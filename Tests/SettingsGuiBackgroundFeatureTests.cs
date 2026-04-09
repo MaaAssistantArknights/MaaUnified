@@ -185,26 +185,41 @@ public sealed class SettingsGuiBackgroundFeatureTests
         await vm.InitializeAsync();
         var settingsChanged = new List<string>();
         var connectChanged = new List<string>();
+        var changeLock = new object();
         vm.PropertyChanged += (_, e) =>
         {
             if (!string.IsNullOrWhiteSpace(e.PropertyName))
             {
-                settingsChanged.Add(e.PropertyName);
+                lock (changeLock)
+                {
+                    settingsChanged.Add(e.PropertyName);
+                }
             }
         };
         vm.ConnectionGameSharedState.PropertyChanged += (_, e) =>
         {
             if (!string.IsNullOrWhiteSpace(e.PropertyName))
             {
-                connectChanged.Add(e.PropertyName);
+                lock (changeLock)
+                {
+                    connectChanged.Add(e.PropertyName);
+                }
             }
         };
 
         await vm.ChangeLanguageAsync("en-us");
         await WaitUntilAsync(() => string.Equals(vm.Language, "en-us", StringComparison.OrdinalIgnoreCase));
 
-        Assert.Contains(nameof(SettingsPageViewModel.RootTexts), settingsChanged);
-        Assert.Contains(nameof(ConnectionGameSharedStateViewModel.RootTexts), connectChanged);
+        string[] settingsSnapshot;
+        string[] connectSnapshot;
+        lock (changeLock)
+        {
+            settingsSnapshot = settingsChanged.ToArray();
+            connectSnapshot = connectChanged.ToArray();
+        }
+
+        Assert.Contains(nameof(SettingsPageViewModel.RootTexts), settingsSnapshot);
+        Assert.Contains(nameof(ConnectionGameSharedStateViewModel.RootTexts), connectSnapshot);
     }
 
     [Fact]
@@ -354,7 +369,7 @@ public sealed class SettingsGuiBackgroundFeatureTests
 
         await vm.RunStartupVersionUpdateCheckAsync();
 
-        Assert.False(vm.HasPendingVersionUpdateAvailability);
+        Assert.True(vm.HasPendingVersionUpdateAvailability);
         Assert.False(vm.HasPendingResourceUpdateAvailability);
         Assert.Equal(0, versionUpdate.CheckResourceCallCount);
     }

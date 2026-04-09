@@ -1,3 +1,4 @@
+using System.Formats.Tar;
 using System.IO.Compression;
 using System.Linq;
 using System.Text.Json;
@@ -87,7 +88,7 @@ public static class PendingAppUpdateService
         try
         {
             PrepareExtractionDirectory(extractDirectory);
-            ZipFile.ExtractToDirectory(pendingUpdate.PackagePath, extractDirectory);
+            ExtractPackageToDirectory(pendingUpdate.PackagePath, extractDirectory);
 
             var removeListFile = Path.Combine(extractDirectory, "removelist.txt");
             var changesFile = Path.Combine(extractDirectory, "changes.json");
@@ -247,6 +248,26 @@ public static class PendingAppUpdateService
     {
         SafeDeleteDirectory(extractDirectory);
         Directory.CreateDirectory(extractDirectory);
+    }
+
+    private static void ExtractPackageToDirectory(string packagePath, string extractDirectory)
+    {
+        if (packagePath.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+        {
+            ZipFile.ExtractToDirectory(packagePath, extractDirectory);
+            return;
+        }
+
+        if (packagePath.EndsWith(".tar.gz", StringComparison.OrdinalIgnoreCase)
+            || packagePath.EndsWith(".tgz", StringComparison.OrdinalIgnoreCase))
+        {
+            using var source = File.OpenRead(packagePath);
+            using var gzip = new GZipStream(source, CompressionMode.Decompress);
+            TarFile.ExtractToDirectory(gzip, extractDirectory, overwriteFiles: true);
+            return;
+        }
+
+        throw new InvalidDataException($"Unsupported update package format: {packagePath}");
     }
 
     private static string[] LoadRemoveList(string removeListFile, string changesFile)

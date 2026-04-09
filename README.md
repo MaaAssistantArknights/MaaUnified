@@ -4,7 +4,7 @@
 
 本项目的初衷，是为 MAA 提供一套可持续演进的跨平台 GUI。相较于继续在现有实现上局部修补，独立维护一套统一前端更适合承担 macOS 与 Linux 的图形界面，并为后续能力扩展预留清晰边界。
 
-在项目规划上，`MAAUnified` 将长期与 WPF 前端并行演进，优先面向 macOS 与 Linux 使用场景，逐步完善功能与平台能力。代码结构自始即按独立仓库组织，并计划以 `submodule` 形式接入宿主仓库。
+在项目规划上，`MAAUnified` 将长期与 WPF 前端并行演进，优先面向 macOS 与 Linux 使用场景，逐步完善功能与平台能力。代码结构自始即按独立仓库组织，并以 `submodule` 形式接入宿主仓库。
 
 ## 技术栈
 
@@ -48,7 +48,7 @@ Linux 运行前提：
 ### 1. 拉取主仓并初始化 submodule
 
 ```bash
-git clone https://github.com/Halo5082/MaaAssistantArknights.git
+git clone https://github.com/MaaAssistantArknights/MaaAssistantArknights.git
 cd MaaAssistantArknights
 
 git submodule sync --recursive
@@ -60,7 +60,8 @@ git -C src/MAAUnified rev-parse --short HEAD
 ```
 
 补充说明：
-- 当前 `.gitmodules` 中 `src/MAAUnified` 的 URL 是 `git@github.com:Halo5082/MaaUnified.git`，默认走 SSH；如果你的环境没有配置 GitHub SSH，需要先配置 SSH，或改成你可访问的地址后再 `git submodule sync`
+- 当前 `.gitmodules` 中 `src/MAAUnified` 的 URL 是 `https://github.com/MaaAssistantArknights/MaaUnified.git`，因此 GitHub Actions 与公共环境可以直接拉取官方仓
+- 如果你本地开发时更习惯用 SSH push，可以在自己的工作区把 `src/MAAUnified` 的 `origin` 改成对应的 SSH 地址
 - `git submodule update --init` 检出的是主仓当前锁定的 submodule 提交，`src/MAAUnified` 处于 detached HEAD 是正常现象
 - 如果你只是想复现主仓当前状态，到这里即可；如果你要继续开发 `MAAUnified` 并切到 UI 仓最新主线，再执行：
 

@@ -8,6 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="..\Build\BuildFlavor.cs" Link="Shared\BuildFlavor.cs" />
     <PackageReference Include="Avalonia" Version="11.2.8" />
     <PackageReference Include="H.NotifyIcon" Version="2.4.1" />
     <PackageReference Include="SharpHook" Version="7.1.1" />

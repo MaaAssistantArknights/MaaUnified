@@ -91,8 +91,12 @@ internal static class Program
 
         var builder = AppBuilder.Configure<App>()
             .UsePlatformDetect()
-            .WithInterFont()
-            .LogToTrace();
+            .WithInterFont();
+
+        if (global::MAAUnified.Platform.MaaUnifiedBuildFlavor.CapturesVerboseDiagnostics)
+        {
+            builder = builder.LogToTrace();
+        }
 
         ApplySoftwareRenderingPreference(builder, useSoftwareRendering);
         return builder;
@@ -164,7 +168,10 @@ internal static class Program
             payload += Environment.NewLine + exception;
         }
 
-        TryAppendDebugLog(StartupTraceLogName, payload);
+        if (exception is not null || global::MAAUnified.Platform.MaaUnifiedBuildFlavor.CapturesVerboseDiagnostics)
+        {
+            TryAppendDebugLog(StartupTraceLogName, payload);
+        }
     }
 
     internal static bool ResolveSoftwareRenderingPreference(string baseDirectory)

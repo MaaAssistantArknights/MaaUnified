@@ -4,5 +4,15 @@
     <VersionSuffix Condition="'$(VersionSuffix)' == ''">pre-alpha</VersionSuffix>
     <AssemblyVersion Condition="'$(AssemblyVersion)' == ''">1.0.0.0</AssemblyVersion>
     <FileVersion Condition="'$(FileVersion)' == ''">1.0.0.0</FileVersion>
+    <MaaUnifiedReleaseChannel Condition="'$(MaaUnifiedReleaseChannel)' == ''">debug</MaaUnifiedReleaseChannel>
+    <MaaUnifiedDiagnosticsProfile Condition="'$(MaaUnifiedDiagnosticsProfile)' == ''">full</MaaUnifiedDiagnosticsProfile>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(MaaUnifiedReleaseChannel)' == 'formal'">
+    <DefineConstants>$(DefineConstants);MAAUNIFIED_FORMAL_RELEASE</DefineConstants>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(MaaUnifiedDiagnosticsProfile)' == 'minimal'">
+    <DefineConstants>$(DefineConstants);MAAUNIFIED_MINIMAL_DIAGNOSTICS</DefineConstants>
   </PropertyGroup>
 </Project>

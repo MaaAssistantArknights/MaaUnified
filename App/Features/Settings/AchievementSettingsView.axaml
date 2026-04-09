@@ -42,7 +42,8 @@
               Background="#1AFFFFFF"
               BorderBrush="{Binding AchievementDebugMedalColor}"
               BorderThickness="2"
-              PointerPressed="OnAchievementDebugPointerPressed">
+              PointerPressed="OnAchievementDebugPointerPressed"
+              IsVisible="{Binding CanUseAchievementDebugEntry}">
         <TextBlock HorizontalAlignment="Center"
                    VerticalAlignment="Center"
                    FontSize="24"
@@ -51,7 +52,8 @@
                    Text="MAA" />
       </Border>
       <TextBlock Classes="settings-centered-text subtle"
-                 Text="{Binding AchievementDebugTip}" />
+                 Text="{Binding AchievementDebugTip}"
+                 IsVisible="{Binding CanUseAchievementDebugEntry}" />
       <StackPanel Orientation="Horizontal"
                   HorizontalAlignment="Center"
                   Spacing="{DynamicResource MAA.Spacing.Small}"

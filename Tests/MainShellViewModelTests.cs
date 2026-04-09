@@ -956,17 +956,17 @@ public sealed class MainShellViewModelTests
 
         await fixture.ViewModel.SettingsPage.RunStartupVersionUpdateCheckAsync();
 
-        Assert.False(fixture.ViewModel.HasWindowVersionUpdateInfo);
+        Assert.True(fixture.ViewModel.HasWindowVersionUpdateInfo);
         Assert.False(fixture.ViewModel.HasWindowResourceUpdateInfo);
-        Assert.DoesNotContain("版本更新可用", fixture.ViewModel.WindowTitle, StringComparison.Ordinal);
+        Assert.Contains("版本更新", fixture.ViewModel.WindowTitle, StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task CheckVersionUpdateAsync_ShouldShowNotImplementedDialog()
+    public async Task CheckVersionUpdateAsync_ShouldShowVersionUpdateDialog()
     {
         var dialogService = new CapturingDialogService
         {
-            WarningConfirmReturn = DialogReturnSemantic.Close,
+            VersionUpdateReturn = DialogReturnSemantic.Close,
         };
         var versionUpdate = new ScriptedVersionUpdateFeatureService
         {
@@ -993,17 +993,23 @@ public sealed class MainShellViewModelTests
 
         await fixture.ViewModel.SettingsPage.CheckVersionUpdateAsync();
 
-        Assert.Equal(1, dialogService.WarningConfirmCallCount);
-        Assert.NotNull(dialogService.LastWarningConfirmRequest);
-        Assert.Contains("暂未实现软件更新", dialogService.LastWarningConfirmRequest!.Message, StringComparison.Ordinal);
-        Assert.Contains("暂未实现软件更新", fixture.ViewModel.SettingsPage.VersionUpdateStatusMessage, StringComparison.Ordinal);
+        Assert.Equal(1, dialogService.VersionUpdateCallCount);
+        Assert.NotNull(dialogService.LastVersionUpdateRequest);
+        Assert.Equal("v2.0.0", dialogService.LastVersionUpdateRequest!.TargetVersion);
+        Assert.Equal(0, dialogService.WarningConfirmCallCount);
+        Assert.Equal(
+            fixture.ViewModel.SettingsPage.RootTexts["Settings.VersionUpdate.Status.DialogClosed"],
+            fixture.ViewModel.SettingsPage.VersionUpdateStatusMessage);
     }
 
     [Fact]
-    public async Task CheckVersionUpdateAsync_ShouldNotRestartWhenAutoInstallEnabled()
+    public async Task CheckVersionUpdateAsync_WhenAutoInstallEnabledAndDialogConfirmed_ShouldRestart()
     {
         var lifecycle = new SpyAppLifecycleService(UiOperationResult.Ok("Restart process launched."));
-        var dialogService = new CapturingDialogService();
+        var dialogService = new CapturingDialogService
+        {
+            VersionUpdateReturn = DialogReturnSemantic.Confirm,
+        };
         var versionUpdate = new ScriptedVersionUpdateFeatureService
         {
             CheckForUpdatesResult = UiOperationResult<VersionUpdateCheckResult>.Ok(
@@ -1031,9 +1037,12 @@ public sealed class MainShellViewModelTests
 
         await fixture.ViewModel.SettingsPage.CheckVersionUpdateAsync();
 
-        Assert.Equal(1, dialogService.WarningConfirmCallCount);
-        Assert.Equal(0, lifecycle.RestartCallCount);
-        Assert.Contains("暂未实现软件更新", fixture.ViewModel.SettingsPage.VersionUpdateStatusMessage, StringComparison.Ordinal);
+        Assert.Equal(1, dialogService.VersionUpdateCallCount);
+        Assert.Equal(0, dialogService.WarningConfirmCallCount);
+        Assert.Equal(1, lifecycle.RestartCallCount);
+        Assert.Equal(
+            fixture.ViewModel.SettingsPage.RootTexts["Settings.VersionUpdate.RestartManualClose"],
+            fixture.ViewModel.SettingsPage.VersionUpdateStatusMessage);
     }
 
     private static ConfigValidationIssue CreateBlockingIssue()
@@ -1729,6 +1738,12 @@ public sealed class MainShellViewModelTests
 
     private sealed class CapturingDialogService : IAppDialogService
     {
+        public int VersionUpdateCallCount { get; private set; }
+
+        public VersionUpdateDialogRequest? LastVersionUpdateRequest { get; private set; }
+
+        public DialogReturnSemantic VersionUpdateReturn { get; set; } = DialogReturnSemantic.Close;
+
         public int ShowTextCallCount { get; private set; }
 
         public string? LastTextScope { get; private set; }
@@ -1757,8 +1772,10 @@ public sealed class MainShellViewModelTests
             string sourceScope,
             CancellationToken cancellationToken = default)
         {
+            VersionUpdateCallCount++;
+            LastVersionUpdateRequest = request;
             return Task.FromResult(new DialogCompletion<VersionUpdateDialogPayload>(
-                DialogReturnSemantic.Close,
+                VersionUpdateReturn,
                 null,
                 "captured"));
         }

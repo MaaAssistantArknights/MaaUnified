@@ -3529,7 +3529,7 @@ With save file: farm points through crafting (advanced).
     <value>Proxy address</value>
   </data>
   <data name="Settings.VersionUpdate.ProxyAddressWatermark" xml:space="preserve">
-    <value>&lt;IP&gt;:&lt;포트&gt;</value>
+    <value>&lt;IP&gt;:&lt;Port&gt;</value>
   </data>
   <data name="Settings.VersionUpdate.ProxyType" xml:space="preserve">
     <value>Proxy type</value>
@@ -3566,6 +3566,15 @@ With save file: farm points through crafting (advanced).
   </data>
   <data name="Settings.VersionUpdate.Status.DialogConfirmed" xml:space="preserve">
     <value>Version update dialog confirmed.</value>
+  </data>
+  <data name="Settings.VersionUpdate.Status.PackageDownloadFailed" xml:space="preserve">
+    <value>Update failed.</value>
+  </data>
+  <data name="Settings.VersionUpdate.Status.PackageUnavailable" xml:space="preserve">
+    <value>Update failed.</value>
+  </data>
+  <data name="Settings.VersionUpdate.Status.WindowsManualUpdateRequired" xml:space="preserve">
+    <value>The Windows release is not published yet. Please update manually.</value>
   </data>
   <data name="Settings.VersionUpdate.Status.MirrorCdkExpired" xml:space="preserve">
     <value>MirrorChyan CDK has expired.</value>
@@ -4748,6 +4757,9 @@ A backup named avalonia.json.schema-v{0}.bak.&lt;timestamp&gt; will be created b
   </data>
   <data name="Settings.VersionUpdate.RestartPending" xml:space="preserve">
     <value>The update package is ready. Restart MAA later to apply it.</value>
+  </data>
+  <data name="Settings.VersionUpdate.RestartPendingWhileRunning" xml:space="preserve">
+    <value>The update package is ready. Current tasks are still running, so restart MAA when idle to apply it.</value>
   </data>
   <data name="Settings.VersionUpdate.SoftwarePlaceholder.Cancel" xml:space="preserve">
     <value>Close</value>

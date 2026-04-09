@@ -2,6 +2,22 @@ using System;
 
 namespace MAAUnified.Application.Models;
 
+public enum PackageResolutionStatus
+{
+    NotChecked = 0,
+    Available = 1,
+    Unavailable = 2,
+    WindowsManualUpdateRequired = 3,
+    DownloadFailed = 4,
+}
+
+public enum PackageSourceKind
+{
+    None = 0,
+    ReleaseAsset = 1,
+    WindowsRelayManifest = 2,
+}
+
 public sealed record VersionUpdateCheckResult(
     string Channel,
     string CurrentVersion,
@@ -14,4 +30,7 @@ public sealed record VersionUpdateCheckResult(
     long? PackageSize,
     bool IsNewVersion,
     bool HasPackage,
-    string? PreparedPackagePath = null);
+    string? PreparedPackagePath = null,
+    PackageResolutionStatus PackageResolutionStatus = PackageResolutionStatus.NotChecked,
+    PackageSourceKind PackageSourceKind = PackageSourceKind.None,
+    string? PackageFailureMessageKey = null);

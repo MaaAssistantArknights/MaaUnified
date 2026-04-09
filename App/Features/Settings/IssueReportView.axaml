@@ -27,20 +27,26 @@
         <Button Classes="wpf-button wpf-button-secondary"
                 Content="{Binding RootTexts[Settings.Action.BuildIssueReport]}"
                 Click="OnBuildIssueReportClick" />
-        <Button Classes="wpf-button wpf-button-secondary" Content="{Binding RootTexts[Settings.IssueReport.OpenRuntimeLogWindow]}" Click="OnOpenRuntimeLogWindowClick" />
+        <Button Classes="wpf-button wpf-button-secondary"
+                Content="{Binding RootTexts[Settings.IssueReport.OpenRuntimeLogWindow]}"
+                Click="OnOpenRuntimeLogWindowClick"
+                IsVisible="{Binding CanOpenRuntimeLogWindow}" />
         <Button Classes="wpf-button wpf-button-secondary"
                 Content="{Binding RootTexts[Settings.Action.OpenDebugDirectory]}"
-                Click="OnOpenDebugDirectoryClick" />
+                Click="OnOpenDebugDirectoryClick"
+                IsVisible="{Binding CanUseIssueReportMaintenanceTools}" />
         <Button Classes="wpf-button wpf-button-secondary"
                 Content="{Binding RootTexts[Settings.Action.ClearImageCache]}"
-                Click="OnClearImageCacheClick" />
+                Click="OnClearImageCacheClick"
+                IsVisible="{Binding CanUseIssueReportMaintenanceTools}" />
       </StackPanel>
     </Grid>
 
     <StackPanel Grid.Row="3"
                 Classes="settings-centered-column"
                 Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}"
-                Spacing="0">
+                Spacing="0"
+                IsVisible="{Binding CanUseDeveloperMode}">
       <CheckBox HorizontalAlignment="Center"
                 Content="{Binding RootTexts[Settings.IssueReport.DeveloperMode]}"
                 IsChecked="{Binding DeveloperModeEnabled}" />

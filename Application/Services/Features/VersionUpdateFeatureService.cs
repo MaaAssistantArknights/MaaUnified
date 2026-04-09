@@ -3,6 +3,7 @@ using System.IO.Compression;
 using System.Net;
 using System.Net.Http;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -20,6 +21,9 @@ namespace MAAUnified.Application.Services.Features;
 
 public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
 {
+    private const string WindowsManualUpdateMessageKey = "Settings.VersionUpdate.Status.WindowsManualUpdateRequired";
+    private const string PackageUnavailableMessageKey = "Settings.VersionUpdate.Status.PackageUnavailable";
+    private const string PackageDownloadFailedMessageKey = "Settings.VersionUpdate.Status.PackageDownloadFailed";
     private const string GithubResourceArchiveUrl = "https://github.com/MaaAssistantArknights/MaaResource/archive/refs/heads/main.zip";
     private const string MirrorChyanResourceApiUrl = "https://mirrorchyan.com/api/resources/MaaResource/latest";
     private static readonly HashSet<string> AllowedVersionTypes = new(StringComparer.OrdinalIgnoreCase)
@@ -336,8 +340,7 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
                 normalizedPolicy,
                 string.IsNullOrWhiteSpace(currentVersion) ? "unknown" : currentVersion.Trim(),
                 cancellationToken).ConfigureAwait(false);
-            string? preparedPackagePath = null;
-            string? packagePreparationSummary = null;
+            var effectiveResult = workflowResult;
 
             if (workflowResult.IsNewVersion
                 && workflowResult.HasPackage
@@ -355,12 +358,14 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
                     cancellationToken).ConfigureAwait(false);
                 if (downloadResult.Success && !string.IsNullOrWhiteSpace(downloadResult.Value))
                 {
-                    preparedPackagePath = downloadResult.Value;
+                    effectiveResult = workflowResult with
+                    {
+                        PreparedPackagePath = downloadResult.Value,
+                    };
                     PublishUpdateLog(
                         workflowResult.PackageName is null
                             ? "Software update package is ready to apply after restart."
                             : $"Software update package `{workflowResult.PackageName}` is ready to apply after restart.");
-                    packagePreparationSummary = "已准备更新包，重启后即可应用。";
                 }
                 else
                 {
@@ -369,20 +374,11 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
                             ? "Software update package preparation failed."
                             : $"Software update package preparation failed: {downloadResult.Message}",
                         "ERROR");
-                    packagePreparationSummary = "自动下载更新包失败，请稍后重试。";
+                    effectiveResult = ApplyPackageDownloadFailure(workflowResult);
                 }
             }
 
-            var effectiveResult = workflowResult with
-            {
-                PreparedPackagePath = preparedPackagePath,
-            };
-
-            var message = effectiveResult.IsNewVersion
-                ? string.IsNullOrWhiteSpace(packagePreparationSummary)
-                    ? $"发现新版本：{effectiveResult.TargetVersion}"
-                    : $"发现新版本：{effectiveResult.TargetVersion}。{packagePreparationSummary}"
-                : $"已检查 `{effectiveResult.Channel}` 通道，当前已是最新。";
+            var message = BuildVersionUpdateMessage(effectiveResult);
             PublishUpdateLog(
                 effectiveResult.IsNewVersion
                     ? $"Version update available: {effectiveResult.TargetVersion}"
@@ -401,6 +397,73 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
                 $"Failed to check for updates: {ex.Message}",
                 ex.Message);
         }
+    }
+
+    private static VersionUpdateCheckResult ApplyPackageDownloadFailure(VersionUpdateCheckResult workflowResult)
+    {
+        if (IsWindowsPackageResolution(workflowResult))
+        {
+            return workflowResult with
+            {
+                PreparedPackagePath = null,
+                PackageResolutionStatus = PackageResolutionStatus.WindowsManualUpdateRequired,
+                PackageFailureMessageKey = WindowsManualUpdateMessageKey,
+            };
+        }
+
+        return workflowResult with
+        {
+            PreparedPackagePath = null,
+            PackageResolutionStatus = PackageResolutionStatus.DownloadFailed,
+            PackageFailureMessageKey = PackageDownloadFailedMessageKey,
+        };
+    }
+
+    private static bool IsWindowsPackageResolution(VersionUpdateCheckResult workflowResult)
+    {
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            return true;
+        }
+
+        if (workflowResult.PackageSourceKind == PackageSourceKind.WindowsRelayManifest)
+        {
+            return true;
+        }
+
+        var packageName = workflowResult.PackageName ?? string.Empty;
+        if (packageName.Contains("windows", StringComparison.OrdinalIgnoreCase)
+            || packageName.Contains("win-", StringComparison.OrdinalIgnoreCase)
+            || packageName.Contains("-win", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return packageName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string BuildVersionUpdateMessage(VersionUpdateCheckResult result)
+    {
+        if (!result.IsNewVersion)
+        {
+            return $"已检查 `{result.Channel}` 通道，当前已是最新。";
+        }
+
+        if (!string.IsNullOrWhiteSpace(result.PreparedPackagePath))
+        {
+            return $"发现新版本：{result.TargetVersion}。已准备更新包，重启后即可应用。";
+        }
+
+        return result.PackageResolutionStatus switch
+        {
+            PackageResolutionStatus.WindowsManualUpdateRequired
+                => $"发现新版本：{result.TargetVersion}。Windows 版目前暂未在 release 发布，请手动更新。",
+            PackageResolutionStatus.Unavailable
+                => $"发现新版本：{result.TargetVersion}。更新失败。",
+            PackageResolutionStatus.DownloadFailed
+                => $"发现新版本：{result.TargetVersion}。更新失败。",
+            _ => $"发现新版本：{result.TargetVersion}",
+        };
     }
 
     private UiOperationResult ValidatePolicy(VersionUpdatePolicy policy)

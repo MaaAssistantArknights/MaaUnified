@@ -2286,6 +2286,15 @@ OF-1 스테이지가 개방되지 않은 경우에는 선택하지 마세요.</v
   <data name="Settings.VersionUpdate.Status.DialogConfirmed" xml:space="preserve">
     <value>버전 업데이트 대화상자를 확인했습니다.</value>
   </data>
+  <data name="Settings.VersionUpdate.Status.PackageDownloadFailed" xml:space="preserve">
+    <value>업데이트에 실패했습니다.</value>
+  </data>
+  <data name="Settings.VersionUpdate.Status.PackageUnavailable" xml:space="preserve">
+    <value>업데이트에 실패했습니다.</value>
+  </data>
+  <data name="Settings.VersionUpdate.Status.WindowsManualUpdateRequired" xml:space="preserve">
+    <value>Windows 버전은 아직 release에 게시되지 않았습니다. 수동으로 업데이트해 주세요.</value>
+  </data>
   <data name="Settings.VersionUpdate.Status.MirrorCdkExpired" xml:space="preserve">
     <value>MirrorChyan CDK가 만료되었습니다.</value>
   </data>
@@ -3967,6 +3976,9 @@ OF-1 스테이지가 개방되지 않은 경우에는 선택하지 마세요.</v
   </data>
   <data name="Settings.VersionUpdate.RestartPending" xml:space="preserve">
     <value>업데이트 패키지 다운로드가 완료되었습니다. 업데이트를 적용하려면 나중에 MAA를 다시 시작하세요.</value>
+  </data>
+  <data name="Settings.VersionUpdate.RestartPendingWhileRunning" xml:space="preserve">
+    <value>업데이트 패키지 다운로드가 완료되었습니다. 현재 작업이 실행 중이므로 한가할 때 MAA를 다시 시작해 업데이트를 적용하세요.</value>
   </data>
   <data name="Settings.VersionUpdate.SoftwarePlaceholder.Cancel" xml:space="preserve">
     <value>닫기</value>

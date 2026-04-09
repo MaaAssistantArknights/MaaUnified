@@ -1,8 +1,10 @@
 using System;
+using System.Formats.Tar;
 using System.IO;
 using System.IO.Compression;
 using System.Net;
 using System.Net.Http;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using MAAUnified.Application.Configuration;
@@ -37,8 +39,8 @@ public sealed class VersionUpdateFeatureServiceTests
                     {
                         new
                         {
-                            name = "MAAUnified-v2.0.0.zip",
-                            browser_download_url = "https://example.com/MAAUnified-v2.0.0.zip",
+                            name = "MAAUnified-v2.0.0-linux-x64.tar.gz",
+                            browser_download_url = "https://example.com/MAAUnified-v2.0.0-linux-x64.tar.gz",
                             size = 1234,
                         },
                     },
@@ -49,6 +51,7 @@ public sealed class VersionUpdateFeatureServiceTests
             {
                 ResourceApi = feedPath,
                 VersionType = "Stable",
+                AutoDownloadUpdatePackage = false,
             };
 
             var result = await service.CheckForUpdatesAsync(policy, "v1.0.0");
@@ -58,9 +61,11 @@ public sealed class VersionUpdateFeatureServiceTests
             Assert.Equal("v2.0.0", result.Value!.TargetVersion);
             Assert.Equal("Release v2.0.0", result.Value.ReleaseName);
             Assert.Equal("Line one.\nLine two.", result.Value.Body);
-            Assert.Equal("MAAUnified-v2.0.0.zip", result.Value.PackageName);
+            Assert.Equal("MAAUnified-v2.0.0-linux-x64.tar.gz", result.Value.PackageName);
             Assert.True(result.Value.IsNewVersion);
             Assert.True(result.Value.HasPackage);
+            Assert.Equal(PackageResolutionStatus.Available, result.Value.PackageResolutionStatus);
+            Assert.Equal(PackageSourceKind.ReleaseAsset, result.Value.PackageSourceKind);
         }
         finally
         {
@@ -98,8 +103,8 @@ public sealed class VersionUpdateFeatureServiceTests
                     {
                         new
                         {
-                            name = "MAAUnified-v2.0.0.zip",
-                            browser_download_url = "https://example.com/MAAUnified-v2.0.0.zip",
+                            name = "MAAUnified-v2.0.0-linux-x64.tar.gz",
+                            browser_download_url = "https://example.com/MAAUnified-v2.0.0-linux-x64.tar.gz",
                             size = 1234,
                         },
                     },
@@ -108,11 +113,11 @@ public sealed class VersionUpdateFeatureServiceTests
 
             using var httpClient = new HttpClient(new StubHttpMessageHandler(static request =>
             {
-                if (request.RequestUri?.AbsoluteUri == "https://example.com/MAAUnified-v2.0.0.zip")
+                if (request.RequestUri?.AbsoluteUri == "https://example.com/MAAUnified-v2.0.0-linux-x64.tar.gz")
                 {
                     return new HttpResponseMessage(HttpStatusCode.OK)
                     {
-                        Content = new ByteArrayContent([0x50, 0x4B, 0x03, 0x04, 0x14]),
+                        Content = new ByteArrayContent([0x1F, 0x8B, 0x08, 0x00, 0x00]),
                     };
                 }
 
@@ -138,6 +143,7 @@ public sealed class VersionUpdateFeatureServiceTests
             Assert.False(string.IsNullOrWhiteSpace(result.Value!.PreparedPackagePath));
             Assert.True(File.Exists(result.Value.PreparedPackagePath));
             Assert.Contains("已准备更新包", result.Message, StringComparison.Ordinal);
+            Assert.Equal(PackageResolutionStatus.Available, result.Value.PackageResolutionStatus);
         }
         finally
         {
@@ -202,8 +208,8 @@ public sealed class VersionUpdateFeatureServiceTests
                                 "prerelease": false,
                                 "assets": [
                                   {
-                                    "name": "MAAUnified-v6.7.0.zip",
-                                    "browser_download_url": "https://example.com/MAAUnified-v6.7.0.zip",
+                                    "name": "MAAUnified-v6.7.0-linux-x64.tar.gz",
+                                    "browser_download_url": "https://example.com/MAAUnified-v6.7.0-linux-x64.tar.gz",
                                     "size": 4321
                                   }
                                 ]
@@ -233,7 +239,7 @@ public sealed class VersionUpdateFeatureServiceTests
             Assert.NotNull(result.Value);
             Assert.Equal("v6.7.0", result.Value!.TargetVersion);
             Assert.Equal("v6.7.0", result.Value.ReleaseName);
-            Assert.Equal("MAAUnified-v6.7.0.zip", result.Value.PackageName);
+            Assert.Equal("MAAUnified-v6.7.0-linux-x64.tar.gz", result.Value.PackageName);
             Assert.True(result.Value.IsNewVersion);
         }
         finally
@@ -248,6 +254,298 @@ public sealed class VersionUpdateFeatureServiceTests
             catch
             {
                 // Best-effort cleanup.
+            }
+        }
+    }
+
+    [Fact]
+    public async Task CheckForUpdatesAsync_OnWindowsRelayManifest_UsesExactArchitecturePackage()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"maa-unified-windows-relay-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(root);
+        var feedPath = Path.Combine(root, "release-feed.json");
+        var relayManifestPath = Path.Combine(root, "windows-relay.json");
+
+        try
+        {
+            await File.WriteAllTextAsync(feedPath, JsonSerializer.Serialize(new[]
+            {
+                new
+                {
+                    tag_name = "v2.0.0",
+                    name = "Release v2.0.0",
+                    body = "Body",
+                    prerelease = false,
+                    assets = Array.Empty<object>(),
+                },
+            }));
+            await File.WriteAllTextAsync(relayManifestPath, """
+                {
+                  "version": "v2.0.0",
+                  "channel": "Stable",
+                  "packages": [
+                    {
+                      "os": "windows",
+                      "arch": "x64",
+                      "url": "https://example.com/MAAUnified-v2.0.0-win-x64.zip",
+                      "sha256": "abc",
+                      "size": 2048,
+                      "name": "MAAUnified-v2.0.0-win-x64.zip"
+                    }
+                  ]
+                }
+                """);
+
+            var workflow = new AppUpdateWorkflowService(
+                new NoOpAppLifecycleService(),
+                operatingSystem: OSPlatform.Windows,
+                architecture: Architecture.X64);
+            var service = new VersionUpdateFeatureService(
+                CreateConfigurationService(root),
+                appUpdateWorkflowService: workflow,
+                runtimeBaseDirectory: root);
+
+            var result = await service.CheckForUpdatesAsync(
+                VersionUpdatePolicy.Default with
+                {
+                    ResourceApi = feedPath,
+                    AutoDownloadUpdatePackage = false,
+                },
+                "v1.0.0");
+
+            Assert.True(result.Success);
+            Assert.NotNull(result.Value);
+            Assert.True(result.Value!.HasPackage);
+            Assert.Equal(PackageResolutionStatus.Available, result.Value.PackageResolutionStatus);
+            Assert.Equal(PackageSourceKind.WindowsRelayManifest, result.Value.PackageSourceKind);
+            Assert.Equal("MAAUnified-v2.0.0-win-x64.zip", result.Value.PackageName);
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    [Fact]
+    public async Task CheckForUpdatesAsync_OnWindowsRelayManifestMiss_ReturnsManualUpdateRequired()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"maa-unified-windows-relay-miss-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(root);
+        var feedPath = Path.Combine(root, "release-feed.json");
+        var relayManifestPath = Path.Combine(root, "windows-relay.json");
+
+        try
+        {
+            await File.WriteAllTextAsync(feedPath, JsonSerializer.Serialize(new[]
+            {
+                new
+                {
+                    tag_name = "v2.0.0",
+                    name = "Release v2.0.0",
+                    body = "Body",
+                    prerelease = false,
+                    assets = Array.Empty<object>(),
+                },
+            }));
+            await File.WriteAllTextAsync(relayManifestPath, """
+                {
+                  "version": "v2.0.0",
+                  "channel": "Stable",
+                  "packages": [
+                    {
+                      "os": "windows",
+                      "arch": "x64",
+                      "url": "https://example.com/MAAUnified-v2.0.0-win-x64.zip"
+                    }
+                  ]
+                }
+                """);
+
+            var workflow = new AppUpdateWorkflowService(
+                new NoOpAppLifecycleService(),
+                operatingSystem: OSPlatform.Windows,
+                architecture: Architecture.Arm64);
+            var service = new VersionUpdateFeatureService(
+                CreateConfigurationService(root),
+                appUpdateWorkflowService: workflow,
+                runtimeBaseDirectory: root);
+
+            var result = await service.CheckForUpdatesAsync(
+                VersionUpdatePolicy.Default with
+                {
+                    ResourceApi = feedPath,
+                    AutoDownloadUpdatePackage = false,
+                },
+                "v1.0.0");
+
+            Assert.True(result.Success);
+            Assert.NotNull(result.Value);
+            Assert.False(result.Value!.HasPackage);
+            Assert.Equal(PackageResolutionStatus.WindowsManualUpdateRequired, result.Value.PackageResolutionStatus);
+            Assert.Contains("手动更新", result.Message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    [Fact]
+    public async Task CheckForUpdatesAsync_OnWindowsDownload404_ReturnsManualUpdateRequired()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"maa-unified-windows-download-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(root);
+        var feedPath = Path.Combine(root, "release-feed.json");
+        var relayManifestPath = Path.Combine(root, "windows-relay.json");
+
+        try
+        {
+            await File.WriteAllTextAsync(feedPath, JsonSerializer.Serialize(new[]
+            {
+                new
+                {
+                    tag_name = "v2.0.0",
+                    name = "Release v2.0.0",
+                    body = "Body",
+                    prerelease = false,
+                    assets = Array.Empty<object>(),
+                },
+            }));
+            await File.WriteAllTextAsync(relayManifestPath, """
+                {
+                  "version": "v2.0.0",
+                  "channel": "Stable",
+                  "packages": [
+                    {
+                      "os": "windows",
+                      "arch": "x64",
+                      "url": "https://example.com/MAAUnified-v2.0.0-win-x64.zip",
+                      "name": "MAAUnified-v2.0.0-win-x64.zip"
+                    }
+                  ]
+                }
+                """);
+
+            using var httpClient = new HttpClient(new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.NotFound)));
+            var workflow = new AppUpdateWorkflowService(
+                new NoOpAppLifecycleService(),
+                httpClient,
+                OSPlatform.Windows,
+                Architecture.X64);
+            var service = new VersionUpdateFeatureService(
+                CreateConfigurationService(root),
+                appUpdateWorkflowService: workflow,
+                runtimeBaseDirectory: root);
+
+            var result = await service.CheckForUpdatesAsync(
+                VersionUpdatePolicy.Default with
+                {
+                    ResourceApi = feedPath,
+                    AutoDownloadUpdatePackage = true,
+                },
+                "v1.0.0");
+
+            Assert.True(result.Success);
+            Assert.NotNull(result.Value);
+            Assert.Equal(PackageResolutionStatus.WindowsManualUpdateRequired, result.Value!.PackageResolutionStatus);
+            Assert.Contains("手动更新", result.Message, StringComparison.Ordinal);
+            Assert.True(string.IsNullOrWhiteSpace(result.Value.PreparedPackagePath));
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    [Fact]
+    public async Task CheckForUpdatesAsync_OnLinuxWithoutMatchingPackage_ReturnsUnavailable()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"maa-unified-linux-unavailable-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(root);
+        var feedPath = Path.Combine(root, "release-feed.json");
+
+        try
+        {
+            await File.WriteAllTextAsync(feedPath, JsonSerializer.Serialize(new[]
+            {
+                new
+                {
+                    tag_name = "v2.0.0",
+                    name = "Release v2.0.0",
+                    body = "Body",
+                    prerelease = false,
+                    assets = new[]
+                    {
+                        new
+                        {
+                            name = "MAAUnified-v2.0.0-win-x64.zip",
+                            browser_download_url = "https://example.com/MAAUnified-v2.0.0-win-x64.zip",
+                            size = 1024,
+                        },
+                    },
+                },
+            }));
+
+            var workflow = new AppUpdateWorkflowService(
+                new NoOpAppLifecycleService(),
+                operatingSystem: OSPlatform.Linux,
+                architecture: Architecture.X64);
+            var service = new VersionUpdateFeatureService(
+                CreateConfigurationService(root),
+                appUpdateWorkflowService: workflow,
+                runtimeBaseDirectory: root);
+
+            var result = await service.CheckForUpdatesAsync(
+                VersionUpdatePolicy.Default with
+                {
+                    ResourceApi = feedPath,
+                    AutoDownloadUpdatePackage = false,
+                },
+                "v1.0.0");
+
+            Assert.True(result.Success);
+            Assert.NotNull(result.Value);
+            Assert.Equal(PackageResolutionStatus.Unavailable, result.Value!.PackageResolutionStatus);
+            Assert.Contains("更新失败", result.Message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+            catch
+            {
             }
         }
     }
@@ -299,6 +597,46 @@ public sealed class VersionUpdateFeatureServiceTests
         }
     }
 
+    [Fact]
+    public async Task TryApplyPendingUpdatePackage_AppliesTarGzAndMarksFirstBoot()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"maa-unified-pending-update-targz-{Guid.NewGuid():N}");
+        var configDir = Path.Combine(root, "config");
+        var packageDir = Path.Combine(root, "update-packages");
+        Directory.CreateDirectory(configDir);
+        Directory.CreateDirectory(packageDir);
+
+        var currentFile = Path.Combine(root, "app.txt");
+        await File.WriteAllTextAsync(currentFile, "old");
+
+        var packagePath = Path.Combine(packageDir, "update.tar.gz");
+        await CreateTarGzPackageAsync(packagePath, ("app.txt", "new"));
+
+        var config = new UnifiedConfig();
+        config.GlobalValues[ConfigurationKeys.VersionName] = JsonValue.Create("v2.0.0");
+        config.GlobalValues[ConfigurationKeys.VersionUpdatePackage] = JsonValue.Create(Path.Combine("update-packages", "update.tar.gz"));
+        var store = new AvaloniaJsonConfigStore(root);
+        await store.SaveAsync(config);
+
+        var result = PendingAppUpdateService.TryApplyPendingUpdatePackage(root);
+        var reloaded = await store.LoadAsync();
+
+        Assert.Equal(PendingAppUpdateStatus.Applied, result.Status);
+        Assert.Equal("new", await File.ReadAllTextAsync(currentFile));
+        Assert.False(File.Exists(packagePath));
+        Assert.NotNull(reloaded);
+        Assert.Equal(string.Empty, ReadGlobalString(reloaded!, ConfigurationKeys.VersionUpdatePackage));
+        Assert.Equal(bool.TrueString, ReadGlobalString(reloaded!, ConfigurationKeys.VersionUpdateIsFirstBoot));
+
+        try
+        {
+            Directory.Delete(root, recursive: true);
+        }
+        catch
+        {
+        }
+    }
+
     private static UnifiedConfigurationService CreateConfigurationService(string root)
     {
         return new UnifiedConfigurationService(
@@ -322,6 +660,44 @@ public sealed class VersionUpdateFeatureServiceTests
         }
 
         return node.ToString();
+    }
+
+    private static async Task CreateTarGzPackageAsync(string packagePath, params (string RelativePath, string Content)[] files)
+    {
+        var tempRoot = Path.Combine(Path.GetTempPath(), $"maa-unified-targz-source-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempRoot);
+
+        try
+        {
+            foreach (var (relativePath, content) in files)
+            {
+                var fullPath = Path.Combine(tempRoot, relativePath);
+                var directory = Path.GetDirectoryName(fullPath);
+                if (!string.IsNullOrWhiteSpace(directory))
+                {
+                    Directory.CreateDirectory(directory);
+                }
+
+                await File.WriteAllTextAsync(fullPath, content);
+            }
+
+            await using var output = File.Create(packagePath);
+            await using var gzip = new GZipStream(output, CompressionLevel.SmallestSize);
+            TarFile.CreateFromDirectory(tempRoot, gzip, includeBaseDirectory: false);
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(tempRoot))
+                {
+                    Directory.Delete(tempRoot, recursive: true);
+                }
+            }
+            catch
+            {
+            }
+        }
     }
 
     private sealed class StubHttpMessageHandler : HttpMessageHandler

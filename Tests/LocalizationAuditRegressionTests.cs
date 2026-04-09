@@ -21,6 +21,7 @@ public sealed class LocalizationAuditRegressionTests
     {
         "Settings.RemoteControl.GetTaskEndpointWatermark",
         "Settings.RemoteControl.ReportTaskEndpointWatermark",
+        "Settings.VersionUpdate.ProxyAddressWatermark",
     };
 
     private static readonly string[] MainTabKeys =
@@ -626,6 +627,18 @@ public sealed class LocalizationAuditRegressionTests
                     enUsBaseline[key],
                     localized);
             }
+        }
+    }
+
+    [Fact]
+    public void VersionUpdateProxyAddressWatermark_ShouldMatchWpfAcrossSupportedLanguages()
+    {
+        var map = new RootLocalizationTextMap("Root.Localization.Tests");
+
+        foreach (var language in new[] { "zh-cn", "zh-tw", "en-us", "ja-jp", "ko-kr" })
+        {
+            map.Language = language;
+            Assert.Equal("<IP>:<Port>", map["Settings.VersionUpdate.ProxyAddressWatermark"]);
         }
     }
 

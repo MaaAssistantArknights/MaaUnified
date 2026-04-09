@@ -605,7 +605,7 @@ public partial class MainWindow : Window
         }
 
         e.Handled = true;
-        await VM.SettingsPage.ShowSoftwareUpdateNotImplementedAsync();
+        await VM.SettingsPage.CheckVersionUpdateWithDialogAsync();
     }
 
     private void OnManualUpdateResourceClick(object? sender, PointerPressedEventArgs e)
@@ -631,7 +631,7 @@ public partial class MainWindow : Window
 
     public void OpenRuntimeLogWindow()
     {
-        if (VM is null)
+        if (!global::MAAUnified.Platform.MaaUnifiedBuildFlavor.ExposesDeveloperTools || VM is null)
         {
             return;
         }

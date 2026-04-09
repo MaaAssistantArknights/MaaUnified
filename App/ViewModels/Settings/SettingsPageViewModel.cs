@@ -865,13 +865,20 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         get => _developerModeEnabled;
         set
         {
-            if (SetProperty(ref _developerModeEnabled, value))
+            var normalized = global::MAAUnified.Platform.MaaUnifiedBuildFlavor.ExposesDeveloperTools && value;
+            if (SetProperty(ref _developerModeEnabled, normalized))
             {
-                Runtime.LogService.SetVerboseEnabled(value);
+                Runtime.LogService.SetVerboseEnabled(normalized);
                 MarkGuiSettingsDirty();
             }
         }
     }
+
+    public bool CanUseDeveloperMode => global::MAAUnified.Platform.MaaUnifiedBuildFlavor.ExposesDeveloperTools;
+
+    public bool CanOpenRuntimeLogWindow => global::MAAUnified.Platform.MaaUnifiedBuildFlavor.ExposesDeveloperTools;
+
+    public bool CanUseIssueReportMaintenanceTools => global::MAAUnified.Platform.MaaUnifiedBuildFlavor.ExposesIssueReportMaintenanceTools;
 
     public bool StartSelf
     {
@@ -1625,7 +1632,9 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         }
     }
 
-    public bool CanUseAchievementDebugActions => AchievementDebugEnabled;
+    public bool CanUseAchievementDebugEntry => global::MAAUnified.Platform.MaaUnifiedBuildFlavor.ExposesAchievementDebugTools;
+
+    public bool CanUseAchievementDebugActions => CanUseAchievementDebugEntry && AchievementDebugEnabled;
 
     public string AchievementDebugMedalColor
     {
@@ -2598,8 +2607,11 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
                 break;
             case "IssueReport":
                 CurrentSectionActions.Add(new SettingsSectionActionItem("settings.build-issue-report", RootTexts["Settings.Action.BuildIssueReport"], IsPrimary: true));
-                CurrentSectionActions.Add(new SettingsSectionActionItem("settings.open-debug-directory", RootTexts["Settings.Action.OpenDebugDirectory"]));
-                CurrentSectionActions.Add(new SettingsSectionActionItem("settings.clear-image-cache", RootTexts["Settings.Action.ClearImageCache"]));
+                if (CanUseIssueReportMaintenanceTools)
+                {
+                    CurrentSectionActions.Add(new SettingsSectionActionItem("settings.open-debug-directory", RootTexts["Settings.Action.OpenDebugDirectory"]));
+                    CurrentSectionActions.Add(new SettingsSectionActionItem("settings.clear-image-cache", RootTexts["Settings.Action.ClearImageCache"]));
+                }
                 break;
             case "About":
                 CurrentSectionActions.Add(new SettingsSectionActionItem("settings.check-announcement", RootTexts["Settings.Action.CheckAnnouncement"], IsPrimary: true));
@@ -3378,6 +3390,11 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
 
     public void HandleAchievementDebugClick()
     {
+        if (!CanUseAchievementDebugEntry)
+        {
+            return;
+        }
+
         AchievementDebugTip = AchievementTextCatalog.GetPallasString(1, 10);
         if (AchievementDebugEnabled)
         {

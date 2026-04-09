@@ -135,12 +135,18 @@ public sealed partial class SettingsPageViewModel
 
     public async Task CheckVersionUpdateAsync(CancellationToken cancellationToken = default)
     {
-        await ShowSoftwareUpdateNotImplementedAsync(cancellationToken);
+        await RunVersionUpdateCheckInternalAsync(
+            "Settings.VersionUpdate.Check.Manual",
+            showDialog: true,
+            cancellationToken);
     }
 
     public async Task CheckVersionUpdateWithDialogAsync(CancellationToken cancellationToken = default)
     {
-        await ShowSoftwareUpdateNotImplementedAsync(cancellationToken);
+        await RunVersionUpdateCheckInternalAsync(
+            "Settings.VersionUpdate.Check.ManualDialog",
+            showDialog: true,
+            cancellationToken);
     }
 
     public async Task RunStartupVersionUpdateCheckAsync(CancellationToken cancellationToken = default)
@@ -151,14 +157,28 @@ public sealed partial class SettingsPageViewModel
         }
 
         _versionUpdateStartupCheckTriggered = true;
-        SetPendingVersionUpdateAvailability(false);
-        await Task.CompletedTask;
+        if (!VersionUpdateStartupCheck)
+        {
+            return;
+        }
+
+        await RunVersionUpdateCheckInternalAsync(
+            "Settings.VersionUpdate.Check.Startup",
+            showDialog: false,
+            cancellationToken);
     }
 
     public async Task RunScheduledVersionUpdateCheckAsync(CancellationToken cancellationToken = default)
     {
-        SetPendingVersionUpdateAvailability(false);
-        await Task.CompletedTask;
+        if (!VersionUpdateScheduledCheck)
+        {
+            return;
+        }
+
+        await RunVersionUpdateCheckInternalAsync(
+            "Settings.VersionUpdate.Check.Scheduled",
+            showDialog: false,
+            cancellationToken);
     }
 
     public async Task ManualUpdateResourceAsync(CancellationToken cancellationToken = default)
@@ -389,10 +409,14 @@ public sealed partial class SettingsPageViewModel
             VersionUpdatePackage = policy.VersionPackage;
             VersionUpdateDoNotShow = policy.DoNotShowUpdate;
         });
+        RefreshVersionUpdateSchedulerState();
         SyncVersionUpdateAvailabilityFromState();
     }
 
-    private async Task RunVersionUpdateCheckInternalAsync(string scope, CancellationToken cancellationToken)
+    private async Task RunVersionUpdateCheckInternalAsync(
+        string scope,
+        bool showDialog,
+        CancellationToken cancellationToken)
     {
         if (IsVersionUpdateActionRunning)
         {
@@ -417,15 +441,19 @@ public sealed partial class SettingsPageViewModel
             }
 
             await ApplyVersionUpdateCheckResultAsync(checkResult, cancellationToken);
-            await RefreshResourceUpdateAvailabilityAsync(
-                $"{scope}.Resource",
-                cancellationToken);
-            await HandlePreparedVersionUpdatePackageAsync(
-                checkResult,
-                $"{scope}.Package",
-                cancellationToken);
-            if (!HasVersionUpdateErrorMessage
-                && string.IsNullOrWhiteSpace(checkResult.PreparedPackagePath))
+            if (showDialog && checkResult.IsNewVersion)
+            {
+                await HandleVersionUpdateDialogAsync(
+                    checkResult,
+                    $"{scope}.Dialog",
+                    cancellationToken);
+            }
+            else if (!showDialog)
+            {
+                VersionUpdateStatusMessage = checkOperation.Message;
+                VersionUpdateErrorMessage = string.Empty;
+            }
+            else if (!HasVersionUpdateErrorMessage)
             {
                 VersionUpdateStatusMessage = checkOperation.Message;
             }
@@ -475,21 +503,89 @@ public sealed partial class SettingsPageViewModel
         }
     }
 
-    private async Task RefreshResourceUpdateAvailabilityAsync(
+    private async Task HandleVersionUpdateDialogAsync(
+        VersionUpdateCheckResult checkResult,
         string scope,
         CancellationToken cancellationToken)
     {
-        var checkOperation = await Runtime.VersionUpdateFeatureService.CheckResourceUpdateAsync(
-            BuildVersionUpdatePolicy(),
-            ConnectionGameSharedState.ClientType,
+        var chrome = CreateSettingsDialogChrome(
+            texts => new DialogChromeSnapshot(
+                title: texts.GetOrDefault("Settings.VersionUpdate.Dialog.Title", "Version Update"),
+                confirmText: texts.GetOrDefault("Settings.VersionUpdate.Dialog.Confirm", "Confirm"),
+                cancelText: texts.GetOrDefault("Settings.VersionUpdate.Dialog.Cancel", "Later")));
+        var chromeSnapshot = chrome.GetSnapshot();
+        var dialogResult = await _dialogService.ShowVersionUpdateAsync(
+            new VersionUpdateDialogRequest(
+                Title: chromeSnapshot.Title,
+                CurrentVersion: checkResult.CurrentVersion,
+                TargetVersion: checkResult.TargetVersion,
+                Summary: checkResult.Summary,
+                Body: checkResult.Body,
+                ConfirmText: chromeSnapshot.ConfirmText ?? RootTexts.GetOrDefault("Settings.VersionUpdate.Dialog.Confirm", "Confirm"),
+                CancelText: chromeSnapshot.CancelText ?? RootTexts.GetOrDefault("Settings.VersionUpdate.Dialog.Cancel", "Later"),
+                Chrome: chrome),
+            scope,
             cancellationToken);
-        var availability = await ApplyResultNoDialogAsync(checkOperation, scope, cancellationToken);
-        if (availability is null)
+
+        if (HasPackageResolutionFailure(checkResult))
         {
+            VersionUpdateStatusMessage = ResolveVersionUpdatePackageFailureMessage(checkResult);
+            VersionUpdateErrorMessage = string.Empty;
             return;
         }
 
-        SetPendingResourceUpdateAvailability(availability.IsUpdateAvailable);
+        switch (dialogResult.Return)
+        {
+            case DialogReturnSemantic.Confirm:
+                VersionUpdateStatusMessage = LocalizeSettingsText(
+                    "Settings.VersionUpdate.Status.DialogConfirmed",
+                    "版本更新弹窗确认完成。");
+                VersionUpdateErrorMessage = string.Empty;
+                await HandlePreparedVersionUpdatePackageAsync(
+                    checkResult,
+                    $"{scope}.Package",
+                    cancellationToken);
+                return;
+            case DialogReturnSemantic.Cancel:
+                VersionUpdateStatusMessage = LocalizeSettingsText(
+                    "Settings.VersionUpdate.Status.DialogCancelled",
+                    "版本更新弹窗已取消。");
+                VersionUpdateErrorMessage = string.Empty;
+                return;
+            default:
+                VersionUpdateStatusMessage = LocalizeSettingsText(
+                    "Settings.VersionUpdate.Status.DialogClosed",
+                    "版本更新弹窗已关闭。");
+                VersionUpdateErrorMessage = string.Empty;
+                return;
+        }
+    }
+
+    private static bool HasPackageResolutionFailure(VersionUpdateCheckResult checkResult)
+    {
+        return checkResult.PackageResolutionStatus is
+            PackageResolutionStatus.WindowsManualUpdateRequired
+            or PackageResolutionStatus.Unavailable
+            or PackageResolutionStatus.DownloadFailed;
+    }
+
+    private string ResolveVersionUpdatePackageFailureMessage(VersionUpdateCheckResult checkResult)
+    {
+        var fallback = ResolveVersionUpdatePackageFailureFallback(checkResult.PackageResolutionStatus);
+        return string.IsNullOrWhiteSpace(checkResult.PackageFailureMessageKey)
+            ? fallback
+            : LocalizeSettingsText(checkResult.PackageFailureMessageKey, fallback);
+    }
+
+    private static string ResolveVersionUpdatePackageFailureFallback(PackageResolutionStatus status)
+    {
+        return status switch
+        {
+            PackageResolutionStatus.WindowsManualUpdateRequired => "Windows 版目前暂未在 release 发布，请手动更新。",
+            PackageResolutionStatus.Unavailable => "更新失败。",
+            PackageResolutionStatus.DownloadFailed => "更新失败。",
+            _ => string.Empty,
+        };
     }
 
     private async Task HandlePreparedVersionUpdatePackageAsync(
@@ -589,7 +685,10 @@ public sealed partial class SettingsPageViewModel
 
     private void SyncVersionUpdateAvailabilityFromState()
     {
-        SetPendingVersionUpdateAvailability(false);
+        SetPendingVersionUpdateAvailability(
+            !VersionUpdateDoNotShow
+            && (!string.IsNullOrWhiteSpace(VersionUpdateName)
+                || !string.IsNullOrWhiteSpace(VersionUpdatePackage)));
     }
 
     private void SetPendingVersionUpdateAvailability(bool available)

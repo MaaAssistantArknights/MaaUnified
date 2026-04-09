@@ -2247,7 +2247,7 @@
     <value>プロキシアドレス</value>
   </data>
   <data name="Settings.VersionUpdate.ProxyAddressWatermark" xml:space="preserve">
-    <value>&lt;IP&gt;:&lt;連接埠&gt;</value>
+    <value>&lt;IP&gt;:&lt;Port&gt;</value>
   </data>
   <data name="Settings.VersionUpdate.ProxyType" xml:space="preserve">
     <value>プロキシ種類</value>
@@ -2284,6 +2284,15 @@
   </data>
   <data name="Settings.VersionUpdate.Status.DialogConfirmed" xml:space="preserve">
     <value>バージョン更新ダイアログを確認しました。</value>
+  </data>
+  <data name="Settings.VersionUpdate.Status.PackageDownloadFailed" xml:space="preserve">
+    <value>更新に失敗しました。</value>
+  </data>
+  <data name="Settings.VersionUpdate.Status.PackageUnavailable" xml:space="preserve">
+    <value>更新に失敗しました。</value>
+  </data>
+  <data name="Settings.VersionUpdate.Status.WindowsManualUpdateRequired" xml:space="preserve">
+    <value>Windows 版はまだ release で公開されていません。手動で更新してください。</value>
   </data>
   <data name="Settings.VersionUpdate.Status.MirrorCdkExpired" xml:space="preserve">
     <value>MirrorChyan CDK は期限切れです。</value>
@@ -3966,6 +3975,9 @@
   </data>
   <data name="Settings.VersionUpdate.RestartPending" xml:space="preserve">
     <value>更新パッケージのダウンロードが完了しました。更新を適用するには、後で MAA を再起動してください。</value>
+  </data>
+  <data name="Settings.VersionUpdate.RestartPendingWhileRunning" xml:space="preserve">
+    <value>更新パッケージのダウンロードが完了しました。現在タスクが実行中のため、空き時間に MAA を再起動して更新を適用してください。</value>
   </data>
   <data name="Settings.VersionUpdate.SoftwarePlaceholder.Cancel" xml:space="preserve">
     <value>閉じる</value>

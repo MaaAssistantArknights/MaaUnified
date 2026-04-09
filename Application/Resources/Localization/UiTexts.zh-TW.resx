@@ -2207,6 +2207,15 @@
   <data name="Settings.VersionUpdate.Status.DialogConfirmed" xml:space="preserve">
     <value>版本更新對話方塊確認完成。</value>
   </data>
+  <data name="Settings.VersionUpdate.Status.PackageDownloadFailed" xml:space="preserve">
+    <value>更新失敗。</value>
+  </data>
+  <data name="Settings.VersionUpdate.Status.PackageUnavailable" xml:space="preserve">
+    <value>更新失敗。</value>
+  </data>
+  <data name="Settings.VersionUpdate.Status.WindowsManualUpdateRequired" xml:space="preserve">
+    <value>Windows 版目前尚未在 release 發佈，請手動更新。</value>
+  </data>
   <data name="Settings.VersionUpdate.Status.MirrorCdkExpired" xml:space="preserve">
     <value>MirrorChyan CDK 已過期。</value>
   </data>
@@ -3969,6 +3978,9 @@
   </data>
   <data name="Settings.VersionUpdate.RestartPending" xml:space="preserve">
     <value>更新套件已下載完成，請稍後重新啟動 MAA 以套用更新。</value>
+  </data>
+  <data name="Settings.VersionUpdate.RestartPendingWhileRunning" xml:space="preserve">
+    <value>更新套件已下載完成。目前任務仍在執行中，請在空閒時重新啟動 MAA 以套用更新。</value>
   </data>
   <data name="Settings.VersionUpdate.SoftwarePlaceholder.Cancel" xml:space="preserve">
     <value>關閉</value>

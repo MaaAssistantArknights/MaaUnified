@@ -75,8 +75,8 @@ public sealed class SettingsModuleCM1FeatureTests
                     "prerelease": false,
                     "assets": [
                       {
-                        "name": "MAAUnified-v2.0.0.zip",
-                        "browser_download_url": "https://example.com/MAAUnified-v2.0.0.zip",
+                        "name": "MAAUnified-v2.0.0-linux-x64.tar.gz",
+                        "browser_download_url": "https://example.com/MAAUnified-v2.0.0-linux-x64.tar.gz",
                         "size": 1234
                       }
                     ]
@@ -86,11 +86,13 @@ public sealed class SettingsModuleCM1FeatureTests
 
             vm.VersionUpdateVersionType = "Stable";
             vm.VersionUpdateResourceApi = feedPath;
+            vm.VersionUpdateAutoDownload = false;
 
             await vm.CheckVersionUpdateAsync();
 
-            Assert.Contains("暂未实现软件更新", vm.VersionUpdateStatusMessage, StringComparison.Ordinal);
+            Assert.Equal(vm.RootTexts["Settings.VersionUpdate.Status.DialogClosed"], vm.VersionUpdateStatusMessage);
             Assert.False(vm.HasVersionUpdateErrorMessage);
+            Assert.True(vm.HasPendingVersionUpdateAvailability);
             Assert.Equal("core-9.9.9", vm.UpdatePanelCoreVersion);
         }
         finally
@@ -130,11 +132,48 @@ public sealed class SettingsModuleCM1FeatureTests
         var dialogRaised = false;
         fixture.Runtime.DialogFeatureService.ErrorRaised += (_, _) => dialogRaised = true;
 
-        vm.VersionUpdateVersionType = "Preview";
-        await vm.CheckVersionUpdateAsync();
+        var feedPath = Path.Combine(Path.GetTempPath(), $"maa-unified-settings-feed-{Guid.NewGuid():N}.json");
+        try
+        {
+            await File.WriteAllTextAsync(feedPath, """
+                [
+                  {
+                    "tag_name": "v2.0.0",
+                    "name": "Release v2.0.0",
+                    "body": "Line one.\nLine two.",
+                    "prerelease": false,
+                    "assets": [
+                      {
+                        "name": "MAAUnified-v2.0.0-linux-x64.tar.gz",
+                        "browser_download_url": "https://example.com/MAAUnified-v2.0.0-linux-x64.tar.gz",
+                        "size": 1234
+                      }
+                    ]
+                  }
+                ]
+                """);
+
+            vm.VersionUpdateVersionType = "Stable";
+            vm.VersionUpdateResourceApi = feedPath;
+            vm.VersionUpdateAutoDownload = false;
+            await vm.CheckVersionUpdateAsync();
+        }
+        finally
+        {
+            try
+            {
+                if (File.Exists(feedPath))
+                {
+                    File.Delete(feedPath);
+                }
+            }
+            catch
+            {
+            }
+        }
 
         Assert.False(vm.HasVersionUpdateErrorMessage);
-        Assert.Contains("暂未实现软件更新", vm.VersionUpdateStatusMessage, StringComparison.Ordinal);
+        Assert.Equal(vm.RootTexts["Settings.VersionUpdate.Status.DialogClosed"], vm.VersionUpdateStatusMessage);
         Assert.False(dialogRaised);
     }
 

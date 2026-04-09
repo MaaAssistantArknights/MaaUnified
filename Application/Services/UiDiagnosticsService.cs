@@ -25,12 +25,14 @@ public sealed class UiDiagnosticsService
         ErrorLogPath = Path.Combine(_debugDirectory, "avalonia-ui-errors.log");
         EventLogPath = Path.Combine(_debugDirectory, "avalonia-ui-events.log");
         PlatformEventLogPath = Path.Combine(_debugDirectory, "avalonia-platform-events.log");
-        Directory.CreateDirectory(_debugDirectory);
 
-        uiLogService.LogReceived += log =>
+        if (global::MAAUnified.Platform.MaaUnifiedBuildFlavor.CapturesVerboseDiagnostics)
         {
-            _ = WriteLineAsync(EventLogPath, $"{log.Timestamp:O} [{log.Level}] {log.Message}");
-        };
+            uiLogService.LogReceived += log =>
+            {
+                _ = WriteLineAsync(EventLogPath, $"{log.Timestamp:O} [{log.Level}] {log.Message}");
+            };
+        }
     }
 
     public string ErrorLogPath { get; }
@@ -90,6 +92,11 @@ public sealed class UiDiagnosticsService
 
     public Task RecordEventAsync(string scope, string message, CancellationToken cancellationToken = default)
     {
+        if (!global::MAAUnified.Platform.MaaUnifiedBuildFlavor.CapturesVerboseDiagnostics)
+        {
+            return Task.CompletedTask;
+        }
+
         return WriteLineAsync(EventLogPath, $"{DateTimeOffset.UtcNow:O} [EVENT] [{scope}] {message}", cancellationToken);
     }
 
@@ -172,6 +179,11 @@ public sealed class UiDiagnosticsService
         TimeSpan? minInterval = null,
         CancellationToken cancellationToken = default)
     {
+        if (!global::MAAUnified.Platform.MaaUnifiedBuildFlavor.CapturesVerboseDiagnostics)
+        {
+            return Task.CompletedTask;
+        }
+
         if (string.IsNullOrWhiteSpace(eventType) || string.IsNullOrWhiteSpace(scope))
         {
             return Task.CompletedTask;
@@ -199,6 +211,11 @@ public sealed class UiDiagnosticsService
         PlatformOperationResult result,
         CancellationToken cancellationToken = default)
     {
+        if (!global::MAAUnified.Platform.MaaUnifiedBuildFlavor.CapturesVerboseDiagnostics)
+        {
+            return Task.CompletedTask;
+        }
+
         var payload = new PlatformEventLogLine(
             DateTimeOffset.UtcNow,
             capability,
@@ -219,6 +236,11 @@ public sealed class UiDiagnosticsService
         PlatformOperationResult<T> result,
         CancellationToken cancellationToken = default)
     {
+        if (!global::MAAUnified.Platform.MaaUnifiedBuildFlavor.CapturesVerboseDiagnostics)
+        {
+            return Task.CompletedTask;
+        }
+
         var payload = new PlatformEventLogLine(
             DateTimeOffset.UtcNow,
             capability,
@@ -263,16 +285,19 @@ public sealed class UiDiagnosticsService
             ErrorLogPath,
             "debug/avalonia-ui-errors.log",
             "UI error log is empty or missing.");
-        AddFileOrPlaceholder(
-            archive,
-            EventLogPath,
-            "debug/avalonia-ui-events.log",
-            "UI event log is empty or missing.");
-        AddFileOrPlaceholder(
-            archive,
-            PlatformEventLogPath,
-            "debug/avalonia-platform-events.log",
-            "Platform event log is empty or missing.");
+        if (global::MAAUnified.Platform.MaaUnifiedBuildFlavor.CapturesVerboseDiagnostics)
+        {
+            AddFileOrPlaceholder(
+                archive,
+                EventLogPath,
+                "debug/avalonia-ui-events.log",
+                "UI event log is empty or missing.");
+            AddFileOrPlaceholder(
+                archive,
+                PlatformEventLogPath,
+                "debug/avalonia-platform-events.log",
+                "Platform event log is empty or missing.");
+        }
 
         await RecordEventAsync("IssueReport", $"Support bundle generated: {outputPath}", cancellationToken);
         return outputPath;

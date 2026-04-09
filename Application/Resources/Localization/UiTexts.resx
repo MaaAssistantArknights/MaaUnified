@@ -3530,7 +3530,7 @@ Session state `{0}` does not allow {2}.</value>
     <value>代理地址</value>
   </data>
   <data name="Settings.VersionUpdate.ProxyAddressWatermark" xml:space="preserve">
-    <value>&lt;IP&gt;:&lt;ポート&gt;</value>
+    <value>&lt;IP&gt;:&lt;Port&gt;</value>
   </data>
   <data name="Settings.VersionUpdate.ProxyType" xml:space="preserve">
     <value>代理类型</value>
@@ -3567,6 +3567,15 @@ Session state `{0}` does not allow {2}.</value>
   </data>
   <data name="Settings.VersionUpdate.Status.DialogConfirmed" xml:space="preserve">
     <value>版本更新弹窗确认完成。</value>
+  </data>
+  <data name="Settings.VersionUpdate.Status.PackageDownloadFailed" xml:space="preserve">
+    <value>更新失败。</value>
+  </data>
+  <data name="Settings.VersionUpdate.Status.PackageUnavailable" xml:space="preserve">
+    <value>更新失败。</value>
+  </data>
+  <data name="Settings.VersionUpdate.Status.WindowsManualUpdateRequired" xml:space="preserve">
+    <value>Windows 版目前暂未在 release 发布，请手动更新。</value>
   </data>
   <data name="Settings.VersionUpdate.Status.MirrorCdkExpired" xml:space="preserve">
     <value>MirrorChyan CDK 已过期。</value>
@@ -4728,6 +4737,9 @@ Session state `{0}` does not allow {2}.</value>
   </data>
   <data name="Settings.VersionUpdate.RestartPending" xml:space="preserve">
     <value>更新包已下载完成，请稍后重启 MAA 以应用更新。</value>
+  </data>
+  <data name="Settings.VersionUpdate.RestartPendingWhileRunning" xml:space="preserve">
+    <value>更新包已下载完成。当前任务仍在运行，请在空闲时重启 MAA 以应用更新。</value>
   </data>
   <data name="Settings.VersionUpdate.SoftwarePlaceholder.Cancel" xml:space="preserve">
     <value>关闭</value>

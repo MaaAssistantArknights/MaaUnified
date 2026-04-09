@@ -984,6 +984,9 @@ public sealed class WindowsGpuCapabilityService : IGpuCapabilityService
         IReadOnlyList<WindowsGpuCandidate>? candidates = null,
         Exception? exception = null)
     {
+#if MAAUNIFIED_MINIMAL_DIAGNOSTICS
+        return;
+#else
         try
         {
             var debugDirectory = Path.Combine(AppContext.BaseDirectory, "debug");
@@ -1034,6 +1037,7 @@ public sealed class WindowsGpuCapabilityService : IGpuCapabilityService
         {
             // Probe diagnostics are best-effort only.
         }
+#endif
     }
 
     private sealed class GpuProbeProgress
