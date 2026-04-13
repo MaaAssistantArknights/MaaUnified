@@ -19,6 +19,27 @@
           </DataTemplate>
         </ComboBox.ItemTemplate>
       </ComboBox>
+      <StackPanel Classes="settings-centered-column"
+                  Margin="0,8,0,0"
+                  IsVisible="{Binding ConnectionGameSharedState.IsYoStarEnClientType}">
+        <TextBlock Classes="settings-centered-text"
+                   Foreground="OrangeRed"
+                   Text="YoStar EN resolution guide is available." />
+        <Button Classes="wpf-button wpf-button-secondary"
+                HorizontalAlignment="Center"
+                Content="Open YoStar EN Resolution Guide"
+                Click="OnOpenYoStarResolutionGuideClick" />
+      </StackPanel>
+      <StackPanel Classes="settings-centered-column"
+                  Margin="0,8,0,0"
+                  IsVisible="{Binding ConnectionGameSharedState.ShowOverseasClientHint}">
+        <TextBlock Classes="settings-centered-text subtle"
+                   Text="Using an overseas client? See adaptation help." />
+        <Button Classes="wpf-button wpf-button-secondary"
+                HorizontalAlignment="Center"
+                Content="Open Overseas Adaptation Guide"
+                Click="OnOpenOverseasAdaptationGuideClick" />
+      </StackPanel>
     </StackPanel>
 
     <StackPanel Grid.Row="2"
@@ -41,7 +62,10 @@
         <controls:TooltipHint Grid.Column="1" Tip="{Binding RootTexts[Settings.Game.StartsWithScriptTip]}" />
       </Grid>
       <TextBox Width="{DynamicResource MAA.Size.Settings.FieldInputWidth}"
-               Text="{Binding StartsWithScript, UpdateSourceTrigger=LostFocus}" />
+               Text="{Binding StartsWithScript, UpdateSourceTrigger=LostFocus}"
+               DragDrop.AllowDrop="True"
+               DragDrop.DragOver="OnScriptPathDragOver"
+               DragDrop.Drop="OnStartsWithScriptDrop" />
     </StackPanel>
 
     <StackPanel Grid.Row="4"
@@ -56,7 +80,10 @@
         <controls:TooltipHint Grid.Column="1" Tip="{Binding RootTexts[Settings.Game.EndsWithScriptTip]}" />
       </Grid>
       <TextBox Width="{DynamicResource MAA.Size.Settings.FieldInputWidth}"
-               Text="{Binding EndsWithScript, UpdateSourceTrigger=LostFocus}" />
+               Text="{Binding EndsWithScript, UpdateSourceTrigger=LostFocus}"
+               DragDrop.AllowDrop="True"
+               DragDrop.DragOver="OnScriptPathDragOver"
+               DragDrop.Drop="OnEndsWithScriptDrop" />
     </StackPanel>
 
     <StackPanel Grid.Row="5"

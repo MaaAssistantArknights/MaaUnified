@@ -91,6 +91,8 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         nameof(OperBoxCopyToClipboardText),
         nameof(OperBoxNotHaveHeader),
         nameof(OperBoxHaveHeader),
+        nameof(LastOperBoxSyncTimeText),
+        nameof(LastOperBoxSyncDisplayText),
         nameof(DepotExportArkPlannerText),
         nameof(DepotExportLoliconText),
         nameof(LastDepotSyncTimeText),
@@ -165,6 +167,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
     private string _operBoxInfo = string.Empty;
     private int _operBoxSelectedIndex;
     private string _operBoxMode = "owned";
+    private DateTimeOffset? _lastOperBoxSyncTime;
 
     private string _depotInfo = string.Empty;
     private DateTimeOffset? _lastDepotSyncTime;
@@ -621,6 +624,42 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         get => _operBoxMode;
         set => SetTrackedProperty(ref _operBoxMode, string.IsNullOrWhiteSpace(value) ? "owned" : value.Trim());
     }
+
+    public DateTimeOffset? LastOperBoxSyncTime
+    {
+        get => _lastOperBoxSyncTime;
+        private set
+        {
+            if (SetProperty(ref _lastOperBoxSyncTime, value))
+            {
+                OnPropertyChanged(nameof(LastOperBoxSyncTimeText));
+                OnPropertyChanged(nameof(HasLastOperBoxSyncTime));
+                OnPropertyChanged(nameof(LastOperBoxSyncDisplayText));
+            }
+        }
+    }
+
+    public string LastOperBoxSyncTimeText
+    {
+        get
+        {
+            if (LastOperBoxSyncTime is null)
+            {
+                return T("Toolbox.Depot.NeverSynced", "Not synced yet");
+            }
+
+            return LastOperBoxSyncTime.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+        }
+    }
+
+    public bool HasLastOperBoxSyncTime => LastOperBoxSyncTime is not null;
+
+    public string LastOperBoxSyncDisplayText => HasLastOperBoxSyncTime
+        ? string.Format(
+            CultureInfo.InvariantCulture,
+            T("Toolbox.Depot.LastSync", "Last sync: {0}"),
+            LastOperBoxSyncTimeText)
+        : string.Empty;
 
     public string DepotInfo
     {
@@ -1487,6 +1526,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         OperBoxNotHaveList.Clear();
         _operBoxListsMaterialized = false;
         OperBoxSelectedIndex = 1;
+        LastOperBoxSyncTime = null;
     }
 
     private void PrepareDepotForStart()
@@ -2034,6 +2074,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         }
 
         RebuildOperBoxLists();
+        LastOperBoxSyncTime = DateTimeOffset.UtcNow;
         OperBoxInfo = $"{T("Toolbox.Status.RecognitionCompleted", "Recognition completed.")}{Environment.NewLine}" +
             T("Toolbox.Tip.OperBoxRecognition", "Special markers may affect recognition accuracy.");
         _ = PersistOperBoxAsync(CancellationToken.None);
@@ -2680,7 +2721,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
 
     private async Task PersistOperBoxAsync(CancellationToken cancellationToken)
     {
-        var payload = JsonSerializer.Serialize(_operBoxOwnedById.Values
+        var ownOpers = _operBoxOwnedById.Values
             .OrderByDescending(item => item.Rarity)
             .ThenBy(item => item.Id, StringComparer.Ordinal)
             .Select(item => new PersistedOperBoxOperator(
@@ -2690,8 +2731,19 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
                 item.Elite,
                 item.Level,
                 true,
-                item.Potential)));
-        var result = await Runtime.SettingsFeatureService.SaveGlobalSettingAsync(LegacyConfigurationKeys.OperBoxData, payload, cancellationToken);
+                item.Potential))
+            .ToArray();
+        var payload = new JsonObject
+        {
+            ["done"] = true,
+            ["own_opers"] = JsonSerializer.SerializeToNode(ownOpers),
+        };
+        if (LastOperBoxSyncTime is not null)
+        {
+            payload["syncTime"] = LastOperBoxSyncTime.Value.ToString("O", CultureInfo.InvariantCulture);
+        }
+
+        var result = await Runtime.SettingsFeatureService.SaveGlobalSettingAsync(LegacyConfigurationKeys.OperBoxData, payload.ToJsonString(), cancellationToken);
         if (!result.Success)
         {
             var failed = UiOperationResult.Fail(result.Error?.Code ?? UiErrorCode.SettingsSaveFailed, result.Message, result.Error?.Details);
@@ -2732,6 +2784,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         OperBoxHaveList.Clear();
         OperBoxNotHaveList.Clear();
         _operBoxListsMaterialized = false;
+        LastOperBoxSyncTime = null;
 
         if (!Runtime.ConfigurationService.CurrentConfig.GlobalValues.TryGetValue(LegacyConfigurationKeys.OperBoxData, out var node) || node is null)
         {
@@ -2748,13 +2801,34 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
                 return;
             }
 
-            var items = JsonSerializer.Deserialize<List<PersistedOperBoxOperator>>(payload, PersistedPayloadJsonOptions);
-            if (items is not null)
+            var parsed = JsonNode.Parse(payload);
+            var ownNode = parsed switch
+            {
+                JsonArray legacyArray => legacyArray,
+                JsonObject modernObject when modernObject["own_opers"] is JsonArray ownOpers => ownOpers,
+                _ => null,
+            };
+            if (ownNode is null)
+            {
+                return;
+            }
+
+            var items = JsonSerializer.Deserialize<List<PersistedOperBoxOperator>>(ownNode.ToJsonString(), PersistedPayloadJsonOptions);
+            if (items is not null && items.Count > 0)
             {
                 foreach (var item in items.Where(item => item is not null && item.Own))
                 {
                     _operBoxOwnedById[item!.Id] = new ToolboxOwnedOperatorState(item.Id, item.Name, item.Rarity, item.Elite, item.Level, item.Potential);
                     _operBoxPotential[item.Id] = item.Potential;
+                }
+            }
+
+            if (parsed is JsonObject persistedObject)
+            {
+                var syncTime = ReadString(persistedObject, "syncTime");
+                if (DateTimeOffset.TryParse(syncTime, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var parsedSyncTime))
+                {
+                    LastOperBoxSyncTime = parsedSyncTime.ToUniversalTime();
                 }
             }
         }

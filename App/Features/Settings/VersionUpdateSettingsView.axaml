@@ -157,7 +157,13 @@
         <StackPanel MaxWidth="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
                     Spacing="4"
                     Margin="0,6,0,0">
-          <TextBlock Text="{Binding VersionUpdateStatusMessage}" TextWrapping="Wrap" />
+          <TextBlock Classes="settings-centered-text subtle long-wrap"
+                     Text="{Binding VersionUpdateActivityMessage}"
+                     IsVisible="{Binding HasVersionUpdateActivityMessage}"
+                     TextWrapping="Wrap" />
+          <TextBlock Classes="settings-centered-text long-wrap"
+                     Text="{Binding VersionUpdateStatusMessage}"
+                     TextWrapping="Wrap" />
           <TextBlock Classes="state-error"
                      Text="{Binding VersionUpdateErrorMessage}"
                      IsVisible="{Binding HasVersionUpdateErrorMessage}"

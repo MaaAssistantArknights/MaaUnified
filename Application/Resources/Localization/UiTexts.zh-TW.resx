@@ -1841,6 +1841,12 @@
   <data name="Settings.IssueReport.OpenRuntimeLogWindow" xml:space="preserve">
     <value>開啟執行日誌視窗</value>
   </data>
+  <data name="Settings.IssueReport.CheckUpdateBeforeReportingIssue" xml:space="preserve">
+    <value>請先升級並測試新版是否仍有此問題，確認非 ｢{key=Help}｣ 後再進行 ｢{key=Issue}｣</value>
+  </data>
+  <data name="Settings.IssueReport.CheckHelpBeforeReportingIssue" xml:space="preserve">
+    <value>請在確認您的問題不屬於 ｢{key=Help}｣ 後，再進行 ｢{key=Issue}｣</value>
+  </data>
   <data name="Settings.IssueReport.PreflightNote" xml:space="preserve">
     <value>提交回報前請先閱讀 FAQ，附上日誌壓縮包可更快定位問題。</value>
   </data>
@@ -2418,6 +2424,9 @@
   </data>
   <data name="TaskQueue.Module.Custom" xml:space="preserve">
     <value>自訂任務</value>
+  </data>
+  <data name="TaskQueue.Module.UserDataUpdate" xml:space="preserve">
+    <value>更新使用者資料</value>
   </data>
   <data name="TaskQueue.Module.Fight" xml:space="preserve">
     <value>理智作戰</value>
@@ -3989,10 +3998,10 @@
     <value>知道了</value>
   </data>
   <data name="Settings.VersionUpdate.SoftwarePlaceholder.Message" xml:space="preserve">
-    <value>MAA Unified 尚未實作軟體更新。請繼續使用 WPF 版本處理軟體更新。</value>
+    <value>軟體更新已接入。請前往「設定 &gt; Version Update」檢查、下載並套用更新。</value>
   </data>
   <data name="Settings.VersionUpdate.SoftwarePlaceholder.Status" xml:space="preserve">
-    <value>MAA Unified 尚未實作軟體更新。</value>
+    <value>軟體更新已可用。</value>
   </data>
   <data name="Settings.VersionUpdate.SoftwarePlaceholder.Title" xml:space="preserve">
     <value>軟體更新</value>

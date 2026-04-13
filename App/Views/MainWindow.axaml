@@ -129,15 +129,33 @@
       </Grid>
     </Grid>
 
-    <ItemsControl ItemsSource="{Binding AchievementToasts}"
-                  HorizontalAlignment="Right"
-                  VerticalAlignment="Top"
-                  Margin="0,12,8,0">
-      <ItemsControl.ItemsPanel>
-        <ItemsPanelTemplate>
-          <StackPanel Spacing="0" />
-        </ItemsPanelTemplate>
-      </ItemsControl.ItemsPanel>
-    </ItemsControl>
+    <StackPanel HorizontalAlignment="Right"
+                VerticalAlignment="Top"
+                Margin="0,12,8,0"
+                Spacing="8">
+      <StackPanel IsVisible="{Binding HasWindowUpdateInfo}"
+                  Spacing="6">
+        <Button Classes="wpf-button wpf-button-secondary"
+                MinWidth="220"
+                HorizontalAlignment="Right"
+                Content="{Binding WindowVersionUpdateInfo}"
+                IsVisible="{Binding HasWindowVersionUpdateInfo}"
+                Click="OnManualUpdateClick" />
+        <Button Classes="wpf-button wpf-button-secondary"
+                MinWidth="220"
+                HorizontalAlignment="Right"
+                Content="{Binding WindowResourceUpdateInfo}"
+                IsVisible="{Binding HasWindowResourceUpdateInfo}"
+                Click="OnManualUpdateResourceClick" />
+      </StackPanel>
+
+      <ItemsControl ItemsSource="{Binding AchievementToasts}">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate>
+            <StackPanel Spacing="0" />
+          </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+      </ItemsControl>
+    </StackPanel>
   </Grid>
 </Window>

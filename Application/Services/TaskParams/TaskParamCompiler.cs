@@ -25,8 +25,19 @@ public static class TaskParamCompiler
     private const string UiAnnihilationStage = "_ui_annihilation_stage";
     private const string UiHideSeries = "_ui_hide_series";
     private const string UiAllowUseStoneSave = "_ui_allow_use_stone_save";
+    private const string UiUseWeeklySchedule = "_ui_use_weekly_schedule";
+    private const string UiWeeklyScheduleSunday = "_ui_weekly_schedule_sunday";
+    private const string UiWeeklyScheduleMonday = "_ui_weekly_schedule_monday";
+    private const string UiWeeklyScheduleTuesday = "_ui_weekly_schedule_tuesday";
+    private const string UiWeeklyScheduleWednesday = "_ui_weekly_schedule_wednesday";
+    private const string UiWeeklyScheduleThursday = "_ui_weekly_schedule_thursday";
+    private const string UiWeeklyScheduleFriday = "_ui_weekly_schedule_friday";
+    private const string UiWeeklyScheduleSaturday = "_ui_weekly_schedule_saturday";
     private const string UiMallCreditFightLastTime = "_ui_mall_credit_fight_last_time";
     private const string UiMallVisitFriendsLastTime = "_ui_mall_visit_friends_last_time";
+    private const string UserDataUpdateOperBox = "update_oper_box";
+    private const string UserDataUpdateDepot = "update_depot";
+    private const string UserDataUpdateTriggerInterval = "trigger_interval";
     private static readonly Regex RoguelikeSeedRegex = new("^[0-9A-Za-z]+,rogue_\\d+,\\d+$", RegexOptions.Compiled);
     private static readonly HashSet<int> RoguelikeModes = [0, 1, 4, 5, 6, 7, 20001];
     private static readonly HashSet<string> RoguelikeThemes = new(StringComparer.OrdinalIgnoreCase) { "JieGarden", "Phantom", "Mizuki", "Sami", "Sarkaz" };
@@ -50,6 +61,7 @@ public static class TaskParamCompiler
         "Award",
         "Roguelike",
         "Reclamation",
+        "UserDataUpdate",
         "Custom",
         "PostAction",
     };
@@ -88,6 +100,7 @@ public static class TaskParamCompiler
             "Award" => "Award",
             "Roguelike" => "Roguelike",
             "Reclamation" => "Reclamation",
+            "UserDataUpdate" => "UserDataUpdate",
             "Custom" => "Custom",
             "PostAction" => "PostAction",
             _ => normalized,
@@ -108,6 +121,7 @@ public static class TaskParamCompiler
             "Recruit" => (normalizedType, CompileRecruit(new RecruitTaskParamsDto(), profile, config).Params),
             "Roguelike" => (normalizedType, CompileRoguelike(new RoguelikeTaskParamsDto(), profile, config).Params),
             "Reclamation" => (normalizedType, CompileReclamation(new ReclamationTaskParamsDto(), profile, config).Params),
+            "UserDataUpdate" => (normalizedType, CompileUserDataUpdate(new UserDataUpdateTaskParamsDto()).Params),
             "Custom" => (normalizedType, CompileCustom(new CustomTaskParamsDto(), profile, config).Params),
             _ => (normalizedType, new JsonObject()),
         };
@@ -235,6 +249,14 @@ public static class TaskParamCompiler
             StageResetMode = ReadString(parameters, UiStageResetMode, false, issues, "fight.stage_reset_mode", "Current"),
             HideSeries = ReadBool(parameters, UiHideSeries, false),
             AllowUseStoneSave = ReadBool(parameters, UiAllowUseStoneSave, false),
+            UseWeeklySchedule = ReadBool(parameters, UiUseWeeklySchedule, false),
+            WeeklyScheduleSunday = ReadBool(parameters, UiWeeklyScheduleSunday, false, issues, "fight.weekly_schedule.sunday", true),
+            WeeklyScheduleMonday = ReadBool(parameters, UiWeeklyScheduleMonday, false, issues, "fight.weekly_schedule.monday", true),
+            WeeklyScheduleTuesday = ReadBool(parameters, UiWeeklyScheduleTuesday, false, issues, "fight.weekly_schedule.tuesday", true),
+            WeeklyScheduleWednesday = ReadBool(parameters, UiWeeklyScheduleWednesday, false, issues, "fight.weekly_schedule.wednesday", true),
+            WeeklyScheduleThursday = ReadBool(parameters, UiWeeklyScheduleThursday, false, issues, "fight.weekly_schedule.thursday", true),
+            WeeklyScheduleFriday = ReadBool(parameters, UiWeeklyScheduleFriday, false, issues, "fight.weekly_schedule.friday", true),
+            WeeklyScheduleSaturday = ReadBool(parameters, UiWeeklyScheduleSaturday, false, issues, "fight.weekly_schedule.saturday", true),
         };
 
         return (dto, issues);
@@ -323,6 +345,14 @@ public static class TaskParamCompiler
             [UiAnnihilationStage] = dto.AnnihilationStage,
             [UiHideSeries] = dto.HideSeries,
             [UiAllowUseStoneSave] = dto.AllowUseStoneSave,
+            [UiUseWeeklySchedule] = dto.UseWeeklySchedule,
+            [UiWeeklyScheduleSunday] = dto.WeeklyScheduleSunday,
+            [UiWeeklyScheduleMonday] = dto.WeeklyScheduleMonday,
+            [UiWeeklyScheduleTuesday] = dto.WeeklyScheduleTuesday,
+            [UiWeeklyScheduleWednesday] = dto.WeeklyScheduleWednesday,
+            [UiWeeklyScheduleThursday] = dto.WeeklyScheduleThursday,
+            [UiWeeklyScheduleFriday] = dto.WeeklyScheduleFriday,
+            [UiWeeklyScheduleSaturday] = dto.WeeklyScheduleSaturday,
         };
 
         if (dto.EnableTargetDrop && !string.IsNullOrWhiteSpace(dto.DropId))
@@ -888,6 +918,57 @@ public static class TaskParamCompiler
         };
     }
 
+    public static (UserDataUpdateTaskParamsDto Dto, IReadOnlyList<TaskValidationIssue> Issues) ReadUserDataUpdate(
+        UnifiedTaskItem task,
+        bool strict)
+    {
+        var issues = new List<TaskValidationIssue>();
+        var parameters = task.Params ?? TaskModuleParameterDefaults.CreateUserDataUpdateDefaults();
+
+        var dto = new UserDataUpdateTaskParamsDto
+        {
+            UpdateOperBox = ReadBool(parameters, UserDataUpdateOperBox, strict, issues, "user_data_update.update_oper_box", true),
+            UpdateDepot = ReadBool(parameters, UserDataUpdateDepot, strict, issues, "user_data_update.update_depot", true),
+            TriggerInterval = NormalizeUserDataUpdateTriggerInterval(
+                ReadString(
+                    parameters,
+                    UserDataUpdateTriggerInterval,
+                    strict,
+                    issues,
+                    "user_data_update.trigger_interval",
+                    UserDataUpdateTaskParamsDto.TriggerEveryTime)),
+        };
+
+        return (dto, issues);
+    }
+
+    public static TaskCompileOutput CompileUserDataUpdate(UserDataUpdateTaskParamsDto dto)
+    {
+        var issues = new List<TaskValidationIssue>();
+        if (!dto.UpdateOperBox && !dto.UpdateDepot)
+        {
+            issues.Add(new TaskValidationIssue(
+                "UserDataUpdateNoTarget",
+                "user_data_update.target",
+                "User data update has no enabled sync target.",
+                Blocking: false));
+        }
+
+        var parameters = new JsonObject
+        {
+            [UserDataUpdateOperBox] = dto.UpdateOperBox,
+            [UserDataUpdateDepot] = dto.UpdateDepot,
+            [UserDataUpdateTriggerInterval] = NormalizeUserDataUpdateTriggerInterval(dto.TriggerInterval),
+        };
+
+        return new TaskCompileOutput
+        {
+            NormalizedType = TaskModuleTypes.UserDataUpdate,
+            Params = parameters,
+            Issues = issues,
+        };
+    }
+
     public static TaskCompileOutput CompileTask(
         UnifiedTaskItem task,
         UnifiedProfile profile,
@@ -904,6 +985,7 @@ public static class TaskParamCompiler
             "Recruit" => CompileRecruitFromTask(task, profile, config, strict),
             "Roguelike" => CompileRoguelikeFromTask(task, profile, config, strict),
             "Reclamation" => CompileReclamationFromTask(task, profile, config, strict),
+            "UserDataUpdate" => CompileUserDataUpdateFromTask(task, strict),
             "Custom" => CompileCustomFromTask(task, profile, config, strict),
             _ => new TaskCompileOutput
             {
@@ -962,6 +1044,20 @@ public static class TaskParamCompiler
             NormalizedType = compiled.NormalizedType,
             Params = compiled.Params,
             Issues = allIssues,
+        };
+    }
+
+    private static TaskCompileOutput CompileUserDataUpdateFromTask(
+        UnifiedTaskItem task,
+        bool strict)
+    {
+        var (dto, readIssues) = ReadUserDataUpdate(task, strict);
+        var compiled = CompileUserDataUpdate(dto);
+        return new TaskCompileOutput
+        {
+            NormalizedType = compiled.NormalizedType,
+            Params = compiled.Params,
+            Issues = readIssues.Concat(compiled.Issues).ToList(),
         };
     }
 
@@ -1169,6 +1265,18 @@ public static class TaskParamCompiler
     {
         return value.IndexOfAny(['[', ']', '{', '}', ':', '"', '\r', '\n']) >= 0
                || value.Any(c => char.IsControl(c) && c != '\t');
+    }
+
+    private static string NormalizeUserDataUpdateTriggerInterval(string? value)
+    {
+        return (value ?? string.Empty).Trim() switch
+        {
+            var trigger when string.Equals(trigger, UserDataUpdateTaskParamsDto.TriggerDaily, StringComparison.OrdinalIgnoreCase)
+                => UserDataUpdateTaskParamsDto.TriggerDaily,
+            var trigger when string.Equals(trigger, UserDataUpdateTaskParamsDto.TriggerWeekly, StringComparison.OrdinalIgnoreCase)
+                => UserDataUpdateTaskParamsDto.TriggerWeekly,
+            _ => UserDataUpdateTaskParamsDto.TriggerEveryTime,
+        };
     }
 
     private static IReadOnlyList<string> ResolveMallBlacklistDefaults(string clientType)

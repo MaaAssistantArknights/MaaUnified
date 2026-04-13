@@ -1,0 +1,39 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:MAAUnified.App.ViewModels.TaskQueue"
+             x:Class="MAAUnified.App.Features.TaskQueue.UserDataUpdateSettingsView">
+  <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto" Margin="2">
+    <TextBlock Classes="section-title" Text="{Binding TitleText}" />
+
+    <StackPanel Grid.Row="1" Margin="0,10,0,0" Spacing="4">
+      <CheckBox Content="{Binding UpdateOperBoxText}" IsChecked="{Binding UpdateOperBox}" />
+      <TextBlock Text="{Binding LastOperBoxSyncDisplayText}"
+                 TextWrapping="Wrap"
+                 IsVisible="{Binding HasLastOperBoxSyncTime}" />
+    </StackPanel>
+
+    <StackPanel Grid.Row="2" Margin="0,10,0,0" Spacing="4">
+      <CheckBox Content="{Binding UpdateDepotText}" IsChecked="{Binding UpdateDepot}" />
+      <TextBlock Text="{Binding LastDepotSyncDisplayText}"
+                 TextWrapping="Wrap"
+                 IsVisible="{Binding HasLastDepotSyncTime}" />
+    </StackPanel>
+
+    <StackPanel Grid.Row="3" Margin="0,10,0,0" Spacing="4">
+      <TextBlock Text="{Binding TriggerIntervalText}" />
+      <ComboBox ItemsSource="{Binding TriggerIntervalOptions}"
+                SelectedValueBinding="{Binding Value}"
+                SelectedValue="{Binding TriggerInterval}">
+        <ComboBox.ItemTemplate>
+          <DataTemplate x:DataType="vm:UserDataUpdateModuleViewModel+StringOption">
+            <TextBlock Text="{Binding DisplayName}" />
+          </DataTemplate>
+        </ComboBox.ItemTemplate>
+      </ComboBox>
+    </StackPanel>
+
+    <TextBlock Grid.Row="4"
+               Margin="0,10,0,0"
+               Text="{Binding StatusMessage}" />
+  </Grid>
+</UserControl>

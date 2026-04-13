@@ -46,11 +46,17 @@
                 Click="OnTestRemoteConnectivityClick" />
       </Grid>
 
-      <Grid ColumnDefinitions="132,*">
+      <Grid ColumnDefinitions="132,220,Auto">
         <TextBlock Classes="settings-label" Text="{Binding RootTexts[Settings.RemoteControl.DeviceIdentity]}" />
         <TextBox Grid.Column="1"
-                 Text="{Binding RemoteDeviceIdentity, UpdateSourceTrigger=LostFocus}"
+                 IsReadOnly="True"
+                 Text="{Binding RemoteDeviceIdentity, Mode=OneWay}"
                  Watermark="{Binding RootTexts[Settings.RemoteControl.DeviceIdentityWatermark]}" />
+        <Button Grid.Column="2"
+                Classes="wpf-button wpf-button-secondary"
+                Margin="{DynamicResource MAA.Thickness.MarginActionButtonLeft}"
+                Content="{Binding RootTexts[RemoteControlRegenerateDeviceIdentity]}"
+                Click="OnRegenerateRemoteDeviceIdentityClick" />
       </Grid>
     </StackPanel>
 

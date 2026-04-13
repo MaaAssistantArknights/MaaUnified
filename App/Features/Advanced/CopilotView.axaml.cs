@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -110,6 +111,23 @@ public partial class CopilotView : UserControl
             ? string.Empty
             : await topLevel.Clipboard.GetTextAsync() ?? string.Empty;
         await VM.LoadCurrentFromClipboardSetAsync(payload);
+    }
+
+    private void OnCopilotDragOver(object? sender, DragEventArgs e)
+    {
+        e.DragEffects = TryGetFirstDroppedJsonFile(e.Data, out _) ? DragDropEffects.Copy : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private async void OnCopilotDrop(object? sender, DragEventArgs e)
+    {
+        if (VM is null || !TryGetFirstDroppedJsonFile(e.Data, out var path))
+        {
+            return;
+        }
+
+        await VM.LoadCurrentFromFileAsync(path);
+        e.Handled = true;
     }
 
     private async void OnFileSelectorSelectionCommitted(object? sender, CheckComboBoxSelectionCommittedEventArgs e)
@@ -297,5 +315,52 @@ public partial class CopilotView : UserControl
 
         e.Handled = true;
         await shell.PickOverlayTargetFromCopilotAsync();
+    }
+
+    private void OnOpenCopilotUrlClick(object? sender, RoutedEventArgs e)
+    {
+        if (!string.IsNullOrWhiteSpace(VM?.CopilotUrl))
+        {
+            OpenUrl(VM.CopilotUrl);
+        }
+    }
+
+    private void OnOpenMapUrlClick(object? sender, RoutedEventArgs e)
+    {
+        if (!string.IsNullOrWhiteSpace(VM?.MapUrl))
+        {
+            OpenUrl(VM.MapUrl);
+        }
+    }
+
+    private static bool TryGetFirstDroppedJsonFile(IDataObject data, out string filePath)
+    {
+        filePath = string.Empty;
+        var first = data.GetFiles()?.FirstOrDefault();
+        var localPath = first?.TryGetLocalPath();
+        if (string.IsNullOrWhiteSpace(localPath)
+            || !localPath.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        filePath = localPath;
+        return true;
+    }
+
+    private static void OpenUrl(string url)
+    {
+        try
+        {
+            _ = Process.Start(new ProcessStartInfo
+            {
+                FileName = url,
+                UseShellExecute = true,
+            });
+        }
+        catch
+        {
+            // Keep copilot UI responsive even if shell open fails.
+        }
     }
 }

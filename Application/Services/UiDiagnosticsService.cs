@@ -9,6 +9,7 @@ namespace MAAUnified.Application.Services;
 public sealed class UiDiagnosticsService
 {
     private const string StartupLogFileName = "avalonia-ui-startup.log";
+    private const long MaxBundleEntrySizeBytes = 20L * 1024L * 1024L;
     private const string PerfEventTypeUiThreadLag = "ui_thread_lag";
     private const string PerfEventTypeNavigationTiming = "navigation_timing";
     private const string PerfEventTypeScreenshotTest = "screenshot_test";
@@ -265,23 +266,28 @@ public sealed class UiDiagnosticsService
         }
 
         using var archive = ZipFile.Open(outputPath, ZipArchiveMode.Create);
+        var archivedEntryNames = new HashSet<string>(StringComparer.Ordinal);
         AddFileOrPlaceholder(
             archive,
+            archivedEntryNames,
             Path.Combine(baseDirectory, "config", "avalonia.json"),
             "config/avalonia.json",
             "avalonia.json not found when bundle was generated.");
         AddFileOrPlaceholder(
             archive,
+            archivedEntryNames,
             Path.Combine(baseDirectory, "debug", "config-import-report.json"),
             "debug/config-import-report.json",
             "config-import-report.json not found when bundle was generated.");
         AddFileOrPlaceholder(
             archive,
+            archivedEntryNames,
             StartupLogPath,
             "debug/avalonia-ui-startup.log",
             "UI startup log is empty or missing.");
         AddFileOrPlaceholder(
             archive,
+            archivedEntryNames,
             ErrorLogPath,
             "debug/avalonia-ui-errors.log",
             "UI error log is empty or missing.");
@@ -289,15 +295,50 @@ public sealed class UiDiagnosticsService
         {
             AddFileOrPlaceholder(
                 archive,
+                archivedEntryNames,
                 EventLogPath,
                 "debug/avalonia-ui-events.log",
                 "UI event log is empty or missing.");
             AddFileOrPlaceholder(
                 archive,
+                archivedEntryNames,
                 PlatformEventLogPath,
                 "debug/avalonia-platform-events.log",
                 "Platform event log is empty or missing.");
         }
+
+        AddDirectoryEntries(
+            archive,
+            archivedEntryNames,
+            Path.Combine(baseDirectory, "config"),
+            "config",
+            includeFile: static (_, fileName) => !fileName.EndsWith(".tmp", StringComparison.OrdinalIgnoreCase));
+        AddDirectoryEntries(
+            archive,
+            archivedEntryNames,
+            Path.Combine(baseDirectory, "debug"),
+            "debug",
+            includeFile: static (fullPath, fileName) =>
+                !fileName.StartsWith("issue-report-", StringComparison.OrdinalIgnoreCase)
+                && !fileName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(Path.GetFileName(fullPath), "avalonia-ui-errors.log", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(Path.GetFileName(fullPath), "avalonia-ui-startup.log", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(Path.GetFileName(fullPath), "avalonia-ui-events.log", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(Path.GetFileName(fullPath), "avalonia-platform-events.log", StringComparison.OrdinalIgnoreCase));
+        AddDirectoryEntries(
+            archive,
+            archivedEntryNames,
+            Path.Combine(baseDirectory, "cache"),
+            "cache",
+            includeFile: static (_, _) => true);
+        AddDirectoryEntries(
+            archive,
+            archivedEntryNames,
+            Path.Combine(baseDirectory, "resource"),
+            "resource",
+            includeFile: static (fullPath, fileName) =>
+                fileName.Contains("_custom.", StringComparison.OrdinalIgnoreCase)
+                || fullPath.Contains($"{Path.DirectorySeparatorChar}custom{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase));
 
         await RecordEventAsync("IssueReport", $"Support bundle generated: {outputPath}", cancellationToken);
         return outputPath;
@@ -324,10 +365,16 @@ public sealed class UiDiagnosticsService
 
     private static void AddFileOrPlaceholder(
         ZipArchive archive,
+        ISet<string> archivedEntryNames,
         string filePath,
         string entryName,
         string placeholderMessage)
     {
+        if (!archivedEntryNames.Add(entryName))
+        {
+            return;
+        }
+
         if (File.Exists(filePath))
         {
             archive.CreateEntryFromFile(filePath, entryName);
@@ -338,6 +385,46 @@ public sealed class UiDiagnosticsService
         using var stream = entry.Open();
         using var writer = new StreamWriter(stream, Encoding.UTF8);
         writer.WriteLine(placeholderMessage);
+    }
+
+    private static void AddDirectoryEntries(
+        ZipArchive archive,
+        ISet<string> archivedEntryNames,
+        string directoryPath,
+        string entryRoot,
+        Func<string, string, bool> includeFile)
+    {
+        if (!Directory.Exists(directoryPath))
+        {
+            return;
+        }
+
+        foreach (var filePath in Directory.EnumerateFiles(directoryPath, "*", SearchOption.AllDirectories))
+        {
+            var fileName = Path.GetFileName(filePath);
+            if (!includeFile(filePath, fileName))
+            {
+                continue;
+            }
+
+            var fileInfo = new FileInfo(filePath);
+            if (!fileInfo.Exists || fileInfo.Length <= 0 || fileInfo.Length > MaxBundleEntrySizeBytes)
+            {
+                continue;
+            }
+
+            var relativePath = Path.GetRelativePath(directoryPath, filePath)
+                .Replace(Path.DirectorySeparatorChar, '/');
+            var entryName = string.IsNullOrWhiteSpace(relativePath)
+                ? $"{entryRoot}/{fileName}"
+                : $"{entryRoot}/{relativePath}";
+            if (!archivedEntryNames.Add(entryName))
+            {
+                continue;
+            }
+
+            archive.CreateEntryFromFile(filePath, entryName);
+        }
     }
 
     private bool ShouldSkipPerformanceEvent(

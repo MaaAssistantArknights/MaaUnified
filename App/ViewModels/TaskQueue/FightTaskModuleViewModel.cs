@@ -105,6 +105,14 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
     private int _dropCount = 1;
     private bool _useCustomAnnihilation;
     private string _annihilationStage = "Annihilation";
+    private bool _useWeeklySchedule;
+    private bool _weeklyScheduleSunday = true;
+    private bool _weeklyScheduleMonday = true;
+    private bool _weeklyScheduleTuesday = true;
+    private bool _weeklyScheduleWednesday = true;
+    private bool _weeklyScheduleThursday = true;
+    private bool _weeklyScheduleFriday = true;
+    private bool _weeklyScheduleSaturday = true;
     private bool _useAlternateStage;
     private bool _hideUnavailableStage = true;
     private string _stageResetMode = "Current";
@@ -182,8 +190,30 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
 
     public bool IsDropControlsEnabled => EnableTargetDrop;
 
+    public bool IsHideUnavailableStageEnabled => !UseWeeklySchedule;
+
     public string UseStoneDisplayName =>
         $"{Texts.GetOrDefault("Fight.UseStoneDisplay", Texts.GetOrDefault("Fight.UseStone", "Use stone"))}{(AllowUseStoneSave ? string.Empty : "*")}";
+
+    public string UseWeeklyScheduleText => Texts.GetOrDefault("Fight.UseWeeklySchedule", "Enable weekly schedule");
+
+    public string UseWeeklyScheduleTip => Texts.GetOrDefault(
+        "Fight.UseWeeklyScheduleTip",
+        "The day of week here follows in-game reset time rather than local clock time.");
+
+    public string WeeklyScheduleSundayText => Texts.GetOrDefault("Fight.WeeklySchedule.Sunday", "Sun");
+
+    public string WeeklyScheduleMondayText => Texts.GetOrDefault("Fight.WeeklySchedule.Monday", "Mon");
+
+    public string WeeklyScheduleTuesdayText => Texts.GetOrDefault("Fight.WeeklySchedule.Tuesday", "Tue");
+
+    public string WeeklyScheduleWednesdayText => Texts.GetOrDefault("Fight.WeeklySchedule.Wednesday", "Wed");
+
+    public string WeeklyScheduleThursdayText => Texts.GetOrDefault("Fight.WeeklySchedule.Thursday", "Thu");
+
+    public string WeeklyScheduleFridayText => Texts.GetOrDefault("Fight.WeeklySchedule.Friday", "Fri");
+
+    public string WeeklyScheduleSaturdayText => Texts.GetOrDefault("Fight.WeeklySchedule.Saturday", "Sat");
 
     public string Stage
     {
@@ -363,6 +393,67 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
         }
     }
 
+    public bool UseWeeklySchedule
+    {
+        get => _useWeeklySchedule;
+        set
+        {
+            if (!SetTrackedProperty(ref _useWeeklySchedule, value))
+            {
+                return;
+            }
+
+            if (value && HideUnavailableStage)
+            {
+                HideUnavailableStage = false;
+            }
+
+            OnPropertyChanged(nameof(IsHideUnavailableStageEnabled));
+        }
+    }
+
+    public bool WeeklyScheduleSunday
+    {
+        get => _weeklyScheduleSunday;
+        set => SetTrackedProperty(ref _weeklyScheduleSunday, value);
+    }
+
+    public bool WeeklyScheduleMonday
+    {
+        get => _weeklyScheduleMonday;
+        set => SetTrackedProperty(ref _weeklyScheduleMonday, value);
+    }
+
+    public bool WeeklyScheduleTuesday
+    {
+        get => _weeklyScheduleTuesday;
+        set => SetTrackedProperty(ref _weeklyScheduleTuesday, value);
+    }
+
+    public bool WeeklyScheduleWednesday
+    {
+        get => _weeklyScheduleWednesday;
+        set => SetTrackedProperty(ref _weeklyScheduleWednesday, value);
+    }
+
+    public bool WeeklyScheduleThursday
+    {
+        get => _weeklyScheduleThursday;
+        set => SetTrackedProperty(ref _weeklyScheduleThursday, value);
+    }
+
+    public bool WeeklyScheduleFriday
+    {
+        get => _weeklyScheduleFriday;
+        set => SetTrackedProperty(ref _weeklyScheduleFriday, value);
+    }
+
+    public bool WeeklyScheduleSaturday
+    {
+        get => _weeklyScheduleSaturday;
+        set => SetTrackedProperty(ref _weeklyScheduleSaturday, value);
+    }
+
     public bool UseAlternateStage
     {
         get => _useAlternateStage;
@@ -490,6 +581,14 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
         DropCount = dto.DropCount;
         UseCustomAnnihilation = dto.UseCustomAnnihilation;
         AnnihilationStage = dto.AnnihilationStage;
+        UseWeeklySchedule = dto.UseWeeklySchedule;
+        WeeklyScheduleSunday = dto.WeeklyScheduleSunday;
+        WeeklyScheduleMonday = dto.WeeklyScheduleMonday;
+        WeeklyScheduleTuesday = dto.WeeklyScheduleTuesday;
+        WeeklyScheduleWednesday = dto.WeeklyScheduleWednesday;
+        WeeklyScheduleThursday = dto.WeeklyScheduleThursday;
+        WeeklyScheduleFriday = dto.WeeklyScheduleFriday;
+        WeeklyScheduleSaturday = dto.WeeklyScheduleSaturday;
         UseAlternateStage = dto.UseAlternateStage;
         HideUnavailableStage = dto.HideUnavailableStage;
         StageResetMode = dto.StageResetMode;
@@ -518,6 +617,14 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
             DropCount = Math.Max(1, DropCount),
             UseCustomAnnihilation = UseCustomAnnihilation,
             AnnihilationStage = string.IsNullOrWhiteSpace(AnnihilationStage) ? "Annihilation" : AnnihilationStage.Trim(),
+            UseWeeklySchedule = UseWeeklySchedule,
+            WeeklyScheduleSunday = WeeklyScheduleSunday,
+            WeeklyScheduleMonday = WeeklyScheduleMonday,
+            WeeklyScheduleTuesday = WeeklyScheduleTuesday,
+            WeeklyScheduleWednesday = WeeklyScheduleWednesday,
+            WeeklyScheduleThursday = WeeklyScheduleThursday,
+            WeeklyScheduleFriday = WeeklyScheduleFriday,
+            WeeklyScheduleSaturday = WeeklyScheduleSaturday,
             UseAlternateStage = UseAlternateStage,
             HideUnavailableStage = HideUnavailableStage,
             StageResetMode = NormalizeStageResetMode(StageResetMode),
@@ -571,6 +678,15 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
         OnPropertyChanged(nameof(AnnihilationStageOptions));
         OnPropertyChanged(nameof(SelectedAnnihilationStageOption));
         OnPropertyChanged(nameof(UseStoneDisplayName));
+        OnPropertyChanged(nameof(UseWeeklyScheduleText));
+        OnPropertyChanged(nameof(UseWeeklyScheduleTip));
+        OnPropertyChanged(nameof(WeeklyScheduleSundayText));
+        OnPropertyChanged(nameof(WeeklyScheduleMondayText));
+        OnPropertyChanged(nameof(WeeklyScheduleTuesdayText));
+        OnPropertyChanged(nameof(WeeklyScheduleWednesdayText));
+        OnPropertyChanged(nameof(WeeklyScheduleThursdayText));
+        OnPropertyChanged(nameof(WeeklyScheduleFridayText));
+        OnPropertyChanged(nameof(WeeklyScheduleSaturdayText));
     }
 
     private void RebuildDropOptions()

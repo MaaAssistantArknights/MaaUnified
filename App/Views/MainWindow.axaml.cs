@@ -597,7 +597,7 @@ public partial class MainWindow : Window
         await DispatchTrayCommandAsync(TrayCommandId.Exit, "window-shell-menu");
     }
 
-    private async void OnManualUpdateClick(object? sender, PointerPressedEventArgs e)
+    private async void OnManualUpdateClick(object? sender, RoutedEventArgs e)
     {
         if (VM is null)
         {
@@ -605,10 +605,10 @@ public partial class MainWindow : Window
         }
 
         e.Handled = true;
-        await VM.SettingsPage.CheckVersionUpdateWithDialogAsync();
+        await VM.SettingsPage.CheckVersionUpdateAsync();
     }
 
-    private void OnManualUpdateResourceClick(object? sender, PointerPressedEventArgs e)
+    private async void OnManualUpdateResourceClick(object? sender, RoutedEventArgs e)
     {
         if (VM is null)
         {
@@ -616,7 +616,7 @@ public partial class MainWindow : Window
         }
 
         e.Handled = true;
-        _ = VM.SettingsPage.ManualUpdateResourceAsync();
+        await VM.SettingsPage.ManualUpdateResourceAsync();
     }
 
     private void OnToggleTopMostClick(object? sender, RoutedEventArgs e)

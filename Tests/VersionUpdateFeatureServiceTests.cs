@@ -551,6 +551,314 @@ public sealed class VersionUpdateFeatureServiceTests
     }
 
     [Fact]
+    public async Task CheckForUpdatesAsync_WhenCurrentVersionIsNewer_DoesNotReportUpdate()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"maa-unified-version-compare-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(root);
+        var feedPath = Path.Combine(root, "release-feed.json");
+
+        try
+        {
+            await File.WriteAllTextAsync(feedPath, JsonSerializer.Serialize(new[]
+            {
+                new
+                {
+                    tag_name = "v2.0.0",
+                    name = "Release v2.0.0",
+                    body = "Body",
+                    prerelease = false,
+                    assets = new[]
+                    {
+                        new
+                        {
+                            name = "MAAUnified-v2.0.0-linux-x64.tar.gz",
+                            browser_download_url = "https://example.com/MAAUnified-v2.0.0-linux-x64.tar.gz",
+                            size = 1024,
+                        },
+                    },
+                },
+            }));
+
+            var workflow = new AppUpdateWorkflowService(
+                new NoOpAppLifecycleService(),
+                operatingSystem: OSPlatform.Linux,
+                architecture: Architecture.X64);
+            var service = new VersionUpdateFeatureService(
+                CreateConfigurationService(root),
+                appUpdateWorkflowService: workflow,
+                runtimeBaseDirectory: root);
+
+            var result = await service.CheckForUpdatesAsync(
+                VersionUpdatePolicy.Default with
+                {
+                    ResourceApi = feedPath,
+                    AutoDownloadUpdatePackage = false,
+                },
+                "v9.9.9");
+
+            Assert.True(result.Success);
+            Assert.NotNull(result.Value);
+            Assert.False(result.Value!.IsNewVersion);
+            Assert.Equal("v2.0.0", result.Value.TargetVersion);
+            Assert.Contains("当前已是最新", result.Message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    [Fact]
+    public async Task CheckForUpdatesAsync_WithMirrorChyanSource_UsesMirrorChyanEndpoint()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"maa-unified-mirrorchyan-app-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(root);
+
+        try
+        {
+            using var httpClient = new HttpClient(new StubHttpMessageHandler(static request =>
+            {
+                var url = request.RequestUri?.AbsoluteUri ?? string.Empty;
+                if (url.StartsWith("https://mirrorchyan.com/api/resources/MAA/latest", StringComparison.OrdinalIgnoreCase))
+                {
+                    return new HttpResponseMessage(HttpStatusCode.OK)
+                    {
+                        Content = new StringContent("""
+                            {
+                              "code": 0,
+                              "data": {
+                                "version_name": "v2.0.0",
+                                "release_note": "MirrorChyan note",
+                                "url": "https://mirror.example.com/MAAUnified-v2.0.0-linux-x64.tar.gz"
+                              }
+                            }
+                            """),
+                    };
+                }
+
+                return new HttpResponseMessage(HttpStatusCode.NotFound);
+            }));
+            var workflow = new AppUpdateWorkflowService(
+                new NoOpAppLifecycleService(),
+                httpClient,
+                OSPlatform.Linux,
+                Architecture.X64);
+            var service = new VersionUpdateFeatureService(
+                CreateConfigurationService(root),
+                appUpdateWorkflowService: workflow,
+                runtimeBaseDirectory: root);
+
+            var result = await service.CheckForUpdatesAsync(
+                VersionUpdatePolicy.Default with
+                {
+                    ResourceUpdateSource = "MirrorChyan",
+                    MirrorChyanCdk = "test-cdk",
+                    AutoDownloadUpdatePackage = false,
+                },
+                "v1.0.0");
+
+            Assert.True(result.Success);
+            Assert.NotNull(result.Value);
+            Assert.True(result.Value!.IsNewVersion);
+            Assert.True(result.Value.HasPackage);
+            Assert.Equal("v2.0.0", result.Value.TargetVersion);
+            Assert.Equal(new Uri("https://mirror.example.com/MAAUnified-v2.0.0-linux-x64.tar.gz"), result.Value.PackageDownloadUrl);
+            Assert.Equal(PackageResolutionStatus.Available, result.Value.PackageResolutionStatus);
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    [Fact]
+    public async Task CheckForUpdatesAsync_WithGithubMirrorsAndGlobalSourceDisabled_DownloadsFromMirror()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"maa-unified-github-mirror-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(root);
+        var feedPath = Path.Combine(root, "release-feed.json");
+
+        try
+        {
+            await File.WriteAllTextAsync(feedPath, """
+                [
+                  {
+                    "tag_name": "v2.0.0",
+                    "name": "Release v2.0.0",
+                    "body": "Body",
+                    "prerelease": false,
+                    "assets": [
+                      {
+                        "name": "MAAUnified-v2.0.0-linux-x64.tar.gz",
+                        "browser_download_url": "https://global.example.com/MAAUnified-v2.0.0-linux-x64.tar.gz",
+                        "mirrors": [
+                          "https://mirror.example.com/MAAUnified-v2.0.0-linux-x64.tar.gz"
+                        ],
+                        "size": 5
+                      }
+                    ]
+                  }
+                ]
+                """);
+
+            using var httpClient = new HttpClient(new StubHttpMessageHandler(static request =>
+            {
+                var url = request.RequestUri?.AbsoluteUri ?? string.Empty;
+                return url switch
+                {
+                    "https://global.example.com/MAAUnified-v2.0.0-linux-x64.tar.gz" => new HttpResponseMessage(HttpStatusCode.NotFound),
+                    "https://mirror.example.com/MAAUnified-v2.0.0-linux-x64.tar.gz" => new HttpResponseMessage(HttpStatusCode.OK)
+                    {
+                        Content = new ByteArrayContent([1, 2, 3, 4, 5]),
+                    },
+                    _ => new HttpResponseMessage(HttpStatusCode.NotFound),
+                };
+            }));
+            var workflow = new AppUpdateWorkflowService(
+                new NoOpAppLifecycleService(),
+                httpClient,
+                OSPlatform.Linux,
+                Architecture.X64);
+            var service = new VersionUpdateFeatureService(
+                CreateConfigurationService(root),
+                appUpdateWorkflowService: workflow,
+                runtimeBaseDirectory: root);
+
+            var result = await service.CheckForUpdatesAsync(
+                VersionUpdatePolicy.Default with
+                {
+                    ResourceApi = feedPath,
+                    ResourceUpdateSource = "Github",
+                    ForceGithubGlobalSource = false,
+                    AutoDownloadUpdatePackage = true,
+                },
+                "v1.0.0");
+
+            Assert.True(result.Success);
+            Assert.NotNull(result.Value);
+            Assert.False(string.IsNullOrWhiteSpace(result.Value!.PreparedPackagePath));
+            Assert.True(File.Exists(result.Value.PreparedPackagePath));
+            Assert.Equal([1, 2, 3, 4, 5], await File.ReadAllBytesAsync(result.Value.PreparedPackagePath));
+            Assert.Contains("已准备更新包", result.Message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    [Fact]
+    public async Task CheckForUpdatesAsync_WithGithubMirrorsAndGlobalSourceForced_IgnoresMirrorUrls()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"maa-unified-github-global-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(root);
+        var feedPath = Path.Combine(root, "release-feed.json");
+
+        try
+        {
+            await File.WriteAllTextAsync(feedPath, """
+                [
+                  {
+                    "tag_name": "v2.0.0",
+                    "name": "Release v2.0.0",
+                    "body": "Body",
+                    "prerelease": false,
+                    "assets": [
+                      {
+                        "name": "MAAUnified-v2.0.0-linux-x64.tar.gz",
+                        "browser_download_url": "https://global.example.com/MAAUnified-v2.0.0-linux-x64.tar.gz",
+                        "mirrors": [
+                          "https://mirror.example.com/MAAUnified-v2.0.0-linux-x64.tar.gz"
+                        ],
+                        "size": 5
+                      }
+                    ]
+                  }
+                ]
+                """);
+
+            using var httpClient = new HttpClient(new StubHttpMessageHandler(static request =>
+            {
+                var url = request.RequestUri?.AbsoluteUri ?? string.Empty;
+                return url switch
+                {
+                    "https://global.example.com/MAAUnified-v2.0.0-linux-x64.tar.gz" => new HttpResponseMessage(HttpStatusCode.NotFound),
+                    "https://mirror.example.com/MAAUnified-v2.0.0-linux-x64.tar.gz" => new HttpResponseMessage(HttpStatusCode.OK)
+                    {
+                        Content = new ByteArrayContent([1, 2, 3, 4, 5]),
+                    },
+                    _ => new HttpResponseMessage(HttpStatusCode.NotFound),
+                };
+            }));
+            var workflow = new AppUpdateWorkflowService(
+                new NoOpAppLifecycleService(),
+                httpClient,
+                OSPlatform.Linux,
+                Architecture.X64);
+            var service = new VersionUpdateFeatureService(
+                CreateConfigurationService(root),
+                appUpdateWorkflowService: workflow,
+                runtimeBaseDirectory: root);
+
+            var result = await service.CheckForUpdatesAsync(
+                VersionUpdatePolicy.Default with
+                {
+                    ResourceApi = feedPath,
+                    ResourceUpdateSource = "Github",
+                    ForceGithubGlobalSource = true,
+                    AutoDownloadUpdatePackage = true,
+                },
+                "v1.0.0");
+
+            Assert.True(result.Success);
+            Assert.NotNull(result.Value);
+            Assert.True(string.IsNullOrWhiteSpace(result.Value!.PreparedPackagePath));
+            Assert.Equal(PackageResolutionStatus.DownloadFailed, result.Value.PackageResolutionStatus);
+            Assert.Contains("更新失败", result.Message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    [Fact]
     public async Task TryApplyPendingUpdatePackage_AppliesZipAndMarksFirstBoot()
     {
         var root = Path.Combine(Path.GetTempPath(), $"maa-unified-pending-update-{Guid.NewGuid():N}");

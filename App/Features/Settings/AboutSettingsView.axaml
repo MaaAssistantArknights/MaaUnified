@@ -15,6 +15,12 @@
                 Content="{Binding RootTexts[Settings.Action.OpenOfficial]}"
                 Click="OnOpenOfficialWebsiteClick" />
         <Button Classes="wpf-button wpf-button-secondary"
+                Content="bilibili"
+                Click="OnOpenBilibiliClick" />
+        <Button Classes="wpf-button wpf-button-secondary"
+                Content="GitHub"
+                Click="OnOpenGithubClick" />
+        <Button Classes="wpf-button wpf-button-secondary"
                 Content="{Binding RootTexts[Settings.Action.CheckAnnouncement]}"
                 Click="OnCheckAnnouncementClick" />
       </StackPanel>
@@ -28,6 +34,18 @@
         <Button Classes="wpf-button wpf-button-secondary"
                 Content="{Binding RootTexts[Settings.Action.OpenDownload]}"
                 Click="OnOpenDownloadClick" />
+        <Button Classes="wpf-button wpf-button-secondary"
+                Content="QQ Group"
+                Click="OnOpenQqGroupClick" />
+        <Button Classes="wpf-button wpf-button-secondary"
+                Content="QQ Channel"
+                Click="OnOpenQqChannelClick" />
+        <Button Classes="wpf-button wpf-button-secondary"
+                Content="Telegram"
+                Click="OnOpenTelegramClick" />
+        <Button Classes="wpf-button wpf-button-secondary"
+                Content="Discord"
+                Click="OnOpenDiscordClick" />
       </StackPanel>
     </Grid>
 

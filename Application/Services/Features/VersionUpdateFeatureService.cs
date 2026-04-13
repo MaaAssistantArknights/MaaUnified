@@ -92,7 +92,7 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
             VersionType: ReadString(config, ConfigurationKeys.VersionType, "Stable"),
             ResourceUpdateSource: ReadString(config, ConfigurationKeys.UpdateSource, "Github"),
             ForceGithubGlobalSource: ReadBool(config, ConfigurationKeys.ForceGithubGlobalSource, false),
-            MirrorChyanCdk: ReadString(config, ConfigurationKeys.MirrorChyanCdk, string.Empty),
+            MirrorChyanCdk: DecryptMirrorChyanCdk(ReadString(config, ConfigurationKeys.MirrorChyanCdk, string.Empty)),
             MirrorChyanCdkExpired: ReadString(config, ConfigurationKeys.MirrorChyanCdkExpiredTime, string.Empty),
             StartupUpdateCheck: ReadBool(config, ConfigurationKeys.StartupUpdateCheck, true),
             ScheduledUpdateCheck: ReadBool(config, ConfigurationKeys.UpdateAutoCheck, false),
@@ -180,6 +180,7 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
     public async Task<UiOperationResult<string>> UpdateResourceAsync(
         VersionUpdatePolicy policy,
         string? clientType,
+        IProgress<VersionUpdateProgressInfo>? progress = null,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -196,10 +197,10 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
         var source = normalizedPolicy.ResourceUpdateSource;
         if (string.Equals(source, "MirrorChyan", StringComparison.OrdinalIgnoreCase))
         {
-            return await UpdateResourceFromMirrorChyanAsync(normalizedPolicy, clientType, cancellationToken);
+            return await UpdateResourceFromMirrorChyanAsync(normalizedPolicy, clientType, progress, cancellationToken);
         }
 
-        return await UpdateResourceFromGithubAsync(cancellationToken);
+        return await UpdateResourceFromGithubAsync(progress, cancellationToken);
     }
 
     public async Task<UiOperationResult<ResourceUpdateCheckResult>> CheckResourceUpdateAsync(
@@ -320,6 +321,7 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
     public async Task<UiOperationResult<VersionUpdateCheckResult>> CheckForUpdatesAsync(
         VersionUpdatePolicy policy,
         string currentVersion,
+        IProgress<VersionUpdateProgressInfo>? progress = null,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -350,11 +352,15 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
                     workflowResult.PackageName is null
                         ? "Preparing software update package download."
                         : $"Preparing software update package `{workflowResult.PackageName}`.");
+                progress?.Report(new VersionUpdateProgressInfo(
+                    VersionUpdateProgressOperation.SoftwarePackage,
+                    VersionUpdateProgressStage.Started));
                 var downloadResult = await _appUpdateWorkflowService.DownloadPackageAsync(
                     workflowResult,
                     ResolveRuntimeBaseDirectory(),
                     forceDownload: false,
                     normalizedPolicy,
+                    progress,
                     cancellationToken).ConfigureAwait(false);
                 if (downloadResult.Success && !string.IsNullOrWhiteSpace(downloadResult.Value))
                 {
@@ -362,6 +368,9 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
                     {
                         PreparedPackagePath = downloadResult.Value,
                     };
+                    progress?.Report(new VersionUpdateProgressInfo(
+                        VersionUpdateProgressOperation.SoftwarePackage,
+                        VersionUpdateProgressStage.Completed));
                     PublishUpdateLog(
                         workflowResult.PackageName is null
                             ? "Software update package is ready to apply after restart."
@@ -527,12 +536,18 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
         return UiOperationResult.Ok("Version update proxy validation passed.");
     }
 
-    private async Task<UiOperationResult<string>> UpdateResourceFromGithubAsync(CancellationToken cancellationToken)
+    private async Task<UiOperationResult<string>> UpdateResourceFromGithubAsync(
+        IProgress<VersionUpdateProgressInfo>? progress,
+        CancellationToken cancellationToken)
     {
         const string scope = "VersionUpdate.Resource.Github";
         var runtimeBaseDirectory = ResolveRuntimeBaseDirectory();
         var resourceDirectory = Path.Combine(runtimeBaseDirectory, "resource");
         PublishUpdateLog("Starting resource update from Github.");
+        progress?.Report(new VersionUpdateProgressInfo(
+            VersionUpdateProgressOperation.ResourcePackage,
+            VersionUpdateProgressStage.Started,
+            VersionUpdateProgressSource.GlobalSource));
         await TraceVersionUpdateAsync(
             scope,
             $"Begin runtimeBaseDirectory={runtimeBaseDirectory}; resourceDirectory={resourceDirectory}",
@@ -562,12 +577,22 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
                 scope,
                 $"Download begin url={GithubResourceArchiveUrl}",
                 cancellationToken).ConfigureAwait(false);
-            await DownloadToFileAsync(GithubResourceArchiveUrl, zipPath, cancellationToken).ConfigureAwait(false);
+            await DownloadToFileAsync(
+                GithubResourceArchiveUrl,
+                zipPath,
+                VersionUpdateProgressOperation.ResourcePackage,
+                VersionUpdateProgressSource.GlobalSource,
+                progress,
+                cancellationToken).ConfigureAwait(false);
             await TraceVersionUpdateAsync(
                 scope,
                 $"Download end zipSize={TryGetFileLength(zipPath)}",
                 cancellationToken).ConfigureAwait(false);
 
+            progress?.Report(new VersionUpdateProgressInfo(
+                VersionUpdateProgressOperation.ResourcePackage,
+                VersionUpdateProgressStage.Preparing,
+                VersionUpdateProgressSource.GlobalSource));
             await TraceVersionUpdateAsync(scope, "Extract begin", cancellationToken).ConfigureAwait(false);
             await Task.Run(
                 () => ZipFile.ExtractToDirectory(zipPath, extractDirectory, overwriteFiles: true),
@@ -595,6 +620,10 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
                 () => MergeDirectory(extractedResourceDirectory, resourceDirectory),
                 cancellationToken).ConfigureAwait(false);
             await TraceVersionUpdateAsync(scope, "Merge end", cancellationToken).ConfigureAwait(false);
+            progress?.Report(new VersionUpdateProgressInfo(
+                VersionUpdateProgressOperation.ResourcePackage,
+                VersionUpdateProgressStage.Completed,
+                VersionUpdateProgressSource.GlobalSource));
             PublishUpdateLog("Resource update completed from Github.");
             return UiOperationResult<string>.Ok(
                 "资源更新完成（Github）。",
@@ -627,6 +656,7 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
     private async Task<UiOperationResult<string>> UpdateResourceFromMirrorChyanAsync(
         VersionUpdatePolicy policy,
         string? clientType,
+        IProgress<VersionUpdateProgressInfo>? progress,
         CancellationToken cancellationToken)
     {
         const string scope = "VersionUpdate.Resource.MirrorChyan";
@@ -712,6 +742,12 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
                 "MirrorChyan response does not contain a downloadable package URL.");
         }
 
+        progress?.Report(new VersionUpdateProgressInfo(
+            VersionUpdateProgressOperation.ResourcePackage,
+            VersionUpdateProgressStage.Started,
+            VersionUpdateProgressSource.MirrorChyan,
+            payload.ReleaseNote));
+
         var runtimeBaseDirectory = ResolveRuntimeBaseDirectory();
         var tempRoot = Path.Combine(
             Path.GetTempPath(),
@@ -731,12 +767,23 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
                 scope,
                 $"Download begin url={payload.DownloadUrl}",
                 cancellationToken).ConfigureAwait(false);
-            await DownloadToFileAsync(payload.DownloadUrl, zipPath, cancellationToken).ConfigureAwait(false);
+            await DownloadToFileAsync(
+                payload.DownloadUrl,
+                zipPath,
+                VersionUpdateProgressOperation.ResourcePackage,
+                VersionUpdateProgressSource.MirrorChyan,
+                progress,
+                cancellationToken).ConfigureAwait(false);
             await TraceVersionUpdateAsync(
                 scope,
                 $"Download end zipSize={TryGetFileLength(zipPath)}",
                 cancellationToken).ConfigureAwait(false);
 
+            progress?.Report(new VersionUpdateProgressInfo(
+                VersionUpdateProgressOperation.ResourcePackage,
+                VersionUpdateProgressStage.Preparing,
+                VersionUpdateProgressSource.MirrorChyan,
+                payload.ReleaseNote));
             await TraceVersionUpdateAsync(scope, "Extract begin", cancellationToken).ConfigureAwait(false);
             await Task.Run(
                 () => ZipFile.ExtractToDirectory(zipPath, extractDirectory, overwriteFiles: true),
@@ -759,6 +806,11 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
                 cancellationToken).ConfigureAwait(false);
             await TraceVersionUpdateAsync(scope, "Merge end", cancellationToken).ConfigureAwait(false);
             _achievementTrackerService?.Unlock("MirrorChyanFirstUse");
+            progress?.Report(new VersionUpdateProgressInfo(
+                VersionUpdateProgressOperation.ResourcePackage,
+                VersionUpdateProgressStage.Completed,
+                VersionUpdateProgressSource.MirrorChyan,
+                payload.ReleaseNote));
             var message = string.IsNullOrWhiteSpace(payload.ReleaseNote)
                 ? "资源更新完成（MirrorChyan）。"
                 : $"资源更新完成（MirrorChyan）：{payload.ReleaseNote}";
@@ -896,7 +948,13 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
         return extractDirectory;
     }
 
-    private static async Task DownloadToFileAsync(string url, string destinationPath, CancellationToken cancellationToken)
+    private static async Task DownloadToFileAsync(
+        string url,
+        string destinationPath,
+        VersionUpdateProgressOperation operation,
+        VersionUpdateProgressSource source,
+        IProgress<VersionUpdateProgressInfo>? progress,
+        CancellationToken cancellationToken)
     {
         using var response = await ResourceHttpClient.GetAsync(
             url,
@@ -906,7 +964,60 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
 
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
         await using var file = File.Create(destinationPath);
-        await stream.CopyToAsync(file, cancellationToken).ConfigureAwait(false);
+        if (progress is null)
+        {
+            await stream.CopyToAsync(file, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        byte[] buffer = new byte[81920];
+        long bytesTransferred = 0;
+        long bytesSinceLastReport = 0;
+        var totalBytes = response.Content.Headers.ContentLength ?? 0;
+        var lastReportAt = DateTime.UtcNow;
+
+        while (true)
+        {
+            var bytesRead = await stream.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
+            if (bytesRead <= 0)
+            {
+                break;
+            }
+
+            await file.WriteAsync(buffer.AsMemory(0, bytesRead), cancellationToken).ConfigureAwait(false);
+            bytesTransferred += bytesRead;
+            bytesSinceLastReport += bytesRead;
+
+            var now = DateTime.UtcNow;
+            var elapsed = (now - lastReportAt).TotalSeconds;
+            if (elapsed < 1 && (totalBytes <= 0 || bytesTransferred < totalBytes))
+            {
+                continue;
+            }
+
+            progress.Report(new VersionUpdateProgressInfo(
+                operation,
+                VersionUpdateProgressStage.Downloading,
+                source,
+                BytesTransferred: bytesTransferred,
+                TotalBytes: totalBytes,
+                BytesPerSecond: bytesSinceLastReport / Math.Max(elapsed, 0.001d)));
+            lastReportAt = now;
+            bytesSinceLastReport = 0;
+        }
+
+        if (bytesTransferred > 0 && bytesSinceLastReport > 0)
+        {
+            var now = DateTime.UtcNow;
+            var elapsed = (now - lastReportAt).TotalSeconds;
+            progress.Report(new VersionUpdateProgressInfo(
+                operation,
+                VersionUpdateProgressStage.Downloading,
+                source,
+                BytesTransferred: bytesTransferred,
+                TotalBytes: totalBytes,
+                BytesPerSecond: bytesSinceLastReport / Math.Max(elapsed, 0.001d)));
+        }
     }
 
     private static void MergeDirectory(string source, string destination)
@@ -1212,9 +1323,10 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
 
         var config = _configService.CurrentConfig;
         var snapshot = CloneGlobalSettings(config);
+        var persistedUpdates = PrepareSettingsForPersistence(updates);
         try
         {
-            foreach (var (key, value) in updates)
+            foreach (var (key, value) in persistedUpdates)
             {
                 config.GlobalValues[key] = JsonValue.Create(value);
             }
@@ -1231,6 +1343,20 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
                 $"Failed to save version update settings: {ex.Message}",
                 ex.Message);
         }
+    }
+
+    private static IReadOnlyDictionary<string, string> PrepareSettingsForPersistence(
+        IReadOnlyDictionary<string, string> updates)
+    {
+        var persisted = new Dictionary<string, string>(updates.Count, StringComparer.Ordinal);
+        foreach (var (key, value) in updates)
+        {
+            persisted[key] = string.Equals(key, ConfigurationKeys.MirrorChyanCdk, StringComparison.Ordinal)
+                ? EncryptMirrorChyanCdk(value)
+                : value;
+        }
+
+        return persisted;
     }
 
     private static Dictionary<string, JsonNode?> CloneGlobalSettings(UnifiedConfig config)
@@ -1274,6 +1400,72 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
         }
 
         return fallback;
+    }
+
+    private static string EncryptMirrorChyanCdk(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value) || !OperatingSystem.IsWindows())
+        {
+            return value;
+        }
+
+        try
+        {
+            var bytes = Encoding.UTF8.GetBytes(value);
+            var encrypted = InvokeWindowsProtectedData("Protect", bytes);
+            return encrypted is null ? value : Convert.ToBase64String(encrypted);
+        }
+        catch
+        {
+            return value;
+        }
+    }
+
+    private static string DecryptMirrorChyanCdk(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value) || !OperatingSystem.IsWindows())
+        {
+            return value;
+        }
+
+        try
+        {
+            var bytes = Convert.FromBase64String(value);
+            var decrypted = InvokeWindowsProtectedData("Unprotect", bytes);
+            if (decrypted is null)
+            {
+                return value;
+            }
+
+            return Encoding.UTF8.GetString(decrypted);
+        }
+        catch
+        {
+            return value;
+        }
+    }
+
+    private static byte[]? InvokeWindowsProtectedData(string methodName, byte[] data)
+    {
+        var protectedDataType = Type.GetType(
+            "System.Security.Cryptography.ProtectedData, System.Security.Cryptography.ProtectedData");
+        var dataProtectionScopeType = Type.GetType(
+            "System.Security.Cryptography.DataProtectionScope, System.Security.Cryptography.ProtectedData");
+        if (protectedDataType is null || dataProtectionScopeType is null)
+        {
+            return null;
+        }
+
+        var method = protectedDataType.GetMethod(
+            methodName,
+            [typeof(byte[]), typeof(byte[]), dataProtectionScopeType]);
+        if (method is null)
+        {
+            return null;
+        }
+
+        var currentUserScope = Enum.Parse(dataProtectionScopeType, "CurrentUser");
+        return method.Invoke(null, [data, null, currentUserScope]) as byte[];
     }
 
     private static bool ReadBool(UnifiedConfig config, string key, bool fallback)

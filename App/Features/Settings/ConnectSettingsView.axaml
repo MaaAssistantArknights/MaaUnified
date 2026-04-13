@@ -62,6 +62,27 @@
                              IsEnabled="{Binding CanEditAdbConnectionFields}"
                              ItemsSource="{Binding ConnectAddressHistory}"
                              Text="{Binding ConnectAddress, UpdateSourceTrigger=LostFocus}" />
+            <ItemsControl Width="{DynamicResource MAA.Size.Settings.FieldInputWidth}"
+                          Margin="0,6,0,0"
+                          ItemsSource="{Binding ConnectAddressHistory}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <Grid Margin="0,2,0,0"
+                        ColumnDefinitions="*,Auto">
+                    <TextBlock Grid.Column="0"
+                               VerticalAlignment="Center"
+                               Text="{Binding .}" />
+                    <Button Grid.Column="1"
+                            Classes="wpf-button wpf-button-secondary"
+                            MinWidth="28"
+                            Padding="6,0"
+                            Tag="{Binding .}"
+                            Content="×"
+                            Click="OnRemoveAddressHistoryClick" />
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
           </StackPanel>
 
           <StackPanel Classes="settings-centered-column">
@@ -85,13 +106,15 @@
                     IsVisible="{Binding ShowMuMuExtrasSection}">
           <CheckBox HorizontalAlignment="Center"
                     Content="{Binding RootTexts[Settings.Connect.MuMu.EnableExtras]}"
-                    IsChecked="{Binding MuMu12ExtrasEnabled}" />
+                    IsChecked="{Binding MuMu12ExtrasEnabled}"
+                    Checked="OnMuMuExtrasChecked" />
           <StackPanel Classes="settings-centered-column"
                       Spacing="{DynamicResource MAA.Spacing.Small}"
                       IsVisible="{Binding MuMu12ExtrasEnabled}">
             <TextBlock Classes="settings-field-caption" Text="{Binding RootTexts[Settings.Connect.MuMu.EmulatorPath]}" />
             <TextBox Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
-                     Text="{Binding MuMu12EmulatorPath, UpdateSourceTrigger=LostFocus}" />
+                     Text="{Binding MuMu12EmulatorPath, UpdateSourceTrigger=LostFocus}"
+                     LostFocus="OnMuMuEmulatorPathLostFocus" />
             <CheckBox HorizontalAlignment="Center"
                       Content="{Binding RootTexts[Settings.Connect.MuMu.BridgeConnection]}"
                       IsChecked="{Binding MuMuBridgeConnection}" />
@@ -109,13 +132,15 @@
                     IsVisible="{Binding ShowLdPlayerExtrasSection}">
           <CheckBox HorizontalAlignment="Center"
                     Content="{Binding RootTexts[Settings.Connect.LdPlayer.EnableExtras]}"
-                    IsChecked="{Binding LdPlayerExtrasEnabled}" />
+                    IsChecked="{Binding LdPlayerExtrasEnabled}"
+                    Checked="OnLdPlayerExtrasChecked" />
           <StackPanel Classes="settings-centered-column"
                       Spacing="{DynamicResource MAA.Spacing.Small}"
                       IsVisible="{Binding LdPlayerExtrasEnabled}">
             <TextBlock Classes="settings-field-caption" Text="{Binding RootTexts[Settings.Connect.LdPlayer.EmulatorPath]}" />
             <TextBox Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
-                     Text="{Binding LdPlayerEmulatorPath, UpdateSourceTrigger=LostFocus}" />
+                     Text="{Binding LdPlayerEmulatorPath, UpdateSourceTrigger=LostFocus}"
+                     LostFocus="OnLdPlayerEmulatorPathLostFocus" />
             <CheckBox HorizontalAlignment="Center"
                       Content="{Binding RootTexts[Settings.Connect.LdPlayer.ManualSetIndex]}"
                       IsChecked="{Binding LdPlayerManualSetIndex}" />

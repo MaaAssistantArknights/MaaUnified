@@ -43,6 +43,22 @@ public sealed class FightTaskParamsDto
     public bool HideSeries { get; set; }
 
     public bool AllowUseStoneSave { get; set; }
+
+    public bool UseWeeklySchedule { get; set; }
+
+    public bool WeeklyScheduleSunday { get; set; } = true;
+
+    public bool WeeklyScheduleMonday { get; set; } = true;
+
+    public bool WeeklyScheduleTuesday { get; set; } = true;
+
+    public bool WeeklyScheduleWednesday { get; set; } = true;
+
+    public bool WeeklyScheduleThursday { get; set; } = true;
+
+    public bool WeeklyScheduleFriday { get; set; } = true;
+
+    public bool WeeklyScheduleSaturday { get; set; } = true;
 }
 
 public static class FightStageSelection

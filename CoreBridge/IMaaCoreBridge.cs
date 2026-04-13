@@ -39,6 +39,11 @@ public interface IMaaCoreBridge : IAsyncDisposable
 
     Task<CoreResult<CoreRuntimeStatus>> GetRuntimeStatusAsync(CancellationToken cancellationToken = default);
 
+    Task<CoreResult<bool>> ReloadResourceAsync(
+        string? clientType = null,
+        CancellationToken cancellationToken = default)
+        => Task.FromResult(CoreResult<bool>.Fail(new CoreError(CoreErrorCode.NotSupported, "Resource reload is unsupported by current bridge.")));
+
     Task<CoreResult<bool>> AttachWindowAsync(
         CoreAttachWindowRequest request,
         CancellationToken cancellationToken = default);

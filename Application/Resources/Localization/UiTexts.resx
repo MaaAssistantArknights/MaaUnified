@@ -3028,6 +3028,12 @@ Session state `{0}` does not allow {2}.</value>
   <data name="Settings.IssueReport.OpenRuntimeLogWindow" xml:space="preserve">
     <value>打开运行日志窗口</value>
   </data>
+  <data name="Settings.IssueReport.CheckUpdateBeforeReportingIssue" xml:space="preserve">
+    <value>请先升级并测试新版是否仍有此问题，确认非 ｢{key=Help}｣ 后再进行 ｢{key=Issue}｣</value>
+  </data>
+  <data name="Settings.IssueReport.CheckHelpBeforeReportingIssue" xml:space="preserve">
+    <value>请在确认您的问题不属于 ｢{key=Help}｣ 后，再进行 ｢{key=Issue}｣</value>
+  </data>
   <data name="Settings.IssueReport.PreflightNote" xml:space="preserve">
     <value>提交反馈前请先阅读 FAQ，附上日志压缩包可更快定位问题。</value>
   </data>
@@ -3556,6 +3562,36 @@ Session state `{0}` does not allow {2}.</value>
   <data name="Settings.VersionUpdate.StartupCheck" xml:space="preserve">
     <value>启动时检查更新</value>
   </data>
+  <data name="Settings.VersionUpdate.Activity.CheckingSoftware" xml:space="preserve">
+    <value>正在检查软件更新……</value>
+  </data>
+  <data name="Settings.VersionUpdate.Activity.CheckingResource" xml:space="preserve">
+    <value>正在检查资源更新……</value>
+  </data>
+  <data name="Settings.VersionUpdate.Activity.ResourceDownloadingGlobalSource" xml:space="preserve">
+    <value>正在使用 ｢GlobalSource｣ 下载……</value>
+  </data>
+  <data name="Settings.VersionUpdate.Activity.ResourceDownloadingMirrorChyan" xml:space="preserve">
+    <value>正在使用 ｢MirrorChyan｣ 下载……</value>
+  </data>
+  <data name="Settings.VersionUpdate.Activity.ResourcePreparing" xml:space="preserve">
+    <value>正在编制索引</value>
+  </data>
+  <data name="Settings.VersionUpdate.Activity.ResourceUpdated" xml:space="preserve">
+    <value>游戏资源已更新。</value>
+  </data>
+  <data name="Settings.VersionUpdate.Activity.ResourceUpdating" xml:space="preserve">
+    <value>游戏资源正在更新。</value>
+  </data>
+  <data name="Settings.VersionUpdate.Activity.ResourceUpdatingMirrorChyan" xml:space="preserve">
+    <value>正在使用 ｢MirrorChyan｣ 更新资源{0}……</value>
+  </data>
+  <data name="Settings.VersionUpdate.Activity.SoftwarePackageDownloaded" xml:space="preserve">
+    <value>软件更新包已下载完成。</value>
+  </data>
+  <data name="Settings.VersionUpdate.Activity.SoftwarePackageDownloading" xml:space="preserve">
+    <value>正在下载软件更新包……</value>
+  </data>
   <data name="Settings.VersionUpdate.Status.CheckFailed" xml:space="preserve">
     <value>检查更新失败。</value>
   </data>
@@ -3567,6 +3603,9 @@ Session state `{0}` does not allow {2}.</value>
   </data>
   <data name="Settings.VersionUpdate.Status.DialogConfirmed" xml:space="preserve">
     <value>版本更新弹窗确认完成。</value>
+  </data>
+  <data name="Settings.VersionUpdate.Status.FirstBootShown" xml:space="preserve">
+    <value>已显示更新说明。</value>
   </data>
   <data name="Settings.VersionUpdate.Status.PackageDownloadFailed" xml:space="preserve">
     <value>更新失败。</value>
@@ -3884,6 +3923,9 @@ Session state `{0}` does not allow {2}.</value>
   </data>
   <data name="TaskQueue.Module.Custom" xml:space="preserve">
     <value>自定义任务</value>
+  </data>
+  <data name="TaskQueue.Module.UserDataUpdate" xml:space="preserve">
+    <value>更新数据</value>
   </data>
   <data name="TaskQueue.Module.Fight" xml:space="preserve">
     <value>理智作战</value>
@@ -4748,10 +4790,10 @@ Session state `{0}` does not allow {2}.</value>
     <value>知道了</value>
   </data>
   <data name="Settings.VersionUpdate.SoftwarePlaceholder.Message" xml:space="preserve">
-    <value>MAA Unified 暂未实现软件更新。请继续使用 WPF 版本处理软件更新。</value>
+    <value>软件更新已接入。请前往“设置 &gt; Version Update”检查、下载并应用更新。</value>
   </data>
   <data name="Settings.VersionUpdate.SoftwarePlaceholder.Status" xml:space="preserve">
-    <value>MAA Unified 暂未实现软件更新。</value>
+    <value>软件更新已可用。</value>
   </data>
   <data name="Settings.VersionUpdate.SoftwarePlaceholder.Title" xml:space="preserve">
     <value>软件更新</value>

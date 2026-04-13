@@ -1,14 +1,23 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="MAAUnified.App.Features.Settings.IssueReportView">
-  <Grid Margin="4" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto">
+  <Grid Margin="4" RowDefinitions="Auto,Auto,Auto,Auto,Auto">
     <TextBlock Classes="section-title" Text="{Binding RootTexts[Settings.Section.IssueReport]}" />
 
-    <TextBlock Grid.Row="1"
-               MaxWidth="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
-               Margin="{DynamicResource MAA.Thickness.Settings.SectionTopMargin}"
-               Classes="settings-centered-text"
-               Text="{Binding RootTexts[Settings.IssueReport.PreflightNote]}" />
+    <StackPanel Grid.Row="1"
+                Margin="{DynamicResource MAA.Thickness.Settings.SectionTopMargin}"
+                Spacing="4">
+      <TextBlock MaxWidth="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
+                 Classes="settings-note settings-centered-text"
+                 Text="{Binding RootTexts[Settings.IssueReport.CheckUpdateBeforeReportingIssue]}"
+                 TextWrapping="Wrap"
+                 IsVisible="{Binding HasIssueReportUpdateAvailability}" />
+      <TextBlock MaxWidth="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
+                 Classes="settings-note settings-centered-text"
+                 Text="{Binding RootTexts[Settings.IssueReport.CheckHelpBeforeReportingIssue]}"
+                 TextWrapping="Wrap"
+                 IsVisible="{Binding ShowIssueReportPreflightNote}" />
+    </StackPanel>
 
     <Grid Grid.Row="2"
           Classes="settings-form"
@@ -28,40 +37,25 @@
                 Content="{Binding RootTexts[Settings.Action.BuildIssueReport]}"
                 Click="OnBuildIssueReportClick" />
         <Button Classes="wpf-button wpf-button-secondary"
-                Content="{Binding RootTexts[Settings.IssueReport.OpenRuntimeLogWindow]}"
-                Click="OnOpenRuntimeLogWindowClick"
-                IsVisible="{Binding CanOpenRuntimeLogWindow}" />
-        <Button Classes="wpf-button wpf-button-secondary"
                 Content="{Binding RootTexts[Settings.Action.OpenDebugDirectory]}"
-                Click="OnOpenDebugDirectoryClick"
-                IsVisible="{Binding CanUseIssueReportMaintenanceTools}" />
+                Click="OnOpenDebugDirectoryClick" />
         <Button Classes="wpf-button wpf-button-secondary"
                 Content="{Binding RootTexts[Settings.Action.ClearImageCache]}"
-                Click="OnClearImageCacheClick"
-                IsVisible="{Binding CanUseIssueReportMaintenanceTools}" />
+                Click="OnClearImageCacheClick">
+          <ToolTip.Tip>
+            <ToolTip Content="{Binding IssueReportClearImageCacheTip}" />
+          </ToolTip.Tip>
+        </Button>
       </StackPanel>
     </Grid>
 
-    <StackPanel Grid.Row="3"
-                Classes="settings-centered-column"
-                Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}"
-                Spacing="0"
-                IsVisible="{Binding CanUseDeveloperMode}">
-      <CheckBox HorizontalAlignment="Center"
-                Content="{Binding RootTexts[Settings.IssueReport.DeveloperMode]}"
-                IsChecked="{Binding DeveloperModeEnabled}" />
-      <TextBlock MaxWidth="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
-                 Classes="settings-note settings-centered-text"
-                 Text="{Binding RootTexts[Settings.IssueReport.DeveloperModeNote]}" />
-    </StackPanel>
-
-    <TextBlock Grid.Row="4"
+    <TextBlock Grid.Row="3"
                MaxWidth="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
                Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}"
                Classes="settings-centered-text"
                Text="{Binding IssueReportPath}" />
 
-    <StackPanel Grid.Row="5"
+    <StackPanel Grid.Row="4"
                 Classes="settings-form settings-form-narrow"
                 Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}"
                 Spacing="4">

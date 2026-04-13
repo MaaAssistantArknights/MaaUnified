@@ -13,22 +13,30 @@
                 Classes="settings-form"
                 Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}"
                 Spacing="{DynamicResource MAA.Spacing.Medium}">
-      <CheckBox HorizontalAlignment="Center"
-                Content="{Binding RootTexts[Settings.ExternalNotification.Enabled]}"
-                IsChecked="{Binding ExternalNotificationEnabled}" />
+      <StackPanel Classes="settings-centered-column"
+                  Spacing="{DynamicResource MAA.Spacing.Small}">
+        <TextBlock Classes="settings-field-caption" Text="{Binding RootTexts[Settings.ExternalNotification.Enabled]}" />
+        <ItemsControl ItemsSource="{Binding NotificationProviderSelections}">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <WrapPanel HorizontalAlignment="Center" />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <CheckBox Margin="0,0,12,6"
+                        Content="{Binding DisplayName}"
+                        IsChecked="{Binding IsEnabled, Mode=TwoWay}" />
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </StackPanel>
 
-      <Grid HorizontalAlignment="Center"
-            ColumnDefinitions="Auto,Auto"
-            IsEnabled="{Binding CanEditExternalNotification}">
-        <ComboBox Width="{DynamicResource MAA.Size.Settings.FieldCenteredWidth}"
-                  ItemsSource="{Binding AvailableNotificationProviders}"
-                  SelectedItem="{Binding SelectedNotificationProvider}" />
-        <Button Grid.Column="1"
-                Classes="wpf-button wpf-button-secondary"
-                Margin="{DynamicResource MAA.Thickness.MarginActionButtonLeft}"
-                Content="{Binding RootTexts[Settings.ExternalNotification.TestSend]}"
-                Click="OnTestSendClick" />
-      </Grid>
+      <Button Classes="wpf-button wpf-button-secondary"
+              HorizontalAlignment="Center"
+              Content="{Binding RootTexts[Settings.ExternalNotification.TestSend]}"
+              Click="OnTestSendClick"
+              IsEnabled="{Binding CanEditExternalNotification}" />
 
       <StackPanel Classes="settings-centered-column"
                   Spacing="0"
@@ -52,36 +60,152 @@
       <StackPanel Classes="settings-centered-column"
                   Spacing="{DynamicResource MAA.Spacing.Small}"
                   IsEnabled="{Binding CanEditExternalNotification}">
-        <TextBlock Classes="settings-field-caption" Text="{Binding RootTexts[Settings.ExternalNotification.ProviderParameters]}" />
-        <TextBlock Classes="settings-note settings-centered-text"
-                   Text="{Binding RootTexts[Settings.ExternalNotification.ProviderParametersNote]}" />
-        <TextBox Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
-                 Height="150"
-                 AcceptsReturn="True"
-                 TextWrapping="Wrap"
-                 Text="{Binding NotificationProviderParametersText, UpdateSourceTrigger=LostFocus}" />
-      </StackPanel>
 
-      <StackPanel Classes="settings-centered-column"
-                  Spacing="{DynamicResource MAA.Spacing.Small}"
-                  IsEnabled="{Binding CanEditExternalNotification}">
-        <TextBlock Classes="settings-field-caption" Text="{Binding RootTexts[Settings.ExternalNotification.TestTitle]}" />
+        <StackPanel Spacing="{DynamicResource MAA.Spacing.Small}"
+                    IsVisible="{Binding ServerChanSectionVisible}">
+          <TextBlock Classes="settings-field-caption" Text="Server Chan" />
+          <TextBox Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
+                   Text="{Binding ServerChanSendKey, UpdateSourceTrigger=PropertyChanged}" />
+        </StackPanel>
+
+        <StackPanel Spacing="{DynamicResource MAA.Spacing.Small}"
+                    IsVisible="{Binding TelegramSectionVisible}">
+          <TextBlock Classes="settings-field-caption" Text="Telegram bot" />
+          <TextBox Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
+                   Text="{Binding TelegramBotToken, UpdateSourceTrigger=PropertyChanged}" />
+          <TextBox Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
+                   Text="{Binding TelegramChatId, UpdateSourceTrigger=PropertyChanged}" />
+          <TextBox Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
+                   Text="{Binding TelegramTopicId, UpdateSourceTrigger=PropertyChanged}" />
+        </StackPanel>
+
+        <StackPanel Spacing="{DynamicResource MAA.Spacing.Small}"
+                    IsVisible="{Binding DiscordSectionVisible}">
+          <TextBlock Classes="settings-field-caption" Text="Discord" />
+          <TextBox Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
+                   Text="{Binding DiscordBotToken, UpdateSourceTrigger=PropertyChanged}" />
+          <TextBox Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
+                   Text="{Binding DiscordUserId, UpdateSourceTrigger=PropertyChanged}" />
+        </StackPanel>
+
+        <StackPanel Spacing="{DynamicResource MAA.Spacing.Small}"
+                    IsVisible="{Binding DiscordWebhookSectionVisible}">
+          <TextBlock Classes="settings-field-caption" Text="Discord WebHook" />
+          <TextBox Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
+                   Text="{Binding DiscordWebhookUrl, UpdateSourceTrigger=PropertyChanged}" />
+        </StackPanel>
+
+        <StackPanel Spacing="{DynamicResource MAA.Spacing.Small}"
+                    IsVisible="{Binding DingTalkSectionVisible}">
+          <TextBlock Classes="settings-field-caption" Text="DingTalk" />
+          <TextBox Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
+                   Text="{Binding DingTalkAccessToken, UpdateSourceTrigger=PropertyChanged}" />
+          <TextBox Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
+                   Text="{Binding DingTalkSecret, UpdateSourceTrigger=PropertyChanged}" />
+        </StackPanel>
+
+        <StackPanel Spacing="{DynamicResource MAA.Spacing.Small}"
+                    IsVisible="{Binding SmtpSectionVisible}">
+          <TextBlock Classes="settings-field-caption" Text="SMTP" />
+          <StackPanel Orientation="Horizontal" Spacing="{DynamicResource MAA.Spacing.Small}">
+            <CheckBox Content="Use SSL" IsChecked="{Binding SmtpUseSsl}" />
+            <CheckBox Content="Require authentication" IsChecked="{Binding SmtpRequireAuthentication}" />
+          </StackPanel>
+          <Grid ColumnDefinitions="Auto,*,Auto,*" RowDefinitions="Auto,Auto,Auto">
+            <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,0,6,0" VerticalAlignment="Center" Text="Server" />
+            <TextBox Grid.Row="0" Grid.Column="1"
+                     Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
+                     Text="{Binding SmtpServer, UpdateSourceTrigger=PropertyChanged}" />
+            <TextBlock Grid.Row="0" Grid.Column="2" Margin="10,0,6,0" VerticalAlignment="Center" Text="Port" />
+            <TextBox Grid.Row="0" Grid.Column="3"
+                     Width="{DynamicResource MAA.Size.Settings.FieldPathCompactWidth}"
+                     Text="{Binding SmtpPort, UpdateSourceTrigger=PropertyChanged}" />
+
+            <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,6,6,0" VerticalAlignment="Center" Text="User" />
+            <TextBox Grid.Row="1" Grid.Column="1"
+                     Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
+                     Text="{Binding SmtpUser, UpdateSourceTrigger=PropertyChanged}" />
+            <TextBlock Grid.Row="1" Grid.Column="2" Margin="10,6,6,0" VerticalAlignment="Center" Text="Password" />
+            <TextBox Grid.Row="1" Grid.Column="3"
+                     Width="{DynamicResource MAA.Size.Settings.FieldPathCompactWidth}"
+                     Text="{Binding SmtpPassword, UpdateSourceTrigger=PropertyChanged}" />
+
+            <TextBlock Grid.Row="2" Grid.Column="0" Margin="0,6,6,0" VerticalAlignment="Center" Text="From" />
+            <TextBox Grid.Row="2" Grid.Column="1"
+                     Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
+                     Text="{Binding SmtpFrom, UpdateSourceTrigger=PropertyChanged}" />
+            <TextBlock Grid.Row="2" Grid.Column="2" Margin="10,6,6,0" VerticalAlignment="Center" Text="To" />
+            <TextBox Grid.Row="2" Grid.Column="3"
+                     Width="{DynamicResource MAA.Size.Settings.FieldPathCompactWidth}"
+                     Text="{Binding SmtpTo, UpdateSourceTrigger=PropertyChanged}" />
+          </Grid>
+        </StackPanel>
+
+        <StackPanel Spacing="{DynamicResource MAA.Spacing.Small}"
+                    IsVisible="{Binding BarkSectionVisible}">
+          <TextBlock Classes="settings-field-caption" Text="Bark" />
+          <TextBox Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
+                   Text="{Binding BarkServer, UpdateSourceTrigger=PropertyChanged}" />
+          <TextBox Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
+                   Text="{Binding BarkSendKey, UpdateSourceTrigger=PropertyChanged}" />
+        </StackPanel>
+
+        <StackPanel Spacing="{DynamicResource MAA.Spacing.Small}"
+                    IsVisible="{Binding QmsgSectionVisible}">
+          <TextBlock Classes="settings-field-caption" Text="Qmsg" />
+          <Grid ColumnDefinitions="Auto,*,Auto,*" RowDefinitions="Auto,Auto">
+            <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,0,6,0" VerticalAlignment="Center" Text="Server" />
+            <TextBox Grid.Row="0" Grid.Column="1"
+                     Text="{Binding QmsgServer, UpdateSourceTrigger=PropertyChanged}" />
+            <TextBlock Grid.Row="0" Grid.Column="2" Margin="10,0,6,0" VerticalAlignment="Center" Text="Key" />
+            <TextBox Grid.Row="0" Grid.Column="3"
+                     Text="{Binding QmsgKey, UpdateSourceTrigger=PropertyChanged}" />
+
+            <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,6,6,0" VerticalAlignment="Center" Text="User" />
+            <TextBox Grid.Row="1" Grid.Column="1"
+                     Text="{Binding QmsgUser, UpdateSourceTrigger=PropertyChanged}" />
+            <TextBlock Grid.Row="1" Grid.Column="2" Margin="10,6,6,0" VerticalAlignment="Center" Text="Bot" />
+            <TextBox Grid.Row="1" Grid.Column="3"
+                     Text="{Binding QmsgBot, UpdateSourceTrigger=PropertyChanged}" />
+          </Grid>
+        </StackPanel>
+
+        <StackPanel Spacing="{DynamicResource MAA.Spacing.Small}"
+                    IsVisible="{Binding GotifySectionVisible}">
+          <TextBlock Classes="settings-field-caption" Text="Gotify" />
+          <TextBox Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
+                   Text="{Binding GotifyServer, UpdateSourceTrigger=PropertyChanged}" />
+          <TextBox Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
+                   Text="{Binding GotifyToken, UpdateSourceTrigger=PropertyChanged}" />
+        </StackPanel>
+
+        <StackPanel Spacing="{DynamicResource MAA.Spacing.Small}"
+                    IsVisible="{Binding CustomWebhookSectionVisible}">
+          <TextBlock Classes="settings-field-caption" Text="Custom Webhook" />
+          <TextBox Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
+                   Text="{Binding CustomWebhookUrl, UpdateSourceTrigger=PropertyChanged}" />
+          <TextBox Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
+                   Height="120"
+                   AcceptsReturn="True"
+                   TextWrapping="Wrap"
+                   Text="{Binding CustomWebhookBody, UpdateSourceTrigger=PropertyChanged}" />
+        </StackPanel>
+
+        <TextBlock Classes="settings-field-caption"
+                   Text="{Binding RootTexts[Settings.ExternalNotification.TestTitle]}" />
         <TextBox Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
                  Text="{Binding NotificationTitle, UpdateSourceTrigger=LostFocus}" />
-      </StackPanel>
 
-      <StackPanel Classes="settings-centered-column"
-                  Spacing="{DynamicResource MAA.Spacing.Small}"
-                  IsEnabled="{Binding CanEditExternalNotification}">
-        <TextBlock Classes="settings-field-caption" Text="{Binding RootTexts[Settings.ExternalNotification.TestMessage]}" />
+        <TextBlock Classes="settings-field-caption"
+                   Text="{Binding RootTexts[Settings.ExternalNotification.TestMessage]}" />
         <TextBox Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
                  Text="{Binding NotificationMessage, UpdateSourceTrigger=LostFocus}" />
-      </StackPanel>
 
-      <Button Classes="wpf-button wpf-button-secondary"
-              HorizontalAlignment="Center"
-              Content="{Binding RootTexts[Settings.Action.ValidateNotification]}"
-              Click="OnValidateProviderClick" />
+        <Button Classes="wpf-button wpf-button-secondary"
+                HorizontalAlignment="Center"
+                Content="{Binding RootTexts[Settings.Action.ValidateNotification]}"
+                Click="OnValidateProviderClick" />
+      </StackPanel>
     </StackPanel>
 
     <StackPanel Grid.Row="3"

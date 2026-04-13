@@ -1,10 +1,13 @@
 using MAAUnified.Application.Models;
+using MAAUnified.Application.Models.TaskParams;
 using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.TaskParams;
 using MAAUnified.CoreBridge;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using LegacyConfigurationKeys = MAAUnified.Compat.Constants.ConfigurationKeys;
 
 namespace MAAUnified.Application.Orchestration;
 
@@ -329,15 +332,42 @@ public sealed class UnifiedSessionService
             }
 
             task.Type = compiled.NormalizedType;
-            var appendParams = TaskParamCompiler.BuildCoreParams(compiled.NormalizedType, compiled.Params);
             if (!string.Equals(compiled.NormalizedType, TaskModuleTypes.Mall, StringComparison.OrdinalIgnoreCase))
             {
                 task.Params = compiled.Params;
             }
+
+            if (ShouldSkipTaskForToday(task, profile, _configService.CurrentConfig))
+            {
+                _logService.Info($"Skipped task `{task.Name}` because current weekly schedule disables it today.");
+                continue;
+            }
+
+            if (string.Equals(compiled.NormalizedType, TaskModuleTypes.UserDataUpdate, StringComparison.OrdinalIgnoreCase))
+            {
+                var userDataTasks = BuildUserDataUpdateCoreTasks(task, profile, _configService.CurrentConfig);
+                foreach (var userDataTask in userDataTasks)
+                {
+                    var appendCoreResult = await _bridge.AppendTaskAsync(userDataTask, cancellationToken);
+                    if (!appendCoreResult.Success)
+                    {
+                        _logService.Warn($"Append task failed `{task.Name}`: {appendCoreResult.Error?.Code} {appendCoreResult.Error?.Message}");
+                        ClearTaskIdMappings();
+                        return CoreResult<int>.Fail(appendCoreResult.Error!);
+                    }
+
+                    SetTaskIdMapping(appendCoreResult.Value, queueIndex);
+                    appended += 1;
+                    _logService.Info($"Appended task #{appendCoreResult.Value}: {userDataTask.Name}");
+                }
+
+                continue;
+            }
+
+            var appendParams = TaskParamCompiler.BuildCoreParams(compiled.NormalizedType, compiled.Params);
             var appendResult = await _bridge.AppendTaskAsync(
                 new CoreTaskRequest(compiled.NormalizedType, task.Name, task.IsEnabled, appendParams.ToJsonString()),
                 cancellationToken);
-
             if (!appendResult.Success)
             {
                 _logService.Warn($"Append task failed `{task.Name}`: {appendResult.Error?.Code} {appendResult.Error?.Message}");
@@ -383,6 +413,163 @@ public sealed class UnifiedSessionService
         return CoreResult<int>.Ok(index);
     }
 
+    private bool ShouldSkipTaskForToday(UnifiedTaskItem task, UnifiedProfile profile, UnifiedConfig config)
+    {
+        if (!string.Equals(TaskParamCompiler.NormalizeTaskType(task.Type), TaskModuleTypes.Fight, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var (dto, _) = TaskParamCompiler.ReadFight(task, strict: false);
+        if (!dto.UseWeeklySchedule)
+        {
+            return false;
+        }
+
+        var clientType = ResolveStringSetting(profile, config, LegacyConfigurationKeys.ClientType) ?? "Official";
+        var currentDay = MallDailyResetHelper.GetYjDate(DateTime.UtcNow, clientType).DayOfWeek;
+        return !IsFightEnabledForDay(dto, currentDay);
+    }
+
+    private IReadOnlyList<CoreTaskRequest> BuildUserDataUpdateCoreTasks(UnifiedTaskItem task, UnifiedProfile profile, UnifiedConfig config)
+    {
+        var (dto, _) = TaskParamCompiler.ReadUserDataUpdate(task, strict: false);
+        if (!dto.UpdateOperBox && !dto.UpdateDepot)
+        {
+            return [];
+        }
+
+        var nowUtc = DateTime.UtcNow;
+        var clientType = ResolveStringSetting(profile, config, LegacyConfigurationKeys.ClientType) ?? "Official";
+        var tasks = new List<CoreTaskRequest>(2);
+        if (dto.UpdateOperBox && IsUserDataUpdateTriggerDue(ReadOperBoxSyncTime(config), dto.TriggerInterval, clientType, nowUtc))
+        {
+            tasks.Add(new CoreTaskRequest("OperBox", $"{task.Name}-OperBox", true, "{}"));
+        }
+
+        if (dto.UpdateDepot && IsUserDataUpdateTriggerDue(ReadDepotSyncTime(config), dto.TriggerInterval, clientType, nowUtc))
+        {
+            tasks.Add(new CoreTaskRequest("Depot", $"{task.Name}-Depot", true, "{}"));
+        }
+
+        return tasks;
+    }
+
+    private static bool IsFightEnabledForDay(FightTaskParamsDto dto, DayOfWeek dayOfWeek)
+    {
+        return dayOfWeek switch
+        {
+            DayOfWeek.Sunday => dto.WeeklyScheduleSunday,
+            DayOfWeek.Monday => dto.WeeklyScheduleMonday,
+            DayOfWeek.Tuesday => dto.WeeklyScheduleTuesday,
+            DayOfWeek.Wednesday => dto.WeeklyScheduleWednesday,
+            DayOfWeek.Thursday => dto.WeeklyScheduleThursday,
+            DayOfWeek.Friday => dto.WeeklyScheduleFriday,
+            DayOfWeek.Saturday => dto.WeeklyScheduleSaturday,
+            _ => true,
+        };
+    }
+
+    private static bool IsUserDataUpdateTriggerDue(
+        DateTimeOffset? lastSyncTime,
+        string triggerInterval,
+        string clientType,
+        DateTime nowUtc)
+    {
+        if (string.Equals(triggerInterval, UserDataUpdateTaskParamsDto.TriggerEveryTime, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (lastSyncTime is null)
+        {
+            return true;
+        }
+
+        var currentYjDate = MallDailyResetHelper.GetYjDate(nowUtc, clientType);
+        var lastYjDate = MallDailyResetHelper.GetYjDate(lastSyncTime.Value.UtcDateTime, clientType);
+        if (string.Equals(triggerInterval, UserDataUpdateTaskParamsDto.TriggerWeekly, StringComparison.OrdinalIgnoreCase))
+        {
+            return ISOWeek.GetYear(currentYjDate) != ISOWeek.GetYear(lastYjDate)
+                   || ISOWeek.GetWeekOfYear(currentYjDate) != ISOWeek.GetWeekOfYear(lastYjDate);
+        }
+
+        return currentYjDate > lastYjDate;
+    }
+
+    private static DateTimeOffset? ReadOperBoxSyncTime(UnifiedConfig config)
+    {
+        if (!config.GlobalValues.TryGetValue(LegacyConfigurationKeys.OperBoxData, out var node) || node is null)
+        {
+            return null;
+        }
+
+        return ReadPersistedSyncTime(node);
+    }
+
+    private static DateTimeOffset? ReadDepotSyncTime(UnifiedConfig config)
+    {
+        if (!config.GlobalValues.TryGetValue(LegacyConfigurationKeys.DepotResult, out var node) || node is null)
+        {
+            return null;
+        }
+
+        return ReadPersistedSyncTime(node);
+    }
+
+    private static DateTimeOffset? ReadPersistedSyncTime(JsonNode node)
+    {
+        var payload = node is JsonValue jsonValue && jsonValue.TryGetValue(out string? raw)
+            ? raw
+            : node.ToJsonString();
+        if (string.IsNullOrWhiteSpace(payload))
+        {
+            return null;
+        }
+
+        try
+        {
+            if (JsonNode.Parse(payload) is not JsonObject obj)
+            {
+                return null;
+            }
+
+            if (obj["syncTime"] is not JsonValue syncValue || !syncValue.TryGetValue(out string? syncText))
+            {
+                return null;
+            }
+
+            return DateTimeOffset.TryParse(syncText, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var parsed)
+                ? parsed.ToUniversalTime()
+                : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static string? ResolveStringSetting(UnifiedProfile profile, UnifiedConfig config, string key)
+    {
+        if (profile.Values.TryGetValue(key, out var profileNode)
+            && profileNode is JsonValue profileValue
+            && profileValue.TryGetValue(out string? profileText)
+            && !string.IsNullOrWhiteSpace(profileText))
+        {
+            return profileText.Trim();
+        }
+
+        if (config.GlobalValues.TryGetValue(key, out var globalNode)
+            && globalNode is JsonValue globalValue
+            && globalValue.TryGetValue(out string? globalText)
+            && !string.IsNullOrWhiteSpace(globalText))
+        {
+            return globalText.Trim();
+        }
+
+        return null;
+    }
+
     public async Task<CoreResult<bool>> StartAsync(CancellationToken cancellationToken = default)
     {
         _logService.Debug($"Session.Start requested: state={CurrentState}");
@@ -423,6 +610,44 @@ public sealed class UnifiedSessionService
     public Task<CoreResult<CoreRuntimeStatus>> GetRuntimeStatusAsync(CancellationToken cancellationToken = default)
     {
         return _bridge.GetRuntimeStatusAsync(cancellationToken);
+    }
+
+    public async Task<CoreResult<bool>> ReloadResourceWhenIdleAsync(
+        string? clientType = null,
+        TimeSpan? waitTimeout = null,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var effectiveTimeout = waitTimeout ?? TimeSpan.FromSeconds(30);
+        if (effectiveTimeout <= TimeSpan.Zero)
+        {
+            return CoreResult<bool>.Fail(new CoreError(
+                CoreErrorCode.InvalidRequest,
+                "Resource reload timeout must be greater than zero."));
+        }
+
+        _logService.Debug(
+            $"Session.ReloadResource requested: state={CurrentState}, client={clientType ?? "<current>"}, timeout={effectiveTimeout}");
+        var waitResult = await WaitUntilReloadSafeAsync(effectiveTimeout, cancellationToken);
+        if (!waitResult.Success)
+        {
+            _logService.Warn(
+                $"Session.ReloadResource aborted: {waitResult.Error?.Code} {waitResult.Error?.Message}");
+            return waitResult;
+        }
+
+        var reloadResult = await _bridge.ReloadResourceAsync(clientType, cancellationToken);
+        if (reloadResult.Success)
+        {
+            _logService.Info($"Session resources reloaded. client={clientType ?? "<current>"}");
+        }
+        else
+        {
+            _logService.Warn(
+                $"Session resource reload failed: {reloadResult.Error?.Code} {reloadResult.Error?.Message}");
+        }
+
+        return reloadResult;
     }
 
     public async Task StartCallbackPumpAsync(Func<CoreCallbackEvent, Task> onEvent, CancellationToken cancellationToken = default)
@@ -587,5 +812,58 @@ public sealed class UnifiedSessionService
         }
 
         return SessionState.Idle;
+    }
+
+    private async Task<CoreResult<bool>> WaitUntilReloadSafeAsync(
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        var deadlineAt = DateTimeOffset.UtcNow + timeout;
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var currentState = CurrentState;
+            if (!IsReloadHardBlockedState(currentState))
+            {
+                var runtimeResult = await _bridge.GetRuntimeStatusAsync(cancellationToken);
+                if (runtimeResult.Success && runtimeResult.Value is { Running: false })
+                {
+                    return CoreResult<bool>.Ok(true);
+                }
+
+                if (!runtimeResult.Success && !IsReloadSoftBlockedState(currentState))
+                {
+                    // Runtime probe can fail transiently during reconnect/dispose windows.
+                    // When state machine is already idle/connected, proceed with best effort.
+                    return CoreResult<bool>.Ok(true);
+                }
+            }
+
+            var now = DateTimeOffset.UtcNow;
+            if (now >= deadlineAt)
+            {
+                return CoreResult<bool>.Fail(new CoreError(
+                    CoreErrorCode.ConnectTimeout,
+                    $"Timed out waiting for session to become idle before resource reload. state={CurrentState}"));
+            }
+
+            var wait = deadlineAt - now;
+            if (wait > TimeSpan.FromMilliseconds(200))
+            {
+                wait = TimeSpan.FromMilliseconds(200);
+            }
+
+            await Task.Delay(wait, cancellationToken);
+        }
+    }
+
+    private static bool IsReloadHardBlockedState(SessionState state)
+    {
+        return state == SessionState.Connecting;
+    }
+
+    private static bool IsReloadSoftBlockedState(SessionState state)
+    {
+        return state is SessionState.Running or SessionState.Stopping;
     }
 }

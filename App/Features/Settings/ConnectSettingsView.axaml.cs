@@ -68,6 +68,85 @@ public partial class ConnectSettingsView : UserControl
         }
     }
 
+    private void OnRemoveAddressHistoryClick(object? sender, RoutedEventArgs e)
+    {
+        var vm = VM;
+        if (vm is null || sender is not Button { Tag: string address })
+        {
+            return;
+        }
+
+        vm.RemoveAddressFromHistory(address);
+    }
+
+    private void OnMuMuExtrasChecked(object? sender, RoutedEventArgs e)
+    {
+        var vm = VM;
+        if (vm is null)
+        {
+            return;
+        }
+
+        if (vm.AutoDetectMuMu12EmulatorPathIfNeeded())
+        {
+            vm.TestLinkInfo = $"MuMu path auto-detected: {vm.MuMu12EmulatorPath}";
+            return;
+        }
+
+        if (!vm.ValidateMuMu12EmulatorPath(out var error) && !string.IsNullOrWhiteSpace(error))
+        {
+            vm.TestLinkInfo = error;
+        }
+    }
+
+    private void OnMuMuEmulatorPathLostFocus(object? sender, RoutedEventArgs e)
+    {
+        var vm = VM;
+        if (vm is null)
+        {
+            return;
+        }
+
+        if (!vm.ValidateMuMu12EmulatorPath(out var error) && !string.IsNullOrWhiteSpace(error))
+        {
+            vm.TestLinkInfo = error;
+        }
+    }
+
+    private void OnLdPlayerExtrasChecked(object? sender, RoutedEventArgs e)
+    {
+        var vm = VM;
+        if (vm is null)
+        {
+            return;
+        }
+
+        if (vm.AutoDetectLdPlayerEmulatorPathIfNeeded())
+        {
+            vm.TestLinkInfo = $"LDPlayer path auto-detected: {vm.LdPlayerEmulatorPath}";
+            return;
+        }
+
+        if (!vm.ValidateLdPlayerEmulatorPath(out var error) && !string.IsNullOrWhiteSpace(error))
+        {
+            vm.TestLinkInfo = error;
+        }
+    }
+
+    private void OnLdPlayerEmulatorPathLostFocus(object? sender, RoutedEventArgs e)
+    {
+        var vm = VM;
+        if (vm is null)
+        {
+            return;
+        }
+
+        if (!vm.ValidateLdPlayerEmulatorPath(out var error) && !string.IsNullOrWhiteSpace(error))
+        {
+            vm.TestLinkInfo = error;
+        }
+    }
+
     private async void OnScreenshotTestClick(object? sender, RoutedEventArgs e)
     {
         var vm = VM;

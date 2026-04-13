@@ -335,6 +335,10 @@ public sealed class SettingsRemoteExternalNotificationFeatureTests
                 vm.NotificationProviderParametersText = "botToken=token-1\nchatId=10001";
 
                 await vm.SaveExternalNotificationAsync();
+
+                Assert.Equal(
+                    "SMTP,Telegram",
+                    ReadCurrentProfileString(first.Config, ConfigurationKeys.ExternalNotificationEnabled));
             }
 
             await using var second = await RuntimeFixture.CreateAsync(
@@ -401,7 +405,29 @@ public sealed class SettingsRemoteExternalNotificationFeatureTests
         Assert.False(vm.HasExternalNotificationStatusMessage);
         Assert.False(vm.HasExternalNotificationWarningMessage);
         Assert.False(vm.HasExternalNotificationErrorMessage);
-        Assert.Equal("False", ReadCurrentProfileString(fixture.Config, ConfigurationKeys.ExternalNotificationEnabled));
+        Assert.Equal(string.Empty, ReadCurrentProfileString(fixture.Config, ConfigurationKeys.ExternalNotificationEnabled));
+    }
+
+    [Fact]
+    public async Task ExternalNotification_LoadLegacyProviderList_PreservesMultiProviderSelection()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync(
+            notificationProviderFeatureService: new ScriptedNotificationProviderFeatureService
+            {
+                ValidateHandler = static _ => UiOperationResult.Ok("valid"),
+            });
+        fixture.Config.CurrentConfig.Profiles[fixture.Config.CurrentConfig.CurrentProfile].Values[ConfigurationKeys.ExternalNotificationEnabled] =
+            JsonValue.Create("SMTP,Telegram,Custom Webhook");
+        await fixture.Config.SaveAsync();
+
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        Assert.True(vm.ExternalNotificationEnabled);
+        await vm.SaveExternalNotificationAsync();
+        Assert.Equal(
+            "SMTP,Telegram,Custom Webhook",
+            ReadCurrentProfileString(fixture.Config, ConfigurationKeys.ExternalNotificationEnabled));
     }
 
     private static async Task<string> RunExternalFailureCaseAsync(

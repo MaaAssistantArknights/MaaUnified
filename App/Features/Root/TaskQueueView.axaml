@@ -29,6 +29,9 @@
     <DataTemplate DataType="taskVm:ReclamationModuleViewModel">
       <taskViews:ReclamationSettingsView />
     </DataTemplate>
+    <DataTemplate DataType="taskVm:UserDataUpdateModuleViewModel">
+      <taskViews:UserDataUpdateSettingsView />
+    </DataTemplate>
     <DataTemplate DataType="taskVm:CustomModuleViewModel">
       <taskViews:CustomSettingsView />
     </DataTemplate>
@@ -89,6 +92,10 @@
                       ToolTip.Tip="{Binding ToolTipText}">
                 <Border.ContextMenu>
                   <ContextMenu>
+                    <MenuItem Header="{Binding TaskMenuRunOnceText}"
+                              IsEnabled="{Binding CanEdit}"
+                              CommandParameter="{Binding PlacementTarget.Tag, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                              Click="OnTaskMenuRunOnceClick" />
                     <MenuItem Header="{Binding TaskMenuMoveUpText}"
                               IsEnabled="{Binding CanEdit}"
                               CommandParameter="{Binding PlacementTarget.Tag, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
@@ -150,6 +157,7 @@
                 <MenuItem Header="{Binding AddTaskMenuAwardText}" Tag="Award" Click="OnAddTaskModuleClick" />
                 <MenuItem Header="{Binding AddTaskMenuRoguelikeText}" Tag="Roguelike" Click="OnAddTaskModuleClick" />
                 <MenuItem Header="{Binding AddTaskMenuReclamationText}" Tag="Reclamation" Click="OnAddTaskModuleClick" />
+                <MenuItem Header="{Binding AddTaskMenuUserDataUpdateText}" Tag="UserDataUpdate" Click="OnAddTaskModuleClick" />
                 <MenuItem Header="{Binding AddTaskMenuCustomText}" Tag="Custom" Click="OnAddTaskModuleClick" />
               </ContextMenu>
             </Button.ContextMenu>

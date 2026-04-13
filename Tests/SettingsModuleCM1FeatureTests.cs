@@ -90,10 +90,67 @@ public sealed class SettingsModuleCM1FeatureTests
 
             await vm.CheckVersionUpdateAsync();
 
-            Assert.Equal(vm.RootTexts["Settings.VersionUpdate.Status.DialogClosed"], vm.VersionUpdateStatusMessage);
+            Assert.Contains("v2.0.0", vm.VersionUpdateStatusMessage, StringComparison.Ordinal);
             Assert.False(vm.HasVersionUpdateErrorMessage);
             Assert.True(vm.HasPendingVersionUpdateAvailability);
             Assert.Equal("core-9.9.9", vm.UpdatePanelCoreVersion);
+        }
+        finally
+        {
+            try
+            {
+                if (File.Exists(feedPath))
+                {
+                    File.Delete(feedPath);
+                }
+            }
+            catch
+            {
+                // Best-effort cleanup.
+            }
+        }
+    }
+
+    [Fact]
+    public async Task VersionUpdate_CheckForUpdates_UsesCoreVersionForCurrentVersion()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync();
+        var vm = new SettingsPageViewModel(
+            fixture.Runtime,
+            new ConnectionGameSharedStateViewModel(),
+            coreVersionResolver: () => "v999.0.0");
+        await vm.InitializeAsync();
+
+        var feedPath = Path.Combine(Path.GetTempPath(), $"maa-unified-settings-core-feed-{Guid.NewGuid():N}.json");
+        try
+        {
+            await File.WriteAllTextAsync(feedPath, """
+                [
+                  {
+                    "tag_name": "v2.0.0",
+                    "name": "Release v2.0.0",
+                    "body": "Line one.\nLine two.",
+                    "prerelease": false,
+                    "assets": [
+                      {
+                        "name": "MAAUnified-v2.0.0-linux-x64.tar.gz",
+                        "browser_download_url": "https://example.com/MAAUnified-v2.0.0-linux-x64.tar.gz",
+                        "size": 1234
+                      }
+                    ]
+                  }
+                ]
+                """);
+
+            vm.VersionUpdateVersionType = "Stable";
+            vm.VersionUpdateResourceApi = feedPath;
+            vm.VersionUpdateAutoDownload = false;
+
+            await vm.CheckVersionUpdateAsync();
+
+            Assert.Equal("v999.0.0", vm.UpdatePanelCoreVersion);
+            Assert.False(vm.HasPendingVersionUpdateAvailability);
+            Assert.DoesNotContain("v2.0.0", vm.VersionUpdateStatusMessage, StringComparison.Ordinal);
         }
         finally
         {
@@ -173,7 +230,7 @@ public sealed class SettingsModuleCM1FeatureTests
         }
 
         Assert.False(vm.HasVersionUpdateErrorMessage);
-        Assert.Equal(vm.RootTexts["Settings.VersionUpdate.Status.DialogClosed"], vm.VersionUpdateStatusMessage);
+        Assert.Contains("v2.0.0", vm.VersionUpdateStatusMessage, StringComparison.Ordinal);
         Assert.False(dialogRaised);
     }
 
@@ -395,7 +452,7 @@ public sealed class SettingsModuleCM1FeatureTests
         fixture.Config.CurrentConfig.Profiles["Default"].Values[ConfigurationKeys.RemoteControlGetTaskEndpointUri] = JsonValue.Create("https://default.example/task");
         fixture.Config.CurrentConfig.Profiles["Default"].Values[ConfigurationKeys.PenguinId] = JsonValue.Create("penguin-default");
         fixture.Config.CurrentConfig.Profiles["Default"].Values[ConfigurationKeys.StartEmulator] = JsonValue.Create("True");
-        fixture.Config.CurrentConfig.Profiles["Default"].Values[ConfigurationKeys.ExternalNotificationEnabled] = JsonValue.Create("True");
+        fixture.Config.CurrentConfig.Profiles["Default"].Values[ConfigurationKeys.ExternalNotificationEnabled] = JsonValue.Create("SMTP");
 
         fixture.Config.CurrentConfig.Profiles["Alt"] = new UnifiedProfile
         {
@@ -404,7 +461,7 @@ public sealed class SettingsModuleCM1FeatureTests
                 [ConfigurationKeys.RemoteControlGetTaskEndpointUri] = JsonValue.Create("https://alt.example/task"),
                 [ConfigurationKeys.PenguinId] = JsonValue.Create("penguin-alt"),
                 [ConfigurationKeys.StartEmulator] = JsonValue.Create("False"),
-                [ConfigurationKeys.ExternalNotificationEnabled] = JsonValue.Create("False"),
+                [ConfigurationKeys.ExternalNotificationEnabled] = JsonValue.Create(string.Empty),
             },
         };
         await fixture.Config.SaveAsync();

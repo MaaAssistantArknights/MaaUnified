@@ -33,4 +33,5 @@ public sealed record VersionUpdateCheckResult(
     string? PreparedPackagePath = null,
     PackageResolutionStatus PackageResolutionStatus = PackageResolutionStatus.NotChecked,
     PackageSourceKind PackageSourceKind = PackageSourceKind.None,
-    string? PackageFailureMessageKey = null);
+    string? PackageFailureMessageKey = null,
+    IReadOnlyList<Uri>? PackageMirrorUrls = null);

@@ -54,10 +54,23 @@ public sealed class SettingsViewStructureContractTests
         Assert.Contains("OnRestoreAchievementClick", achievement, StringComparison.Ordinal);
         Assert.Contains("OnAchievementDebugPointerPressed", achievement, StringComparison.Ordinal);
         Assert.Contains("IsVisible=\"{Binding CanUseAchievementDebugActions}\"", achievement, StringComparison.Ordinal);
+        Assert.DoesNotContain("OnRefreshAchievementClick", achievement, StringComparison.Ordinal);
+        Assert.DoesNotContain("OnOpenAchievementGuideClick", achievement, StringComparison.Ordinal);
 
         var external = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "ExternalNotificationSettingsView.axaml"));
         Assert.Contains("IsEnabled=\"{Binding CanEditExternalNotification}\"", external, StringComparison.Ordinal);
         Assert.Contains("IsEnabled=\"{Binding CanEditExternalNotificationDetails}\"", external, StringComparison.Ordinal);
+        Assert.Contains("Text=\"Server Chan\"", external, StringComparison.Ordinal);
+        Assert.Contains("Text=\"Telegram bot\"", external, StringComparison.Ordinal);
+        Assert.Contains("Text=\"Discord WebHook\"", external, StringComparison.Ordinal);
+        Assert.Contains("Text=\"SMTP\"", external, StringComparison.Ordinal);
+        Assert.Contains("Text=\"Custom Webhook\"", external, StringComparison.Ordinal);
+        Assert.DoesNotContain("NotificationProviderParametersText", external, StringComparison.Ordinal);
+
+        var issue = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "IssueReportView.axaml"));
+        Assert.DoesNotContain("OnOpenRuntimeLogWindowClick", issue, StringComparison.Ordinal);
+        Assert.DoesNotContain("Settings.IssueReport.DeveloperMode", issue, StringComparison.Ordinal);
+        Assert.Contains("IssueReportClearImageCacheTip", issue, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -180,6 +193,26 @@ public sealed class SettingsViewStructureContractTests
         Assert.True(
             itemsControlIndex < validationMessageIndex,
             "Timer validation message should be rendered after the timer slots list.");
+    }
+
+    [Fact]
+    public void ConnectAndGameSettingsViews_ShouldExposeWpfParityEntryPoints()
+    {
+        var root = GetMaaUnifiedRoot();
+
+        var connect = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "ConnectSettingsView.axaml"));
+        Assert.Contains("OnRemoveAddressHistoryClick", connect, StringComparison.Ordinal);
+        Assert.Contains("OnMuMuExtrasChecked", connect, StringComparison.Ordinal);
+        Assert.Contains("OnLdPlayerExtrasChecked", connect, StringComparison.Ordinal);
+        Assert.Contains("OnMuMuEmulatorPathLostFocus", connect, StringComparison.Ordinal);
+        Assert.Contains("OnLdPlayerEmulatorPathLostFocus", connect, StringComparison.Ordinal);
+
+        var game = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "GameSettingsView.axaml"));
+        Assert.Contains("OnOpenYoStarResolutionGuideClick", game, StringComparison.Ordinal);
+        Assert.Contains("OnOpenOverseasAdaptationGuideClick", game, StringComparison.Ordinal);
+        Assert.Contains("OnScriptPathDragOver", game, StringComparison.Ordinal);
+        Assert.Contains("OnStartsWithScriptDrop", game, StringComparison.Ordinal);
+        Assert.Contains("OnEndsWithScriptDrop", game, StringComparison.Ordinal);
     }
 
     [Fact]

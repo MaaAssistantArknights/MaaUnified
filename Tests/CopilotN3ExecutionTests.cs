@@ -463,6 +463,7 @@ public sealed class CopilotN3ExecutionTests
             var path = Path.Combine(Root, "copilot.json");
             var payload = new JsonObject
             {
+                ["copilot_id"] = 123,
                 ["stage_name"] = "1-7",
                 ["minimum_required"] = "v4.0",
                 ["actions"] = new JsonArray(new JsonObject()),
@@ -514,7 +515,7 @@ public sealed class CopilotN3ExecutionTests
                 ConnectFeatureService = connect,
                 ShellFeatureService = new ShellFeatureService(connect),
                 TaskQueueFeatureService = new TaskQueueFeatureService(session, config),
-                CopilotFeatureService = new CopilotFeatureService(),
+                CopilotFeatureService = new CopilotFeatureService(new HttpClient(new SuccessfulFeedbackHandler())),
                 ToolboxFeatureService = new ToolboxFeatureService(),
                 RemoteControlFeatureService = new RemoteControlFeatureService(),
                 PlatformCapabilityService = capability,
@@ -554,6 +555,17 @@ public sealed class CopilotN3ExecutionTests
             {
                 // ignore temp cleanup failures
             }
+        }
+    }
+
+    private sealed class SuccessfulFeedbackHandler : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            {
+                Content = new StringContent("{}"),
+            });
         }
     }
 

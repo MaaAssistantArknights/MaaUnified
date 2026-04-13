@@ -173,6 +173,41 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
                 ["body"] = ConfigurationKeys.ExternalNotificationCustomWebhookBody,
             },
         };
+    private static readonly IReadOnlyDictionary<string, IReadOnlyList<string>> ProviderFieldPropertyMap =
+        new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["ServerChan"] = [nameof(ServerChanSendKey)],
+            ["Telegram"] = [nameof(TelegramBotToken), nameof(TelegramChatId), nameof(TelegramTopicId)],
+            ["Discord"] = [nameof(DiscordBotToken), nameof(DiscordUserId), nameof(DiscordWebhookUrl)],
+            ["DingTalk"] = [nameof(DingTalkAccessToken), nameof(DingTalkSecret)],
+            ["Smtp"] = [
+                nameof(SmtpServer),
+                nameof(SmtpPort),
+                nameof(SmtpUseSsl),
+                nameof(SmtpRequireAuthentication),
+                nameof(SmtpUser),
+                nameof(SmtpPassword),
+                nameof(SmtpFrom),
+                nameof(SmtpTo),
+            ],
+            ["Bark"] = [nameof(BarkServer), nameof(BarkSendKey)],
+            ["Qmsg"] = [nameof(QmsgServer), nameof(QmsgKey), nameof(QmsgUser), nameof(QmsgBot)],
+            ["Gotify"] = [nameof(GotifyServer), nameof(GotifyToken)],
+            ["CustomWebhook"] = [nameof(CustomWebhookUrl), nameof(CustomWebhookBody)],
+        };
+    private static readonly IReadOnlyList<string> ExternalNotificationSectionPropertyNames =
+        [
+            nameof(ServerChanSectionVisible),
+            nameof(TelegramSectionVisible),
+            nameof(DiscordSectionVisible),
+            nameof(DiscordWebhookSectionVisible),
+            nameof(DingTalkSectionVisible),
+            nameof(SmtpSectionVisible),
+            nameof(BarkSectionVisible),
+            nameof(QmsgSectionVisible),
+            nameof(GotifySectionVisible),
+            nameof(CustomWebhookSectionVisible),
+        ];
     private static readonly JsonSerializerOptions ConfigExportSerializerOptions = new()
     {
         WriteIndented = true,
@@ -329,6 +364,9 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
     private string _versionUpdatePackage = string.Empty;
     private bool _versionUpdateDoNotShow;
     private bool _versionUpdateStartupCheckTriggered;
+    private string _versionUpdateLastScheduledMinuteKey = string.Empty;
+    private int _versionUpdateScheduledCheckRunning;
+    private string _versionUpdateActivityMessage = string.Empty;
     private string _versionUpdateStatusMessage = string.Empty;
     private string _versionUpdateErrorMessage = string.Empty;
     private bool _hasPendingVersionUpdateAvailability;
@@ -367,13 +405,17 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
     private string _aboutErrorMessage = string.Empty;
     private readonly Dictionary<string, string> _notificationProviderParameters =
         new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, Dictionary<string, string>> _providerParameterValues =
+        new(StringComparer.OrdinalIgnoreCase);
+    private bool _suppressProviderParameterDirtyTracking;
+    private bool _isApplyingProviderParametersText;
     private readonly Func<string, CancellationToken, Task<UiOperationResult>> _openExternalTargetAsync;
     private readonly IAppDialogService _dialogService;
     private readonly IUiLanguageCoordinator _uiLanguageCoordinator;
     private readonly Func<string?> _coreVersionResolver;
     private readonly DispatcherTimer _versionUpdateSchedulerTimer = new()
     {
-        Interval = TimeSpan.FromHours(1),
+        Interval = TimeSpan.FromSeconds(10),
     };
     private string? _pendingLanguageChangeTarget;
 
@@ -876,9 +918,9 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
 
     public bool CanUseDeveloperMode => global::MAAUnified.Platform.MaaUnifiedBuildFlavor.ExposesDeveloperTools;
 
-    public bool CanOpenRuntimeLogWindow => global::MAAUnified.Platform.MaaUnifiedBuildFlavor.ExposesDeveloperTools;
+    public bool CanOpenRuntimeLogWindow => true;
 
-    public bool CanUseIssueReportMaintenanceTools => global::MAAUnified.Platform.MaaUnifiedBuildFlavor.ExposesIssueReportMaintenanceTools;
+    public bool CanUseIssueReportMaintenanceTools => true;
 
     public bool StartSelf
     {
@@ -1237,9 +1279,10 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
 
             if (SetProperty(ref _selectedNotificationProvider, normalized))
             {
-                NotificationProviderParametersText = _notificationProviderParameters.TryGetValue(normalized, out var stored)
-                    ? stored
+                var stored = _notificationProviderParameters.TryGetValue(normalized, out var existing)
+                    ? existing
                     : string.Empty;
+                UpdateProviderParameterMapFromText(normalized, stored, markDirty: false);
             }
         }
     }
@@ -1247,7 +1290,18 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
     public string NotificationProviderParametersText
     {
         get => _notificationProviderParametersText;
-        set => SetProperty(ref _notificationProviderParametersText, value ?? string.Empty);
+        set
+        {
+            var normalized = value ?? string.Empty;
+            if (SetProperty(ref _notificationProviderParametersText, normalized))
+            {
+                UpdateProviderParameterMapFromText(_selectedNotificationProvider, normalized, markDirty: false);
+                if (!_suppressProviderParameterDirtyTracking)
+                {
+                    MarkExternalNotificationDirty();
+                }
+            }
+        }
     }
 
     public string ExternalNotificationStatusMessage
@@ -1294,6 +1348,483 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
 
     public bool HasExternalNotificationErrorMessage =>
         ExternalNotificationEnabled && !string.IsNullOrWhiteSpace(ExternalNotificationErrorMessage);
+
+    public bool ServerChanSectionVisible => _enabledNotificationProviders.Contains("ServerChan");
+
+    public bool TelegramSectionVisible => _enabledNotificationProviders.Contains("Telegram");
+
+    public bool DiscordSectionVisible => _enabledNotificationProviders.Contains("Discord");
+
+    public bool DiscordWebhookSectionVisible => DiscordSectionVisible;
+
+    public bool DingTalkSectionVisible => _enabledNotificationProviders.Contains("DingTalk");
+
+    public bool SmtpSectionVisible => _enabledNotificationProviders.Contains("Smtp");
+
+    public bool BarkSectionVisible => _enabledNotificationProviders.Contains("Bark");
+
+    public bool QmsgSectionVisible => _enabledNotificationProviders.Contains("Qmsg");
+
+    public bool GotifySectionVisible => _enabledNotificationProviders.Contains("Gotify");
+
+    public bool CustomWebhookSectionVisible => _enabledNotificationProviders.Contains("CustomWebhook");
+
+    public string ServerChanSendKey
+    {
+        get => GetProviderParameterValue("ServerChan", "sendKey");
+        set
+        {
+            var normalized = value ?? string.Empty;
+            if (string.Equals(GetProviderParameterValue("ServerChan", "sendKey"), normalized, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            SetProviderParameterValue("ServerChan", "sendKey", normalized);
+            OnPropertyChanged(nameof(ServerChanSendKey));
+            MarkExternalNotificationDirty();
+        }
+    }
+
+    public string TelegramBotToken
+    {
+        get => GetProviderParameterValue("Telegram", "botToken");
+        set
+        {
+            var normalized = value ?? string.Empty;
+            if (string.Equals(GetProviderParameterValue("Telegram", "botToken"), normalized, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            SetProviderParameterValue("Telegram", "botToken", normalized);
+            OnPropertyChanged(nameof(TelegramBotToken));
+            MarkExternalNotificationDirty();
+        }
+    }
+
+    public string TelegramChatId
+    {
+        get => GetProviderParameterValue("Telegram", "chatId");
+        set
+        {
+            var normalized = value ?? string.Empty;
+            if (string.Equals(GetProviderParameterValue("Telegram", "chatId"), normalized, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            SetProviderParameterValue("Telegram", "chatId", normalized);
+            OnPropertyChanged(nameof(TelegramChatId));
+            MarkExternalNotificationDirty();
+        }
+    }
+
+    public string TelegramTopicId
+    {
+        get => GetProviderParameterValue("Telegram", "topicId");
+        set
+        {
+            var normalized = value ?? string.Empty;
+            if (string.Equals(GetProviderParameterValue("Telegram", "topicId"), normalized, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            SetProviderParameterValue("Telegram", "topicId", normalized);
+            OnPropertyChanged(nameof(TelegramTopicId));
+            MarkExternalNotificationDirty();
+        }
+    }
+
+    public string DiscordBotToken
+    {
+        get => GetProviderParameterValue("Discord", "botToken");
+        set
+        {
+            var normalized = value ?? string.Empty;
+            if (string.Equals(GetProviderParameterValue("Discord", "botToken"), normalized, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            SetProviderParameterValue("Discord", "botToken", normalized);
+            OnPropertyChanged(nameof(DiscordBotToken));
+            MarkExternalNotificationDirty();
+        }
+    }
+
+    public string DiscordUserId
+    {
+        get => GetProviderParameterValue("Discord", "userId");
+        set
+        {
+            var normalized = value ?? string.Empty;
+            if (string.Equals(GetProviderParameterValue("Discord", "userId"), normalized, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            SetProviderParameterValue("Discord", "userId", normalized);
+            OnPropertyChanged(nameof(DiscordUserId));
+            MarkExternalNotificationDirty();
+        }
+    }
+
+    public string DiscordWebhookUrl
+    {
+        get => GetProviderParameterValue("Discord", "webhookUrl");
+        set
+        {
+            var normalized = value ?? string.Empty;
+            if (string.Equals(GetProviderParameterValue("Discord", "webhookUrl"), normalized, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            SetProviderParameterValue("Discord", "webhookUrl", normalized);
+            OnPropertyChanged(nameof(DiscordWebhookUrl));
+            MarkExternalNotificationDirty();
+        }
+    }
+
+    public string DingTalkAccessToken
+    {
+        get => GetProviderParameterValue("DingTalk", "accessToken");
+        set
+        {
+            var normalized = value ?? string.Empty;
+            if (string.Equals(GetProviderParameterValue("DingTalk", "accessToken"), normalized, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            SetProviderParameterValue("DingTalk", "accessToken", normalized);
+            OnPropertyChanged(nameof(DingTalkAccessToken));
+            MarkExternalNotificationDirty();
+        }
+    }
+
+    public string DingTalkSecret
+    {
+        get => GetProviderParameterValue("DingTalk", "secret");
+        set
+        {
+            var normalized = value ?? string.Empty;
+            if (string.Equals(GetProviderParameterValue("DingTalk", "secret"), normalized, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            SetProviderParameterValue("DingTalk", "secret", normalized);
+            OnPropertyChanged(nameof(DingTalkSecret));
+            MarkExternalNotificationDirty();
+        }
+    }
+
+    public string SmtpServer
+    {
+        get => GetProviderParameterValue("Smtp", "server");
+        set
+        {
+            var normalized = value ?? string.Empty;
+            if (string.Equals(GetProviderParameterValue("Smtp", "server"), normalized, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            SetProviderParameterValue("Smtp", "server", normalized);
+            OnPropertyChanged(nameof(SmtpServer));
+            MarkExternalNotificationDirty();
+        }
+    }
+
+    public string SmtpPort
+    {
+        get => GetProviderParameterValue("Smtp", "port");
+        set
+        {
+            var normalized = value ?? string.Empty;
+            if (string.Equals(GetProviderParameterValue("Smtp", "port"), normalized, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            SetProviderParameterValue("Smtp", "port", normalized);
+            OnPropertyChanged(nameof(SmtpPort));
+            MarkExternalNotificationDirty();
+        }
+    }
+
+    public bool SmtpUseSsl
+    {
+        get => TryGetProviderParameterBool("Smtp", "useSsl", out var value) && value;
+        set
+        {
+            if (SmtpUseSsl == value)
+            {
+                return;
+            }
+
+            SetProviderParameterValue("Smtp", "useSsl", value ? bool.TrueString : bool.FalseString);
+            OnPropertyChanged(nameof(SmtpUseSsl));
+            MarkExternalNotificationDirty();
+        }
+    }
+
+    public bool SmtpRequireAuthentication
+    {
+        get => TryGetProviderParameterBool("Smtp", "requiresAuthentication", out var value) && value;
+        set
+        {
+            if (SmtpRequireAuthentication == value)
+            {
+                return;
+            }
+
+            SetProviderParameterValue("Smtp", "requiresAuthentication", value ? bool.TrueString : bool.FalseString);
+            OnPropertyChanged(nameof(SmtpRequireAuthentication));
+            MarkExternalNotificationDirty();
+        }
+    }
+
+    public string SmtpUser
+    {
+        get => GetProviderParameterValue("Smtp", "user");
+        set
+        {
+            var normalized = value ?? string.Empty;
+            if (string.Equals(GetProviderParameterValue("Smtp", "user"), normalized, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            SetProviderParameterValue("Smtp", "user", normalized);
+            OnPropertyChanged(nameof(SmtpUser));
+            MarkExternalNotificationDirty();
+        }
+    }
+
+    public string SmtpPassword
+    {
+        get => GetProviderParameterValue("Smtp", "password");
+        set
+        {
+            var normalized = value ?? string.Empty;
+            if (string.Equals(GetProviderParameterValue("Smtp", "password"), normalized, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            SetProviderParameterValue("Smtp", "password", normalized);
+            OnPropertyChanged(nameof(SmtpPassword));
+            MarkExternalNotificationDirty();
+        }
+    }
+
+    public string SmtpFrom
+    {
+        get => GetProviderParameterValue("Smtp", "from");
+        set
+        {
+            var normalized = value ?? string.Empty;
+            if (string.Equals(GetProviderParameterValue("Smtp", "from"), normalized, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            SetProviderParameterValue("Smtp", "from", normalized);
+            OnPropertyChanged(nameof(SmtpFrom));
+            MarkExternalNotificationDirty();
+        }
+    }
+
+    public string SmtpTo
+    {
+        get => GetProviderParameterValue("Smtp", "to");
+        set
+        {
+            var normalized = value ?? string.Empty;
+            if (string.Equals(GetProviderParameterValue("Smtp", "to"), normalized, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            SetProviderParameterValue("Smtp", "to", normalized);
+            OnPropertyChanged(nameof(SmtpTo));
+            MarkExternalNotificationDirty();
+        }
+    }
+
+    public string BarkServer
+    {
+        get => GetProviderParameterValue("Bark", "server");
+        set
+        {
+            var normalized = value ?? string.Empty;
+            if (string.Equals(GetProviderParameterValue("Bark", "server"), normalized, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            SetProviderParameterValue("Bark", "server", normalized);
+            OnPropertyChanged(nameof(BarkServer));
+            MarkExternalNotificationDirty();
+        }
+    }
+
+    public string BarkSendKey
+    {
+        get => GetProviderParameterValue("Bark", "sendKey");
+        set
+        {
+            var normalized = value ?? string.Empty;
+            if (string.Equals(GetProviderParameterValue("Bark", "sendKey"), normalized, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            SetProviderParameterValue("Bark", "sendKey", normalized);
+            OnPropertyChanged(nameof(BarkSendKey));
+            MarkExternalNotificationDirty();
+        }
+    }
+
+    public string QmsgServer
+    {
+        get => GetProviderParameterValue("Qmsg", "server");
+        set
+        {
+            var normalized = value ?? string.Empty;
+            if (string.Equals(GetProviderParameterValue("Qmsg", "server"), normalized, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            SetProviderParameterValue("Qmsg", "server", normalized);
+            OnPropertyChanged(nameof(QmsgServer));
+            MarkExternalNotificationDirty();
+        }
+    }
+
+    public string QmsgKey
+    {
+        get => GetProviderParameterValue("Qmsg", "key");
+        set
+        {
+            var normalized = value ?? string.Empty;
+            if (string.Equals(GetProviderParameterValue("Qmsg", "key"), normalized, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            SetProviderParameterValue("Qmsg", "key", normalized);
+            OnPropertyChanged(nameof(QmsgKey));
+            MarkExternalNotificationDirty();
+        }
+    }
+
+    public string QmsgUser
+    {
+        get => GetProviderParameterValue("Qmsg", "user");
+        set
+        {
+            var normalized = value ?? string.Empty;
+            if (string.Equals(GetProviderParameterValue("Qmsg", "user"), normalized, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            SetProviderParameterValue("Qmsg", "user", normalized);
+            OnPropertyChanged(nameof(QmsgUser));
+            MarkExternalNotificationDirty();
+        }
+    }
+
+    public string QmsgBot
+    {
+        get => GetProviderParameterValue("Qmsg", "bot");
+        set
+        {
+            var normalized = value ?? string.Empty;
+            if (string.Equals(GetProviderParameterValue("Qmsg", "bot"), normalized, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            SetProviderParameterValue("Qmsg", "bot", normalized);
+            OnPropertyChanged(nameof(QmsgBot));
+            MarkExternalNotificationDirty();
+        }
+    }
+
+    public string GotifyServer
+    {
+        get => GetProviderParameterValue("Gotify", "server");
+        set
+        {
+            var normalized = value ?? string.Empty;
+            if (string.Equals(GetProviderParameterValue("Gotify", "server"), normalized, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            SetProviderParameterValue("Gotify", "server", normalized);
+            OnPropertyChanged(nameof(GotifyServer));
+            MarkExternalNotificationDirty();
+        }
+    }
+
+    public string GotifyToken
+    {
+        get => GetProviderParameterValue("Gotify", "token");
+        set
+        {
+            var normalized = value ?? string.Empty;
+            if (string.Equals(GetProviderParameterValue("Gotify", "token"), normalized, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            SetProviderParameterValue("Gotify", "token", normalized);
+            OnPropertyChanged(nameof(GotifyToken));
+            MarkExternalNotificationDirty();
+        }
+    }
+
+    public string CustomWebhookUrl
+    {
+        get => GetProviderParameterValue("CustomWebhook", "url");
+        set
+        {
+            var normalized = value ?? string.Empty;
+            if (string.Equals(GetProviderParameterValue("CustomWebhook", "url"), normalized, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            SetProviderParameterValue("CustomWebhook", "url", normalized);
+            OnPropertyChanged(nameof(CustomWebhookUrl));
+            MarkExternalNotificationDirty();
+        }
+    }
+
+    public string CustomWebhookBody
+    {
+        get => GetProviderParameterValue("CustomWebhook", "body");
+        set
+        {
+            var normalized = value ?? string.Empty;
+            if (string.Equals(GetProviderParameterValue("CustomWebhook", "body"), normalized, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            SetProviderParameterValue("CustomWebhook", "body", normalized);
+            OnPropertyChanged(nameof(CustomWebhookBody));
+            MarkExternalNotificationDirty();
+        }
+    }
 
     public string ConfigurationManagerSelectedProfile
     {
@@ -1496,6 +2027,20 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         private set => SetProperty(ref _versionUpdateStatusMessage, value);
     }
 
+    public string VersionUpdateActivityMessage
+    {
+        get => _versionUpdateActivityMessage;
+        private set
+        {
+            if (SetProperty(ref _versionUpdateActivityMessage, value))
+            {
+                OnPropertyChanged(nameof(HasVersionUpdateActivityMessage));
+            }
+        }
+    }
+
+    public bool HasVersionUpdateActivityMessage => !string.IsNullOrWhiteSpace(VersionUpdateActivityMessage);
+
     public string VersionUpdateErrorMessage
     {
         get => _versionUpdateErrorMessage;
@@ -1513,6 +2058,17 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
     public bool HasPendingVersionUpdateAvailability => _hasPendingVersionUpdateAvailability;
 
     public bool HasPendingResourceUpdateAvailability => _hasPendingResourceUpdateAvailability;
+
+    public bool HasIssueReportUpdateAvailability =>
+        HasPendingVersionUpdateAvailability || HasPendingResourceUpdateAvailability;
+
+    public bool ShowIssueReportPreflightNote => !HasIssueReportUpdateAvailability;
+
+    public string IssueReportUpdateNotice => BuildIssueReportUpdateNoticeText();
+
+    public string IssueReportClearImageCacheTip => LocalizeSettingsText(
+        "Settings.IssueReport.ClearImageCacheTip",
+        "通常无需手动清理图片缓存，仅建议排障时使用。");
 
     public bool IsVersionUpdateMirrorChyanSource =>
         string.Equals(VersionUpdateResourceSource, "MirrorChyan", StringComparison.OrdinalIgnoreCase);
@@ -1632,9 +2188,9 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         }
     }
 
-    public bool CanUseAchievementDebugEntry => global::MAAUnified.Platform.MaaUnifiedBuildFlavor.ExposesAchievementDebugTools;
+    public bool CanUseAchievementDebugEntry => true;
 
-    public bool CanUseAchievementDebugActions => CanUseAchievementDebugEntry && AchievementDebugEnabled;
+    public bool CanUseAchievementDebugActions => AchievementDebugEnabled;
 
     public string AchievementDebugMedalColor
     {
@@ -2607,11 +3163,8 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
                 break;
             case "IssueReport":
                 CurrentSectionActions.Add(new SettingsSectionActionItem("settings.build-issue-report", RootTexts["Settings.Action.BuildIssueReport"], IsPrimary: true));
-                if (CanUseIssueReportMaintenanceTools)
-                {
-                    CurrentSectionActions.Add(new SettingsSectionActionItem("settings.open-debug-directory", RootTexts["Settings.Action.OpenDebugDirectory"]));
-                    CurrentSectionActions.Add(new SettingsSectionActionItem("settings.clear-image-cache", RootTexts["Settings.Action.ClearImageCache"]));
-                }
+                CurrentSectionActions.Add(new SettingsSectionActionItem("settings.open-debug-directory", RootTexts["Settings.Action.OpenDebugDirectory"]));
+                CurrentSectionActions.Add(new SettingsSectionActionItem("settings.clear-image-cache", RootTexts["Settings.Action.ClearImageCache"]));
                 break;
             case "About":
                 CurrentSectionActions.Add(new SettingsSectionActionItem("settings.check-announcement", RootTexts["Settings.Action.CheckAnnouncement"], IsPrimary: true));
@@ -3390,11 +3943,6 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
 
     public void HandleAchievementDebugClick()
     {
-        if (!CanUseAchievementDebugEntry)
-        {
-            return;
-        }
-
         AchievementDebugTip = AchievementTextCatalog.GetPallasString(1, 10);
         if (AchievementDebugEnabled)
         {
@@ -3768,15 +4316,38 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
     public async Task CheckAboutAnnouncementAsync(CancellationToken cancellationToken = default)
     {
         ClearAboutStatus();
-        var result = await Runtime.AnnouncementFeatureService.LoadStateAsync(cancellationToken);
-        var state = await ApplyResultAsync(result, "Settings.About.CheckAnnouncement", cancellationToken);
+        var loadResult = await Runtime.AnnouncementFeatureService.LoadStateAsync(cancellationToken);
+        var state = await ApplyResultAsync(loadResult, "Settings.About.CheckAnnouncement", cancellationToken);
         if (state is null)
         {
             AboutStatusMessage = LocalizeSettingsText(
                 "Settings.About.Status.AnnouncementLoadFailed",
                 "公告读取失败。");
-            AboutErrorMessage = result.Message;
+            AboutErrorMessage = loadResult.Message;
             return;
+        }
+
+        var fetchResult = await FetchLatestAnnouncementInfoAsync(cancellationToken);
+        if (fetchResult.Success && fetchResult.Value is not null && !string.IsNullOrWhiteSpace(fetchResult.Value.Content))
+        {
+            var latestInfo = fetchResult.Value.Content.Trim();
+            if (!string.Equals(latestInfo, state.AnnouncementInfo, StringComparison.Ordinal))
+            {
+                state = state with
+                {
+                    AnnouncementInfo = latestInfo,
+                    DoNotRemindThisAnnouncementAgain = false,
+                };
+                var saveFetchedState = await Runtime.AnnouncementFeatureService.SaveStateAsync(state, cancellationToken);
+                if (!await ApplyResultAsync(saveFetchedState, "Settings.About.Announcement.SaveFetched", cancellationToken))
+                {
+                    AboutStatusMessage = LocalizeSettingsText(
+                        "Settings.About.Status.AnnouncementSaveFailed",
+                        "公告状态保存失败。");
+                    AboutErrorMessage = saveFetchedState.Message;
+                    return;
+                }
+            }
         }
 
         var info = string.IsNullOrWhiteSpace(state.AnnouncementInfo)
@@ -3797,67 +4368,8 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         AboutErrorMessage = string.Empty;
     }
 
-    public async Task CheckAboutAnnouncementWithDialogAsync(CancellationToken cancellationToken = default)
-    {
-        ClearAboutStatus();
-        var result = await Runtime.AnnouncementFeatureService.LoadStateAsync(cancellationToken);
-        var state = await ApplyResultAsync(result, "Settings.About.CheckAnnouncement", cancellationToken);
-        if (state is null)
-        {
-            AboutStatusMessage = LocalizeSettingsText(
-                "Settings.About.Status.AnnouncementLoadFailed",
-                "公告读取失败。");
-            AboutErrorMessage = result.Message;
-            return;
-        }
-
-        var announcementChrome = CreateSettingsDialogChrome(
-            texts => new DialogChromeSnapshot(
-                title: texts.GetOrDefault("Settings.About.Dialog.Title", "Announcement"),
-                confirmText: texts.GetOrDefault("Settings.About.Dialog.Confirm", "Confirm"),
-                cancelText: texts.GetOrDefault("Settings.About.Dialog.Cancel", "Cancel")));
-        var announcementChromeSnapshot = announcementChrome.GetSnapshot();
-        var request = new AnnouncementDialogRequest(
-            Title: announcementChromeSnapshot.Title,
-            AnnouncementInfo: state.AnnouncementInfo,
-            DoNotRemindThisAnnouncementAgain: state.DoNotRemindThisAnnouncementAgain,
-            DoNotShowAnnouncement: state.DoNotShowAnnouncement,
-            ConfirmText: announcementChromeSnapshot.ConfirmText ?? LocalizeSettingsText("Settings.About.Dialog.Confirm", "Confirm"),
-            CancelText: announcementChromeSnapshot.CancelText ?? LocalizeSettingsText("Settings.About.Dialog.Cancel", "Cancel"),
-            Chrome: announcementChrome);
-        var dialogResult = await _dialogService.ShowAnnouncementAsync(request, "Settings.About.Announcement.Dialog", cancellationToken);
-        if (dialogResult.Return == DialogReturnSemantic.Confirm && dialogResult.Payload is not null)
-        {
-            var nextState = new AnnouncementState(
-                AnnouncementInfo: dialogResult.Payload.AnnouncementInfo,
-                DoNotRemindThisAnnouncementAgain: dialogResult.Payload.DoNotRemindThisAnnouncementAgain,
-                DoNotShowAnnouncement: dialogResult.Payload.DoNotShowAnnouncement);
-            var saveResult = await Runtime.AnnouncementFeatureService.SaveStateAsync(nextState, cancellationToken);
-            if (!await ApplyResultAsync(saveResult, "Settings.About.Announcement.Save", cancellationToken))
-            {
-                AboutStatusMessage = LocalizeSettingsText(
-                    "Settings.About.Status.AnnouncementSaveFailed",
-                    "公告状态保存失败。");
-                AboutErrorMessage = saveResult.Message;
-                return;
-            }
-
-            AboutStatusMessage = LocalizeSettingsText(
-                "Settings.About.Status.AnnouncementSaveSucceeded",
-                "公告状态已保存。");
-            AboutErrorMessage = string.Empty;
-            return;
-        }
-
-        AboutStatusMessage = dialogResult.Return == DialogReturnSemantic.Cancel
-            ? LocalizeSettingsText(
-                "Settings.About.Status.AnnouncementDialogCancelled",
-                "公告弹窗已取消。")
-            : LocalizeSettingsText(
-                "Settings.About.Status.AnnouncementDialogClosed",
-                "公告弹窗已关闭。");
-        AboutErrorMessage = string.Empty;
-    }
+    public Task CheckAboutAnnouncementWithDialogAsync(CancellationToken cancellationToken = default)
+        => CheckAndDownloadAboutAnnouncementWithDialogAsync(cancellationToken);
 
     public async Task ApplyAutostartAsync(CancellationToken cancellationToken = default)
     {
@@ -5852,7 +6364,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
             RemoteUserIdentity = ReadProfileString(config, ConfigurationKeys.RemoteControlUserIdentity, string.Empty).Trim();
             RemoteDeviceIdentity = ReadProfileString(config, ConfigurationKeys.RemoteControlDeviceIdentity, string.Empty).Trim();
             RemotePollInterval = ReadProfileInt(config, ConfigurationKeys.RemoteControlPollIntervalMs, DefaultRemotePollIntervalMs);
-            ExternalNotificationEnabled = ReadProfileBool(config, ConfigurationKeys.ExternalNotificationEnabled, false);
+            ExternalNotificationEnabled = false;
             ExternalNotificationSendWhenComplete = ReadProfileBool(config, ConfigurationKeys.ExternalNotificationSendWhenComplete, true);
             ExternalNotificationSendWhenError = ReadProfileBool(config, ConfigurationKeys.ExternalNotificationSendWhenError, true);
             ExternalNotificationSendWhenTimeout = ReadProfileBool(config, ConfigurationKeys.ExternalNotificationSendWhenTimeout, true);
@@ -6125,6 +6637,31 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         OnPropertyChanged(nameof(GpuSupportMessage));
         OnPropertyChanged(nameof(HasGpuSupportMessage));
         OnPropertyChanged(nameof(StatusMessage));
+        OnPropertyChanged(nameof(HasIssueReportUpdateAvailability));
+        OnPropertyChanged(nameof(ShowIssueReportPreflightNote));
+        OnPropertyChanged(nameof(IssueReportUpdateNotice));
+        OnPropertyChanged(nameof(IssueReportClearImageCacheTip));
+    }
+
+    private string BuildIssueReportUpdateNoticeText()
+    {
+        if (HasPendingVersionUpdateAvailability && HasPendingResourceUpdateAvailability)
+        {
+            return LocalizeSettingsText(
+                "Settings.IssueReport.UpdateAvailable.Both",
+                "检测到软件和资源更新可用，建议先更新后再提交 Issue。");
+        }
+
+        if (HasPendingVersionUpdateAvailability)
+        {
+            return LocalizeSettingsText(
+                "Settings.IssueReport.UpdateAvailable.Software",
+                "检测到软件更新可用，建议先更新后再提交 Issue。");
+        }
+
+        return LocalizeSettingsText(
+            "Settings.IssueReport.UpdateAvailable.Resource",
+            "检测到资源更新可用，建议先更新资源后再提交 Issue。");
     }
 
     private void ClearGuiValidationMessages()
@@ -6591,7 +7128,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         await EnsureNotificationProvidersLoadedAsync(cancellationToken);
         RunWithSuppressedSettingsBackfill(() =>
         {
-            ExternalNotificationEnabled = ReadProfileBool(config, ConfigurationKeys.ExternalNotificationEnabled, false);
+            ExternalNotificationEnabled = false;
             ExternalNotificationSendWhenComplete = ReadProfileBool(config, ConfigurationKeys.ExternalNotificationSendWhenComplete, true);
             ExternalNotificationSendWhenError = ReadProfileBool(config, ConfigurationKeys.ExternalNotificationSendWhenError, true);
             ExternalNotificationSendWhenTimeout = ReadProfileBool(config, ConfigurationKeys.ExternalNotificationSendWhenTimeout, true);
@@ -6802,6 +7339,22 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
             PreferredGpuInstancePath: PerformancePreferredGpuInstancePath);
     }
 
+    private static bool IsSameGpuPreference(
+        GpuPreference left,
+        GpuPreference right)
+    {
+        return left.UseGpu == right.UseGpu
+               && left.AllowDeprecatedGpu == right.AllowDeprecatedGpu
+               && string.Equals(
+                   left.PreferredGpuDescription?.Trim(),
+                   right.PreferredGpuDescription?.Trim(),
+                   StringComparison.Ordinal)
+               && string.Equals(
+                   left.PreferredGpuInstancePath?.Trim(),
+                   right.PreferredGpuInstancePath?.Trim(),
+                   StringComparison.Ordinal);
+    }
+
     private static bool IsNonUiThreadContext()
     {
         if (Avalonia.Application.Current is null)
@@ -6923,6 +7476,13 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
                 if (_suppressGpuUiRefresh
                     || cancellationToken.IsCancellationRequested
                     || refreshSequence != Interlocked.Read(ref _gpuRefreshSequence))
+                {
+                    return;
+                }
+
+                // Drop stale probe results to avoid reverting an explicit GPU selection
+                // when preference fields changed while this probe was running.
+                if (!IsSameGpuPreference(preference, BuildCurrentGpuPreference()))
                 {
                     return;
                 }

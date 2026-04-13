@@ -176,8 +176,14 @@
 
       <TabItem Header="{Binding OperBoxTabTitle}">
         <Grid Margin="{DynamicResource MAA.Thickness.Toolbox.PageMargin}"
-              RowDefinitions="Auto,*,Auto">
+              RowDefinitions="Auto,Auto,*,Auto">
         <TextBlock Grid.Row="0"
+                   HorizontalAlignment="Center"
+                   Classes="long-wrap"
+                   FontWeight="SemiBold"
+                   Text="{Binding LastOperBoxSyncDisplayText}"
+                   IsVisible="{Binding HasLastOperBoxSyncTime}" />
+        <TextBlock Grid.Row="1"
                    Margin="{DynamicResource MAA.Thickness.Toolbox.InfoMargin}"
                    HorizontalAlignment="Center"
                    TextAlignment="Center"
@@ -185,7 +191,7 @@
                    FontWeight="SemiBold"
                    Text="{Binding OperBoxInfo}" />
 
-        <TabControl Grid.Row="1"
+        <TabControl Grid.Row="2"
                     SelectedIndex="{Binding OperBoxSelectedIndex}">
           <TabItem Header="{Binding OperBoxNotHaveHeader}">
             <ScrollViewer HorizontalScrollBarVisibility="Disabled"
@@ -293,7 +299,7 @@
           </TabItem>
         </TabControl>
 
-        <StackPanel Grid.Row="2"
+        <StackPanel Grid.Row="3"
                     Margin="{DynamicResource MAA.Thickness.Toolbox.ActionTopMargin}"
                     HorizontalAlignment="Center"
                     Orientation="Horizontal">

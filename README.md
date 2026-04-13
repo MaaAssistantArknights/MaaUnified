@@ -152,7 +152,7 @@ cp -a install/. publish/
 
 - macOS / Linux 显卡能力支持：该部分涉及 MaaCore 边界，当前暂不实现
 - macOS / Linux 关闭模拟器功能：仍需按平台分别适配，暂未完成调试
-- MaaUnified 的软件更新：暂未开发更新相关功能
+- MaaUnified 的软件更新：已接入并可用
 
 ## 目录结构
 

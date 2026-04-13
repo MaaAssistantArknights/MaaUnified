@@ -146,6 +146,17 @@ public partial class TaskQueueView : UserControl
         await VM.RenameSelectedTaskWithDialogAsync();
     }
 
+    private async void OnTaskMenuRunOnceClick(object? sender, RoutedEventArgs e)
+    {
+        if (VM is null || !TryGetTaskParameter(sender, out var task))
+        {
+            return;
+        }
+
+        VM.SelectedTask = task;
+        await VM.RunSelectedTaskOnceAsync();
+    }
+
     private async void OnTaskMenuRemoveClick(object? sender, RoutedEventArgs e)
     {
         if (VM is null || !TryGetTaskParameter(sender, out var task))

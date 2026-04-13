@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Globalization;
 using System.Text.Json.Nodes;
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
@@ -681,6 +682,11 @@ public sealed class MainShellViewModel : ObservableObject
         RefreshRootTextState();
         await SyncTrayMenuStateAsync(cancellationToken);
         StartTimerScheduler();
+        if (settingsLoaded && TryGetSettingsPage(out var startupSettingsPage))
+        {
+            _ = RunStartupVersionUpdateWorkflowAsync(startupSettingsPage, cancellationToken);
+        }
+
         UpdateStartupPhase("启动完成", "后台页面初始化完成，核心组件将在界面就绪后继续后台预热。");
         RecordStartupPhase("Deferred.End", "Deferred startup stages completed.");
     }
@@ -1793,7 +1799,13 @@ public sealed class MainShellViewModel : ObservableObject
             return;
         }
 
-        Dispatcher.UIThread.Post(() => ApplySettingsUpdateAvailabilityState(page));
+        Dispatcher.UIThread
+            .InvokeAsync(
+                () => ApplySettingsUpdateAvailabilityState(page),
+                DispatcherPriority.Send)
+            .GetTask()
+            .GetAwaiter()
+            .GetResult();
     }
 
     private async void OnSettingsConfigurationContextChanged(object? sender, ConfigurationContextChangedEventArgs e)
@@ -1846,7 +1858,57 @@ public sealed class MainShellViewModel : ObservableObject
         WindowVersionUpdateInfo = page.HasPendingVersionUpdateAvailability
             ? RootTexts["Main.Update.VersionAvailable"]
             : string.Empty;
-        WindowResourceUpdateInfo = string.Empty;
+        WindowResourceUpdateInfo = page.HasPendingResourceUpdateAvailability
+            ? RootTexts["Main.Update.ResourceAvailable"]
+            : string.Empty;
+    }
+
+    private async Task RunStartupVersionUpdateWorkflowAsync(
+        SettingsPageViewModel settingsPage,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await settingsPage.EnsureSectionDataLoadedAsync("VersionUpdate", cancellationToken);
+            await settingsPage.RunStartupVersionUpdateCheckAsync(cancellationToken);
+            await Dispatcher.UIThread.InvokeAsync(
+                () => ApplySettingsUpdateAvailabilityState(settingsPage),
+                DispatcherPriority.Send,
+                cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // no-op
+        }
+        catch (Exception ex)
+        {
+            await RecordUnhandledExceptionAsync(
+                "App.Initialize.VersionUpdate",
+                ex,
+                UiErrorCode.UiOperationFailed,
+                $"启动更新检查失败: {ex.Message}",
+                cancellationToken);
+        }
+    }
+
+    private static void ShowAndActivateMainWindow()
+    {
+        if (Avalonia.Application.Current?.ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime { MainWindow: { } mainWindow })
+        {
+            return;
+        }
+
+        if (!mainWindow.IsVisible)
+        {
+            mainWindow.Show();
+        }
+
+        if (mainWindow.WindowState == WindowState.Minimized)
+        {
+            mainWindow.WindowState = WindowState.Normal;
+        }
+
+        mainWindow.Activate();
     }
 
     private void RefreshWindowTitle()
@@ -2067,6 +2129,10 @@ public sealed class MainShellViewModel : ObservableObject
         {
             if (SettingsPage.ShowWindowBeforeForceScheduledStart)
             {
+                await Dispatcher.UIThread.InvokeAsync(
+                    ShowAndActivateMainWindow,
+                    DispatcherPriority.Send,
+                    cancellationToken);
                 PushGrowl("定时触发：强制执行前显示窗口。");
             }
 

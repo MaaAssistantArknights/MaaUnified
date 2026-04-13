@@ -1507,6 +1507,165 @@ public sealed class TaskQueueFeatureService : ITaskQueueFeatureService
 
 public sealed class CopilotFeatureService : ICopilotFeatureService
 {
+    private const string CopilotIdPrefix = "maa://";
+    private const string PrtsPlusCopilotGet = "https://prts.maa.plus/copilot/get/";
+    private const string PrtsPlusCopilotSetGet = "https://prts.maa.plus/set/get?id=";
+    private const string PrtsPlusCopilotRating = "https://prts.maa.plus/copilot/rating";
+    private static readonly HttpClient DefaultCopilotHttpClient = CreateCopilotHttpClient();
+    private readonly HttpClient _copilotHttpClient;
+
+    public CopilotFeatureService(HttpClient? copilotHttpClient = null)
+    {
+        _copilotHttpClient = copilotHttpClient ?? DefaultCopilotHttpClient;
+    }
+
+    public async Task<UiOperationResult<CopilotRemotePayload>> LoadFromCodeAsync(
+        string source,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!TryParseCopilotCode(source, out var copilotId))
+        {
+            return UiOperationResult<CopilotRemotePayload>.Fail(
+                UiErrorCode.CopilotIdMissing,
+                "作业码无效。请输入 `maa:///123456` 或纯数字作业码。");
+        }
+
+        var remote = await GetRemoteJsonObjectAsync($"{PrtsPlusCopilotGet}{copilotId}", cancellationToken);
+        if (!remote.Success || remote.Value is null)
+        {
+            return UiOperationResult<CopilotRemotePayload>.Fail(
+                remote.Error?.Code ?? UiErrorCode.CoreUnknown,
+                remote.Message,
+                remote.Error?.Details);
+        }
+
+        var root = remote.Value;
+        var statusCode = ReadJsonInt(root, "status_code") ?? 0;
+        if (statusCode != 200)
+        {
+            var error = ReadJsonString(root, "message");
+            return UiOperationResult<CopilotRemotePayload>.Fail(
+                UiErrorCode.CopilotFileNotFound,
+                string.IsNullOrWhiteSpace(error)
+                    ? $"作业不存在：{copilotId}。"
+                    : error);
+        }
+
+        if (!TryGetPropertyCaseInsensitive(root, "data", out var dataNode) || dataNode is not JsonObject data)
+        {
+            return UiOperationResult<CopilotRemotePayload>.Fail(
+                UiErrorCode.CopilotPayloadInvalidType,
+                "作业站返回结构异常：缺少 data 字段。");
+        }
+
+        if (!TryExtractRemotePayloadJson(data, out var payloadJson, out var payloadError))
+        {
+            return UiOperationResult<CopilotRemotePayload>.Fail(
+                UiErrorCode.CopilotPayloadInvalidType,
+                payloadError);
+        }
+
+        if (!TryValidateCopilotPayload(payloadJson, out var errorCode, out var errorMessage))
+        {
+            return UiOperationResult<CopilotRemotePayload>.Fail(errorCode, errorMessage);
+        }
+
+        var resolvedId = ReadJsonInt(data, "id") ?? copilotId;
+        var title = ReadJsonString(data, "title");
+        if (string.IsNullOrWhiteSpace(title))
+        {
+            title = ReadJsonString(data, "name");
+        }
+
+        var description = ReadJsonString(data, "description");
+        return UiOperationResult<CopilotRemotePayload>.Ok(
+            new CopilotRemotePayload(resolvedId, payloadJson, title, description),
+            $"已加载作业码 {resolvedId}。");
+    }
+
+    public async Task<UiOperationResult<CopilotRemoteSetPayload>> LoadSetFromCodeAsync(
+        string source,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!TryParseCopilotCode(source, out var setId))
+        {
+            return UiOperationResult<CopilotRemoteSetPayload>.Fail(
+                UiErrorCode.CopilotIdMissing,
+                "作业集码无效。请输入 `maa:///123456` 或纯数字作业集码。");
+        }
+
+        var remote = await GetRemoteJsonObjectAsync($"{PrtsPlusCopilotSetGet}{setId}", cancellationToken);
+        if (!remote.Success || remote.Value is null)
+        {
+            return UiOperationResult<CopilotRemoteSetPayload>.Fail(
+                remote.Error?.Code ?? UiErrorCode.CoreUnknown,
+                remote.Message,
+                remote.Error?.Details);
+        }
+
+        var root = remote.Value;
+        var statusCode = ReadJsonInt(root, "status_code") ?? 0;
+        if (statusCode != 200)
+        {
+            var error = ReadJsonString(root, "message");
+            return UiOperationResult<CopilotRemoteSetPayload>.Fail(
+                UiErrorCode.CopilotFileNotFound,
+                string.IsNullOrWhiteSpace(error)
+                    ? $"作业集不存在：{setId}。"
+                    : error);
+        }
+
+        if (!TryGetPropertyCaseInsensitive(root, "data", out var dataNode) || dataNode is not JsonObject data)
+        {
+            return UiOperationResult<CopilotRemoteSetPayload>.Fail(
+                UiErrorCode.CopilotPayloadInvalidType,
+                "作业站返回结构异常：作业集缺少 data 字段。");
+        }
+
+        var name = ReadJsonString(data, "name");
+        var description = ReadJsonString(data, "description");
+        var items = new List<CopilotRemotePayload>();
+        var failedIds = new List<int>();
+
+        if (TryGetPropertyCaseInsensitive(data, "copilot_ids", out var idsNode) && idsNode is JsonArray idsArray)
+        {
+            foreach (var idNode in idsArray)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (!TryReadInt(idNode, out var itemId) || itemId <= 0)
+                {
+                    continue;
+                }
+
+                var item = await LoadFromCodeAsync(itemId.ToString(), cancellationToken);
+                if (item.Success && item.Value is not null)
+                {
+                    items.Add(item.Value);
+                }
+                else
+                {
+                    failedIds.Add(itemId);
+                }
+            }
+        }
+
+        if (items.Count == 0)
+        {
+            return UiOperationResult<CopilotRemoteSetPayload>.Fail(
+                UiErrorCode.CopilotPayloadInvalidType,
+                "作业集中没有可用作业。");
+        }
+
+        var resolvedName = string.IsNullOrWhiteSpace(name) ? $"Set-{setId}" : name;
+        return UiOperationResult<CopilotRemoteSetPayload>.Ok(
+            new CopilotRemoteSetPayload(setId, resolvedName, description, items, failedIds),
+            failedIds.Count == 0
+                ? $"已加载作业集 {resolvedName}（{items.Count} 个作业）。"
+                : $"已加载作业集 {resolvedName}（成功 {items.Count}，失败 {failedIds.Count}）。");
+    }
+
     public Task<string> ImportCopilotAsync(string source, CancellationToken cancellationToken = default)
     {
         return Task.FromResult($"Copilot import queued from {source}");
@@ -1583,15 +1742,59 @@ public sealed class CopilotFeatureService : ICopilotFeatureService
         return Task.FromResult(UiOperationResult.Ok("已接受剪贴板作业内容。"));
     }
 
-    public Task<UiOperationResult> SubmitFeedbackAsync(string copilotId, bool like, CancellationToken cancellationToken = default)
+    public async Task<UiOperationResult> SubmitFeedbackAsync(string copilotId, bool like, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (string.IsNullOrWhiteSpace(copilotId))
+        var normalized = (copilotId ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(normalized))
         {
-            return Task.FromResult(UiOperationResult.Fail(UiErrorCode.CopilotIdMissing, "Copilot id cannot be empty."));
+            return UiOperationResult.Fail(UiErrorCode.CopilotIdMissing, "Copilot id cannot be empty.");
         }
 
-        return Task.FromResult(UiOperationResult.Ok($"Feedback submitted for {copilotId}: {(like ? "like" : "dislike")}"));
+        if (!TryParseCopilotCode(normalized, out var resolvedId))
+        {
+            return UiOperationResult.Fail(
+                UiErrorCode.CopilotIdMissing,
+                "作业码无效。请输入 `maa:///123456` 或纯数字作业码。");
+        }
+
+        var body = JsonSerializer.Serialize(new
+        {
+            id = resolvedId,
+            rating = like ? "Like" : "Dislike",
+        });
+
+        try
+        {
+            using var response = await _copilotHttpClient.PostAsync(
+                PrtsPlusCopilotRating,
+                new StringContent(body, Encoding.UTF8, "application/json"),
+                cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                var details = await ReadResponseBodySafeAsync(response, cancellationToken);
+                return UiOperationResult.Fail(
+                    UiErrorCode.CoreUnknown,
+                    $"提交反馈失败（HTTP {(int)response.StatusCode}）。",
+                    details);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or IOException or TaskCanceledException)
+        {
+            return UiOperationResult.Fail(
+                UiErrorCode.CoreUnknown,
+                "提交反馈失败：网络不可用或请求超时。",
+                ex.Message);
+        }
+
+        return UiOperationResult.Ok(
+            like
+                ? $"Feedback submitted for {resolvedId}: like"
+                : $"Feedback submitted for {resolvedId}: dislike");
     }
 
     private static bool TryValidateCopilotPayload(
@@ -1804,6 +2007,195 @@ public sealed class CopilotFeatureService : ICopilotFeatureService
                || text.StartsWith(".\\", StringComparison.Ordinal)
                || text.StartsWith("../", StringComparison.Ordinal)
                || text.StartsWith("..\\", StringComparison.Ordinal);
+    }
+
+    private static HttpClient CreateCopilotHttpClient()
+    {
+        var client = new HttpClient
+        {
+            Timeout = TimeSpan.FromSeconds(15),
+        };
+
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("MAAUnified-Copilot/1.0");
+        return client;
+    }
+
+    private static bool TryParseCopilotCode(string source, out int copilotId)
+    {
+        copilotId = 0;
+        var normalized = (source ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(normalized))
+        {
+            return false;
+        }
+
+        if (normalized.StartsWith(CopilotIdPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            normalized = normalized[CopilotIdPrefix.Length..].TrimStart('/');
+        }
+
+        return int.TryParse(normalized, out copilotId) && copilotId > 0;
+    }
+
+    private async Task<UiOperationResult<JsonObject>> GetRemoteJsonObjectAsync(string url, CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var response = await _copilotHttpClient.GetAsync(url, cancellationToken);
+            var body = await ReadResponseBodySafeAsync(response, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                return UiOperationResult<JsonObject>.Fail(
+                    UiErrorCode.CoreUnknown,
+                    $"请求失败（HTTP {(int)response.StatusCode}）。",
+                    body);
+            }
+
+            JsonNode? root;
+            try
+            {
+                root = JsonNode.Parse(body);
+            }
+            catch (Exception ex)
+            {
+                return UiOperationResult<JsonObject>.Fail(
+                    UiErrorCode.CopilotPayloadInvalidJson,
+                    "作业站返回了无效 JSON。",
+                    ex.Message);
+            }
+
+            if (root is not JsonObject obj)
+            {
+                return UiOperationResult<JsonObject>.Fail(
+                    UiErrorCode.CopilotPayloadInvalidType,
+                    "作业站返回结构异常，预期为 JSON 对象。");
+            }
+
+            return UiOperationResult<JsonObject>.Ok(obj, "ok");
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or IOException or TaskCanceledException)
+        {
+            return UiOperationResult<JsonObject>.Fail(
+                UiErrorCode.CoreUnknown,
+                "网络请求失败，请稍后重试。",
+                ex.Message);
+        }
+    }
+
+    private static async Task<string> ReadResponseBodySafeAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await response.Content.ReadAsStringAsync(cancellationToken);
+        }
+        catch
+        {
+            return string.Empty;
+        }
+    }
+
+    private static string ReadJsonString(JsonObject obj, string key)
+    {
+        if (!TryGetPropertyCaseInsensitive(obj, key, out var node)
+            || !TryGetStringValue(node, out var raw))
+        {
+            return string.Empty;
+        }
+
+        return raw.Trim();
+    }
+
+    private static int? ReadJsonInt(JsonObject obj, string key)
+    {
+        if (!TryGetPropertyCaseInsensitive(obj, key, out var node))
+        {
+            return null;
+        }
+
+        if (!TryReadInt(node, out var value))
+        {
+            return null;
+        }
+
+        return value;
+    }
+
+    private static bool TryReadInt(JsonNode? node, out int value)
+    {
+        value = 0;
+        if (node is not JsonValue jsonValue)
+        {
+            return false;
+        }
+
+        if (jsonValue.TryGetValue(out int parsedInt))
+        {
+            value = parsedInt;
+            return true;
+        }
+
+        if (jsonValue.TryGetValue(out string? raw) && int.TryParse(raw, out parsedInt))
+        {
+            value = parsedInt;
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool TryExtractRemotePayloadJson(
+        JsonObject data,
+        out string payloadJson,
+        out string errorMessage)
+    {
+        payloadJson = string.Empty;
+        errorMessage = string.Empty;
+
+        if (!TryGetPropertyCaseInsensitive(data, "content", out var contentNode) || contentNode is null)
+        {
+            errorMessage = "作业站返回结构异常：缺少 content 字段。";
+            return false;
+        }
+
+        if (contentNode is JsonObject or JsonArray)
+        {
+            payloadJson = contentNode.ToJsonString();
+            return true;
+        }
+
+        if (!TryGetStringValue(contentNode, out var rawContent))
+        {
+            errorMessage = "作业站返回结构异常：content 不是 JSON 对象或 JSON 字符串。";
+            return false;
+        }
+
+        var normalized = rawContent.Trim();
+        if (LooksLikeJsonPayload(normalized))
+        {
+            payloadJson = normalized;
+            return true;
+        }
+
+        try
+        {
+            var parsed = JsonNode.Parse(normalized);
+            if (parsed is JsonObject or JsonArray)
+            {
+                payloadJson = parsed.ToJsonString();
+                return true;
+            }
+        }
+        catch
+        {
+            // Keep original normalized payload for final validation.
+        }
+
+        payloadJson = normalized;
+        return true;
     }
 }
 

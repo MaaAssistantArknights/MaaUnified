@@ -53,6 +53,7 @@ internal static class SettingsOptionCatalog
         new("BlueStacks", "StartUp.Option.ConnectConfig.BlueStacks", "BlueStacks"),
         new("MuMuEmulator12", "StartUp.Option.ConnectConfig.MuMuEmulator12", "MuMu Emulator 12"),
         new("LDPlayer", "StartUp.Option.ConnectConfig.LDPlayer", "LD Player"),
+        new("AVD", "StartUp.Option.ConnectConfig.AVD", "AVD"),
         new("Nox", "StartUp.Option.ConnectConfig.Nox", "Nox"),
         new("XYAZ", "StartUp.Option.ConnectConfig.XYAZ", "MEmu"),
         new("PC", "StartUp.Option.ConnectConfig.PC", "PC Client"),
@@ -77,6 +78,7 @@ internal static class SettingsOptionCatalog
         new("minitouch", "StartUp.Option.TouchMode.MiniTouch", "Minitouch"),
         new("maatouch", "StartUp.Option.TouchMode.MaaTouch", "MaaTouch"),
         new("adb", "StartUp.Option.TouchMode.AdbTouch", "ADB Input"),
+        new("MaaFwAdb", "StartUp.Option.TouchMode.MaaFwAdbTouch", "MaaFwAdb"),
     ];
 
     private static readonly IReadOnlyList<LocalizedOptionSpec<string>> AttachWindowScreencapOptionSpecs =

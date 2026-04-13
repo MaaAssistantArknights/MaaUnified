@@ -1919,6 +1919,12 @@
   <data name="Settings.IssueReport.OpenRuntimeLogWindow" xml:space="preserve">
     <value>実行ログウィンドウを開く</value>
   </data>
+  <data name="Settings.IssueReport.CheckUpdateBeforeReportingIssue" xml:space="preserve">
+    <value>まずアップグレードして新しいバージョンで問題が再現するか確認し、一般的な問題でないことを確認してから報告してください。</value>
+  </data>
+  <data name="Settings.IssueReport.CheckHelpBeforeReportingIssue" xml:space="preserve">
+    <value>問題を報告する前に、よくある質問に該当しないことを確認してください</value>
+  </data>
   <data name="Settings.IssueReport.PreflightNote" xml:space="preserve">
     <value>フィードバック送信前に FAQ を確認してください。ログ圧縮パッケージを添付すると問題特定が早くなります。</value>
   </data>
@@ -2496,6 +2502,9 @@
   </data>
   <data name="TaskQueue.Module.Custom" xml:space="preserve">
     <value>カスタムタスク</value>
+  </data>
+  <data name="TaskQueue.Module.UserDataUpdate" xml:space="preserve">
+    <value>ユーザーデータ更新</value>
   </data>
   <data name="TaskQueue.Module.Fight" xml:space="preserve">
     <value>作戦</value>
@@ -3986,10 +3995,10 @@
     <value>わかりました</value>
   </data>
   <data name="Settings.VersionUpdate.SoftwarePlaceholder.Message" xml:space="preserve">
-    <value>MAA Unified ではソフトウェア更新がまだ実装されていません。ソフトウェア更新には WPF 版を引き続き使用してください。</value>
+    <value>ソフトウェア更新は利用可能です。「設定 &gt; Version Update」から更新の確認、ダウンロード、適用を行ってください。</value>
   </data>
   <data name="Settings.VersionUpdate.SoftwarePlaceholder.Status" xml:space="preserve">
-    <value>MAA Unified ではソフトウェア更新がまだ実装されていません。</value>
+    <value>ソフトウェア更新は利用可能です。</value>
   </data>
   <data name="Settings.VersionUpdate.SoftwarePlaceholder.Title" xml:space="preserve">
     <value>ソフトウェア更新</value>

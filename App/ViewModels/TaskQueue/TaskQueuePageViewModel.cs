@@ -50,6 +50,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         TaskModuleTypes.Award,
         TaskModuleTypes.Roguelike,
         TaskModuleTypes.Reclamation,
+        TaskModuleTypes.UserDataUpdate,
         TaskModuleTypes.Custom,
     ];
 
@@ -131,6 +132,15 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 "生息演算",
                 "生息演算",
                 "생식연산",
+            ],
+            [TaskModuleTypes.UserDataUpdate] =
+            [
+                "UserDataUpdate",
+                "Update Doctor Data",
+                "更新数据",
+                "更新使用者資料",
+                "ユーザーデータ更新",
+                "사용자 데이터 업데이트",
             ],
             [TaskModuleTypes.Custom] =
             [
@@ -277,6 +287,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         AwardModule = new AwardModuleViewModel(runtime, Texts);
         RoguelikeModule = new RoguelikeModuleViewModel(runtime, Texts);
         ReclamationModule = new ReclamationModuleViewModel(runtime, Texts);
+        UserDataUpdateModule = new UserDataUpdateModuleViewModel(runtime, Texts);
         CustomModule = new CustomModuleViewModel(runtime, Texts);
         PostActionModule = new PostActionModuleViewModel(runtime, Texts);
         ApplySettingsModeToTaskModules();
@@ -354,6 +365,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     public RoguelikeModuleViewModel RoguelikeModule { get; }
 
     public ReclamationModuleViewModel ReclamationModule { get; }
+
+    public UserDataUpdateModuleViewModel UserDataUpdateModule { get; }
 
     public CustomModuleViewModel CustomModule { get; }
 
@@ -671,6 +684,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     public string TaskMenuTooltipText =>
         $"{RootTexts.GetOrDefault("TaskQueue.Root.LeftClick", "Left click")}: {RootTexts.GetOrDefault("TaskQueue.Root.TaskSettings", "Task settings")}{Environment.NewLine}" +
         $"{RootTexts.GetOrDefault("TaskQueue.Root.RightClick", "Right click")}: " +
+        $"{Texts.GetOrDefault("RunTaskOnce", "Run once")} / " +
         $"{RootTexts.GetOrDefault("TaskQueue.Root.MoveUp", "Move up")} / " +
         $"{RootTexts.GetOrDefault("TaskQueue.Root.MoveDown", "Move down")} / " +
         $"{RootTexts.GetOrDefault("TaskQueue.Root.Rename", "Rename")} / " +
@@ -689,6 +703,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     public string TaskMenuMoveDownText => RootTexts.GetOrDefault("TaskQueue.Root.MoveDown", "Move down");
 
     public string TaskMenuRenameText => RootTexts.GetOrDefault("TaskQueue.Root.Rename", "Rename");
+
+    public string TaskMenuRunOnceText => Texts.GetOrDefault("RunTaskOnce", "Run once");
 
     public string TaskMenuDeleteText => RootTexts.GetOrDefault("TaskQueue.Root.Delete", "Delete");
 
@@ -721,6 +737,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     public string AddTaskMenuRoguelikeText => ResolveModuleDisplayName(TaskModuleTypes.Roguelike);
 
     public string AddTaskMenuReclamationText => ResolveModuleDisplayName(TaskModuleTypes.Reclamation);
+
+    public string AddTaskMenuUserDataUpdateText => ResolveModuleDisplayName(TaskModuleTypes.UserDataUpdate);
 
     public string AddTaskMenuCustomText => ResolveModuleDisplayName(TaskModuleTypes.Custom);
 
@@ -790,6 +808,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 TaskModuleTypes.Award => AwardModule,
                 TaskModuleTypes.Roguelike => RoguelikeModule,
                 TaskModuleTypes.Reclamation => ReclamationModule,
+                TaskModuleTypes.UserDataUpdate => UserDataUpdateModule,
                 TaskModuleTypes.Custom => CustomModule,
                 _ => null,
             };
@@ -1046,6 +1065,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         OnPropertyChanged(nameof(TaskMenuMoveUpText));
         OnPropertyChanged(nameof(TaskMenuMoveDownText));
         OnPropertyChanged(nameof(TaskMenuRenameText));
+        OnPropertyChanged(nameof(TaskMenuRunOnceText));
         OnPropertyChanged(nameof(TaskMenuDeleteText));
         OnPropertyChanged(nameof(TaskMenuIconText));
         OnPropertyChanged(nameof(AddTaskButtonText));
@@ -1062,6 +1082,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         OnPropertyChanged(nameof(AddTaskMenuAwardText));
         OnPropertyChanged(nameof(AddTaskMenuRoguelikeText));
         OnPropertyChanged(nameof(AddTaskMenuReclamationText));
+        OnPropertyChanged(nameof(AddTaskMenuUserDataUpdateText));
         OnPropertyChanged(nameof(AddTaskMenuCustomText));
     }
 
@@ -1791,6 +1812,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         AwardModule.IsAdvancedMode = _isAdvancedSettingsSelected;
         RoguelikeModule.IsAdvancedMode = _isAdvancedSettingsSelected;
         ReclamationModule.IsAdvancedMode = _isAdvancedSettingsSelected;
+        UserDataUpdateModule.IsAdvancedMode = _isAdvancedSettingsSelected;
         CustomModule.IsAdvancedMode = _isAdvancedSettingsSelected;
     }
 
@@ -2371,6 +2393,208 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     private static string BuildBilingualMessage(string zh, string en)
     {
         return $"{zh}{Environment.NewLine}{en}";
+    }
+
+    public async Task RunSelectedTaskOnceAsync(CancellationToken cancellationToken = default)
+    {
+        if (SelectedTask is null)
+        {
+            LastErrorMessage = BuildBilingualMessage(
+                "请先选择要单次运行的任务。",
+                "Select a task to run once.");
+            return;
+        }
+
+        var selectedIndex = Tasks.IndexOf(SelectedTask);
+        if (selectedIndex < 0)
+        {
+            LastErrorMessage = BuildBilingualMessage(
+                "当前选中的任务不存在。",
+                "The selected task no longer exists.");
+            return;
+        }
+
+        await _runTransitionLock.WaitAsync(cancellationToken);
+        try
+        {
+            ClearVisibleRuntimeLogs();
+            if (!Runtime.SessionService.TryBeginRun(TaskQueueRunOwner, out var currentOwner))
+            {
+                var owner = string.IsNullOrWhiteSpace(currentOwner) ? "Unknown" : currentOwner;
+                var message = BuildRunOwnerBlockedMessage("单次运行", "run-once", owner);
+                LastErrorMessage = message;
+                AppendStartFailureLog(LastErrorMessage);
+                await RecordFailedResultAsync(
+                    "TaskQueue.RunOnce.RunOwner",
+                    UiOperationResult.Fail(UiErrorCode.TaskQueueEditBlocked, message),
+                    cancellationToken);
+                return;
+            }
+
+            var keepRunOwner = false;
+            try
+            {
+                if (!await EnsureCoreReadyAsync("TaskQueue.RunOnce.CoreWarmup", cancellationToken))
+                {
+                    return;
+                }
+
+                if (!await EnsureConnectedForLinkStartAsync("TaskQueue.RunOnce", cancellationToken))
+                {
+                    return;
+                }
+
+                await WaitForPendingBindingAsync(cancellationToken);
+                if (!await SaveBoundTaskModulesAsync(cancellationToken))
+                {
+                    return;
+                }
+
+                StartPrecheckWarningMessage = string.Empty;
+                _clearTaskStatusesWhenStopped = false;
+
+                var validationResult = await Runtime.TaskQueueFeatureService.ValidateTaskAsync(selectedIndex, cancellationToken);
+                if (!validationResult.Success || validationResult.Value is null)
+                {
+                    LastErrorMessage = validationResult.Message;
+                    AppendStartPrecheckWarningMessage(LastErrorMessage);
+                    await SelectTaskByIndexAsync(selectedIndex, cancellationToken);
+                    AppendStartFailureLog(LastErrorMessage);
+                    await RecordFailedResultAsync(
+                        "TaskQueue.RunOnce.ValidateTask",
+                        UiOperationResult.Fail(
+                            validationResult.Error?.Code ?? UiErrorCode.TaskValidationFailed,
+                            validationResult.Message,
+                            validationResult.Error?.Details),
+                        cancellationToken);
+                    return;
+                }
+
+                UpdateSelectedTaskValidationSummary(validationResult.Value);
+                if (validationResult.Value.HasBlockingIssues)
+                {
+                    var firstBlocking = validationResult.Value.Issues.First(static issue => issue.Blocking);
+                    var issueDetail = $"{firstBlocking.Code}:{firstBlocking.Field}:{firstBlocking.Message}";
+                    LastErrorMessage = string.Format(
+                        Texts.GetOrDefault(
+                            "TaskQueue.Error.BlockingValidation",
+                            "Task `{0}` blocked by validation: {1}"),
+                        validationResult.Value.TaskName,
+                        issueDetail);
+                    AppendStartPrecheckWarningMessage(LastErrorMessage);
+                    await SelectTaskByIndexAsync(selectedIndex, cancellationToken);
+                    AppendStartFailureLog(LastErrorMessage);
+                    await RecordFailedResultAsync(
+                        "TaskQueue.RunOnce.ValidateTask",
+                        UiOperationResult.Fail(UiErrorCode.TaskValidationFailed, LastErrorMessage, issueDetail),
+                        cancellationToken);
+                    return;
+                }
+
+                RefreshConfigValidationState(Runtime.ConfigurationService.RevalidateCurrentConfig());
+                if (HasBlockingConfigIssues)
+                {
+                    var first = Runtime.ConfigurationService.CurrentValidationIssues.FirstOrDefault(i => i.Blocking);
+                    LastErrorMessage = first is null
+                        ? "Config validation has blocking issues."
+                        : $"{first.Scope}:{first.Code}:{first.Field}:{first.Message}";
+                    AppendStartPrecheckWarningMessage(LastErrorMessage);
+                    await NavigateToFirstBlockingIssueAsync(first, cancellationToken);
+                    AppendStartFailureLog(LastErrorMessage);
+                    await RecordConfigValidationFailureAsync(first, cancellationToken);
+                    return;
+                }
+
+                if (!Runtime.ConfigurationService.TryGetCurrentProfile(out var profile))
+                {
+                    LastErrorMessage = Texts.GetOrDefault("TaskQueue.Error.ProfileMissingShort", "Current profile is missing.");
+                    await RecordFailedResultAsync(
+                        "TaskQueue.RunOnce.Profile",
+                        UiOperationResult.Fail(UiErrorCode.ProfileMissing, LastErrorMessage),
+                        cancellationToken);
+                    return;
+                }
+
+                if (selectedIndex >= profile.TaskQueue.Count)
+                {
+                    LastErrorMessage = BuildBilingualMessage(
+                        "当前选中的任务不存在。",
+                        "The selected task no longer exists.");
+                    await RecordFailedResultAsync(
+                        "TaskQueue.RunOnce.Task",
+                        UiOperationResult.Fail(UiErrorCode.TaskNotFound, LastErrorMessage),
+                        cancellationToken);
+                    return;
+                }
+
+                CoreResult<int> appendResult;
+                var enabledSnapshot = profile.TaskQueue.Select(task => task.IsEnabled).ToArray();
+                try
+                {
+                    for (var index = 0; index < profile.TaskQueue.Count; index++)
+                    {
+                        profile.TaskQueue[index].IsEnabled = index == selectedIndex;
+                    }
+
+                    appendResult = await Runtime.TaskQueueFeatureService.QueueEnabledTasksAsync(cancellationToken);
+                }
+                finally
+                {
+                    for (var index = 0; index < profile.TaskQueue.Count && index < enabledSnapshot.Length; index++)
+                    {
+                        profile.TaskQueue[index].IsEnabled = enabledSnapshot[index];
+                    }
+                }
+
+                if (!appendResult.Success)
+                {
+                    var error = UiOperationResult<int>.FromCore(appendResult, "Task queued.");
+                    _ = await ApplyResultAsync(error, "TaskQueue.RunOnce.Append", cancellationToken);
+                    return;
+                }
+
+                if (appendResult.Value <= 0)
+                {
+                    LastErrorMessage = BuildBilingualMessage(
+                        "当前任务本次没有产生可执行的核心任务。",
+                        "The selected task did not produce any runnable core task this time.");
+                    AppendStartPrecheckWarningMessage(LastErrorMessage);
+                    AppendStartFailureLog(LastErrorMessage);
+                    await RecordFailedResultAsync(
+                        "TaskQueue.RunOnce.AppendEmpty",
+                        UiOperationResult.Fail(UiErrorCode.TaskValidationFailed, LastErrorMessage),
+                        cancellationToken);
+                    return;
+                }
+
+                if (!await ApplyResultAsync(
+                        await Runtime.ConnectFeatureService.StartAsync(cancellationToken),
+                        "TaskQueue.RunOnce.Start",
+                        cancellationToken))
+                {
+                    return;
+                }
+
+                ResetRuntimeLogState();
+                ResetAllTaskStatuses();
+                CurrentSessionState = Runtime.SessionService.CurrentState;
+                _currentRunId = Guid.NewGuid().ToString("N");
+                _lastPostActionRunId = string.Empty;
+                TrackAchievementsAfterStart(appendResult.Value);
+                keepRunOwner = true;
+            }
+            finally
+            {
+                if (!keepRunOwner)
+                {
+                    Runtime.SessionService.EndRun(TaskQueueRunOwner);
+                }
+            }
+        }
+        finally
+        {
+            _runTransitionLock.Release();
+        }
     }
 
     private async Task RunAccountSwitchManualAsync(CancellationToken cancellationToken)
@@ -3127,6 +3351,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 AwardModule.ClearBinding();
                 RoguelikeModule.ClearBinding();
                 ReclamationModule.ClearBinding();
+                UserDataUpdateModule.ClearBinding();
                 CustomModule.ClearBinding();
                 await RefreshSelectedTaskValidationSummaryAsync(index, cancellationToken);
                 return;
@@ -3147,6 +3372,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 AwardModule.ClearBinding();
                 RoguelikeModule.ClearBinding();
                 ReclamationModule.ClearBinding();
+                UserDataUpdateModule.ClearBinding();
                 CustomModule.ClearBinding();
                 await RefreshSelectedTaskValidationSummaryAsync(index, cancellationToken);
                 return;
@@ -3167,6 +3393,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 AwardModule.ClearBinding();
                 RoguelikeModule.ClearBinding();
                 ReclamationModule.ClearBinding();
+                UserDataUpdateModule.ClearBinding();
                 CustomModule.ClearBinding();
                 await RefreshSelectedTaskValidationSummaryAsync(index, cancellationToken);
                 return;
@@ -3187,6 +3414,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 MallModule.ClearBinding();
                 AwardModule.ClearBinding();
                 ReclamationModule.ClearBinding();
+                UserDataUpdateModule.ClearBinding();
                 CustomModule.ClearBinding();
                 await RefreshSelectedTaskValidationSummaryAsync(index, cancellationToken);
                 return;
@@ -3207,6 +3435,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 MallModule.ClearBinding();
                 AwardModule.ClearBinding();
                 RoguelikeModule.ClearBinding();
+                UserDataUpdateModule.ClearBinding();
                 CustomModule.ClearBinding();
                 await RefreshSelectedTaskValidationSummaryAsync(index, cancellationToken);
                 return;
@@ -3271,6 +3500,19 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             else
             {
                 MallModule.ClearBinding();
+            }
+
+            if (string.Equals(moduleType, TaskModuleTypes.UserDataUpdate, StringComparison.OrdinalIgnoreCase))
+            {
+                await UserDataUpdateModule.BindAsync(index, paramsResult.Value, cancellationToken);
+                if (IsBindingStale(expectedVersion, cancellationToken))
+                {
+                    return;
+                }
+            }
+            else
+            {
+                UserDataUpdateModule.ClearBinding();
             }
 
             if (string.Equals(moduleType, TaskModuleTypes.Award, StringComparison.OrdinalIgnoreCase))
@@ -3352,6 +3594,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         AwardModule.ClearBinding();
         RoguelikeModule.ClearBinding();
         ReclamationModule.ClearBinding();
+        UserDataUpdateModule.ClearBinding();
         CustomModule.ClearBinding();
         ResetSelectedTaskValidationSummary();
     }
@@ -3416,6 +3659,12 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         if (!await AwardModule.FlushPendingChangesAsync(cancellationToken))
         {
             LastErrorMessage = AwardModule.LastErrorMessage;
+            return false;
+        }
+
+        if (!await UserDataUpdateModule.FlushPendingChangesAsync(cancellationToken))
+        {
+            LastErrorMessage = UserDataUpdateModule.LastErrorMessage;
             return false;
         }
 

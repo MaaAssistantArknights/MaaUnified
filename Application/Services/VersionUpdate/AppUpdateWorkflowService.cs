@@ -4,6 +4,8 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Runtime.InteropServices;
+using System.Text;
+using System.Security.Cryptography;
 using System.Text.Json;
 using MAAUnified.Application.Models;
 using MAAUnified.Application.Services;
@@ -15,6 +17,7 @@ public sealed class AppUpdateWorkflowService
     private const string MaaApiBaseUrl = "https://api.maa.plus/MaaAssistantArknights/api/";
     private const string MaaApiFallbackBaseUrl = "https://api2.maa.plus/MaaAssistantArknights/api/";
     private const string GitHubReleasesUrl = "https://api.github.com/repos/MaaAssistantArknights/MaaAssistantArknights/releases";
+    private const string MirrorChyanAppUpdateUrl = "https://mirrorchyan.com/api/resources/MAA/latest";
     private const string WindowsRelayManifestFileName = "windows-relay.json";
     private const string WindowsManualUpdateMessageKey = "Settings.VersionUpdate.Status.WindowsManualUpdateRequired";
     private const string PackageUnavailableMessageKey = "Settings.VersionUpdate.Status.PackageUnavailable";
@@ -44,6 +47,33 @@ public sealed class AppUpdateWorkflowService
         var (httpClient, disposeClient) = ResolveHttpClient(policy);
         try
         {
+            currentVersion = string.IsNullOrWhiteSpace(currentVersion) ? "unknown" : currentVersion.Trim();
+            if (ShouldSkipUpdateCheckForDebugVersion(currentVersion))
+            {
+                return new VersionUpdateCheckResult(
+                    Channel: policy.VersionType,
+                    CurrentVersion: currentVersion,
+                    TargetVersion: currentVersion,
+                    ReleaseName: currentVersion,
+                    Summary: string.Empty,
+                    Body: string.Empty,
+                    PackageName: null,
+                    PackageDownloadUrl: null,
+                    PackageSize: null,
+                    IsNewVersion: false,
+                    HasPackage: false);
+            }
+
+            var mirrorChyanResult = await TryResolveReleaseFromMirrorChyanAsync(
+                policy,
+                currentVersion,
+                httpClient,
+                cancellationToken).ConfigureAwait(false);
+            if (mirrorChyanResult is not null)
+            {
+                return mirrorChyanResult;
+            }
+
             var release = await ResolveReleaseAsync(policy.ResourceApi, policy.VersionType, httpClient, cancellationToken).ConfigureAwait(false);
             if (!release.HasValue)
             {
@@ -56,7 +86,7 @@ public sealed class AppUpdateWorkflowService
             var body = TryGetString(releaseValue, "body") ?? string.Empty;
             var summary = string.IsNullOrWhiteSpace(body) ? releaseName : body;
             var targetVersion = tag;
-            var isNew = !string.Equals(currentVersion, tag, StringComparison.OrdinalIgnoreCase);
+            var isNew = IsNewerVersion(targetVersion, currentVersion);
 
             ResolvedPackage? resolvedPackage = null;
             if (isNew)
@@ -64,6 +94,8 @@ public sealed class AppUpdateWorkflowService
                 resolvedPackage = await ResolvePackageAsync(
                     policy.ResourceApi,
                     policy.VersionType,
+                    allowMirrorUrls: string.Equals(policy.ResourceUpdateSource, "Github", StringComparison.OrdinalIgnoreCase)
+                        && !policy.ForceGithubGlobalSource,
                     targetVersion,
                     releaseValue,
                     httpClient,
@@ -85,7 +117,8 @@ public sealed class AppUpdateWorkflowService
                 PreparedPackagePath: null,
                 PackageResolutionStatus: resolvedPackage?.Status ?? PackageResolutionStatus.NotChecked,
                 PackageSourceKind: resolvedPackage?.SourceKind ?? PackageSourceKind.None,
-                PackageFailureMessageKey: resolvedPackage?.FailureMessageKey);
+                PackageFailureMessageKey: resolvedPackage?.FailureMessageKey,
+                PackageMirrorUrls: resolvedPackage?.MirrorUrls);
         }
         finally
         {
@@ -101,6 +134,7 @@ public sealed class AppUpdateWorkflowService
         string runtimeBaseDirectory,
         bool forceDownload,
         VersionUpdatePolicy? policy,
+        IProgress<VersionUpdateProgressInfo>? progress,
         CancellationToken cancellationToken)
     {
         if (!checkResult.HasPackage
@@ -127,22 +161,28 @@ public sealed class AppUpdateWorkflowService
         var (httpClient, disposeClient) = ResolveHttpClient(policy);
         try
         {
-            using var request = new HttpRequestMessage(HttpMethod.Get, checkResult.PackageDownloadUrl);
-            using var response = await httpClient.SendAsync(
-                request,
-                HttpCompletionOption.ResponseHeadersRead,
-                cancellationToken).ConfigureAwait(false);
-
-            if (!response.IsSuccessStatusCode)
+            var candidates = BuildPackageDownloadCandidates(checkResult);
+            UiOperationResult<string>? lastFailure = null;
+            foreach (var candidate in candidates)
             {
-                return UiOperationResult<string>.Fail(
-                    UiErrorCode.UiOperationFailed,
-                    $"Package download failed with HTTP {(int)response.StatusCode}.");
+                TryDeleteFile(destinationPath);
+                var downloadResult = await TryDownloadPackageFromCandidateAsync(
+                    httpClient,
+                    candidate,
+                    destinationPath,
+                    progress,
+                    cancellationToken).ConfigureAwait(false);
+                if (downloadResult.Success)
+                {
+                    return UiOperationResult<string>.Ok(destinationPath, "Update package downloaded.");
+                }
+
+                lastFailure = downloadResult;
             }
 
-            await using var sourceStream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-            await using var destinationStream = File.Create(destinationPath);
-            await sourceStream.CopyToAsync(destinationStream, cancellationToken).ConfigureAwait(false);
+            return lastFailure ?? UiOperationResult<string>.Fail(
+                UiErrorCode.UiOperationFailed,
+                "Failed to download update package.");
         }
         catch (OperationCanceledException)
         {
@@ -161,8 +201,66 @@ public sealed class AppUpdateWorkflowService
                 httpClient.Dispose();
             }
         }
+    }
 
-        return UiOperationResult<string>.Ok(destinationPath, "Update package downloaded.");
+    private static async Task CopyToAsyncWithProgress(
+        Stream sourceStream,
+        Stream destinationStream,
+        long totalBytes,
+        IProgress<VersionUpdateProgressInfo>? progress,
+        CancellationToken cancellationToken)
+    {
+        if (progress is null)
+        {
+            await sourceStream.CopyToAsync(destinationStream, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        byte[] buffer = new byte[81920];
+        long bytesTransferred = 0;
+        long bytesSinceLastReport = 0;
+        var lastReportAt = DateTime.UtcNow;
+
+        while (true)
+        {
+            var bytesRead = await sourceStream.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
+            if (bytesRead <= 0)
+            {
+                break;
+            }
+
+            await destinationStream.WriteAsync(buffer.AsMemory(0, bytesRead), cancellationToken).ConfigureAwait(false);
+            bytesTransferred += bytesRead;
+            bytesSinceLastReport += bytesRead;
+
+            var now = DateTime.UtcNow;
+            var elapsed = (now - lastReportAt).TotalSeconds;
+            if (elapsed < 1 && (totalBytes <= 0 || bytesTransferred < totalBytes))
+            {
+                continue;
+            }
+
+            progress.Report(new VersionUpdateProgressInfo(
+                VersionUpdateProgressOperation.SoftwarePackage,
+                VersionUpdateProgressStage.Downloading,
+                BytesTransferred: bytesTransferred,
+                TotalBytes: totalBytes,
+                BytesPerSecond: bytesSinceLastReport / Math.Max(elapsed, 0.001d)));
+            lastReportAt = now;
+            bytesSinceLastReport = 0;
+        }
+
+        if (bytesTransferred > 0 && bytesSinceLastReport > 0)
+        {
+            var now = DateTime.UtcNow;
+            var elapsed = (now - lastReportAt).TotalSeconds;
+            progress.Report(new VersionUpdateProgressInfo(
+                VersionUpdateProgressOperation.SoftwarePackage,
+                VersionUpdateProgressStage.Downloading,
+                BytesTransferred: bytesTransferred,
+                TotalBytes: totalBytes,
+                BytesPerSecond: bytesSinceLastReport / Math.Max(elapsed, 0.001d)));
+        }
     }
 
     public Task<UiOperationResult> InstallPackageAsync(string packagePath, CancellationToken cancellationToken)
@@ -294,6 +392,7 @@ public sealed class AppUpdateWorkflowService
     private async Task<ResolvedPackage> ResolvePackageAsync(
         string? resourceApi,
         string channel,
+        bool allowMirrorUrls,
         string targetVersion,
         JsonElement release,
         HttpClient httpClient,
@@ -315,7 +414,7 @@ public sealed class AppUpdateWorkflowService
             var releaseAsset = SelectPackageAsset(release);
             if (releaseAsset is not null)
             {
-                return releaseAsset;
+                return allowMirrorUrls ? releaseAsset : releaseAsset with { MirrorUrls = null };
             }
 
             return new ResolvedPackage(
@@ -324,8 +423,14 @@ public sealed class AppUpdateWorkflowService
                 FailureMessageKey: WindowsManualUpdateMessageKey);
         }
 
-        return SelectPackageAsset(release)
-            ?? new ResolvedPackage(
+        var asset = SelectPackageAsset(release);
+        if (asset is not null)
+        {
+            return allowMirrorUrls ? asset : asset with { MirrorUrls = null };
+        }
+
+        return
+            new ResolvedPackage(
                 Status: PackageResolutionStatus.Unavailable,
                 SourceKind: PackageSourceKind.None,
                 FailureMessageKey: PackageUnavailableMessageKey);
@@ -596,6 +701,7 @@ public sealed class AppUpdateWorkflowService
                 Name: name,
                 DownloadUrl: downloadUrl,
                 Size: size,
+                MirrorUrls: ReadMirrorUrls(asset),
                 Score: score);
             if (best is null || candidate.Score > best.Score)
             {
@@ -881,6 +987,7 @@ public sealed class AppUpdateWorkflowService
         if (string.Equals(channel, "Nightly", StringComparison.OrdinalIgnoreCase))
         {
             return tag.Contains("nightly", StringComparison.OrdinalIgnoreCase)
+                || tag.Contains("alpha", StringComparison.OrdinalIgnoreCase)
                 || name.Contains("nightly", StringComparison.OrdinalIgnoreCase);
         }
 
@@ -914,6 +1021,345 @@ public sealed class AppUpdateWorkflowService
             && property.TryGetInt64(out var value)
                 ? value
                 : null;
+    }
+
+    private async Task<VersionUpdateCheckResult?> TryResolveReleaseFromMirrorChyanAsync(
+        VersionUpdatePolicy policy,
+        string currentVersion,
+        HttpClient httpClient,
+        CancellationToken cancellationToken)
+    {
+        if (!string.Equals(policy.ResourceUpdateSource, "MirrorChyan", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var cdk = policy.MirrorChyanCdk.Trim();
+        if (cdk.Length == 0)
+        {
+            return null;
+        }
+
+        var requestUrl =
+            $"{MirrorChyanAppUpdateUrl}?current_version={Uri.EscapeDataString(currentVersion)}&cdk={Uri.EscapeDataString(cdk)}&user_agent=MAAUnified&os={Uri.EscapeDataString(BuildMirrorChyanOs())}&arch={Uri.EscapeDataString(BuildMirrorChyanArchitecture())}&channel={Uri.EscapeDataString(NormalizeMaaApiChannel(policy.VersionType))}&sp_id={Uri.EscapeDataString(BuildMirrorChyanSpId())}";
+
+        try
+        {
+            using var document = await FetchJsonDocumentAsync(httpClient, requestUrl, cancellationToken).ConfigureAwait(false);
+            if (document.RootElement.ValueKind != JsonValueKind.Object)
+            {
+                return null;
+            }
+
+            var root = document.RootElement;
+            var code = root.TryGetProperty("code", out var codeNode) && codeNode.TryGetInt32(out var parsedCode)
+                ? parsedCode
+                : -1;
+            if (code != 0)
+            {
+                return null;
+            }
+
+            if (!root.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Object)
+            {
+                return null;
+            }
+
+            var targetVersion = TryGetString(data, "version_name") ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(targetVersion))
+            {
+                return null;
+            }
+
+            if (!IsNewerVersion(targetVersion, currentVersion))
+            {
+                return new VersionUpdateCheckResult(
+                    Channel: policy.VersionType,
+                    CurrentVersion: currentVersion,
+                    TargetVersion: targetVersion,
+                    ReleaseName: targetVersion,
+                    Summary: string.Empty,
+                    Body: string.Empty,
+                    PackageName: null,
+                    PackageDownloadUrl: null,
+                    PackageSize: null,
+                    IsNewVersion: false,
+                    HasPackage: false);
+            }
+
+            var releaseNote = TryGetString(data, "release_note") ?? string.Empty;
+            if (!Uri.TryCreate(TryGetString(data, "url"), UriKind.Absolute, out var downloadUrl))
+            {
+                return null;
+            }
+
+            var packageName = Path.GetFileName(downloadUrl.AbsolutePath);
+            if (string.IsNullOrWhiteSpace(packageName))
+            {
+                packageName = BuildFallbackPackageName(targetVersion);
+            }
+
+            return new VersionUpdateCheckResult(
+                Channel: policy.VersionType,
+                CurrentVersion: currentVersion,
+                TargetVersion: targetVersion,
+                ReleaseName: targetVersion,
+                Summary: string.IsNullOrWhiteSpace(releaseNote) ? targetVersion : releaseNote,
+                Body: releaseNote,
+                PackageName: packageName,
+                PackageDownloadUrl: downloadUrl,
+                PackageSize: null,
+                IsNewVersion: true,
+                HasPackage: true,
+                PreparedPackagePath: null,
+                PackageResolutionStatus: PackageResolutionStatus.Available,
+                PackageSourceKind: PackageSourceKind.ReleaseAsset);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static IReadOnlyList<Uri>? ReadMirrorUrls(JsonElement asset)
+    {
+        if (!asset.TryGetProperty("mirrors", out var mirrorsNode) || mirrorsNode.ValueKind != JsonValueKind.Array)
+        {
+            return null;
+        }
+
+        var mirrors = new List<Uri>();
+        foreach (var mirror in mirrorsNode.EnumerateArray())
+        {
+            if (mirror.ValueKind != JsonValueKind.String)
+            {
+                continue;
+            }
+
+            var raw = mirror.GetString();
+            if (Uri.TryCreate(raw, UriKind.Absolute, out var uri))
+            {
+                mirrors.Add(uri);
+            }
+        }
+
+        return mirrors.Count == 0 ? null : mirrors;
+    }
+
+    private static IReadOnlyList<Uri> BuildPackageDownloadCandidates(VersionUpdateCheckResult checkResult)
+    {
+        var candidates = new List<Uri>();
+        if (checkResult.PackageMirrorUrls is not null)
+        {
+            foreach (var mirror in checkResult.PackageMirrorUrls)
+            {
+                if (!candidates.Contains(mirror))
+                {
+                    candidates.Add(mirror);
+                }
+            }
+        }
+
+        if (!candidates.Contains(checkResult.PackageDownloadUrl!))
+        {
+            candidates.Add(checkResult.PackageDownloadUrl!);
+        }
+
+        return candidates;
+    }
+
+    private static async Task<UiOperationResult<string>> TryDownloadPackageFromCandidateAsync(
+        HttpClient httpClient,
+        Uri candidate,
+        string destinationPath,
+        IProgress<VersionUpdateProgressInfo>? progress,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, candidate);
+            using var response = await httpClient.SendAsync(
+                request,
+                HttpCompletionOption.ResponseHeadersRead,
+                cancellationToken).ConfigureAwait(false);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                return UiOperationResult<string>.Fail(
+                    UiErrorCode.UiOperationFailed,
+                    $"Package download failed with HTTP {(int)response.StatusCode}.");
+            }
+
+            await using var sourceStream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+            await using var destinationStream = File.Create(destinationPath);
+            await CopyToAsyncWithProgress(
+                sourceStream,
+                destinationStream,
+                response.Content.Headers.ContentLength ?? 0,
+                progress,
+                cancellationToken).ConfigureAwait(false);
+            return UiOperationResult<string>.Ok(destinationPath, "Update package downloaded.");
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            return UiOperationResult<string>.Fail(
+                UiErrorCode.UiOperationFailed,
+                $"Failed to download update package: {ex.Message}");
+        }
+    }
+
+    private static void TryDeleteFile(string path)
+    {
+        try
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+        catch
+        {
+            // Best-effort cleanup before retrying the next candidate.
+        }
+    }
+
+    private static bool IsNewerVersion(string targetVersion, string currentVersion)
+    {
+        targetVersion = (targetVersion ?? string.Empty).Trim();
+        currentVersion = (currentVersion ?? string.Empty).Trim();
+        if (targetVersion.Length == 0 || currentVersion.Length == 0)
+        {
+            return targetVersion.Length > 0 && !string.Equals(targetVersion, currentVersion, StringComparison.OrdinalIgnoreCase);
+        }
+
+        if (TryParseComparableVersion(targetVersion, out var target)
+            && TryParseComparableVersion(currentVersion, out var current))
+        {
+            return target.CompareTo(current) > 0;
+        }
+
+        return string.CompareOrdinal(currentVersion, targetVersion) < 0;
+    }
+
+    private static bool TryParseComparableVersion(string version, out ComparableVersion parsed)
+    {
+        parsed = default;
+        if (string.IsNullOrWhiteSpace(version))
+        {
+            return false;
+        }
+
+        var normalized = version.Trim();
+        var plusIndex = normalized.IndexOf('+', StringComparison.Ordinal);
+        if (plusIndex >= 0)
+        {
+            normalized = normalized[..plusIndex];
+        }
+
+        if (normalized.StartsWith("v", StringComparison.OrdinalIgnoreCase))
+        {
+            normalized = normalized[1..];
+        }
+
+        var dashIndex = normalized.IndexOf('-', StringComparison.Ordinal);
+        var coreText = dashIndex >= 0 ? normalized[..dashIndex] : normalized;
+        var prereleaseText = dashIndex >= 0 ? normalized[(dashIndex + 1)..] : string.Empty;
+        var coreParts = coreText.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (coreParts.Length is < 2 or > 4)
+        {
+            return false;
+        }
+
+        Span<int> numbers = stackalloc int[4];
+        for (var index = 0; index < coreParts.Length; index++)
+        {
+            if (!int.TryParse(coreParts[index], out numbers[index]))
+            {
+                return false;
+            }
+        }
+
+        var prerelease = new List<ComparableVersionIdentifier>();
+        if (prereleaseText.Length > 0)
+        {
+            foreach (var identifier in prereleaseText.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                if (long.TryParse(identifier, out var numeric))
+                {
+                    prerelease.Add(new ComparableVersionIdentifier(identifier, numeric, true));
+                }
+                else
+                {
+                    prerelease.Add(new ComparableVersionIdentifier(identifier, null, false));
+                }
+            }
+        }
+
+        parsed = new ComparableVersion(
+            numbers[0],
+            numbers[1],
+            numbers[2],
+            numbers[3],
+            prerelease);
+        return true;
+    }
+
+    private static bool ShouldSkipUpdateCheckForDebugVersion(string version)
+    {
+        if (string.IsNullOrWhiteSpace(version))
+        {
+            return false;
+        }
+
+        return System.Text.RegularExpressions.Regex.IsMatch(
+            version.Trim(),
+            @"^(.*DEBUG.*|v\d+(\.\d+){1,3}-\d+-g[0-9a-f]{6,}|[^v][0-9a-f]{6,})$",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+    }
+
+    private static string BuildMirrorChyanOs()
+    {
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            return "win";
+        }
+
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+        {
+            return "mac";
+        }
+
+        return "linux";
+    }
+
+    private static string BuildMirrorChyanArchitecture()
+    {
+        return RuntimeInformation.ProcessArchitecture switch
+        {
+            Architecture.Arm64 => "arm64",
+            Architecture.X64 => "x64",
+            Architecture.X86 => "x86",
+            _ => RuntimeInformation.ProcessArchitecture.ToString().ToLowerInvariant(),
+        };
+    }
+
+    private static string BuildMirrorChyanSpId()
+    {
+        var material = string.Join(
+            "|",
+            Environment.MachineName,
+            Environment.UserName,
+            Environment.OSVersion.VersionString);
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(material));
+        return Convert.ToHexString(bytes[..8]).ToLowerInvariant();
     }
 
     private static PackageSelectionPlatform ResolvePlatform(OSPlatform? operatingSystem, Architecture? architecture)
@@ -1056,7 +1502,89 @@ public sealed class AppUpdateWorkflowService
         Uri? DownloadUrl = null,
         long? Size = null,
         string? FailureMessageKey = null,
+        IReadOnlyList<Uri>? MirrorUrls = null,
         int Score = 0);
+
+    private readonly record struct ComparableVersionIdentifier(
+        string RawText,
+        long? NumericValue,
+        bool IsNumeric);
+
+    private readonly record struct ComparableVersion(
+        int Major,
+        int Minor,
+        int Patch,
+        int Revision,
+        IReadOnlyList<ComparableVersionIdentifier> PreRelease) : IComparable<ComparableVersion>
+    {
+        public int CompareTo(ComparableVersion other)
+        {
+            var majorCompare = Major.CompareTo(other.Major);
+            if (majorCompare != 0)
+            {
+                return majorCompare;
+            }
+
+            var minorCompare = Minor.CompareTo(other.Minor);
+            if (minorCompare != 0)
+            {
+                return minorCompare;
+            }
+
+            var patchCompare = Patch.CompareTo(other.Patch);
+            if (patchCompare != 0)
+            {
+                return patchCompare;
+            }
+
+            var revisionCompare = Revision.CompareTo(other.Revision);
+            if (revisionCompare != 0)
+            {
+                return revisionCompare;
+            }
+
+            var hasPreRelease = PreRelease.Count > 0;
+            var otherHasPreRelease = other.PreRelease.Count > 0;
+            if (hasPreRelease != otherHasPreRelease)
+            {
+                return hasPreRelease ? -1 : 1;
+            }
+
+            if (!hasPreRelease)
+            {
+                return 0;
+            }
+
+            var count = Math.Min(PreRelease.Count, other.PreRelease.Count);
+            for (var index = 0; index < count; index++)
+            {
+                var identifierCompare = CompareIdentifier(PreRelease[index], other.PreRelease[index]);
+                if (identifierCompare != 0)
+                {
+                    return identifierCompare;
+                }
+            }
+
+            return PreRelease.Count.CompareTo(other.PreRelease.Count);
+        }
+
+        private static int CompareIdentifier(
+            ComparableVersionIdentifier left,
+            ComparableVersionIdentifier right)
+        {
+            if (left.IsNumeric && right.IsNumeric)
+            {
+                return Nullable.Compare(left.NumericValue, right.NumericValue);
+            }
+
+            if (left.IsNumeric != right.IsNumeric)
+            {
+                return left.IsNumeric ? -1 : 1;
+            }
+
+            return string.CompareOrdinal(left.RawText, right.RawText);
+        }
+    }
 
     private readonly record struct PackageSelectionPlatform(
         string OperatingSystem,

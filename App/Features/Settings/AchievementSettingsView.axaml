@@ -1,7 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="MAAUnified.App.Features.Settings.AchievementSettingsView">
-  <Grid Margin="4" RowDefinitions="Auto,Auto,Auto,Auto,Auto">
+  <Grid Margin="4" RowDefinitions="Auto,Auto,Auto,Auto">
     <TextBlock Classes="section-title" Text="{Binding RootTexts[Settings.Section.Achievement]}" />
 
     <StackPanel Grid.Row="1"
@@ -11,16 +11,10 @@
       <TextBlock Classes="settings-centered-text"
                  FontWeight="SemiBold"
                  Text="{Binding AchievementLevelText}" />
-      <StackPanel Orientation="Horizontal"
-                  HorizontalAlignment="Center"
-                  Spacing="{DynamicResource MAA.Spacing.Small}">
-        <Button Classes="wpf-button wpf-button-secondary"
-                Content="{Binding RootTexts[Settings.Action.RefreshAchievement]}"
-                Click="OnRefreshAchievementClick" />
-        <Button Classes="wpf-button wpf-button-secondary"
-                Content="{Binding RootTexts[Settings.Action.ShowAchievement]}"
-                Click="OnShowAchievementListClick" />
-      </StackPanel>
+      <Button Classes="wpf-button wpf-button-secondary"
+              HorizontalAlignment="Center"
+              Content="{Binding RootTexts[Settings.Action.ShowAchievement]}"
+              Click="OnShowAchievementListClick" />
       <StackPanel Orientation="Horizontal"
                   HorizontalAlignment="Center"
                   Spacing="{DynamicResource MAA.Spacing.Small}">
@@ -30,9 +24,6 @@
         <Button Classes="wpf-button wpf-button-secondary"
                 Content="{Binding RootTexts[Settings.Achievement.Restore]}"
                 Click="OnRestoreAchievementClick" />
-        <Button Classes="wpf-button wpf-button-secondary"
-                Content="{Binding RootTexts[Settings.Action.OpenAchievementGuide]}"
-                Click="OnOpenAchievementGuideClick" />
       </StackPanel>
       <Border Width="108"
               Height="108"
@@ -44,6 +35,9 @@
               BorderThickness="2"
               PointerPressed="OnAchievementDebugPointerPressed"
               IsVisible="{Binding CanUseAchievementDebugEntry}">
+        <ToolTip.Tip>
+          <ToolTip Content="{Binding AchievementDebugTip}" />
+        </ToolTip.Tip>
         <TextBlock HorizontalAlignment="Center"
                    VerticalAlignment="Center"
                    FontSize="24"
@@ -68,13 +62,6 @@
     </StackPanel>
 
     <StackPanel Grid.Row="2"
-                Classes="settings-form settings-form-narrow"
-                Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}"
-                Spacing="4">
-      <TextBlock Classes="settings-centered-text long-wrap" Text="{Binding AchievementPolicySummary}" />
-    </StackPanel>
-
-    <StackPanel Grid.Row="3"
                 Classes="settings-centered-column"
                 Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}"
                 Spacing="0">
@@ -89,7 +76,7 @@
                 IsVisible="{Binding CanEditAchievementPopupAutoClose}" />
     </StackPanel>
 
-    <StackPanel Grid.Row="4"
+    <StackPanel Grid.Row="3"
                 Classes="settings-form settings-form-narrow"
                 Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}"
                 Spacing="4">

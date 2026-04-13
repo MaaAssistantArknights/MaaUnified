@@ -27,22 +27,16 @@ public sealed class SettingsUiAuditRegressionTests
     }
 
     [Fact]
-    public async Task HotKeyEditor_ShouldBeRetiredFromSettingsRoot()
+    public async Task HotKeyEditor_ShouldBeRemovedAndUnreferencedFromSettingsRoot()
     {
         var root = GetMaaUnifiedRoot();
-        var editorXaml = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "HotKeyEditorView.axaml"));
-        var editorCode = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "HotKeyEditorView.axaml.cs"));
+        var editorXamlPath = Path.Combine(root, "App", "Features", "Settings", "HotKeyEditorView.axaml");
+        var editorCodePath = Path.Combine(root, "App", "Features", "Settings", "HotKeyEditorView.axaml.cs");
         var settingsXaml = File.ReadAllText(Path.Combine(root, "App", "Features", "Root", "SettingsView.axaml"));
         var settingsCode = File.ReadAllText(Path.Combine(root, "App", "Features", "Root", "SettingsView.axaml.cs"));
 
-        Assert.Contains("<Grid />", editorXaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("ShowGuiHotkeyState", editorXaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("LinkStartHotkeyState", editorXaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("OnApplyHotkeysClick", editorXaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("OnBeginCaptureClick", editorCode, StringComparison.Ordinal);
-        Assert.DoesNotContain("OnClearHotkeyClick", editorCode, StringComparison.Ordinal);
-        Assert.DoesNotContain("OnHotkeyCaptureKeyDown", editorCode, StringComparison.Ordinal);
-        Assert.DoesNotContain("RegisterHotkeysAsync", editorCode, StringComparison.Ordinal);
+        Assert.False(File.Exists(editorXamlPath));
+        Assert.False(File.Exists(editorCodePath));
 
         Assert.DoesNotContain("SectionHotKeyEditor", settingsXaml, StringComparison.Ordinal);
         Assert.DoesNotContain("settingsViews:HotKeyEditorView", settingsXaml, StringComparison.Ordinal);

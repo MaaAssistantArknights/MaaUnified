@@ -13,6 +13,7 @@ public static class TaskModuleTypes
     public const string Award = "Award";
     public const string Roguelike = "Roguelike";
     public const string Reclamation = "Reclamation";
+    public const string UserDataUpdate = "UserDataUpdate";
     public const string Custom = "Custom";
     public const string PostAction = "PostAction";
 
@@ -49,6 +50,7 @@ public static class TaskModuleParameterDefaults
             TaskModuleTypes.Infrast => CreateInfrastDefaults(),
             TaskModuleTypes.Mall => CreateMallDefaults(language),
             TaskModuleTypes.Award => CreateAwardDefaults(),
+            TaskModuleTypes.UserDataUpdate => CreateUserDataUpdateDefaults(),
             _ => new JsonObject(),
         };
     }
@@ -118,6 +120,16 @@ public static class TaskModuleParameterDefaults
             ["orundum"] = false,
             ["mining"] = false,
             ["specialaccess"] = false,
+        };
+    }
+
+    public static JsonObject CreateUserDataUpdateDefaults()
+    {
+        return new JsonObject
+        {
+            ["update_oper_box"] = true,
+            ["update_depot"] = true,
+            ["trigger_interval"] = "EveryTime",
         };
     }
 }

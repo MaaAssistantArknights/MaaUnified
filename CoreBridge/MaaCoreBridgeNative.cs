@@ -452,6 +452,52 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge
         return Task.FromResult(CoreResult<CoreRuntimeStatus>.Ok(new CoreRuntimeStatus(true, connected, running)));
     }
 
+    public async Task<CoreResult<bool>> ReloadResourceAsync(
+        string? clientType = null,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        await _lifecycleLock.WaitAsync(cancellationToken);
+        try
+        {
+            var status = EnsureReady();
+            if (!status.Success)
+            {
+                return CoreResult<bool>.Fail(status.Error!);
+            }
+
+            if (string.IsNullOrWhiteSpace(_baseDirectory))
+            {
+                return Fail<bool>(CoreErrorCode.NotInitialized, "Bridge base directory is unavailable.");
+            }
+
+            var exports = _exports!;
+            var baseDirectory = _baseDirectory!;
+            if (!AsBool(exports.AsstLoadResource(baseDirectory)))
+            {
+                return Fail<bool>(CoreErrorCode.ResourceLoadFailed, "AsstLoadResource(baseDir) returned false during resource reload.");
+            }
+
+            var effectiveClientType = string.IsNullOrWhiteSpace(clientType)
+                ? _loadedClientType
+                : clientType;
+            if (!string.IsNullOrWhiteSpace(effectiveClientType))
+            {
+                var clientLoad = LoadClientResource(effectiveClientType, baseDirectory, exports);
+                if (!clientLoad.Success)
+                {
+                    return CoreResult<bool>.Fail(clientLoad.Error!);
+                }
+            }
+
+            return CoreResult<bool>.Ok(true);
+        }
+        finally
+        {
+            _lifecycleLock.Release();
+        }
+    }
+
     public Task<CoreResult<bool>> AttachWindowAsync(
         CoreAttachWindowRequest request,
         CancellationToken cancellationToken = default)

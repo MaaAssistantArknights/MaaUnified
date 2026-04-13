@@ -136,6 +136,37 @@
         </ComboBox>
 
         <Grid ColumnDefinitions="Auto,Auto">
+          <CheckBox Content="{Binding UseWeeklyScheduleText}" IsChecked="{Binding UseWeeklySchedule}" />
+          <controls:TooltipHint Grid.Column="1"
+                                Margin="{DynamicResource MAA.Thickness.MarginLeftSmall}"
+                                Tip="{Binding UseWeeklyScheduleTip}" />
+        </Grid>
+        <UniformGrid Columns="7"
+                     IsVisible="{Binding UseWeeklySchedule}">
+          <CheckBox HorizontalAlignment="Center"
+                    Content="{Binding WeeklyScheduleSundayText}"
+                    IsChecked="{Binding WeeklyScheduleSunday}" />
+          <CheckBox HorizontalAlignment="Center"
+                    Content="{Binding WeeklyScheduleMondayText}"
+                    IsChecked="{Binding WeeklyScheduleMonday}" />
+          <CheckBox HorizontalAlignment="Center"
+                    Content="{Binding WeeklyScheduleTuesdayText}"
+                    IsChecked="{Binding WeeklyScheduleTuesday}" />
+          <CheckBox HorizontalAlignment="Center"
+                    Content="{Binding WeeklyScheduleWednesdayText}"
+                    IsChecked="{Binding WeeklyScheduleWednesday}" />
+          <CheckBox HorizontalAlignment="Center"
+                    Content="{Binding WeeklyScheduleThursdayText}"
+                    IsChecked="{Binding WeeklyScheduleThursday}" />
+          <CheckBox HorizontalAlignment="Center"
+                    Content="{Binding WeeklyScheduleFridayText}"
+                    IsChecked="{Binding WeeklyScheduleFriday}" />
+          <CheckBox HorizontalAlignment="Center"
+                    Content="{Binding WeeklyScheduleSaturdayText}"
+                    IsChecked="{Binding WeeklyScheduleSaturday}" />
+        </UniformGrid>
+
+        <Grid ColumnDefinitions="Auto,Auto">
           <CheckBox Content="{Binding Texts[Fight.DrGrandet]}" IsChecked="{Binding IsDrGrandet}" />
           <controls:TooltipHint Grid.Column="1"
                                 Margin="{DynamicResource MAA.Thickness.MarginLeftSmall}"
@@ -162,7 +193,9 @@
         </ComboBox>
 
         <CheckBox Content="{Binding Texts[Fight.UseAlternateStage]}" IsChecked="{Binding UseAlternateStage}" />
-        <CheckBox Content="{Binding Texts[Fight.HideUnavailableStage]}" IsChecked="{Binding HideUnavailableStage}" />
+        <CheckBox Content="{Binding Texts[Fight.HideUnavailableStage]}"
+                  IsChecked="{Binding HideUnavailableStage}"
+                  IsEnabled="{Binding IsHideUnavailableStageEnabled}" />
       </StackPanel>
 
       <TextBlock Text="{Binding StatusMessage}" />

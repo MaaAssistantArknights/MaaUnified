@@ -228,32 +228,6 @@ public sealed class SettingsModuleAK2FeatureTests
     }
 
     [Fact]
-    public async Task ShowSoftwareUpdateNotImplementedAsync_ShouldUseLocalizedDialogTexts()
-    {
-        await using var fixture = await RuntimeFixture.CreateAsync();
-        var dialogService = new ScriptedDialogService(DialogReturnSemantic.Cancel);
-        var vm = new SettingsPageViewModel(
-            fixture.Runtime,
-            new ConnectionGameSharedStateViewModel(),
-            dialogService: dialogService);
-        await vm.InitializeAsync();
-
-        vm.Language = "ko-kr";
-
-        await vm.ShowSoftwareUpdateNotImplementedAsync();
-
-        var request = Assert.Single(dialogService.WarningConfirmRequests);
-        Assert.Equal("ko-kr", request.Language);
-        Assert.Equal(vm.RootTexts["Settings.VersionUpdate.SoftwarePlaceholder.Title"], request.Title);
-        Assert.Equal(vm.RootTexts["Settings.VersionUpdate.SoftwarePlaceholder.Message"], request.Message);
-        Assert.Equal(vm.RootTexts["Settings.VersionUpdate.SoftwarePlaceholder.Confirm"], request.ConfirmText);
-        Assert.Equal(vm.RootTexts["Settings.VersionUpdate.SoftwarePlaceholder.Cancel"], request.CancelText);
-        Assert.Equal(
-            vm.RootTexts["Settings.VersionUpdate.SoftwarePlaceholder.Status"],
-            vm.VersionUpdateStatusMessage);
-    }
-
-    [Fact]
     public async Task SaveStartPerformanceSettings_GpuRestartRequest_ShouldKeepExistingPayloadLanguage_AfterLanguageSwitch()
     {
         await using var fixture = await RuntimeFixture.CreateAsync(gpuCapabilityService: new ScriptedWindowsGpuCapabilityService());

@@ -3027,6 +3027,12 @@ With save file: farm points through crafting (advanced).
   <data name="Settings.IssueReport.OpenRuntimeLogWindow" xml:space="preserve">
     <value>Open runtime log window</value>
   </data>
+  <data name="Settings.IssueReport.CheckUpdateBeforeReportingIssue" xml:space="preserve">
+    <value>Please upgrade first and test if the issue persists in the new version. Confirm it's not a common issue before reporting.</value>
+  </data>
+  <data name="Settings.IssueReport.CheckHelpBeforeReportingIssue" xml:space="preserve">
+    <value>Please check the ｢{key=Help}｣ before reporting any issues.</value>
+  </data>
   <data name="Settings.IssueReport.PreflightNote" xml:space="preserve">
     <value>Read the FAQ before submitting feedback. Attaching the log archive helps with troubleshooting.</value>
   </data>
@@ -3555,6 +3561,36 @@ With save file: farm points through crafting (advanced).
   <data name="Settings.VersionUpdate.StartupCheck" xml:space="preserve">
     <value>Check for updates at startup</value>
   </data>
+  <data name="Settings.VersionUpdate.Activity.CheckingSoftware" xml:space="preserve">
+    <value>Checking for software updates...</value>
+  </data>
+  <data name="Settings.VersionUpdate.Activity.CheckingResource" xml:space="preserve">
+    <value>Checking for resource updates...</value>
+  </data>
+  <data name="Settings.VersionUpdate.Activity.ResourceDownloadingGlobalSource" xml:space="preserve">
+    <value>Downloading from GlobalSource...</value>
+  </data>
+  <data name="Settings.VersionUpdate.Activity.ResourceDownloadingMirrorChyan" xml:space="preserve">
+    <value>Downloading from MirrorChyan...</value>
+  </data>
+  <data name="Settings.VersionUpdate.Activity.ResourcePreparing" xml:space="preserve">
+    <value>Indexing in progress</value>
+  </data>
+  <data name="Settings.VersionUpdate.Activity.ResourceUpdated" xml:space="preserve">
+    <value>Game resources updated.</value>
+  </data>
+  <data name="Settings.VersionUpdate.Activity.ResourceUpdating" xml:space="preserve">
+    <value>Game resources are being updated.</value>
+  </data>
+  <data name="Settings.VersionUpdate.Activity.ResourceUpdatingMirrorChyan" xml:space="preserve">
+    <value>Updating resource {0} from MirrorChyan...</value>
+  </data>
+  <data name="Settings.VersionUpdate.Activity.SoftwarePackageDownloaded" xml:space="preserve">
+    <value>Software update package downloaded.</value>
+  </data>
+  <data name="Settings.VersionUpdate.Activity.SoftwarePackageDownloading" xml:space="preserve">
+    <value>Downloading software update package...</value>
+  </data>
   <data name="Settings.VersionUpdate.Status.CheckFailed" xml:space="preserve">
     <value>Update check failed.</value>
   </data>
@@ -3566,6 +3602,9 @@ With save file: farm points through crafting (advanced).
   </data>
   <data name="Settings.VersionUpdate.Status.DialogConfirmed" xml:space="preserve">
     <value>Version update dialog confirmed.</value>
+  </data>
+  <data name="Settings.VersionUpdate.Status.FirstBootShown" xml:space="preserve">
+    <value>Update notes displayed.</value>
   </data>
   <data name="Settings.VersionUpdate.Status.PackageDownloadFailed" xml:space="preserve">
     <value>Update failed.</value>
@@ -3883,6 +3922,9 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
   </data>
   <data name="TaskQueue.Module.Custom" xml:space="preserve">
     <value>Custom</value>
+  </data>
+  <data name="TaskQueue.Module.UserDataUpdate" xml:space="preserve">
+    <value>Update user data</value>
   </data>
   <data name="TaskQueue.Module.Fight" xml:space="preserve">
     <value>Combat</value>
@@ -4768,10 +4810,10 @@ A backup named avalonia.json.schema-v{0}.bak.&lt;timestamp&gt; will be created b
     <value>OK</value>
   </data>
   <data name="Settings.VersionUpdate.SoftwarePlaceholder.Message" xml:space="preserve">
-    <value>Software update is not available in MAA Unified yet. Please use the WPF version for software updates.</value>
+    <value>Software update is available. Go to Settings &gt; Version Update to check, download, and apply updates.</value>
   </data>
   <data name="Settings.VersionUpdate.SoftwarePlaceholder.Status" xml:space="preserve">
-    <value>Software update is not available in MAA Unified yet.</value>
+    <value>Software update is available.</value>
   </data>
   <data name="Settings.VersionUpdate.SoftwarePlaceholder.Title" xml:space="preserve">
     <value>Software Update</value>

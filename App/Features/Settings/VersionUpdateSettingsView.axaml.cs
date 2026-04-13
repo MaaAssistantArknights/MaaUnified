@@ -18,7 +18,7 @@ public partial class VersionUpdateSettingsView : UserControl
     {
         if (VM is not null)
         {
-            await VM.CheckVersionUpdateWithDialogAsync();
+            await VM.CheckVersionUpdateAsync();
         }
     }
 
