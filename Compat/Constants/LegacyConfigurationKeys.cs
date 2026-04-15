@@ -32,6 +32,7 @@ public static class ConfigurationKeys
     public const string OperNameLanguage = "GUI.OperNameLanguage";
     public const string UseTray = "GUI.UseTray";
     public const string MinimizeToTray = "GUI.MinimizeToTray";
+    public const string UseNotify = "GUI.UseNotify";
     public const string HideCloseButton = "GUI.HideCloseButton";
     public const string WindowTitleScrollable = "GUI.WindowTitleScrollable";
     public const string IgnoreBadModulesAndUseSoftwareRendering = "GUI.IgnoreBadModulesAndUseSoftwareRendering";

@@ -146,6 +146,17 @@ public sealed partial class SettingsPageViewModel
 
     public async Task ManualUpdateResourceAsync(CancellationToken cancellationToken = default)
     {
+        if (string.Equals(VersionUpdateResourceSource, "MirrorChyan", StringComparison.OrdinalIgnoreCase)
+            && string.IsNullOrWhiteSpace(VersionUpdateMirrorChyanCdk))
+        {
+            ClearVersionUpdateActivityMessage();
+            VersionUpdateStatusMessage = LocalizeSettingsText(
+                "Settings.VersionUpdate.Status.MirrorChyanCdkRequired",
+                "请前往 设置 > Version Update 配置 Mirror酱 CDK 或切换更新源。");
+            VersionUpdateErrorMessage = string.Empty;
+            return;
+        }
+
         await RunResourceUpdateInternalAsync(
             "Settings.VersionUpdate.Resource.Manual",
             autoApplyUpdate: true,
@@ -212,6 +223,7 @@ public sealed partial class SettingsPageViewModel
             if (availability is null)
             {
                 ClearVersionUpdateActivityMessage();
+                SetPendingResourceUpdateState(null);
                 VersionUpdateErrorMessage = checkOperation.Message;
                 VersionUpdateStatusMessage = RootTexts.GetOrDefault(
                     "Settings.VersionUpdate.Status.ResourceUpdateFailed",
@@ -219,7 +231,7 @@ public sealed partial class SettingsPageViewModel
                 return;
             }
 
-            SetPendingResourceUpdateAvailability(availability.IsUpdateAvailable);
+            SetPendingResourceUpdateState(availability);
             if (!availability.IsUpdateAvailable)
             {
                 ClearVersionUpdateActivityMessage();
@@ -234,7 +246,9 @@ public sealed partial class SettingsPageViewModel
             {
                 ClearVersionUpdateActivityMessage();
                 VersionUpdateStatusMessage = checkOperation.Message;
-                VersionUpdateErrorMessage = "MirrorChyan source requires a CDK.";
+                VersionUpdateErrorMessage = LocalizeSettingsText(
+                    "Settings.VersionUpdate.Status.MirrorChyanCdkRequired",
+                    "请前往 设置 > Version Update 配置 Mirror酱 CDK 或切换更新源。");
                 return;
             }
 
@@ -771,7 +785,7 @@ public sealed partial class SettingsPageViewModel
         await ReloadUpdatedResourcesAsync(cancellationToken);
         VersionUpdateStatusMessage = payload;
         VersionUpdateErrorMessage = string.Empty;
-        SetPendingResourceUpdateAvailability(false);
+        SetPendingResourceUpdateState(null);
         await RefreshVersionUpdateResourceInfoAsync(cancellationToken);
         ResourceVersionUpdated?.Invoke(this, EventArgs.Empty);
         return true;
@@ -941,15 +955,45 @@ public sealed partial class SettingsPageViewModel
         UpdateAvailabilityChanged?.Invoke(this, EventArgs.Empty);
     }
 
-    private void SetPendingResourceUpdateAvailability(bool available)
+    private void SetPendingResourceUpdateState(ResourceUpdateCheckResult? availability)
     {
-        if (_hasPendingResourceUpdateAvailability == available)
+        var available = availability?.IsUpdateAvailable == true;
+        var displayVersion = available ? availability!.DisplayVersion ?? string.Empty : string.Empty;
+        var releaseNote = available ? availability!.ReleaseNote ?? string.Empty : string.Empty;
+        var versionTimestamp = available ? availability!.VersionTimestamp : null;
+        var changed = false;
+
+        if (_hasPendingResourceUpdateAvailability != available)
+        {
+            _hasPendingResourceUpdateAvailability = available;
+            OnPropertyChanged(nameof(HasPendingResourceUpdateAvailability));
+            changed = true;
+        }
+
+        if (!string.Equals(_pendingResourceUpdateDisplayVersion, displayVersion, StringComparison.Ordinal))
+        {
+            _pendingResourceUpdateDisplayVersion = displayVersion;
+            changed = true;
+        }
+
+        if (!string.Equals(_pendingResourceUpdateReleaseNote, releaseNote, StringComparison.Ordinal))
+        {
+            _pendingResourceUpdateReleaseNote = releaseNote;
+            changed = true;
+        }
+
+        if (_pendingResourceUpdateVersionTimestamp != versionTimestamp)
+        {
+            _pendingResourceUpdateVersionTimestamp = versionTimestamp;
+            changed = true;
+        }
+
+        if (!changed)
         {
             return;
         }
 
-        _hasPendingResourceUpdateAvailability = available;
-        OnPropertyChanged(nameof(HasPendingResourceUpdateAvailability));
+        OnPropertyChanged(nameof(PendingResourceUpdateSummary));
         UpdateAvailabilityChanged?.Invoke(this, EventArgs.Empty);
     }
 

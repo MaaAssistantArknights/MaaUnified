@@ -249,6 +249,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
     private string _operNameLanguage = DefaultOperNameLanguage;
     private string _inverseClearMode = DefaultInverseClearMode;
     private bool _useTray = true;
+    private bool _useNotify = true;
     private bool _minimizeToTray;
     private bool _windowTitleScrollable;
     private bool _useSoftwareRendering;
@@ -371,6 +372,9 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
     private string _versionUpdateErrorMessage = string.Empty;
     private bool _hasPendingVersionUpdateAvailability;
     private bool _hasPendingResourceUpdateAvailability;
+    private string _pendingResourceUpdateDisplayVersion = string.Empty;
+    private string _pendingResourceUpdateReleaseNote = string.Empty;
+    private DateTimeOffset? _pendingResourceUpdateVersionTimestamp;
     private IReadOnlyList<DisplayValueOption> _themeOptions = [];
     private IReadOnlyList<DisplayValueOption> _supportedLanguages = [];
     private IReadOnlyList<DisplayValueOption> _backgroundStretchModes = [];
@@ -780,6 +784,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
                     RefreshAchievementUiState();
                     UpdateAchievementPolicySummary(new AchievementPolicy(AchievementPopupDisabled, AchievementPopupAutoClose));
                     OnPropertyChanged(nameof(VersionUpdateMirrorChyanCdkExpiryText));
+                    OnPropertyChanged(nameof(PendingResourceUpdateSummary));
                     MarkGuiSettingsDirty();
                     NotifyGuiSettingsPreviewChanged();
                     RefreshRightPaneLocalization();
@@ -869,6 +874,19 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         {
             var normalized = UseTray && value;
             if (SetProperty(ref _minimizeToTray, normalized))
+            {
+                MarkGuiSettingsDirty();
+                NotifyGuiSettingsPreviewChanged();
+            }
+        }
+    }
+
+    public bool UseNotify
+    {
+        get => _useNotify;
+        set
+        {
+            if (SetProperty(ref _useNotify, value))
             {
                 MarkGuiSettingsDirty();
                 NotifyGuiSettingsPreviewChanged();
@@ -2059,6 +2077,8 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
 
     public bool HasPendingResourceUpdateAvailability => _hasPendingResourceUpdateAvailability;
 
+    public string PendingResourceUpdateSummary => BuildPendingResourceUpdateSummary();
+
     public bool HasIssueReportUpdateAvailability =>
         HasPendingVersionUpdateAvailability || HasPendingResourceUpdateAvailability;
 
@@ -2116,6 +2136,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
             if (SetProperty(ref _isVersionUpdateActionRunning, value))
             {
                 OnPropertyChanged(nameof(CanRunVersionUpdateActions));
+                UpdateAvailabilityChanged?.Invoke(this, EventArgs.Empty);
             }
         }
     }
@@ -3824,7 +3845,10 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
                     DialogTextCatalog.Select(language, "搜索成就", "Filter achievements"));
                 return new DialogChromeSnapshot(
                     title: AchievementTextCatalog.GetString("AchievementList", language, "成就列表"),
-                    confirmText: DialogTextCatalog.WarningDialogConfirmButton(language),
+                    confirmText: GetSettingsTextForLanguage(
+                        language,
+                        "Settings.Action.Close",
+                        DialogTextCatalog.ErrorDialogCloseButton(language)),
                     cancelText: DialogTextCatalog.WarningDialogCancelButton(language),
                     namedTexts: DialogTextCatalog.CreateNamedTexts(
                         (DialogTextCatalog.ChromeKeys.FilterWatermark, filterWatermark)));
@@ -3834,13 +3858,17 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
             Title: chromeSnapshot.Title,
             Items: snapshot.Items,
             InitialFilter: string.Empty,
-            ConfirmText: chromeSnapshot.ConfirmText ?? DialogTextCatalog.WarningDialogConfirmButton(Language),
+            ConfirmText: chromeSnapshot.ConfirmText ?? RootTexts.GetOrDefault(
+                "Settings.Action.Close",
+                DialogTextCatalog.ErrorDialogCloseButton(Language)),
             CancelText: chromeSnapshot.CancelText ?? DialogTextCatalog.WarningDialogCancelButton(Language),
             FilterWatermark: chromeSnapshot.GetNamedTextOrDefault(
                 DialogTextCatalog.ChromeKeys.FilterWatermark,
                 RootTexts.GetOrDefault(
                     "Settings.Achievement.Dialog.FilterWatermark",
                     DialogTextCatalog.Select(Language, "搜索成就", "Filter achievements"))),
+            UnlockedCount: snapshot.UnlockedCount,
+            TotalCount: snapshot.TotalCount,
             Chrome: chrome);
         var dialogResult = await _dialogService.ShowAchievementListAsync(request, "Settings.Achievement.Dialog", cancellationToken);
         AchievementStatusMessage = dialogResult.Return switch
@@ -5769,6 +5797,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         return new GuiSettingsSnapshot(
             Theme: NormalizeTheme(Theme),
             UseTray: UseTray,
+            UseNotify: UseNotify,
             MinimizeToTray: UseTray && MinimizeToTray,
             WindowTitleScrollable: WindowTitleScrollable,
             UseSoftwareRendering: UseSoftwareRendering,
@@ -5790,6 +5819,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         {
             Theme = snapshot.Theme;
             UseTray = snapshot.UseTray;
+            UseNotify = snapshot.UseNotify;
             MinimizeToTray = snapshot.MinimizeToTray;
             WindowTitleScrollable = snapshot.WindowTitleScrollable;
             UseSoftwareRendering = snapshot.UseSoftwareRendering;
@@ -6348,6 +6378,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
                 _suppressPageAutoSave = previousSuppress;
             }
             UseTray = ReadGlobalBool(config, ConfigurationKeys.UseTray, true);
+            UseNotify = ReadGlobalBool(config, ConfigurationKeys.UseNotify, true);
             MinimizeToTray = ReadGlobalBool(config, ConfigurationKeys.MinimizeToTray, false);
             WindowTitleScrollable = ReadGlobalBool(config, ConfigurationKeys.WindowTitleScrollable, false);
             UseSoftwareRendering = rawUseSoftwareRendering;
@@ -6398,13 +6429,13 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         {
             ApplyVersionUpdatePolicy(versionPolicyResult.Value);
             SyncVersionUpdateAvailabilityFromState();
-            SetPendingResourceUpdateAvailability(false);
+            SetPendingResourceUpdateState(null);
             VersionUpdateErrorMessage = string.Empty;
         }
         else
         {
             SetPendingVersionUpdateAvailability(false);
-            SetPendingResourceUpdateAvailability(false);
+            SetPendingResourceUpdateState(null);
             VersionUpdateErrorMessage = versionPolicyResult.Message;
         }
 
@@ -7779,6 +7810,57 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         return string.IsNullOrWhiteSpace(key) ? string.Empty : RootTexts[key];
     }
 
+    private string BuildPendingResourceUpdateSummary()
+    {
+        if (!_hasPendingResourceUpdateAvailability)
+        {
+            return string.Empty;
+        }
+
+        var versionLabel = BuildPendingResourceUpdateVersionLabel();
+        if (string.IsNullOrWhiteSpace(versionLabel))
+        {
+            return RootTexts.GetOrDefault(
+                "Main.Update.ResourceAvailable",
+                "资源更新可用，点击检查资源");
+        }
+
+        var template = RootTexts.GetOrDefault(
+            "Main.Update.ResourceDetected",
+            "检测到资源更新: {0}");
+        return string.Format(CultureInfo.CurrentCulture, template, versionLabel);
+    }
+
+    private string BuildPendingResourceUpdateVersionLabel()
+    {
+        var releaseNote = _pendingResourceUpdateReleaseNote.Trim();
+        if (_pendingResourceUpdateVersionTimestamp is DateTimeOffset timestamp
+            && !string.IsNullOrWhiteSpace(releaseNote))
+        {
+            return FormatPendingResourceVersionLabel(releaseNote, timestamp);
+        }
+
+        if (!string.IsNullOrWhiteSpace(releaseNote))
+        {
+            return releaseNote;
+        }
+
+        return _pendingResourceUpdateDisplayVersion.Trim();
+    }
+
+    private string FormatPendingResourceVersionLabel(string releaseNote, DateTimeOffset timestamp)
+    {
+        var localTimestamp = timestamp.ToLocalTime();
+        return UiLanguageCatalog.Normalize(Language) switch
+        {
+            "zh-cn" or "zh-tw" => $"{releaseNote}{localTimestamp:MMdd}",
+            "en-us" => $"{localTimestamp:dd/MM} {releaseNote}",
+            _ => $"{localTimestamp.ToString(
+                CultureInfo.CurrentCulture.DateTimeFormat.ShortDatePattern.Replace("yyyy", string.Empty).Trim('/', '.'),
+                CultureInfo.CurrentCulture)} {releaseNote}",
+        };
+    }
+
     private void ApplyGpuProbeFailureState(Exception exception)
     {
         Runtime.LogService.Error($"GPU capability probe failed: {exception}");
@@ -8394,6 +8476,7 @@ internal enum ConfigValuePreference
 public sealed record GuiSettingsSnapshot(
     string Theme,
     bool UseTray,
+    bool UseNotify,
     bool MinimizeToTray,
     bool WindowTitleScrollable,
     bool UseSoftwareRendering,
@@ -8412,6 +8495,7 @@ public sealed record GuiSettingsSnapshot(
         {
             ["Theme.Mode"] = Theme,
             [ConfigurationKeys.UseTray] = UseTray.ToString(),
+            [ConfigurationKeys.UseNotify] = UseNotify.ToString(),
             [ConfigurationKeys.MinimizeToTray] = MinimizeToTray.ToString(),
             [ConfigurationKeys.WindowTitleScrollable] = WindowTitleScrollable.ToString(),
             [ConfigurationKeys.IgnoreBadModulesAndUseSoftwareRendering] = UseSoftwareRendering.ToString(),

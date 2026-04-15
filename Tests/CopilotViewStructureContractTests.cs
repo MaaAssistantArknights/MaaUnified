@@ -25,18 +25,15 @@ public sealed class CopilotViewStructureContractTests
     }
 
     [Fact]
-    public void CopilotView_ShouldUseSharedOverlayContracts()
+    public void CopilotView_ShouldNotEmbedOverlayButton_WhenWindowHostsSharedOverlayEntry()
     {
         var root = GetMaaUnifiedRoot();
         var xaml = File.ReadAllText(Path.Combine(root, "App", "Features", "Advanced", "CopilotView.axaml"));
 
-        Assert.Contains("Click=\"OnToggleOverlayClick\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("PointerPressed=\"OnOverlayButtonPointerPressed\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("ToolTip.Tip=\"{Binding DataContext.TaskQueuePage.OverlayButtonToolTip, RelativeSource={RelativeSource AncestorType=Window}}\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Text=\"{Binding DataContext.TaskQueuePage.RootTexts[TaskQueue.Root.OverlayButton], RelativeSource={RelativeSource AncestorType=Window}}\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("DataContext.TaskQueuePage.IsOverlayPreviewMode", xaml, StringComparison.Ordinal);
-        Assert.Contains("DataContext.TaskQueuePage.IsOverlayNativeMode", xaml, StringComparison.Ordinal);
-        Assert.Contains("DataContext.TaskQueuePage.IsOverlayHiddenMode", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Click=\"OnToggleOverlayClick\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("PointerPressed=\"OnOverlayButtonPointerPressed\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("DataContext.TaskQueuePage.OverlayButtonToolTip", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("TaskQueue.Root.OverlayButton", xaml, StringComparison.Ordinal);
     }
 
     [Fact]

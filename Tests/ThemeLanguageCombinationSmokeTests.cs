@@ -25,10 +25,10 @@ public sealed class ThemeLanguageCombinationSmokeTests
         var root = GetMaaUnifiedRoot();
         var checks = new[]
         {
-            new ViewStructureCheck("App/Views/MainWindow.axaml", "<TabStrip", "Classes=\"root-nav\"", "Title=\"{Binding WindowTitle}\""),
+            new ViewStructureCheck("App/Views/MainWindow.axaml", "<TabStrip", "Classes=\"root-nav\"", "Title=\"{Binding WindowTitle}\"", "OnWindowOverlayToggleClick", "OnWindowOverlayButtonPointerPressed", "ShowWindowOverlayButton"),
             new ViewStructureCheck("App/Views/RuntimeLogWindow.axaml", "ItemsSource=\"{Binding GrowlMessages}\"", "ItemsSource=\"{Binding RootLogs}\"", "Text=\"{Binding CapabilitySummary}\""),
-            new ViewStructureCheck("App/Features/Root/TaskQueueView.axaml", "<ListBox", "<ScrollViewer", "TaskSettingsHost", "OnToggleOverlayClick", "OverlayButtonToolTip"),
-            new ViewStructureCheck("App/Features/Advanced/CopilotView.axaml", "OnToggleOverlayClick", "OnOverlayButtonPointerPressed", "DataContext.TaskQueuePage.OverlayButtonToolTip"),
+            new ViewStructureCheck("App/Features/Root/TaskQueueView.axaml", "<ListBox", "<ScrollViewer", "TaskSettingsHost"),
+            new ViewStructureCheck("App/Features/Advanced/CopilotView.axaml", "StatusMessage", "ItemsSource=\"{Binding Logs}\""),
             new ViewStructureCheck("App/Features/Root/SettingsView.axaml", "<ListBox", "SectionScrollViewer", "SectionContentPanel", "ScrollChanged=\"OnSectionScrollChanged\"", "SectionConfigurationManager", "SectionAbout"),
         };
 

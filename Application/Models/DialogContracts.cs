@@ -197,6 +197,8 @@ public sealed record AchievementListDialogRequest(
     string ConfirmText = "Confirm",
     string CancelText = "Cancel",
     string FilterWatermark = "Filter",
+    int UnlockedCount = 0,
+    int TotalCount = 0,
     DialogChromeCatalog? Chrome = null);
 
 public sealed record AchievementListDialogPayload(

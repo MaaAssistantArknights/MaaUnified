@@ -1,74 +1,253 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:MAAUnified.App.Features.Dialogs"
         x:Class="MAAUnified.App.Features.Dialogs.AchievementListDialogView"
-        Width="760"
-        Height="520"
-        MinWidth="640"
-        MinHeight="420"
+        Width="980"
+        Height="820"
+        MinWidth="840"
+        MinHeight="620"
+        CanResize="True"
+        Background="Transparent"
+        SystemDecorations="None"
         WindowStartupLocation="CenterOwner">
-  <Grid Margin="10" RowDefinitions="Auto,Auto,*,Auto">
-    <TextBlock x:Name="DialogTitleText"
-               Classes="section-title"
-               Text="Achievement List" />
-    <TextBox x:Name="FilterInput"
-             Grid.Row="1"
-             Margin="0,8,0,0"
-             Watermark="Filter"
-             TextChanged="OnFilterChanged" />
-    <ListBox x:Name="AchievementList"
-             Grid.Row="2"
-             Margin="0,8,0,0"
-             SelectionMode="Multiple">
-      <ListBox.ItemTemplate>
-        <DataTemplate>
-          <Border Margin="0,0,0,8"
-                  Padding="10"
-                  CornerRadius="10"
-                  Background="#14000000"
-                  BorderBrush="#22000000"
-                  BorderThickness="1">
-            <Grid ColumnDefinitions="Auto,*">
-              <Border Width="42"
-                      Height="42"
-                      Margin="0,4,10,0"
-                      CornerRadius="21"
-                      Background="{Binding MedalColor}"
-                      VerticalAlignment="Top" />
-              <StackPanel Grid.Column="1" Spacing="4">
-                <StackPanel Orientation="Horizontal" Spacing="6">
-                  <TextBlock FontWeight="SemiBold" Text="{Binding Title}" />
-                  <TextBlock Text="{Binding NewBadgeText}"
-                             FontWeight="Bold"
-                             Foreground="#D96C0D"
-                             IsVisible="{Binding IsNewUnlock}" />
-                </StackPanel>
-                <TextBlock Classes="long-wrap" Opacity="0.9" Text="{Binding Description}" />
-                <TextBlock Classes="long-wrap subtle" Text="{Binding Conditions}" />
-                <ProgressBar Minimum="0"
-                             Maximum="{Binding Target}"
-                             Value="{Binding Progress}"
-                             IsVisible="{Binding ShowProgress}"
-                             Height="10"
-                             Width="220" />
-                <TextBlock Text="{Binding ProgressText}"
-                           IsVisible="{Binding ShowProgress}" />
-                <TextBlock Opacity="0.72" Text="{Binding Status}" />
-                <TextBlock Text="{Binding UnlockedAtText}"
-                           Foreground="{Binding MedalColor}"
-                           IsVisible="{Binding IsUnlocked}" />
-              </StackPanel>
-            </Grid>
+  <Grid>
+    <Border Margin="12"
+            Classes="modern-dialog-shell">
+      <Border.Effect>
+        <DropShadowDirectionEffect BlurRadius="24"
+                                   ShadowDepth="6"
+                                   Opacity="0.18"
+                                   Color="Black" />
+      </Border.Effect>
+      <Grid RowDefinitions="Auto,Auto,*">
+        <Grid ColumnDefinitions="*,Auto">
+          <Border Background="Transparent"
+                  PointerPressed="OnDragHeaderPointerPressed">
+            <StackPanel Spacing="6">
+              <TextBlock x:Name="DialogTitleText"
+                         Classes="modern-dialog-title"
+                         Text="Achievement List" />
+              <TextBlock x:Name="OverviewText"
+                         Classes="modern-dialog-subtitle"
+                         Text="Unlocked 0 / 0" />
+            </StackPanel>
           </Border>
-        </DataTemplate>
-      </ListBox.ItemTemplate>
-    </ListBox>
-    <StackPanel Grid.Row="3"
-                Orientation="Horizontal"
-                Spacing="8"
-                HorizontalAlignment="Right"
-                Margin="0,12,0,0">
-      <Button Classes="wpf-button wpf-button-secondary" x:Name="CancelButton" Content="Cancel" Click="OnCancelClick" />
-      <Button x:Name="ConfirmButton" Classes="wpf-button" Content="Confirm" Click="OnConfirmClick" />
-    </StackPanel>
+          <Button Grid.Column="1"
+                  Classes="modern-dialog-close"
+                  HorizontalAlignment="Right"
+                  VerticalAlignment="Top"
+                  Content="✕"
+                  Click="OnCloseClick" />
+        </Grid>
+
+        <Border Grid.Row="1"
+                Margin="0,18,0,0"
+                Classes="modern-dialog-section">
+          <StackPanel Spacing="12">
+            <TextBox x:Name="FilterInput"
+                     Watermark="Filter"
+                     TextChanged="OnFilterChanged" />
+            <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,*,Auto">
+              <Button x:Name="FilterAllButton"
+                      Margin="0,0,8,0"
+                      Classes="modern-dialog-chip"
+                      Tag="All"
+                      Click="OnFilterChipClick" />
+              <Button x:Name="FilterUnlockedButton"
+                      Grid.Column="1"
+                      Margin="0,0,8,0"
+                      Classes="modern-dialog-chip"
+                      Tag="Unlocked"
+                      Click="OnFilterChipClick" />
+              <Button x:Name="FilterInProgressButton"
+                      Grid.Column="2"
+                      Margin="0,0,8,0"
+                      Classes="modern-dialog-chip"
+                      Tag="InProgress"
+                      Click="OnFilterChipClick" />
+              <Button x:Name="FilterNewButton"
+                      Grid.Column="3"
+                      Classes="modern-dialog-chip"
+                      Tag="NewUnlock"
+                      Click="OnFilterChipClick" />
+              <TextBlock x:Name="ResultCountText"
+                         Grid.Column="4"
+                         Margin="14,0,0,0"
+                         VerticalAlignment="Center"
+                         Classes="modern-dialog-caption"
+                         Text="Showing 0 achievements" />
+              <Button x:Name="ClearFiltersButton"
+                      Grid.Column="5"
+                      Classes="wpf-button wpf-button-subtle compact"
+                      Click="OnClearFiltersClick" />
+            </Grid>
+          </StackPanel>
+        </Border>
+
+        <Grid Grid.Row="2"
+              Margin="0,18,0,0">
+          <ListBox x:Name="AchievementItems"
+                   Classes="achievement-dialog-list"
+                   SelectionMode="Single"
+                   ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+            <ListBox.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <VirtualizingStackPanel />
+                </ItemsPanelTemplate>
+            </ListBox.ItemsPanel>
+            <ListBox.ItemTemplate>
+              <DataTemplate x:DataType="local:AchievementListDisplayItem"
+                            x:CompileBindings="True">
+                <Border Margin="0,0,0,12"
+                        Classes="modern-dialog-card">
+                  <Grid ColumnDefinitions="6,Auto,*">
+                    <Border Background="{Binding MedalColor}" />
+                    <Border Grid.Column="1"
+                            Margin="14,12,12,0"
+                            VerticalAlignment="Top"
+                            Classes="achievement-dialog-medal-shell">
+                      <Border Classes="achievement-dialog-medal-core"
+                              Background="{Binding MedalColor}">
+                        <TextBlock Classes="achievement-dialog-medal-glyph"
+                                   Text="★" />
+                      </Border>
+                    </Border>
+                    <StackPanel Grid.Column="2"
+                                Margin="0,12,14,12"
+                                Spacing="6">
+                      <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Classes="achievement-dialog-card-title"
+                                   Text="{Binding Title}" />
+                        <Border Grid.Column="1"
+                                Margin="8,0,0,0"
+                                VerticalAlignment="Top"
+                                Classes="achievement-dialog-new-badge"
+                                IsVisible="{Binding IsNewUnlock}">
+                          <TextBlock Classes="achievement-dialog-new-badge-text"
+                                     Text="{Binding NewBadgeText}" />
+                        </Border>
+                      </Grid>
+                      <Border Classes="achievement-dialog-status-badge">
+                        <TextBlock Classes="achievement-dialog-status-badge-text"
+                                   Text="{Binding Status}" />
+                      </Border>
+                      <TextBlock Classes="achievement-dialog-card-description"
+                                 Text="{Binding Description}" />
+                      <Border Classes="modern-dialog-section"
+                              Padding="10,8"
+                              IsVisible="{Binding HasConditions}">
+                        <TextBlock Classes="achievement-dialog-card-conditions"
+                                   Text="{Binding Conditions}" />
+                      </Border>
+                      <StackPanel Spacing="4"
+                                  IsVisible="{Binding ShowProgress}">
+                        <ProgressBar Minimum="0"
+                                     Maximum="{Binding Target}"
+                                     Value="{Binding ProgressValue}"
+                                     Height="8" />
+                        <TextBlock Classes="modern-dialog-caption"
+                                   Text="{Binding ProgressText}" />
+                      </StackPanel>
+                      <TextBlock Classes="achievement-dialog-unlocked-at"
+                                 Foreground="{Binding MedalColor}"
+                                 Text="{Binding UnlockedAtText}"
+                                 IsVisible="{Binding HasUnlockedAtText}" />
+                    </StackPanel>
+                  </Grid>
+                </Border>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+
+          <Border x:Name="EmptyStatePanel"
+                  HorizontalAlignment="Stretch"
+                  VerticalAlignment="Center"
+                  Classes="modern-dialog-section">
+            <StackPanel HorizontalAlignment="Center"
+                        Spacing="8">
+              <TextBlock x:Name="EmptyStateTitleText"
+                         HorizontalAlignment="Center"
+                         Classes="modern-dialog-title"
+                         Text="No matching achievements" />
+              <TextBlock x:Name="EmptyStateDescriptionText"
+                         MaxWidth="360"
+                         HorizontalAlignment="Center"
+                         TextAlignment="Center"
+                         Classes="modern-dialog-subtitle"
+                         Text="Try a different keyword or filter." />
+            </StackPanel>
+          </Border>
+        </Grid>
+      </Grid>
+    </Border>
+
+    <Border Height="14"
+            Margin="12,12,12,0"
+            HorizontalAlignment="Stretch"
+            VerticalAlignment="Top"
+            Background="Transparent"
+            ZIndex="10"
+            Tag="North"
+            PointerPressed="OnResizeGripPointerPressed" />
+    <Border Height="14"
+            Margin="12,0,12,12"
+            HorizontalAlignment="Stretch"
+            VerticalAlignment="Bottom"
+            Background="Transparent"
+            ZIndex="10"
+            Tag="South"
+            PointerPressed="OnResizeGripPointerPressed" />
+    <Border Width="14"
+            Margin="12,12,0,12"
+            HorizontalAlignment="Left"
+            VerticalAlignment="Stretch"
+            Background="Transparent"
+            ZIndex="10"
+            Tag="West"
+            PointerPressed="OnResizeGripPointerPressed" />
+    <Border Width="14"
+            Margin="0,12,12,12"
+            HorizontalAlignment="Right"
+            VerticalAlignment="Stretch"
+            Background="Transparent"
+            ZIndex="10"
+            Tag="East"
+            PointerPressed="OnResizeGripPointerPressed" />
+    <Border Width="24"
+            Height="24"
+            Margin="12"
+            HorizontalAlignment="Left"
+            VerticalAlignment="Top"
+            Background="Transparent"
+            ZIndex="11"
+            Tag="NorthWest"
+            PointerPressed="OnResizeGripPointerPressed" />
+    <Border Width="24"
+            Height="24"
+            Margin="12"
+            HorizontalAlignment="Right"
+            VerticalAlignment="Top"
+            Background="Transparent"
+            ZIndex="11"
+            Tag="NorthEast"
+            PointerPressed="OnResizeGripPointerPressed" />
+    <Border Width="24"
+            Height="24"
+            Margin="12"
+            HorizontalAlignment="Left"
+            VerticalAlignment="Bottom"
+            Background="Transparent"
+            ZIndex="11"
+            Tag="SouthWest"
+            PointerPressed="OnResizeGripPointerPressed" />
+    <Border Width="24"
+            Height="24"
+            Margin="12"
+            HorizontalAlignment="Right"
+            VerticalAlignment="Bottom"
+            Background="Transparent"
+            ZIndex="11"
+            Tag="SouthEast"
+            PointerPressed="OnResizeGripPointerPressed" />
   </Grid>
 </Window>

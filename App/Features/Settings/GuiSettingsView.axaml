@@ -22,14 +22,15 @@
           Classes="settings-form"
           Margin="{DynamicResource MAA.Thickness.Settings.SectionTopMargin}"
           ColumnDefinitions="250,250">
-      <StackPanel Grid.Column="0"
+        <StackPanel Grid.Column="0"
                   Classes="settings-centered-column"
                   Spacing="{DynamicResource MAA.Spacing.Small}">
-        <CheckBox Content="{Binding RootTexts[Settings.GUI.UseTray]}" IsChecked="{Binding UseTray}" />
-        <CheckBox Content="{Binding RootTexts[Settings.GUI.MinimizeToTray]}"
-                  IsChecked="{Binding MinimizeToTray}"
-                  IsVisible="{Binding CanMinimizeToTray}" />
-        <CheckBox Content="{Binding RootTexts[Settings.GUI.WindowTitleScrollable]}" IsChecked="{Binding WindowTitleScrollable}" />
+          <CheckBox Content="{Binding RootTexts[Settings.GUI.UseTray]}" IsChecked="{Binding UseTray}" />
+          <CheckBox Content="{Binding RootTexts[Settings.GUI.MinimizeToTray]}"
+                    IsChecked="{Binding MinimizeToTray}"
+                    IsVisible="{Binding CanMinimizeToTray}" />
+          <CheckBox Content="{Binding RootTexts[Settings.GUI.UseNotify]}" IsChecked="{Binding UseNotify}" />
+          <CheckBox Content="{Binding RootTexts[Settings.GUI.WindowTitleScrollable]}" IsChecked="{Binding WindowTitleScrollable}" />
         <CheckBox Content="{Binding RootTexts[Settings.GUI.UseSoftwareRendering]}" IsChecked="{Binding UseSoftwareRendering}" />
       </StackPanel>
 

@@ -587,6 +587,45 @@ public partial class MainWindow : Window
         await DispatchTrayCommandAsync(TrayCommandId.ToggleOverlay, "window-shell-menu");
     }
 
+    private async void OnWindowOverlayToggleClick(object? sender, RoutedEventArgs e)
+    {
+        if (VM is null)
+        {
+            return;
+        }
+
+        if (VM.IsCopilotRootTabSelected)
+        {
+            await VM.ToggleOverlayFromCopilotAsync();
+            return;
+        }
+
+        await VM.ToggleOverlayFromTaskQueueAsync();
+    }
+
+    private async void OnWindowOverlayButtonPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (VM is null || sender is not Control control)
+        {
+            return;
+        }
+
+        var point = e.GetCurrentPoint(control);
+        if (!point.Properties.IsRightButtonPressed)
+        {
+            return;
+        }
+
+        e.Handled = true;
+        if (VM.IsCopilotRootTabSelected)
+        {
+            await VM.PickOverlayTargetFromCopilotAsync();
+            return;
+        }
+
+        await VM.PickOverlayTargetFromTaskQueueAsync();
+    }
+
     private async void OnRestartClick(object? sender, RoutedEventArgs e)
     {
         await DispatchTrayCommandAsync(TrayCommandId.Restart, "window-shell-menu");
@@ -605,7 +644,32 @@ public partial class MainWindow : Window
         }
 
         e.Handled = true;
-        await VM.SettingsPage.CheckVersionUpdateAsync();
+        var settingsPage = VM.SettingsPage;
+        if (settingsPage.IsVersionUpdateActionRunning)
+        {
+            var runningFeedback = !string.IsNullOrWhiteSpace(settingsPage.VersionUpdateActivityMessage)
+                ? settingsPage.VersionUpdateActivityMessage
+                : VM.RootTexts.GetOrDefault("Settings.VersionUpdate.Activity.Busy", "更新任务正在进行，请稍候。");
+            VM.PushGrowl(runningFeedback);
+            return;
+        }
+
+        var updateTask = settingsPage.CheckVersionUpdateAsync();
+        var immediateFeedback = !string.IsNullOrWhiteSpace(settingsPage.VersionUpdateActivityMessage)
+            ? settingsPage.VersionUpdateActivityMessage
+            : VM.RootTexts.GetOrDefault(
+                "Settings.VersionUpdate.Activity.CheckingSoftware",
+                "正在检查软件更新……");
+        VM.PushGrowl(immediateFeedback);
+
+        await updateTask;
+        var feedback = string.IsNullOrWhiteSpace(settingsPage.VersionUpdateErrorMessage)
+            ? settingsPage.VersionUpdateStatusMessage
+            : settingsPage.VersionUpdateErrorMessage;
+        if (!string.IsNullOrWhiteSpace(feedback))
+        {
+            VM.PushGrowl(feedback);
+        }
     }
 
     private async void OnManualUpdateResourceClick(object? sender, RoutedEventArgs e)
@@ -616,7 +680,32 @@ public partial class MainWindow : Window
         }
 
         e.Handled = true;
-        await VM.SettingsPage.ManualUpdateResourceAsync();
+        var settingsPage = VM.SettingsPage;
+        if (settingsPage.IsVersionUpdateActionRunning)
+        {
+            var runningFeedback = !string.IsNullOrWhiteSpace(settingsPage.VersionUpdateActivityMessage)
+                ? settingsPage.VersionUpdateActivityMessage
+                : VM.RootTexts.GetOrDefault("Settings.VersionUpdate.Activity.Busy", "更新任务正在进行，请稍候。");
+            VM.PushGrowl(runningFeedback);
+            return;
+        }
+
+        var updateTask = settingsPage.ManualUpdateResourceAsync();
+        var immediateFeedback = !string.IsNullOrWhiteSpace(settingsPage.VersionUpdateActivityMessage)
+            ? settingsPage.VersionUpdateActivityMessage
+            : VM.RootTexts.GetOrDefault(
+                "Settings.VersionUpdate.Activity.CheckingResource",
+                "正在检查资源更新……");
+        VM.PushGrowl(immediateFeedback);
+
+        await updateTask;
+        var feedback = string.IsNullOrWhiteSpace(settingsPage.VersionUpdateErrorMessage)
+            ? settingsPage.VersionUpdateStatusMessage
+            : settingsPage.VersionUpdateErrorMessage;
+        if (!string.IsNullOrWhiteSpace(feedback))
+        {
+            VM.PushGrowl(feedback);
+        }
     }
 
     private void OnToggleTopMostClick(object? sender, RoutedEventArgs e)

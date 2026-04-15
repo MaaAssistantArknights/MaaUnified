@@ -228,7 +228,12 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
 
         try
         {
-            PublishUpdateLog($"Checking resource updates. source={normalizedPolicy.ResourceUpdateSource}, client={clientType ?? "<default>"}");
+            PublishUpdateLog(
+                FormatUpdateLogText(
+                    "VersionUpdate.Log.Resource.Checking",
+                    "正在检查资源更新。源={0}，客户端={1}",
+                    normalizedPolicy.ResourceUpdateSource,
+                    clientType ?? "<default>"));
             await TraceVersionUpdateAsync(scope, $"Query begin url={requestUrl}", cancellationToken).ConfigureAwait(false);
             using var response = await ResourceHttpClient.GetAsync(requestUrl, cancellationToken).ConfigureAwait(false);
             var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
@@ -238,7 +243,12 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
                 cancellationToken).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode)
             {
-                PublishUpdateLog($"Resource update check failed with HTTP {(int)response.StatusCode}.", "WARN");
+                PublishUpdateLog(
+                    FormatUpdateLogText(
+                        "VersionUpdate.Log.Resource.CheckFailedHttp",
+                        "资源更新检查失败，HTTP 状态码 {0}。",
+                        (int)response.StatusCode),
+                    "WARN");
                 return UiOperationResult<ResourceUpdateCheckResult>.Fail(
                     UiErrorCode.UiOperationFailed,
                     $"MirrorChyan request failed with status {(int)response.StatusCode}.",
@@ -260,8 +270,13 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
             {
                 PublishUpdateLog(
                     string.IsNullOrWhiteSpace(payload.Message)
-                        ? "Resource update check failed."
-                        : $"Resource update check failed: {payload.Message}",
+                        ? LocalizeUpdateText(
+                            "VersionUpdate.Log.Resource.CheckFailed",
+                            "资源更新检查失败。")
+                        : FormatUpdateLogText(
+                            "VersionUpdate.Log.Resource.CheckFailedWithMessage",
+                            "资源更新检查失败：{0}",
+                            payload.Message),
                     "WARN");
                 return UiOperationResult<ResourceUpdateCheckResult>.Fail(
                     UiErrorCode.VersionUpdateInvalidParameters,
@@ -274,12 +289,15 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
                 && localVersion.LastUpdatedAt != DateTime.MinValue
                 && payload.VersionTimestamp.Value <= localVersion.LastUpdatedAt)
             {
-                PublishUpdateLog("Resources are already up to date.");
+                PublishUpdateLog(LocalizeUpdateText(
+                    "VersionUpdate.Log.Resource.AlreadyLatest",
+                    "资源已是最新版本。"));
                 return UiOperationResult<ResourceUpdateCheckResult>.Ok(
                     new ResourceUpdateCheckResult(
                         IsUpdateAvailable: false,
                         DisplayVersion: string.Empty,
                         ReleaseNote: string.Empty,
+                        VersionTimestamp: payload.VersionTimestamp,
                         RequiresMirrorChyanCdk: false,
                         DownloadUrl: payload.DownloadUrl),
                     "资源已是最新版本。");
@@ -290,13 +308,20 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
             var requiresMirrorChyanCdk = string.IsNullOrWhiteSpace(payload.DownloadUrl);
             PublishUpdateLog(
                 requiresMirrorChyanCdk
-                    ? $"Resource update available: {displayVersion}. MirrorChyan CDK required for direct download."
-                    : $"Resource update available: {displayVersion}.");
+                    ? FormatUpdateLogText(
+                        "VersionUpdate.Log.Resource.AvailableRequiresCdk",
+                        "检测到资源更新：{0}。MirrorChyan 直链下载需要 CDK。",
+                        displayVersion)
+                    : FormatUpdateLogText(
+                        "VersionUpdate.Log.Resource.Available",
+                        "检测到资源更新：{0}。",
+                        displayVersion));
             return UiOperationResult<ResourceUpdateCheckResult>.Ok(
                 new ResourceUpdateCheckResult(
                     IsUpdateAvailable: true,
                     DisplayVersion: displayVersion,
                     ReleaseNote: payload.ReleaseNote,
+                    VersionTimestamp: payload.VersionTimestamp,
                     RequiresMirrorChyanCdk: requiresMirrorChyanCdk,
                     DownloadUrl: payload.DownloadUrl),
                 requiresMirrorChyanCdk
@@ -309,7 +334,12 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
         }
         catch (Exception ex)
         {
-            PublishUpdateLog($"Resource update check failed: {ex.Message}", "ERROR");
+            PublishUpdateLog(
+                FormatUpdateLogText(
+                    "VersionUpdate.Log.Resource.CheckFailedWithMessage",
+                    "资源更新检查失败：{0}",
+                    ex.Message),
+                "ERROR");
             await TraceVersionUpdateErrorAsync(scope, "Resource update check failed.", ex, cancellationToken).ConfigureAwait(false);
             return UiOperationResult<ResourceUpdateCheckResult>.Fail(
                 UiErrorCode.UiOperationFailed,
@@ -337,7 +367,12 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
 
         try
         {
-            PublishUpdateLog($"Checking software updates. channel={normalizedPolicy.VersionType}, current={currentVersion}");
+            PublishUpdateLog(
+                FormatUpdateLogText(
+                    "VersionUpdate.Log.Software.Checking",
+                    "正在检查软件更新。通道={0}，当前版本={1}",
+                    normalizedPolicy.VersionType,
+                    currentVersion));
             var workflowResult = await _appUpdateWorkflowService.CheckForUpdatesAsync(
                 normalizedPolicy,
                 string.IsNullOrWhiteSpace(currentVersion) ? "unknown" : currentVersion.Trim(),
@@ -350,8 +385,13 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
             {
                 PublishUpdateLog(
                     workflowResult.PackageName is null
-                        ? "Preparing software update package download."
-                        : $"Preparing software update package `{workflowResult.PackageName}`.");
+                        ? LocalizeUpdateText(
+                            "VersionUpdate.Log.Software.PreparingPackage",
+                            "正在准备软件下载包。")
+                        : FormatUpdateLogText(
+                            "VersionUpdate.Log.Software.PreparingNamedPackage",
+                            "正在准备软件下载包：{0}",
+                            workflowResult.PackageName));
                 progress?.Report(new VersionUpdateProgressInfo(
                     VersionUpdateProgressOperation.SoftwarePackage,
                     VersionUpdateProgressStage.Started));
@@ -373,15 +413,25 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
                         VersionUpdateProgressStage.Completed));
                     PublishUpdateLog(
                         workflowResult.PackageName is null
-                            ? "Software update package is ready to apply after restart."
-                            : $"Software update package `{workflowResult.PackageName}` is ready to apply after restart.");
+                            ? LocalizeUpdateText(
+                                "VersionUpdate.Log.Software.PackageReady",
+                                "软件下载包已准备完成，重启后即可应用。")
+                            : FormatUpdateLogText(
+                                "VersionUpdate.Log.Software.NamedPackageReady",
+                                "软件下载包 {0} 已准备完成，重启后即可应用。",
+                                workflowResult.PackageName));
                 }
                 else
                 {
                     PublishUpdateLog(
                         downloadResult.Message.Length == 0
-                            ? "Software update package preparation failed."
-                            : $"Software update package preparation failed: {downloadResult.Message}",
+                            ? LocalizeUpdateText(
+                                "VersionUpdate.Log.Software.PackagePrepareFailed",
+                                "软件下载包准备失败。")
+                            : FormatUpdateLogText(
+                                "VersionUpdate.Log.Software.PackagePrepareFailedWithMessage",
+                                "软件下载包准备失败：{0}",
+                                downloadResult.Message),
                         "ERROR");
                     effectiveResult = ApplyPackageDownloadFailure(workflowResult);
                 }
@@ -390,8 +440,14 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
             var message = BuildVersionUpdateMessage(effectiveResult);
             PublishUpdateLog(
                 effectiveResult.IsNewVersion
-                    ? $"Version update available: {effectiveResult.TargetVersion}"
-                    : $"Software is already up to date on `{effectiveResult.Channel}`.");
+                    ? FormatUpdateLogText(
+                        "VersionUpdate.Log.Software.Available",
+                        "检测到软件更新：{0}",
+                        effectiveResult.TargetVersion)
+                    : FormatUpdateLogText(
+                        "VersionUpdate.Log.Software.AlreadyLatest",
+                        "当前 {0} 通道已是最新版本。",
+                        effectiveResult.Channel));
             return UiOperationResult<VersionUpdateCheckResult>.Ok(effectiveResult, message);
         }
         catch (OperationCanceledException)
@@ -400,7 +456,12 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
         }
         catch (Exception ex)
         {
-            PublishUpdateLog($"Software update check failed: {ex.Message}", "ERROR");
+            PublishUpdateLog(
+                FormatUpdateLogText(
+                    "VersionUpdate.Log.Software.CheckFailedWithMessage",
+                    "软件更新检查失败：{0}",
+                    ex.Message),
+                "ERROR");
             return UiOperationResult<VersionUpdateCheckResult>.Fail(
                 UiErrorCode.UiOperationFailed,
                 $"Failed to check for updates: {ex.Message}",
@@ -543,7 +604,9 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
         const string scope = "VersionUpdate.Resource.Github";
         var runtimeBaseDirectory = ResolveRuntimeBaseDirectory();
         var resourceDirectory = Path.Combine(runtimeBaseDirectory, "resource");
-        PublishUpdateLog("Starting resource update from Github.");
+        PublishUpdateLog(LocalizeUpdateText(
+            "VersionUpdate.Log.Resource.GithubStart",
+            "开始从 Github 更新资源。"));
         progress?.Report(new VersionUpdateProgressInfo(
             VersionUpdateProgressOperation.ResourcePackage,
             VersionUpdateProgressStage.Started,
@@ -624,7 +687,9 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
                 VersionUpdateProgressOperation.ResourcePackage,
                 VersionUpdateProgressStage.Completed,
                 VersionUpdateProgressSource.GlobalSource));
-            PublishUpdateLog("Resource update completed from Github.");
+            PublishUpdateLog(LocalizeUpdateText(
+                "VersionUpdate.Log.Resource.GithubCompleted",
+                "已从 Github 完成资源更新。"));
             return UiOperationResult<string>.Ok(
                 "资源更新完成（Github）。",
                 "Resource update completed.");
@@ -635,7 +700,12 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
         }
         catch (Exception ex)
         {
-            PublishUpdateLog($"Resource update from Github failed: {ex.Message}", "ERROR");
+            PublishUpdateLog(
+                FormatUpdateLogText(
+                    "VersionUpdate.Log.Resource.GithubFailedWithMessage",
+                    "Github 资源更新失败：{0}",
+                    ex.Message),
+                "ERROR");
             await TraceVersionUpdateErrorAsync(scope, "Github resource update failed.", ex, cancellationToken).ConfigureAwait(false);
             return UiOperationResult<string>.Fail(
                 UiErrorCode.UiOperationFailed,
@@ -661,7 +731,9 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
     {
         const string scope = "VersionUpdate.Resource.MirrorChyan";
         var cdk = policy.MirrorChyanCdk.Trim();
-        PublishUpdateLog("Starting resource update from MirrorChyan.");
+        PublishUpdateLog(LocalizeUpdateText(
+            "VersionUpdate.Log.Resource.MirrorChyanStart",
+            "开始从 MirrorChyan 更新资源。"));
         await TraceVersionUpdateAsync(
             scope,
             $"Begin clientType={clientType ?? "<null>"}; cdkLength={cdk.Length}",
@@ -814,7 +886,9 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
             var message = string.IsNullOrWhiteSpace(payload.ReleaseNote)
                 ? "资源更新完成（MirrorChyan）。"
                 : $"资源更新完成（MirrorChyan）：{payload.ReleaseNote}";
-            PublishUpdateLog("Resource update completed from MirrorChyan.");
+            PublishUpdateLog(LocalizeUpdateText(
+                "VersionUpdate.Log.Resource.MirrorChyanCompleted",
+                "已从 MirrorChyan 完成资源更新。"));
             return UiOperationResult<string>.Ok(message, "Resource update completed.");
         }
         catch (OperationCanceledException)
@@ -823,7 +897,12 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
         }
         catch (Exception ex)
         {
-            PublishUpdateLog($"Resource update from MirrorChyan failed: {ex.Message}", "ERROR");
+            PublishUpdateLog(
+                FormatUpdateLogText(
+                    "VersionUpdate.Log.Resource.MirrorChyanFailedWithMessage",
+                    "MirrorChyan 资源更新失败：{0}",
+                    ex.Message),
+                "ERROR");
             await TraceVersionUpdateErrorAsync(scope, "MirrorChyan resource update failed.", ex, cancellationToken).ConfigureAwait(false);
             return UiOperationResult<string>.Fail(
                 UiErrorCode.UiOperationFailed,
@@ -1050,6 +1129,32 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
         {
             // Ignore temporary cleanup failures.
         }
+    }
+
+    private string ResolveLanguage()
+    {
+        if (_configService?.CurrentConfig.GlobalValues.TryGetValue(ConfigurationKeys.Localization, out var value) == true
+            && value is JsonValue jsonValue
+            && jsonValue.TryGetValue(out string? language)
+            && !string.IsNullOrWhiteSpace(language))
+        {
+            return UiLanguageCatalog.Normalize(language);
+        }
+
+        return UiLanguageCatalog.DefaultLanguage;
+    }
+
+    private string LocalizeUpdateText(string key, string fallback)
+    {
+        return UiLocalizer.Create(ResolveLanguage()).GetOrDefault(key, fallback, "VersionUpdate.Log");
+    }
+
+    private string FormatUpdateLogText(string key, string fallback, params object[] args)
+    {
+        var template = LocalizeUpdateText(key, fallback);
+        return args.Length == 0
+            ? template
+            : string.Format(CultureInfo.CurrentCulture, template, args);
     }
 
     private void PublishUpdateLog(string message, string level = "INFO")

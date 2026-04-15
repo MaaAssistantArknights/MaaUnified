@@ -58,17 +58,15 @@
                          Text="{Binding RootTexts[Settings.Connect.Address]}" />
               <controls:TooltipHint Grid.Column="1" Tip="{Binding RootTexts[Settings.Connect.AddressTip]}" />
             </Grid>
-            <AutoCompleteBox Width="{DynamicResource MAA.Size.Settings.FieldInputWidth}"
-                             IsEnabled="{Binding CanEditAdbConnectionFields}"
-                             ItemsSource="{Binding ConnectAddressHistory}"
-                             Text="{Binding ConnectAddress, UpdateSourceTrigger=LostFocus}" />
-            <ItemsControl Width="{DynamicResource MAA.Size.Settings.FieldInputWidth}"
-                          Margin="0,6,0,0"
-                          ItemsSource="{Binding ConnectAddressHistory}">
-              <ItemsControl.ItemTemplate>
+            <controls:CheckComboBox Width="{DynamicResource MAA.Size.Settings.FieldInputWidth}"
+                                    IsEditable="True"
+                                    IsEnabled="{Binding CanEditAdbConnectionFields}"
+                                    ItemsSource="{Binding ConnectAddressHistory}"
+                                    Text="{Binding ConnectAddress}"
+                                    SelectionCommitted="OnConnectAddressSelectionCommitted">
+              <controls:CheckComboBox.ItemTemplate>
                 <DataTemplate>
-                  <Grid Margin="0,2,0,0"
-                        ColumnDefinitions="*,Auto">
+                  <Grid ColumnDefinitions="*,Auto">
                     <TextBlock Grid.Column="0"
                                VerticalAlignment="Center"
                                Text="{Binding .}" />
@@ -81,8 +79,8 @@
                             Click="OnRemoveAddressHistoryClick" />
                   </Grid>
                 </DataTemplate>
-              </ItemsControl.ItemTemplate>
-            </ItemsControl>
+              </controls:CheckComboBox.ItemTemplate>
+            </controls:CheckComboBox>
           </StackPanel>
 
           <StackPanel Classes="settings-centered-column">

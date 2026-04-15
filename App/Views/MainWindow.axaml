@@ -61,37 +61,83 @@
       <rootViews:SettingsView />
     </DataTemplate>
     <DataTemplate DataType="viewModels:AchievementToastItemViewModel">
-      <Border Width="320"
-              Margin="0,0,0,8"
-              Padding="10"
-              CornerRadius="12"
-              Background="#F7FFF6E8"
-              BorderBrush="#44252F1D"
-              BorderThickness="1">
-        <Grid ColumnDefinitions="Auto,*,Auto">
-          <Border Width="18"
-                  Height="18"
-                  Margin="0,4,10,0"
-                  CornerRadius="9"
-                  Background="{Binding MedalColor}"
-                  VerticalAlignment="Top" />
-          <StackPanel Grid.Column="1" Spacing="4">
-            <TextBlock FontWeight="Bold" Text="{Binding Title}" />
-            <TextBlock Classes="long-wrap" Opacity="0.88" Text="{Binding Description}" />
-          </StackPanel>
-          <Button Grid.Column="2"
-                  Width="26"
-                  Height="26"
-                  Padding="0"
-                  Margin="8,0,0,0"
-                  Classes="wpf-button wpf-button-secondary"
-                  Content="x"
-                  Tag="{Binding Id}"
-                  Click="OnDismissAchievementToastClick" />
+      <Border Classes="achievement-toast"
+              Margin="0,0,0,10">
+        <Border.Effect>
+          <DropShadowDirectionEffect BlurRadius="18"
+                                     ShadowDepth="4"
+                                     Opacity="0.16"
+                                     Color="Black" />
+        </Border.Effect>
+        <Grid ColumnDefinitions="6,*">
+          <Border Background="{Binding MedalColor}" />
+          <Border Grid.Column="1"
+                  Padding="14,12,12,12">
+            <Grid ColumnDefinitions="Auto,*"
+                  RowDefinitions="Auto,Auto">
+              <Border Grid.RowSpan="2"
+                      Margin="0,0,14,0"
+                      Classes="achievement-toast-medal-shell">
+                <Border Classes="achievement-toast-medal-core"
+                        Background="{Binding MedalColor}">
+                  <TextBlock Classes="achievement-toast-medal-glyph"
+                             Text="★" />
+                </Border>
+              </Border>
+              <Grid Grid.Column="1"
+                    ColumnDefinitions="*,Auto"
+                    VerticalAlignment="Top">
+                <Border VerticalAlignment="Center"
+                        Classes="achievement-toast-badge">
+                  <TextBlock Classes="achievement-toast-badge-text"
+                             Text="{Binding CelebrateText}" />
+                </Border>
+                <Button Grid.Column="1"
+                        Margin="10,0,0,0"
+                        VerticalAlignment="Center"
+                        Classes="achievement-toast-close"
+                        Content="✕"
+                        Tag="{Binding Id}"
+                        Click="OnDismissAchievementToastClick" />
+              </Grid>
+              <StackPanel Grid.Row="1"
+                          Grid.Column="1"
+                          Margin="0,10,0,0"
+                          Spacing="6">
+                <TextBlock Classes="achievement-toast-title"
+                           Text="{Binding Title}" />
+                <TextBlock Classes="achievement-toast-description"
+                           Text="{Binding Description}" />
+              </StackPanel>
+            </Grid>
+          </Border>
         </Grid>
       </Border>
     </DataTemplate>
   </Window.DataTemplates>
+  <Window.Styles>
+    <Style Selector="Button.wpf-button.window-overlay-toggle">
+      <Setter Property="MinWidth" Value="96" />
+      <Setter Property="Height" Value="32" />
+      <Setter Property="Padding" Value="10,0" />
+    </Style>
+    <Style Selector="Border.overlay-indicator">
+      <Setter Property="Width" Value="10" />
+      <Setter Property="Height" Value="10" />
+      <Setter Property="CornerRadius" Value="999" />
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.Text.Secondary}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Border.overlay-indicator.mode-preview">
+      <Setter Property="Background" Value="#D9A441" />
+    </Style>
+    <Style Selector="Border.overlay-indicator.mode-native">
+      <Setter Property="Background" Value="#4FA86C" />
+    </Style>
+    <Style Selector="Border.overlay-indicator.mode-hidden">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.Text.Secondary}" />
+    </Style>
+  </Window.Styles>
   <Grid x:Name="ShellRoot"
         Margin="{DynamicResource MAA.Thickness.PageMargin}">
     <Image
@@ -131,24 +177,23 @@
 
     <StackPanel HorizontalAlignment="Right"
                 VerticalAlignment="Top"
-                Margin="0,12,8,0"
+                Margin="0,5,5,0"
                 Spacing="8">
-      <StackPanel IsVisible="{Binding HasWindowUpdateInfo}"
-                  Spacing="6">
-        <Button Classes="wpf-button wpf-button-secondary"
-                MinWidth="220"
-                HorizontalAlignment="Right"
-                Content="{Binding WindowVersionUpdateInfo}"
-                IsVisible="{Binding HasWindowVersionUpdateInfo}"
-                Click="OnManualUpdateClick" />
-        <Button Classes="wpf-button wpf-button-secondary"
-                MinWidth="220"
-                HorizontalAlignment="Right"
-                Content="{Binding WindowResourceUpdateInfo}"
-                IsVisible="{Binding HasWindowResourceUpdateInfo}"
-                Click="OnManualUpdateResourceClick" />
-      </StackPanel>
-
+      <Button Classes="wpf-button wpf-button-secondary window-overlay-toggle"
+              HorizontalAlignment="Right"
+              IsVisible="{Binding ShowWindowOverlayButton}"
+              ToolTip.Tip="{Binding TaskQueuePage.OverlayButtonToolTip}"
+              Click="OnWindowOverlayToggleClick"
+              PointerPressed="OnWindowOverlayButtonPointerPressed">
+        <StackPanel Orientation="Horizontal"
+                    Spacing="{DynamicResource MAA.Spacing.Tight}">
+          <Border Classes="overlay-indicator"
+                  Classes.mode-hidden="{Binding TaskQueuePage.IsOverlayHiddenMode}"
+                  Classes.mode-preview="{Binding TaskQueuePage.IsOverlayPreviewMode}"
+                  Classes.mode-native="{Binding TaskQueuePage.IsOverlayNativeMode}" />
+          <TextBlock Text="{Binding TaskQueuePage.OverlayButtonText}" />
+        </StackPanel>
+      </Button>
       <ItemsControl ItemsSource="{Binding AchievementToasts}">
         <ItemsControl.ItemsPanel>
           <ItemsPanelTemplate>

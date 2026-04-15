@@ -932,7 +932,7 @@ public sealed class MainShellViewModelTests
             content,
             StringComparison.Ordinal);
         Assert.Contains(
-            "await VM.SettingsPage.CheckVersionUpdateAsync();",
+            "CheckVersionUpdateAsync();",
             content,
             StringComparison.Ordinal);
     }
@@ -993,6 +993,7 @@ public sealed class MainShellViewModelTests
                     IsUpdateAvailable: true,
                     DisplayVersion: "2026-04-03 10:00:00",
                     ReleaseNote: "episode",
+                    VersionTimestamp: null,
                     RequiresMirrorChyanCdk: true,
                     DownloadUrl: null),
                 "检测到资源更新。"),
@@ -1007,6 +1008,7 @@ public sealed class MainShellViewModelTests
 
         Assert.True(fixture.ViewModel.HasWindowVersionUpdateInfo);
         Assert.True(fixture.ViewModel.HasWindowResourceUpdateInfo);
+        Assert.Contains("episode", fixture.ViewModel.WindowResourceUpdateInfo, StringComparison.Ordinal);
         Assert.Contains("版本更新", fixture.ViewModel.WindowTitle, StringComparison.Ordinal);
         Assert.Contains("资源更新", fixture.ViewModel.WindowTitle, StringComparison.Ordinal);
     }
@@ -1039,6 +1041,7 @@ public sealed class MainShellViewModelTests
                     IsUpdateAvailable: true,
                     DisplayVersion: "2026-04-03 10:00:00",
                     ReleaseNote: "episode",
+                    VersionTimestamp: null,
                     RequiresMirrorChyanCdk: true,
                     DownloadUrl: null),
                 "检测到资源更新。"),
@@ -1054,6 +1057,7 @@ public sealed class MainShellViewModelTests
         Assert.Equal(0, versionUpdate.UpdateResourceCallCount);
         Assert.True(fixture.ViewModel.HasWindowVersionUpdateInfo);
         Assert.True(fixture.ViewModel.HasWindowResourceUpdateInfo);
+        Assert.Contains("episode", fixture.ViewModel.WindowResourceUpdateInfo, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -1077,11 +1081,18 @@ public sealed class MainShellViewModelTests
             dialogService: dialogService);
         await fixture.ViewModel.InitializeAsync();
 
-        Assert.True(await WaitUntilAsync(() => !fixture.ViewModel.SettingsPage.VersionUpdateIsFirstBoot));
+        var expectedStatus = fixture.ViewModel.SettingsPage.RootTexts["Settings.VersionUpdate.Status.FirstBootShown"];
+        Assert.True(await WaitUntilAsync(() =>
+            dialogService.VersionUpdateCallCount > 0
+            && string.Equals(
+                fixture.ViewModel.SettingsPage.VersionUpdateStatusMessage,
+                expectedStatus,
+                StringComparison.Ordinal)));
         Assert.False(fixture.ViewModel.SettingsPage.VersionUpdateIsFirstBoot);
-        Assert.Equal(
-            fixture.ViewModel.SettingsPage.RootTexts["Settings.VersionUpdate.Status.FirstBootShown"],
-            fixture.ViewModel.SettingsPage.VersionUpdateStatusMessage);
+        Assert.Equal(1, dialogService.VersionUpdateCallCount);
+        Assert.Equal(0, versionUpdate.CheckForUpdatesCallCount);
+        Assert.Equal(0, versionUpdate.CheckResourceCallCount);
+        Assert.Equal(expectedStatus, fixture.ViewModel.SettingsPage.VersionUpdateStatusMessage);
     }
 
     [Fact]
@@ -1694,6 +1705,7 @@ public sealed class MainShellViewModelTests
                     IsUpdateAvailable: false,
                     DisplayVersion: string.Empty,
                     ReleaseNote: string.Empty,
+                    VersionTimestamp: null,
                     RequiresMirrorChyanCdk: false,
                     DownloadUrl: null),
                 "Resources are up to date.");

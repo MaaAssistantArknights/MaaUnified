@@ -21,6 +21,11 @@ public sealed class RootViewStructureContractTests
         Assert.DoesNotContain("{Binding RootTexts[Main.Menu.SwitchLanguage]}", text, StringComparison.Ordinal);
         Assert.Contains("Title=\"{Binding WindowTitle}\"", text, StringComparison.Ordinal);
         Assert.Contains("<TabStrip Classes=\"root-nav\"", text, StringComparison.Ordinal);
+        Assert.Contains("Click=\"OnWindowOverlayToggleClick\"", text, StringComparison.Ordinal);
+        Assert.Contains("PointerPressed=\"OnWindowOverlayButtonPointerPressed\"", text, StringComparison.Ordinal);
+        Assert.Contains("IsVisible=\"{Binding ShowWindowOverlayButton}\"", text, StringComparison.Ordinal);
+        Assert.Contains("ToolTip.Tip=\"{Binding TaskQueuePage.OverlayButtonToolTip}\"", text, StringComparison.Ordinal);
+        Assert.Contains("Text=\"{Binding TaskQueuePage.OverlayButtonText}\"", text, StringComparison.Ordinal);
         Assert.Contains("<DataTemplate DataType=\"viewModels:RootPageHostViewModel\">", text, StringComparison.Ordinal);
         Assert.Contains("<DataTemplate DataType=\"taskVm:TaskQueuePageViewModel\">", text, StringComparison.Ordinal);
         Assert.Contains("<DataTemplate DataType=\"copilotVm:CopilotPageViewModel\">", text, StringComparison.Ordinal);
@@ -75,10 +80,6 @@ public sealed class RootViewStructureContractTests
         Assert.DoesNotContain("Click=\"OnInverseClick\"", text, StringComparison.Ordinal);
         Assert.DoesNotContain("TaskQueue.Root.AdvancedMode", text, StringComparison.Ordinal);
         Assert.DoesNotContain("ShowAdvanced", text, StringComparison.Ordinal);
-        Assert.Contains("Text=\"{Binding OverlayButtonText}\"", text, StringComparison.Ordinal);
-        Assert.Contains("Click=\"OnToggleOverlayClick\"", text, StringComparison.Ordinal);
-        Assert.Contains("PointerPressed=\"OnOverlayButtonPointerPressed\"", text, StringComparison.Ordinal);
-        Assert.Contains("ToolTip.Tip=\"{Binding OverlayButtonToolTip}\"", text, StringComparison.Ordinal);
         Assert.DoesNotContain("Text=\"{Binding OverlayStatusText}\"", text, StringComparison.Ordinal);
         Assert.DoesNotContain("Text=\"{Binding OverlayTargetSummaryText}\"", text, StringComparison.Ordinal);
         Assert.DoesNotContain("{Binding RootTexts[TaskQueue.Root.RuntimeTitle]}", text, StringComparison.Ordinal);

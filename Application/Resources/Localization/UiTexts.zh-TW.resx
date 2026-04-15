@@ -1067,8 +1067,35 @@
   <data name="Settings.Achievement.Dialog.FilterWatermark" xml:space="preserve">
     <value>搜尋成就</value>
   </data>
+  <data name="Settings.Achievement.Dialog.FilterAll" xml:space="preserve">
+    <value>全部</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.FilterUnlocked" xml:space="preserve">
+    <value>已解鎖</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.FilterInProgress" xml:space="preserve">
+    <value>進行中</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.FilterNew" xml:space="preserve">
+    <value>新解鎖</value>
+  </data>
   <data name="Settings.Achievement.Dialog.ProgressFormat" xml:space="preserve">
     <value>進度：{0}</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.ResultsFormat" xml:space="preserve">
+    <value>顯示 {0} 項</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.ClearFilters" xml:space="preserve">
+    <value>清除篩選</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.EmptyTitle" xml:space="preserve">
+    <value>沒有找到符合的成就</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.EmptyDescription" xml:space="preserve">
+    <value>試著更換關鍵字或篩選條件。</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.OverviewFormat" xml:space="preserve">
+    <value>已解鎖 {0} / {1} · 完成率 {2}%</value>
   </data>
   <data name="Settings.Achievement.Dialog.Snapshot" xml:space="preserve">
     <value>成就對話快照</value>
@@ -1690,6 +1717,9 @@
   </data>
   <data name="Settings.GUI.UseTray" xml:space="preserve">
     <value>顯示托盤圖示</value>
+  </data>
+  <data name="Settings.GUI.UseNotify" xml:space="preserve">
+    <value>顯示系統通知</value>
   </data>
   <data name="Settings.GUI.WindowTitleScrollable" xml:space="preserve">
     <value>視窗標題滾動</value>

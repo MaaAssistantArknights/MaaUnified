@@ -1145,8 +1145,35 @@
   <data name="Settings.Achievement.Dialog.FilterWatermark" xml:space="preserve">
     <value>実績を検索</value>
   </data>
+  <data name="Settings.Achievement.Dialog.FilterAll" xml:space="preserve">
+    <value>すべて</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.FilterUnlocked" xml:space="preserve">
+    <value>解除済み</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.FilterInProgress" xml:space="preserve">
+    <value>進行中</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.FilterNew" xml:space="preserve">
+    <value>新規解除</value>
+  </data>
   <data name="Settings.Achievement.Dialog.ProgressFormat" xml:space="preserve">
     <value>進捗: {0}</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.ResultsFormat" xml:space="preserve">
+    <value>{0}件を表示</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.ClearFilters" xml:space="preserve">
+    <value>フィルターをクリア</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.EmptyTitle" xml:space="preserve">
+    <value>条件に一致する実績がありません</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.EmptyDescription" xml:space="preserve">
+    <value>キーワードやフィルター条件を変えてみてください。</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.OverviewFormat" xml:space="preserve">
+    <value>解除済み {0} / {1} ・達成率 {2}%</value>
   </data>
   <data name="Settings.Achievement.Dialog.Snapshot" xml:space="preserve">
     <value>実績ダイアログのスナップショット</value>
@@ -1768,6 +1795,9 @@
   </data>
   <data name="Settings.GUI.UseTray" xml:space="preserve">
     <value>トレイアイコンを表示</value>
+  </data>
+  <data name="Settings.GUI.UseNotify" xml:space="preserve">
+    <value>システム通知を表示</value>
   </data>
   <data name="Settings.GUI.WindowTitleScrollable" xml:space="preserve">
     <value>ウィンドウタイトルをスクロール</value>

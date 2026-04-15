@@ -36,6 +36,7 @@ public sealed class SettingsGuiBackgroundFeatureTests
         vm.Theme = "Dark";
         SelectLanguageThroughView(view, vm, "en-us");
         vm.UseTray = false;
+        vm.UseNotify = false;
         vm.MinimizeToTray = true;
         vm.WindowTitleScrollable = false;
         vm.BackgroundImagePath = path;
@@ -55,6 +56,7 @@ public sealed class SettingsGuiBackgroundFeatureTests
         Assert.Equal("en-us", vm.SelectedLanguageValue);
         Assert.Equal("en-us", vm.SelectedLanguageOption?.Value);
         Assert.Equal("False", ReadGlobalString(fixture.Config, ConfigurationKeys.UseTray));
+        Assert.Equal("False", ReadGlobalString(fixture.Config, ConfigurationKeys.UseNotify));
         Assert.Equal("False", ReadGlobalString(fixture.Config, ConfigurationKeys.MinimizeToTray));
         Assert.Equal("False", ReadGlobalString(fixture.Config, ConfigurationKeys.WindowTitleScrollable));
         Assert.Equal(path, ReadGlobalString(fixture.Config, ConfigurationKeys.BackgroundImagePath));
@@ -357,6 +359,7 @@ public sealed class SettingsGuiBackgroundFeatureTests
                     IsUpdateAvailable: true,
                     DisplayVersion: "2026-04-03 10:00:00",
                     ReleaseNote: "episode",
+                    VersionTimestamp: null,
                     RequiresMirrorChyanCdk: true,
                     DownloadUrl: null),
                 "检测到资源更新，可手动更新。"),
@@ -373,7 +376,24 @@ public sealed class SettingsGuiBackgroundFeatureTests
 
         Assert.True(vm.HasPendingVersionUpdateAvailability);
         Assert.True(vm.HasPendingResourceUpdateAvailability);
+        Assert.Contains("episode", vm.PendingResourceUpdateSummary, StringComparison.Ordinal);
         Assert.Equal(1, versionUpdate.CheckResourceCallCount);
+    }
+
+    [Fact]
+    public async Task ManualUpdateResource_WhenMirrorChyanWithoutCdk_ShouldShortCircuitWithLocalizedGuidance()
+    {
+        var versionUpdate = new SpyVersionUpdateFeatureService();
+        await using var fixture = await RuntimeFixture.CreateAsync(versionUpdateFeatureService: versionUpdate);
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        vm.VersionUpdateResourceSource = "MirrorChyan";
+        vm.VersionUpdateMirrorChyanCdk = string.Empty;
+
+        await vm.ManualUpdateResourceAsync();
+
+        Assert.Equal(0, versionUpdate.CheckResourceCallCount);
+        Assert.Contains("CDK", vm.VersionUpdateStatusMessage, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -386,6 +406,7 @@ public sealed class SettingsGuiBackgroundFeatureTests
                     IsUpdateAvailable: false,
                     DisplayVersion: string.Empty,
                     ReleaseNote: string.Empty,
+                    VersionTimestamp: null,
                     RequiresMirrorChyanCdk: false,
                     DownloadUrl: null),
                 "资源已是最新版本。"),
@@ -413,6 +434,7 @@ public sealed class SettingsGuiBackgroundFeatureTests
                     IsUpdateAvailable: true,
                     DisplayVersion: "2026-04-09",
                     ReleaseNote: "2026-04-09",
+                    VersionTimestamp: null,
                     RequiresMirrorChyanCdk: false,
                     DownloadUrl: "https://example.com/resource.zip"),
                 "检测到资源更新。"),
@@ -1105,6 +1127,7 @@ public sealed class SettingsGuiBackgroundFeatureTests
                     IsUpdateAvailable: false,
                     DisplayVersion: string.Empty,
                     ReleaseNote: string.Empty,
+                    VersionTimestamp: null,
                     RequiresMirrorChyanCdk: false,
                     DownloadUrl: null),
                 "Resources are up to date.");

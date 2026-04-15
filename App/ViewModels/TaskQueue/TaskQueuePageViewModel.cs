@@ -230,6 +230,9 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     private int _expiringMedicineUsedTimes;
     private int _stoneUsedTimes;
     private string _logTimestampFormat = DefaultLogItemDateFormat;
+    private bool _useSystemNotifications = true;
+    private string _lastCompletionNotificationRunId = string.Empty;
+    private string _lastFailureNotificationRunId = string.Empty;
     private bool _selectedTaskSettingsHostResetPending;
     private readonly IUiLanguageCoordinator _uiLanguageCoordinator;
 
@@ -1100,6 +1103,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         ArgumentNullException.ThrowIfNull(snapshot);
 
         _logTimestampFormat = NormalizeLogTimestampFormat(snapshot.LogItemDateFormatString);
+        _useSystemNotifications = snapshot.UseNotify;
         ApplySelectionBatchMode(snapshot.InverseClearMode);
         RoguelikeModule.RefreshGuiDependentOptions();
     }
@@ -4263,6 +4267,115 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         };
     }
 
+    private void QueueAutomaticSystemNotification(
+        CoreCallbackEvent callback,
+        CallbackPayload payload,
+        int? taskIndex,
+        string runId)
+    {
+        if (!_useSystemNotifications)
+        {
+            return;
+        }
+
+        var request = TryBuildAutomaticSystemNotification(callback, payload, taskIndex, runId);
+        if (!request.HasValue)
+        {
+            return;
+        }
+
+        var notification = request.Value;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Runtime.PlatformCapabilityService.SendSystemNotificationAsync(
+                    notification.Title,
+                    notification.Message);
+            }
+            catch (Exception ex)
+            {
+                await RecordErrorAsync(
+                    notification.Scope,
+                    $"Failed to dispatch automatic system notification for {notification.Reason}.",
+                    ex);
+            }
+        });
+    }
+
+    private TaskQueueSystemNotification? TryBuildAutomaticSystemNotification(
+        CoreCallbackEvent callback,
+        CallbackPayload payload,
+        int? taskIndex,
+        string runId)
+    {
+        switch (callback.MsgName)
+        {
+            case "AllTasksCompleted":
+                if (string.Equals(_lastCompletionNotificationRunId, runId, StringComparison.Ordinal))
+                {
+                    return null;
+                }
+
+                _lastCompletionNotificationRunId = runId;
+                var completionLog = BuildAllTasksCompletedLog(callback.Timestamp);
+                return new TaskQueueSystemNotification(
+                    NormalizeNotificationText(
+                        RootTexts.GetOrDefault("TaskQueue.Log.AllCompleted", "All tasks completed"),
+                        "All tasks completed"),
+                    NormalizeNotificationText(completionLog.Content, "All tasks completed"),
+                    "TaskQueue.Notification.Complete",
+                    "task completion");
+            case "TaskChainError":
+                if (string.Equals(_lastFailureNotificationRunId, runId, StringComparison.Ordinal))
+                {
+                    return null;
+                }
+
+                _lastFailureNotificationRunId = runId;
+                var taskFailureLog = BuildTaskChainErrorLog(payload.TaskChain);
+                return new TaskQueueSystemNotification(
+                    NormalizeNotificationText(
+                        string.Format(
+                            RootTexts.GetOrDefault("TaskQueue.Log.TaskError", "{0} failed"),
+                            ResolveTaskLogName(taskIndex, payload.TaskChain)),
+                        "Task failed"),
+                    NormalizeNotificationText(taskFailureLog.Content, "Task failed"),
+                    "TaskQueue.Notification.Error",
+                    "task failure");
+            case "SubTaskError":
+                if (string.Equals(_lastFailureNotificationRunId, runId, StringComparison.Ordinal))
+                {
+                    return null;
+                }
+
+                _lastFailureNotificationRunId = runId;
+                var subTaskFailureLog = BuildSubTaskErrorLog(payload, taskIndex) ?? BuildTaskChainErrorLog(payload.TaskChain);
+                return new TaskQueueSystemNotification(
+                    NormalizeNotificationText(
+                        string.Format(
+                            RootTexts.GetOrDefault("TaskQueue.Log.SubTaskError", "{0}: {1} failed"),
+                            ResolveTaskLogName(taskIndex, payload.TaskChain),
+                            payload.SubTask ?? "SubTask"),
+                        "Task failed"),
+                    NormalizeNotificationText(subTaskFailureLog.Content, "Task failed"),
+                    "TaskQueue.Notification.Error",
+                    "sub-task failure");
+            default:
+                return null;
+        }
+    }
+
+    private static string NormalizeNotificationText(string? text, string fallback)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return fallback;
+        }
+
+        return text.Trim();
+    }
+
     private string BuildPenguinUploadFailureLog(CallbackPayload payload, int? taskIndex)
     {
         if (IsAnnihilationFightTask(taskIndex))
@@ -5038,6 +5151,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                     callback.PayloadJson,
                     UiErrorCode.TaskRuntimeCallbackError,
                     resolveSource);
+                QueueAutomaticSystemNotification(callback, metadata, taskIndex, runId);
                 CompleteTaskQueueRunOwnership();
                 break;
             case "TaskChainStopped":
@@ -5077,6 +5191,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                     TaskQueueItemStatus.Success,
                     callback.PayloadJson,
                     resolveSource: resolveSource);
+                QueueAutomaticSystemNotification(callback, metadata, taskIndex, runId);
                 if (!string.Equals(_lastPostActionRunId, runId, StringComparison.Ordinal))
                 {
                     _lastPostActionRunId = runId;
@@ -5541,6 +5656,12 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
     private readonly record struct CallbackTaskResolution(int? TaskIndex, string ResolveSource, string? WarningDetail = null);
 
+    private readonly record struct TaskQueueSystemNotification(
+        string Title,
+        string Message,
+        string Scope,
+        string Reason);
+
     private string ResolveRunId(string? callbackRunId)
     {
         if (!string.IsNullOrWhiteSpace(callbackRunId))
@@ -5907,6 +6028,10 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     private void ApplyGuiSettingsFromConfig()
     {
         _logTimestampFormat = ResolveLogTimestampFormat();
+        _useSystemNotifications = TryReadGlobalBool(
+            Runtime.ConfigurationService.CurrentConfig.GlobalValues,
+            ConfigurationKeys.UseNotify,
+            fallback: true);
         RefreshSelectionBatchModeFromConfig();
         RoguelikeModule.RefreshGuiDependentOptions();
     }

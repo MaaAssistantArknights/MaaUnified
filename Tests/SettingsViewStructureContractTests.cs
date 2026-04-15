@@ -41,6 +41,7 @@ public sealed class SettingsViewStructureContractTests
 
         var gui = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "GuiSettingsView.axaml"));
         Assert.Contains("IsVisible=\"{Binding CanMinimizeToTray}\"", gui, StringComparison.Ordinal);
+        Assert.Contains("RootTexts[Settings.GUI.UseNotify]", gui, StringComparison.Ordinal);
 
         var start = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "StartSettingsView.axaml"));
         Assert.Contains("IsVisible=\"{Binding CanEditEmulatorLaunchSettings}\"", start, StringComparison.Ordinal);
@@ -202,6 +203,9 @@ public sealed class SettingsViewStructureContractTests
 
         var connect = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "ConnectSettingsView.axaml"));
         Assert.Contains("OnRemoveAddressHistoryClick", connect, StringComparison.Ordinal);
+        Assert.Contains("SelectionCommitted=\"OnConnectAddressSelectionCommitted\"", connect, StringComparison.Ordinal);
+        Assert.Contains("<controls:CheckComboBox", connect, StringComparison.Ordinal);
+        Assert.DoesNotContain("<AutoCompleteBox", connect, StringComparison.Ordinal);
         Assert.Contains("OnMuMuExtrasChecked", connect, StringComparison.Ordinal);
         Assert.Contains("OnLdPlayerExtrasChecked", connect, StringComparison.Ordinal);
         Assert.Contains("OnMuMuEmulatorPathLostFocus", connect, StringComparison.Ordinal);

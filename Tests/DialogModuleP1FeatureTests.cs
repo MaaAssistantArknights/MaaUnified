@@ -220,8 +220,10 @@ public sealed class DialogModuleP1FeatureTests
 
         Assert.Equal("成就列表", firstRequest.Title);
         Assert.Equal("搜索成就", firstRequest.FilterWatermark);
-        Assert.Equal("确认", firstRequest.ConfirmText);
+        Assert.Equal("关闭", firstRequest.ConfirmText);
         Assert.Equal("取消", firstRequest.CancelText);
+        Assert.Equal(1, firstRequest.UnlockedCount);
+        Assert.Equal(3, firstRequest.TotalCount);
         Assert.Equal("首次会面", firstItem.Title);
         Assert.Equal("旧语言描述", firstItem.Description);
         Assert.Equal("已解锁", firstItem.Status);
@@ -229,7 +231,7 @@ public sealed class DialogModuleP1FeatureTests
         Assert.Equal(["achievement-1"], firstPayload.SelectedIds);
 
         Assert.Equal("Achievement List", englishChrome.Title);
-        Assert.Equal("Confirm", englishChrome.ConfirmText);
+        Assert.Equal("Close", englishChrome.ConfirmText);
         Assert.Equal("Cancel", englishChrome.CancelText);
         Assert.Equal(
             "Filter achievements",
@@ -242,11 +244,91 @@ public sealed class DialogModuleP1FeatureTests
 
         Assert.Equal("Achievement List", secondRequest.Title);
         Assert.Equal("Filter achievements", secondRequest.FilterWatermark);
-        Assert.Equal("Confirm", secondRequest.ConfirmText);
+        Assert.Equal("Close", secondRequest.ConfirmText);
         Assert.Equal("Cancel", secondRequest.CancelText);
+        Assert.Equal(1, secondRequest.UnlockedCount);
+        Assert.Equal(3, secondRequest.TotalCount);
         Assert.Equal("First encounter", secondItem.Title);
         Assert.Equal("Legacy-language description", secondItem.Description);
         Assert.Equal("Unlocked", secondItem.Status);
+    }
+
+    [Fact]
+    public void AchievementListDialogPresenter_ShouldFilterByQuickFilterAndSearch()
+    {
+        var presenter = new AchievementListDialogPresenter();
+        presenter.ApplyRequest(
+            new AchievementListDialogRequest(
+                Title: "Achievement",
+                Items:
+                [
+                    new AchievementListItem(
+                        "unlocked-new",
+                        "First contact",
+                        "Unlocked description",
+                        "Unlocked",
+                        IsUnlocked: true,
+                        IsNewUnlock: true),
+                    new AchievementListItem(
+                        "progress",
+                        "Planner",
+                        "Track progress",
+                        "In progress",
+                        Conditions: "Reach 5",
+                        IsProgressive: true,
+                        ShowProgress: true,
+                        Progress: 3,
+                        Target: 5),
+                    new AchievementListItem(
+                        "other",
+                        "Explorer",
+                        "General description",
+                        "General")
+                ],
+                InitialFilter: string.Empty,
+                UnlockedCount: 1,
+                TotalCount: 3));
+
+        var initialState = presenter.BuildState(
+            "NEW",
+            "Progress: {0}",
+            "Unlocked {0} / {1} · {2}% complete",
+            "Showing {0} achievements");
+        Assert.Equal(3, initialState.Items.Count);
+        Assert.Equal("Unlocked 1 / 3 · 33% complete", initialState.OverviewText);
+
+        presenter.SetFilter(AchievementQuickFilter.InProgress);
+        var progressState = presenter.BuildState(
+            "NEW",
+            "Progress: {0}",
+            "Unlocked {0} / {1} · {2}% complete",
+            "Showing {0} achievements");
+        var progressItem = Assert.Single(progressState.Items);
+        Assert.Equal("progress", progressItem.Id);
+        Assert.Equal("Progress: 3 / 5", progressItem.ProgressText);
+
+        presenter.SetFilter(AchievementQuickFilter.NewUnlock);
+        presenter.SetSearchText("contact");
+        var combinedState = presenter.BuildState(
+            "NEW",
+            "Progress: {0}",
+            "Unlocked {0} / {1} · {2}% complete",
+            "Showing {0} achievements");
+        var combinedItem = Assert.Single(combinedState.Items);
+        Assert.Equal("unlocked-new", combinedItem.Id);
+        Assert.True(combinedState.HasActiveFilters);
+    }
+
+    [Fact]
+    public void AchievementListDialogView_BuildPayload_ShouldReturnFilterTextAndEmptySelection()
+    {
+        var view = (AchievementListDialogView)RuntimeHelpers.GetUninitializedObject(typeof(AchievementListDialogView));
+        SetAchievementListDialogField(view, "FilterInput", new TextBox { Text = "keyword" });
+
+        var payload = view.BuildPayload();
+
+        Assert.Equal("keyword", payload.FilterText);
+        Assert.Empty(payload.SelectedIds);
     }
 
     [Fact]
@@ -305,7 +387,7 @@ public sealed class DialogModuleP1FeatureTests
             language,
             currentLanguage => new DialogChromeSnapshot(
                 title: DialogTextCatalog.Select(currentLanguage, "成就列表", "Achievement List"),
-                confirmText: DialogTextCatalog.WarningDialogConfirmButton(currentLanguage),
+                confirmText: DialogTextCatalog.ErrorDialogCloseButton(currentLanguage),
                 cancelText: DialogTextCatalog.WarningDialogCancelButton(currentLanguage),
                 namedTexts: DialogTextCatalog.CreateNamedTexts(
                     (
@@ -323,12 +405,21 @@ public sealed class DialogModuleP1FeatureTests
                     DialogTextCatalog.Select(language, "已解锁", "Unlocked"))
             ],
             InitialFilter: DialogTextCatalog.Select(language, "首次", "first"),
-            ConfirmText: snapshot.ConfirmText ?? DialogTextCatalog.WarningDialogConfirmButton(language),
+            ConfirmText: snapshot.ConfirmText ?? DialogTextCatalog.ErrorDialogCloseButton(language),
             CancelText: snapshot.CancelText ?? DialogTextCatalog.WarningDialogCancelButton(language),
             FilterWatermark: snapshot.GetNamedTextOrDefault(
                 DialogTextCatalog.ChromeKeys.FilterWatermark,
                 DialogTextCatalog.Select(language, "搜索成就", "Filter achievements")),
+            UnlockedCount: 1,
+            TotalCount: 3,
             Chrome: chrome);
+    }
+
+    private static void SetAchievementListDialogField(AchievementListDialogView view, string fieldName, object? value)
+    {
+        var field = typeof(AchievementListDialogView).GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(field);
+        field!.SetValue(view, value);
     }
 
     private static void AssertAllCloseSemantics<TPayload>(

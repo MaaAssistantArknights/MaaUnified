@@ -1388,6 +1388,9 @@ Are you sure you want to exit?</value>
   <data name="Main.Update.ResourceAvailable" xml:space="preserve">
     <value>Resource update available. Run resource check</value>
   </data>
+  <data name="Main.Update.ResourceDetected" xml:space="preserve">
+    <value>Resource update detected: {0}</value>
+  </data>
   <data name="Main.Update.VersionAvailable" xml:space="preserve">
     <value>Version update available. See Settings &gt; Version Update</value>
   </data>
@@ -2142,8 +2145,35 @@ With save file: farm points through crafting (advanced).
   <data name="Settings.Achievement.Dialog.FilterWatermark" xml:space="preserve">
     <value>Filter achievements</value>
   </data>
+  <data name="Settings.Achievement.Dialog.FilterAll" xml:space="preserve">
+    <value>All</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.FilterUnlocked" xml:space="preserve">
+    <value>Unlocked</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.FilterInProgress" xml:space="preserve">
+    <value>In Progress</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.FilterNew" xml:space="preserve">
+    <value>New</value>
+  </data>
   <data name="Settings.Achievement.Dialog.ProgressFormat" xml:space="preserve">
     <value>Progress: {0}</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.ResultsFormat" xml:space="preserve">
+    <value>Showing {0} achievements</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.ClearFilters" xml:space="preserve">
+    <value>Clear filters</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.EmptyTitle" xml:space="preserve">
+    <value>No matching achievements</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.EmptyDescription" xml:space="preserve">
+    <value>Try a different keyword or filter.</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.OverviewFormat" xml:space="preserve">
+    <value>Unlocked {0} / {1} · {2}% complete</value>
   </data>
   <data name="Settings.Achievement.Dialog.Snapshot" xml:space="preserve">
     <value>Achievement dialog snapshot</value>
@@ -2855,6 +2885,9 @@ With save file: farm points through crafting (advanced).
   </data>
   <data name="Settings.GUI.UseTray" xml:space="preserve">
     <value>Show tray icon</value>
+  </data>
+  <data name="Settings.GUI.UseNotify" xml:space="preserve">
+    <value>Show system notifications</value>
   </data>
   <data name="Settings.GUI.WindowTitleScrollable" xml:space="preserve">
     <value>Scroll window title</value>
@@ -3650,6 +3683,78 @@ With save file: farm points through crafting (advanced).
   </data>
   <data name="Settings.VersionUpdate.Status.ResourceUpdateFailed" xml:space="preserve">
     <value>Resource update failed.</value>
+  </data>
+  <data name="Settings.VersionUpdate.Status.MirrorChyanCdkRequired" xml:space="preserve">
+    <value>Please go to Settings &gt; Version Update to configure a MirrorChyan CDK or switch the update source.</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.Checking" xml:space="preserve">
+    <value>Checking resource updates. source={0}, client={1}</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.CheckFailedHttp" xml:space="preserve">
+    <value>Resource update check failed with HTTP {0}.</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.CheckFailed" xml:space="preserve">
+    <value>Resource update check failed.</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.CheckFailedWithMessage" xml:space="preserve">
+    <value>Resource update check failed: {0}</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.AlreadyLatest" xml:space="preserve">
+    <value>Resources are already up to date.</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.Available" xml:space="preserve">
+    <value>Resource update available: {0}.</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.AvailableRequiresCdk" xml:space="preserve">
+    <value>Resource update available: {0}. MirrorChyan CDK required for direct download.</value>
+  </data>
+  <data name="VersionUpdate.Log.Software.Checking" xml:space="preserve">
+    <value>Checking software updates. channel={0}, current={1}</value>
+  </data>
+  <data name="VersionUpdate.Log.Software.PreparingPackage" xml:space="preserve">
+    <value>Preparing software update package download.</value>
+  </data>
+  <data name="VersionUpdate.Log.Software.PreparingNamedPackage" xml:space="preserve">
+    <value>Preparing software update package: {0}</value>
+  </data>
+  <data name="VersionUpdate.Log.Software.PackageReady" xml:space="preserve">
+    <value>Software update package is ready to apply after restart.</value>
+  </data>
+  <data name="VersionUpdate.Log.Software.NamedPackageReady" xml:space="preserve">
+    <value>Software update package {0} is ready to apply after restart.</value>
+  </data>
+  <data name="VersionUpdate.Log.Software.PackagePrepareFailed" xml:space="preserve">
+    <value>Software update package preparation failed.</value>
+  </data>
+  <data name="VersionUpdate.Log.Software.PackagePrepareFailedWithMessage" xml:space="preserve">
+    <value>Software update package preparation failed: {0}</value>
+  </data>
+  <data name="VersionUpdate.Log.Software.Available" xml:space="preserve">
+    <value>Version update available: {0}</value>
+  </data>
+  <data name="VersionUpdate.Log.Software.AlreadyLatest" xml:space="preserve">
+    <value>Software is already up to date on {0}.</value>
+  </data>
+  <data name="VersionUpdate.Log.Software.CheckFailedWithMessage" xml:space="preserve">
+    <value>Software update check failed: {0}</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.GithubStart" xml:space="preserve">
+    <value>Starting resource update from Github.</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.GithubCompleted" xml:space="preserve">
+    <value>Resource update completed from Github.</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.GithubFailedWithMessage" xml:space="preserve">
+    <value>Resource update from Github failed: {0}</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.MirrorChyanStart" xml:space="preserve">
+    <value>Starting resource update from MirrorChyan.</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.MirrorChyanCompleted" xml:space="preserve">
+    <value>Resource update completed from MirrorChyan.</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.MirrorChyanFailedWithMessage" xml:space="preserve">
+    <value>Resource update from MirrorChyan failed: {0}</value>
   </data>
   <data name="Settings.VersionUpdate.Status.SaveChannelFailed" xml:space="preserve">
     <value>Failed to save update channel settings.</value>

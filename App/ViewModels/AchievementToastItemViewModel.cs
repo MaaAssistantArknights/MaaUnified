@@ -6,6 +6,7 @@ public sealed class AchievementToastItemViewModel : ObservableObject
 {
     public AchievementToastItemViewModel(
         string id,
+        string celebrateText,
         string title,
         string description,
         string medalColor,
@@ -13,6 +14,7 @@ public sealed class AchievementToastItemViewModel : ObservableObject
         DateTimeOffset unlockedAtUtc)
     {
         Id = id;
+        CelebrateText = celebrateText;
         Title = title;
         Description = description;
         MedalColor = medalColor;
@@ -21,6 +23,8 @@ public sealed class AchievementToastItemViewModel : ObservableObject
     }
 
     public string Id { get; }
+
+    public string CelebrateText { get; }
 
     public string Title { get; }
 

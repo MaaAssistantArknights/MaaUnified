@@ -70,6 +70,7 @@ public sealed class MainShellViewModel : ObservableObject
     private string _windowTitle = AppDisplayName;
     private string _windowVersionUpdateInfo = string.Empty;
     private string _windowResourceUpdateInfo = string.Empty;
+    private bool _isWindowUpdateActionRunning;
     private string _importStatus = string.Empty;
     private string _capabilitySummary = string.Empty;
     private string _currentShellLanguage = UiLanguageCatalog.DefaultLanguage;
@@ -228,6 +229,7 @@ public sealed class MainShellViewModel : ObservableObject
                 OnPropertyChanged(nameof(IsCopilotRootTabSelected));
                 OnPropertyChanged(nameof(IsToolboxRootTabSelected));
                 OnPropertyChanged(nameof(IsSettingsRootTabSelected));
+                OnPropertyChanged(nameof(ShowWindowOverlayButton));
             }
         }
     }
@@ -239,6 +241,8 @@ public sealed class MainShellViewModel : ObservableObject
     public bool IsToolboxRootTabSelected => SelectedRootTabIndex == 2;
 
     public bool IsSettingsRootTabSelected => SelectedRootTabIndex == 3;
+
+    public bool ShowWindowOverlayButton => IsTaskQueueRootTabSelected || IsCopilotRootTabSelected;
 
     public bool IsWindowTopMost
     {
@@ -379,6 +383,20 @@ public sealed class MainShellViewModel : ObservableObject
     public bool HasWindowResourceUpdateInfo => !string.IsNullOrWhiteSpace(WindowResourceUpdateInfo);
 
     public bool HasWindowUpdateInfo => HasWindowVersionUpdateInfo || HasWindowResourceUpdateInfo;
+
+    public bool IsWindowUpdateActionRunning
+    {
+        get => _isWindowUpdateActionRunning;
+        private set
+        {
+            if (SetProperty(ref _isWindowUpdateActionRunning, value))
+            {
+                OnPropertyChanged(nameof(CanTriggerWindowUpdateActions));
+            }
+        }
+    }
+
+    public bool CanTriggerWindowUpdateActions => !IsWindowUpdateActionRunning;
 
     public bool HasLastError => !string.IsNullOrWhiteSpace(LastError);
 
@@ -1657,6 +1675,9 @@ public sealed class MainShellViewModel : ObservableObject
             0,
             new AchievementToastItemViewModel(
                 notification.Id,
+                AchievementTextCatalog.GetString("AchievementCelebrate", CurrentShellLanguage, "Achievement Unlocked")
+                    .Replace("🎉", string.Empty, StringComparison.Ordinal)
+                    .Trim(),
                 notification.Title,
                 notification.Description,
                 notification.MedalColor,
@@ -1852,15 +1873,15 @@ public sealed class MainShellViewModel : ObservableObject
         {
             WindowVersionUpdateInfo = string.Empty;
             WindowResourceUpdateInfo = string.Empty;
+            IsWindowUpdateActionRunning = false;
             return;
         }
 
+        IsWindowUpdateActionRunning = page.IsVersionUpdateActionRunning;
         WindowVersionUpdateInfo = page.HasPendingVersionUpdateAvailability
             ? RootTexts["Main.Update.VersionAvailable"]
             : string.Empty;
-        WindowResourceUpdateInfo = page.HasPendingResourceUpdateAvailability
-            ? RootTexts["Main.Update.ResourceAvailable"]
-            : string.Empty;
+        WindowResourceUpdateInfo = page.PendingResourceUpdateSummary;
     }
 
     private async Task RunStartupVersionUpdateWorkflowAsync(
@@ -1913,20 +1934,20 @@ public sealed class MainShellViewModel : ObservableObject
 
     private void RefreshWindowTitle()
     {
-        var updateTags = new List<string>();
+        var updateMessages = new List<string>();
         if (HasWindowVersionUpdateInfo)
         {
-            updateTags.Add(RootTexts.GetOrDefault("Main.Title.UpdateVersion", "Version Update"));
+            updateMessages.Add(WindowVersionUpdateInfo.Trim());
         }
 
         if (HasWindowResourceUpdateInfo)
         {
-            updateTags.Add(RootTexts.GetOrDefault("Main.Title.UpdateResource", "Resource Update"));
+            updateMessages.Add(WindowResourceUpdateInfo.Trim());
         }
 
-        _windowTitleSource = updateTags.Count == 0
+        _windowTitleSource = updateMessages.Count == 0
             ? AppDisplayName
-            : $"{AppDisplayName} [{string.Join(" / ", updateTags)}]";
+            : $"{AppDisplayName} - {string.Join(" / ", updateMessages)}";
         _windowTitleScrollOffset = 0;
         UpdateWindowTitleDisplay();
     }
@@ -2686,6 +2707,7 @@ public sealed class MainShellViewModel : ObservableObject
                 nextLanguage,
                 settingsPage.StartSelf,
                 ReportLocalizationFallback);
+            ApplySettingsUpdateAvailabilityState(settingsPage);
         }
 
         RefreshRootTextState();

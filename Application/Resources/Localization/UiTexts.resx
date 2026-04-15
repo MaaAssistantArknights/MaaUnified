@@ -1388,6 +1388,9 @@ Session state `{0}` does not allow {2}.</value>
   <data name="Main.Update.ResourceAvailable" xml:space="preserve">
     <value>资源更新可用，点击检查资源</value>
   </data>
+  <data name="Main.Update.ResourceDetected" xml:space="preserve">
+    <value>检测到资源更新: {0}</value>
+  </data>
   <data name="Main.Update.VersionAvailable" xml:space="preserve">
     <value>版本更新可用，点击设置 &gt; Version Update</value>
   </data>
@@ -2143,8 +2146,35 @@ Session state `{0}` does not allow {2}.</value>
   <data name="Settings.Achievement.Dialog.FilterWatermark" xml:space="preserve">
     <value>搜索成就</value>
   </data>
+  <data name="Settings.Achievement.Dialog.FilterAll" xml:space="preserve">
+    <value>全部</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.FilterUnlocked" xml:space="preserve">
+    <value>已解锁</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.FilterInProgress" xml:space="preserve">
+    <value>进行中</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.FilterNew" xml:space="preserve">
+    <value>新解锁</value>
+  </data>
   <data name="Settings.Achievement.Dialog.ProgressFormat" xml:space="preserve">
     <value>进度：{0}</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.ResultsFormat" xml:space="preserve">
+    <value>显示 {0} 项</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.ClearFilters" xml:space="preserve">
+    <value>清除筛选</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.EmptyTitle" xml:space="preserve">
+    <value>没有找到匹配的成就</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.EmptyDescription" xml:space="preserve">
+    <value>试试更换关键词或筛选条件。</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.OverviewFormat" xml:space="preserve">
+    <value>已解锁 {0} / {1} · 完成率 {2}%</value>
   </data>
   <data name="Settings.Achievement.Dialog.Snapshot" xml:space="preserve">
     <value>成就对话快照</value>
@@ -2856,6 +2886,9 @@ Session state `{0}` does not allow {2}.</value>
   </data>
   <data name="Settings.GUI.UseTray" xml:space="preserve">
     <value>显示托盘图标</value>
+  </data>
+  <data name="Settings.GUI.UseNotify" xml:space="preserve">
+    <value>显示系统通知</value>
   </data>
   <data name="Settings.GUI.WindowTitleScrollable" xml:space="preserve">
     <value>窗口标题滚动</value>
@@ -3651,6 +3684,78 @@ Session state `{0}` does not allow {2}.</value>
   </data>
   <data name="Settings.VersionUpdate.Status.ResourceUpdateFailed" xml:space="preserve">
     <value>更新资源失败。</value>
+  </data>
+  <data name="Settings.VersionUpdate.Status.MirrorChyanCdkRequired" xml:space="preserve">
+    <value>请前往 设置 &gt; Version Update 配置 Mirror酱 CDK 或切换更新源。</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.Checking" xml:space="preserve">
+    <value>正在检查资源更新。源={0}，客户端={1}</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.CheckFailedHttp" xml:space="preserve">
+    <value>资源更新检查失败，HTTP 状态码 {0}。</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.CheckFailed" xml:space="preserve">
+    <value>资源更新检查失败。</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.CheckFailedWithMessage" xml:space="preserve">
+    <value>资源更新检查失败：{0}</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.AlreadyLatest" xml:space="preserve">
+    <value>资源已是最新版本。</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.Available" xml:space="preserve">
+    <value>检测到资源更新：{0}。</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.AvailableRequiresCdk" xml:space="preserve">
+    <value>检测到资源更新：{0}。MirrorChyan 直链下载需要 CDK。</value>
+  </data>
+  <data name="VersionUpdate.Log.Software.Checking" xml:space="preserve">
+    <value>正在检查软件更新。通道={0}，当前版本={1}</value>
+  </data>
+  <data name="VersionUpdate.Log.Software.PreparingPackage" xml:space="preserve">
+    <value>正在准备软件下载包。</value>
+  </data>
+  <data name="VersionUpdate.Log.Software.PreparingNamedPackage" xml:space="preserve">
+    <value>正在准备软件下载包：{0}</value>
+  </data>
+  <data name="VersionUpdate.Log.Software.PackageReady" xml:space="preserve">
+    <value>软件下载包已准备完成，重启后即可应用。</value>
+  </data>
+  <data name="VersionUpdate.Log.Software.NamedPackageReady" xml:space="preserve">
+    <value>软件下载包 {0} 已准备完成，重启后即可应用。</value>
+  </data>
+  <data name="VersionUpdate.Log.Software.PackagePrepareFailed" xml:space="preserve">
+    <value>软件下载包准备失败。</value>
+  </data>
+  <data name="VersionUpdate.Log.Software.PackagePrepareFailedWithMessage" xml:space="preserve">
+    <value>软件下载包准备失败：{0}</value>
+  </data>
+  <data name="VersionUpdate.Log.Software.Available" xml:space="preserve">
+    <value>检测到软件更新：{0}</value>
+  </data>
+  <data name="VersionUpdate.Log.Software.AlreadyLatest" xml:space="preserve">
+    <value>当前 {0} 通道已是最新版本。</value>
+  </data>
+  <data name="VersionUpdate.Log.Software.CheckFailedWithMessage" xml:space="preserve">
+    <value>软件更新检查失败：{0}</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.GithubStart" xml:space="preserve">
+    <value>开始从 Github 更新资源。</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.GithubCompleted" xml:space="preserve">
+    <value>已从 Github 完成资源更新。</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.GithubFailedWithMessage" xml:space="preserve">
+    <value>Github 资源更新失败：{0}</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.MirrorChyanStart" xml:space="preserve">
+    <value>开始从 MirrorChyan 更新资源。</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.MirrorChyanCompleted" xml:space="preserve">
+    <value>已从 MirrorChyan 完成资源更新。</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.MirrorChyanFailedWithMessage" xml:space="preserve">
+    <value>MirrorChyan 资源更新失败：{0}</value>
   </data>
   <data name="Settings.VersionUpdate.Status.SaveChannelFailed" xml:space="preserve">
     <value>版本更新通道配置保存失败。</value>

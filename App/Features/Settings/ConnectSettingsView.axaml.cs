@@ -15,6 +15,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using MAAUnified.Application.Models;
+using MAAUnified.App.Controls;
 using MAAUnified.App.ViewModels.Settings;
 using MAAUnified.Application.Services.Localization;
 
@@ -77,6 +78,16 @@ public partial class ConnectSettingsView : UserControl
         }
 
         vm.RemoveAddressFromHistory(address);
+    }
+
+    private void OnConnectAddressSelectionCommitted(object? sender, CheckComboBoxSelectionCommittedEventArgs e)
+    {
+        if (VM is null || e.SelectedItem is not string address)
+        {
+            return;
+        }
+
+        VM.ConnectAddress = address;
     }
 
     private void OnMuMuExtrasChecked(object? sender, RoutedEventArgs e)
