@@ -2,6 +2,7 @@ using System.Text.Json.Nodes;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using MAAUnified.Application.Services.Localization;
+using MAAUnified.Compat.Runtime;
 
 namespace MAAUnified.App.ViewModels.Toolbox;
 
@@ -655,7 +656,7 @@ internal static class ToolboxAssetCatalog
 
         var candidates = new[]
         {
-            AppContext.BaseDirectory,
+            RuntimeLayout.ResolveRuntimeBaseDirectory(),
             Environment.CurrentDirectory,
             Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..")),
         };

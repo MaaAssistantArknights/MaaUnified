@@ -51,7 +51,7 @@ public partial class AchievementListDialogView : Window, IDialogChromeAware
     public void ApplyRequest(AchievementListDialogRequest request)
     {
         Title = request.Title;
-        DialogTitleText.Text = request.Title;
+        DialogShell.Title = request.Title;
         _filterWatermarkSnapshot = request.FilterWatermark;
         LoadLocalizedText();
         _presenter.ApplyRequest(request, _newBadgeText, _progressFormat);
@@ -72,7 +72,7 @@ public partial class AchievementListDialogView : Window, IDialogChromeAware
     public void ApplyDialogChrome(DialogChromeSnapshot chrome)
     {
         Title = chrome.Title;
-        DialogTitleText.Text = chrome.GetNamedTextOrDefault(DialogTextCatalog.ChromeKeys.SectionTitle, chrome.Title);
+        DialogShell.Title = chrome.GetNamedTextOrDefault(DialogTextCatalog.ChromeKeys.SectionTitle, chrome.Title);
         FilterInput.Watermark = chrome.GetNamedTextOrDefault(DialogTextCatalog.ChromeKeys.FilterWatermark, _filterWatermarkSnapshot);
         LoadLocalizedText();
         _presenter.UpdateDisplayItems(_newBadgeText, _progressFormat);
@@ -153,20 +153,9 @@ public partial class AchievementListDialogView : Window, IDialogChromeAware
         RefreshView();
     }
 
-    private void OnCloseClick(object? sender, RoutedEventArgs e)
+    private void OnShellCloseRequested(object? sender, EventArgs e)
     {
         Close(DialogReturnSemantic.Close);
-    }
-
-    private void OnDragHeaderPointerPressed(object? sender, PointerPressedEventArgs e)
-    {
-        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
-        {
-            return;
-        }
-
-        BeginMoveDrag(e);
-        e.Handled = true;
     }
 
     private void OnResizeGripPointerPressed(object? sender, PointerPressedEventArgs e)

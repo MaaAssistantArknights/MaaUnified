@@ -23,9 +23,11 @@ public partial class ErrorDialogView : Window, IDialogChromeAware
         ErrorDialogRequest request,
         Func<CancellationToken, Task<UiOperationResult>>? openIssueReportAsync = null)
     {
+        _copied = false;
+        _issueOpened = false;
         Title = request.Title;
         _openIssueReportAsync = openIssueReportAsync;
-        DialogTitleText.Text = request.Title;
+        DialogShell.Title = request.Title;
         CopyButton.Content = DialogTextCatalog.ErrorDialogCopyButton(request.Language);
         IssueReportButton.Content = DialogTextCatalog.ErrorDialogIssueReportButton(request.Language);
         ConfirmButton.Content = request.ConfirmText;
@@ -33,6 +35,9 @@ public partial class ErrorDialogView : Window, IDialogChromeAware
         ContextLine.Text = $"[{request.Context}] {request.Result.Message}";
         _formattedText = BuildFormattedErrorText(request);
         ErrorDetailBox.Text = _formattedText;
+        ErrorDetailBox.CaretIndex = 0;
+        IssueReportButton.IsVisible = _openIssueReportAsync is not null;
+        IssueReportButton.IsEnabled = _openIssueReportAsync is not null;
     }
 
     public ErrorDialogPayload BuildPayload()
@@ -77,10 +82,18 @@ public partial class ErrorDialogView : Window, IDialogChromeAware
             return;
         }
 
-        var result = await _openIssueReportAsync(CancellationToken.None);
-        if (result.Success)
+        IssueReportButton.IsEnabled = false;
+        try
         {
-            _issueOpened = true;
+            var result = await _openIssueReportAsync(CancellationToken.None);
+            if (result.Success)
+            {
+                _issueOpened = true;
+            }
+        }
+        finally
+        {
+            IssueReportButton.IsEnabled = _openIssueReportAsync is not null;
         }
     }
 
@@ -94,10 +107,15 @@ public partial class ErrorDialogView : Window, IDialogChromeAware
         Close(DialogReturnSemantic.Cancel);
     }
 
+    private void OnShellCloseRequested(object? sender, EventArgs e)
+    {
+        Close();
+    }
+
     public void ApplyDialogChrome(DialogChromeSnapshot chrome)
     {
         Title = chrome.Title;
-        DialogTitleText.Text = chrome.GetNamedTextOrDefault(DialogTextCatalog.ChromeKeys.SectionTitle, chrome.Title);
+        DialogShell.Title = chrome.GetNamedTextOrDefault(DialogTextCatalog.ChromeKeys.SectionTitle, chrome.Title);
         CopyButton.Content = chrome.GetNamedTextOrDefault(DialogTextCatalog.ChromeKeys.CopyButton, CopyButton.Content?.ToString() ?? "Copy");
         IssueReportButton.Content = chrome.GetNamedTextOrDefault(
             DialogTextCatalog.ChromeKeys.IssueReportButton,

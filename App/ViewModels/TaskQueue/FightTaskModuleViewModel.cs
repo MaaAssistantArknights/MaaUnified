@@ -6,6 +6,7 @@ using MAAUnified.Application.Models.TaskParams;
 using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Localization;
 using MAAUnified.Application.Services.TaskParams;
+using MAAUnified.Compat.Runtime;
 using LegacyConfigurationKeys = MAAUnified.Compat.Constants.ConfigurationKeys;
 
 namespace MAAUnified.App.ViewModels.TaskQueue;
@@ -743,7 +744,7 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
         string language,
         string? baseDirectory = null)
     {
-        var root = baseDirectory ?? AppContext.BaseDirectory;
+        var root = baseDirectory ?? RuntimeLayout.ResolveRuntimeBaseDirectory();
         var candidates = new List<string>();
 
         if (DisplayLanguageClientDirectoryMap.TryGetValue(language, out var clientDirectory))

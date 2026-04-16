@@ -70,6 +70,26 @@ public sealed class DialogModuleP1FeatureTests
     }
 
     [Fact]
+    public void TextDialogRequest_ShouldSupportReadOnlyContentMode()
+    {
+        var editable = new TextDialogRequest(
+            Title: "Editable",
+            Prompt: "Prompt",
+            DefaultText: "Default");
+        var readOnly = editable with
+        {
+            MultiLine = true,
+            ReadOnlyContent = true,
+        };
+
+        Assert.False(editable.ReadOnlyContent);
+        Assert.False(editable.MultiLine);
+        Assert.True(readOnly.ReadOnlyContent);
+        Assert.True(readOnly.MultiLine);
+        Assert.Equal("Default", readOnly.DefaultText);
+    }
+
+    [Fact]
     public void DialogTextCatalog_ShouldUseLocalizedTextsForSupportedLanguages()
     {
         Assert.Equal("警告", DialogTextCatalog.WarningDialogTitle("ja-jp"));
@@ -287,11 +307,11 @@ public sealed class DialogModuleP1FeatureTests
                 ],
                 InitialFilter: string.Empty,
                 UnlockedCount: 1,
-                TotalCount: 3));
+                TotalCount: 3),
+            "NEW",
+            "Progress: {0}");
 
         var initialState = presenter.BuildState(
-            "NEW",
-            "Progress: {0}",
             "Unlocked {0} / {1} · {2}% complete",
             "Showing {0} achievements");
         Assert.Equal(3, initialState.Items.Count);
@@ -299,8 +319,6 @@ public sealed class DialogModuleP1FeatureTests
 
         presenter.SetFilter(AchievementQuickFilter.InProgress);
         var progressState = presenter.BuildState(
-            "NEW",
-            "Progress: {0}",
             "Unlocked {0} / {1} · {2}% complete",
             "Showing {0} achievements");
         var progressItem = Assert.Single(progressState.Items);
@@ -310,8 +328,6 @@ public sealed class DialogModuleP1FeatureTests
         presenter.SetFilter(AchievementQuickFilter.NewUnlock);
         presenter.SetSearchText("contact");
         var combinedState = presenter.BuildState(
-            "NEW",
-            "Progress: {0}",
             "Unlocked {0} / {1} · {2}% complete",
             "Showing {0} achievements");
         var combinedItem = Assert.Single(combinedState.Items);

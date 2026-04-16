@@ -284,7 +284,9 @@ public sealed class MainShellViewModelTests
         Assert.Equal(
             fixture.ViewModel.RootTexts["Main.SchemaMigration.Dialog.Cancel"],
             dialogService.LastTextRequest.CancelText);
-        Assert.Contains("当前版本: v1", dialogService.LastTextRequest.Prompt, StringComparison.Ordinal);
+        Assert.True(dialogService.LastTextRequest.ReadOnlyContent);
+        Assert.True(dialogService.LastTextRequest.MultiLine);
+        Assert.Contains("当前版本: v1", dialogService.LastTextRequest.DefaultText, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -1232,18 +1234,21 @@ public sealed class MainShellViewModelTests
         Assert.True(confirmed);
         Assert.Equal(1, dialogService.WarningConfirmCallCount);
         Assert.Equal("Toolbox.Gacha.Disclaimer", dialogService.LastWarningConfirmScope);
-        var request = Assert.NotNull(dialogService.LastWarningConfirmRequest);
+        var request = dialogService.LastWarningConfirmRequest;
+        Assert.NotNull(request);
         Assert.Equal(fixture.ViewModel.ToolboxPage.GachaWarningText, request.Message);
-        var chrome = Assert.NotNull(request.Chrome).GetSnapshot(request.Language);
+        var chrome = request.Chrome;
+        Assert.NotNull(chrome);
+        var chromeSnapshot = chrome!.GetSnapshot(request.Language);
         Assert.Equal(
             fixture.ViewModel.ToolboxPage.GachaDisclaimerLeadText,
-            chrome.GetNamedTextOrDefault(DialogTextCatalog.ChromeKeys.LeadText));
+            chromeSnapshot.GetNamedTextOrDefault(DialogTextCatalog.ChromeKeys.LeadText));
         Assert.Equal(
             fixture.ViewModel.ToolboxPage.GachaDisclaimerEmphasisText,
-            chrome.GetNamedTextOrDefault(DialogTextCatalog.ChromeKeys.EmphasisText));
+            chromeSnapshot.GetNamedTextOrDefault(DialogTextCatalog.ChromeKeys.EmphasisText));
         Assert.Equal(
             fixture.ViewModel.ToolboxPage.GachaDisclaimerBodyText,
-            chrome.GetNamedTextOrDefault(DialogTextCatalog.ChromeKeys.DetailText));
+            chromeSnapshot.GetNamedTextOrDefault(DialogTextCatalog.ChromeKeys.DetailText));
         Assert.False(fixture.ViewModel.ToolboxPage.GachaShowDisclaimer);
     }
 

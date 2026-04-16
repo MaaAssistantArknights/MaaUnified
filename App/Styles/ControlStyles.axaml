@@ -1,5 +1,6 @@
 <Styles xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:dialogs="clr-namespace:MAAUnified.App.Features.Dialogs">
   <Styles.Resources>
     <Thickness x:Key="MAA.BorderThickness.Thin">1</Thickness>
 
@@ -314,41 +315,35 @@
   </Style>
 
   <Style Selector="Border.achievement-toast-badge">
-    <Setter Property="Padding" Value="10,4" />
-    <Setter Property="Background" Value="{DynamicResource MAA.Brush.Toast.AchievementBadgeBackground}" />
+    <Setter Property="Padding" Value="8,3" />
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.Dialog.FilterChipBackground}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.Dialog.FilterChipBorder}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource MAA.BorderThickness.Thin}" />
     <Setter Property="CornerRadius" Value="999" />
-    <Setter Property="HorizontalAlignment" Value="Left" />
+    <Setter Property="HorizontalAlignment" Value="Center" />
   </Style>
 
   <Style Selector="TextBlock.achievement-toast-badge-text">
     <Setter Property="FontSize" Value="11" />
     <Setter Property="FontWeight" Value="SemiBold" />
-    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Toast.AchievementBadgeForeground}" />
-  </Style>
-
-  <Style Selector="Border.achievement-toast-medal-shell">
-    <Setter Property="Width" Value="44" />
-    <Setter Property="Height" Value="44" />
-    <Setter Property="CornerRadius" Value="22" />
-    <Setter Property="Background" Value="{DynamicResource MAA.Brush.Toast.AchievementMedalSurface}" />
-    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.Toast.AchievementMedalBorder}" />
-    <Setter Property="BorderThickness" Value="{DynamicResource MAA.BorderThickness.Thin}" />
-    <Setter Property="VerticalAlignment" Value="Center" />
-    <Setter Property="HorizontalAlignment" Value="Center" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Text.Secondary}" />
   </Style>
 
   <Style Selector="Border.achievement-toast-medal-core">
-    <Setter Property="Width" Value="28" />
-    <Setter Property="Height" Value="28" />
-    <Setter Property="CornerRadius" Value="14" />
+    <Setter Property="Width" Value="44" />
+    <Setter Property="Height" Value="44" />
+    <Setter Property="CornerRadius" Value="22" />
     <Setter Property="HorizontalAlignment" Value="Center" />
     <Setter Property="VerticalAlignment" Value="Center" />
   </Style>
 
   <Style Selector="TextBlock.achievement-toast-medal-glyph">
-    <Setter Property="FontSize" Value="14" />
+    <Setter Property="Width" Value="44" />
+    <Setter Property="Height" Value="44" />
+    <Setter Property="FontSize" Value="28" />
     <Setter Property="FontWeight" Value="Bold" />
     <Setter Property="Foreground" Value="#FFFFFFFF" />
+    <Setter Property="LineHeight" Value="44" />
     <Setter Property="HorizontalAlignment" Value="Center" />
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="TextAlignment" Value="Center" />
@@ -385,12 +380,86 @@
     <Setter Property="VerticalContentAlignment" Value="Center" />
   </Style>
 
+  <Style Selector="Grid.achievement-toast-close-shell">
+    <Setter Property="Width" Value="40" />
+    <Setter Property="Height" Value="40" />
+  </Style>
+
+  <Style Selector="Ellipse.achievement-toast-close-ring-track">
+    <Setter Property="Width" Value="36" />
+    <Setter Property="Height" Value="36" />
+    <Setter Property="StrokeThickness" Value="2" />
+    <Setter Property="Stroke" Value="{DynamicResource MAA.Brush.Dialog.SectionBorder}" />
+    <Setter Property="HorizontalAlignment" Value="Center" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="Ellipse.achievement-toast-close-ring-progress">
+    <Setter Property="Width" Value="36" />
+    <Setter Property="Height" Value="36" />
+    <Setter Property="StrokeThickness" Value="2.5" />
+    <Setter Property="StrokeLineCap" Value="Round" />
+    <Setter Property="HorizontalAlignment" Value="Center" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="RenderTransformOrigin" Value="0.5,0.5" />
+    <Setter Property="RenderTransform">
+      <RotateTransform Angle="-90" />
+    </Setter>
+  </Style>
+
   <Style Selector="Button.achievement-toast-close:pointerover">
     <Setter Property="Background" Value="{DynamicResource MAA.Brush.Toast.AchievementCloseHoverBackground}" />
   </Style>
 
   <Style Selector="Button.achievement-toast-close:pressed">
     <Setter Property="Background" Value="{DynamicResource MAA.Brush.Toast.AchievementClosePressedBackground}" />
+  </Style>
+
+  <Style Selector="dialogs|ModernDialogShell">
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Margin="{TemplateBinding ShellMargin}"
+                Classes="modern-dialog-shell">
+          <Border.Effect>
+            <DropShadowDirectionEffect BlurRadius="24"
+                                       ShadowDepth="6"
+                                       Opacity="0.18"
+                                       Color="Black" />
+          </Border.Effect>
+          <Grid RowDefinitions="Auto,Auto,*,Auto">
+            <Grid ColumnDefinitions="*,Auto">
+              <Border x:Name="PART_HeaderDragArea"
+                      Background="Transparent">
+                <TextBlock Classes="modern-dialog-title dialog-window-title"
+                           Text="{TemplateBinding Title}" />
+              </Border>
+              <Button x:Name="PART_CloseButton"
+                      Grid.Column="1"
+                      Classes="modern-dialog-close"
+                      HorizontalAlignment="Right"
+                      VerticalAlignment="Top"
+                      IsVisible="{TemplateBinding ShowCloseButton}"
+                      Content="✕" />
+            </Grid>
+
+            <ContentPresenter Grid.Row="1"
+                              Margin="0,6,0,0"
+                              IsVisible="{TemplateBinding HasHeaderContent}"
+                              Content="{TemplateBinding HeaderContent}" />
+
+            <ContentPresenter Grid.Row="2"
+                              Margin="0,16,0,0"
+                              Content="{TemplateBinding Content}" />
+
+            <ContentPresenter Grid.Row="3"
+                              Margin="0,20,0,0"
+                              IsVisible="{TemplateBinding HasActions}"
+                              HorizontalAlignment="Right"
+                              Content="{TemplateBinding ActionsContent}" />
+          </Grid>
+        </Border>
+      </ControlTemplate>
+    </Setter>
   </Style>
 
   <Style Selector="Border.modern-dialog-shell">

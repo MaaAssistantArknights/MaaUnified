@@ -15,6 +15,7 @@ using MAAUnified.Application.Models;
 using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Localization;
 using MAAUnified.Compat.Constants;
+using MAAUnified.Compat.Runtime;
 using MAAUnified.CoreBridge;
 using MAAUnified.Platform;
 
@@ -6071,8 +6072,8 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
     {
         var baseDirectories = new[]
         {
-            AppContext.BaseDirectory,
             ResolveRuntimeBaseDirectory(),
+            AppContext.BaseDirectory,
         };
 
         foreach (var baseDirectory in baseDirectories
@@ -6215,7 +6216,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
             }
         }
 
-        return Environment.CurrentDirectory;
+        return RuntimeLayout.ResolveRuntimeBaseDirectory();
     }
 
     private async Task OpenAboutExternalTargetAsync(

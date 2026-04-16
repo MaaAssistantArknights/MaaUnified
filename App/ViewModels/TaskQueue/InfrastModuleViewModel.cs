@@ -233,7 +233,7 @@ public sealed class InfrastModuleViewModel : TaskModuleSettingsViewModelBase
 
             if (readOnly)
             {
-                var defaultPath = Path.Combine(AppContext.BaseDirectory, "resource", "custom_infrast", normalized);
+                var defaultPath = Path.Combine(global::MAAUnified.Compat.Runtime.RuntimeLayout.ResolveRuntimeBaseDirectory(), "resource", "custom_infrast", normalized);
                 CustomFilePath = defaultPath;
             }
 

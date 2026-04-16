@@ -1,5 +1,6 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:dialogs="clr-namespace:MAAUnified.App.Features.Dialogs"
         x:Class="MAAUnified.App.Features.Dialogs.WarningConfirmDialogView"
         Width="620"
         MinWidth="520"
@@ -8,75 +9,48 @@
         Background="Transparent"
         SystemDecorations="None"
         WindowStartupLocation="CenterOwner">
-  <Grid>
-    <Border Margin="12"
-            Classes="modern-dialog-shell">
-      <Border.Effect>
-        <DropShadowDirectionEffect BlurRadius="24"
-                                   ShadowDepth="6"
-                                   Opacity="0.18"
-                                   Color="Black" />
-      </Border.Effect>
-      <Grid RowDefinitions="Auto,Auto,Auto">
-        <Grid ColumnDefinitions="*,Auto">
-          <Border Background="Transparent"
-                  PointerPressed="OnDragHeaderPointerPressed">
-            <TextBlock x:Name="TitleText"
-                       Classes="modern-dialog-title dialog-window-title"
+  <dialogs:ModernDialogShell x:Name="DialogShell"
+                             CloseRequested="OnShellCloseRequested">
+    <dialogs:ModernDialogShell.Content>
+      <Grid ColumnDefinitions="Auto,*">
+        <Border Classes="modern-dialog-hero-core"
+                VerticalAlignment="Top">
+          <TextBlock Classes="modern-dialog-hero-glyph"
+                     Text="!" />
+        </Border>
+
+        <StackPanel Grid.Column="1"
+                    Margin="18,2,0,0"
+                    Spacing="12">
+          <TextBlock x:Name="LeadTextBlock"
+                     Classes="modern-dialog-lead"
+                     IsVisible="False"
+                     Text="" />
+          <Border x:Name="EmphasisPanel"
+                  Classes="modern-dialog-highlight"
+                  IsVisible="False">
+            <TextBlock x:Name="EmphasisTextBlock"
+                       Classes="modern-dialog-emphasis"
                        Text="" />
           </Border>
-          <Button Grid.Column="1"
-                  Classes="modern-dialog-close"
-                  HorizontalAlignment="Right"
-                  VerticalAlignment="Top"
-                  Content="✕"
-                  Click="OnCloseClick" />
-        </Grid>
-
-        <Grid Grid.Row="1"
-              Margin="0,18,0,0"
-              ColumnDefinitions="Auto,*">
-          <Border Classes="modern-dialog-hero-core"
-                  VerticalAlignment="Top">
-            <TextBlock Classes="modern-dialog-hero-glyph"
-                       Text="!" />
-          </Border>
-
-          <StackPanel Grid.Column="1"
-                      Margin="18,2,0,0"
-                      Spacing="12">
-            <TextBlock x:Name="LeadTextBlock"
-                       Classes="modern-dialog-lead"
-                       IsVisible="False"
-                       Text="" />
-            <Border x:Name="EmphasisPanel"
-                    Classes="modern-dialog-highlight"
-                    IsVisible="False">
-              <TextBlock x:Name="EmphasisTextBlock"
-                         Classes="modern-dialog-emphasis"
-                         Text="" />
-            </Border>
-            <TextBlock x:Name="DetailTextBlock"
-                       Classes="modern-dialog-body"
-                       Text="" />
-          </StackPanel>
-        </Grid>
-
-        <StackPanel Grid.Row="2"
-                    Margin="0,22,0,0"
-                    HorizontalAlignment="Right"
-                    Orientation="Horizontal"
-                    Spacing="10">
-          <Button x:Name="CancelButton"
-                  Classes="modern-dialog-button modern-dialog-button-secondary"
-                  Content=""
-                  Click="OnCancelClick" />
-          <Button x:Name="ConfirmButton"
-                  Classes="modern-dialog-button modern-dialog-button-primary"
-                  Content=""
-                  Click="OnConfirmClick" />
+          <TextBlock x:Name="DetailTextBlock"
+                     Classes="modern-dialog-body"
+                     Text="" />
         </StackPanel>
       </Grid>
-    </Border>
-  </Grid>
+    </dialogs:ModernDialogShell.Content>
+    <dialogs:ModernDialogShell.ActionsContent>
+      <StackPanel Orientation="Horizontal"
+                  Spacing="10">
+        <Button x:Name="CancelButton"
+                Classes="modern-dialog-button modern-dialog-button-secondary"
+                Content=""
+                Click="OnCancelClick" />
+        <Button x:Name="ConfirmButton"
+                Classes="modern-dialog-button modern-dialog-button-primary"
+                Content=""
+                Click="OnConfirmClick" />
+      </StackPanel>
+    </dialogs:ModernDialogShell.ActionsContent>
+  </dialogs:ModernDialogShell>
 </Window>

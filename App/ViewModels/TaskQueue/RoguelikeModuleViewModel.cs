@@ -6,6 +6,7 @@ using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Localization;
 using MAAUnified.Application.Services.TaskParams;
 using MAAUnified.Compat.Constants;
+using MAAUnified.Compat.Runtime;
 
 namespace MAAUnified.App.ViewModels.TaskQueue;
 
@@ -1454,9 +1455,10 @@ public sealed class RoguelikeModuleViewModel : TypedTaskModuleViewModelBase<Rogu
 
     private static string? ResolveRoguelikeRecruitmentFilePath(string theme)
     {
+        var runtimeBaseDirectory = RuntimeLayout.ResolveRuntimeBaseDirectory();
         var candidates = new[]
         {
-            Path.Combine(AppContext.BaseDirectory, "resource", "roguelike", theme, "recruitment.json"),
+            Path.Combine(runtimeBaseDirectory, "resource", "roguelike", theme, "recruitment.json"),
             Path.Combine(Environment.CurrentDirectory, "resource", "roguelike", theme, "recruitment.json"),
         };
 
@@ -1473,9 +1475,10 @@ public sealed class RoguelikeModuleViewModel : TypedTaskModuleViewModelBase<Rogu
 
     private static string? ResolveBattleDataFilePath()
     {
+        var runtimeBaseDirectory = RuntimeLayout.ResolveRuntimeBaseDirectory();
         var candidates = new[]
         {
-            Path.Combine(AppContext.BaseDirectory, "resource", "battle_data.json"),
+            Path.Combine(runtimeBaseDirectory, "resource", "battle_data.json"),
             Path.Combine(Environment.CurrentDirectory, "resource", "battle_data.json"),
         };
 

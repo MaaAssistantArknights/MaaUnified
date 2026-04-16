@@ -1,36 +1,109 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:dialogs="clr-namespace:MAAUnified.App.Features.Dialogs"
         x:Class="MAAUnified.App.Features.Dialogs.ProcessPickerDialogView"
         Width="620"
         Height="460"
         MinWidth="520"
         MinHeight="360"
+        CanResize="False"
+        Background="Transparent"
+        SystemDecorations="None"
         WindowStartupLocation="CenterOwner">
-  <Grid Margin="10" RowDefinitions="Auto,*,Auto">
-    <TextBlock x:Name="DialogTitleText"
-               Classes="section-title dialog-window-title"
-               Text="Process Picker" />
-    <ListBox x:Name="ProcessList"
-             Grid.Row="1"
-             Margin="0,8,0,0"
-             SelectionMode="Single">
-      <ListBox.ItemTemplate>
-        <DataTemplate>
-          <TextBlock Classes="long-wrap" Text="{Binding DisplayName}" />
-        </DataTemplate>
-      </ListBox.ItemTemplate>
-    </ListBox>
-    <StackPanel Grid.Row="2"
-                Orientation="Horizontal"
-                Spacing="8"
-                HorizontalAlignment="Right"
-                Margin="0,12,0,0">
-      <Button x:Name="RefreshButton"
-              Classes="wpf-button wpf-button-secondary"
-              Content="Refresh"
-              Click="OnRefreshClick" />
-      <Button Classes="wpf-button wpf-button-secondary" x:Name="CancelButton" Content="Cancel" Click="OnCancelClick" />
-      <Button x:Name="ConfirmButton" Classes="wpf-button" Content="Select" Click="OnConfirmClick" />
-    </StackPanel>
-  </Grid>
+  <dialogs:ModernDialogShell x:Name="DialogShell"
+                             CloseRequested="OnShellCloseRequested">
+    <dialogs:ModernDialogShell.HeaderContent>
+      <TextBlock x:Name="SelectionSummaryText"
+                 Margin="8,0,0,0"
+                 Classes="modern-dialog-subtitle dialog-window-subtitle long-wrap"
+                 Text="No running process found" />
+    </dialogs:ModernDialogShell.HeaderContent>
+    <dialogs:ModernDialogShell.Content>
+      <Grid RowDefinitions="Auto,*">
+        <Border Classes="modern-dialog-section">
+          <StackPanel Spacing="6">
+            <TextBlock Classes="section-title"
+                       Text="Running processes" />
+            <TextBlock x:Name="HintText"
+                       Classes="modern-dialog-subtitle subtle long-wrap"
+                       Text="Choose the process that should receive the connection." />
+          </StackPanel>
+        </Border>
+
+        <Grid Grid.Row="1"
+              Margin="0,14,0,0">
+          <Border Classes="modern-dialog-card">
+            <ListBox x:Name="ProcessList"
+                     Margin="2"
+                     SelectionMode="Single"
+                     SelectionChanged="OnProcessSelectionChanged"
+                     DoubleTapped="OnProcessListDoubleTapped"
+                     KeyDown="OnProcessListKeyDown">
+              <ListBox.ItemTemplate>
+                <DataTemplate>
+                  <Border Margin="0,0,0,10"
+                          Padding="14"
+                          Classes="modern-dialog-section">
+                    <Grid ColumnDefinitions="*,Auto"
+                          RowDefinitions="Auto,Auto">
+                      <TextBlock Classes="modern-dialog-lead long-wrap"
+                                 Text="{Binding DisplayName}" />
+                      <Border Grid.Column="1"
+                              Padding="10,4"
+                              Background="{DynamicResource MAA.Brush.Dialog.FilterChipSelectedBackground}"
+                              CornerRadius="12"
+                              IsVisible="{Binding IsPrimary}">
+                        <TextBlock Classes="modern-dialog-caption"
+                                   Foreground="{DynamicResource MAA.Brush.Dialog.FilterChipSelectedForeground}"
+                                   Text="Primary" />
+                      </Border>
+                      <TextBlock Grid.Row="1"
+                                 Grid.ColumnSpan="2"
+                                 Margin="0,8,0,0"
+                                 Classes="modern-dialog-caption long-ellipsis"
+                                 Text="{Binding Id}" />
+                    </Grid>
+                  </Border>
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
+          </Border>
+
+          <Border x:Name="EmptyStatePanel"
+                  Classes="modern-dialog-section"
+                  IsVisible="False">
+            <StackPanel HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Spacing="8">
+              <TextBlock HorizontalAlignment="Center"
+                         Classes="modern-dialog-title"
+                         Text="No running process found" />
+              <TextBlock HorizontalAlignment="Center"
+                         MaxWidth="340"
+                         TextAlignment="Center"
+                         Classes="modern-dialog-subtitle"
+                         Text="Refresh to scan again, or check whether the target app is already open." />
+            </StackPanel>
+          </Border>
+        </Grid>
+      </Grid>
+    </dialogs:ModernDialogShell.Content>
+    <dialogs:ModernDialogShell.ActionsContent>
+      <StackPanel Orientation="Horizontal"
+                  Spacing="10">
+        <Button x:Name="RefreshButton"
+                Classes="modern-dialog-button modern-dialog-button-secondary"
+                Content="Refresh"
+                Click="OnRefreshClick" />
+        <Button x:Name="CancelButton"
+                Classes="modern-dialog-button modern-dialog-button-secondary"
+                Content="Cancel"
+                Click="OnCancelClick" />
+        <Button x:Name="ConfirmButton"
+                Classes="modern-dialog-button modern-dialog-button-primary"
+                Content="Select"
+                Click="OnConfirmClick" />
+      </StackPanel>
+    </dialogs:ModernDialogShell.ActionsContent>
+  </dialogs:ModernDialogShell>
 </Window>

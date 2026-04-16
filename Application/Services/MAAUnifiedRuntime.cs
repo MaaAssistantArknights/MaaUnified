@@ -2,6 +2,7 @@ using MAAUnified.Application.Configuration;
 using MAAUnified.Application.Orchestration;
 using MAAUnified.Application.Services.Features;
 using MAAUnified.Application.Services.Localization;
+using MAAUnified.Compat.Runtime;
 using MAAUnified.CoreBridge;
 using MAAUnified.Platform;
 using RemoteControlFeatureServiceImpl = MAAUnified.Application.Services.Features.RemoteControlFeatureService;
@@ -110,21 +111,22 @@ public static class MAAUnifiedRuntimeFactory
 {
     public static MAAUnifiedRuntime Create(string baseDirectory)
     {
+        var runtimeBaseDirectory = RuntimeLayout.NormalizeDirectory(baseDirectory);
         var logService = new UiLogService();
-        var diagnosticsService = new UiDiagnosticsService(baseDirectory, logService);
-        var store = new AvaloniaJsonConfigStore(baseDirectory);
+        var diagnosticsService = new UiDiagnosticsService(runtimeBaseDirectory, logService);
+        var store = new AvaloniaJsonConfigStore(runtimeBaseDirectory);
         var configService = new UnifiedConfigurationService(
             store,
             new GuiNewJsonConfigImporter(),
             new GuiJsonConfigImporter(),
             logService,
-            baseDirectory);
+            runtimeBaseDirectory);
         var bridge = new MaaCoreBridgeNative();
         var stateMachine = new SessionStateMachine();
         var sessionService = new UnifiedSessionService(bridge, configService, logService, stateMachine);
         var platform = PlatformServicesFactory.CreateDefaults();
         var resourceWorkflowService = new ResourceWorkflowService(
-            baseDirectory,
+            runtimeBaseDirectory,
             bridge,
             logService,
             platform.GpuCapabilityService);
@@ -149,13 +151,13 @@ public static class MAAUnifiedRuntimeFactory
         var configurationProfileFeatureService = new ConfigurationProfileFeatureService(configService);
         var uiLanguageCoordinator = new UiLanguageCoordinator(configService);
         var appLifecycleService = new ProcessAppLifecycleService();
-        var achievementTrackerService = new AchievementTrackerService(configService, baseDirectory);
+        var achievementTrackerService = new AchievementTrackerService(configService, runtimeBaseDirectory);
         var versionUpdateFeatureService = new VersionUpdateFeatureService(
             configService,
             diagnosticsService,
             achievementTrackerService,
             logService,
-            runtimeBaseDirectory: baseDirectory);
+            runtimeBaseDirectory: runtimeBaseDirectory);
         var achievementFeatureService = new AchievementFeatureService(configService);
         var announcementFeatureService = new AnnouncementFeatureService(configService);
         var stageManagerFeatureService = new StageManagerFeatureServiceImpl(configService);

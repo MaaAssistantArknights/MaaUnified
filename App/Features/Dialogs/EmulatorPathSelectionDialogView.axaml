@@ -1,30 +1,102 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:dialogs="clr-namespace:MAAUnified.App.Features.Dialogs"
         x:Class="MAAUnified.App.Features.Dialogs.EmulatorPathSelectionDialogView"
         Width="720"
         Height="480"
         MinWidth="620"
         MinHeight="380"
+        CanResize="False"
+        Background="Transparent"
+        SystemDecorations="None"
         WindowStartupLocation="CenterOwner">
-  <Grid Margin="10" RowDefinitions="Auto,*,Auto,Auto">
-    <TextBlock x:Name="DialogTitleText"
-               Classes="section-title dialog-window-title"
-               Text="Emulator Path Selection" />
-    <ListBox x:Name="PathList"
-             Grid.Row="1"
-             Margin="0,8,0,0"
-             SelectionMode="Single" />
-    <TextBox x:Name="PathInput"
-             Grid.Row="2"
-             Margin="0,8,0,0"
-             Watermark="/path/to/emulator" />
-    <StackPanel Grid.Row="3"
-                Orientation="Horizontal"
-                Spacing="8"
-                HorizontalAlignment="Right"
-                Margin="0,12,0,0">
-      <Button Classes="wpf-button wpf-button-secondary" x:Name="CancelButton" Content="Cancel" Click="OnCancelClick" />
-      <Button x:Name="ConfirmButton" Classes="wpf-button" Content="Confirm" Click="OnConfirmClick" />
-    </StackPanel>
-  </Grid>
+  <dialogs:ModernDialogShell x:Name="DialogShell"
+                             CloseRequested="OnShellCloseRequested">
+    <dialogs:ModernDialogShell.HeaderContent>
+      <TextBlock x:Name="SelectionSummaryText"
+                 Margin="8,0,0,0"
+                 Classes="modern-dialog-subtitle dialog-window-subtitle long-wrap"
+                 Text="No detected paths" />
+    </dialogs:ModernDialogShell.HeaderContent>
+    <dialogs:ModernDialogShell.Content>
+      <Grid RowDefinitions="Auto,*,Auto">
+        <Border Classes="modern-dialog-section">
+          <StackPanel Spacing="6">
+            <TextBlock Classes="section-title"
+                       Text="Detected paths" />
+            <TextBlock x:Name="DialogIntroText"
+                       Classes="modern-dialog-subtitle subtle long-wrap"
+                       Text="Pick a detected emulator executable or paste a custom path below." />
+          </StackPanel>
+        </Border>
+
+        <Grid Grid.Row="1"
+              Margin="0,14,0,0">
+          <Border Classes="modern-dialog-card">
+            <ListBox x:Name="PathList"
+                     Margin="2"
+                     SelectionMode="Single"
+                     DoubleTapped="OnPathListDoubleTapped"
+                     KeyDown="OnPathListKeyDown">
+              <ListBox.ItemTemplate>
+                <DataTemplate>
+                  <Border Margin="0,0,0,10"
+                          Padding="14"
+                          Classes="modern-dialog-section">
+                    <TextBlock Classes="modern-dialog-body long-wrap"
+                               Text="{Binding .}" />
+                  </Border>
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
+          </Border>
+
+          <Border x:Name="EmptyStatePanel"
+                  Classes="modern-dialog-section"
+                  IsVisible="False">
+            <StackPanel HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Spacing="8">
+              <TextBlock HorizontalAlignment="Center"
+                         Classes="modern-dialog-title"
+                         Text="No detected paths" />
+              <TextBlock HorizontalAlignment="Center"
+                         MaxWidth="340"
+                         TextAlignment="Center"
+                         Classes="modern-dialog-subtitle"
+                         Text="Paste the emulator executable path below if auto-detection did not find one." />
+            </StackPanel>
+          </Border>
+        </Grid>
+
+        <Border Grid.Row="2"
+                Margin="0,14,0,0"
+                Classes="modern-dialog-section">
+          <Grid RowDefinitions="Auto,Auto">
+            <TextBlock Classes="section-title"
+                       Text="Custom path" />
+            <TextBox x:Name="PathInput"
+                     Grid.Row="1"
+                     Margin="0,10,0,0"
+                     Watermark="/path/to/emulator"
+                     TextChanged="OnPathInputTextChanged"
+                     KeyDown="OnPathInputKeyDown" />
+          </Grid>
+        </Border>
+      </Grid>
+    </dialogs:ModernDialogShell.Content>
+    <dialogs:ModernDialogShell.ActionsContent>
+      <StackPanel Orientation="Horizontal"
+                  Spacing="10">
+        <Button x:Name="CancelButton"
+                Classes="modern-dialog-button modern-dialog-button-secondary"
+                Content="Cancel"
+                Click="OnCancelClick" />
+        <Button x:Name="ConfirmButton"
+                Classes="modern-dialog-button modern-dialog-button-primary"
+                Content="Confirm"
+                Click="OnConfirmClick" />
+      </StackPanel>
+    </dialogs:ModernDialogShell.ActionsContent>
+  </dialogs:ModernDialogShell>
 </Window>

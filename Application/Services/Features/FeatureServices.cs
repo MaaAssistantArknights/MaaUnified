@@ -3968,7 +3968,7 @@ public sealed class SettingsFeatureService : ISettingsFeatureService
             }
         }
 
-        return AppContext.BaseDirectory;
+        return global::MAAUnified.Compat.Runtime.RuntimeLayout.ResolveRuntimeBaseDirectory();
     }
 }
 

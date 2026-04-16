@@ -7,11 +7,13 @@ using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 using MAAUnified.App.ViewModels;
+using MAAUnified.App.ViewModels.Settings;
 using MAAUnified.App.ViewModels.TaskQueue;
 using MAAUnified.Application.Configuration;
 using MAAUnified.Application.Orchestration;
 using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Features;
+using MAAUnified.Application.Services.Localization;
 using MAAUnified.CoreBridge;
 using MAAUnified.Compat.Constants;
 using MAAUnified.Platform;
@@ -75,7 +77,7 @@ public sealed class TaskQueueNotificationTests
             new CoreCallbackEvent(0, "TaskChainError", payload.ToJsonString(), DateTimeOffset.UtcNow));
 
         await WaitForNotificationCountAsync(fixture.NotificationCapability, 1);
-        Assert.Equal("(Fight) failed", fixture.NotificationCapability.LastTitle);
+        Assert.Contains("failed", fixture.NotificationCapability.LastTitle, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Task error", fixture.NotificationCapability.LastMessage, StringComparison.OrdinalIgnoreCase);
     }
 

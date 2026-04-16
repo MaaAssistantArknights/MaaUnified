@@ -10,22 +10,21 @@ using System.Text.Json;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
-using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using MAAUnified.Application.Models;
 using MAAUnified.App.Controls;
+using MAAUnified.App.Views;
 using MAAUnified.App.ViewModels.Settings;
 using MAAUnified.Application.Services.Localization;
+using MAAUnified.Compat.Runtime;
 
 namespace MAAUnified.App.Features.Settings;
 
 public partial class ConnectSettingsView : UserControl
 {
-    private Window? _screenshotPreviewWindow;
-    private Image? _screenshotPreviewImage;
-    private Bitmap? _screenshotPreviewBitmap;
+    private RuntimeLogWindow? _screenshotPreviewWindow;
 
     public ConnectSettingsView()
     {
@@ -266,7 +265,7 @@ public partial class ConnectSettingsView : UserControl
 
             vm.TestLinkInfo = T("Settings.Connect.Status.DownloadingAdb");
 
-            var baseDirectory = AppContext.BaseDirectory;
+            var baseDirectory = RuntimeLayout.ResolveRuntimeBaseDirectory();
             var cacheDirectory = Path.Combine(baseDirectory, "cache", "adb");
             Directory.CreateDirectory(cacheDirectory);
 
@@ -437,27 +436,21 @@ public partial class ConnectSettingsView : UserControl
 
     private void ShowOrUpdateScreenshotPreview(byte[] imageBytes)
     {
-        Bitmap bitmap;
-        using (var stream = new MemoryStream(imageBytes, writable: false))
-        {
-            bitmap = new Bitmap(stream);
-        }
+        using var stream = new MemoryStream(imageBytes, writable: false);
+        var bitmap = new Bitmap(stream);
 
         EnsureScreenshotPreviewWindow();
-
-        var previous = _screenshotPreviewBitmap;
-        _screenshotPreviewBitmap = bitmap;
-        if (_screenshotPreviewImage is not null)
-        {
-            _screenshotPreviewImage.Source = bitmap;
-        }
-
-        previous?.Dispose();
-
         if (_screenshotPreviewWindow is null)
         {
+            bitmap.Dispose();
             return;
         }
+
+        _screenshotPreviewWindow.ConfigureForScreenshotPreview(
+            bitmap,
+            BuildScreenshotPreviewTitle(),
+            BuildScreenshotPreviewSubtitle(),
+            BuildScreenshotPreviewStatusText());
 
         if (_screenshotPreviewWindow.IsVisible)
         {
@@ -476,49 +469,32 @@ public partial class ConnectSettingsView : UserControl
 
     private void EnsureScreenshotPreviewWindow()
     {
-        if (_screenshotPreviewWindow is not null && _screenshotPreviewImage is not null)
+        if (_screenshotPreviewWindow is not null)
         {
             return;
         }
 
-        var image = new Image
+        var window = new RuntimeLogWindow
         {
-            Stretch = Stretch.Uniform,
-        };
-
-        var host = new Border
-        {
-            Background = Brushes.Black,
-            Padding = new Thickness(4),
-            Child = image,
-        };
-
-        var window = new Window
-        {
-            Title = T("Settings.Connect.Dialog.ScreenshotPreview"),
             Width = 800,
             Height = 480,
             MinWidth = 480,
             MinHeight = 320,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            Content = host,
         };
 
         window.Closed += (_, _) =>
         {
-            _screenshotPreviewBitmap?.Dispose();
-            _screenshotPreviewBitmap = null;
-            _screenshotPreviewImage = null;
             _screenshotPreviewWindow = null;
         };
 
-        _screenshotPreviewImage = image;
         _screenshotPreviewWindow = window;
     }
 
     protected override void OnDetachedFromVisualTree(Avalonia.VisualTreeAttachmentEventArgs e)
     {
         App.Runtime.UiLanguageCoordinator.LanguageChanged -= OnUiLanguageChanged;
+        CloseScreenshotPreviewWindow();
         base.OnDetachedFromVisualTree(e);
     }
 
@@ -529,15 +505,54 @@ public partial class ConnectSettingsView : UserControl
             return;
         }
 
-        Dispatcher.UIThread.Post(UpdateScreenshotPreviewWindowTitle);
+        Dispatcher.UIThread.Post(UpdateScreenshotPreviewWindowChrome);
     }
 
-    private void UpdateScreenshotPreviewWindowTitle()
+    private void UpdateScreenshotPreviewWindowChrome()
     {
         if (_screenshotPreviewWindow is not null)
         {
-            _screenshotPreviewWindow.Title = T("Settings.Connect.Dialog.ScreenshotPreview");
+            _screenshotPreviewWindow.UpdateScreenshotPreviewChrome(
+                BuildScreenshotPreviewTitle(),
+                BuildScreenshotPreviewSubtitle(),
+                BuildScreenshotPreviewStatusText());
         }
+    }
+
+    private string BuildScreenshotPreviewTitle()
+    {
+        return T("Settings.Connect.Dialog.ScreenshotPreview");
+    }
+
+    private string BuildScreenshotPreviewSubtitle()
+    {
+        var vm = VM;
+        if (vm is null)
+        {
+            return string.Empty;
+        }
+
+        var address = string.IsNullOrWhiteSpace(vm.ConnectAddress) ? "ADB / attach window" : vm.ConnectAddress.Trim();
+        return string.IsNullOrWhiteSpace(vm.ScreencapCost)
+            ? address
+            : $"{address} · {vm.ScreencapCost}";
+    }
+
+    private string? BuildScreenshotPreviewStatusText()
+    {
+        var info = VM?.TestLinkInfo;
+        return string.IsNullOrWhiteSpace(info) ? null : info.Trim();
+    }
+
+    private void CloseScreenshotPreviewWindow()
+    {
+        if (_screenshotPreviewWindow is null)
+        {
+            return;
+        }
+
+        _screenshotPreviewWindow.Close();
+        _screenshotPreviewWindow = null;
     }
 
     private readonly record struct AdbPackageInfo(string Url, string FileName, string AdbRelativePath)

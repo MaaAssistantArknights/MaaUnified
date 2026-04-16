@@ -1,33 +1,165 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:dialogs="clr-namespace:MAAUnified.App.Features.Dialogs"
         x:Class="MAAUnified.App.Views.RuntimeLogWindow"
         Width="920"
         Height="700"
         MinWidth="760"
         MinHeight="560"
+        CanResize="True"
+        Background="Transparent"
+        SystemDecorations="None"
+        WindowStartupLocation="CenterOwner"
         Title="Runtime Logs">
-  <Grid Margin="{DynamicResource MAA.Thickness.PageMargin}" RowDefinitions="*,*">
-    <Border Classes="wpf-panel wpf-panel-strong">
-      <Grid RowDefinitions="Auto,Auto,*">
-        <TextBlock Classes="section-title" Text="{Binding RootTexts[Main.Sidebar.GrowlAndCapability]}" />
-        <TextBlock Grid.Row="1"
-                   Classes="long-wrap subtle"
-                   Text="{Binding CapabilitySummary}" />
-        <ListBox Grid.Row="2"
-                 Margin="{DynamicResource MAA.Thickness.MarginTopList}"
-                 ItemsSource="{Binding GrowlMessages}" />
-      </Grid>
-    </Border>
+  <Grid>
+    <dialogs:ModernDialogShell x:Name="WindowShell"
+                               CloseRequested="OnShellCloseRequested">
+      <dialogs:ModernDialogShell.HeaderContent>
+        <Grid>
+          <TextBlock x:Name="LogHeaderText"
+                     Classes="modern-dialog-subtitle dialog-window-subtitle long-wrap"
+                     Text="{Binding CapabilitySummary}" />
+          <TextBlock x:Name="PreviewHeaderText"
+                     Classes="modern-dialog-subtitle dialog-window-subtitle long-wrap"
+                     IsVisible="False"
+                     Text="" />
+        </Grid>
+      </dialogs:ModernDialogShell.HeaderContent>
+      <dialogs:ModernDialogShell.Content>
+        <Grid Margin="{DynamicResource MAA.Thickness.PageMargin}">
+          <Grid x:Name="LogModePanel"
+                RowDefinitions="*,*">
+            <Border Classes="modern-dialog-section">
+              <Grid RowDefinitions="Auto,Auto,*">
+                <TextBlock Classes="section-title"
+                           Text="{Binding RootTexts[Main.Sidebar.GrowlAndCapability]}" />
+                <TextBlock Grid.Row="1"
+                           Classes="long-wrap subtle"
+                           Text="{Binding CapabilitySummary}" />
+                <ListBox Grid.Row="2"
+                         Margin="{DynamicResource MAA.Thickness.MarginTopList}"
+                         ItemsSource="{Binding GrowlMessages}" />
+              </Grid>
+            </Border>
 
-    <Border Grid.Row="1"
-            Classes="wpf-panel wpf-panel-strong"
-            Margin="{DynamicResource MAA.Thickness.MarginTopSection}">
-      <Grid RowDefinitions="Auto,*">
-        <TextBlock Classes="section-title" Text="{Binding RootTexts[Main.Footer.RootLogs]}" />
-        <ListBox Grid.Row="1"
-                 Margin="{DynamicResource MAA.Thickness.MarginTopList}"
-                 ItemsSource="{Binding RootLogs}" />
-      </Grid>
-    </Border>
+            <Border Grid.Row="1"
+                    Classes="modern-dialog-section"
+                    Margin="{DynamicResource MAA.Thickness.MarginTopSection}">
+              <Grid RowDefinitions="Auto,*">
+                <TextBlock Classes="section-title"
+                           Text="{Binding RootTexts[Main.Footer.RootLogs]}" />
+                <ListBox Grid.Row="1"
+                         Margin="{DynamicResource MAA.Thickness.MarginTopList}"
+                         ItemsSource="{Binding RootLogs}" />
+              </Grid>
+            </Border>
+          </Grid>
+
+          <Grid x:Name="PreviewModePanel"
+                IsVisible="False"
+                RowDefinitions="Auto,*">
+            <Border Classes="modern-dialog-section">
+              <StackPanel Spacing="6">
+                <TextBlock x:Name="PreviewSectionTitleText"
+                           Classes="section-title"
+                           Text="Screenshot Preview" />
+                <TextBlock x:Name="PreviewStatusText"
+                           Classes="long-wrap subtle"
+                           IsVisible="False"
+                           Text="" />
+              </StackPanel>
+            </Border>
+
+            <Border Grid.Row="1"
+                    Margin="{DynamicResource MAA.Thickness.MarginTopSection}"
+                    Classes="modern-dialog-card">
+              <Border Background="#10151D"
+                      Padding="16">
+                <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                              VerticalScrollBarVisibility="Auto">
+                  <Image x:Name="PreviewImage"
+                         Stretch="Uniform" />
+                </ScrollViewer>
+              </Border>
+            </Border>
+          </Grid>
+        </Grid>
+      </dialogs:ModernDialogShell.Content>
+      <dialogs:ModernDialogShell.ActionsContent>
+        <Button x:Name="CloseActionButton"
+                Classes="modern-dialog-button modern-dialog-button-primary"
+                Content="Close"
+                Click="OnCloseClick" />
+      </dialogs:ModernDialogShell.ActionsContent>
+    </dialogs:ModernDialogShell>
+
+    <Border Height="14"
+            Margin="12,12,12,0"
+            HorizontalAlignment="Stretch"
+            VerticalAlignment="Top"
+            Background="Transparent"
+            ZIndex="10"
+            Tag="North"
+            PointerPressed="OnResizeGripPointerPressed" />
+    <Border Height="14"
+            Margin="12,0,12,12"
+            HorizontalAlignment="Stretch"
+            VerticalAlignment="Bottom"
+            Background="Transparent"
+            ZIndex="10"
+            Tag="South"
+            PointerPressed="OnResizeGripPointerPressed" />
+    <Border Width="14"
+            Margin="12,12,0,12"
+            HorizontalAlignment="Left"
+            VerticalAlignment="Stretch"
+            Background="Transparent"
+            ZIndex="10"
+            Tag="West"
+            PointerPressed="OnResizeGripPointerPressed" />
+    <Border Width="14"
+            Margin="0,12,12,12"
+            HorizontalAlignment="Right"
+            VerticalAlignment="Stretch"
+            Background="Transparent"
+            ZIndex="10"
+            Tag="East"
+            PointerPressed="OnResizeGripPointerPressed" />
+    <Border Width="24"
+            Height="24"
+            Margin="12"
+            HorizontalAlignment="Left"
+            VerticalAlignment="Top"
+            Background="Transparent"
+            ZIndex="11"
+            Tag="NorthWest"
+            PointerPressed="OnResizeGripPointerPressed" />
+    <Border Width="24"
+            Height="24"
+            Margin="12"
+            HorizontalAlignment="Right"
+            VerticalAlignment="Top"
+            Background="Transparent"
+            ZIndex="11"
+            Tag="NorthEast"
+            PointerPressed="OnResizeGripPointerPressed" />
+    <Border Width="24"
+            Height="24"
+            Margin="12"
+            HorizontalAlignment="Left"
+            VerticalAlignment="Bottom"
+            Background="Transparent"
+            ZIndex="11"
+            Tag="SouthWest"
+            PointerPressed="OnResizeGripPointerPressed" />
+    <Border Width="24"
+            Height="24"
+            Margin="12"
+            HorizontalAlignment="Right"
+            VerticalAlignment="Bottom"
+            Background="Transparent"
+            ZIndex="11"
+            Tag="SouthEast"
+            PointerPressed="OnResizeGripPointerPressed" />
   </Grid>
 </Window>

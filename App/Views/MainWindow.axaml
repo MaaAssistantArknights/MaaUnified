@@ -73,42 +73,49 @@
           <Border Background="{Binding MedalColor}" />
           <Border Grid.Column="1"
                   Padding="14,12,12,12">
-            <Grid ColumnDefinitions="Auto,*"
-                  RowDefinitions="Auto,Auto">
-              <Border Grid.RowSpan="2"
-                      Margin="0,0,14,0"
-                      Classes="achievement-toast-medal-shell">
-                <Border Classes="achievement-toast-medal-core"
-                        Background="{Binding MedalColor}">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <StackPanel Spacing="8"
+                          HorizontalAlignment="Center"
+                          VerticalAlignment="Center">
+                <Border HorizontalAlignment="Center"
+                        Background="{Binding MedalColor}"
+                        Classes="achievement-toast-medal-core">
                   <TextBlock Classes="achievement-toast-medal-glyph"
                              Text="★" />
                 </Border>
-              </Border>
-              <Grid Grid.Column="1"
-                    ColumnDefinitions="*,Auto"
-                    VerticalAlignment="Top">
-                <Border VerticalAlignment="Center"
-                        Classes="achievement-toast-badge">
+                <Border Classes="achievement-toast-badge">
                   <TextBlock Classes="achievement-toast-badge-text"
                              Text="{Binding CelebrateText}" />
                 </Border>
-                <Button Grid.Column="1"
-                        Margin="10,0,0,0"
-                        VerticalAlignment="Center"
-                        Classes="achievement-toast-close"
-                        Content="✕"
-                        Tag="{Binding Id}"
-                        Click="OnDismissAchievementToastClick" />
-              </Grid>
-              <StackPanel Grid.Row="1"
-                          Grid.Column="1"
-                          Margin="0,10,0,0"
+              </StackPanel>
+
+              <StackPanel Grid.Column="1"
+                          Margin="14,0,14,0"
+                          VerticalAlignment="Center"
                           Spacing="6">
                 <TextBlock Classes="achievement-toast-title"
                            Text="{Binding Title}" />
                 <TextBlock Classes="achievement-toast-description"
                            Text="{Binding Description}" />
               </StackPanel>
+
+              <Grid Grid.Column="2"
+                    Classes="achievement-toast-close-shell"
+                    VerticalAlignment="Center">
+                <Ellipse Classes="achievement-toast-close-ring-track"
+                         IsVisible="{Binding IsCloseCountdownVisible}" />
+                <Ellipse Classes="achievement-toast-close-ring-progress"
+                         IsVisible="{Binding IsCloseCountdownVisible}"
+                         Stroke="{Binding MedalColor}"
+                         StrokeDashArray="{Binding CloseCountdownStrokeDashArray}" />
+                <Button VerticalAlignment="Center"
+                        Classes="achievement-toast-close"
+                        Content="✕"
+                        Tag="{Binding Id}"
+                        Click="OnDismissAchievementToastClick"
+                        PointerEntered="OnAchievementToastClosePointerEntered"
+                        PointerExited="OnAchievementToastClosePointerExited" />
+              </Grid>
             </Grid>
           </Border>
         </Grid>

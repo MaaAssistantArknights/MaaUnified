@@ -7,6 +7,7 @@ using Avalonia;
 using Avalonia.Win32;
 using Avalonia.X11;
 using MAAUnified.Compat.Constants;
+using MAAUnified.Compat.Runtime;
 using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.VersionUpdate;
 
@@ -27,8 +28,9 @@ internal static class Program
     [STAThread]
     public static int Main(string[] args)
     {
+        var runtimeBaseDirectory = RuntimeLayout.ResolveRuntimeBaseDirectory();
         RecordStartupStage("Main.Entry", BuildStartupEnvironmentSnapshot(args));
-        var pendingUpdateResult = PendingAppUpdateService.TryApplyPendingUpdatePackage(AppContext.BaseDirectory);
+        var pendingUpdateResult = PendingAppUpdateService.TryApplyPendingUpdatePackage(runtimeBaseDirectory);
         if (pendingUpdateResult.Status == PendingAppUpdateStatus.Applied)
         {
             RecordStartupStage("Main.PendingUpdate.Applied", pendingUpdateResult.Message);
@@ -84,10 +86,11 @@ internal static class Program
 
     public static AppBuilder BuildAvaloniaApp()
     {
-        var useSoftwareRendering = ResolveSoftwareRenderingPreference(AppContext.BaseDirectory);
+        var runtimeBaseDirectory = RuntimeLayout.ResolveRuntimeBaseDirectory();
+        var useSoftwareRendering = ResolveSoftwareRenderingPreference(runtimeBaseDirectory);
         RecordStartupStage(
             "Main.RenderingPreference",
-            $"softwareRendering={useSoftwareRendering}; baseDir={AppContext.BaseDirectory}");
+            $"softwareRendering={useSoftwareRendering}; executableBaseDir={AppContext.BaseDirectory}; runtimeBaseDir={runtimeBaseDirectory}");
 
         var builder = AppBuilder.Configure<App>()
             .UsePlatformDetect()
@@ -124,9 +127,10 @@ internal static class Program
             ? "<none>"
             : string.Join(' ', args.Select(static arg => arg.Contains(' ', StringComparison.Ordinal) ? $"\"{arg}\"" : arg));
         var processPath = Environment.ProcessPath ?? "<unknown>";
+        var runtimeBaseDirectory = RuntimeLayout.ResolveRuntimeBaseDirectory();
         return string.Create(
             CultureInfo.InvariantCulture,
-            $"framework={RuntimeInformation.FrameworkDescription}; os={RuntimeInformation.OSDescription}; osArch={RuntimeInformation.OSArchitecture}; processArch={RuntimeInformation.ProcessArchitecture}; baseDir={AppContext.BaseDirectory}; currentDir={Environment.CurrentDirectory}; processPath={processPath}; args={commandLine}");
+            $"framework={RuntimeInformation.FrameworkDescription}; os={RuntimeInformation.OSDescription}; osArch={RuntimeInformation.OSArchitecture}; processArch={RuntimeInformation.ProcessArchitecture}; executableBaseDir={AppContext.BaseDirectory}; runtimeBaseDir={runtimeBaseDirectory}; currentDir={Environment.CurrentDirectory}; processPath={processPath}; args={commandLine}");
     }
 
     internal static string BuildStartupTracePayload(string stage, string message, Exception? exception = null)
@@ -406,7 +410,7 @@ internal static class Program
     {
         try
         {
-            var debugDirectory = Path.Combine(AppContext.BaseDirectory, "debug");
+            var debugDirectory = Path.Combine(RuntimeLayout.ResolveRuntimeBaseDirectory(), "debug");
             Directory.CreateDirectory(debugDirectory);
             var path = Path.Combine(debugDirectory, fileName);
             File.AppendAllText(path, payload + Environment.NewLine);

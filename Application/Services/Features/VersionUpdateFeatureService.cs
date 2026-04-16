@@ -991,14 +991,14 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
     private string ResolveRuntimeBaseDirectory()
     {
         return _runtimeBaseDirectory
-            ?? AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            ?? global::MAAUnified.Compat.Runtime.RuntimeLayout.ResolveRuntimeBaseDirectory();
     }
 
     private static string? NormalizeRuntimeBaseDirectory(string? runtimeBaseDirectory)
     {
         return string.IsNullOrWhiteSpace(runtimeBaseDirectory)
             ? null
-            : runtimeBaseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            : global::MAAUnified.Compat.Runtime.RuntimeLayout.NormalizeDirectory(runtimeBaseDirectory);
     }
 
     private static string ResolveExtractedResourceDirectory(string extractDirectory)

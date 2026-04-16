@@ -1,32 +1,59 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:dialogs="clr-namespace:MAAUnified.App.Features.Dialogs"
         x:Class="MAAUnified.App.Features.Dialogs.TextDialogView"
         Width="620"
         Height="320"
         MinWidth="480"
         MinHeight="260"
+        CanResize="False"
+        Background="Transparent"
+        SystemDecorations="None"
         WindowStartupLocation="CenterOwner">
-  <Grid Margin="10" RowDefinitions="Auto,Auto,*,Auto">
-    <TextBlock x:Name="DialogTitleText"
-               Classes="section-title dialog-window-title"
-               Text="Text Dialog" />
-    <TextBlock x:Name="PromptText"
-               Grid.Row="1"
-               Margin="0,8,0,0"
-               Classes="long-wrap"
-               Text="Prompt" />
-    <TextBox x:Name="InputBox"
-             Grid.Row="2"
-             Margin="0,8,0,0"
-             TextWrapping="Wrap"
-             AcceptsReturn="False" />
-    <StackPanel Grid.Row="3"
-                Orientation="Horizontal"
-                Spacing="8"
-                HorizontalAlignment="Right"
-                Margin="0,12,0,0">
-      <Button Classes="wpf-button wpf-button-secondary" x:Name="CancelButton" Content="Cancel" Click="OnCancelClick" />
-      <Button x:Name="ConfirmButton" Classes="wpf-button" Content="Confirm" Click="OnConfirmClick" />
-    </StackPanel>
-  </Grid>
+  <dialogs:ModernDialogShell x:Name="DialogShell"
+                             CloseRequested="OnShellCloseRequested">
+    <dialogs:ModernDialogShell.Content>
+      <Grid RowDefinitions="Auto,*">
+        <TextBlock x:Name="PromptText"
+                   Classes="long-wrap"
+                   Text="Prompt" />
+        <Grid Grid.Row="1"
+              Margin="0,10,0,0">
+          <Border x:Name="EditableInputPanel"
+                  Classes="modern-dialog-section">
+            <TextBox x:Name="InputBox"
+                     AcceptsReturn="False"
+                     ScrollViewer.VerticalScrollBarVisibility="Auto"
+                     TextWrapping="Wrap"
+                     />
+          </Border>
+          <Border x:Name="ReadOnlyContentPanel"
+                  Classes="modern-dialog-section"
+                  IsVisible="False">
+            <TextBox x:Name="ReadOnlyContentBox"
+                     AcceptsReturn="True"
+                     IsReadOnly="True"
+                     ScrollViewer.VerticalScrollBarVisibility="Auto"
+                     TextWrapping="Wrap"
+                     />
+          </Border>
+        </Grid>
+      </Grid>
+    </dialogs:ModernDialogShell.Content>
+    <dialogs:ModernDialogShell.ActionsContent>
+      <StackPanel Orientation="Horizontal"
+                  Spacing="10">
+        <Button x:Name="CancelButton"
+                Classes="modern-dialog-button modern-dialog-button-secondary"
+                Content="Cancel"
+                IsCancel="True"
+                Click="OnCancelClick" />
+        <Button x:Name="ConfirmButton"
+                Classes="modern-dialog-button modern-dialog-button-primary"
+                Content="Confirm"
+                IsDefault="True"
+                Click="OnConfirmClick" />
+      </StackPanel>
+    </dialogs:ModernDialogShell.ActionsContent>
+  </dialogs:ModernDialogShell>
 </Window>

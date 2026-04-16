@@ -1,7 +1,9 @@
 using System.IO;
 using System.Globalization;
 using System.Linq;
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using MAAUnified.App.Features.Dialogs;
@@ -50,9 +52,7 @@ public partial class ConfigurationManagerView : UserControl
             return;
         }
 
-        var owner = TopLevel.GetTopLevel(this) as Window;
         var confirmed = await ShowWarningDialogAsync(
-            owner,
             vm.Language,
             T("Settings.ConfigurationManager.Dialog.DeleteTitle"),
             string.Format(
@@ -60,7 +60,8 @@ public partial class ConfigurationManagerView : UserControl
                 T("Settings.ConfigurationManager.Dialog.DeleteMessage"),
                 target),
             confirmText: T("Settings.Action.Delete"),
-            cancelText: T("Settings.Action.Cancel"));
+            cancelText: T("Settings.Action.Cancel"),
+            sourceScope: "Settings.ConfigurationManager.DeleteConfirm.Dialog");
         if (!confirmed)
         {
             return;
@@ -118,7 +119,6 @@ public partial class ConfigurationManagerView : UserControl
         {
             return;
         }
-        var owner = TopLevel.GetTopLevel(this) as Window;
         var language = vm.Language;
         Func<string, string> text = key => vm.RootTexts[key];
 
@@ -138,7 +138,7 @@ public partial class ConfigurationManagerView : UserControl
                     return;
 
                 case ConfigurationImportSelectionKind.LegacyReady:
-                    if (await TryRunLegacyImportAsync(vm, analysis, owner, language, text))
+                    if (await TryRunLegacyImportAsync(vm, analysis, language, text))
                     {
                         return;
                     }
@@ -148,18 +148,18 @@ public partial class ConfigurationManagerView : UserControl
                 case ConfigurationImportSelectionKind.LegacyPartial:
                 {
                     var forceImport = await ShowWarningDialogAsync(
-                        owner,
                         language,
                         text("Settings.ConfigurationManager.Dialog.ImportLegacyTitle"),
                         analysis.Message,
                         confirmText: text("Settings.Action.ImportAnyway"),
-                        cancelText: text("Settings.Action.ChooseAgain"));
+                        cancelText: text("Settings.Action.ChooseAgain"),
+                        sourceScope: "Settings.ConfigurationManager.ImportLegacyPartial.Dialog");
                     if (!forceImport)
                     {
                         continue;
                     }
 
-                    if (await TryRunLegacyImportAsync(vm, analysis, owner, language, text, allowPartialImport: true))
+                    if (await TryRunLegacyImportAsync(vm, analysis, language, text, allowPartialImport: true))
                     {
                         return;
                     }
@@ -170,12 +170,12 @@ public partial class ConfigurationManagerView : UserControl
                 default:
                 {
                     var close = await ShowWarningDialogAsync(
-                        owner,
                         language,
                         text("Settings.ConfigurationManager.Dialog.ImportConfigTitle"),
                         analysis.Message,
                         confirmText: text("Settings.Action.Close"),
-                        cancelText: text("Settings.Action.ChooseAgain"));
+                        cancelText: text("Settings.Action.ChooseAgain"),
+                        sourceScope: "Settings.ConfigurationManager.ImportSelection.Dialog");
                     if (!close)
                     {
                         continue;
@@ -238,7 +238,6 @@ public partial class ConfigurationManagerView : UserControl
     private static async Task<bool> TryRunLegacyImportAsync(
         SettingsPageViewModel vm,
         ConfigurationImportSelectionAnalysis analysis,
-        Window? owner,
         string? language,
         Func<string, string> text,
         bool allowPartialImport = false)
@@ -257,7 +256,6 @@ public partial class ConfigurationManagerView : UserControl
         if (report.DamagedFiles.Count > 0 && report.ImportedFiles.Count > 0 && !allowPartialImport)
         {
             var importUsable = await ShowWarningDialogAsync(
-                owner,
                 language,
                 text("Settings.ConfigurationManager.Dialog.ImportLegacyTitle"),
                 string.Format(
@@ -265,7 +263,8 @@ public partial class ConfigurationManagerView : UserControl
                     text("Settings.ConfigurationManager.Dialog.DamagedFiles"),
                     string.Join(", ", report.DamagedFiles)),
                 confirmText: text("Settings.Action.ImportValidContent"),
-                cancelText: text("Settings.Action.ChooseAgain"));
+                cancelText: text("Settings.Action.ChooseAgain"),
+                sourceScope: "Settings.ConfigurationManager.ImportLegacyDamagedFiles.Dialog");
             if (!importUsable)
             {
                 return false;
@@ -280,7 +279,6 @@ public partial class ConfigurationManagerView : UserControl
             if (retriedReport.DamagedFiles.Count > 0)
             {
                 var close = await ShowWarningDialogAsync(
-                    owner,
                     language,
                     text("Settings.ConfigurationManager.Dialog.ImportLegacyTitle"),
                     string.Format(
@@ -288,7 +286,8 @@ public partial class ConfigurationManagerView : UserControl
                         text("Settings.ConfigurationManager.Dialog.DamagedFilesNoImport"),
                         string.Join(", ", retriedReport.DamagedFiles)),
                     confirmText: text("Settings.Action.Close"),
-                    cancelText: text("Settings.Action.ChooseAgain"));
+                    cancelText: text("Settings.Action.ChooseAgain"),
+                    sourceScope: "Settings.ConfigurationManager.ImportLegacyNoImport.Dialog");
                 return close;
             }
 
@@ -298,7 +297,6 @@ public partial class ConfigurationManagerView : UserControl
         if (report.DamagedFiles.Count > 0)
         {
             var close = await ShowWarningDialogAsync(
-                owner,
                 language,
                 text("Settings.ConfigurationManager.Dialog.ImportLegacyTitle"),
                 string.Format(
@@ -306,7 +304,8 @@ public partial class ConfigurationManagerView : UserControl
                     text("Settings.ConfigurationManager.Dialog.DamagedFilesNoImport"),
                     string.Join(", ", report.DamagedFiles)),
                 confirmText: text("Settings.Action.Close"),
-                cancelText: text("Settings.Action.ChooseAgain"));
+                cancelText: text("Settings.Action.ChooseAgain"),
+                sourceScope: "Settings.ConfigurationManager.ImportLegacyFailed.Dialog");
             return close;
         }
 
@@ -314,21 +313,29 @@ public partial class ConfigurationManagerView : UserControl
     }
 
     private static async Task<bool> ShowWarningDialogAsync(
-        Window? owner,
         string? language,
         string title,
         string message,
         string confirmText,
-        string cancelText)
+        string cancelText,
+        string sourceScope)
     {
-        if (owner is null)
-        {
-            return false;
-        }
+        var completion = await ResolveDialogService().ShowWarningConfirmAsync(
+            new WarningConfirmDialogRequest(
+                Title: title,
+                Message: message,
+                ConfirmText: confirmText,
+                CancelText: cancelText,
+                Language: language ?? "en-us"),
+            sourceScope);
+        return completion.Return == DialogReturnSemantic.Confirm;
+    }
 
-        var dialog = new WarningConfirmDialogView();
-        dialog.ApplyRequest(title, message, confirmText, cancelText, language);
-        return await dialog.ShowDialog<bool>(owner);
+    private static IAppDialogService ResolveDialogService()
+    {
+        return Avalonia.Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime
+            ? new AvaloniaDialogService(App.Runtime)
+            : NoOpAppDialogService.Instance;
     }
 
     private FilePickerFileType CreateJsonFileType() => new(T("Settings.ConfigurationManager.FileType.Json"))

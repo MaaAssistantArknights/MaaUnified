@@ -255,18 +255,21 @@ public sealed class ToolboxModuleO2FeatureTests
         Assert.False(vm.GachaShowDisclaimer);
         Assert.Equal(1, dialogService.WarningConfirmCallCount);
         Assert.Equal("Toolbox.Gacha.Disclaimer", dialogService.LastScope);
-        var request = Assert.NotNull(dialogService.LastRequest);
+        var request = dialogService.LastRequest;
+        Assert.NotNull(request);
         Assert.Equal(DialogTextCatalog.WarningDialogTitle("en-us"), request.Title);
         Assert.Equal(vm.GachaWarningText, request.Message);
         Assert.Equal(DialogTextCatalog.WarningDialogConfirmButton("en-us"), request.ConfirmText);
         Assert.Equal(DialogTextCatalog.WarningDialogCancelButton("en-us"), request.CancelText);
         Assert.Equal("en-us", request.Language);
 
-        var chrome = Assert.NotNull(request.Chrome).GetSnapshot("en-us");
-        Assert.Equal(vm.GachaWarningText, chrome.GetNamedTextOrDefault(DialogTextCatalog.ChromeKeys.Prompt));
-        Assert.Equal(vm.GachaDisclaimerLeadText, chrome.GetNamedTextOrDefault(DialogTextCatalog.ChromeKeys.LeadText));
-        Assert.Equal(vm.GachaDisclaimerEmphasisText, chrome.GetNamedTextOrDefault(DialogTextCatalog.ChromeKeys.EmphasisText));
-        Assert.Equal(vm.GachaDisclaimerBodyText, chrome.GetNamedTextOrDefault(DialogTextCatalog.ChromeKeys.DetailText));
+        var chrome = request.Chrome;
+        Assert.NotNull(chrome);
+        var chromeSnapshot = chrome!.GetSnapshot("en-us");
+        Assert.Equal(vm.GachaWarningText, chromeSnapshot.GetNamedTextOrDefault(DialogTextCatalog.ChromeKeys.Prompt));
+        Assert.Equal(vm.GachaDisclaimerLeadText, chromeSnapshot.GetNamedTextOrDefault(DialogTextCatalog.ChromeKeys.LeadText));
+        Assert.Equal(vm.GachaDisclaimerEmphasisText, chromeSnapshot.GetNamedTextOrDefault(DialogTextCatalog.ChromeKeys.EmphasisText));
+        Assert.Equal(vm.GachaDisclaimerBodyText, chromeSnapshot.GetNamedTextOrDefault(DialogTextCatalog.ChromeKeys.DetailText));
     }
 
     [Fact]

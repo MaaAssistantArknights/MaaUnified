@@ -1,6 +1,5 @@
 using System.Threading;
 using Avalonia.Controls;
-using Avalonia.Input;
 using Avalonia.Interactivity;
 using MAAUnified.App.Infrastructure;
 using MAAUnified.App.ViewModels.Infrastructure;
@@ -53,7 +52,7 @@ public partial class WarningConfirmDialogView : Window, IDialogChromeAware
         _countdownSeconds = Math.Max(0, countdownSeconds);
         _remainingCountdownSeconds = _countdownSeconds;
         Title = _titleSnapshot;
-        TitleText.Text = _titleSnapshot;
+        DialogShell.Title = _titleSnapshot;
         ApplyContent(_leadSnapshot, _emphasisSnapshot, _detailSnapshot);
         CancelButton.Content = _cancelSnapshot;
         UpdateConfirmButtonText(_remainingCountdownSeconds);
@@ -71,7 +70,7 @@ public partial class WarningConfirmDialogView : Window, IDialogChromeAware
         Close(false);
     }
 
-    private void OnCloseClick(object? sender, RoutedEventArgs e)
+    private void OnShellCloseRequested(object? sender, EventArgs e)
     {
         StopCountdown();
         Close();
@@ -83,17 +82,6 @@ public partial class WarningConfirmDialogView : Window, IDialogChromeAware
         {
             StartCountdown();
         }
-    }
-
-    private void OnDragHeaderPointerPressed(object? sender, PointerPressedEventArgs e)
-    {
-        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
-        {
-            return;
-        }
-
-        BeginMoveDrag(e);
-        e.Handled = true;
     }
 
     private void OnClosed(object? sender, EventArgs e)
@@ -173,7 +161,7 @@ public partial class WarningConfirmDialogView : Window, IDialogChromeAware
         _detailSnapshot = detail;
 
         Title = chromeTitle;
-        TitleText.Text = chrome.GetNamedTextOrDefault(DialogTextCatalog.ChromeKeys.SectionTitle, chromeTitle);
+        DialogShell.Title = chrome.GetNamedTextOrDefault(DialogTextCatalog.ChromeKeys.SectionTitle, chromeTitle);
         ApplyContent(_leadSnapshot, _emphasisSnapshot, _detailSnapshot);
         _confirmSnapshot = chrome.ConfirmText ?? _confirmSnapshot;
         _cancelSnapshot = chrome.CancelText ?? _cancelSnapshot;

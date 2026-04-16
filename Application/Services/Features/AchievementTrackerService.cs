@@ -5,6 +5,7 @@ using System.Text.Json.Serialization;
 using MAAUnified.Application.Models;
 using MAAUnified.Application.Services.Localization;
 using MAAUnified.Compat.Constants;
+using MAAUnified.Compat.Runtime;
 
 namespace MAAUnified.Application.Services.Features;
 
@@ -890,7 +891,7 @@ public sealed class AchievementTrackerService : IAchievementTrackerService
     }
 
     private static string ResolveDefaultBaseDirectory()
-        => AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        => RuntimeLayout.ResolveRuntimeBaseDirectory();
 
     private static string DialogText(string language, string zh, string en)
     {

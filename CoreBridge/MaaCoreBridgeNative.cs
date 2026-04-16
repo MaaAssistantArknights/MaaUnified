@@ -2,6 +2,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Threading.Channels;
+using MAAUnified.Compat.Runtime;
 
 namespace MAAUnified.CoreBridge;
 
@@ -70,6 +71,8 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge
             return Fail<CoreInitializeInfo>(CoreErrorCode.InvalidRequest, "Base directory is empty.");
         }
 
+        var runtimeBaseDirectory = RuntimeLayout.NormalizeDirectory(request.BaseDirectory);
+
         await _lifecycleLock.WaitAsync(cancellationToken);
         try
         {
@@ -99,13 +102,13 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge
                 return CoreResult<CoreInitializeInfo>.Fail(libraryNameResult.Error!);
             }
 
-            var libraryPath = Path.Combine(request.BaseDirectory, libraryNameResult.Value!);
+            var libraryPath = Path.Combine(runtimeBaseDirectory, libraryNameResult.Value!);
             if (!File.Exists(libraryPath))
             {
                 return Fail<CoreInitializeInfo>(CoreErrorCode.LibraryNotFound, $"MaaCore library was not found: {libraryPath}");
             }
 
-            var resourceDir = Path.Combine(request.BaseDirectory, "resource");
+            var resourceDir = Path.Combine(runtimeBaseDirectory, "resource");
             if (!Directory.Exists(resourceDir))
             {
                 return Fail<CoreInitializeInfo>(CoreErrorCode.ResourceNotFound, $"Resource directory was not found: {resourceDir}");
@@ -130,13 +133,13 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge
             _callbackDelegate = OnNativeCallback;
             var gpuInitializeInfo = ApplyGpuInitialization(request.Gpu, exports);
 
-            if (!AsBool(exports.AsstSetUserDir(request.BaseDirectory)))
+            if (!AsBool(exports.AsstSetUserDir(runtimeBaseDirectory)))
             {
                 NativeLibrary.Free(loadedLibrary);
                 return Fail<CoreInitializeInfo>(CoreErrorCode.ResourceLoadFailed, "AsstSetUserDir returned false.");
             }
 
-            if (!AsBool(exports.AsstLoadResource(request.BaseDirectory)))
+            if (!AsBool(exports.AsstLoadResource(runtimeBaseDirectory)))
             {
                 NativeLibrary.Free(loadedLibrary);
                 return Fail<CoreInitializeInfo>(CoreErrorCode.ResourceLoadFailed, "AsstLoadResource(baseDir) returned false.");
@@ -144,7 +147,7 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge
 
             if (!string.IsNullOrWhiteSpace(request.ClientType))
             {
-                var clientLoad = LoadClientResource(request.ClientType, request.BaseDirectory, exports);
+                var clientLoad = LoadClientResource(request.ClientType, runtimeBaseDirectory, exports);
                 if (!clientLoad.Success)
                 {
                     NativeLibrary.Free(loadedLibrary);
@@ -163,11 +166,11 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge
             _exports = exports;
             _instance = instance;
             _libraryPath = libraryPath;
-            _baseDirectory = request.BaseDirectory;
+            _baseDirectory = runtimeBaseDirectory;
             _loadedClientType = request.ClientType;
             _gpuInitializeInfo = gpuInitializeInfo;
 
-            return CoreResult<CoreInitializeInfo>.Ok(BuildInitializeInfo(request.BaseDirectory, libraryPath, request.ClientType, gpuInitializeInfo));
+            return CoreResult<CoreInitializeInfo>.Ok(BuildInitializeInfo(runtimeBaseDirectory, libraryPath, request.ClientType, gpuInitializeInfo));
         }
         finally
         {

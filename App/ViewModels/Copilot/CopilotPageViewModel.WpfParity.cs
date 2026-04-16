@@ -8,6 +8,7 @@ using Avalonia.Threading;
 using MAAUnified.Application.Models;
 using MAAUnified.App.ViewModels.Infrastructure;
 using MAAUnified.CoreBridge;
+using MAAUnified.Compat.Runtime;
 using LegacyConfigurationKeys = MAAUnified.Compat.Constants.ConfigurationKeys;
 
 namespace MAAUnified.App.ViewModels.Copilot;
@@ -1421,7 +1422,7 @@ public sealed partial class CopilotPageViewModel
 
     private static string ResolveCopilotResourceRoot()
     {
-        return Path.Combine(AppContext.BaseDirectory, "resource", "copilot");
+        return Path.Combine(RuntimeLayout.ResolveRuntimeBaseDirectory(), "resource", "copilot");
     }
 
     private CopilotFileItemViewModel CreateFileNode(string filePath, string root)
@@ -1471,7 +1472,7 @@ public sealed partial class CopilotPageViewModel
             return raw;
         }
 
-        return Path.Combine(AppContext.BaseDirectory, raw);
+        return Path.Combine(RuntimeLayout.ResolveRuntimeBaseDirectory(), raw);
     }
 
     private static bool LooksLikeCopilotCodeSource(string source)
@@ -2103,7 +2104,7 @@ public sealed partial class CopilotPageViewModel
         }
 
         var debugDirectory = Path.GetDirectoryName(Runtime.DiagnosticsService.EventLogPath)
-            ?? Path.Combine(AppContext.BaseDirectory, "debug");
+            ?? Path.Combine(RuntimeLayout.ResolveRuntimeBaseDirectory(), "debug");
         var directory = Path.Combine(debugDirectory, "copilot-cache");
         Directory.CreateDirectory(directory);
         var baseName = string.IsNullOrWhiteSpace(displayName) ? "copilot-inline" : displayName;

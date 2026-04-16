@@ -21,8 +21,9 @@ public partial class AnnouncementDialogView : Window, IDialogChromeAware
     public void ApplyRequest(AnnouncementDialogRequest request)
     {
         Title = request.Title;
-        DialogTitleText.Text = request.Title;
+        DialogShell.Title = request.Title;
         AnnouncementInfoBox.Text = request.AnnouncementInfo;
+        AnnouncementInfoBox.CaretIndex = 0;
         DoNotRemindBox.IsChecked = request.DoNotRemindThisAnnouncementAgain;
         DoNotShowBox.IsChecked = request.DoNotShowAnnouncement;
         ConfirmButton.Content = request.ConfirmText;
@@ -53,6 +54,11 @@ public partial class AnnouncementDialogView : Window, IDialogChromeAware
         Close(DialogReturnSemantic.Cancel);
     }
 
+    private void OnShellCloseRequested(object? sender, EventArgs e)
+    {
+        Close();
+    }
+
     private string Text(string key, string fallback = "")
     {
         _texts.Language = App.Runtime.UiLanguageCoordinator.CurrentLanguage;
@@ -62,7 +68,7 @@ public partial class AnnouncementDialogView : Window, IDialogChromeAware
     public void ApplyDialogChrome(DialogChromeSnapshot chrome)
     {
         Title = chrome.Title;
-        DialogTitleText.Text = chrome.GetNamedTextOrDefault(DialogTextCatalog.ChromeKeys.SectionTitle, chrome.Title);
+        DialogShell.Title = chrome.GetNamedTextOrDefault(DialogTextCatalog.ChromeKeys.SectionTitle, chrome.Title);
         ConfirmButton.Content = chrome.ConfirmText ?? ConfirmButton.Content;
         CancelButton.Content = chrome.CancelText ?? CancelButton.Content;
         DoNotRemindBox.Content = chrome.GetNamedTextOrDefault(

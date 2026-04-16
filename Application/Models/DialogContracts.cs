@@ -210,6 +210,7 @@ public sealed record TextDialogRequest(
     string Prompt,
     string DefaultText,
     bool MultiLine = false,
+    bool ReadOnlyContent = false,
     string ConfirmText = "Confirm",
     string CancelText = "Cancel",
     DialogChromeCatalog? Chrome = null);

@@ -7,6 +7,7 @@ using MAAUnified.Application.Models.TaskParams;
 using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Localization;
 using MAAUnified.Application.Services.TaskParams;
+using MAAUnified.Compat.Runtime;
 
 namespace MAAUnified.App.ViewModels.TaskQueue;
 
@@ -456,7 +457,7 @@ public sealed class RecruitTaskModuleViewModel : TypedTaskModuleViewModelBase<Re
 
     private static string ResolveRecruitmentPathByClientType(string clientType)
     {
-        var baseResourceDirectory = Path.Combine(AppContext.BaseDirectory, "resource");
+        var baseResourceDirectory = Path.Combine(RuntimeLayout.ResolveRuntimeBaseDirectory(), "resource");
         if (string.IsNullOrWhiteSpace(clientType)
             || string.Equals(clientType, "Official", StringComparison.OrdinalIgnoreCase)
             || string.Equals(clientType, "Bilibili", StringComparison.OrdinalIgnoreCase))
@@ -469,12 +470,13 @@ public sealed class RecruitTaskModuleViewModel : TypedTaskModuleViewModelBase<Re
 
     private static string ResolveRecruitmentPathByDisplayLanguage(string language)
     {
+        var runtimeBaseDirectory = RuntimeLayout.ResolveRuntimeBaseDirectory();
         if (DisplayLanguageClientDirectoryMap.TryGetValue(language, out var clientDirectory))
         {
-            return Path.Combine(AppContext.BaseDirectory, "resource", "global", clientDirectory, "resource", "recruitment.json");
+            return Path.Combine(runtimeBaseDirectory, "resource", "global", clientDirectory, "resource", "recruitment.json");
         }
 
-        return Path.Combine(AppContext.BaseDirectory, "resource", "recruitment.json");
+        return Path.Combine(runtimeBaseDirectory, "resource", "recruitment.json");
     }
 
     private static Dictionary<string, string> ParseRecruitTags(string path)

@@ -556,6 +556,22 @@ public partial class MainWindow : Window
         }
     }
 
+    private void OnAchievementToastClosePointerEntered(object? sender, PointerEventArgs e)
+    {
+        if (sender is Control { DataContext: AchievementToastItemViewModel toast })
+        {
+            toast.PauseCloseCountdown();
+        }
+    }
+
+    private void OnAchievementToastClosePointerExited(object? sender, PointerEventArgs e)
+    {
+        if (sender is Control { DataContext: AchievementToastItemViewModel toast })
+        {
+            toast.ResumeCloseCountdown();
+        }
+    }
+
     private async void OnSwitchLanguageToClick(object? sender, RoutedEventArgs e)
     {
         if (VM is null)

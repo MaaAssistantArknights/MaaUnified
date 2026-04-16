@@ -9,6 +9,7 @@ using MAAUnified.App.Views;
 using MAAUnified.Application.Models;
 using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Features;
+using MAAUnified.Compat.Runtime;
 
 namespace MAAUnified.App;
 
@@ -42,8 +43,11 @@ public partial class App : Avalonia.Application
 
         try
         {
-            Program.RecordStartupStage("FrameworkInit.RuntimeCreate.Begin", $"baseDir={AppContext.BaseDirectory}");
-            Runtime = MAAUnifiedRuntimeFactory.Create(AppContext.BaseDirectory);
+            var runtimeBaseDirectory = RuntimeLayout.ResolveRuntimeBaseDirectory();
+            Program.RecordStartupStage(
+                "FrameworkInit.RuntimeCreate.Begin",
+                $"executableBaseDir={AppContext.BaseDirectory}; runtimeBaseDir={runtimeBaseDirectory}");
+            Runtime = MAAUnifiedRuntimeFactory.Create(runtimeBaseDirectory);
             Program.RecordStartupStage("FrameworkInit.RuntimeCreate.End", "MAAUnified runtime created.");
         }
         catch (Exception ex)
@@ -52,7 +56,7 @@ public partial class App : Avalonia.Application
             throw;
         }
 
-        _crashCaptureService = new AppCrashCaptureService(AppContext.BaseDirectory);
+        _crashCaptureService = new AppCrashCaptureService(RuntimeLayout.ResolveRuntimeBaseDirectory());
         Program.RecordStartupStage("FrameworkInit.CrashCapture.Ready", "Crash capture service created.");
         RegisterGlobalExceptionHandlers();
         Program.RecordStartupStage("FrameworkInit.ExceptionHandlers.Ready", "Global exception handlers registered.");
@@ -450,7 +454,8 @@ public partial class App : Avalonia.Application
             $"Context: {context}{Environment.NewLine}" +
             $"Handled: {handled}{Environment.NewLine}" +
             $"IsTerminating: {isTerminating}{Environment.NewLine}" +
-            $"BaseDirectory: {AppContext.BaseDirectory}{Environment.NewLine}" +
+            $"ExecutableBaseDirectory: {AppContext.BaseDirectory}{Environment.NewLine}" +
+            $"RuntimeBaseDirectory: {RuntimeLayout.ResolveRuntimeBaseDirectory()}{Environment.NewLine}" +
             $"ErrorLog: {Runtime.DiagnosticsService.ErrorLogPath}{Environment.NewLine}" +
             $"EventLog: {Runtime.DiagnosticsService.EventLogPath}{Environment.NewLine}" +
             $"PlatformLog: {Runtime.DiagnosticsService.PlatformEventLogPath}{Environment.NewLine}{Environment.NewLine}" +

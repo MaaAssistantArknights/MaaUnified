@@ -88,14 +88,17 @@ cmake --build --preset linux-publish-x64
 cmake --install build --config RelWithDebInfo
 
 # 4) 发布 Avalonia app（Linux 包内置 .NET runtime）
-dotnet publish src/MAAUnified/App/MAAUnified.App.csproj -c Release -r linux-x64 --self-contained true --no-restore -o publish
+dotnet publish src/MAAUnified/App/MAAUnified.App.csproj -c Release -r linux-x64 --self-contained true --no-restore -o staging/bin
 
-# 5) 合并 runtime 到发布目录
-cp -a install/. publish/
+# 5) 合并 runtime 到发布目录根部
+mkdir -p staging
+cp -a install/. staging/
 
-# 6) 运行
-cd publish
-./MAAUnified
+# 6) 生成根目录启动入口
+bash src/MAAUnified/CI/create-unix-launchers.sh staging linux
+
+# 7) 运行
+./staging/MAAUnified
 ```
 
 ### 3. Windows x64 本地构建
@@ -113,8 +116,10 @@ cmake --preset windows-publish-x64 --fresh -DINSTALL_PYTHON=OFF
 cmake --build --preset windows-publish-x64 --config RelWithDebInfo
 cmake --install build --config RelWithDebInfo
 
-dotnet publish src\MAAUnified\App\MAAUnified.App.csproj -c Release -r win-x64 --self-contained true --no-restore -o publish
-Copy-Item install\* publish\ -Recurse -Force
+dotnet publish src\MAAUnified\App\MAAUnified.App.csproj -c Release -r win-x64 --self-contained true --no-restore -o staging\bin
+New-Item -ItemType Directory -Path staging -Force | Out-Null
+Copy-Item install\* staging\ -Recurse -Force
+pwsh -File src\MAAUnified\CI\create-windows-launcher.ps1 -TargetDir staging
 ```
 
 ### 4. macOS x64 本地构建
@@ -132,13 +137,19 @@ cmake --preset macos-publish-x64 --fresh -DINSTALL_PYTHON=OFF
 cmake --build --preset macos-publish-x64
 cmake --install build --config RelWithDebInfo
 
-dotnet publish src/MAAUnified/App/MAAUnified.App.csproj -c Release -r osx-x64 --self-contained true --no-restore -o publish
-cp -a install/. publish/
+dotnet publish src/MAAUnified/App/MAAUnified.App.csproj -c Release -r osx-x64 --self-contained true --no-restore -o staging/bin
+mkdir -p staging
+cp -a install/. staging/
+bash src/MAAUnified/CI/create-unix-launchers.sh staging macos
 ```
 
 常见问题：
 - 如果你之前在同一个 `build/` 目录切换过不同 generator，CMake 可能会报 generator 不匹配；优先使用 `cmake --preset ... --fresh`
-- `publish/` 目录需要同时包含应用本体、MaaCore 动态库和 `resource/`；因此 `cp -a install/. publish/` 或 `Copy-Item install\* publish\` 这一步不能省
+- 发布目录现在按 `staging/bin/` 与 `staging/` 根目录分层；`staging/bin/` 放托管应用产物，`staging/` 根目录放 MaaCore 动态库与 `resource/`
+- 因此 `cp -a install/. staging/` 或 `Copy-Item install\* staging\` 这一步不能省
+- Linux 根目录入口为 `staging/MAAUnified`
+- macOS 根目录入口为 `staging/MAAUnified.command`，同时保留 `staging/MAAUnified` 供终端启动
+- Windows 根目录入口为 `staging/MAAUnified.cmd`
 - 如果只想做 UI 层快速迭代，不依赖宿主仓打包产物，也可以继续使用上面的独立形态命令：`dotnet run --project App/MAAUnified.App.csproj`
 
 ## 配置约定

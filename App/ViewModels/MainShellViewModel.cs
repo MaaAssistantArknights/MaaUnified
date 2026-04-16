@@ -1627,6 +1627,7 @@ public sealed class MainShellViewModel : ObservableObject
         if (toast is not null)
         {
             AchievementToasts.Remove(toast);
+            toast.Dispose();
         }
     }
 
@@ -1682,34 +1683,16 @@ public sealed class MainShellViewModel : ObservableObject
                 notification.Description,
                 notification.MedalColor,
                 notification.AutoClose,
-                notification.UnlockedAtUtc));
+                notification.UnlockedAtUtc,
+                DismissAchievementToast));
 
         const int maxVisible = 4;
         while (AchievementToasts.Count > maxVisible)
         {
+            var removedToast = AchievementToasts[^1];
             AchievementToasts.RemoveAt(AchievementToasts.Count - 1);
+            removedToast.Dispose();
         }
-
-        if (!notification.AutoClose)
-        {
-            return;
-        }
-
-        _ = AutoDismissAchievementToastAsync(notification.Id);
-    }
-
-    private async Task AutoDismissAchievementToastAsync(string id)
-    {
-        try
-        {
-            await Task.Delay(TimeSpan.FromSeconds(15), _startupCts.Token);
-        }
-        catch (OperationCanceledException)
-        {
-            return;
-        }
-
-        Dispatcher.UIThread.Post(() => DismissAchievementToast(id));
     }
 
     private static string BuildLinkStartStateNotAllowedMessage(SessionState state)
@@ -2508,6 +2491,16 @@ public sealed class MainShellViewModel : ObservableObject
         _schemaMigrationNoticeShown = true;
         try
         {
+            var noticeBody = string.Format(
+                CultureInfo.CurrentCulture,
+                RootTexts.GetOrDefault(
+                    "Main.SchemaMigration.Dialog.Prompt",
+                    "The configuration schema is older than the latest version.{4}Current version: v{0}{4}Latest version: v{1}{4}{4}{2}{4}Suggested action: {3}{4}A backup named avalonia.json.schema-v{0}.bak.<timestamp> will be created before writing the latest schema."),
+                notice.CurrentSchemaVersion,
+                notice.LatestSchemaVersion,
+                notice.Message,
+                notice.SuggestedAction,
+                Environment.NewLine);
             var chrome = DialogTextCatalog.CreateRootCatalog(
                 CurrentShellLanguage,
                 "Root.Localization.MainShell",
@@ -2520,27 +2513,15 @@ public sealed class MainShellViewModel : ObservableObject
                         "I Understand"),
                     cancelText: texts.GetOrDefault(
                         "Main.SchemaMigration.Dialog.Cancel",
-                        "Close"),
-                    namedTexts: DialogTextCatalog.CreateNamedTexts(
-                        (
-                            DialogTextCatalog.ChromeKeys.Prompt,
-                            string.Format(
-                                CultureInfo.CurrentCulture,
-                                texts.GetOrDefault(
-                                    "Main.SchemaMigration.Dialog.Prompt",
-                                    "The configuration schema is older than the latest version.{4}Current version: v{0}{4}Latest version: v{1}{4}{4}{2}{4}Suggested action: {3}{4}A backup named avalonia.json.schema-v{0}.bak.<timestamp> will be created before writing the latest schema."),
-                                notice.CurrentSchemaVersion,
-                                notice.LatestSchemaVersion,
-                                notice.Message,
-                                notice.SuggestedAction,
-                                Environment.NewLine)))));
+                        "Close")));
             var chromeSnapshot = chrome.GetSnapshot();
             var completion = await _dialogService.ShowTextAsync(
                 new TextDialogRequest(
                     Title: chromeSnapshot.Title,
-                    Prompt: chromeSnapshot.GetNamedTextOrDefault(DialogTextCatalog.ChromeKeys.Prompt, string.Empty),
-                    DefaultText: string.Empty,
+                    Prompt: notice.Message,
+                    DefaultText: noticeBody,
                     MultiLine: true,
+                    ReadOnlyContent: true,
                     ConfirmText: chromeSnapshot.ConfirmText ?? RootTexts.GetOrDefault("Main.SchemaMigration.Dialog.Confirm", "I Understand"),
                     CancelText: chromeSnapshot.CancelText ?? RootTexts.GetOrDefault("Main.SchemaMigration.Dialog.Cancel", "Close"),
                     Chrome: chrome),
