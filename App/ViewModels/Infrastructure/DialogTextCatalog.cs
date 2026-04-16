@@ -12,6 +12,9 @@ public static class DialogTextCatalog
     public static class ChromeKeys
     {
         public const string Prompt = "Prompt";
+        public const string LeadText = "LeadText";
+        public const string EmphasisText = "EmphasisText";
+        public const string DetailText = "DetailText";
         public const string FilterWatermark = "FilterWatermark";
         public const string RefreshButton = "RefreshButton";
         public const string RefreshingButton = "RefreshingButton";

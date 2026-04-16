@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Threading;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
@@ -49,7 +50,8 @@ public partial class SettingsView : UserControl
     private bool _sectionTopCacheDirty = true;
     private double _lastKnownExtentHeight = -1d;
     private double _lastKnownViewportHeight = -1d;
-    private DispatcherTimer? _progressiveMaterializationTimer;
+    private CancellationTokenSource? _progressiveMaterializationCts;
+    private readonly HashSet<string> _pendingProgressiveSections = new(StringComparer.OrdinalIgnoreCase);
     private bool _sectionMaterializationInitialized;
     private SettingsPageViewModel? _observedViewModel;
     private bool _viewCompositionActive;
@@ -379,6 +381,9 @@ public partial class SettingsView : UserControl
     }
 
     private bool EnsureSectionMaterialized(string key)
+        => EnsureSectionMaterializedCore(key, loadDeferredData: true);
+
+    private bool EnsureSectionMaterializedCore(string key, bool loadDeferredData)
     {
         if (string.IsNullOrWhiteSpace(key)
             || _materializedSections.Contains(key)
@@ -398,7 +403,7 @@ public partial class SettingsView : UserControl
         anchor.Child = content;
         _materializedSections.Add(key);
         InvalidateSectionTopCache();
-        if (VM is { } vm)
+        if (loadDeferredData && VM is { } vm)
         {
             _ = vm.EnsureSectionDataLoadedAsync(key);
         }
@@ -536,42 +541,79 @@ public partial class SettingsView : UserControl
     private void StartProgressiveSectionMaterialization()
     {
         CancelProgressiveSectionMaterialization();
-        if (!TryMaterializeNextSectionInOrder())
+        if (VM is not { } vm)
         {
             CompleteViewComposition();
             return;
         }
 
-        var timer = new DispatcherTimer
+        var pendingSections = SectionOrder
+            .Where(sectionKey => !_materializedSections.Contains(sectionKey))
+            .ToArray();
+        if (pendingSections.Length == 0)
         {
-            Interval = TimeSpan.FromMilliseconds(45),
-        };
-        timer.Tick += OnProgressiveMaterializationTick;
-        _progressiveMaterializationTimer = timer;
-        timer.Start();
+            CompleteViewComposition();
+            return;
+        }
+
+        _progressiveMaterializationCts = new CancellationTokenSource();
+        foreach (var sectionKey in pendingSections)
+        {
+            _pendingProgressiveSections.Add(sectionKey);
+            _ = MaterializeSectionWhenReadyAsync(vm, sectionKey, _progressiveMaterializationCts.Token);
+        }
     }
 
     private void CancelProgressiveSectionMaterialization()
     {
-        var timer = _progressiveMaterializationTimer;
-        _progressiveMaterializationTimer = null;
-        if (timer is null)
-        {
-            return;
-        }
-
-        timer.Stop();
-        timer.Tick -= OnProgressiveMaterializationTick;
+        _pendingProgressiveSections.Clear();
+        _progressiveMaterializationCts?.Cancel();
+        _progressiveMaterializationCts?.Dispose();
+        _progressiveMaterializationCts = null;
     }
 
-    private void OnProgressiveMaterializationTick(object? sender, EventArgs e)
+    private async Task MaterializeSectionWhenReadyAsync(
+        SettingsPageViewModel owner,
+        string sectionKey,
+        CancellationToken cancellationToken)
     {
-        if (TryMaterializeNextSectionInOrder())
+        try
+        {
+            await owner.EnsureSectionDataLoadedAsync(sectionKey, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+
+        await Dispatcher.UIThread.InvokeAsync(
+            () =>
+            {
+                if (!cancellationToken.IsCancellationRequested
+                    && ReferenceEquals(VM, owner))
+                {
+                    EnsureSectionMaterializedCore(sectionKey, loadDeferredData: false);
+                }
+
+                CompleteProgressiveSectionMaterialization(owner, sectionKey);
+            },
+            DispatcherPriority.Background);
+    }
+
+    private void CompleteProgressiveSectionMaterialization(SettingsPageViewModel owner, string sectionKey)
+    {
+        if (!ReferenceEquals(_viewCompositionOwner, owner))
         {
             return;
         }
 
-        CancelProgressiveSectionMaterialization();
+        _pendingProgressiveSections.Remove(sectionKey);
+        if (_pendingProgressiveSections.Count > 0)
+        {
+            return;
+        }
+
+        _progressiveMaterializationCts?.Dispose();
+        _progressiveMaterializationCts = null;
         CompleteViewComposition();
     }
 

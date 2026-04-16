@@ -275,6 +275,14 @@
     <Setter Property="Margin" Value="{DynamicResource MAA.Thickness.SectionTitleMargin}" />
   </Style>
 
+  <Style Selector="TextBlock.dialog-window-title">
+    <Setter Property="Margin" Value="8,4,0,0" />
+  </Style>
+
+  <Style Selector="TextBlock.dialog-window-subtitle">
+    <Setter Property="Margin" Value="8,0,0,0" />
+  </Style>
+
   <Style Selector="TextBlock.long-wrap">
     <Setter Property="TextWrapping" Value="Wrap" />
   </Style>
@@ -409,6 +417,17 @@
     <Setter Property="ClipToBounds" Value="True" />
   </Style>
 
+  <Style Selector="TextBox.achievement-dialog-search">
+    <Setter Property="Height" Value="38" />
+    <Setter Property="MinWidth" Value="220" />
+    <Setter Property="Padding" Value="14,0" />
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.Dialog.CardSurface}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.Dialog.FilterChipBorder}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource MAA.BorderThickness.Thin}" />
+    <Setter Property="CornerRadius" Value="19" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+
   <Style Selector="TextBlock.modern-dialog-title">
     <Setter Property="FontSize" Value="20" />
     <Setter Property="FontWeight" Value="SemiBold" />
@@ -451,15 +470,16 @@
   </Style>
 
   <Style Selector="Button.modern-dialog-chip">
-    <Setter Property="Height" Value="30" />
-    <Setter Property="MinWidth" Value="64" />
-    <Setter Property="Padding" Value="12,0" />
-    <Setter Property="CornerRadius" Value="15" />
+    <Setter Property="Height" Value="34" />
+    <Setter Property="MinWidth" Value="72" />
+    <Setter Property="Padding" Value="14,0" />
+    <Setter Property="CornerRadius" Value="17" />
     <Setter Property="Background" Value="{DynamicResource MAA.Brush.Dialog.FilterChipBackground}" />
     <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.Dialog.FilterChipBorder}" />
     <Setter Property="BorderThickness" Value="{DynamicResource MAA.BorderThickness.Thin}" />
     <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Dialog.FilterChipForeground}" />
     <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="FontSize" Value="12.5" />
     <Setter Property="HorizontalContentAlignment" Value="Center" />
     <Setter Property="VerticalContentAlignment" Value="Center" />
   </Style>
@@ -478,34 +498,168 @@
     <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Dialog.FilterChipSelectedForeground}" />
   </Style>
 
-  <Style Selector="Border.achievement-dialog-medal-shell">
-    <Setter Property="Width" Value="48" />
-    <Setter Property="Height" Value="48" />
-    <Setter Property="CornerRadius" Value="24" />
-    <Setter Property="Background" Value="{DynamicResource MAA.Brush.Toast.AchievementMedalSurface}" />
-    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.Toast.AchievementMedalBorder}" />
+  <Style Selector="Border.achievement-dialog-filter-strip">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.Dialog.CardSurface}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.Dialog.SectionBorder}" />
     <Setter Property="BorderThickness" Value="{DynamicResource MAA.BorderThickness.Thin}" />
+    <Setter Property="CornerRadius" Value="22" />
+    <Setter Property="Padding" Value="4" />
+  </Style>
+
+  <Style Selector="Button.modern-dialog-chip.achievement-dialog-filter-chip">
+    <Setter Property="Height" Value="36" />
+    <Setter Property="MinWidth" Value="80" />
+    <Setter Property="Padding" Value="16,0" />
+    <Setter Property="CornerRadius" Value="18" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="FontSize" Value="12.5" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Text.Secondary}" />
+  </Style>
+
+  <Style Selector="Button.modern-dialog-chip.achievement-dialog-filter-chip:pointerover">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.Action.SecondaryBackgroundHover}" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Text.Primary}" />
+  </Style>
+
+  <Style Selector="Button.modern-dialog-chip.achievement-dialog-filter-chip:pressed">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.Action.SecondaryBackgroundPressed}" />
+  </Style>
+
+  <Style Selector="Button.modern-dialog-chip.achievement-dialog-filter-chip.selected">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.Dialog.FilterChipSelectedBackground}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.Dialog.FilterChipSelectedBorder}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource MAA.BorderThickness.Thin}" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Dialog.FilterChipSelectedForeground}" />
+  </Style>
+
+  <Style Selector="Button.achievement-dialog-clear-chip">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Text.Secondary}" />
+  </Style>
+
+  <Style Selector="Button.achievement-dialog-clear-chip:pointerover">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.Action.SecondaryBackgroundHover}" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Text.Primary}" />
+  </Style>
+
+  <Style Selector="Border.modern-dialog-hero-core">
+    <Setter Property="Width" Value="56" />
+    <Setter Property="Height" Value="56" />
+    <Setter Property="CornerRadius" Value="28" />
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.State.Warning}" />
+  </Style>
+
+  <Style Selector="TextBlock.modern-dialog-hero-glyph">
+    <Setter Property="Width" Value="56" />
+    <Setter Property="Height" Value="56" />
+    <Setter Property="FontSize" Value="34" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="Foreground" Value="#FFFFFFFF" />
+    <Setter Property="HorizontalAlignment" Value="Center" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="LineHeight" Value="56" />
+    <Setter Property="TextAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="TextBlock.modern-dialog-lead">
+    <Setter Property="FontSize" Value="16" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Text.Primary}" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+    <Setter Property="LineHeight" Value="22" />
+  </Style>
+
+  <Style Selector="Border.modern-dialog-highlight">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.Surface.Warning}" />
+    <Setter Property="CornerRadius" Value="18" />
+    <Setter Property="Padding" Value="16,12" />
+  </Style>
+
+  <Style Selector="TextBlock.modern-dialog-emphasis">
+    <Setter Property="FontSize" Value="23" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.State.Warning}" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+  </Style>
+
+  <Style Selector="TextBlock.modern-dialog-body">
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Text.Secondary}" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+    <Setter Property="LineHeight" Value="20" />
+  </Style>
+
+  <Style Selector="Button.modern-dialog-button">
+    <Setter Property="MinWidth" Value="104" />
+    <Setter Property="Height" Value="42" />
+    <Setter Property="Padding" Value="18,0" />
+    <Setter Property="CornerRadius" Value="21" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="FontSize" Value="13.5" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="Button.modern-dialog-button.modern-dialog-button-primary">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.Action.PrimaryBackground}" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Action.PrimaryForeground}" />
+  </Style>
+
+  <Style Selector="Button.modern-dialog-button.modern-dialog-button-primary:pointerover">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.Action.PrimaryBackgroundHover}" />
+  </Style>
+
+  <Style Selector="Button.modern-dialog-button.modern-dialog-button-primary:pressed">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.Action.PrimaryBackgroundPressed}" />
+  </Style>
+
+  <Style Selector="Button.modern-dialog-button.modern-dialog-button-primary:disabled">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.Action.PrimaryBackgroundDisabled}" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Action.ForegroundDisabled}" />
+  </Style>
+
+  <Style Selector="Button.modern-dialog-button.modern-dialog-button-secondary">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.Dialog.Section}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.Dialog.SectionBorder}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource MAA.BorderThickness.Thin}" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Text.Secondary}" />
+  </Style>
+
+  <Style Selector="Button.modern-dialog-button.modern-dialog-button-secondary:pointerover">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.Action.SecondaryBackgroundHover}" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Text.Primary}" />
+  </Style>
+
+  <Style Selector="Button.modern-dialog-button.modern-dialog-button-secondary:pressed">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.Action.SecondaryBackgroundPressed}" />
+  </Style>
+
+  <Style Selector="Button.modern-dialog-button.modern-dialog-button-secondary:disabled">
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Action.ForegroundDisabled}" />
   </Style>
 
   <Style Selector="Border.achievement-dialog-medal-core">
-    <Setter Property="Width" Value="30" />
-    <Setter Property="Height" Value="30" />
-    <Setter Property="CornerRadius" Value="15" />
-    <Setter Property="HorizontalAlignment" Value="Center" />
-    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Width" Value="44" />
+    <Setter Property="Height" Value="44" />
+    <Setter Property="CornerRadius" Value="22" />
   </Style>
 
   <Style Selector="TextBlock.achievement-dialog-medal-glyph">
-    <Setter Property="FontSize" Value="14" />
+    <Setter Property="Width" Value="44" />
+    <Setter Property="Height" Value="44" />
+    <Setter Property="FontSize" Value="28" />
     <Setter Property="FontWeight" Value="Bold" />
     <Setter Property="Foreground" Value="#FFFFFFFF" />
+    <Setter Property="LineHeight" Value="44" />
     <Setter Property="HorizontalAlignment" Value="Center" />
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="TextAlignment" Value="Center" />
   </Style>
 
   <Style Selector="TextBlock.achievement-dialog-card-title">
-    <Setter Property="FontSize" Value="15.5" />
+    <Setter Property="FontSize" Value="16" />
     <Setter Property="FontWeight" Value="SemiBold" />
     <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Text.Primary}" />
     <Setter Property="TextWrapping" Value="Wrap" />
@@ -514,21 +668,31 @@
   <Style Selector="TextBlock.achievement-dialog-card-description">
     <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Text.Secondary}" />
     <Setter Property="TextWrapping" Value="Wrap" />
-    <Setter Property="LineHeight" Value="18" />
+    <Setter Property="LineHeight" Value="20" />
   </Style>
 
   <Style Selector="TextBlock.achievement-dialog-card-conditions">
-    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Text.Secondary}" />
+    <Setter Property="FontSize" Value="12.5" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Text.Primary}" />
     <Setter Property="TextWrapping" Value="Wrap" />
     <Setter Property="LineHeight" Value="17" />
+    <Setter Property="FontWeight" Value="Medium" />
+  </Style>
+
+  <Style Selector="Border.achievement-dialog-conditions-panel">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.Dialog.CardSurface}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.Dialog.SectionBorder}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource MAA.BorderThickness.Thin}" />
+    <Setter Property="CornerRadius" Value="12" />
+    <Setter Property="Padding" Value="10,8" />
   </Style>
 
   <Style Selector="Border.achievement-dialog-status-badge">
-    <Setter Property="Background" Value="{DynamicResource MAA.Brush.Dialog.Section}" />
-    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.Dialog.SectionBorder}" />
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.Dialog.FilterChipBackground}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.Dialog.FilterChipBorder}" />
     <Setter Property="BorderThickness" Value="{DynamicResource MAA.BorderThickness.Thin}" />
     <Setter Property="CornerRadius" Value="999" />
-    <Setter Property="Padding" Value="8,3" />
+    <Setter Property="Padding" Value="9,4" />
     <Setter Property="HorizontalAlignment" Value="Left" />
   </Style>
 
@@ -550,8 +714,26 @@
   </Style>
 
   <Style Selector="TextBlock.achievement-dialog-unlocked-at">
+    <Setter Property="FontSize" Value="12.5" />
     <Setter Property="FontWeight" Value="SemiBold" />
     <Setter Property="TextWrapping" Value="Wrap" />
+  </Style>
+
+  <Style Selector="StackPanel.achievement-dialog-progress-panel">
+    <Setter Property="MaxWidth" Value="540" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
+  </Style>
+
+  <Style Selector="ProgressBar.achievement-dialog-progress-bar">
+    <Setter Property="MaxWidth" Value="540" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
+  </Style>
+
+  <Style Selector="Border.achievement-dialog-item-card">
+    <Setter Property="Padding" Value="14" />
+    <Setter Property="CornerRadius" Value="16" />
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.Dialog.Section}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.Dialog.SectionBorder}" />
   </Style>
 
   <Style Selector="ListBox.achievement-dialog-list">

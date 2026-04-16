@@ -365,5 +365,7 @@ internal sealed class AchievementListDisplayItem
 
     public bool HasConditions => !string.IsNullOrWhiteSpace(Source.Conditions);
 
+    public bool HasConditionDetails => HasConditions || ShowProgress;
+
     public bool HasUnlockedAtText => !string.IsNullOrWhiteSpace(Source.UnlockedAtText);
 }

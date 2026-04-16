@@ -8,7 +8,7 @@
         WindowStartupLocation="CenterOwner">
   <Grid Margin="10" RowDefinitions="Auto,*,Auto,Auto">
     <TextBlock x:Name="DialogTitleText"
-               Classes="section-title"
+               Classes="section-title dialog-window-title"
                Text="Emulator Path Selection" />
     <ListBox x:Name="PathList"
              Grid.Row="1"

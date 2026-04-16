@@ -1,5 +1,6 @@
 using System.Threading;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using MAAUnified.App.Infrastructure;
 using MAAUnified.App.ViewModels.Infrastructure;
@@ -14,6 +15,9 @@ public partial class WarningConfirmDialogView : Window, IDialogChromeAware
     private string _titleSnapshot = string.Empty;
     private string _messageSnapshot = string.Empty;
     private string _cancelSnapshot = string.Empty;
+    private string _leadSnapshot = string.Empty;
+    private string _emphasisSnapshot = string.Empty;
+    private string _detailSnapshot = string.Empty;
     private int _countdownSeconds;
     private int _remainingCountdownSeconds;
 
@@ -43,11 +47,14 @@ public partial class WarningConfirmDialogView : Window, IDialogChromeAware
         _cancelSnapshot = string.IsNullOrWhiteSpace(cancelText)
             ? DialogTextCatalog.WarningDialogCancelButton(effectiveLanguage)
             : cancelText;
+        _leadSnapshot = string.Empty;
+        _emphasisSnapshot = string.Empty;
+        _detailSnapshot = _messageSnapshot;
         _countdownSeconds = Math.Max(0, countdownSeconds);
         _remainingCountdownSeconds = _countdownSeconds;
         Title = _titleSnapshot;
         TitleText.Text = _titleSnapshot;
-        PromptText.Text = _messageSnapshot;
+        ApplyContent(_leadSnapshot, _emphasisSnapshot, _detailSnapshot);
         CancelButton.Content = _cancelSnapshot;
         UpdateConfirmButtonText(_remainingCountdownSeconds);
     }
@@ -64,12 +71,29 @@ public partial class WarningConfirmDialogView : Window, IDialogChromeAware
         Close(false);
     }
 
+    private void OnCloseClick(object? sender, RoutedEventArgs e)
+    {
+        StopCountdown();
+        Close();
+    }
+
     private void OnOpened(object? sender, EventArgs e)
     {
         if (_countdownSeconds > 0)
         {
             StartCountdown();
         }
+    }
+
+    private void OnDragHeaderPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+        {
+            return;
+        }
+
+        BeginMoveDrag(e);
+        e.Handled = true;
     }
 
     private void OnClosed(object? sender, EventArgs e)
@@ -125,12 +149,47 @@ public partial class WarningConfirmDialogView : Window, IDialogChromeAware
 
     public void ApplyDialogChrome(DialogChromeSnapshot chrome)
     {
-        Title = chrome.Title;
-        TitleText.Text = chrome.GetNamedTextOrDefault(DialogTextCatalog.ChromeKeys.SectionTitle, chrome.Title);
-        PromptText.Text = chrome.GetNamedTextOrDefault(DialogTextCatalog.ChromeKeys.Prompt, _messageSnapshot);
+        var chromeTitle = string.IsNullOrWhiteSpace(chrome.Title) ? _titleSnapshot : chrome.Title;
+        var prompt = chrome.GetNamedTextOrDefault(DialogTextCatalog.ChromeKeys.Prompt, _messageSnapshot);
+        var lead = chrome.GetNamedTextOrDefault(DialogTextCatalog.ChromeKeys.LeadText, _leadSnapshot);
+        var emphasis = chrome.GetNamedTextOrDefault(DialogTextCatalog.ChromeKeys.EmphasisText, _emphasisSnapshot);
+        var detail = chrome.GetNamedTextOrDefault(DialogTextCatalog.ChromeKeys.DetailText, _detailSnapshot);
+
+        if (string.IsNullOrWhiteSpace(lead)
+            && string.IsNullOrWhiteSpace(emphasis)
+            && string.IsNullOrWhiteSpace(detail))
+        {
+            detail = prompt;
+        }
+        else if (string.IsNullOrWhiteSpace(detail))
+        {
+            detail = prompt;
+        }
+
+        _titleSnapshot = chromeTitle;
+        _messageSnapshot = prompt;
+        _leadSnapshot = lead;
+        _emphasisSnapshot = emphasis;
+        _detailSnapshot = detail;
+
+        Title = chromeTitle;
+        TitleText.Text = chrome.GetNamedTextOrDefault(DialogTextCatalog.ChromeKeys.SectionTitle, chromeTitle);
+        ApplyContent(_leadSnapshot, _emphasisSnapshot, _detailSnapshot);
         _confirmSnapshot = chrome.ConfirmText ?? _confirmSnapshot;
         _cancelSnapshot = chrome.CancelText ?? _cancelSnapshot;
         CancelButton.Content = _cancelSnapshot;
         UpdateConfirmButtonText(_remainingCountdownSeconds);
+    }
+
+    private void ApplyContent(string lead, string emphasis, string detail)
+    {
+        LeadTextBlock.Text = lead;
+        LeadTextBlock.IsVisible = !string.IsNullOrWhiteSpace(lead);
+
+        EmphasisTextBlock.Text = emphasis;
+        EmphasisPanel.IsVisible = !string.IsNullOrWhiteSpace(emphasis);
+
+        DetailTextBlock.Text = detail;
+        DetailTextBlock.IsVisible = !string.IsNullOrWhiteSpace(detail);
     }
 }

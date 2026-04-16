@@ -5,6 +5,7 @@ using System.Threading.Channels;
 using Avalonia.Threading;
 using MAAUnified.App.Features.Dialogs;
 using MAAUnified.App.ViewModels;
+using MAAUnified.App.ViewModels.Infrastructure;
 using MAAUnified.App.ViewModels.Settings;
 using MAAUnified.App.ViewModels.TaskQueue;
 using MAAUnified.Application.Configuration;
@@ -1215,6 +1216,37 @@ public sealed class MainShellViewModelTests
             fixture.ViewModel.SettingsPage.VersionUpdateStatusMessage);
     }
 
+    [Fact]
+    public async Task ToolboxPage_ShouldUseShellDialogService_ForGachaDisclaimerConfirmation()
+    {
+        var dialogService = new CapturingDialogService
+        {
+            WarningConfirmReturn = DialogReturnSemantic.Confirm,
+        };
+        await using var fixture = await TestFixture.CreateAsync(dialogService: dialogService);
+        await fixture.ViewModel.InitializeAsync();
+        fixture.ViewModel.ToolboxPage.SetLanguage("en-us");
+
+        var confirmed = await fixture.ViewModel.ToolboxPage.ConfirmGachaDisclaimerAsync();
+
+        Assert.True(confirmed);
+        Assert.Equal(1, dialogService.WarningConfirmCallCount);
+        Assert.Equal("Toolbox.Gacha.Disclaimer", dialogService.LastWarningConfirmScope);
+        var request = Assert.NotNull(dialogService.LastWarningConfirmRequest);
+        Assert.Equal(fixture.ViewModel.ToolboxPage.GachaWarningText, request.Message);
+        var chrome = Assert.NotNull(request.Chrome).GetSnapshot(request.Language);
+        Assert.Equal(
+            fixture.ViewModel.ToolboxPage.GachaDisclaimerLeadText,
+            chrome.GetNamedTextOrDefault(DialogTextCatalog.ChromeKeys.LeadText));
+        Assert.Equal(
+            fixture.ViewModel.ToolboxPage.GachaDisclaimerEmphasisText,
+            chrome.GetNamedTextOrDefault(DialogTextCatalog.ChromeKeys.EmphasisText));
+        Assert.Equal(
+            fixture.ViewModel.ToolboxPage.GachaDisclaimerBodyText,
+            chrome.GetNamedTextOrDefault(DialogTextCatalog.ChromeKeys.DetailText));
+        Assert.False(fixture.ViewModel.ToolboxPage.GachaShowDisclaimer);
+    }
+
     private static ConfigValidationIssue CreateBlockingIssue()
     {
         return new ConfigValidationIssue
@@ -1947,6 +1979,8 @@ public sealed class MainShellViewModelTests
 
         public WarningConfirmDialogRequest? LastWarningConfirmRequest { get; private set; }
 
+        public string? LastWarningConfirmScope { get; private set; }
+
         public DialogReturnSemantic WarningConfirmReturn { get; set; } = DialogReturnSemantic.Close;
 
         public Task<DialogCompletion<AnnouncementDialogPayload>> ShowAnnouncementAsync(
@@ -2039,6 +2073,7 @@ public sealed class MainShellViewModelTests
         {
             WarningConfirmCallCount++;
             LastWarningConfirmRequest = request;
+            LastWarningConfirmScope = sourceScope;
             return Task.FromResult(new DialogCompletion<WarningConfirmDialogPayload>(
                 WarningConfirmReturn,
                 WarningConfirmReturn == DialogReturnSemantic.Confirm ? new WarningConfirmDialogPayload(true) : null,

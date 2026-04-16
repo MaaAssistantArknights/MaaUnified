@@ -2,6 +2,8 @@ using System.Globalization;
 using System.Text.RegularExpressions;
 using System.Text.Json.Nodes;
 using Avalonia.Threading;
+using MAAUnified.App.Features.Dialogs;
+using MAAUnified.App.ViewModels.Infrastructure;
 using MAAUnified.App.ViewModels.Toolbox;
 using MAAUnified.Application.Models;
 using LegacyConfigurationKeys = MAAUnified.Compat.Constants.ConfigurationKeys;
@@ -238,6 +240,51 @@ public sealed class ToolboxModuleO2FeatureTests
     }
 
     [Fact]
+    public async Task ConfirmGachaDisclaimerAsync_ShouldIssueLocalizedDialogRequest_AndAcceptOnConfirm()
+    {
+        await using var fixture = await ToolboxTestFixture.CreateAsync();
+        var dialogService = new RecordingDialogService(DialogReturnSemantic.Confirm);
+        var vm = new ToolboxPageViewModel(fixture.Runtime, fixture.ConnectionState, dialogService);
+        await vm.InitializeAsync();
+
+        vm.SetLanguage("en-us");
+
+        var confirmed = await vm.ConfirmGachaDisclaimerAsync();
+
+        Assert.True(confirmed);
+        Assert.False(vm.GachaShowDisclaimer);
+        Assert.Equal(1, dialogService.WarningConfirmCallCount);
+        Assert.Equal("Toolbox.Gacha.Disclaimer", dialogService.LastScope);
+        var request = Assert.NotNull(dialogService.LastRequest);
+        Assert.Equal(DialogTextCatalog.WarningDialogTitle("en-us"), request.Title);
+        Assert.Equal(vm.GachaWarningText, request.Message);
+        Assert.Equal(DialogTextCatalog.WarningDialogConfirmButton("en-us"), request.ConfirmText);
+        Assert.Equal(DialogTextCatalog.WarningDialogCancelButton("en-us"), request.CancelText);
+        Assert.Equal("en-us", request.Language);
+
+        var chrome = Assert.NotNull(request.Chrome).GetSnapshot("en-us");
+        Assert.Equal(vm.GachaWarningText, chrome.GetNamedTextOrDefault(DialogTextCatalog.ChromeKeys.Prompt));
+        Assert.Equal(vm.GachaDisclaimerLeadText, chrome.GetNamedTextOrDefault(DialogTextCatalog.ChromeKeys.LeadText));
+        Assert.Equal(vm.GachaDisclaimerEmphasisText, chrome.GetNamedTextOrDefault(DialogTextCatalog.ChromeKeys.EmphasisText));
+        Assert.Equal(vm.GachaDisclaimerBodyText, chrome.GetNamedTextOrDefault(DialogTextCatalog.ChromeKeys.DetailText));
+    }
+
+    [Fact]
+    public async Task ConfirmGachaDisclaimerAsync_ShouldKeepDisclaimerVisible_WhenDialogIsNotConfirmed()
+    {
+        await using var fixture = await ToolboxTestFixture.CreateAsync();
+        var dialogService = new RecordingDialogService(DialogReturnSemantic.Cancel);
+        var vm = new ToolboxPageViewModel(fixture.Runtime, fixture.ConnectionState, dialogService);
+        await vm.InitializeAsync();
+
+        var confirmed = await vm.ConfirmGachaDisclaimerAsync();
+
+        Assert.False(confirmed);
+        Assert.True(vm.GachaShowDisclaimer);
+        Assert.Equal(1, dialogService.WarningConfirmCallCount);
+    }
+
+    [Fact]
     public async Task TogglePeepAsync_ShouldAcquireOwnerAndReleaseOnSecondToggle()
     {
         await using var fixture = await ToolboxTestFixture.CreateAsync();
@@ -355,5 +402,78 @@ public sealed class ToolboxModuleO2FeatureTests
         var suffix = template[(index + placeholder.Length)..];
         var pattern = $"^{Regex.Escape(prefix)}\\d+{Regex.Escape(suffix)}$";
         Assert.Matches(pattern, actual);
+    }
+
+    private sealed class RecordingDialogService : IAppDialogService
+    {
+        private readonly DialogReturnSemantic _warningConfirmReturn;
+
+        public RecordingDialogService(DialogReturnSemantic warningConfirmReturn)
+        {
+            _warningConfirmReturn = warningConfirmReturn;
+        }
+
+        public int WarningConfirmCallCount { get; private set; }
+
+        public string? LastScope { get; private set; }
+
+        public WarningConfirmDialogRequest? LastRequest { get; private set; }
+
+        public Task<DialogCompletion<AnnouncementDialogPayload>> ShowAnnouncementAsync(
+            AnnouncementDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<AnnouncementDialogPayload>(DialogReturnSemantic.Close, null, "recording"));
+
+        public Task<DialogCompletion<VersionUpdateDialogPayload>> ShowVersionUpdateAsync(
+            VersionUpdateDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<VersionUpdateDialogPayload>(DialogReturnSemantic.Close, null, "recording"));
+
+        public Task<DialogCompletion<ProcessPickerDialogPayload>> ShowProcessPickerAsync(
+            ProcessPickerDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<ProcessPickerDialogPayload>(DialogReturnSemantic.Close, null, "recording"));
+
+        public Task<DialogCompletion<EmulatorPathDialogPayload>> ShowEmulatorPathAsync(
+            EmulatorPathDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<EmulatorPathDialogPayload>(DialogReturnSemantic.Close, null, "recording"));
+
+        public Task<DialogCompletion<ErrorDialogPayload>> ShowErrorAsync(
+            ErrorDialogRequest request,
+            string sourceScope,
+            Func<CancellationToken, Task<UiOperationResult>>? openIssueReportAsync = null,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<ErrorDialogPayload>(DialogReturnSemantic.Close, null, "recording"));
+
+        public Task<DialogCompletion<AchievementListDialogPayload>> ShowAchievementListAsync(
+            AchievementListDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<AchievementListDialogPayload>(DialogReturnSemantic.Close, null, "recording"));
+
+        public Task<DialogCompletion<TextDialogPayload>> ShowTextAsync(
+            TextDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<TextDialogPayload>(DialogReturnSemantic.Close, null, "recording"));
+
+        public Task<DialogCompletion<WarningConfirmDialogPayload>> ShowWarningConfirmAsync(
+            WarningConfirmDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+        {
+            WarningConfirmCallCount++;
+            LastScope = sourceScope;
+            LastRequest = request;
+            return Task.FromResult(new DialogCompletion<WarningConfirmDialogPayload>(
+                _warningConfirmReturn,
+                _warningConfirmReturn == DialogReturnSemantic.Confirm ? new WarningConfirmDialogPayload(true) : null,
+                "recording"));
+        }
     }
 }

@@ -1112,7 +1112,7 @@ public sealed class MainShellViewModel : ObservableObject
 
     private ToolboxPageViewModel CreateToolboxPage()
     {
-        var page = new ToolboxPageViewModel(_runtime, _connectionGameSharedState);
+        var page = new ToolboxPageViewModel(_runtime, _connectionGameSharedState, _dialogService);
         page.SetLanguage(CurrentShellLanguage);
         return page;
     }

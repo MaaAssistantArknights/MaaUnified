@@ -2,8 +2,6 @@ using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Threading;
-using MAAUnified.App.Features.Dialogs;
-using MAAUnified.App.ViewModels.Infrastructure;
 using MAAUnified.App.ViewModels.Toolbox;
 
 namespace MAAUnified.App.Features.Advanced;
@@ -93,23 +91,7 @@ public partial class ToolboxView : UserControl
             return;
         }
 
-        var owner = TopLevel.GetTopLevel(this) as Window;
-        if (owner is null)
-        {
-            return;
-        }
-
-        var dialog = new WarningConfirmDialogView();
-        dialog.ApplyRequest(
-            DialogTextCatalog.WarningDialogTitle(VM.DialogLanguage),
-            VM.GachaWarningText,
-            confirmText: DialogTextCatalog.WarningDialogConfirmButton(VM.DialogLanguage),
-            cancelText: DialogTextCatalog.WarningDialogCancelButton(VM.DialogLanguage),
-            language: VM.DialogLanguage);
-        if (await dialog.ShowDialog<bool>(owner))
-        {
-            VM.AgreeGachaDisclaimer();
-        }
+        await VM.ConfirmGachaDisclaimerAsync();
     }
 
     private async void OnGachaOnceClick(object? sender, RoutedEventArgs e)

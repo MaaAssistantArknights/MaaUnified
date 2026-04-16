@@ -8,7 +8,7 @@
         WindowStartupLocation="CenterOwner">
   <Grid Margin="10" RowDefinitions="Auto,*,Auto">
     <TextBlock x:Name="DialogTitleText"
-               Classes="section-title"
+               Classes="section-title dialog-window-title"
                Text="Announcement" />
     <Grid Grid.Row="1" RowDefinitions="*,Auto,Auto" Margin="0,8,0,0">
       <TextBox x:Name="AnnouncementInfoBox"

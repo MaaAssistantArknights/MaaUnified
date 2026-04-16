@@ -25,10 +25,10 @@
                   PointerPressed="OnDragHeaderPointerPressed">
             <StackPanel Spacing="6">
               <TextBlock x:Name="DialogTitleText"
-                         Classes="modern-dialog-title"
+                         Classes="modern-dialog-title dialog-window-title"
                          Text="Achievement List" />
               <TextBlock x:Name="OverviewText"
-                         Classes="modern-dialog-subtitle"
+                         Classes="modern-dialog-subtitle dialog-window-subtitle"
                          Text="Unlocked 0 / 0" />
             </StackPanel>
           </Border>
@@ -43,45 +43,47 @@
         <Border Grid.Row="1"
                 Margin="0,18,0,0"
                 Classes="modern-dialog-section">
-          <StackPanel Spacing="12">
-            <TextBox x:Name="FilterInput"
-                     Watermark="Filter"
-                     TextChanged="OnFilterChanged" />
-            <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,*,Auto">
-              <Button x:Name="FilterAllButton"
-                      Margin="0,0,8,0"
-                      Classes="modern-dialog-chip"
-                      Tag="All"
-                      Click="OnFilterChipClick" />
-              <Button x:Name="FilterUnlockedButton"
-                      Grid.Column="1"
-                      Margin="0,0,8,0"
-                      Classes="modern-dialog-chip"
-                      Tag="Unlocked"
-                      Click="OnFilterChipClick" />
-              <Button x:Name="FilterInProgressButton"
-                      Grid.Column="2"
-                      Margin="0,0,8,0"
-                      Classes="modern-dialog-chip"
-                      Tag="InProgress"
-                      Click="OnFilterChipClick" />
-              <Button x:Name="FilterNewButton"
-                      Grid.Column="3"
-                      Classes="modern-dialog-chip"
-                      Tag="NewUnlock"
-                      Click="OnFilterChipClick" />
+          <Grid ColumnDefinitions="*,20,300"
+                RowDefinitions="Auto">
+            <StackPanel Orientation="Horizontal"
+                        Spacing="10"
+                        VerticalAlignment="Center">
+              <Border Classes="achievement-dialog-filter-strip">
+                <StackPanel Orientation="Horizontal"
+                            Spacing="6">
+                  <Button x:Name="FilterAllButton"
+                          Classes="modern-dialog-chip achievement-dialog-filter-chip"
+                          Tag="All"
+                          Click="OnFilterChipClick" />
+                  <Button x:Name="FilterUnlockedButton"
+                          Classes="modern-dialog-chip achievement-dialog-filter-chip"
+                          Tag="Unlocked"
+                          Click="OnFilterChipClick" />
+                  <Button x:Name="FilterInProgressButton"
+                          Classes="modern-dialog-chip achievement-dialog-filter-chip"
+                          Tag="InProgress"
+                          Click="OnFilterChipClick" />
+                  <Button x:Name="FilterNewButton"
+                          Classes="modern-dialog-chip achievement-dialog-filter-chip"
+                          Tag="NewUnlock"
+                          Click="OnFilterChipClick" />
+                </StackPanel>
+              </Border>
               <TextBlock x:Name="ResultCountText"
-                         Grid.Column="4"
-                         Margin="14,0,0,0"
                          VerticalAlignment="Center"
                          Classes="modern-dialog-caption"
                          Text="Showing 0 achievements" />
               <Button x:Name="ClearFiltersButton"
-                      Grid.Column="5"
-                      Classes="wpf-button wpf-button-subtle compact"
+                      Classes="modern-dialog-chip achievement-dialog-clear-chip"
                       Click="OnClearFiltersClick" />
-            </Grid>
-          </StackPanel>
+            </StackPanel>
+            <TextBox x:Name="FilterInput"
+                     Grid.Column="2"
+                     Classes="achievement-dialog-search"
+                     Watermark="Filter"
+                     HorizontalAlignment="Stretch"
+                     TextChanged="OnFilterChanged" />
+          </Grid>
         </Border>
 
         <Grid Grid.Row="2"
@@ -99,22 +101,18 @@
               <DataTemplate x:DataType="local:AchievementListDisplayItem"
                             x:CompileBindings="True">
                 <Border Margin="0,0,0,12"
-                        Classes="modern-dialog-card">
-                  <Grid ColumnDefinitions="6,Auto,*">
-                    <Border Background="{Binding MedalColor}" />
-                    <Border Grid.Column="1"
-                            Margin="14,12,12,0"
+                        Classes="modern-dialog-card achievement-dialog-item-card">
+                  <Grid ColumnDefinitions="Auto,*">
+                    <Border Margin="0,2,0,0"
                             VerticalAlignment="Top"
-                            Classes="achievement-dialog-medal-shell">
-                      <Border Classes="achievement-dialog-medal-core"
-                              Background="{Binding MedalColor}">
-                        <TextBlock Classes="achievement-dialog-medal-glyph"
-                                   Text="★" />
-                      </Border>
+                            Background="{Binding MedalColor}"
+                            Classes="achievement-dialog-medal-core">
+                      <TextBlock Classes="achievement-dialog-medal-glyph"
+                                 Text="★" />
                     </Border>
-                    <StackPanel Grid.Column="2"
-                                Margin="0,12,14,12"
-                                Spacing="6">
+                    <StackPanel Grid.Column="1"
+                                Margin="14,0,0,0"
+                                Spacing="8">
                       <Grid ColumnDefinitions="*,Auto">
                         <TextBlock Classes="achievement-dialog-card-title"
                                    Text="{Binding Title}" />
@@ -133,21 +131,31 @@
                       </Border>
                       <TextBlock Classes="achievement-dialog-card-description"
                                  Text="{Binding Description}" />
-                      <Border Classes="modern-dialog-section"
-                              Padding="10,8"
-                              IsVisible="{Binding HasConditions}">
-                        <TextBlock Classes="achievement-dialog-card-conditions"
-                                   Text="{Binding Conditions}" />
+                      <Border Classes="achievement-dialog-conditions-panel"
+                              IsVisible="{Binding HasConditionDetails}">
+                        <StackPanel Spacing="8">
+                          <Grid ColumnDefinitions="4,*"
+                                IsVisible="{Binding HasConditions}">
+                            <Border Background="{Binding MedalColor}"
+                                    CornerRadius="2" />
+                            <TextBlock Grid.Column="1"
+                                       Margin="10,0,0,0"
+                                       Classes="achievement-dialog-card-conditions"
+                                       Text="{Binding Conditions}" />
+                          </Grid>
+                          <StackPanel Classes="achievement-dialog-progress-panel"
+                                      Spacing="4"
+                                      IsVisible="{Binding ShowProgress}">
+                            <ProgressBar Classes="achievement-dialog-progress-bar"
+                                         Minimum="0"
+                                         Maximum="{Binding Target}"
+                                         Value="{Binding ProgressValue}"
+                                         Height="8" />
+                            <TextBlock Classes="modern-dialog-caption"
+                                       Text="{Binding ProgressText}" />
+                          </StackPanel>
+                        </StackPanel>
                       </Border>
-                      <StackPanel Spacing="4"
-                                  IsVisible="{Binding ShowProgress}">
-                        <ProgressBar Minimum="0"
-                                     Maximum="{Binding Target}"
-                                     Value="{Binding ProgressValue}"
-                                     Height="8" />
-                        <TextBlock Classes="modern-dialog-caption"
-                                   Text="{Binding ProgressText}" />
-                      </StackPanel>
                       <TextBlock Classes="achievement-dialog-unlocked-at"
                                  Foreground="{Binding MedalColor}"
                                  Text="{Binding UnlockedAtText}"

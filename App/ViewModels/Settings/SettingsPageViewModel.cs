@@ -66,6 +66,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
     private const string SettingsDataBucketHotKey = "HotKey";
     private const string SettingsDataBucketTimer = "Timer";
     private const string SettingsDataBucketStartPerformance = "StartPerformance";
+    private const string SettingsDataBucketAutostart = "Autostart";
     private const string SettingsDataBucketConnectionGame = "ConnectionGame";
     private const string SettingsDataBucketRemoteControl = "RemoteControl";
     private const string SettingsDataBucketExternalNotification = "ExternalNotification";
@@ -77,6 +78,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         SettingsDataBucketHotKey,
         SettingsDataBucketTimer,
         SettingsDataBucketStartPerformance,
+        SettingsDataBucketAutostart,
         SettingsDataBucketConnectionGame,
         SettingsDataBucketRemoteControl,
         SettingsDataBucketExternalNotification,
@@ -3211,8 +3213,6 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         {
             await LoadInitialSettingsAsync(cancellationToken);
             await RefreshConfigurationProfilesAsync(cancellationToken);
-            await LoadImmediateSettingsDataAsync(cancellationToken);
-            await RefreshAutostartStatusAsync(cancellationToken);
             _deferredSectionDataLoadEnabled = true;
             await EnsureSectionDataLoadedAsync(SelectedSection?.Key, cancellationToken);
 
@@ -6831,7 +6831,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
             "HotKey" => [SettingsDataBucketHotKey],
             "Timer" => [SettingsDataBucketTimer],
             "Performance" => [SettingsDataBucketStartPerformance],
-            "Start" => [SettingsDataBucketStartPerformance],
+            "Start" => [SettingsDataBucketStartPerformance, SettingsDataBucketAutostart, SettingsDataBucketConnectionGame],
             "Game" => [SettingsDataBucketConnectionGame, SettingsDataBucketStartPerformance],
             "Connect" => [SettingsDataBucketConnectionGame],
             "RemoteControl" => [SettingsDataBucketRemoteControl],
@@ -6909,6 +6909,9 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
             case SettingsDataBucketStartPerformance:
                 await LoadStartPerformanceDataFromConfigAsync(config, cancellationToken);
                 break;
+            case SettingsDataBucketAutostart:
+                await RefreshAutostartStatusAsync(cancellationToken);
+                break;
             case SettingsDataBucketConnectionGame:
                 LoadConnectionSharedStateFromConfig();
                 break;
@@ -6939,16 +6942,6 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         _loadedSettingsDataBuckets.Clear();
         await LoadGuiBackgroundBaselineFromConfigAsync(Runtime.ConfigurationService.CurrentConfig, cancellationToken);
         MarkSettingsDataBucketsLoaded(SettingsDataBucketGuiBackground);
-    }
-
-    private async Task LoadImmediateSettingsDataAsync(CancellationToken cancellationToken)
-    {
-        await EnsureSettingsDataBucketLoadedAsync(SettingsDataBucketConnectionGame, cancellationToken);
-        await EnsureSettingsDataBucketLoadedAsync(SettingsDataBucketRemoteControl, cancellationToken);
-        await EnsureSettingsDataBucketLoadedAsync(SettingsDataBucketExternalNotification, cancellationToken);
-        await EnsureSettingsDataBucketLoadedAsync(SettingsDataBucketTimer, cancellationToken);
-        await EnsureSettingsDataBucketLoadedAsync(SettingsDataBucketStartPerformance, cancellationToken);
-        await EnsureSettingsDataBucketLoadedAsync(SettingsDataBucketHotKey, cancellationToken);
     }
 
     private async Task LoadGuiBackgroundBaselineFromConfigAsync(

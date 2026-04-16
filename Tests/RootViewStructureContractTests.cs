@@ -175,6 +175,9 @@ public sealed class RootViewStructureContractTests
         Assert.Contains("EnsureSectionsThrough(", codeBehind, StringComparison.Ordinal);
         Assert.Contains("BindViewModelNotifications();", codeBehind, StringComparison.Ordinal);
         Assert.Contains("RefreshLocalizedSections()", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("MaterializeSectionWhenReadyAsync(", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("_pendingProgressiveSections", codeBehind, StringComparison.Ordinal);
+        Assert.DoesNotContain("OnProgressiveMaterializationTick", codeBehind, StringComparison.Ordinal);
         Assert.Contains("nameof(SettingsPageViewModel.RootTexts)", codeBehind, StringComparison.Ordinal);
         Assert.Contains("new settingsViews.ConfigurationManagerView()", codeBehind, StringComparison.Ordinal);
         Assert.Contains("new settingsViews.AboutSettingsView()", codeBehind, StringComparison.Ordinal);

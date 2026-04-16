@@ -9,6 +9,7 @@ using System.Text.Json.Nodes;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
+using MAAUnified.App.Features.Dialogs;
 using MAAUnified.App.ViewModels.Infrastructure;
 using MAAUnified.App.ViewModels.Settings;
 using MAAUnified.Application.Models;
@@ -28,6 +29,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
     private const string ToolboxHistoryLoadScope = "Toolbox.History.Load";
     private const string ToolboxHistorySaveScope = "Toolbox.History.Save";
     private const string ToolboxLegacyResultScope = "Toolbox.LegacyResult";
+    private const string ToolboxGachaDisclaimerDialogScope = "Toolbox.Gacha.Disclaimer";
     private const string MiniGameSecretFrontTaskName = "MiniGame@SecretFront";
     private const string RecruitTaskChain = "Recruit";
     private const string DepotTaskChain = "Depot";
@@ -127,6 +129,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
     private const double DepotPanelItemWidth = 166d;
 
     private readonly ConnectionGameSharedStateViewModel? _connectionState;
+    private readonly IAppDialogService _dialogService;
     private readonly DispatcherTimer _gachaTipTimer;
     private readonly DispatcherTimer _peepTimer;
     private ToolboxLocalizationTextMap _texts;
@@ -192,10 +195,14 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
     private string _miniGameTip = string.Empty;
     private readonly List<ToolboxNamedOption> _miniGameSecretFrontEventOptions = [];
 
-    public ToolboxPageViewModel(MAAUnifiedRuntime runtime, ConnectionGameSharedStateViewModel? connectionState = null)
+    public ToolboxPageViewModel(
+        MAAUnifiedRuntime runtime,
+        ConnectionGameSharedStateViewModel? connectionState = null,
+        IAppDialogService? dialogService = null)
         : base(runtime)
     {
         _connectionState = connectionState;
+        _dialogService = dialogService ?? NoOpAppDialogService.Instance;
         if (_connectionState is not null)
         {
             _connectionState.PropertyChanged += OnConnectionStatePropertyChanged;
@@ -1148,6 +1155,30 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         await DispatchToolAsync(ToolboxToolKind.Gacha, request, PrepareGachaForStart, cancellationToken, startPeepAfterDispatch: true);
     }
 
+    public async Task<bool> ConfirmGachaDisclaimerAsync(CancellationToken cancellationToken = default)
+    {
+        var chrome = CreateGachaDisclaimerDialogChrome(DialogLanguage);
+        var chromeSnapshot = chrome.GetSnapshot(DialogLanguage);
+        var request = new WarningConfirmDialogRequest(
+            Title: chromeSnapshot.Title,
+            Message: chromeSnapshot.GetNamedTextOrDefault(DialogTextCatalog.ChromeKeys.Prompt, GachaWarningText),
+            ConfirmText: chromeSnapshot.ConfirmText ?? DialogTextCatalog.WarningDialogConfirmButton(DialogLanguage),
+            CancelText: chromeSnapshot.CancelText ?? DialogTextCatalog.WarningDialogCancelButton(DialogLanguage),
+            Language: DialogLanguage,
+            Chrome: chrome);
+        var dialogResult = await _dialogService.ShowWarningConfirmAsync(
+            request,
+            ToolboxGachaDisclaimerDialogScope,
+            cancellationToken);
+        if (dialogResult.Return != DialogReturnSemantic.Confirm)
+        {
+            return false;
+        }
+
+        AgreeGachaDisclaimer();
+        return true;
+    }
+
     public async Task StartMiniGameAsync(CancellationToken cancellationToken = default)
     {
         var request = new ToolboxDispatchRequest(
@@ -1729,6 +1760,36 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         {
             Language = language,
         };
+    }
+
+    private static DialogChromeCatalog CreateGachaDisclaimerDialogChrome(string language)
+    {
+        return DialogTextCatalog.CreateCatalog(
+            language,
+            nextLanguage =>
+            {
+                var texts = CreateTexts(nextLanguage);
+                var title = DialogTextCatalog.WarningDialogTitle(nextLanguage);
+                var prompt = texts.GetOrDefault(
+                    "Toolbox.Warning.GachaMessage",
+                    "This feature is risky and may cause unintended pulls.");
+                return new DialogChromeSnapshot(
+                    title: title,
+                    confirmText: DialogTextCatalog.WarningDialogConfirmButton(nextLanguage),
+                    cancelText: DialogTextCatalog.WarningDialogCancelButton(nextLanguage),
+                    namedTexts: DialogTextCatalog.CreateNamedTexts(
+                        (DialogTextCatalog.ChromeKeys.SectionTitle, title),
+                        (DialogTextCatalog.ChromeKeys.Prompt, prompt),
+                        (DialogTextCatalog.ChromeKeys.LeadText, texts.GetOrDefault(
+                            "Toolbox.Gacha.Disclaimer.Lead",
+                            "Please note, this is")),
+                        (DialogTextCatalog.ChromeKeys.EmphasisText, texts.GetOrDefault(
+                            "Toolbox.Gacha.Disclaimer.Emphasis",
+                            "REAL GACHA")),
+                        (DialogTextCatalog.ChromeKeys.DetailText, texts.GetOrDefault(
+                            "Toolbox.Gacha.Disclaimer.Body",
+                            "The gacha tool directly operates the current client. Make sure this is not your main account and the emulator is already on the gacha screen."))));
+            });
     }
 
     private void RefreshLocalizedUiState()
