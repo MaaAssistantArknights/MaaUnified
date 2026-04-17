@@ -2082,14 +2082,74 @@ With save file: farm points through crafting (advanced).
   <data name="Settings.About.Dialog.Confirm" xml:space="preserve">
     <value>Confirm</value>
   </data>
+  <data name="Settings.About.Dialog.ConfirmLocked" xml:space="preserve">
+    <value>Read announcement first</value>
+  </data>
+  <data name="Settings.About.Dialog.ConfirmBlocked1" xml:space="preserve">
+    <value>You haven't finished reading. Please confirm after you finish.</value>
+  </data>
+  <data name="Settings.About.Dialog.ConfirmBlocked2" xml:space="preserve">
+    <value>Yes, you - still clicking</value>
+  </data>
+  <data name="Settings.About.Dialog.ConfirmBlocked3" xml:space="preserve">
+    <value>Still clicking</value>
+  </data>
   <data name="Settings.About.Dialog.DoNotRemindThisAnnouncementAgain" xml:space="preserve">
-    <value>Do not remind this announcement again</value>
+    <value>Do not show this announcement again</value>
   </data>
   <data name="Settings.About.Dialog.DoNotShowAnnouncement" xml:space="preserve">
     <value>Do not show announcement</value>
   </data>
   <data name="Settings.About.Dialog.Title" xml:space="preserve">
     <value>Announcement</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadProgress.PendingBadge" xml:space="preserve">
+    <value>READ LOCK</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadProgress.PendingTitle" xml:space="preserve">
+    <value>Scroll to the bottom to unlock confirm.</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadProgress.PendingCaption" xml:space="preserve">
+    <value>Keep scrolling through every section. Confirm and do-not-remind will unlock together when you reach the end.</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadProgress.PendingFooterHint" xml:space="preserve">
+    <value>This option unlocks after you finish reading, so the full action area stays together and easy to scan.</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadProgress.ReadyBadge" xml:space="preserve">
+    <value>UNLOCKED</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadProgress.ReadyTitle" xml:space="preserve">
+    <value>Confirm is now available.</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadProgress.ReadyCaption" xml:space="preserve">
+    <value>You can confirm now, and you can choose not to show this announcement again.</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadProgress.ReadyFooterHint" xml:space="preserve">
+    <value>If you do not want to see this announcement again until it changes, tick the option on the left and confirm from the button on the right.</value>
+  </data>
+  <data name="Settings.About.Dialog.SectionsTitle" xml:space="preserve">
+    <value>Announcement Sections</value>
+  </data>
+  <data name="Settings.About.Dialog.SectionsCaption" xml:space="preserve">
+    <value>Choose a section on the left to read the full announcement.</value>
+  </data>
+  <data name="Settings.About.Dialog.Lead" xml:space="preserve">
+    <value>Please read the latest announcement carefully before closing this window.</value>
+  </data>
+  <data name="Settings.About.Dialog.BottomHint" xml:space="preserve">
+    <value>Unread announcements cannot be dismissed yet.</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadHint" xml:space="preserve">
+    <value>Scroll to the bottom before closing, or hide this announcement until the next update.</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadFinishedHint" xml:space="preserve">
+    <value>Announcement fully read. You can close this dialog now.</value>
+  </data>
+  <data name="Settings.About.Dialog.MetaCurrentSection" xml:space="preserve">
+    <value>Current section</value>
+  </data>
+  <data name="Settings.About.Dialog.MetaSectionFormat" xml:space="preserve">
+    <value>Section {0} / {1}</value>
   </data>
   <data name="Settings.About.OpenCommunity" xml:space="preserve">
     <value>Open community portal</value>

@@ -21,6 +21,7 @@
     <PackageReference Include="Avalonia.Themes.Fluent" Version="11.2.8" />
     <PackageReference Include="Avalonia.Fonts.Inter" Version="11.2.8" />
     <PackageReference Include="Avalonia.ReactiveUI" Version="11.2.8" />
+    <PackageReference Include="MarkdownViewer.Core" Version="1.0.5" />
   </ItemGroup>
 
   <ItemGroup>

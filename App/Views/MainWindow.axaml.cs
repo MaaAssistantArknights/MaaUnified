@@ -97,6 +97,7 @@ public partial class MainWindow : Window
     private RuntimeLogWindow? _runtimeLogWindow;
     private RootPageHostViewModel? _settingsWarmupRootPage;
     private bool _settingsWarmupStarted;
+    private bool _settingsSectionWarmupStarted;
 
     private readonly record struct ResponsiveDoubleResourceRange(string ResourceKey, double Minimum, double Maximum);
 
@@ -462,6 +463,8 @@ public partial class MainWindow : Window
 
         _settingsWarmupRootPage.PropertyChanged -= OnSettingsWarmupRootPagePropertyChanged;
         _settingsWarmupRootPage = null;
+        _settingsWarmupStarted = false;
+        _settingsSectionWarmupStarted = false;
     }
 
     private void OnSettingsWarmupRootPagePropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -481,7 +484,18 @@ public partial class MainWindow : Window
 
     private void TryStartSettingsWarmup(MainShellViewModel vm)
     {
-        if (_settingsWarmupStarted || _settingsWarmupRootPage?.IsLoaded != true)
+        if (_settingsWarmupRootPage?.IsLoaded != true)
+        {
+            return;
+        }
+
+        if (!_settingsSectionWarmupStarted)
+        {
+            _settingsSectionWarmupStarted = true;
+            MAAUnified.App.Features.Root.SettingsView.StartBackgroundSectionWarmup();
+        }
+
+        if (_settingsWarmupStarted)
         {
             return;
         }

@@ -115,11 +115,13 @@ public sealed partial class SettingsPageViewModel
         }
 
         _versionUpdateStartupCheckTriggered = true;
-        if (await TryShowFirstBootVersionUpdateDialogAsync(
-                "Settings.VersionUpdate.Check.Startup.FirstBoot",
-                cancellationToken))
+        var firstBootDialogRequest = await PrepareFirstBootVersionUpdateDialogRequestAsync(cancellationToken);
+        if (firstBootDialogRequest is not null)
         {
-            return;
+            StartFirstBootVersionUpdateDialog(
+                firstBootDialogRequest,
+                "Settings.VersionUpdate.Check.Startup.FirstBoot",
+                cancellationToken);
         }
 
         if (!VersionUpdateStartupCheck)
@@ -832,58 +834,7 @@ public sealed partial class SettingsPageViewModel
             $"[update] Resource reload failed after package update: {reloadResult.Error?.Code} {reloadResult.Error?.Message}");
     }
 
-    private async Task<bool> ShowFirstBootVersionUpdateDialogAsync(
-        string scope,
-        CancellationToken cancellationToken)
-    {
-        if (!VersionUpdateIsFirstBoot)
-        {
-            return false;
-        }
-
-        VersionUpdateIsFirstBoot = false;
-        var persistResult = await Runtime.VersionUpdateFeatureService.SavePolicyAsync(
-            BuildVersionUpdatePolicy(),
-            cancellationToken);
-        if (!persistResult.Success)
-        {
-            VersionUpdateErrorMessage = persistResult.Message;
-        }
-
-        if (VersionUpdateDoNotShow
-            || (string.IsNullOrWhiteSpace(VersionUpdateName)
-                && string.IsNullOrWhiteSpace(VersionUpdateBody)))
-        {
-            return true;
-        }
-
-        var chrome = CreateSettingsDialogChrome(
-            texts => new DialogChromeSnapshot(
-                title: texts.GetOrDefault("Settings.VersionUpdate.Dialog.Title", "Version Update"),
-                confirmText: texts.GetOrDefault("Settings.VersionUpdate.Dialog.Confirm", "Confirm"),
-                cancelText: texts.GetOrDefault("Settings.VersionUpdate.Dialog.Cancel", "Later")));
-        var chromeSnapshot = chrome.GetSnapshot();
-        await _dialogService.ShowVersionUpdateAsync(
-            new VersionUpdateDialogRequest(
-                Title: chromeSnapshot.Title,
-                CurrentVersion: UpdatePanelUiVersion,
-                TargetVersion: VersionUpdateName,
-                Summary: VersionUpdateName,
-                Body: VersionUpdateBody,
-                ConfirmText: chromeSnapshot.ConfirmText ?? RootTexts.GetOrDefault("Settings.VersionUpdate.Dialog.Confirm", "Confirm"),
-                CancelText: chromeSnapshot.CancelText ?? RootTexts.GetOrDefault("Settings.VersionUpdate.Dialog.Cancel", "Later"),
-                Chrome: chrome),
-            scope,
-            cancellationToken);
-        VersionUpdateStatusMessage = RootTexts.GetOrDefault(
-            "Settings.VersionUpdate.Status.FirstBootShown",
-            "Update notes displayed.");
-        VersionUpdateErrorMessage = string.Empty;
-        return true;
-    }
-
-    private async Task<bool> TryShowFirstBootVersionUpdateDialogAsync(
-        string scope,
+    private async Task<VersionUpdateDialogRequest?> PrepareFirstBootVersionUpdateDialogRequestAsync(
         CancellationToken cancellationToken)
     {
         if (!VersionUpdateIsFirstBoot)
@@ -899,7 +850,72 @@ public sealed partial class SettingsPageViewModel
             }
         }
 
-        return await ShowFirstBootVersionUpdateDialogAsync(scope, cancellationToken);
+        if (!VersionUpdateIsFirstBoot)
+        {
+            return null;
+        }
+
+        var targetVersion = VersionUpdateName;
+        var body = VersionUpdateBody;
+        var doNotShow = VersionUpdateDoNotShow;
+        VersionUpdateIsFirstBoot = false;
+        var persistResult = await Runtime.VersionUpdateFeatureService.SavePolicyAsync(
+            BuildVersionUpdatePolicy(),
+            cancellationToken);
+        if (!persistResult.Success)
+        {
+            VersionUpdateErrorMessage = persistResult.Message;
+        }
+
+        if (doNotShow
+            || (string.IsNullOrWhiteSpace(targetVersion)
+                && string.IsNullOrWhiteSpace(body)))
+        {
+            return null;
+        }
+
+        var chrome = CreateSettingsDialogChrome(
+            texts => new DialogChromeSnapshot(
+                title: texts.GetOrDefault("Settings.VersionUpdate.Dialog.Title", "Version Update"),
+                confirmText: texts.GetOrDefault("Settings.VersionUpdate.Dialog.Confirm", "Confirm"),
+                cancelText: texts.GetOrDefault("Settings.VersionUpdate.Dialog.Cancel", "Later")));
+        var chromeSnapshot = chrome.GetSnapshot();
+        return new VersionUpdateDialogRequest(
+            Title: chromeSnapshot.Title,
+            CurrentVersion: UpdatePanelUiVersion,
+            TargetVersion: targetVersion,
+            Summary: targetVersion,
+            Body: body,
+            ConfirmText: chromeSnapshot.ConfirmText ?? RootTexts.GetOrDefault("Settings.VersionUpdate.Dialog.Confirm", "Confirm"),
+            CancelText: chromeSnapshot.CancelText ?? RootTexts.GetOrDefault("Settings.VersionUpdate.Dialog.Cancel", "Later"),
+            Chrome: chrome);
+    }
+
+    private void StartFirstBootVersionUpdateDialog(
+        VersionUpdateDialogRequest request,
+        string scope,
+        CancellationToken cancellationToken)
+    {
+        _ = ObserveFirstBootVersionUpdateDialogAsync(request, scope, cancellationToken);
+    }
+
+    private async Task ObserveFirstBootVersionUpdateDialogAsync(
+        VersionUpdateDialogRequest request,
+        string scope,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _dialogService.ShowVersionUpdateAsync(request, scope, cancellationToken);
+            VersionUpdateStatusMessage = RootTexts.GetOrDefault(
+                "Settings.VersionUpdate.Status.FirstBootShown",
+                "Update notes displayed.");
+            VersionUpdateErrorMessage = string.Empty;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // no-op
+        }
     }
 
     private bool ShouldRunScheduledVersionUpdateCheck(DateTimeOffset utcNow)

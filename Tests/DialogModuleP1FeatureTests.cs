@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
@@ -224,6 +225,138 @@ public sealed class DialogModuleP1FeatureTests
             warningConfirm.Return,
             warningConfirm.Payload,
             warningConfirm.Summary);
+    }
+
+    [Fact]
+    public void AnnouncementDialogView_ShouldHideCloseButton_AndGateEscapeUntilRead()
+    {
+        var root = BaselineTestSupport.GetMaaUnifiedRoot();
+        var xaml = File.ReadAllText(Path.Combine(root, "App", "Features", "Dialogs", "AnnouncementDialogView.axaml"));
+        var code = File.ReadAllText(Path.Combine(root, "App", "Features", "Dialogs", "AnnouncementDialogView.axaml.cs"));
+
+        Assert.Contains("ShowCloseButton=\"False\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("if (!_hasEverScrolledToBottom)", code, StringComparison.Ordinal);
+        Assert.Contains("TryCompleteDialog(DialogReturnSemantic.Close);", code, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AnnouncementDialogView_ShouldUseUnifiedSectionActivationMath()
+    {
+        const double activationLineY = 36d;
+        const double targetHeaderTop = 240d;
+        var targetOffset = AnnouncementDialogView.ComputeSectionTargetOffset(targetHeaderTop, activationLineY);
+
+        Assert.Equal(204d, targetOffset);
+        Assert.Equal(
+            1,
+            AnnouncementDialogView.ResolveActiveSectionIndex(
+                targetOffset,
+                activationLineY,
+                new[] { 120d, targetHeaderTop, 420d }));
+        Assert.Equal(
+            -1,
+            AnnouncementDialogView.ResolveActiveSectionIndex(
+                20d,
+                activationLineY,
+                new[] { 120d, targetHeaderTop, 420d }));
+    }
+
+    [Theory]
+    [InlineData(120d, 60d, 0d)]
+    [InlineData(60d, 60d, 0d)]
+    [InlineData(30d, 60d, 30d)]
+    [InlineData(-40d, 60d, 60d)]
+    public void AnnouncementDialogView_ShouldClampStickyPushOffset(double nextViewportTop, double stickyHeight, double expected)
+    {
+        Assert.Equal(expected, AnnouncementDialogView.ComputeStickyPushOffset(nextViewportTop, stickyHeight));
+    }
+
+    [Fact]
+    public void AnnouncementDialogView_ShouldDeclareStickyPushTrackAndFollowAccentWithoutTextHighlight()
+    {
+        var root = BaselineTestSupport.GetMaaUnifiedRoot();
+        var xaml = File.ReadAllText(Path.Combine(root, "App", "Features", "Dialogs", "AnnouncementDialogView.axaml"));
+        var code = File.ReadAllText(Path.Combine(root, "App", "Features", "Dialogs", "AnnouncementDialogView.axaml.cs"));
+        var styles = File.ReadAllText(Path.Combine(root, "App", "Styles", "ControlStyles.axaml"));
+
+        Assert.Contains("SectionListFollowAccent", xaml, StringComparison.Ordinal);
+        Assert.Contains("SectionListFollowAccentGlow", xaml, StringComparison.Ordinal);
+        Assert.Contains("ColumnDefinitions=\"22,*\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("ClipToBounds=\"True\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("announcement-dialog-sticky-title-viewport", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("announcement-dialog-list-selection-surface", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("announcement-dialog-read-progress", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("announcement-dialog-action-lock-scrim", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("AllAnnouncementsKey", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("AnnouncementTitleText", xaml, StringComparison.Ordinal);
+        Assert.Contains("UpdateSectionListFollowAccent", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("Math.Max(0d, point.Value.Y", code, StringComparison.Ordinal);
+        Assert.Contains("_primarySectionHeader ??= header", code, StringComparison.Ordinal);
+        Assert.Contains("CreateSectionHeader(item.Title)", code, StringComparison.Ordinal);
+        Assert.Contains("CreateMarkdownViewer(item.MarkdownContent)", code, StringComparison.Ordinal);
+        Assert.Contains("announcement-dialog-list-follow-accent", styles, StringComparison.Ordinal);
+        Assert.Contains("ListBox.announcement-dialog-list ListBoxItem:pointerover Border.announcement-dialog-list-card", styles, StringComparison.Ordinal);
+        Assert.Contains("ListBox.announcement-dialog-list ListBoxItem:selected Border.announcement-dialog-list-card", styles, StringComparison.Ordinal);
+        Assert.Contains("ListBox.announcement-dialog-list ListBoxItem:selected:pointerover Border.announcement-dialog-list-card", styles, StringComparison.Ordinal);
+        Assert.DoesNotContain("ListBox.announcement-dialog-list ListBoxItem:selected TextBlock.announcement-dialog-list-title", styles, StringComparison.Ordinal);
+        Assert.Contains("<Setter Property=\"Padding\" Value=\"0,9,15,9\" />", styles, StringComparison.Ordinal);
+        Assert.Contains("<Style Selector=\"Border.announcement-dialog-image-shell\">", styles, StringComparison.Ordinal);
+        Assert.Contains("<Setter Property=\"CornerRadius\" Value=\"20\" />", styles, StringComparison.Ordinal);
+        Assert.Contains("<Setter Property=\"ClipToBounds\" Value=\"True\" />", styles, StringComparison.Ordinal);
+        Assert.Contains("ComputeSectionTargetOffset", code, StringComparison.Ordinal);
+        Assert.Contains("ComputeStickyPushOffset", code, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AnnouncementDialogView_ShouldBuildSectionsFromRealMarkdownHeadings()
+    {
+        var sections = AnnouncementDialogView.BuildSectionDefinitions(
+            "Announcement",
+            """
+            ### 小游戏发个小公告 (NEW!!!)
+            第一段
+
+            ### Windows 端一键长草任务配置重构
+            第二段
+            """);
+
+        Assert.Collection(
+            sections,
+            first =>
+            {
+                Assert.Equal("小游戏发个小公告", first.Title);
+                Assert.True(first.IsNew);
+                Assert.Equal("第一段", first.MarkdownContent);
+            },
+            second =>
+            {
+                Assert.Equal("Windows 端一键长草任务配置重构", second.Title);
+                Assert.False(second.IsNew);
+                Assert.Equal("第二段", second.MarkdownContent);
+            });
+    }
+
+    [Fact]
+    public void AnnouncementDialogView_ShouldFallbackToDialogTitle_WhenMarkdownHasNoSectionHeadings()
+    {
+        var sections = AnnouncementDialogView.BuildSectionDefinitions(
+            "公告",
+            """
+            没有分节标题的公告正文
+
+            第二段也应保留
+            """);
+
+        var section = Assert.Single(sections);
+        Assert.Equal("公告", section.Title);
+        Assert.False(section.IsNew);
+        Assert.Equal(
+            """
+            没有分节标题的公告正文
+
+            第二段也应保留
+            """,
+            section.MarkdownContent);
     }
 
     [Fact]

@@ -305,6 +305,88 @@ public sealed class MainShellViewModelTests
     }
 
     [Fact]
+    public async Task InitializeAsync_OutdatedSchema_DialogOpen_ShouldNotBlockDeferredStartupOrVersionChecks()
+    {
+        var dialogService = new CapturingDialogService
+        {
+            TextTask = new TaskCompletionSource<DialogCompletion<TextDialogPayload>>(TaskCreationOptions.RunContinuationsAsynchronously),
+        };
+        var versionUpdate = new ScriptedVersionUpdateFeatureService();
+        await using var fixture = await TestFixture.CreateAsync(
+            existingAvaloniaJson: CreateOutdatedSchemaConfigJson(),
+            dialogService: dialogService,
+            versionUpdateFeatureService: versionUpdate);
+
+        var startupTask = fixture.ViewModel.InitializeAsync();
+
+        Assert.True(await WaitUntilAsync(
+            () => dialogService.ShowTextCallCount == 1,
+            retry: 240,
+            delayMs: 50));
+        Assert.True(await WaitUntilAsync(
+            () =>
+                fixture.ViewModel.SettingsRootPage.IsLoaded
+                && fixture.ViewModel.CopilotRootPage.IsLoaded
+                && fixture.ViewModel.ToolboxRootPage.IsLoaded
+                && versionUpdate.CheckForUpdatesCallCount >= 1
+                && versionUpdate.CheckResourceCallCount >= 1,
+            retry: 240,
+            delayMs: 50));
+
+        await startupTask.WaitAsync(TimeSpan.FromSeconds(10));
+
+        dialogService.TextTask.TrySetResult(
+            new DialogCompletion<TextDialogPayload>(
+                DialogReturnSemantic.Confirm,
+                new TextDialogPayload(dialogService.LastTextRequest?.DefaultText ?? string.Empty),
+                "released"));
+    }
+
+    [Fact]
+    public async Task InitializeAsync_AnnouncementDialogOpen_ShouldContinueDeferredStartup_AndNotBlockStartupVersionUpdate()
+    {
+        var dialogService = new CapturingDialogService
+        {
+            AnnouncementTask = new TaskCompletionSource<DialogCompletion<AnnouncementDialogPayload>>(TaskCreationOptions.RunContinuationsAsynchronously),
+        };
+        var versionUpdate = new ScriptedVersionUpdateFeatureService();
+        var announcementFeatureService = new ScriptedAnnouncementFeatureService(
+            new AnnouncementState("cached announcement", false, false));
+        await using var fixture = await TestFixture.CreateAsync(
+            dialogService: dialogService,
+            versionUpdateFeatureService: versionUpdate,
+            announcementFeatureService: announcementFeatureService);
+
+        var startupTask = fixture.ViewModel.InitializeAsync();
+
+        Assert.True(await WaitUntilAsync(
+            () => dialogService.AnnouncementCallCount == 1,
+            retry: 240,
+            delayMs: 50));
+        Assert.Equal("App.Initialize.Announcement.Dialog", dialogService.LastAnnouncementScope);
+        Assert.True(await WaitUntilAsync(
+            () =>
+                fixture.ViewModel.SettingsRootPage.IsLoaded
+                && fixture.ViewModel.CopilotRootPage.IsLoaded
+                && fixture.ViewModel.ToolboxRootPage.IsLoaded,
+            retry: 240,
+            delayMs: 50));
+        await startupTask.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.True(await WaitUntilAsync(
+            () =>
+                versionUpdate.CheckForUpdatesCallCount >= 1
+                && versionUpdate.CheckResourceCallCount >= 1,
+            retry: 240,
+            delayMs: 50));
+
+        dialogService.AnnouncementTask.TrySetResult(
+            new DialogCompletion<AnnouncementDialogPayload>(
+                DialogReturnSemantic.Close,
+                null,
+                "released"));
+    }
+
+    [Fact]
     public async Task InitializeAsync_CoreInitFailure_ShouldRaiseDialogError()
     {
         await using var fixture = await TestFixture.CreateAsync(
@@ -1064,7 +1146,7 @@ public sealed class MainShellViewModelTests
     }
 
     [Fact]
-    public async Task InitializeAsync_WhenFirstBootFlagSet_ShouldShowPersistedUpdateDialogAndSkipChecks()
+    public async Task InitializeAsync_WhenFirstBootFlagSet_ShouldShowPersistedUpdateDialogWithoutBlockingChecks()
     {
         var dialogService = new CapturingDialogService
         {
@@ -1074,6 +1156,7 @@ public sealed class MainShellViewModelTests
         {
             LoadedPolicy = VersionUpdatePolicy.Default with
             {
+                StartupUpdateCheck = true,
                 IsFirstBoot = true,
                 VersionName = "Release v2.0.0",
                 VersionBody = "Body",
@@ -1084,18 +1167,15 @@ public sealed class MainShellViewModelTests
             dialogService: dialogService);
         await fixture.ViewModel.InitializeAsync();
 
-        var expectedStatus = fixture.ViewModel.SettingsPage.RootTexts["Settings.VersionUpdate.Status.FirstBootShown"];
         Assert.True(await WaitUntilAsync(() =>
-            dialogService.VersionUpdateCallCount > 0
-            && string.Equals(
-                fixture.ViewModel.SettingsPage.VersionUpdateStatusMessage,
-                expectedStatus,
-                StringComparison.Ordinal)));
+            dialogService.VersionUpdateCallCount > 0));
         Assert.False(fixture.ViewModel.SettingsPage.VersionUpdateIsFirstBoot);
         Assert.Equal(1, dialogService.VersionUpdateCallCount);
-        Assert.Equal(0, versionUpdate.CheckForUpdatesCallCount);
-        Assert.Equal(0, versionUpdate.CheckResourceCallCount);
-        Assert.Equal(expectedStatus, fixture.ViewModel.SettingsPage.VersionUpdateStatusMessage);
+        Assert.NotNull(dialogService.LastVersionUpdateRequest);
+        Assert.Equal("Release v2.0.0", dialogService.LastVersionUpdateRequest!.TargetVersion);
+        Assert.True(await WaitUntilAsync(() =>
+            versionUpdate.CheckForUpdatesCallCount >= 1
+            && versionUpdate.CheckResourceCallCount >= 1));
     }
 
     [Fact]
@@ -1831,6 +1911,7 @@ public sealed class MainShellViewModelTests
             IGlobalHotkeyService? hotkeyService = null,
             IOverlayFeatureService? overlayFeatureService = null,
             IVersionUpdateFeatureService? versionUpdateFeatureService = null,
+            IAnnouncementFeatureService? announcementFeatureService = null,
             string? existingAvaloniaJson = null,
             IAppDialogService? dialogService = null,
             IMaaCoreBridge? bridge = null,
@@ -1896,6 +1977,7 @@ public sealed class MainShellViewModelTests
                 NotificationProviderFeatureService = new NotificationProviderFeatureService(),
                 SettingsFeatureService = new SettingsFeatureService(config, capability, diagnostics),
                 VersionUpdateFeatureService = versionUpdateFeatureService ?? new VersionUpdateFeatureService(config, diagnostics, uiLogService: log, runtimeBaseDirectory: root),
+                AnnouncementFeatureService = announcementFeatureService ?? new AnnouncementFeatureService(config),
                 UiLanguageCoordinator = uiLanguageCoordinator ?? new UiLanguageCoordinator(config),
                 ConfigurationProfileFeatureService = new ConfigurationProfileFeatureService(config),
                 DialogFeatureService = new DialogFeatureService(diagnostics),
@@ -1968,6 +2050,14 @@ public sealed class MainShellViewModelTests
 
     private sealed class CapturingDialogService : IAppDialogService
     {
+        public int AnnouncementCallCount { get; private set; }
+
+        public string? LastAnnouncementScope { get; private set; }
+
+        public AnnouncementDialogRequest? LastAnnouncementRequest { get; private set; }
+
+        public TaskCompletionSource<DialogCompletion<AnnouncementDialogPayload>>? AnnouncementTask { get; set; }
+
         public int VersionUpdateCallCount { get; private set; }
 
         public VersionUpdateDialogRequest? LastVersionUpdateRequest { get; private set; }
@@ -1979,6 +2069,8 @@ public sealed class MainShellViewModelTests
         public string? LastTextScope { get; private set; }
 
         public TextDialogRequest? LastTextRequest { get; private set; }
+
+        public TaskCompletionSource<DialogCompletion<TextDialogPayload>>? TextTask { get; set; }
 
         public int WarningConfirmCallCount { get; private set; }
 
@@ -1993,10 +2085,20 @@ public sealed class MainShellViewModelTests
             string sourceScope,
             CancellationToken cancellationToken = default)
         {
-            return Task.FromResult(new DialogCompletion<AnnouncementDialogPayload>(
-                DialogReturnSemantic.Close,
-                null,
-                "captured"));
+            AnnouncementCallCount++;
+            LastAnnouncementScope = sourceScope;
+            LastAnnouncementRequest = request;
+            if (AnnouncementTask is not null)
+            {
+                cancellationToken.Register(() => AnnouncementTask.TrySetCanceled(cancellationToken));
+                return AnnouncementTask.Task;
+            }
+
+            return Task.FromResult(
+                new DialogCompletion<AnnouncementDialogPayload>(
+                    DialogReturnSemantic.Close,
+                    null,
+                    "captured"));
         }
 
         public Task<DialogCompletion<VersionUpdateDialogPayload>> ShowVersionUpdateAsync(
@@ -2065,6 +2167,12 @@ public sealed class MainShellViewModelTests
             ShowTextCallCount++;
             LastTextScope = sourceScope;
             LastTextRequest = request;
+            if (TextTask is not null)
+            {
+                cancellationToken.Register(() => TextTask.TrySetCanceled(cancellationToken));
+                return TextTask.Task;
+            }
+
             return Task.FromResult(new DialogCompletion<TextDialogPayload>(
                 DialogReturnSemantic.Confirm,
                 new TextDialogPayload(request.DefaultText),
@@ -2083,6 +2191,35 @@ public sealed class MainShellViewModelTests
                 WarningConfirmReturn,
                 WarningConfirmReturn == DialogReturnSemantic.Confirm ? new WarningConfirmDialogPayload(true) : null,
                 "captured"));
+        }
+    }
+
+    private sealed class ScriptedAnnouncementFeatureService : IAnnouncementFeatureService
+    {
+        public ScriptedAnnouncementFeatureService(AnnouncementState state)
+        {
+            State = state;
+        }
+
+        public AnnouncementState State { get; private set; }
+
+        public int LoadStateCallCount { get; private set; }
+
+        public int SaveStateCallCount { get; private set; }
+
+        public Task<UiOperationResult<AnnouncementState>> LoadStateAsync(CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            LoadStateCallCount++;
+            return Task.FromResult(UiOperationResult<AnnouncementState>.Ok(State, "loaded"));
+        }
+
+        public Task<UiOperationResult> SaveStateAsync(AnnouncementState state, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            SaveStateCallCount++;
+            State = state;
+            return Task.FromResult(UiOperationResult.Ok("saved"));
         }
     }
 

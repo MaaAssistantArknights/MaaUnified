@@ -687,22 +687,34 @@ public sealed class MainShellViewModel : ObservableObject
     {
         RecordStartupPhase("Deferred.Begin", "Running deferred startup stages after first screen ready.");
         var strictValidationTask = RunStrictConfigValidationAsync(cancellationToken);
-        var settingsLoaded = await InitializeDeferredPagesAsync(cancellationToken);
+        var settingsLoaded = await InitializeDeferredSettingsPageAsync(cancellationToken);
         await strictValidationTask;
         if (settingsLoaded && TryGetSettingsPage(out var settingsPage))
         {
             await ApplyGuiSettingsAsync(settingsPage.CurrentGuiSnapshot, cancellationToken);
         }
 
-        await ShowSchemaMigrationNoticeIfNeededAsync(loadResult, cancellationToken);
+        StartBackgroundStartupDialog(
+            ct => ShowSchemaMigrationNoticeIfNeededAsync(loadResult, ct),
+            cancellationToken);
+        if (settingsLoaded && TryGetSettingsPage(out var startupSettingsPage))
+        {
+            StartBackgroundStartupDialog(
+                ct => RunStartupAnnouncementWorkflowAsync(startupSettingsPage, ct),
+                cancellationToken);
+        }
+
+        await InitializeRemainingDeferredPagesAsync(cancellationToken);
         ScheduleDeferredCoreWarmupAfterStartup();
         await RefreshCapabilitySummaryAsync(cancellationToken);
         RefreshRootTextState();
         await SyncTrayMenuStateAsync(cancellationToken);
         StartTimerScheduler();
-        if (settingsLoaded && TryGetSettingsPage(out var startupSettingsPage))
+        if (settingsLoaded && TryGetSettingsPage(out var versionUpdateSettingsPage))
         {
-            _ = RunStartupVersionUpdateWorkflowAsync(startupSettingsPage, cancellationToken);
+            StartBackgroundStartupDialog(
+                ct => RunStartupVersionUpdateWorkflowAsync(versionUpdateSettingsPage, ct),
+                cancellationToken);
         }
 
         UpdateStartupPhase("启动完成", "后台页面初始化完成，核心组件将在界面就绪后继续后台预热。");
@@ -820,7 +832,20 @@ public sealed class MainShellViewModel : ObservableObject
         return true;
     }
 
-    private async Task<bool> InitializeDeferredPagesAsync(CancellationToken cancellationToken)
+    private async Task<bool> InitializeDeferredSettingsPageAsync(CancellationToken cancellationToken)
+    {
+        var settingsPage = EnsureSettingsPage();
+        return await InitializeDeferredRootPageAsync(
+            "Settings",
+            "Settings",
+            "Settings 页面正在后台初始化。",
+            SettingsRootPage,
+            ct => settingsPage.InitializeAsync(ct),
+            settingsPage,
+            cancellationToken);
+    }
+
+    private async Task InitializeRemainingDeferredPagesAsync(CancellationToken cancellationToken)
     {
         var taskQueueDeferredTask = InitializeTaskQueueDeferredStartupAsync(cancellationToken);
         var copilotPage = EnsureCopilotPage();
@@ -841,17 +866,7 @@ public sealed class MainShellViewModel : ObservableObject
             ct => toolboxPage.InitializeAsync(ct),
             toolboxPage,
             cancellationToken);
-        var settingsPage = EnsureSettingsPage();
-        var settingsLoaded = await InitializeDeferredRootPageAsync(
-            "Settings",
-            "Settings",
-            "Settings 页面正在后台初始化。",
-            SettingsRootPage,
-            ct => settingsPage.InitializeAsync(ct),
-            settingsPage,
-            cancellationToken);
         await taskQueueDeferredTask;
-        return settingsLoaded;
     }
 
     private void ScheduleDeferredCoreWarmupAfterStartup()
@@ -1892,6 +1907,50 @@ public sealed class MainShellViewModel : ObservableObject
                 UiErrorCode.UiOperationFailed,
                 $"启动更新检查失败: {ex.Message}",
                 cancellationToken);
+        }
+    }
+
+    private async Task RunStartupAnnouncementWorkflowAsync(
+        SettingsPageViewModel settingsPage,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await settingsPage.ShowStartupAnnouncementAsync(cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // no-op
+        }
+        catch (Exception ex)
+        {
+            await RecordUnhandledExceptionAsync(
+                "App.Initialize.Announcement",
+                ex,
+                UiErrorCode.UiOperationFailed,
+                $"启动公告检查失败: {ex.Message}",
+                cancellationToken);
+        }
+    }
+
+    private void StartBackgroundStartupDialog(
+        Func<CancellationToken, Task> operation,
+        CancellationToken cancellationToken)
+    {
+        _ = ObserveBackgroundStartupDialogAsync(operation, cancellationToken);
+    }
+
+    private static async Task ObserveBackgroundStartupDialogAsync(
+        Func<CancellationToken, Task> operation,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await operation(cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // no-op
         }
     }
 

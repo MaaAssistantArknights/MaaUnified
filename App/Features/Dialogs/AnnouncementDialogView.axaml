@@ -2,51 +2,233 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:dialogs="clr-namespace:MAAUnified.App.Features.Dialogs"
         x:Class="MAAUnified.App.Features.Dialogs.AnnouncementDialogView"
-        Width="720"
-        Height="520"
-        MinWidth="620"
-        MinHeight="420"
-        CanResize="False"
+        Width="1080"
+        Height="820"
+        MinWidth="920"
+        MinHeight="640"
+        CanResize="True"
         Background="Transparent"
         SystemDecorations="None"
         WindowStartupLocation="CenterOwner">
-  <dialogs:ModernDialogShell x:Name="DialogShell"
-                             CloseRequested="OnShellCloseRequested">
-    <dialogs:ModernDialogShell.Content>
-      <Grid RowDefinitions="*,Auto,Auto">
-        <Border Classes="modern-dialog-section">
-          <TextBox x:Name="AnnouncementInfoBox"
-                   Classes="long-wrap"
-                   AcceptsReturn="True"
-                   HorizontalAlignment="Stretch"
-                   ScrollViewer.VerticalScrollBarVisibility="Auto"
-                   TextWrapping="Wrap"
-                   VerticalAlignment="Stretch" />
-        </Border>
-        <CheckBox x:Name="DoNotRemindBox"
-                  Grid.Row="1"
-                  Margin="0,12,0,0"
-                  Content="Do not remind this announcement again" />
-        <CheckBox x:Name="DoNotShowBox"
-                  Grid.Row="2"
-                  Margin="0,8,0,0"
-                  Content="Do not show announcement" />
-      </Grid>
-    </dialogs:ModernDialogShell.Content>
-    <dialogs:ModernDialogShell.ActionsContent>
-      <StackPanel Orientation="Horizontal"
-                  Spacing="10">
-        <Button x:Name="CancelButton"
-                Classes="modern-dialog-button modern-dialog-button-secondary"
-                Content="Cancel"
-                IsCancel="True"
-                Click="OnCancelClick" />
-        <Button x:Name="ConfirmButton"
-                Classes="modern-dialog-button modern-dialog-button-primary"
-                Content="Confirm"
-                IsDefault="True"
-                Click="OnConfirmClick" />
-      </StackPanel>
-    </dialogs:ModernDialogShell.ActionsContent>
-  </dialogs:ModernDialogShell>
+  <Grid>
+    <dialogs:ModernDialogShell x:Name="DialogShell"
+                               ShowCloseButton="False"
+                               CloseRequested="OnShellCloseRequested">
+      <dialogs:ModernDialogShell.Content>
+        <Grid>
+          <Grid ColumnDefinitions="304,24,*">
+            <Border Classes="modern-dialog-section announcement-dialog-rail">
+              <Grid RowDefinitions="*,Auto">
+                <Grid x:Name="SectionListHost"
+                      ColumnDefinitions="22,*"
+                      ClipToBounds="True">
+                  <Border x:Name="SectionListFollowAccentGlow"
+                          Grid.Column="0"
+                          HorizontalAlignment="Left"
+                          VerticalAlignment="Top"
+                          IsHitTestVisible="False"
+                          IsVisible="False"
+                          Classes="announcement-dialog-list-follow-accent-glow" />
+                  <Border x:Name="SectionListFollowAccent"
+                          Grid.Column="0"
+                          HorizontalAlignment="Left"
+                          VerticalAlignment="Top"
+                          IsHitTestVisible="False"
+                          IsVisible="False"
+                          Classes="announcement-dialog-list-follow-accent" />
+                  <ListBox x:Name="SectionList"
+                           Grid.Column="1"
+                           Classes="announcement-dialog-list"
+                           Focusable="False"
+                           SelectionChanged="OnSectionSelectionChanged">
+                    <ListBox.ItemTemplate>
+                      <DataTemplate>
+                        <Border Classes="announcement-dialog-list-card">
+                          <Grid ColumnDefinitions="*,Auto">
+                            <TextBlock Grid.Column="0"
+                                       VerticalAlignment="Center"
+                                       Classes="announcement-dialog-list-title"
+                                       Text="{Binding Title}" />
+                            <Border Grid.Column="1"
+                                    Margin="12,0,0,0"
+                                    VerticalAlignment="Center"
+                                    Classes="announcement-dialog-new-badge"
+                                    IsVisible="{Binding IsNew}">
+                              <TextBlock Classes="announcement-dialog-new-badge-text"
+                                         Text="{Binding NewBadgeText}" />
+                            </Border>
+                          </Grid>
+                        </Border>
+                      </DataTemplate>
+                    </ListBox.ItemTemplate>
+                  </ListBox>
+                </Grid>
+
+                <Border Grid.Row="1"
+                        Margin="0,20,0,0"
+                        Classes="announcement-dialog-image-shell">
+                  <Image x:Name="AnnouncementHeroImage"
+                         Height="312"
+                         HorizontalAlignment="Stretch"
+                         VerticalAlignment="Bottom"
+                         Stretch="Uniform" />
+                </Border>
+              </Grid>
+            </Border>
+
+            <Grid Grid.Column="2"
+                  RowDefinitions="*,Auto">
+              <Grid Grid.Row="0">
+                <ScrollViewer x:Name="MarkdownHost"
+                              Margin="0,4,0,0"
+                              Classes="announcement-dialog-markdown"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled"
+                              ScrollChanged="OnMarkdownScrollChanged">
+                  <StackPanel x:Name="MarkdownContentPanel"
+                              HorizontalAlignment="Stretch"
+                              Spacing="18">
+                    <ContentControl x:Name="MarkdownViewerHost" />
+                  </StackPanel>
+                </ScrollViewer>
+
+                <Border x:Name="StickyTitlePanel"
+                        Margin="0,4,12,0"
+                        HorizontalAlignment="Stretch"
+                        VerticalAlignment="Top"
+                        ZIndex="3"
+                        Classes="announcement-dialog-sticky-title"
+                        IsVisible="False">
+                  <Border Classes="announcement-dialog-sticky-title-viewport">
+                    <Grid Classes="announcement-dialog-sticky-title-track">
+                      <Border x:Name="StickyCurrentHost"
+                              Classes="announcement-dialog-sticky-title-current-shell">
+                        <TextBlock x:Name="StickyTitleText"
+                                   VerticalAlignment="Top"
+                                   Classes="modern-dialog-title announcement-dialog-content-title announcement-dialog-sticky-title-text"
+                                   Text="Announcement" />
+                      </Border>
+                      <Border x:Name="StickyTransitionHost"
+                              VerticalAlignment="Top"
+                              Classes="announcement-dialog-sticky-transition-shell"
+                              IsVisible="False">
+                        <TextBlock x:Name="StickyTransitionText"
+                                   Classes="modern-dialog-title announcement-dialog-content-title announcement-dialog-sticky-title-text announcement-dialog-sticky-title-previous"
+                                   Text="Announcement" />
+                      </Border>
+                    </Grid>
+                  </Border>
+                </Border>
+              </Grid>
+
+              <Border x:Name="ActionPanel"
+                      Grid.Row="1"
+                      Margin="0,18,0,0"
+                      Classes="announcement-dialog-read-footer">
+                <Grid x:Name="ActionContentGrid"
+                      ColumnDefinitions="*,Auto"
+                      VerticalAlignment="Center">
+                  <Border x:Name="ReadProgressStatePanel"
+                          VerticalAlignment="Center"
+                          Classes="announcement-dialog-read-state">
+                    <CheckBox x:Name="DoNotRemindBox"
+                              HorizontalAlignment="Left"
+                              VerticalAlignment="Center"
+                              Classes="announcement-dialog-do-not-remind"
+                              Content="Do not show this announcement again"
+                              IsEnabled="False" />
+                  </Border>
+
+                  <Grid Grid.Column="1"
+                        Margin="24,0,0,0"
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Center"
+                        MinWidth="256">
+                    <Button x:Name="ConfirmButton"
+                            Margin="0,0,16,0"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Center"
+                            Classes="modern-dialog-button modern-dialog-button-primary announcement-dialog-confirm-button"
+                            Content="请先阅读公告"
+                            IsEnabled="False"
+                            IsDefault="True"
+                            Click="OnConfirmClick" />
+                  </Grid>
+                </Grid>
+              </Border>
+            </Grid>
+          </Grid>
+        </Grid>
+      </dialogs:ModernDialogShell.Content>
+    </dialogs:ModernDialogShell>
+
+    <Border Height="14"
+            Margin="12,12,12,0"
+            HorizontalAlignment="Stretch"
+            VerticalAlignment="Top"
+            Background="Transparent"
+            ZIndex="10"
+            Tag="North"
+            PointerPressed="OnResizeGripPointerPressed" />
+    <Border Height="14"
+            Margin="12,0,12,12"
+            HorizontalAlignment="Stretch"
+            VerticalAlignment="Bottom"
+            Background="Transparent"
+            ZIndex="10"
+            Tag="South"
+            PointerPressed="OnResizeGripPointerPressed" />
+    <Border Width="14"
+            Margin="12,12,0,12"
+            HorizontalAlignment="Left"
+            VerticalAlignment="Stretch"
+            Background="Transparent"
+            ZIndex="10"
+            Tag="West"
+            PointerPressed="OnResizeGripPointerPressed" />
+    <Border Width="14"
+            Margin="0,12,12,12"
+            HorizontalAlignment="Right"
+            VerticalAlignment="Stretch"
+            Background="Transparent"
+            ZIndex="10"
+            Tag="East"
+            PointerPressed="OnResizeGripPointerPressed" />
+    <Border Width="24"
+            Height="24"
+            Margin="12"
+            HorizontalAlignment="Left"
+            VerticalAlignment="Top"
+            Background="Transparent"
+            ZIndex="11"
+            Tag="NorthWest"
+            PointerPressed="OnResizeGripPointerPressed" />
+    <Border Width="24"
+            Height="24"
+            Margin="12"
+            HorizontalAlignment="Right"
+            VerticalAlignment="Top"
+            Background="Transparent"
+            ZIndex="11"
+            Tag="NorthEast"
+            PointerPressed="OnResizeGripPointerPressed" />
+    <Border Width="24"
+            Height="24"
+            Margin="12"
+            HorizontalAlignment="Left"
+            VerticalAlignment="Bottom"
+            Background="Transparent"
+            ZIndex="11"
+            Tag="SouthWest"
+            PointerPressed="OnResizeGripPointerPressed" />
+    <Border Width="24"
+            Height="24"
+            Margin="12"
+            HorizontalAlignment="Right"
+            VerticalAlignment="Bottom"
+            Background="Transparent"
+            ZIndex="11"
+            Tag="SouthEast"
+            PointerPressed="OnResizeGripPointerPressed" />
+  </Grid>
 </Window>

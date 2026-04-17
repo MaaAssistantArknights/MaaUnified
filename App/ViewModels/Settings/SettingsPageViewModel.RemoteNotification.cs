@@ -23,10 +23,8 @@ namespace MAAUnified.App.ViewModels.Settings;
 
 public sealed partial class SettingsPageViewModel
 {
-    private static readonly HttpClient AboutAnnouncementHttpClient = new()
-    {
-        Timeout = TimeSpan.FromSeconds(10),
-    };
+    private static readonly TimeSpan DefaultAboutAnnouncementTimeout = TimeSpan.FromSeconds(5);
+    private static readonly HttpClient SharedAboutAnnouncementHttpClient = CreateAboutAnnouncementHttpClient();
 
     private static readonly string[] AboutAnnouncementApiBaseUrls =
     [
@@ -80,6 +78,14 @@ public sealed partial class SettingsPageViewModel
 
     private readonly HashSet<string> _enabledNotificationProviders = new(StringComparer.OrdinalIgnoreCase);
     private bool _suppressNotificationProviderSelectionEvents;
+
+    private static HttpClient CreateAboutAnnouncementHttpClient()
+    {
+        return new HttpClient
+        {
+            Timeout = Timeout.InfiniteTimeSpan,
+        };
+    }
 
     public ObservableCollection<NotificationProviderSelectionItem> NotificationProviderSelections { get; } = [];
 
@@ -830,68 +836,42 @@ public sealed partial class SettingsPageViewModel
     public async Task CheckAndDownloadAboutAnnouncementWithDialogAsync(CancellationToken cancellationToken = default)
     {
         ClearAboutStatus();
-        var loadResult = await Runtime.AnnouncementFeatureService.LoadStateAsync(cancellationToken);
-        var state = await ApplyResultAsync(loadResult, "Settings.About.CheckAnnouncement", cancellationToken);
+        var latestStateResult = await LoadLatestAnnouncementStateAsync(cancellationToken);
+        var state = await ApplyResultAsync(latestStateResult, "Settings.About.CheckAnnouncement", cancellationToken);
         if (state is null)
         {
             AboutStatusMessage = LocalizeSettingsText(
                 "Settings.About.Status.AnnouncementLoadFailed",
                 "公告读取失败。");
-            AboutErrorMessage = loadResult.Message;
+            AboutErrorMessage = latestStateResult.Message;
             return;
         }
 
-        var fetchResult = await FetchLatestAnnouncementInfoAsync(cancellationToken);
-        if (fetchResult.Success
-            && fetchResult.Value is AnnouncementFetchResult fetched
-            && !string.IsNullOrWhiteSpace(fetched.Content))
+        if (!state.HasAnnouncementInfo)
         {
-            var remoteInfo = fetched.Content.Trim();
-            if (!string.Equals(remoteInfo, state.AnnouncementInfo, StringComparison.Ordinal))
-            {
-                state = state.WithFetchedAnnouncement(remoteInfo, fetched.SourceUri, DateTimeOffset.UtcNow);
-                var saveFetchedState = await Runtime.AnnouncementFeatureService.SaveStateAsync(state, cancellationToken);
-                if (!await ApplyResultAsync(saveFetchedState, "Settings.About.Announcement.SaveFetched", cancellationToken))
-                {
-                    AboutStatusMessage = LocalizeSettingsText(
-                        "Settings.About.Status.AnnouncementSaveFailed",
-                        "公告状态保存失败。");
-                    AboutErrorMessage = saveFetchedState.Message;
-                    return;
-                }
-            }
+            AboutStatusMessage = LocalizeSettingsText(
+                "Settings.About.Status.AnnouncementInfoEmpty",
+                "当前没有公告内容。");
+            AboutErrorMessage = string.Empty;
+            return;
         }
 
-        var announcementChrome = CreateSettingsDialogChrome(
-            texts => new DialogChromeSnapshot(
-                title: texts.GetOrDefault("Settings.About.Dialog.Title", "Announcement"),
-                confirmText: texts.GetOrDefault("Settings.About.Dialog.Confirm", "Confirm"),
-                cancelText: texts.GetOrDefault("Settings.About.Dialog.Cancel", "Cancel")));
-        var announcementChromeSnapshot = announcementChrome.GetSnapshot();
-        var request = new AnnouncementDialogRequest(
-            Title: announcementChromeSnapshot.Title,
-            AnnouncementInfo: state.AnnouncementInfo,
-            DoNotRemindThisAnnouncementAgain: state.DoNotRemindThisAnnouncementAgain,
-            DoNotShowAnnouncement: state.DoNotShowAnnouncement,
-            ConfirmText: announcementChromeSnapshot.ConfirmText ?? LocalizeSettingsText("Settings.About.Dialog.Confirm", "Confirm"),
-            CancelText: announcementChromeSnapshot.CancelText ?? LocalizeSettingsText("Settings.About.Dialog.Cancel", "Cancel"),
-            Chrome: announcementChrome);
-        var dialogResult = await _dialogService.ShowAnnouncementAsync(request, "Settings.About.Announcement.Dialog", cancellationToken);
-        if (dialogResult.Return == DialogReturnSemantic.Confirm && dialogResult.Payload is not null)
+        var dialogResult = await ShowAnnouncementDialogCoreAsync(
+            state,
+            "Settings.About.Announcement.Dialog",
+            cancellationToken);
+        if (dialogResult.Payload is not null && dialogResult.Return != DialogReturnSemantic.Cancel)
         {
-            var nextState = state with
-            {
-                AnnouncementInfo = dialogResult.Payload.AnnouncementInfo,
-                DoNotRemindThisAnnouncementAgain = dialogResult.Payload.DoNotRemindThisAnnouncementAgain,
-                DoNotShowAnnouncement = dialogResult.Payload.DoNotShowAnnouncement,
-            };
-            var saveResult = await Runtime.AnnouncementFeatureService.SaveStateAsync(nextState, cancellationToken);
-            if (!await ApplyResultAsync(saveResult, "Settings.About.Announcement.Save", cancellationToken))
+            if (!await TryPersistAnnouncementDialogPayloadAsync(
+                    state,
+                    dialogResult.Payload,
+                    "Settings.About.Announcement.Save",
+                    cancellationToken))
             {
                 AboutStatusMessage = LocalizeSettingsText(
                     "Settings.About.Status.AnnouncementSaveFailed",
                     "公告状态保存失败。");
-                AboutErrorMessage = saveResult.Message;
+                AboutErrorMessage = LastErrorMessage;
                 return;
             }
 
@@ -912,11 +892,171 @@ public sealed partial class SettingsPageViewModel
         AboutErrorMessage = string.Empty;
     }
 
+    public async Task ShowStartupAnnouncementAsync(CancellationToken cancellationToken = default)
+    {
+        ResetStartupAnnouncementCompletion();
+        try
+        {
+            var latestStateResult = await LoadLatestAnnouncementStateAsync(cancellationToken);
+            var state = await ApplyResultAsync(latestStateResult, "App.Initialize.Announcement", cancellationToken);
+            if (state is null
+                || !state.HasAnnouncementInfo
+                || state.DoNotRemindThisAnnouncementAgain
+                || state.DoNotShowAnnouncement)
+            {
+                CompleteStartupAnnouncementCompletion();
+                return;
+            }
+
+            var dialogTask = ShowAnnouncementDialogCoreAsync(
+                state,
+                "App.Initialize.Announcement.Dialog",
+                cancellationToken);
+
+            _ = FinalizeStartupAnnouncementAsync(state, dialogTask, cancellationToken);
+            await Task.Yield();
+        }
+        catch
+        {
+            CompleteStartupAnnouncementCompletion();
+            throw;
+        }
+    }
+
+    private async Task FinalizeStartupAnnouncementAsync(
+        AnnouncementState state,
+        Task<DialogCompletion<AnnouncementDialogPayload>> dialogTask,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var dialogResult = await dialogTask;
+            if (dialogResult.Payload is null || dialogResult.Return == DialogReturnSemantic.Cancel)
+            {
+                return;
+            }
+
+            _ = await TryPersistAnnouncementDialogPayloadAsync(
+                state,
+                dialogResult.Payload,
+                "App.Initialize.Announcement.Save",
+                cancellationToken);
+        }
+        finally
+        {
+            CompleteStartupAnnouncementCompletion();
+        }
+    }
+
+    private async Task<UiOperationResult<AnnouncementState>> LoadLatestAnnouncementStateAsync(CancellationToken cancellationToken)
+    {
+        var loadResult = await Runtime.AnnouncementFeatureService.LoadStateAsync(cancellationToken);
+        if (!loadResult.Success || loadResult.Value is null)
+        {
+            return UiOperationResult<AnnouncementState>.Fail(
+                loadResult.Error?.Code ?? UiErrorCode.AnnouncementServiceUnavailable,
+                loadResult.Message,
+                loadResult.Error?.Details);
+        }
+
+        var state = loadResult.Value;
+        var fetchResult = await FetchLatestAnnouncementInfoAsync(cancellationToken);
+        if (fetchResult.Success
+            && fetchResult.Value is AnnouncementFetchResult fetched
+            && !string.IsNullOrWhiteSpace(fetched.Content))
+        {
+            var remoteInfo = fetched.Content.Trim();
+            if (!string.Equals(remoteInfo, state.AnnouncementInfo, StringComparison.Ordinal))
+            {
+                state = state.WithFetchedAnnouncement(remoteInfo, fetched.SourceUri, DateTimeOffset.UtcNow);
+                var saveFetchedState = await Runtime.AnnouncementFeatureService.SaveStateAsync(state, cancellationToken);
+                if (!saveFetchedState.Success)
+                {
+                    return UiOperationResult<AnnouncementState>.Fail(
+                        saveFetchedState.Error?.Code ?? UiErrorCode.AnnouncementServiceUnavailable,
+                        saveFetchedState.Message,
+                        saveFetchedState.Error?.Details);
+                }
+            }
+
+            return UiOperationResult<AnnouncementState>.Ok(state, "Announcement state refreshed.");
+        }
+
+        if (state.HasAnnouncementInfo)
+        {
+            return UiOperationResult<AnnouncementState>.Ok(
+                state,
+                fetchResult.Success
+                    ? "Loaded cached announcement state."
+                    : "Loaded cached announcement state after refresh failure.");
+        }
+
+        if (!fetchResult.Success)
+        {
+            return UiOperationResult<AnnouncementState>.Fail(
+                fetchResult.Error?.Code ?? UiErrorCode.AnnouncementServiceUnavailable,
+                fetchResult.Message,
+                fetchResult.Error?.Details);
+        }
+
+        return UiOperationResult<AnnouncementState>.Ok(state, "Announcement state loaded with empty content.");
+    }
+
+    private async Task<DialogCompletion<AnnouncementDialogPayload>> ShowAnnouncementDialogCoreAsync(
+        AnnouncementState state,
+        string sourceScope,
+        CancellationToken cancellationToken)
+    {
+        var request = BuildAnnouncementDialogRequest(state);
+        return await _dialogService.ShowAnnouncementAsync(request, sourceScope, cancellationToken);
+    }
+
+    private AnnouncementDialogRequest BuildAnnouncementDialogRequest(AnnouncementState state)
+    {
+        var announcementChrome = CreateSettingsDialogChrome(
+            texts => new DialogChromeSnapshot(
+                title: texts.GetOrDefault("Settings.About.Dialog.Title", "Announcement"),
+                confirmText: texts.GetOrDefault("Settings.About.Dialog.Confirm", "Confirm"),
+                cancelText: texts.GetOrDefault("Settings.About.Dialog.Cancel", "Cancel")));
+        var announcementChromeSnapshot = announcementChrome.GetSnapshot();
+        return new AnnouncementDialogRequest(
+            Title: announcementChromeSnapshot.Title,
+            AnnouncementInfo: state.AnnouncementInfo,
+            DoNotRemindThisAnnouncementAgain: state.DoNotRemindThisAnnouncementAgain,
+            DoNotShowAnnouncement: state.DoNotShowAnnouncement,
+            ConfirmText: announcementChromeSnapshot.ConfirmText ?? LocalizeSettingsText("Settings.About.Dialog.Confirm", "Confirm"),
+            CancelText: announcementChromeSnapshot.CancelText ?? LocalizeSettingsText("Settings.About.Dialog.Cancel", "Cancel"),
+            Chrome: announcementChrome);
+    }
+
+    private async Task<bool> TryPersistAnnouncementDialogPayloadAsync(
+        AnnouncementState currentState,
+        AnnouncementDialogPayload payload,
+        string saveScope,
+        CancellationToken cancellationToken)
+    {
+        var nextState = currentState.WithDialogPreferences(
+            payload.DoNotRemindThisAnnouncementAgain,
+            payload.DoNotShowAnnouncement);
+        var saveResult = await Runtime.AnnouncementFeatureService.SaveStateAsync(nextState, cancellationToken);
+        if (!await ApplyResultAsync(saveResult, saveScope, cancellationToken))
+        {
+            LastErrorMessage = saveResult.Message;
+            return false;
+        }
+
+        LastErrorMessage = string.Empty;
+        return true;
+    }
+
     private async Task<UiOperationResult<AnnouncementFetchResult>> FetchLatestAnnouncementInfoAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var candidatePaths = BuildAnnouncementCandidatePaths();
         Exception? lastException = null;
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutCts.CancelAfter(_aboutAnnouncementTimeout);
+        var requestCancellationToken = timeoutCts.Token;
 
         foreach (var baseUrl in AboutAnnouncementApiBaseUrls)
         {
@@ -931,16 +1071,16 @@ public sealed partial class SettingsPageViewModel
                         NoCache = true,
                     };
 
-                    using var response = await AboutAnnouncementHttpClient.SendAsync(
+                    using var response = await _aboutAnnouncementHttpClient.SendAsync(
                         request,
                         HttpCompletionOption.ResponseHeadersRead,
-                        cancellationToken);
+                        requestCancellationToken);
                     if (!response.IsSuccessStatusCode)
                     {
                         continue;
                     }
 
-                    var content = await response.Content.ReadAsStringAsync(cancellationToken);
+                    var content = await response.Content.ReadAsStringAsync(requestCancellationToken);
                     if (!string.IsNullOrWhiteSpace(content))
                     {
                         return UiOperationResult<AnnouncementFetchResult>.Ok(
@@ -948,9 +1088,16 @@ public sealed partial class SettingsPageViewModel
                             "Announcement downloaded.");
                     }
                 }
-                catch (OperationCanceledException)
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                 {
                     throw;
+                }
+                catch (OperationCanceledException ex) when (requestCancellationToken.IsCancellationRequested)
+                {
+                    lastException = ex;
+                    return UiOperationResult<AnnouncementFetchResult>.Fail(
+                        UiErrorCode.AnnouncementServiceUnavailable,
+                        $"Announcement download timed out after {_aboutAnnouncementTimeout.TotalSeconds:0} seconds.");
                 }
                 catch (Exception ex)
                 {

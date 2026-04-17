@@ -1,6 +1,7 @@
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:dialogs="clr-namespace:MAAUnified.App.Features.Dialogs">
+        xmlns:dialogs="clr-namespace:MAAUnified.App.Features.Dialogs"
+        xmlns:md="clr-namespace:MarkdownViewer.Core.Controls;assembly=MarkdownViewer.Core">
   <Styles.Resources>
     <Thickness x:Key="MAA.BorderThickness.Thin">1</Thickness>
 
@@ -422,8 +423,8 @@
                 Classes="modern-dialog-shell">
           <Border.Effect>
             <DropShadowDirectionEffect BlurRadius="24"
-                                       ShadowDepth="6"
-                                       Opacity="0.18"
+                                       ShadowDepth="0"
+                                       Opacity="0.16"
                                        Color="Black" />
           </Border.Effect>
           <Grid RowDefinitions="Auto,Auto,*,Auto">
@@ -834,9 +835,448 @@
     <Setter Property="IsVisible" Value="False" />
   </Style>
 
+  <Style Selector="ListBoxItem /template/ Rectangle#SelectionIndicator">
+    <Setter Property="IsVisible" Value="False" />
+  </Style>
+
   <Style Selector="ListBox.achievement-dialog-list ListBoxItem /template/ Border#PART_LayoutRoot">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderBrush" Value="Transparent" />
+  </Style>
+
+  <Style Selector="Border.announcement-dialog-rail">
+    <Setter Property="Padding" Value="12,12,4,8" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="24" />
+    <Setter Property="Background">
+      <LinearGradientBrush StartPoint="0,0"
+                           EndPoint="0,1">
+        <GradientStop Offset="0"
+                      Color="#FFF1F6FD" />
+        <GradientStop Offset="1"
+                      Color="#FFE7EEF9" />
+      </LinearGradientBrush>
+    </Setter>
+  </Style>
+
+  <Style Selector="TextBlock.announcement-dialog-rail-title">
+    <Setter Property="FontSize" Value="18" />
+  </Style>
+
+  <Style Selector="ListBox.announcement-dialog-list">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0,0,4,0" />
+  </Style>
+
+  <Style Selector="ListBox.announcement-dialog-list ListBoxItem">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Margin" Value="0,0,0,6" />
+    <Setter Property="Focusable" Value="False" />
+  </Style>
+
+  <Style Selector="ListBox.announcement-dialog-list ListBoxItem:pointerover">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
+  <Style Selector="ListBox.announcement-dialog-list ListBoxItem:pointerover /template/ Border#PART_LayoutRoot">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+
+  <Style Selector="ListBox.announcement-dialog-list ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
+  <Style Selector="ListBox.announcement-dialog-list ListBoxItem:selected">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
+  <Style Selector="ListBox.announcement-dialog-list ListBoxItem:selected:pointerover">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
+  <Style Selector="ListBox.announcement-dialog-list ListBoxItem:selected:pressed">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
+  <Style Selector="ListBox.announcement-dialog-list ListBoxItem /template/ Rectangle#SelectionIndicator">
+    <Setter Property="IsVisible" Value="False" />
+  </Style>
+
+  <Style Selector="ListBox.announcement-dialog-list ListBoxItem /template/ Rectangle#FocusVisual">
+    <Setter Property="IsVisible" Value="False" />
+  </Style>
+
+  <Style Selector="ListBox.announcement-dialog-list ListBoxItem /template/ Border#PART_LayoutRoot">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+
+  <Style Selector="ListBox.announcement-dialog-list ListBoxItem:selected /template/ Border#PART_LayoutRoot">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+
+  <Style Selector="ListBox.announcement-dialog-list ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
+  <Style Selector="ListBox.announcement-dialog-list ListBoxItem:selected:pointerover /template/ Border#PART_LayoutRoot">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+
+  <Style Selector="ListBox.announcement-dialog-list ListBoxItem:selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
+  <Style Selector="ListBox.announcement-dialog-list ListBoxItem:selected:pressed /template/ Border#PART_LayoutRoot">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+
+  <Style Selector="ListBox.announcement-dialog-list ListBoxItem:selected:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
+  <Style Selector="ListBox.announcement-dialog-list ListBoxItem:focus /template/ Border#PART_LayoutRoot">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+
+  <Style Selector="ListBox.announcement-dialog-list ListBoxItem:focus-visible /template/ Border#PART_LayoutRoot">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+
+  <Style Selector="ListBox.announcement-dialog-list /template/ ScrollViewer#PART_ScrollViewer">
+    <Setter Property="Margin" Value="0,0,0,0" />
+    <Setter Property="Padding" Value="0" />
+  </Style>
+
+  <Style Selector="Border.announcement-dialog-list-card">
+    <Setter Property="MinHeight" Value="46" />
+    <Setter Property="Padding" Value="0,9,15,9" />
+    <Setter Property="CornerRadius" Value="20" />
+    <Setter Property="ClipToBounds" Value="True" />
+    <Setter Property="Background" Value="#00FFFFFF" />
+    <Setter Property="BorderBrush" Value="#00FFFFFF" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+
+  <Style Selector="ListBox.announcement-dialog-list ListBoxItem:pointerover Border.announcement-dialog-list-card">
+    <Setter Property="Background" Value="#00FFFFFF" />
+    <Setter Property="BorderBrush" Value="#00FFFFFF" />
+  </Style>
+
+  <Style Selector="ListBox.announcement-dialog-list ListBoxItem:selected Border.announcement-dialog-list-card">
+    <Setter Property="Background" Value="#00FFFFFF" />
+    <Setter Property="BorderBrush" Value="#00FFFFFF" />
+  </Style>
+
+  <Style Selector="ListBox.announcement-dialog-list ListBoxItem:selected:pointerover Border.announcement-dialog-list-card">
+    <Setter Property="Background" Value="#00FFFFFF" />
+    <Setter Property="BorderBrush" Value="#00FFFFFF" />
+  </Style>
+
+  <Style Selector="ListBox.announcement-dialog-list ListBoxItem:selected:pressed Border.announcement-dialog-list-card">
+    <Setter Property="Background" Value="#00FFFFFF" />
+    <Setter Property="BorderBrush" Value="#00FFFFFF" />
+  </Style>
+
+  <Style Selector="Border.announcement-dialog-list-follow-accent-glow">
+    <Setter Property="Width" Value="14" />
+    <Setter Property="Height" Value="24" />
+    <Setter Property="Margin" Value="2,0,0,0" />
+    <Setter Property="CornerRadius" Value="999" />
+    <Setter Property="Opacity" Value="0.96" />
+    <Setter Property="ZIndex" Value="1" />
+    <Setter Property="Background">
+      <LinearGradientBrush StartPoint="0,0"
+                           EndPoint="0,1">
+        <GradientStop Offset="0"
+                      Color="#D883B3E6" />
+        <GradientStop Offset="1"
+                      Color="#1483B3E6" />
+      </LinearGradientBrush>
+    </Setter>
+    <Setter Property="Transitions">
+      <Transitions>
+        <ThicknessTransition Property="Margin"
+                             Duration="0:0:0.24" />
+        <DoubleTransition Property="Height"
+                          Duration="0:0:0.2" />
+      </Transitions>
+    </Setter>
+  </Style>
+
+  <Style Selector="Border.announcement-dialog-list-follow-accent">
+    <Setter Property="Width" Value="6" />
+    <Setter Property="Height" Value="24" />
+    <Setter Property="Margin" Value="6,0,0,0" />
+    <Setter Property="CornerRadius" Value="999" />
+    <Setter Property="ZIndex" Value="2" />
+    <Setter Property="Background" Value="#FF2E6DAA" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <ThicknessTransition Property="Margin"
+                             Duration="0:0:0.22" />
+        <DoubleTransition Property="Height"
+                          Duration="0:0:0.18" />
+      </Transitions>
+    </Setter>
+  </Style>
+
+  <Style Selector="TextBlock.announcement-dialog-list-title">
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Text.Primary}" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+    <Setter Property="MaxLines" Value="2" />
+    <Setter Property="LineHeight" Value="17" />
+  </Style>
+
+  <Style Selector="TextBlock.announcement-dialog-list-caption">
+    <Setter Property="FontSize" Value="12.5" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Text.Muted}" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+    <Setter Property="LineHeight" Value="18" />
+  </Style>
+
+  <Style Selector="Border.announcement-dialog-new-badge">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.Toast.AchievementBadgeBackground}" />
+    <Setter Property="CornerRadius" Value="999" />
+    <Setter Property="Padding" Value="7,2" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <DoubleTransition Property="Opacity"
+                          Duration="0:0:0.18" />
+      </Transitions>
+    </Setter>
+  </Style>
+
+  <Style Selector="TextBlock.announcement-dialog-new-badge-text">
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Toast.AchievementBadgeForeground}" />
+  </Style>
+
+  <Style Selector="Border.announcement-dialog-hero-card">
+    <Setter Property="MinHeight" Value="180" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="24" />
+    <Setter Property="Background">
+      <LinearGradientBrush StartPoint="0,0"
+                           EndPoint="1,1">
+        <GradientStop Offset="0"
+                      Color="#FFFFF5E7" />
+        <GradientStop Offset="1"
+                      Color="#FFF6E7D6" />
+      </LinearGradientBrush>
+    </Setter>
+  </Style>
+
+  <Style Selector="Border.announcement-dialog-image-shell">
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="20" />
+    <Setter Property="ClipToBounds" Value="True" />
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
+  <Style Selector="TextBlock.announcement-dialog-lead">
+    <Setter Property="FontSize" Value="15" />
+    <Setter Property="LineHeight" Value="22" />
+  </Style>
+
+  <Style Selector="Border.announcement-dialog-sticky-title">
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="ClipToBounds" Value="True" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
+  <Style Selector="Border.announcement-dialog-sticky-title-viewport">
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="ClipToBounds" Value="True" />
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
+  <Style Selector="Grid.announcement-dialog-sticky-title-track">
+    <Setter Property="ClipToBounds" Value="True" />
+    <Setter Property="RenderTransform">
+      <TranslateTransform Y="0" />
+    </Setter>
+    <Setter Property="Transitions">
+      <Transitions>
+        <TransformOperationsTransition Property="RenderTransform"
+                                       Duration="0:0:0.22" />
+      </Transitions>
+    </Setter>
+  </Style>
+
+  <Style Selector="TextBlock.announcement-dialog-sticky-title-text">
+    <Setter Property="Margin" Value="0" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <ThicknessTransition Property="Margin"
+                             Duration="0:0:0.16" />
+        <TransformOperationsTransition Property="RenderTransform"
+                                       Duration="0:0:0.18" />
+      </Transitions>
+    </Setter>
+  </Style>
+
+  <Style Selector="Border.announcement-dialog-sticky-transition-shell">
+    <Setter Property="ClipToBounds" Value="True" />
+    <Setter Property="Margin" Value="0" />
+    <Setter Property="Padding" Value="0,0,0,8" />
+    <Setter Property="Background" Value="#F9FFFFFF" />
+    <Setter Property="RenderTransform">
+      <TranslateTransform Y="0" />
+    </Setter>
+    <Setter Property="Transitions">
+      <Transitions>
+        <DoubleTransition Property="Height"
+                          Duration="0:0:0.14" />
+        <TransformOperationsTransition Property="RenderTransform"
+                                       Duration="0:0:0.14" />
+      </Transitions>
+    </Setter>
+  </Style>
+
+  <Style Selector="TextBlock.announcement-dialog-sticky-title-previous">
+    <Setter Property="Opacity" Value="0.72" />
+    <Setter Property="RenderTransform">
+      <TranslateTransform Y="0" />
+    </Setter>
+  </Style>
+
+  <Style Selector="Border.announcement-dialog-sticky-title-current-shell">
+    <Setter Property="Padding" Value="0,0,0,8" />
+    <Setter Property="Background" Value="#F9FFFFFF" />
+  </Style>
+
+  <Style Selector="TextBlock.announcement-dialog-section-heading">
+    <Setter Property="Margin" Value="0,6,0,4" />
+  </Style>
+
+  <Style Selector="TextBlock.announcement-dialog-content-title">
+    <Setter Property="Margin" Value="0,0,12,0" />
+    <Setter Property="FontSize" Value="28" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+  </Style>
+
+  <Style Selector="ScrollViewer.announcement-dialog-markdown">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0,0,12,0" />
+  </Style>
+
+  <Style Selector="md|MarkdownViewer.announcement-dialog-markdown-viewer">
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="VerticalAlignment" Value="Top" />
+    <Setter Property="Margin" Value="0,0,8,28" />
+  </Style>
+
+  <Style Selector="CheckBox.announcement-dialog-do-not-remind">
+    <Setter Property="FontSize" Value="12.5" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Text.Secondary}" />
+  </Style>
+
+  <Style Selector="CheckBox.announcement-dialog-do-not-remind:disabled">
+    <Setter Property="Opacity" Value="1" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Text.Muted}" />
+  </Style>
+
+  <Style Selector="CheckBox.announcement-dialog-do-not-remind.ready">
+    <Setter Property="Opacity" Value="1" />
+  </Style>
+
+  <Style Selector="CheckBox.announcement-dialog-do-not-remind.locked">
+    <Setter Property="Opacity" Value="0.62" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Text.Muted}" />
+  </Style>
+
+  <Style Selector="CheckBox.announcement-dialog-do-not-remind.locked /template/ Border#NormalRectangle">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.Action.PrimaryBackgroundDisabled}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.Action.PrimaryBackgroundDisabled}" />
+  </Style>
+
+  <Style Selector="CheckBox.announcement-dialog-do-not-remind.locked /template/ Path#CheckGlyph">
+    <Setter Property="Opacity" Value="0" />
+  </Style>
+
+  <Style Selector="Border.announcement-dialog-read-state">
+    <Setter Property="Margin" Value="0" />
+    <Setter Property="Padding" Value="2,0" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+
+  <Style Selector="Border.announcement-dialog-read-state.ready">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
+  <Style Selector="Border.announcement-dialog-read-footer">
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+
+  <Style Selector="Border.announcement-dialog-read-footer.ready">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
+  <Style Selector="TextBlock.announcement-dialog-state-title">
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Text.Primary}" />
+  </Style>
+
+  <Style Selector="TextBlock.announcement-dialog-state-caption">
+    <Setter Property="FontSize" Value="12.5" />
+    <Setter Property="LineHeight" Value="18" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Text.Secondary}" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+  </Style>
+
+  <Style Selector="Button.announcement-dialog-confirm-button">
+    <Setter Property="MinWidth" Value="136" />
+    <Setter Property="Height" Value="46" />
+    <Setter Property="Padding" Value="20,0" />
+  </Style>
+
+  <Style Selector="Button.announcement-dialog-confirm-button.locked">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.Action.PrimaryBackgroundDisabled}" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Action.ForegroundDisabled}" />
+    <Setter Property="Cursor" Value="Arrow" />
+  </Style>
+
+  <Style Selector="Button.announcement-dialog-confirm-button.locked:pointerover">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.Action.PrimaryBackgroundDisabled}" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Action.ForegroundDisabled}" />
+  </Style>
+
+  <Style Selector="Button.announcement-dialog-confirm-button.locked:pressed">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.Action.PrimaryBackgroundDisabled}" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Action.ForegroundDisabled}" />
   </Style>
 
   <Style Selector="Grid.settings-form">

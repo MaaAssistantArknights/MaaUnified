@@ -107,7 +107,6 @@ public sealed record AnnouncementDialogRequest(
     DialogChromeCatalog? Chrome = null);
 
 public sealed record AnnouncementDialogPayload(
-    string AnnouncementInfo,
     bool DoNotRemindThisAnnouncementAgain,
     bool DoNotShowAnnouncement);
 

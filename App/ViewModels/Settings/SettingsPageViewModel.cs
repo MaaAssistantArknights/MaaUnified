@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Globalization;
 using System.Diagnostics;
+using System.Net.Http;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text.Json;
@@ -232,6 +233,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
     private CancellationTokenSource? _autostartFeedbackCts;
     private readonly SemaphoreSlim _settingsDataLoadSemaphore = new(1, 1);
     private readonly HashSet<string> _loadedSettingsDataBuckets = new(StringComparer.OrdinalIgnoreCase);
+    private TaskCompletionSource<bool> _startupAnnouncementCompletionSource = CreateCompletedTaskCompletionSource();
     private bool _deferredSectionDataLoadEnabled;
     private bool _suppressVersionUpdateResourceRefresh;
     private long _gpuRefreshSequence;
@@ -420,6 +422,8 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
     private readonly IAppDialogService _dialogService;
     private readonly IUiLanguageCoordinator _uiLanguageCoordinator;
     private readonly Func<string?> _coreVersionResolver;
+    private readonly HttpClient _aboutAnnouncementHttpClient;
+    private readonly TimeSpan _aboutAnnouncementTimeout;
     private readonly DispatcherTimer _versionUpdateSchedulerTimer = new()
     {
         Interval = TimeSpan.FromSeconds(10),
@@ -432,7 +436,9 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         Action<LocalizationFallbackInfo>? localizationFallbackReporter = null,
         Func<string, CancellationToken, Task<UiOperationResult>>? openExternalTargetAsync = null,
         IAppDialogService? dialogService = null,
-        Func<string?>? coreVersionResolver = null)
+        Func<string?>? coreVersionResolver = null,
+        HttpClient? aboutAnnouncementHttpClient = null,
+        TimeSpan? aboutAnnouncementTimeout = null)
         : base(runtime)
     {
         _localizationFallbackReporter = localizationFallbackReporter;
@@ -440,6 +446,10 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         _dialogService = dialogService ?? NoOpAppDialogService.Instance;
         _uiLanguageCoordinator = runtime.UiLanguageCoordinator;
         _coreVersionResolver = coreVersionResolver ?? ResolveCurrentCoreVersion;
+        _aboutAnnouncementHttpClient = aboutAnnouncementHttpClient ?? SharedAboutAnnouncementHttpClient;
+        _aboutAnnouncementTimeout = aboutAnnouncementTimeout is { } timeout && timeout > TimeSpan.Zero
+            ? timeout
+            : DefaultAboutAnnouncementTimeout;
         _uiLanguageCoordinator.LanguageChanged += OnUnifiedLanguageChanged;
         _versionUpdateSchedulerTimer.Tick += OnVersionUpdateSchedulerTick;
         RootTexts = new RootLocalizationTextMap("Root.Localization.Settings");
@@ -674,6 +684,9 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
 
     public ObservableCollection<string> AvailableNotificationProviders { get; } = new();
 
+    public Task WaitForStartupAnnouncementCompletionAsync(CancellationToken cancellationToken = default)
+        => _startupAnnouncementCompletionSource.Task.WaitAsync(cancellationToken);
+
     public SettingsSectionViewModel? SelectedSection
     {
         get => _selectedSection;
@@ -709,6 +722,23 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
     }
 
     public string SelectedSectionTitle => SelectedSection?.DisplayName ?? string.Empty;
+
+    private static TaskCompletionSource<bool> CreateCompletedTaskCompletionSource()
+    {
+        var source = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        source.TrySetResult(true);
+        return source;
+    }
+
+    private void ResetStartupAnnouncementCompletion()
+    {
+        _startupAnnouncementCompletionSource = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+    }
+
+    private void CompleteStartupAnnouncementCompletion()
+    {
+        _startupAnnouncementCompletionSource.TrySetResult(true);
+    }
 
     public bool IsConfigurationManagerSelected => IsSelectedSection("ConfigurationManager");
 

@@ -1,7 +1,10 @@
 using System.Collections.Specialized;
+using System.Net;
+using System.Net.Http;
 using System.Runtime.CompilerServices;
 using System.IO.Compression;
 using System.Text.Json.Nodes;
+using MAAUnified.App.Features.Dialogs;
 using MAAUnified.App.Features.Settings;
 using MAAUnified.App.ViewModels.Settings;
 using MAAUnified.Application.Configuration;
@@ -177,6 +180,35 @@ public sealed class SettingsModuleCM1FeatureTests
 
         Assert.True(VersionUpdatePolicy.Default.AutoDownloadUpdatePackage);
         Assert.True(vm.VersionUpdateAutoDownload);
+    }
+
+    [Fact]
+    public async Task CheckAboutAnnouncementWithDialogAsync_WhenRemoteTimesOut_UsesCachedAnnouncement()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync();
+        var cachedAnnouncement = "# Cached announcement";
+        var saveResult = await fixture.Runtime.AnnouncementFeatureService.SaveStateAsync(
+            new AnnouncementState(cachedAnnouncement, false, false));
+        Assert.True(saveResult.Success);
+
+        using var aboutAnnouncementHttpClient = new HttpClient(new TimeoutUntilCanceledMessageHandler())
+        {
+            Timeout = Timeout.InfiniteTimeSpan,
+        };
+        var dialogService = new RecordingAnnouncementDialogService();
+        var vm = new SettingsPageViewModel(
+            fixture.Runtime,
+            new ConnectionGameSharedStateViewModel(),
+            dialogService: dialogService,
+            aboutAnnouncementHttpClient: aboutAnnouncementHttpClient,
+            aboutAnnouncementTimeout: TimeSpan.FromMilliseconds(50));
+        await vm.InitializeAsync();
+
+        await vm.CheckAndDownloadAboutAnnouncementWithDialogAsync();
+
+        Assert.NotNull(dialogService.LastAnnouncementRequest);
+        Assert.Equal(cachedAnnouncement, dialogService.LastAnnouncementRequest!.AnnouncementInfo);
+        Assert.False(vm.HasAboutErrorMessage);
     }
 
     [Fact]
@@ -854,6 +886,80 @@ public sealed class SettingsModuleCM1FeatureTests
                 // ignore cleanup failures in temporary test directories
             }
         }
+    }
+
+    private sealed class TimeoutUntilCanceledMessageHandler : HttpMessageHandler
+    {
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            try
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+
+            return new HttpResponseMessage(HttpStatusCode.OK);
+        }
+    }
+
+    private sealed class RecordingAnnouncementDialogService : IAppDialogService
+    {
+        public AnnouncementDialogRequest? LastAnnouncementRequest { get; private set; }
+
+        public Task<DialogCompletion<AnnouncementDialogPayload>> ShowAnnouncementAsync(
+            AnnouncementDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+        {
+            LastAnnouncementRequest = request;
+            return Task.FromResult(new DialogCompletion<AnnouncementDialogPayload>(DialogReturnSemantic.Close, null, "recorded"));
+        }
+
+        public Task<DialogCompletion<VersionUpdateDialogPayload>> ShowVersionUpdateAsync(
+            VersionUpdateDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<VersionUpdateDialogPayload>(DialogReturnSemantic.Close, null, "recorded"));
+
+        public Task<DialogCompletion<ProcessPickerDialogPayload>> ShowProcessPickerAsync(
+            ProcessPickerDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<ProcessPickerDialogPayload>(DialogReturnSemantic.Close, null, "recorded"));
+
+        public Task<DialogCompletion<EmulatorPathDialogPayload>> ShowEmulatorPathAsync(
+            EmulatorPathDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<EmulatorPathDialogPayload>(DialogReturnSemantic.Close, null, "recorded"));
+
+        public Task<DialogCompletion<ErrorDialogPayload>> ShowErrorAsync(
+            ErrorDialogRequest request,
+            string sourceScope,
+            Func<CancellationToken, Task<UiOperationResult>>? openIssueReportAsync = null,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<ErrorDialogPayload>(DialogReturnSemantic.Close, null, "recorded"));
+
+        public Task<DialogCompletion<AchievementListDialogPayload>> ShowAchievementListAsync(
+            AchievementListDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<AchievementListDialogPayload>(DialogReturnSemantic.Close, null, "recorded"));
+
+        public Task<DialogCompletion<TextDialogPayload>> ShowTextAsync(
+            TextDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<TextDialogPayload>(DialogReturnSemantic.Close, null, "recorded"));
+
+        public Task<DialogCompletion<WarningConfirmDialogPayload>> ShowWarningConfirmAsync(
+            WarningConfirmDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<WarningConfirmDialogPayload>(DialogReturnSemantic.Close, null, "recorded"));
     }
 
     private sealed class FakeBridge : IMaaCoreBridge

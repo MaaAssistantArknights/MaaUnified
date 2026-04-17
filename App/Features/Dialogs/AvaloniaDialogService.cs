@@ -41,7 +41,7 @@ public sealed class AvaloniaDialogService : IAppDialogService
         dialog.ApplyRequest(normalizedRequest);
         using var chromeBinding = AttachChromeLocalization(dialog, normalizedRequest.Title, normalizedRequest.Chrome);
         var semantic = await dialog.ShowDialog<DialogReturnSemantic?>(owner) ?? DialogReturnSemantic.Close;
-        var payload = semantic == DialogReturnSemantic.Confirm ? dialog.BuildPayload() : null;
+        var payload = semantic == DialogReturnSemantic.Cancel ? null : dialog.BuildPayload();
         await _runtime.DialogFeatureService.RecordDialogActionAsync(token, "return", semantic.ToString(), cancellationToken);
         await _runtime.DialogFeatureService.CompleteDialogAsync(token, semantic, "announcement-dialog-complete", cancellationToken);
         return new DialogCompletion<AnnouncementDialogPayload>(semantic, payload, "announcement-dialog-complete");

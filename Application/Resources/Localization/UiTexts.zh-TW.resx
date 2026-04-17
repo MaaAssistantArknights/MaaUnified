@@ -1004,14 +1004,74 @@
   <data name="Settings.About.Dialog.Confirm" xml:space="preserve">
     <value>確認</value>
   </data>
+  <data name="Settings.About.Dialog.ConfirmLocked" xml:space="preserve">
+    <value>請先閱讀公告</value>
+  </data>
+  <data name="Settings.About.Dialog.ConfirmBlocked1" xml:space="preserve">
+    <value>沒看完點什麼確認？</value>
+  </data>
+  <data name="Settings.About.Dialog.ConfirmBlocked2" xml:space="preserve">
+    <value>就是在說你，還點！</value>
+  </data>
+  <data name="Settings.About.Dialog.ConfirmBlocked3" xml:space="preserve">
+    <value>還點</value>
+  </data>
   <data name="Settings.About.Dialog.DoNotRemindThisAnnouncementAgain" xml:space="preserve">
-    <value>不再提醒此公告</value>
+    <value>下次公告更新前不再顯示</value>
   </data>
   <data name="Settings.About.Dialog.DoNotShowAnnouncement" xml:space="preserve">
     <value>不顯示公告</value>
   </data>
   <data name="Settings.About.Dialog.Title" xml:space="preserve">
     <value>公告</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadProgress.PendingBadge" xml:space="preserve">
+    <value>閱讀門禁</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadProgress.PendingTitle" xml:space="preserve">
+    <value>捲動到底部以解鎖確認</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadProgress.PendingCaption" xml:space="preserve">
+    <value>請繼續往下閱讀所有章節。確認按鈕和「下次公告更新前不再顯示」會在閱讀完成後一起解鎖。</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadProgress.PendingFooterHint" xml:space="preserve">
+    <value>這個選項會在你閱讀完成後解鎖，因此底部操作會始終集中在同一區域。</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadProgress.ReadyBadge" xml:space="preserve">
+    <value>已解鎖</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadProgress.ReadyTitle" xml:space="preserve">
+    <value>現在可以確認</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadProgress.ReadyCaption" xml:space="preserve">
+    <value>現在可以確認，也可以選擇在下次公告內容更新前不再顯示。</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadProgress.ReadyFooterHint" xml:space="preserve">
+    <value>如果你不想在這次公告內容變更前再次看到它，可以先勾選左側選項，再從右側確認。</value>
+  </data>
+  <data name="Settings.About.Dialog.SectionsTitle" xml:space="preserve">
+    <value>公告分欄</value>
+  </data>
+  <data name="Settings.About.Dialog.SectionsCaption" xml:space="preserve">
+    <value>選擇左側分欄以查看完整公告內容。</value>
+  </data>
+  <data name="Settings.About.Dialog.Lead" xml:space="preserve">
+    <value>請仔細閱讀最新公告後再關閉此視窗。</value>
+  </data>
+  <data name="Settings.About.Dialog.BottomHint" xml:space="preserve">
+    <value>尚未讀完公告前，暫時無法直接關閉。</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadHint" xml:space="preserve">
+    <value>捲動到底部後，才可以關閉此公告，或選擇在下次更新前不再顯示。</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadFinishedHint" xml:space="preserve">
+    <value>已完整閱讀公告，現在可以關閉此視窗。</value>
+  </data>
+  <data name="Settings.About.Dialog.MetaCurrentSection" xml:space="preserve">
+    <value>目前查看</value>
+  </data>
+  <data name="Settings.About.Dialog.MetaSectionFormat" xml:space="preserve">
+    <value>第 {0} / {1} 節</value>
   </data>
   <data name="Settings.About.OpenCommunity" xml:space="preserve">
     <value>開啟社群入口</value>

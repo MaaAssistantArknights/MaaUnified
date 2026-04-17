@@ -1082,14 +1082,74 @@
   <data name="Settings.About.Dialog.Confirm" xml:space="preserve">
     <value>確認</value>
   </data>
+  <data name="Settings.About.Dialog.ConfirmLocked" xml:space="preserve">
+    <value>先にお知らせを読み終えてください</value>
+  </data>
+  <data name="Settings.About.Dialog.ConfirmBlocked1" xml:space="preserve">
+    <value>まだ読んでいません。読み終わってから確認してください。</value>
+  </data>
+  <data name="Settings.About.Dialog.ConfirmBlocked2" xml:space="preserve">
+    <value>そう、あなたですね、まだ押す</value>
+  </data>
+  <data name="Settings.About.Dialog.ConfirmBlocked3" xml:space="preserve">
+    <value>まだ押す</value>
+  </data>
   <data name="Settings.About.Dialog.DoNotRemindThisAnnouncementAgain" xml:space="preserve">
-    <value>このお知らせを再通知しない</value>
+    <value>次回のお知らせ更新まで表示しない</value>
   </data>
   <data name="Settings.About.Dialog.DoNotShowAnnouncement" xml:space="preserve">
     <value>お知らせを表示しない</value>
   </data>
   <data name="Settings.About.Dialog.Title" xml:space="preserve">
     <value>お知らせ</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadProgress.PendingBadge" xml:space="preserve">
+    <value>閲覧ロック</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadProgress.PendingTitle" xml:space="preserve">
+    <value>一番下までスクロールすると確認できます</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadProgress.PendingCaption" xml:space="preserve">
+    <value>最後まで読むと、確認ボタンと「次回のお知らせ更新まで表示しない」が一緒に解放されます。</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadProgress.PendingFooterHint" xml:space="preserve">
+    <value>この操作エリアは、読み終えるまでまとめてロックされたままです。</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadProgress.ReadyBadge" xml:space="preserve">
+    <value>解放済み</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadProgress.ReadyTitle" xml:space="preserve">
+    <value>これで確認できます</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadProgress.ReadyCaption" xml:space="preserve">
+    <value>確認できるようになりました。必要なら、このお知らせを次回更新まで非表示にもできます。</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadProgress.ReadyFooterHint" xml:space="preserve">
+    <value>同じ内容を次回更新まで表示したくない場合は、左側の項目を選んでから確認してください。</value>
+  </data>
+  <data name="Settings.About.Dialog.SectionsTitle" xml:space="preserve">
+    <value>お知らせ一覧</value>
+  </data>
+  <data name="Settings.About.Dialog.SectionsCaption" xml:space="preserve">
+    <value>左側の項目を選ぶと、該当セクションの全文を確認できます。</value>
+  </data>
+  <data name="Settings.About.Dialog.Lead" xml:space="preserve">
+    <value>このウィンドウを閉じる前に、最新のお知らせを最後まで読んでください。</value>
+  </data>
+  <data name="Settings.About.Dialog.BottomHint" xml:space="preserve">
+    <value>未読のお知らせはまだ閉じられません。</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadHint" xml:space="preserve">
+    <value>一番下までスクロールすると閉じられます。次回更新まで非表示にもできます。</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadFinishedHint" xml:space="preserve">
+    <value>お知らせを最後まで読みました。これで閉じられます。</value>
+  </data>
+  <data name="Settings.About.Dialog.MetaCurrentSection" xml:space="preserve">
+    <value>現在のセクション</value>
+  </data>
+  <data name="Settings.About.Dialog.MetaSectionFormat" xml:space="preserve">
+    <value>セクション {0} / {1}</value>
   </data>
   <data name="Settings.About.OpenCommunity" xml:space="preserve">
     <value>コミュニティ入口を開く</value>

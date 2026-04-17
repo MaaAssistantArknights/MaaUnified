@@ -220,6 +220,24 @@ public sealed class SettingsViewStructureContractTests
     }
 
     [Fact]
+    public void MainWindowSettingsWarmup_ShouldTriggerDeferredDataAndBackgroundSectionPrewarmWhenSettingsRootLoads()
+    {
+        var root = GetMaaUnifiedRoot();
+
+        var mainWindow = File.ReadAllText(Path.Combine(root, "App", "Views", "MainWindow.axaml.cs"));
+        Assert.Contains("if (_settingsWarmupRootPage?.IsLoaded != true)", mainWindow, StringComparison.Ordinal);
+        Assert.Contains("if (!_settingsSectionWarmupStarted)", mainWindow, StringComparison.Ordinal);
+        Assert.Contains("MAAUnified.App.Features.Root.SettingsView.StartBackgroundSectionWarmup();", mainWindow, StringComparison.Ordinal);
+        Assert.Contains("_ = WarmupSettingsPageAsync(vm);", mainWindow, StringComparison.Ordinal);
+        Assert.Contains("await vm.SettingsPage.WarmupDeferredSectionDataAsync();", mainWindow, StringComparison.Ordinal);
+
+        var settingsView = File.ReadAllText(Path.Combine(root, "App", "Features", "Root", "SettingsView.axaml.cs"));
+        Assert.Contains("if (_backgroundSectionWarmupTimer is not null || PrewarmedSectionKeys.Count >= SectionOrder.Length)", settingsView, StringComparison.Ordinal);
+        Assert.Contains("PrewarmedSectionContentCache[sectionKey] = content;", settingsView, StringComparison.Ordinal);
+        Assert.Contains("PrewarmedSectionKeys.Add(sectionKey);", settingsView, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ControlStyles_ShouldExposeSharedSettingsFormResources()
     {
         var root = GetMaaUnifiedRoot();

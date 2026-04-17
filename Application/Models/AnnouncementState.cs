@@ -27,6 +27,19 @@ public sealed record AnnouncementState(
         };
     }
 
+    public bool HasAnnouncementInfo => !string.IsNullOrWhiteSpace(AnnouncementInfo);
+
+    public AnnouncementState WithDialogPreferences(
+        bool doNotRemindThisAnnouncementAgain,
+        bool doNotShowAnnouncement)
+    {
+        return this with
+        {
+            DoNotRemindThisAnnouncementAgain = doNotRemindThisAnnouncementAgain,
+            DoNotShowAnnouncement = doNotShowAnnouncement,
+        };
+    }
+
     public IReadOnlyDictionary<string, string> ToGlobalSettingUpdates()
     {
         return new Dictionary<string, string>(StringComparer.Ordinal)
