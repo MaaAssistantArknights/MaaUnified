@@ -104,6 +104,40 @@ public sealed class StyleTokenContractTests
     }
 
     [Fact]
+    public void AppFoundationStyles_ShouldDefineAppInputBlockContract()
+    {
+        var root = GetMaaUnifiedRoot();
+        var text = File.ReadAllText(Path.Combine(root, "App", "Styles", "AppFoundationStyles.axaml"));
+
+        Assert.Contains("Style Selector=\"TextBox.app-input.app-input-block\"", text, StringComparison.Ordinal);
+        Assert.Contains("<Setter Property=\"Height\" Value=\"NaN\" />", text, StringComparison.Ordinal);
+        Assert.Contains("<Setter Property=\"MinHeight\" Value=\"{DynamicResource MAA.App.Size.InputBlockMinHeight}\" />", text, StringComparison.Ordinal);
+        Assert.Contains("<Setter Property=\"Padding\" Value=\"{DynamicResource MAA.App.Thickness.InputBlockPadding}\" />", text, StringComparison.Ordinal);
+        Assert.Contains("<Setter Property=\"VerticalContentAlignment\" Value=\"Top\" />", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AppSources_ShouldNotRetainModernDialogShellOrLegacyModernDialogTokens()
+    {
+        var root = GetMaaUnifiedRoot();
+        var appRoot = Path.Combine(root, "App");
+        var legacyHits = Directory.EnumerateFiles(appRoot, "*.*", SearchOption.AllDirectories)
+            .Where(path => path.EndsWith(".axaml", StringComparison.Ordinal) || path.EndsWith(".cs", StringComparison.Ordinal))
+            .Select(path => new
+            {
+                Path = path,
+                Text = File.ReadAllText(path),
+            })
+            .Where(entry =>
+                entry.Text.Contains("ModernDialogShell", StringComparison.Ordinal)
+                || entry.Text.Contains("modern-dialog-", StringComparison.Ordinal))
+            .ToList();
+
+        Assert.False(File.Exists(Path.Combine(root, "App", "Features", "Dialogs", "ModernDialogShell.cs")));
+        Assert.Empty(legacyHits);
+    }
+
+    [Fact]
     public void ControlStyles_ShouldKeepLowResolutionFriendlyMainWindowSizing()
     {
         var root = GetMaaUnifiedRoot();
@@ -244,7 +278,7 @@ public sealed class StyleTokenContractTests
     }
 
     [Fact]
-    public void CoreEntryViews_AllButtons_ShouldUseWpfButtonClass()
+    public void CoreEntryViews_AllButtons_ShouldUseFoundationButtonClass()
     {
         var root = GetMaaUnifiedRoot();
         var buttonPattern = new Regex("<Button\\b(?!\\.ContextMenu)([^>]*)>", RegexOptions.Compiled | RegexOptions.Singleline);
@@ -260,7 +294,9 @@ public sealed class StyleTokenContractTests
             {
                 totalButtons++;
                 var attrs = match.Groups[1].Value;
-                Assert.Matches("Classes=\"[^\"]*\\bwpf-button\\b[^\"]*\"", attrs);
+                Assert.Matches(
+                    "Classes=\"[^\"]*\\b(?:wpf-button|app-button|achievement-toast-close|copilot-link)\\b[^\"]*\"",
+                    attrs);
             }
         }
 

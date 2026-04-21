@@ -1,6 +1,6 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:dialogs="clr-namespace:MAAUnified.App.Features.Dialogs"
+        xmlns:controls="clr-namespace:MAAUnified.App.Controls"
         x:Class="MAAUnified.App.Features.Dialogs.ErrorDialogView"
         Width="760"
         Height="540"
@@ -10,46 +10,46 @@
         Background="Transparent"
         SystemDecorations="None"
         WindowStartupLocation="CenterOwner">
-  <dialogs:ModernDialogShell x:Name="DialogShell"
-                             CloseRequested="OnShellCloseRequested">
-    <dialogs:ModernDialogShell.HeaderContent>
+  <controls:AppWindowFrame x:Name="DialogShell"
+                           Mode="CompactModal"
+                           CloseRequested="OnShellCloseRequested">
+    <controls:AppWindowFrame.HeaderContent>
       <TextBlock x:Name="ContextLine"
-                 Margin="8,0,0,0"
-                 Classes="long-wrap subtle"
+                 Classes="app-window-subtitle subtle long-wrap"
                  Text="Context" />
-    </dialogs:ModernDialogShell.HeaderContent>
-    <dialogs:ModernDialogShell.Content>
-      <Border Classes="modern-dialog-section">
+    </controls:AppWindowFrame.HeaderContent>
+    <controls:AppWindowFrame.Content>
+      <Border Classes="app-surface app-section">
         <TextBox x:Name="ErrorDetailBox"
+                 Classes="app-input app-input-block"
                  AcceptsReturn="True"
                  IsReadOnly="True"
                  ScrollViewer.VerticalScrollBarVisibility="Auto"
-                 TextWrapping="Wrap"
-                 />
+                 TextWrapping="Wrap" />
       </Border>
-    </dialogs:ModernDialogShell.Content>
-    <dialogs:ModernDialogShell.ActionsContent>
+    </controls:AppWindowFrame.Content>
+    <controls:AppWindowFrame.ActionsContent>
       <StackPanel Orientation="Horizontal"
                   Spacing="10">
         <Button x:Name="CopyButton"
-                Classes="modern-dialog-button modern-dialog-button-secondary"
+                Classes="app-button app-secondary"
                 Content="Copy"
                 Click="OnCopyClick" />
         <Button x:Name="IssueReportButton"
-                Classes="modern-dialog-button modern-dialog-button-secondary"
+                Classes="app-button app-secondary"
                 Content="IssueReport"
                 Click="OnOpenIssueReportClick" />
         <Button x:Name="CancelButton"
-                Classes="modern-dialog-button modern-dialog-button-secondary"
+                Classes="app-button app-secondary"
                 Content="Ignore"
                 IsCancel="True"
                 Click="OnCancelClick" />
         <Button x:Name="ConfirmButton"
-                Classes="modern-dialog-button modern-dialog-button-primary"
+                Classes="app-button app-primary"
                 Content="Close"
                 IsDefault="True"
                 Click="OnConfirmClick" />
       </StackPanel>
-    </dialogs:ModernDialogShell.ActionsContent>
-  </dialogs:ModernDialogShell>
+    </controls:AppWindowFrame.ActionsContent>
+  </controls:AppWindowFrame>
 </Window>

@@ -1,6 +1,5 @@
 using System.Globalization;
 using Avalonia.Controls;
-using Avalonia.Input;
 using Avalonia.Interactivity;
 using MAAUnified.App.Infrastructure;
 using MAAUnified.App.ViewModels.Infrastructure;
@@ -10,8 +9,6 @@ namespace MAAUnified.App.Features.Dialogs;
 
 public partial class AchievementListDialogView : Window, IDialogChromeAware
 {
-    private const double PreferredWindowHeight = 820d;
-    private const double OwnerHeightThresholdMargin = 24d;
     private const string ProgressFormatKey = "Achievement.ProgressFormat";
     private const string NewBadgeTextKey = "Achievement.NewBadgeText";
     private const string OverviewFormatKey = "Settings.Achievement.Dialog.OverviewFormat";
@@ -158,36 +155,9 @@ public partial class AchievementListDialogView : Window, IDialogChromeAware
         Close(DialogReturnSemantic.Close);
     }
 
-    private void OnResizeGripPointerPressed(object? sender, PointerPressedEventArgs e)
-    {
-        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed
-            || sender is not Control { Tag: string tag }
-            || !Enum.TryParse<WindowEdge>(tag, out var edge))
-        {
-            return;
-        }
-
-        BeginResizeDrag(edge, e);
-        e.Handled = true;
-    }
-
     private void OnOpened(object? sender, EventArgs e)
     {
-        ApplyOwnerHeightThreshold();
         FilterInput.Focus();
-    }
-
-    private void ApplyOwnerHeightThreshold()
-    {
-        var ownerHeight = Owner?.Bounds.Height ?? 0d;
-        if (ownerHeight <= 0d)
-        {
-            return;
-        }
-
-        var cappedHeight = Math.Max(MinHeight, ownerHeight - OwnerHeightThresholdMargin);
-        MaxHeight = cappedHeight;
-        Height = Math.Min(Math.Max(Height, PreferredWindowHeight), cappedHeight);
     }
 
     private string Text(string key, string fallback)

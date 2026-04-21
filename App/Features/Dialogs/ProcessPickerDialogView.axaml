@@ -1,6 +1,6 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:dialogs="clr-namespace:MAAUnified.App.Features.Dialogs"
+        xmlns:controls="clr-namespace:MAAUnified.App.Controls"
         x:Class="MAAUnified.App.Features.Dialogs.ProcessPickerDialogView"
         Width="620"
         Height="460"
@@ -10,100 +10,90 @@
         Background="Transparent"
         SystemDecorations="None"
         WindowStartupLocation="CenterOwner">
-  <dialogs:ModernDialogShell x:Name="DialogShell"
-                             CloseRequested="OnShellCloseRequested">
-    <dialogs:ModernDialogShell.HeaderContent>
+  <controls:AppWindowFrame x:Name="DialogShell"
+                           Mode="CompactModal"
+                           CloseRequested="OnShellCloseRequested">
+    <controls:AppWindowFrame.HeaderContent>
       <TextBlock x:Name="SelectionSummaryText"
-                 Margin="8,0,0,0"
-                 Classes="modern-dialog-subtitle dialog-window-subtitle long-wrap"
+                 Classes="app-window-subtitle long-wrap"
                  Text="No running process found" />
-    </dialogs:ModernDialogShell.HeaderContent>
-    <dialogs:ModernDialogShell.Content>
+    </controls:AppWindowFrame.HeaderContent>
+    <controls:AppWindowFrame.Content>
       <Grid RowDefinitions="Auto,*">
-        <Border Classes="modern-dialog-section">
-          <StackPanel Spacing="6">
+        <Border Classes="app-surface app-section">
+          <StackPanel Classes="app-compact-selection-intro">
             <TextBlock Classes="section-title"
                        Text="Running processes" />
             <TextBlock x:Name="HintText"
-                       Classes="modern-dialog-subtitle subtle long-wrap"
+                       Classes="app-window-subtitle subtle long-wrap"
                        Text="Choose the process that should receive the connection." />
           </StackPanel>
         </Border>
 
         <Grid Grid.Row="1"
               Margin="0,14,0,0">
-          <Border Classes="modern-dialog-card">
-            <ListBox x:Name="ProcessList"
-                     Margin="2"
-                     SelectionMode="Single"
-                     SelectionChanged="OnProcessSelectionChanged"
-                     DoubleTapped="OnProcessListDoubleTapped"
-                     KeyDown="OnProcessListKeyDown">
-              <ListBox.ItemTemplate>
+          <Border Classes="app-surface app-card">
+            <controls:AppSelectionList x:Name="ProcessList"
+                                       Classes="app-compact-selection-list"
+                                       VisualMode="Surface"
+                                       SelectionMode="Single"
+                                       SelectionChanged="OnProcessSelectionChanged"
+                                       DoubleTapped="OnProcessListDoubleTapped"
+                                       KeyDown="OnProcessListKeyDown">
+              <controls:AppSelectionList.ItemTemplate>
                 <DataTemplate>
-                  <Border Margin="0,0,0,10"
-                          Padding="14"
-                          Classes="modern-dialog-section">
+                  <Border Classes="app-selection-list-item-shell">
                     <Grid ColumnDefinitions="*,Auto"
                           RowDefinitions="Auto,Auto">
-                      <TextBlock Classes="modern-dialog-lead long-wrap"
+                      <TextBlock Classes="section-title long-wrap"
                                  Text="{Binding DisplayName}" />
                       <Border Grid.Column="1"
-                              Padding="10,4"
-                              Background="{DynamicResource MAA.Brush.Dialog.FilterChipSelectedBackground}"
-                              CornerRadius="12"
+                              Classes="app-badge"
                               IsVisible="{Binding IsPrimary}">
-                        <TextBlock Classes="modern-dialog-caption"
-                                   Foreground="{DynamicResource MAA.Brush.Dialog.FilterChipSelectedForeground}"
+                        <TextBlock Classes="app-badge-text"
                                    Text="Primary" />
                       </Border>
                       <TextBlock Grid.Row="1"
                                  Grid.ColumnSpan="2"
                                  Margin="0,8,0,0"
-                                 Classes="modern-dialog-caption long-ellipsis"
+                                 Classes="app-caption long-ellipsis"
                                  Text="{Binding Id}" />
                     </Grid>
                   </Border>
                 </DataTemplate>
-              </ListBox.ItemTemplate>
-            </ListBox>
+              </controls:AppSelectionList.ItemTemplate>
+            </controls:AppSelectionList>
           </Border>
 
           <Border x:Name="EmptyStatePanel"
-                  Classes="modern-dialog-section"
+                  Classes="app-surface app-section"
                   IsVisible="False">
-            <StackPanel HorizontalAlignment="Center"
-                        VerticalAlignment="Center"
-                        Spacing="8">
-              <TextBlock HorizontalAlignment="Center"
-                         Classes="modern-dialog-title"
+            <StackPanel Classes="app-compact-empty-state-content">
+              <TextBlock Classes="app-window-title app-compact-empty-title"
                          Text="No running process found" />
-              <TextBlock HorizontalAlignment="Center"
-                         MaxWidth="340"
-                         TextAlignment="Center"
-                         Classes="modern-dialog-subtitle"
+              <TextBlock Classes="app-window-subtitle app-compact-empty-body"
                          Text="Refresh to scan again, or check whether the target app is already open." />
             </StackPanel>
           </Border>
         </Grid>
       </Grid>
-    </dialogs:ModernDialogShell.Content>
-    <dialogs:ModernDialogShell.ActionsContent>
+    </controls:AppWindowFrame.Content>
+    <controls:AppWindowFrame.ActionsContent>
       <StackPanel Orientation="Horizontal"
                   Spacing="10">
         <Button x:Name="RefreshButton"
-                Classes="modern-dialog-button modern-dialog-button-secondary"
+                Classes="app-button app-secondary"
                 Content="Refresh"
                 Click="OnRefreshClick" />
         <Button x:Name="CancelButton"
-                Classes="modern-dialog-button modern-dialog-button-secondary"
+                Classes="app-button app-secondary"
                 Content="Cancel"
                 Click="OnCancelClick" />
         <Button x:Name="ConfirmButton"
-                Classes="modern-dialog-button modern-dialog-button-primary"
+                Classes="app-button app-primary"
                 Content="Select"
                 Click="OnConfirmClick" />
       </StackPanel>
-    </dialogs:ModernDialogShell.ActionsContent>
-  </dialogs:ModernDialogShell>
+    </controls:AppWindowFrame.ActionsContent>
+  </controls:AppWindowFrame>
 </Window>

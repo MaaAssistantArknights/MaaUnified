@@ -24,7 +24,7 @@ namespace MAAUnified.App.Features.Settings;
 
 public partial class ConnectSettingsView : UserControl
 {
-    private RuntimeLogWindow? _screenshotPreviewWindow;
+    private ScreenshotPreviewWindow? _screenshotPreviewWindow;
 
     public ConnectSettingsView()
     {
@@ -446,7 +446,7 @@ public partial class ConnectSettingsView : UserControl
             return;
         }
 
-        _screenshotPreviewWindow.ConfigureForScreenshotPreview(
+        _screenshotPreviewWindow.SetPreview(
             bitmap,
             BuildScreenshotPreviewTitle(),
             BuildScreenshotPreviewSubtitle(),
@@ -474,14 +474,7 @@ public partial class ConnectSettingsView : UserControl
             return;
         }
 
-        var window = new RuntimeLogWindow
-        {
-            Width = 800,
-            Height = 480,
-            MinWidth = 480,
-            MinHeight = 320,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-        };
+        var window = new ScreenshotPreviewWindow();
 
         window.Closed += (_, _) =>
         {
@@ -512,7 +505,7 @@ public partial class ConnectSettingsView : UserControl
     {
         if (_screenshotPreviewWindow is not null)
         {
-            _screenshotPreviewWindow.UpdateScreenshotPreviewChrome(
+            _screenshotPreviewWindow.UpdateChrome(
                 BuildScreenshotPreviewTitle(),
                 BuildScreenshotPreviewSubtitle(),
                 BuildScreenshotPreviewStatusText());

@@ -1,6 +1,6 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:dialogs="clr-namespace:MAAUnified.App.Features.Dialogs"
+        xmlns:controls="clr-namespace:MAAUnified.App.Controls"
         x:Class="MAAUnified.App.Features.Dialogs.VersionUpdateDialogView"
         Width="680"
         Height="520"
@@ -10,44 +10,45 @@
         Background="Transparent"
         SystemDecorations="None"
         WindowStartupLocation="CenterOwner">
-  <dialogs:ModernDialogShell x:Name="DialogShell"
-                             CloseRequested="OnShellCloseRequested">
-    <dialogs:ModernDialogShell.Content>
+  <controls:AppWindowFrame x:Name="DialogShell"
+                           Mode="CompactModal"
+                           CloseRequested="OnShellCloseRequested">
+    <controls:AppWindowFrame.Content>
       <Grid RowDefinitions="Auto,*">
         <StackPanel Spacing="8">
           <TextBlock x:Name="VersionLine"
-                     Classes="modern-dialog-lead"
+                     Classes="section-title"
                      Text="Current -> Target" />
           <TextBlock x:Name="SummaryLine"
-                     Classes="modern-dialog-body"
+                     Classes="app-body"
                      Text="Summary" />
         </StackPanel>
         <Border Grid.Row="1"
                 Margin="0,12,0,0"
-                Classes="modern-dialog-section">
+                Classes="app-surface app-section">
           <TextBox x:Name="BodyBox"
+                   Classes="app-input app-input-block"
                    AcceptsReturn="True"
                    IsReadOnly="True"
                    ScrollViewer.VerticalScrollBarVisibility="Auto"
-                   TextWrapping="Wrap"
-                   />
+                   TextWrapping="Wrap" />
         </Border>
       </Grid>
-    </dialogs:ModernDialogShell.Content>
-    <dialogs:ModernDialogShell.ActionsContent>
+    </controls:AppWindowFrame.Content>
+    <controls:AppWindowFrame.ActionsContent>
       <StackPanel Orientation="Horizontal"
                   Spacing="10">
         <Button x:Name="CancelButton"
-                Classes="modern-dialog-button modern-dialog-button-secondary"
+                Classes="app-button app-secondary"
                 Content="Later"
                 IsCancel="True"
                 Click="OnCancelClick" />
         <Button x:Name="ConfirmButton"
-                Classes="modern-dialog-button modern-dialog-button-primary"
+                Classes="app-button app-primary"
                 Content="Confirm"
                 IsDefault="True"
                 Click="OnConfirmClick" />
       </StackPanel>
-    </dialogs:ModernDialogShell.ActionsContent>
-  </dialogs:ModernDialogShell>
+    </controls:AppWindowFrame.ActionsContent>
+  </controls:AppWindowFrame>
 </Window>

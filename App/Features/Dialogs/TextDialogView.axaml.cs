@@ -47,7 +47,7 @@ public partial class TextDialogView : Window, IDialogChromeAware
         EditableInputPanel.IsVisible = !_readOnlyContentMode;
         ReadOnlyContentPanel.IsVisible = _readOnlyContentMode;
         InputBox.Text = _payloadText;
-        InputBox.AcceptsReturn = request.MultiLine;
+        ApplyInputMode(request.MultiLine);
         ReadOnlyContentBox.Text = readOnlyBodyText;
         ReadOnlyContentBox.CaretIndex = 0;
         DialogShell.Title = Title;
@@ -73,6 +73,24 @@ public partial class TextDialogView : Window, IDialogChromeAware
     private void OnShellCloseRequested(object? sender, EventArgs e)
     {
         Close();
+    }
+
+    private void ApplyInputMode(bool multiLine)
+    {
+        InputBox.AcceptsReturn = multiLine;
+        InputBox.TextWrapping = multiLine ? Avalonia.Media.TextWrapping.Wrap : Avalonia.Media.TextWrapping.NoWrap;
+
+        if (multiLine)
+        {
+            if (!InputBox.Classes.Contains("app-input-block"))
+            {
+                InputBox.Classes.Add("app-input-block");
+            }
+
+            return;
+        }
+
+        InputBox.Classes.Remove("app-input-block");
     }
 
     public void ApplyDialogChrome(DialogChromeSnapshot chrome)

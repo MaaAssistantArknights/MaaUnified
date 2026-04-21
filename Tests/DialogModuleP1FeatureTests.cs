@@ -272,39 +272,183 @@ public sealed class DialogModuleP1FeatureTests
     }
 
     [Fact]
-    public void AnnouncementDialogView_ShouldDeclareStickyPushTrackAndFollowAccentWithoutTextHighlight()
+    public void AnnouncementDialogView_ShouldUseAppWindowFrameAndRailSelectionListStyles()
     {
         var root = BaselineTestSupport.GetMaaUnifiedRoot();
         var xaml = File.ReadAllText(Path.Combine(root, "App", "Features", "Dialogs", "AnnouncementDialogView.axaml"));
         var code = File.ReadAllText(Path.Combine(root, "App", "Features", "Dialogs", "AnnouncementDialogView.axaml.cs"));
-        var styles = File.ReadAllText(Path.Combine(root, "App", "Styles", "ControlStyles.axaml"));
+        var foundationStyles = File.ReadAllText(Path.Combine(root, "App", "Styles", "AppFoundationStyles.axaml"));
+        var selectionListStyles = File.ReadAllText(Path.Combine(root, "App", "Styles", "AppSelectionListStyles.axaml"));
+        var controlStyles = File.ReadAllText(Path.Combine(root, "App", "Styles", "ControlStyles.axaml"));
 
-        Assert.Contains("SectionListFollowAccent", xaml, StringComparison.Ordinal);
-        Assert.Contains("SectionListFollowAccentGlow", xaml, StringComparison.Ordinal);
-        Assert.Contains("ColumnDefinitions=\"22,*\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("ClipToBounds=\"True\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("<controls:AppWindowFrame", xaml, StringComparison.Ordinal);
+        Assert.Contains("Mode=\"ResizableDialog\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("VisualMode=\"Rail\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("ReserveTrailingAccessorySpace=\"True\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("app-selection-list-item-shell", xaml, StringComparison.Ordinal);
         Assert.Contains("announcement-dialog-sticky-title-viewport", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("announcement-dialog-list-selection-surface", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("announcement-dialog-read-progress", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("announcement-dialog-action-lock-scrim", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("SectionListFollowAccent", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("AllAnnouncementsKey", code, StringComparison.Ordinal);
         Assert.DoesNotContain("AnnouncementTitleText", xaml, StringComparison.Ordinal);
-        Assert.Contains("UpdateSectionListFollowAccent", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("UpdateSectionListFollowAccent", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("OnResizeGripPointerPressed", code, StringComparison.Ordinal);
         Assert.DoesNotContain("Math.Max(0d, point.Value.Y", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("modern-dialog-title", code, StringComparison.Ordinal);
+        Assert.Contains("app-window-title", code, StringComparison.Ordinal);
         Assert.Contains("_primarySectionHeader ??= header", code, StringComparison.Ordinal);
         Assert.Contains("CreateSectionHeader(item.Title)", code, StringComparison.Ordinal);
         Assert.Contains("CreateMarkdownViewer(item.MarkdownContent)", code, StringComparison.Ordinal);
-        Assert.Contains("announcement-dialog-list-follow-accent", styles, StringComparison.Ordinal);
-        Assert.Contains("ListBox.announcement-dialog-list ListBoxItem:pointerover Border.announcement-dialog-list-card", styles, StringComparison.Ordinal);
-        Assert.Contains("ListBox.announcement-dialog-list ListBoxItem:selected Border.announcement-dialog-list-card", styles, StringComparison.Ordinal);
-        Assert.Contains("ListBox.announcement-dialog-list ListBoxItem:selected:pointerover Border.announcement-dialog-list-card", styles, StringComparison.Ordinal);
-        Assert.DoesNotContain("ListBox.announcement-dialog-list ListBoxItem:selected TextBlock.announcement-dialog-list-title", styles, StringComparison.Ordinal);
-        Assert.Contains("<Setter Property=\"Padding\" Value=\"0,9,15,9\" />", styles, StringComparison.Ordinal);
-        Assert.Contains("<Style Selector=\"Border.announcement-dialog-image-shell\">", styles, StringComparison.Ordinal);
-        Assert.Contains("<Setter Property=\"CornerRadius\" Value=\"20\" />", styles, StringComparison.Ordinal);
-        Assert.Contains("<Setter Property=\"ClipToBounds\" Value=\"True\" />", styles, StringComparison.Ordinal);
+        Assert.Contains("controls|AppSelectionList.selection-list-rail Border.app-selection-list-item-shell", selectionListStyles, StringComparison.Ordinal);
+        Assert.Contains("selection-list-rail.selection-list-rail-trailing-accessory-space", selectionListStyles, StringComparison.Ordinal);
+        Assert.Contains("ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter", selectionListStyles, StringComparison.Ordinal);
+        Assert.Contains("ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter", selectionListStyles, StringComparison.Ordinal);
+        Assert.Contains("ListBoxItem:selected:pointerover /template/ ContentPresenter#PART_ContentPresenter", selectionListStyles, StringComparison.Ordinal);
+        Assert.DoesNotContain("selection-list-rail ListBoxItem:selected Border.app-selection-list-item-shell", selectionListStyles, StringComparison.Ordinal);
+        Assert.DoesNotContain("selection-list-rail ListBoxItem:pointerover Border.app-selection-list-item-shell", selectionListStyles, StringComparison.Ordinal);
+        Assert.DoesNotContain("ListBox.announcement-dialog-list", controlStyles + selectionListStyles, StringComparison.Ordinal);
+        Assert.DoesNotContain("announcement-dialog-list-follow-accent", controlStyles + selectionListStyles, StringComparison.Ordinal);
+        Assert.Contains("Border.app-selection-list-follow-accent", selectionListStyles, StringComparison.Ordinal);
+        Assert.Contains("Border.app-surface.app-section", foundationStyles, StringComparison.Ordinal);
+        Assert.Contains("TextBlock.app-window-title", foundationStyles, StringComparison.Ordinal);
         Assert.Contains("ComputeSectionTargetOffset", code, StringComparison.Ordinal);
         Assert.Contains("ComputeStickyPushOffset", code, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AchievementListDialogView_ShouldUseAppWindowFrameAndNoneSelectionListStyles()
+    {
+        var root = BaselineTestSupport.GetMaaUnifiedRoot();
+        var xaml = File.ReadAllText(Path.Combine(root, "App", "Features", "Dialogs", "AchievementListDialogView.axaml"));
+        var code = File.ReadAllText(Path.Combine(root, "App", "Features", "Dialogs", "AchievementListDialogView.axaml.cs"));
+        var foundationStyles = File.ReadAllText(Path.Combine(root, "App", "Styles", "AppFoundationStyles.axaml"));
+        var selectionListStyles = File.ReadAllText(Path.Combine(root, "App", "Styles", "AppSelectionListStyles.axaml"));
+        var controlStyles = File.ReadAllText(Path.Combine(root, "App", "Styles", "ControlStyles.axaml"));
+
+        Assert.Contains("<controls:AppWindowFrame", xaml, StringComparison.Ordinal);
+        Assert.Contains("Mode=\"ResizableDialog\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("OwnerHeightCapMargin=\"24\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("VisualMode=\"None\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("app-button app-chip achievement-dialog-filter-chip", xaml, StringComparison.Ordinal);
+        Assert.Contains("app-input app-search-input", xaml, StringComparison.Ordinal);
+        Assert.Contains("app-selection-list-item-shell achievement-dialog-item-card", xaml, StringComparison.Ordinal);
+        Assert.Contains("app-body achievement-dialog-card-description", xaml, StringComparison.Ordinal);
+        Assert.Contains("app-surface app-card achievement-dialog-conditions-panel", xaml, StringComparison.Ordinal);
+        Assert.Contains("app-caption achievement-dialog-unlocked-at", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("achievement-dialog-list", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("OnResizeGripPointerPressed", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("ApplyOwnerHeightThreshold", code, StringComparison.Ordinal);
+        Assert.Contains("controls|AppSelectionList.selection-list-none Border.app-selection-list-item-shell", selectionListStyles, StringComparison.Ordinal);
+        Assert.DoesNotContain("ListBox.achievement-dialog-list", controlStyles + selectionListStyles, StringComparison.Ordinal);
+        Assert.Contains("Button.app-button.app-chip.achievement-dialog-filter-chip", foundationStyles + File.ReadAllText(Path.Combine(root, "App", "Styles", "ControlStyles.axaml")), StringComparison.Ordinal);
+        Assert.Contains("Border.app-surface.app-card", foundationStyles, StringComparison.Ordinal);
+        Assert.Contains("Button.app-button.app-chip", foundationStyles, StringComparison.Ordinal);
+        Assert.Contains("TextBox.app-input.app-search-input", foundationStyles, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("ProcessPickerDialogView.axaml", "CompactModal")]
+    [InlineData("EmulatorPathSelectionDialogView.axaml", "CompactModal")]
+    [InlineData("TextDialogView.axaml", "CompactModal")]
+    [InlineData("ErrorDialogView.axaml", "CompactModal")]
+    [InlineData("VersionUpdateDialogView.axaml", "CompactModal")]
+    [InlineData("WarningConfirmDialogView.axaml", "CompactModal")]
+    public void CompactDialogViews_ShouldUseAppWindowFrameAndDropLegacyShell(string fileName, string expectedMode)
+    {
+        var root = BaselineTestSupport.GetMaaUnifiedRoot();
+        var xaml = File.ReadAllText(Path.Combine(root, "App", "Features", "Dialogs", fileName));
+
+        Assert.Contains("<controls:AppWindowFrame", xaml, StringComparison.Ordinal);
+        Assert.Contains($"Mode=\"{expectedMode}\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("ModernDialogShell", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("PointerPressed=\"OnResizeGripPointerPressed\"", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RuntimeLogAndScreenshotPreviewWindows_ShouldSplitResponsibilities_AndDropLegacyShell()
+    {
+        var root = BaselineTestSupport.GetMaaUnifiedRoot();
+        var runtimeLogXaml = File.ReadAllText(Path.Combine(root, "App", "Views", "RuntimeLogWindow.axaml"));
+        var runtimeLogCode = File.ReadAllText(Path.Combine(root, "App", "Views", "RuntimeLogWindow.axaml.cs"));
+        var screenshotPreviewXaml = File.ReadAllText(Path.Combine(root, "App", "Views", "ScreenshotPreviewWindow.axaml"));
+        var screenshotPreviewCode = File.ReadAllText(Path.Combine(root, "App", "Views", "ScreenshotPreviewWindow.axaml.cs"));
+        var mainWindowCode = File.ReadAllText(Path.Combine(root, "App", "Views", "MainWindow.axaml.cs"));
+        var connectSettingsCode = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "ConnectSettingsView.axaml.cs"));
+
+        Assert.Contains("<controls:AppWindowFrame", runtimeLogXaml, StringComparison.Ordinal);
+        Assert.Contains("ItemsSource=\"{Binding GrowlMessages}\"", runtimeLogXaml, StringComparison.Ordinal);
+        Assert.Contains("ItemsSource=\"{Binding RootLogs}\"", runtimeLogXaml, StringComparison.Ordinal);
+        Assert.Contains("Text=\"{Binding CapabilitySummary}\"", runtimeLogXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("PreviewImage", runtimeLogXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("ConfigureForScreenshotPreview", runtimeLogCode, StringComparison.Ordinal);
+        Assert.DoesNotContain("UpdateScreenshotPreviewChrome", runtimeLogCode, StringComparison.Ordinal);
+        Assert.DoesNotContain("_previewBitmap", runtimeLogCode, StringComparison.Ordinal);
+        Assert.DoesNotContain("ModernDialogShell", runtimeLogXaml, StringComparison.Ordinal);
+        Assert.Contains("WindowVisuals.ApplyDefaultIcon(this);", runtimeLogCode, StringComparison.Ordinal);
+
+        Assert.Contains("<controls:AppWindowFrame", screenshotPreviewXaml, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"PreviewImage\"", screenshotPreviewXaml, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"PreviewHeaderText\"", screenshotPreviewXaml, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"PreviewSectionTitleText\"", screenshotPreviewXaml, StringComparison.Ordinal);
+        Assert.Contains("SetPreview(Bitmap bitmap, string title, string subtitle, string? statusText = null)", screenshotPreviewCode, StringComparison.Ordinal);
+        Assert.Contains("UpdateChrome(string title, string subtitle, string? statusText = null)", screenshotPreviewCode, StringComparison.Ordinal);
+        Assert.Contains("_previewBitmap", screenshotPreviewCode, StringComparison.Ordinal);
+        Assert.Contains("WindowVisuals.ApplyDefaultIcon(this);", screenshotPreviewCode, StringComparison.Ordinal);
+
+        Assert.Contains("_runtimeLogWindow = new RuntimeLogWindow", mainWindowCode, StringComparison.Ordinal);
+        Assert.Contains("private ScreenshotPreviewWindow? _screenshotPreviewWindow;", connectSettingsCode, StringComparison.Ordinal);
+        Assert.Contains("_screenshotPreviewWindow.SetPreview(", connectSettingsCode, StringComparison.Ordinal);
+        Assert.Contains("_screenshotPreviewWindow.UpdateChrome(", connectSettingsCode, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TextAndReadonlyDialogs_ShouldUseAppInputBlock_ForMultilineBodyContent()
+    {
+        var root = BaselineTestSupport.GetMaaUnifiedRoot();
+        var textDialogXaml = File.ReadAllText(Path.Combine(root, "App", "Features", "Dialogs", "TextDialogView.axaml"));
+        var textDialogCode = File.ReadAllText(Path.Combine(root, "App", "Features", "Dialogs", "TextDialogView.axaml.cs"));
+        var errorDialogXaml = File.ReadAllText(Path.Combine(root, "App", "Features", "Dialogs", "ErrorDialogView.axaml"));
+        var versionUpdateXaml = File.ReadAllText(Path.Combine(root, "App", "Features", "Dialogs", "VersionUpdateDialogView.axaml"));
+        var foundationStyles = File.ReadAllText(Path.Combine(root, "App", "Styles", "AppFoundationStyles.axaml"));
+
+        Assert.Contains("x:Name=\"InputBox\"", textDialogXaml, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"app-input app-input-block\"", textDialogXaml, StringComparison.Ordinal);
+        Assert.Contains("ApplyInputMode(request.MultiLine);", textDialogCode, StringComparison.Ordinal);
+        Assert.Contains("InputBox.Classes.Add(\"app-input-block\")", textDialogCode, StringComparison.Ordinal);
+        Assert.Contains("InputBox.Classes.Remove(\"app-input-block\")", textDialogCode, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"app-input app-input-block\"", errorDialogXaml, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"app-input app-input-block\"", versionUpdateXaml, StringComparison.Ordinal);
+        Assert.Contains("Style Selector=\"TextBox.app-input.app-input-block\"", foundationStyles, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SelectionDialogs_ShouldUseSurfaceSelectionListMode_AndSharedCompactEmptyState()
+    {
+        var root = BaselineTestSupport.GetMaaUnifiedRoot();
+        var processPickerXaml = File.ReadAllText(Path.Combine(root, "App", "Features", "Dialogs", "ProcessPickerDialogView.axaml"));
+        var emulatorPathXaml = File.ReadAllText(Path.Combine(root, "App", "Features", "Dialogs", "EmulatorPathSelectionDialogView.axaml"));
+        var selectionListStyles = File.ReadAllText(Path.Combine(root, "App", "Styles", "AppSelectionListStyles.axaml"));
+        var foundationStyles = File.ReadAllText(Path.Combine(root, "App", "Styles", "AppFoundationStyles.axaml"));
+
+        Assert.Contains("<controls:AppSelectionList", processPickerXaml, StringComparison.Ordinal);
+        Assert.Contains("VisualMode=\"Surface\"", processPickerXaml, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"app-button app-primary\"", processPickerXaml, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"app-button app-secondary\"", processPickerXaml, StringComparison.Ordinal);
+        Assert.Contains("app-compact-selection-intro", processPickerXaml, StringComparison.Ordinal);
+        Assert.Contains("app-compact-selection-list", processPickerXaml, StringComparison.Ordinal);
+        Assert.Contains("app-compact-empty-state-content", processPickerXaml, StringComparison.Ordinal);
+        Assert.Contains("<controls:AppSelectionList", emulatorPathXaml, StringComparison.Ordinal);
+        Assert.Contains("VisualMode=\"Surface\"", emulatorPathXaml, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"app-input\"", emulatorPathXaml, StringComparison.Ordinal);
+        Assert.Contains("app-compact-selection-intro", emulatorPathXaml, StringComparison.Ordinal);
+        Assert.Contains("app-compact-selection-list", emulatorPathXaml, StringComparison.Ordinal);
+        Assert.Contains("app-compact-empty-state-content", emulatorPathXaml, StringComparison.Ordinal);
+        Assert.Contains("controls|AppSelectionList.selection-list-surface Border.app-selection-list-item-shell", selectionListStyles, StringComparison.Ordinal);
+        Assert.Contains("controls|AppSelectionList.app-compact-selection-list", foundationStyles, StringComparison.Ordinal);
+        Assert.Contains("StackPanel.app-compact-empty-state-content", foundationStyles, StringComparison.Ordinal);
+        Assert.Contains("Button.app-button.app-secondary", foundationStyles, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -585,7 +729,7 @@ public sealed class DialogModuleP1FeatureTests
     {
         var view = (ProcessPickerDialogView)RuntimeHelpers.GetUninitializedObject(typeof(ProcessPickerDialogView));
         var items = new System.Collections.ObjectModel.ObservableCollection<ProcessPickerItem>();
-        var processList = new ListBox
+        var processList = new MAAUnified.App.Controls.AppSelectionList
         {
             ItemsSource = items,
         };

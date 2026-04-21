@@ -7,7 +7,6 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
-using Avalonia.VisualTree;
 using MarkdownViewerControl = MarkdownViewer.Core.Controls.MarkdownViewer;
 using MAAUnified.App.Infrastructure;
 using MAAUnified.App.ViewModels.Infrastructure;
@@ -18,13 +17,11 @@ namespace MAAUnified.App.Features.Dialogs;
 
 public partial class AnnouncementDialogView : Window, IDialogChromeAware
 {
-    private const double StickyRevealPadding = 10d;
     private const double StickyActivationPadding = 8d;
     private const double BottomReachedTolerance = 12d;
-    private const double SectionListFollowAccentMinHeight = 20d;
-    private const double SectionListFollowAccentMaxHeight = 24d;
-    private const double SectionListFollowAccentGlowLeft = 2d;
-    private const double SectionListFollowAccentLeft = 6d;
+    private const double SectionHeaderTopInset = 6d;
+    private const double SectionHeaderBottomInset = 4d;
+    private const double StickyRevealLineY = 0d;
 
     private const string NewBadgeKey = "Achievement.NewBadgeText";
     private const string ChineseImageUri = "avares://MAAUnified/Assets/Announcement/NoSkland.jpg";
@@ -46,8 +43,6 @@ public partial class AnnouncementDialogView : Window, IDialogChromeAware
     ];
     private string _newBadgeText = "NEW";
     private bool _suppressSectionSelectionChanged;
-    private bool _sectionListFollowAccentInitialized;
-    private ScrollViewer? _sectionListScrollViewer;
     private TextBlock? _primarySectionHeader;
     private readonly TranslateTransform _stickyCurrentTitleTransform = new();
     private readonly TranslateTransform _stickyIncomingTitleTransform = new();
@@ -60,16 +55,6 @@ public partial class AnnouncementDialogView : Window, IDialogChromeAware
         StickyTransitionHost.ClipToBounds = true;
         StickyCurrentHost.RenderTransform = _stickyCurrentTitleTransform;
         StickyTransitionHost.RenderTransform = _stickyIncomingTitleTransform;
-        SectionList.SizeChanged += (_, _) => UpdateSectionListFollowAccentDeferred();
-        LayoutUpdated += (_, _) =>
-        {
-            if (_sectionListFollowAccentInitialized)
-            {
-                return;
-            }
-
-            UpdateSectionListFollowAccentDeferred();
-        };
         Opened += OnOpened;
         KeyDown += OnWindowKeyDown;
     }
@@ -118,19 +103,6 @@ public partial class AnnouncementDialogView : Window, IDialogChromeAware
         TryCompleteDialog(DialogReturnSemantic.Close);
     }
 
-    private void OnResizeGripPointerPressed(object? sender, PointerPressedEventArgs e)
-    {
-        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed
-            || sender is not Control { Tag: string tag }
-            || !Enum.TryParse<WindowEdge>(tag, out var edge))
-        {
-            return;
-        }
-
-        BeginResizeDrag(edge, e);
-        e.Handled = true;
-    }
-
     private void OnSectionSelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
         if (_suppressSectionSelectionChanged)
@@ -143,7 +115,6 @@ public partial class AnnouncementDialogView : Window, IDialogChromeAware
             return;
         }
 
-        UpdateSectionListFollowAccentDeferred();
         NavigateToSection(selected);
     }
 
@@ -159,7 +130,6 @@ public partial class AnnouncementDialogView : Window, IDialogChromeAware
 
     private void OnOpened(object? sender, EventArgs e)
     {
-        EnsureSectionListScrollTracking();
         MarkdownHost.Focus();
         Dispatcher.UIThread.Post(EvaluateReadStateFromCurrentViewport, DispatcherPriority.Background);
     }
@@ -232,7 +202,6 @@ public partial class AnnouncementDialogView : Window, IDialogChromeAware
         StickyTransitionText.Text = string.Empty;
         StickyTransitionHost.IsVisible = false;
         StickyTitlePanel.IsVisible = false;
-        ResetSectionListFollowAccent();
         RenderSectionContent();
         SelectSection(_sections.FirstOrDefault());
         Dispatcher.UIThread.Post(ResetMarkdownViewport, DispatcherPriority.Background);
@@ -317,7 +286,7 @@ public partial class AnnouncementDialogView : Window, IDialogChromeAware
         var offsetY = MarkdownHost.Offset.Y;
         var headerLayouts = MeasureSectionHeaderLayouts(offsetY);
         var activeSection = ResolveActiveSection(headerLayouts, offsetY);
-        var stickyState = ResolveStickyPresentation(headerLayouts, offsetY);
+        var stickyState = ResolveStickyPresentation(headerLayouts);
         return new ScrollSyncState(activeSection, stickyState);
     }
 
@@ -367,22 +336,27 @@ public partial class AnnouncementDialogView : Window, IDialogChromeAware
             : _sections.FirstOrDefault();
     }
 
-    private StickyPresentationState ResolveStickyPresentation(IReadOnlyList<SectionHeaderLayout> headerLayouts, double offsetY)
+    private StickyPresentationState ResolveStickyPresentation(IReadOnlyList<SectionHeaderLayout> headerLayouts)
     {
-        if (headerLayouts.Count == 0 || offsetY <= GetStickyRevealThreshold())
+        if (headerLayouts.Count == 0)
         {
             return StickyPresentationState.Hidden;
         }
 
-        var currentIndex = 0;
+        var currentIndex = -1;
         for (var i = 0; i < headerLayouts.Count; i++)
         {
-            if (headerLayouts[i].ViewportTop > 0d)
+            if (headerLayouts[i].ViewportTop > StickyRevealLineY)
             {
                 break;
             }
 
             currentIndex = i;
+        }
+
+        if (currentIndex < 0)
+        {
+            return StickyPresentationState.Hidden;
         }
 
         var currentLayout = headerLayouts[currentIndex];
@@ -515,7 +489,7 @@ public partial class AnnouncementDialogView : Window, IDialogChromeAware
             HorizontalAlignment = HorizontalAlignment.Stretch,
             TextWrapping = TextWrapping.Wrap,
         };
-        header.Classes.Add("modern-dialog-title");
+        header.Classes.Add("app-window-title");
         header.Classes.Add("announcement-dialog-content-title");
         header.Classes.Add("announcement-dialog-section-heading");
         return header;
@@ -544,71 +518,6 @@ public partial class AnnouncementDialogView : Window, IDialogChromeAware
         _suppressSectionSelectionChanged = true;
         SectionList.SelectedItem = section;
         _suppressSectionSelectionChanged = false;
-        UpdateSectionListFollowAccentDeferred();
-    }
-
-    private void UpdateSectionListFollowAccentDeferred()
-    {
-        EnsureSectionListScrollTracking();
-        Dispatcher.UIThread.Post(UpdateSectionListFollowAccent, DispatcherPriority.Loaded);
-    }
-
-    private void EnsureSectionListScrollTracking()
-    {
-        if (_sectionListScrollViewer is not null)
-        {
-            return;
-        }
-
-        _sectionListScrollViewer = SectionList
-            .GetVisualDescendants()
-            .OfType<ScrollViewer>()
-            .FirstOrDefault();
-
-        if (_sectionListScrollViewer is not null)
-        {
-            _sectionListScrollViewer.ScrollChanged += OnSectionListScrollChanged;
-        }
-    }
-
-    private void OnSectionListScrollChanged(object? sender, ScrollChangedEventArgs e)
-    {
-        UpdateSectionListFollowAccent();
-    }
-
-    private void UpdateSectionListFollowAccent()
-    {
-        if (SectionList.SelectedItem is not AnnouncementSectionDisplayItem selected
-            || SectionList.ContainerFromItem(selected) is not Control container)
-        {
-            return;
-        }
-
-        var point = container.TranslatePoint(new Point(0d, 0d), SectionListHost);
-        if (point is null)
-        {
-            return;
-        }
-
-        var height = Math.Clamp(container.Bounds.Height - 18d, SectionListFollowAccentMinHeight, SectionListFollowAccentMaxHeight);
-        var top = point.Value.Y + ((container.Bounds.Height - height) / 2d);
-
-        SectionListFollowAccent.IsVisible = true;
-        SectionListFollowAccentGlow.IsVisible = true;
-        SectionListFollowAccent.Height = height;
-        SectionListFollowAccentGlow.Height = height;
-        SectionListFollowAccent.Margin = new Thickness(SectionListFollowAccentLeft, top, 0d, 0d);
-        SectionListFollowAccentGlow.Margin = new Thickness(SectionListFollowAccentGlowLeft, top, 0d, 0d);
-        _sectionListFollowAccentInitialized = true;
-    }
-
-    private void ResetSectionListFollowAccent()
-    {
-        SectionListFollowAccent.IsVisible = false;
-        SectionListFollowAccentGlow.IsVisible = false;
-        SectionListFollowAccent.Margin = new Thickness(SectionListFollowAccentLeft, 0d, 0d, 0d);
-        SectionListFollowAccentGlow.Margin = new Thickness(SectionListFollowAccentGlowLeft, 0d, 0d, 0d);
-        _sectionListFollowAccentInitialized = false;
     }
 
     private static bool HasReachedBottom(double extentHeight, double viewportHeight, double offsetY)
@@ -739,11 +648,6 @@ public partial class AnnouncementDialogView : Window, IDialogChromeAware
         bool IsNew,
         string NewBadgeText);
 
-    private double GetStickyRevealThreshold()
-    {
-        return Math.Max(18d, (_primarySectionHeader?.Bounds.Height ?? 0d) + StickyRevealPadding);
-    }
-
     private double GetSectionActivationLineY()
     {
         return Math.Max(18d, GetStickyReferenceHeight() + StickyActivationPadding);
@@ -751,7 +655,9 @@ public partial class AnnouncementDialogView : Window, IDialogChromeAware
 
     private double GetSectionScrollTargetLineY()
     {
-        return Math.Max(12d, GetStickyReferenceHeight() - StickyActivationPadding);
+        // Direct navigation should tuck the real section header under the sticky title
+        // instead of leaving an extra visible title-height gap beneath it.
+        return StickyRevealLineY;
     }
 
     private double GetStickyReferenceHeight()
@@ -759,8 +665,10 @@ public partial class AnnouncementDialogView : Window, IDialogChromeAware
         return Math.Max(
             1d,
             Math.Max(
-                _primarySectionHeader?.Bounds.Height ?? 0d,
-                Math.Max(StickyTitlePanel.Bounds.Height, StickyTitleText.Bounds.Height)));
+                GetSectionHeaderVisualHeight(_primarySectionHeader?.Bounds.Height ?? 0d),
+                Math.Max(
+                    StickyTitlePanel.Bounds.Height,
+                    GetSectionHeaderVisualHeight(StickyTitleText.Bounds.Height))));
     }
 
     private double GetStickyPresentationHeight(SectionHeaderLayout currentLayout, SectionHeaderLayout? nextLayout)
@@ -769,7 +677,14 @@ public partial class AnnouncementDialogView : Window, IDialogChromeAware
             1d,
             Math.Max(
                 GetStickyReferenceHeight(),
-                Math.Max(currentLayout.HeaderHeight, nextLayout?.HeaderHeight ?? 0d)));
+                Math.Max(
+                    GetSectionHeaderVisualHeight(currentLayout.HeaderHeight),
+                    GetSectionHeaderVisualHeight(nextLayout?.HeaderHeight ?? 0d))));
+    }
+
+    private static double GetSectionHeaderVisualHeight(double headerHeight)
+    {
+        return Math.Max(1d, headerHeight + SectionHeaderTopInset + SectionHeaderBottomInset);
     }
 
     private static double CalculatePushOffset(SectionHeaderLayout? nextLayout, double stickyHeight)

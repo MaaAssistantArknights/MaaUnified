@@ -1,6 +1,6 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:dialogs="clr-namespace:MAAUnified.App.Features.Dialogs"
+        xmlns:controls="clr-namespace:MAAUnified.App.Controls"
         x:Class="MAAUnified.App.Features.Dialogs.WarningConfirmDialogView"
         Width="620"
         MinWidth="520"
@@ -9,48 +9,52 @@
         Background="Transparent"
         SystemDecorations="None"
         WindowStartupLocation="CenterOwner">
-  <dialogs:ModernDialogShell x:Name="DialogShell"
-                             CloseRequested="OnShellCloseRequested">
-    <dialogs:ModernDialogShell.Content>
-      <Grid ColumnDefinitions="Auto,*">
-        <Border Classes="modern-dialog-hero-core"
-                VerticalAlignment="Top">
-          <TextBlock Classes="modern-dialog-hero-glyph"
-                     Text="!" />
-        </Border>
-
-        <StackPanel Grid.Column="1"
-                    Margin="18,2,0,0"
-                    Spacing="12">
-          <TextBlock x:Name="LeadTextBlock"
-                     Classes="modern-dialog-lead"
-                     IsVisible="False"
-                     Text="" />
-          <Border x:Name="EmphasisPanel"
-                  Classes="modern-dialog-highlight"
-                  IsVisible="False">
-            <TextBlock x:Name="EmphasisTextBlock"
-                       Classes="modern-dialog-emphasis"
-                       Text="" />
+  <controls:AppWindowFrame x:Name="DialogShell"
+                           Mode="CompactModal"
+                           ShowCloseButton="False"
+                           CloseRequested="OnShellCloseRequested">
+    <controls:AppWindowFrame.Content>
+      <Border Classes="warning-dialog-content">
+        <Grid ColumnDefinitions="Auto,*">
+          <Border Classes="app-hero app-warning-hero"
+                  VerticalAlignment="Top">
+            <TextBlock Classes="app-hero-glyph app-warning-hero-glyph"
+                       Text="!" />
           </Border>
-          <TextBlock x:Name="DetailTextBlock"
-                     Classes="modern-dialog-body"
-                     Text="" />
-        </StackPanel>
-      </Grid>
-    </dialogs:ModernDialogShell.Content>
-    <dialogs:ModernDialogShell.ActionsContent>
+
+          <StackPanel Grid.Column="1"
+                      Margin="18,2,0,0"
+                      Spacing="12">
+            <TextBlock x:Name="LeadTextBlock"
+                       Classes="app-lead long-wrap"
+                       IsVisible="False"
+                       Text="" />
+            <Border x:Name="EmphasisPanel"
+                    Classes="app-highlight app-warning-highlight"
+                    IsVisible="False">
+              <TextBlock x:Name="EmphasisTextBlock"
+                         Classes="app-emphasis app-warning-emphasis long-wrap"
+                         Text="" />
+            </Border>
+            <TextBlock x:Name="DetailTextBlock"
+                       Classes="app-body long-wrap"
+                       Text="" />
+          </StackPanel>
+        </Grid>
+      </Border>
+    </controls:AppWindowFrame.Content>
+    <controls:AppWindowFrame.ActionsContent>
       <StackPanel Orientation="Horizontal"
                   Spacing="10">
         <Button x:Name="CancelButton"
-                Classes="modern-dialog-button modern-dialog-button-secondary"
+                Classes="app-button app-secondary"
                 Content=""
                 Click="OnCancelClick" />
         <Button x:Name="ConfirmButton"
-                Classes="modern-dialog-button modern-dialog-button-primary"
+                Classes="app-button app-primary"
                 Content=""
                 Click="OnConfirmClick" />
       </StackPanel>
-    </dialogs:ModernDialogShell.ActionsContent>
-  </dialogs:ModernDialogShell>
+    </controls:AppWindowFrame.ActionsContent>
+  </controls:AppWindowFrame>
 </Window>

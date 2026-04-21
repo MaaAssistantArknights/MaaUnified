@@ -1,51 +1,52 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:controls="clr-namespace:MAAUnified.App.Controls"
-        x:Class="MAAUnified.App.Views.RuntimeLogWindow"
-        Width="920"
-        Height="700"
-        MinWidth="760"
-        MinHeight="560"
+        x:Class="MAAUnified.App.Views.ScreenshotPreviewWindow"
+        Width="800"
+        Height="480"
+        MinWidth="480"
+        MinHeight="320"
         CanResize="True"
         Background="Transparent"
         SystemDecorations="None"
         WindowStartupLocation="CenterOwner"
-        Title="Runtime Logs">
+        Title="Screenshot Preview">
   <controls:AppWindowFrame x:Name="DialogShell"
-                           Title="Runtime Logs"
+                           Title="Screenshot Preview"
                            Mode="ResizableDialog"
                            CapWindowHeightToOwner="True"
                            CloseRequested="OnShellCloseRequested">
     <controls:AppWindowFrame.HeaderContent>
-      <TextBlock x:Name="LogHeaderText"
+      <TextBlock x:Name="PreviewHeaderText"
                  Classes="app-window-subtitle dialog-window-subtitle long-wrap"
-                 Text="{Binding CapabilitySummary}" />
+                 IsVisible="False"
+                 Text="" />
     </controls:AppWindowFrame.HeaderContent>
     <controls:AppWindowFrame.Content>
-      <Grid RowDefinitions="*,*">
+      <Grid RowDefinitions="Auto,*">
         <Border Classes="app-surface app-section">
-          <Grid RowDefinitions="Auto,Auto,*">
-            <TextBlock Classes="section-title"
-                       Text="{Binding RootTexts[Main.Sidebar.GrowlAndCapability]}" />
-            <TextBlock Grid.Row="1"
+          <StackPanel Spacing="6">
+            <TextBlock x:Name="PreviewSectionTitleText"
+                       Classes="section-title"
+                       Text="Screenshot Preview" />
+            <TextBlock x:Name="PreviewStatusText"
                        Classes="long-wrap subtle"
-                       Text="{Binding CapabilitySummary}" />
-            <ListBox Grid.Row="2"
-                     Margin="{DynamicResource MAA.Thickness.MarginTopList}"
-                     ItemsSource="{Binding GrowlMessages}" />
-          </Grid>
+                       IsVisible="False"
+                       Text="" />
+          </StackPanel>
         </Border>
 
         <Border Grid.Row="1"
                 Margin="{DynamicResource MAA.Thickness.MarginTopSection}"
-                Classes="app-surface app-section">
-          <Grid RowDefinitions="Auto,*">
-            <TextBlock Classes="section-title"
-                       Text="{Binding RootTexts[Main.Footer.RootLogs]}" />
-            <ListBox Grid.Row="1"
-                     Margin="{DynamicResource MAA.Thickness.MarginTopList}"
-                     ItemsSource="{Binding RootLogs}" />
-          </Grid>
+                Classes="app-surface app-card">
+          <Border Background="#10151D"
+                  Padding="16">
+            <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                          VerticalScrollBarVisibility="Auto">
+              <Image x:Name="PreviewImage"
+                     Stretch="Uniform" />
+            </ScrollViewer>
+          </Border>
         </Border>
       </Grid>
     </controls:AppWindowFrame.Content>
