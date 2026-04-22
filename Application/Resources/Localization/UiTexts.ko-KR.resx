@@ -2871,7 +2871,7 @@ OF-1 스테이지가 개방되지 않은 경우에는 선택하지 마세요.</v
     <value>트레이 통합</value>
   </data>
   <data name="Toolbox.Advanced.Tab.WebApi" xml:space="preserve">
-    <value>WebApi(호환)</value>
+    <value>WebApi</value>
   </data>
   <data name="Toolbox.Advanced.Tray.ApplyVisibility" xml:space="preserve">
     <value>표시 적용</value>
@@ -2937,10 +2937,10 @@ OF-1 스테이지가 개방되지 않은 경우에는 선택하지 마세요.</v
     <value>서비스 중지</value>
   </data>
   <data name="Toolbox.Advanced.WebApi.Title" xml:space="preserve">
-    <value>WebApi(호환)</value>
+    <value>WebApi</value>
   </data>
   <data name="Toolbox.Advanced.WebApi.Warning" xml:space="preserve">
-    <value>이 패널은 레거시 WebApi 호환을 위한 것입니다. 외부 호출이 꼭 필요할 때만 활성화하고, 가능하면 액세스 토큰을 설정하세요.</value>
+    <value>이 고급 기능 페이지는 레거시 WebApi 클라이언트와의 호환성을 유지합니다. 외부 호출이 꼭 필요할 때만 활성화하고, 가능하면 액세스 토큰을 설정하세요.</value>
   </data>
   <data name="Toolbox.Depot.ExportArkPlanner" xml:space="preserve">
     <value>Penguin Stats 플래너로 내보내기</value>

@@ -1,28 +1,80 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="MAAUnified.App.Features.Advanced.OverlayView">
-  <Grid RowDefinitions="Auto,Auto,Auto,*">
-    <TextBlock Classes="section-title" Text="{Binding Texts[Toolbox.Advanced.Overlay.Title]}" />
-    <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto,Auto">
-      <TextBlock VerticalAlignment="Center" Text="{Binding Texts[Toolbox.Advanced.Overlay.TargetWindow]}" />
-      <ComboBox ItemsSource="{Binding Targets}"
-                SelectedItem="{Binding SelectedTarget}"
-                DisplayMemberBinding="{Binding DisplayName}" />
-      <Button Grid.Column="2"
-              Classes="wpf-button"
-              Margin="{DynamicResource MAA.Thickness.MarginActionButtonLeft}"
-              Content="{Binding Texts[Toolbox.Advanced.Overlay.ReloadTargets]}"
-              Click="OnReloadTargetsClick" />
-      <Button Grid.Column="3"
-              Classes="wpf-button"
-              Margin="{DynamicResource MAA.Thickness.MarginActionButtonLeft}"
-              Content="{Binding Texts[Toolbox.Advanced.Overlay.ToggleVisibility]}"
-              Click="OnToggleOverlayClick" />
-    </Grid>
-    <TextBlock Grid.Row="2" Classes="long-wrap" Text="{Binding CapabilitySummary}" />
-    <StackPanel Grid.Row="3" Spacing="{DynamicResource MAA.Spacing.Small}">
-      <TextBlock Text="{Binding StatusMessage}" />
-      <TextBlock Classes="state-error long-wrap" Text="{Binding LastErrorMessage}" />
-    </StackPanel>
+  <UserControl.Styles>
+    <Style Selector="Border.overlay-section">
+      <Setter Property="Padding" Value="22" />
+    </Style>
+
+    <Style Selector="Border.overlay-card">
+      <Setter Property="Padding" Value="16" />
+    </Style>
+
+    <Style Selector="StackPanel.overlay-stack">
+      <Setter Property="Spacing" Value="16" />
+    </Style>
+
+    <Style Selector="TextBlock.overlay-card-title">
+      <Setter Property="FontSize" Value="16" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <Style Selector="ComboBox.overlay-target-selector">
+      <Setter Property="MinWidth" Value="280" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+    </Style>
+  </UserControl.Styles>
+
+  <Grid Margin="4"
+        RowDefinitions="Auto,Auto,*">
+    <Border Classes="app-surface app-section overlay-section">
+      <StackPanel Classes="overlay-stack">
+        <TextBlock Classes="app-window-title"
+                   Text="{Binding Texts[Toolbox.Advanced.Overlay.Title]}" />
+        <TextBlock Classes="app-caption long-wrap"
+                   Text="{Binding CapabilitySummary}" />
+      </StackPanel>
+    </Border>
+
+    <Border Grid.Row="1"
+            Margin="0,14,0,0"
+            Classes="app-surface app-section overlay-section">
+      <StackPanel Classes="overlay-stack">
+        <TextBlock Classes="app-body overlay-card-title"
+                   Text="{Binding Texts[Toolbox.Advanced.Overlay.TargetWindow]}" />
+
+        <Border Classes="app-surface app-card overlay-card">
+          <StackPanel Classes="overlay-stack">
+            <ComboBox Classes="overlay-target-selector"
+                      ItemsSource="{Binding Targets}"
+                      SelectedItem="{Binding SelectedTarget}"
+                      DisplayMemberBinding="{Binding DisplayName}" />
+
+            <StackPanel Orientation="Horizontal"
+                        Spacing="{DynamicResource MAA.Spacing.Small}">
+              <Button Classes="app-button app-secondary"
+                      Content="{Binding Texts[Toolbox.Advanced.Overlay.ReloadTargets]}"
+                      Click="OnReloadTargetsClick" />
+              <Button Classes="app-button app-primary"
+                      Content="{Binding Texts[Toolbox.Advanced.Overlay.ToggleVisibility]}"
+                      Click="OnToggleOverlayClick" />
+            </StackPanel>
+          </StackPanel>
+        </Border>
+      </StackPanel>
+    </Border>
+
+    <Border Grid.Row="2"
+            Margin="0,14,0,0"
+            Classes="app-surface app-section overlay-section">
+      <Border Classes="app-surface app-card overlay-card">
+        <StackPanel Spacing="8">
+          <TextBlock Classes="app-body long-wrap"
+                     Text="{Binding StatusMessage}" />
+          <TextBlock Classes="state-error long-wrap"
+                     Text="{Binding LastErrorMessage}" />
+        </StackPanel>
+      </Border>
+    </Border>
   </Grid>
 </UserControl>

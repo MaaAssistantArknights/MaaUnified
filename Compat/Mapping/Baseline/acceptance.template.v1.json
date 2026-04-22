@@ -1009,6 +1009,68 @@
       "requires_fallback_trace": true
     },
     {
+      "case_id": "ACC-032",
+      "tier": "Tier-2",
+      "item_id": "Advanced.StageManager",
+      "platforms": [
+        "windows"
+      ],
+      "themes": [
+        "Light"
+      ],
+      "locales": [
+        "zh-cn",
+        "zh-tw",
+        "en-us",
+        "ja-jp",
+        "ko-kr",
+        "pallas"
+      ],
+      "steps": [
+        "Open Advanced.StageManager.",
+        "Execute primary interaction.",
+        "Trigger one controlled failure path."
+      ],
+      "expected": [
+        "Behavior matches frozen defaults and interaction semantics.",
+        "Failure is visible to user and written to debug logs.",
+        "Application process remains alive."
+      ],
+      "non_crash_required": true,
+      "requires_fallback_trace": true
+    },
+    {
+      "case_id": "ACC-033",
+      "tier": "Tier-2",
+      "item_id": "Advanced.WebApi",
+      "platforms": [
+        "windows"
+      ],
+      "themes": [
+        "Light"
+      ],
+      "locales": [
+        "zh-cn",
+        "zh-tw",
+        "en-us",
+        "ja-jp",
+        "ko-kr",
+        "pallas"
+      ],
+      "steps": [
+        "Open Advanced.WebApi.",
+        "Execute primary interaction.",
+        "Trigger one controlled failure path."
+      ],
+      "expected": [
+        "Behavior matches frozen defaults and interaction semantics.",
+        "Failure is visible to user and written to debug logs.",
+        "Application process remains alive."
+      ],
+      "non_crash_required": true,
+      "requires_fallback_trace": true
+    },
+    {
       "case_id": "ACC-038",
       "tier": "Tier-2",
       "item_id": "Dialog.Announcement",

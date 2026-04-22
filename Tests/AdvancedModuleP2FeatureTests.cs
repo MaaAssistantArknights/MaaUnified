@@ -372,7 +372,7 @@ public sealed class AdvancedModuleP2FeatureTests
     }
 
     [Fact]
-    public async Task AdvancedViewModels_InitializeForToolboxAggregation_ShouldExposeUsableState()
+    public async Task AdvancedViewModels_Initialize_ShouldExposeUsableState()
     {
         await using var fixture = await RuntimeFixture.CreateAsync();
         var stageManager = new StageManagerPageViewModel(fixture.Runtime);

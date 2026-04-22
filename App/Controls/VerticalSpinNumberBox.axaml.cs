@@ -35,6 +35,8 @@ public partial class VerticalSpinNumberBox : UserControl
     public VerticalSpinNumberBox()
     {
         InitializeComponent();
+        AddHandler(GotFocusEvent, OnFocusChanged, RoutingStrategies.Bubble);
+        AddHandler(LostFocusEvent, OnFocusChanged, RoutingStrategies.Bubble);
     }
 
     public int Minimum
@@ -75,6 +77,17 @@ public partial class VerticalSpinNumberBox : UserControl
     private void OnDecreaseClick(object? sender, RoutedEventArgs e)
     {
         Step(-1);
+    }
+
+    private void OnFocusChanged(object? sender, RoutedEventArgs e)
+    {
+        UpdateFocusedState();
+    }
+
+    private void UpdateFocusedState()
+    {
+        PseudoClasses.Set(":focused", IsKeyboardFocusWithin);
+        SpinRootBorder.Classes.Set("focused", IsKeyboardFocusWithin);
     }
 
     private void Step(int direction)

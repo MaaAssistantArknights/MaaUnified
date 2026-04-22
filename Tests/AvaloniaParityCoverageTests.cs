@@ -8,6 +8,8 @@ public sealed class AvaloniaParityCoverageTests
         "App/Features/Root/TaskQueueView.axaml",
         "App/Features/Advanced/CopilotView.axaml",
         "App/Features/Advanced/ToolboxView.axaml",
+        "App/Features/Advanced/StageManagerView.axaml",
+        "App/Features/Advanced/WebApiView.axaml",
         "App/Features/Root/SettingsView.axaml",
         "App/Features/TaskQueue/StartUpTaskView.axaml",
         "App/Features/TaskQueue/FightSettingsView.axaml",

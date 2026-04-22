@@ -235,6 +235,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
     private readonly HashSet<string> _loadedSettingsDataBuckets = new(StringComparer.OrdinalIgnoreCase);
     private TaskCompletionSource<bool> _startupAnnouncementCompletionSource = CreateCompletedTaskCompletionSource();
     private bool _deferredSectionDataLoadEnabled;
+    private bool _deferredSectionDataLoadRequested;
     private bool _suppressVersionUpdateResourceRefresh;
     private long _gpuRefreshSequence;
     private bool _autoSaveReady;
@@ -3244,8 +3245,15 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         {
             await LoadInitialSettingsAsync(cancellationToken);
             await RefreshConfigurationProfilesAsync(cancellationToken);
-            _deferredSectionDataLoadEnabled = true;
-            await EnsureSectionDataLoadedAsync(SelectedSection?.Key, cancellationToken);
+            _deferredSectionDataLoadEnabled = _deferredSectionDataLoadRequested;
+            if (_deferredSectionDataLoadEnabled)
+            {
+                await EnsureSectionDataLoadedAsync(SelectedSection?.Key, cancellationToken);
+            }
+            else
+            {
+                await WarmupDeferredSectionDataAsync(cancellationToken);
+            }
 
             await RecordEventAsync("Settings", "Settings page initialized.", cancellationToken);
             initialized = true;
@@ -3265,6 +3273,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
             return;
         }
 
+        EnableDeferredSectionDataLoad();
         SuspendAutoSave(repairTimerProfilesOnResume: true);
     }
 
@@ -3282,7 +3291,20 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
             return;
         }
 
+        DisableDeferredSectionDataLoad();
         ResumeAutoSave();
+    }
+
+    public void EnableDeferredSectionDataLoad()
+    {
+        _deferredSectionDataLoadRequested = true;
+        _deferredSectionDataLoadEnabled = true;
+    }
+
+    public void DisableDeferredSectionDataLoad()
+    {
+        _deferredSectionDataLoadRequested = false;
+        _deferredSectionDataLoadEnabled = false;
     }
 
     public async Task ChangeLanguageAsync(string targetLanguage, CancellationToken cancellationToken = default)
@@ -6875,11 +6897,6 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
 
     public async Task EnsureSectionDataLoadedAsync(string? sectionKey, CancellationToken cancellationToken = default)
     {
-        if (!_deferredSectionDataLoadEnabled)
-        {
-            return;
-        }
-
         foreach (var bucket in GetSettingsDataBucketsForSection(sectionKey))
         {
             await EnsureSettingsDataBucketLoadedAsync(bucket, cancellationToken);
@@ -6888,11 +6905,6 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
 
     public async Task WarmupDeferredSectionDataAsync(CancellationToken cancellationToken = default)
     {
-        if (!_deferredSectionDataLoadEnabled)
-        {
-            return;
-        }
-
         foreach (var bucket in AllSettingsDataBuckets)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -7287,9 +7299,40 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         bool fallback,
         ConfigValuePreference preference)
     {
-        if (TryGetConfigNode(config, key, preference, out var node) && node is not null)
+        if (!TryGetConfigNode(config, key, preference, out var node) || node is null)
         {
-            return bool.TryParse(node.ToString(), out var parsed) ? parsed : fallback;
+            return fallback;
+        }
+
+        if (node is JsonValue value)
+        {
+            if (value.TryGetValue(out bool parsedBool))
+            {
+                return parsedBool;
+            }
+
+            if (value.TryGetValue(out int parsedInt))
+            {
+                return parsedInt != 0;
+            }
+
+            if (value.TryGetValue(out string? text))
+            {
+                if (bool.TryParse(text, out var parsedTextBool))
+                {
+                    return parsedTextBool;
+                }
+
+                if (int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedTextInt))
+                {
+                    return parsedTextInt != 0;
+                }
+            }
+        }
+
+        if (bool.TryParse(node.ToString(), out var parsed))
+        {
+            return parsed;
         }
 
         return fallback;

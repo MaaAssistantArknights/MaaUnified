@@ -1,0 +1,217 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <Styles.Resources>
+    <Thickness x:Key="MAA.App.Settings.RailPadding">10</Thickness>
+    <Thickness x:Key="MAA.App.Settings.RailItemPadding">14,11</Thickness>
+    <Thickness x:Key="MAA.App.Settings.SectionShellPadding">18</Thickness>
+    <Thickness x:Key="MAA.App.Settings.SectionIntroPadding">0,0,0,4</Thickness>
+    <Thickness x:Key="MAA.App.Settings.ActionBarPadding">0</Thickness>
+    <Thickness x:Key="MAA.App.Settings.StatusPanelPadding">14,12</Thickness>
+
+    <x:Double x:Key="MAA.App.Settings.RailWidth">248</x:Double>
+    <x:Double x:Key="MAA.App.Settings.SectionSpacing">14</x:Double>
+    <x:Double x:Key="MAA.App.Settings.RailItemMinHeight">44</x:Double>
+  </Styles.Resources>
+
+  <Style Selector="Border.settings-rail-shell">
+    <Setter Property="Width" Value="{DynamicResource MAA.App.Settings.RailWidth}" />
+    <Setter Property="Padding" Value="{DynamicResource MAA.App.Settings.RailPadding}" />
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Surface.Section}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Border.Section}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource MAA.BorderThickness.Thin}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.CornerRadius.Section}" />
+    <Setter Property="ClipToBounds" Value="True" />
+  </Style>
+
+  <Style Selector="Border.settings-rail">
+    <Setter Property="Width" Value="{DynamicResource MAA.App.Settings.RailWidth}" />
+    <Setter Property="Padding" Value="{DynamicResource MAA.App.Settings.RailPadding}" />
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Surface.Section}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Border.Section}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource MAA.BorderThickness.Thin}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.CornerRadius.Section}" />
+    <Setter Property="ClipToBounds" Value="True" />
+  </Style>
+
+  <Style Selector="ListBox.settings-rail">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+  </Style>
+
+  <Style Selector="Border.settings-rail ListBox">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+  </Style>
+
+  <Style Selector="ListBox.settings-rail ListBoxItem">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Margin" Value="0,0,0,6" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    <Setter Property="VerticalContentAlignment" Value="Stretch" />
+  </Style>
+
+  <Style Selector="Border.settings-rail ListBoxItem">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Margin" Value="0,0,0,6" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    <Setter Property="VerticalContentAlignment" Value="Stretch" />
+  </Style>
+
+  <Style Selector="Border.settings-rail-item">
+    <Setter Property="MinHeight" Value="{DynamicResource MAA.App.Settings.RailItemMinHeight}" />
+    <Setter Property="Padding" Value="{DynamicResource MAA.App.Settings.RailItemPadding}" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="18" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="0:0:0.18" />
+        <BrushTransition Property="BorderBrush" Duration="0:0:0.18" />
+      </Transitions>
+    </Setter>
+  </Style>
+
+  <Style Selector="Button.settings-rail-item">
+    <Setter Property="MinWidth" Value="0" />
+    <Setter Property="MinHeight" Value="{DynamicResource MAA.App.Settings.RailItemMinHeight}" />
+    <Setter Property="Padding" Value="{DynamicResource MAA.App.Settings.RailItemPadding}" />
+    <Setter Property="CornerRadius" Value="18" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Secondary}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+
+  <Style Selector="TextBlock.settings-rail-item-text">
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Secondary}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Foreground" Duration="0:0:0.18" />
+      </Transitions>
+    </Setter>
+  </Style>
+
+  <Style Selector="ListBox.settings-rail ListBoxItem:pointerover Border.settings-rail-item">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.SubtleBackgroundHover}" />
+  </Style>
+
+  <Style Selector="ListBox.settings-rail ListBoxItem:pointerover TextBlock.settings-rail-item-text">
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
+  </Style>
+
+  <Style Selector="Border.settings-rail ListBoxItem:pointerover Button.settings-rail-item">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.SubtleBackgroundHover}" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
+  </Style>
+
+  <Style Selector="ListBox.settings-rail ListBoxItem:selected Border.settings-rail-item">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Selection.Background}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Selection.Border}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource MAA.BorderThickness.Thin}" />
+  </Style>
+
+  <Style Selector="Border.settings-rail ListBoxItem:selected Button.settings-rail-item">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Selection.Background}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Selection.Border}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource MAA.BorderThickness.Thin}" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Selection.Foreground}" />
+  </Style>
+
+  <Style Selector="ListBox.settings-rail ListBoxItem:selected:pointerover Border.settings-rail-item">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Selection.Background}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Selection.Border}" />
+  </Style>
+
+  <Style Selector="Border.settings-rail ListBoxItem:selected:pointerover Button.settings-rail-item">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Selection.Background}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Selection.Border}" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Selection.Foreground}" />
+  </Style>
+
+  <Style Selector="ListBox.settings-rail ListBoxItem:selected TextBlock.settings-rail-item-text">
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Selection.Foreground}" />
+  </Style>
+
+  <Style Selector="ListBox.settings-rail:disabled TextBlock.settings-rail-item-text">
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Action.DisabledForeground}" />
+  </Style>
+
+  <Style Selector="Border.settings-rail:disabled Button.settings-rail-item">
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Action.DisabledForeground}" />
+  </Style>
+
+  <Style Selector="Border.settings-section-shell">
+    <Setter Property="Padding" Value="{DynamicResource MAA.App.Settings.SectionShellPadding}" />
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Surface.Section}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Border.Section}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource MAA.BorderThickness.Thin}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.CornerRadius.Section}" />
+  </Style>
+
+  <Style Selector="StackPanel.settings-section-shell">
+    <Setter Property="Spacing" Value="{DynamicResource MAA.App.Settings.SectionSpacing}" />
+  </Style>
+
+  <Style Selector="TextBlock.settings-section-intro">
+    <Setter Property="Margin" Value="{DynamicResource MAA.App.Settings.SectionIntroPadding}" />
+  </Style>
+
+  <Style Selector="WrapPanel.settings-section-actions">
+    <Setter Property="ItemHeight" Value="{DynamicResource MAA.App.Size.ButtonHeight}" />
+    <Setter Property="Margin" Value="{DynamicResource MAA.App.Settings.ActionBarPadding}" />
+    <Setter Property="Orientation" Value="Horizontal" />
+  </Style>
+
+  <Style Selector="WrapPanel.settings-section-action-bar">
+    <Setter Property="ItemHeight" Value="{DynamicResource MAA.App.Size.ButtonHeight}" />
+    <Setter Property="Margin" Value="{DynamicResource MAA.App.Settings.ActionBarPadding}" />
+    <Setter Property="Orientation" Value="Horizontal" />
+  </Style>
+
+  <Style Selector="StackPanel.settings-section-actions">
+    <Setter Property="Orientation" Value="Horizontal" />
+    <Setter Property="Spacing" Value="10" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+  </Style>
+
+  <Style Selector="StackPanel.settings-section-action-bar">
+    <Setter Property="Orientation" Value="Horizontal" />
+    <Setter Property="Spacing" Value="10" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+  </Style>
+
+  <Style Selector="DockPanel.settings-section-actions">
+    <Setter Property="LastChildFill" Value="False" />
+  </Style>
+
+  <Style Selector="DockPanel.settings-section-action-bar">
+    <Setter Property="LastChildFill" Value="False" />
+  </Style>
+
+  <Style Selector="Border.settings-status-panel">
+    <Setter Property="Padding" Value="{DynamicResource MAA.App.Settings.StatusPanelPadding}" />
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Surface.Card}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Border.Card}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource MAA.BorderThickness.Thin}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.CornerRadius.Card}" />
+  </Style>
+
+  <Style Selector="Border.settings-status-panel.status-warning">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Surface.Warning}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.State.Warning}" />
+  </Style>
+</Styles>

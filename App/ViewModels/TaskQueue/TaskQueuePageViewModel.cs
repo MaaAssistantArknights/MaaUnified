@@ -980,6 +980,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         }
 
         await WaitForPendingBindingAsync(cancellationToken);
+        await FightModule.ReloadPersistentConfigAsync(cancellationToken);
         await InfrastModule.ReloadPersistentConfigAsync(cancellationToken);
         await RoguelikeModule.ReloadPersistentConfigAsync(cancellationToken);
         RefreshStagePresentation();
@@ -994,6 +995,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     {
         PrepareForConfigurationContextSwitch();
         await ReloadTasksAsync(cancellationToken, preferProfileSelectedIndex: true);
+        await FightModule.ReloadPersistentConfigAsync(cancellationToken);
         await InfrastModule.ReloadPersistentConfigAsync(cancellationToken);
         await RoguelikeModule.ReloadPersistentConfigAsync(cancellationToken);
         ApplyGuiSettingsFromConfig();

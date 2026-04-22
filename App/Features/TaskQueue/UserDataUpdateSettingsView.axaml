@@ -2,38 +2,74 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="clr-namespace:MAAUnified.App.ViewModels.TaskQueue"
              x:Class="MAAUnified.App.Features.TaskQueue.UserDataUpdateSettingsView">
-  <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto" Margin="2">
+  <UserControl.Styles>
+    <Style Selector="StackPanel.user-data-update-content">
+      <Setter Property="Spacing" Value="12" />
+    </Style>
+
+    <Style Selector="StackPanel.user-data-update-card-content">
+      <Setter Property="Spacing" Value="8" />
+    </Style>
+
+    <Style Selector="TextBlock.user-data-update-card-title">
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+  </UserControl.Styles>
+
+  <StackPanel Margin="4" Spacing="{DynamicResource MAA.Spacing.Medium}">
     <TextBlock Classes="section-title" Text="{Binding TitleText}" />
 
-    <StackPanel Grid.Row="1" Margin="0,10,0,0" Spacing="4">
-      <CheckBox Content="{Binding UpdateOperBoxText}" IsChecked="{Binding UpdateOperBox}" />
-      <TextBlock Text="{Binding LastOperBoxSyncDisplayText}"
-                 TextWrapping="Wrap"
-                 IsVisible="{Binding HasLastOperBoxSyncTime}" />
-    </StackPanel>
+    <Border Classes="app-surface app-section">
+      <StackPanel Classes="user-data-update-content">
+        <Border Classes="app-surface app-card">
+          <StackPanel Classes="user-data-update-card-content">
+            <CheckBox Classes="app-checkbox"
+                      Content="{Binding UpdateOperBoxText}"
+                      IsChecked="{Binding UpdateOperBox}" />
+            <TextBlock MaxWidth="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
+                       Classes="app-caption"
+                       Text="{Binding LastOperBoxSyncDisplayText}"
+                       IsVisible="{Binding HasLastOperBoxSyncTime}" />
+          </StackPanel>
+        </Border>
 
-    <StackPanel Grid.Row="2" Margin="0,10,0,0" Spacing="4">
-      <CheckBox Content="{Binding UpdateDepotText}" IsChecked="{Binding UpdateDepot}" />
-      <TextBlock Text="{Binding LastDepotSyncDisplayText}"
-                 TextWrapping="Wrap"
-                 IsVisible="{Binding HasLastDepotSyncTime}" />
-    </StackPanel>
+        <Border Classes="app-surface app-card">
+          <StackPanel Classes="user-data-update-card-content">
+            <CheckBox Classes="app-checkbox"
+                      Content="{Binding UpdateDepotText}"
+                      IsChecked="{Binding UpdateDepot}" />
+            <TextBlock MaxWidth="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
+                       Classes="app-caption"
+                       Text="{Binding LastDepotSyncDisplayText}"
+                       IsVisible="{Binding HasLastDepotSyncTime}" />
+          </StackPanel>
+        </Border>
 
-    <StackPanel Grid.Row="3" Margin="0,10,0,0" Spacing="4">
-      <TextBlock Text="{Binding TriggerIntervalText}" />
-      <ComboBox ItemsSource="{Binding TriggerIntervalOptions}"
-                SelectedValueBinding="{Binding Value}"
-                SelectedValue="{Binding TriggerInterval}">
-        <ComboBox.ItemTemplate>
-          <DataTemplate x:DataType="vm:UserDataUpdateModuleViewModel+StringOption">
-            <TextBlock Text="{Binding DisplayName}" />
-          </DataTemplate>
-        </ComboBox.ItemTemplate>
-      </ComboBox>
-    </StackPanel>
+        <Border Classes="app-surface app-card">
+          <StackPanel Classes="user-data-update-card-content">
+            <TextBlock Classes="app-body user-data-update-card-title"
+                       Text="{Binding TriggerIntervalText}" />
+            <Grid HorizontalAlignment="Left">
+              <ComboBox Width="{DynamicResource MAA.Size.Settings.FieldCenteredWidth}"
+                        ItemsSource="{Binding TriggerIntervalOptions}"
+                        SelectedValueBinding="{Binding Value}"
+                        SelectedValue="{Binding TriggerInterval}">
+                <ComboBox.ItemTemplate>
+                  <DataTemplate x:DataType="vm:UserDataUpdateModuleViewModel+StringOption">
+                    <TextBlock Text="{Binding DisplayName}" />
+                  </DataTemplate>
+                </ComboBox.ItemTemplate>
+              </ComboBox>
+            </Grid>
+          </StackPanel>
+        </Border>
 
-    <TextBlock Grid.Row="4"
-               Margin="0,10,0,0"
-               Text="{Binding StatusMessage}" />
-  </Grid>
+        <Border Classes="app-surface app-card">
+          <TextBlock MaxWidth="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
+                     Classes="app-body long-wrap"
+                     Text="{Binding StatusMessage}" />
+        </Border>
+      </StackPanel>
+    </Border>
+  </StackPanel>
 </UserControl>

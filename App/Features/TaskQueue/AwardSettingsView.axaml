@@ -2,39 +2,82 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:controls="clr-namespace:MAAUnified.App.Controls"
              x:Class="MAAUnified.App.Features.TaskQueue.AwardSettingsView">
-  <Grid RowDefinitions="Auto,Auto,Auto,Auto" Margin="2">
+  <UserControl.Styles>
+    <Style Selector="StackPanel.award-layout">
+      <Setter Property="Spacing" Value="{DynamicResource MAA.Spacing.Medium}" />
+    </Style>
+
+    <Style Selector="StackPanel.award-section-content">
+      <Setter Property="Spacing" Value="{DynamicResource MAA.Spacing.Small}" />
+    </Style>
+
+    <Style Selector="Border.award-card">
+      <Setter Property="Padding" Value="14" />
+    </Style>
+
+    <Style Selector="StackPanel.award-card-content">
+      <Setter Property="Spacing" Value="8" />
+    </Style>
+  </UserControl.Styles>
+
+  <StackPanel Margin="4" Classes="award-layout">
     <TextBlock Classes="section-title" Text="{Binding Texts[Award.Title]}" />
 
-    <StackPanel Grid.Row="1" Spacing="{DynamicResource MAA.Spacing.Small}">
-      <CheckBox Content="{Binding Texts[Award.Award]}" IsChecked="{Binding Award}" />
-      <CheckBox Content="{Binding Texts[Award.Mail]}" IsChecked="{Binding Mail}" />
+    <Border Classes="app-surface app-section">
+      <StackPanel Classes="award-section-content">
+        <Border Classes="app-surface app-card award-card">
+          <StackPanel Classes="award-card-content">
+            <CheckBox Classes="app-checkbox"
+                      Content="{Binding Texts[Award.Award]}"
+                      IsChecked="{Binding Award}" />
+            <CheckBox Classes="app-checkbox"
+                      Content="{Binding Texts[Award.Mail]}"
+                      IsChecked="{Binding Mail}" />
 
-      <Grid ColumnDefinitions="Auto,Auto">
-        <CheckBox Content="{Binding Texts[Award.Recruit]}" IsChecked="{Binding FreeGacha}" />
-        <controls:TooltipHint Grid.Column="1"
-                              Margin="{DynamicResource MAA.Thickness.MarginLeftSmall}"
-                              Tip="{Binding Texts[Award.FreeGachaTip]}" />
-      </Grid>
+            <Grid ColumnDefinitions="Auto,Auto,*">
+              <CheckBox Classes="app-checkbox"
+                        Content="{Binding Texts[Award.Recruit]}"
+                        IsChecked="{Binding FreeGacha}" />
+              <controls:TooltipHint Grid.Column="1"
+                                    Margin="6,0,0,0"
+                                    VerticalAlignment="Center"
+                                    Tip="{Binding Texts[Award.FreeGachaTip]}" />
+            </Grid>
 
-      <CheckBox Content="{Binding Texts[Award.Orundum]}" IsChecked="{Binding Orundum}" />
-      <CheckBox Content="{Binding Texts[Award.Mining]}" IsChecked="{Binding Mining}" />
-      <CheckBox Content="{Binding Texts[Award.Special]}" IsChecked="{Binding SpecialAccess}" />
-    </StackPanel>
+            <CheckBox Classes="app-checkbox"
+                      Content="{Binding Texts[Award.Orundum]}"
+                      IsChecked="{Binding Orundum}" />
+            <CheckBox Classes="app-checkbox"
+                      Content="{Binding Texts[Award.Mining]}"
+                      IsChecked="{Binding Mining}" />
+            <CheckBox Classes="app-checkbox"
+                      Content="{Binding Texts[Award.Special]}"
+                      IsChecked="{Binding SpecialAccess}" />
+          </StackPanel>
+        </Border>
 
-    <Border Grid.Row="2"
-            Padding="8"
-            Margin="0,8,0,0"
-            CornerRadius="6"
-            BorderThickness="1"
-            BorderBrush="{DynamicResource MAA.WarningBrush}"
-            IsVisible="{Binding PendingFreeGachaConfirmation}">
-      <StackPanel Spacing="{DynamicResource MAA.Spacing.Small}">
-        <TextBlock Text="{Binding Texts[Award.GachaWarning]}" TextWrapping="Wrap" />
-        <Button Classes="wpf-button wpf-button-secondary" Content="{Binding Texts[Award.Confirm]}" Click="OnConfirmRecruitClick" />
-        <Button Classes="wpf-button wpf-button-secondary" Content="{Binding Texts[Award.Cancel]}" Click="OnCancelRecruitClick" />
+        <Border Classes="app-surface app-card award-card"
+                IsVisible="{Binding PendingFreeGachaConfirmation}">
+          <StackPanel Classes="award-card-content">
+            <TextBlock Classes="app-body long-wrap state-warning"
+                       Text="{Binding Texts[Award.GachaWarning]}" />
+
+            <Button Classes="app-button app-secondary"
+                    HorizontalAlignment="Left"
+                    Content="{Binding Texts[Award.Confirm]}"
+                    Click="OnConfirmRecruitClick" />
+            <Button Classes="app-button app-secondary"
+                    HorizontalAlignment="Left"
+                    Content="{Binding Texts[Award.Cancel]}"
+                    Click="OnCancelRecruitClick" />
+          </StackPanel>
+        </Border>
+
+        <Border Classes="app-surface app-card award-card">
+          <TextBlock Classes="app-body long-wrap state-warning"
+                     Text="{Binding StatusMessage}" />
+        </Border>
       </StackPanel>
     </Border>
-
-    <TextBlock Grid.Row="3" Foreground="{DynamicResource MAA.WarningBrush}" Text="{Binding StatusMessage}" />
-  </Grid>
+  </StackPanel>
 </UserControl>

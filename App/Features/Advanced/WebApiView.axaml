@@ -2,36 +2,120 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:controls="clr-namespace:MAAUnified.App.Controls"
              x:Class="MAAUnified.App.Features.Advanced.WebApiView">
-  <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,*">
-    <TextBlock Classes="section-title" Text="{Binding Texts[Toolbox.Advanced.WebApi.Title]}" />
-    <TextBlock Grid.Row="1"
-               Classes="state-warning long-wrap"
-               Text="{Binding Texts[Toolbox.Advanced.WebApi.Warning]}" />
-    <Grid Grid.Row="2" ColumnDefinitions="Auto,Auto,Auto,160,Auto,120,Auto,*">
-      <CheckBox Content="{Binding Texts[Toolbox.Advanced.WebApi.Enabled]}" IsChecked="{Binding Enabled}" />
-      <TextBlock Grid.Column="1" VerticalAlignment="Center" Text="{Binding Texts[Toolbox.Advanced.WebApi.Host]}" />
-      <TextBox Grid.Column="2" Text="{Binding Host}" Width="200" />
-      <TextBlock Grid.Column="3" VerticalAlignment="Center" Text="{Binding Texts[Toolbox.Advanced.WebApi.Port]}" />
-      <controls:VerticalSpinNumberBox Grid.Column="4"
-                                      Minimum="1"
-                                      Maximum="65535"
-                                      Value="{Binding Port}" />
-      <TextBlock Grid.Column="5" VerticalAlignment="Center" Text="{Binding Texts[Toolbox.Advanced.WebApi.RunningStatus]}" />
-      <TextBlock Grid.Column="6" VerticalAlignment="Center" Text="{Binding RunningStatusText}" />
-    </Grid>
-    <Grid Grid.Row="3" ColumnDefinitions="Auto,*">
-      <TextBlock VerticalAlignment="Center" Text="{Binding Texts[Toolbox.Advanced.WebApi.AccessToken]}" />
-      <TextBox Text="{Binding AccessToken}" />
-    </Grid>
-    <StackPanel Grid.Row="4" Orientation="Horizontal" Spacing="{DynamicResource MAA.Spacing.Small}">
-      <Button Classes="wpf-button" Content="{Binding Texts[Toolbox.Advanced.WebApi.SaveConfig]}" Click="OnSaveClick" />
-      <Button Classes="wpf-button" Content="{Binding Texts[Toolbox.Advanced.WebApi.StartService]}" Click="OnStartClick" />
-      <Button Classes="wpf-button" Content="{Binding Texts[Toolbox.Advanced.WebApi.StopService]}" Click="OnStopClick" />
-      <Button Classes="wpf-button" Content="{Binding Texts[Toolbox.Advanced.WebApi.RefreshStatus]}" Click="OnRefreshStatusClick" />
-    </StackPanel>
-    <StackPanel Grid.Row="5" Spacing="{DynamicResource MAA.Spacing.Small}">
-      <TextBlock Text="{Binding StatusMessage}" />
-      <TextBlock Classes="state-error long-wrap" Text="{Binding LastErrorMessage}" />
+  <UserControl.Styles>
+    <Style Selector="StackPanel.webapi-section-stack">
+      <Setter Property="Spacing" Value="16" />
+    </Style>
+
+    <Style Selector="StackPanel.webapi-card-stack">
+      <Setter Property="Spacing" Value="14" />
+    </Style>
+
+    <Style Selector="Border.webapi-status-card">
+      <Setter Property="MinHeight" Value="68" />
+    </Style>
+  </UserControl.Styles>
+
+  <Grid Margin="4"
+        RowDefinitions="Auto">
+    <StackPanel Classes="settings-form">
+      <Border Classes="app-surface app-section"
+              Margin="{DynamicResource MAA.Thickness.Settings.SectionTopMargin}">
+        <StackPanel Classes="webapi-section-stack">
+          <TextBlock Classes="section-title"
+                     Text="{Binding Texts[Toolbox.Advanced.WebApi.Title]}" />
+
+          <Border Classes="app-highlight app-warning-highlight">
+            <TextBlock Classes="state-warning long-wrap"
+                       Text="{Binding Texts[Toolbox.Advanced.WebApi.Warning]}" />
+          </Border>
+        </StackPanel>
+      </Border>
+
+      <Border Classes="app-surface app-section"
+              Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}">
+        <WrapPanel Classes="settings-wrap">
+          <Border Classes="app-surface app-card">
+            <StackPanel Classes="webapi-card-stack">
+              <CheckBox Classes="app-checkbox"
+                        Content="{Binding Texts[Toolbox.Advanced.WebApi.Enabled]}"
+                        IsChecked="{Binding Enabled}" />
+
+              <StackPanel Spacing="6">
+                <TextBlock Classes="app-caption"
+                           Text="{Binding Texts[Toolbox.Advanced.WebApi.Host]}" />
+                <TextBox Classes="app-input app-input-block"
+                         Text="{Binding Host}" />
+              </StackPanel>
+            </StackPanel>
+          </Border>
+
+          <Border Classes="app-surface app-card">
+            <StackPanel Classes="webapi-card-stack">
+              <StackPanel Spacing="6">
+                <TextBlock Classes="app-caption"
+                           Text="{Binding Texts[Toolbox.Advanced.WebApi.Port]}" />
+                <controls:VerticalSpinNumberBox Width="160"
+                                                HorizontalAlignment="Left"
+                                                Minimum="1"
+                                                Maximum="65535"
+                                                Value="{Binding Port}" />
+              </StackPanel>
+
+              <StackPanel Spacing="6">
+                <TextBlock Classes="app-caption"
+                           Text="{Binding Texts[Toolbox.Advanced.WebApi.AccessToken]}" />
+                <TextBox Classes="app-input app-input-block"
+                         Text="{Binding AccessToken}" />
+              </StackPanel>
+            </StackPanel>
+          </Border>
+        </WrapPanel>
+      </Border>
+
+      <Border Classes="app-surface app-section"
+              Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}">
+        <WrapPanel Classes="tool-action-bar">
+          <Button Classes="app-button app-primary"
+                  Content="{Binding Texts[Toolbox.Advanced.WebApi.SaveConfig]}"
+                  Click="OnSaveClick" />
+          <Button Classes="app-button app-secondary"
+                  Content="{Binding Texts[Toolbox.Advanced.WebApi.StartService]}"
+                  Click="OnStartClick" />
+          <Button Classes="app-button app-secondary"
+                  Content="{Binding Texts[Toolbox.Advanced.WebApi.StopService]}"
+                  Click="OnStopClick" />
+          <Button Classes="app-button app-secondary"
+                  Content="{Binding Texts[Toolbox.Advanced.WebApi.RefreshStatus]}"
+                  Click="OnRefreshStatusClick" />
+        </WrapPanel>
+      </Border>
+
+      <Border Classes="app-surface app-section"
+              Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}">
+        <WrapPanel Classes="settings-wrap">
+          <Border Classes="app-surface app-card webapi-status-card">
+            <StackPanel Spacing="10">
+              <TextBlock Classes="app-caption"
+                         Text="{Binding Texts[Toolbox.Advanced.WebApi.RunningStatus]}" />
+              <Border Classes="app-badge"
+                      HorizontalAlignment="Left">
+                <TextBlock Classes="app-badge-text"
+                           Text="{Binding RunningStatusText}" />
+              </Border>
+            </StackPanel>
+          </Border>
+
+          <Border Classes="app-surface app-card webapi-status-card">
+            <StackPanel Spacing="8">
+              <TextBlock Classes="app-body long-wrap"
+                         Text="{Binding StatusMessage}" />
+              <TextBlock Classes="state-error long-wrap"
+                         Text="{Binding LastErrorMessage}" />
+            </StackPanel>
+          </Border>
+        </WrapPanel>
+      </Border>
     </StackPanel>
   </Grid>
 </UserControl>

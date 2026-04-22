@@ -39,21 +39,155 @@
       <taskViews:PostActionSettingsView />
     </DataTemplate>
   </UserControl.DataTemplates>
-  <Grid ColumnDefinitions="Auto,*,Auto">
-      <Border Grid.Column="0"
+
+  <UserControl.Styles>
+    <Style Selector="Grid.task-queue-config-panel">
+      <Setter Property="Width" Value="{DynamicResource MAA.Size.TaskQueue.ConfigPanelWidth}" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="ScrollViewer.task-queue-config-scroll">
+      <Setter Property="Margin" Value="{DynamicResource MAA.Thickness.MarginTopList}" />
+      <Setter Property="HorizontalScrollBarVisibility" Value="Disabled" />
+    </Style>
+
+    <Style Selector="StackPanel.task-queue-config-content">
+      <Setter Property="Spacing" Value="{DynamicResource MAA.Spacing.Small}" />
+      <Setter Property="Margin" Value="{DynamicResource MAA.Thickness.TaskQueue.ConfigContentMargin}" />
+    </Style>
+
+    <Style Selector="ListBox.task-queue-list">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+
+    <Style Selector="ListBox.task-queue-list ListBoxItem">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Margin" Value="0" />
+    </Style>
+
+    <Style Selector="ListBox.task-queue-list ListBoxItem:pointerover">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <Style Selector="ListBox.task-queue-list ListBoxItem:selected">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <Style Selector="Border.task-queue-item-card">
+      <Setter Property="Margin" Value="{DynamicResource MAA.Thickness.MarginItemVertical}" />
+      <Setter Property="Padding" Value="{DynamicResource MAA.Thickness.ItemCompactPadding}" />
+      <Setter Property="MinHeight" Value="{DynamicResource MAA.Size.TaskQueue.RowHeight}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="ListBox.task-queue-list ListBoxItem:pointerover Border.task-queue-item-card">
+      <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Action.SecondaryBorder}" />
+    </Style>
+
+    <Style Selector="ListBox.task-queue-list ListBoxItem:selected Border.task-queue-item-card">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Selection.Background}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Selection.Border}" />
+    </Style>
+
+    <Style Selector="ListBox.task-queue-list ListBoxItem:selected:pointerover Border.task-queue-item-card">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Selection.Background}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Selection.Border}" />
+    </Style>
+
+    <Style Selector="Border.task-queue-item-card.status-running">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.Wpf.TaskStatus.Running}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.Wpf.TaskStatus.Running}" />
+    </Style>
+
+    <Style Selector="Border.task-queue-item-card.status-success">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.Wpf.TaskStatus.Success}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.Wpf.TaskStatus.Success}" />
+    </Style>
+
+    <Style Selector="Border.task-queue-item-card.status-error">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.Wpf.TaskStatus.Error}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.Wpf.TaskStatus.Error}" />
+    </Style>
+
+    <Style Selector="Border.task-queue-item-card.status-skipped">
+      <Setter Property="Opacity" Value="0.55" />
+    </Style>
+
+    <Style Selector="Border.task-queue-item-card.status-idle">
+      <Setter Property="Opacity" Value="1" />
+    </Style>
+
+    <Style Selector="Button.task-queue-row-action">
+      <Setter Property="Width" Value="28" />
+      <Setter Property="MinWidth" Value="28" />
+      <Setter Property="Height" Value="28" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="FontSize" Value="16" />
+    </Style>
+
+    <Style Selector="StackPanel.task-queue-post-action-summary">
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="Width" Value="{DynamicResource MAA.Size.TaskQueue.PostActionSummaryWidth}" />
+      <Setter Property="Margin" Value="{DynamicResource MAA.Thickness.TaskQueue.PostActionSummaryMargin}" />
+      <Setter Property="Spacing" Value="{DynamicResource MAA.Spacing.Tight}" />
+    </Style>
+
+    <Style Selector="TextBlock.task-queue-post-action-description">
+      <Setter Property="Width" Value="{DynamicResource MAA.Size.TaskQueue.PostActionDescriptionWidth}" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="TextAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="TextBlock.task-queue-warning-text">
+      <Setter Property="Width" Value="{DynamicResource MAA.Size.TaskQueue.PostActionSummaryWidth}" />
+      <Setter Property="Margin" Value="{DynamicResource MAA.Thickness.MarginTopList}" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="TextAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="Border.task-queue-log-card">
+      <Setter Property="Margin" Value="{DynamicResource MAA.Thickness.MarginItemVertical}" />
+    </Style>
+
+    <Style Selector="TextBlock.task-queue-log-time">
+      <Setter Property="Width" Value="88" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="TextAlignment" Value="Center" />
+      <Setter Property="TextWrapping" Value="NoWrap" />
+    </Style>
+
+    <Style Selector="TextBlock.task-queue-log-time.align-top">
+      <Setter Property="VerticalAlignment" Value="Top" />
+    </Style>
+
+    <Style Selector="Image.task-queue-log-thumbnail">
+      <Setter Property="Width" Value="72" />
+      <Setter Property="Margin" Value="{DynamicResource MAA.Thickness.MarginTopSection}" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="Stretch" Value="Uniform" />
+      <Setter Property="ToolTip.ShowDelay" Value="200" />
+    </Style>
+  </UserControl.Styles>
+
+  <Grid ColumnDefinitions="276,*,380">
+    <Border Grid.Column="0"
             Width="{DynamicResource MAA.Size.TaskQueue.ListPanelWidth}"
-            Classes="wpf-panel">
-        <Grid RowDefinitions="Auto,*,Auto,Auto,Auto">
-          <TextBlock Classes="section-title" Text="{Binding TaskListTitleText}" />
+            Classes="app-surface app-section">
+      <Grid RowDefinitions="Auto,*,Auto,Auto,Auto">
+        <TextBlock Classes="section-title"
+                   Text="{Binding TaskListTitleText}" />
 
         <ListBox Grid.Row="1"
-                 Classes="wpf-list-no-highlight"
+                 Classes="task-queue-list"
                  Margin="{DynamicResource MAA.Thickness.MarginTopList}"
                  ItemsSource="{Binding Tasks}"
                  SelectedItem="{Binding SelectedTask}">
           <ListBox.ItemTemplate>
             <DataTemplate>
-              <Border Classes="wpf-card wpf-card-compact task-row-card"
+              <Border Classes="app-surface app-card task-queue-item-card"
                       Classes.status-running="{Binding IsStatusRunning}"
                       Classes.status-success="{Binding IsStatusSuccess}"
                       Classes.status-error="{Binding IsStatusError}"
@@ -90,9 +224,11 @@
                               Click="OnTaskMenuRemoveClick" />
                   </ContextMenu>
                 </Border.ContextMenu>
+
                 <Grid MinHeight="{DynamicResource MAA.Size.TaskQueue.RowHeight}"
                       ColumnDefinitions="Auto,*,Auto">
-                  <CheckBox IsChecked="{Binding IsEnabled}"
+                  <CheckBox Classes="app-checkbox"
+                            IsChecked="{Binding IsEnabled}"
                             VerticalAlignment="Center"
                             Margin="{DynamicResource MAA.Thickness.TaskQueue.CheckboxMargin}"
                             IsEnabled="{Binding DataContext.CanEdit, RelativeSource={RelativeSource AncestorType=UserControl}}" />
@@ -102,7 +238,7 @@
                              Margin="{DynamicResource MAA.Thickness.MarginLeftSmall}"
                              Text="{Binding DisplayName}" />
                   <Button Grid.Column="2"
-                          Classes="wpf-button task-row-gear"
+                          Classes="app-button app-subtle app-icon-only task-queue-row-action"
                           Margin="{DynamicResource MAA.Thickness.MarginActionButtonLeft}"
                           Content="{Binding DataContext.TaskMenuIconText, RelativeSource={RelativeSource AncestorType=UserControl}}"
                           ToolTip.Tip="{Binding DataContext.TaskMenuTooltipText, RelativeSource={RelativeSource AncestorType=UserControl}}"
@@ -112,285 +248,260 @@
             </DataTemplate>
           </ListBox.ItemTemplate>
         </ListBox>
-
-        <Grid Grid.Row="2"
-              Margin="{DynamicResource MAA.Thickness.MarginTopSection}"
-              ColumnDefinitions="Auto,Auto,Auto"
-              HorizontalAlignment="Center"
-              IsEnabled="{Binding CanEdit}">
-          <Button x:Name="AddTaskButton"
-                  Grid.Column="0"
-                  Classes="wpf-button compact icon-only queue-segment segment-left"
-                  Content="{Binding AddTaskButtonText}"
-                  Click="OnOpenButtonContextMenuClick">
-            <Button.ContextMenu>
-              <ContextMenu>
-                <MenuItem Header="{Binding AddTaskMenuStartUpText}" Tag="StartUp" Click="OnAddTaskModuleClick" />
-                <MenuItem Header="{Binding AddTaskMenuFightText}" Tag="Fight" Click="OnAddTaskModuleClick" />
-                <MenuItem Header="{Binding AddTaskMenuInfrastText}" Tag="Infrast" Click="OnAddTaskModuleClick" />
-                <MenuItem Header="{Binding AddTaskMenuRecruitText}" Tag="Recruit" Click="OnAddTaskModuleClick" />
-                <MenuItem Header="{Binding AddTaskMenuMallText}" Tag="Mall" Click="OnAddTaskModuleClick" />
-                <MenuItem Header="{Binding AddTaskMenuAwardText}" Tag="Award" Click="OnAddTaskModuleClick" />
-                <MenuItem Header="{Binding AddTaskMenuRoguelikeText}" Tag="Roguelike" Click="OnAddTaskModuleClick" />
-                <MenuItem Header="{Binding AddTaskMenuReclamationText}" Tag="Reclamation" Click="OnAddTaskModuleClick" />
-                <MenuItem Header="{Binding AddTaskMenuUserDataUpdateText}" Tag="UserDataUpdate" Click="OnAddTaskModuleClick" />
-                <MenuItem Header="{Binding AddTaskMenuCustomText}" Tag="Custom" Click="OnAddTaskModuleClick" />
-              </ContextMenu>
-            </Button.ContextMenu>
-          </Button>
-          <Button Grid.Column="1"
-                  Classes="wpf-button compact queue-segment segment-middle"
-                  Content="{Binding SelectAllButtonText}"
-                  Click="OnSelectAllClick" />
-          <Button Grid.Column="2"
-                  Classes="wpf-button compact queue-segment segment-right"
-                  Content="{Binding BatchActionText}"
-                  Click="OnBatchActionClick">
-            <Button.ContextMenu>
-              <ContextMenu>
-                <MenuItem Header="{Binding BatchToggleMenuText}"
-                          IsVisible="{Binding ShowBatchModeToggle}"
-                          Click="OnToggleBatchModeClick" />
-              </ContextMenu>
-            </Button.ContextMenu>
-          </Button>
-        </Grid>
+        <Border Grid.Row="2"
+                Margin="{DynamicResource MAA.Thickness.MarginTopSection}"
+                Classes="app-surface app-card"
+                IsEnabled="{Binding CanEdit}">
+          <Grid ColumnDefinitions="*,*,*">
+            <Button x:Name="AddTaskButton"
+                    Grid.Column="0"
+                    Classes="app-button app-chip"
+                    Content="{Binding AddTaskButtonText}"
+                    Click="OnOpenButtonContextMenuClick">
+              <Button.ContextMenu>
+                <ContextMenu>
+                  <MenuItem Header="{Binding AddTaskMenuStartUpText}" Tag="StartUp" Click="OnAddTaskModuleClick" />
+                  <MenuItem Header="{Binding AddTaskMenuFightText}" Tag="Fight" Click="OnAddTaskModuleClick" />
+                  <MenuItem Header="{Binding AddTaskMenuInfrastText}" Tag="Infrast" Click="OnAddTaskModuleClick" />
+                  <MenuItem Header="{Binding AddTaskMenuRecruitText}" Tag="Recruit" Click="OnAddTaskModuleClick" />
+                  <MenuItem Header="{Binding AddTaskMenuMallText}" Tag="Mall" Click="OnAddTaskModuleClick" />
+                  <MenuItem Header="{Binding AddTaskMenuAwardText}" Tag="Award" Click="OnAddTaskModuleClick" />
+                  <MenuItem Header="{Binding AddTaskMenuRoguelikeText}" Tag="Roguelike" Click="OnAddTaskModuleClick" />
+                  <MenuItem Header="{Binding AddTaskMenuReclamationText}" Tag="Reclamation" Click="OnAddTaskModuleClick" />
+                  <MenuItem Header="{Binding AddTaskMenuUserDataUpdateText}" Tag="UserDataUpdate" Click="OnAddTaskModuleClick" />
+                  <MenuItem Header="{Binding AddTaskMenuCustomText}" Tag="Custom" Click="OnAddTaskModuleClick" />
+                </ContextMenu>
+              </Button.ContextMenu>
+            </Button>
+            <Button Grid.Column="1"
+                    Margin="{DynamicResource MAA.Thickness.MarginActionButtonLeft}"
+                    Classes="app-button app-chip"
+                    Content="{Binding SelectAllButtonText}"
+                    Click="OnSelectAllClick" />
+            <Button Grid.Column="2"
+                    Margin="{DynamicResource MAA.Thickness.MarginActionButtonLeft}"
+                    Classes="app-button app-chip"
+                    Content="{Binding BatchActionText}"
+                    Click="OnBatchActionClick">
+              <Button.ContextMenu>
+                <ContextMenu>
+                  <MenuItem Header="{Binding BatchToggleMenuText}"
+                            IsVisible="{Binding ShowBatchModeToggle}"
+                            Click="OnToggleBatchModeClick" />
+                </ContextMenu>
+              </Button.ContextMenu>
+            </Button>
+          </Grid>
+        </Border>
 
         <Border Grid.Row="3"
-                Classes="wpf-card"
-                Margin="{DynamicResource MAA.Thickness.MarginTopSection}">
+                Margin="{DynamicResource MAA.Thickness.MarginTopSection}"
+                Classes="app-surface app-card">
           <Grid ColumnDefinitions="*,Auto">
-            <StackPanel HorizontalAlignment="Center"
-                        Width="{DynamicResource MAA.Size.TaskQueue.PostActionSummaryWidth}"
-                        Margin="{DynamicResource MAA.Thickness.TaskQueue.PostActionSummaryMargin}"
-                        Spacing="{DynamicResource MAA.Spacing.Tight}">
+            <StackPanel Classes="task-queue-post-action-summary">
               <TextBlock Classes="section-title long-ellipsis"
                          HorizontalAlignment="Center"
                          TextAlignment="Center"
                          Text="{Binding PostActionActionTitle}" />
               <Border Height="{DynamicResource MAA.Size.TaskQueue.PostActionDividerHeight}"
                       Margin="{DynamicResource MAA.Thickness.TaskQueue.PostActionDividerMargin}"
-                      Background="{DynamicResource MAA.Brush.Border.Default}" />
-              <TextBlock Width="{DynamicResource MAA.Size.TaskQueue.PostActionDescriptionWidth}"
-                         HorizontalAlignment="Center"
-                         TextAlignment="Center"
-                         Classes="long-wrap subtle"
+                      Background="{DynamicResource MAA.Brush.App.Border.Card}" />
+              <TextBlock Classes="app-caption long-wrap task-queue-post-action-description"
                          Text="{Binding PostActionActionDescription}" />
             </StackPanel>
             <Button Grid.Column="1"
-                    Classes="wpf-button wpf-button-subtle compact icon-only"
+                    Classes="app-button app-subtle app-icon-only"
                     Margin="{DynamicResource MAA.Thickness.MarginActionButtonLeft}"
                     Content="{Binding TaskMenuIconText}"
                     Click="OnOpenPostActionClick" />
           </Grid>
         </Border>
 
-        <Grid Grid.Row="4"
-              Margin="{DynamicResource MAA.Thickness.MarginTopSection}"
-              RowDefinitions="Auto,Auto,Auto"
-              HorizontalAlignment="Center">
-          <Button Classes="wpf-button queue-run"
-                  Grid.Row="0"
-                  HorizontalAlignment="Center"
-                  Content="{Binding RunButtonText}"
-                  IsEnabled="{Binding CanToggleRun}"
-                  Click="OnToggleRunClick" />
-          <TextBlock Grid.Row="1"
-                     Classes="long-wrap state-warning"
-                     Width="{DynamicResource MAA.Size.TaskQueue.PostActionSummaryWidth}"
-                     Margin="{DynamicResource MAA.Thickness.MarginTopList}"
-                     HorizontalAlignment="Center"
-                     TextAlignment="Center"
-                     Text="{Binding CoreInitializationMessage}"
-                     IsVisible="{Binding HasCoreInitializationMessage}" />
-          <TextBlock Grid.Row="2"
-                     Classes="long-wrap state-warning"
-                     Width="{DynamicResource MAA.Size.TaskQueue.PostActionSummaryWidth}"
-                     Margin="{DynamicResource MAA.Thickness.MarginTopList}"
-                     HorizontalAlignment="Center"
-                     TextAlignment="Center"
-                     Text="{Binding StartPrecheckWarningMessage}"
-                     IsVisible="{Binding HasStartPrecheckWarningMessage}" />
-        </Grid>
-        </Grid>
-      </Border>
+        <Border Grid.Row="4"
+                Margin="{DynamicResource MAA.Thickness.MarginTopSection}"
+                Classes="app-surface app-card">
+          <Grid RowDefinitions="Auto,Auto,Auto">
+            <Button Classes="app-button app-primary"
+                    Grid.Row="0"
+                    HorizontalAlignment="Stretch"
+                    Content="{Binding RunButtonText}"
+                    IsEnabled="{Binding CanToggleRun}"
+                    Click="OnToggleRunClick" />
+            <TextBlock Grid.Row="1"
+                       Classes="app-caption long-wrap state-warning task-queue-warning-text"
+                       Text="{Binding CoreInitializationMessage}"
+                       IsVisible="{Binding HasCoreInitializationMessage}" />
+            <TextBlock Grid.Row="2"
+                       Classes="app-caption long-wrap state-warning task-queue-warning-text"
+                       Text="{Binding StartPrecheckWarningMessage}"
+                       IsVisible="{Binding HasStartPrecheckWarningMessage}" />
+          </Grid>
+        </Border>
+      </Grid>
+    </Border>
 
-      <Grid Grid.Column="1"
-            Margin="{DynamicResource MAA.Thickness.MarginRightSection}">
-        <Grid RowDefinitions="Auto,*,Auto,Auto"
-              Width="{DynamicResource MAA.Size.TaskQueue.ConfigPanelWidth}"
-              HorizontalAlignment="Center">
-          <TextBlock Classes="section-title" Text="{Binding TaskConfigTitleText}" />
+    <Border Grid.Column="1"
+            Margin="{DynamicResource MAA.Thickness.MarginRightSection}"
+            Classes="app-surface app-section">
+      <Grid Classes="task-queue-config-panel"
+            RowDefinitions="Auto,*,Auto,Auto">
+        <TextBlock Classes="section-title"
+                   Text="{Binding TaskConfigTitleText}" />
 
         <ScrollViewer Grid.Row="1"
-                      HorizontalScrollBarVisibility="Disabled">
-          <StackPanel Spacing="{DynamicResource MAA.Spacing.Small}"
-                      Margin="{DynamicResource MAA.Thickness.TaskQueue.ConfigContentMargin}">
-            <TextBlock Classes="muted"
-                       Text="{Binding NoTaskSelectedHint}"
-                       IsVisible="{Binding ShowTaskConfigHint}" />
+                      Classes="task-queue-config-scroll">
+          <StackPanel Classes="task-queue-config-content">
+            <Border Classes="app-surface app-card"
+                    IsVisible="{Binding ShowTaskConfigHint}">
+              <TextBlock Classes="app-caption"
+                         Text="{Binding NoTaskSelectedHint}" />
+            </Border>
             <ContentControl x:Name="TaskSettingsHost"
                             IsEnabled="{Binding CanEdit}" />
           </StackPanel>
         </ScrollViewer>
 
-        <Grid Grid.Row="2"
-              IsVisible="{Binding ShowSettingsModeSwitch}"
-              ColumnDefinitions="Auto,Auto"
-              Margin="{DynamicResource MAA.Thickness.MarginTopSection}"
-              HorizontalAlignment="Center">
-          <Button Classes="wpf-button compact queue-mode segment-left"
-                  Classes.mode-selected="{Binding IsGeneralSettingsSelected}"
-                  Content="{Binding GeneralSettingsButtonText}"
-                  Click="OnSelectGeneralSettingsClick" />
-          <Button Grid.Column="1"
-                  Classes="wpf-button compact queue-mode segment-right"
-                  Classes.mode-selected="{Binding IsAdvancedSettingsSelected}"
-                  Content="{Binding AdvancedSettingsButtonText}"
-                  IsEnabled="{Binding CanUseAdvancedSettings}"
-                  Click="OnSelectAdvancedSettingsClick" />
-        </Grid>
+        <Border Grid.Row="2"
+                Margin="{DynamicResource MAA.Thickness.MarginTopSection}"
+                Classes="app-surface app-card"
+                IsVisible="{Binding ShowSettingsModeSwitch}">
+          <Grid ColumnDefinitions="*,*">
+            <Button Classes="app-button app-secondary"
+                    Classes.selected="{Binding IsGeneralSettingsSelected}"
+                    Content="{Binding GeneralSettingsButtonText}"
+                    Click="OnSelectGeneralSettingsClick" />
+            <Button Grid.Column="1"
+                    Margin="{DynamicResource MAA.Thickness.MarginActionButtonLeft}"
+                    Classes="app-button app-secondary"
+                    Classes.selected="{Binding IsAdvancedSettingsSelected}"
+                    Content="{Binding AdvancedSettingsButtonText}"
+                    IsEnabled="{Binding CanUseAdvancedSettings}"
+                    Click="OnSelectAdvancedSettingsClick" />
+          </Grid>
+        </Border>
 
-        <ScrollViewer Grid.Row="3"
-                      Margin="{DynamicResource MAA.Thickness.MarginTopSection}"
-                      HorizontalScrollBarVisibility="Disabled"
-                      VerticalScrollBarVisibility="Auto">
-          <StackPanel Spacing="{DynamicResource MAA.Spacing.Tight}">
-            <Grid ColumnDefinitions="Auto,Auto,*">
-              <TextBlock Classes="subtle" Text="{Binding DailyStageLabelText}" />
-              <controls:TooltipHint Grid.Column="1"
-                                    Tip="{Binding DailyStageTooltipText}" />
-            </Grid>
-            <TextBlock Classes="long-wrap subtle" Text="{Binding DailyStageHint}" />
-          </StackPanel>
-        </ScrollViewer>
-        </Grid>
+        <Border Grid.Row="3"
+                Margin="{DynamicResource MAA.Thickness.MarginTopSection}"
+                Classes="app-surface app-card">
+          <ScrollViewer HorizontalScrollBarVisibility="Disabled"
+                        VerticalScrollBarVisibility="Auto">
+            <StackPanel Spacing="{DynamicResource MAA.Spacing.Tight}">
+              <Grid ColumnDefinitions="Auto,Auto,*">
+                <TextBlock Classes="app-caption"
+                           Text="{Binding DailyStageLabelText}" />
+                <controls:TooltipHint Grid.Column="1"
+                                      Margin="{DynamicResource MAA.Thickness.MarginLeftSmall}"
+                                      Tip="{Binding DailyStageTooltipText}" />
+              </Grid>
+              <TextBlock Classes="app-caption"
+                         Text="{Binding DailyStageHint}" />
+            </StackPanel>
+          </ScrollViewer>
+        </Border>
       </Grid>
+    </Border>
 
-      <Grid Grid.Column="2"
-            Width="{DynamicResource MAA.Size.TaskQueue.LogPanelWidth}">
-        <Grid RowDefinitions="Auto,Auto,*">
-          <TextBlock Classes="section-title" Text="{Binding LogsTitleText}" />
+    <Border Grid.Column="2"
+            Width="{DynamicResource MAA.Size.TaskQueue.LogPanelWidth}"
+            Classes="app-surface app-section">
+      <Grid RowDefinitions="Auto,Auto,*">
+        <TextBlock Classes="section-title"
+                   Text="{Binding LogsTitleText}" />
 
-          <ContentControl Grid.Row="1"
-                          IsVisible="{Binding HasDownloadLog}"
-                          Content="{Binding DownloadLogEntry}"
-                          Margin="{DynamicResource MAA.Thickness.MarginTopList}">
-            <ContentControl.ContentTemplate>
+        <ContentControl Grid.Row="1"
+                        IsVisible="{Binding HasDownloadLog}"
+                        Content="{Binding DownloadLogEntry}"
+                        Margin="{DynamicResource MAA.Thickness.MarginTopList}">
+          <ContentControl.ContentTemplate>
+            <DataTemplate>
+              <Border Classes="app-surface app-card task-queue-log-card">
+                <Grid ColumnDefinitions="104,*"
+                      MinHeight="{DynamicResource MAA.Size.TaskQueue.RowHeight}">
+                  <TextBlock Classes="app-caption task-queue-log-time"
+                             Text="{Binding Time}" />
+                          <TextBlock Grid.Column="1"
+                                     Classes="long-wrap"
+                                     Margin="{DynamicResource MAA.Thickness.MarginActionButtonLeft}"
+                                     VerticalAlignment="Center"
+                                     TextWrapping="NoWrap"
+                                     Text="{Binding Content}" />
+                </Grid>
+              </Border>
+            </DataTemplate>
+          </ContentControl.ContentTemplate>
+        </ContentControl>
+
+        <ScrollViewer Grid.Row="2"
+                      Margin="{DynamicResource MAA.Thickness.MarginTopSection}"
+                      HorizontalScrollBarVisibility="Disabled">
+          <ItemsControl ItemsSource="{Binding LogCards}">
+            <ItemsControl.ItemTemplate>
               <DataTemplate>
-                <Border Classes="wpf-card">
-                  <Grid MinHeight="{DynamicResource MAA.Size.TaskQueue.RowHeight}"
-                        ColumnDefinitions="104,*">
-                    <TextBlock Classes="subtle"
-                               Width="88"
-                               HorizontalAlignment="Center"
-                               VerticalAlignment="Center"
-                               TextAlignment="Center"
-                               Text="{Binding Time}"
-                               TextWrapping="NoWrap" />
-                    <TextBlock Grid.Column="1"
-                               Classes="long-wrap"
-                               Margin="{DynamicResource MAA.Thickness.MarginActionButtonLeft}"
-                               VerticalAlignment="Center"
-                               Text="{Binding Content}" />
+                <Border Classes="app-surface app-card task-queue-log-card">
+                  <Grid ColumnDefinitions="104,*">
+                    <Grid RowDefinitions="Auto,Auto,Auto"
+                          IsVisible="{Binding ShowThumbnail}">
+                      <TextBlock Classes="app-caption task-queue-log-time align-top"
+                                 Text="{Binding StartTime}"
+                                 IsVisible="{Binding ShowStartTime}" />
+                      <Image Grid.Row="1"
+                             Classes="task-queue-log-thumbnail"
+                             Source="{Binding Thumbnail}"
+                             ToolTip.ShowDelay="200"
+                             IsVisible="{Binding ShowThumbnail}">
+                        <ToolTip.Tip>
+                          <Border Classes="app-surface app-card">
+                            <Image MaxWidth="960"
+                                   MaxHeight="540"
+                                   Source="{Binding Thumbnail}"
+                                   Stretch="Uniform" />
+                          </Border>
+                        </ToolTip.Tip>
+                      </Image>
+                      <TextBlock Grid.Row="2"
+                                 Classes="app-caption task-queue-log-time"
+                                 Margin="{DynamicResource MAA.Thickness.MarginTopSection}"
+                                 Text="{Binding EndTime}"
+                                 IsVisible="{Binding ShowEndTime}" />
+                    </Grid>
+
+                    <StackPanel HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                IsVisible="{Binding ShowTimeOnlyLayout}">
+                      <TextBlock Classes="app-caption task-queue-log-time"
+                                 Text="{Binding StartTime}"
+                                 IsVisible="{Binding ShowStartTime}" />
+                      <TextBlock Classes="app-caption task-queue-log-time"
+                                 Margin="{DynamicResource MAA.Thickness.MarginTopSection}"
+                                 Text="{Binding EndTime}"
+                                 IsVisible="{Binding ShowEndTime}" />
+                    </StackPanel>
+
+                    <ItemsControl Grid.Column="1"
+                                  VerticalAlignment="Center"
+                                  ItemsSource="{Binding Items}">
+                      <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                          <StackPanel Spacing="{DynamicResource MAA.Spacing.Medium}" />
+                        </ItemsPanelTemplate>
+                      </ItemsControl.ItemsPanel>
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                          <TextBlock Classes="long-wrap"
+                                     Classes.state-error="{Binding IsError}"
+                                     Classes.state-warning="{Binding IsWarning}"
+                                     Classes.state-success="{Binding IsSuccess}"
+                                     Text="{Binding Content}" />
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
                   </Grid>
                 </Border>
               </DataTemplate>
-            </ContentControl.ContentTemplate>
-          </ContentControl>
-
-          <Grid Grid.Row="2"
-                Margin="{DynamicResource MAA.Thickness.MarginTopSection}">
-            <ScrollViewer HorizontalScrollBarVisibility="Disabled">
-              <ItemsControl ItemsSource="{Binding LogCards}">
-                <ItemsControl.ItemTemplate>
-                  <DataTemplate>
-                    <Border Classes="wpf-card">
-                      <Grid ColumnDefinitions="104,*">
-                        <Grid RowDefinitions="Auto,Auto,Auto"
-                              IsVisible="{Binding ShowThumbnail}">
-                          <TextBlock Classes="subtle"
-                                     Width="88"
-                                     HorizontalAlignment="Center"
-                                     VerticalAlignment="Top"
-                                     TextAlignment="Center"
-                                     Text="{Binding StartTime}"
-                                     TextWrapping="NoWrap"
-                                     IsVisible="{Binding ShowStartTime}" />
-                          <Image Grid.Row="1"
-                                 Width="72"
-                                 Margin="{DynamicResource MAA.Thickness.MarginTopSection}"
-                                 HorizontalAlignment="Center"
-                                 Source="{Binding Thumbnail}"
-                                 Stretch="Uniform"
-                                 IsVisible="{Binding ShowThumbnail}"
-                                 ToolTip.ShowDelay="200">
-                            <ToolTip.Tip>
-                              <Border Classes="wpf-card">
-                                <Image MaxWidth="960"
-                                       MaxHeight="540"
-                                       Source="{Binding Thumbnail}"
-                                       Stretch="Uniform" />
-                              </Border>
-                            </ToolTip.Tip>
-                          </Image>
-                          <TextBlock Grid.Row="2"
-                                     Classes="subtle"
-                                     Width="88"
-                                     HorizontalAlignment="Center"
-                                     Margin="{DynamicResource MAA.Thickness.MarginTopSection}"
-                                     TextAlignment="Center"
-                                     Text="{Binding EndTime}"
-                                     TextWrapping="NoWrap"
-                                     IsVisible="{Binding ShowEndTime}" />
-                        </Grid>
-
-                        <StackPanel HorizontalAlignment="Center"
-                                    VerticalAlignment="Center"
-                                    IsVisible="{Binding ShowTimeOnlyLayout}">
-                          <TextBlock Classes="subtle"
-                                     Width="88"
-                                     HorizontalAlignment="Center"
-                                     TextAlignment="Center"
-                                     Text="{Binding StartTime}"
-                                     TextWrapping="NoWrap"
-                                     IsVisible="{Binding ShowStartTime}" />
-                          <TextBlock Classes="subtle"
-                                     Width="88"
-                                     HorizontalAlignment="Center"
-                                     Margin="{DynamicResource MAA.Thickness.MarginTopSection}"
-                                     TextAlignment="Center"
-                                     Text="{Binding EndTime}"
-                                     TextWrapping="NoWrap"
-                                     IsVisible="{Binding ShowEndTime}" />
-                        </StackPanel>
-
-                        <ItemsControl Grid.Column="1"
-                                      VerticalAlignment="Center"
-                                      ItemsSource="{Binding Items}">
-                          <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate>
-                              <StackPanel Spacing="{DynamicResource MAA.Spacing.Medium}" />
-                            </ItemsPanelTemplate>
-                          </ItemsControl.ItemsPanel>
-                          <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                              <TextBlock Classes="long-wrap"
-                                         Classes.state-error="{Binding IsError}"
-                                         Classes.state-warning="{Binding IsWarning}"
-                                         Classes.state-success="{Binding IsSuccess}"
-                                         Text="{Binding Content}" />
-                            </DataTemplate>
-                          </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                      </Grid>
-                    </Border>
-                  </DataTemplate>
-                </ItemsControl.ItemTemplate>
-              </ItemsControl>
-            </ScrollViewer>
-          </Grid>
-        </Grid>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
       </Grid>
+    </Border>
   </Grid>
 </UserControl>

@@ -1,6 +1,8 @@
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using MAAUnified.App.ViewModels.Infrastructure;
 using MAAUnified.Application.Models;
 using MAAUnified.Application.Models.TaskParams;
 using MAAUnified.Application.Services;
@@ -91,17 +93,39 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
         ("PR-D-1", "PR-D-1/2: 近&特芯片", "PR-D-1/2: Grd&Spc Chip", [["3221", "3281"], ["3222", "3282"]]),
     ];
 
+    private static readonly IReadOnlyDictionary<string, string> ManualStageAliasMap =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["AN"] = "Annihilation",
+            ["剿灭"] = "Annihilation",
+            ["CE"] = "CE-6",
+            ["龙门币"] = "CE-6",
+            ["LS"] = "LS-6",
+            ["经验"] = "LS-6",
+            ["狗粮"] = "LS-6",
+            ["CA"] = "CA-5",
+            ["技能"] = "CA-5",
+            ["AP"] = "AP-5",
+            ["红票"] = "AP-5",
+            ["SK"] = "SK-5",
+            ["碳"] = "SK-5",
+            ["炭"] = "SK-5",
+        };
+
+    private readonly ObservableCollection<StagePlanEntry> _stagePlan = [];
+    private bool _suppressStagePlanSync;
     private string _stage = FightStageSelection.CurrentOrLast;
-    private bool _useMedicine;
+    private bool _isStageManually;
+    private bool? _useMedicine = false;
     private int _medicine;
-    private bool _useStone;
+    private bool? _useStone = false;
     private int _stone;
-    private bool _enableTimesLimit;
+    private bool? _enableTimesLimit = false;
     private int _times = int.MaxValue;
     private int _series = 1;
     private bool _isDrGrandet;
     private bool _useExpiringMedicine;
-    private bool _enableTargetDrop;
+    private bool? _enableTargetDrop = false;
     private string _dropId = string.Empty;
     private int _dropCount = 1;
     private bool _useCustomAnnihilation;
@@ -119,6 +143,7 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
     private string _stageResetMode = "Current";
     private bool _hideSeries;
     private bool _allowUseStoneSave;
+    private bool _autoRestartOnDrop = true;
     private IReadOnlyList<IntOption> _seriesOptions = [];
     private IReadOnlyList<StringOption> _stageResetModeOptions = [];
     private IReadOnlyList<StringOption> _annihilationStageOptions = [];
@@ -128,7 +153,10 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
     public FightTaskModuleViewModel(MAAUnifiedRuntime runtime, LocalizedTextMap texts)
         : base(runtime, texts, "TaskQueue.Fight")
     {
+        _stagePlan.CollectionChanged += (_, _) => OnStagePlanCollectionChanged();
         Texts.PropertyChanged += OnTextsChanged;
+        ApplyPersistentAutoRestartOnDrop(ResolveAutoRestartOnDrop());
+        EnsureStagePlanInitialized();
         RebuildLocalizedOptions();
         RebuildDropOptions();
         RebuildStageOptions();
@@ -162,6 +190,8 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
 
     public IReadOnlyList<StageOption> StageOptions => _stageOptions;
 
+    public ObservableCollection<StagePlanEntry> StagePlan => _stagePlan;
+
     public StageOption? SelectedStageOption
     {
         get => StageOptions.FirstOrDefault(
@@ -185,16 +215,44 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
         set => DropId = value?.Value ?? string.Empty;
     }
 
-    public bool IsMedicineInputEnabled => UseMedicine && !UseStone;
+    public bool IsMedicineToggleEnabled => UseStone == false;
+
+    public bool IsMedicineInputEnabled => UseStone == false;
 
     public bool ShowSeriesSetting => !HideSeries;
 
-    public bool IsDropControlsEnabled => EnableTargetDrop;
+    public bool IsDropControlsEnabled => EnableTargetDrop != false;
 
     public bool IsHideUnavailableStageEnabled => !UseWeeklySchedule;
 
+    public bool CanRemoveStagePlanEntry => StagePlan.Count > 1;
+
+    public bool ShowStagePlanComboBox => !IsStageManually;
+
+    public bool ShowStagePlanTextBox => IsStageManually;
+
     public string UseStoneDisplayName =>
         $"{Texts.GetOrDefault("Fight.UseStoneDisplay", Texts.GetOrDefault("Fight.UseStone", "Use stone"))}{(AllowUseStoneSave ? string.Empty : "*")}";
+
+    public string StageSelectDisplayText => UseAlternateStage
+        ? Texts.GetOrDefault("StageSelect2", "Candidates")
+        : Texts.GetOrDefault("Fight.StageSelect", "Stage");
+
+    public string AddStageText => Texts.GetOrDefault("AddStage", "Add candidate");
+
+    public string CustomStageCodeText => Texts.GetOrDefault("CustomStageCode", "Manual entry of stage names");
+
+    public string CustomStageCodeTipText => Texts.GetOrDefault(
+        "CustomStageCodeTip",
+        "Support most main stage names and stage names from the original list.");
+
+    public string MultiTasksShareTipText => Texts.GetOrDefault(
+        "MultiTasksShareTip",
+        "The following options are shared across multiple tasks.");
+
+    public string AutoRestartOnDropText => Texts.GetOrDefault(
+        "AutoRestartOption",
+        "Restart when game disconnects");
 
     public string UseWeeklyScheduleText => Texts.GetOrDefault("Fight.UseWeeklySchedule", "Enable weekly schedule");
 
@@ -221,17 +279,43 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
         get => _stage;
         set
         {
-            var normalized = FightStageSelection.NormalizeStoredValue(value);
+            var normalized = NormalizeStagePlanEntryValue(value);
             if (!SetTrackedProperty(ref _stage, normalized))
             {
                 return;
+            }
+
+            if (!_suppressStagePlanSync)
+            {
+                SetFirstStagePlanEntry(normalized);
             }
 
             OnPropertyChanged(nameof(SelectedStageOption));
         }
     }
 
-    public bool UseMedicine
+    public bool IsStageManually
+    {
+        get => _isStageManually;
+        set
+        {
+            if (!SetTrackedProperty(ref _isStageManually, value))
+            {
+                return;
+            }
+
+            if (!value)
+            {
+                NormalizeStagePlanAgainstKnownStages();
+            }
+
+            OnPropertyChanged(nameof(ShowStagePlanComboBox));
+            OnPropertyChanged(nameof(ShowStagePlanTextBox));
+            RefreshStagePlanPresentation();
+        }
+    }
+
+    public bool? UseMedicine
     {
         get => _useMedicine;
         set
@@ -241,11 +325,12 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
                 return;
             }
 
-            if (!value && UseStone)
+            if (value == false && UseStone != false)
             {
                 UseStone = false;
             }
 
+            OnPropertyChanged(nameof(IsMedicineToggleEnabled));
             OnPropertyChanged(nameof(IsMedicineInputEnabled));
         }
     }
@@ -256,21 +341,26 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
         set => SetTrackedProperty(ref _medicine, Math.Max(0, value));
     }
 
-    public bool UseStone
+    public bool? UseStone
     {
         get => _useStone;
         set
         {
+            if (!AllowUseStoneSave && value == true)
+            {
+                value = null;
+            }
+
             if (!SetTrackedProperty(ref _useStone, value))
             {
                 return;
             }
 
-            if (value)
+            if (value != false)
             {
-                if (!UseMedicine)
+                if (UseMedicine == false)
                 {
-                    UseMedicine = true;
+                    UseMedicine = value;
                 }
 
                 if (Medicine < 999)
@@ -289,7 +379,7 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
         set => SetTrackedProperty(ref _stone, Math.Max(0, value));
     }
 
-    public bool EnableTimesLimit
+    public bool? EnableTimesLimit
     {
         get => _enableTimesLimit;
         set => SetTrackedProperty(ref _enableTimesLimit, value);
@@ -328,7 +418,7 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
         set => SetTrackedProperty(ref _useExpiringMedicine, value);
     }
 
-    public bool EnableTargetDrop
+    public bool? EnableTargetDrop
     {
         get => _enableTargetDrop;
         set
@@ -339,6 +429,20 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
             }
 
             OnPropertyChanged(nameof(IsDropControlsEnabled));
+        }
+    }
+
+    public bool AutoRestartOnDrop
+    {
+        get => _autoRestartOnDrop;
+        set
+        {
+            if (!SetProperty(ref _autoRestartOnDrop, value))
+            {
+                return;
+            }
+
+            _ = PersistAutoRestartOnDropAsync(value);
         }
     }
 
@@ -477,6 +581,12 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
                     StageResetMode = "Ignore";
                 }
             }
+            else
+            {
+                CollapseStagePlanToPrimaryEntry();
+            }
+
+            OnPropertyChanged(nameof(StageSelectDisplayText));
         }
     }
 
@@ -504,6 +614,7 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
             }
 
             RebuildStageOptions();
+            RefreshStagePlanPresentation();
         }
     }
 
@@ -547,7 +658,18 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
             }
 
             OnPropertyChanged(nameof(UseStoneDisplayName));
+
+            if (!value && UseStone == true)
+            {
+                UseStone = null;
+            }
         }
+    }
+
+    public Task ReloadPersistentConfigAsync(CancellationToken cancellationToken = default)
+    {
+        ApplyPersistentAutoRestartOnDrop(ResolveAutoRestartOnDrop());
+        return Task.CompletedTask;
     }
 
     protected override Task<UiOperationResult<FightTaskParamsDto>> LoadDtoAsync(int index, CancellationToken cancellationToken)
@@ -567,7 +689,11 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
 
     protected override void ApplyDto(FightTaskParamsDto dto)
     {
-        Stage = dto.Stage;
+        IsStageManually = dto.IsStageManually;
+        ReplaceStagePlan(dto.StagePlan.Count > 0 ? dto.StagePlan : [dto.Stage]);
+        SetProperty(ref _stage, FightStageSelection.NormalizeStoredValue(dto.Stage), nameof(Stage));
+        OnPropertyChanged(nameof(SelectedStageOption));
+        AllowUseStoneSave = dto.AllowUseStoneSave;
         UseMedicine = dto.UseMedicine;
         Medicine = dto.Medicine;
         UseStone = dto.UseStone;
@@ -594,22 +720,25 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
         HideUnavailableStage = dto.HideUnavailableStage;
         StageResetMode = dto.StageResetMode;
         HideSeries = dto.HideSeries;
-        AllowUseStoneSave = dto.AllowUseStoneSave;
         NormalizeDropSelectionToKnownOption();
         RebuildStageOptions();
+        RefreshStagePlanPresentation();
     }
 
     protected override FightTaskParamsDto BuildDto()
     {
+        var stagePlan = StagePlan.Select(entry => entry.Stage).ToList();
         return new FightTaskParamsDto
         {
             Stage = FightStageSelection.NormalizeStoredValue(Stage),
+            StagePlan = FightStageSelection.NormalizeStagePlan(stagePlan),
+            IsStageManually = IsStageManually,
             UseMedicine = UseMedicine,
             Medicine = Math.Max(0, Medicine),
             UseStone = UseStone,
             Stone = Math.Max(0, Stone),
             EnableTimesLimit = EnableTimesLimit,
-            Times = EnableTimesLimit ? Math.Max(0, Times) : int.MaxValue,
+            Times = EnableTimesLimit != false ? Math.Max(0, Times) : int.MaxValue,
             Series = Math.Clamp(Series, -1, 6),
             IsDrGrandet = IsDrGrandet,
             UseExpiringMedicine = UseExpiringMedicine,
@@ -679,6 +808,12 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
         OnPropertyChanged(nameof(AnnihilationStageOptions));
         OnPropertyChanged(nameof(SelectedAnnihilationStageOption));
         OnPropertyChanged(nameof(UseStoneDisplayName));
+        OnPropertyChanged(nameof(StageSelectDisplayText));
+        OnPropertyChanged(nameof(AddStageText));
+        OnPropertyChanged(nameof(CustomStageCodeText));
+        OnPropertyChanged(nameof(CustomStageCodeTipText));
+        OnPropertyChanged(nameof(MultiTasksShareTipText));
+        OnPropertyChanged(nameof(AutoRestartOnDropText));
         OnPropertyChanged(nameof(UseWeeklyScheduleText));
         OnPropertyChanged(nameof(UseWeeklyScheduleTip));
         OnPropertyChanged(nameof(WeeklyScheduleSundayText));
@@ -688,6 +823,7 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
         OnPropertyChanged(nameof(WeeklyScheduleThursdayText));
         OnPropertyChanged(nameof(WeeklyScheduleFridayText));
         OnPropertyChanged(nameof(WeeklyScheduleSaturdayText));
+        RefreshStagePlanPresentation();
     }
 
     private void RebuildDropOptions()
@@ -1024,6 +1160,9 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
         var normalizedClientType = NormalizeClientType(clientTypeOverride ?? ResolveClientTypeFromConfig());
         var dayOfWeek = MallDailyResetHelper.GetYjDate(DateTime.UtcNow, normalizedClientType).DayOfWeek;
         var stageCodes = Runtime.StageManagerFeatureService.GetStageCodes(normalizedClientType, forceReload);
+        var currentStages = StagePlan
+            .Select(entry => FightStageSelection.NormalizeStoredValue(entry.Stage))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var defaultStageDisplay = Texts.GetOrDefault("Fight.DefaultStage", "Cur/Last");
         var annihilationDisplay = UseCustomAnnihilation
             ? AnnihilationStageOptions.FirstOrDefault(
@@ -1044,10 +1183,7 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
             }
 
             var isOpen = IsStageOpen(normalizedStage, dayOfWeek);
-            var isCurrentStage = string.Equals(
-                normalizedStage,
-                Stage?.Trim(),
-                StringComparison.OrdinalIgnoreCase);
+            var isCurrentStage = currentStages.Contains(normalizedStage);
             if (HideUnavailableStage && !isOpen && !isCurrentStage)
             {
                 continue;
@@ -1061,10 +1197,14 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
             list.Add(new StageOption(display, normalizedStage, isOpen, IsOutdated: false));
         }
 
-        var currentStage = FightStageSelection.NormalizeStoredValue(Stage);
-        if (!FightStageSelection.IsCurrentOrLast(currentStage)
-            && !list.Any(option => string.Equals(option.Value, currentStage, StringComparison.OrdinalIgnoreCase)))
+        foreach (var currentStage in currentStages)
         {
+            if (FightStageSelection.IsCurrentOrLast(currentStage)
+                || list.Any(option => string.Equals(option.Value, currentStage, StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+
             list.Add(new StageOption(
                 $"{currentStage} {BuildOutdatedSuffix()}",
                 currentStage,
@@ -1075,6 +1215,7 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
         _stageOptions = list;
         OnPropertyChanged(nameof(StageOptions));
         OnPropertyChanged(nameof(SelectedStageOption));
+        RefreshStagePlanPresentation();
     }
 
     private string ResolveClientTypeFromConfig()
@@ -1156,11 +1297,420 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
             : "Current";
     }
 
+    public void AddStagePlanEntry()
+    {
+        StagePlan.Add(new StagePlanEntry(this, FightStageSelection.CurrentOrLast));
+    }
+
+    public void RemoveStagePlanEntry(StagePlanEntry? entry)
+    {
+        if (entry is null || StagePlan.Count <= 1)
+        {
+            return;
+        }
+
+        StagePlan.Remove(entry);
+    }
+
+    public void MoveStagePlanEntryUp(StagePlanEntry? entry)
+    {
+        if (entry is null)
+        {
+            return;
+        }
+
+        var index = StagePlan.IndexOf(entry);
+        if (index <= 0)
+        {
+            return;
+        }
+
+        StagePlan.Move(index, index - 1);
+    }
+
+    public void MoveStagePlanEntryDown(StagePlanEntry? entry)
+    {
+        if (entry is null)
+        {
+            return;
+        }
+
+        var index = StagePlan.IndexOf(entry);
+        if (index < 0 || index >= StagePlan.Count - 1)
+        {
+            return;
+        }
+
+        StagePlan.Move(index, index + 1);
+    }
+
+    private void OnStagePlanCollectionChanged()
+    {
+        if (_suppressStagePlanSync)
+        {
+            return;
+        }
+
+        if (StagePlan.Count == 0)
+        {
+            _suppressStagePlanSync = true;
+            try
+            {
+                StagePlan.Add(new StagePlanEntry(this, FightStageSelection.CurrentOrLast));
+            }
+            finally
+            {
+                _suppressStagePlanSync = false;
+            }
+        }
+
+        SyncPrimaryStageFromPlan(markDirty: true);
+        OnPropertyChanged(nameof(CanRemoveStagePlanEntry));
+        OnPropertyChanged(nameof(StageSelectDisplayText));
+        RebuildStageOptions();
+        MarkDirty();
+    }
+
+    private void EnsureStagePlanInitialized()
+    {
+        if (StagePlan.Count == 0)
+        {
+            StagePlan.Add(new StagePlanEntry(this, FightStageSelection.CurrentOrLast));
+        }
+    }
+
+    private void ReplaceStagePlan(IEnumerable<string?> stages)
+    {
+        var normalized = FightStageSelection.NormalizeStagePlan(stages);
+
+        _suppressStagePlanSync = true;
+        try
+        {
+            StagePlan.Clear();
+            foreach (var stage in normalized)
+            {
+                StagePlan.Add(new StagePlanEntry(this, stage));
+            }
+        }
+        finally
+        {
+            _suppressStagePlanSync = false;
+        }
+
+        SyncPrimaryStageFromPlan(markDirty: false);
+        OnPropertyChanged(nameof(CanRemoveStagePlanEntry));
+        RebuildStageOptions();
+    }
+
+    private void SetFirstStagePlanEntry(string stage)
+    {
+        EnsureStagePlanInitialized();
+        if (string.Equals(StagePlan[0].Stage, stage, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _suppressStagePlanSync = true;
+        try
+        {
+            StagePlan[0].Stage = stage;
+        }
+        finally
+        {
+            _suppressStagePlanSync = false;
+        }
+
+        RefreshStagePlanPresentation();
+    }
+
+    private void SyncPrimaryStageFromPlan(bool markDirty)
+    {
+        EnsureStagePlanInitialized();
+        var primary = FightStageSelection.NormalizeStoredValue(StagePlan[0].Stage);
+
+        _suppressStagePlanSync = true;
+        try
+        {
+            if (markDirty)
+            {
+                Stage = primary;
+            }
+            else
+            {
+                SetProperty(ref _stage, primary, nameof(Stage));
+                OnPropertyChanged(nameof(SelectedStageOption));
+            }
+        }
+        finally
+        {
+            _suppressStagePlanSync = false;
+        }
+    }
+
+    private void CollapseStagePlanToPrimaryEntry()
+    {
+        if (StagePlan.Count <= 1)
+        {
+            return;
+        }
+
+        ReplaceStagePlan([StagePlan[0].Stage]);
+        MarkDirty();
+    }
+
+    private void NormalizeStagePlanAgainstKnownStages()
+    {
+        var knownStageCodes = Runtime.StageManagerFeatureService
+            .GetStageCodes(ResolveClientTypeFromConfig())
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var updated = false;
+        foreach (var entry in StagePlan)
+        {
+            if (FightStageSelection.IsCurrentOrLast(entry.Stage)
+                || knownStageCodes.Contains(entry.Stage))
+            {
+                continue;
+            }
+
+            entry.Stage = FightStageSelection.CurrentOrLast;
+            updated = true;
+        }
+
+        if (updated)
+        {
+            MarkDirty();
+        }
+    }
+
+    internal string NormalizeStagePlanEntryValue(string? value)
+    {
+        if (IsStageManually)
+        {
+            return NormalizeManualStageInput(value);
+        }
+
+        return FightStageSelection.NormalizeStoredValue(value);
+    }
+
+    private string NormalizeManualStageInput(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return FightStageSelection.CurrentOrLast;
+        }
+
+        var trimmed = value.Trim();
+        if (FightStageSelection.IsCurrentOrLast(trimmed))
+        {
+            return FightStageSelection.CurrentOrLast;
+        }
+
+        var upper = trimmed.ToUpperInvariant();
+        if (ManualStageAliasMap.TryGetValue(upper, out var alias))
+        {
+            return alias;
+        }
+
+        var matchedStage = Runtime.StageManagerFeatureService
+            .GetStageCodes(ResolveClientTypeFromConfig())
+            .FirstOrDefault(stageCode => string.Equals(stageCode, trimmed, StringComparison.OrdinalIgnoreCase));
+        if (!string.IsNullOrWhiteSpace(matchedStage))
+        {
+            return matchedStage;
+        }
+
+        return upper;
+    }
+
+    internal void OnStagePlanEntryChanged(StagePlanEntry entry)
+    {
+        if (_suppressStagePlanSync)
+        {
+            return;
+        }
+
+        if (StagePlan.IndexOf(entry) == 0)
+        {
+            SyncPrimaryStageFromPlan(markDirty: true);
+        }
+
+        RebuildStageOptions();
+        MarkDirty();
+    }
+
+    private void RefreshStagePlanPresentation()
+    {
+        var dayOfWeek = MallDailyResetHelper.GetYjDate(DateTime.UtcNow, NormalizeClientType(ResolveClientTypeFromConfig())).DayOfWeek;
+        foreach (var entry in StagePlan)
+        {
+            var stage = FightStageSelection.NormalizeStoredValue(entry.Stage);
+            if (FightStageSelection.IsCurrentOrLast(stage))
+            {
+                entry.UpdateAvailability(isOpen: true, isOutdated: false, statusText: string.Empty);
+                continue;
+            }
+
+            var option = _stageOptions.FirstOrDefault(candidate => string.Equals(candidate.Value, stage, StringComparison.OrdinalIgnoreCase));
+            if (option is not null)
+            {
+                entry.UpdateAvailability(option.IsOpen, option.IsOutdated, BuildStageStatusText(option.IsOpen, option.IsOutdated));
+                continue;
+            }
+
+            var isOpen = IsStageManually || IsStageOpen(stage, dayOfWeek);
+            entry.UpdateAvailability(isOpen, isOutdated: !IsStageManually, BuildStageStatusText(isOpen, isOutdated: !IsStageManually));
+        }
+    }
+
+    private string BuildStageStatusText(bool isOpen, bool isOutdated)
+    {
+        if (isOutdated)
+        {
+            return BuildOutdatedSuffix();
+        }
+
+        return isOpen ? string.Empty : BuildClosedSuffix();
+    }
+
+    private bool ResolveAutoRestartOnDrop()
+    {
+        if (Runtime.ConfigurationService.TryGetCurrentProfile(out var profile)
+            && profile.Values.TryGetValue(LegacyConfigurationKeys.AutoRestartOnDrop, out var profileNode)
+            && profileNode is JsonValue profileValue)
+        {
+            if (profileValue.TryGetValue(out bool profileFlag))
+            {
+                return profileFlag;
+            }
+
+            if (profileValue.TryGetValue(out string? profileText) && bool.TryParse(profileText, out profileFlag))
+            {
+                return profileFlag;
+            }
+        }
+
+        if (Runtime.ConfigurationService.CurrentConfig.GlobalValues.TryGetValue(LegacyConfigurationKeys.AutoRestartOnDrop, out var globalNode)
+            && globalNode is JsonValue globalValue)
+        {
+            if (globalValue.TryGetValue(out bool globalFlag))
+            {
+                return globalFlag;
+            }
+
+            if (globalValue.TryGetValue(out string? globalText) && bool.TryParse(globalText, out globalFlag))
+            {
+                return globalFlag;
+            }
+        }
+
+        return true;
+    }
+
+    private void ApplyPersistentAutoRestartOnDrop(bool value)
+    {
+        SetProperty(ref _autoRestartOnDrop, value, nameof(AutoRestartOnDrop));
+    }
+
+    private async Task PersistAutoRestartOnDropAsync(bool value)
+    {
+        try
+        {
+            if (Runtime.ConfigurationService.TryGetCurrentProfile(out var profile))
+            {
+                profile.Values[LegacyConfigurationKeys.AutoRestartOnDrop] = JsonValue.Create(value);
+            }
+            else
+            {
+                Runtime.ConfigurationService.CurrentConfig.GlobalValues[LegacyConfigurationKeys.AutoRestartOnDrop] = JsonValue.Create(value);
+            }
+
+            await Runtime.ConfigurationService.SaveAsync();
+        }
+        catch (Exception ex)
+        {
+            await Runtime.DiagnosticsService.RecordErrorAsync(
+                "Fight.AutoRestartOnDrop.Save",
+                "Failed to persist auto restart on drop setting.",
+                ex);
+        }
+    }
+
     public sealed record IntOption(int Value, string DisplayName);
 
     public sealed record StringOption(string Value, string DisplayName);
 
     public sealed record DropOption(string DisplayName, string Value);
+
+    public sealed class StagePlanEntry : ObservableObject
+    {
+        private readonly FightTaskModuleViewModel _owner;
+        private string _stage;
+        private bool _isOpen = true;
+        private bool _isOutdated;
+        private string _statusText = string.Empty;
+
+        public StagePlanEntry(FightTaskModuleViewModel owner, string stage)
+        {
+            _owner = owner;
+            _stage = FightStageSelection.NormalizeStoredValue(stage);
+        }
+
+        public string Stage
+        {
+            get => _stage;
+            set
+            {
+                var normalized = _owner.NormalizeStagePlanEntryValue(value);
+                if (!SetProperty(ref _stage, normalized))
+                {
+                    return;
+                }
+
+                OnPropertyChanged(nameof(EditableStageText));
+                _owner.OnStagePlanEntryChanged(this);
+            }
+        }
+
+        public string EditableStageText
+        {
+            get => FightStageSelection.IsCurrentOrLast(Stage) ? string.Empty : Stage;
+            set => Stage = value;
+        }
+
+        public bool IsOpen
+        {
+            get => _isOpen;
+            private set
+            {
+                if (SetProperty(ref _isOpen, value))
+                {
+                    OnPropertyChanged(nameof(IsClosed));
+                }
+            }
+        }
+
+        public bool IsClosed => !IsOpen;
+
+        public bool IsOutdated
+        {
+            get => _isOutdated;
+            private set => SetProperty(ref _isOutdated, value);
+        }
+
+        public string StatusText
+        {
+            get => _statusText;
+            private set => SetProperty(ref _statusText, value);
+        }
+
+        internal void UpdateAvailability(bool isOpen, bool isOutdated, string statusText)
+        {
+            IsOpen = isOpen;
+            IsOutdated = isOutdated;
+            StatusText = statusText;
+        }
+    }
 
     public sealed record StageOption(string DisplayName, string Value, bool IsOpen, bool IsOutdated)
     {

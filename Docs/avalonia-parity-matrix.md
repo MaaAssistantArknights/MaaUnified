@@ -59,10 +59,12 @@
 | --- | --- |
 | Copilot | InProgress |
 | Toolbox | Implemented |
+| StageManager | Implemented |
+| Web API | Implemented |
 | Remote Control Center | Implemented |
 | Overlay | Implemented |
 | Tray Integration | Implemented |
-| StageManager / Web API / Notification Providers | Implemented |
+| Notification Providers | Implemented |
 
 Toolbox note: Avalonia 侧当前为 WPF 对齐的 6-tab 运行工具页，风险提示仅保留在抽卡页。
 

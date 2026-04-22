@@ -1,144 +1,165 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="MAAUnified.App.Features.Settings.HotKeySettingsView">
-  <Grid Margin="4" RowDefinitions="Auto,Auto,Auto,Auto">
-    <TextBlock Classes="section-title" Text="{Binding RootTexts[Settings.Section.HotKey]}" />
+  <UserControl.Styles>
+    <Style Selector="Border.hotkey-settings-block">
+      <Setter Property="Padding" Value="22" />
+    </Style>
 
-    <StackPanel Grid.Row="1"
-                Classes="settings-centered-column"
-                Margin="{DynamicResource MAA.Thickness.Settings.SectionTopMargin}"
-                Spacing="10">
-      <TextBlock Classes="settings-centered-text"
-                 Text="{Binding HotkeyCaptureGuideText}"
-                 TextWrapping="Wrap" />
+    <Style Selector="Border.hotkey-settings-section">
+      <Setter Property="Margin" Value="0,14,0,0" />
+    </Style>
 
-      <Border Padding="12"
-              BorderBrush="Gray"
-              BorderThickness="1"
-              CornerRadius="8">
-        <Grid RowDefinitions="Auto,Auto,Auto"
-              ColumnDefinitions="2*,180,Auto,Auto,Auto">
-          <TextBlock Grid.Row="0"
-                     Grid.Column="0"
-                     Margin="0,0,8,0"
-                     VerticalAlignment="Center"
-                     Text="{Binding ShowGuiHotkeyState.Title}" />
-          <TextBox x:Name="ShowGuiCaptureBox"
-                   Grid.Row="0"
-                   Grid.Column="1"
-                   Margin="0,0,8,0"
-                   IsReadOnly="True"
-                   Tag="ShowGui"
-                   Text="{Binding ShowGuiHotkeyState.InputText}"
-                   KeyDown="OnHotkeyCaptureKeyDown" />
-          <Button Grid.Row="0"
-                  Grid.Column="2"
-                  Margin="0,0,8,0"
-                  Classes="wpf-button wpf-button-secondary"
-                  Tag="ShowGui"
-                  Content="{Binding ShowGuiHotkeyState.CaptureButtonText}"
-                  Click="OnBeginCaptureClick" />
-          <Button Grid.Row="0"
-                  Grid.Column="3"
-                  Margin="0,0,8,0"
-                  Classes="wpf-button wpf-button-secondary"
-                  Tag="ShowGui"
-                  Content="{Binding ShowGuiHotkeyState.ClearButtonText}"
-                  Click="OnClearHotkeyClick" />
-          <TextBlock Grid.Row="0"
-                     Grid.Column="4"
-                     VerticalAlignment="Center"
-                     Text="{Binding ShowGuiHotkeyState.ScopeLabel}" />
+    <Style Selector="Border.hotkey-settings-card">
+      <Setter Property="Padding" Value="18" />
+    </Style>
 
-          <TextBlock Grid.Row="1"
-                     Grid.Column="0"
-                     Grid.ColumnSpan="5"
-                     Classes="state-warning"
-                     IsVisible="{Binding ShowGuiHotkeyState.HasWarningMessage}"
-                     Text="{Binding ShowGuiHotkeyState.WarningMessage}"
-                     TextWrapping="Wrap" />
-          <TextBlock Grid.Row="2"
-                     Grid.Column="0"
-                     Grid.ColumnSpan="5"
-                     Classes="state-error"
-                     IsVisible="{Binding ShowGuiHotkeyState.HasErrorMessage}"
-                     Text="{Binding ShowGuiHotkeyState.ErrorMessage}"
-                     TextWrapping="Wrap" />
-        </Grid>
-      </Border>
+    <Style Selector="StackPanel.hotkey-settings-stack">
+      <Setter Property="Spacing" Value="14" />
+    </Style>
 
-      <Border Padding="12"
-              BorderBrush="Gray"
-              BorderThickness="1"
-              CornerRadius="8">
-        <Grid RowDefinitions="Auto,Auto,Auto"
-              ColumnDefinitions="2*,180,Auto,Auto,Auto">
-          <TextBlock Grid.Row="0"
-                     Grid.Column="0"
-                     Margin="0,0,8,0"
-                     VerticalAlignment="Center"
-                     Text="{Binding LinkStartHotkeyState.Title}" />
-          <TextBox x:Name="LinkStartCaptureBox"
-                   Grid.Row="0"
-                   Grid.Column="1"
-                   Margin="0,0,8,0"
-                   IsReadOnly="True"
-                   Tag="LinkStart"
-                   Text="{Binding LinkStartHotkeyState.InputText}"
-                   KeyDown="OnHotkeyCaptureKeyDown" />
-          <Button Grid.Row="0"
-                  Grid.Column="2"
-                  Margin="0,0,8,0"
-                  Classes="wpf-button wpf-button-secondary"
-                  Tag="LinkStart"
-                  Content="{Binding LinkStartHotkeyState.CaptureButtonText}"
-                  Click="OnBeginCaptureClick" />
-          <Button Grid.Row="0"
-                  Grid.Column="3"
-                  Margin="0,0,8,0"
-                  Classes="wpf-button wpf-button-secondary"
-                  Tag="LinkStart"
-                  Content="{Binding LinkStartHotkeyState.ClearButtonText}"
-                  Click="OnClearHotkeyClick" />
-          <TextBlock Grid.Row="0"
-                     Grid.Column="4"
-                     VerticalAlignment="Center"
-                     Text="{Binding LinkStartHotkeyState.ScopeLabel}" />
+    <Style Selector="StackPanel.hotkey-settings-card-content">
+      <Setter Property="Spacing" Value="12" />
+    </Style>
 
-          <TextBlock Grid.Row="1"
-                     Grid.Column="0"
-                     Grid.ColumnSpan="5"
-                     Classes="state-warning"
-                     IsVisible="{Binding LinkStartHotkeyState.HasWarningMessage}"
-                     Text="{Binding LinkStartHotkeyState.WarningMessage}"
-                     TextWrapping="Wrap" />
-          <TextBlock Grid.Row="2"
-                     Grid.Column="0"
-                     Grid.ColumnSpan="5"
-                     Classes="state-error"
-                     IsVisible="{Binding LinkStartHotkeyState.HasErrorMessage}"
-                     Text="{Binding LinkStartHotkeyState.ErrorMessage}"
-                     TextWrapping="Wrap" />
-        </Grid>
-      </Border>
+    <Style Selector="TextBlock.hotkey-settings-card-title">
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
 
-      <Button Classes="wpf-button wpf-button-secondary"
-              HorizontalAlignment="Center"
-              Content="{Binding RootTexts[Settings.Action.RegisterHotkeys]}"
-              Click="OnApplyHotkeysClick" />
-    </StackPanel>
+    <Style Selector="StackPanel.hotkey-settings-actions">
+      <Setter Property="Orientation" Value="Horizontal" />
+      <Setter Property="Spacing" Value="10" />
+    </Style>
 
-    <StackPanel Grid.Row="2"
-                Classes="settings-form settings-form-narrow"
-                Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}"
-                Spacing="4">
-      <TextBlock Classes="settings-centered-text" Text="{Binding HotkeyStatusMessage}" />
-      <TextBlock Classes="state-warning settings-centered-text"
-                 Text="{Binding HotkeyWarningMessage}"
-                 IsVisible="{Binding HasHotkeyWarningMessage}" />
-      <TextBlock Classes="state-error settings-centered-text"
-                 Text="{Binding HotkeyErrorMessage}"
-                 IsVisible="{Binding HasHotkeyErrorMessage}" />
-    </StackPanel>
+    <Style Selector="StackPanel.hotkey-settings-status-list">
+      <Setter Property="Spacing" Value="8" />
+    </Style>
+  </UserControl.Styles>
+
+  <Grid Margin="4"
+        Classes="settings-form"
+        RowDefinitions="Auto,Auto,Auto,Auto">
+    <Border Classes="app-surface app-section hotkey-settings-block">
+      <StackPanel Classes="hotkey-settings-stack">
+        <TextBlock Classes="app-window-title"
+                   Text="{Binding RootTexts[Settings.Section.HotKey]}" />
+        <TextBlock Classes="app-window-subtitle"
+                   Text="{Binding HotkeyCaptureGuideText}"
+                   TextWrapping="Wrap" />
+      </StackPanel>
+    </Border>
+
+    <Border Grid.Row="1"
+            Classes="app-surface app-section hotkey-settings-block hotkey-settings-section">
+      <StackPanel Classes="hotkey-settings-stack">
+        <Border Classes="app-surface app-card hotkey-settings-card">
+          <StackPanel Classes="hotkey-settings-card-content">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Classes="app-body hotkey-settings-card-title"
+                         Text="{Binding ShowGuiHotkeyState.Title}" />
+              <TextBlock Grid.Column="1"
+                         Margin="12,0,0,0"
+                         VerticalAlignment="Center"
+                         Classes="app-caption"
+                         Text="{Binding ShowGuiHotkeyState.ScopeLabel}" />
+            </Grid>
+
+            <TextBox x:Name="ShowGuiCaptureBox"
+                     Classes="app-input"
+                     IsReadOnly="True"
+                     Tag="ShowGui"
+                     Text="{Binding ShowGuiHotkeyState.InputText}"
+                     KeyDown="OnHotkeyCaptureKeyDown" />
+
+            <StackPanel Classes="hotkey-settings-actions">
+              <Button Classes="app-button app-secondary"
+                      Tag="ShowGui"
+                      Content="{Binding ShowGuiHotkeyState.CaptureButtonText}"
+                      Click="OnBeginCaptureClick" />
+              <Button Classes="app-button app-secondary"
+                      Tag="ShowGui"
+                      Content="{Binding ShowGuiHotkeyState.ClearButtonText}"
+                      Click="OnClearHotkeyClick" />
+            </StackPanel>
+
+            <TextBlock Classes="state-warning app-caption"
+                       IsVisible="{Binding ShowGuiHotkeyState.HasWarningMessage}"
+                       Text="{Binding ShowGuiHotkeyState.WarningMessage}"
+                       TextWrapping="Wrap" />
+            <TextBlock Classes="state-error app-caption"
+                       IsVisible="{Binding ShowGuiHotkeyState.HasErrorMessage}"
+                       Text="{Binding ShowGuiHotkeyState.ErrorMessage}"
+                       TextWrapping="Wrap" />
+          </StackPanel>
+        </Border>
+
+        <Border Classes="app-surface app-card hotkey-settings-card">
+          <StackPanel Classes="hotkey-settings-card-content">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Classes="app-body hotkey-settings-card-title"
+                         Text="{Binding LinkStartHotkeyState.Title}" />
+              <TextBlock Grid.Column="1"
+                         Margin="12,0,0,0"
+                         VerticalAlignment="Center"
+                         Classes="app-caption"
+                         Text="{Binding LinkStartHotkeyState.ScopeLabel}" />
+            </Grid>
+
+            <TextBox x:Name="LinkStartCaptureBox"
+                     Classes="app-input"
+                     IsReadOnly="True"
+                     Tag="LinkStart"
+                     Text="{Binding LinkStartHotkeyState.InputText}"
+                     KeyDown="OnHotkeyCaptureKeyDown" />
+
+            <StackPanel Classes="hotkey-settings-actions">
+              <Button Classes="app-button app-secondary"
+                      Tag="LinkStart"
+                      Content="{Binding LinkStartHotkeyState.CaptureButtonText}"
+                      Click="OnBeginCaptureClick" />
+              <Button Classes="app-button app-secondary"
+                      Tag="LinkStart"
+                      Content="{Binding LinkStartHotkeyState.ClearButtonText}"
+                      Click="OnClearHotkeyClick" />
+            </StackPanel>
+
+            <TextBlock Classes="state-warning app-caption"
+                       IsVisible="{Binding LinkStartHotkeyState.HasWarningMessage}"
+                       Text="{Binding LinkStartHotkeyState.WarningMessage}"
+                       TextWrapping="Wrap" />
+            <TextBlock Classes="state-error app-caption"
+                       IsVisible="{Binding LinkStartHotkeyState.HasErrorMessage}"
+                       Text="{Binding LinkStartHotkeyState.ErrorMessage}"
+                       TextWrapping="Wrap" />
+          </StackPanel>
+        </Border>
+      </StackPanel>
+    </Border>
+
+    <Border Grid.Row="2"
+            Classes="app-surface app-section hotkey-settings-block hotkey-settings-section">
+      <StackPanel HorizontalAlignment="Center">
+        <Button Classes="app-button app-primary"
+                Content="{Binding RootTexts[Settings.Action.RegisterHotkeys]}"
+                Click="OnApplyHotkeysClick" />
+      </StackPanel>
+    </Border>
+
+    <Border Grid.Row="3"
+            Classes="app-surface app-section hotkey-settings-block hotkey-settings-section">
+      <StackPanel Classes="hotkey-settings-status-list">
+        <TextBlock Classes="app-body"
+                   Text="{Binding HotkeyStatusMessage}"
+                   TextWrapping="Wrap" />
+        <TextBlock Classes="state-warning app-caption"
+                   Text="{Binding HotkeyWarningMessage}"
+                   TextWrapping="Wrap"
+                   IsVisible="{Binding HasHotkeyWarningMessage}" />
+        <TextBlock Classes="state-error app-caption"
+                   Text="{Binding HotkeyErrorMessage}"
+                   TextWrapping="Wrap"
+                   IsVisible="{Binding HasHotkeyErrorMessage}" />
+      </StackPanel>
+    </Border>
   </Grid>
 </UserControl>

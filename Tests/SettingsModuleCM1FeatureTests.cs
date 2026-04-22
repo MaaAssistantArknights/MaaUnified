@@ -679,6 +679,30 @@ public sealed class SettingsModuleCM1FeatureTests
     }
 
     [Fact]
+    public async Task IssueReport_DialogEntryAction_ShouldReuseSharedIssueEntryRoute_WithoutMutatingStatus()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync();
+        var openedTargets = new List<string>();
+        var vm = new SettingsPageViewModel(
+            fixture.Runtime,
+            new ConnectionGameSharedStateViewModel(),
+            openExternalTargetAsync: (target, _) =>
+            {
+                openedTargets.Add(target);
+                return Task.FromResult(UiOperationResult.Ok($"opened:{target}"));
+            });
+        await vm.InitializeAsync();
+
+        var result = await vm.OpenIssueReportEntryForDialogAsync();
+
+        Assert.True(result.Success);
+        Assert.Single(openedTargets);
+        Assert.Contains("issues/new/choose", openedTargets[0], StringComparison.Ordinal);
+        Assert.True(string.IsNullOrEmpty(vm.IssueReportStatusMessage));
+        Assert.False(vm.HasIssueReportErrorMessage);
+    }
+
+    [Fact]
     public async Task IssueReport_ClearImageCache_RemovesFiles()
     {
         await using var fixture = await RuntimeFixture.CreateAsync();

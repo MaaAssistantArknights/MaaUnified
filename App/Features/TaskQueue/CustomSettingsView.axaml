@@ -1,26 +1,77 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="MAAUnified.App.Features.TaskQueue.CustomSettingsView">
-  <Grid RowDefinitions="Auto,Auto" Margin="2">
+  <UserControl.Styles>
+    <Style Selector="StackPanel.custom-settings-content">
+      <Setter Property="Spacing" Value="12" />
+    </Style>
+
+    <Style Selector="Border.custom-settings-card">
+      <Setter Property="Padding" Value="14" />
+    </Style>
+
+    <Style Selector="StackPanel.custom-settings-card-content">
+      <Setter Property="Spacing" Value="8" />
+    </Style>
+
+    <Style Selector="TextBlock.custom-settings-title">
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <Style Selector="StackPanel.custom-settings-validation">
+      <Setter Property="Spacing" Value="6" />
+    </Style>
+  </UserControl.Styles>
+
+  <StackPanel Margin="4" Spacing="{DynamicResource MAA.Spacing.Medium}">
     <TextBlock Classes="section-title" Text="{Binding Texts[Custom.Title]}" />
 
-    <StackPanel Grid.Row="1" Spacing="{DynamicResource MAA.Spacing.Small}">
-      <TextBlock Text="{Binding Texts[Custom.TaskNames]}" />
-      <TextBox AcceptsReturn="True" Height="120" Text="{Binding TaskNamesText, UpdateSourceTrigger=LostFocus}" />
+    <Border Classes="app-surface app-section">
+      <StackPanel Classes="custom-settings-content">
+        <Border Classes="app-surface app-card custom-settings-card">
+          <StackPanel Classes="custom-settings-card-content">
+            <TextBlock Classes="app-caption" Text="{Binding Texts[Custom.TaskNames]}" />
+            <TextBox Width="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
+                     Classes="app-input app-input-block"
+                     AcceptsReturn="True"
+                     Height="120"
+                     Text="{Binding TaskNamesText, UpdateSourceTrigger=LostFocus}" />
+          </StackPanel>
+        </Border>
 
-      <TextBlock Text="{Binding Texts[Custom.TaskNamesPreview]}" />
-      <TextBlock Text="{Binding TaskNamesPreview}" TextWrapping="Wrap" />
+        <Border Classes="app-surface app-card custom-settings-card">
+          <StackPanel Classes="custom-settings-card-content">
+            <TextBlock Classes="app-caption" Text="{Binding Texts[Custom.TaskNamesPreview]}" />
+            <TextBlock MaxWidth="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
+                       Classes="app-body"
+                       Text="{Binding TaskNamesPreview}" />
+          </StackPanel>
+        </Border>
 
-      <TextBlock Text="{Binding Texts[Common.LoadingTaskHint]}" />
-      <TextBlock Text="{Binding StatusMessage}" />
-      <TextBlock Foreground="{DynamicResource MAA.ErrorBrush}"
-                 Text="{Binding LastErrorMessage}"
-                 TextWrapping="Wrap" />
+        <Border Classes="app-surface app-card custom-settings-card">
+          <StackPanel Classes="custom-settings-card-content">
+            <TextBlock MaxWidth="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
+                       Classes="app-caption"
+                       Text="{Binding Texts[Common.LoadingTaskHint]}" />
+            <TextBlock MaxWidth="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
+                       Classes="app-body"
+                       Text="{Binding StatusMessage}" />
+            <TextBlock MaxWidth="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
+                       Classes="app-body"
+                       Foreground="{DynamicResource MAA.ErrorBrush}"
+                       Text="{Binding LastErrorMessage}" />
 
-      <StackPanel IsVisible="{Binding HasValidationIssues}">
-        <TextBlock Text="{Binding Texts[Common.ValidationIssues]}" />
-        <ListBox MaxHeight="96" ItemsSource="{Binding ValidationMessages}" />
+            <StackPanel Classes="custom-settings-validation"
+                        IsVisible="{Binding HasValidationIssues}">
+              <TextBlock Classes="app-body custom-settings-title"
+                         Text="{Binding Texts[Common.ValidationIssues]}" />
+              <ListBox Width="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
+                       MaxHeight="96"
+                       ItemsSource="{Binding ValidationMessages}" />
+            </StackPanel>
+          </StackPanel>
+        </Border>
       </StackPanel>
-    </StackPanel>
-  </Grid>
+    </Border>
+  </StackPanel>
 </UserControl>

@@ -3,150 +3,234 @@
              xmlns:controls="clr-namespace:MAAUnified.App.Controls"
              xmlns:vm="clr-namespace:MAAUnified.App.ViewModels.Settings"
              x:Class="MAAUnified.App.Features.Settings.GameSettingsView">
-  <Grid Margin="4" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto">
-    <TextBlock Classes="section-title" Text="{Binding RootTexts[Settings.Section.Game]}" />
+  <UserControl.Styles>
+    <Style Selector="Border.game-settings-section">
+      <Setter Property="Padding" Value="22" />
+    </Style>
 
-    <StackPanel Grid.Row="1"
-                Classes="settings-centered-column"
-                Margin="{DynamicResource MAA.Thickness.Settings.SectionTopMargin}">
-      <TextBlock Classes="settings-field-caption" Text="{Binding RootTexts[Settings.Game.ClientType]}" />
-      <ComboBox Width="{DynamicResource MAA.Size.Settings.FieldCenteredWidth}"
-                ItemsSource="{Binding ConnectionGameSharedState.ClientTypeOptions}"
-                SelectedItem="{Binding ConnectionGameSharedState.SelectedClientTypeOption, Mode=TwoWay}">
-        <ComboBox.ItemTemplate>
-          <DataTemplate x:DataType="vm:ConnectionGameOptionItem">
-            <TextBlock Text="{Binding DisplayName}" />
-          </DataTemplate>
-        </ComboBox.ItemTemplate>
-      </ComboBox>
-      <StackPanel Classes="settings-centered-column"
-                  Margin="0,8,0,0"
+    <Style Selector="StackPanel.game-settings-stack">
+      <Setter Property="Spacing" Value="12" />
+    </Style>
+
+    <Style Selector="Border.game-settings-card">
+      <Setter Property="Padding" Value="16" />
+    </Style>
+
+    <Style Selector="TextBlock.game-settings-card-title">
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <Style Selector="WrapPanel.game-settings-toggle-group">
+      <Setter Property="ItemWidth" Value="260" />
+      <Setter Property="Orientation" Value="Horizontal" />
+    </Style>
+  </UserControl.Styles>
+
+  <Grid Margin="4"
+        RowDefinitions="Auto,Auto,Auto">
+    <TextBlock Classes="section-title"
+               Text="{Binding RootTexts[Settings.Section.Game]}" />
+
+    <WrapPanel Grid.Row="1"
+               Classes="settings-form settings-wrap"
+               Margin="{DynamicResource MAA.Thickness.Settings.SectionTopMargin}">
+      <Border Classes="app-surface app-section game-settings-section">
+        <StackPanel Classes="game-settings-stack">
+          <TextBlock Classes="app-body"
+                     FontSize="16"
+                     FontWeight="SemiBold"
+                     Text="{Binding RootTexts[Settings.Game.ClientType]}" />
+
+          <Border Classes="app-surface app-card game-settings-card">
+            <StackPanel Classes="game-settings-stack">
+              <TextBlock Classes="app-caption"
+                         Text="{Binding RootTexts[Settings.Game.ClientType]}" />
+              <ComboBox Classes="app-input"
+                        MinWidth="260"
+                        MaxWidth="420"
+                        HorizontalAlignment="Left"
+                        ItemsSource="{Binding ConnectionGameSharedState.ClientTypeOptions}"
+                        SelectedItem="{Binding ConnectionGameSharedState.SelectedClientTypeOption, Mode=TwoWay}">
+                <ComboBox.ItemTemplate>
+                  <DataTemplate x:DataType="vm:ConnectionGameOptionItem">
+                    <TextBlock Text="{Binding DisplayName}" />
+                  </DataTemplate>
+                </ComboBox.ItemTemplate>
+              </ComboBox>
+            </StackPanel>
+          </Border>
+
+          <Border Classes="app-surface app-card game-settings-card"
                   IsVisible="{Binding ConnectionGameSharedState.IsYoStarEnClientType}">
-        <TextBlock Classes="settings-centered-text"
-                   Foreground="OrangeRed"
-                   Text="YoStar EN resolution guide is available." />
-        <Button Classes="wpf-button wpf-button-secondary"
-                HorizontalAlignment="Center"
-                Content="Open YoStar EN Resolution Guide"
-                Click="OnOpenYoStarResolutionGuideClick" />
-      </StackPanel>
-      <StackPanel Classes="settings-centered-column"
-                  Margin="0,8,0,0"
+            <StackPanel Classes="game-settings-stack">
+              <TextBlock Classes="app-body game-settings-card-title"
+                         Text="YoStar EN resolution guide is available." />
+              <Button Classes="app-button app-secondary"
+                      HorizontalAlignment="Left"
+                      Content="Open YoStar EN Resolution Guide"
+                      Click="OnOpenYoStarResolutionGuideClick" />
+            </StackPanel>
+          </Border>
+
+          <Border Classes="app-surface app-card game-settings-card"
                   IsVisible="{Binding ConnectionGameSharedState.ShowOverseasClientHint}">
-        <TextBlock Classes="settings-centered-text subtle"
-                   Text="Using an overseas client? See adaptation help." />
-        <Button Classes="wpf-button wpf-button-secondary"
-                HorizontalAlignment="Center"
-                Content="Open Overseas Adaptation Guide"
-                Click="OnOpenOverseasAdaptationGuideClick" />
-      </StackPanel>
-    </StackPanel>
+            <StackPanel Classes="game-settings-stack">
+              <TextBlock Classes="app-body"
+                         Text="Using an overseas client? See adaptation help." />
+              <Button Classes="app-button app-secondary"
+                      HorizontalAlignment="Left"
+                      Content="Open Overseas Adaptation Guide"
+                      Click="OnOpenOverseasAdaptationGuideClick" />
+            </StackPanel>
+          </Border>
 
-    <StackPanel Grid.Row="2"
-                Classes="settings-centered-column"
-                Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}">
-      <CheckBox Content="{Binding RootTexts[Settings.Game.DeploymentWithPause]}"
-                HorizontalAlignment="Center"
-                IsChecked="{Binding DeploymentWithPause}" />
-    </StackPanel>
+          <Border Classes="app-surface app-card game-settings-card">
+            <StackPanel Classes="game-settings-stack">
+              <CheckBox Classes="app-checkbox"
+                        Content="{Binding RootTexts[Settings.Game.DeploymentWithPause]}"
+                        IsChecked="{Binding DeploymentWithPause}" />
+            </StackPanel>
+          </Border>
+        </StackPanel>
+      </Border>
 
-    <StackPanel Grid.Row="3"
-                Classes="settings-centered-column"
-                Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}">
-      <Grid HorizontalAlignment="Center"
-            ColumnDefinitions="Auto,Auto">
-        <TextBlock Grid.Column="0"
-                   Classes="settings-field-caption"
-                   Margin="0"
-                   Text="{Binding RootTexts[Settings.Game.StartsWithScript]}" />
-        <controls:TooltipHint Grid.Column="1" Tip="{Binding RootTexts[Settings.Game.StartsWithScriptTip]}" />
-      </Grid>
-      <TextBox Width="{DynamicResource MAA.Size.Settings.FieldInputWidth}"
-               Text="{Binding StartsWithScript, UpdateSourceTrigger=LostFocus}"
-               DragDrop.AllowDrop="True"
-               DragDrop.DragOver="OnScriptPathDragOver"
-               DragDrop.Drop="OnStartsWithScriptDrop" />
-    </StackPanel>
+      <Border Classes="app-surface app-section game-settings-section">
+        <StackPanel Classes="game-settings-stack">
+          <TextBlock Classes="app-body"
+                     FontSize="16"
+                     FontWeight="SemiBold"
+                     Text="{Binding RootTexts[Settings.Game.StartsWithScript]}" />
 
-    <StackPanel Grid.Row="4"
-                Classes="settings-centered-column"
-                Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}">
-      <Grid HorizontalAlignment="Center"
-            ColumnDefinitions="Auto,Auto">
-        <TextBlock Grid.Column="0"
-                   Classes="settings-field-caption"
-                   Margin="0"
-                   Text="{Binding RootTexts[Settings.Game.EndsWithScript]}" />
-        <controls:TooltipHint Grid.Column="1" Tip="{Binding RootTexts[Settings.Game.EndsWithScriptTip]}" />
-      </Grid>
-      <TextBox Width="{DynamicResource MAA.Size.Settings.FieldInputWidth}"
-               Text="{Binding EndsWithScript, UpdateSourceTrigger=LostFocus}"
-               DragDrop.AllowDrop="True"
-               DragDrop.DragOver="OnScriptPathDragOver"
-               DragDrop.Drop="OnEndsWithScriptDrop" />
-    </StackPanel>
+          <Border Classes="app-surface app-card game-settings-card">
+            <StackPanel Classes="game-settings-stack">
+              <StackPanel Orientation="Horizontal"
+                          Spacing="8">
+                <TextBlock Classes="app-body game-settings-card-title"
+                           VerticalAlignment="Center"
+                           Text="{Binding RootTexts[Settings.Game.StartsWithScript]}" />
+                <controls:TooltipHint Tip="{Binding RootTexts[Settings.Game.StartsWithScriptTip]}" />
+              </StackPanel>
+              <TextBox Classes="app-input"
+                       Text="{Binding StartsWithScript, UpdateSourceTrigger=LostFocus}"
+                       DragDrop.AllowDrop="True"
+                       DragDrop.DragOver="OnScriptPathDragOver"
+                       DragDrop.Drop="OnStartsWithScriptDrop" />
+            </StackPanel>
+          </Border>
 
-    <StackPanel Grid.Row="5"
-                Classes="settings-centered-column"
-                Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}">
-      <StackPanel Orientation="Horizontal"
-                  HorizontalAlignment="Center"
-                  Spacing="{DynamicResource MAA.Spacing.Large}">
-        <CheckBox Content="{Binding RootTexts[Settings.Game.UseScriptOnCopilot]}" IsChecked="{Binding CopilotWithScript}" />
-        <CheckBox Content="{Binding RootTexts[Settings.Game.UseScriptOnManualStop]}" IsChecked="{Binding ManualStopWithScript}" />
-      </StackPanel>
-    </StackPanel>
+          <Border Classes="app-surface app-card game-settings-card">
+            <StackPanel Classes="game-settings-stack">
+              <StackPanel Orientation="Horizontal"
+                          Spacing="8">
+                <TextBlock Classes="app-body game-settings-card-title"
+                           VerticalAlignment="Center"
+                           Text="{Binding RootTexts[Settings.Game.EndsWithScript]}" />
+                <controls:TooltipHint Tip="{Binding RootTexts[Settings.Game.EndsWithScriptTip]}" />
+              </StackPanel>
+              <TextBox Classes="app-input"
+                       Text="{Binding EndsWithScript, UpdateSourceTrigger=LostFocus}"
+                       DragDrop.AllowDrop="True"
+                       DragDrop.DragOver="OnScriptPathDragOver"
+                       DragDrop.Drop="OnEndsWithScriptDrop" />
+            </StackPanel>
+          </Border>
+        </StackPanel>
+      </Border>
 
-    <StackPanel Grid.Row="6"
-                Classes="settings-centered-column"
-                Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}">
-      <StackPanel Orientation="Horizontal"
-                  HorizontalAlignment="Center"
-                  Spacing="{DynamicResource MAA.Spacing.Large}">
-        <CheckBox Content="{Binding RootTexts[Settings.Game.BlockSleep]}" IsChecked="{Binding BlockSleep}" />
-        <CheckBox Content="{Binding RootTexts[Settings.Game.BlockSleepWithScreenOn]}"
-                  IsChecked="{Binding BlockSleepWithScreenOn}"
-                  IsVisible="{Binding ShowBlockSleepWithScreenOnOption}" />
-      </StackPanel>
-    </StackPanel>
+      <Border Classes="app-surface app-section game-settings-section">
+        <StackPanel Classes="game-settings-stack">
+          <TextBlock Classes="app-body"
+                     FontSize="16"
+                     FontWeight="SemiBold"
+                     Text="{Binding RootTexts[Settings.Section.Game]}" />
 
-    <StackPanel Grid.Row="7"
-                Classes="settings-centered-column"
-                Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}">
-      <StackPanel Orientation="Horizontal"
-                  HorizontalAlignment="Center"
-                  Spacing="{DynamicResource MAA.Spacing.Large}">
-        <CheckBox Content="{Binding RootTexts[Settings.Game.EnablePenguin]}" IsChecked="{Binding EnablePenguin}" />
-        <CheckBox Content="{Binding RootTexts[Settings.Game.EnableYituliu]}" IsChecked="{Binding EnableYituliu}" />
-      </StackPanel>
-      <StackPanel Classes="settings-centered-column"
-                  Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}"
+          <WrapPanel Classes="game-settings-toggle-group"
+                     ItemHeight="88"
+                     ItemWidth="280">
+            <Border Classes="app-surface app-card game-settings-card">
+              <CheckBox Classes="app-checkbox"
+                        Content="{Binding RootTexts[Settings.Game.UseScriptOnCopilot]}"
+                        IsChecked="{Binding CopilotWithScript}" />
+            </Border>
+
+            <Border Classes="app-surface app-card game-settings-card">
+              <CheckBox Classes="app-checkbox"
+                        Content="{Binding RootTexts[Settings.Game.UseScriptOnManualStop]}"
+                        IsChecked="{Binding ManualStopWithScript}" />
+            </Border>
+
+            <Border Classes="app-surface app-card game-settings-card">
+              <CheckBox Classes="app-checkbox"
+                        Content="{Binding RootTexts[Settings.Game.BlockSleep]}"
+                        IsChecked="{Binding BlockSleep}" />
+            </Border>
+
+            <Border Classes="app-surface app-card game-settings-card"
+                    IsVisible="{Binding ShowBlockSleepWithScreenOnOption}">
+              <CheckBox Classes="app-checkbox"
+                        Content="{Binding RootTexts[Settings.Game.BlockSleepWithScreenOn]}"
+                        IsChecked="{Binding BlockSleepWithScreenOn}" />
+            </Border>
+
+            <Border Classes="app-surface app-card game-settings-card">
+              <CheckBox Classes="app-checkbox"
+                        Content="{Binding RootTexts[Settings.Game.EnablePenguin]}"
+                        IsChecked="{Binding EnablePenguin}" />
+            </Border>
+
+            <Border Classes="app-surface app-card game-settings-card">
+              <CheckBox Classes="app-checkbox"
+                        Content="{Binding RootTexts[Settings.Game.EnableYituliu]}"
+                        IsChecked="{Binding EnableYituliu}" />
+            </Border>
+          </WrapPanel>
+
+          <Border Classes="app-surface app-card game-settings-card"
                   IsVisible="{Binding ShowPenguinIdField}">
-        <TextBlock Classes="settings-field-caption" Text="{Binding RootTexts[Settings.Game.PenguinId]}" />
-        <TextBox Width="{DynamicResource MAA.Size.Settings.FieldInputWidth}"
-                 Text="{Binding PenguinId, UpdateSourceTrigger=LostFocus}" />
-      </StackPanel>
-    </StackPanel>
+            <StackPanel Classes="game-settings-stack">
+              <TextBlock Classes="app-caption"
+                         Text="{Binding RootTexts[Settings.Game.PenguinId]}" />
+              <TextBox Classes="app-input"
+                       MinWidth="240"
+                       MaxWidth="360"
+                       HorizontalAlignment="Left"
+                       Text="{Binding PenguinId, UpdateSourceTrigger=LostFocus}" />
+            </StackPanel>
+          </Border>
+        </StackPanel>
+      </Border>
+    </WrapPanel>
 
-    <Grid Grid.Row="8"
-          Classes="settings-form"
-          Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}"
-          ColumnDefinitions="250,250">
-      <StackPanel Grid.Column="0" Classes="settings-centered-column">
-        <TextBlock Classes="settings-field-caption" Text="{Binding RootTexts[Settings.Game.TaskTimeoutMinutes]}" />
-        <controls:VerticalSpinNumberBox Width="{DynamicResource MAA.Size.Settings.FieldNarrowWidth}"
-                                        Minimum="0"
-                                        Maximum="1440"
-                                        Value="{Binding TaskTimeoutMinutes}" />
-      </StackPanel>
+    <WrapPanel Grid.Row="2"
+               Classes="settings-wrap"
+               Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}">
+      <Border Classes="app-surface app-section game-settings-section">
+        <Border Classes="app-surface app-card game-settings-card">
+          <StackPanel Classes="game-settings-stack">
+            <TextBlock Classes="app-caption"
+                       Text="{Binding RootTexts[Settings.Game.TaskTimeoutMinutes]}" />
+            <controls:VerticalSpinNumberBox Width="{DynamicResource MAA.Size.Settings.FieldNarrowWidth}"
+                                            HorizontalAlignment="Left"
+                                            Minimum="0"
+                                            Maximum="1440"
+                                            Value="{Binding TaskTimeoutMinutes}" />
+          </StackPanel>
+        </Border>
+      </Border>
 
-      <StackPanel Grid.Column="1" Classes="settings-centered-column">
-        <TextBlock Classes="settings-field-caption" Text="{Binding RootTexts[Settings.Game.ReminderIntervalMinutes]}" />
-        <controls:VerticalSpinNumberBox Width="{DynamicResource MAA.Size.Settings.FieldNarrowWidth}"
-                                        Minimum="1"
-                                        Maximum="1440"
-                                        Value="{Binding ReminderIntervalMinutes}" />
-      </StackPanel>
-    </Grid>
+      <Border Classes="app-surface app-section game-settings-section">
+        <Border Classes="app-surface app-card game-settings-card">
+          <StackPanel Classes="game-settings-stack">
+            <TextBlock Classes="app-caption"
+                       Text="{Binding RootTexts[Settings.Game.ReminderIntervalMinutes]}" />
+            <controls:VerticalSpinNumberBox Width="{DynamicResource MAA.Size.Settings.FieldNarrowWidth}"
+                                            HorizontalAlignment="Left"
+                                            Minimum="1"
+                                            Maximum="1440"
+                                            Value="{Binding ReminderIntervalMinutes}" />
+          </StackPanel>
+        </Border>
+      </Border>
+    </WrapPanel>
   </Grid>
 </UserControl>

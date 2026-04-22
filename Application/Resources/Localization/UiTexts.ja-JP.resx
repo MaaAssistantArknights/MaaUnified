@@ -2870,7 +2870,7 @@
     <value>トレイ統合</value>
   </data>
   <data name="Toolbox.Advanced.Tab.WebApi" xml:space="preserve">
-    <value>WebApi（互換）</value>
+    <value>WebApi</value>
   </data>
   <data name="Toolbox.Advanced.Tray.ApplyVisibility" xml:space="preserve">
     <value>表示設定を適用</value>
@@ -2936,10 +2936,10 @@
     <value>サービスを停止</value>
   </data>
   <data name="Toolbox.Advanced.WebApi.Title" xml:space="preserve">
-    <value>WebApi（互換）</value>
+    <value>WebApi</value>
   </data>
   <data name="Toolbox.Advanced.WebApi.Warning" xml:space="preserve">
-    <value>このパネルは旧版 WebApi 互換のためのものです。外部アクセスが明確に必要な場合のみ有効化し、可能であればアクセストークンを設定してください。</value>
+    <value>この高度な機能ページは旧版 WebApi クライアントとの互換性を維持します。外部アクセスが明確に必要な場合のみ有効化し、可能であればアクセストークンを設定してください。</value>
   </data>
   <data name="Toolbox.Depot.ExportArkPlanner" xml:space="preserve">
     <value>Penguin Stats 周回計画へエクスポート</value>

@@ -2,75 +2,150 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:controls="clr-namespace:MAAUnified.App.Controls"
              x:Class="MAAUnified.App.Features.Settings.RemoteControlSettingsView">
-  <Grid Margin="4" RowDefinitions="Auto,Auto,Auto">
-    <TextBlock Classes="section-title" Text="{Binding RootTexts[Settings.Section.RemoteControl]}" />
+  <UserControl.Styles>
+    <Style Selector="Border.remote-control-section">
+      <Setter Property="Padding" Value="22" />
+    </Style>
+
+    <Style Selector="StackPanel.remote-control-stack">
+      <Setter Property="Spacing" Value="16" />
+    </Style>
+
+    <Style Selector="Border.remote-control-card">
+      <Setter Property="Padding" Value="14" />
+    </Style>
+
+    <Style Selector="StackPanel.remote-control-card-stack">
+      <Setter Property="Spacing" Value="8" />
+    </Style>
+
+    <Style Selector="TextBlock.remote-control-field-title">
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <Style Selector="StackPanel.remote-control-inline-actions">
+      <Setter Property="Orientation" Value="Horizontal" />
+      <Setter Property="Spacing" Value="10" />
+    </Style>
+
+    <Style Selector="StackPanel.remote-control-status-list">
+      <Setter Property="Spacing" Value="8" />
+    </Style>
+  </UserControl.Styles>
+
+  <Grid Margin="4"
+        RowDefinitions="Auto,Auto,Auto">
+    <TextBlock Classes="section-title"
+               Text="{Binding RootTexts[Settings.Section.RemoteControl]}" />
+
     <StackPanel Grid.Row="1"
                 Classes="settings-form"
-                Margin="{DynamicResource MAA.Thickness.Settings.SectionTopMargin}"
-                Spacing="{DynamicResource MAA.Spacing.Medium}">
-      <TextBlock MaxWidth="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
-                 Classes="settings-centered-text"
-                 Text="{Binding RootTexts[Settings.RemoteControl.Warning]}" />
+                Margin="{DynamicResource MAA.Thickness.Settings.SectionTopMargin}">
+      <Border Classes="app-surface app-section remote-control-section">
+        <StackPanel Classes="remote-control-stack">
+          <TextBlock Classes="app-lead"
+                     Text="{Binding RootTexts[Settings.Section.RemoteControl]}" />
+          <TextBlock MaxWidth="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
+                     Classes="app-body"
+                     Text="{Binding RootTexts[Settings.RemoteControl.Warning]}" />
+        </StackPanel>
+      </Border>
 
-      <Grid ColumnDefinitions="132,*">
-        <TextBlock Classes="settings-label" Text="{Binding RootTexts[Settings.RemoteControl.GetTaskEndpoint]}" />
-        <TextBox Grid.Column="1"
-                 Text="{Binding RemoteGetTaskEndpoint, UpdateSourceTrigger=LostFocus}"
-                 Watermark="{Binding RootTexts[Settings.RemoteControl.GetTaskEndpointWatermark]}" />
-      </Grid>
+      <WrapPanel Classes="settings-wrap">
+        <Border Classes="app-surface app-section remote-control-section">
+          <StackPanel Classes="remote-control-stack">
+            <TextBlock Classes="section-title"
+                       Text="{Binding RootTexts[Settings.Section.RemoteControl]}" />
 
-      <Grid ColumnDefinitions="132,*">
-        <TextBlock Classes="settings-label" Text="{Binding RootTexts[Settings.RemoteControl.ReportTaskEndpoint]}" />
-        <TextBox Grid.Column="1"
-                 Text="{Binding RemoteReportEndpoint, UpdateSourceTrigger=LostFocus}"
-                 Watermark="{Binding RootTexts[Settings.RemoteControl.ReportTaskEndpointWatermark]}" />
-      </Grid>
+            <Border Classes="app-surface app-card remote-control-card">
+              <StackPanel Classes="remote-control-card-stack">
+                <TextBlock Classes="app-body remote-control-field-title"
+                           Text="{Binding RootTexts[Settings.RemoteControl.GetTaskEndpoint]}" />
+                <TextBox Classes="app-input"
+                         Text="{Binding RemoteGetTaskEndpoint, UpdateSourceTrigger=LostFocus}"
+                         Watermark="{Binding RootTexts[Settings.RemoteControl.GetTaskEndpointWatermark]}" />
+              </StackPanel>
+            </Border>
 
-      <Grid ColumnDefinitions="132,120">
-        <TextBlock Classes="settings-label" Text="{Binding RootTexts[Settings.RemoteControl.PollIntervalMs]}" />
-        <controls:VerticalSpinNumberBox Grid.Column="1"
-                                        Minimum="500"
-                                        Maximum="60000"
-                                        Value="{Binding RemotePollInterval}" />
-      </Grid>
+            <Border Classes="app-surface app-card remote-control-card">
+              <StackPanel Classes="remote-control-card-stack">
+                <TextBlock Classes="app-body remote-control-field-title"
+                           Text="{Binding RootTexts[Settings.RemoteControl.ReportTaskEndpoint]}" />
+                <TextBox Classes="app-input"
+                         Text="{Binding RemoteReportEndpoint, UpdateSourceTrigger=LostFocus}"
+                         Watermark="{Binding RootTexts[Settings.RemoteControl.ReportTaskEndpointWatermark]}" />
+              </StackPanel>
+            </Border>
 
-      <Grid ColumnDefinitions="132,220,Auto">
-        <TextBlock Classes="settings-label" Text="{Binding RootTexts[Settings.RemoteControl.UserIdentity]}" />
-        <TextBox Grid.Column="1"
-                 Text="{Binding RemoteUserIdentity, UpdateSourceTrigger=LostFocus}"
-                 Watermark="{Binding RootTexts[Settings.RemoteControl.UserIdentityWatermark]}" />
-        <Button Grid.Column="2"
-                Classes="wpf-button wpf-button-secondary"
-                Margin="{DynamicResource MAA.Thickness.MarginActionButtonLeft}"
-                Content="{Binding RootTexts[Settings.Action.TestRemote]}"
-                Click="OnTestRemoteConnectivityClick" />
-      </Grid>
+            <Border Classes="app-surface app-card remote-control-card">
+              <StackPanel Classes="remote-control-card-stack">
+                <TextBlock Classes="app-body remote-control-field-title"
+                           Text="{Binding RootTexts[Settings.RemoteControl.PollIntervalMs]}" />
+                <controls:VerticalSpinNumberBox Width="120"
+                                                HorizontalAlignment="Left"
+                                                Minimum="500"
+                                                Maximum="60000"
+                                                Value="{Binding RemotePollInterval}" />
+              </StackPanel>
+            </Border>
+          </StackPanel>
+        </Border>
 
-      <Grid ColumnDefinitions="132,220,Auto">
-        <TextBlock Classes="settings-label" Text="{Binding RootTexts[Settings.RemoteControl.DeviceIdentity]}" />
-        <TextBox Grid.Column="1"
-                 IsReadOnly="True"
-                 Text="{Binding RemoteDeviceIdentity, Mode=OneWay}"
-                 Watermark="{Binding RootTexts[Settings.RemoteControl.DeviceIdentityWatermark]}" />
-        <Button Grid.Column="2"
-                Classes="wpf-button wpf-button-secondary"
-                Margin="{DynamicResource MAA.Thickness.MarginActionButtonLeft}"
-                Content="{Binding RootTexts[RemoteControlRegenerateDeviceIdentity]}"
-                Click="OnRegenerateRemoteDeviceIdentityClick" />
-      </Grid>
+        <Border Classes="app-surface app-section remote-control-section">
+          <StackPanel Classes="remote-control-stack">
+            <TextBlock Classes="section-title"
+                       Text="{Binding RootTexts[Settings.RemoteControl.UserIdentity]}" />
+
+            <Border Classes="app-surface app-card remote-control-card">
+              <StackPanel Classes="remote-control-card-stack">
+                <TextBlock Classes="app-body remote-control-field-title"
+                           Text="{Binding RootTexts[Settings.RemoteControl.UserIdentity]}" />
+                <StackPanel Classes="remote-control-inline-actions">
+                  <TextBox Classes="app-input"
+                           Width="220"
+                           Text="{Binding RemoteUserIdentity, UpdateSourceTrigger=LostFocus}"
+                           Watermark="{Binding RootTexts[Settings.RemoteControl.UserIdentityWatermark]}" />
+                  <Button Classes="app-button app-secondary"
+                          Content="{Binding RootTexts[Settings.Action.TestRemote]}"
+                          Click="OnTestRemoteConnectivityClick" />
+                </StackPanel>
+              </StackPanel>
+            </Border>
+
+            <Border Classes="app-surface app-card remote-control-card">
+              <StackPanel Classes="remote-control-card-stack">
+                <TextBlock Classes="app-body remote-control-field-title"
+                           Text="{Binding RootTexts[Settings.RemoteControl.DeviceIdentity]}" />
+                <StackPanel Classes="remote-control-inline-actions">
+                  <TextBox Classes="app-input"
+                           Width="220"
+                           IsReadOnly="True"
+                           Text="{Binding RemoteDeviceIdentity, Mode=OneWay}"
+                           Watermark="{Binding RootTexts[Settings.RemoteControl.DeviceIdentityWatermark]}" />
+                  <Button Classes="app-button app-secondary"
+                          Content="{Binding RootTexts[RemoteControlRegenerateDeviceIdentity]}"
+                          Click="OnRegenerateRemoteDeviceIdentityClick" />
+                </StackPanel>
+              </StackPanel>
+            </Border>
+          </StackPanel>
+        </Border>
+      </WrapPanel>
     </StackPanel>
 
-    <StackPanel Grid.Row="2"
-                Classes="settings-form settings-form-narrow"
-                Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}"
-                Spacing="4">
-      <TextBlock Classes="settings-centered-text" Text="{Binding RemoteControlStatusMessage}" />
-      <TextBlock Classes="state-warning settings-centered-text"
-                 Text="{Binding RemoteControlWarningMessage}"
-                 IsVisible="{Binding HasRemoteControlWarningMessage}" />
-      <TextBlock Classes="state-error settings-centered-text"
-                 Text="{Binding RemoteControlErrorMessage}"
-                 IsVisible="{Binding HasRemoteControlErrorMessage}" />
-    </StackPanel>
+    <Border Grid.Row="2"
+            Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}"
+            Classes="app-surface app-section remote-control-section">
+      <StackPanel Classes="remote-control-status-list">
+        <TextBlock Classes="app-body"
+                   Text="{Binding RemoteControlStatusMessage}" />
+        <TextBlock Classes="state-warning app-body"
+                   Text="{Binding RemoteControlWarningMessage}"
+                   IsVisible="{Binding HasRemoteControlWarningMessage}" />
+        <TextBlock Classes="state-error app-body"
+                   Text="{Binding RemoteControlErrorMessage}"
+                   IsVisible="{Binding HasRemoteControlErrorMessage}" />
+      </StackPanel>
+    </Border>
   </Grid>
 </UserControl>

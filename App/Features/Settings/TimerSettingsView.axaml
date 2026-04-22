@@ -2,108 +2,151 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:controls="clr-namespace:MAAUnified.App.Controls"
              x:Class="MAAUnified.App.Features.Settings.TimerSettingsView">
-  <Grid RowDefinitions="Auto,Auto,*,Auto" Margin="4">
-    <Grid ColumnDefinitions="Auto,*">
-      <TextBlock Classes="section-title" Text="{Binding RootTexts[Settings.Section.Timer]}" />
-      <TextBlock Grid.Column="1"
-                 HorizontalAlignment="Right"
-                 VerticalAlignment="Center"
-                 Classes="state-warning"
-                 Text="{Binding RootTexts[Settings.State.Saving]}"
-                 IsVisible="{Binding IsTimerSaveInProgress}" />
-      <TextBlock Grid.Column="1"
-                 HorizontalAlignment="Right"
-                 VerticalAlignment="Center"
-                 Classes="state-success"
-                 Text="{Binding RootTexts[Settings.State.Saved]}"
-                 IsVisible="{Binding HasTimerSaveSucceeded}" />
+  <Grid Margin="4"
+        RowDefinitions="Auto,Auto">
+    <Grid ColumnDefinitions="*,Auto">
+      <TextBlock Classes="section-title"
+                 Text="{Binding RootTexts[Settings.Section.Timer]}" />
+      <StackPanel Grid.Column="1"
+                  Margin="16,0,0,0"
+                  HorizontalAlignment="Right"
+                  VerticalAlignment="Center"
+                  Spacing="2">
+        <TextBlock HorizontalAlignment="Right"
+                   VerticalAlignment="Center"
+                   Classes="state-warning"
+                   Text="{Binding RootTexts[Settings.State.Saving]}"
+                   IsVisible="{Binding IsTimerSaveInProgress}" />
+        <TextBlock HorizontalAlignment="Right"
+                   VerticalAlignment="Center"
+                   Classes="state-success"
+                   Text="{Binding RootTexts[Settings.State.Saved]}"
+                   IsVisible="{Binding HasTimerSaveSucceeded}" />
+      </StackPanel>
     </Grid>
 
     <StackPanel Grid.Row="1"
-                Classes="settings-centered-column"
                 Margin="{DynamicResource MAA.Thickness.Settings.SectionTopMargin}"
-                Spacing="{DynamicResource MAA.Spacing.Small}">
-      <StackPanel Orientation="Horizontal"
-                  HorizontalAlignment="Center"
-                  Spacing="{DynamicResource MAA.Spacing.Large}">
-        <CheckBox Content="{Binding RootTexts[Settings.Timer.ForceScheduledStart]}" IsChecked="{Binding ForceScheduledStart}" />
-        <CheckBox Content="{Binding RootTexts[Settings.Timer.CustomConfig]}" IsChecked="{Binding CustomTimerConfig}" />
-      </StackPanel>
+                Classes="settings-form">
+      <Border Classes="app-surface app-section">
+        <StackPanel Spacing="16">
+          <TextBlock Classes="app-body"
+                     FontSize="16"
+                     FontWeight="SemiBold"
+                     Text="{Binding RootTexts[Settings.Section.Timer]}" />
 
-      <StackPanel Orientation="Horizontal"
-                  HorizontalAlignment="Center"
-                  IsVisible="{Binding ForceScheduledStart}">
-        <CheckBox Content="{Binding RootTexts[Settings.Timer.ShowWindowBeforeForceScheduledStart]}"
-                  IsChecked="{Binding ShowWindowBeforeForceScheduledStart}"
-                  IsVisible="{Binding ForceScheduledStart}" />
-      </StackPanel>
-    </StackPanel>
+          <Border Classes="app-surface app-card"
+                  Padding="16">
+            <StackPanel Spacing="12">
+              <WrapPanel Classes="settings-wrap"
+                         ItemHeight="54"
+                         ItemWidth="280">
+                <Border Classes="app-surface app-card"
+                        Padding="14">
+                  <CheckBox Classes="app-checkbox"
+                            Content="{Binding RootTexts[Settings.Timer.ForceScheduledStart]}"
+                            IsChecked="{Binding ForceScheduledStart}" />
+                </Border>
 
-    <ItemsControl Grid.Row="2"
-                  HorizontalAlignment="Center"
-                  MaxWidth="{DynamicResource MAA.Size.Settings.FormMaxWidth}"
-                  Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}"
-                  ItemsSource="{Binding Timers}">
-      <ItemsControl.ItemsPanel>
-        <ItemsPanelTemplate>
-          <UniformGrid Columns="2" />
-        </ItemsPanelTemplate>
-      </ItemsControl.ItemsPanel>
-      <ItemsControl.ItemTemplate>
-        <DataTemplate>
-          <StackPanel Classes="settings-centered-column"
-                      Margin="{DynamicResource MAA.Thickness.Settings.ItemMargin}"
-                      Spacing="{DynamicResource MAA.Spacing.Small}">
-            <StackPanel Orientation="Horizontal"
-                        HorizontalAlignment="Center"
-                        Spacing="{DynamicResource MAA.Spacing.Small}">
-              <CheckBox Margin="{DynamicResource MAA.Thickness.Settings.ItemMarginSmall}"
-                        IsChecked="{Binding Enabled}">
-                <CheckBox.Content>
-                  <MultiBinding StringFormat="{}{0} {1}">
-                    <Binding RelativeSource="{RelativeSource AncestorType=UserControl}"
-                             Path="DataContext.RootTexts[Settings.Timer.SlotLabel]" />
-                    <Binding Path="Index" />
-                  </MultiBinding>
-                </CheckBox.Content>
-              </CheckBox>
-              <StackPanel Orientation="Horizontal"
-                          VerticalAlignment="Center"
-                          Spacing="{DynamicResource MAA.Spacing.Small}">
-                <controls:VerticalSpinNumberBox Width="{DynamicResource MAA.Size.Settings.FieldTinyWidth}"
-                                                Minimum="0"
-                                                Maximum="23"
-                                                FormatString="00"
-                                                Value="{Binding Hour}"
-                                                IsEnabled="{Binding Enabled}" />
-                <TextBlock VerticalAlignment="Center" Text=":" />
-                <controls:VerticalSpinNumberBox Width="{DynamicResource MAA.Size.Settings.FieldTinyWidth}"
-                                                Minimum="0"
-                                                Maximum="59"
-                                                FormatString="00"
-                                                Value="{Binding Minute}"
-                                                IsEnabled="{Binding Enabled}" />
-              </StackPanel>
+                <Border Classes="app-surface app-card"
+                        Padding="14">
+                  <CheckBox Classes="app-checkbox"
+                            Content="{Binding RootTexts[Settings.Timer.CustomConfig]}"
+                            IsChecked="{Binding CustomTimerConfig}" />
+                </Border>
+              </WrapPanel>
+
+              <Border Classes="app-surface app-card"
+                      Padding="14"
+                      IsVisible="{Binding ForceScheduledStart}">
+                <CheckBox Margin="{DynamicResource MAA.Thickness.Settings.BranchIndent}"
+                          Classes="app-checkbox"
+                          Content="{Binding RootTexts[Settings.Timer.ShowWindowBeforeForceScheduledStart]}"
+                          IsChecked="{Binding ShowWindowBeforeForceScheduledStart}"
+                          IsVisible="{Binding ForceScheduledStart}" />
+              </Border>
             </StackPanel>
+          </Border>
+        </StackPanel>
+      </Border>
 
-            <ComboBox Width="{DynamicResource MAA.Size.Settings.FieldTimerConfigWidth}"
-                      HorizontalAlignment="Center"
-                      ItemsSource="{Binding DataContext.ConfigurationProfiles, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                      SelectedItem="{Binding Profile, Mode=TwoWay}"
-                      IsEnabled="{Binding Enabled}"
-                      IsVisible="{Binding DataContext.CustomTimerConfig, RelativeSource={RelativeSource AncestorType=UserControl}}" />
-          </StackPanel>
-        </DataTemplate>
-      </ItemsControl.ItemTemplate>
-    </ItemsControl>
+      <Border Classes="app-surface app-section">
+        <StackPanel Spacing="16">
+          <TextBlock Classes="app-body"
+                     FontSize="16"
+                     FontWeight="SemiBold"
+                     Text="{Binding RootTexts[Settings.Timer.SlotLabel]}" />
 
-    <StackPanel Grid.Row="3"
-                Classes="settings-form settings-form-narrow"
-                Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}"
-                Spacing="4">
-      <TextBlock Classes="state-warning settings-centered-text"
-                 Text="{Binding TimerValidationMessage}"
-                 IsVisible="{Binding HasTimerValidationMessage}" />
+          <ItemsControl ItemsSource="{Binding Timers}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <UniformGrid Columns="2" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Border Margin="{DynamicResource MAA.Thickness.Settings.ItemMargin}"
+                        Classes="app-surface app-card"
+                        Padding="16">
+                  <StackPanel Spacing="12">
+                    <Grid ColumnDefinitions="*,Auto">
+                      <CheckBox Grid.Column="0"
+                                Classes="app-checkbox"
+                                VerticalAlignment="Center"
+                                IsChecked="{Binding Enabled}">
+                        <CheckBox.Content>
+                          <MultiBinding StringFormat="{}{0} {1}">
+                            <Binding RelativeSource="{RelativeSource AncestorType=UserControl}"
+                                     Path="DataContext.RootTexts[Settings.Timer.SlotLabel]" />
+                            <Binding Path="Index" />
+                          </MultiBinding>
+                        </CheckBox.Content>
+                      </CheckBox>
+
+                      <StackPanel Grid.Column="1"
+                                  Margin="12,0,0,0"
+                                  Orientation="Horizontal"
+                                  VerticalAlignment="Center"
+                                  Spacing="{DynamicResource MAA.Spacing.Small}">
+                        <controls:VerticalSpinNumberBox Width="{DynamicResource MAA.Size.Settings.FieldTinyWidth}"
+                                                        Minimum="0"
+                                                        Maximum="23"
+                                                        FormatString="00"
+                                                        Value="{Binding Hour}"
+                                                        IsEnabled="{Binding Enabled}" />
+                        <TextBlock VerticalAlignment="Center"
+                                   Text=":" />
+                        <controls:VerticalSpinNumberBox Width="{DynamicResource MAA.Size.Settings.FieldTinyWidth}"
+                                                        Minimum="0"
+                                                        Maximum="59"
+                                                        FormatString="00"
+                                                        Value="{Binding Minute}"
+                                                        IsEnabled="{Binding Enabled}" />
+                      </StackPanel>
+                    </Grid>
+
+                    <ComboBox Width="{DynamicResource MAA.Size.Settings.FieldTimerConfigWidth}"
+                              HorizontalAlignment="Left"
+                              Classes="app-input"
+                              ItemsSource="{Binding DataContext.ConfigurationProfiles, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                              SelectedItem="{Binding Profile, Mode=TwoWay}"
+                              IsEnabled="{Binding Enabled}"
+                              IsVisible="{Binding DataContext.CustomTimerConfig, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                  </StackPanel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </Border>
+
+      <Border Classes="app-surface app-section">
+        <StackPanel Spacing="6">
+          <TextBlock Classes="state-warning"
+                     Text="{Binding TimerValidationMessage}"
+                     IsVisible="{Binding HasTimerValidationMessage}" />
+        </StackPanel>
+      </Border>
     </StackPanel>
   </Grid>
 </UserControl>

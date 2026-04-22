@@ -245,6 +245,16 @@ public partial class CopilotView : UserControl
         await VM.DeleteListItemAsync(item);
     }
 
+    private async void OnCopilotListReordered(object? sender, ReorderableListReorderedEventArgs e)
+    {
+        if (VM is null || e.Item is not CopilotItemViewModel item || !e.Applied)
+        {
+            return;
+        }
+
+        await VM.PersistReorderedItemsAsync(item, e.OldIndex, e.NewIndex);
+    }
+
     private void OnOpenUserAdditionalPopupClick(object? sender, RoutedEventArgs e)
     {
         VM?.OpenUserAdditionalPopup();

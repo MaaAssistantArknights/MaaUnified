@@ -1,0 +1,202 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="MAAUnified.App.Features.Advanced.ToolboxOperBoxView">
+  <UserControl.Styles>
+    <Style Selector="Border.toolbox-operbox-section">
+      <Setter Property="Padding" Value="22" />
+    </Style>
+
+    <Style Selector="Border.toolbox-operbox-card">
+      <Setter Property="Padding" Value="16" />
+    </Style>
+
+    <Style Selector="Border.toolbox-operbox-list-card">
+      <Setter Property="Padding" Value="12" />
+    </Style>
+
+    <Style Selector="Border.toolbox-operbox-operator-card">
+      <Setter Property="Padding" Value="{DynamicResource MAA.Thickness.Toolbox.OperBoxCardPadding}" />
+    </Style>
+
+    <Style Selector="StackPanel.toolbox-operbox-card-stack">
+      <Setter Property="Spacing" Value="12" />
+    </Style>
+
+    <Style Selector="StackPanel.toolbox-operbox-operator-stack">
+      <Setter Property="Spacing" Value="8" />
+    </Style>
+
+    <Style Selector="StackPanel.toolbox-operbox-actions">
+      <Setter Property="Orientation" Value="Horizontal" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="Spacing" Value="12" />
+    </Style>
+  </UserControl.Styles>
+
+  <Grid Margin="{DynamicResource MAA.Thickness.Toolbox.PageMargin}"
+        RowDefinitions="Auto,*,Auto">
+    <Border Classes="app-surface app-section toolbox-operbox-section">
+      <Border Classes="app-surface app-card toolbox-operbox-card">
+        <StackPanel Classes="toolbox-operbox-card-stack">
+          <Border HorizontalAlignment="Left"
+                  Classes="app-badge"
+                  IsVisible="{Binding HasLastOperBoxSyncTime}">
+            <TextBlock Classes="app-badge-text"
+                       Text="{Binding LastOperBoxSyncDisplayText}" />
+          </Border>
+          <TextBlock HorizontalAlignment="Center"
+                     TextAlignment="Center"
+                     Classes="app-body long-wrap"
+                     FontWeight="SemiBold"
+                     Text="{Binding OperBoxInfo}" />
+        </StackPanel>
+      </Border>
+    </Border>
+
+    <Border Grid.Row="1"
+            Margin="0,14,0,0"
+            Classes="app-surface app-section toolbox-operbox-section">
+      <TabControl SelectedIndex="{Binding OperBoxSelectedIndex}">
+        <TabItem Header="{Binding OperBoxNotHaveHeader}">
+          <Border Classes="app-surface app-card toolbox-operbox-list-card">
+            <ScrollViewer HorizontalScrollBarVisibility="Disabled"
+                          VerticalScrollBarVisibility="Auto">
+              <ItemsControl Width="{Binding OperBoxNotHavePanelWidth}"
+                            HorizontalAlignment="Center"
+                            ItemsSource="{Binding OperBoxNotHaveList}">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <WrapPanel ItemWidth="{DynamicResource MAA.Size.Toolbox.OperBoxWrapItemWidth}" />
+                  </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <Border Margin="{DynamicResource MAA.Thickness.Toolbox.CardMargin}"
+                            MinWidth="{DynamicResource MAA.Size.Toolbox.OperBoxCardMinWidth}"
+                            MinHeight="{DynamicResource MAA.Size.Toolbox.OperBoxCardMinHeight}"
+                            Classes="app-surface app-card toolbox-operbox-operator-card">
+                      <StackPanel HorizontalAlignment="Center"
+                                  VerticalAlignment="Center"
+                                  Classes="toolbox-operbox-operator-stack">
+                        <TextBlock HorizontalAlignment="Center"
+                                   Classes="section-title long-wrap"
+                                   Text="{Binding Name}"
+                                   TextAlignment="Center" />
+                        <Border HorizontalAlignment="Center"
+                                Classes="app-badge">
+                          <TextBlock Classes="app-badge-text"
+                                     Foreground="{Binding RarityBrush}"
+                                     Text="{Binding RarityStars}" />
+                        </Border>
+                        <TextBlock HorizontalAlignment="Center"
+                                   Classes="app-caption subtle long-wrap"
+                                   Text="{Binding Subtitle}"
+                                   TextAlignment="Center" />
+                      </StackPanel>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </ScrollViewer>
+          </Border>
+        </TabItem>
+
+        <TabItem Header="{Binding OperBoxHaveHeader}">
+          <Border Classes="app-surface app-card toolbox-operbox-list-card">
+            <ScrollViewer HorizontalScrollBarVisibility="Disabled"
+                          VerticalScrollBarVisibility="Auto">
+              <ItemsControl Width="{Binding OperBoxHavePanelWidth}"
+                            HorizontalAlignment="Center"
+                            ItemsSource="{Binding OperBoxHaveList}">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <WrapPanel ItemWidth="{DynamicResource MAA.Size.Toolbox.OperBoxWrapItemWidth}" />
+                  </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <Border Margin="{DynamicResource MAA.Thickness.Toolbox.CardMargin}"
+                            MinWidth="{DynamicResource MAA.Size.Toolbox.OperBoxCardMinWidth}"
+                            MinHeight="{DynamicResource MAA.Size.Toolbox.OperBoxCardMinHeight}"
+                            Classes="app-surface app-card toolbox-operbox-operator-card">
+                      <StackPanel HorizontalAlignment="Center"
+                                  VerticalAlignment="Center"
+                                  Classes="toolbox-operbox-operator-stack">
+                        <TextBlock HorizontalAlignment="Center"
+                                   Classes="section-title long-wrap"
+                                   Text="{Binding Name}"
+                                   TextAlignment="Center" />
+                        <Border HorizontalAlignment="Center"
+                                Classes="app-badge">
+                          <TextBlock Classes="app-badge-text"
+                                     Foreground="{Binding RarityBrush}"
+                                     Text="{Binding RarityStars}" />
+                        </Border>
+                        <StackPanel HorizontalAlignment="Center"
+                                    Orientation="Horizontal"
+                                    Spacing="{DynamicResource MAA.Spacing.Small}">
+                          <Image Width="{DynamicResource MAA.Size.Toolbox.OperBoxBadgeIcon}"
+                                 Height="{DynamicResource MAA.Size.Toolbox.OperBoxBadgeIcon}"
+                                 Margin="{DynamicResource MAA.Thickness.Toolbox.OperBoxBadgeMargin}"
+                                 Source="{Binding EliteIconImage}"
+                                 Stretch="Uniform">
+                            <Image.Effect>
+                              <DropShadowDirectionEffect BlurRadius="8"
+                                                         ShadowDepth="2"
+                                                         Opacity="0.55"
+                                                         Color="Black" />
+                            </Image.Effect>
+                          </Image>
+                          <TextBlock VerticalAlignment="Center"
+                                     Classes="app-body"
+                                     FontWeight="SemiBold"
+                                     Text="{Binding LevelDisplay}" />
+                          <Image Width="{DynamicResource MAA.Size.Toolbox.OperBoxBadgeIcon}"
+                                 Height="{DynamicResource MAA.Size.Toolbox.OperBoxBadgeIcon}"
+                                 Margin="{DynamicResource MAA.Thickness.Toolbox.OperBoxBadgeMargin}"
+                                 Source="{Binding PotentialIconImage}"
+                                 Stretch="Uniform">
+                            <Image.Effect>
+                              <DropShadowDirectionEffect BlurRadius="8"
+                                                         ShadowDepth="2"
+                                                         Opacity="0.55"
+                                                         Color="Black" />
+                            </Image.Effect>
+                          </Image>
+                        </StackPanel>
+                        <TextBlock HorizontalAlignment="Center"
+                                   Classes="app-caption subtle long-wrap"
+                                   Text="{Binding Subtitle}"
+                                   TextAlignment="Center" />
+                      </StackPanel>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </ScrollViewer>
+          </Border>
+        </TabItem>
+      </TabControl>
+    </Border>
+
+    <Border Grid.Row="2"
+            Margin="0,14,0,0"
+            Classes="app-surface app-section toolbox-operbox-section">
+      <StackPanel Classes="toolbox-operbox-actions">
+        <Button Width="{DynamicResource MAA.Size.Toolbox.ActionButtonWidth}"
+                Height="{DynamicResource MAA.Size.Toolbox.ActionButtonHeight}"
+                Classes="app-button app-secondary"
+                Click="OnOperBoxExportClick">
+          <TextBlock Text="{Binding OperBoxCopyToClipboardText}"
+                     TextAlignment="Center"
+                     TextWrapping="Wrap" />
+        </Button>
+        <Button Width="{DynamicResource MAA.Size.Toolbox.ActionButtonWidth}"
+                Height="{DynamicResource MAA.Size.Toolbox.ActionButtonHeight}"
+                Classes="app-button app-primary"
+                Content="{Binding StartRecognitionText}"
+                Click="OnOperBoxStartClick" />
+      </StackPanel>
+    </Border>
+  </Grid>
+</UserControl>

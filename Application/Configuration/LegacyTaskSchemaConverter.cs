@@ -197,14 +197,31 @@ internal static class LegacyTaskSchemaConverter
 
     private static JsonObject ConvertFight(JsonObject task, UnifiedProfile profile, UnifiedConfig config)
     {
+        var stagePlan = ResolveFightStagePlan(task);
         var stage = FightStageSelection.NormalizeStoredValue(ResolveFightStage(task));
-        var useMedicine = GetBool(task, "UseMedicine", false);
-        var useStone = GetBool(task, "UseStone", false);
+        var useMedicine = GetNullableBool(task, "UseMedicine") ?? false;
+        var useStone = GetNullableBool(task, "UseStone") ?? false;
         var useExpiringMedicine = GetBool(task, "UseExpiringMedicine", false);
-        var enableTimesLimit = GetBool(task, "EnableTimesLimit", false);
-        var enableTargetDrop = GetBool(task, "EnableTargetDrop", false);
+        var enableTimesLimit = GetNullableBool(task, "EnableTimesLimit") ?? false;
+        var enableTargetDrop = GetNullableBool(task, "EnableTargetDrop") ?? false;
         var useCustomAnnihilation = GetBool(task, "UseCustomAnnihilation", false);
         var annihilationStage = GetString(task, "AnnihilationStage") ?? string.Empty;
+        var useAlternateStage = GetBool(task, "UseOptionalStage", false);
+        var hideUnavailableStage = GetBool(task, "HideUnavailableStage", false);
+        var stageResetMode = ResolveFightStageResetMode(task);
+
+        // Match CompileFight normalization rules so legacy import produces consistent UI metadata.
+        if (useAlternateStage)
+        {
+            hideUnavailableStage = false;
+            stageResetMode = "Ignore";
+        }
+
+        if (hideUnavailableStage)
+        {
+            useAlternateStage = false;
+            stageResetMode = "Current";
+        }
 
         if (string.Equals(stage, "Annihilation", StringComparison.OrdinalIgnoreCase)
             && useCustomAnnihilation
@@ -228,6 +245,27 @@ internal static class LegacyTaskSchemaConverter
             ["yituliu_id"] = ResolveStringSetting(profile, config, "YituliuId"),
             ["server"] = ResolveServerType(profile, config),
             ["client_type"] = ResolveClientType(profile, config),
+            ["_ui_stage_plan"] = ToJsonArray(stagePlan),
+            ["_ui_is_stage_manually"] = GetBool(task, "IsStageManually", false),
+            ["_ui_use_medicine"] = JsonValue.Create(GetNullableBool(task, "UseMedicine")),
+            ["_ui_use_stone"] = JsonValue.Create(GetNullableBool(task, "UseStone")),
+            ["_ui_enable_times_limit"] = JsonValue.Create(GetNullableBool(task, "EnableTimesLimit")),
+            ["_ui_enable_target_drop"] = JsonValue.Create(GetNullableBool(task, "EnableTargetDrop")),
+            ["_ui_use_alternate_stage"] = useAlternateStage,
+            ["_ui_hide_unavailable_stage"] = hideUnavailableStage,
+            ["_ui_stage_reset_mode"] = stageResetMode,
+            ["_ui_use_custom_annihilation"] = useCustomAnnihilation,
+            ["_ui_annihilation_stage"] = string.IsNullOrWhiteSpace(annihilationStage) ? "Annihilation" : annihilationStage.Trim(),
+            ["_ui_hide_series"] = GetBool(task, "HideSeries", false),
+            ["_ui_allow_use_stone_save"] = GetBool(task, "UseStoneAllowSave", false),
+            ["_ui_use_weekly_schedule"] = GetBool(task, "UseWeeklySchedule", false),
+            ["_ui_weekly_schedule_sunday"] = ResolveLegacyWeeklySchedule(task, DayOfWeek.Sunday),
+            ["_ui_weekly_schedule_monday"] = ResolveLegacyWeeklySchedule(task, DayOfWeek.Monday),
+            ["_ui_weekly_schedule_tuesday"] = ResolveLegacyWeeklySchedule(task, DayOfWeek.Tuesday),
+            ["_ui_weekly_schedule_wednesday"] = ResolveLegacyWeeklySchedule(task, DayOfWeek.Wednesday),
+            ["_ui_weekly_schedule_thursday"] = ResolveLegacyWeeklySchedule(task, DayOfWeek.Thursday),
+            ["_ui_weekly_schedule_friday"] = ResolveLegacyWeeklySchedule(task, DayOfWeek.Friday),
+            ["_ui_weekly_schedule_saturday"] = ResolveLegacyWeeklySchedule(task, DayOfWeek.Saturday),
         };
 
         if (enableTargetDrop)
@@ -562,21 +600,85 @@ internal static class LegacyTaskSchemaConverter
 
     private static bool HasFlag(int value, int flag) => (value & flag) == flag;
 
-    private static string ResolveFightStage(JsonObject task)
+    private static List<string> ResolveFightStagePlan(JsonObject task)
     {
         if (task["StagePlan"] is JsonArray stagePlan)
         {
-            foreach (var stageNode in stagePlan)
+            return FightStageSelection.NormalizeStagePlan(
+                stagePlan.Select(stageNode => stageNode?.GetValue<string?>()));
+        }
+
+        return [FightStageSelection.CurrentOrLast];
+    }
+
+    private static string ResolveFightStage(JsonObject task)
+    {
+        foreach (var stage in ResolveFightStagePlan(task))
+        {
+            if (!FightStageSelection.IsCurrentOrLast(stage))
             {
-                var stage = stageNode?.GetValue<string?>();
-                if (!string.IsNullOrWhiteSpace(stage))
+                return stage;
+            }
+        }
+
+        return FightStageSelection.CurrentOrLast;
+    }
+
+    private static string ResolveFightStageResetMode(JsonObject task)
+    {
+        var raw = GetString(task, "StageResetMode");
+        if (string.Equals(raw, "Ignore", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(raw, "1", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Ignore";
+        }
+
+        if (GetInt(task, "StageResetMode", 0) == 1)
+        {
+            return "Ignore";
+        }
+
+        return "Current";
+    }
+
+    private static bool ResolveLegacyWeeklySchedule(JsonObject task, DayOfWeek dayOfWeek)
+    {
+        if (task["WeeklySchedule"] is not JsonObject weeklySchedule)
+        {
+            return true;
+        }
+
+        foreach (var key in ResolveLegacyWeeklyScheduleKeys(dayOfWeek))
+        {
+            if (weeklySchedule.TryGetPropertyValue(key, out var value) && value is not null)
+            {
+                if (value is JsonValue jsonValue)
                 {
-                    return stage.Trim();
+                    if (jsonValue.TryGetValue(out bool flag))
+                    {
+                        return flag;
+                    }
+
+                    if (jsonValue.TryGetValue(out int number))
+                    {
+                        return number != 0;
+                    }
+
+                    if (jsonValue.TryGetValue(out string? text) && bool.TryParse(text, out flag))
+                    {
+                        return flag;
+                    }
                 }
             }
         }
 
-        return string.Empty;
+        return true;
+    }
+
+    private static IEnumerable<string> ResolveLegacyWeeklyScheduleKeys(DayOfWeek dayOfWeek)
+    {
+        yield return dayOfWeek.ToString();
+        yield return ((int)dayOfWeek).ToString();
     }
 
     private static string ResolveRoguelikeTheme(JsonNode? themeNode)
@@ -762,6 +864,47 @@ internal static class LegacyTaskSchemaConverter
         }
 
         return fallback;
+    }
+
+    private static bool? GetNullableBool(JsonObject obj, string key)
+    {
+        if (!obj.TryGetPropertyValue(key, out var value))
+        {
+            return null;
+        }
+
+        if (value is null)
+        {
+            return null;
+        }
+
+        if (value is JsonValue jsonValue)
+        {
+            if (jsonValue.TryGetValue(out bool b))
+            {
+                return b;
+            }
+
+            if (jsonValue.TryGetValue(out string? text))
+            {
+                if (string.IsNullOrWhiteSpace(text))
+                {
+                    return null;
+                }
+
+                if (bool.TryParse(text, out var parsed))
+                {
+                    return parsed;
+                }
+            }
+
+            if (jsonValue.TryGetValue(out int i))
+            {
+                return i != 0;
+            }
+        }
+
+        return null;
     }
 
     private static int GetInt(JsonObject obj, string key, int fallback)

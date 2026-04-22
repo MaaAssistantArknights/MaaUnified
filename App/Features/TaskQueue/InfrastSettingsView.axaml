@@ -3,143 +3,250 @@
              xmlns:controls="clr-namespace:MAAUnified.App.Controls"
              xmlns:vm="clr-namespace:MAAUnified.App.ViewModels.TaskQueue"
              x:Class="MAAUnified.App.Features.TaskQueue.InfrastSettingsView">
-  <Grid RowDefinitions="Auto,Auto" Margin="2">
+  <UserControl.Styles>
+    <Style Selector="TextBlock.infrast-section-heading">
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="TextBlock.infrast-note">
+      <Setter Property="Opacity" Value="0.78" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <Style Selector="StackPanel.infrast-section-body">
+      <Setter Property="Spacing" Value="{DynamicResource MAA.Spacing.Small}" />
+    </Style>
+    <Style Selector="StackPanel.infrast-field-group">
+      <Setter Property="Spacing" Value="{DynamicResource MAA.Spacing.Tight}" />
+    </Style>
+    <Style Selector="ListBox.infrast-facility-list">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="0" />
+    </Style>
+    <Style Selector="ListBox.infrast-facility-list ListBoxItem">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Margin" Value="0" />
+    </Style>
+    <Style Selector="ListBox.infrast-facility-list ListBoxItem:pointerover">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="ListBox.infrast-facility-list ListBoxItem:selected">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="ListBox.infrast-facility-list ListBoxItem:selected:pointerover">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+  </UserControl.Styles>
+
+  <StackPanel Margin="2"
+              Spacing="{DynamicResource MAA.Spacing.Small}">
     <TextBlock Classes="section-title" Text="{Binding Texts[Infrast.Title]}" />
 
-    <StackPanel Grid.Row="1" Spacing="{DynamicResource MAA.Spacing.Small}">
-      <StackPanel IsVisible="{Binding IsGeneralMode}" Spacing="{DynamicResource MAA.Spacing.Small}">
-        <Grid ColumnDefinitions="Auto,Auto">
-          <TextBlock Text="{Binding Texts[Infrast.Mode]}" />
-          <controls:TooltipHint Grid.Column="1"
-                                IsVisible="{Binding ShowRotationTip}"
-                                Margin="{DynamicResource MAA.Thickness.MarginLeftSmall}"
-                                Tip="{Binding Texts[Infrast.ModeRotationToolTip]}" />
-        </Grid>
-        <ComboBox ItemsSource="{Binding ModeOptions}"
-                  SelectedValueBinding="{Binding Value}"
-                  SelectedValue="{Binding Mode}">
-          <ComboBox.ItemTemplate>
-            <DataTemplate x:DataType="vm:InfrastModuleViewModel+IntOption">
-              <TextBlock Text="{Binding DisplayName}" />
-            </DataTemplate>
-          </ComboBox.ItemTemplate>
-        </ComboBox>
-
-        <StackPanel IsVisible="{Binding ShowCustomModeSettings}" Spacing="{DynamicResource MAA.Spacing.Small}">
-          <Grid ColumnDefinitions="Auto,Auto">
-            <TextBlock Text="{Binding Texts[Infrast.Plan]}" />
-            <controls:TooltipHint Grid.Column="1"
-                                  Margin="{DynamicResource MAA.Thickness.MarginLeftSmall}"
-                                  Tip="{Binding Texts[Infrast.CustomPlanToolTip]}" />
-          </Grid>
-          <Grid ColumnDefinitions="*,Auto">
-            <ComboBox ItemsSource="{Binding PlanOptions}"
-                      SelectedValueBinding="{Binding Index}"
-                      SelectedValue="{Binding SelectedPlanIndex}">
+    <Border Classes="app-surface app-section"
+            IsVisible="{Binding IsGeneralMode}">
+      <StackPanel Spacing="{DynamicResource MAA.Spacing.Small}">
+        <Border Classes="app-surface app-card">
+          <StackPanel Classes="infrast-section-body">
+            <Grid ColumnDefinitions="Auto,Auto">
+              <TextBlock Classes="infrast-section-heading" Text="{Binding Texts[Infrast.Mode]}" />
+              <controls:TooltipHint Grid.Column="1"
+                                    IsVisible="{Binding ShowRotationTip}"
+                                    Margin="{DynamicResource MAA.Thickness.MarginLeftSmall}"
+                                    VerticalAlignment="Center"
+                                    Tip="{Binding Texts[Infrast.ModeRotationToolTip]}" />
+            </Grid>
+            <ComboBox Classes="app-input"
+                      ItemsSource="{Binding ModeOptions}"
+                      SelectedValueBinding="{Binding Value}"
+                      SelectedValue="{Binding Mode}">
               <ComboBox.ItemTemplate>
-                <DataTemplate x:DataType="vm:InfrastModuleViewModel+PlanOption">
-                  <TextBlock Text="{Binding Display}" />
+                <DataTemplate x:DataType="vm:InfrastModuleViewModel+IntOption">
+                  <TextBlock Text="{Binding DisplayName}" TextWrapping="Wrap" />
                 </DataTemplate>
               </ComboBox.ItemTemplate>
             </ComboBox>
-            <Button Grid.Column="1"
-                    Classes="wpf-button wpf-button-secondary"
-                    Margin="{DynamicResource MAA.Thickness.MarginActionButtonLeft}"
-                    Content="{Binding Texts[Infrast.Plan.Refresh]}"
-                    Click="OnReloadPlansClick" />
-          </Grid>
+            <TextBlock IsVisible="{Binding ShowRotationTip}"
+                       Classes="subtle infrast-note"
+                       Text="{Binding Texts[Infrast.ModeRotationTip]}" />
+          </StackPanel>
+        </Border>
 
-          <TextBlock Text="{Binding Texts[Infrast.DefaultPreset]}" />
-          <Grid ColumnDefinitions="*,Auto">
-            <ComboBox ItemsSource="{Binding DefaultInfrastOptions}"
+        <Border Classes="app-surface app-card"
+                IsVisible="{Binding ShowCustomModeSettings}">
+          <StackPanel Classes="infrast-section-body">
+            <Grid ColumnDefinitions="Auto,Auto">
+              <TextBlock Classes="infrast-section-heading" Text="{Binding Texts[Infrast.Plan]}" />
+              <controls:TooltipHint Grid.Column="1"
+                                    Margin="{DynamicResource MAA.Thickness.MarginLeftSmall}"
+                                    VerticalAlignment="Center"
+                                    Tip="{Binding Texts[Infrast.CustomPlanToolTip]}" />
+            </Grid>
+
+            <Grid ColumnDefinitions="*,Auto">
+              <ComboBox Classes="app-input"
+                        ItemsSource="{Binding PlanOptions}"
+                        SelectedValueBinding="{Binding Index}"
+                        SelectedValue="{Binding SelectedPlanIndex}">
+                <ComboBox.ItemTemplate>
+                  <DataTemplate x:DataType="vm:InfrastModuleViewModel+PlanOption">
+                    <TextBlock Text="{Binding Display}" TextWrapping="Wrap" />
+                  </DataTemplate>
+                </ComboBox.ItemTemplate>
+              </ComboBox>
+              <Button Grid.Column="1"
+                      Classes="app-button app-secondary"
+                      Margin="{DynamicResource MAA.Thickness.MarginActionButtonLeft}"
+                      Content="{Binding Texts[Infrast.Plan.Refresh]}"
+                      Click="OnReloadPlansClick" />
+            </Grid>
+
+            <StackPanel Classes="infrast-field-group">
+              <TextBlock Classes="subtle"
+                         Text="{Binding Texts[Infrast.DefaultPreset]}"
+                         TextWrapping="Wrap" />
+              <Grid ColumnDefinitions="*,Auto">
+                <ComboBox Classes="app-input"
+                          ItemsSource="{Binding DefaultInfrastOptions}"
+                          SelectedValueBinding="{Binding Value}"
+                          SelectedValue="{Binding DefaultInfrast}">
+                  <ComboBox.ItemTemplate>
+                    <DataTemplate x:DataType="vm:InfrastModuleViewModel+StringOption">
+                      <TextBlock Text="{Binding DisplayName}" TextWrapping="Wrap" />
+                    </DataTemplate>
+                  </ComboBox.ItemTemplate>
+                </ComboBox>
+                <Button Grid.Column="1"
+                        Classes="app-button app-secondary"
+                        Margin="{DynamicResource MAA.Thickness.MarginActionButtonLeft}"
+                        Content="{Binding Texts[Infrast.Select]}"
+                        Click="OnSelectCustomFileClick" />
+              </Grid>
+            </StackPanel>
+
+            <StackPanel Classes="infrast-field-group">
+              <TextBlock Classes="subtle"
+                         Text="{Binding Texts[Infrast.File]}"
+                         TextWrapping="Wrap" />
+              <TextBox Classes="app-input"
+                       IsReadOnly="{Binding IsCustomFileReadOnly}"
+                       Text="{Binding CustomFilePath, UpdateSourceTrigger=LostFocus}" />
+            </StackPanel>
+          </StackPanel>
+        </Border>
+
+        <Border Classes="app-surface app-card">
+          <StackPanel Classes="infrast-section-body">
+            <TextBlock Classes="infrast-section-heading" Text="{Binding Texts[Infrast.Drones]}" />
+            <ComboBox Classes="app-input"
+                      ItemsSource="{Binding DroneOptions}"
+                      IsEnabled="{Binding CanEditDrones}"
                       SelectedValueBinding="{Binding Value}"
-                      SelectedValue="{Binding DefaultInfrast}">
+                      SelectedValue="{Binding Drones}">
               <ComboBox.ItemTemplate>
                 <DataTemplate x:DataType="vm:InfrastModuleViewModel+StringOption">
-                  <TextBlock Text="{Binding DisplayName}" />
+                  <TextBlock Text="{Binding DisplayName}" TextWrapping="Wrap" />
                 </DataTemplate>
               </ComboBox.ItemTemplate>
             </ComboBox>
-            <Button Grid.Column="1"
-                    Classes="wpf-button wpf-button-secondary"
-                    Margin="{DynamicResource MAA.Thickness.MarginActionButtonLeft}"
-                    Content="{Binding Texts[Infrast.Select]}"
-                    Click="OnSelectCustomFileClick" />
-          </Grid>
 
-          <TextBlock Text="{Binding Texts[Infrast.File]}" />
-          <TextBox IsReadOnly="{Binding IsCustomFileReadOnly}"
-                   Text="{Binding CustomFilePath, UpdateSourceTrigger=LostFocus}" />
-        </StackPanel>
+            <StackPanel IsVisible="{Binding ShowThresholdSettings}"
+                        Classes="infrast-field-group">
+              <Grid ColumnDefinitions="Auto,Auto,*">
+                <TextBlock Classes="subtle"
+                           Text="{Binding Texts[Infrast.Threshold]}"
+                           TextWrapping="Wrap" />
+                <controls:TooltipHint Grid.Column="1"
+                                      Margin="{DynamicResource MAA.Thickness.MarginLeftSmall}"
+                                      VerticalAlignment="Center"
+                                      Tip="{Binding Texts[Infrast.ThresholdTip]}" />
+                <TextBlock Grid.Column="2"
+                           Classes="subtle"
+                           HorizontalAlignment="Right"
+                           Text="{Binding DormThresholdPercent, StringFormat='{}{0}%'}" />
+              </Grid>
+              <Slider Minimum="0" Maximum="100" Value="{Binding DormThresholdPercent}" />
+            </StackPanel>
+          </StackPanel>
+        </Border>
 
-        <TextBlock IsVisible="{Binding ShowRotationTip}"
-                   Text="{Binding Texts[Infrast.ModeRotationTip]}"
+        <Border Classes="app-surface app-card">
+          <StackPanel Classes="infrast-section-body">
+            <TextBlock Classes="infrast-section-heading" Text="{Binding Texts[Infrast.Facility]}" />
+            <ListBox Classes="infrast-facility-list"
+                     ItemsSource="{Binding FacilityOptions}"
+                     MaxHeight="196">
+              <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:InfrastModuleViewModel+FacilityOption">
+                  <CheckBox Classes="app-checkbox"
+                            Content="{Binding DisplayName}"
+                            IsChecked="{Binding IsSelected}" />
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
+            <Grid ColumnDefinitions="*,*">
+              <Button Classes="app-button app-secondary"
+                      Content="{Binding Texts[Infrast.SelectAll]}"
+                      Click="OnSelectAllFacilityClick" />
+              <Button Grid.Column="1"
+                      Classes="app-button app-secondary"
+                      Margin="{DynamicResource MAA.Thickness.MarginActionButtonLeft}"
+                      Content="{Binding Texts[Infrast.Clear]}"
+                      Click="OnClearFacilityClick" />
+            </Grid>
+          </StackPanel>
+        </Border>
+      </StackPanel>
+    </Border>
+
+    <Border Classes="app-surface app-section"
+            IsVisible="{Binding IsAdvancedMode}">
+      <StackPanel Spacing="{DynamicResource MAA.Spacing.Small}">
+        <Border Classes="app-surface app-card">
+          <StackPanel Classes="infrast-section-body">
+            <TextBlock Classes="infrast-section-heading" Text="{Binding Texts[Infrast.Advanced]}" />
+            <CheckBox Classes="app-checkbox"
+                      Content="{Binding Texts[Infrast.Trust]}"
+                      IsChecked="{Binding DormTrustEnabled}"
+                      IsVisible="{Binding ShowDormFilterSettings}" />
+            <Grid ColumnDefinitions="Auto,Auto"
+                  IsVisible="{Binding ShowDormFilterSettings}">
+              <CheckBox Classes="app-checkbox"
+                        Content="{Binding Texts[Infrast.NotStationed]}"
+                        IsChecked="{Binding DormNotStationedEnabled}" />
+              <controls:TooltipHint Grid.Column="1"
+                                    Margin="{DynamicResource MAA.Thickness.MarginLeftSmall}"
+                                    VerticalAlignment="Center"
+                                    Tip="{Binding Texts[Infrast.NotStationedTip]}" />
+            </Grid>
+            <CheckBox Classes="app-checkbox"
+                      Content="{Binding Texts[Infrast.Replenish]}"
+                      IsChecked="{Binding Replenish}" />
+            <CheckBox Classes="app-checkbox"
+                      Content="{Binding Texts[Infrast.ReceptionBoard]}"
+                      IsChecked="{Binding ReceptionMessageBoard}" />
+            <CheckBox Classes="app-checkbox"
+                      Content="{Binding Texts[Infrast.ReceptionExchange]}"
+                      IsChecked="{Binding ReceptionClueExchange}" />
+            <CheckBox Classes="app-checkbox"
+                      Content="{Binding Texts[Infrast.ReceptionSend]}"
+                      IsChecked="{Binding ReceptionSendClue}" />
+            <CheckBox Classes="app-checkbox"
+                      Content="{Binding Texts[Infrast.ContinueTraining]}"
+                      IsChecked="{Binding ContinueTraining}" />
+          </StackPanel>
+        </Border>
+      </StackPanel>
+    </Border>
+
+    <Border Classes="app-surface app-card settings-status-panel">
+      <StackPanel Spacing="{DynamicResource MAA.Spacing.Tight}">
+        <TextBlock Text="{Binding StatusMessage}"
                    TextWrapping="Wrap" />
-
-        <TextBlock Text="{Binding Texts[Infrast.Drones]}" />
-        <ComboBox ItemsSource="{Binding DroneOptions}"
-                  IsEnabled="{Binding CanEditDrones}"
-                  SelectedValueBinding="{Binding Value}"
-                  SelectedValue="{Binding Drones}">
-          <ComboBox.ItemTemplate>
-            <DataTemplate x:DataType="vm:InfrastModuleViewModel+StringOption">
-              <TextBlock Text="{Binding DisplayName}" />
-            </DataTemplate>
-          </ComboBox.ItemTemplate>
-        </ComboBox>
-
-        <StackPanel IsVisible="{Binding ShowThresholdSettings}" Spacing="{DynamicResource MAA.Spacing.Small}">
-          <Grid ColumnDefinitions="Auto,Auto">
-            <TextBlock Text="{Binding Texts[Infrast.Threshold]}" />
-            <controls:TooltipHint Grid.Column="1"
-                                  Margin="{DynamicResource MAA.Thickness.MarginLeftSmall}"
-                                  Tip="{Binding Texts[Infrast.ThresholdTip]}" />
-          </Grid>
-          <Slider Minimum="0" Maximum="100" Value="{Binding DormThresholdPercent}" />
-          <TextBlock Classes="subtle" Text="{Binding DormThresholdPercent, StringFormat='{}{0}%'}" />
-        </StackPanel>
-
-        <TextBlock Text="{Binding Texts[Infrast.Facility]}" />
-        <ListBox Classes="wpf-list-no-highlight"
-                 ItemsSource="{Binding FacilityOptions}"
-                 MaxHeight="196">
-          <ListBox.ItemTemplate>
-            <DataTemplate x:DataType="vm:InfrastModuleViewModel+FacilityOption">
-              <CheckBox Content="{Binding DisplayName}" IsChecked="{Binding IsSelected}" />
-            </DataTemplate>
-          </ListBox.ItemTemplate>
-        </ListBox>
-        <Grid ColumnDefinitions="*,*">
-          <Button Classes="wpf-button wpf-button-secondary"
-                  Content="{Binding Texts[Infrast.SelectAll]}"
-                  Click="OnSelectAllFacilityClick" />
-          <Button Grid.Column="1"
-                  Classes="wpf-button wpf-button-secondary"
-                  Margin="{DynamicResource MAA.Thickness.MarginActionButtonLeft}"
-                  Content="{Binding Texts[Infrast.Clear]}"
-                  Click="OnClearFacilityClick" />
-        </Grid>
+        <TextBlock Classes="state-error"
+                   Text="{Binding LastErrorMessage}"
+                   TextWrapping="Wrap" />
       </StackPanel>
-
-      <StackPanel IsVisible="{Binding IsAdvancedMode}" Spacing="{DynamicResource MAA.Spacing.Small}">
-        <CheckBox Content="{Binding Texts[Infrast.Trust]}"
-                  IsChecked="{Binding DormTrustEnabled}"
-                  IsVisible="{Binding ShowDormFilterSettings}" />
-        <Grid ColumnDefinitions="Auto,Auto" IsVisible="{Binding ShowDormFilterSettings}">
-          <CheckBox Content="{Binding Texts[Infrast.NotStationed]}" IsChecked="{Binding DormNotStationedEnabled}" />
-          <controls:TooltipHint Grid.Column="1"
-                                Margin="{DynamicResource MAA.Thickness.MarginLeftSmall}"
-                                Tip="{Binding Texts[Infrast.NotStationedTip]}" />
-        </Grid>
-        <CheckBox Content="{Binding Texts[Infrast.Replenish]}" IsChecked="{Binding Replenish}" />
-        <CheckBox Content="{Binding Texts[Infrast.ReceptionBoard]}" IsChecked="{Binding ReceptionMessageBoard}" />
-        <CheckBox Content="{Binding Texts[Infrast.ReceptionExchange]}" IsChecked="{Binding ReceptionClueExchange}" />
-        <CheckBox Content="{Binding Texts[Infrast.ReceptionSend]}" IsChecked="{Binding ReceptionSendClue}" />
-        <CheckBox Content="{Binding Texts[Infrast.ContinueTraining]}" IsChecked="{Binding ContinueTraining}" />
-      </StackPanel>
-
-      <TextBlock Foreground="{DynamicResource MAA.WarningBrush}" Text="{Binding StatusMessage}" TextWrapping="Wrap" />
-      <TextBlock Foreground="{DynamicResource MAA.ErrorBrush}" Text="{Binding LastErrorMessage}" TextWrapping="Wrap" />
-    </StackPanel>
-  </Grid>
+    </Border>
+  </StackPanel>
 </UserControl>

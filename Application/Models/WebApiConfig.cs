@@ -1,6 +1,5 @@
 namespace MAAUnified.Application.Models;
 
-[Obsolete("Deprecated: WebApi is retained in source only and is no longer a user-visible Unified feature.")]
 public sealed record WebApiConfig(
     bool Enabled,
     string Host,

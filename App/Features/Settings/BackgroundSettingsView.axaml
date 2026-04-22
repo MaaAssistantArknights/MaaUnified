@@ -3,81 +3,119 @@
              xmlns:controls="clr-namespace:MAAUnified.App.Controls"
              xmlns:vm="clr-namespace:MAAUnified.App.ViewModels.Settings"
              x:Class="MAAUnified.App.Features.Settings.BackgroundSettingsView">
-  <Grid Margin="4" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto">
-    <Grid ColumnDefinitions="Auto,*">
-      <TextBlock Classes="section-title" Text="{Binding RootTexts[Settings.Section.Background]}" />
-      <TextBlock Grid.Column="1"
-                 HorizontalAlignment="Right"
-                 VerticalAlignment="Center"
-                 Classes="state-warning"
-                 Text="{Binding RootTexts[Settings.State.Saving]}"
-                 IsVisible="{Binding IsGuiSaveInProgress}" />
-      <TextBlock Grid.Column="1"
-                 HorizontalAlignment="Right"
-                 VerticalAlignment="Center"
-                 Classes="state-success"
-                 Text="{Binding RootTexts[Settings.State.Saved]}"
-                 IsVisible="{Binding HasGuiSaveSucceeded}" />
+  <Grid Margin="4"
+        RowDefinitions="Auto,Auto">
+    <Grid ColumnDefinitions="*,Auto">
+      <TextBlock Classes="section-title"
+                 Text="{Binding RootTexts[Settings.Section.Background]}" />
+      <StackPanel Grid.Column="1"
+                  HorizontalAlignment="Right"
+                  VerticalAlignment="Center"
+                  Spacing="2">
+        <TextBlock HorizontalAlignment="Right"
+                   VerticalAlignment="Center"
+                   Classes="state-warning"
+                   Text="{Binding RootTexts[Settings.State.Saving]}"
+                   IsVisible="{Binding IsGuiSaveInProgress}" />
+        <TextBlock HorizontalAlignment="Right"
+                   VerticalAlignment="Center"
+                   Classes="state-success"
+                   Text="{Binding RootTexts[Settings.State.Saved]}"
+                   IsVisible="{Binding HasGuiSaveSucceeded}" />
+      </StackPanel>
     </Grid>
+
     <StackPanel Grid.Row="1"
-                Classes="settings-centered-column"
-                Margin="{DynamicResource MAA.Thickness.Settings.SectionTopMargin}">
-      <TextBlock Classes="settings-field-caption" Text="{Binding RootTexts[Settings.Background.ImagePath]}" />
-      <Grid Width="{DynamicResource MAA.Size.Settings.FieldPathWidth}"
-            ColumnDefinitions="*,Auto">
-        <TextBox Text="{Binding BackgroundImagePath, UpdateSourceTrigger=LostFocus}"
-                 LostFocus="OnBackgroundPathLostFocus"
-                 KeyDown="OnBackgroundPathKeyDown" />
-        <Button Grid.Column="1"
-                Classes="wpf-button wpf-button-secondary"
-                Margin="{DynamicResource MAA.Thickness.MarginActionButtonLeft}"
-                Content="{Binding RootTexts[Settings.Start.SelectButton]}"
-                Click="OnSelectBackgroundImageClick" />
-      </Grid>
-    </StackPanel>
+                Margin="{DynamicResource MAA.Thickness.Settings.SectionTopMargin}"
+                Classes="settings-form">
+      <Border Classes="app-surface app-section">
+        <StackPanel Spacing="16">
+          <TextBlock Classes="app-body"
+                     FontSize="16"
+                     FontWeight="SemiBold"
+                     Text="{Binding RootTexts[Settings.Background.ImagePath]}" />
 
-    <StackPanel Grid.Row="2"
-                Classes="settings-centered-column"
-                Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}">
-      <TextBlock Classes="settings-field-caption" Text="{Binding RootTexts[Settings.Background.Opacity]}" />
-      <controls:VerticalSpinNumberBox Width="{DynamicResource MAA.Size.Settings.FieldNarrowWidth}"
-                                      Minimum="0"
-                                      Maximum="100"
-                                      Value="{Binding BackgroundOpacity}" />
-    </StackPanel>
+          <Border Classes="app-surface app-card"
+                  Padding="16">
+            <StackPanel Spacing="10">
+              <TextBlock Classes="app-caption"
+                         Text="{Binding RootTexts[Settings.Background.ImagePath]}" />
+              <Grid MaxWidth="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
+                    ColumnDefinitions="*,Auto">
+                <TextBox Classes="app-input"
+                         Text="{Binding BackgroundImagePath, UpdateSourceTrigger=LostFocus}"
+                         LostFocus="OnBackgroundPathLostFocus"
+                         KeyDown="OnBackgroundPathKeyDown" />
+                <Button Grid.Column="1"
+                        Classes="app-button app-secondary"
+                        Margin="{DynamicResource MAA.Thickness.MarginActionButtonLeft}"
+                        Content="{Binding RootTexts[Settings.Start.SelectButton]}"
+                        Click="OnSelectBackgroundImageClick" />
+              </Grid>
+            </StackPanel>
+          </Border>
+        </StackPanel>
+      </Border>
 
-    <StackPanel Grid.Row="3"
-                Classes="settings-centered-column"
-                Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}">
-      <TextBlock Classes="settings-field-caption" Text="{Binding RootTexts[Settings.Background.BlurRadius]}" />
-      <controls:VerticalSpinNumberBox Width="{DynamicResource MAA.Size.Settings.FieldNarrowWidth}"
-                                      Minimum="0"
-                                      Maximum="80"
-                                      Value="{Binding BackgroundBlur}" />
-    </StackPanel>
+      <Border Classes="app-surface app-section">
+        <WrapPanel Classes="settings-wrap"
+                   ItemWidth="320">
+          <Border Classes="app-surface app-card"
+                  Padding="16">
+            <StackPanel Spacing="10">
+              <TextBlock Classes="app-caption"
+                         Text="{Binding RootTexts[Settings.Background.Opacity]}" />
+              <controls:VerticalSpinNumberBox Width="{DynamicResource MAA.Size.Settings.FieldNarrowWidth}"
+                                              HorizontalAlignment="Left"
+                                              Minimum="0"
+                                              Maximum="100"
+                                              Value="{Binding BackgroundOpacity}" />
+            </StackPanel>
+          </Border>
 
-    <StackPanel Grid.Row="4"
-                Classes="settings-centered-column"
-                Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}">
-      <TextBlock Classes="settings-field-caption" Text="{Binding RootTexts[Settings.Background.StretchMode]}" />
-      <ComboBox Width="{DynamicResource MAA.Size.Settings.FieldCenteredWidth}"
-                ItemsSource="{Binding BackgroundStretchModes}"
-                SelectedItem="{Binding SelectedBackgroundStretchModeOption, Mode=TwoWay}">
-        <ComboBox.ItemTemplate>
-          <DataTemplate x:DataType="vm:DisplayValueOption">
-            <TextBlock Text="{Binding Display}" />
-          </DataTemplate>
-        </ComboBox.ItemTemplate>
-      </ComboBox>
-    </StackPanel>
+          <Border Classes="app-surface app-card"
+                  Padding="16">
+            <StackPanel Spacing="10">
+              <TextBlock Classes="app-caption"
+                         Text="{Binding RootTexts[Settings.Background.BlurRadius]}" />
+              <controls:VerticalSpinNumberBox Width="{DynamicResource MAA.Size.Settings.FieldNarrowWidth}"
+                                              HorizontalAlignment="Left"
+                                              Minimum="0"
+                                              Maximum="80"
+                                              Value="{Binding BackgroundBlur}" />
+            </StackPanel>
+          </Border>
 
-    <StackPanel Grid.Row="5"
-                Classes="settings-form settings-form-narrow"
-                Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}"
-                Spacing="4">
-      <TextBlock Classes="state-warning settings-centered-text"
-                 Text="{Binding BackgroundValidationMessage}"
-                 IsVisible="{Binding HasBackgroundValidationMessage}" />
+          <Border Classes="app-surface app-card"
+                  Padding="16">
+            <StackPanel Spacing="10">
+              <TextBlock Classes="app-body"
+                         FontWeight="SemiBold"
+                         Text="{Binding RootTexts[Settings.Background.StretchMode]}" />
+              <ComboBox Classes="app-input"
+                        Width="{DynamicResource MAA.Size.Settings.FieldCenteredWidth}"
+                        ItemsSource="{Binding BackgroundStretchModes}"
+                        SelectedItem="{Binding SelectedBackgroundStretchModeOption, Mode=TwoWay}">
+                <ComboBox.ItemTemplate>
+                  <DataTemplate x:DataType="vm:DisplayValueOption">
+                    <TextBlock Text="{Binding Display}" />
+                  </DataTemplate>
+                </ComboBox.ItemTemplate>
+              </ComboBox>
+            </StackPanel>
+          </Border>
+        </WrapPanel>
+      </Border>
+
+      <Border Classes="app-surface app-section">
+        <StackPanel Classes="settings-form settings-form-narrow"
+                    Spacing="8">
+          <TextBlock MaxWidth="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
+                     Classes="state-warning app-body settings-centered-text"
+                     Text="{Binding BackgroundValidationMessage}"
+                     IsVisible="{Binding HasBackgroundValidationMessage}" />
+        </StackPanel>
+      </Border>
     </StackPanel>
   </Grid>
 </UserControl>

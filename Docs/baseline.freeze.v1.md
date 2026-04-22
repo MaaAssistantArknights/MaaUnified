@@ -7,13 +7,13 @@
 - Matrix mode: `tiered`
 - Themes: `Light, Dark`
 - Locales: `zh-cn, zh-tw, en-us, ja-jp, ko-kr, pallas`
-- Feature items: `36`
+- Feature items: `38`
 - System items: `13`
-- Config keys: `293`
+- Config keys: `294`
 - Fallback records: `15`
 
 ## Feature Parity
-- Aligned: `36`
+- Aligned: `38`
 - Gap: `0`
 - Waived: `0`
 
@@ -48,6 +48,8 @@
 | `Task.PostAction` | TaskQueue | Aligned | `App/Features/TaskQueue/PostActionSettingsView.axaml` |
 | `Advanced.Copilot` | Advanced | Aligned | `App/Features/Advanced/CopilotView.axaml` |
 | `Advanced.Toolbox` | Advanced | Aligned | `App/Features/Advanced/ToolboxView.axaml` |
+| `Advanced.StageManager` | Advanced | Aligned | `App/Features/Advanced/StageManagerView.axaml` |
+| `Advanced.WebApi` | Advanced | Aligned | `App/Features/Advanced/WebApiView.axaml` |
 | `Dialog.Announcement` | Dialogs | Aligned | `App/Features/Dialogs/AnnouncementDialogView.axaml` |
 | `Dialog.VersionUpdate` | Dialogs | Aligned | `App/Features/Dialogs/VersionUpdateDialogView.axaml` |
 | `Dialog.ProcessPicker` | Dialogs | Aligned | `App/Features/Dialogs/ProcessPickerDialogView.axaml` |
@@ -74,7 +76,7 @@
 | `System.PageErrorChannel` | Aligned | `App/ViewModels/Infrastructure/PageViewModelBase.cs` |
 
 ## Config Key Mapping Summary
-- Aligned: `293`
+- Aligned: `294`
 - Gap: `0`
 - Waived: `0`
 
@@ -106,6 +108,7 @@
 - `GUI.IgnoreBadModulesAndUseSoftwareRendering` -> `SettingsPageViewModel.UseSoftwareRendering`
 - `GUI.Localization` -> `SettingsPageViewModel.Language`
 - `GUI.MinimizeToTray` -> `SettingsPageViewModel.MinimizeToTray`
+- `GUI.UseNotify` -> `SettingsPageViewModel.UseNotify`
 - `GUI.UseTray` -> `SettingsPageViewModel.UseTray`
 - `GUI.WindowTitleScrollable` -> `SettingsPageViewModel.WindowTitleScrollable`
 - `Gacha.ShowDisclaimerNoMore` -> `UnifiedConfigurationService.CurrentConfig.GlobalValues[Gacha.ShowDisclaimerNoMore]`

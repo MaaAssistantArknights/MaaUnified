@@ -2,135 +2,198 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:controls="clr-namespace:MAAUnified.App.Controls"
              x:Class="MAAUnified.App.Features.Settings.StartSettingsView">
-  <Grid Margin="4" RowDefinitions="Auto,Auto,Auto,Auto">
-    <Grid ColumnDefinitions="Auto,*">
-      <TextBlock Classes="section-title" Text="{Binding RootTexts[Settings.Section.Start]}" />
-      <TextBlock Grid.Column="1"
-                 HorizontalAlignment="Right"
-                 VerticalAlignment="Center"
-                 Classes="state-warning"
-                 Text="{Binding RootTexts[Settings.State.Saving]}"
-                 IsVisible="{Binding IsStartPerformanceSaveInProgress}" />
-      <TextBlock Grid.Column="1"
-                 HorizontalAlignment="Right"
-                 VerticalAlignment="Center"
-                 Classes="state-success"
-                 Text="{Binding RootTexts[Settings.State.Saved]}"
-                 IsVisible="{Binding HasStartPerformanceSaveSucceeded}" />
-    </Grid>
+  <UserControl.Styles>
+    <Style Selector="Border.start-settings-section">
+      <Setter Property="Padding" Value="22" />
+    </Style>
 
-    <Grid Grid.Row="1"
-          Classes="settings-form"
-          Margin="{DynamicResource MAA.Thickness.Settings.SectionTopMargin}"
-          ColumnDefinitions="260,320">
-      <StackPanel Grid.Column="0"
-                  Classes="settings-centered-column"
-                  Spacing="{DynamicResource MAA.Spacing.Small}">
-        <Grid ColumnDefinitions="Auto,Auto">
-          <CheckBox Content="{Binding RootTexts[Settings.Start.AutoStartMaa]}" IsChecked="{Binding StartSelf}" />
-          <controls:TooltipHint Grid.Column="1"
-                                Margin="{DynamicResource MAA.Thickness.MarginLeftTooltip}"
-                                Tip="{Binding RootTexts[Settings.Start.AutoStartMaaTip]}" />
-        </Grid>
+    <Style Selector="StackPanel.start-settings-stack">
+      <Setter Property="Spacing" Value="12" />
+    </Style>
 
-        <StackPanel Spacing="0">
-          <CheckBox Content="{Binding RootTexts[Settings.Start.MinimizeDirectly]}" IsChecked="{Binding MinimizeDirectly}" />
-          <TextBlock Classes="settings-apply-note"
-                     Margin="{DynamicResource MAA.Thickness.Settings.CheckboxNoteIndent}"
-                     Text="{Binding RootTexts[Settings.Start.ApplyOnNextLaunch]}" />
-        </StackPanel>
+    <Style Selector="Border.start-settings-card">
+      <Setter Property="Padding" Value="16" />
+    </Style>
 
-        <Border Height="1"
-                Margin="0,6,0,6"
-                Background="{DynamicResource MAA.Brush.Border.Default}" />
+    <Style Selector="TextBlock.start-settings-card-title">
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
 
-        <StackPanel Spacing="0">
-          <CheckBox Content="{Binding RootTexts[Settings.Start.RunDirectly]}" IsChecked="{Binding RunDirectly}" />
-          <TextBlock Classes="settings-apply-note"
-                     Margin="{DynamicResource MAA.Thickness.Settings.CheckboxNoteIndent}"
-                     Text="{Binding RootTexts[Settings.Start.ApplyOnNextLaunch]}" />
-        </StackPanel>
+    <Style Selector="TextBlock.start-settings-note">
+      <Setter Property="Margin" Value="28,4,0,0" />
+    </Style>
+  </UserControl.Styles>
 
-        <StackPanel Spacing="0">
-          <CheckBox Content="{Binding RootTexts[Settings.Start.AutoOpenEmulator]}" IsChecked="{Binding OpenEmulatorAfterLaunch}" />
-          <TextBlock Classes="settings-apply-note"
-                     Margin="{DynamicResource MAA.Thickness.Settings.CheckboxNoteIndent}"
-                     Text="{Binding RootTexts[Settings.Start.ApplyOnNextExecution]}" />
-        </StackPanel>
-
-        <Grid ColumnDefinitions="Auto,Auto">
-          <CheckBox Content="{Binding RootTexts[Settings.Start.RetryOnDisconnected]}"
-                    IsChecked="{Binding ConnectionGameSharedState.RetryOnDisconnected}" />
-          <controls:TooltipHint Grid.Column="1"
-                                Margin="{DynamicResource MAA.Thickness.MarginLeftTooltip}"
-                                Tip="{Binding RootTexts[Settings.Start.RetryOnDisconnectedTip]}" />
-        </Grid>
-      </StackPanel>
-
+  <Grid Margin="4"
+        RowDefinitions="Auto,Auto,Auto">
+    <Grid ColumnDefinitions="*,Auto">
+      <TextBlock Classes="section-title"
+                 Text="{Binding RootTexts[Settings.Section.Start]}" />
       <StackPanel Grid.Column="1"
-                  Classes="settings-centered-column"
-                  Spacing="{DynamicResource MAA.Spacing.Large}"
-                  IsVisible="{Binding CanEditEmulatorLaunchSettings}">
-        <StackPanel Classes="settings-centered-column">
-          <Grid HorizontalAlignment="Center"
-                ColumnDefinitions="Auto,Auto,Auto">
-            <TextBlock Grid.Column="0"
-                       Classes="settings-field-caption"
-                       Margin="0"
-                       Text="{Binding RootTexts[Settings.Start.EmulatorPath]}" />
-            <controls:TooltipHint Grid.Column="1" Tip="{Binding RootTexts[Settings.Start.EmulatorPathTip]}" />
-            <Button Grid.Column="2"
-                    Classes="wpf-button wpf-button-secondary compact"
-                    Margin="{DynamicResource MAA.Thickness.MarginActionButtonLeft}"
-                    Content="{Binding RootTexts[Settings.Start.SelectButton]}"
-                    Click="OnSelectEmulatorPathClick" />
-          </Grid>
-          <TextBox Width="{DynamicResource MAA.Size.Settings.FieldInputWidth}"
-                   Text="{Binding EmulatorPath, UpdateSourceTrigger=LostFocus}" />
-        </StackPanel>
-
-        <StackPanel Classes="settings-centered-column">
-          <Grid HorizontalAlignment="Center"
-                ColumnDefinitions="Auto,Auto">
-            <TextBlock Grid.Column="0"
-                       Classes="settings-field-caption"
-                       Margin="0"
-                       Text="{Binding RootTexts[Settings.Start.EmulatorExtraArgs]}" />
-            <controls:TooltipHint Grid.Column="1" Tip="{Binding RootTexts[Settings.Start.EmulatorExtraArgsTip]}" />
-          </Grid>
-          <TextBox Width="{DynamicResource MAA.Size.Settings.FieldInputWidth}"
-                   IsEnabled="{Binding CanEditEmulatorLaunchSettings}"
-                   Text="{Binding EmulatorAddCommand, UpdateSourceTrigger=LostFocus}" />
-        </StackPanel>
-
-        <StackPanel Classes="settings-centered-column" Spacing="0">
-          <StackPanel Orientation="Horizontal"
-                      HorizontalAlignment="Center"
-                      Spacing="{DynamicResource MAA.Spacing.Small}">
-            <TextBlock VerticalAlignment="Center" Text="{Binding RootTexts[Settings.Start.EmulatorWaitSeconds]}" />
-            <controls:VerticalSpinNumberBox Width="{DynamicResource MAA.Size.Settings.FieldTinyWidth}"
-                                            Minimum="0"
-                                            Maximum="600"
-                                            Value="{Binding EmulatorWaitSeconds}" />
-          </StackPanel>
-          <TextBlock Classes="settings-apply-note settings-centered-text" Text="{Binding RootTexts[Settings.Start.EmulatorWaitSecondsNote]}" />
-        </StackPanel>
+                  Margin="16,0,0,0"
+                  HorizontalAlignment="Right"
+                  VerticalAlignment="Center"
+                  Spacing="2">
+        <TextBlock HorizontalAlignment="Right"
+                   VerticalAlignment="Center"
+                   Classes="state-warning"
+                   Text="{Binding RootTexts[Settings.State.Saving]}"
+                   IsVisible="{Binding IsStartPerformanceSaveInProgress}" />
+        <TextBlock HorizontalAlignment="Right"
+                   VerticalAlignment="Center"
+                   Classes="state-success"
+                   Text="{Binding RootTexts[Settings.State.Saved]}"
+                   IsVisible="{Binding HasStartPerformanceSaveSucceeded}" />
       </StackPanel>
     </Grid>
 
-    <StackPanel Grid.Row="3"
-                Classes="settings-form settings-form-narrow"
-                Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}"
-                Spacing="4">
-      <TextBlock Classes="state-warning settings-centered-text"
-                 Text="{Binding StartPerformanceValidationMessage}"
-                 IsVisible="{Binding HasStartPerformanceValidationMessage}" />
-      <TextBlock Classes="state-warning settings-centered-text"
-                 Text="{Binding AutostartWarningMessage}"
-                 IsVisible="{Binding HasAutostartWarningMessage}" />
-      <TextBlock Classes="state-error settings-centered-text"
-                 Text="{Binding AutostartErrorMessage}"
-                 IsVisible="{Binding HasAutostartErrorMessage}" />
-    </StackPanel>
+    <WrapPanel Grid.Row="1"
+               Classes="settings-form settings-wrap"
+               Margin="{DynamicResource MAA.Thickness.Settings.SectionTopMargin}">
+      <Border Classes="app-surface app-section start-settings-section">
+        <StackPanel Classes="start-settings-stack">
+          <TextBlock Classes="app-body"
+                     FontSize="16"
+                     FontWeight="SemiBold"
+                     Text="{Binding RootTexts[Settings.Section.Start]}" />
+
+          <Border Classes="app-surface app-card start-settings-card">
+            <StackPanel Orientation="Horizontal"
+                        Spacing="8">
+              <CheckBox Classes="app-checkbox"
+                        Content="{Binding RootTexts[Settings.Start.AutoStartMaa]}"
+                        IsChecked="{Binding StartSelf}" />
+              <controls:TooltipHint VerticalAlignment="Center"
+                                    Tip="{Binding RootTexts[Settings.Start.AutoStartMaaTip]}" />
+            </StackPanel>
+          </Border>
+
+          <Border Classes="app-surface app-card start-settings-card">
+            <StackPanel>
+              <CheckBox Classes="app-checkbox"
+                        Content="{Binding RootTexts[Settings.Start.MinimizeDirectly]}"
+                        IsChecked="{Binding MinimizeDirectly}" />
+              <TextBlock Classes="app-caption start-settings-note"
+                         Text="{Binding RootTexts[Settings.Start.ApplyOnNextLaunch]}" />
+            </StackPanel>
+          </Border>
+
+          <Border Classes="app-surface app-card start-settings-card">
+            <StackPanel>
+              <CheckBox Classes="app-checkbox"
+                        Content="{Binding RootTexts[Settings.Start.RunDirectly]}"
+                        IsChecked="{Binding RunDirectly}" />
+              <TextBlock Classes="app-caption start-settings-note"
+                         Text="{Binding RootTexts[Settings.Start.ApplyOnNextLaunch]}" />
+            </StackPanel>
+          </Border>
+
+          <Border Classes="app-surface app-card start-settings-card">
+            <StackPanel>
+              <CheckBox Classes="app-checkbox"
+                        Content="{Binding RootTexts[Settings.Start.AutoOpenEmulator]}"
+                        IsChecked="{Binding OpenEmulatorAfterLaunch}" />
+              <TextBlock Classes="app-caption start-settings-note"
+                         Text="{Binding RootTexts[Settings.Start.ApplyOnNextExecution]}" />
+            </StackPanel>
+          </Border>
+
+          <Border Classes="app-surface app-card start-settings-card">
+            <StackPanel Orientation="Horizontal"
+                        Spacing="8">
+              <CheckBox Classes="app-checkbox"
+                        Content="{Binding RootTexts[Settings.Start.RetryOnDisconnected]}"
+                        IsChecked="{Binding ConnectionGameSharedState.RetryOnDisconnected}" />
+              <controls:TooltipHint VerticalAlignment="Center"
+                                    Tip="{Binding RootTexts[Settings.Start.RetryOnDisconnectedTip]}" />
+            </StackPanel>
+          </Border>
+        </StackPanel>
+      </Border>
+
+      <Border Classes="app-surface app-section start-settings-section"
+              IsVisible="{Binding CanEditEmulatorLaunchSettings}">
+        <StackPanel Classes="start-settings-stack">
+          <TextBlock Classes="app-body"
+                     FontSize="16"
+                     FontWeight="SemiBold"
+                     Text="{Binding RootTexts[Settings.Start.EmulatorPath]}" />
+
+          <Border Classes="app-surface app-card start-settings-card">
+            <StackPanel Classes="start-settings-stack">
+              <StackPanel Orientation="Horizontal"
+                          Spacing="8">
+                <TextBlock Classes="app-body start-settings-card-title"
+                           VerticalAlignment="Center"
+                           Text="{Binding RootTexts[Settings.Start.EmulatorPath]}" />
+                <controls:TooltipHint VerticalAlignment="Center"
+                                      Tip="{Binding RootTexts[Settings.Start.EmulatorPathTip]}" />
+              </StackPanel>
+              <StackPanel Orientation="Horizontal"
+                          Spacing="10">
+                <TextBox Classes="app-input"
+                         Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
+                         Text="{Binding EmulatorPath, UpdateSourceTrigger=LostFocus}" />
+                <Button Classes="app-button app-secondary"
+                        HorizontalAlignment="Left"
+                        Content="{Binding RootTexts[Settings.Start.SelectButton]}"
+                        Click="OnSelectEmulatorPathClick" />
+              </StackPanel>
+            </StackPanel>
+          </Border>
+
+          <Border Classes="app-surface app-card start-settings-card">
+            <StackPanel Classes="start-settings-stack">
+              <StackPanel Orientation="Horizontal"
+                          Spacing="8">
+                <TextBlock Classes="app-body start-settings-card-title"
+                           VerticalAlignment="Center"
+                           Text="{Binding RootTexts[Settings.Start.EmulatorExtraArgs]}" />
+                <controls:TooltipHint VerticalAlignment="Center"
+                                      Tip="{Binding RootTexts[Settings.Start.EmulatorExtraArgsTip]}" />
+              </StackPanel>
+              <TextBox Classes="app-input"
+                       IsEnabled="{Binding CanEditEmulatorLaunchSettings}"
+                       Text="{Binding EmulatorAddCommand, UpdateSourceTrigger=LostFocus}" />
+            </StackPanel>
+          </Border>
+
+          <Border Classes="app-surface app-card start-settings-card">
+            <StackPanel Classes="start-settings-stack">
+              <TextBlock Classes="app-body start-settings-card-title"
+                         Text="{Binding RootTexts[Settings.Start.EmulatorWaitSeconds]}" />
+              <StackPanel Orientation="Horizontal"
+                          Spacing="10">
+                <TextBlock VerticalAlignment="Center"
+                           Classes="app-caption"
+                           Text="{Binding RootTexts[Settings.Start.EmulatorWaitSeconds]}" />
+                <controls:VerticalSpinNumberBox Width="{DynamicResource MAA.Size.Settings.FieldTinyWidth}"
+                                                Minimum="0"
+                                                Maximum="600"
+                                                Value="{Binding EmulatorWaitSeconds}" />
+              </StackPanel>
+              <TextBlock Classes="app-caption"
+                         Text="{Binding RootTexts[Settings.Start.EmulatorWaitSecondsNote]}" />
+            </StackPanel>
+          </Border>
+        </StackPanel>
+      </Border>
+    </WrapPanel>
+
+    <Border Grid.Row="2"
+            Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}"
+            Classes="app-surface app-section start-settings-section">
+      <StackPanel Spacing="6">
+        <TextBlock Classes="state-warning"
+                   Text="{Binding StartPerformanceValidationMessage}"
+                   IsVisible="{Binding HasStartPerformanceValidationMessage}" />
+        <TextBlock Classes="state-warning"
+                   Text="{Binding AutostartWarningMessage}"
+                   IsVisible="{Binding HasAutostartWarningMessage}" />
+        <TextBlock Classes="state-error"
+                   Text="{Binding AutostartErrorMessage}"
+                   IsVisible="{Binding HasAutostartErrorMessage}" />
+      </StackPanel>
+    </Border>
   </Grid>
 </UserControl>

@@ -2,36 +2,70 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="MAAUnified.App.Controls.TooltipHint"
              x:Name="Root">
+  <UserControl.Styles>
+    <Style Selector="Border.tooltip-hint-glyph">
+      <Setter Property="Width" Value="18" />
+      <Setter Property="Height" Value="18" />
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.SubtleBackground}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Border.Card}" />
+      <Setter Property="BorderThickness" Value="{DynamicResource MAA.BorderThickness.Thin}" />
+      <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.CornerRadius.Badge}" />
+      <Setter Property="ClipToBounds" Value="True" />
+    </Style>
+
+    <Style Selector="Border.tooltip-hint-glyph:pointerover">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.SubtleBackgroundHover}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Input.BorderHover}" />
+    </Style>
+
+    <Style Selector="Border.tooltip-hint-glyph:disabled">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.DisabledBackground}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Action.DisabledBorder}" />
+    </Style>
+
+    <Style Selector="Border.tooltip-hint-card">
+      <Setter Property="MaxWidth" Value="360" />
+      <Setter Property="Padding" Value="12,10" />
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Surface.Card}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Border.Card}" />
+      <Setter Property="BorderThickness" Value="{DynamicResource MAA.BorderThickness.Thin}" />
+      <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.CornerRadius.Card}" />
+      <Setter Property="ClipToBounds" Value="True" />
+      <Setter Property="Effect">
+        <DropShadowDirectionEffect BlurRadius="18"
+                                   ShadowDepth="0"
+                                   Opacity="0.14"
+                                   Color="Black" />
+      </Setter>
+    </Style>
+
+    <Style Selector="TextBlock.tooltip-hint-glyph-text">
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Secondary}" />
+      <Setter Property="FontSize" Value="10" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+  </UserControl.Styles>
+
   <Border x:Name="GlyphHost"
-          Width="16"
-          Height="16"
+          Classes="tooltip-hint-glyph"
           Margin="{Binding GlyphMargin, ElementName=Root}"
-          Background="Transparent"
-          BorderBrush="{DynamicResource MAA.Brush.Border.Default}"
-          BorderThickness="1"
-          CornerRadius="8"
           Cursor="Hand"
           ToolTip.ShowDelay="500"
           ToolTip.Placement="Top"
           ToolTip.VerticalOffset="6">
     <ToolTip.Tip>
-      <Border MaxWidth="360"
-              Padding="10,8"
-              Background="{DynamicResource MAA.Brush.Surface.SectionStrong}"
-              BorderBrush="{DynamicResource MAA.Brush.Border.Default}"
-              BorderThickness="1"
-              CornerRadius="{DynamicResource MAA.CornerRadius.SectionStrong}">
+      <Border Classes="tooltip-hint-card">
         <TextBlock Classes="long-wrap"
-                   MaxWidth="340"
+                   MaxWidth="336"
+                   Foreground="{DynamicResource MAA.Brush.App.Text.Secondary}"
                    Text="{Binding Tip, ElementName=Root}"
                    TextWrapping="Wrap" />
       </Border>
     </ToolTip.Tip>
 
-    <TextBlock Classes="subtle"
+    <TextBlock Classes="tooltip-hint-glyph-text"
                HorizontalAlignment="Center"
                VerticalAlignment="Center"
-               FontSize="10"
                Text="{Binding GlyphText, ElementName=Root}" />
   </Border>
 </UserControl>

@@ -69,8 +69,13 @@ public sealed class SettingsViewStructureContractTests
         Assert.DoesNotContain("NotificationProviderParametersText", external, StringComparison.Ordinal);
 
         var issue = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "IssueReportView.axaml"));
-        Assert.DoesNotContain("OnOpenRuntimeLogWindowClick", issue, StringComparison.Ordinal);
-        Assert.DoesNotContain("Settings.IssueReport.DeveloperMode", issue, StringComparison.Ordinal);
+        Assert.Contains("Click=\"OnOpenRuntimeLogWindowClick\"", issue, StringComparison.Ordinal);
+        Assert.Contains("IsVisible=\"{Binding CanOpenRuntimeLogWindow}\"", issue, StringComparison.Ordinal);
+        Assert.Contains("Settings.IssueReport.DeveloperMode", issue, StringComparison.Ordinal);
+        Assert.Contains("Settings.IssueReport.DeveloperModeNote", issue, StringComparison.Ordinal);
+        Assert.Contains("IsVisible=\"{Binding CanUseDeveloperMode}\"", issue, StringComparison.Ordinal);
+        Assert.Contains("IsVisible=\"{Binding CanUseIssueReportMaintenanceTools}\"", issue, StringComparison.Ordinal);
+        Assert.Contains("IsChecked=\"{Binding DeveloperModeEnabled}\"", issue, StringComparison.Ordinal);
         Assert.Contains("IssueReportClearImageCacheTip", issue, StringComparison.Ordinal);
     }
 

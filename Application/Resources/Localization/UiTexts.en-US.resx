@@ -4467,7 +4467,7 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
     <value>Tray Integration</value>
   </data>
   <data name="Toolbox.Advanced.Tab.WebApi" xml:space="preserve">
-    <value>WebApi (Compat)</value>
+    <value>WebApi</value>
   </data>
   <data name="Toolbox.Advanced.Tray.ApplyVisibility" xml:space="preserve">
     <value>Apply visibility</value>
@@ -4533,10 +4533,10 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
     <value>Stop service</value>
   </data>
   <data name="Toolbox.Advanced.WebApi.Title" xml:space="preserve">
-    <value>WebApi (Compat)</value>
+    <value>WebApi</value>
   </data>
   <data name="Toolbox.Advanced.WebApi.Warning" xml:space="preserve">
-    <value>This panel exists for legacy WebApi compatibility. Enable it only when you explicitly need external access, and configure an access token whenever possible.</value>
+    <value>This Advanced page keeps compatibility with legacy WebApi clients. Enable it only when you explicitly need external access, and configure an access token whenever possible.</value>
   </data>
   <data name="Toolbox.Depot.ExportArkPlanner" xml:space="preserve">
     <value>Export to Penguin Stats planner</value>

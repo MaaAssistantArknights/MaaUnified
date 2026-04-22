@@ -297,58 +297,82 @@ public sealed class ToolboxModuleO3FeatureTests
     }
 
     [Fact]
-    public void ToolboxView_ShouldExposeAllToolActions_AndHideAdvancedSuiteEntry()
+    public void ToolboxView_ShouldKeepRealSixToolStructure_AndExcludeAdvancedInjection()
     {
         var root = GetMaaUnifiedRoot();
-        var xaml = File.ReadAllText(Path.Combine(root, "App", "Features", "Advanced", "ToolboxView.axaml"));
+        var toolboxXaml = ReadAdvancedView(root, "ToolboxView.axaml");
+        var recruitXaml = ReadAdvancedView(root, "ToolboxRecruitView.axaml");
+        var operBoxXaml = ReadAdvancedView(root, "ToolboxOperBoxView.axaml");
+        var depotXaml = ReadAdvancedView(root, "ToolboxDepotView.axaml");
+        var gachaXaml = ReadAdvancedView(root, "ToolboxGachaView.axaml");
+        var peepXaml = ReadAdvancedView(root, "ToolboxPeepView.axaml");
+        var miniGameXaml = ReadAdvancedView(root, "ToolboxMiniGameView.axaml");
 
-        Assert.Contains("Header=\"{Binding RecruitTabTitle}\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Header=\"{Binding OperBoxTabTitle}\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Header=\"{Binding DepotTabTitle}\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Classes=\"toolbox-nav\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("ItemsSource=\"{Binding Segments}\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Header=\"{Binding GachaTabTitle}\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Header=\"{Binding PeepTabTitle}\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Header=\"{Binding MiniGameTabTitle}\"", xaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("Header=\"{Binding Texts[Toolbox.Tab.Advanced]}\"", xaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("advanced:StageManagerView DataContext=\"{Binding StageManagerPage}\"", xaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("advanced:OverlayView DataContext=\"{Binding OverlayPage}\"", xaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("advanced:TrayIntegrationView DataContext=\"{Binding TrayIntegrationPage}\"", xaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("advanced:RemoteControlCenterView DataContext=\"{Binding RemoteControlCenterPage}\"", xaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("advanced:ExternalNotificationProvidersView DataContext=\"{Binding ExternalNotificationProvidersPage}\"", xaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("advanced:WebApiView DataContext=\"{Binding WebApiPage}\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Text=\"{Binding RecruitFixedSixStarText}\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Content=\"{Binding StartRecognitionText}\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Text=\"{Binding OperBoxCopyToClipboardText}\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Text=\"{Binding DepotExportArkPlannerText}\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Text=\"{Binding DepotExportLoliconText}\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Content=\"{Binding GachaDrawOnceText}\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Content=\"{Binding GachaDrawTenText}\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Content=\"{Binding GachaDisclaimerAcknowledgeText}\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Content=\"{Binding GachaDisclaimerNoMoreText}\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("IsChecked=\"{Binding GachaShowDisclaimerNoMore}\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Content=\"{Binding PeepCommandText}\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Content=\"{Binding MiniGameCommandText}\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Text=\"{Binding ExecutionReviewTitle}\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Text=\"{Binding ResultText}\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Text=\"{Binding CurrentToolParameters}\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("ItemsSource=\"{Binding ExecutionHistory}\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Classes.status-success=\"{Binding Success}\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Classes.status-error=\"{Binding HasErrorCode}\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Source=\"{Binding EliteIconImage}\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Source=\"{Binding PotentialIconImage}\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Source=\"{Binding ItemImage}\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("x:Name=\"GachaDisclaimerEmphasisText\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("SpreadMethod=\"Repeat\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("DropShadowDirectionEffect", xaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("执行成功示例", xaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("执行失败示例", xaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("Content=\"下次不再提示\"\r\n                        IsChecked=\"{Binding GachaShowDisclaimerNoMore}\"\r\n                        IsEnabled=\"False\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"toolbox-nav\"", toolboxXaml, StringComparison.Ordinal);
+        Assert.Contains("Header=\"{Binding RecruitTabTitle}\"", toolboxXaml, StringComparison.Ordinal);
+        Assert.Contains("Header=\"{Binding OperBoxTabTitle}\"", toolboxXaml, StringComparison.Ordinal);
+        Assert.Contains("Header=\"{Binding DepotTabTitle}\"", toolboxXaml, StringComparison.Ordinal);
+        Assert.Contains("Header=\"{Binding GachaTabTitle}\"", toolboxXaml, StringComparison.Ordinal);
+        Assert.Contains("Header=\"{Binding PeepTabTitle}\"", toolboxXaml, StringComparison.Ordinal);
+        Assert.Contains("Header=\"{Binding MiniGameTabTitle}\"", toolboxXaml, StringComparison.Ordinal);
+        Assert.Contains("<views:ToolboxRecruitView />", toolboxXaml, StringComparison.Ordinal);
+        Assert.Contains("<views:ToolboxOperBoxView />", toolboxXaml, StringComparison.Ordinal);
+        Assert.Contains("<views:ToolboxDepotView />", toolboxXaml, StringComparison.Ordinal);
+        Assert.Contains("<views:ToolboxGachaView />", toolboxXaml, StringComparison.Ordinal);
+        Assert.Contains("<views:ToolboxPeepView />", toolboxXaml, StringComparison.Ordinal);
+        Assert.Contains("<views:ToolboxMiniGameView />", toolboxXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Header=\"{Binding Texts[Toolbox.Tab.Advanced]}\"", toolboxXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("<views:StageManagerView", toolboxXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("<views:OverlayView", toolboxXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("<views:TrayIntegrationView", toolboxXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("<views:RemoteControlCenterView", toolboxXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("<views:ExternalNotificationProvidersView", toolboxXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("<views:WebApiView", toolboxXaml, StringComparison.Ordinal);
+        Assert.Contains("Text=\"{Binding ExecutionReviewTitle}\"", toolboxXaml, StringComparison.Ordinal);
+        Assert.Contains("Text=\"{Binding ResultText}\"", toolboxXaml, StringComparison.Ordinal);
+        Assert.Contains("Text=\"{Binding CurrentToolParameters}\"", toolboxXaml, StringComparison.Ordinal);
+        Assert.Contains("ItemsSource=\"{Binding ExecutionHistory}\"", toolboxXaml, StringComparison.Ordinal);
+        Assert.Contains("Classes.status-success=\"{Binding Success}\"", toolboxXaml, StringComparison.Ordinal);
+        Assert.Contains("Classes.status-error=\"{Binding HasErrorCode}\"", toolboxXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Legacy structure contract anchors", toolboxXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("执行成功示例", toolboxXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("执行失败示例", toolboxXaml, StringComparison.Ordinal);
+
+        Assert.Contains("ItemsSource=\"{Binding Segments}\"", recruitXaml, StringComparison.Ordinal);
+        Assert.Contains("Text=\"{Binding RecruitFixedSixStarText}\"", recruitXaml, StringComparison.Ordinal);
+        Assert.Contains("Content=\"{Binding StartRecognitionText}\"", recruitXaml, StringComparison.Ordinal);
+
+        Assert.Contains("Text=\"{Binding OperBoxCopyToClipboardText}\"", operBoxXaml, StringComparison.Ordinal);
+        Assert.Contains("Content=\"{Binding StartRecognitionText}\"", operBoxXaml, StringComparison.Ordinal);
+        Assert.Contains("Source=\"{Binding EliteIconImage}\"", operBoxXaml, StringComparison.Ordinal);
+        Assert.Contains("Source=\"{Binding PotentialIconImage}\"", operBoxXaml, StringComparison.Ordinal);
+        Assert.Contains("DropShadowDirectionEffect", operBoxXaml, StringComparison.Ordinal);
+
+        Assert.Contains("Text=\"{Binding DepotExportArkPlannerText}\"", depotXaml, StringComparison.Ordinal);
+        Assert.Contains("Text=\"{Binding DepotExportLoliconText}\"", depotXaml, StringComparison.Ordinal);
+        Assert.Contains("Content=\"{Binding StartRecognitionText}\"", depotXaml, StringComparison.Ordinal);
+        Assert.Contains("Source=\"{Binding ItemImage}\"", depotXaml, StringComparison.Ordinal);
+
+        Assert.Contains("Content=\"{Binding GachaDrawOnceText}\"", gachaXaml, StringComparison.Ordinal);
+        Assert.Contains("Content=\"{Binding GachaDrawTenText}\"", gachaXaml, StringComparison.Ordinal);
+        Assert.Contains("Content=\"{Binding GachaDisclaimerAcknowledgeText}\"", gachaXaml, StringComparison.Ordinal);
+        Assert.Contains("Content=\"{Binding GachaDisclaimerNoMoreText}\"", gachaXaml, StringComparison.Ordinal);
+        Assert.Contains("IsChecked=\"{Binding GachaShowDisclaimerNoMore}\"", gachaXaml, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"GachaDisclaimerEmphasisText\"", gachaXaml, StringComparison.Ordinal);
+        Assert.Contains("SpreadMethod=\"Repeat\"", gachaXaml, StringComparison.Ordinal);
+
+        Assert.Contains("Content=\"{Binding PeepCommandText}\"", peepXaml, StringComparison.Ordinal);
+        Assert.Contains("Content=\"{Binding MiniGameCommandText}\"", miniGameXaml, StringComparison.Ordinal);
     }
 
     private static CoreCallbackEvent CreateCallback(string msgName, JsonObject? payload = null)
     {
         return new CoreCallbackEvent(0, msgName, (payload ?? new JsonObject()).ToJsonString(), DateTimeOffset.Now);
+    }
+
+    private static string ReadAdvancedView(string root, string fileName)
+    {
+        return File.ReadAllText(Path.Combine(root, "App", "Features", "Advanced", fileName));
     }
 
     private static async Task WaitForSettingAsync(ToolboxTestFixture fixture, string key, string? expectedSubstring = null)

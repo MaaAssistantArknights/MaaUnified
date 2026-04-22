@@ -59,7 +59,10 @@ public sealed class RootViewStructureContractTests
         Assert.Contains("IsEnabled=\"{Binding CanToggleRun}\"", text, StringComparison.Ordinal);
         Assert.Contains("Text=\"{Binding CoreInitializationMessage}\"", text, StringComparison.Ordinal);
         Assert.Contains("IsVisible=\"{Binding HasCoreInitializationMessage}\"", text, StringComparison.Ordinal);
-        Assert.Contains("Classes=\"wpf-list-no-highlight\"", text, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"task-queue-list\"", text, StringComparison.Ordinal);
+        Assert.Contains("Style Selector=\"ListBox.task-queue-list ListBoxItem:pointerover\"", text, StringComparison.Ordinal);
+        Assert.Contains("Style Selector=\"ListBox.task-queue-list ListBoxItem:selected\"", text, StringComparison.Ordinal);
+        Assert.Contains("Style Selector=\"ListBox.task-queue-list ListBoxItem:selected:pointerover Border.task-queue-item-card\"", text, StringComparison.Ordinal);
         Assert.Contains("Text=\"{Binding LogsTitleText}\"", text, StringComparison.Ordinal);
         Assert.Contains("ItemsSource=\"{Binding LogCards}\"", text, StringComparison.Ordinal);
         Assert.Contains("ItemsSource=\"{Binding Items}\"", text, StringComparison.Ordinal);
@@ -191,6 +194,10 @@ public sealed class RootViewStructureContractTests
         var codeBehind = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "IssueReportView.axaml.cs"));
 
         Assert.Contains("Click=\"OnOpenRuntimeLogWindowClick\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("IsVisible=\"{Binding CanOpenRuntimeLogWindow}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Settings.IssueReport.DeveloperMode", xaml, StringComparison.Ordinal);
+        Assert.Contains("Settings.IssueReport.DeveloperModeNote", xaml, StringComparison.Ordinal);
+        Assert.Contains("IsVisible=\"{Binding CanUseDeveloperMode}\"", xaml, StringComparison.Ordinal);
         Assert.Contains("OnOpenRuntimeLogWindowClick", codeBehind, StringComparison.Ordinal);
         Assert.Contains("OpenRuntimeLogWindow()", codeBehind, StringComparison.Ordinal);
     }

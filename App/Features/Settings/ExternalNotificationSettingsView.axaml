@@ -1,226 +1,418 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="MAAUnified.App.Features.Settings.ExternalNotificationSettingsView">
-  <Grid Margin="4" RowDefinitions="Auto,Auto,Auto,Auto">
-    <TextBlock Classes="section-title" Text="{Binding RootTexts[Settings.Section.ExternalNotification]}" />
-    <TextBlock Grid.Row="1"
-               MaxWidth="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
-               Margin="{DynamicResource MAA.Thickness.Settings.SectionTopMargin}"
-               Classes="settings-centered-text"
-               Text="{Binding RootTexts[Settings.ExternalNotification.OnlyCompleteNote]}" />
+  <UserControl.Styles>
+    <Style Selector="Border.external-notification-section">
+      <Setter Property="Margin" Value="0,14,0,0" />
+      <Setter Property="Padding" Value="22" />
+    </Style>
 
-    <StackPanel Grid.Row="2"
-                Classes="settings-form"
-                Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}"
-                Spacing="{DynamicResource MAA.Spacing.Medium}">
-      <StackPanel Classes="settings-centered-column"
-                  Spacing="{DynamicResource MAA.Spacing.Small}">
-        <TextBlock Classes="settings-field-caption" Text="{Binding RootTexts[Settings.ExternalNotification.Enabled]}" />
-        <ItemsControl ItemsSource="{Binding NotificationProviderSelections}">
-          <ItemsControl.ItemsPanel>
-            <ItemsPanelTemplate>
-              <WrapPanel HorizontalAlignment="Center" />
-            </ItemsPanelTemplate>
-          </ItemsControl.ItemsPanel>
-          <ItemsControl.ItemTemplate>
-            <DataTemplate>
-              <CheckBox Margin="0,0,12,6"
-                        Content="{Binding DisplayName}"
-                        IsChecked="{Binding IsEnabled, Mode=TwoWay}" />
-            </DataTemplate>
-          </ItemsControl.ItemTemplate>
-        </ItemsControl>
+    <Style Selector="Border.external-notification-card">
+      <Setter Property="Padding" Value="16" />
+    </Style>
+
+    <Style Selector="StackPanel.external-notification-stack">
+      <Setter Property="Spacing" Value="16" />
+    </Style>
+
+    <Style Selector="StackPanel.external-notification-card-stack">
+      <Setter Property="Spacing" Value="10" />
+    </Style>
+
+    <Style Selector="TextBlock.external-notification-card-title">
+      <Setter Property="FontSize" Value="16" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+  </UserControl.Styles>
+
+  <Grid Margin="4"
+        Classes="settings-form"
+        RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto">
+    <Border Classes="app-surface app-section"
+            Padding="22">
+      <StackPanel Classes="external-notification-stack">
+        <TextBlock Classes="app-window-title"
+                   Text="{Binding RootTexts[Settings.Section.ExternalNotification]}" />
+        <TextBlock MaxWidth="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
+                   Classes="app-window-subtitle long-wrap"
+                   Text="{Binding RootTexts[Settings.ExternalNotification.OnlyCompleteNote]}" />
       </StackPanel>
+    </Border>
 
-      <Button Classes="wpf-button wpf-button-secondary"
-              HorizontalAlignment="Center"
-              Content="{Binding RootTexts[Settings.ExternalNotification.TestSend]}"
-              Click="OnTestSendClick"
-              IsEnabled="{Binding CanEditExternalNotification}" />
+    <Border Grid.Row="1"
+            Classes="app-surface app-section external-notification-section">
+      <StackPanel Classes="external-notification-stack">
+        <Grid ColumnDefinitions="*,Auto">
+          <TextBlock VerticalAlignment="Center"
+                     Classes="app-body external-notification-card-title"
+                     Text="{Binding RootTexts[Settings.ExternalNotification.Enabled]}" />
 
-      <StackPanel Classes="settings-centered-column"
-                  Spacing="0"
-                  IsEnabled="{Binding CanEditExternalNotification}">
-        <CheckBox Content="{Binding RootTexts[Settings.ExternalNotification.SendWhenComplete]}"
-                  IsChecked="{Binding ExternalNotificationSendWhenComplete}"
+          <Button Classes="app-button app-secondary"
+                  Margin="16,0,0,0"
+                  HorizontalAlignment="Right"
+                  VerticalAlignment="Center"
+                  Content="{Binding RootTexts[Settings.ExternalNotification.TestSend]}"
+                  Click="OnTestSendClick"
                   IsEnabled="{Binding CanEditExternalNotification}" />
-        <CheckBox Margin="{DynamicResource MAA.Thickness.Settings.BranchIndent}"
-                  Content="{Binding RootTexts[Settings.ExternalNotification.EnableDetails]}"
-                  IsChecked="{Binding ExternalNotificationEnableDetails}"
-                  IsEnabled="{Binding CanEditExternalNotificationDetails}"
-                  IsVisible="{Binding ExternalNotificationSendWhenComplete}" />
-        <CheckBox Content="{Binding RootTexts[Settings.ExternalNotification.SendWhenError]}"
-                  IsChecked="{Binding ExternalNotificationSendWhenError}"
-                  IsEnabled="{Binding CanEditExternalNotification}" />
-        <CheckBox Content="{Binding RootTexts[Settings.ExternalNotification.SendWhenTimeout]}"
-                  IsChecked="{Binding ExternalNotificationSendWhenTimeout}"
-                  IsEnabled="{Binding CanEditExternalNotification}" />
+        </Grid>
+
+        <Border Classes="app-surface app-card external-notification-card">
+          <ItemsControl ItemsSource="{Binding NotificationProviderSelections}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <WrapPanel />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <CheckBox Margin="0,0,12,8"
+                          Classes="app-checkbox"
+                          Content="{Binding DisplayName}"
+                          IsChecked="{Binding IsEnabled, Mode=TwoWay}" />
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </Border>
       </StackPanel>
+    </Border>
 
-      <StackPanel Classes="settings-centered-column"
-                  Spacing="{DynamicResource MAA.Spacing.Small}"
-                  IsEnabled="{Binding CanEditExternalNotification}">
-
-        <StackPanel Spacing="{DynamicResource MAA.Spacing.Small}"
-                    IsVisible="{Binding ServerChanSectionVisible}">
-          <TextBlock Classes="settings-field-caption" Text="Server Chan" />
-          <TextBox Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
-                   Text="{Binding ServerChanSendKey, UpdateSourceTrigger=PropertyChanged}" />
-        </StackPanel>
-
-        <StackPanel Spacing="{DynamicResource MAA.Spacing.Small}"
-                    IsVisible="{Binding TelegramSectionVisible}">
-          <TextBlock Classes="settings-field-caption" Text="Telegram bot" />
-          <TextBox Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
-                   Text="{Binding TelegramBotToken, UpdateSourceTrigger=PropertyChanged}" />
-          <TextBox Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
-                   Text="{Binding TelegramChatId, UpdateSourceTrigger=PropertyChanged}" />
-          <TextBox Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
-                   Text="{Binding TelegramTopicId, UpdateSourceTrigger=PropertyChanged}" />
-        </StackPanel>
-
-        <StackPanel Spacing="{DynamicResource MAA.Spacing.Small}"
-                    IsVisible="{Binding DiscordSectionVisible}">
-          <TextBlock Classes="settings-field-caption" Text="Discord" />
-          <TextBox Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
-                   Text="{Binding DiscordBotToken, UpdateSourceTrigger=PropertyChanged}" />
-          <TextBox Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
-                   Text="{Binding DiscordUserId, UpdateSourceTrigger=PropertyChanged}" />
-        </StackPanel>
-
-        <StackPanel Spacing="{DynamicResource MAA.Spacing.Small}"
-                    IsVisible="{Binding DiscordWebhookSectionVisible}">
-          <TextBlock Classes="settings-field-caption" Text="Discord WebHook" />
-          <TextBox Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
-                   Text="{Binding DiscordWebhookUrl, UpdateSourceTrigger=PropertyChanged}" />
-        </StackPanel>
-
-        <StackPanel Spacing="{DynamicResource MAA.Spacing.Small}"
-                    IsVisible="{Binding DingTalkSectionVisible}">
-          <TextBlock Classes="settings-field-caption" Text="DingTalk" />
-          <TextBox Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
-                   Text="{Binding DingTalkAccessToken, UpdateSourceTrigger=PropertyChanged}" />
-          <TextBox Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
-                   Text="{Binding DingTalkSecret, UpdateSourceTrigger=PropertyChanged}" />
-        </StackPanel>
-
-        <StackPanel Spacing="{DynamicResource MAA.Spacing.Small}"
-                    IsVisible="{Binding SmtpSectionVisible}">
-          <TextBlock Classes="settings-field-caption" Text="SMTP" />
-          <StackPanel Orientation="Horizontal" Spacing="{DynamicResource MAA.Spacing.Small}">
-            <CheckBox Content="Use SSL" IsChecked="{Binding SmtpUseSsl}" />
-            <CheckBox Content="Require authentication" IsChecked="{Binding SmtpRequireAuthentication}" />
+    <Border Grid.Row="2"
+            Classes="app-surface app-section external-notification-section">
+      <StackPanel Classes="external-notification-stack">
+        <Border Classes="app-surface app-card external-notification-card">
+          <StackPanel Classes="external-notification-card-stack"
+                      IsEnabled="{Binding CanEditExternalNotification}">
+            <CheckBox Classes="app-checkbox"
+                      Content="{Binding RootTexts[Settings.ExternalNotification.SendWhenComplete]}"
+                      IsChecked="{Binding ExternalNotificationSendWhenComplete}"
+                      IsEnabled="{Binding CanEditExternalNotification}" />
+            <CheckBox Margin="{DynamicResource MAA.Thickness.Settings.BranchIndent}"
+                      Classes="app-checkbox"
+                      Content="{Binding RootTexts[Settings.ExternalNotification.EnableDetails]}"
+                      IsChecked="{Binding ExternalNotificationEnableDetails}"
+                      IsEnabled="{Binding CanEditExternalNotificationDetails}"
+                      IsVisible="{Binding ExternalNotificationSendWhenComplete}" />
+            <CheckBox Classes="app-checkbox"
+                      Content="{Binding RootTexts[Settings.ExternalNotification.SendWhenError]}"
+                      IsChecked="{Binding ExternalNotificationSendWhenError}"
+                      IsEnabled="{Binding CanEditExternalNotification}" />
+            <CheckBox Classes="app-checkbox"
+                      Content="{Binding RootTexts[Settings.ExternalNotification.SendWhenTimeout]}"
+                      IsChecked="{Binding ExternalNotificationSendWhenTimeout}"
+                      IsEnabled="{Binding CanEditExternalNotification}" />
           </StackPanel>
-          <Grid ColumnDefinitions="Auto,*,Auto,*" RowDefinitions="Auto,Auto,Auto">
-            <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,0,6,0" VerticalAlignment="Center" Text="Server" />
-            <TextBox Grid.Row="0" Grid.Column="1"
-                     Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
-                     Text="{Binding SmtpServer, UpdateSourceTrigger=PropertyChanged}" />
-            <TextBlock Grid.Row="0" Grid.Column="2" Margin="10,0,6,0" VerticalAlignment="Center" Text="Port" />
-            <TextBox Grid.Row="0" Grid.Column="3"
-                     Width="{DynamicResource MAA.Size.Settings.FieldPathCompactWidth}"
-                     Text="{Binding SmtpPort, UpdateSourceTrigger=PropertyChanged}" />
-
-            <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,6,6,0" VerticalAlignment="Center" Text="User" />
-            <TextBox Grid.Row="1" Grid.Column="1"
-                     Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
-                     Text="{Binding SmtpUser, UpdateSourceTrigger=PropertyChanged}" />
-            <TextBlock Grid.Row="1" Grid.Column="2" Margin="10,6,6,0" VerticalAlignment="Center" Text="Password" />
-            <TextBox Grid.Row="1" Grid.Column="3"
-                     Width="{DynamicResource MAA.Size.Settings.FieldPathCompactWidth}"
-                     Text="{Binding SmtpPassword, UpdateSourceTrigger=PropertyChanged}" />
-
-            <TextBlock Grid.Row="2" Grid.Column="0" Margin="0,6,6,0" VerticalAlignment="Center" Text="From" />
-            <TextBox Grid.Row="2" Grid.Column="1"
-                     Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
-                     Text="{Binding SmtpFrom, UpdateSourceTrigger=PropertyChanged}" />
-            <TextBlock Grid.Row="2" Grid.Column="2" Margin="10,6,6,0" VerticalAlignment="Center" Text="To" />
-            <TextBox Grid.Row="2" Grid.Column="3"
-                     Width="{DynamicResource MAA.Size.Settings.FieldPathCompactWidth}"
-                     Text="{Binding SmtpTo, UpdateSourceTrigger=PropertyChanged}" />
-          </Grid>
-        </StackPanel>
-
-        <StackPanel Spacing="{DynamicResource MAA.Spacing.Small}"
-                    IsVisible="{Binding BarkSectionVisible}">
-          <TextBlock Classes="settings-field-caption" Text="Bark" />
-          <TextBox Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
-                   Text="{Binding BarkServer, UpdateSourceTrigger=PropertyChanged}" />
-          <TextBox Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
-                   Text="{Binding BarkSendKey, UpdateSourceTrigger=PropertyChanged}" />
-        </StackPanel>
-
-        <StackPanel Spacing="{DynamicResource MAA.Spacing.Small}"
-                    IsVisible="{Binding QmsgSectionVisible}">
-          <TextBlock Classes="settings-field-caption" Text="Qmsg" />
-          <Grid ColumnDefinitions="Auto,*,Auto,*" RowDefinitions="Auto,Auto">
-            <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,0,6,0" VerticalAlignment="Center" Text="Server" />
-            <TextBox Grid.Row="0" Grid.Column="1"
-                     Text="{Binding QmsgServer, UpdateSourceTrigger=PropertyChanged}" />
-            <TextBlock Grid.Row="0" Grid.Column="2" Margin="10,0,6,0" VerticalAlignment="Center" Text="Key" />
-            <TextBox Grid.Row="0" Grid.Column="3"
-                     Text="{Binding QmsgKey, UpdateSourceTrigger=PropertyChanged}" />
-
-            <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,6,6,0" VerticalAlignment="Center" Text="User" />
-            <TextBox Grid.Row="1" Grid.Column="1"
-                     Text="{Binding QmsgUser, UpdateSourceTrigger=PropertyChanged}" />
-            <TextBlock Grid.Row="1" Grid.Column="2" Margin="10,6,6,0" VerticalAlignment="Center" Text="Bot" />
-            <TextBox Grid.Row="1" Grid.Column="3"
-                     Text="{Binding QmsgBot, UpdateSourceTrigger=PropertyChanged}" />
-          </Grid>
-        </StackPanel>
-
-        <StackPanel Spacing="{DynamicResource MAA.Spacing.Small}"
-                    IsVisible="{Binding GotifySectionVisible}">
-          <TextBlock Classes="settings-field-caption" Text="Gotify" />
-          <TextBox Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
-                   Text="{Binding GotifyServer, UpdateSourceTrigger=PropertyChanged}" />
-          <TextBox Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
-                   Text="{Binding GotifyToken, UpdateSourceTrigger=PropertyChanged}" />
-        </StackPanel>
-
-        <StackPanel Spacing="{DynamicResource MAA.Spacing.Small}"
-                    IsVisible="{Binding CustomWebhookSectionVisible}">
-          <TextBlock Classes="settings-field-caption" Text="Custom Webhook" />
-          <TextBox Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
-                   Text="{Binding CustomWebhookUrl, UpdateSourceTrigger=PropertyChanged}" />
-          <TextBox Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
-                   Height="120"
-                   AcceptsReturn="True"
-                   TextWrapping="Wrap"
-                   Text="{Binding CustomWebhookBody, UpdateSourceTrigger=PropertyChanged}" />
-        </StackPanel>
-
-        <TextBlock Classes="settings-field-caption"
-                   Text="{Binding RootTexts[Settings.ExternalNotification.TestTitle]}" />
-        <TextBox Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
-                 Text="{Binding NotificationTitle, UpdateSourceTrigger=LostFocus}" />
-
-        <TextBlock Classes="settings-field-caption"
-                   Text="{Binding RootTexts[Settings.ExternalNotification.TestMessage]}" />
-        <TextBox Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
-                 Text="{Binding NotificationMessage, UpdateSourceTrigger=LostFocus}" />
-
-        <Button Classes="wpf-button wpf-button-secondary"
-                HorizontalAlignment="Center"
-                Content="{Binding RootTexts[Settings.Action.ValidateNotification]}"
-                Click="OnValidateProviderClick" />
+        </Border>
       </StackPanel>
-    </StackPanel>
+    </Border>
 
-    <StackPanel Grid.Row="3"
-                Classes="settings-form settings-form-narrow"
-                Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}"
-                Spacing="4">
-      <TextBlock Classes="settings-centered-text"
-                 Text="{Binding ExternalNotificationStatusMessage}"
-                 IsVisible="{Binding HasExternalNotificationStatusMessage}" />
-      <TextBlock Classes="state-warning settings-centered-text"
-                 Text="{Binding ExternalNotificationWarningMessage}"
-                 IsVisible="{Binding HasExternalNotificationWarningMessage}" />
-      <TextBlock Classes="state-error settings-centered-text"
-                 Text="{Binding ExternalNotificationErrorMessage}"
-                 IsVisible="{Binding HasExternalNotificationErrorMessage}" />
-    </StackPanel>
+    <Border Grid.Row="3"
+            Classes="app-surface app-section external-notification-section"
+            IsEnabled="{Binding CanEditExternalNotification}">
+      <StackPanel Classes="external-notification-stack">
+        <StackPanel Spacing="12">
+          <Border Classes="app-surface app-card external-notification-card"
+                  IsVisible="{Binding ServerChanSectionVisible}">
+            <StackPanel Classes="external-notification-card-stack">
+              <TextBlock Classes="app-body external-notification-card-title"
+                         Text="Server Chan" />
+              <TextBox Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
+                       Classes="app-input"
+                       Text="{Binding ServerChanSendKey, UpdateSourceTrigger=PropertyChanged}" />
+            </StackPanel>
+          </Border>
+
+          <Border Classes="app-surface app-card external-notification-card"
+                  IsVisible="{Binding TelegramSectionVisible}">
+            <StackPanel Classes="external-notification-card-stack">
+              <TextBlock Classes="app-body external-notification-card-title"
+                         Text="Telegram bot" />
+              <TextBox Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
+                       Classes="app-input"
+                       Text="{Binding TelegramBotToken, UpdateSourceTrigger=PropertyChanged}" />
+              <TextBox Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
+                       Classes="app-input"
+                       Text="{Binding TelegramChatId, UpdateSourceTrigger=PropertyChanged}" />
+              <TextBox Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
+                       Classes="app-input"
+                       Text="{Binding TelegramTopicId, UpdateSourceTrigger=PropertyChanged}" />
+            </StackPanel>
+          </Border>
+
+          <Border Classes="app-surface app-card external-notification-card"
+                  IsVisible="{Binding DiscordSectionVisible}">
+            <StackPanel Classes="external-notification-card-stack">
+              <TextBlock Classes="app-body external-notification-card-title"
+                         Text="Discord" />
+              <TextBox Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
+                       Classes="app-input"
+                       Text="{Binding DiscordBotToken, UpdateSourceTrigger=PropertyChanged}" />
+              <TextBox Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
+                       Classes="app-input"
+                       Text="{Binding DiscordUserId, UpdateSourceTrigger=PropertyChanged}" />
+            </StackPanel>
+          </Border>
+
+          <Border Classes="app-surface app-card external-notification-card"
+                  IsVisible="{Binding DiscordWebhookSectionVisible}">
+            <StackPanel Classes="external-notification-card-stack">
+              <TextBlock Classes="app-body external-notification-card-title"
+                         Text="Discord WebHook" />
+              <TextBox Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
+                       Classes="app-input"
+                       Text="{Binding DiscordWebhookUrl, UpdateSourceTrigger=PropertyChanged}" />
+            </StackPanel>
+          </Border>
+
+          <Border Classes="app-surface app-card external-notification-card"
+                  IsVisible="{Binding DingTalkSectionVisible}">
+            <StackPanel Classes="external-notification-card-stack">
+              <TextBlock Classes="app-body external-notification-card-title"
+                         Text="DingTalk" />
+              <TextBox Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
+                       Classes="app-input"
+                       Text="{Binding DingTalkAccessToken, UpdateSourceTrigger=PropertyChanged}" />
+              <TextBox Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
+                       Classes="app-input"
+                       Text="{Binding DingTalkSecret, UpdateSourceTrigger=PropertyChanged}" />
+            </StackPanel>
+          </Border>
+
+          <Border Classes="app-surface app-card external-notification-card"
+                  IsVisible="{Binding SmtpSectionVisible}">
+            <StackPanel Classes="external-notification-card-stack">
+              <TextBlock Classes="app-body external-notification-card-title"
+                         Text="SMTP" />
+
+              <StackPanel Orientation="Horizontal"
+                          Spacing="{DynamicResource MAA.Spacing.Medium}">
+                <CheckBox Classes="app-checkbox"
+                          Content="Use SSL"
+                          IsChecked="{Binding SmtpUseSsl}" />
+                <CheckBox Classes="app-checkbox"
+                          Content="Require authentication"
+                          IsChecked="{Binding SmtpRequireAuthentication}" />
+              </StackPanel>
+
+              <Grid ColumnDefinitions="Auto,*,Auto,*"
+                    RowDefinitions="Auto,Auto,Auto">
+                <TextBlock Grid.Row="0"
+                           Grid.Column="0"
+                           VerticalAlignment="Center"
+                           Classes="app-caption"
+                           Text="Server" />
+                <TextBox Grid.Row="0"
+                         Grid.Column="1"
+                         Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
+                         Classes="app-input"
+                         Text="{Binding SmtpServer, UpdateSourceTrigger=PropertyChanged}" />
+                <TextBlock Grid.Row="0"
+                           Grid.Column="2"
+                           Margin="10,0,0,0"
+                           VerticalAlignment="Center"
+                           Classes="app-caption"
+                           Text="Port" />
+                <TextBox Grid.Row="0"
+                         Grid.Column="3"
+                         Margin="6,0,0,0"
+                         Width="{DynamicResource MAA.Size.Settings.FieldPathCompactWidth}"
+                         Classes="app-input"
+                         Text="{Binding SmtpPort, UpdateSourceTrigger=PropertyChanged}" />
+
+                <TextBlock Grid.Row="1"
+                           Grid.Column="0"
+                           Margin="0,6,0,0"
+                           VerticalAlignment="Center"
+                           Classes="app-caption"
+                           Text="User" />
+                <TextBox Grid.Row="1"
+                         Grid.Column="1"
+                         Margin="0,6,0,0"
+                         Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
+                         Classes="app-input"
+                         Text="{Binding SmtpUser, UpdateSourceTrigger=PropertyChanged}" />
+                <TextBlock Grid.Row="1"
+                           Grid.Column="2"
+                           Margin="10,6,0,0"
+                           VerticalAlignment="Center"
+                           Classes="app-caption"
+                           Text="Password" />
+                <TextBox Grid.Row="1"
+                         Grid.Column="3"
+                         Margin="6,6,0,0"
+                         Width="{DynamicResource MAA.Size.Settings.FieldPathCompactWidth}"
+                         Classes="app-input"
+                         Text="{Binding SmtpPassword, UpdateSourceTrigger=PropertyChanged}" />
+
+                <TextBlock Grid.Row="2"
+                           Grid.Column="0"
+                           Margin="0,6,0,0"
+                           VerticalAlignment="Center"
+                           Classes="app-caption"
+                           Text="From" />
+                <TextBox Grid.Row="2"
+                         Grid.Column="1"
+                         Margin="0,6,0,0"
+                         Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
+                         Classes="app-input"
+                         Text="{Binding SmtpFrom, UpdateSourceTrigger=PropertyChanged}" />
+                <TextBlock Grid.Row="2"
+                           Grid.Column="2"
+                           Margin="10,6,0,0"
+                           VerticalAlignment="Center"
+                           Classes="app-caption"
+                           Text="To" />
+                <TextBox Grid.Row="2"
+                         Grid.Column="3"
+                         Margin="6,6,0,0"
+                         Width="{DynamicResource MAA.Size.Settings.FieldPathCompactWidth}"
+                         Classes="app-input"
+                         Text="{Binding SmtpTo, UpdateSourceTrigger=PropertyChanged}" />
+              </Grid>
+            </StackPanel>
+          </Border>
+
+          <Border Classes="app-surface app-card external-notification-card"
+                  IsVisible="{Binding BarkSectionVisible}">
+            <StackPanel Classes="external-notification-card-stack">
+              <TextBlock Classes="app-body external-notification-card-title"
+                         Text="Bark" />
+              <TextBox Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
+                       Classes="app-input"
+                       Text="{Binding BarkServer, UpdateSourceTrigger=PropertyChanged}" />
+              <TextBox Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
+                       Classes="app-input"
+                       Text="{Binding BarkSendKey, UpdateSourceTrigger=PropertyChanged}" />
+            </StackPanel>
+          </Border>
+
+          <Border Classes="app-surface app-card external-notification-card"
+                  IsVisible="{Binding QmsgSectionVisible}">
+            <StackPanel Classes="external-notification-card-stack">
+              <TextBlock Classes="app-body external-notification-card-title"
+                         Text="Qmsg" />
+              <Grid ColumnDefinitions="Auto,*,Auto,*"
+                    RowDefinitions="Auto,Auto">
+                <TextBlock Grid.Row="0"
+                           Grid.Column="0"
+                           VerticalAlignment="Center"
+                           Classes="app-caption"
+                           Text="Server" />
+                <TextBox Grid.Row="0"
+                         Grid.Column="1"
+                         Classes="app-input"
+                         Text="{Binding QmsgServer, UpdateSourceTrigger=PropertyChanged}" />
+                <TextBlock Grid.Row="0"
+                           Grid.Column="2"
+                           Margin="10,0,0,0"
+                           VerticalAlignment="Center"
+                           Classes="app-caption"
+                           Text="Key" />
+                <TextBox Grid.Row="0"
+                         Grid.Column="3"
+                         Margin="6,0,0,0"
+                         Classes="app-input"
+                         Text="{Binding QmsgKey, UpdateSourceTrigger=PropertyChanged}" />
+
+                <TextBlock Grid.Row="1"
+                           Grid.Column="0"
+                           Margin="0,6,0,0"
+                           VerticalAlignment="Center"
+                           Classes="app-caption"
+                           Text="User" />
+                <TextBox Grid.Row="1"
+                         Grid.Column="1"
+                         Margin="0,6,0,0"
+                         Classes="app-input"
+                         Text="{Binding QmsgUser, UpdateSourceTrigger=PropertyChanged}" />
+                <TextBlock Grid.Row="1"
+                           Grid.Column="2"
+                           Margin="10,6,0,0"
+                           VerticalAlignment="Center"
+                           Classes="app-caption"
+                           Text="Bot" />
+                <TextBox Grid.Row="1"
+                         Grid.Column="3"
+                         Margin="6,6,0,0"
+                         Classes="app-input"
+                         Text="{Binding QmsgBot, UpdateSourceTrigger=PropertyChanged}" />
+              </Grid>
+            </StackPanel>
+          </Border>
+
+          <Border Classes="app-surface app-card external-notification-card"
+                  IsVisible="{Binding GotifySectionVisible}">
+            <StackPanel Classes="external-notification-card-stack">
+              <TextBlock Classes="app-body external-notification-card-title"
+                         Text="Gotify" />
+              <TextBox Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
+                       Classes="app-input"
+                       Text="{Binding GotifyServer, UpdateSourceTrigger=PropertyChanged}" />
+              <TextBox Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
+                       Classes="app-input"
+                       Text="{Binding GotifyToken, UpdateSourceTrigger=PropertyChanged}" />
+            </StackPanel>
+          </Border>
+
+          <Border Classes="app-surface app-card external-notification-card"
+                  IsVisible="{Binding CustomWebhookSectionVisible}">
+            <StackPanel Classes="external-notification-card-stack">
+              <TextBlock Classes="app-body external-notification-card-title"
+                         Text="Custom Webhook" />
+              <TextBox Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
+                       Classes="app-input"
+                       Text="{Binding CustomWebhookUrl, UpdateSourceTrigger=PropertyChanged}" />
+              <TextBox Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
+                       Height="120"
+                       AcceptsReturn="True"
+                       TextWrapping="Wrap"
+                       Classes="app-input"
+                       Text="{Binding CustomWebhookBody, UpdateSourceTrigger=PropertyChanged}" />
+            </StackPanel>
+          </Border>
+        </StackPanel>
+      </StackPanel>
+    </Border>
+
+    <Border Grid.Row="4"
+            Classes="app-surface app-section external-notification-section">
+      <StackPanel Classes="external-notification-stack">
+        <Border Classes="app-surface app-card external-notification-card">
+          <StackPanel Classes="external-notification-card-stack">
+            <TextBlock Classes="app-caption"
+                       Text="{Binding RootTexts[Settings.ExternalNotification.TestTitle]}" />
+            <TextBox Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
+                     Classes="app-input"
+                     Text="{Binding NotificationTitle, UpdateSourceTrigger=LostFocus}" />
+
+            <TextBlock Classes="app-caption"
+                       Text="{Binding RootTexts[Settings.ExternalNotification.TestMessage]}" />
+            <TextBox Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
+                     Classes="app-input"
+                     Text="{Binding NotificationMessage, UpdateSourceTrigger=LostFocus}" />
+
+            <Button Classes="app-button app-secondary"
+                    HorizontalAlignment="Left"
+                    Content="{Binding RootTexts[Settings.Action.ValidateNotification]}"
+                    Click="OnValidateProviderClick" />
+          </StackPanel>
+        </Border>
+      </StackPanel>
+    </Border>
+
+    <Border Grid.Row="5"
+            Classes="app-surface app-section external-notification-section">
+      <StackPanel Spacing="8">
+        <TextBlock Classes="app-body long-wrap"
+                   Text="{Binding ExternalNotificationStatusMessage}"
+                   IsVisible="{Binding HasExternalNotificationStatusMessage}" />
+        <TextBlock Classes="state-warning long-wrap"
+                   Text="{Binding ExternalNotificationWarningMessage}"
+                   IsVisible="{Binding HasExternalNotificationWarningMessage}" />
+        <TextBlock Classes="state-error long-wrap"
+                   Text="{Binding ExternalNotificationErrorMessage}"
+                   IsVisible="{Binding HasExternalNotificationErrorMessage}" />
+      </StackPanel>
+    </Border>
   </Grid>
 </UserControl>

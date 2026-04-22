@@ -4456,7 +4456,7 @@ Session state `{0}` does not allow {2}.</value>
     <value>托盘集成</value>
   </data>
   <data name="Toolbox.Advanced.Tab.WebApi" xml:space="preserve">
-    <value>WebApi(兼容)</value>
+    <value>WebApi</value>
   </data>
   <data name="Toolbox.Advanced.Tray.ApplyVisibility" xml:space="preserve">
     <value>应用可见性</value>
@@ -4522,10 +4522,10 @@ Session state `{0}` does not allow {2}.</value>
     <value>停止服务</value>
   </data>
   <data name="Toolbox.Advanced.WebApi.Title" xml:space="preserve">
-    <value>WebApi(兼容)</value>
+    <value>WebApi</value>
   </data>
   <data name="Toolbox.Advanced.WebApi.Warning" xml:space="preserve">
-    <value>该面板用于兼容旧版 WebApi 接入。仅在你明确需要外部调用时启用，并建议配置访问令牌。</value>
+    <value>该高级页保留对旧版 WebApi 接入的兼容。仅在你明确需要外部调用时启用，并建议尽量配置访问令牌。</value>
   </data>
   <data name="Toolbox.Depot.ExportArkPlanner" xml:space="preserve">
     <value>导出至企鹅物流刷图规划</value>

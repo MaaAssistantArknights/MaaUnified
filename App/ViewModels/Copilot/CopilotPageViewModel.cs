@@ -493,6 +493,47 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
             cancellationToken);
     }
 
+    public async Task PersistReorderedItemsAsync(
+        CopilotItemViewModel item,
+        int oldIndex,
+        int newIndex,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var currentIndex = Items.IndexOf(item);
+        if (currentIndex < 0 || currentIndex != newIndex)
+        {
+            StatusMessage = T("Copilot.Status.SortFailed", "排序失败。");
+            LastErrorMessage = T("Copilot.Error.SortStateOutOfSync", "作业列表顺序已变化，请重试。");
+            await RecordFailedResultAsync(
+                "Copilot.Sort",
+                UiOperationResult.Fail(UiErrorCode.CopilotListPersistenceFailed, LastErrorMessage),
+                cancellationToken);
+            return;
+        }
+
+        var persistResult = await PersistItemsAsync(cancellationToken);
+        if (!persistResult.Success)
+        {
+            Items.Move(currentIndex, Math.Clamp(oldIndex, 0, Items.Count - 1));
+            SetSelectedItemSilently(item);
+            StatusMessage = T("Copilot.Status.SortFailed", "排序失败。");
+            LastErrorMessage = persistResult.Message;
+            await RecordFailedResultAsync(
+                "Copilot.Sort",
+                BuildPersistFailedResult(
+                    T("Copilot.Error.SortPersistFail", "排序失败：列表保存失败。"),
+                    persistResult),
+                cancellationToken);
+            return;
+        }
+
+        SetSelectedItemSilently(item);
+        StatusMessage = T("Copilot.Status.ReorderSuccess", "已更新作业顺序。");
+        LastErrorMessage = string.Empty;
+        await RecordEventAsync("Copilot.Sort", StatusMessage, cancellationToken);
+    }
+
     public async Task StartAsync(CancellationToken cancellationToken = default)
     {
         if (!CanStart)

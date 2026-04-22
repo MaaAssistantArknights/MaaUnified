@@ -1,68 +1,149 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="MAAUnified.App.Features.Settings.IssueReportView">
-  <Grid Margin="4" RowDefinitions="Auto,Auto,Auto,Auto,Auto">
-    <TextBlock Classes="section-title" Text="{Binding RootTexts[Settings.Section.IssueReport]}" />
+  <UserControl.Styles>
+    <Style Selector="Border.issue-report-card">
+      <Setter Property="Padding" Value="16" />
+    </Style>
+
+    <Style Selector="Border.issue-report-section">
+      <Setter Property="Padding" Value="22" />
+    </Style>
+
+    <Style Selector="StackPanel.issue-report-stack">
+      <Setter Property="Spacing" Value="16" />
+    </Style>
+
+    <Style Selector="StackPanel.issue-report-card-stack">
+      <Setter Property="Spacing" Value="12" />
+    </Style>
+
+    <Style Selector="Button.issue-report-action">
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+    </Style>
+
+    <Style Selector="StackPanel.issue-report-status-list">
+      <Setter Property="Spacing" Value="8" />
+    </Style>
+  </UserControl.Styles>
+
+  <Grid Margin="4"
+        RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto">
+    <TextBlock Classes="section-title"
+               Text="{Binding RootTexts[Settings.Section.IssueReport]}" />
 
     <StackPanel Grid.Row="1"
                 Margin="{DynamicResource MAA.Thickness.Settings.SectionTopMargin}"
-                Spacing="4">
-      <TextBlock MaxWidth="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
-                 Classes="settings-note settings-centered-text"
-                 Text="{Binding RootTexts[Settings.IssueReport.CheckUpdateBeforeReportingIssue]}"
-                 TextWrapping="Wrap"
-                 IsVisible="{Binding HasIssueReportUpdateAvailability}" />
-      <TextBlock MaxWidth="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
-                 Classes="settings-note settings-centered-text"
-                 Text="{Binding RootTexts[Settings.IssueReport.CheckHelpBeforeReportingIssue]}"
-                 TextWrapping="Wrap"
-                 IsVisible="{Binding ShowIssueReportPreflightNote}" />
+                Spacing="12">
+      <Border Classes="app-surface app-card issue-report-card"
+              IsVisible="{Binding HasIssueReportUpdateAvailability}">
+        <TextBlock MaxWidth="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
+                   TextAlignment="Center"
+                   TextWrapping="Wrap"
+                   Classes="app-window-subtitle"
+                   Text="{Binding RootTexts[Settings.IssueReport.CheckUpdateBeforeReportingIssue]}" />
+      </Border>
+      <Border Classes="app-surface app-card issue-report-card"
+              IsVisible="{Binding ShowIssueReportPreflightNote}">
+        <TextBlock MaxWidth="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
+                   TextAlignment="Center"
+                   TextWrapping="Wrap"
+                   Classes="app-window-subtitle"
+                   Text="{Binding RootTexts[Settings.IssueReport.CheckHelpBeforeReportingIssue]}" />
+      </Border>
     </StackPanel>
 
     <Grid Grid.Row="2"
-          Classes="settings-form"
           Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}"
-          ColumnDefinitions="250,250">
-      <StackPanel Grid.Column="0"
-                  Classes="settings-centered-column"
-                  Spacing="{DynamicResource MAA.Spacing.Small}">
-        <Button Classes="wpf-button wpf-button-secondary" Content="{Binding RootTexts[Settings.IssueReport.Faq]}" Click="OnOpenHelpClick" />
-        <Button Classes="wpf-button wpf-button-secondary" Content="{Binding RootTexts[Settings.IssueReport.IssueEntry]}" Click="OnOpenIssueEntryClick" />
-      </StackPanel>
+          ColumnDefinitions="*,24,*">
+      <Border Classes="app-surface app-section issue-report-section">
+        <Border Classes="app-surface app-card issue-report-card">
+          <StackPanel Classes="issue-report-card-stack">
+            <Button Classes="app-button app-secondary issue-report-action"
+                    Content="{Binding RootTexts[Settings.IssueReport.Faq]}"
+                    Click="OnOpenHelpClick" />
+            <Button Classes="app-button app-primary issue-report-action"
+                    Content="{Binding RootTexts[Settings.IssueReport.IssueEntry]}"
+                    Click="OnOpenIssueEntryClick" />
+          </StackPanel>
+        </Border>
+      </Border>
 
-      <StackPanel Grid.Column="1"
-                  Classes="settings-centered-column"
-                  Spacing="{DynamicResource MAA.Spacing.Small}">
-        <Button Classes="wpf-button wpf-button-secondary"
-                Content="{Binding RootTexts[Settings.Action.BuildIssueReport]}"
-                Click="OnBuildIssueReportClick" />
-        <Button Classes="wpf-button wpf-button-secondary"
-                Content="{Binding RootTexts[Settings.Action.OpenDebugDirectory]}"
-                Click="OnOpenDebugDirectoryClick" />
-        <Button Classes="wpf-button wpf-button-secondary"
-                Content="{Binding RootTexts[Settings.Action.ClearImageCache]}"
-                Click="OnClearImageCacheClick">
-          <ToolTip.Tip>
-            <ToolTip Content="{Binding IssueReportClearImageCacheTip}" />
-          </ToolTip.Tip>
-        </Button>
-      </StackPanel>
+      <Border Grid.Column="2"
+              Classes="app-surface app-section issue-report-section">
+        <Border Classes="app-surface app-card issue-report-card">
+          <StackPanel Classes="issue-report-card-stack">
+            <Button Classes="app-button app-primary issue-report-action"
+                    Content="{Binding RootTexts[Settings.Action.BuildIssueReport]}"
+                    Click="OnBuildIssueReportClick" />
+            <Button Classes="app-button app-secondary issue-report-action"
+                    Content="{Binding RootTexts[Settings.IssueReport.OpenRuntimeLogWindow]}"
+                    Click="OnOpenRuntimeLogWindowClick"
+                    IsVisible="{Binding CanOpenRuntimeLogWindow}" />
+            <Button Classes="app-button app-secondary issue-report-action"
+                    Content="{Binding RootTexts[Settings.Action.OpenDebugDirectory]}"
+                    Click="OnOpenDebugDirectoryClick"
+                    IsVisible="{Binding CanUseIssueReportMaintenanceTools}" />
+            <Button Classes="app-button app-secondary issue-report-action"
+                    Content="{Binding RootTexts[Settings.Action.ClearImageCache]}"
+                    Click="OnClearImageCacheClick"
+                    IsVisible="{Binding CanUseIssueReportMaintenanceTools}">
+              <ToolTip.Tip>
+                <ToolTip Content="{Binding IssueReportClearImageCacheTip}" />
+              </ToolTip.Tip>
+            </Button>
+          </StackPanel>
+        </Border>
+      </Border>
     </Grid>
 
-    <TextBlock Grid.Row="3"
-               MaxWidth="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
-               Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}"
-               Classes="settings-centered-text"
-               Text="{Binding IssueReportPath}" />
+    <Border Grid.Row="3"
+            Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}"
+            Classes="app-surface app-section issue-report-section"
+            IsVisible="{Binding CanUseDeveloperMode}">
+      <Border Classes="app-surface app-card issue-report-card">
+        <StackPanel Classes="issue-report-card-stack">
+          <CheckBox Classes="app-checkbox"
+                    HorizontalAlignment="Center"
+                    Content="{Binding RootTexts[Settings.IssueReport.DeveloperMode]}"
+                    IsChecked="{Binding DeveloperModeEnabled}" />
+          <TextBlock MaxWidth="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
+                     HorizontalAlignment="Center"
+                     TextAlignment="Center"
+                     TextWrapping="Wrap"
+                     Classes="app-caption"
+                     Text="{Binding RootTexts[Settings.IssueReport.DeveloperModeNote]}" />
+        </StackPanel>
+      </Border>
+    </Border>
 
-    <StackPanel Grid.Row="4"
-                Classes="settings-form settings-form-narrow"
-                Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}"
-                Spacing="4">
-      <TextBlock Classes="settings-centered-text" Text="{Binding IssueReportStatusMessage}" />
-      <TextBlock Classes="state-error settings-centered-text"
-                 Text="{Binding IssueReportErrorMessage}"
-                 IsVisible="{Binding HasIssueReportErrorMessage}" />
-    </StackPanel>
+    <Border Grid.Row="4"
+            Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}"
+            Classes="app-surface app-card issue-report-card">
+      <TextBlock MaxWidth="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
+                 HorizontalAlignment="Center"
+                 TextAlignment="Center"
+                 TextWrapping="Wrap"
+                 Classes="app-body"
+                 Text="{Binding IssueReportPath}" />
+    </Border>
+
+    <Border Grid.Row="5"
+            Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}"
+            Classes="app-surface app-section issue-report-section">
+      <StackPanel Classes="issue-report-status-list">
+        <TextBlock HorizontalAlignment="Center"
+                   TextAlignment="Center"
+                   TextWrapping="Wrap"
+                   Classes="app-body"
+                   Text="{Binding IssueReportStatusMessage}" />
+        <TextBlock HorizontalAlignment="Center"
+                   TextAlignment="Center"
+                   TextWrapping="Wrap"
+                   Classes="state-error"
+                   Text="{Binding IssueReportErrorMessage}"
+                   IsVisible="{Binding HasIssueReportErrorMessage}" />
+      </StackPanel>
+    </Border>
   </Grid>
 </UserControl>

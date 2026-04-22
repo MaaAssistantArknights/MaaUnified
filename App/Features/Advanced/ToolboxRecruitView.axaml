@@ -1,0 +1,216 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:MAAUnified.App.Controls"
+             x:Class="MAAUnified.App.Features.Advanced.ToolboxRecruitView">
+  <UserControl.Styles>
+    <Style Selector="Border.toolbox-recruit-section">
+      <Setter Property="Padding" Value="22" />
+    </Style>
+
+    <Style Selector="Border.toolbox-recruit-card">
+      <Setter Property="Padding" Value="16" />
+    </Style>
+
+    <Style Selector="StackPanel.toolbox-recruit-section-stack">
+      <Setter Property="Spacing" Value="16" />
+    </Style>
+
+    <Style Selector="StackPanel.toolbox-recruit-card-stack">
+      <Setter Property="Spacing" Value="12" />
+    </Style>
+
+    <Style Selector="StackPanel.toolbox-recruit-option-stack">
+      <Setter Property="Spacing" Value="10" />
+    </Style>
+
+    <Style Selector="Button.toolbox-recruit-action">
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+    </Style>
+  </UserControl.Styles>
+
+  <Grid Margin="{DynamicResource MAA.Thickness.Toolbox.PageMargin}"
+        RowDefinitions="Auto,*,Auto">
+    <Border Classes="app-surface app-section toolbox-recruit-section">
+      <Border Classes="app-surface app-card toolbox-recruit-card">
+        <TextBlock Classes="app-body long-wrap"
+                   FontWeight="SemiBold"
+                   Text="{Binding RecruitInfo}" />
+      </Border>
+    </Border>
+
+    <Border Grid.Row="1"
+            Margin="0,14,0,0"
+            Classes="app-surface app-section toolbox-recruit-section">
+      <Border Classes="app-surface app-card toolbox-recruit-card"
+              MinHeight="{DynamicResource MAA.Size.Toolbox.RecruitResultMinHeight}">
+        <ScrollViewer VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled">
+          <ItemsControl ItemsSource="{Binding RecruitResultLines}"
+                        IsVisible="{Binding HasRecruitResults}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <StackPanel>
+                  <ItemsControl ItemsSource="{Binding Segments}"
+                                IsVisible="{Binding HasSegments}">
+                    <ItemsControl.ItemsPanel>
+                      <ItemsPanelTemplate>
+                        <WrapPanel />
+                      </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate>
+                        <TextBlock Margin="0,0,12,0"
+                                   Classes="app-body"
+                                   Foreground="{Binding Foreground}"
+                                   Text="{Binding Text}"
+                                   TextWrapping="NoWrap" />
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                  <Border Height="{Binding SpacerHeight}"
+                          Background="Transparent"
+                          IsVisible="{Binding HasSpacer}" />
+                </StackPanel>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+      </Border>
+    </Border>
+
+    <Grid Grid.Row="2"
+          Margin="0,14,0,0"
+          ColumnDefinitions="*,280">
+      <Border Classes="app-surface app-section toolbox-recruit-section">
+        <StackPanel Classes="toolbox-recruit-section-stack">
+          <Border Classes="app-surface app-card toolbox-recruit-card">
+            <StackPanel Classes="toolbox-recruit-card-stack">
+              <CheckBox Classes="app-checkbox"
+                        Content="{Binding RecruitAutoSetTimeText}"
+                        IsChecked="{Binding RecruitAutoSetTime}" />
+
+              <Grid ColumnDefinitions="*,Auto">
+                <CheckBox Grid.Column="0"
+                          Classes="app-checkbox"
+                          IsChecked="{Binding RecruitmentShowPotential}">
+                  <TextBlock MaxWidth="{DynamicResource MAA.Size.Toolbox.RecruitPotentialTextMaxWidth}"
+                             Text="{Binding RecruitShowPotentialText}"
+                             TextWrapping="Wrap" />
+                </CheckBox>
+                <controls:TooltipHint Grid.Column="1"
+                                      VerticalAlignment="Center"
+                                      Tip="{Binding RecruitPotentialTip}" />
+              </Grid>
+            </StackPanel>
+          </Border>
+
+          <Border Classes="app-surface app-card toolbox-recruit-card">
+            <StackPanel Classes="toolbox-recruit-option-stack">
+              <Grid ColumnDefinitions="*,Auto">
+                <CheckBox Grid.Column="0"
+                          Classes="app-checkbox"
+                          VerticalAlignment="Center"
+                          Content="{Binding RecruitAutoSelect3Text}"
+                          IsChecked="{Binding ChooseLevel3}" />
+                <StackPanel Grid.Column="1"
+                            Margin="14,0,0,0"
+                            Orientation="Horizontal"
+                            Spacing="{DynamicResource MAA.Spacing.Small}"
+                            IsVisible="{Binding ShowRecruitAutoSetTimeControls}">
+                  <controls:VerticalSpinNumberBox Width="{DynamicResource MAA.Size.Toolbox.RecruitTimePickerWidth}"
+                                                  Minimum="1"
+                                                  Maximum="9"
+                                                  Value="{Binding RecruitLevel3Hour}" />
+                  <TextBlock VerticalAlignment="Center"
+                             Text=":" />
+                  <controls:VerticalSpinNumberBox Width="{DynamicResource MAA.Size.Toolbox.RecruitTimePickerWidth}"
+                                                  Minimum="0"
+                                                  Maximum="50"
+                                                  Increment="10"
+                                                  Value="{Binding RecruitLevel3Minute}" />
+                </StackPanel>
+              </Grid>
+
+              <Grid ColumnDefinitions="*,Auto">
+                <CheckBox Grid.Column="0"
+                          Classes="app-checkbox"
+                          VerticalAlignment="Center"
+                          Content="{Binding RecruitAutoSelect4Text}"
+                          IsChecked="{Binding ChooseLevel4}" />
+                <StackPanel Grid.Column="1"
+                            Margin="14,0,0,0"
+                            Orientation="Horizontal"
+                            Spacing="{DynamicResource MAA.Spacing.Small}"
+                            IsVisible="{Binding ShowRecruitAutoSetTimeControls}">
+                  <controls:VerticalSpinNumberBox Width="{DynamicResource MAA.Size.Toolbox.RecruitTimePickerWidth}"
+                                                  Minimum="1"
+                                                  Maximum="9"
+                                                  Value="{Binding RecruitLevel4Hour}" />
+                  <TextBlock VerticalAlignment="Center"
+                             Text=":" />
+                  <controls:VerticalSpinNumberBox Width="{DynamicResource MAA.Size.Toolbox.RecruitTimePickerWidth}"
+                                                  Minimum="0"
+                                                  Maximum="50"
+                                                  Increment="10"
+                                                  Value="{Binding RecruitLevel4Minute}" />
+                </StackPanel>
+              </Grid>
+
+              <Grid ColumnDefinitions="*,Auto">
+                <CheckBox Grid.Column="0"
+                          Classes="app-checkbox"
+                          VerticalAlignment="Center"
+                          Content="{Binding RecruitAutoSelect5Text}"
+                          IsChecked="{Binding ChooseLevel5}" />
+                <StackPanel Grid.Column="1"
+                            Margin="14,0,0,0"
+                            Orientation="Horizontal"
+                            Spacing="{DynamicResource MAA.Spacing.Small}"
+                            IsVisible="{Binding ShowRecruitAutoSetTimeControls}">
+                  <controls:VerticalSpinNumberBox Width="{DynamicResource MAA.Size.Toolbox.RecruitTimePickerWidth}"
+                                                  Minimum="1"
+                                                  Maximum="9"
+                                                  Value="{Binding RecruitLevel5Hour}" />
+                  <TextBlock VerticalAlignment="Center"
+                             Text=":" />
+                  <controls:VerticalSpinNumberBox Width="{DynamicResource MAA.Size.Toolbox.RecruitTimePickerWidth}"
+                                                  Minimum="0"
+                                                  Maximum="50"
+                                                  Increment="10"
+                                                  Value="{Binding RecruitLevel5Minute}" />
+                </StackPanel>
+              </Grid>
+
+              <Grid ColumnDefinitions="*,Auto">
+                <CheckBox Grid.Column="0"
+                          Classes="app-checkbox"
+                          VerticalAlignment="Center"
+                          Content="{Binding RecruitAutoSelect6Text}"
+                          IsChecked="{Binding ChooseLevel6}" />
+                <StackPanel Grid.Column="1"
+                            Margin="14,0,0,0"
+                            Orientation="Horizontal"
+                            Spacing="{DynamicResource MAA.Spacing.Small}"
+                            IsVisible="{Binding ShowRecruitAutoSetTimeControls}">
+                  <TextBlock VerticalAlignment="Center"
+                             Classes="app-caption subtle"
+                             Text="{Binding RecruitFixedSixStarText}" />
+                </StackPanel>
+              </Grid>
+            </StackPanel>
+          </Border>
+        </StackPanel>
+      </Border>
+
+      <Border Grid.Column="1"
+              Margin="14,0,0,0"
+              Classes="app-surface app-section toolbox-recruit-section">
+        <Button Width="{DynamicResource MAA.Size.Toolbox.ActionButtonWidth}"
+                Height="{DynamicResource MAA.Size.Toolbox.ActionButtonHeight}"
+                Classes="app-button app-primary toolbox-recruit-action"
+                Content="{Binding StartRecognitionText}"
+                Click="OnRecruitStartClick" />
+      </Border>
+    </Grid>
+  </Grid>
+</UserControl>

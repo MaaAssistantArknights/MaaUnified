@@ -2,9 +2,11 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="clr-namespace:MAAUnified.App.ViewModels.Settings"
              x:Class="MAAUnified.App.Features.Settings.GuiSettingsView">
-  <Grid Margin="4" RowDefinitions="Auto,Auto,Auto">
+  <Grid Margin="4"
+        RowDefinitions="Auto,Auto">
     <Grid ColumnDefinitions="Auto,*">
-      <TextBlock Classes="section-title" Text="{Binding RootTexts[Settings.Section.GUI]}" />
+      <TextBlock Classes="section-title"
+                 Text="{Binding RootTexts[Settings.Section.GUI]}" />
       <TextBlock Grid.Column="1"
                  HorizontalAlignment="Right"
                  VerticalAlignment="Center"
@@ -18,97 +20,143 @@
                  Text="{Binding RootTexts[Settings.State.Saved]}"
                  IsVisible="{Binding HasGuiSaveSucceeded}" />
     </Grid>
-    <Grid Grid.Row="1"
-          Classes="settings-form"
-          Margin="{DynamicResource MAA.Thickness.Settings.SectionTopMargin}"
-          ColumnDefinitions="250,250">
-        <StackPanel Grid.Column="0"
-                  Classes="settings-centered-column"
-                  Spacing="{DynamicResource MAA.Spacing.Small}">
-          <CheckBox Content="{Binding RootTexts[Settings.GUI.UseTray]}" IsChecked="{Binding UseTray}" />
-          <CheckBox Content="{Binding RootTexts[Settings.GUI.MinimizeToTray]}"
-                    IsChecked="{Binding MinimizeToTray}"
-                    IsVisible="{Binding CanMinimizeToTray}" />
-          <CheckBox Content="{Binding RootTexts[Settings.GUI.UseNotify]}" IsChecked="{Binding UseNotify}" />
-          <CheckBox Content="{Binding RootTexts[Settings.GUI.WindowTitleScrollable]}" IsChecked="{Binding WindowTitleScrollable}" />
-        <CheckBox Content="{Binding RootTexts[Settings.GUI.UseSoftwareRendering]}" IsChecked="{Binding UseSoftwareRendering}" />
-      </StackPanel>
 
-      <StackPanel Grid.Column="1"
-                  Classes="settings-centered-column"
-                  Spacing="{DynamicResource MAA.Spacing.Small}">
-        <StackPanel Classes="settings-centered-column">
-          <TextBlock Classes="settings-field-caption" Text="{Binding RootTexts[Settings.GUI.Language]}" />
-          <ComboBox Width="{DynamicResource MAA.Size.Settings.FieldNarrowWidth}"
-                    ItemsSource="{Binding SupportedLanguages}"
-                    SelectedItem="{Binding SelectedLanguageOption, Mode=TwoWay}">
-            <ComboBox.ItemTemplate>
-              <DataTemplate x:DataType="vm:DisplayValueOption">
-                <TextBlock Text="{Binding Display}" />
-              </DataTemplate>
-            </ComboBox.ItemTemplate>
-          </ComboBox>
+    <StackPanel Grid.Row="1"
+                Margin="{DynamicResource MAA.Thickness.Settings.SectionTopMargin}"
+                Classes="settings-form">
+      <Border Classes="app-surface app-section">
+        <StackPanel Spacing="16">
+          <TextBlock Classes="app-body"
+                     FontSize="16"
+                     FontWeight="SemiBold"
+                     Text="{Binding RootTexts[Settings.Section.GUI]}" />
+
+          <WrapPanel Classes="settings-wrap"
+                     ItemWidth="320">
+            <Border Classes="app-surface app-card"
+                    Padding="16">
+              <StackPanel Spacing="12">
+                <CheckBox Classes="app-checkbox"
+                          Content="{Binding RootTexts[Settings.GUI.UseTray]}"
+                          IsChecked="{Binding UseTray}" />
+                <CheckBox Classes="app-checkbox"
+                          Content="{Binding RootTexts[Settings.GUI.MinimizeToTray]}"
+                          IsChecked="{Binding MinimizeToTray}"
+                          IsVisible="{Binding CanMinimizeToTray}" />
+                <CheckBox Classes="app-checkbox"
+                          Content="{Binding RootTexts[Settings.GUI.UseNotify]}"
+                          IsChecked="{Binding UseNotify}" />
+                <CheckBox Classes="app-checkbox"
+                          Content="{Binding RootTexts[Settings.GUI.WindowTitleScrollable]}"
+                          IsChecked="{Binding WindowTitleScrollable}" />
+                <CheckBox Classes="app-checkbox"
+                          Content="{Binding RootTexts[Settings.GUI.UseSoftwareRendering]}"
+                          IsChecked="{Binding UseSoftwareRendering}" />
+              </StackPanel>
+            </Border>
+
+            <Border Classes="app-surface app-card"
+                    Padding="16">
+              <StackPanel Spacing="10">
+                <TextBlock Classes="app-body"
+                           FontWeight="SemiBold"
+                           Text="{Binding RootTexts[Settings.GUI.Language]}" />
+                <ComboBox Classes="app-input"
+                          Width="{DynamicResource MAA.Size.Settings.FieldNarrowWidth}"
+                          ItemsSource="{Binding SupportedLanguages}"
+                          SelectedItem="{Binding SelectedLanguageOption, Mode=TwoWay}">
+                  <ComboBox.ItemTemplate>
+                    <DataTemplate x:DataType="vm:DisplayValueOption">
+                      <TextBlock Text="{Binding Display}" />
+                    </DataTemplate>
+                  </ComboBox.ItemTemplate>
+                </ComboBox>
+              </StackPanel>
+            </Border>
+
+            <Border Classes="app-surface app-card"
+                    Padding="16">
+              <StackPanel Spacing="10">
+                <TextBlock Classes="app-body"
+                           FontWeight="SemiBold"
+                           Text="{Binding RootTexts[Settings.GUI.OperNameLanguage]}" />
+                <ComboBox Classes="app-input"
+                          Width="{DynamicResource MAA.Size.Settings.FieldCenteredWidth}"
+                          ItemsSource="{Binding OperNameLanguageOptions}"
+                          SelectedItem="{Binding SelectedOperNameLanguageOption, Mode=TwoWay}">
+                  <ComboBox.ItemTemplate>
+                    <DataTemplate x:DataType="vm:DisplayValueOption">
+                      <TextBlock Text="{Binding Display}" />
+                    </DataTemplate>
+                  </ComboBox.ItemTemplate>
+                </ComboBox>
+              </StackPanel>
+            </Border>
+
+            <Border Classes="app-surface app-card"
+                    Padding="16">
+              <StackPanel Spacing="10">
+                <TextBlock Classes="app-body"
+                           FontWeight="SemiBold"
+                           Text="{Binding RootTexts[Settings.GUI.Theme]}" />
+                <ComboBox Classes="app-input"
+                          Width="{DynamicResource MAA.Size.Settings.FieldNarrowWidth}"
+                          ItemsSource="{Binding ThemeOptions}"
+                          SelectedItem="{Binding SelectedThemeOption, Mode=TwoWay}">
+                  <ComboBox.ItemTemplate>
+                    <DataTemplate x:DataType="vm:DisplayValueOption">
+                      <TextBlock Text="{Binding Display}" />
+                    </DataTemplate>
+                  </ComboBox.ItemTemplate>
+                </ComboBox>
+              </StackPanel>
+            </Border>
+
+            <Border Classes="app-surface app-card"
+                    Padding="16">
+              <StackPanel Spacing="10">
+                <TextBlock Classes="app-body"
+                           FontWeight="SemiBold"
+                           Text="{Binding RootTexts[Settings.GUI.InverseClearMode]}" />
+                <ComboBox Classes="app-input"
+                          Width="{DynamicResource MAA.Size.Settings.FieldCenteredWidth}"
+                          ItemsSource="{Binding InverseClearModeOptions}"
+                          SelectedItem="{Binding SelectedInverseClearModeOption, Mode=TwoWay}">
+                  <ComboBox.ItemTemplate>
+                    <DataTemplate x:DataType="vm:DisplayValueOption">
+                      <TextBlock Text="{Binding Display}" />
+                    </DataTemplate>
+                  </ComboBox.ItemTemplate>
+                </ComboBox>
+              </StackPanel>
+            </Border>
+
+            <Border Classes="app-surface app-card"
+                    Padding="16">
+              <StackPanel Spacing="10">
+                <TextBlock Classes="app-body"
+                           FontWeight="SemiBold"
+                           Text="{Binding RootTexts[Settings.GUI.LogItemDateFormat]}" />
+                <ComboBox Classes="app-input"
+                          Width="{DynamicResource MAA.Size.Settings.FieldCenteredWidth}"
+                          ItemsSource="{Binding LogItemDateFormatOptions}"
+                          SelectedValue="{Binding LogItemDateFormatString}" />
+                <TextBlock Classes="app-caption"
+                           Text="{Binding RootTexts[Settings.GUI.LogItemDateFormat.PreviewCaption]}" />
+                <TextBlock Classes="app-caption"
+                           Text="{Binding GuiLogItemDateFormatPreview}" />
+              </StackPanel>
+            </Border>
+          </WrapPanel>
         </StackPanel>
+      </Border>
 
-        <StackPanel Classes="settings-centered-column">
-          <TextBlock Classes="settings-field-caption" Text="{Binding RootTexts[Settings.GUI.OperNameLanguage]}" />
-          <ComboBox Width="{DynamicResource MAA.Size.Settings.FieldCenteredWidth}"
-                    ItemsSource="{Binding OperNameLanguageOptions}"
-                    SelectedItem="{Binding SelectedOperNameLanguageOption, Mode=TwoWay}">
-            <ComboBox.ItemTemplate>
-              <DataTemplate x:DataType="vm:DisplayValueOption">
-                <TextBlock Text="{Binding Display}" />
-              </DataTemplate>
-            </ComboBox.ItemTemplate>
-          </ComboBox>
-        </StackPanel>
-
-        <StackPanel Classes="settings-centered-column">
-          <TextBlock Classes="settings-field-caption" Text="{Binding RootTexts[Settings.GUI.Theme]}" />
-          <ComboBox Width="{DynamicResource MAA.Size.Settings.FieldNarrowWidth}"
-                    ItemsSource="{Binding ThemeOptions}"
-                    SelectedItem="{Binding SelectedThemeOption, Mode=TwoWay}">
-            <ComboBox.ItemTemplate>
-              <DataTemplate x:DataType="vm:DisplayValueOption">
-                <TextBlock Text="{Binding Display}" />
-              </DataTemplate>
-            </ComboBox.ItemTemplate>
-          </ComboBox>
-        </StackPanel>
-
-        <StackPanel Classes="settings-centered-column">
-          <TextBlock Classes="settings-field-caption" Text="{Binding RootTexts[Settings.GUI.InverseClearMode]}" />
-          <ComboBox Width="{DynamicResource MAA.Size.Settings.FieldCenteredWidth}"
-                    ItemsSource="{Binding InverseClearModeOptions}"
-                    SelectedItem="{Binding SelectedInverseClearModeOption, Mode=TwoWay}">
-            <ComboBox.ItemTemplate>
-              <DataTemplate x:DataType="vm:DisplayValueOption">
-                <TextBlock Text="{Binding Display}" />
-              </DataTemplate>
-            </ComboBox.ItemTemplate>
-          </ComboBox>
-        </StackPanel>
-
-        <StackPanel Classes="settings-centered-column">
-          <TextBlock Classes="settings-field-caption" Text="{Binding RootTexts[Settings.GUI.LogItemDateFormat]}" />
-          <ComboBox Width="{DynamicResource MAA.Size.Settings.FieldCenteredWidth}"
-                    ItemsSource="{Binding LogItemDateFormatOptions}"
-                    SelectedValue="{Binding LogItemDateFormatString}" />
-          <TextBlock Classes="settings-note settings-centered-text"
-                     Text="{Binding RootTexts[Settings.GUI.LogItemDateFormat.PreviewCaption]}" />
-          <TextBlock Classes="settings-note settings-centered-text"
-                     Text="{Binding GuiLogItemDateFormatPreview}" />
-        </StackPanel>
-      </StackPanel>
-    </Grid>
-
-    <StackPanel Grid.Row="2"
-                Classes="settings-form settings-form-narrow"
-                Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}"
-                Spacing="4">
-      <TextBlock Classes="state-warning settings-centered-text"
-                 Text="{Binding GuiSectionValidationMessage}"
-                 IsVisible="{Binding HasGuiSectionValidationMessage}" />
+      <Border Classes="app-surface app-section">
+        <TextBlock HorizontalAlignment="Center"
+                   Classes="state-warning app-caption settings-centered-text"
+                   Text="{Binding GuiSectionValidationMessage}"
+                   IsVisible="{Binding HasGuiSectionValidationMessage}" />
+      </Border>
     </StackPanel>
   </Grid>
 </UserControl>

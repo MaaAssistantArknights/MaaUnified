@@ -237,7 +237,9 @@ public sealed class StyleTokenContractTests
         var text = File.ReadAllText(taskQueuePath);
 
         Assert.Contains("ListBox Grid.Row=\"1\"", text, StringComparison.Ordinal);
-        Assert.Contains("Classes=\"wpf-list-no-highlight\"", text, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"task-queue-list\"", text, StringComparison.Ordinal);
+        Assert.Contains("Style Selector=\"ListBox.task-queue-list ListBoxItem:pointerover\"", text, StringComparison.Ordinal);
+        Assert.Contains("Style Selector=\"ListBox.task-queue-list ListBoxItem:selected\"", text, StringComparison.Ordinal);
         Assert.Contains("IsEnabled=\"{Binding CanEdit}\"", text, StringComparison.Ordinal);
         Assert.Contains("IsEnabled=\"{Binding CanToggleRun}\"", text, StringComparison.Ordinal);
         Assert.Contains("Content=\"{Binding BatchActionText}\"", text, StringComparison.Ordinal);

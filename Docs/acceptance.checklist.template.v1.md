@@ -3,7 +3,7 @@
 ## 摘要
 - Schema version: `1.0.0`
 - Baseline ref: `src/MAAUnified/Compat/Mapping/Baseline/baseline.freeze.v1.json`
-- Case count: `50`
+- Case count: `52`
 
 ## Matrix Strategy
 - Tier-1: Root + Settings + System entries, full platform/theme/locale matrix.
@@ -51,6 +51,8 @@
 | `ACC-029` | Tier-2 | `Task.PostAction` | windows | Light | zh-cn, zh-tw, en-us, ja-jp, ko-kr, pallas |
 | `ACC-030` | Tier-2 | `Advanced.Copilot` | windows | Light | zh-cn, zh-tw, en-us, ja-jp, ko-kr, pallas |
 | `ACC-031` | Tier-2 | `Advanced.Toolbox` | windows | Light | zh-cn, zh-tw, en-us, ja-jp, ko-kr, pallas |
+| `ACC-032` | Tier-2 | `Advanced.StageManager` | windows | Light | zh-cn, zh-tw, en-us, ja-jp, ko-kr, pallas |
+| `ACC-033` | Tier-2 | `Advanced.WebApi` | windows | Light | zh-cn, zh-tw, en-us, ja-jp, ko-kr, pallas |
 | `ACC-038` | Tier-2 | `Dialog.Announcement` | windows | Light | zh-cn, zh-tw, en-us, ja-jp, ko-kr, pallas |
 | `ACC-039` | Tier-2 | `Dialog.VersionUpdate` | windows | Light | zh-cn, zh-tw, en-us, ja-jp, ko-kr, pallas |
 | `ACC-040` | Tier-2 | `Dialog.ProcessPicker` | windows | Light | zh-cn, zh-tw, en-us, ja-jp, ko-kr, pallas |

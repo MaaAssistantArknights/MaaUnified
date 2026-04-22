@@ -25,6 +25,8 @@ public sealed class ParityMatrixSyncTests
         var targets = new (string ItemId, string MatrixModule)[]
         {
             ("Advanced.Toolbox", "Toolbox"),
+            ("Advanced.StageManager", "StageManager"),
+            ("Advanced.WebApi", "Web API"),
             ("Dialog.Announcement", "AnnouncementDialog"),
             ("Dialog.VersionUpdate", "VersionUpdateDialog"),
             ("Dialog.ProcessPicker", "ProcessPickerDialog"),

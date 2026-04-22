@@ -1,38 +1,118 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="MAAUnified.App.Features.Advanced.TrayIntegrationView">
-  <Grid RowDefinitions="Auto,Auto,Auto,Auto,*">
-    <TextBlock Classes="section-title" Text="{Binding Texts[Toolbox.Advanced.Tray.Title]}" />
-    <TextBlock Grid.Row="1" Classes="long-wrap" Text="{Binding CapabilitySummary}" />
-    <Grid Grid.Row="2" ColumnDefinitions="Auto,Auto,Auto,*">
-      <CheckBox Content="{Binding Texts[Toolbox.Advanced.Tray.Visible]}" IsChecked="{Binding TrayVisible}" />
-      <Button Grid.Column="1"
-              Classes="wpf-button"
-              Margin="{DynamicResource MAA.Thickness.MarginActionButtonLeft}"
-              Content="{Binding Texts[Toolbox.Advanced.Tray.ApplyVisibility]}"
-              Click="OnApplyTrayVisibilityClick" />
-      <Button Grid.Column="2"
-              Classes="wpf-button"
-              Margin="{DynamicResource MAA.Thickness.MarginActionButtonLeft}"
-              Content="{Binding Texts[Toolbox.Advanced.Tray.SyncMenuState]}"
-              Click="OnSyncMenuStateClick" />
-      <Button Grid.Column="3"
-              Classes="wpf-button"
-              Margin="{DynamicResource MAA.Thickness.MarginActionButtonLeft}"
-              HorizontalAlignment="Left"
-              Content="{Binding Texts[Toolbox.Advanced.Tray.RefreshCapability]}"
-              Click="OnRefreshCapabilityClick" />
-    </Grid>
-    <Grid Grid.Row="3" ColumnDefinitions="Auto,200,Auto,*">
-      <TextBlock VerticalAlignment="Center" Text="{Binding Texts[Toolbox.Advanced.Tray.MessageTitle]}" />
-      <TextBox Text="{Binding TrayMessageTitle}" />
-      <TextBlock Grid.Column="2" VerticalAlignment="Center" Text="{Binding Texts[Toolbox.Advanced.Tray.MessageBody]}" />
-      <TextBox Grid.Column="3" Text="{Binding TrayMessageBody}" />
-    </Grid>
-    <StackPanel Grid.Row="4" Spacing="{DynamicResource MAA.Spacing.Small}">
-      <Button Classes="wpf-button" Content="{Binding Texts[Toolbox.Advanced.Tray.SendMessage]}" Click="OnSendTrayMessageClick" />
-      <TextBlock Text="{Binding StatusMessage}" />
-      <TextBlock Classes="state-error long-wrap" Text="{Binding LastErrorMessage}" />
-    </StackPanel>
+  <UserControl.Styles>
+    <Style Selector="Border.tray-section">
+      <Setter Property="Padding" Value="22" />
+    </Style>
+
+    <Style Selector="Border.tray-card">
+      <Setter Property="Padding" Value="16" />
+    </Style>
+
+    <Style Selector="StackPanel.tray-stack">
+      <Setter Property="Spacing" Value="16" />
+    </Style>
+
+    <Style Selector="TextBlock.tray-card-title">
+      <Setter Property="FontSize" Value="16" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <Style Selector="TextBox.tray-title-input">
+      <Setter Property="Width" Value="320" />
+    </Style>
+
+    <Style Selector="TextBox.tray-body-input">
+      <Setter Property="MinWidth" Value="320" />
+    </Style>
+  </UserControl.Styles>
+
+  <Grid Margin="4"
+        RowDefinitions="Auto,Auto,Auto,*">
+    <Border Classes="app-surface app-section tray-section">
+      <StackPanel Classes="tray-stack">
+        <TextBlock Classes="app-window-title"
+                   Text="{Binding Texts[Toolbox.Advanced.Tray.Title]}" />
+        <TextBlock Classes="app-caption long-wrap"
+                   Text="{Binding CapabilitySummary}" />
+        <Button Classes="app-button app-secondary"
+                HorizontalAlignment="Left"
+                Content="{Binding Texts[Toolbox.Advanced.Tray.RefreshCapability]}"
+                Click="OnRefreshCapabilityClick" />
+      </StackPanel>
+    </Border>
+
+    <Border Grid.Row="1"
+            Margin="0,14,0,0"
+            Classes="app-surface app-section tray-section">
+      <StackPanel Classes="tray-stack">
+        <TextBlock Classes="app-body tray-card-title"
+                   Text="{Binding Texts[Toolbox.Advanced.Tray.Visible]}" />
+
+        <Border Classes="app-surface app-card tray-card">
+          <StackPanel Classes="tray-stack">
+            <CheckBox Classes="app-checkbox"
+                      Content="{Binding Texts[Toolbox.Advanced.Tray.Visible]}"
+                      IsChecked="{Binding TrayVisible}" />
+
+            <StackPanel Orientation="Horizontal"
+                        Spacing="{DynamicResource MAA.Spacing.Small}">
+              <Button Classes="app-button app-primary"
+                      Content="{Binding Texts[Toolbox.Advanced.Tray.ApplyVisibility]}"
+                      Click="OnApplyTrayVisibilityClick" />
+              <Button Classes="app-button app-secondary"
+                      Content="{Binding Texts[Toolbox.Advanced.Tray.SyncMenuState]}"
+                      Click="OnSyncMenuStateClick" />
+            </StackPanel>
+          </StackPanel>
+        </Border>
+      </StackPanel>
+    </Border>
+
+    <Border Grid.Row="2"
+            Margin="0,14,0,0"
+            Classes="app-surface app-section tray-section">
+      <StackPanel Classes="tray-stack">
+        <TextBlock Classes="app-body tray-card-title"
+                   Text="{Binding Texts[Toolbox.Advanced.Tray.SendMessage]}" />
+
+        <Border Classes="app-surface app-card tray-card">
+          <StackPanel Classes="tray-stack">
+            <StackPanel Spacing="8">
+              <TextBlock Classes="app-caption"
+                         Text="{Binding Texts[Toolbox.Advanced.Tray.MessageTitle]}" />
+              <TextBox Classes="app-input tray-title-input"
+                       Text="{Binding TrayMessageTitle}" />
+            </StackPanel>
+
+            <StackPanel Spacing="8">
+              <TextBlock Classes="app-caption"
+                         Text="{Binding Texts[Toolbox.Advanced.Tray.MessageBody]}" />
+              <TextBox Classes="app-input app-input-block tray-body-input"
+                       Text="{Binding TrayMessageBody}" />
+            </StackPanel>
+
+            <Button Classes="app-button app-primary"
+                    HorizontalAlignment="Left"
+                    Content="{Binding Texts[Toolbox.Advanced.Tray.SendMessage]}"
+                    Click="OnSendTrayMessageClick" />
+          </StackPanel>
+        </Border>
+      </StackPanel>
+    </Border>
+
+    <Border Grid.Row="3"
+            Margin="0,14,0,0"
+            Classes="app-surface app-section tray-section">
+      <Border Classes="app-surface app-card tray-card">
+        <StackPanel Spacing="8">
+          <TextBlock Classes="app-body long-wrap"
+                     Text="{Binding StatusMessage}" />
+          <TextBlock Classes="state-error long-wrap"
+                     Text="{Binding LastErrorMessage}" />
+        </StackPanel>
+      </Border>
+    </Border>
   </Grid>
 </UserControl>

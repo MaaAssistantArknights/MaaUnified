@@ -4,58 +4,151 @@
              x:Name="Root">
   <UserControl.Styles>
     <Style Selector="Border.combo-shell">
-      <Setter Property="Background" Value="{DynamicResource MAA.Brush.Surface.SectionStrong}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.Border.Default}" />
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Input.Background}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Input.Border}" />
       <Setter Property="BorderThickness" Value="{DynamicResource MAA.BorderThickness.Thin}" />
-      <Setter Property="CornerRadius" Value="{DynamicResource MAA.CornerRadius.Item}" />
-      <Setter Property="MinHeight" Value="32" />
+      <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.CornerRadius.Input}" />
+      <Setter Property="MinHeight" Value="{DynamicResource MAA.App.Size.InputHeight}" />
+      <Setter Property="Padding" Value="{DynamicResource MAA.App.Thickness.InputPadding}" />
+    </Style>
+    <Style Selector="Border.combo-shell:pointerover">
+      <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Input.BorderHover}" />
+    </Style>
+    <Style Selector="Border.combo-shell.open">
+      <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Input.BorderFocus}" />
+    </Style>
+    <Style Selector="Border.combo-shell.focused">
+      <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Input.BorderFocus}" />
+    </Style>
+    <Style Selector="Border.combo-shell:disabled">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Input.BackgroundDisabled}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Action.DisabledBorder}" />
+      <Setter Property="Opacity" Value="1" />
+    </Style>
+    <Style Selector="TextBlock.combo-display">
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="TextBlock.combo-display.empty">
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Secondary}" />
+    </Style>
+    <Style Selector="TextBlock.combo-display:disabled">
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Input.ForegroundDisabled}" />
+    </Style>
+    <Style Selector="TextBox.combo-editor">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="MinHeight" Value="{DynamicResource MAA.App.Size.InputHeight}" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="TextBox.combo-editor:disabled">
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Input.ForegroundDisabled}" />
     </Style>
     <Style Selector="Border.combo-dropdown-panel">
       <Setter Property="Background" Value="{DynamicResource MAA.Brush.Surface.SectionStrong}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.Border.Default}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Input.PopupBorder}" />
       <Setter Property="BorderThickness" Value="{DynamicResource MAA.BorderThickness.Thin}" />
-      <Setter Property="CornerRadius" Value="{DynamicResource MAA.CornerRadius.Item}" />
+      <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.CornerRadius.Card}" />
+      <Setter Property="Padding" Value="{DynamicResource MAA.App.Thickness.InputPopupPadding}" />
     </Style>
     <Style Selector="Button.combo-arrow">
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="BorderBrush" Value="Transparent" />
       <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Secondary}" />
       <Setter Property="MinWidth" Value="36" />
-      <Setter Property="MinHeight" Value="32" />
-      <Setter Property="Padding" Value="6,0" />
-      <Setter Property="CornerRadius" Value="{DynamicResource MAA.CornerRadius.Item}" />
+      <Setter Property="MinHeight" Value="{DynamicResource MAA.App.Size.InputHeight}" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="CornerRadius" Value="12" />
     </Style>
     <Style Selector="Button.combo-arrow:pointerover">
-      <Setter Property="Background" Value="{DynamicResource MAA.Brush.Action.SubtleBackgroundHover}" />
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.SubtleBackgroundHover}" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
     </Style>
     <Style Selector="Button.combo-arrow:pressed">
-      <Setter Property="Background" Value="{DynamicResource MAA.Brush.Action.SubtleBackgroundPressed}" />
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.SubtleBackgroundPressed}" />
+    </Style>
+    <Style Selector="Button.combo-arrow:disabled">
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Input.ForegroundDisabled}" />
     </Style>
     <Style Selector="TreeView.combo-dropdown">
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="BorderThickness" Value="0" />
     </Style>
     <Style Selector="TreeView.combo-dropdown TreeViewItem">
-      <Setter Property="MinHeight" Value="28" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="{DynamicResource MAA.App.Thickness.InputItemPadding}" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Secondary}" />
+      <Setter Property="MinHeight" Value="38" />
+      <Setter Property="CornerRadius" Value="12" />
+    </Style>
+    <Style Selector="TreeView.combo-dropdown TreeViewItem:pointerover">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Input.ItemBackgroundHover}" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
+    </Style>
+    <Style Selector="TreeView.combo-dropdown TreeViewItem:selected">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Input.ItemBackgroundSelected}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Input.ItemBorderSelected}" />
+      <Setter Property="BorderThickness" Value="{DynamicResource MAA.BorderThickness.Thin}" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Input.ItemForegroundSelected}" />
+    </Style>
+    <Style Selector="TreeView.combo-dropdown TreeViewItem:selected:pointerover">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Input.ItemBackgroundSelected}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Input.ItemBorderSelected}" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Input.ItemForegroundSelected}" />
     </Style>
     <Style Selector="TreeView.combo-dropdown ToggleButton">
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="BorderBrush" Value="Transparent" />
       <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Secondary}" />
       <Setter Property="MinWidth" Value="24" />
-      <Setter Property="MinHeight" Value="24" />
+      <Setter Property="MinHeight" Value="28" />
       <Setter Property="Padding" Value="4" />
-      <Setter Property="CornerRadius" Value="{DynamicResource MAA.CornerRadius.Item}" />
+      <Setter Property="CornerRadius" Value="10" />
     </Style>
     <Style Selector="TreeView.combo-dropdown ToggleButton:pointerover">
-      <Setter Property="Background" Value="{DynamicResource MAA.Brush.Action.SubtleBackgroundHover}" />
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.SubtleBackgroundHover}" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
     </Style>
     <Style Selector="TreeView.combo-dropdown ToggleButton:pressed">
-      <Setter Property="Background" Value="{DynamicResource MAA.Brush.Action.SubtleBackgroundPressed}" />
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.SubtleBackgroundPressed}" />
     </Style>
     <Style Selector="ListBox.combo-dropdown">
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="BorderThickness" Value="0" />
+    </Style>
+    <Style Selector="ListBox.combo-dropdown ListBoxItem">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="{DynamicResource MAA.App.Thickness.InputItemPadding}" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Secondary}" />
+      <Setter Property="MinHeight" Value="38" />
+      <Setter Property="CornerRadius" Value="12" />
+    </Style>
+    <Style Selector="ListBox.combo-dropdown ListBoxItem:pointerover">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Input.ItemBackgroundHover}" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
+    </Style>
+    <Style Selector="ListBox.combo-dropdown ListBoxItem:selected">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Input.ItemBackgroundSelected}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Input.ItemBorderSelected}" />
+      <Setter Property="BorderThickness" Value="{DynamicResource MAA.BorderThickness.Thin}" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Input.ItemForegroundSelected}" />
+    </Style>
+    <Style Selector="ListBox.combo-dropdown ListBoxItem:selected:pointerover">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Input.ItemBackgroundSelected}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Input.ItemBorderSelected}" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Input.ItemForegroundSelected}" />
+    </Style>
+    <Style Selector="ContentPresenter.combo-custom-content">
+      <Setter Property="Margin" Value="2" />
     </Style>
   </UserControl.Styles>
 
@@ -65,31 +158,27 @@
             PointerPressed="OnShellPointerPressed">
       <Grid ColumnDefinitions="*,Auto">
         <TextBlock x:Name="HeaderTextBlock"
-                   Margin="10,0,0,0"
-                   VerticalAlignment="Center"
-                   Text="{Binding HeaderText, ElementName=Root}"
+                   Classes="combo-display"
                    TextTrimming="CharacterEllipsis" />
         <TextBox x:Name="EditableTextBox"
-                 Margin="6,0,0,0"
-                 BorderThickness="0"
-                 Background="Transparent"
+                 Classes="combo-editor"
                  Text="{Binding Text, ElementName=Root, Mode=TwoWay}"
                  Watermark="{Binding Watermark, ElementName=Root}"
-                 VerticalContentAlignment="Center"
+                 GotFocus="OnEditableTextBoxGotFocus"
                  LostFocus="OnEditableTextBoxLostFocus"
                  KeyDown="OnEditableTextBoxKeyDown" />
         <Button Grid.Column="1"
                 x:Name="ToggleButton"
                 Classes="combo-arrow"
+                Margin="8,0,0,0"
                 Click="OnToggleButtonClick">
-          <Path Width="10"
-                Height="6"
-                Margin="{DynamicResource MAA.Thickness.MarginLeftSmall}"
+          <Path Width="14"
+                Height="14"
                 VerticalAlignment="Center"
                 HorizontalAlignment="Center"
                 Data="M 1 1 L 5 5 L 9 1"
                 Stroke="{DynamicResource MAA.Brush.Text.Secondary}"
-                StrokeThickness="1.5"
+                StrokeThickness="1.75"
                 StrokeLineCap="Round"
                 Stretch="Fill" />
         </Button>
@@ -104,10 +193,10 @@
            Closed="OnPopupClosed">
       <Border Classes="combo-dropdown-panel"
               MinWidth="{Binding Bounds.Width, ElementName=ShellBorder}"
-              HorizontalAlignment="Left"
-              Padding="6">
+              HorizontalAlignment="Left">
         <ScrollViewer MaxHeight="{Binding MaxDropDownHeight, ElementName=Root}"
-                      HorizontalScrollBarVisibility="Disabled">
+                      HorizontalScrollBarVisibility="Disabled"
+                      VerticalScrollBarVisibility="Auto">
           <Grid>
             <TreeView x:Name="TreeModeView"
                       Classes="combo-dropdown"
@@ -129,6 +218,7 @@
                      ItemTemplate="{Binding ItemTemplate, ElementName=Root}" />
 
             <ContentPresenter x:Name="CustomContentPresenter"
+                              Classes="combo-custom-content"
                               Content="{Binding DropDownContent, ElementName=Root}" />
           </Grid>
         </ScrollViewer>

@@ -5,6 +5,9 @@
     <FluentTheme />
     <StyleInclude Source="avares://MAAUnified/Styles/ColorTokens.axaml" />
     <StyleInclude Source="avares://MAAUnified/Styles/AppFoundationStyles.axaml" />
+    <StyleInclude Source="avares://MAAUnified/Styles/SettingsShellStyles.axaml" />
+    <StyleInclude Source="avares://MAAUnified/Styles/AdvancedToolStyles.axaml" />
+    <StyleInclude Source="avares://MAAUnified/Styles/AppInteractionStyles.axaml" />
     <StyleInclude Source="avares://MAAUnified/Styles/AppSelectionListStyles.axaml" />
     <StyleInclude Source="avares://MAAUnified/Styles/ControlStyles.axaml" />
   </Application.Styles>

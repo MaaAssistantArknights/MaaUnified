@@ -38,18 +38,17 @@ public partial class TaskQueueView : UserControl
 
     private void OnDetachedFromVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
     {
-        if (_observedVm is null)
-        {
-            return;
-        }
-
-        _observedVm.PropertyChanged -= OnVmPropertyChanged;
-        _observedVm = null;
+        SetObservedVm(null);
     }
 
     private void UpdateVmSubscription()
     {
-        if (ReferenceEquals(_observedVm, VM))
+        SetObservedVm(VM);
+    }
+
+    private void SetObservedVm(TaskQueuePageViewModel? nextVm)
+    {
+        if (ReferenceEquals(_observedVm, nextVm))
         {
             return;
         }
@@ -59,7 +58,7 @@ public partial class TaskQueueView : UserControl
             _observedVm.PropertyChanged -= OnVmPropertyChanged;
         }
 
-        _observedVm = VM;
+        _observedVm = nextVm;
         if (_observedVm is not null)
         {
             _observedVm.PropertyChanged += OnVmPropertyChanged;
@@ -235,7 +234,7 @@ public partial class TaskQueueView : UserControl
 
     private async void OnToggleOverlayClick(object? sender, RoutedEventArgs e)
     {
-        if (TopLevel.GetTopLevel(this)?.DataContext is MainShellViewModel shell)
+        if (TryGetShellViewModel(out var shell))
         {
             await shell.ToggleOverlayFromTaskQueueAsync();
             return;
@@ -261,7 +260,7 @@ public partial class TaskQueueView : UserControl
         }
 
         e.Handled = true;
-        if (TopLevel.GetTopLevel(this)?.DataContext is MainShellViewModel shell)
+        if (TryGetShellViewModel(out var shell))
         {
             await shell.PickOverlayTargetFromTaskQueueAsync();
             return;
@@ -504,5 +503,17 @@ public partial class TaskQueueView : UserControl
         rowControl.ContextMenu.DataContext = null;
         rowControl.ContextMenu.DataContext = VM;
         rowControl.ContextMenu.Open(rowControl);
+    }
+
+    private bool TryGetShellViewModel(out MainShellViewModel shell)
+    {
+        if (TopLevel.GetTopLevel(this)?.DataContext is MainShellViewModel currentShell)
+        {
+            shell = currentShell;
+            return true;
+        }
+
+        shell = null!;
+        return false;
     }
 }

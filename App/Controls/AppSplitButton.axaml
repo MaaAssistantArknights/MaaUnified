@@ -1,0 +1,36 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="MAAUnified.App.Controls.AppSplitButton"
+             x:Name="Root">
+  <Border Classes="app-split-button-host">
+    <Grid Classes="app-split-button-host"
+          ColumnDefinitions="*,Auto">
+      <Button Grid.Column="0"
+              Classes="app-split-button-trigger app-split-button-primary"
+              Content="{Binding Text, ElementName=Root}"
+              Click="OnPrimaryButtonClick" />
+
+      <Button x:Name="DropDownButton"
+              Grid.Column="1"
+              Classes="app-split-button-trigger app-split-button-secondary"
+              Content="▾"
+              Click="OnToggleButtonClick" />
+
+      <Popup x:Name="MenuPopup"
+             PlacementTarget="{Binding ElementName=DropDownButton}"
+             Placement="BottomEdgeAlignedRight"
+             IsOpen="{Binding IsDropDownOpen, ElementName=Root, Mode=TwoWay}"
+             Closed="OnPopupClosed">
+        <Border Classes="app-floating-card app-split-button-popup">
+          <StackPanel Spacing="8">
+            <TextBlock Text="{Binding FlyoutHeader, ElementName=Root}" />
+            <ListBox x:Name="SecondaryItemsList"
+                     ItemsSource="{Binding ItemsSource, ElementName=Root}"
+                     ItemTemplate="{Binding ItemTemplate, ElementName=Root}"
+                     SelectionChanged="OnSecondaryItemsSelectionChanged" />
+          </StackPanel>
+        </Border>
+      </Popup>
+    </Grid>
+  </Border>
+</UserControl>

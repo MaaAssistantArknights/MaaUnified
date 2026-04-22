@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using System.Reflection;
 using Avalonia;
 using Avalonia.Controls;
@@ -74,8 +75,16 @@ public partial class CheckComboBox : UserControl
         this.GetObservable(ItemsSourceProperty).Subscribe(_ => UpdateVisualState());
         this.GetObservable(ItemsSourceProperty).Subscribe(_ => SyncSelectedItemFromSelectedValue());
         this.GetObservable(IsTreeModeProperty).Subscribe(_ => UpdateVisualState());
-        this.GetObservable(SelectedItemProperty).Subscribe(_ => SyncSelectedValueFromSelectedItem());
+        this.GetObservable(IsDropDownOpenProperty).Subscribe(_ => UpdateShellState());
+        this.GetObservable(IsEnabledProperty).Subscribe(_ => UpdateShellState());
+        this.GetObservable(HeaderTextProperty).Subscribe(_ => UpdateHeaderText());
+        this.GetObservable(SelectedItemProperty).Subscribe(_ =>
+        {
+            SyncSelectedValueFromSelectedItem();
+            UpdateHeaderText();
+        });
         this.GetObservable(SelectedValueProperty).Subscribe(_ => SyncSelectedItemFromSelectedValue());
+        this.GetObservable(TextProperty).Subscribe(_ => UpdateHeaderText());
         this.GetObservable(SelectedValueBindingProperty).Subscribe(_ =>
         {
             SyncSelectedValueFromSelectedItem();
@@ -178,20 +187,24 @@ public partial class CheckComboBox : UserControl
         TreeModeView.IsVisible = useTreeMode;
         FlatListBox.IsVisible = useItemsSourceMode;
         CustomContentPresenter.IsVisible = useCustomContentMode;
+        UpdateHeaderText();
+        UpdateShellState();
     }
 
     private void OnShellPointerPressed(object? sender, PointerPressedEventArgs e)
     {
-        if (IsEditable)
-        {
-            return;
-        }
-
         if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
         {
             var point = e.GetPosition(ShellBorder);
             if (point.X >= ShellBorder.Bounds.Width - ToggleButton.Bounds.Width)
             {
+                return;
+            }
+
+            if (IsEditable)
+            {
+                EditableTextBox.Focus();
+                e.Handled = true;
                 return;
             }
 
@@ -239,11 +252,27 @@ public partial class CheckComboBox : UserControl
 
     private void OnEditableTextBoxLostFocus(object? sender, RoutedEventArgs e)
     {
+        _isEditorFocused = false;
+        UpdateShellState();
         EditorCommitted?.Invoke(this, EventArgs.Empty);
     }
 
     private void OnEditableTextBoxKeyDown(object? sender, KeyEventArgs e)
     {
+        if (e.Key is Key.Down or Key.F4)
+        {
+            e.Handled = true;
+            IsDropDownOpen = true;
+            return;
+        }
+
+        if (e.Key == Key.Escape && IsDropDownOpen)
+        {
+            e.Handled = true;
+            IsDropDownOpen = false;
+            return;
+        }
+
         if (e.Key != Key.Enter)
         {
             return;
@@ -253,18 +282,35 @@ public partial class CheckComboBox : UserControl
         EditorCommitted?.Invoke(this, EventArgs.Empty);
     }
 
+    private void OnEditableTextBoxGotFocus(object? sender, GotFocusEventArgs e)
+    {
+        _isEditorFocused = true;
+        UpdateShellState();
+    }
+
     private void TogglePopup()
     {
+        if (!IsEnabled)
+        {
+            return;
+        }
+
         IsDropDownOpen = !IsDropDownOpen;
     }
 
     private void CommitSelection(object selectedItem)
     {
+        if (IsEditable)
+        {
+            SetCurrentValue(TextProperty, BuildSelectionText(selectedItem));
+        }
+
         IsDropDownOpen = false;
         SelectionCommitted?.Invoke(this, new CheckComboBoxSelectionCommittedEventArgs(selectedItem));
     }
 
     private bool _syncingSelectionValue;
+    private bool _isEditorFocused;
 
     private void SyncSelectedValueFromSelectedItem()
     {
@@ -321,7 +367,7 @@ public partial class CheckComboBox : UserControl
             return null;
         }
 
-        foreach (var item in ItemsSource)
+        foreach (var item in EnumerateItems(ItemsSource))
         {
             if (Equals(ResolveSelectedValue(item), selectedValue))
             {
@@ -382,6 +428,65 @@ public partial class CheckComboBox : UserControl
         return current;
     }
 
+    private void UpdateShellState()
+    {
+        ShellBorder.Classes.Set("open", IsDropDownOpen);
+        ShellBorder.Classes.Set("focused", _isEditorFocused);
+    }
+
+    private void UpdateHeaderText()
+    {
+        var headerText = string.IsNullOrWhiteSpace(HeaderText)
+            ? BuildSelectionText(SelectedItem, includePlaceholder: false)
+            : HeaderText;
+
+        HeaderTextBlock.Text = headerText;
+        HeaderTextBlock.Classes.Set("empty", string.IsNullOrWhiteSpace(headerText));
+    }
+
+    private string BuildSelectionText(object? item, bool includePlaceholder = true)
+    {
+        if (item is null)
+        {
+            return includePlaceholder ? Watermark : string.Empty;
+        }
+
+        if (IsTreeMode && TryGetStringProperty(item, "RelativePath", out var relativePath) && !string.IsNullOrWhiteSpace(relativePath))
+        {
+            return relativePath;
+        }
+
+        if (TryGetStringProperty(item, "DisplayName", out var displayName) && !string.IsNullOrWhiteSpace(displayName))
+        {
+            return displayName;
+        }
+
+        if (TryGetStringProperty(item, "Name", out var name) && !string.IsNullOrWhiteSpace(name))
+        {
+            return name;
+        }
+
+        return item.ToString() ?? string.Empty;
+    }
+
+    private static IEnumerable<object?> EnumerateItems(IEnumerable items)
+    {
+        foreach (var item in items)
+        {
+            yield return item;
+
+            if (!TryGetChildrenEnumerable(item, out var children))
+            {
+                continue;
+            }
+
+            foreach (var child in EnumerateItems(children))
+            {
+                yield return child;
+            }
+        }
+    }
+
     private static bool CanCommitSelection(object? item)
     {
         if (item is null)
@@ -399,6 +504,37 @@ public partial class CheckComboBox : UserControl
             return !isFolder;
         }
 
+        return true;
+    }
+
+    private static bool TryGetChildrenEnumerable(object? instance, out IEnumerable children)
+    {
+        children = Array.Empty<object>();
+        if (instance is null)
+        {
+            return false;
+        }
+
+        var property = instance.GetType().GetProperty("Children", BindingFlags.Instance | BindingFlags.Public);
+        if (property?.GetValue(instance) is not IEnumerable enumerable)
+        {
+            return false;
+        }
+
+        children = enumerable;
+        return true;
+    }
+
+    private static bool TryGetStringProperty(object instance, string propertyName, out string value)
+    {
+        value = string.Empty;
+        var property = instance.GetType().GetProperty(propertyName, BindingFlags.Instance | BindingFlags.Public);
+        if (property?.PropertyType != typeof(string))
+        {
+            return false;
+        }
+
+        value = (string?)property.GetValue(instance) ?? string.Empty;
         return true;
     }
 

@@ -532,13 +532,45 @@ public sealed class UnifiedConfigurationService
                 }
 
                 var normalizedStage = FightStageSelection.NormalizeStoredValue(stage);
-                if (string.Equals(stage, normalizedStage, StringComparison.Ordinal))
+                task.Params.TryGetPropertyValue("_ui_stage_plan", out var stagePlanNode);
+                if (string.Equals(stage, normalizedStage, StringComparison.Ordinal)
+                    && stagePlanNode is null)
                 {
                     continue;
                 }
 
-                task.Params["stage"] = normalizedStage;
-                normalizedCount += 1;
+                if (!string.Equals(stage, normalizedStage, StringComparison.Ordinal))
+                {
+                    task.Params["stage"] = normalizedStage;
+                    normalizedCount += 1;
+                }
+
+                if (stagePlanNode is JsonArray stagePlanArray)
+                {
+                    var updated = false;
+                    for (var index = 0; index < stagePlanArray.Count; index++)
+                    {
+                        if (stagePlanArray[index] is not JsonValue planValue
+                            || !planValue.TryGetValue(out string? planStage))
+                        {
+                            continue;
+                        }
+
+                        var normalizedPlanStage = FightStageSelection.NormalizeStoredValue(planStage);
+                        if (string.Equals(planStage, normalizedPlanStage, StringComparison.Ordinal))
+                        {
+                            continue;
+                        }
+
+                        stagePlanArray[index] = normalizedPlanStage;
+                        updated = true;
+                    }
+
+                    if (updated)
+                    {
+                        normalizedCount += 1;
+                    }
+                }
             }
         }
 

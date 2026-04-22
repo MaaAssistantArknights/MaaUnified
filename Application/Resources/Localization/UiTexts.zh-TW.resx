@@ -2792,7 +2792,7 @@
     <value>托盤整合</value>
   </data>
   <data name="Toolbox.Advanced.Tab.WebApi" xml:space="preserve">
-    <value>WebApi(相容)</value>
+    <value>WebApi</value>
   </data>
   <data name="Toolbox.Advanced.Tray.ApplyVisibility" xml:space="preserve">
     <value>套用可見性</value>
@@ -2858,10 +2858,10 @@
     <value>停止服務</value>
   </data>
   <data name="Toolbox.Advanced.WebApi.Title" xml:space="preserve">
-    <value>WebApi(相容)</value>
+    <value>WebApi</value>
   </data>
   <data name="Toolbox.Advanced.WebApi.Warning" xml:space="preserve">
-    <value>此面板用於相容舊版 WebApi 接入。僅在你明確需要外部呼叫時啟用，並建議配置存取權杖。</value>
+    <value>此高級功能頁保留對舊版 WebApi 接入的相容。僅在你明確需要外部呼叫時啟用，並建議盡量配置存取權杖。</value>
   </data>
   <data name="Toolbox.Depot.ExportArkPlanner" xml:space="preserve">
     <value>匯出至企鵝物流刷圖規劃</value>

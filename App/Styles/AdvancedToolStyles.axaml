@@ -1,0 +1,94 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <Styles.Resources>
+    <Thickness x:Key="MAA.App.Tool.FormSectionPadding">18</Thickness>
+    <Thickness x:Key="MAA.App.Tool.StatusPanelPadding">14,12</Thickness>
+    <Thickness x:Key="MAA.App.Tool.CompareCardPadding">16</Thickness>
+
+    <x:Double x:Key="MAA.App.Tool.SectionSpacing">14</x:Double>
+    <x:Double x:Key="MAA.App.Tool.CompareCardMinWidth">240</x:Double>
+  </Styles.Resources>
+
+  <Style Selector="Border.tool-form-section">
+    <Setter Property="Padding" Value="{DynamicResource MAA.App.Tool.FormSectionPadding}" />
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Surface.Section}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Border.Section}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource MAA.BorderThickness.Thin}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.CornerRadius.Section}" />
+  </Style>
+
+  <Style Selector="StackPanel.tool-form-section">
+    <Setter Property="Spacing" Value="{DynamicResource MAA.App.Tool.SectionSpacing}" />
+  </Style>
+
+  <Style Selector="StackPanel.tool-action-bar">
+    <Setter Property="Orientation" Value="Horizontal" />
+    <Setter Property="Spacing" Value="10" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+  </Style>
+
+  <Style Selector="WrapPanel.tool-action-bar">
+    <Setter Property="Orientation" Value="Horizontal" />
+    <Setter Property="ItemHeight" Value="{DynamicResource MAA.App.Size.ButtonHeight}" />
+  </Style>
+
+  <Style Selector="Border.tool-status-panel">
+    <Setter Property="Padding" Value="{DynamicResource MAA.App.Tool.StatusPanelPadding}" />
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Surface.Card}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Border.Card}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource MAA.BorderThickness.Thin}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.CornerRadius.Card}" />
+  </Style>
+
+  <Style Selector="Border.tool-status-panel.status-warning">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Surface.Warning}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.State.Warning}" />
+  </Style>
+
+  <Style Selector="Border.tool-compare-card">
+    <Setter Property="MinWidth" Value="{DynamicResource MAA.App.Tool.CompareCardMinWidth}" />
+    <Setter Property="Padding" Value="{DynamicResource MAA.App.Tool.CompareCardPadding}" />
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Surface.Card}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Border.Card}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource MAA.BorderThickness.Thin}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.CornerRadius.Card}" />
+  </Style>
+
+  <Style Selector="Button.app-button.app-busy">
+    <Setter Property="MinWidth" Value="124" />
+  </Style>
+
+  <Style Selector="Button.app-button.app-busy.busy">
+    <Setter Property="IsEnabled" Value="False" />
+    <Setter Property="Opacity" Value="1" />
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.SecondaryBackgroundHover}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Action.SecondaryBorder}" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
+  </Style>
+
+  <Style Selector="Button.app-button.app-busy.app-primary.busy">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.PrimaryBackgroundHover}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Action.PrimaryBorder}" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Action.PrimaryForeground}" />
+  </Style>
+
+  <Style Selector="Button.app-button.app-async">
+    <Setter Property="MinWidth" Value="124" />
+  </Style>
+
+  <Style Selector="Button.app-button.app-async.pending">
+    <Setter Property="Opacity" Value="0.86" />
+  </Style>
+
+  <Style Selector="Button.app-button.app-async.success">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Selection.Background}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Selection.Border}" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Selection.Foreground}" />
+  </Style>
+
+  <Style Selector="Button.app-button.app-async.warning">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Surface.Warning}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.State.Warning}" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
+  </Style>
+ </Styles>

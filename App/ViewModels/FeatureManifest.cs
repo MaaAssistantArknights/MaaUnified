@@ -36,6 +36,8 @@ public static class FeatureManifest
 
         new("Advanced.Copilot", "Advanced", "Copilot", "作业导入与执行", "Copilot", "高级功能"),
         new("Advanced.Toolbox", "Advanced", "Toolbox", "工具箱", "Toolbox", "高级功能"),
+        new("Advanced.StageManager", "Advanced", "StageManager", "关卡资源管理与校验", "StageManager", "高级功能"),
+        new("Advanced.WebApi", "Advanced", "WebApi", "WebApi 服务与兼容接入", "WebApi", "高级功能"),
 
         new("Dialog.Announcement", "Dialogs", "AnnouncementDialog", "公告弹窗", "AnnouncementDialog", "对话框"),
         new("Dialog.VersionUpdate", "Dialogs", "VersionUpdateDialog", "版本更新弹窗", "VersionUpdateDialog", "对话框"),

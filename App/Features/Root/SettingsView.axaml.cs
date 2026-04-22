@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using Avalonia;
 using Avalonia.Controls;
@@ -11,7 +12,7 @@ using MAAUnified.App.ViewModels.Settings;
 
 namespace MAAUnified.App.Features.Root;
 
-public partial class SettingsView : UserControl
+public partial class SettingsView : UserControl, INotifyPropertyChanged
 {
     private readonly record struct SectionScrollPosition(string SectionKey, double OffsetWithinSection);
 
@@ -56,6 +57,7 @@ public partial class SettingsView : UserControl
     private SettingsPageViewModel? _observedViewModel;
     private bool _viewCompositionActive;
     private SettingsPageViewModel? _viewCompositionOwner;
+    private event PropertyChangedEventHandler? ViewPropertyChanged;
 
     public SettingsView()
     {
@@ -95,6 +97,7 @@ public partial class SettingsView : UserControl
             CompleteViewComposition();
             BindViewModelNotifications();
             _sectionMaterializationInitialized = false;
+            RaiseSectionChromePropertyChanged();
             Dispatcher.UIThread.Post(() =>
             {
                 if (VisualRoot is null)
@@ -111,6 +114,12 @@ public partial class SettingsView : UserControl
                 StartProgressiveSectionMaterialization();
             }, DispatcherPriority.Loaded);
         };
+    }
+
+    event PropertyChangedEventHandler? INotifyPropertyChanged.PropertyChanged
+    {
+        add => ViewPropertyChanged += value;
+        remove => ViewPropertyChanged -= value;
     }
 
     private SettingsPageViewModel? VM => DataContext as SettingsPageViewModel;
@@ -184,6 +193,24 @@ public partial class SettingsView : UserControl
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (string.IsNullOrEmpty(e.PropertyName)
+            || string.Equals(e.PropertyName, nameof(SettingsPageViewModel.SelectedSection), StringComparison.Ordinal)
+            || string.Equals(e.PropertyName, nameof(SettingsPageViewModel.SelectedSectionTitle), StringComparison.Ordinal)
+            || string.Equals(e.PropertyName, nameof(SettingsPageViewModel.RootTexts), StringComparison.Ordinal)
+            || string.Equals(e.PropertyName, nameof(SettingsPageViewModel.Language), StringComparison.Ordinal)
+            || string.Equals(e.PropertyName, nameof(SettingsPageViewModel.StatusMessage), StringComparison.Ordinal)
+            || string.Equals(e.PropertyName, nameof(SettingsPageViewModel.RemoteControlStatusMessage), StringComparison.Ordinal)
+            || string.Equals(e.PropertyName, nameof(SettingsPageViewModel.ExternalNotificationStatusMessage), StringComparison.Ordinal)
+            || string.Equals(e.PropertyName, nameof(SettingsPageViewModel.HotkeyStatusMessage), StringComparison.Ordinal)
+            || string.Equals(e.PropertyName, nameof(SettingsPageViewModel.VersionUpdateStatusMessage), StringComparison.Ordinal)
+            || string.Equals(e.PropertyName, nameof(SettingsPageViewModel.ConfigurationManagerStatusMessage), StringComparison.Ordinal)
+            || string.Equals(e.PropertyName, nameof(SettingsPageViewModel.AchievementStatusMessage), StringComparison.Ordinal)
+            || string.Equals(e.PropertyName, nameof(SettingsPageViewModel.IssueReportStatusMessage), StringComparison.Ordinal)
+            || string.Equals(e.PropertyName, nameof(SettingsPageViewModel.AboutStatusMessage), StringComparison.Ordinal))
+        {
+            RaiseSectionChromePropertyChanged();
+        }
+
         if (!string.Equals(e.PropertyName, nameof(SettingsPageViewModel.RootTexts), StringComparison.Ordinal)
             && !string.Equals(e.PropertyName, nameof(SettingsPageViewModel.Language), StringComparison.Ordinal))
         {
@@ -200,6 +227,7 @@ public partial class SettingsView : UserControl
             return;
         }
 
+        RaiseSectionChromePropertyChanged();
         var scrollPosition = CaptureCurrentSectionScrollPosition();
         CancelProgressiveSectionMaterialization();
         BeginViewComposition();
@@ -272,7 +300,34 @@ public partial class SettingsView : UserControl
             return;
         }
 
+        RaiseSectionChromePropertyChanged();
         Dispatcher.UIThread.Post(ScrollToSelectedSection, DispatcherPriority.Background);
+    }
+
+    private void OnRailItemClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Control { Tag: SettingsSectionViewModel section } || VM is null)
+        {
+            return;
+        }
+
+        if (!ReferenceEquals(VM.SelectedSection, section))
+        {
+            VM.SelectedSection = section;
+        }
+
+        RaiseSectionChromePropertyChanged();
+    }
+
+    private async void OnSectionActionClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Control { Tag: SettingsSectionActionItem action } || VM is null)
+        {
+            return;
+        }
+
+        await VM.ExecuteSectionActionAsync(action);
+        RaiseSectionChromePropertyChanged();
     }
 
     private void OnSectionScrollChanged(object? sender, ScrollChangedEventArgs e)
@@ -832,5 +887,84 @@ public partial class SettingsView : UserControl
         Dispatcher.UIThread.Post(
             () => _suppressSectionScrollChanged = false,
             DispatcherPriority.Background);
+    }
+
+    public string CurrentSectionIntroText
+    {
+        get
+        {
+            if (VM?.SelectedSection?.Key is not { Length: > 0 } key || VM.RootTexts is null)
+            {
+                return string.Empty;
+            }
+
+            return VM.RootTexts.GetOrDefault($"Settings.Section.{key}.Intro", string.Empty);
+        }
+    }
+
+    public bool HasCurrentSectionIntroText => !string.IsNullOrWhiteSpace(CurrentSectionIntroText);
+
+    public string CurrentSectionStatusTitle
+    {
+        get
+        {
+            if (VM?.RootTexts is null)
+            {
+                return string.Empty;
+            }
+
+            return VM.RootTexts.GetOrDefault("Settings.Section.Status.Title", "Status");
+        }
+    }
+
+    public string CurrentSectionStatusMessage
+    {
+        get
+        {
+            if (VM is null)
+            {
+                return string.Empty;
+            }
+
+            var selectedKey = VM.SelectedSection?.Key;
+            if (string.IsNullOrWhiteSpace(selectedKey))
+            {
+                return string.Empty;
+            }
+
+            return selectedKey switch
+            {
+                "ConfigurationManager" => FirstNonEmpty(VM.ConfigurationManagerStatusMessage, VM.StatusMessage),
+                "RemoteControl" => FirstNonEmpty(VM.RemoteControlStatusMessage, VM.StatusMessage),
+                "ExternalNotification" => FirstNonEmpty(VM.ExternalNotificationStatusMessage, VM.StatusMessage),
+                "HotKey" => FirstNonEmpty(VM.HotkeyStatusMessage, VM.StatusMessage),
+                "Achievement" => FirstNonEmpty(VM.AchievementStatusMessage, VM.StatusMessage),
+                "VersionUpdate" => FirstNonEmpty(VM.VersionUpdateStatusMessage, VM.StatusMessage),
+                "IssueReport" => FirstNonEmpty(VM.IssueReportStatusMessage, VM.StatusMessage),
+                "About" => FirstNonEmpty(VM.AboutStatusMessage, VM.StatusMessage),
+                _ => VM.StatusMessage,
+            };
+        }
+    }
+
+    public bool HasCurrentSectionStatusMessage => !string.IsNullOrWhiteSpace(CurrentSectionStatusMessage);
+
+    private void RaiseSectionChromePropertyChanged()
+    {
+        OnPropertyChanged(nameof(CurrentSectionIntroText));
+        OnPropertyChanged(nameof(HasCurrentSectionIntroText));
+        OnPropertyChanged(nameof(CurrentSectionStatusTitle));
+        OnPropertyChanged(nameof(CurrentSectionStatusMessage));
+        OnPropertyChanged(nameof(HasCurrentSectionStatusMessage));
+    }
+
+    private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+    {
+        ViewPropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+    }
+
+    private static string FirstNonEmpty(string primary, string fallback)
+    {
+        return !string.IsNullOrWhiteSpace(primary) ? primary : fallback;
     }
 }

@@ -75,6 +75,16 @@
     <SolidColorBrush x:Key="MAA.Brush.App.Input.BorderHover" Color="{DynamicResource MAA.Color.Action.SecondaryBorder}" />
     <SolidColorBrush x:Key="MAA.Brush.App.Input.BorderFocus" Color="{DynamicResource MAA.Color.Action.PrimaryBorder}" />
     <SolidColorBrush x:Key="MAA.Brush.App.Input.BackgroundDisabled" Color="{DynamicResource MAA.Color.Action.BackgroundDisabled}" />
+    <SolidColorBrush x:Key="MAA.Brush.App.Input.ForegroundDisabled" Color="{DynamicResource MAA.Color.Action.ForegroundDisabled}" />
+    <SolidColorBrush x:Key="MAA.Brush.App.Input.PopupBackground" Color="{DynamicResource MAA.Color.Dialog.Section}" />
+    <SolidColorBrush x:Key="MAA.Brush.App.Input.PopupBorder" Color="{DynamicResource MAA.Color.Dialog.SectionBorder}" />
+    <SolidColorBrush x:Key="MAA.Brush.App.Input.ItemBackgroundHover" Color="{DynamicResource MAA.Color.Action.SecondaryBackgroundHover}" />
+    <SolidColorBrush x:Key="MAA.Brush.App.Input.ItemBackgroundSelected" Color="{DynamicResource MAA.Color.Dialog.FilterChipSelectedBackground}" />
+    <SolidColorBrush x:Key="MAA.Brush.App.Input.ItemBorderSelected" Color="{DynamicResource MAA.Color.Dialog.FilterChipSelectedBorder}" />
+    <SolidColorBrush x:Key="MAA.Brush.App.Input.ItemForegroundSelected" Color="{DynamicResource MAA.Color.Dialog.FilterChipSelectedForeground}" />
+    <Thickness x:Key="MAA.App.Thickness.InputPopupPadding">8</Thickness>
+    <Thickness x:Key="MAA.App.Thickness.InputItemPadding">12,9</Thickness>
+    <x:Double x:Key="MAA.App.Size.InputPopupMaxHeight">280</x:Double>
     <SolidColorBrush x:Key="MAA.Brush.App.Badge.Background" Color="{DynamicResource MAA.Color.Dialog.FilterChipSelectedBackground}" />
     <SolidColorBrush x:Key="MAA.Brush.App.Badge.Border" Color="{DynamicResource MAA.Color.Dialog.FilterChipSelectedBorder}" />
     <SolidColorBrush x:Key="MAA.Brush.App.Badge.Foreground" Color="{DynamicResource MAA.Color.Dialog.FilterChipSelectedForeground}" />
@@ -623,7 +633,7 @@
   <Style Selector="TextBox.app-input:disabled">
     <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Input.BackgroundDisabled}" />
     <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Action.DisabledBorder}" />
-    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Action.DisabledForeground}" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Input.ForegroundDisabled}" />
   </Style>
 
   <Style Selector="TextBox.app-input.app-input-block">
@@ -636,6 +646,213 @@
   <Style Selector="TextBox.app-input.app-search-input">
     <Setter Property="MinWidth" Value="{DynamicResource MAA.App.Size.SearchInputMinWidth}" />
     <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.CornerRadius.SearchInput}" />
+  </Style>
+
+  <Style Selector="ComboBox.app-input">
+    <Setter Property="Height" Value="{DynamicResource MAA.App.Size.InputHeight}" />
+    <Setter Property="Padding" Value="{DynamicResource MAA.App.Thickness.InputPadding}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.CornerRadius.Input}" />
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Input.Background}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Input.Border}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource MAA.BorderThickness.Thin}" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="MaxDropDownHeight" Value="{DynamicResource MAA.App.Size.InputPopupMaxHeight}" />
+  </Style>
+
+  <Style Selector="ComboBox.app-input:pointerover">
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Input.BorderHover}" />
+  </Style>
+
+  <Style Selector="ComboBox.app-input:focus">
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Input.BorderFocus}" />
+  </Style>
+
+  <Style Selector="ComboBox.app-input:focus-visible">
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Input.BorderFocus}" />
+  </Style>
+
+  <Style Selector="ComboBox.app-input:disabled">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Input.BackgroundDisabled}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Action.DisabledBorder}" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Input.ForegroundDisabled}" />
+    <Setter Property="Opacity" Value="1" />
+  </Style>
+
+  <Style Selector="ComboBox.app-input /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Margin" Value="0" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
+  </Style>
+
+  <Style Selector="ComboBox.app-input /template/ ToggleButton#PART_DropDownButton">
+    <Setter Property="Width" Value="{DynamicResource MAA.App.Size.InputHeight}" />
+    <Setter Property="MinWidth" Value="{DynamicResource MAA.App.Size.InputHeight}" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Secondary}" />
+  </Style>
+
+  <Style Selector="ComboBox.app-input:pointerover /template/ ToggleButton#PART_DropDownButton">
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
+  </Style>
+
+  <Style Selector="ComboBox.app-input:disabled /template/ ToggleButton#PART_DropDownButton">
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Input.ForegroundDisabled}" />
+  </Style>
+
+  <Style Selector="ComboBox.app-input /template/ Popup#PART_Popup">
+    <Setter Property="WindowManagerAddShadowHint" Value="False" />
+  </Style>
+
+  <Style Selector="ComboBox.app-input /template/ Border#PART_PopupBorder">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Input.PopupBackground}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Input.PopupBorder}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource MAA.BorderThickness.Thin}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.CornerRadius.Card}" />
+    <Setter Property="Padding" Value="{DynamicResource MAA.App.Thickness.InputPopupPadding}" />
+  </Style>
+
+  <Style Selector="ComboBox.app-input /template/ Border#PART_PopupBorder ComboBoxItem">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="{DynamicResource MAA.App.Thickness.InputItemPadding}" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Secondary}" />
+    <Setter Property="MinHeight" Value="38" />
+    <Setter Property="CornerRadius" Value="12" />
+  </Style>
+
+  <Style Selector="ComboBox.app-input /template/ Border#PART_PopupBorder ComboBoxItem:pointerover">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Input.ItemBackgroundHover}" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
+  </Style>
+
+  <Style Selector="ComboBox.app-input /template/ Border#PART_PopupBorder ComboBoxItem:selected">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Input.ItemBackgroundSelected}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Input.ItemBorderSelected}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource MAA.BorderThickness.Thin}" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Input.ItemForegroundSelected}" />
+  </Style>
+
+  <Style Selector="ComboBox.app-input /template/ Border#PART_PopupBorder ComboBoxItem:selected:pointerover">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Input.ItemBackgroundSelected}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Input.ItemBorderSelected}" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Input.ItemForegroundSelected}" />
+  </Style>
+
+  <Style Selector="AutoCompleteBox.app-input">
+    <Setter Property="Height" Value="{DynamicResource MAA.App.Size.InputHeight}" />
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Input.Background}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Input.Border}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource MAA.BorderThickness.Thin}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.CornerRadius.Input}" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
+    <Setter Property="MaxDropDownHeight" Value="{DynamicResource MAA.App.Size.InputPopupMaxHeight}" />
+  </Style>
+
+  <Style Selector="AutoCompleteBox.app-input:pointerover">
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Input.BorderHover}" />
+  </Style>
+
+  <Style Selector="AutoCompleteBox.app-input:focus">
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Input.BorderFocus}" />
+  </Style>
+
+  <Style Selector="AutoCompleteBox.app-input:focus-visible">
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Input.BorderFocus}" />
+  </Style>
+
+  <Style Selector="AutoCompleteBox.app-input:disabled">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Input.BackgroundDisabled}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Action.DisabledBorder}" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Input.ForegroundDisabled}" />
+    <Setter Property="Opacity" Value="1" />
+  </Style>
+
+  <Style Selector="AutoCompleteBox.app-input /template/ TextBox#PART_TextBox">
+    <Setter Property="Height" Value="{DynamicResource MAA.App.Size.InputHeight}" />
+    <Setter Property="Padding" Value="{DynamicResource MAA.App.Thickness.InputPadding}" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="AutoCompleteBox.app-input:disabled /template/ TextBox#PART_TextBox">
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Input.ForegroundDisabled}" />
+  </Style>
+
+  <Style Selector="AutoCompleteBox.app-input /template/ Popup#PART_Popup">
+    <Setter Property="WindowManagerAddShadowHint" Value="False" />
+  </Style>
+
+  <Style Selector="AutoCompleteBox.app-input /template/ Border#PART_PopupBorder">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Input.PopupBackground}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Input.PopupBorder}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource MAA.BorderThickness.Thin}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.CornerRadius.Card}" />
+    <Setter Property="Padding" Value="{DynamicResource MAA.App.Thickness.InputPopupPadding}" />
+  </Style>
+
+  <Style Selector="AutoCompleteBox.app-input /template/ SelectingItemsControl#PART_SelectingItemsControl ListBoxItem">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="{DynamicResource MAA.App.Thickness.InputItemPadding}" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Secondary}" />
+    <Setter Property="MinHeight" Value="38" />
+    <Setter Property="CornerRadius" Value="12" />
+  </Style>
+
+  <Style Selector="AutoCompleteBox.app-input /template/ SelectingItemsControl#PART_SelectingItemsControl ListBoxItem:pointerover">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Input.ItemBackgroundHover}" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
+  </Style>
+
+  <Style Selector="AutoCompleteBox.app-input /template/ SelectingItemsControl#PART_SelectingItemsControl ListBoxItem:selected">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Input.ItemBackgroundSelected}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Input.ItemBorderSelected}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource MAA.BorderThickness.Thin}" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Input.ItemForegroundSelected}" />
+  </Style>
+
+  <Style Selector="AutoCompleteBox.app-input /template/ SelectingItemsControl#PART_SelectingItemsControl ListBoxItem:selected:pointerover">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Input.ItemBackgroundSelected}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Input.ItemBorderSelected}" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Input.ItemForegroundSelected}" />
+  </Style>
+
+  <Style Selector="AutoCompleteBox.app-input /template/ ListBox#PART_SelectionAdapter ListBoxItem">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="{DynamicResource MAA.App.Thickness.InputItemPadding}" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Secondary}" />
+    <Setter Property="MinHeight" Value="38" />
+    <Setter Property="CornerRadius" Value="12" />
+  </Style>
+
+  <Style Selector="AutoCompleteBox.app-input /template/ ListBox#PART_SelectionAdapter ListBoxItem:pointerover">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Input.ItemBackgroundHover}" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
+  </Style>
+
+  <Style Selector="AutoCompleteBox.app-input /template/ ListBox#PART_SelectionAdapter ListBoxItem:selected">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Input.ItemBackgroundSelected}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Input.ItemBorderSelected}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource MAA.BorderThickness.Thin}" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Input.ItemForegroundSelected}" />
+  </Style>
+
+  <Style Selector="AutoCompleteBox.app-input /template/ ListBox#PART_SelectionAdapter ListBoxItem:selected:pointerover">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Input.ItemBackgroundSelected}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Input.ItemBorderSelected}" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Input.ItemForegroundSelected}" />
   </Style>
 
   <Style Selector="Border.app-badge">

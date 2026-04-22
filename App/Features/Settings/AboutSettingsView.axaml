@@ -1,68 +1,105 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="MAAUnified.App.Features.Settings.AboutSettingsView">
-  <Grid Margin="4" RowDefinitions="Auto,Auto,Auto,Auto">
-    <TextBlock Classes="section-title" Text="{Binding RootTexts[Settings.Section.About]}" />
+  <UserControl.Styles>
+    <Style Selector="Border.about-settings-card">
+      <Setter Property="Padding" Value="16" />
+    </Style>
+
+    <Style Selector="StackPanel.about-settings-stack">
+      <Setter Property="Spacing" Value="12" />
+    </Style>
+
+    <Style Selector="Button.about-settings-action">
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+    </Style>
+
+    <Style Selector="Border.about-settings-status">
+      <Setter Property="Padding" Value="22" />
+    </Style>
+
+    <Style Selector="StackPanel.about-settings-status-list">
+      <Setter Property="Spacing" Value="8" />
+    </Style>
+  </UserControl.Styles>
+
+  <Grid Margin="4"
+        RowDefinitions="Auto,Auto,Auto,Auto">
+    <TextBlock Classes="section-title"
+               Text="{Binding RootTexts[Settings.Section.About]}" />
 
     <Grid Grid.Row="1"
-          Classes="settings-form"
           Margin="{DynamicResource MAA.Thickness.Settings.SectionTopMargin}"
-          ColumnDefinitions="250,250">
-      <StackPanel Grid.Column="0"
-                  Classes="settings-centered-column"
-                  Spacing="{DynamicResource MAA.Spacing.Small}">
-        <Button Classes="wpf-button wpf-button-secondary"
-                Content="{Binding RootTexts[Settings.Action.OpenOfficial]}"
-                Click="OnOpenOfficialWebsiteClick" />
-        <Button Classes="wpf-button wpf-button-secondary"
-                Content="bilibili"
-                Click="OnOpenBilibiliClick" />
-        <Button Classes="wpf-button wpf-button-secondary"
-                Content="GitHub"
-                Click="OnOpenGithubClick" />
-        <Button Classes="wpf-button wpf-button-secondary"
-                Content="{Binding RootTexts[Settings.Action.CheckAnnouncement]}"
-                Click="OnCheckAnnouncementClick" />
-      </StackPanel>
+          ColumnDefinitions="*,24,*">
+      <Border Classes="app-surface app-card about-settings-card">
+        <StackPanel Classes="about-settings-stack">
+          <Button Classes="app-button app-primary about-settings-action"
+                  Content="{Binding RootTexts[Settings.Action.OpenOfficial]}"
+                  Click="OnOpenOfficialWebsiteClick" />
+          <Button Classes="app-button app-secondary about-settings-action"
+                  Content="bilibili"
+                  Click="OnOpenBilibiliClick" />
+          <Button Classes="app-button app-secondary about-settings-action"
+                  Content="GitHub"
+                  Click="OnOpenGithubClick" />
+          <Button Classes="app-button app-secondary about-settings-action"
+                  Content="{Binding RootTexts[Settings.Action.CheckAnnouncement]}"
+                  Click="OnCheckAnnouncementClick" />
+        </StackPanel>
+      </Border>
 
-      <StackPanel Grid.Column="1"
-                  Classes="settings-centered-column"
-                  Spacing="{DynamicResource MAA.Spacing.Small}">
-        <Button Classes="wpf-button wpf-button-secondary"
-                Content="{Binding RootTexts[Settings.Action.OpenCommunity]}"
-                Click="OnOpenCommunityClick" />
-        <Button Classes="wpf-button wpf-button-secondary"
-                Content="{Binding RootTexts[Settings.Action.OpenDownload]}"
-                Click="OnOpenDownloadClick" />
-        <Button Classes="wpf-button wpf-button-secondary"
-                Content="QQ Group"
-                Click="OnOpenQqGroupClick" />
-        <Button Classes="wpf-button wpf-button-secondary"
-                Content="QQ Channel"
-                Click="OnOpenQqChannelClick" />
-        <Button Classes="wpf-button wpf-button-secondary"
-                Content="Telegram"
-                Click="OnOpenTelegramClick" />
-        <Button Classes="wpf-button wpf-button-secondary"
-                Content="Discord"
-                Click="OnOpenDiscordClick" />
-      </StackPanel>
+      <Border Grid.Column="2"
+              Classes="app-surface app-card about-settings-card">
+        <StackPanel Classes="about-settings-stack">
+          <Button Classes="app-button app-primary about-settings-action"
+                  Content="{Binding RootTexts[Settings.Action.OpenCommunity]}"
+                  Click="OnOpenCommunityClick" />
+          <Button Classes="app-button app-secondary about-settings-action"
+                  Content="{Binding RootTexts[Settings.Action.OpenDownload]}"
+                  Click="OnOpenDownloadClick" />
+          <Button Classes="app-button app-secondary about-settings-action"
+                  Content="QQ Group"
+                  Click="OnOpenQqGroupClick" />
+          <Button Classes="app-button app-secondary about-settings-action"
+                  Content="QQ Channel"
+                  Click="OnOpenQqChannelClick" />
+          <Button Classes="app-button app-secondary about-settings-action"
+                  Content="Telegram"
+                  Click="OnOpenTelegramClick" />
+          <Button Classes="app-button app-secondary about-settings-action"
+                  Content="Discord"
+                  Click="OnOpenDiscordClick" />
+        </StackPanel>
+      </Border>
     </Grid>
 
-    <TextBlock Grid.Row="2"
-               MaxWidth="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
-               Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}"
-               Classes="settings-centered-text"
-               Text="{Binding AboutVersionInfo}" />
+    <Border Grid.Row="2"
+            Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}"
+            Classes="app-surface app-card about-settings-card">
+      <TextBlock MaxWidth="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
+                 HorizontalAlignment="Center"
+                 TextAlignment="Center"
+                 TextWrapping="Wrap"
+                 Classes="app-body"
+                 Text="{Binding AboutVersionInfo}" />
+    </Border>
 
-    <StackPanel Grid.Row="3"
-                Classes="settings-form settings-form-narrow"
-                Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}"
-                Spacing="4">
-      <TextBlock Classes="settings-centered-text" Text="{Binding AboutStatusMessage}" />
-      <TextBlock Classes="state-error settings-centered-text"
-                 Text="{Binding AboutErrorMessage}"
-                 IsVisible="{Binding HasAboutErrorMessage}" />
-    </StackPanel>
+    <Border Grid.Row="3"
+            Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}"
+            Classes="app-surface app-section about-settings-status">
+      <StackPanel Classes="about-settings-status-list">
+        <TextBlock HorizontalAlignment="Center"
+                   TextAlignment="Center"
+                   TextWrapping="Wrap"
+                   Classes="app-body"
+                   Text="{Binding AboutStatusMessage}" />
+        <TextBlock HorizontalAlignment="Center"
+                   TextAlignment="Center"
+                   TextWrapping="Wrap"
+                   Classes="state-error"
+                   Text="{Binding AboutErrorMessage}"
+                   IsVisible="{Binding HasAboutErrorMessage}" />
+      </StackPanel>
+    </Border>
   </Grid>
 </UserControl>

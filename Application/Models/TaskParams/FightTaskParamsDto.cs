@@ -6,15 +6,19 @@ public sealed class FightTaskParamsDto
 {
     public string Stage { get; set; } = FightStageSelection.CurrentOrLast;
 
-    public bool UseMedicine { get; set; }
+    public List<string> StagePlan { get; set; } = [FightStageSelection.CurrentOrLast];
+
+    public bool IsStageManually { get; set; }
+
+    public bool? UseMedicine { get; set; } = false;
 
     public int Medicine { get; set; }
 
-    public bool UseStone { get; set; }
+    public bool? UseStone { get; set; } = false;
 
     public int Stone { get; set; }
 
-    public bool EnableTimesLimit { get; set; }
+    public bool? EnableTimesLimit { get; set; } = false;
 
     public int Times { get; set; } = int.MaxValue;
 
@@ -24,7 +28,7 @@ public sealed class FightTaskParamsDto
 
     public bool UseExpiringMedicine { get; set; }
 
-    public bool EnableTargetDrop { get; set; }
+    public bool? EnableTargetDrop { get; set; } = false;
 
     public string DropId { get; set; } = string.Empty;
 
@@ -76,6 +80,25 @@ public static class FightStageSelection
         return IsCurrentOrLast(stage)
             ? CurrentOrLast
             : stage!.Trim();
+    }
+
+    public static string NormalizePlanEntry(string? stage)
+    {
+        return NormalizeStoredValue(stage);
+    }
+
+    public static List<string> NormalizeStagePlan(IEnumerable<string?>? stagePlan)
+    {
+        var normalized = (stagePlan ?? [])
+            .Select(NormalizePlanEntry)
+            .ToList();
+
+        if (normalized.Count == 0)
+        {
+            normalized.Add(CurrentOrLast);
+        }
+
+        return normalized;
     }
 
     public static string ToCoreStage(string? stage)
