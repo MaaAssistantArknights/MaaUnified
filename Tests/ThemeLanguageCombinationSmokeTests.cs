@@ -30,7 +30,7 @@ public sealed class ThemeLanguageCombinationSmokeTests
             new ViewStructureCheck("App/Views/ScreenshotPreviewWindow.axaml", "x:Name=\"PreviewHeaderText\"", "x:Name=\"PreviewSectionTitleText\"", "x:Name=\"PreviewImage\""),
             new ViewStructureCheck("App/Features/Root/TaskQueueView.axaml", "<ListBox", "<ScrollViewer", "TaskSettingsHost"),
             new ViewStructureCheck("App/Features/Advanced/CopilotView.axaml", "StatusMessage", "ItemsSource=\"{Binding Logs}\""),
-            new ViewStructureCheck("App/Features/Root/SettingsView.axaml", "<ListBox", "SectionScrollViewer", "SectionContentPanel", "ScrollChanged=\"OnSectionScrollChanged\"", "SectionConfigurationManager", "SectionAbout"),
+            new ViewStructureCheck("App/Features/Root/SettingsView.axaml", "<controls:AppSelectionList", "VisualMode=\"Rail\"", "StickyTitlePanel", "StickyTransitionHost", "SectionScrollViewer", "SectionContentPanel", "ScrollChanged=\"OnSectionScrollChanged\"", "SectionConfigurationManager", "SectionAbout"),
         };
 
         foreach (var check in checks)

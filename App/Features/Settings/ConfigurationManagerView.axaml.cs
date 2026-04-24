@@ -4,8 +4,11 @@ using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
+using Avalonia.VisualTree;
+using MAAUnified.App.Controls;
 using MAAUnified.App.Features.Dialogs;
 using MAAUnified.App.ViewModels.Settings;
 using MAAUnified.Application.Models;
@@ -14,6 +17,8 @@ namespace MAAUnified.App.Features.Settings;
 
 public partial class ConfigurationManagerView : UserControl
 {
+    private bool _suppressProfileSelectionChanged;
+
     public ConfigurationManagerView()
     {
         InitializeComponent();
@@ -24,6 +29,11 @@ public partial class ConfigurationManagerView : UserControl
 
     private async void OnConfigurationProfileSelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
+        if (_suppressProfileSelectionChanged)
+        {
+            return;
+        }
+
         if (VM is not null)
         {
             await VM.SwitchConfigurationProfileAsync();
@@ -40,13 +50,30 @@ public partial class ConfigurationManagerView : UserControl
 
     private async void OnDeleteCurrentProfileClick(object? sender, RoutedEventArgs e)
     {
+        await ShowDeleteCurrentProfileDialogAsync();
+    }
+
+    private async void OnDeleteProfileEntryClick(object? sender, RoutedEventArgs e)
+    {
+        e.Handled = true;
+
+        if (VM is null || sender is not Button { Tag: string targetProfile } button)
+        {
+            return;
+        }
+
+        await ShowDeleteCurrentProfileDialogAsync(targetProfile, ResolveOwningDropDown(button));
+    }
+
+    private async Task ShowDeleteCurrentProfileDialogAsync(string? targetProfile = null, Control? reopenOwner = null)
+    {
         var vm = VM;
         if (vm is null)
         {
             return;
         }
 
-        var target = vm.ConfigurationManagerSelectedProfile?.Trim() ?? string.Empty;
+        var target = (targetProfile ?? vm.ConfigurationManagerSelectedProfile)?.Trim() ?? string.Empty;
         if (string.IsNullOrWhiteSpace(target))
         {
             return;
@@ -64,10 +91,31 @@ public partial class ConfigurationManagerView : UserControl
             sourceScope: "Settings.ConfigurationManager.DeleteConfirm.Dialog");
         if (!confirmed)
         {
+            ReopenOwningDropDown(reopenOwner);
             return;
         }
 
-        await vm.DeleteConfigurationProfileAsync();
+        _suppressProfileSelectionChanged = true;
+        try
+        {
+            vm.ConfigurationManagerSelectedProfile = target;
+            await vm.DeleteConfigurationProfileAsync();
+        }
+        finally
+        {
+            _suppressProfileSelectionChanged = false;
+            ReopenOwningDropDown(reopenOwner);
+        }
+    }
+
+    private void OnDropdownDeleteButtonPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        e.Handled = true;
+    }
+
+    private void OnDropdownDeleteButtonPointerReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        e.Handled = true;
     }
 
     private async void OnExportAllProfilesClick(object? sender, RoutedEventArgs e)
@@ -336,6 +384,37 @@ public partial class ConfigurationManagerView : UserControl
         return Avalonia.Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime
             ? new AvaloniaDialogService(App.Runtime)
             : NoOpAppDialogService.Instance;
+    }
+
+    private static Control? ResolveOwningDropDown(Control source)
+    {
+        if (source is Visual visual)
+        {
+            if (visual.FindAncestorOfType<ComboBox>() is { } comboBox)
+            {
+                return comboBox;
+            }
+
+            if (visual.FindAncestorOfType<CheckComboBox>() is { } checkComboBox)
+            {
+                return checkComboBox;
+            }
+        }
+
+        return null;
+    }
+
+    private static void ReopenOwningDropDown(Control? owner)
+    {
+        switch (owner)
+        {
+            case ComboBox comboBox:
+                comboBox.IsDropDownOpen = true;
+                break;
+            case CheckComboBox checkComboBox:
+                checkComboBox.IsDropDownOpen = true;
+                break;
+        }
     }
 
     private FilePickerFileType CreateJsonFileType() => new(T("Settings.ConfigurationManager.FileType.Json"))

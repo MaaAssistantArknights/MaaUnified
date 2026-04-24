@@ -10,6 +10,8 @@
         CanResize="True"
         Background="Transparent"
         SystemDecorations="None"
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaChromeHints="NoChrome"
         WindowStartupLocation="CenterOwner">
   <controls:AppWindowFrame x:Name="DialogShell"
                            Mode="ResizableDialog"
@@ -30,25 +32,38 @@
                         Spacing="10"
                         VerticalAlignment="Center">
               <Border Classes="app-surface app-card achievement-dialog-filter-strip">
-                <StackPanel Orientation="Horizontal"
-                            Spacing="6">
-                  <Button x:Name="FilterAllButton"
-                          Classes="app-button app-chip achievement-dialog-filter-chip"
-                          Tag="All"
-                          Click="OnFilterChipClick" />
-                  <Button x:Name="FilterUnlockedButton"
-                          Classes="app-button app-chip achievement-dialog-filter-chip"
-                          Tag="Unlocked"
-                          Click="OnFilterChipClick" />
-                  <Button x:Name="FilterInProgressButton"
-                          Classes="app-button app-chip achievement-dialog-filter-chip"
-                          Tag="InProgress"
-                          Click="OnFilterChipClick" />
-                  <Button x:Name="FilterNewButton"
-                          Classes="app-button app-chip achievement-dialog-filter-chip"
-                          Tag="NewUnlock"
-                          Click="OnFilterChipClick" />
-                </StackPanel>
+                <Grid x:Name="FilterStripTrack">
+                  <Border x:Name="FilterSelectionSlider"
+                          Classes="achievement-dialog-filter-selection-slider"
+                          HorizontalAlignment="Left"
+                          VerticalAlignment="Center"
+                          IsHitTestVisible="False"
+                          IsVisible="False">
+                    <Border.RenderTransform>
+                      <TranslateTransform X="0" />
+                    </Border.RenderTransform>
+                  </Border>
+                  <StackPanel x:Name="FilterChipPanel"
+                              Orientation="Horizontal"
+                              Spacing="6">
+                    <Button x:Name="FilterAllButton"
+                            Classes="app-button app-chip achievement-dialog-filter-chip"
+                            Tag="All"
+                            Click="OnFilterChipClick" />
+                    <Button x:Name="FilterUnlockedButton"
+                            Classes="app-button app-chip achievement-dialog-filter-chip"
+                            Tag="Unlocked"
+                            Click="OnFilterChipClick" />
+                    <Button x:Name="FilterInProgressButton"
+                            Classes="app-button app-chip achievement-dialog-filter-chip"
+                            Tag="InProgress"
+                            Click="OnFilterChipClick" />
+                    <Button x:Name="FilterNewButton"
+                            Classes="app-button app-chip achievement-dialog-filter-chip"
+                            Tag="NewUnlock"
+                            Click="OnFilterChipClick" />
+                  </StackPanel>
+                </Grid>
               </Border>
               <TextBlock x:Name="ResultCountText"
                          VerticalAlignment="Center"

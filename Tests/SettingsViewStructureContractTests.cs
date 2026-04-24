@@ -30,7 +30,11 @@ public sealed class SettingsViewStructureContractTests
         foreach (var relative in files)
         {
             var text = File.ReadAllText(Path.Combine(root, relative.Replace('/', Path.DirectorySeparatorChar)));
-            Assert.Contains("settings-form", text, StringComparison.Ordinal);
+            Assert.True(
+                text.Contains("settings-form", StringComparison.Ordinal)
+                || text.Contains("settings-page-flow", StringComparison.Ordinal)
+                || text.Contains("settings-page-two-column", StringComparison.Ordinal),
+                $"{relative} should use a shared settings layout class.");
         }
     }
 
@@ -65,7 +69,7 @@ public sealed class SettingsViewStructureContractTests
         Assert.Contains("Text=\"Telegram bot\"", external, StringComparison.Ordinal);
         Assert.Contains("Text=\"Discord WebHook\"", external, StringComparison.Ordinal);
         Assert.Contains("Text=\"SMTP\"", external, StringComparison.Ordinal);
-        Assert.Contains("Text=\"Custom Webhook\"", external, StringComparison.Ordinal);
+        Assert.Contains("ExternalNotificationCustomWebhook", external, StringComparison.Ordinal);
         Assert.DoesNotContain("NotificationProviderParametersText", external, StringComparison.Ordinal);
 
         var issue = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "IssueReportView.axaml"));
@@ -222,6 +226,73 @@ public sealed class SettingsViewStructureContractTests
         Assert.Contains("OnScriptPathDragOver", game, StringComparison.Ordinal);
         Assert.Contains("OnStartsWithScriptDrop", game, StringComparison.Ordinal);
         Assert.Contains("OnEndsWithScriptDrop", game, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SettingsViews_ShouldKeepWpfInspiredLayoutOrder_ForKeySections()
+    {
+        var root = GetMaaUnifiedRoot();
+
+        var configManager = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "ConfigurationManagerView.axaml"));
+        Assert.Contains("OnDeleteProfileEntryClick", configManager, StringComparison.Ordinal);
+        Assert.True(
+            configManager.IndexOf("SelectionChanged=\"OnConfigurationProfileSelectionChanged\"", StringComparison.Ordinal)
+            < configManager.IndexOf("OnCreateProfileClick", StringComparison.Ordinal),
+            "Configuration manager should place profile switching before create/save-as-new.");
+
+        var start = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "StartSettingsView.axaml"));
+        Assert.Contains("Classes=\"settings-page-two-column\"", start, StringComparison.Ordinal);
+        Assert.Contains("ColumnDefinitions=\"*,24,*\"", start, StringComparison.Ordinal);
+
+        var gui = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "GuiSettingsView.axaml"));
+        Assert.Contains("Classes=\"settings-page-two-column\"", gui, StringComparison.Ordinal);
+        Assert.True(
+            gui.IndexOf("RootTexts[Settings.GUI.UseTray]", StringComparison.Ordinal)
+            < gui.IndexOf("RootTexts[Settings.GUI.Language]", StringComparison.Ordinal),
+            "GUI settings should render behavior toggles before selector controls.");
+
+        var background = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "BackgroundSettingsView.axaml"));
+        Assert.DoesNotContain("<WrapPanel", background, StringComparison.Ordinal);
+        Assert.True(
+            background.IndexOf("RootTexts[Settings.Background.ImagePath]", StringComparison.Ordinal)
+            < background.IndexOf("RootTexts[Settings.Background.Opacity]", StringComparison.Ordinal)
+            && background.IndexOf("RootTexts[Settings.Background.Opacity]", StringComparison.Ordinal)
+            < background.IndexOf("RootTexts[Settings.Background.BlurRadius]", StringComparison.Ordinal)
+            && background.IndexOf("RootTexts[Settings.Background.BlurRadius]", StringComparison.Ordinal)
+            < background.IndexOf("RootTexts[Settings.Background.StretchMode]", StringComparison.Ordinal),
+            "Background settings should follow the WPF-inspired top-down order.");
+
+        var hotkey = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "HotKeySettingsView.axaml"));
+        Assert.Contains("Settings.Action.RegisterHotkeys", hotkey, StringComparison.Ordinal);
+        Assert.True(
+            hotkey.IndexOf("ShowGuiHotkeyState.Title", StringComparison.Ordinal)
+            < hotkey.IndexOf("LinkStartHotkeyState.Title", StringComparison.Ordinal),
+            "Hotkey settings should keep Show GUI before Link Start.");
+
+        var remote = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "RemoteControlSettingsView.axaml"));
+        Assert.Contains("ColumnDefinitions=\"Auto,*,Auto\"", remote, StringComparison.Ordinal);
+        Assert.True(
+            remote.IndexOf("Settings.RemoteControl.GetTaskEndpoint", StringComparison.Ordinal)
+            < remote.IndexOf("Settings.RemoteControl.ReportTaskEndpoint", StringComparison.Ordinal)
+            && remote.IndexOf("Settings.RemoteControl.ReportTaskEndpoint", StringComparison.Ordinal)
+            < remote.IndexOf("Settings.RemoteControl.PollIntervalMs", StringComparison.Ordinal),
+            "Remote control fields should follow the WPF label-input row order.");
+
+        var issueReport = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "IssueReportView.axaml"));
+        Assert.Contains("ColumnDefinitions=\"*,24,*\"", issueReport, StringComparison.Ordinal);
+        Assert.True(
+            issueReport.IndexOf("Settings.IssueReport.Faq", StringComparison.Ordinal)
+            < issueReport.IndexOf("Settings.IssueReport.IssueEntry", StringComparison.Ordinal)
+            && issueReport.IndexOf("Settings.Action.BuildIssueReport", StringComparison.Ordinal)
+            < issueReport.IndexOf("Settings.IssueReport.OpenRuntimeLogWindow", StringComparison.Ordinal),
+            "Issue report actions should keep the WPF-inspired left/right action order.");
+
+        var versionUpdate = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "VersionUpdateSettingsView.axaml"));
+        Assert.Contains("ColumnDefinitions=\"300,24,*\"", versionUpdate, StringComparison.Ordinal);
+        Assert.True(
+            versionUpdate.IndexOf("Settings.VersionUpdate.SoftwareUpdate", StringComparison.Ordinal)
+            < versionUpdate.IndexOf("Settings.VersionUpdate.ResourceUpdate", StringComparison.Ordinal),
+            "Version update actions should keep software update before resource update.");
     }
 
     [Fact]

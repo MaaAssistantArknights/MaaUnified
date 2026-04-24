@@ -2,11 +2,14 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Data;
 using Avalonia.Interactivity;
+using Avalonia.VisualTree;
 
 namespace MAAUnified.App.Controls;
 
 public partial class VerticalSpinNumberBox : UserControl
 {
+    private bool _settingsSpinClassAppliedByContext;
+
     public static readonly StyledProperty<int> MinimumProperty =
         AvaloniaProperty.Register<VerticalSpinNumberBox, int>(nameof(Minimum), 0);
 
@@ -37,6 +40,23 @@ public partial class VerticalSpinNumberBox : UserControl
         InitializeComponent();
         AddHandler(GotFocusEvent, OnFocusChanged, RoutingStrategies.Bubble);
         AddHandler(LostFocusEvent, OnFocusChanged, RoutingStrategies.Bubble);
+    }
+
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        UpdateSettingsSpinVariantFromContext();
+    }
+
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        if (_settingsSpinClassAppliedByContext)
+        {
+            Classes.Remove("settings-spin");
+            _settingsSpinClassAppliedByContext = false;
+        }
+
+        base.OnDetachedFromVisualTree(e);
     }
 
     public int Minimum
@@ -88,6 +108,32 @@ public partial class VerticalSpinNumberBox : UserControl
     {
         PseudoClasses.Set(":focused", IsKeyboardFocusWithin);
         SpinRootBorder.Classes.Set("focused", IsKeyboardFocusWithin);
+    }
+
+    private void UpdateSettingsSpinVariantFromContext()
+    {
+        if (Classes.Contains("settings-spin"))
+        {
+            _settingsSpinClassAppliedByContext = false;
+            return;
+        }
+
+        var shouldUseSettingsSpin = IsInsideSettingsPage();
+        Classes.Set("settings-spin", shouldUseSettingsSpin);
+        _settingsSpinClassAppliedByContext = shouldUseSettingsSpin;
+    }
+
+    private bool IsInsideSettingsPage()
+    {
+        for (var ancestor = this.GetVisualParent(); ancestor is not null; ancestor = ancestor.GetVisualParent())
+        {
+            if (ancestor is StyledElement styledElement && styledElement.Classes.Contains("settings-page"))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private void Step(int direction)

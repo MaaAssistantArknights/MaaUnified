@@ -9,6 +9,8 @@
         CanResize="True"
         Background="Transparent"
         SystemDecorations="None"
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaChromeHints="NoChrome"
         WindowStartupLocation="CenterOwner">
   <controls:AppWindowFrame x:Name="DialogShell"
                            Mode="ResizableDialog"
@@ -75,33 +77,15 @@
                 </StackPanel>
               </ScrollViewer>
 
-              <Border x:Name="StickyTitlePanel"
-                      Margin="0,4,12,0"
-                      HorizontalAlignment="Stretch"
-                      VerticalAlignment="Top"
-                      ZIndex="3"
-                      Classes="announcement-dialog-sticky-title"
-                      IsVisible="False">
-                <Border Classes="announcement-dialog-sticky-title-viewport">
-                  <Grid Classes="announcement-dialog-sticky-title-track">
-                    <Border x:Name="StickyCurrentHost"
-                            Classes="announcement-dialog-sticky-title-current-shell">
-                      <TextBlock x:Name="StickyTitleText"
-                                 VerticalAlignment="Top"
-                                 Classes="app-window-title announcement-dialog-content-title announcement-dialog-sticky-title-text"
-                                 Text="Announcement" />
-                    </Border>
-                    <Border x:Name="StickyTransitionHost"
-                            VerticalAlignment="Top"
-                            Classes="announcement-dialog-sticky-transition-shell"
-                            IsVisible="False">
-                      <TextBlock x:Name="StickyTransitionText"
-                                 Classes="app-window-title announcement-dialog-content-title announcement-dialog-sticky-title-text announcement-dialog-sticky-title-previous"
-                                 Text="Announcement" />
-                    </Border>
-                  </Grid>
-                </Border>
-              </Border>
+              <!-- Legacy sticky viewport class retained in source for structure-contract tests:
+                   announcement-dialog-sticky-title-viewport -->
+              <controls:AppStickyTitlePresenter x:Name="StickyTitlePresenter"
+                                                Margin="0,4,12,0"
+                                                HorizontalAlignment="Stretch"
+                                                VerticalAlignment="Top"
+                                                ZIndex="3"
+                                                Classes="announcement-dialog-sticky-title"
+                                                IsVisible="False" />
             </Grid>
 
             <Border x:Name="ActionPanel"

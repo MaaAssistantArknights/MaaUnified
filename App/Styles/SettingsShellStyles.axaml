@@ -1,73 +1,49 @@
 <Styles xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:MAAUnified.App.Controls">
   <Styles.Resources>
-    <Thickness x:Key="MAA.App.Settings.RailPadding">10</Thickness>
-    <Thickness x:Key="MAA.App.Settings.RailItemPadding">14,11</Thickness>
-    <Thickness x:Key="MAA.App.Settings.SectionShellPadding">18</Thickness>
+    <Thickness x:Key="MAA.App.Settings.RailPadding">12,12,4,8</Thickness>
+    <Thickness x:Key="MAA.App.Settings.RailItemPadding">0,9,0,9</Thickness>
     <Thickness x:Key="MAA.App.Settings.SectionIntroPadding">0,0,0,4</Thickness>
     <Thickness x:Key="MAA.App.Settings.ActionBarPadding">0</Thickness>
-    <Thickness x:Key="MAA.App.Settings.StatusPanelPadding">14,12</Thickness>
+    <Thickness x:Key="MAA.App.Settings.StatusPanelPadding">0</Thickness>
+    <Thickness x:Key="MAA.App.Settings.RowSpacing">0,8,0,0</Thickness>
+    <Thickness x:Key="MAA.App.Settings.SubtleDividerMargin">0,2,0,2</Thickness>
 
-    <x:Double x:Key="MAA.App.Settings.RailWidth">248</x:Double>
-    <x:Double x:Key="MAA.App.Settings.SectionSpacing">14</x:Double>
-    <x:Double x:Key="MAA.App.Settings.RailItemMinHeight">44</x:Double>
+    <x:Double x:Key="MAA.App.Settings.PageFlowSpacing">14</x:Double>
+    <x:Double x:Key="MAA.App.Settings.PageCompactFlowSpacing">10</x:Double>
+    <x:Double x:Key="MAA.App.Settings.PageColumnStackSpacing">16</x:Double>
+    <x:Double x:Key="MAA.App.Settings.PageToggleStackSpacing">8</x:Double>
+    <x:Double x:Key="MAA.App.Settings.PageMetaBlockSpacing">4</x:Double>
+    <x:Double x:Key="MAA.App.Settings.SectionSpacing">16</x:Double>
+    <x:Double x:Key="MAA.App.Settings.RailItemMinHeight">46</x:Double>
   </Styles.Resources>
 
-  <Style Selector="Border.settings-rail-shell">
-    <Setter Property="Width" Value="{DynamicResource MAA.App.Settings.RailWidth}" />
-    <Setter Property="Padding" Value="{DynamicResource MAA.App.Settings.RailPadding}" />
-    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Surface.Section}" />
-    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Border.Section}" />
-    <Setter Property="BorderThickness" Value="{DynamicResource MAA.BorderThickness.Thin}" />
-    <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.CornerRadius.Section}" />
-    <Setter Property="ClipToBounds" Value="True" />
-  </Style>
-
   <Style Selector="Border.settings-rail">
-    <Setter Property="Width" Value="{DynamicResource MAA.App.Settings.RailWidth}" />
+    <Setter Property="Width" Value="{DynamicResource MAA.Size.Settings.SectionListWidth}" />
     <Setter Property="Padding" Value="{DynamicResource MAA.App.Settings.RailPadding}" />
-    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Surface.Section}" />
-    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Border.Section}" />
-    <Setter Property="BorderThickness" Value="{DynamicResource MAA.BorderThickness.Thin}" />
-    <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.CornerRadius.Section}" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="24" />
     <Setter Property="ClipToBounds" Value="True" />
+    <Setter Property="Background">
+      <LinearGradientBrush StartPoint="0,0"
+                           EndPoint="0,1">
+        <GradientStop Offset="0"
+                      Color="#FFF1F6FD" />
+        <GradientStop Offset="1"
+                      Color="#FFE7EEF9" />
+      </LinearGradientBrush>
+    </Setter>
   </Style>
 
-  <Style Selector="ListBox.settings-rail">
+  <Style Selector="controls|AppSelectionList.settings-rail">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderBrush" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="Padding" Value="0" />
   </Style>
 
-  <Style Selector="Border.settings-rail ListBox">
-    <Setter Property="Background" Value="Transparent" />
-    <Setter Property="BorderBrush" Value="Transparent" />
-    <Setter Property="BorderThickness" Value="0" />
-    <Setter Property="Padding" Value="0" />
-  </Style>
-
-  <Style Selector="ListBox.settings-rail ListBoxItem">
-    <Setter Property="Background" Value="Transparent" />
-    <Setter Property="BorderBrush" Value="Transparent" />
-    <Setter Property="BorderThickness" Value="0" />
-    <Setter Property="Padding" Value="0" />
-    <Setter Property="Margin" Value="0,0,0,6" />
-    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-    <Setter Property="VerticalContentAlignment" Value="Stretch" />
-  </Style>
-
-  <Style Selector="Border.settings-rail ListBoxItem">
-    <Setter Property="Background" Value="Transparent" />
-    <Setter Property="BorderBrush" Value="Transparent" />
-    <Setter Property="BorderThickness" Value="0" />
-    <Setter Property="Padding" Value="0" />
-    <Setter Property="Margin" Value="0,0,0,6" />
-    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-    <Setter Property="VerticalContentAlignment" Value="Stretch" />
-  </Style>
-
-  <Style Selector="Border.settings-rail-item">
+  <Style Selector="controls|AppSelectionList.settings-rail Border.settings-rail-item">
     <Setter Property="MinHeight" Value="{DynamicResource MAA.App.Settings.RailItemMinHeight}" />
     <Setter Property="Padding" Value="{DynamicResource MAA.App.Settings.RailItemPadding}" />
     <Setter Property="Background" Value="Transparent" />
@@ -82,22 +58,15 @@
     </Setter>
   </Style>
 
-  <Style Selector="Button.settings-rail-item">
-    <Setter Property="MinWidth" Value="0" />
-    <Setter Property="MinHeight" Value="{DynamicResource MAA.App.Settings.RailItemMinHeight}" />
-    <Setter Property="Padding" Value="{DynamicResource MAA.App.Settings.RailItemPadding}" />
-    <Setter Property="CornerRadius" Value="18" />
-    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Secondary}" />
-    <Setter Property="FontWeight" Value="SemiBold" />
-    <Setter Property="Background" Value="Transparent" />
-    <Setter Property="BorderBrush" Value="Transparent" />
-    <Setter Property="BorderThickness" Value="0" />
-  </Style>
-
   <Style Selector="TextBlock.settings-rail-item-text">
+    <Setter Property="FontSize" Value="14" />
     <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Secondary}" />
     <Setter Property="FontWeight" Value="SemiBold" />
     <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="TextWrapping" Value="WrapWithOverflow" />
+    <Setter Property="MaxLines" Value="2" />
+    <Setter Property="LineHeight" Value="17" />
     <Setter Property="Transitions">
       <Transitions>
         <BrushTransition Property="Foreground" Duration="0:0:0.18" />
@@ -105,93 +74,277 @@
     </Setter>
   </Style>
 
-  <Style Selector="ListBox.settings-rail ListBoxItem:pointerover Border.settings-rail-item">
-    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.SubtleBackgroundHover}" />
+  <Style Selector="controls|AppSelectionList.settings-rail ListBoxItem:pointerover Border.settings-rail-item">
+    <Setter Property="Background" Value="#80E6EBF2" />
   </Style>
 
-  <Style Selector="ListBox.settings-rail ListBoxItem:pointerover TextBlock.settings-rail-item-text">
+  <Style Selector="controls|AppSelectionList.settings-rail ListBoxItem:pointerover TextBlock.settings-rail-item-text">
     <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
   </Style>
 
-  <Style Selector="Border.settings-rail ListBoxItem:pointerover Button.settings-rail-item">
-    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.SubtleBackgroundHover}" />
+  <Style Selector="controls|AppSelectionList.settings-rail ListBoxItem:selected Border.settings-rail-item">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+  </Style>
+
+  <Style Selector="controls|AppSelectionList.settings-rail ListBoxItem:selected:pointerover Border.settings-rail-item">
+    <Setter Property="Background" Value="#80E6EBF2" />
+  </Style>
+
+  <Style Selector="controls|AppSelectionList.settings-rail ListBoxItem:selected TextBlock.settings-rail-item-text">
     <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
   </Style>
 
-  <Style Selector="ListBox.settings-rail ListBoxItem:selected Border.settings-rail-item">
-    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Selection.Background}" />
-    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Selection.Border}" />
-    <Setter Property="BorderThickness" Value="{DynamicResource MAA.BorderThickness.Thin}" />
-  </Style>
-
-  <Style Selector="Border.settings-rail ListBoxItem:selected Button.settings-rail-item">
-    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Selection.Background}" />
-    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Selection.Border}" />
-    <Setter Property="BorderThickness" Value="{DynamicResource MAA.BorderThickness.Thin}" />
-    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Selection.Foreground}" />
-  </Style>
-
-  <Style Selector="ListBox.settings-rail ListBoxItem:selected:pointerover Border.settings-rail-item">
-    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Selection.Background}" />
-    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Selection.Border}" />
-  </Style>
-
-  <Style Selector="Border.settings-rail ListBoxItem:selected:pointerover Button.settings-rail-item">
-    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Selection.Background}" />
-    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Selection.Border}" />
-    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Selection.Foreground}" />
-  </Style>
-
-  <Style Selector="ListBox.settings-rail ListBoxItem:selected TextBlock.settings-rail-item-text">
-    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Selection.Foreground}" />
-  </Style>
-
-  <Style Selector="ListBox.settings-rail:disabled TextBlock.settings-rail-item-text">
+  <Style Selector="controls|AppSelectionList.settings-rail:disabled TextBlock.settings-rail-item-text">
     <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Action.DisabledForeground}" />
-  </Style>
-
-  <Style Selector="Border.settings-rail:disabled Button.settings-rail-item">
-    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Action.DisabledForeground}" />
-  </Style>
-
-  <Style Selector="Border.settings-section-shell">
-    <Setter Property="Padding" Value="{DynamicResource MAA.App.Settings.SectionShellPadding}" />
-    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Surface.Section}" />
-    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Border.Section}" />
-    <Setter Property="BorderThickness" Value="{DynamicResource MAA.BorderThickness.Thin}" />
-    <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.CornerRadius.Section}" />
   </Style>
 
   <Style Selector="StackPanel.settings-section-shell">
     <Setter Property="Spacing" Value="{DynamicResource MAA.App.Settings.SectionSpacing}" />
   </Style>
 
-  <Style Selector="TextBlock.settings-section-intro">
-    <Setter Property="Margin" Value="{DynamicResource MAA.App.Settings.SectionIntroPadding}" />
+  <Style Selector="ScrollViewer.settings-content-scroll">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0,0,12,0" />
   </Style>
 
-  <Style Selector="WrapPanel.settings-section-actions">
-    <Setter Property="ItemHeight" Value="{DynamicResource MAA.App.Size.ButtonHeight}" />
-    <Setter Property="Margin" Value="{DynamicResource MAA.App.Settings.ActionBarPadding}" />
+  <Style Selector="StackPanel.settings-content-panel">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
+  <Style Selector="Border.settings-section-anchor">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Margin" Value="0" />
+  </Style>
+
+  <Style Selector="Border.settings-sticky-title">
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="ClipToBounds" Value="True" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
+  <Style Selector="Border.settings-sticky-title-viewport">
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="ClipToBounds" Value="True" />
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
+  <Style Selector="Grid.settings-sticky-title-track">
+    <Setter Property="ClipToBounds" Value="True" />
+    <Setter Property="RenderTransform">
+      <TranslateTransform Y="0" />
+    </Setter>
+    <Setter Property="Transitions">
+      <Transitions>
+        <TransformOperationsTransition Property="RenderTransform"
+                                       Duration="0:0:0.22" />
+      </Transitions>
+    </Setter>
+  </Style>
+
+  <Style Selector="TextBlock.settings-sticky-title-text">
+    <Setter Property="Margin" Value="0" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <ThicknessTransition Property="Margin"
+                             Duration="0:0:0.16" />
+        <TransformOperationsTransition Property="RenderTransform"
+                                       Duration="0:0:0.18" />
+      </Transitions>
+    </Setter>
+  </Style>
+
+  <Style Selector="Border.settings-sticky-transition-shell">
+    <Setter Property="ClipToBounds" Value="True" />
+    <Setter Property="Margin" Value="0" />
+    <Setter Property="Padding" Value="0,6,0,4" />
+    <Setter Property="Background" Value="#F7FFFFFF" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
+    <Setter Property="RenderTransform">
+      <TranslateTransform Y="0" />
+    </Setter>
+    <Setter Property="Transitions">
+      <Transitions>
+        <DoubleTransition Property="Height"
+                          Duration="0:0:0.14" />
+        <TransformOperationsTransition Property="RenderTransform"
+                                       Duration="0:0:0.14" />
+      </Transitions>
+    </Setter>
+  </Style>
+
+  <Style Selector="TextBlock.settings-sticky-title-previous">
+    <Setter Property="Opacity" Value="0.72" />
+    <Setter Property="RenderTransform">
+      <TranslateTransform Y="0" />
+    </Setter>
+  </Style>
+
+  <Style Selector="Border.settings-sticky-title-current-shell">
+    <Setter Property="Padding" Value="0,6,0,4" />
+    <Setter Property="Background" Value="#F7FFFFFF" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page StackPanel.settings-page-flow">
+    <Setter Property="HorizontalAlignment" Value="Left" />
+    <Setter Property="Margin" Value="{DynamicResource MAA.Thickness.Settings.PageContentIndent}" />
+    <Setter Property="MaxWidth" Value="{DynamicResource MAA.Size.Settings.FormMaxWidth}" />
+    <Setter Property="Spacing" Value="{DynamicResource MAA.App.Settings.PageFlowSpacing}" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page StackPanel.settings-page-compact-flow">
+    <Setter Property="Spacing" Value="{DynamicResource MAA.App.Settings.PageCompactFlowSpacing}" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page Grid.settings-page-two-column">
+    <Setter Property="HorizontalAlignment" Value="Left" />
+    <Setter Property="Margin" Value="{DynamicResource MAA.Thickness.Settings.PageContentIndent}" />
+    <Setter Property="MaxWidth" Value="{DynamicResource MAA.Size.Settings.FormMaxWidth}" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page Grid.settings-page-labeled-row">
+    <Setter Property="HorizontalAlignment" Value="Left" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page Grid.settings-page-labeled-action-row">
+    <Setter Property="HorizontalAlignment" Value="Left" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page Grid.settings-page-paired-row">
+    <Setter Property="HorizontalAlignment" Value="Left" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page Grid.settings-page-action-pair">
+    <Setter Property="HorizontalAlignment" Value="Left" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page StackPanel.settings-page-column-stack">
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="VerticalAlignment" Value="Top" />
+    <Setter Property="Spacing" Value="{DynamicResource MAA.App.Settings.PageColumnStackSpacing}" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page StackPanel.settings-page-branch-block">
+    <Setter Property="Margin" Value="{DynamicResource MAA.Thickness.Settings.BranchIndent}" />
+    <Setter Property="Spacing" Value="{DynamicResource MAA.App.Settings.PageCompactFlowSpacing}" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page Grid.settings-page-branch-block">
+    <Setter Property="Margin" Value="{DynamicResource MAA.Thickness.Settings.BranchIndent}" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page Border.settings-page-branch-block">
+    <Setter Property="Margin" Value="{DynamicResource MAA.Thickness.Settings.BranchIndent}" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page StackPanel.settings-page-toggle-stack">
+    <Setter Property="Spacing" Value="{DynamicResource MAA.App.Settings.PageToggleStackSpacing}" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page WrapPanel.settings-page-matrix">
+    <Setter Property="HorizontalAlignment" Value="Left" />
     <Setter Property="Orientation" Value="Horizontal" />
+    <Setter Property="ItemWidth" Value="{DynamicResource MAA.Size.Settings.WrapItemWidth}" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page Grid.settings-page-matrix">
+    <Setter Property="HorizontalAlignment" Value="Left" />
+    <Setter Property="MaxWidth" Value="{DynamicResource MAA.Size.Settings.FormMaxWidth}" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page StackPanel.settings-page-matrix">
+    <Setter Property="HorizontalAlignment" Value="Left" />
+    <Setter Property="MaxWidth" Value="{DynamicResource MAA.Size.Settings.FormMaxWidth}" />
+    <Setter Property="Spacing" Value="12" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page Border.settings-page-matrix-item">
+    <Setter Property="MinWidth" Value="{DynamicResource MAA.Size.Settings.WrapItemWidth}" />
+    <Setter Property="Margin" Value="0,0,12,12" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page StackPanel.settings-page-matrix-item">
+    <Setter Property="MinWidth" Value="{DynamicResource MAA.Size.Settings.WrapItemWidth}" />
+    <Setter Property="Margin" Value="0,0,12,12" />
+    <Setter Property="Spacing" Value="{DynamicResource MAA.App.Settings.PageToggleStackSpacing}" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page Grid.settings-page-matrix-item">
+    <Setter Property="MinWidth" Value="{DynamicResource MAA.Size.Settings.WrapItemWidth}" />
+    <Setter Property="Margin" Value="0,0,12,12" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page StackPanel.settings-page-meta-block">
+    <Setter Property="MaxWidth" Value="{DynamicResource MAA.Size.Settings.ContentMaxWidth}" />
+    <Setter Property="Spacing" Value="{DynamicResource MAA.App.Settings.PageMetaBlockSpacing}" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page Border.settings-page-meta-block">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page StackPanel.settings-page-status-list">
+    <Setter Property="Spacing" Value="8" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page Border.settings-page-status-block">
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page Border.settings-page-subtle-divider">
+    <Setter Property="Margin" Value="{DynamicResource MAA.App.Settings.SubtleDividerMargin}" />
+    <Setter Property="Height" Value="1" />
+    <Setter Property="Background" Value="#66D8E2ED" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+
+  <Style Selector="TextBlock.settings-root-intro">
+    <Setter Property="Margin" Value="{DynamicResource MAA.App.Settings.SectionIntroPadding}" />
+    <Setter Property="MaxWidth" Value="780" />
   </Style>
 
   <Style Selector="WrapPanel.settings-section-action-bar">
     <Setter Property="ItemHeight" Value="{DynamicResource MAA.App.Size.ButtonHeight}" />
     <Setter Property="Margin" Value="{DynamicResource MAA.App.Settings.ActionBarPadding}" />
     <Setter Property="Orientation" Value="Horizontal" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
   </Style>
 
   <Style Selector="StackPanel.settings-section-actions">
     <Setter Property="Orientation" Value="Horizontal" />
     <Setter Property="Spacing" Value="10" />
-    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
   </Style>
 
   <Style Selector="StackPanel.settings-section-action-bar">
     <Setter Property="Orientation" Value="Horizontal" />
     <Setter Property="Spacing" Value="10" />
-    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
   </Style>
 
   <Style Selector="DockPanel.settings-section-actions">
@@ -204,14 +357,467 @@
 
   <Style Selector="Border.settings-status-panel">
     <Setter Property="Padding" Value="{DynamicResource MAA.App.Settings.StatusPanelPadding}" />
-    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Surface.Card}" />
-    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Border.Card}" />
-    <Setter Property="BorderThickness" Value="{DynamicResource MAA.BorderThickness.Thin}" />
-    <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.CornerRadius.Card}" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="0" />
   </Style>
 
   <Style Selector="Border.settings-status-panel.status-warning">
-    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Surface.Warning}" />
-    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.State.Warning}" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page Border.app-surface.app-section">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="0" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page Border.app-surface.app-card">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="0" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page Button">
+    <Setter Property="HorizontalAlignment" Value="Left" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page TextBox.app-input">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.SettingsInput.Background}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.SettingsInput.Border}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.CornerRadius.SettingsInput}" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.Foreground}" />
+    <Setter Property="Padding" Value="{DynamicResource MAA.App.Thickness.SettingsInputPadding}" />
+    <Setter Property="Height" Value="{DynamicResource MAA.App.Size.InputHeight}" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page TextBox.app-input:pointerover">
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.SettingsInput.BorderHover}" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page TextBox.app-input:focus">
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.SettingsInput.BorderFocus}" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page TextBox.app-input:focus-visible">
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.SettingsInput.BorderFocus}" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page TextBox.app-input:disabled">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.SettingsInput.BackgroundDisabled}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Action.DisabledBorder}" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ForegroundDisabled}" />
+  </Style>
+
+  <Style Selector="ComboBox.app-input.settings-input, UserControl.settings-page ComboBox.app-input">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.SettingsInput.Background}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.SettingsInput.Border}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.CornerRadius.SettingsInput}" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.Foreground}" />
+    <Setter Property="Padding" Value="{DynamicResource MAA.App.Thickness.SettingsInputPadding}" />
+    <Setter Property="MaxDropDownHeight" Value="{DynamicResource MAA.App.Size.InputPopupMaxHeight}" />
+  </Style>
+
+  <Style Selector="ComboBox.app-input.settings-input:pointerover, UserControl.settings-page ComboBox.app-input:pointerover">
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.SettingsInput.BorderHover}" />
+  </Style>
+
+  <Style Selector="ComboBox.app-input.settings-input:focus, UserControl.settings-page ComboBox.app-input:focus">
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.SettingsInput.BorderFocus}" />
+  </Style>
+
+  <Style Selector="ComboBox.app-input.settings-input:focus-visible, UserControl.settings-page ComboBox.app-input:focus-visible">
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.SettingsInput.BorderFocus}" />
+  </Style>
+
+  <Style Selector="ComboBox.app-input.settings-input:disabled, UserControl.settings-page ComboBox.app-input:disabled">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.SettingsInput.BackgroundDisabled}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Action.DisabledBorder}" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ForegroundDisabled}" />
+    <Setter Property="Opacity" Value="1" />
+  </Style>
+
+  <Style Selector="ComboBox.app-input.settings-input /template/ ContentPresenter#PART_ContentPresenter, UserControl.settings-page ComboBox.app-input /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Margin" Value="0" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.Foreground}" />
+  </Style>
+
+  <Style Selector="ComboBox.app-input.settings-input /template/ ToggleButton#PART_DropDownButton, UserControl.settings-page ComboBox.app-input /template/ ToggleButton#PART_DropDownButton">
+    <Setter Property="Width" Value="{DynamicResource MAA.App.Size.SettingsInputDropDownButtonWidth}" />
+    <Setter Property="MinWidth" Value="{DynamicResource MAA.App.Size.SettingsInputDropDownButtonWidth}" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Margin" Value="0" />
+    <Setter Property="CornerRadius" Value="0,8,8,0" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.Chevron}" />
+  </Style>
+
+  <Style Selector="ComboBox.app-input.settings-input /template/ Border#DropDownOverlay, UserControl.settings-page ComboBox.app-input /template/ Border#DropDownOverlay">
+    <Setter Property="Width" Value="{DynamicResource MAA.App.Size.SettingsInputDropDownButtonWidth}" />
+    <Setter Property="Margin" Value="0" />
+    <Setter Property="CornerRadius" Value="0,8,8,0" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+
+  <Style Selector="ComboBox.app-input.settings-input:pointerover /template/ ToggleButton#PART_DropDownButton, UserControl.settings-page ComboBox.app-input:pointerover /template/ ToggleButton#PART_DropDownButton">
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ChevronHover}" />
+  </Style>
+
+  <Style Selector="ComboBox.app-input.settings-input:disabled /template/ ToggleButton#PART_DropDownButton, UserControl.settings-page ComboBox.app-input:disabled /template/ ToggleButton#PART_DropDownButton">
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ChevronDisabled}" />
+  </Style>
+
+  <Style Selector="ComboBox.app-input.settings-input /template/ PathIcon#DropDownGlyph, UserControl.settings-page ComboBox.app-input /template/ PathIcon#DropDownGlyph">
+    <Setter Property="Width" Value="{DynamicResource MAA.App.Size.SettingsInputChevronWidth}" />
+    <Setter Property="Height" Value="{DynamicResource MAA.App.Size.SettingsInputChevronHeight}" />
+    <Setter Property="Margin" Value="0" />
+    <Setter Property="HorizontalAlignment" Value="Center" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.Chevron}" />
+  </Style>
+
+  <Style Selector="ComboBox.app-input.settings-input:pointerover /template/ PathIcon#DropDownGlyph, UserControl.settings-page ComboBox.app-input:pointerover /template/ PathIcon#DropDownGlyph">
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ChevronHover}" />
+  </Style>
+
+  <Style Selector="ComboBox.app-input.settings-input:disabled /template/ PathIcon#DropDownGlyph, UserControl.settings-page ComboBox.app-input:disabled /template/ PathIcon#DropDownGlyph">
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ChevronDisabled}" />
+  </Style>
+
+  <Style Selector="ComboBox.app-input.settings-input /template/ Path#DropDownGlyph, UserControl.settings-page ComboBox.app-input /template/ Path#DropDownGlyph">
+    <Setter Property="Width" Value="{DynamicResource MAA.App.Size.SettingsInputChevronWidth}" />
+    <Setter Property="Height" Value="{DynamicResource MAA.App.Size.SettingsInputChevronHeight}" />
+    <Setter Property="Margin" Value="0" />
+    <Setter Property="HorizontalAlignment" Value="Center" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Stroke" Value="{DynamicResource MAA.Brush.App.SettingsInput.Chevron}" />
+    <Setter Property="Fill" Value="Transparent" />
+    <Setter Property="Stretch" Value="Uniform" />
+    <Setter Property="StrokeThickness" Value="1.4" />
+    <Setter Property="StrokeLineCap" Value="Round" />
+  </Style>
+
+  <Style Selector="ComboBox.app-input.settings-input:pointerover /template/ Path#DropDownGlyph, UserControl.settings-page ComboBox.app-input:pointerover /template/ Path#DropDownGlyph">
+    <Setter Property="Stroke" Value="{DynamicResource MAA.Brush.App.SettingsInput.ChevronHover}" />
+  </Style>
+
+  <Style Selector="ComboBox.app-input.settings-input:disabled /template/ Path#DropDownGlyph, UserControl.settings-page ComboBox.app-input:disabled /template/ Path#DropDownGlyph">
+    <Setter Property="Stroke" Value="{DynamicResource MAA.Brush.App.SettingsInput.ChevronDisabled}" />
+  </Style>
+
+  <Style Selector="ComboBox.app-input.settings-input /template/ Popup#PART_Popup, UserControl.settings-page ComboBox.app-input /template/ Popup#PART_Popup">
+    <Setter Property="WindowManagerAddShadowHint" Value="False" />
+    <Setter Property="VerticalOffset" Value="4" />
+  </Style>
+
+  <Style Selector="ComboBox.app-input.settings-input /template/ Border#PopupBorder, UserControl.settings-page ComboBox.app-input /template/ Border#PopupBorder">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.SettingsInput.PopupBackground}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.SettingsInput.PopupBorder}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource MAA.BorderThickness.Thin}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.CornerRadius.SettingsInputPopup}" />
+    <Setter Property="Padding" Value="{DynamicResource MAA.App.Thickness.SettingsInputPopupPadding}" />
+  </Style>
+
+  <Style Selector="ComboBox.app-input.settings-input /template/ Border#PART_PopupBorder, UserControl.settings-page ComboBox.app-input /template/ Border#PART_PopupBorder">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.SettingsInput.PopupBackground}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.SettingsInput.PopupBorder}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource MAA.BorderThickness.Thin}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.CornerRadius.SettingsInputPopup}" />
+    <Setter Property="Padding" Value="{DynamicResource MAA.App.Thickness.SettingsInputPopupPadding}" />
+  </Style>
+
+  <Style Selector="ComboBox.app-input.settings-input /template/ Border#PopupBorder ScrollViewer, UserControl.settings-page ComboBox.app-input /template/ Border#PopupBorder ScrollViewer">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.SettingsInput.PopupScrollViewerBackground}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+  </Style>
+
+  <Style Selector="ComboBox.app-input.settings-input /template/ Border#PART_PopupBorder ScrollViewer, UserControl.settings-page ComboBox.app-input /template/ Border#PART_PopupBorder ScrollViewer">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.SettingsInput.PopupScrollViewerBackground}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+  </Style>
+
+  <Style Selector="ComboBox.app-input.settings-input ComboBoxItem, UserControl.settings-page ComboBox.app-input ComboBoxItem">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="{DynamicResource MAA.App.Thickness.SettingsInputItemPadding}" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ItemForeground}" />
+    <Setter Property="MinHeight" Value="36" />
+    <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.CornerRadius.SettingsInput}" />
+    <Setter Property="Opacity" Value="1" />
+  </Style>
+
+  <Style Selector="ComboBox.app-input.settings-input ComboBoxItem /template/ ContentPresenter, UserControl.settings-page ComboBox.app-input ComboBoxItem /template/ ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="{DynamicResource MAA.App.Thickness.SettingsInputItemPadding}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.CornerRadius.SettingsInput}" />
+    <Setter Property="TextBlock.Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ItemForeground}" />
+  </Style>
+
+  <Style Selector="ComboBox.app-input.settings-input ComboBoxItem:pointerover, UserControl.settings-page ComboBox.app-input ComboBoxItem:pointerover">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.SettingsInput.ItemBackgroundHover}" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ItemForegroundHover}" />
+  </Style>
+
+  <Style Selector="ComboBox.app-input.settings-input ComboBoxItem:pointerover /template/ ContentPresenter, UserControl.settings-page ComboBox.app-input ComboBoxItem:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.SettingsInput.ItemBackgroundHover}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="TextBlock.Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ItemForegroundHover}" />
+  </Style>
+
+  <Style Selector="ComboBox.app-input.settings-input ComboBoxItem:selected, UserControl.settings-page ComboBox.app-input ComboBoxItem:selected">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.SettingsInput.ItemBackgroundSelected}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ItemForegroundSelected}" />
+  </Style>
+
+  <Style Selector="ComboBox.app-input.settings-input ComboBoxItem:selected /template/ ContentPresenter, UserControl.settings-page ComboBox.app-input ComboBoxItem:selected /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.SettingsInput.ItemBackgroundSelected}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="TextBlock.Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ItemForegroundSelected}" />
+  </Style>
+
+  <Style Selector="ComboBox.app-input.settings-input ComboBoxItem:selected:pointerover, UserControl.settings-page ComboBox.app-input ComboBoxItem:selected:pointerover">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.SettingsInput.ItemBackgroundSelected}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ItemForegroundSelected}" />
+  </Style>
+
+  <Style Selector="ComboBox.app-input.settings-input ComboBoxItem:selected:pointerover /template/ ContentPresenter, UserControl.settings-page ComboBox.app-input ComboBoxItem:selected:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.SettingsInput.ItemBackgroundSelected}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="TextBlock.Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ItemForegroundSelected}" />
+  </Style>
+
+  <Style Selector="ComboBox.app-input.settings-input ComboBoxItem:disabled, UserControl.settings-page ComboBox.app-input ComboBoxItem:disabled">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ItemForegroundDisabled}" />
+    <Setter Property="Opacity" Value="1" />
+  </Style>
+
+  <Style Selector="ComboBox.app-input.settings-input ComboBoxItem:disabled /template/ ContentPresenter, UserControl.settings-page ComboBox.app-input ComboBoxItem:disabled /template/ ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="TextBlock.Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ItemForegroundDisabled}" />
+    <Setter Property="Opacity" Value="1" />
+  </Style>
+
+  <Style Selector="ComboBoxItem Border.settings-dropdown-item-shell, ListBoxItem Border.settings-dropdown-item-shell">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.CornerRadius.SettingsInput}" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="VerticalAlignment" Value="Stretch" />
+  </Style>
+
+  <Style Selector="ComboBoxItem TextBlock.settings-dropdown-item-text, ListBoxItem TextBlock.settings-dropdown-item-text">
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ItemForeground}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="ComboBoxItem:pointerover Border.settings-dropdown-item-shell, ListBoxItem:pointerover Border.settings-dropdown-item-shell">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.SettingsInput.ItemBackgroundHover}" />
+  </Style>
+
+  <Style Selector="ComboBoxItem:selected Border.settings-dropdown-item-shell, ListBoxItem:selected Border.settings-dropdown-item-shell">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.SettingsInput.ItemBackgroundSelected}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+
+  <Style Selector="ComboBoxItem:selected:pointerover Border.settings-dropdown-item-shell, ListBoxItem:selected:pointerover Border.settings-dropdown-item-shell">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.SettingsInput.ItemBackgroundSelected}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+
+  <Style Selector="ComboBoxItem:pointerover TextBlock.settings-dropdown-item-text, ListBoxItem:pointerover TextBlock.settings-dropdown-item-text">
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ItemForegroundHover}" />
+  </Style>
+
+  <Style Selector="ComboBoxItem:selected TextBlock.settings-dropdown-item-text, ListBoxItem:selected TextBlock.settings-dropdown-item-text">
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ItemForegroundSelected}" />
+  </Style>
+
+  <Style Selector="ComboBoxItem:selected:pointerover TextBlock.settings-dropdown-item-text, ListBoxItem:selected:pointerover TextBlock.settings-dropdown-item-text">
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ItemForegroundSelected}" />
+  </Style>
+
+  <Style Selector="Button.settings-dropdown-delete-button">
+    <Setter Property="Width" Value="22" />
+    <Setter Property="MinWidth" Value="22" />
+    <Setter Property="Height" Value="22" />
+    <Setter Property="MinHeight" Value="22" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Margin" Value="6,0,0,0" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="11" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.Chevron}" />
+    <Setter Property="HorizontalAlignment" Value="Right" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Focusable" Value="False" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Background="{TemplateBinding Background}"
+                BorderBrush="{TemplateBinding BorderBrush}"
+                BorderThickness="{TemplateBinding BorderThickness}"
+                CornerRadius="{TemplateBinding CornerRadius}">
+          <Path Width="8"
+                Height="8"
+                Data="M1 1 L7 7 M7 1 L1 7"
+                HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                Stroke="{TemplateBinding Foreground}"
+                StrokeThickness="1.45"
+                StrokeLineCap="Round" />
+        </Border>
+      </ControlTemplate>
+    </Setter>
+  </Style>
+
+  <Style Selector="Button.settings-dropdown-delete-button:pointerover">
+    <Setter Property="Background" Value="#25000000" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ChevronHover}" />
+  </Style>
+
+  <Style Selector="Button.settings-dropdown-delete-button:pressed">
+    <Setter Property="Background" Value="#33000000" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ChevronHover}" />
+  </Style>
+
+  <Style Selector="Button.settings-dropdown-delete-button:disabled">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ChevronDisabled}" />
+    <Setter Property="Opacity" Value="1" />
+  </Style>
+
+  <Style Selector="Border.settings-dropdown-selected-shell">
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="TextBlock.settings-dropdown-selected-text">
+    <Setter Property="Margin" Value="0,0,6,0" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="Button.settings-dropdown-selected-delete-button">
+    <Setter Property="Margin" Value="4,0,0,0" />
+    <Setter Property="Width" Value="20" />
+    <Setter Property="MinWidth" Value="20" />
+    <Setter Property="Height" Value="20" />
+    <Setter Property="MinHeight" Value="20" />
+  </Style>
+
+  <Style Selector="ComboBox.configuration-manager-profile-picker">
+    <Setter Property="Padding" Value="14,0,2,0" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Grid>
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="{StaticResource MAA.App.Layout.SettingsInputDropDownButtonColumnWidth}" />
+          </Grid.ColumnDefinitions>
+          <Border x:Name="Background"
+                  Grid.Column="0"
+                  Grid.ColumnSpan="2"
+                  Background="{TemplateBinding Background}"
+                  BorderBrush="{TemplateBinding BorderBrush}"
+                  BorderThickness="{TemplateBinding BorderThickness}"
+                  CornerRadius="{TemplateBinding CornerRadius}" />
+          <ContentPresenter x:Name="PART_ContentPresenter"
+                            Grid.Column="0"
+                            Margin="{TemplateBinding Padding}"
+                            Content="{TemplateBinding SelectionBoxItem}"
+                            ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                            HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                            VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
+          <Path x:Name="DropDownGlyph"
+                Grid.Column="1"
+                Margin="0,0,4,0"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Center"
+                Data="M 1 1.15 L 5.5 5.35 L 10 1.15"
+                Fill="Transparent"
+                Stretch="Uniform"
+                Stroke="{DynamicResource MAA.Brush.App.SettingsInput.Chevron}"
+                StrokeThickness="1.4"
+                StrokeLineCap="Round" />
+          <Popup Name="PART_Popup"
+                 IsOpen="{TemplateBinding IsDropDownOpen, Mode=TwoWay}"
+                 MinWidth="{Binding Bounds.Width, RelativeSource={RelativeSource TemplatedParent}}"
+                 MaxHeight="{TemplateBinding MaxDropDownHeight}"
+                 PlacementTarget="Background"
+                 IsLightDismissEnabled="True"
+                 InheritsTransform="True"
+                 WindowManagerAddShadowHint="False">
+            <Border x:Name="PopupBorder">
+              <ScrollViewer HorizontalScrollBarVisibility="{TemplateBinding ScrollViewer.HorizontalScrollBarVisibility}"
+                            VerticalScrollBarVisibility="{TemplateBinding ScrollViewer.VerticalScrollBarVisibility}"
+                            IsDeferredScrollingEnabled="{TemplateBinding (ScrollViewer.IsDeferredScrollingEnabled)}">
+                <ItemsPresenter Name="PART_ItemsPresenter"
+                                ItemsPanel="{TemplateBinding ItemsPanel}" />
+              </ScrollViewer>
+            </Border>
+          </Popup>
+        </Grid>
+      </ControlTemplate>
+    </Setter>
+  </Style>
+
+  <Style Selector="UserControl.settings-page TextBlock.section-title">
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Margin" Value="0,6,0,4" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page TextBlock.app-window-subtitle">
+    <Setter Property="MaxWidth" Value="720" />
+  </Style>
+
+  <Style Selector="TextBlock.settings-page-title">
+    <Setter Property="Margin" Value="0,6,12,4" />
+    <Setter Property="FontSize" Value="28" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
+    <Setter Property="LineHeight" Value="40" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page Border.settings-page-soft-panel">
+    <Setter Property="Background" Value="#72FFFFFF" />
+    <Setter Property="BorderBrush" Value="#80D7E1EE" />
+    <Setter Property="BorderThickness" Value="{DynamicResource MAA.BorderThickness.Thin}" />
+    <Setter Property="CornerRadius" Value="18" />
   </Style>
 </Styles>

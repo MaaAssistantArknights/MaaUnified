@@ -4,6 +4,8 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json.Nodes;
 using Avalonia;
+using Avalonia.Rendering.Composition;
+using Avalonia.Skia;
 using Avalonia.Win32;
 using Avalonia.X11;
 using MAAUnified.Compat.Constants;
@@ -15,6 +17,7 @@ namespace MAAUnified.App;
 
 internal static class Program
 {
+    private const long RecommendedMaxGpuResourceSizeBytes = 256L * 1024L * 1024L;
     private const string StartupScope = "App.Startup";
     private const string StartupNoDisplayCode = "UiStartupNoDisplay";
     private const string StartupUnhandledCode = "UiStartupUnhandled";
@@ -95,6 +98,16 @@ internal static class Program
         var builder = AppBuilder.Configure<App>()
             .UsePlatformDetect()
             .WithInterFont();
+
+        builder = builder.With(new CompositionOptions
+        {
+            UseRegionDirtyRectClipping = true,
+        });
+
+        builder = builder.With(new SkiaOptions
+        {
+            MaxGpuResourceSizeBytes = RecommendedMaxGpuResourceSizeBytes,
+        });
 
         if (global::MAAUnified.Platform.MaaUnifiedBuildFlavor.CapturesVerboseDiagnostics)
         {

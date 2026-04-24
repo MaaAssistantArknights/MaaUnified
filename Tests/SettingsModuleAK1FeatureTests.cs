@@ -529,6 +529,16 @@ public sealed class SettingsModuleAK1FeatureTests
     }
 
     [Fact]
+    public async Task SaveStartPerformanceSettings_WithNoEffectiveChange_ShouldSkipCoreSync()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+
+        await fixture.Shell.SettingsPage.SaveStartPerformanceSettingsAsync();
+
+        Assert.Null(fixture.Bridge.LastAppliedInstanceOptions);
+    }
+
+    [Fact]
     public async Task StartAsync_ShouldApplySavedDeploymentWithPauseBeforeRun()
     {
         await using var fixture = await TestFixture.CreateAsync();

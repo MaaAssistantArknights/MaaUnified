@@ -17,6 +17,8 @@ public sealed class CheckComboBoxSelectionCommittedEventArgs(object? selectedIte
 
 public partial class CheckComboBox : UserControl
 {
+    private const string SettingsInputClassName = "settings-input";
+
     public static readonly StyledProperty<string> HeaderTextProperty =
         AvaloniaProperty.Register<CheckComboBox, string>(nameof(HeaderText), string.Empty);
 
@@ -31,6 +33,9 @@ public partial class CheckComboBox : UserControl
 
     public static readonly StyledProperty<bool> IsEditableProperty =
         AvaloniaProperty.Register<CheckComboBox, bool>(nameof(IsEditable), false);
+
+    public static readonly StyledProperty<bool> UseCompactChevronProperty =
+        AvaloniaProperty.Register<CheckComboBox, bool>(nameof(UseCompactChevron), false);
 
     public static readonly StyledProperty<object?> DropDownContentProperty =
         AvaloniaProperty.Register<CheckComboBox, object?>(nameof(DropDownContent));
@@ -71,9 +76,16 @@ public partial class CheckComboBox : UserControl
         InitializeComponent();
         DropDownPopup.PlacementTarget = ShellBorder;
 
+        AttachedToVisualTree += (_, _) => SyncVariantClasses();
+        DetachedFromVisualTree += (_, _) => SetAutoSettingsInputVariant(false);
+
         this.GetObservable(IsEditableProperty).Subscribe(_ => UpdateVisualState());
         this.GetObservable(ItemsSourceProperty).Subscribe(_ => UpdateVisualState());
-        this.GetObservable(ItemsSourceProperty).Subscribe(_ => SyncSelectedItemFromSelectedValue());
+        this.GetObservable(ItemsSourceProperty).Subscribe(_ =>
+        {
+            SyncSelectedItemFromSelectedValue();
+            SyncSelectedItemFromText();
+        });
         this.GetObservable(IsTreeModeProperty).Subscribe(_ => UpdateVisualState());
         this.GetObservable(IsDropDownOpenProperty).Subscribe(_ => UpdateShellState());
         this.GetObservable(IsEnabledProperty).Subscribe(_ => UpdateShellState());
@@ -84,12 +96,17 @@ public partial class CheckComboBox : UserControl
             UpdateHeaderText();
         });
         this.GetObservable(SelectedValueProperty).Subscribe(_ => SyncSelectedItemFromSelectedValue());
-        this.GetObservable(TextProperty).Subscribe(_ => UpdateHeaderText());
+        this.GetObservable(TextProperty).Subscribe(_ =>
+        {
+            SyncSelectedItemFromText();
+            UpdateHeaderText();
+        });
         this.GetObservable(SelectedValueBindingProperty).Subscribe(_ =>
         {
             SyncSelectedValueFromSelectedItem();
             SyncSelectedItemFromSelectedValue();
         });
+        SyncVariantClasses();
         UpdateVisualState();
     }
 
@@ -119,6 +136,12 @@ public partial class CheckComboBox : UserControl
     {
         get => GetValue(IsEditableProperty);
         set => SetValue(IsEditableProperty, value);
+    }
+
+    public bool UseCompactChevron
+    {
+        get => GetValue(UseCompactChevronProperty);
+        set => SetValue(UseCompactChevronProperty, value);
     }
 
     public object? DropDownContent
@@ -310,7 +333,9 @@ public partial class CheckComboBox : UserControl
     }
 
     private bool _syncingSelectionValue;
+    private bool _syncingTextSelection;
     private bool _isEditorFocused;
+    private bool _autoSettingsInputVariant;
 
     private void SyncSelectedValueFromSelectedItem()
     {
@@ -357,6 +382,62 @@ public partial class CheckComboBox : UserControl
         finally
         {
             _syncingSelectionValue = false;
+        }
+    }
+
+    private void SyncSelectedItemFromText()
+    {
+        if (_syncingSelectionValue || _syncingTextSelection || !IsEditable || ItemsSource is null)
+        {
+            return;
+        }
+
+        var text = Text;
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            if (SelectedItem is null)
+            {
+                return;
+            }
+
+            _syncingTextSelection = true;
+            try
+            {
+                SetCurrentValue(SelectedItemProperty, null);
+            }
+            finally
+            {
+                _syncingTextSelection = false;
+            }
+
+            return;
+        }
+
+        object? matchedItem = null;
+        foreach (var item in EnumerateItems(ItemsSource))
+        {
+            if (!string.Equals(BuildSelectionText(item, includePlaceholder: false), text, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            matchedItem = item;
+            break;
+        }
+
+        if (Equals(SelectedItem, matchedItem))
+        {
+            return;
+        }
+
+        _syncingTextSelection = true;
+        try
+        {
+            SetCurrentValue(SelectedItemProperty, matchedItem);
+        }
+        finally
+        {
+            _syncingTextSelection = false;
         }
     }
 
@@ -432,6 +513,44 @@ public partial class CheckComboBox : UserControl
     {
         ShellBorder.Classes.Set("open", IsDropDownOpen);
         ShellBorder.Classes.Set("focused", _isEditorFocused);
+    }
+
+    private void SyncVariantClasses()
+    {
+        SetAutoSettingsInputVariant(HasSettingsPageAncestor());
+        var useSettingsInputVariant = _autoSettingsInputVariant || Classes.Contains(SettingsInputClassName);
+
+        ShellBorder.Classes.Set(SettingsInputClassName, useSettingsInputVariant);
+        HeaderTextBlock.Classes.Set(SettingsInputClassName, useSettingsInputVariant);
+        EditableTextBox.Classes.Set(SettingsInputClassName, useSettingsInputVariant);
+        DropDownPopup.Classes.Set(SettingsInputClassName, useSettingsInputVariant);
+        DropDownPanelBorder.Classes.Set(SettingsInputClassName, useSettingsInputVariant);
+        ToggleButton.Classes.Set(SettingsInputClassName, useSettingsInputVariant);
+        ToggleIconPath.Classes.Set(SettingsInputClassName, useSettingsInputVariant);
+        TreeModeView.Classes.Set(SettingsInputClassName, useSettingsInputVariant);
+        FlatListBox.Classes.Set(SettingsInputClassName, useSettingsInputVariant);
+        CustomContentPresenter.Classes.Set(SettingsInputClassName, useSettingsInputVariant);
+    }
+
+    private void SetAutoSettingsInputVariant(bool enabled)
+    {
+        _autoSettingsInputVariant = enabled;
+    }
+
+    private bool HasSettingsPageAncestor()
+    {
+        StyledElement? current = this;
+        while (current is not null)
+        {
+            if (current.Classes.Contains("settings-page"))
+            {
+                return true;
+            }
+
+            current = current.Parent as StyledElement;
+        }
+
+        return false;
     }
 
     private void UpdateHeaderText()

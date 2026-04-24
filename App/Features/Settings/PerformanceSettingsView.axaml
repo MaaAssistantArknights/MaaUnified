@@ -1,104 +1,65 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="clr-namespace:MAAUnified.App.ViewModels.Settings"
+             Classes="settings-page"
              x:Class="MAAUnified.App.Features.Settings.PerformanceSettingsView">
   <Grid Margin="4"
         RowDefinitions="Auto,Auto">
-    <Grid ColumnDefinitions="*,Auto">
-      <TextBlock Classes="section-title" Text="{Binding RootTexts[Settings.Section.Performance]}" />
-      <StackPanel Grid.Column="1"
-                  Margin="16,0,0,0"
-                  HorizontalAlignment="Right"
-                  VerticalAlignment="Center"
-                  Spacing="2">
-        <TextBlock HorizontalAlignment="Right"
-                   VerticalAlignment="Center"
-                   Classes="state-warning"
-                   Text="{Binding RootTexts[Settings.State.Saving]}"
-                   IsVisible="{Binding IsStartPerformanceSaveInProgress}" />
-        <TextBlock HorizontalAlignment="Right"
-                   VerticalAlignment="Center"
-                   Classes="state-success"
-                   Text="{Binding RootTexts[Settings.State.Saved]}"
-                   IsVisible="{Binding HasStartPerformanceSaveSucceeded}" />
-      </StackPanel>
-    </Grid>
+    <TextBlock Classes="settings-page-title"
+               Text="{Binding RootTexts[Settings.Section.Performance]}" />
 
     <StackPanel Grid.Row="1"
                 Margin="{DynamicResource MAA.Thickness.Settings.SectionTopMargin}"
-                Classes="settings-form">
-      <Border Classes="app-surface app-section">
-        <StackPanel Spacing="16">
-          <TextBlock Classes="app-body"
-                     FontSize="16"
-                     FontWeight="SemiBold"
-                     Text="{Binding RootTexts[Settings.Performance.Gpu.Select]}" />
+                Classes="settings-page-flow">
+      <Grid Classes="settings-page-labeled-row"
+            ColumnDefinitions="132,*">
+        <TextBlock Classes="settings-label"
+                   Text="{Binding RootTexts[Settings.Performance.Gpu.Select]}" />
+        <ComboBox Grid.Column="1"
+                  Classes="app-input settings-input"
+                  Width="{DynamicResource MAA.Size.Settings.FieldPathWidth}"
+                  HorizontalAlignment="Left"
+                  ItemsSource="{Binding AvailableGpuOptions}"
+                  SelectedValueBinding="{Binding Descriptor.Id}"
+                  SelectedValue="{Binding SelectedGpuOptionId}"
+                  IsEnabled="{Binding IsGpuSelectionEnabled}">
+          <ComboBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:GpuOptionDisplayItem">
+              <TextBlock Text="{Binding Display}" />
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+      </Grid>
 
-          <Border Classes="app-surface app-card"
-                  Padding="16">
-            <StackPanel Spacing="10">
-              <TextBlock Classes="app-caption"
-                         Text="{Binding RootTexts[Settings.Performance.Gpu.Select]}" />
-              <ComboBox Classes="app-input"
-                        MinWidth="260"
-                        MaxWidth="420"
-                        HorizontalAlignment="Left"
-                        ItemsSource="{Binding AvailableGpuOptions}"
-                        SelectedValueBinding="{Binding Descriptor.Id}"
-                        SelectedValue="{Binding SelectedGpuOptionId}"
-                        IsEnabled="{Binding IsGpuSelectionEnabled}">
-                <ComboBox.ItemTemplate>
-                  <DataTemplate x:DataType="vm:GpuOptionDisplayItem">
-                    <TextBlock Text="{Binding Display}" />
-                  </DataTemplate>
-                </ComboBox.ItemTemplate>
-              </ComboBox>
-            </StackPanel>
-          </Border>
+      <StackPanel Classes="settings-page-branch-block settings-page-compact-flow"
+                  IsVisible="{Binding IsGpuCustomSelectionFieldsVisible}">
+        <Grid Classes="settings-page-labeled-row"
+              ColumnDefinitions="132,*">
+          <TextBlock Classes="settings-label"
+                     Text="{Binding RootTexts[Settings.Performance.Gpu.CustomDescription]}" />
+          <TextBox Grid.Column="1"
+                   Classes="app-input"
+                   Width="{DynamicResource MAA.Size.Settings.FieldPathWidth}"
+                   HorizontalAlignment="Left"
+                   Text="{Binding GpuCustomDescription, UpdateSourceTrigger=LostFocus}"
+                   IsEnabled="{Binding IsGpuSelectionEnabled}" />
+        </Grid>
 
-          <StackPanel Spacing="12"
-                      IsVisible="{Binding IsGpuCustomSelectionFieldsVisible}">
-            <TextBlock Classes="app-body"
-                       FontSize="16"
-                       FontWeight="SemiBold"
-                       Text="{Binding RootTexts[Settings.Performance.Gpu.CustomDescription]}" />
+        <Grid Classes="settings-page-labeled-row"
+              ColumnDefinitions="132,*">
+          <TextBlock Classes="settings-label"
+                     Text="{Binding RootTexts[Settings.Performance.Gpu.CustomInstancePath]}" />
+          <TextBox Grid.Column="1"
+                   Classes="app-input"
+                   Width="{DynamicResource MAA.Size.Settings.FieldPathWidth}"
+                   HorizontalAlignment="Left"
+                   Text="{Binding GpuCustomInstancePath, UpdateSourceTrigger=LostFocus}"
+                   IsEnabled="{Binding IsGpuSelectionEnabled}" />
+        </Grid>
+      </StackPanel>
 
-            <WrapPanel Classes="settings-wrap"
-                       ItemWidth="320">
-              <Border Classes="app-surface app-card"
-                      Padding="16">
-                <StackPanel Spacing="10">
-                  <TextBlock Classes="app-caption"
-                             Text="{Binding RootTexts[Settings.Performance.Gpu.CustomDescription]}" />
-                  <TextBox Classes="app-input"
-                           MinWidth="260"
-                           MaxWidth="420"
-                           HorizontalAlignment="Left"
-                           Text="{Binding GpuCustomDescription, UpdateSourceTrigger=LostFocus}"
-                           IsEnabled="{Binding IsGpuSelectionEnabled}" />
-                </StackPanel>
-              </Border>
-
-              <Border Classes="app-surface app-card"
-                      Padding="16">
-                <StackPanel Spacing="10">
-                  <TextBlock Classes="app-caption"
-                             Text="{Binding RootTexts[Settings.Performance.Gpu.CustomInstancePath]}" />
-                  <TextBox Classes="app-input"
-                           MinWidth="260"
-                           MaxWidth="420"
-                           HorizontalAlignment="Left"
-                           Text="{Binding GpuCustomInstancePath, UpdateSourceTrigger=LostFocus}"
-                           IsEnabled="{Binding IsGpuSelectionEnabled}" />
-                </StackPanel>
-              </Border>
-            </WrapPanel>
-          </StackPanel>
-        </StackPanel>
-      </Border>
-
-      <Border Classes="app-surface app-section">
-        <StackPanel Spacing="8">
+      <Border Classes="settings-page-status-block">
+        <StackPanel Classes="settings-page-status-list">
           <TextBlock Classes="app-body"
                      Text="{Binding GpuSupportMessage}"
                      IsVisible="{Binding HasGpuSupportMessage}" />

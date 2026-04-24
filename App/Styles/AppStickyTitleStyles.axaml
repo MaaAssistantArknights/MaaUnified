@@ -1,0 +1,107 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:MAAUnified.App.Controls">
+  <Style Selector="controls|AppStickyTitlePresenter Border.app-sticky-title-host">
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="ClipToBounds" Value="True" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
+  <Style Selector="controls|AppStickyTitlePresenter Border.app-sticky-title-viewport">
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="ClipToBounds" Value="True" />
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
+  <Style Selector="controls|AppStickyTitlePresenter Grid.app-sticky-title-track">
+    <Setter Property="ClipToBounds" Value="True" />
+  </Style>
+
+  <!-- Sticky title motion is part of the section-navigation contract.
+       Do not remove these transitions unless the presenter interaction is redesigned end-to-end. -->
+  <Style Selector="controls|AppStickyTitlePresenter Border.app-sticky-title-current-shell">
+    <Setter Property="ClipToBounds" Value="True" />
+    <Setter Property="Margin" Value="0" />
+    <Setter Property="RenderTransform">
+      <TranslateTransform Y="0" />
+    </Setter>
+    <Setter Property="Transitions">
+      <Transitions>
+        <TransformOperationsTransition Property="RenderTransform"
+                                       Duration="0:0:0.18" />
+      </Transitions>
+    </Setter>
+  </Style>
+
+  <Style Selector="controls|AppStickyTitlePresenter Border.app-sticky-title-transition-shell">
+    <Setter Property="ClipToBounds" Value="True" />
+    <Setter Property="Margin" Value="0" />
+    <Setter Property="RenderTransform">
+      <TranslateTransform Y="0" />
+    </Setter>
+    <Setter Property="Transitions">
+      <Transitions>
+        <DoubleTransition Property="Height"
+                          Duration="0:0:0.14" />
+        <TransformOperationsTransition Property="RenderTransform"
+                                       Duration="0:0:0.14" />
+      </Transitions>
+    </Setter>
+  </Style>
+
+  <Style Selector="controls|AppStickyTitlePresenter TextBlock.app-sticky-title-text">
+    <Setter Property="Transitions">
+      <Transitions>
+        <ThicknessTransition Property="Margin"
+                             Duration="0:0:0.16" />
+      </Transitions>
+    </Setter>
+  </Style>
+
+  <Style Selector="controls|AppStickyTitlePresenter TextBlock.app-sticky-title-previous">
+    <Setter Property="Opacity" Value="0.72" />
+    <Setter Property="RenderTransform">
+      <TranslateTransform Y="0" />
+    </Setter>
+  </Style>
+
+  <Style Selector="controls|AppStickyTitlePresenter.settings-sticky-title Border.app-sticky-title-current-shell">
+    <Setter Property="Padding" Value="0,6,0,4" />
+    <Setter Property="Background" Value="#F7FFFFFF" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
+  </Style>
+
+  <Style Selector="controls|AppStickyTitlePresenter.settings-sticky-title Border.app-sticky-title-transition-shell">
+    <Setter Property="Padding" Value="0,6,0,4" />
+    <Setter Property="Background" Value="#F7FFFFFF" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
+  </Style>
+
+  <Style Selector="controls|AppStickyTitlePresenter.settings-sticky-title TextBlock.app-sticky-title-text">
+    <Setter Property="Margin" Value="0,6,12,4" />
+    <Setter Property="FontSize" Value="28" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
+    <Setter Property="LineHeight" Value="40" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+  </Style>
+
+  <Style Selector="controls|AppStickyTitlePresenter.announcement-dialog-sticky-title Border.app-sticky-title-current-shell">
+    <Setter Property="Padding" Value="0,6,0,4" />
+    <Setter Property="Background" Value="#F9FFFFFF" />
+  </Style>
+
+  <Style Selector="controls|AppStickyTitlePresenter.announcement-dialog-sticky-title Border.app-sticky-title-transition-shell">
+    <Setter Property="Padding" Value="0,6,0,4" />
+    <Setter Property="Background" Value="#F9FFFFFF" />
+  </Style>
+
+  <Style Selector="controls|AppStickyTitlePresenter.announcement-dialog-sticky-title TextBlock.app-sticky-title-text">
+    <Setter Property="Margin" Value="0,0,12,0" />
+    <Setter Property="FontSize" Value="28" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+  </Style>
+</Styles>

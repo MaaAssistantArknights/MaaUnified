@@ -26,6 +26,15 @@ public sealed class RootViewStructureContractTests
         Assert.Contains("IsVisible=\"{Binding ShowWindowOverlayButton}\"", text, StringComparison.Ordinal);
         Assert.Contains("ToolTip.Tip=\"{Binding TaskQueuePage.OverlayButtonToolTip}\"", text, StringComparison.Ordinal);
         Assert.Contains("Text=\"{Binding TaskQueuePage.OverlayButtonText}\"", text, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"main-shell-floating-overlays\"", text, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"main-shell-update-overlay-card main-shell-floating-card interactive app-surface app-card\"", text, StringComparison.Ordinal);
+        Assert.Contains("Click=\"OnDismissWindowUpdateClick\"", text, StringComparison.Ordinal);
+        Assert.Contains("HasVisibleWindowUpdateInfo", text, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"achievement-toast-host achievement-toast-overlay-host\"", text, StringComparison.Ordinal);
+        Assert.Contains("PointerEntered=\"OnAchievementToastPointerEntered\"", text, StringComparison.Ordinal);
+        Assert.Contains("PointerExited=\"OnAchievementToastPointerExited\"", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("OnAchievementToastClosePointerEntered", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("OnAchievementToastClosePointerExited", text, StringComparison.Ordinal);
         Assert.Contains("<DataTemplate DataType=\"viewModels:RootPageHostViewModel\">", text, StringComparison.Ordinal);
         Assert.Contains("<DataTemplate DataType=\"taskVm:TaskQueuePageViewModel\">", text, StringComparison.Ordinal);
         Assert.Contains("<DataTemplate DataType=\"copilotVm:CopilotPageViewModel\">", text, StringComparison.Ordinal);
@@ -153,11 +162,22 @@ public sealed class RootViewStructureContractTests
         Assert.Contains("ItemsSource=\"{Binding Sections}\"", text, StringComparison.Ordinal);
         Assert.Contains("SelectedItem=\"{Binding SelectedSection}\"", text, StringComparison.Ordinal);
         Assert.Contains("SelectionChanged=\"OnSectionSelectionChanged\"", text, StringComparison.Ordinal);
+        Assert.Contains("<controls:AppSelectionList", text, StringComparison.Ordinal);
+        Assert.Contains("VisualMode=\"Rail\"", text, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"SectionScrollViewer\"", text, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"SectionContentPanel\"", text, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"StickyTitlePanel\"", text, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"StickyCurrentHost\"", text, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"StickyTransitionHost\"", text, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"StickyTitleText\"", text, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"StickyTransitionText\"", text, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"settings-sticky-title\"", text, StringComparison.Ordinal);
         Assert.Contains("ScrollChanged=\"OnSectionScrollChanged\"", text, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"SectionConfigurationManager\"", text, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"SectionAbout\"", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("ItemsSource=\"{Binding CurrentSectionActions}\"", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("OnSectionActionClick", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Text=\"{Binding SelectedSectionTitle}\"", text, StringComparison.Ordinal);
 
         var sectionHostCount = System.Text.RegularExpressions.Regex.Matches(
             text,
@@ -181,6 +201,13 @@ public sealed class RootViewStructureContractTests
         Assert.Contains("MaterializeSectionWhenReadyAsync(", codeBehind, StringComparison.Ordinal);
         Assert.Contains("_pendingProgressiveSections", codeBehind, StringComparison.Ordinal);
         Assert.DoesNotContain("OnProgressiveMaterializationTick", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("GetSectionActivationLineY()", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("ResolveActiveSectionIndex(", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("StickyTitlePresentationState", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("UpdateStickyTitlePresentation()", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("ApplyStickyTitlePresentation(", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("_stickyCurrentTitleTransform", codeBehind, StringComparison.Ordinal);
+        Assert.DoesNotContain("scrollViewer.Viewport.Height * 0.25d", codeBehind, StringComparison.Ordinal);
         Assert.Contains("nameof(SettingsPageViewModel.RootTexts)", codeBehind, StringComparison.Ordinal);
         Assert.Contains("new settingsViews.ConfigurationManagerView()", codeBehind, StringComparison.Ordinal);
         Assert.Contains("new settingsViews.AboutSettingsView()", codeBehind, StringComparison.Ordinal);

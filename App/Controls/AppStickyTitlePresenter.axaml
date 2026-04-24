@@ -1,0 +1,26 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="MAAUnified.App.Controls.AppStickyTitlePresenter">
+  <Border x:Name="PresenterHost"
+          Classes="app-sticky-title-host">
+    <Border Classes="app-sticky-title-viewport">
+      <Grid Classes="app-sticky-title-track">
+        <Border x:Name="CurrentHost"
+                Classes="app-sticky-title-current-shell">
+          <TextBlock x:Name="CurrentTitleText"
+                     VerticalAlignment="Top"
+                     Classes="app-sticky-title-text"
+                     TextWrapping="Wrap" />
+        </Border>
+        <Border x:Name="IncomingHost"
+                VerticalAlignment="Top"
+                Classes="app-sticky-title-transition-shell"
+                IsVisible="False">
+          <TextBlock x:Name="IncomingTitleText"
+                     Classes="app-sticky-title-text app-sticky-title-previous"
+                     TextWrapping="Wrap" />
+        </Border>
+      </Grid>
+    </Border>
+  </Border>
+</UserControl>

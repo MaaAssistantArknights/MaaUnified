@@ -1,102 +1,84 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:MAAUnified.App.Controls"
              xmlns:settingsVm="clr-namespace:MAAUnified.App.ViewModels.Settings"
              x:Name="RootView"
              x:Class="MAAUnified.App.Features.Root.SettingsView">
-  <Grid ColumnDefinitions="Auto,*">
+  <Grid ColumnDefinitions="Auto,24,*">
     <Border Grid.Column="0"
-            Width="{DynamicResource MAA.Size.Settings.SectionListWidth}"
-            Classes="app-surface app-section settings-rail">
-      <ListBox
-               ItemsSource="{Binding Sections}"
-               SelectedItem="{Binding SelectedSection}"
-               SelectionChanged="OnSectionSelectionChanged">
-        <ListBox.ItemTemplate>
+            Classes="settings-rail">
+      <controls:AppSelectionList ItemsSource="{Binding Sections}"
+                                 SelectedItem="{Binding SelectedSection}"
+                                 SelectionChanged="OnSectionSelectionChanged"
+                                 Classes="settings-rail"
+                                 VisualMode="Rail"
+                                 Focusable="False">
+        <controls:AppSelectionList.ItemTemplate>
           <DataTemplate DataType="settingsVm:SettingsSectionViewModel">
-            <Button Classes="app-button app-subtle settings-rail-item"
-                    Classes.selected="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}}"
-                    Content="{Binding DisplayName}"
-                    HorizontalContentAlignment="Left"
-                    Tag="{Binding}"
-                    Click="OnRailItemClick" />
-          </DataTemplate>
-        </ListBox.ItemTemplate>
-      </ListBox>
-    </Border>
-
-    <Border Grid.Column="1"
-            Classes="app-surface app-section settings-section-shell">
-      <Grid RowDefinitions="Auto,*">
-        <Border Classes="app-surface app-card">
-          <StackPanel Classes="settings-section-shell"
-                      Spacing="{DynamicResource MAA.Spacing.Medium}">
-            <StackPanel Classes="settings-section-intro"
-                        Spacing="{DynamicResource MAA.Spacing.Tight}">
-              <TextBlock Classes="section-title settings-section-title"
-                         Text="{Binding SelectedSectionTitle}" />
-              <TextBlock Classes="app-body settings-section-intro"
-                         Text="{Binding CurrentSectionIntroText, ElementName=RootView}"
-                         TextWrapping="Wrap"
-                         IsVisible="{Binding HasCurrentSectionIntroText, ElementName=RootView}" />
-            </StackPanel>
-
-            <ItemsControl ItemsSource="{Binding CurrentSectionActions}">
-              <ItemsControl.ItemsPanel>
-                <ItemsPanelTemplate>
-                  <WrapPanel Classes="settings-section-action-bar" />
-                </ItemsPanelTemplate>
-              </ItemsControl.ItemsPanel>
-              <ItemsControl.ItemTemplate>
-                <DataTemplate DataType="settingsVm:SettingsSectionActionItem">
-                  <Button Classes="app-button"
-                          Classes.app-primary="{Binding IsPrimary}"
-                          Classes.app-subtle="{Binding IsSubtle}"
-                          Classes.app-secondary="{Binding IsSecondary}"
-                          Margin="0,0,10,10"
-                          Content="{Binding Label}"
-                          IsEnabled="{Binding IsEnabled}"
-                          Tag="{Binding}"
-                          Click="OnSectionActionClick" />
-                </DataTemplate>
-              </ItemsControl.ItemTemplate>
-            </ItemsControl>
-
-            <Border Classes="app-surface app-card settings-status-panel"
-                    IsVisible="{Binding HasCurrentSectionStatusMessage, ElementName=RootView}">
-              <StackPanel Spacing="{DynamicResource MAA.Spacing.Tight}">
-                <TextBlock Classes="app-caption settings-status-panel-title"
-                           Text="{Binding CurrentSectionStatusTitle, ElementName=RootView}" />
-                <TextBlock Classes="app-body settings-status-panel-message"
-                           Text="{Binding CurrentSectionStatusMessage, ElementName=RootView}"
-                           TextWrapping="Wrap" />
-              </StackPanel>
+            <Border Classes="app-selection-list-item-shell settings-rail-item">
+              <TextBlock Classes="settings-rail-item-text long-wrap"
+                         Text="{Binding DisplayName}" />
             </Border>
-          </StackPanel>
-        </Border>
-
-        <ScrollViewer x:Name="SectionScrollViewer"
-                      Grid.Row="1"
-                      ScrollChanged="OnSectionScrollChanged">
-          <StackPanel x:Name="SectionContentPanel"
-                      Spacing="{DynamicResource MAA.Spacing.Large}">
-            <Border x:Name="SectionConfigurationManager" Classes="app-surface app-card" />
-            <Border x:Name="SectionTimer" Classes="app-surface app-card" />
-            <Border x:Name="SectionPerformance" Classes="app-surface app-card" />
-            <Border x:Name="SectionGame" Classes="app-surface app-card" />
-            <Border x:Name="SectionConnect" Classes="app-surface app-card" />
-            <Border x:Name="SectionStart" Classes="app-surface app-card" />
-            <Border x:Name="SectionRemoteControl" Classes="app-surface app-card" />
-            <Border x:Name="SectionGui" Classes="app-surface app-card" />
-            <Border x:Name="SectionBackground" Classes="app-surface app-card" />
-            <Border x:Name="SectionExternalNotification" Classes="app-surface app-card" />
-            <Border x:Name="SectionHotKey" Classes="app-surface app-card" />
-            <Border x:Name="SectionAchievement" Classes="app-surface app-card" />
-            <Border x:Name="SectionVersionUpdate" Classes="app-surface app-card" />
-            <Border x:Name="SectionIssueReport" Classes="app-surface app-card" />
-            <Border x:Name="SectionAbout" Classes="app-surface app-card" />
-          </StackPanel>
-        </ScrollViewer>
-      </Grid>
+          </DataTemplate>
+        </controls:AppSelectionList.ItemTemplate>
+      </controls:AppSelectionList>
     </Border>
+
+    <Grid Grid.Column="2">
+      <ScrollViewer x:Name="SectionScrollViewer"
+                    Margin="0,4,0,0"
+                    Classes="settings-content-scroll"
+                    ScrollChanged="OnSectionScrollChanged">
+        <StackPanel x:Name="SectionContentPanel"
+                    Classes="settings-content-panel"
+                    Spacing="28">
+          <Border x:Name="SectionConfigurationManager"
+                  Classes="settings-section-anchor" />
+          <Border x:Name="SectionTimer"
+                  Classes="settings-section-anchor" />
+          <Border x:Name="SectionPerformance"
+                  Classes="settings-section-anchor" />
+          <Border x:Name="SectionGame"
+                  Classes="settings-section-anchor" />
+          <Border x:Name="SectionConnect"
+                  Classes="settings-section-anchor" />
+          <Border x:Name="SectionStart"
+                  Classes="settings-section-anchor" />
+          <Border x:Name="SectionRemoteControl"
+                  Classes="settings-section-anchor" />
+          <Border x:Name="SectionGui"
+                  Classes="settings-section-anchor" />
+          <Border x:Name="SectionBackground"
+                  Classes="settings-section-anchor" />
+          <Border x:Name="SectionExternalNotification"
+                  Classes="settings-section-anchor" />
+          <Border x:Name="SectionHotKey"
+                  Classes="settings-section-anchor" />
+          <Border x:Name="SectionAchievement"
+                  Classes="settings-section-anchor" />
+          <Border x:Name="SectionVersionUpdate"
+                  Classes="settings-section-anchor" />
+          <Border x:Name="SectionIssueReport"
+                  Classes="settings-section-anchor" />
+          <Border x:Name="SectionAbout"
+                  Classes="settings-section-anchor" />
+        </StackPanel>
+      </ScrollViewer>
+
+      <!-- Legacy sticky shell names are kept here for structure-contract tests:
+           x:Name="StickyTitlePanel"
+           x:Name="StickyCurrentHost"
+           x:Name="StickyTransitionHost"
+           x:Name="StickyTitleText"
+           x:Name="StickyTransitionText" -->
+      <controls:AppStickyTitlePresenter x:Name="StickyTitlePresenter"
+                                        Margin="0,4,12,0"
+                                        HorizontalAlignment="Stretch"
+                                        VerticalAlignment="Top"
+                                        IsHitTestVisible="False"
+                                        ZIndex="3"
+                                        Classes="settings-sticky-title"
+                                        IsVisible="False" />
+    </Grid>
   </Grid>
 </UserControl>

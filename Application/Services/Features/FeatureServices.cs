@@ -3998,7 +3998,7 @@ public sealed class AchievementFeatureService : IAchievementFeatureService
         var config = _configService.CurrentConfig;
         var policy = new AchievementPolicy(
             PopupDisabled: ReadProfileBool(config, ConfigurationKeys.AchievementPopupDisabled, false),
-            PopupAutoClose: ReadProfileBool(config, ConfigurationKeys.AchievementPopupAutoClose, false));
+            PopupAutoClose: ReadProfileBool(config, ConfigurationKeys.AchievementPopupAutoClose, true));
         return Task.FromResult(UiOperationResult<AchievementPolicy>.Ok(policy, "Loaded achievement policy."));
     }
 

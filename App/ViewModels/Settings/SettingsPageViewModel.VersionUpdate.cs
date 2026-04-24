@@ -131,6 +131,7 @@ public sealed partial class SettingsPageViewModel
 
         await RunAutomaticVersionAndResourceUpdateFlowAsync(
             "Settings.VersionUpdate.Check.Startup",
+            autoApplyResourceUpdate: false,
             cancellationToken);
     }
 
@@ -143,6 +144,7 @@ public sealed partial class SettingsPageViewModel
 
         await RunAutomaticVersionAndResourceUpdateFlowAsync(
             "Settings.VersionUpdate.Check.Scheduled",
+            autoApplyResourceUpdate: false,
             cancellationToken);
     }
 
@@ -505,6 +507,7 @@ public sealed partial class SettingsPageViewModel
 
     private async Task RunAutomaticVersionAndResourceUpdateFlowAsync(
         string scope,
+        bool autoApplyResourceUpdate,
         CancellationToken cancellationToken)
     {
         await RunVersionUpdateCheckInternalAsync(
@@ -514,7 +517,7 @@ public sealed partial class SettingsPageViewModel
 
         await RunResourceUpdateInternalAsync(
             $"{scope}.Resource",
-            autoApplyUpdate: true,
+            autoApplyUpdate: autoApplyResourceUpdate,
             cancellationToken);
     }
 

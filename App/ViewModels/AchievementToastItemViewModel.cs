@@ -1,4 +1,3 @@
-using System.Globalization;
 using Avalonia.Threading;
 using MAAUnified.App.ViewModels.Infrastructure;
 
@@ -7,12 +6,11 @@ namespace MAAUnified.App.ViewModels;
 public sealed class AchievementToastItemViewModel : ObservableObject, IDisposable
 {
     private const double CloseCountdownSeconds = 5d;
-    private const double CloseCountdownCircumference = 106.814d;
     private readonly Action<string>? _dismissCallback;
     private readonly DispatcherTimer? _closeCountdownTimer;
     private DateTimeOffset _lastCloseCountdownTickUtc;
     private double _remainingCloseCountdownSeconds = CloseCountdownSeconds;
-    private string _closeCountdownStrokeDashArray = BuildCloseCountdownStrokeDashArray(1d);
+    private double _closeCountdownProgress;
     private bool _isCloseCountdownPaused;
     private bool _isDisposed;
 
@@ -34,6 +32,7 @@ public sealed class AchievementToastItemViewModel : ObservableObject, IDisposabl
         AutoClose = autoClose;
         UnlockedAtUtc = unlockedAtUtc;
         _dismissCallback = dismissCallback;
+        _closeCountdownProgress = AutoClose ? 1d : 0d;
 
         if (AutoClose)
         {
@@ -63,10 +62,10 @@ public sealed class AchievementToastItemViewModel : ObservableObject, IDisposabl
 
     public bool IsCloseCountdownVisible => AutoClose;
 
-    public string CloseCountdownStrokeDashArray
+    public double CloseCountdownProgress
     {
-        get => _closeCountdownStrokeDashArray;
-        private set => SetProperty(ref _closeCountdownStrokeDashArray, value);
+        get => _closeCountdownProgress;
+        private set => SetProperty(ref _closeCountdownProgress, value);
     }
 
     public void PauseCloseCountdown()
@@ -118,7 +117,7 @@ public sealed class AchievementToastItemViewModel : ObservableObject, IDisposabl
         _lastCloseCountdownTickUtc = now;
 
         _remainingCloseCountdownSeconds = Math.Max(0d, _remainingCloseCountdownSeconds - elapsed.TotalSeconds);
-        CloseCountdownStrokeDashArray = BuildCloseCountdownStrokeDashArray(_remainingCloseCountdownSeconds / CloseCountdownSeconds);
+        CloseCountdownProgress = Math.Clamp(_remainingCloseCountdownSeconds / CloseCountdownSeconds, 0d, 1d);
 
         if (_remainingCloseCountdownSeconds > 0d)
         {
@@ -127,16 +126,5 @@ public sealed class AchievementToastItemViewModel : ObservableObject, IDisposabl
 
         Dispose();
         _dismissCallback?.Invoke(Id);
-    }
-
-    private static string BuildCloseCountdownStrokeDashArray(double progress)
-    {
-        var normalizedProgress = Math.Clamp(progress, 0d, 1d);
-        var dashLength = CloseCountdownCircumference * normalizedProgress;
-        return string.Format(
-            CultureInfo.InvariantCulture,
-            "{0:0.###} {1:0.###}",
-            dashLength,
-            CloseCountdownCircumference);
     }
 }

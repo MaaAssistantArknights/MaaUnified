@@ -3,9 +3,12 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Media;
 using Avalonia.Platform;
+using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using MAAUnified.App.Controls;
 using MAAUnified.App.Features.Dialogs;
 using MAAUnified.App.Infrastructure;
 using MAAUnified.App.Services;
@@ -29,6 +32,9 @@ public partial class MainWindow : Window
     private const double ResponsiveMaxLayoutWidth = 1360d;
     private const double ResponsiveMinLayoutWidth = ResponsiveMinWindowWidth - (ResponsiveMinPageMargin * 2d);
     private const double ResponsiveContentStageEndWidth = ResponsiveMarginStageEndWidth + (ResponsiveMaxLayoutWidth - ResponsiveMinLayoutWidth);
+    private const int ResponsiveMarginProgressSteps = 12;
+    private const int ResponsiveWidthProgressSteps = 24;
+    private static readonly TimeSpan ResizeSettleDelay = TimeSpan.FromMilliseconds(120);
     private static readonly KeyValuePair<string, object>[] CompactLayoutResourceOverrides =
     [
         new("MAA.Thickness.SectionPadding", new Thickness(6)),
@@ -61,8 +67,8 @@ public partial class MainWindow : Window
         new("MAA.Size.Settings.FormNarrowMaxWidth", 710d, 760d),
         new("MAA.Size.Settings.ContentMaxWidth", 405d, 450d),
         new("MAA.Size.Settings.ColumnWidth", 228d, 250d),
-        new("MAA.Size.Settings.FieldSlimWidth", 136d, 150d),
-        new("MAA.Size.Settings.FieldNarrowWidth", 162d, 180d),
+        new("MAA.Size.Settings.FieldSlimWidth", 130d, 144d),
+        new("MAA.Size.Settings.FieldNarrowWidth", 154d, 170d),
         new("MAA.Size.Settings.FieldCenteredWidth", 180d, 200d),
         new("MAA.Size.Settings.FieldInputWidth", 270d, 300d),
         new("MAA.Size.Settings.FieldPathWidth", 360d, 400d),
@@ -88,9 +94,15 @@ public partial class MainWindow : Window
     private bool _closeRequestPending;
     private bool _compactLayoutEnabled;
     private ResponsiveLayoutMetrics? _responsiveLayoutMetrics;
+    private bool _adaptiveLayoutUpdateQueued;
+    private bool _pendingAdaptiveLayoutFlushAllHosts;
+    private double _pendingAdaptiveLayoutWidth;
+    private double _pendingAdaptiveLayoutHeight;
+    private DispatcherTimer? _resizeSettleTimer;
     private readonly object _dialogErrorGate = new();
     private readonly Queue<DialogErrorRaisedEvent> _pendingDialogErrors = [];
     private readonly HashSet<string> _pendingDialogErrorKeys = new(StringComparer.Ordinal);
+    private readonly Dictionary<ContentControl, ResponsiveLayoutMetrics> _rootHostResponsiveMetrics = [];
     private readonly IAppDialogService _dialogService;
     private readonly ShellCloseConfirmationService _closeConfirmationService;
     private OverlayHostWindow? _overlayHostWindow;
@@ -98,6 +110,8 @@ public partial class MainWindow : Window
     private RootPageHostViewModel? _settingsWarmupRootPage;
     private bool _settingsWarmupStarted;
     private bool _settingsSectionWarmupStarted;
+    private MainShellViewModel? _shellBackgroundVm;
+    private BlurEffect? _shellBackgroundBlurEffect;
 
     private readonly record struct ResponsiveDoubleResourceRange(string ResourceKey, double Minimum, double Maximum);
 
@@ -121,11 +135,18 @@ public partial class MainWindow : Window
         _closeConfirmationService = new ShellCloseConfirmationService(_dialogService);
         BindDialogErrorEvents();
         Opened += OnWindowOpened;
-        SizeChanged += OnWindowSizeChanged;
+        Resized += OnWindowResized;
         KeyDown += OnWindowKeyDown;
         Closing += OnWindowClosing;
         Closed += OnWindowClosed;
+        DataContextChanged += OnWindowDataContextChanged;
         PropertyChanged += OnWindowPropertyChanged;
+        WindowShellFrame.PropertyChanged += OnWindowShellFramePropertyChanged;
+        TaskQueueRootHost.PropertyChanged += OnRootHostPropertyChanged;
+        CopilotRootHost.PropertyChanged += OnRootHostPropertyChanged;
+        ToolboxRootHost.PropertyChanged += OnRootHostPropertyChanged;
+        SettingsRootHost.PropertyChanged += OnRootHostPropertyChanged;
+        BindShellBackgroundVm(VM);
         App.Runtime.UiLanguageCoordinator.LanguageChanged += OnUiLanguageChanged;
     }
 
@@ -173,7 +194,7 @@ public partial class MainWindow : Window
     {
         Program.RecordStartupStage("MainWindow.Opened", "Main window opened.");
         FitToCurrentScreenWorkingArea();
-        UpdateAdaptiveLayoutMode();
+        UpdateAdaptiveLayoutMode(flushAllHosts: true);
         UpdateAchievementToastVisibility();
         StartDialogErrorPumpIfNeeded();
         var vm = VM;
@@ -232,6 +253,22 @@ public partial class MainWindow : Window
     private async void OnWindowClosed(object? sender, EventArgs e)
     {
         UpdateAchievementToastVisibility();
+        BindShellBackgroundVm(null);
+        Resized -= OnWindowResized;
+        WindowShellFrame.PropertyChanged -= OnWindowShellFramePropertyChanged;
+        DataContextChanged -= OnWindowDataContextChanged;
+        TaskQueueRootHost.PropertyChanged -= OnRootHostPropertyChanged;
+        CopilotRootHost.PropertyChanged -= OnRootHostPropertyChanged;
+        ToolboxRootHost.PropertyChanged -= OnRootHostPropertyChanged;
+        SettingsRootHost.PropertyChanged -= OnRootHostPropertyChanged;
+        if (_resizeSettleTimer is not null)
+        {
+            _resizeSettleTimer.Stop();
+            _resizeSettleTimer.Tick -= OnResizeSettleTimerTick;
+            _resizeSettleTimer = null;
+        }
+
+        _rootHostResponsiveMetrics.Clear();
         if (_dialogErrorBound)
         {
             App.Runtime.DialogFeatureService.ErrorRaised -= OnDialogErrorRaised;
@@ -293,8 +330,35 @@ public partial class MainWindow : Window
         VM?.SetAchievementToastWindowVisible(IsVisible && WindowState != WindowState.Minimized);
     }
 
-    private void OnWindowSizeChanged(object? sender, SizeChangedEventArgs e)
+    private void OnWindowResized(object? sender, WindowResizedEventArgs e)
     {
+        ScheduleAdaptiveLayoutUpdate(
+            ResolveResponsiveLayoutWidth(e.ClientSize.Width),
+            e.ClientSize.Height,
+            flushAllHosts: false,
+            immediate: false);
+        RestartResizeSettleTimer();
+    }
+
+    private void OnWindowDataContextChanged(object? sender, EventArgs e)
+    {
+        BindShellBackgroundVm(VM);
+        UpdateAdaptiveLayoutMode(flushAllHosts: true);
+    }
+
+    private void OnRootHostPropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
+    {
+        if (e.Property != IsVisibleProperty || sender is not ContentControl host || !host.IsVisible)
+        {
+            return;
+        }
+
+        if (_responsiveLayoutMetrics is { } metrics)
+        {
+            ApplyResponsiveLayoutMetricsToRootHost(host, metrics);
+            return;
+        }
+
         UpdateAdaptiveLayoutMode();
     }
 
@@ -315,33 +379,82 @@ public partial class MainWindow : Window
         Dispatcher.UIThread.Post(InvalidateLocalizedLayoutTree, DispatcherPriority.Render);
     }
 
-    private void UpdateAdaptiveLayoutMode()
+    private void UpdateAdaptiveLayoutMode(bool flushAllHosts = false)
     {
-        var width = Bounds.Width;
-        var height = Bounds.Height;
+        ScheduleAdaptiveLayoutUpdate(
+            ResolveResponsiveLayoutWidth(),
+            ResolveResponsiveLayoutHeight(),
+            flushAllHosts,
+            immediate: true);
+    }
+
+    private void ScheduleAdaptiveLayoutUpdate(double width, double height, bool flushAllHosts, bool immediate)
+    {
         if (width <= 0d || height <= 0d)
         {
             return;
         }
 
-        var responsiveChanged = ApplyResponsiveLayoutMetrics(width);
-        var compactChanged = UpdateCompactLayoutMode(height <= CompactLayoutHeightThreshold);
-        if (!responsiveChanged && !compactChanged)
+        _pendingAdaptiveLayoutWidth = width;
+        _pendingAdaptiveLayoutHeight = height;
+        _pendingAdaptiveLayoutFlushAllHosts |= flushAllHosts;
+        if (immediate)
+        {
+            ApplyPendingAdaptiveLayoutUpdate();
+            return;
+        }
+
+        if (_adaptiveLayoutUpdateQueued)
         {
             return;
         }
 
-        InvalidateMeasure();
-        InvalidateArrange();
+        _adaptiveLayoutUpdateQueued = true;
+        Dispatcher.UIThread.Post(
+            () =>
+            {
+                _adaptiveLayoutUpdateQueued = false;
+                ApplyPendingAdaptiveLayoutUpdate();
+            },
+            DispatcherPriority.Render);
+    }
+
+    private void ApplyPendingAdaptiveLayoutUpdate()
+    {
+        var width = _pendingAdaptiveLayoutWidth;
+        var height = _pendingAdaptiveLayoutHeight;
+        var flushAllHosts = _pendingAdaptiveLayoutFlushAllHosts;
+
+        _pendingAdaptiveLayoutWidth = 0d;
+        _pendingAdaptiveLayoutHeight = 0d;
+        _pendingAdaptiveLayoutFlushAllHosts = false;
+
+        if (width <= 0d || height <= 0d)
+        {
+            return;
+        }
+
+        var metrics = CalculateResponsiveLayoutMetrics(width, maxContentWidth: width);
+        _ = ApplyResponsiveLayoutMetrics(metrics);
+        var compactChanged = UpdateCompactLayoutMode(height <= CompactLayoutHeightThreshold);
+
+        if (flushAllHosts)
+        {
+            ApplyResponsiveLayoutMetricsToAllRootHosts(metrics);
+        }
+        else
+        {
+            ApplyResponsiveLayoutMetricsToActiveRootHost(metrics);
+        }
+
         if (compactChanged)
         {
             RefreshLocalizedLayout();
         }
     }
 
-    private bool ApplyResponsiveLayoutMetrics(double width)
+    private bool ApplyResponsiveLayoutMetrics(ResponsiveLayoutMetrics metrics)
     {
-        var metrics = CalculateResponsiveLayoutMetrics(width);
         if (_responsiveLayoutMetrics is { } current && current.ApproximatelyEquals(metrics))
         {
             return false;
@@ -349,15 +462,7 @@ public partial class MainWindow : Window
 
         _responsiveLayoutMetrics = metrics;
         Resources["MAA.Thickness.PageMargin"] = new Thickness(metrics.PageMargin);
-        Resources["MAA.Thickness.CopilotRootMargin"] = new Thickness(Lerp(2d, 4d, metrics.WidthProgress));
-        ApplyDoubleResource("MAA.Size.MainWindow.LayoutWidth", metrics.LayoutWidth, ResponsiveMaxLayoutWidth);
-
-        foreach (var range in ResponsiveWidthResourceRanges)
-        {
-            var value = Lerp(range.Minimum, range.Maximum, metrics.WidthProgress);
-            ApplyDoubleResource(range.ResourceKey, value, range.Maximum);
-        }
-
+        ApplyDoubleResource(Resources, "MAA.Size.MainWindow.LayoutWidth", metrics.LayoutWidth, ResponsiveMaxLayoutWidth);
         return true;
     }
 
@@ -387,30 +492,127 @@ public partial class MainWindow : Window
         return true;
     }
 
-    private static ResponsiveLayoutMetrics CalculateResponsiveLayoutMetrics(double windowWidth)
+    private static ResponsiveLayoutMetrics CalculateResponsiveLayoutMetrics(double windowWidth, double maxContentWidth)
     {
-        var marginProgress = InverseLerp(ResponsiveMinWindowWidth, ResponsiveMarginStageEndWidth, windowWidth);
+        var marginProgress = QuantizeProgress(
+            InverseLerp(ResponsiveMinWindowWidth, ResponsiveMarginStageEndWidth, windowWidth),
+            ResponsiveMarginProgressSteps);
         var pageMargin = Lerp(ResponsiveMinPageMargin, ResponsiveMaxPageMargin, marginProgress);
+        var maxSafePageMargin = Math.Max(0d, maxContentWidth / 2d);
+        pageMargin = Math.Min(pageMargin, maxSafePageMargin);
+        var maxLayoutWidth = Math.Max(0d, maxContentWidth - (pageMargin * 2d));
 
         if (windowWidth <= ResponsiveMarginStageEndWidth)
         {
-            return new ResponsiveLayoutMetrics(pageMargin, ResponsiveMinLayoutWidth, 0d);
+            return new ResponsiveLayoutMetrics(pageMargin, Math.Min(ResponsiveMinLayoutWidth, maxLayoutWidth), 0d);
         }
 
-        var widthProgress = InverseLerp(ResponsiveMarginStageEndWidth, ResponsiveContentStageEndWidth, windowWidth);
-        var layoutWidth = Lerp(ResponsiveMinLayoutWidth, ResponsiveMaxLayoutWidth, widthProgress);
-        return new ResponsiveLayoutMetrics(ResponsiveMaxPageMargin, layoutWidth, widthProgress);
+        var widthProgress = QuantizeProgress(
+            InverseLerp(ResponsiveMarginStageEndWidth, ResponsiveContentStageEndWidth, windowWidth),
+            ResponsiveWidthProgressSteps);
+        var expandedPageMargin = Math.Min(ResponsiveMaxPageMargin, maxSafePageMargin);
+        var expandedLayoutWidth = Math.Max(0d, maxContentWidth - (expandedPageMargin * 2d));
+        var layoutWidth = Math.Min(Lerp(ResponsiveMinLayoutWidth, ResponsiveMaxLayoutWidth, widthProgress), expandedLayoutWidth);
+        return new ResponsiveLayoutMetrics(expandedPageMargin, layoutWidth, widthProgress);
     }
 
-    private void ApplyDoubleResource(string key, double value, double defaultValue)
+    private void ApplyResponsiveLayoutMetricsToActiveRootHost(ResponsiveLayoutMetrics metrics)
     {
-        if (Math.Abs(value - defaultValue) < 0.01d)
+        if (ResolveActiveRootHost() is not { } host)
         {
-            Resources.Remove(key);
             return;
         }
 
-        Resources[key] = value;
+        ApplyResponsiveLayoutMetricsToRootHost(host, metrics);
+    }
+
+    private void ApplyResponsiveLayoutMetricsToAllRootHosts(ResponsiveLayoutMetrics metrics)
+    {
+        foreach (var host in EnumerateRootHosts())
+        {
+            ApplyResponsiveLayoutMetricsToRootHost(host, metrics);
+        }
+    }
+
+    private void ApplyResponsiveLayoutMetricsToRootHost(ContentControl host, ResponsiveLayoutMetrics metrics)
+    {
+        if (_rootHostResponsiveMetrics.TryGetValue(host, out var current) && current.ApproximatelyEquals(metrics))
+        {
+            return;
+        }
+
+        var resources = EnsureResources(host);
+        resources["MAA.Thickness.CopilotRootMargin"] = new Thickness(Lerp(2d, 4d, metrics.WidthProgress));
+        foreach (var range in ResponsiveWidthResourceRanges)
+        {
+            var value = Lerp(range.Minimum, range.Maximum, metrics.WidthProgress);
+            ApplyDoubleResource(resources, range.ResourceKey, value, range.Maximum);
+        }
+
+        _rootHostResponsiveMetrics[host] = metrics;
+    }
+
+    private ContentControl? ResolveActiveRootHost()
+    {
+        foreach (var host in EnumerateRootHosts())
+        {
+            if (host.IsVisible)
+            {
+                return host;
+            }
+        }
+
+        return null;
+    }
+
+    private IEnumerable<ContentControl> EnumerateRootHosts()
+    {
+        yield return TaskQueueRootHost;
+        yield return CopilotRootHost;
+        yield return ToolboxRootHost;
+        yield return SettingsRootHost;
+    }
+
+    private static IResourceDictionary EnsureResources(StyledElement element)
+    {
+        if (element.Resources is null)
+        {
+            element.Resources = new ResourceDictionary();
+        }
+
+        return element.Resources;
+    }
+
+    private static void ApplyDoubleResource(IResourceDictionary resources, string key, double value, double defaultValue)
+    {
+        if (Math.Abs(value - defaultValue) < 0.01d)
+        {
+            resources.Remove(key);
+            return;
+        }
+
+        resources[key] = value;
+    }
+
+    private void RestartResizeSettleTimer()
+    {
+        if (_resizeSettleTimer is null)
+        {
+            _resizeSettleTimer = new DispatcherTimer
+            {
+                Interval = ResizeSettleDelay,
+            };
+            _resizeSettleTimer.Tick += OnResizeSettleTimerTick;
+        }
+
+        _resizeSettleTimer.Stop();
+        _resizeSettleTimer.Start();
+    }
+
+    private void OnResizeSettleTimerTick(object? sender, EventArgs e)
+    {
+        _resizeSettleTimer?.Stop();
+        UpdateAdaptiveLayoutMode(flushAllHosts: true);
     }
 
     private static double InverseLerp(double start, double end, double value)
@@ -426,6 +628,111 @@ public partial class MainWindow : Window
     private static double Lerp(double start, double end, double progress)
     {
         return start + ((end - start) * Math.Clamp(progress, 0d, 1d));
+    }
+
+    private static double QuantizeProgress(double progress, int steps)
+    {
+        if (steps <= 0)
+        {
+            return Math.Clamp(progress, 0d, 1d);
+        }
+
+        var clamped = Math.Clamp(progress, 0d, 1d);
+        return Math.Round(clamped * steps, MidpointRounding.AwayFromZero) / steps;
+    }
+
+    private double ResolveResponsiveLayoutWidth()
+    {
+        var clientWidth = ClientSize.Width > 0d ? ClientSize.Width : Bounds.Width;
+        return ResolveResponsiveLayoutWidth(clientWidth);
+    }
+
+    private double ResolveResponsiveLayoutWidth(double clientWidth)
+    {
+        if (clientWidth <= 0d)
+        {
+            return 0d;
+        }
+
+        return Math.Max(0d, clientWidth - WindowShellFrame.EffectiveHorizontalContentInset.Total);
+    }
+
+    private double ResolveResponsiveLayoutHeight()
+    {
+        return ClientSize.Height > 0d ? ClientSize.Height : Bounds.Height;
+    }
+
+    private void OnWindowShellFramePropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
+    {
+        if (e.Property == AppWindowFrame.EffectiveHorizontalContentInsetProperty)
+        {
+            UpdateAdaptiveLayoutMode();
+        }
+    }
+
+    private void BindShellBackgroundVm(MainShellViewModel? vm)
+    {
+        if (ReferenceEquals(_shellBackgroundVm, vm))
+        {
+            ApplyShellBackgroundEffect();
+            return;
+        }
+
+        if (_shellBackgroundVm is not null)
+        {
+            _shellBackgroundVm.PropertyChanged -= OnShellBackgroundVmPropertyChanged;
+        }
+
+        _shellBackgroundVm = vm;
+        if (_shellBackgroundVm is not null)
+        {
+            _shellBackgroundVm.PropertyChanged += OnShellBackgroundVmPropertyChanged;
+        }
+
+        ApplyShellBackgroundEffect();
+    }
+
+    private void OnShellBackgroundVmPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (!string.Equals(e.PropertyName, nameof(MainShellViewModel.ShellBackgroundBlur), StringComparison.Ordinal)
+            && !string.Equals(e.PropertyName, nameof(MainShellViewModel.ShellBackgroundImage), StringComparison.Ordinal)
+            && !string.Equals(e.PropertyName, nameof(MainShellViewModel.HasShellBackgroundImage), StringComparison.Ordinal)
+            && !string.Equals(e.PropertyName, nameof(MainShellViewModel.ShellBackgroundOpacity), StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            ApplyShellBackgroundEffect();
+            return;
+        }
+
+        Dispatcher.UIThread.Post(ApplyShellBackgroundEffect, DispatcherPriority.Render);
+    }
+
+    private void ApplyShellBackgroundEffect()
+    {
+        var vm = _shellBackgroundVm;
+        if (vm is null
+            || !vm.HasShellBackgroundImage
+            || vm.ShellBackgroundBlur <= 0
+            || vm.ShellBackgroundOpacity <= 0d)
+        {
+            if (ShellBackgroundImageHost.Effect is not null)
+            {
+                ShellBackgroundImageHost.Effect = null;
+            }
+
+            return;
+        }
+
+        _shellBackgroundBlurEffect ??= new BlurEffect();
+        _shellBackgroundBlurEffect.Radius = vm.ShellBackgroundBlur;
+        if (!ReferenceEquals(ShellBackgroundImageHost.Effect, _shellBackgroundBlurEffect))
+        {
+            ShellBackgroundImageHost.Effect = _shellBackgroundBlurEffect;
+        }
     }
 
     private void InvalidateLocalizedLayoutTree()
@@ -564,13 +871,50 @@ public partial class MainWindow : Window
 
     private void OnDismissAchievementToastClick(object? sender, RoutedEventArgs e)
     {
+        e.Handled = true;
         if (sender is Button button && button.Tag is string toastId)
         {
             VM?.DismissAchievementToast(toastId);
         }
     }
 
-    private void OnAchievementToastClosePointerEntered(object? sender, PointerEventArgs e)
+    private void OnDismissWindowUpdateClick(object? sender, RoutedEventArgs e)
+    {
+        e.Handled = true;
+        VM?.DismissWindowUpdateOverlay();
+    }
+
+    private async void OnAchievementToastTapped(object? sender, TappedEventArgs e)
+    {
+        if (e.Handled
+            || sender is not Control { DataContext: AchievementToastItemViewModel toast }
+            || VM is null
+            || IsEventFromButton(e.Source))
+        {
+            return;
+        }
+
+        e.Handled = true;
+        await VM.ShowAchievementListDialogFromToastAsync(toast.Id);
+    }
+
+    private void OnWindowUpdateOverlayTapped(object? sender, TappedEventArgs e)
+    {
+        if (e.Handled || VM is null || IsEventFromButton(e.Source))
+        {
+            return;
+        }
+
+        e.Handled = true;
+        VM.OpenVersionUpdateSectionFromWindowOverlay();
+    }
+
+    private void OnFloatingOverlayCloseButtonTapped(object? sender, TappedEventArgs e)
+    {
+        e.Handled = true;
+    }
+
+    private void OnAchievementToastPointerEntered(object? sender, PointerEventArgs e)
     {
         if (sender is Control { DataContext: AchievementToastItemViewModel toast })
         {
@@ -578,7 +922,7 @@ public partial class MainWindow : Window
         }
     }
 
-    private void OnAchievementToastClosePointerExited(object? sender, PointerEventArgs e)
+    private void OnAchievementToastPointerExited(object? sender, PointerEventArgs e)
     {
         if (sender is Control { DataContext: AchievementToastItemViewModel toast })
         {
@@ -666,78 +1010,6 @@ public partial class MainWindow : Window
         await DispatchTrayCommandAsync(TrayCommandId.Exit, "window-shell-menu");
     }
 
-    private async void OnManualUpdateClick(object? sender, RoutedEventArgs e)
-    {
-        if (VM is null)
-        {
-            return;
-        }
-
-        e.Handled = true;
-        var settingsPage = VM.SettingsPage;
-        if (settingsPage.IsVersionUpdateActionRunning)
-        {
-            var runningFeedback = !string.IsNullOrWhiteSpace(settingsPage.VersionUpdateActivityMessage)
-                ? settingsPage.VersionUpdateActivityMessage
-                : VM.RootTexts.GetOrDefault("Settings.VersionUpdate.Activity.Busy", "更新任务正在进行，请稍候。");
-            VM.PushGrowl(runningFeedback);
-            return;
-        }
-
-        var updateTask = settingsPage.CheckVersionUpdateAsync();
-        var immediateFeedback = !string.IsNullOrWhiteSpace(settingsPage.VersionUpdateActivityMessage)
-            ? settingsPage.VersionUpdateActivityMessage
-            : VM.RootTexts.GetOrDefault(
-                "Settings.VersionUpdate.Activity.CheckingSoftware",
-                "正在检查软件更新……");
-        VM.PushGrowl(immediateFeedback);
-
-        await updateTask;
-        var feedback = string.IsNullOrWhiteSpace(settingsPage.VersionUpdateErrorMessage)
-            ? settingsPage.VersionUpdateStatusMessage
-            : settingsPage.VersionUpdateErrorMessage;
-        if (!string.IsNullOrWhiteSpace(feedback))
-        {
-            VM.PushGrowl(feedback);
-        }
-    }
-
-    private async void OnManualUpdateResourceClick(object? sender, RoutedEventArgs e)
-    {
-        if (VM is null)
-        {
-            return;
-        }
-
-        e.Handled = true;
-        var settingsPage = VM.SettingsPage;
-        if (settingsPage.IsVersionUpdateActionRunning)
-        {
-            var runningFeedback = !string.IsNullOrWhiteSpace(settingsPage.VersionUpdateActivityMessage)
-                ? settingsPage.VersionUpdateActivityMessage
-                : VM.RootTexts.GetOrDefault("Settings.VersionUpdate.Activity.Busy", "更新任务正在进行，请稍候。");
-            VM.PushGrowl(runningFeedback);
-            return;
-        }
-
-        var updateTask = settingsPage.ManualUpdateResourceAsync();
-        var immediateFeedback = !string.IsNullOrWhiteSpace(settingsPage.VersionUpdateActivityMessage)
-            ? settingsPage.VersionUpdateActivityMessage
-            : VM.RootTexts.GetOrDefault(
-                "Settings.VersionUpdate.Activity.CheckingResource",
-                "正在检查资源更新……");
-        VM.PushGrowl(immediateFeedback);
-
-        await updateTask;
-        var feedback = string.IsNullOrWhiteSpace(settingsPage.VersionUpdateErrorMessage)
-            ? settingsPage.VersionUpdateStatusMessage
-            : settingsPage.VersionUpdateErrorMessage;
-        if (!string.IsNullOrWhiteSpace(feedback))
-        {
-            VM.PushGrowl(feedback);
-        }
-    }
-
     private void OnToggleTopMostClick(object? sender, RoutedEventArgs e)
     {
         if (VM is null)
@@ -772,6 +1044,16 @@ public partial class MainWindow : Window
         }
 
         _runtimeLogWindow.Activate();
+    }
+
+    private static bool IsEventFromButton(object? source)
+    {
+        if (source is Button)
+        {
+            return true;
+        }
+
+        return source is Visual visual && visual.FindAncestorOfType<Button>() is not null;
     }
 
     private void OnRuntimeLogWindowClosed(object? sender, EventArgs e)

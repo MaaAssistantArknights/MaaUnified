@@ -1,6 +1,8 @@
 using System.Globalization;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using Avalonia.Media;
 using MAAUnified.App.Infrastructure;
 using MAAUnified.App.ViewModels.Infrastructure;
 using MAAUnified.Application.Models;
@@ -9,6 +11,7 @@ namespace MAAUnified.App.Features.Dialogs;
 
 public partial class AchievementListDialogView : Window, IDialogChromeAware
 {
+    private const string FilterSliderAnimatedClass = "animate";
     private const string ProgressFormatKey = "Achievement.ProgressFormat";
     private const string NewBadgeTextKey = "Achievement.NewBadgeText";
     private const string OverviewFormatKey = "Settings.Achievement.Dialog.OverviewFormat";
@@ -37,12 +40,15 @@ public partial class AchievementListDialogView : Window, IDialogChromeAware
     private string _emptyTitleText = "No matching achievements";
     private string _emptyDescriptionText = "Try a different keyword or filter.";
     private bool _suppressFilterChanged;
+    private double _filterSliderX = double.NaN;
+    private double _filterSliderWidth = double.NaN;
 
     public AchievementListDialogView()
     {
         InitializeComponent();
         WindowVisuals.ApplyDefaultIcon(this);
         Opened += OnOpened;
+        FilterStripTrack.LayoutUpdated += OnFilterStripTrackLayoutUpdated;
     }
 
     public void ApplyRequest(AchievementListDialogRequest request)
@@ -99,7 +105,7 @@ public partial class AchievementListDialogView : Window, IDialogChromeAware
         EmptyStateDescriptionText.Text = _emptyDescriptionText;
     }
 
-    private void RefreshView()
+    private void RefreshView(bool animateFilterSlider = false)
     {
         var state = _presenter.BuildState(
             _overviewFormat,
@@ -116,6 +122,8 @@ public partial class AchievementListDialogView : Window, IDialogChromeAware
         FilterUnlockedButton.Classes.Set("selected", _presenter.ActiveFilter == AchievementQuickFilter.Unlocked);
         FilterInProgressButton.Classes.Set("selected", _presenter.ActiveFilter == AchievementQuickFilter.InProgress);
         FilterNewButton.Classes.Set("selected", _presenter.ActiveFilter == AchievementQuickFilter.NewUnlock);
+
+        SyncActiveFilterSlider(animateFilterSlider);
     }
 
     private void OnFilterChanged(object? sender, TextChangedEventArgs e)
@@ -138,7 +146,7 @@ public partial class AchievementListDialogView : Window, IDialogChromeAware
         }
 
         _presenter.SetFilter(filter);
-        RefreshView();
+        RefreshView(animateFilterSlider: true);
     }
 
     private void OnClearFiltersClick(object? sender, RoutedEventArgs e)
@@ -147,7 +155,7 @@ public partial class AchievementListDialogView : Window, IDialogChromeAware
         _suppressFilterChanged = true;
         FilterInput.Text = string.Empty;
         _suppressFilterChanged = false;
-        RefreshView();
+        RefreshView(animateFilterSlider: true);
     }
 
     private void OnShellCloseRequested(object? sender, EventArgs e)
@@ -158,6 +166,62 @@ public partial class AchievementListDialogView : Window, IDialogChromeAware
     private void OnOpened(object? sender, EventArgs e)
     {
         FilterInput.Focus();
+        SyncActiveFilterSlider(animate: false);
+    }
+
+    private void OnFilterStripTrackLayoutUpdated(object? sender, EventArgs e)
+    {
+        SyncActiveFilterSlider(animate: false);
+    }
+
+    private void SyncActiveFilterSlider(bool animate)
+    {
+        var activeButton = GetActiveFilterButton();
+        if (activeButton is null)
+        {
+            return;
+        }
+
+        if (activeButton.Bounds.Width <= 0 || FilterStripTrack.Bounds.Width <= 0)
+        {
+            return;
+        }
+
+        var origin = activeButton.TranslatePoint(new Point(0, 0), FilterStripTrack);
+        if (origin is null)
+        {
+            return;
+        }
+
+        var targetX = origin.Value.X;
+        var targetWidth = activeButton.Bounds.Width;
+        if (FilterSelectionSlider.IsVisible
+            && Math.Abs(_filterSliderX - targetX) < 0.5
+            && Math.Abs(_filterSliderWidth - targetWidth) < 0.5)
+        {
+            return;
+        }
+
+        FilterSelectionSlider.Classes.Set(FilterSliderAnimatedClass, animate);
+        FilterSelectionSlider.Width = targetWidth;
+        FilterSelectionSlider.RenderTransform = new TranslateTransform
+        {
+            X = targetX,
+        };
+        FilterSelectionSlider.IsVisible = true;
+        _filterSliderX = targetX;
+        _filterSliderWidth = targetWidth;
+    }
+
+    private Button GetActiveFilterButton()
+    {
+        return _presenter.ActiveFilter switch
+        {
+            AchievementQuickFilter.Unlocked => FilterUnlockedButton,
+            AchievementQuickFilter.InProgress => FilterInProgressButton,
+            AchievementQuickFilter.NewUnlock => FilterNewButton,
+            _ => FilterAllButton,
+        };
     }
 
     private string Text(string key, string fallback)

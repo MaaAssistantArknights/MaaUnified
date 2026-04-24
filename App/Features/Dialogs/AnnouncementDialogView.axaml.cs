@@ -8,6 +8,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
 using MarkdownViewerControl = MarkdownViewer.Core.Controls.MarkdownViewer;
+using MAAUnified.App.Controls;
 using MAAUnified.App.Infrastructure;
 using MAAUnified.App.ViewModels.Infrastructure;
 using MAAUnified.Application.Models;
@@ -44,17 +45,12 @@ public partial class AnnouncementDialogView : Window, IDialogChromeAware
     private string _newBadgeText = "NEW";
     private bool _suppressSectionSelectionChanged;
     private TextBlock? _primarySectionHeader;
-    private readonly TranslateTransform _stickyCurrentTitleTransform = new();
-    private readonly TranslateTransform _stickyIncomingTitleTransform = new();
 
     public AnnouncementDialogView()
     {
         InitializeComponent();
         WindowVisuals.ApplyDefaultIcon(this);
-        StickyTitlePanel.ClipToBounds = true;
-        StickyTransitionHost.ClipToBounds = true;
-        StickyCurrentHost.RenderTransform = _stickyCurrentTitleTransform;
-        StickyTransitionHost.RenderTransform = _stickyIncomingTitleTransform;
+        StickyTitlePresenter.State = AppStickyTitleState.Hidden;
         Opened += OnOpened;
         KeyDown += OnWindowKeyDown;
     }
@@ -197,11 +193,7 @@ public partial class AnnouncementDialogView : Window, IDialogChromeAware
         }
 
         SectionList.ItemsSource = _sections;
-        var initialSectionTitle = _sections.FirstOrDefault()?.Title ?? fallbackTitle;
-        StickyTitleText.Text = initialSectionTitle;
-        StickyTransitionText.Text = string.Empty;
-        StickyTransitionHost.IsVisible = false;
-        StickyTitlePanel.IsVisible = false;
+        StickyTitlePresenter.State = AppStickyTitleState.Hidden;
         RenderSectionContent();
         SelectSection(_sections.FirstOrDefault());
         Dispatcher.UIThread.Post(ResetMarkdownViewport, DispatcherPriority.Background);
@@ -280,7 +272,7 @@ public partial class AnnouncementDialogView : Window, IDialogChromeAware
         {
             return new ScrollSyncState(
                 ActiveSection: null,
-                Sticky: StickyPresentationState.Hidden);
+                Sticky: AppStickyTitleState.Hidden);
         }
 
         var offsetY = MarkdownHost.Offset.Y;
@@ -336,27 +328,19 @@ public partial class AnnouncementDialogView : Window, IDialogChromeAware
             : _sections.FirstOrDefault();
     }
 
-    private StickyPresentationState ResolveStickyPresentation(IReadOnlyList<SectionHeaderLayout> headerLayouts)
+    private AppStickyTitleState ResolveStickyPresentation(IReadOnlyList<SectionHeaderLayout> headerLayouts)
     {
         if (headerLayouts.Count == 0)
         {
-            return StickyPresentationState.Hidden;
+            return AppStickyTitleState.Hidden;
         }
 
-        var currentIndex = -1;
-        for (var i = 0; i < headerLayouts.Count; i++)
-        {
-            if (headerLayouts[i].ViewportTop > StickyRevealLineY)
-            {
-                break;
-            }
-
-            currentIndex = i;
-        }
-
+        var currentIndex = StickyTitleMath.ResolvePinnedHeaderIndex(
+            headerLayouts.Select(static layout => layout.ViewportTop).ToArray(),
+            StickyRevealLineY);
         if (currentIndex < 0)
         {
-            return StickyPresentationState.Hidden;
+            return AppStickyTitleState.Hidden;
         }
 
         var currentLayout = headerLayouts[currentIndex];
@@ -364,7 +348,7 @@ public partial class AnnouncementDialogView : Window, IDialogChromeAware
         var stickyHeight = GetStickyPresentationHeight(currentLayout, nextLayout);
         var pushOffset = CalculatePushOffset(nextLayout, stickyHeight);
 
-        return new StickyPresentationState(
+        return new AppStickyTitleState(
             IsVisible: true,
             Height: stickyHeight,
             CurrentTitle: currentLayout.Anchor.Title,
@@ -374,43 +358,9 @@ public partial class AnnouncementDialogView : Window, IDialogChromeAware
             ShowIncomingTitle: nextLayout is not null && pushOffset > 0d);
     }
 
-    private void ApplyStickyPresentation(StickyPresentationState state)
+    private void ApplyStickyPresentation(AppStickyTitleState state)
     {
-        if (!state.IsVisible)
-        {
-            ResetStickyPresentation();
-            return;
-        }
-
-        StickyTitlePanel.IsVisible = true;
-        StickyTitlePanel.Height = state.Height;
-        StickyTitleText.Text = state.CurrentTitle;
-        _stickyCurrentTitleTransform.Y = state.CurrentTranslateY;
-
-        if (!state.ShowIncomingTitle || string.IsNullOrEmpty(state.IncomingTitle))
-        {
-            StickyTransitionHost.IsVisible = false;
-            StickyTransitionHost.Height = state.Height;
-            StickyTransitionText.Text = string.Empty;
-            _stickyIncomingTitleTransform.Y = state.Height;
-            return;
-        }
-
-        StickyTransitionHost.IsVisible = true;
-        StickyTransitionHost.Height = state.Height;
-        StickyTransitionText.Text = state.IncomingTitle;
-        _stickyIncomingTitleTransform.Y = state.IncomingTranslateY;
-    }
-
-    private void ResetStickyPresentation()
-    {
-        StickyTitlePanel.IsVisible = false;
-        StickyTitlePanel.Height = double.NaN;
-        StickyTransitionHost.IsVisible = false;
-        StickyTransitionHost.Height = double.NaN;
-        StickyTransitionText.Text = string.Empty;
-        _stickyCurrentTitleTransform.Y = 0d;
-        _stickyIncomingTitleTransform.Y = 0d;
+        StickyTitlePresenter.State = state;
     }
 
     private void RenderSectionContent()
@@ -666,9 +616,7 @@ public partial class AnnouncementDialogView : Window, IDialogChromeAware
             1d,
             Math.Max(
                 GetSectionHeaderVisualHeight(_primarySectionHeader?.Bounds.Height ?? 0d),
-                Math.Max(
-                    StickyTitlePanel.Bounds.Height,
-                    GetSectionHeaderVisualHeight(StickyTitleText.Bounds.Height))));
+                StickyTitlePresenter.Bounds.Height));
     }
 
     private double GetStickyPresentationHeight(SectionHeaderLayout currentLayout, SectionHeaderLayout? nextLayout)
@@ -717,56 +665,20 @@ public partial class AnnouncementDialogView : Window, IDialogChromeAware
 
     private sealed record ScrollSyncState(
         AnnouncementSectionDisplayItem? ActiveSection,
-        StickyPresentationState Sticky);
-
-    private sealed record StickyPresentationState(
-        bool IsVisible,
-        double Height,
-        string CurrentTitle,
-        double CurrentTranslateY,
-        string? IncomingTitle,
-        double IncomingTranslateY,
-        bool ShowIncomingTitle)
-    {
-        public static StickyPresentationState Hidden { get; } = new(
-            IsVisible: false,
-            Height: 0d,
-            CurrentTitle: string.Empty,
-            CurrentTranslateY: 0d,
-            IncomingTitle: null,
-            IncomingTranslateY: 0d,
-            ShowIncomingTitle: false);
-    }
+        AppStickyTitleState Sticky);
 
     internal static double ComputeSectionTargetOffset(double headerContentTop, double activationLineY)
     {
-        return Math.Max(0d, headerContentTop - activationLineY);
+        return StickyTitleMath.ComputeSectionTargetOffset(headerContentTop, activationLineY);
     }
 
     internal static int ResolveActiveSectionIndex(double offsetY, double activationLineY, IReadOnlyList<double> headerContentTops)
     {
-        var activationContentY = offsetY + activationLineY;
-        var selectedIndex = -1;
-        for (var i = 0; i < headerContentTops.Count; i++)
-        {
-            if (activationContentY < headerContentTops[i])
-            {
-                break;
-            }
-
-            selectedIndex = i;
-        }
-
-        return selectedIndex;
+        return StickyTitleMath.ResolveActiveSectionIndex(offsetY, activationLineY, headerContentTops);
     }
 
     internal static double ComputeStickyPushOffset(double nextViewportTop, double stickyHeight)
     {
-        if (stickyHeight <= 0d)
-        {
-            return 0d;
-        }
-
-        return Math.Clamp(stickyHeight - nextViewportTop, 0d, stickyHeight);
+        return StickyTitleMath.ComputePushOffset(nextViewportTop, stickyHeight);
     }
 }

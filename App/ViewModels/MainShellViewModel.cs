@@ -93,6 +93,7 @@ public sealed class MainShellViewModel : ObservableObject
     private Stretch _shellBackgroundStretch = Stretch.UniformToFill;
     private bool _schemaMigrationNoticeShown;
     private StartupShellSnapshot _startupSnapshot = StartupShellSnapshot.Default;
+    private string _dismissedWindowUpdateOverlaySignature = string.Empty;
 
     public MainShellViewModel(MAAUnifiedRuntime runtime, IAppDialogService? dialogService = null)
     {
@@ -265,6 +266,7 @@ public sealed class MainShellViewModel : ObservableObject
             {
                 OnPropertyChanged(nameof(HasWindowVersionUpdateInfo));
                 OnPropertyChanged(nameof(HasWindowUpdateInfo));
+                NotifyWindowUpdateOverlayVisibilityChanged();
                 RefreshWindowTitle();
             }
         }
@@ -279,6 +281,7 @@ public sealed class MainShellViewModel : ObservableObject
             {
                 OnPropertyChanged(nameof(HasWindowResourceUpdateInfo));
                 OnPropertyChanged(nameof(HasWindowUpdateInfo));
+                NotifyWindowUpdateOverlayVisibilityChanged();
                 RefreshWindowTitle();
             }
         }
@@ -383,6 +386,16 @@ public sealed class MainShellViewModel : ObservableObject
     public bool HasWindowResourceUpdateInfo => !string.IsNullOrWhiteSpace(WindowResourceUpdateInfo);
 
     public bool HasWindowUpdateInfo => HasWindowVersionUpdateInfo || HasWindowResourceUpdateInfo;
+
+    public bool HasVisibleWindowVersionUpdateInfo => HasWindowVersionUpdateInfo && HasVisibleWindowUpdateInfo;
+
+    public bool HasVisibleWindowResourceUpdateInfo => HasWindowResourceUpdateInfo && HasVisibleWindowUpdateInfo;
+
+    public bool HasMultipleVisibleWindowUpdates => HasVisibleWindowVersionUpdateInfo && HasVisibleWindowResourceUpdateInfo;
+
+    public bool HasVisibleWindowUpdateInfo
+        => HasWindowUpdateInfo
+           && !string.Equals(CurrentWindowUpdateOverlaySignature, _dismissedWindowUpdateOverlaySignature, StringComparison.Ordinal);
 
     public bool IsWindowUpdateActionRunning
     {
@@ -1646,6 +1659,17 @@ public sealed class MainShellViewModel : ObservableObject
         }
     }
 
+    public async Task ShowAchievementListDialogFromToastAsync(string toastId, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(toastId))
+        {
+            return;
+        }
+
+        DismissAchievementToast(toastId);
+        await SettingsPage.ShowAchievementListDialogAsync(cancellationToken);
+    }
+
     private void OnAchievementUnlocked(object? sender, AchievementUnlockedEvent notification)
     {
         if (Dispatcher.UIThread.CheckAccess())
@@ -1691,9 +1715,10 @@ public sealed class MainShellViewModel : ObservableObject
             0,
             new AchievementToastItemViewModel(
                 notification.Id,
-                AchievementTextCatalog.GetString("AchievementCelebrate", CurrentShellLanguage, "Achievement Unlocked")
-                    .Replace("🎉", string.Empty, StringComparison.Ordinal)
-                    .Trim(),
+                FormatAchievementCelebrateText(
+                    AchievementTextCatalog.GetString("AchievementCelebrate", CurrentShellLanguage, "Achievement Unlocked")
+                        .Replace("🎉", string.Empty, StringComparison.Ordinal)
+                        .Trim()),
                 notification.Title,
                 notification.Description,
                 notification.MedalColor,
@@ -1992,6 +2017,58 @@ public sealed class MainShellViewModel : ObservableObject
             : $"{AppDisplayName} - {string.Join(" / ", updateMessages)}";
         _windowTitleScrollOffset = 0;
         UpdateWindowTitleDisplay();
+    }
+
+    public void DismissWindowUpdateOverlay()
+    {
+        if (!HasWindowUpdateInfo)
+        {
+            return;
+        }
+
+        _dismissedWindowUpdateOverlaySignature = CurrentWindowUpdateOverlaySignature;
+        NotifyWindowUpdateOverlayVisibilityChanged();
+    }
+
+    public void OpenVersionUpdateSectionFromWindowOverlay()
+    {
+        DismissWindowUpdateOverlay();
+        NavigateToSettingsSection("VersionUpdate");
+    }
+
+    private string CurrentWindowUpdateOverlaySignature
+        => string.Concat(WindowVersionUpdateInfo.Trim(), "\n", WindowResourceUpdateInfo.Trim());
+
+    private void NotifyWindowUpdateOverlayVisibilityChanged()
+    {
+        if (string.IsNullOrEmpty(CurrentWindowUpdateOverlaySignature))
+        {
+            _dismissedWindowUpdateOverlaySignature = string.Empty;
+        }
+
+        OnPropertyChanged(nameof(HasVisibleWindowVersionUpdateInfo));
+        OnPropertyChanged(nameof(HasVisibleWindowResourceUpdateInfo));
+        OnPropertyChanged(nameof(HasMultipleVisibleWindowUpdates));
+        OnPropertyChanged(nameof(HasVisibleWindowUpdateInfo));
+    }
+
+    private static string FormatAchievementCelebrateText(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return text;
+        }
+
+        if (!text.Contains(' ', StringComparison.Ordinal)
+            || !text.Any(static character => character is >= 'A' and <= 'Z' or >= 'a' and <= 'z'))
+        {
+            return text;
+        }
+
+        var firstSpaceIndex = text.IndexOf(' ');
+        return firstSpaceIndex > 0
+            ? text[..firstSpaceIndex] + Environment.NewLine + text[(firstSpaceIndex + 1)..]
+            : text;
     }
 
     private async Task HandleSettingsConfigurationContextChangedAsync(ConfigurationContextChangedEventArgs change)

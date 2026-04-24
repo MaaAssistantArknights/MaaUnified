@@ -1045,13 +1045,14 @@ public sealed class MainShellViewModelTests
         var path = Path.Combine(root, "App", "Views", "MainWindow.axaml");
         var content = File.ReadAllText(path);
 
-        Assert.Contains("HasWindowUpdateInfo", content, StringComparison.Ordinal);
-        Assert.Contains("HasWindowVersionUpdateInfo", content, StringComparison.Ordinal);
+        Assert.Contains("HasVisibleWindowUpdateInfo", content, StringComparison.Ordinal);
+        Assert.Contains("HasVisibleWindowVersionUpdateInfo", content, StringComparison.Ordinal);
         Assert.Contains("WindowVersionUpdateInfo", content, StringComparison.Ordinal);
         Assert.Contains("Click=\"OnManualUpdateClick\"", content, StringComparison.Ordinal);
-        Assert.Contains("HasWindowResourceUpdateInfo", content, StringComparison.Ordinal);
+        Assert.Contains("HasVisibleWindowResourceUpdateInfo", content, StringComparison.Ordinal);
         Assert.Contains("WindowResourceUpdateInfo", content, StringComparison.Ordinal);
         Assert.Contains("Click=\"OnManualUpdateResourceClick\"", content, StringComparison.Ordinal);
+        Assert.Contains("Click=\"OnDismissWindowUpdateClick\"", content, StringComparison.Ordinal);
     }
 
     [Fact]

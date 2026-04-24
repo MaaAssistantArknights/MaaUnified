@@ -9,6 +9,8 @@
         CanResize="True"
         Background="Transparent"
         SystemDecorations="None"
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaChromeHints="NoChrome"
         WindowStartupLocation="CenterOwner"
         Title="Screenshot Preview">
   <controls:AppWindowFrame x:Name="DialogShell"

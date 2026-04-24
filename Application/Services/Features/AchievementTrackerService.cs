@@ -819,7 +819,7 @@ public sealed class AchievementTrackerService : IAchievementTrackerService
         var config = _configService.CurrentConfig;
         return new AchievementPolicy(
             PopupDisabled: ReadProfileBool(config, ConfigurationKeys.AchievementPopupDisabled, false),
-            PopupAutoClose: ReadProfileBool(config, ConfigurationKeys.AchievementPopupAutoClose, false));
+            PopupAutoClose: ReadProfileBool(config, ConfigurationKeys.AchievementPopupAutoClose, true));
     }
 
     private static bool ReadProfileBool(UnifiedConfig config, string key, bool fallback)

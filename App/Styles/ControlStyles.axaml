@@ -1,5 +1,6 @@
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:MAAUnified.App.Controls"
         xmlns:md="clr-namespace:MarkdownViewer.Core.Controls;assembly=MarkdownViewer.Core">
   <Styles.Resources>
     <Thickness x:Key="MAA.BorderThickness.Thin">1</Thickness>
@@ -56,6 +57,7 @@
     <Thickness x:Key="MAA.Thickness.Settings.ItemMargin">10</Thickness>
     <Thickness x:Key="MAA.Thickness.Settings.ItemMarginSmall">5</Thickness>
     <Thickness x:Key="MAA.Thickness.Settings.CaptionBottomMargin">0,0,0,5</Thickness>
+    <Thickness x:Key="MAA.Thickness.Settings.PageContentIndent">20,0,0,0</Thickness>
     <Thickness x:Key="MAA.Thickness.Settings.BranchIndent">24,0,0,0</Thickness>
     <Thickness x:Key="MAA.Thickness.Settings.CheckboxNoteIndent">22,-2,0,0</Thickness>
     <Thickness x:Key="MAA.Thickness.Settings.FieldNoteIndent">132,-2,0,0</Thickness>
@@ -73,6 +75,7 @@
     <Thickness x:Key="MAA.Thickness.CopilotNavTabPadding">10,4,10,9</Thickness>
     <Thickness x:Key="MAA.Thickness.RootNavTabPadding">10,4,10,15</Thickness>
     <Thickness x:Key="MAA.Thickness.ToolboxNavTabPadding">10,4,10,15</Thickness>
+    <Thickness x:Key="MAA.Thickness.ToolboxNavContentMargin">0,12,0,0</Thickness>
 
     <x:Double x:Key="MAA.Spacing.Tight">2</x:Double>
     <x:Double x:Key="MAA.Spacing.Small">6</x:Double>
@@ -85,6 +88,9 @@
     <x:Double x:Key="MAA.FontSize.ActionCompact">12</x:Double>
     <x:Double x:Key="MAA.FontSize.TabCompact">12.5</x:Double>
     <x:Double x:Key="MAA.FontSize.CopilotNavTab">14</x:Double>
+    <x:Double x:Key="MAA.Size.NavIndicator.Thickness">3</x:Double>
+    <x:Double x:Key="MAA.Size.NavIndicator.MinLength">18</x:Double>
+    <x:Double x:Key="MAA.Size.NavChrome.CornerRadius">10</x:Double>
 
     <x:Double x:Key="MAA.Size.MainWindow.Width">1380</x:Double>
     <x:Double x:Key="MAA.Size.MainWindow.Height">900</x:Double>
@@ -110,8 +116,8 @@
     <x:Double x:Key="MAA.Size.Settings.LabelWidth">132</x:Double>
     <x:Double x:Key="MAA.Size.Settings.LabelWideWidth">152</x:Double>
     <x:Double x:Key="MAA.Size.Settings.FieldTinyWidth">55</x:Double>
-    <x:Double x:Key="MAA.Size.Settings.FieldSlimWidth">150</x:Double>
-    <x:Double x:Key="MAA.Size.Settings.FieldNarrowWidth">180</x:Double>
+    <x:Double x:Key="MAA.Size.Settings.FieldSlimWidth">144</x:Double>
+    <x:Double x:Key="MAA.Size.Settings.FieldNarrowWidth">170</x:Double>
     <x:Double x:Key="MAA.Size.Settings.FieldCenteredWidth">200</x:Double>
     <x:Double x:Key="MAA.Size.Settings.FieldInputWidth">300</x:Double>
     <x:Double x:Key="MAA.Size.Settings.FieldPathWidth">400</x:Double>
@@ -169,6 +175,8 @@
     <ColumnDefinitions x:Key="MAA.Layout.MainWindow.ContentColumns">*,260</ColumnDefinitions>
     <ColumnDefinitions x:Key="MAA.Layout.TaskQueue.Columns">276,*,380</ColumnDefinitions>
     <ColumnDefinitions x:Key="MAA.Layout.Settings.Columns">224,*</ColumnDefinitions>
+    <ColumnDefinitions x:Key="MAA.Layout.Settings.TwoColumn">250,24,250</ColumnDefinitions>
+    <ColumnDefinitions x:Key="MAA.Layout.Settings.TwoColumnAligned">250,24,250</ColumnDefinitions>
     <ColumnDefinitions x:Key="MAA.Layout.Settings.RowLabelField">132,220</ColumnDefinitions>
     <ColumnDefinitions x:Key="MAA.Layout.Settings.RowLabelFill">132,*</ColumnDefinitions>
     <ColumnDefinitions x:Key="MAA.Layout.Settings.RowLabelFieldAction">132,*,Auto</ColumnDefinitions>
@@ -423,6 +431,23 @@
     <Setter Property="Padding" Value="4" />
   </Style>
 
+  <Style Selector="Border.achievement-dialog-filter-selection-slider">
+    <Setter Property="Height" Value="36" />
+    <Setter Property="CornerRadius" Value="18" />
+    <Setter Property="Background" Value="#FF2F7CF6" />
+  </Style>
+
+  <Style Selector="Border.achievement-dialog-filter-selection-slider.animate">
+    <Setter Property="Transitions">
+      <Transitions>
+        <DoubleTransition Property="Width"
+                          Duration="0:0:0.22" />
+        <TransformOperationsTransition Property="RenderTransform"
+                                       Duration="0:0:0.22" />
+      </Transitions>
+    </Setter>
+  </Style>
+
   <Style Selector="Button.app-button.app-chip.achievement-dialog-filter-chip">
     <Setter Property="Height" Value="36" />
     <Setter Property="MinWidth" Value="80" />
@@ -447,10 +472,24 @@
   </Style>
 
   <Style Selector="Button.app-button.app-chip.achievement-dialog-filter-chip.selected">
-    <Setter Property="Background" Value="{DynamicResource MAA.Brush.Dialog.FilterChipSelectedBackground}" />
-    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.Dialog.FilterChipSelectedBorder}" />
-    <Setter Property="BorderThickness" Value="{DynamicResource MAA.BorderThickness.Thin}" />
-    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Dialog.FilterChipSelectedForeground}" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Foreground" Value="White" />
+  </Style>
+
+  <Style Selector="Button.app-button.app-chip.achievement-dialog-filter-chip.selected:pointerover">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Foreground" Value="White" />
+  </Style>
+
+  <Style Selector="Button.app-button.app-chip.achievement-dialog-filter-chip.selected:pressed">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Foreground" Value="White" />
   </Style>
 
   <Style Selector="Button.achievement-dialog-clear-chip">
@@ -826,12 +865,12 @@
   </Style>
 
   <Style Selector="Grid.settings-form">
-    <Setter Property="HorizontalAlignment" Value="Center" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
     <Setter Property="MaxWidth" Value="{DynamicResource MAA.Size.Settings.FormMaxWidth}" />
   </Style>
 
   <Style Selector="StackPanel.settings-form">
-    <Setter Property="HorizontalAlignment" Value="Center" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
     <Setter Property="MaxWidth" Value="{DynamicResource MAA.Size.Settings.FormMaxWidth}" />
     <Setter Property="Spacing" Value="{DynamicResource MAA.Spacing.Medium}" />
   </Style>
@@ -846,13 +885,14 @@
   </Style>
 
   <Style Selector="WrapPanel.settings-wrap">
-    <Setter Property="HorizontalAlignment" Value="Center" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
     <Setter Property="ItemWidth" Value="{DynamicResource MAA.Size.Settings.WrapItemWidth}" />
   </Style>
 
   <Style Selector="TextBlock.settings-label">
     <Setter Property="VerticalAlignment" Value="Center" />
-    <Setter Property="TextAlignment" Value="Right" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="TextAlignment" Value="Left" />
     <Setter Property="Margin" Value="0,0,8,0" />
   </Style>
 
@@ -1244,43 +1284,250 @@
     <Setter Property="Background" Value="{DynamicResource MAA.Brush.Wpf.TaskRowSelected}" />
   </Style>
 
-  <Style Selector="TabControl.root-nav TabItem">
-    <Setter Property="Padding" Value="{DynamicResource MAA.Thickness.RootNavTabPadding}" />
-    <Setter Property="MinHeight" Value="{DynamicResource MAA.Size.Tab.MinHeight}" />
-    <Setter Property="FontSize" Value="{DynamicResource MAA.FontSize.SectionTitle}" />
+  <Style Selector="TabStrip.root-nav">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Grid ClipToBounds="True">
+          <ItemsPresenter Name="PART_ItemsPresenter"
+                          ItemsPanel="{TemplateBinding ItemsPanel}" />
+          <controls:AppSelectionIndicatorPresenter Classes="selection-indicator-nav"
+                                                  Target="{Binding RelativeSource={RelativeSource TemplatedParent}}"
+                                                  Orientation="Horizontal"
+                                                  LeadingInset="10"
+                                                  TrailingInset="10"
+                                                  MinimumLength="{DynamicResource MAA.Size.NavIndicator.MinLength}" />
+        </Grid>
+      </ControlTemplate>
+    </Setter>
   </Style>
 
-  <Style Selector="TabControl.root-nav TabItem:selected">
-    <Setter Property="FontWeight" Value="SemiBold" />
+  <Style Selector="TabStrip.copilot-nav">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Grid ClipToBounds="True">
+          <ItemsPresenter Name="PART_ItemsPresenter"
+                          ItemsPanel="{TemplateBinding ItemsPanel}" />
+          <controls:AppSelectionIndicatorPresenter Classes="selection-indicator-nav"
+                                                  Target="{Binding RelativeSource={RelativeSource TemplatedParent}}"
+                                                  Orientation="Horizontal"
+                                                  LeadingInset="10"
+                                                  TrailingInset="10"
+                                                  MinimumLength="{DynamicResource MAA.Size.NavIndicator.MinLength}" />
+        </Grid>
+      </ControlTemplate>
+    </Setter>
+  </Style>
+
+  <Style Selector="TabControl.toolbox-nav">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Grid RowDefinitions="Auto,*"
+              ClipToBounds="True">
+          <Grid Grid.Row="0"
+                ClipToBounds="True">
+            <ItemsPresenter Name="PART_ItemsPresenter"
+                            ItemsPanel="{TemplateBinding ItemsPanel}" />
+            <controls:AppSelectionIndicatorPresenter Classes="selection-indicator-nav"
+                                                    Target="{Binding RelativeSource={RelativeSource TemplatedParent}}"
+                                                    Orientation="Horizontal"
+                                                    LeadingInset="10"
+                                                    TrailingInset="10"
+                                                    MinimumLength="{DynamicResource MAA.Size.NavIndicator.MinLength}" />
+          </Grid>
+
+          <ContentPresenter x:Name="PART_SelectedContentHost"
+                            Grid.Row="1"
+                            Margin="{DynamicResource MAA.Thickness.ToolboxNavContentMargin}"
+                            Content="{TemplateBinding SelectedContent}"
+                            ContentTemplate="{TemplateBinding SelectedContentTemplate}"
+                            HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                            VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
+        </Grid>
+      </ControlTemplate>
+    </Setter>
+  </Style>
+
+  <Style Selector="controls|AppSelectionIndicatorPresenter.selection-indicator-nav.indicator-horizontal /template/ Border#PART_IndicatorGlow">
+    <Setter Property="Width" Value="{DynamicResource MAA.Size.NavIndicator.MinLength}" />
+    <Setter Property="Height" Value="{DynamicResource MAA.Size.NavIndicator.Thickness}" />
+    <Setter Property="Margin" Value="0,0,0,0" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
+    <Setter Property="VerticalAlignment" Value="Bottom" />
+    <Setter Property="Opacity" Value="0" />
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.PrimaryBackground}" />
+  </Style>
+
+  <Style Selector="controls|AppSelectionIndicatorPresenter.selection-indicator-nav.indicator-horizontal /template/ Border#PART_Indicator">
+    <Setter Property="Width" Value="{DynamicResource MAA.Size.NavIndicator.MinLength}" />
+    <Setter Property="Height" Value="{DynamicResource MAA.Size.NavIndicator.Thickness}" />
+    <Setter Property="Margin" Value="0,0,0,0" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
+    <Setter Property="VerticalAlignment" Value="Bottom" />
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.PrimaryBackground}" />
   </Style>
 
   <Style Selector="TabStrip.root-nav TabStripItem">
     <Setter Property="Padding" Value="{DynamicResource MAA.Thickness.RootNavTabPadding}" />
     <Setter Property="MinHeight" Value="{DynamicResource MAA.Size.Tab.MinHeight}" />
-    <Setter Property="FontSize" Value="{DynamicResource MAA.FontSize.SectionTitle}" />
+    <Setter Property="FontSize" Value="15.5" />
+    <Setter Property="FontWeight" Value="Medium" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Secondary}" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border x:Name="PART_NavChrome"
+                Background="Transparent"
+                CornerRadius="10">
+          <ContentPresenter Margin="{TemplateBinding Padding}"
+                            HorizontalContentAlignment="Center"
+                            VerticalContentAlignment="Center"
+                            Content="{TemplateBinding Content}"
+                            ContentTemplate="{TemplateBinding ContentTemplate}" />
+        </Border>
+      </ControlTemplate>
+    </Setter>
   </Style>
 
   <Style Selector="TabStrip.root-nav TabStripItem:selected">
     <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
   </Style>
 
-  <Style Selector="TabControl.copilot-nav TabItem">
+  <Style Selector="TabStrip.root-nav TabStripItem:pointerover /template/ Border#PART_NavChrome">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.SubtleBackgroundHover}" />
+  </Style>
+
+  <Style Selector="TabStrip.root-nav TabStripItem:pressed /template/ Border#PART_NavChrome">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.SubtleBackgroundPressed}" />
+  </Style>
+
+  <Style Selector="TabStrip.root-nav TabStripItem:selected /template/ Border#PART_NavChrome">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
+  <Style Selector="TabStrip.root-nav TabStripItem /template/ Border#PART_NavChrome">
+    <!-- Navigation underline motion is a design contract. Keep these hover/press transitions aligned with it. -->
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background"
+                         Duration="0:0:0.16" />
+      </Transitions>
+    </Setter>
+  </Style>
+
+  <Style Selector="TabStrip.copilot-nav TabStripItem">
     <Setter Property="Padding" Value="{DynamicResource MAA.Thickness.CopilotNavTabPadding}" />
     <Setter Property="MinHeight" Value="{DynamicResource MAA.Size.Tab.MinHeight}" />
     <Setter Property="FontSize" Value="{DynamicResource MAA.FontSize.CopilotNavTab}" />
+    <Setter Property="FontWeight" Value="Medium" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Secondary}" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border x:Name="PART_NavChrome"
+                Background="Transparent"
+                CornerRadius="10">
+          <ContentPresenter Margin="{TemplateBinding Padding}"
+                            HorizontalContentAlignment="Center"
+                            VerticalContentAlignment="Center"
+                            Content="{TemplateBinding Content}"
+                            ContentTemplate="{TemplateBinding ContentTemplate}" />
+        </Border>
+      </ControlTemplate>
+    </Setter>
   </Style>
 
-  <Style Selector="TabControl.copilot-nav TabItem:selected">
+  <Style Selector="TabStrip.copilot-nav TabStripItem:selected">
     <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
+  </Style>
+
+  <Style Selector="TabStrip.copilot-nav TabStripItem:pointerover /template/ Border#PART_NavChrome">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.SubtleBackgroundHover}" />
+  </Style>
+
+  <Style Selector="TabStrip.copilot-nav TabStripItem:pressed /template/ Border#PART_NavChrome">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.SubtleBackgroundPressed}" />
+  </Style>
+
+  <Style Selector="TabStrip.copilot-nav TabStripItem:selected /template/ Border#PART_NavChrome">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
+  <Style Selector="TabStrip.copilot-nav TabStripItem /template/ Border#PART_NavChrome">
+    <!-- Navigation underline motion is a design contract. Keep these hover/press transitions aligned with it. -->
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background"
+                         Duration="0:0:0.16" />
+      </Transitions>
+    </Setter>
   </Style>
 
   <Style Selector="TabControl.toolbox-nav TabItem">
     <Setter Property="Padding" Value="{DynamicResource MAA.Thickness.ToolboxNavTabPadding}" />
     <Setter Property="MinHeight" Value="{DynamicResource MAA.Size.Tab.MinHeight}" />
     <Setter Property="FontSize" Value="{DynamicResource MAA.FontSize.SectionTitle}" />
+    <Setter Property="FontWeight" Value="Medium" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Secondary}" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border x:Name="PART_NavChrome"
+                Background="Transparent"
+                CornerRadius="10">
+          <ContentPresenter Margin="{TemplateBinding Padding}"
+                            HorizontalContentAlignment="Center"
+                            VerticalContentAlignment="Center"
+                            Content="{TemplateBinding Header}"
+                            ContentTemplate="{TemplateBinding HeaderTemplate}" />
+        </Border>
+      </ControlTemplate>
+    </Setter>
   </Style>
 
   <Style Selector="TabControl.toolbox-nav TabItem:selected">
     <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
+  </Style>
+
+  <Style Selector="TabControl.toolbox-nav TabItem:pointerover /template/ Border#PART_NavChrome">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.SubtleBackgroundHover}" />
+  </Style>
+
+  <Style Selector="TabControl.toolbox-nav TabItem:pressed /template/ Border#PART_NavChrome">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.SubtleBackgroundPressed}" />
+  </Style>
+
+  <Style Selector="TabControl.toolbox-nav TabItem:selected /template/ Border#PART_NavChrome">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
+  <Style Selector="TabControl.toolbox-nav TabItem /template/ Border#PART_NavChrome">
+    <!-- Navigation underline motion is a design contract. Keep these hover/press transitions aligned with it. -->
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background"
+                         Duration="0:0:0.16" />
+      </Transitions>
+    </Setter>
   </Style>
 </Styles>

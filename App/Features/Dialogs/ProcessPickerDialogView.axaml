@@ -9,6 +9,8 @@
         CanResize="False"
         Background="Transparent"
         SystemDecorations="None"
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaChromeHints="NoChrome"
         WindowStartupLocation="CenterOwner">
   <controls:AppWindowFrame x:Name="DialogShell"
                            Mode="CompactModal"

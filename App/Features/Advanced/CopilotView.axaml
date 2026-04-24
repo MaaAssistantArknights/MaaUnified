@@ -160,14 +160,14 @@
         <StackPanel Grid.Row="0"
                     HorizontalAlignment="Stretch"
                     Spacing="14">
-          <TabControl Classes="copilot-nav"
-                      SelectedIndex="{Binding CopilotTabIndex}"
-                      IsEnabled="{Binding CanEdit}">
-            <TabItem Header="{Binding MainTabTitle}" />
-            <TabItem Header="{Binding SecurityTabTitle}" />
-            <TabItem Header="{Binding ParadoxTabTitle}" />
-            <TabItem Header="{Binding OtherTabTitle}" />
-          </TabControl>
+          <TabStrip Classes="copilot-nav"
+                    SelectedIndex="{Binding CopilotTabIndex}"
+                    IsEnabled="{Binding CanEdit}">
+            <TabStripItem Content="{Binding MainTabTitle}" />
+            <TabStripItem Content="{Binding SecurityTabTitle}" />
+            <TabStripItem Content="{Binding ParadoxTabTitle}" />
+            <TabStripItem Content="{Binding OtherTabTitle}" />
+          </TabStrip>
 
           <Border Classes="app-surface app-card copilot-file-strip">
             <Grid ColumnDefinitions="*,Auto,Auto,Auto">

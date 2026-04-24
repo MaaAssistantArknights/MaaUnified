@@ -378,6 +378,39 @@ public sealed class SettingsGuiBackgroundFeatureTests
         Assert.True(vm.HasPendingResourceUpdateAvailability);
         Assert.Contains("episode", vm.PendingResourceUpdateSummary, StringComparison.Ordinal);
         Assert.Equal(1, versionUpdate.CheckResourceCallCount);
+        Assert.Equal(0, versionUpdate.UpdateResourceCallCount);
+        var bridge = Assert.IsType<FakeBridge>(fixture.Runtime.CoreBridge);
+        Assert.Equal(0, bridge.ReloadResourceCallCount);
+    }
+
+    [Fact]
+    public async Task StartupVersionUpdateCheck_WhenGithubResourceUpdateAvailable_ShouldNotAutoApply()
+    {
+        var versionUpdate = new SpyVersionUpdateFeatureService
+        {
+            CheckResourceUpdateResult = UiOperationResult<ResourceUpdateCheckResult>.Ok(
+                new ResourceUpdateCheckResult(
+                    IsUpdateAvailable: true,
+                    DisplayVersion: "2026-04-22 08:48:01",
+                    ReleaseNote: "episode",
+                    VersionTimestamp: null,
+                    RequiresMirrorChyanCdk: false,
+                    DownloadUrl: "https://example.com/resource.zip"),
+                "检测到资源更新，可手动更新。"),
+        };
+        await using var fixture = await RuntimeFixture.CreateAsync(versionUpdateFeatureService: versionUpdate);
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        vm.VersionUpdateResourceSource = "Github";
+
+        await vm.RunStartupVersionUpdateCheckAsync();
+
+        Assert.True(vm.HasPendingResourceUpdateAvailability);
+        Assert.Contains("episode", vm.PendingResourceUpdateSummary, StringComparison.Ordinal);
+        Assert.Equal(1, versionUpdate.CheckResourceCallCount);
+        Assert.Equal(0, versionUpdate.UpdateResourceCallCount);
+        var bridge = Assert.IsType<FakeBridge>(fixture.Runtime.CoreBridge);
+        Assert.Equal(0, bridge.ReloadResourceCallCount);
     }
 
     [Fact]

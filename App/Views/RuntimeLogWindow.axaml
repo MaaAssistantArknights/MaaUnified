@@ -9,6 +9,8 @@
         CanResize="True"
         Background="Transparent"
         SystemDecorations="None"
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaChromeHints="NoChrome"
         WindowStartupLocation="CenterOwner"
         Title="Runtime Logs">
   <controls:AppWindowFrame x:Name="DialogShell"

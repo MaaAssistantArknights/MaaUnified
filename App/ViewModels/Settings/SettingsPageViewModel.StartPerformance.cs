@@ -191,7 +191,8 @@ public sealed partial class SettingsPageViewModel
 
     public async Task SaveStartPerformanceSettingsAsync(CancellationToken cancellationToken = default)
     {
-        var persistedSnapshot = ReadStartPerformanceSnapshot(Runtime.ConfigurationService.CurrentConfig, new List<string>());
+        var persistedWarnings = new List<string>();
+        var persistedSnapshot = ReadStartPerformanceSnapshot(Runtime.ConfigurationService.CurrentConfig, persistedWarnings);
         var snapshot = BuildNormalizedStartPerformanceSnapshot();
         ApplyStartPerformanceSnapshotWithoutDirtyTracking(snapshot);
 
@@ -205,6 +206,13 @@ public sealed partial class SettingsPageViewModel
                 "Settings.Save.StartPerformance.Validation",
                 validation,
                 cancellationToken);
+            return;
+        }
+
+        if (persistedWarnings.Count == 0 && snapshot == persistedSnapshot)
+        {
+            HasPendingStartPerformanceChanges = false;
+            StartPerformanceValidationMessage = string.Empty;
             return;
         }
 
@@ -230,7 +238,10 @@ public sealed partial class SettingsPageViewModel
             : string.Empty;
         LastSuccessfulStartPerformanceSaveAt = DateTimeOffset.Now;
 
-        await TrySyncCoreInstanceOptionsAsync("Settings.StartPerformance.SyncInstanceOptions", cancellationToken);
+        if (persistedSnapshot.DeploymentWithPause != readBackSnapshot.DeploymentWithPause)
+        {
+            await TrySyncCoreInstanceOptionsAsync("Settings.StartPerformance.SyncInstanceOptions", cancellationToken);
+        }
 
         if (ShouldPromptForGpuRestart(persistedSnapshot, readBackSnapshot))
         {

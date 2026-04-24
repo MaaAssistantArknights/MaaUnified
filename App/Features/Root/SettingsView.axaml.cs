@@ -5,8 +5,9 @@ using System.Runtime.CompilerServices;
 using System.Threading;
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Interactivity;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
+using MAAUnified.App.Controls;
 using settingsViews = MAAUnified.App.Features.Settings;
 using MAAUnified.App.ViewModels.Settings;
 
@@ -15,8 +16,21 @@ namespace MAAUnified.App.Features.Root;
 public partial class SettingsView : UserControl, INotifyPropertyChanged
 {
     private readonly record struct SectionScrollPosition(string SectionKey, double OffsetWithinSection);
+    private readonly record struct SectionHeaderLayout(
+        SettingsSectionViewModel Section,
+        double ContentTop,
+        double ViewportTop,
+        double HeaderHeight);
+    private readonly record struct StickyTitlePresentationState(
+        string? CurrentSectionKey,
+        AppStickyTitleState PresenterState);
 
     private const int BackgroundSectionWarmupIntervalMs = 45;
+    private const int ProgressiveMaterializationLeadCount = 2;
+    private const double StickyActivationPadding = 8d;
+    private const double StickyTitleTopInset = 0d;
+    private const double StickyTitleBottomInset = 0d;
+    private const double StickyTitleRevealLineY = 0d;
     private static readonly string[] SectionOrder =
     [
         "ConfigurationManager",
@@ -42,12 +56,14 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
     private static int _backgroundSectionWarmupIndex;
 
     private readonly Dictionary<string, Border> _sectionAnchors = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, TextBlock> _sectionTitleAnchors = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _materializedSections = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, double> _sectionTopCache = new(StringComparer.OrdinalIgnoreCase);
     private ScrollViewer? _sectionScrollViewer;
     private StackPanel? _sectionContentPanel;
     private bool _suppressSectionSelectionChanged;
     private bool _suppressSectionScrollChanged;
+    private bool _sectionLayoutRefreshQueued;
     private bool _sectionTopCacheDirty = true;
     private double _lastKnownExtentHeight = -1d;
     private double _lastKnownViewportHeight = -1d;
@@ -62,6 +78,9 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
     public SettingsView()
     {
         InitializeComponent();
+        // Legacy local transforms (_stickyCurrentTitleTransform / _stickyIncomingTitleTransform)
+        // are now owned by AppStickyTitlePresenter to keep the animation contract centralized.
+        StickyTitlePresenter.State = AppStickyTitleState.Hidden;
         AttachedToVisualTree += (_, _) =>
         {
             BindViewModelNotifications();
@@ -304,32 +323,6 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
         Dispatcher.UIThread.Post(ScrollToSelectedSection, DispatcherPriority.Background);
     }
 
-    private void OnRailItemClick(object? sender, RoutedEventArgs e)
-    {
-        if (sender is not Control { Tag: SettingsSectionViewModel section } || VM is null)
-        {
-            return;
-        }
-
-        if (!ReferenceEquals(VM.SelectedSection, section))
-        {
-            VM.SelectedSection = section;
-        }
-
-        RaiseSectionChromePropertyChanged();
-    }
-
-    private async void OnSectionActionClick(object? sender, RoutedEventArgs e)
-    {
-        if (sender is not Control { Tag: SettingsSectionActionItem action } || VM is null)
-        {
-            return;
-        }
-
-        await VM.ExecuteSectionActionAsync(action);
-        RaiseSectionChromePropertyChanged();
-    }
-
     private void OnSectionScrollChanged(object? sender, ScrollChangedEventArgs e)
     {
         if (_suppressSectionScrollChanged)
@@ -340,12 +333,13 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
         InvalidateSectionTopCacheIfLayoutChanged();
         TryMaterializeNextSectionForScroll();
         UpdateSelectedSectionFromScroll();
+        UpdateStickyTitlePresentation();
     }
 
     private void OnSectionContentPanelSizeChanged(object? sender, SizeChangedEventArgs e)
     {
         InvalidateSectionTopCache();
-        RefreshSectionTopCacheIfNeeded();
+        QueueSectionLayoutRefresh();
     }
 
     private void RebuildSectionAnchors()
@@ -384,6 +378,7 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
             anchor.Child = null;
         }
 
+        _sectionTitleAnchors.Clear();
         _materializedSections.Clear();
         InvalidateSectionTopCache();
     }
@@ -456,6 +451,7 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
         ApplySectionDataContext(key, content);
         MarkSectionWarmupPrepared(key);
         anchor.Child = content;
+        UpdateSectionTitleAnchor(key, content);
         _materializedSections.Add(key);
         InvalidateSectionTopCache();
         if (loadDeferredData && VM is { } vm)
@@ -511,6 +507,38 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
             : vm;
     }
 
+    private void UpdateSectionTitleAnchor(string key, Control? content)
+    {
+        _sectionTitleAnchors.Remove(key);
+        if (content is null)
+        {
+            return;
+        }
+
+        if (FindSectionTitleAnchor(content) is { } title)
+        {
+            _sectionTitleAnchors[key] = title;
+        }
+    }
+
+    private static TextBlock? FindSectionTitleAnchor(Control content)
+    {
+        if (content is TextBlock directTitle && directTitle.Classes.Contains("settings-page-title"))
+        {
+            return directTitle;
+        }
+
+        foreach (var title in content.GetVisualDescendants().OfType<TextBlock>())
+        {
+            if (title.Classes.Contains("settings-page-title"))
+            {
+                return title;
+            }
+        }
+
+        return null;
+    }
+
     private void InvalidateSectionTopCache()
     {
         _sectionTopCacheDirty = true;
@@ -545,19 +573,55 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
         foreach (var section in VM.Sections)
         {
             if (!_materializedSections.Contains(section.Key)
-                || !_sectionAnchors.TryGetValue(section.Key, out var anchor))
+                || !TryResolveSectionTop(section.Key, out var top))
             {
                 continue;
             }
 
-            var point = anchor.TranslatePoint(default, _sectionContentPanel);
-            if (point.HasValue)
-            {
-                _sectionTopCache[section.Key] = point.Value.Y;
-            }
+            _sectionTopCache[section.Key] = top;
         }
 
         _sectionTopCacheDirty = false;
+    }
+
+    private void QueueSectionLayoutRefresh()
+    {
+        if (_sectionLayoutRefreshQueued)
+        {
+            return;
+        }
+
+        _sectionLayoutRefreshQueued = true;
+        Dispatcher.UIThread.Post(
+            () =>
+            {
+                _sectionLayoutRefreshQueued = false;
+                RefreshSectionTopCacheIfNeeded();
+                UpdateStickyTitlePresentation();
+            },
+            DispatcherPriority.Render);
+    }
+
+    private bool TryResolveSectionTop(string key, out double top)
+    {
+        if (_sectionContentPanel is not null
+            && _sectionTitleAnchors.TryGetValue(key, out var titleAnchor)
+            && titleAnchor.TranslatePoint(default, _sectionContentPanel) is { } titlePoint)
+        {
+            top = titlePoint.Y;
+            return true;
+        }
+
+        if (_sectionContentPanel is not null
+            && _sectionAnchors.TryGetValue(key, out var sectionAnchor)
+            && sectionAnchor.TranslatePoint(default, _sectionContentPanel) is { } sectionPoint)
+        {
+            top = sectionPoint.Y;
+            return true;
+        }
+
+        top = 0d;
+        return false;
     }
 
     private void TryMaterializeNextSectionForScroll()
@@ -602,7 +666,7 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
             return;
         }
 
-        var pendingSections = SectionOrder
+        var pendingSections = ResolveProgressiveMaterializationTargets(vm.SelectedSection?.Key)
             .Where(sectionKey => !_materializedSections.Contains(sectionKey))
             .ToArray();
         if (pendingSections.Length == 0)
@@ -616,6 +680,32 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
         {
             _pendingProgressiveSections.Add(sectionKey);
             _ = MaterializeSectionWhenReadyAsync(vm, sectionKey, _progressiveMaterializationCts.Token);
+        }
+    }
+
+    private static IEnumerable<string> ResolveProgressiveMaterializationTargets(string? selectedKey)
+    {
+        if (SectionOrder.Length == 0)
+        {
+            yield break;
+        }
+
+        var startIndex = 0;
+        if (!string.IsNullOrWhiteSpace(selectedKey))
+        {
+            var selectedIndex = Array.FindIndex(
+                SectionOrder,
+                sectionKey => string.Equals(sectionKey, selectedKey, StringComparison.OrdinalIgnoreCase));
+            if (selectedIndex >= 0)
+            {
+                startIndex = selectedIndex;
+            }
+        }
+
+        var endIndex = Math.Min(SectionOrder.Length - 1, startIndex + ProgressiveMaterializationLeadCount);
+        for (var i = startIndex; i <= endIndex; i++)
+        {
+            yield return SectionOrder[i];
         }
     }
 
@@ -759,10 +849,9 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
         RefreshSectionTopCacheIfNeeded();
 
         if (!_sectionTopCache.TryGetValue(vm.SelectedSection.Key, out var top)
-            && (_sectionAnchors.TryGetValue(vm.SelectedSection.Key, out var anchor)
-                && anchor.TranslatePoint(default, contentPanel) is { } point))
+            && TryResolveSectionTop(vm.SelectedSection.Key, out var resolvedTop))
         {
-            top = point.Y;
+            top = resolvedTop;
             _sectionTopCache[vm.SelectedSection.Key] = top;
         }
 
@@ -771,10 +860,13 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
             return;
         }
 
+        var targetOffset = ComputeSectionTargetOffset(top, GetSectionScrollTargetLineY());
         SuppressSectionScrollChangedOnce();
         scrollViewer.Offset = new Vector(
             scrollViewer.Offset.X,
-            Math.Max(top, 0d));
+            Math.Max(targetOffset, 0d));
+        UpdateStickyTitlePresentation();
+        StartProgressiveSectionMaterialization();
     }
 
     private SectionScrollPosition? CaptureCurrentSectionScrollPosition()
@@ -793,9 +885,10 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
             return null;
         }
 
+        var sectionOffset = ComputeSectionTargetOffset(top, GetSectionScrollTargetLineY());
         return new SectionScrollPosition(
             vm.SelectedSection.Key,
-            Math.Max(scrollViewer.Offset.Y - top, 0d));
+            Math.Max(scrollViewer.Offset.Y - sectionOffset, 0d));
     }
 
     private bool RestoreSectionScrollPosition(SectionScrollPosition? scrollPosition)
@@ -811,10 +904,9 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
         RefreshSectionTopCacheIfNeeded();
 
         if (!_sectionTopCache.TryGetValue(scrollPosition.Value.SectionKey, out var top)
-            && (_sectionAnchors.TryGetValue(scrollPosition.Value.SectionKey, out var anchor)
-                && anchor.TranslatePoint(default, contentPanel) is { } point))
+            && TryResolveSectionTop(scrollPosition.Value.SectionKey, out var resolvedTop))
         {
-            top = point.Y;
+            top = resolvedTop;
             _sectionTopCache[scrollPosition.Value.SectionKey] = top;
         }
 
@@ -824,9 +916,11 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
         }
 
         var maxOffset = Math.Max(scrollViewer.Extent.Height - scrollViewer.Viewport.Height, 0d);
-        var targetOffset = Math.Clamp(top + scrollPosition.Value.OffsetWithinSection, 0d, maxOffset);
+        var sectionOffset = ComputeSectionTargetOffset(top, GetSectionScrollTargetLineY());
+        var targetOffset = Math.Clamp(sectionOffset + scrollPosition.Value.OffsetWithinSection, 0d, maxOffset);
         SuppressSectionScrollChangedOnce();
         scrollViewer.Offset = new Vector(scrollViewer.Offset.X, targetOffset);
+        UpdateStickyTitlePresentation();
         return true;
     }
 
@@ -839,31 +933,19 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
             return;
         }
 
-        RefreshSectionTopCacheIfNeeded();
-        if (_sectionTopCache.Count == 0)
+        var headerLayouts = MeasureSectionHeaderLayouts(Math.Max(scrollViewer.Offset.Y, 0d));
+        if (headerLayouts.Count == 0)
         {
             return;
         }
 
-        var threshold = scrollViewer.Offset.Y + Math.Max(24d, scrollViewer.Viewport.Height * 0.25d);
-        SettingsSectionViewModel? candidate = null;
-        var candidateTop = double.MinValue;
-
-        foreach (var section in vm.Sections)
-        {
-            if (!_sectionTopCache.TryGetValue(section.Key, out var top))
-            {
-                continue;
-            }
-
-            if (top <= threshold && top >= candidateTop)
-            {
-                candidate = section;
-                candidateTop = top;
-            }
-        }
-
-        candidate ??= vm.Sections.Count > 0 ? vm.Sections[0] : null;
+        var selectedIndex = ResolveActiveSectionIndex(
+            Math.Max(scrollViewer.Offset.Y, 0d),
+            GetSectionActivationLineY(),
+            headerLayouts.Select(static layout => layout.ContentTop).ToArray());
+        SettingsSectionViewModel? candidate = selectedIndex >= 0
+            ? headerLayouts[selectedIndex].Section
+            : (vm.Sections.Count > 0 ? vm.Sections[0] : null);
         if (candidate is null || ReferenceEquals(candidate, vm.SelectedSection))
         {
             return;
@@ -887,6 +969,172 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
         Dispatcher.UIThread.Post(
             () => _suppressSectionScrollChanged = false,
             DispatcherPriority.Background);
+    }
+
+    private void UpdateStickyTitlePresentation()
+    {
+        ApplyStickyTitlePresentation(CalculateStickyTitlePresentation());
+    }
+
+    private StickyTitlePresentationState CalculateStickyTitlePresentation()
+    {
+        var vm = VM;
+        var scrollViewer = _sectionScrollViewer;
+        if (vm is null || vm.Sections.Count == 0 || scrollViewer is null)
+        {
+            return new StickyTitlePresentationState(null, AppStickyTitleState.Hidden);
+        }
+
+        var headerLayouts = MeasureSectionHeaderLayouts(Math.Max(scrollViewer.Offset.Y, 0d));
+        if (headerLayouts.Count == 0)
+        {
+            return new StickyTitlePresentationState(null, AppStickyTitleState.Hidden);
+        }
+
+        var currentIndex = StickyTitleMath.ResolvePinnedHeaderIndex(
+            headerLayouts.Select(static layout => layout.ViewportTop).ToArray(),
+            StickyTitleRevealLineY);
+        if (currentIndex < 0)
+        {
+            return new StickyTitlePresentationState(null, AppStickyTitleState.Hidden);
+        }
+
+        var currentLayout = headerLayouts[currentIndex];
+        var nextLayout = currentIndex + 1 < headerLayouts.Count
+            ? headerLayouts[currentIndex + 1]
+            : (SectionHeaderLayout?)null;
+        var height = GetStickyPresentationHeight(currentLayout, nextLayout);
+        var pushOffset = CalculatePushOffset(nextLayout, height);
+        if (nextLayout is null)
+        {
+            return new StickyTitlePresentationState(
+                currentLayout.Section.Key,
+                new AppStickyTitleState(
+                    IsVisible: true,
+                    Height: height,
+                    CurrentTitle: currentLayout.Section.DisplayName,
+                    CurrentTranslateY: 0d,
+                    IncomingTitle: null,
+                    IncomingTranslateY: height,
+                    ShowIncomingTitle: false));
+        }
+
+        return new StickyTitlePresentationState(
+            currentLayout.Section.Key,
+            new AppStickyTitleState(
+                IsVisible: true,
+                Height: height,
+                CurrentTitle: currentLayout.Section.DisplayName,
+                CurrentTranslateY: -pushOffset,
+                IncomingTitle: pushOffset > 0d ? nextLayout.Value.Section.DisplayName : null,
+                IncomingTranslateY: height - pushOffset,
+                ShowIncomingTitle: pushOffset > 0d));
+    }
+
+    private IReadOnlyList<SectionHeaderLayout> MeasureSectionHeaderLayouts(double offsetY)
+    {
+        RefreshSectionTopCacheIfNeeded();
+        if (VM is null || _sectionTopCache.Count == 0)
+        {
+            return [];
+        }
+
+        var layouts = new List<SectionHeaderLayout>(VM.Sections.Count);
+        foreach (var section in VM.Sections)
+        {
+            if (!_sectionTopCache.TryGetValue(section.Key, out var top))
+            {
+                continue;
+            }
+
+            var headerHeight = 0d;
+            if (_sectionTitleAnchors.TryGetValue(section.Key, out var titleAnchor))
+            {
+                headerHeight = Math.Max(titleAnchor.Bounds.Height, titleAnchor.DesiredSize.Height);
+            }
+
+            layouts.Add(new SectionHeaderLayout(
+                section,
+                top,
+                top - offsetY,
+                Math.Max(headerHeight, 1d)));
+        }
+
+        return layouts;
+    }
+
+    private double GetSectionActivationLineY()
+    {
+        return Math.Max(18d, GetStickyReferenceHeight() + StickyActivationPadding);
+    }
+
+    private double GetSectionScrollTargetLineY()
+    {
+        return StickyTitleRevealLineY;
+    }
+
+    private double GetStickyReferenceHeight()
+    {
+        var tallestSectionHeader = _sectionTitleAnchors.Count == 0
+            ? 0d
+            : _sectionTitleAnchors.Values.Max(title => Math.Max(title.Bounds.Height, title.DesiredSize.Height));
+        return Math.Max(
+            1d,
+            Math.Max(
+                GetSectionHeaderVisualHeight(tallestSectionHeader),
+                StickyTitlePresenter.Bounds.Height));
+    }
+
+    private double GetStickyPresentationHeight(SectionHeaderLayout currentLayout, SectionHeaderLayout? nextLayout)
+    {
+        return Math.Max(
+            1d,
+            Math.Max(
+                GetStickyReferenceHeight(),
+                Math.Max(
+                    GetSectionHeaderVisualHeight(currentLayout.HeaderHeight),
+                    GetSectionHeaderVisualHeight(nextLayout?.HeaderHeight ?? 0d))));
+    }
+
+    private static double GetSectionHeaderVisualHeight(double headerHeight)
+    {
+        return Math.Max(1d, headerHeight + StickyTitleTopInset + StickyTitleBottomInset);
+    }
+
+    private static double CalculatePushOffset(SectionHeaderLayout? nextLayout, double stickyHeight)
+    {
+        if (nextLayout is null || stickyHeight <= 0d)
+        {
+            return 0d;
+        }
+
+        return StickyTitleMath.ComputePushOffset(nextLayout.Value.ViewportTop, stickyHeight);
+    }
+
+    private static double ComputeSectionTargetOffset(double headerContentTop, double activationLineY)
+    {
+        return StickyTitleMath.ComputeSectionTargetOffset(headerContentTop, activationLineY);
+    }
+
+    private static int ResolveActiveSectionIndex(double offsetY, double activationLineY, IReadOnlyList<double> headerContentTops)
+    {
+        return StickyTitleMath.ResolveActiveSectionIndex(offsetY, activationLineY, headerContentTops);
+    }
+
+    private void ApplyStickyTitlePresentation(StickyTitlePresentationState state)
+    {
+        UpdateSectionTitleAnchorVisibility(state.CurrentSectionKey);
+        StickyTitlePresenter.State = state.PresenterState;
+    }
+
+    private void UpdateSectionTitleAnchorVisibility(string? hiddenSectionKey)
+    {
+        foreach (var (sectionKey, titleAnchor) in _sectionTitleAnchors)
+        {
+            titleAnchor.Opacity = string.Equals(sectionKey, hiddenSectionKey, StringComparison.OrdinalIgnoreCase)
+                ? 0d
+                : 1d;
+        }
     }
 
     public string CurrentSectionIntroText
@@ -913,7 +1161,7 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
                 return string.Empty;
             }
 
-            return VM.RootTexts.GetOrDefault("Settings.Section.Status.Title", "Status");
+        return VM.RootTexts.GetOrDefault("Settings.Section.Status.Title", "Status");
         }
     }
 
@@ -932,7 +1180,7 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
                 return string.Empty;
             }
 
-            return selectedKey switch
+            var message = selectedKey switch
             {
                 "ConfigurationManager" => FirstNonEmpty(VM.ConfigurationManagerStatusMessage, VM.StatusMessage),
                 "RemoteControl" => FirstNonEmpty(VM.RemoteControlStatusMessage, VM.StatusMessage),
@@ -944,7 +1192,22 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
                 "About" => FirstNonEmpty(VM.AboutStatusMessage, VM.StatusMessage),
                 _ => VM.StatusMessage,
             };
+
+            return IsTransientSaveStateMessage(message) ? string.Empty : message;
         }
+    }
+
+    private bool IsTransientSaveStateMessage(string? message)
+    {
+        if (string.IsNullOrWhiteSpace(message) || VM?.RootTexts is null)
+        {
+            return false;
+        }
+
+        var savingText = VM.RootTexts.GetOrDefault("Settings.State.Saving", string.Empty);
+        var savedText = VM.RootTexts.GetOrDefault("Settings.State.Saved", string.Empty);
+        return string.Equals(message, savingText, StringComparison.Ordinal)
+            || string.Equals(message, savedText, StringComparison.Ordinal);
     }
 
     public bool HasCurrentSectionStatusMessage => !string.IsNullOrWhiteSpace(CurrentSectionStatusMessage);
@@ -956,6 +1219,7 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
         OnPropertyChanged(nameof(CurrentSectionStatusTitle));
         OnPropertyChanged(nameof(CurrentSectionStatusMessage));
         OnPropertyChanged(nameof(HasCurrentSectionStatusMessage));
+        Dispatcher.UIThread.Post(UpdateStickyTitlePresentation, DispatcherPriority.Background);
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)

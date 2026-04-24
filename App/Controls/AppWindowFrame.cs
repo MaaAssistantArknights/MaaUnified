@@ -7,7 +7,7 @@ using Avalonia.VisualTree;
 
 namespace MAAUnified.App.Controls;
 
-[PseudoClasses(":resizable-dialog", ":compact-modal")]
+[PseudoClasses(":resizable-dialog", ":compact-modal", ":controls-left", ":window-maximized")]
 public class AppWindowFrame : ContentControl
 {
     public static readonly StyledProperty<string> TitleProperty =
@@ -24,6 +24,17 @@ public class AppWindowFrame : ContentControl
 
     public static readonly StyledProperty<bool> ShowCloseButtonProperty =
         AvaloniaProperty.Register<AppWindowFrame, bool>(nameof(ShowCloseButton), true);
+
+    public static readonly StyledProperty<bool> ShowMinimizeButtonProperty =
+        AvaloniaProperty.Register<AppWindowFrame, bool>(nameof(ShowMinimizeButton));
+
+    public static readonly StyledProperty<bool> ShowMaximizeButtonProperty =
+        AvaloniaProperty.Register<AppWindowFrame, bool>(nameof(ShowMaximizeButton));
+
+    public static readonly StyledProperty<AppWindowControlsPlacement> WindowControlsPlacementProperty =
+        AvaloniaProperty.Register<AppWindowFrame, AppWindowControlsPlacement>(
+            nameof(WindowControlsPlacement),
+            AppWindowControlsPlacement.PlatformDefault);
 
     public static readonly StyledProperty<AppWindowFrameMode> ModeProperty =
         AvaloniaProperty.Register<AppWindowFrame, AppWindowFrameMode>(
@@ -56,6 +67,11 @@ public class AppWindowFrame : ContentControl
             nameof(ShowsResizeGrips),
             frame => frame.ShowsResizeGrips);
 
+    public static readonly DirectProperty<AppWindowFrame, AppWindowFrameHorizontalInset> EffectiveHorizontalContentInsetProperty =
+        AvaloniaProperty.RegisterDirect<AppWindowFrame, AppWindowFrameHorizontalInset>(
+            nameof(EffectiveHorizontalContentInset),
+            frame => frame.EffectiveHorizontalContentInset);
+
     private static readonly (string PartName, WindowEdge Edge)[] ResizeGripParts =
     [
         ("PART_ResizeNorth", WindowEdge.North),
@@ -69,7 +85,10 @@ public class AppWindowFrame : ContentControl
     ];
 
     private Border? _headerDragArea;
-    private Button? _closeButton;
+    private Border? _frameSurface;
+    private readonly List<Button> _closeButtons = [];
+    private readonly List<Button> _minimizeButtons = [];
+    private readonly List<Button> _maximizeButtons = [];
     private readonly List<Control> _resizeGrips = [];
     private Window? _hostWindow;
     private WindowBase? _ownerWindow;
@@ -79,6 +98,7 @@ public class AppWindowFrame : ContentControl
     private bool _showsResizeGrips;
     private bool _hasCapturedHostMaxHeight;
     private double _initialHostMaxHeight = double.PositiveInfinity;
+    private AppWindowFrameHorizontalInset _effectiveHorizontalContentInset;
 
     public event EventHandler? CloseRequested;
 
@@ -86,7 +106,9 @@ public class AppWindowFrame : ContentControl
     {
         HasHeaderContent = HeaderContent is not null;
         HasActions = ActionsContent is not null;
+        UpdateWindowControlsPlacementState();
         UpdateModeState();
+        UpdateEffectiveHorizontalContentInset();
     }
 
     public string Title
@@ -117,6 +139,24 @@ public class AppWindowFrame : ContentControl
     {
         get => GetValue(ShowCloseButtonProperty);
         set => SetValue(ShowCloseButtonProperty, value);
+    }
+
+    public bool ShowMinimizeButton
+    {
+        get => GetValue(ShowMinimizeButtonProperty);
+        set => SetValue(ShowMinimizeButtonProperty, value);
+    }
+
+    public bool ShowMaximizeButton
+    {
+        get => GetValue(ShowMaximizeButtonProperty);
+        set => SetValue(ShowMaximizeButtonProperty, value);
+    }
+
+    public AppWindowControlsPlacement WindowControlsPlacement
+    {
+        get => GetValue(WindowControlsPlacementProperty);
+        set => SetValue(WindowControlsPlacementProperty, value);
     }
 
     public AppWindowFrameMode Mode
@@ -161,22 +201,75 @@ public class AppWindowFrame : ContentControl
         private set => SetAndRaise(ShowsResizeGripsProperty, ref _showsResizeGrips, value);
     }
 
+    public AppWindowFrameHorizontalInset EffectiveHorizontalContentInset
+    {
+        get => _effectiveHorizontalContentInset;
+        private set => SetAndRaise(
+            EffectiveHorizontalContentInsetProperty,
+            ref _effectiveHorizontalContentInset,
+            value);
+    }
+
     protected override void OnApplyTemplate(TemplateAppliedEventArgs e)
     {
         DetachTemplateEvents();
         base.OnApplyTemplate(e);
 
-        _headerDragArea = e.NameScope.Find<Border>("PART_HeaderDragArea");
-        _closeButton = e.NameScope.Find<Button>("PART_CloseButton");
+        _frameSurface = e.NameScope.Find<Border>("PART_FrameSurface");
+        if (_frameSurface is not null)
+        {
+            _frameSurface.PropertyChanged += OnFrameSurfacePropertyChanged;
+        }
 
+        _headerDragArea = e.NameScope.Find<Border>("PART_HeaderDragArea");
         if (_headerDragArea is not null)
         {
             _headerDragArea.PointerPressed += OnHeaderPointerPressed;
         }
 
-        if (_closeButton is not null)
+        foreach (var partName in new[]
+                 {
+                     "PART_LeftCloseButton",
+                     "PART_RightCloseButton",
+                 })
         {
-            _closeButton.Click += OnCloseButtonClick;
+            if (e.NameScope.Find<Button>(partName) is not { } button)
+            {
+                continue;
+            }
+
+            button.Click += OnCloseButtonClick;
+            _closeButtons.Add(button);
+        }
+
+        foreach (var partName in new[]
+                 {
+                     "PART_LeftMinimizeButton",
+                     "PART_RightMinimizeButton",
+                 })
+        {
+            if (e.NameScope.Find<Button>(partName) is not { } button)
+            {
+                continue;
+            }
+
+            button.Click += OnMinimizeButtonClick;
+            _minimizeButtons.Add(button);
+        }
+
+        foreach (var partName in new[]
+                 {
+                     "PART_LeftMaximizeButton",
+                     "PART_RightMaximizeButton",
+                 })
+        {
+            if (e.NameScope.Find<Button>(partName) is not { } button)
+            {
+                continue;
+            }
+
+            button.Click += OnMaximizeRestoreButtonClick;
+            _maximizeButtons.Add(button);
         }
 
         foreach (var (partName, edge) in ResizeGripParts)
@@ -186,10 +279,12 @@ public class AppWindowFrame : ContentControl
                 continue;
             }
 
-            grip.Tag = edge.ToString();
+            grip.Tag = edge;
             grip.PointerPressed += OnResizeGripPointerPressed;
             _resizeGrips.Add(grip);
         }
+
+        UpdateEffectiveHorizontalContentInset();
     }
 
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
@@ -228,6 +323,18 @@ public class AppWindowFrame : ContentControl
             return;
         }
 
+        if (change.Property == WindowControlsPlacementProperty)
+        {
+            UpdateWindowControlsPlacementState();
+            return;
+        }
+
+        if (change.Property == ShellMarginProperty)
+        {
+            UpdateEffectiveHorizontalContentInset();
+            return;
+        }
+
         if (change.Property == CapWindowHeightToOwnerProperty
             || change.Property == OwnerHeightCapMarginProperty)
         {
@@ -243,10 +350,34 @@ public class AppWindowFrame : ContentControl
             return;
         }
 
-        if (TopLevel.GetTopLevel(this) is Window window)
+        if (ResolveHostWindow() is Window window)
         {
             window.Close();
         }
+    }
+
+    private void OnMinimizeButtonClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (ResolveHostWindow() is not Window window)
+        {
+            return;
+        }
+
+        window.WindowState = WindowState.Minimized;
+        e.Handled = true;
+    }
+
+    private void OnMaximizeRestoreButtonClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (ResolveHostWindow() is not Window window)
+        {
+            return;
+        }
+
+        window.WindowState = window.WindowState == WindowState.Maximized
+            ? WindowState.Normal
+            : WindowState.Maximized;
+        e.Handled = true;
     }
 
     private void OnHeaderPointerPressed(object? sender, PointerPressedEventArgs e)
@@ -256,8 +387,17 @@ public class AppWindowFrame : ContentControl
             return;
         }
 
-        if (TopLevel.GetTopLevel(this) is not Window window)
+        if (ResolveHostWindow() is not Window window)
         {
+            return;
+        }
+
+        if (e.ClickCount >= 2 && ShowMaximizeButton && window.CanResize)
+        {
+            window.WindowState = window.WindowState == WindowState.Maximized
+                ? WindowState.Normal
+                : WindowState.Maximized;
+            e.Handled = true;
             return;
         }
 
@@ -269,13 +409,17 @@ public class AppWindowFrame : ContentControl
     {
         if (!ShowsResizeGrips
             || !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed
-            || sender is not Control { Tag: string tag }
-            || !Enum.TryParse<WindowEdge>(tag, out var edge))
+            || sender is not Control { Tag: WindowEdge edge })
         {
             return;
         }
 
-        if (TopLevel.GetTopLevel(this) is not Window window)
+        if (ResolveHostWindow() is not Window window)
+        {
+            return;
+        }
+
+        if (!window.CanResize)
         {
             return;
         }
@@ -288,11 +432,23 @@ public class AppWindowFrame : ContentControl
     {
         SubscribeToOwnerWindow(_hostWindow?.Owner);
         TryApplyOwnerHeightCap();
+        UpdateModeState();
     }
 
     private void OnHostWindowClosed(object? sender, EventArgs e)
     {
         DetachOwnerWindow();
+        UpdateModeState();
+    }
+
+    private void OnHostWindowPropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
+    {
+        if (e.Property != Window.WindowStateProperty)
+        {
+            return;
+        }
+
+        UpdateModeState();
     }
 
     private void OnOwnerWindowSizeChanged(object? sender, SizeChangedEventArgs e)
@@ -310,6 +466,7 @@ public class AppWindowFrame : ContentControl
         if (ReferenceEquals(_hostWindow, hostWindow))
         {
             TryApplyOwnerHeightCap();
+            UpdateModeState();
             return;
         }
 
@@ -320,9 +477,11 @@ public class AppWindowFrame : ContentControl
 
         _hostWindow.Opened += OnHostWindowOpened;
         _hostWindow.Closed += OnHostWindowClosed;
+        _hostWindow.PropertyChanged += OnHostWindowPropertyChanged;
 
         SubscribeToOwnerWindow(_hostWindow.Owner);
         TryApplyOwnerHeightCap();
+        UpdateModeState();
     }
 
     private void DetachWindowEvents()
@@ -334,11 +493,13 @@ public class AppWindowFrame : ContentControl
             RestoreHostWindowMaxHeight();
             _hostWindow.Opened -= OnHostWindowOpened;
             _hostWindow.Closed -= OnHostWindowClosed;
+            _hostWindow.PropertyChanged -= OnHostWindowPropertyChanged;
             _hostWindow = null;
         }
 
         _hasCapturedHostMaxHeight = false;
         _initialHostMaxHeight = double.PositiveInfinity;
+        UpdateModeState();
     }
 
     private void SubscribeToOwnerWindow(WindowBase? ownerWindow)
@@ -419,30 +580,107 @@ public class AppWindowFrame : ContentControl
             effectiveMaxHeight);
     }
 
+    private Window? ResolveHostWindow()
+    {
+        return _hostWindow ?? TopLevel.GetTopLevel(this) as Window;
+    }
+
+    private void UpdateWindowControlsPlacementState()
+    {
+        var resolvedPlacement = WindowControlsPlacement == AppWindowControlsPlacement.PlatformDefault
+            ? ResolvePlatformDefaultWindowControlsPlacement()
+            : WindowControlsPlacement;
+
+        var useLeftPlacement = resolvedPlacement == AppWindowControlsPlacement.Left;
+        PseudoClasses.Set(":controls-left", useLeftPlacement);
+    }
+
+    private static AppWindowControlsPlacement ResolvePlatformDefaultWindowControlsPlacement()
+    {
+        return OperatingSystem.IsMacOS()
+            ? AppWindowControlsPlacement.Left
+            : AppWindowControlsPlacement.Right;
+    }
+
     private void UpdateModeState()
     {
+        UpdateWindowControlsPlacementState();
+
         var isResizableDialog = Mode == AppWindowFrameMode.ResizableDialog;
+        var hostWindow = ResolveHostWindow();
+        var hostWindowState = hostWindow?.WindowState ?? WindowState.Normal;
+        var isHostNormalState = hostWindowState == WindowState.Normal;
+        var isHostMaximizedState = hostWindowState == WindowState.Maximized;
 
         AllowsHeaderDrag = isResizableDialog;
-        ShowsResizeGrips = isResizableDialog;
+        ShowsResizeGrips = isResizableDialog && isHostNormalState;
 
         PseudoClasses.Set(":resizable-dialog", isResizableDialog);
         PseudoClasses.Set(":compact-modal", !isResizableDialog);
+        PseudoClasses.Set(":window-maximized", isHostMaximizedState);
+        UpdateEffectiveHorizontalContentInset();
+    }
+
+    private void OnFrameSurfacePropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
+    {
+        if (e.Property == Border.PaddingProperty
+            || e.Property == Border.BorderThicknessProperty
+            || e.Property == Border.MarginProperty)
+        {
+            UpdateEffectiveHorizontalContentInset();
+        }
+    }
+
+    private void UpdateEffectiveHorizontalContentInset()
+    {
+        EffectiveHorizontalContentInset = CalculateEffectiveHorizontalContentInset();
+    }
+
+    private AppWindowFrameHorizontalInset CalculateEffectiveHorizontalContentInset()
+    {
+        var shellMargin = _frameSurface?.Margin ?? ShellMargin;
+        var framePadding = _frameSurface?.Padding ?? default;
+        var frameBorder = _frameSurface?.BorderThickness ?? default;
+
+        return new AppWindowFrameHorizontalInset(
+            shellMargin.Left + frameBorder.Left + framePadding.Left,
+            shellMargin.Right + frameBorder.Right + framePadding.Right);
     }
 
     private void DetachTemplateEvents()
     {
+        if (_frameSurface is not null)
+        {
+            _frameSurface.PropertyChanged -= OnFrameSurfacePropertyChanged;
+            _frameSurface = null;
+        }
+
         if (_headerDragArea is not null)
         {
             _headerDragArea.PointerPressed -= OnHeaderPointerPressed;
             _headerDragArea = null;
         }
 
-        if (_closeButton is not null)
+        foreach (var closeButton in _closeButtons)
         {
-            _closeButton.Click -= OnCloseButtonClick;
-            _closeButton = null;
+            closeButton.Click -= OnCloseButtonClick;
         }
+
+        _closeButtons.Clear();
+
+        foreach (var minimizeButton in _minimizeButtons)
+        {
+            minimizeButton.Click -= OnMinimizeButtonClick;
+        }
+
+        _minimizeButtons.Clear();
+
+        foreach (var maximizeButton in _maximizeButtons)
+        {
+            maximizeButton.Click -= OnMaximizeRestoreButtonClick;
+        }
+
+        _maximizeButtons.Clear();
 
         foreach (var grip in _resizeGrips)
         {

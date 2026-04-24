@@ -37,15 +37,24 @@ public sealed class CopilotViewStructureContractTests
     }
 
     [Fact]
-    public void ConnectSettingsView_ShouldUseSharedCheckComboBox_ForConnectConfigSelection()
+    public void ConnectSettingsView_ShouldUseStandardComboBox_ForConnectConfigSelection_AndKeepCheckComboBoxForEditableAddress()
     {
         var root = GetMaaUnifiedRoot();
         var xaml = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "ConnectSettingsView.axaml"));
 
         Assert.Contains("<controls:CheckComboBox", xaml, StringComparison.Ordinal);
-        Assert.Contains("HeaderText=\"{Binding SelectedConnectConfigOption.DisplayName}\"", xaml, StringComparison.Ordinal);
         Assert.Contains("ItemsSource=\"{Binding ConnectConfigOptions}\"", xaml, StringComparison.Ordinal);
         Assert.Contains("SelectedItem=\"{Binding SelectedConnectConfigOption, Mode=TwoWay}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("ItemsSource=\"{Binding ConnectAddressHistory}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("SelectionCommitted=\"OnConnectAddressSelectionCommitted\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("HeaderText=\"{Binding SelectedConnectConfigOption.DisplayName}\"", xaml, StringComparison.Ordinal);
+
+        var connectConfigBindingIndex = xaml.IndexOf("ItemsSource=\"{Binding ConnectConfigOptions}\"", StringComparison.Ordinal);
+        Assert.True(connectConfigBindingIndex >= 0, "Connect settings should bind the connect config selector to ConnectConfigOptions.");
+        Assert.True(
+            xaml.LastIndexOf("<ComboBox", connectConfigBindingIndex, StringComparison.Ordinal) >
+            xaml.LastIndexOf("<controls:CheckComboBox", connectConfigBindingIndex, StringComparison.Ordinal),
+            "Connect config selection should use the standard ComboBox rather than the custom CheckComboBox.");
     }
 
     [Fact]
