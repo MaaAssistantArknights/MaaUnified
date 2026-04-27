@@ -135,6 +135,25 @@ dotnet publish src/MAAUnified/App/MAAUnified.App.csproj -c Release -r osx-x64 --
 cp -a install/. publish/
 ```
 
+### 4. macOS apple silicon(M系列 A 系列处理器) 本地构建
+
+```bash
+cd /path/to/MaaAssistantArknights
+
+git submodule sync --recursive
+git submodule update --init --depth 1 src/MAAUnified src/MaaUtils
+
+dotnet restore src/MAAUnified/App/MAAUnified.App.csproj  -r osx-arm64
+python3 tools/maadeps-download.py arm64-osx
+
+cmake --preset macos-publish-arm64 --fresh -DINSTALL_PYTHON=OFF
+cmake --build --preset macos-publish-arm64
+cmake --install build --config RelWithDebInfo
+
+dotnet publish src/MAAUnified/App/MAAUnified.App.csproj -c Release -r osx-arm64 --self-contained true --no-restore -o publish
+cp -a install/. publish/
+```
+
 常见问题：
 - 如果你之前在同一个 `build/` 目录切换过不同 generator，CMake 可能会报 generator 不匹配；优先使用 `cmake --preset ... --fresh`
 - `publish/` 目录需要同时包含应用本体、MaaCore 动态库和 `resource/`；因此 `cp -a install/. publish/` 或 `Copy-Item install\* publish\` 这一步不能省
