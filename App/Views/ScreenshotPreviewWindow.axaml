@@ -2,10 +2,10 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:controls="clr-namespace:MAAUnified.App.Controls"
         x:Class="MAAUnified.App.Views.ScreenshotPreviewWindow"
-        Width="800"
-        Height="480"
-        MinWidth="480"
-        MinHeight="320"
+        Width="980"
+        Height="680"
+        MinWidth="720"
+        MinHeight="480"
         CanResize="True"
         Background="Transparent"
         SystemDecorations="None"
@@ -25,31 +25,17 @@
                  Text="" />
     </controls:AppWindowFrame.HeaderContent>
     <controls:AppWindowFrame.Content>
-      <Grid RowDefinitions="Auto,*">
-        <Border Classes="app-surface app-section">
-          <StackPanel Spacing="6">
-            <TextBlock x:Name="PreviewSectionTitleText"
-                       Classes="section-title"
-                       Text="Screenshot Preview" />
-            <TextBlock x:Name="PreviewStatusText"
-                       Classes="long-wrap subtle"
-                       IsVisible="False"
-                       Text="" />
-          </StackPanel>
-        </Border>
-
-        <Border Grid.Row="1"
-                Margin="{DynamicResource MAA.Thickness.MarginTopSection}"
-                Classes="app-surface app-card">
-          <Border Background="#10151D"
-                  Padding="16">
-            <ScrollViewer HorizontalScrollBarVisibility="Auto"
-                          VerticalScrollBarVisibility="Auto">
-              <Image x:Name="PreviewImage"
-                     Stretch="Uniform" />
-            </ScrollViewer>
-          </Border>
-        </Border>
+      <Grid>
+        <TextBlock x:Name="PreviewSectionTitleText"
+                   IsVisible="False"
+                   Text="Screenshot Preview" />
+        <TextBlock x:Name="PreviewStatusText"
+                   IsVisible="False"
+                   Text="" />
+        <Image x:Name="PreviewImage"
+               HorizontalAlignment="Stretch"
+               VerticalAlignment="Stretch"
+               Stretch="Uniform" />
       </Grid>
     </controls:AppWindowFrame.Content>
     <controls:AppWindowFrame.ActionsContent>

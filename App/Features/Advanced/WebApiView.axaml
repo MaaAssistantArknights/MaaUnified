@@ -44,8 +44,8 @@
               <StackPanel Spacing="6">
                 <TextBlock Classes="app-caption"
                            Text="{Binding Texts[Toolbox.Advanced.WebApi.Host]}" />
-                <TextBox Classes="app-input app-input-block"
-                         Text="{Binding Host}" />
+                <controls:AppTextInput Classes="settings-input-block"
+                                       Text="{Binding Host}" />
               </StackPanel>
             </StackPanel>
           </Border>
@@ -55,18 +55,18 @@
               <StackPanel Spacing="6">
                 <TextBlock Classes="app-caption"
                            Text="{Binding Texts[Toolbox.Advanced.WebApi.Port]}" />
-                <controls:VerticalSpinNumberBox Width="160"
-                                                HorizontalAlignment="Left"
-                                                Minimum="1"
-                                                Maximum="65535"
-                                                Value="{Binding Port}" />
+                <controls:AppNumberInput Width="160"
+                                         HorizontalAlignment="Left"
+                                         Minimum="1"
+                                         Maximum="65535"
+                                         Value="{Binding Port}" />
               </StackPanel>
 
               <StackPanel Spacing="6">
                 <TextBlock Classes="app-caption"
                            Text="{Binding Texts[Toolbox.Advanced.WebApi.AccessToken]}" />
-                <TextBox Classes="app-input app-input-block"
-                         Text="{Binding AccessToken}" />
+                <controls:AppTextInput Classes="settings-input-block"
+                                       Text="{Binding AccessToken}" />
               </StackPanel>
             </StackPanel>
           </Border>

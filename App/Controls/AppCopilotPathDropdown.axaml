@@ -1,0 +1,330 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="MAAUnified.App.Controls.AppCopilotPathDropdown"
+             x:Name="Root"
+             Classes="app-copilot-path-dropdown">
+  <UserControl.Styles>
+    <Style Selector="Border.app-copilot-path-shell">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.SettingsInput.Background}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.SettingsInput.Border}" />
+      <Setter Property="BorderThickness" Value="{DynamicResource MAA.BorderThickness.Thin}" />
+      <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.CornerRadius.SettingsInput}" />
+      <Setter Property="Height" Value="{DynamicResource MAA.App.Size.InputHeight}" />
+      <Setter Property="MinHeight" Value="{DynamicResource MAA.App.Size.InputHeight}" />
+      <Setter Property="Padding" Value="{DynamicResource MAA.App.Thickness.SettingsInputShellPadding}" />
+    </Style>
+
+    <Style Selector="Border.app-copilot-path-shell:pointerover">
+      <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.SettingsInput.BorderHover}" />
+    </Style>
+
+    <Style Selector="Border.app-copilot-path-shell.open">
+      <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.SettingsInput.BorderFocus}" />
+    </Style>
+
+    <Style Selector="Border.app-copilot-path-shell.focused">
+      <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.SettingsInput.BorderFocus}" />
+    </Style>
+
+    <Style Selector="Border.app-copilot-path-shell:disabled">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.SettingsInput.BackgroundDisabled}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Action.DisabledBorder}" />
+      <Setter Property="Opacity" Value="1" />
+    </Style>
+
+    <Style Selector="TextBox.app-copilot-path-editor">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="FocusAdorner" Value="{x:Null}" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.Foreground}" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="TextBox.app-copilot-path-editor:disabled">
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ForegroundDisabled}" />
+    </Style>
+
+    <Style Selector="TextBox.app-copilot-path-editor /template/ Border">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+
+    <Style Selector="TextBox.app-copilot-path-editor:focus /template/ Border">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+
+    <Style Selector="TextBox.app-copilot-path-editor:focus-visible /template/ Border">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+
+    <Style Selector="Button.app-copilot-path-toggle">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="0" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.Chevron}" />
+      <Setter Property="Width" Value="{DynamicResource MAA.App.Size.InputHeight}" />
+      <Setter Property="MinWidth" Value="{DynamicResource MAA.App.Size.InputHeight}" />
+      <Setter Property="Height" Value="{DynamicResource MAA.App.Size.InputHeight}" />
+      <Setter Property="MinHeight" Value="{DynamicResource MAA.App.Size.InputHeight}" />
+      <Setter Property="Margin" Value="0" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Focusable" Value="False" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Border Background="{TemplateBinding Background}"
+                  BorderBrush="{TemplateBinding BorderBrush}"
+                  BorderThickness="{TemplateBinding BorderThickness}"
+                  CornerRadius="{TemplateBinding CornerRadius}">
+            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                              Content="{TemplateBinding Content}"
+                              ContentTemplate="{TemplateBinding ContentTemplate}"
+                              Margin="{TemplateBinding Padding}" />
+          </Border>
+        </ControlTemplate>
+      </Setter>
+    </Style>
+
+    <Style Selector="Button.app-copilot-path-toggle:pointerover">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ChevronHover}" />
+    </Style>
+
+    <Style Selector="Button.app-copilot-path-toggle:pressed">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <Style Selector="Button.app-copilot-path-toggle:disabled">
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ChevronDisabled}" />
+    </Style>
+
+    <Style Selector="Path.app-copilot-path-chevron">
+      <Setter Property="Width" Value="{DynamicResource MAA.App.Size.SettingsInputChevronWidth}" />
+      <Setter Property="Height" Value="{DynamicResource MAA.App.Size.SettingsInputChevronHeight}" />
+      <Setter Property="Margin" Value="0,1,0,0" />
+      <Setter Property="Stretch" Value="Uniform" />
+      <Setter Property="Stroke" Value="{DynamicResource MAA.Brush.App.SettingsInput.Chevron}" />
+      <Setter Property="StrokeThickness" Value="1.4" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="Button.app-copilot-path-toggle:pointerover Path.app-copilot-path-chevron">
+      <Setter Property="Stroke" Value="{DynamicResource MAA.Brush.App.SettingsInput.ChevronHover}" />
+    </Style>
+
+    <Style Selector="Button.app-copilot-path-toggle:pressed Path.app-copilot-path-chevron">
+      <Setter Property="Stroke" Value="{DynamicResource MAA.Brush.App.SettingsInput.ChevronHover}" />
+    </Style>
+
+    <Style Selector="Button.app-copilot-path-toggle:disabled Path.app-copilot-path-chevron">
+      <Setter Property="Stroke" Value="{DynamicResource MAA.Brush.App.SettingsInput.ChevronDisabled}" />
+    </Style>
+
+    <Style Selector="Popup.app-copilot-path-popup">
+      <Setter Property="WindowManagerAddShadowHint" Value="False" />
+    </Style>
+
+    <Style Selector="Border.app-copilot-path-popup-panel">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.SettingsInput.PopupBackground}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.SettingsInput.PopupBorder}" />
+      <Setter Property="BorderThickness" Value="{DynamicResource MAA.BorderThickness.Thin}" />
+      <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.CornerRadius.SettingsInputPopup}" />
+      <Setter Property="Padding" Value="{DynamicResource MAA.App.Thickness.SettingsInputPopupPadding}" />
+    </Style>
+
+    <Style Selector="ScrollViewer.app-copilot-path-scroll">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.SettingsInput.PopupScrollViewerBackground}" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="0" />
+    </Style>
+
+    <Style Selector="ItemsControl.app-copilot-path-list">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <Style Selector="ItemsControl.app-copilot-path-list ContentPresenter">
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+    </Style>
+
+    <Style Selector="ItemsControl.app-copilot-path-list ContentPresenter /template/ ContentPresenter">
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+    </Style>
+
+    <Style Selector="Button.app-copilot-path-row">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.CornerRadius.SettingsInput}" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ItemForeground}" />
+      <Setter Property="MinHeight" Value="{DynamicResource MAA.App.Size.SettingsInputItemMinHeight}" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Focusable" Value="False" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="Template">
+        <ControlTemplate>
+          <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                            VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                            Content="{TemplateBinding Content}"
+                            ContentTemplate="{TemplateBinding ContentTemplate}" />
+        </ControlTemplate>
+      </Setter>
+    </Style>
+
+    <Style Selector="Border.app-copilot-path-row-shell">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.CornerRadius.SettingsInput}" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="MinHeight" Value="{DynamicResource MAA.App.Size.SettingsInputItemMinHeight}" />
+      <Setter Property="Padding" Value="{DynamicResource MAA.App.Thickness.SettingsInputItemPadding}" />
+    </Style>
+
+    <Style Selector="Button.app-copilot-path-row:pointerover Border.app-copilot-path-row-shell">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.SettingsInput.ItemBackgroundHover}" />
+    </Style>
+
+    <Style Selector="Button.app-copilot-path-row.current Border.app-copilot-path-row-shell">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.SettingsInput.ItemBackgroundSelected}" />
+    </Style>
+
+    <Style Selector="Button.app-copilot-path-row.current:pointerover Border.app-copilot-path-row-shell">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.SettingsInput.ItemBackgroundSelected}" />
+    </Style>
+
+    <Style Selector="TextBlock.app-copilot-path-row-text">
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ItemForeground}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="Button.app-copilot-path-row:pointerover TextBlock.app-copilot-path-row-text">
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ItemForegroundHover}" />
+    </Style>
+
+    <Style Selector="Button.app-copilot-path-row.current TextBlock.app-copilot-path-row-text">
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ItemForegroundSelected}" />
+    </Style>
+
+    <Style Selector="Path.app-copilot-path-row-chevron">
+      <Setter Property="Stretch" Value="Uniform" />
+      <Setter Property="Stroke" Value="{DynamicResource MAA.Brush.App.SettingsInput.Chevron}" />
+      <Setter Property="StrokeThickness" Value="1.4" />
+      <Setter Property="StrokeLineCap" Value="Round" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="Button.app-copilot-path-row:pointerover Path.app-copilot-path-row-chevron">
+      <Setter Property="Stroke" Value="{DynamicResource MAA.Brush.App.SettingsInput.ChevronHover}" />
+    </Style>
+
+    <Style Selector="Button.app-copilot-path-row.current Path.app-copilot-path-row-chevron">
+      <Setter Property="Stroke" Value="{DynamicResource MAA.Brush.App.SettingsInput.ItemForegroundSelected}" />
+    </Style>
+  </UserControl.Styles>
+
+  <Grid>
+    <Border x:Name="ShellBorder"
+            Classes="app-copilot-path-shell"
+            PointerPressed="OnShellPointerPressed">
+      <Grid ColumnDefinitions="*,Auto">
+        <TextBox x:Name="EditorTextBox"
+                 Classes="app-copilot-path-editor"
+                 Text="{Binding Text, ElementName=Root, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                 Watermark="{Binding Watermark, ElementName=Root}"
+                 GotFocus="OnEditorGotFocus"
+                 LostFocus="OnEditorLostFocus"
+                 KeyDown="OnEditorKeyDown" />
+
+        <Button x:Name="ToggleButton"
+                Grid.Column="1"
+                Classes="app-copilot-path-toggle"
+                Click="OnToggleButtonClick">
+          <Path Classes="app-copilot-path-chevron"
+                Data="M 1 1 L 5 5 L 9 1"
+                StrokeLineCap="Round" />
+        </Button>
+      </Grid>
+    </Border>
+
+    <Popup x:Name="DropDownPopup"
+           Classes="app-copilot-path-popup"
+           IsOpen="{Binding IsDropDownOpen, ElementName=Root, Mode=TwoWay}"
+           Placement="BottomEdgeAlignedLeft"
+           PlacementTarget="{Binding ElementName=ShellBorder}"
+           VerticalOffset="4"
+           IsLightDismissEnabled="True"
+           Closed="OnPopupClosed">
+      <Border Classes="app-copilot-path-popup-panel"
+              MinWidth="{Binding Bounds.Width, ElementName=ShellBorder}"
+              HorizontalAlignment="Left">
+        <ScrollViewer Classes="app-copilot-path-scroll"
+                      MaxHeight="{Binding MaxDropDownHeight, ElementName=Root}"
+                      HorizontalScrollBarVisibility="Disabled"
+                      VerticalScrollBarVisibility="Auto">
+          <ItemsControl x:Name="VisibleRowsControl"
+                        Classes="app-copilot-path-list">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <StackPanel />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Button Classes="app-copilot-path-row"
+                        Classes.current="{Binding IsCurrent}"
+                        Tag="{Binding}"
+                        Click="OnPathRowClick"
+                        PointerPressed="OnPathRowPointerPressed">
+                  <Border Classes="app-copilot-path-row-shell">
+                    <Grid ColumnDefinitions="Auto,28,*">
+                      <Border Grid.Column="0"
+                              Width="{Binding Indent}" />
+                      <Grid Grid.Column="1"
+                            Width="28"
+                            Height="28"
+                            VerticalAlignment="Center">
+                        <Path Classes="app-copilot-path-row-chevron"
+                              Width="{DynamicResource MAA.App.Size.SettingsInputChevronHeight}"
+                              Height="{DynamicResource MAA.App.Size.SettingsInputChevronWidth}"
+                              Data="M 1 1 L 5 5 L 1 9"
+                              IsVisible="{Binding ShowCollapsedChevron}" />
+                        <Path Classes="app-copilot-path-row-chevron"
+                              Width="{DynamicResource MAA.App.Size.SettingsInputChevronWidth}"
+                              Height="{DynamicResource MAA.App.Size.SettingsInputChevronHeight}"
+                              Margin="0,1,0,0"
+                              Data="M 1 1 L 5 5 L 9 1"
+                              IsVisible="{Binding ShowExpandedChevron}" />
+                      </Grid>
+                      <TextBlock Grid.Column="2"
+                                 Classes="app-copilot-path-row-text"
+                                 Margin="2,0,0,0"
+                                 Text="{Binding DisplayName}"
+                                 TextTrimming="CharacterEllipsis" />
+                    </Grid>
+                  </Border>
+                </Button>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+      </Border>
+    </Popup>
+  </Grid>
+</UserControl>

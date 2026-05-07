@@ -8,7 +8,6 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using Avalonia.VisualTree;
-using MAAUnified.App.Controls;
 using MAAUnified.App.Features.Dialogs;
 using MAAUnified.App.ViewModels.Settings;
 using MAAUnified.Application.Models;
@@ -395,10 +394,6 @@ public partial class ConfigurationManagerView : UserControl
                 return comboBox;
             }
 
-            if (visual.FindAncestorOfType<CheckComboBox>() is { } checkComboBox)
-            {
-                return checkComboBox;
-            }
         }
 
         return null;
@@ -410,9 +405,6 @@ public partial class ConfigurationManagerView : UserControl
         {
             case ComboBox comboBox:
                 comboBox.IsDropDownOpen = true;
-                break;
-            case CheckComboBox checkComboBox:
-                checkComboBox.IsDropDownOpen = true;
                 break;
         }
     }

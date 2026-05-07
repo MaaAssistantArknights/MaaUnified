@@ -9,6 +9,52 @@
     <x:Double x:Key="MAA.App.Tool.CompareCardMinWidth">240</x:Double>
   </Styles.Resources>
 
+  <Style Selector="StackPanel.toolbox-page-root">
+    <Setter Property="Spacing" Value="18" />
+  </Style>
+
+  <Style Selector="TextBlock.toolbox-page-title">
+    <Setter Property="FontSize" Value="28" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Text.Primary}" />
+    <Setter Property="LineHeight" Value="40" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+  </Style>
+
+  <Style Selector="TextBlock.toolbox-section-title">
+    <Setter Property="FontSize" Value="16" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Text.Primary}" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+  </Style>
+
+  <Style Selector="TextBlock.toolbox-section-caption">
+    <Setter Property="FontSize" Value="12.5" />
+    <Setter Property="FontWeight" Value="Medium" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Text.Secondary}" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+  </Style>
+
+  <Style Selector="Border.toolbox-soft-panel">
+    <Setter Property="Padding" Value="14,12" />
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.Dialog.CardSurface}" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="14" />
+  </Style>
+
+  <Style Selector="Border.toolbox-chip">
+    <Setter Property="Padding" Value="9,4" />
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.Dialog.FilterChipBackground}" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="999" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
+  </Style>
+
+  <Style Selector="TextBlock.toolbox-chip-text">
+    <Setter Property="FontSize" Value="11.5" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Text.Secondary}" />
+  </Style>
+
   <Style Selector="Border.tool-form-section">
     <Setter Property="Padding" Value="{DynamicResource MAA.App.Tool.FormSectionPadding}" />
     <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Surface.Section}" />

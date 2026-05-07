@@ -45,4 +45,16 @@ public sealed class AppSelectionListStateTests
         list.ReserveTrailingAccessorySpace = false;
         Assert.DoesNotContain("selection-list-rail-trailing-accessory-space", list.Classes);
     }
+
+    [Fact]
+    public void AppSelectionList_ShouldToggleReorderClassFromState()
+    {
+        var list = new AppSelectionList();
+
+        list.CanReorderItems = true;
+        Assert.Contains("selection-list-reorderable", list.Classes);
+
+        list.CanReorderItems = false;
+        Assert.DoesNotContain("selection-list-reorderable", list.Classes);
+    }
 }

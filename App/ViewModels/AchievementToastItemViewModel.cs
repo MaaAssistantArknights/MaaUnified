@@ -12,6 +12,8 @@ public sealed class AchievementToastItemViewModel : ObservableObject, IDisposabl
     private double _remainingCloseCountdownSeconds = CloseCountdownSeconds;
     private double _closeCountdownProgress;
     private bool _isCloseCountdownPaused;
+    private bool _isAnimationHidden = true;
+    private bool _isDismissAnimationActive;
     private bool _isDisposed;
 
     public AchievementToastItemViewModel(
@@ -44,6 +46,8 @@ public sealed class AchievementToastItemViewModel : ObservableObject, IDisposabl
             _lastCloseCountdownTickUtc = DateTimeOffset.UtcNow;
             _closeCountdownTimer.Start();
         }
+
+        Dispatcher.UIThread.Post(BeginEnterAnimation, DispatcherPriority.Loaded);
     }
 
     public string Id { get; }
@@ -61,6 +65,18 @@ public sealed class AchievementToastItemViewModel : ObservableObject, IDisposabl
     public DateTimeOffset UnlockedAtUtc { get; }
 
     public bool IsCloseCountdownVisible => AutoClose;
+
+    public bool IsAnimationHidden
+    {
+        get => _isAnimationHidden;
+        private set => SetProperty(ref _isAnimationHidden, value);
+    }
+
+    public bool IsDismissAnimationActive
+    {
+        get => _isDismissAnimationActive;
+        private set => SetProperty(ref _isDismissAnimationActive, value);
+    }
 
     public double CloseCountdownProgress
     {
@@ -89,6 +105,19 @@ public sealed class AchievementToastItemViewModel : ObservableObject, IDisposabl
         _lastCloseCountdownTickUtc = DateTimeOffset.UtcNow;
     }
 
+    public bool BeginDismissAnimation()
+    {
+        if (IsDismissAnimationActive)
+        {
+            return false;
+        }
+
+        IsDismissAnimationActive = true;
+        IsAnimationHidden = true;
+        Dispose();
+        return true;
+    }
+
     public void Dispose()
     {
         if (_isDisposed)
@@ -102,6 +131,14 @@ public sealed class AchievementToastItemViewModel : ObservableObject, IDisposabl
         {
             _closeCountdownTimer.Stop();
             _closeCountdownTimer.Tick -= OnCloseCountdownTick;
+        }
+    }
+
+    private void BeginEnterAnimation()
+    {
+        if (!IsDismissAnimationActive && !_isDisposed)
+        {
+            IsAnimationHidden = false;
         }
     }
 
@@ -124,7 +161,19 @@ public sealed class AchievementToastItemViewModel : ObservableObject, IDisposabl
             return;
         }
 
-        Dispose();
-        _dismissCallback?.Invoke(Id);
+        if (_closeCountdownTimer is not null)
+        {
+            _closeCountdownTimer.Stop();
+            _closeCountdownTimer.Tick -= OnCloseCountdownTick;
+        }
+
+        if (_dismissCallback is not null)
+        {
+            _dismissCallback.Invoke(Id);
+        }
+        else
+        {
+            Dispose();
+        }
     }
 }

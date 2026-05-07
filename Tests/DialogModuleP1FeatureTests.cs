@@ -280,6 +280,9 @@ public sealed class DialogModuleP1FeatureTests
         var foundationStyles = File.ReadAllText(Path.Combine(root, "App", "Styles", "AppFoundationStyles.axaml"));
         var selectionListStyles = File.ReadAllText(Path.Combine(root, "App", "Styles", "AppSelectionListStyles.axaml"));
         var controlStyles = File.ReadAllText(Path.Combine(root, "App", "Styles", "ControlStyles.axaml"));
+        var filterSliderAnimateStyleStart = controlStyles.IndexOf("  <Style Selector=\"Border.achievement-dialog-filter-selection-slider.animate\">", StringComparison.Ordinal);
+        var filterSliderAnimateStyleEnd = controlStyles.IndexOf("  <Style Selector=\"Button.app-button.app-slider-chip.achievement-dialog-filter-chip\">", filterSliderAnimateStyleStart, StringComparison.Ordinal);
+        var filterSliderAnimateStyle = controlStyles.Substring(filterSliderAnimateStyleStart, filterSliderAnimateStyleEnd - filterSliderAnimateStyleStart);
 
         Assert.Contains("<controls:AppWindowFrame", xaml, StringComparison.Ordinal);
         Assert.Contains("Mode=\"ResizableDialog\"", xaml, StringComparison.Ordinal);
@@ -327,6 +330,9 @@ public sealed class DialogModuleP1FeatureTests
         var foundationStyles = File.ReadAllText(Path.Combine(root, "App", "Styles", "AppFoundationStyles.axaml"));
         var selectionListStyles = File.ReadAllText(Path.Combine(root, "App", "Styles", "AppSelectionListStyles.axaml"));
         var controlStyles = File.ReadAllText(Path.Combine(root, "App", "Styles", "ControlStyles.axaml"));
+        var filterSliderAnimateStyleStart = controlStyles.IndexOf("  <Style Selector=\"Border.achievement-dialog-filter-selection-slider.animate\">", StringComparison.Ordinal);
+        var filterSliderAnimateStyleEnd = controlStyles.IndexOf("  <Style Selector=\"Button.app-button.app-slider-chip.achievement-dialog-filter-chip\">", filterSliderAnimateStyleStart, StringComparison.Ordinal);
+        var filterSliderAnimateStyle = controlStyles.Substring(filterSliderAnimateStyleStart, filterSliderAnimateStyleEnd - filterSliderAnimateStyleStart);
 
         Assert.Contains("<controls:AppWindowFrame", xaml, StringComparison.Ordinal);
         Assert.Contains("Mode=\"ResizableDialog\"", xaml, StringComparison.Ordinal);
@@ -335,7 +341,7 @@ public sealed class DialogModuleP1FeatureTests
         Assert.Contains("x:Name=\"FilterStripTrack\"", xaml, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"FilterSelectionSlider\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Classes=\"achievement-dialog-filter-selection-slider\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("app-button app-chip achievement-dialog-filter-chip", xaml, StringComparison.Ordinal);
+        Assert.Contains("app-button app-slider-chip achievement-dialog-filter-chip", xaml, StringComparison.Ordinal);
         Assert.Contains("app-input app-search-input", xaml, StringComparison.Ordinal);
         Assert.Contains("app-selection-list-item-shell achievement-dialog-item-card", xaml, StringComparison.Ordinal);
         Assert.Contains("app-body achievement-dialog-card-description", xaml, StringComparison.Ordinal);
@@ -344,19 +350,23 @@ public sealed class DialogModuleP1FeatureTests
         Assert.DoesNotContain("achievement-dialog-list", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("OnResizeGripPointerPressed", code, StringComparison.Ordinal);
         Assert.DoesNotContain("ApplyOwnerHeightThreshold", code, StringComparison.Ordinal);
-        Assert.Contains("FilterStripTrack.LayoutUpdated += OnFilterStripTrackLayoutUpdated;", code, StringComparison.Ordinal);
+        Assert.Contains("FilterStripTrack.SizeChanged += OnFilterSliderLayoutMetricChanged;", code, StringComparison.Ordinal);
+        Assert.Contains("FilterAllButton.SizeChanged += OnFilterSliderLayoutMetricChanged;", code, StringComparison.Ordinal);
         Assert.Contains("private void SyncActiveFilterSlider(bool animate)", code, StringComparison.Ordinal);
-        Assert.Contains("FilterSelectionSlider.RenderTransform = new TranslateTransform", code, StringComparison.Ordinal);
-        Assert.Contains("X = targetX,", code, StringComparison.Ordinal);
+        Assert.Contains("_filterSelectionSliderTransform = FilterSelectionSlider.RenderTransform as TranslateTransform ?? new TranslateTransform();", code, StringComparison.Ordinal);
+        Assert.Contains("_filterSelectionSliderTransform.Transitions = animate ? AnimatedFilterSliderTransformTransitions : null;", code, StringComparison.Ordinal);
+        Assert.Contains("_filterSelectionSliderTransform.X = targetX;", code, StringComparison.Ordinal);
+        Assert.Contains("private void RequestSilentFilterSliderSync()", code, StringComparison.Ordinal);
+        Assert.Contains("Dispatcher.UIThread.Post(() =>", code, StringComparison.Ordinal);
         Assert.Contains("FilterSelectionSlider.Classes.Set(FilterSliderAnimatedClass, animate);", code, StringComparison.Ordinal);
         Assert.Contains("RefreshView(animateFilterSlider: true);", code, StringComparison.Ordinal);
         Assert.Contains("controls|AppSelectionList.selection-list-none Border.app-selection-list-item-shell", selectionListStyles, StringComparison.Ordinal);
         Assert.DoesNotContain("ListBox.achievement-dialog-list", controlStyles + selectionListStyles, StringComparison.Ordinal);
-        Assert.Contains("Button.app-button.app-chip.achievement-dialog-filter-chip", foundationStyles + File.ReadAllText(Path.Combine(root, "App", "Styles", "ControlStyles.axaml")), StringComparison.Ordinal);
+        Assert.Contains("Button.app-button.app-slider-chip.achievement-dialog-filter-chip", controlStyles, StringComparison.Ordinal);
         Assert.Contains("Border.achievement-dialog-filter-selection-slider", controlStyles, StringComparison.Ordinal);
         Assert.Contains("Border.achievement-dialog-filter-selection-slider.animate", controlStyles, StringComparison.Ordinal);
-        Assert.Contains("<DoubleTransition Property=\"Width\"", controlStyles, StringComparison.Ordinal);
-        Assert.Contains("<TransformOperationsTransition Property=\"RenderTransform\"", controlStyles, StringComparison.Ordinal);
+        Assert.Contains("<DoubleTransition Property=\"Width\"", filterSliderAnimateStyle, StringComparison.Ordinal);
+        Assert.DoesNotContain("<TransformOperationsTransition Property=\"RenderTransform\"", filterSliderAnimateStyle, StringComparison.Ordinal);
         Assert.Contains("Border.app-surface.app-card", foundationStyles, StringComparison.Ordinal);
         Assert.Contains("Button.app-button.app-chip", foundationStyles, StringComparison.Ordinal);
         Assert.Contains("TextBox.app-input.app-search-input", foundationStyles, StringComparison.Ordinal);
@@ -425,16 +435,16 @@ public sealed class DialogModuleP1FeatureTests
         var textDialogCode = File.ReadAllText(Path.Combine(root, "App", "Features", "Dialogs", "TextDialogView.axaml.cs"));
         var errorDialogXaml = File.ReadAllText(Path.Combine(root, "App", "Features", "Dialogs", "ErrorDialogView.axaml"));
         var versionUpdateXaml = File.ReadAllText(Path.Combine(root, "App", "Features", "Dialogs", "VersionUpdateDialogView.axaml"));
-        var foundationStyles = File.ReadAllText(Path.Combine(root, "App", "Styles", "AppFoundationStyles.axaml"));
+        var inputStyles = File.ReadAllText(Path.Combine(root, "App", "Styles", "AppInputStyles.axaml"));
+        var appTextInputCode = File.ReadAllText(Path.Combine(root, "App", "Controls", "AppTextInput.axaml.cs"));
 
-        Assert.Contains("x:Name=\"InputBox\"", textDialogXaml, StringComparison.Ordinal);
-        Assert.Contains("Classes=\"app-input app-input-block\"", textDialogXaml, StringComparison.Ordinal);
+        Assert.Contains("<controls:AppTextInput x:Name=\"InputBox\"", textDialogXaml, StringComparison.Ordinal);
         Assert.Contains("ApplyInputMode(request.MultiLine);", textDialogCode, StringComparison.Ordinal);
-        Assert.Contains("InputBox.Classes.Add(\"app-input-block\")", textDialogCode, StringComparison.Ordinal);
-        Assert.Contains("InputBox.Classes.Remove(\"app-input-block\")", textDialogCode, StringComparison.Ordinal);
-        Assert.Contains("Classes=\"app-input app-input-block\"", errorDialogXaml, StringComparison.Ordinal);
-        Assert.Contains("Classes=\"app-input app-input-block\"", versionUpdateXaml, StringComparison.Ordinal);
-        Assert.Contains("Style Selector=\"TextBox.app-input.app-input-block\"", foundationStyles, StringComparison.Ordinal);
+        Assert.Contains("Classes.Set(\"settings-input\", true);", appTextInputCode, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"settings-input settings-input-block\"", errorDialogXaml, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"settings-input settings-input-block\"", versionUpdateXaml, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"settings-input settings-input-block\"", textDialogXaml, StringComparison.Ordinal);
+        Assert.Contains("Style Selector=\"TextBox.settings-input.settings-input-block\"", inputStyles, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -451,11 +461,12 @@ public sealed class DialogModuleP1FeatureTests
         Assert.Contains("Classes=\"app-button app-primary\"", processPickerXaml, StringComparison.Ordinal);
         Assert.Contains("Classes=\"app-button app-secondary\"", processPickerXaml, StringComparison.Ordinal);
         Assert.Contains("app-compact-selection-intro", processPickerXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Running processes", processPickerXaml, StringComparison.Ordinal);
         Assert.Contains("app-compact-selection-list", processPickerXaml, StringComparison.Ordinal);
         Assert.Contains("app-compact-empty-state-content", processPickerXaml, StringComparison.Ordinal);
         Assert.Contains("<controls:AppSelectionList", emulatorPathXaml, StringComparison.Ordinal);
         Assert.Contains("VisualMode=\"Surface\"", emulatorPathXaml, StringComparison.Ordinal);
-        Assert.Contains("Classes=\"app-input\"", emulatorPathXaml, StringComparison.Ordinal);
+        Assert.Contains("<controls:AppTextInput x:Name=\"PathInput\"", emulatorPathXaml, StringComparison.Ordinal);
         Assert.Contains("app-compact-selection-intro", emulatorPathXaml, StringComparison.Ordinal);
         Assert.Contains("app-compact-selection-list", emulatorPathXaml, StringComparison.Ordinal);
         Assert.Contains("app-compact-empty-state-content", emulatorPathXaml, StringComparison.Ordinal);

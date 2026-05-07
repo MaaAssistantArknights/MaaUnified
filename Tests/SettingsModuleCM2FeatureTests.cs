@@ -60,6 +60,8 @@ public sealed class SettingsModuleCM2FeatureTests
             null,
             OpenExternalTargetAsync);
         await vm.InitializeAsync();
+        Assert.False(vm.HasIssueReportPath);
+        Assert.False(vm.HasIssueReportStatusMessage);
 
         var imageCacheRoot = Path.Combine(fixture.Root, "cache", "images");
         var nestedDirectory = Path.Combine(imageCacheRoot, "nested");
@@ -70,6 +72,7 @@ public sealed class SettingsModuleCM2FeatureTests
         await vm.OpenIssueReportDebugDirectoryAsync();
         Assert.NotEmpty(openedTargets);
         Assert.True(Directory.Exists(openedTargets[^1]));
+        Assert.True(vm.HasIssueReportStatusMessage);
         Assert.Contains("已打开目录", vm.IssueReportStatusMessage, StringComparison.Ordinal);
         Assert.False(vm.HasIssueReportErrorMessage);
 

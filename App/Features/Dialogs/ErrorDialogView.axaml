@@ -23,7 +23,7 @@
     <controls:AppWindowFrame.Content>
       <Border Classes="app-surface app-section">
         <TextBox x:Name="ErrorDetailBox"
-                 Classes="app-input app-input-block"
+                 Classes="settings-input settings-input-block"
                  AcceptsReturn="True"
                  IsReadOnly="True"
                  ScrollViewer.VerticalScrollBarVisibility="Auto"

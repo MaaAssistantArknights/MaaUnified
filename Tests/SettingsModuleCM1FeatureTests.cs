@@ -698,6 +698,8 @@ public sealed class SettingsModuleCM1FeatureTests
         Assert.True(result.Success);
         Assert.Single(openedTargets);
         Assert.Contains("issues/new/choose", openedTargets[0], StringComparison.Ordinal);
+        Assert.False(vm.HasIssueReportPath);
+        Assert.False(vm.HasIssueReportStatusMessage);
         Assert.True(string.IsNullOrEmpty(vm.IssueReportStatusMessage));
         Assert.False(vm.HasIssueReportErrorMessage);
     }

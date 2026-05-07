@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using MAAUnified.App.ViewModels.Infrastructure;
+using MAAUnified.App.Services;
 using MAAUnified.Application.Models;
 using MAAUnified.Application.Models.TaskParams;
 using MAAUnified.Application.Services;
@@ -129,7 +130,7 @@ public abstract class TypedTaskModuleViewModelBase<TDto> : ObservableObject
         IsTaskBound = true;
         IsDirty = false;
         LastErrorMessage = string.Empty;
-        StatusMessage = loaded.Message;
+        StatusMessage = string.Empty;
     }
 
     public virtual void ClearBinding()
@@ -152,6 +153,17 @@ public abstract class TypedTaskModuleViewModelBase<TDto> : ObservableObject
     }
 
     public async Task<bool> SaveAsync(CancellationToken cancellationToken = default)
+    {
+        return await ConfigurationSaveTracker.Instance.RunTrackedAsync(
+            Scope,
+            ResolveSaveDisplayName(),
+            $"{Scope}.Save",
+            Runtime.DiagnosticsService,
+            SaveCoreAsync,
+            cancellationToken);
+    }
+
+    private async Task<bool> SaveCoreAsync(CancellationToken cancellationToken = default)
     {
         if (!IsTaskBound || _boundTaskIndex < 0)
         {
@@ -207,8 +219,26 @@ public abstract class TypedTaskModuleViewModelBase<TDto> : ObservableObject
 
         IsDirty = false;
         LastErrorMessage = string.Empty;
-        StatusMessage = save.Message;
+        StatusMessage = string.Empty;
         return true;
+    }
+
+    private string ResolveSaveDisplayName()
+    {
+        var key = Scope.StartsWith("TaskQueue.", StringComparison.Ordinal)
+            ? Scope["TaskQueue.".Length..]
+            : Scope;
+
+        return key switch
+        {
+            "StartUp" => Texts.GetOrDefault("StartUp.Title", "开始唤醒"),
+            "Fight" => Texts.GetOrDefault("Fight.Title", "自动战斗"),
+            "Recruit" => Texts.GetOrDefault("Recruit.Title", "自动公招"),
+            "Roguelike" => Texts.GetOrDefault("Roguelike.Title", "自动肉鸽"),
+            "Reclamation" => Texts.GetOrDefault("Reclamation.Title", "生息演算"),
+            "Custom" => Texts.GetOrDefault("Custom.Title", "自定义任务"),
+            _ => key,
+        };
     }
 
     protected bool SetTrackedProperty<T>(ref T backingField, T value, [CallerMemberName] string? propertyName = null)

@@ -2,16 +2,12 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="MAAUnified.App.Features.Advanced.ToolboxDepotView">
   <UserControl.Styles>
-    <Style Selector="Border.toolbox-depot-section">
-      <Setter Property="Padding" Value="22" />
-    </Style>
-
-    <Style Selector="Border.toolbox-depot-card">
-      <Setter Property="Padding" Value="16" />
+    <Style Selector="StackPanel.toolbox-depot-section">
+      <Setter Property="Spacing" Value="12" />
     </Style>
 
     <Style Selector="StackPanel.toolbox-depot-stack">
-      <Setter Property="Spacing" Value="16" />
+      <Setter Property="Spacing" Value="12" />
     </Style>
 
     <Style Selector="Border.toolbox-depot-sync-badge">
@@ -25,14 +21,11 @@
       <Setter Property="FontWeight" Value="SemiBold" />
     </Style>
 
-    <Style Selector="Border.toolbox-depot-results-card">
-      <Setter Property="Padding" Value="12" />
-    </Style>
-
     <Style Selector="Border.toolbox-depot-item-card">
       <Setter Property="Margin" Value="{DynamicResource MAA.Thickness.Toolbox.CardMargin}" />
       <Setter Property="MinWidth" Value="{DynamicResource MAA.Size.Toolbox.DepotCardMinWidth}" />
       <Setter Property="Padding" Value="16" />
+      <Setter Property="BorderThickness" Value="0" />
     </Style>
 
     <Style Selector="StackPanel.toolbox-depot-item-stack">
@@ -64,79 +57,74 @@
 
   <Grid Margin="{DynamicResource MAA.Thickness.Toolbox.PageMargin}"
         RowDefinitions="Auto,*,Auto">
-    <Border Grid.Row="0"
-            Classes="app-surface app-section toolbox-depot-section">
-      <StackPanel Classes="toolbox-depot-stack">
-        <Border Classes="app-badge toolbox-depot-sync-badge"
-                IsVisible="{Binding HasLastDepotSyncTime}">
-          <TextBlock Classes="app-badge-text"
-                     Text="{Binding LastDepotSyncDisplayText}" />
-        </Border>
-
-        <TextBlock Classes="app-window-subtitle long-wrap toolbox-depot-summary"
-                   Text="{Binding DepotInfo}" />
-      </StackPanel>
-    </Border>
-
-    <Border Grid.Row="1"
-            Margin="0,14,0,0"
-            Classes="app-surface app-section toolbox-depot-section">
-      <Border Classes="app-surface app-card toolbox-depot-results-card">
-        <ScrollViewer HorizontalScrollBarVisibility="Disabled"
-                      VerticalScrollBarVisibility="Auto">
-          <ItemsControl Width="{Binding DepotPanelWidth}"
-                        HorizontalAlignment="Center"
-                        ItemsSource="{Binding DepotResult}">
-            <ItemsControl.ItemsPanel>
-              <ItemsPanelTemplate>
-                <WrapPanel ItemWidth="{DynamicResource MAA.Size.Toolbox.DepotWrapItemWidth}" />
-              </ItemsPanelTemplate>
-            </ItemsControl.ItemsPanel>
-            <ItemsControl.ItemTemplate>
-              <DataTemplate>
-                <Border Classes="app-surface app-card toolbox-depot-item-card">
-                  <StackPanel Classes="toolbox-depot-item-stack">
-                    <Image Width="{DynamicResource MAA.Size.Toolbox.DepotCardImage}"
-                           Height="{DynamicResource MAA.Size.Toolbox.DepotCardImage}"
-                           Source="{Binding ItemImage}"
-                           Stretch="Uniform" />
-                    <TextBlock Classes="app-body toolbox-depot-item-name"
-                               Text="{Binding Name}" />
-                    <Border Classes="app-badge toolbox-depot-count-badge">
-                      <TextBlock Classes="app-badge-text"
-                                 Text="{Binding DisplayCount}" />
-                    </Border>
-                  </StackPanel>
-                </Border>
-              </DataTemplate>
-            </ItemsControl.ItemTemplate>
-          </ItemsControl>
-        </ScrollViewer>
+    <StackPanel Grid.Row="0"
+                Classes="toolbox-depot-section toolbox-depot-stack">
+      <Border Classes="toolbox-chip toolbox-depot-sync-badge"
+              IsVisible="{Binding HasLastDepotSyncTime}">
+        <TextBlock Classes="toolbox-chip-text"
+                   Text="{Binding LastDepotSyncDisplayText}" />
       </Border>
-    </Border>
 
-    <Border Grid.Row="2"
-            Margin="{DynamicResource MAA.Thickness.Toolbox.ActionTopMargin}"
-            Classes="app-surface app-section toolbox-depot-section">
-      <Border Classes="app-surface app-card toolbox-depot-card">
-        <WrapPanel Classes="toolbox-depot-actions">
-          <Button Classes="app-button app-secondary toolbox-depot-action"
-                  Click="OnDepotExportArkPlannerClick">
-            <TextBlock Text="{Binding DepotExportArkPlannerText}"
-                       TextAlignment="Center"
-                       TextWrapping="Wrap" />
-          </Button>
-          <Button Classes="app-button app-secondary toolbox-depot-action"
-                  Click="OnDepotExportLoliconClick">
-            <TextBlock Text="{Binding DepotExportLoliconText}"
-                       TextAlignment="Center"
-                       TextWrapping="Wrap" />
-          </Button>
-          <Button Classes="app-button app-primary toolbox-depot-action"
-                  Content="{Binding StartRecognitionText}"
-                  Click="OnDepotStartClick" />
-        </WrapPanel>
-      </Border>
-    </Border>
+      <TextBlock Classes="app-window-subtitle long-wrap toolbox-depot-summary"
+                 Text="{Binding DepotInfo}" />
+    </StackPanel>
+
+    <StackPanel Grid.Row="1"
+                Margin="0,14,0,0"
+                Classes="toolbox-depot-section"
+                Spacing="12">
+      <ScrollViewer HorizontalScrollBarVisibility="Disabled"
+                    VerticalScrollBarVisibility="Auto">
+        <ItemsControl Width="{Binding DepotPanelWidth}"
+                      HorizontalAlignment="Center"
+                      ItemsSource="{Binding DepotResult}">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <WrapPanel ItemWidth="{DynamicResource MAA.Size.Toolbox.DepotWrapItemWidth}" />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <Border Classes="app-surface app-card toolbox-depot-item-card">
+                <StackPanel Classes="toolbox-depot-item-stack">
+                  <Image Width="{DynamicResource MAA.Size.Toolbox.DepotCardImage}"
+                         Height="{DynamicResource MAA.Size.Toolbox.DepotCardImage}"
+                         Source="{Binding ItemImage}"
+                         Stretch="Uniform" />
+                  <TextBlock Classes="app-body toolbox-depot-item-name"
+                             Text="{Binding Name}" />
+                  <Border Classes="app-badge toolbox-depot-count-badge">
+                    <TextBlock Classes="app-badge-text"
+                               Text="{Binding DisplayCount}" />
+                  </Border>
+                </StackPanel>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ScrollViewer>
+    </StackPanel>
+
+    <StackPanel Grid.Row="2"
+                Margin="{DynamicResource MAA.Thickness.Toolbox.ActionTopMargin}"
+                Classes="toolbox-depot-section">
+      <WrapPanel Classes="toolbox-depot-actions">
+        <Button Classes="app-button app-secondary toolbox-depot-action"
+                Click="OnDepotExportArkPlannerClick">
+          <TextBlock Text="{Binding DepotExportArkPlannerText}"
+                     TextAlignment="Center"
+                     TextWrapping="Wrap" />
+        </Button>
+        <Button Classes="app-button app-secondary toolbox-depot-action"
+                Click="OnDepotExportLoliconClick">
+          <TextBlock Text="{Binding DepotExportLoliconText}"
+                     TextAlignment="Center"
+                     TextWrapping="Wrap" />
+        </Button>
+        <Button Classes="app-button app-primary toolbox-depot-action"
+                Content="{Binding StartRecognitionText}"
+                Click="OnDepotStartClick" />
+      </WrapPanel>
+    </StackPanel>
   </Grid>
 </UserControl>

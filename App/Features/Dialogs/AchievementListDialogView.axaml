@@ -47,19 +47,19 @@
                               Orientation="Horizontal"
                               Spacing="6">
                     <Button x:Name="FilterAllButton"
-                            Classes="app-button app-chip achievement-dialog-filter-chip"
+                            Classes="app-button app-slider-chip achievement-dialog-filter-chip"
                             Tag="All"
                             Click="OnFilterChipClick" />
                     <Button x:Name="FilterUnlockedButton"
-                            Classes="app-button app-chip achievement-dialog-filter-chip"
+                            Classes="app-button app-slider-chip achievement-dialog-filter-chip"
                             Tag="Unlocked"
                             Click="OnFilterChipClick" />
                     <Button x:Name="FilterInProgressButton"
-                            Classes="app-button app-chip achievement-dialog-filter-chip"
+                            Classes="app-button app-slider-chip achievement-dialog-filter-chip"
                             Tag="InProgress"
                             Click="OnFilterChipClick" />
                     <Button x:Name="FilterNewButton"
-                            Classes="app-button app-chip achievement-dialog-filter-chip"
+                            Classes="app-button app-slider-chip achievement-dialog-filter-chip"
                             Tag="NewUnlock"
                             Click="OnFilterChipClick" />
                   </StackPanel>

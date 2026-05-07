@@ -171,6 +171,10 @@ public sealed class PlatformCapabilityContractTests
         {
             Assert.IsType<WindowsOverlayCapabilityService>(bundle.OverlayService);
         }
+        else if (OperatingSystem.IsLinux() && !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("DISPLAY")))
+        {
+            Assert.IsType<LinuxOverlayCapabilityService>(bundle.OverlayService);
+        }
         else
         {
             Assert.IsType<NoOpOverlayCapabilityService>(bundle.OverlayService);
@@ -185,7 +189,7 @@ public sealed class PlatformCapabilityContractTests
         Assert.True(bundle.NotificationService is DesktopNotificationService or CommandNotificationService or NoOpNotificationService);
         Assert.True(bundle.HotkeyService is SharpHookGlobalHotkeyService or LinuxPortalGlobalHotkeyService or CompositeGlobalHotkeyService or WindowScopedHotkeyService or NoOpGlobalHotkeyService);
         Assert.True(bundle.AutostartService is CrossPlatformAutostartService or NoOpAutostartService);
-        Assert.True(bundle.OverlayService is WindowsOverlayCapabilityService or NoOpOverlayCapabilityService);
+        Assert.True(bundle.OverlayService is WindowsOverlayCapabilityService or LinuxOverlayCapabilityService or NoOpOverlayCapabilityService);
     }
 
     [Fact]

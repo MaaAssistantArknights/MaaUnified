@@ -1,80 +1,87 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:MAAUnified.App.Controls"
              x:Class="MAAUnified.App.Features.Advanced.OverlayView">
   <UserControl.Styles>
-    <Style Selector="Border.overlay-section">
-      <Setter Property="Padding" Value="22" />
+    <Style Selector="StackPanel.overlay-page">
+      <Setter Property="Spacing" Value="22" />
     </Style>
 
-    <Style Selector="Border.overlay-card">
-      <Setter Property="Padding" Value="16" />
+    <Style Selector="StackPanel.overlay-header">
+      <Setter Property="Spacing" Value="8" />
     </Style>
 
-    <Style Selector="StackPanel.overlay-stack">
-      <Setter Property="Spacing" Value="16" />
+    <Style Selector="StackPanel.overlay-section">
+      <Setter Property="Spacing" Value="12" />
     </Style>
 
-    <Style Selector="TextBlock.overlay-card-title">
+    <Style Selector="TextBlock.overlay-section-title">
       <Setter Property="FontSize" Value="16" />
       <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
     </Style>
 
     <Style Selector="ComboBox.overlay-target-selector">
       <Setter Property="MinWidth" Value="280" />
       <Setter Property="HorizontalAlignment" Value="Stretch" />
     </Style>
+
+    <Style Selector="StackPanel.overlay-actions">
+      <Setter Property="Orientation" Value="Horizontal" />
+      <Setter Property="Spacing" Value="10" />
+      <Setter Property="HorizontalAlignment" Value="Right" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="Border.overlay-status-panel">
+      <Setter Property="Padding" Value="14,12" />
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Surface.Section}" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="8" />
+    </Style>
   </UserControl.Styles>
 
-  <Grid Margin="4"
-        RowDefinitions="Auto,Auto,*">
-    <Border Classes="app-surface app-section overlay-section">
-      <StackPanel Classes="overlay-stack">
-        <TextBlock Classes="app-window-title"
-                   Text="{Binding Texts[Toolbox.Advanced.Overlay.Title]}" />
-        <TextBlock Classes="app-caption long-wrap"
-                   Text="{Binding CapabilitySummary}" />
-      </StackPanel>
-    </Border>
+  <StackPanel Margin="4"
+              Classes="overlay-page">
+    <StackPanel Classes="overlay-header">
+      <TextBlock Classes="app-window-title"
+                 Text="{Binding Texts[Toolbox.Advanced.Overlay.Title]}" />
+      <TextBlock Classes="app-caption long-wrap"
+                 Text="{Binding CapabilitySummary}" />
+    </StackPanel>
 
-    <Border Grid.Row="1"
-            Margin="0,14,0,0"
-            Classes="app-surface app-section overlay-section">
-      <StackPanel Classes="overlay-stack">
-        <TextBlock Classes="app-body overlay-card-title"
-                   Text="{Binding Texts[Toolbox.Advanced.Overlay.TargetWindow]}" />
+    <StackPanel Classes="overlay-section">
+      <TextBlock Classes="overlay-section-title"
+                 Text="{Binding Texts[Toolbox.Advanced.Overlay.TargetWindow]}" />
 
-        <Border Classes="app-surface app-card overlay-card">
-          <StackPanel Classes="overlay-stack">
-            <ComboBox Classes="overlay-target-selector"
-                      ItemsSource="{Binding Targets}"
-                      SelectedItem="{Binding SelectedTarget}"
-                      DisplayMemberBinding="{Binding DisplayName}" />
+      <Grid ColumnDefinitions="*,Auto"
+            Classes="overlay-target-row">
+        <controls:AppSelect Classes="overlay-target-selector"
+                            ItemsSource="{Binding Targets}"
+                            SelectedItem="{Binding SelectedTarget}"
+                            DisplayMemberBinding="{Binding DisplayName}" />
 
-            <StackPanel Orientation="Horizontal"
-                        Spacing="{DynamicResource MAA.Spacing.Small}">
-              <Button Classes="app-button app-secondary"
-                      Content="{Binding Texts[Toolbox.Advanced.Overlay.ReloadTargets]}"
-                      Click="OnReloadTargetsClick" />
-              <Button Classes="app-button app-primary"
-                      Content="{Binding Texts[Toolbox.Advanced.Overlay.ToggleVisibility]}"
-                      Click="OnToggleOverlayClick" />
-            </StackPanel>
-          </StackPanel>
-        </Border>
-      </StackPanel>
-    </Border>
-
-    <Border Grid.Row="2"
-            Margin="0,14,0,0"
-            Classes="app-surface app-section overlay-section">
-      <Border Classes="app-surface app-card overlay-card">
-        <StackPanel Spacing="8">
-          <TextBlock Classes="app-body long-wrap"
-                     Text="{Binding StatusMessage}" />
-          <TextBlock Classes="state-error long-wrap"
-                     Text="{Binding LastErrorMessage}" />
+        <StackPanel Grid.Column="1"
+                    Margin="12,0,0,0"
+                    Classes="overlay-actions">
+          <Button Classes="app-button app-secondary"
+                  Content="{Binding Texts[Toolbox.Advanced.Overlay.ReloadTargets]}"
+                  Click="OnReloadTargetsClick" />
+          <Button Classes="app-button app-primary"
+                  Content="{Binding Texts[Toolbox.Advanced.Overlay.ToggleVisibility]}"
+                  Click="OnToggleOverlayClick" />
         </StackPanel>
-      </Border>
+      </Grid>
+    </StackPanel>
+
+    <Border Classes="overlay-status-panel">
+      <StackPanel Spacing="6">
+        <TextBlock Classes="app-body long-wrap"
+                   Text="{Binding StatusMessage}" />
+        <TextBlock Classes="state-error long-wrap"
+                   Text="{Binding LastErrorMessage}" />
+      </StackPanel>
     </Border>
-  </Grid>
+  </StackPanel>
 </UserControl>

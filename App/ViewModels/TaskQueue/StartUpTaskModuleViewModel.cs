@@ -394,6 +394,11 @@ public sealed class StartUpTaskModuleViewModel : TypedTaskModuleViewModelBase<St
         }
     }
 
+    public void RemoveAddressFromHistory(string? address)
+    {
+        _sharedState.RemoveAddressFromHistory(address);
+    }
+
     protected override Task<UiOperationResult<StartUpTaskParamsDto>> LoadDtoAsync(int index, CancellationToken cancellationToken)
     {
         return Runtime.TaskQueueFeatureService.GetStartUpParamsAsync(index, cancellationToken);

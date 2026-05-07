@@ -30,6 +30,10 @@ public sealed class RootViewStructureContractTests
         Assert.Contains("Classes=\"main-shell-update-overlay-card main-shell-floating-card interactive app-surface app-card\"", text, StringComparison.Ordinal);
         Assert.Contains("Click=\"OnDismissWindowUpdateClick\"", text, StringComparison.Ordinal);
         Assert.Contains("HasVisibleWindowUpdateInfo", text, StringComparison.Ordinal);
+        Assert.Contains("Style Selector=\"Button.main-shell-update-action\"", text, StringComparison.Ordinal);
+        Assert.Contains("<Setter Property=\"Height\" Value=\"NaN\" />", text, StringComparison.Ordinal);
+        Assert.Contains("Style Selector=\"TextBlock.main-shell-update-description\"", text, StringComparison.Ordinal);
+        Assert.Contains("<Setter Property=\"FontWeight\" Value=\"Normal\" />", text, StringComparison.Ordinal);
         Assert.Contains("Classes=\"achievement-toast-host achievement-toast-overlay-host\"", text, StringComparison.Ordinal);
         Assert.Contains("PointerEntered=\"OnAchievementToastPointerEntered\"", text, StringComparison.Ordinal);
         Assert.Contains("PointerExited=\"OnAchievementToastPointerExited\"", text, StringComparison.Ordinal);
@@ -47,7 +51,9 @@ public sealed class RootViewStructureContractTests
         Assert.Contains("IsVisible=\"{Binding IsTaskQueueRootTabSelected}\"", text, StringComparison.Ordinal);
         Assert.Contains("IsVisible=\"{Binding IsCopilotRootTabSelected}\"", text, StringComparison.Ordinal);
         Assert.Contains("IsVisible=\"{Binding IsToolboxRootTabSelected}\"", text, StringComparison.Ordinal);
-        Assert.Contains("IsVisible=\"{Binding IsSettingsRootTabSelected}\"", text, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"settings-root-host\"", text, StringComparison.Ordinal);
+        Assert.Contains("Classes.settings-root-host-selected=\"{Binding IsSettingsRootTabSelected}\"", text, StringComparison.Ordinal);
+        Assert.Contains("Style Selector=\"ContentControl.settings-root-host\"", text, StringComparison.Ordinal);
         Assert.DoesNotContain("<rootViews:TaskQueueView DataContext=\"{Binding TaskQueuePage}\" />", text, StringComparison.Ordinal);
         Assert.DoesNotContain("<advancedViews:CopilotView DataContext=\"{Binding CopilotPage}\" />", text, StringComparison.Ordinal);
         Assert.DoesNotContain("<advancedViews:ToolboxView DataContext=\"{Binding ToolboxPage}\" />", text, StringComparison.Ordinal);
@@ -68,17 +74,30 @@ public sealed class RootViewStructureContractTests
         Assert.Contains("IsEnabled=\"{Binding CanToggleRun}\"", text, StringComparison.Ordinal);
         Assert.Contains("Text=\"{Binding CoreInitializationMessage}\"", text, StringComparison.Ordinal);
         Assert.Contains("IsVisible=\"{Binding HasCoreInitializationMessage}\"", text, StringComparison.Ordinal);
-        Assert.Contains("Classes=\"task-queue-list\"", text, StringComparison.Ordinal);
-        Assert.Contains("Style Selector=\"ListBox.task-queue-list ListBoxItem:pointerover\"", text, StringComparison.Ordinal);
-        Assert.Contains("Style Selector=\"ListBox.task-queue-list ListBoxItem:selected\"", text, StringComparison.Ordinal);
-        Assert.Contains("Style Selector=\"ListBox.task-queue-list ListBoxItem:selected:pointerover Border.task-queue-item-card\"", text, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"grouped-card-frame compact task-queue-list-frame\"", text, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"grouped-card-footer-action task-queue-card-action\"", text, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"grouped-card-footer-action task-queue-card-action grouped-card-footer-post-action task-queue-post-action-row\"", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Classes=\"app-button task-queue-card-action\"", text, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"task-queue-list-action-separator\"", text, StringComparison.Ordinal);
+        Assert.Contains("<controls:AppSelectionList x:Name=\"TaskListBox\"", text, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"task-queue-list selection-list-section-cards selection-list-no-indicator\"", text, StringComparison.Ordinal);
+        Assert.Contains("Style Selector=\"controls|AppSelectionList.task-queue-list Border.task-queue-item-card\"", text, StringComparison.Ordinal);
+        Assert.Contains("Classes.status-running=\"{Binding IsStatusRunning}\"", text, StringComparison.Ordinal);
+        Assert.Contains("Classes.status-success=\"{Binding IsStatusSuccess}\"", text, StringComparison.Ordinal);
+        Assert.Contains("Classes.status-error=\"{Binding IsStatusError}\"", text, StringComparison.Ordinal);
+        Assert.Contains("Classes.status-skipped=\"{Binding IsStatusSkipped}\"", text, StringComparison.Ordinal);
+        Assert.Contains("Classes.status-idle=\"{Binding IsStatusIdle}\"", text, StringComparison.Ordinal);
         Assert.Contains("Text=\"{Binding LogsTitleText}\"", text, StringComparison.Ordinal);
         Assert.Contains("ItemsSource=\"{Binding LogCards}\"", text, StringComparison.Ordinal);
         Assert.Contains("ItemsSource=\"{Binding Items}\"", text, StringComparison.Ordinal);
-        Assert.Contains("ToolTip.ShowDelay=\"200\"", text, StringComparison.Ordinal);
-        Assert.Contains("TextWrapping=\"NoWrap\"", text, StringComparison.Ordinal);
-        Assert.Contains("MaxWidth=\"960\"", text, StringComparison.Ordinal);
-        Assert.Contains("MaxHeight=\"540\"", text, StringComparison.Ordinal);
+        Assert.Contains("PointerEntered=\"OnLogThumbnailPointerEntered\"", text, StringComparison.Ordinal);
+        Assert.Contains("PointerExited=\"OnLogThumbnailPointerExited\"", text, StringComparison.Ordinal);
+        Assert.Contains("<Setter Property=\"TextWrapping\" Value=\"NoWrap\" />", text, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"task-queue-log-image-popup\"", text, StringComparison.Ordinal);
+        Assert.Contains("<DoubleTransition Property=\"Opacity\"", text, StringComparison.Ordinal);
+        Assert.Contains("Duration=\"0:0:0.1\"", text, StringComparison.Ordinal);
+        Assert.Contains("<Setter Property=\"Width\" Value=\"854\" />", text, StringComparison.Ordinal);
+        Assert.Contains("<Setter Property=\"Height\" Value=\"480\" />", text, StringComparison.Ordinal);
         Assert.Contains("IsVisible=\"{Binding ShowTimeOnlyLayout}\"", text, StringComparison.Ordinal);
         Assert.Contains("VerticalAlignment=\"Center\"", text, StringComparison.Ordinal);
         Assert.Contains("Click=\"OnOpenPostActionClick\"", text, StringComparison.Ordinal);
@@ -101,6 +120,7 @@ public sealed class RootViewStructureContractTests
     public void TaskQueueTaskViews_ShouldUseVerticalSettingsLayout_AndHidePostActionCommandInputs()
     {
         var root = GetMaaUnifiedRoot();
+        var infrastText = File.ReadAllText(Path.Combine(root, "App", "Features", "TaskQueue", "InfrastSettingsView.axaml"));
         var taskViewFiles = new[]
         {
             "App/Features/TaskQueue/StartUpTaskView.axaml",
@@ -119,7 +139,16 @@ public sealed class RootViewStructureContractTests
         {
             var fullPath = Path.Combine(root, file.Replace('/', Path.DirectorySeparatorChar));
             var text = File.ReadAllText(fullPath);
-            Assert.DoesNotContain("<WrapPanel", text, StringComparison.Ordinal);
+            if (file.EndsWith("FightSettingsView.axaml", StringComparison.Ordinal))
+            {
+                Assert.Contains("<WrapPanel", text, StringComparison.Ordinal);
+                Assert.DoesNotContain("<UniformGrid", text, StringComparison.Ordinal);
+                Assert.Contains("Content=\"{Binding WeeklyScheduleSundayText}\"", text, StringComparison.Ordinal);
+            }
+            else
+            {
+                Assert.DoesNotContain("<WrapPanel", text, StringComparison.Ordinal);
+            }
 
             if (file.EndsWith("RecruitSettingsView.axaml", StringComparison.Ordinal))
             {
@@ -128,6 +157,7 @@ public sealed class RootViewStructureContractTests
                 Assert.Equal(1, horizontalCount);
                 Assert.Contains("Content=\"{Binding Texts[Recruit.AutoSelectLevel6]}\"", text, StringComparison.Ordinal);
                 Assert.Contains("Text=\"{Binding Texts[Recruit.AutoSelectLevel6FixedTime]}\"", text, StringComparison.Ordinal);
+                Assert.Contains("Classes=\"recruit-time-picker\"", text, StringComparison.Ordinal);
             }
             else
             {
@@ -135,6 +165,17 @@ public sealed class RootViewStructureContractTests
                 Assert.DoesNotContain("Orientation=\"Horizontal\"", text, StringComparison.Ordinal);
             }
         }
+
+        var startUpText = File.ReadAllText(Path.Combine(root, "App", "Features", "TaskQueue", "StartUpTaskView.axaml"));
+        Assert.Contains("IsVisible=\"{Binding ShowAccountSwitch}\"", startUpText, StringComparison.Ordinal);
+        Assert.Contains("<controls:SettingsInlineRow Classes=\"startup-card-content\"", startUpText, StringComparison.Ordinal);
+        Assert.Contains("Texts[StartUp.AccountSwitchManualRun]", startUpText, StringComparison.Ordinal);
+
+        Assert.Contains("Classes=\"grouped-card-frame compact infrast-facility-frame\"", infrastText, StringComparison.Ordinal);
+        Assert.Contains("<controls:AppSelectionList x:Name=\"FacilitySelectionList\"", infrastText, StringComparison.Ordinal);
+        Assert.Contains("CanReorderItems=\"True\"", infrastText, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"app-selection-list-item-shell\"", infrastText, StringComparison.Ordinal);
+        Assert.DoesNotContain("<ListBox Classes=\"infrast-facility-list\"", infrastText, StringComparison.Ordinal);
 
         var postActionText = File.ReadAllText(
             Path.Combine(
@@ -153,11 +194,56 @@ public sealed class RootViewStructureContractTests
     }
 
     [Fact]
+    public void TaskQueueRemainingViews_ShouldUseSharedInputControls()
+    {
+        var root = GetMaaUnifiedRoot();
+        var migratedTaskViewFiles = new[]
+        {
+            "CustomSettingsView.axaml",
+            "MallSettingsView.axaml",
+            "UserDataUpdateSettingsView.axaml",
+            "InfrastSettingsView.axaml",
+            "ReclamationSettingsView.axaml",
+            "RecruitSettingsView.axaml",
+        };
+
+        foreach (var file in migratedTaskViewFiles)
+        {
+            var text = File.ReadAllText(Path.Combine(root, "App", "Features", "TaskQueue", file));
+            Assert.DoesNotContain("<TextBox", text, StringComparison.Ordinal);
+            Assert.DoesNotContain("<ComboBox", text, StringComparison.Ordinal);
+            Assert.DoesNotContain("ComboBox.ItemTemplate", text, StringComparison.Ordinal);
+            Assert.DoesNotContain("<controls:VerticalSpinNumberBox", text, StringComparison.Ordinal);
+            Assert.DoesNotContain("Classes=\"app-input", text, StringComparison.Ordinal);
+            Assert.Contains("xmlns:controls=\"clr-namespace:MAAUnified.App.Controls\"", text, StringComparison.Ordinal);
+        }
+
+        var recruitText = File.ReadAllText(
+            Path.Combine(root, "App", "Features", "TaskQueue", "RecruitSettingsView.axaml"));
+        Assert.Contains("<controls:AppMultiSelectDropdown", recruitText, StringComparison.Ordinal);
+        Assert.DoesNotContain("<controls:CheckComboBox", recruitText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void InfrastSettingsView_ShouldUseSharedSelectionListForFacilityOrder()
+    {
+        var root = GetMaaUnifiedRoot();
+        var text = File.ReadAllText(Path.Combine(root, "App", "Features", "TaskQueue", "InfrastSettingsView.axaml"));
+
+        Assert.Contains("Classes=\"grouped-card-frame compact infrast-facility-frame\"", text, StringComparison.Ordinal);
+        Assert.Contains("<controls:AppSelectionList x:Name=\"FacilitySelectionList\"", text, StringComparison.Ordinal);
+        Assert.Contains("CanReorderItems=\"True\"", text, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"app-selection-list-item-shell\"", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("<ListBox Classes=\"infrast-facility-list\"", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void SettingsView_ShouldUseLazySectionHosts_AndKeepSharedScrollSurface()
     {
         var root = GetMaaUnifiedRoot();
         var text = File.ReadAllText(Path.Combine(root, "App", "Features", "Root", "SettingsView.axaml"));
         var codeBehind = File.ReadAllText(Path.Combine(root, "App", "Features", "Root", "SettingsView.axaml.cs"));
+        var styles = File.ReadAllText(Path.Combine(root, "App", "Styles", "SettingsShellStyles.axaml"));
 
         Assert.Contains("ItemsSource=\"{Binding Sections}\"", text, StringComparison.Ordinal);
         Assert.Contains("SelectedItem=\"{Binding SelectedSection}\"", text, StringComparison.Ordinal);
@@ -166,6 +252,7 @@ public sealed class RootViewStructureContractTests
         Assert.Contains("VisualMode=\"Rail\"", text, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"SectionScrollViewer\"", text, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"SectionContentPanel\"", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Spacing=\"28\"", text, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"StickyTitlePanel\"", text, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"StickyCurrentHost\"", text, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"StickyTransitionHost\"", text, StringComparison.Ordinal);
@@ -188,6 +275,8 @@ public sealed class RootViewStructureContractTests
         Assert.DoesNotContain("settingsViews:AboutSettingsView", text, StringComparison.Ordinal);
         Assert.DoesNotContain("xmlns:settingsViews=", text, StringComparison.Ordinal);
         Assert.DoesNotContain("x:Name=\"SectionHost\"", text, StringComparison.Ordinal);
+        Assert.Contains("Style Selector=\"StackPanel.settings-content-panel\"", styles, StringComparison.Ordinal);
+        Assert.Contains("<Setter Property=\"Spacing\" Value=\"{DynamicResource MAA.App.Settings.SectionSpacing}\" />", styles, StringComparison.Ordinal);
 
         Assert.Contains("private readonly HashSet<string> _materializedSections", codeBehind, StringComparison.Ordinal);
         Assert.Contains("private readonly Dictionary<string, double> _sectionTopCache", codeBehind, StringComparison.Ordinal);
@@ -238,8 +327,17 @@ public sealed class RootViewStructureContractTests
 
         Assert.Contains("SelectionChanged=\"OnConfigurationProfileSelectionChanged\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Click=\"OnImportProfilesClick\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"configuration-manager-action-grid\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("RowDefinitions=\"Auto,10,Auto\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Grid.Row=\"2\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Grid.Column=\"2\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Grid.RowSpan=\"3\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Watermark=\"{Binding RootTexts[Settings.ConfigurationManager.NewProfileWatermark]}\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Content=\"{Binding RootTexts[Settings.ConfigurationManager.SaveAsNew]}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Content=\"{Binding RootTexts[Settings.ConfigurationManager.ExportCurrent]}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Content=\"{Binding RootTexts[Settings.ConfigurationManager.ExportAll]}\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("RootTexts[Settings.ConfigurationManager.AutoSavedCurrent]", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Classes=\"app-button app-primary\"", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("留空使用当前时间", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("切换到别的配置", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("保存当前配置的修改", xaml, StringComparison.Ordinal);

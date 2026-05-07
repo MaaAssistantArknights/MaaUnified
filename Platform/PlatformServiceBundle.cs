@@ -112,9 +112,18 @@ public static class PlatformServicesFactory
 
         try
         {
-            overlayService = !forceFallback && OperatingSystem.IsWindows()
-                ? new WindowsOverlayCapabilityService()
-                : new NoOpOverlayCapabilityService();
+            if (!forceFallback && OperatingSystem.IsWindows())
+            {
+                overlayService = new WindowsOverlayCapabilityService();
+            }
+            else if (!forceFallback && LinuxOverlayCapabilityService.TryCreate(out var linuxOverlay))
+            {
+                overlayService = linuxOverlay;
+            }
+            else
+            {
+                overlayService = new NoOpOverlayCapabilityService();
+            }
         }
         catch
         {

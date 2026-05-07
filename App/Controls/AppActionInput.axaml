@@ -1,0 +1,25 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="MAAUnified.App.Controls.AppActionInput"
+             x:Name="Root">
+  <Border x:Name="ShellBorder"
+          Classes="settings-input-group">
+    <Grid ColumnDefinitions="*,Auto">
+      <TextBox x:Name="EditorTextBox"
+               Classes="settings-input-group-editor"
+               Text="{Binding Text, ElementName=Root, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+               Watermark="{Binding Watermark, ElementName=Root}"
+               IsReadOnly="{Binding IsReadOnly, ElementName=Root}"
+               GotFocus="OnEditorGotFocus"
+               LostFocus="OnEditorLostFocus"
+               KeyDown="OnEditorKeyDown" />
+
+      <Button x:Name="ActionButton"
+              Grid.Column="1"
+              Classes="settings-input-group-action"
+              Content="{Binding ActionContent, ElementName=Root}"
+              Command="{Binding ActionCommand, ElementName=Root}"
+              Click="OnActionButtonClick" />
+    </Grid>
+  </Border>
+</UserControl>

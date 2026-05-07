@@ -84,9 +84,11 @@ public sealed class WebApiPageViewModel : PageViewModelBase
     public async Task SaveAsync(CancellationToken cancellationToken = default)
     {
         var config = new WebApiConfig(Enabled, Host, Port, AccessToken);
-        await ApplyResultAsync(
-            await Runtime.WebApiFeatureService.SaveConfigAsync(config, cancellationToken),
+        _ = await RunTrackedConfigurationSaveAsync(
+            "Advanced.WebApi",
+            "Web API",
             "Advanced.WebApi.Save",
+            ct => Runtime.WebApiFeatureService.SaveConfigAsync(config, ct),
             cancellationToken);
     }
 

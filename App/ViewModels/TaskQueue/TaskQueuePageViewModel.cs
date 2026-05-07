@@ -9,6 +9,7 @@ using System.Text.RegularExpressions;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using MAAUnified.App.Features.Dialogs;
+using MAAUnified.App.Services;
 using MAAUnified.App.ViewModels.Infrastructure;
 using MAAUnified.App.ViewModels.Settings;
 using MAAUnified.Application.Models;
@@ -28,6 +29,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     private const string DefaultLogItemDateFormat = "HH:mm:ss";
     private const string TaskQueueRunOwner = "TaskQueue";
     private const string TaskSelectedIndexConfigKey = "TaskSelectedIndex";
+    private const string TaskQueueSaveKey = "TaskQueue.Queue";
     private static readonly string[] WpfDefaultTaskOrder =
     [
         TaskModuleTypes.StartUp,
@@ -196,6 +198,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     private bool _isAdvancedSettingsSelected;
     private bool _isPostActionPanelSelected;
     private bool _isWaitingForStop;
+    private bool _isStartRequestActive;
     private SelectionBatchMode _selectionBatchMode = SelectionBatchMode.Clear;
     private bool _showBatchModeToggle;
     private bool _clearTaskStatusesWhenStopped;
@@ -229,6 +232,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     private int _medicineUsedTimes;
     private int _expiringMedicineUsedTimes;
     private int _stoneUsedTimes;
+    private bool _nextLogEntryStartsNewCard;
     private string _logTimestampFormat = DefaultLogItemDateFormat;
     private bool _useSystemNotifications = true;
     private string _lastCompletionNotificationRunId = string.Empty;
@@ -467,6 +471,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
     public bool IsReclamationTaskSelected => IsSelectedTaskType(TaskModuleTypes.Reclamation);
 
+    public bool IsUserDataUpdateTaskSelected => IsSelectedTaskType(TaskModuleTypes.UserDataUpdate);
+
     public bool IsCustomTaskSelected => IsSelectedTaskType(TaskModuleTypes.Custom);
 
     public bool IsPostActionTaskSelected => IsSelectedTaskType(TaskModuleTypes.PostAction);
@@ -578,7 +584,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         }
     }
 
-    public bool IsRunning => CurrentSessionState is SessionState.Running or SessionState.Stopping;
+    public bool IsRunning => _isStartRequestActive || CurrentSessionState is SessionState.Running or SessionState.Stopping;
 
     public bool CanEdit => !IsRunning;
 
@@ -618,11 +624,26 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
     public bool CanToggleRun =>
         !IsWaitingForStop
+        && !_isStartRequestActive
         && CurrentSessionState != SessionState.Stopping;
 
     public bool CanWaitAndStop =>
         !IsWaitingForStop
         && CurrentSessionState == SessionState.Running;
+
+    private void SetStartRequestActive(bool value)
+    {
+        if (_isStartRequestActive == value)
+        {
+            return;
+        }
+
+        _isStartRequestActive = value;
+        OnPropertyChanged(nameof(IsRunning));
+        OnPropertyChanged(nameof(CanEdit));
+        OnPropertyChanged(nameof(RunButtonText));
+        OnPropertyChanged(nameof(CanToggleRun));
+    }
 
     public bool IsWaitingForStop
     {
@@ -776,7 +797,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         && !IsPostActionTaskSelected
         && SelectedTask is not null
         && !IsStartUpTaskSelected
-        && !IsAwardTaskSelected;
+        && !IsAwardTaskSelected
+        && !IsUserDataUpdateTaskSelected;
 
     public bool ShowTaskConfigHint => !IsPostActionPanelSelected && IsNoTaskSelected;
 
@@ -1423,6 +1445,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 await WaitForPendingBindingAsync(cancellationToken);
             }
 
+            RegisterTaskQueueSavePending();
             return true;
         }
         finally
@@ -1722,7 +1745,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             return;
         }
 
-        await ApplyResultAsync(await Runtime.TaskQueueFeatureService.SaveAsync(cancellationToken), "TaskQueue.Save", cancellationToken);
+        _ = await SaveTaskQueueTrackedAsync(cancellationToken);
     }
 
     private async Task<bool> SeedDefaultTaskQueueAsync(CancellationToken cancellationToken)
@@ -1740,10 +1763,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             }
         }
 
-        return await ApplyResultAsync(
-            await Runtime.TaskQueueFeatureService.SaveAsync(cancellationToken),
-            "TaskQueue.SeedDefaults.Save",
-            cancellationToken);
+        return await SaveTaskQueueTrackedAsync(cancellationToken, "TaskQueue.SeedDefaults.Save");
     }
 
     private bool IsSelectedTaskType(string moduleType)
@@ -1767,6 +1787,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         OnPropertyChanged(nameof(IsAwardTaskSelected));
         OnPropertyChanged(nameof(IsRoguelikeTaskSelected));
         OnPropertyChanged(nameof(IsReclamationTaskSelected));
+        OnPropertyChanged(nameof(IsUserDataUpdateTaskSelected));
         OnPropertyChanged(nameof(IsCustomTaskSelected));
         OnPropertyChanged(nameof(IsPostActionTaskSelected));
         OnPropertyChanged(nameof(ShowPostActionSettingsPanel));
@@ -1855,6 +1876,12 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     {
         lock (_moduleAutoSaveGate)
         {
+            ConfigurationSaveTracker.Instance.MarkPending(
+                "TaskQueue.TypedModules",
+                ResolveTypedModulesSaveDisplayName(),
+                "TaskQueue.TypedModules.Flush",
+                Runtime.DiagnosticsService,
+                SaveBoundTaskModulesAsync);
             _moduleAutoSaveCts?.Cancel();
             _moduleAutoSaveCts?.Dispose();
             _moduleAutoSaveCts = new CancellationTokenSource();
@@ -1877,7 +1904,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 }
 
                 _suppressModuleAutoSave = true;
-                _ = await SaveBoundTaskModulesAsync(cancellationToken);
+                _ = await SaveTypedModulesTrackedAsync(cancellationToken);
             }
             finally
             {
@@ -1931,6 +1958,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             }
 
             var keepRunOwner = false;
+            SetStartRequestActive(true);
             try
             {
                 if (!await EnsureCoreReadyAsync("TaskQueue.Start.CoreWarmup", cancellationToken))
@@ -2028,12 +2056,14 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 _lastPostActionRunId = string.Empty;
                 TrackAchievementsAfterStart(appendResult.Value);
                 keepRunOwner = true;
+                SetStartRequestActive(false);
             }
             finally
             {
                 if (!keepRunOwner)
                 {
                     Runtime.SessionService.EndRun(TaskQueueRunOwner);
+                    SetStartRequestActive(false);
                 }
             }
         }
@@ -2971,10 +3001,12 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                     (DialogTextCatalog.ChromeKeys.RefreshButton, texts.GetOrDefault("TaskQueue.Root.ReloadTargets", "Refresh")),
                     (DialogTextCatalog.ChromeKeys.RefreshingButton, texts.GetOrDefault("TaskQueue.Root.ReloadTargets", "Refresh")))));
         var chromeSnapshot = chrome.GetSnapshot();
+        var pickerItems = BuildOverlayPickerItems(OverlayTargets);
+        var selectedPickerId = ResolveOverlayPickerSelectedId(SelectedOverlayTarget);
         var request = new ProcessPickerDialogRequest(
             Title: chromeSnapshot.Title,
-            Items: OverlayTargets.Select(t => new ProcessPickerItem(t.Id, t.DisplayName, t.IsPrimary)).ToArray(),
-            SelectedId: SelectedOverlayTarget?.Id,
+            Items: pickerItems,
+            SelectedId: selectedPickerId,
             ConfirmText: chromeSnapshot.ConfirmText ?? RootTexts.GetOrDefault("TaskQueue.Root.OverlayTargetPickerConfirm", "Select"),
             CancelText: chromeSnapshot.CancelText ?? RootTexts.GetOrDefault("TaskQueue.Root.OverlayTargetPickerCancel", "Cancel"),
             RefreshItemsAsync: RefreshOverlayPickerItemsAsync,
@@ -2994,9 +3026,27 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     private async Task<IReadOnlyList<ProcessPickerItem>> RefreshOverlayPickerItemsAsync(CancellationToken cancellationToken)
     {
         await ReloadOverlayTargetsAsync(cancellationToken);
-        return OverlayTargets
+        return BuildOverlayPickerItems(OverlayTargets);
+    }
+
+    private static IReadOnlyList<ProcessPickerItem> BuildOverlayPickerItems(IEnumerable<OverlayTarget> targets)
+    {
+        return targets
+            .Where(target => !IsPreviewOverlayTarget(target))
             .Select(target => new ProcessPickerItem(target.Id, target.DisplayName, target.IsPrimary))
             .ToArray();
+    }
+
+    private static string? ResolveOverlayPickerSelectedId(OverlayTarget? target)
+    {
+        return target is null || IsPreviewOverlayTarget(target)
+            ? null
+            : target.Id;
+    }
+
+    private static bool IsPreviewOverlayTarget(OverlayTarget target)
+    {
+        return string.Equals(target.Id, "preview", StringComparison.OrdinalIgnoreCase);
     }
 
     public async Task ApplyOverlayTargetAsync(string targetId, CancellationToken cancellationToken = default)
@@ -3078,7 +3128,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             timestamp: DateTimeOffset.Now,
             content: $"Link Start failed: {message}",
             level: "ERROR",
-            splitMode: TaskQueueLogSplitMode.None,
+            splitMode: TaskQueueLogSplitMode.Before,
             updateThumbnail: false);
     }
 
@@ -3614,81 +3664,179 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
     private async Task<bool> SaveBoundTaskModulesAsync(CancellationToken cancellationToken = default)
     {
+        var succeeded = true;
+        var lastErrorMessage = string.Empty;
+
         if (!await StartUpModule.SaveIfDirtyAsync(cancellationToken))
         {
-            LastErrorMessage = StartUpModule.LastErrorMessage;
-            return false;
+            succeeded = false;
+            lastErrorMessage = StartUpModule.LastErrorMessage;
         }
 
         if (!await FightModule.SaveIfDirtyAsync(cancellationToken))
         {
-            LastErrorMessage = FightModule.LastErrorMessage;
-            return false;
+            succeeded = false;
+            lastErrorMessage = FightModule.LastErrorMessage;
         }
 
         if (!await RecruitModule.SaveIfDirtyAsync(cancellationToken))
         {
-            LastErrorMessage = RecruitModule.LastErrorMessage;
-            return false;
+            succeeded = false;
+            lastErrorMessage = RecruitModule.LastErrorMessage;
         }
 
         if (!await RoguelikeModule.SaveIfDirtyAsync(cancellationToken))
         {
-            LastErrorMessage = RoguelikeModule.LastErrorMessage;
-            return false;
+            succeeded = false;
+            lastErrorMessage = RoguelikeModule.LastErrorMessage;
         }
 
         if (!await ReclamationModule.SaveIfDirtyAsync(cancellationToken))
         {
-            LastErrorMessage = ReclamationModule.LastErrorMessage;
-            return false;
+            succeeded = false;
+            lastErrorMessage = ReclamationModule.LastErrorMessage;
         }
 
         if (!await CustomModule.SaveIfDirtyAsync(cancellationToken))
         {
-            LastErrorMessage = CustomModule.LastErrorMessage;
-            return false;
+            succeeded = false;
+            lastErrorMessage = CustomModule.LastErrorMessage;
         }
 
         if (!await InfrastModule.FlushPendingChangesAsync(cancellationToken))
         {
-            LastErrorMessage = InfrastModule.LastErrorMessage;
-            return false;
+            succeeded = false;
+            lastErrorMessage = InfrastModule.LastErrorMessage;
         }
 
         if (!await MallModule.FlushPendingChangesAsync(cancellationToken))
         {
-            LastErrorMessage = MallModule.LastErrorMessage;
-            return false;
+            succeeded = false;
+            lastErrorMessage = MallModule.LastErrorMessage;
         }
 
         if (!await AwardModule.FlushPendingChangesAsync(cancellationToken))
         {
-            LastErrorMessage = AwardModule.LastErrorMessage;
-            return false;
+            succeeded = false;
+            lastErrorMessage = AwardModule.LastErrorMessage;
         }
 
         if (!await UserDataUpdateModule.FlushPendingChangesAsync(cancellationToken))
         {
-            LastErrorMessage = UserDataUpdateModule.LastErrorMessage;
-            return false;
+            succeeded = false;
+            lastErrorMessage = UserDataUpdateModule.LastErrorMessage;
         }
 
         if (!await PostActionModule.FlushPendingChangesAsync(cancellationToken))
         {
-            LastErrorMessage = PostActionModule.LastErrorMessage;
-            return false;
+            succeeded = false;
+            lastErrorMessage = PostActionModule.LastErrorMessage;
         }
 
-        var flushResult = await Runtime.TaskQueueFeatureService.FlushTaskParamWritesAsync(cancellationToken);
-        if (!flushResult.Success)
+        if (succeeded)
         {
-            LastErrorMessage = flushResult.Message;
-            await RecordFailedResultAsync("TaskQueue.FlushParams", flushResult, cancellationToken);
+            var flushResult = await Runtime.TaskQueueFeatureService.FlushTaskParamWritesAsync(cancellationToken);
+            if (!flushResult.Success)
+            {
+                LastErrorMessage = flushResult.Message;
+                await RecordFailedResultAsync("TaskQueue.FlushParams", flushResult, cancellationToken);
+                return false;
+            }
+
+            return true;
+        }
+
+        LastErrorMessage = lastErrorMessage;
+        return false;
+    }
+
+    public async Task<bool> FlushConfigurationSavesForCloseAsync(CancellationToken cancellationToken = default)
+    {
+        CancelTypedModuleAutoSave();
+
+        await _queueMutationLock.WaitAsync(cancellationToken);
+        try
+        {
+            await WaitForPendingBindingAsync(cancellationToken);
+            if (CanEdit)
+            {
+                _suppressModuleAutoSave = true;
+                if (!await SaveTypedModulesTrackedAsync(cancellationToken))
+                {
+                    return false;
+                }
+
+                var failedNames = await ConfigurationSaveTracker.Instance.RetryPendingOrFailedAsync(
+                    static key => key.StartsWith("TaskQueue.", StringComparison.Ordinal),
+                    cancellationToken);
+                return failedNames.Count == 0;
+            }
+
+            ConfigurationSaveTracker.Instance.ClearPending("TaskQueue.TypedModules");
+            ConfigurationSaveTracker.Instance.ClearFailure("TaskQueue.TypedModules");
+            return true;
+        }
+        finally
+        {
+            _suppressModuleAutoSave = false;
+            _queueMutationLock.Release();
+        }
+    }
+
+    private Task<bool> SaveTypedModulesTrackedAsync(CancellationToken cancellationToken = default)
+    {
+        return ConfigurationSaveTracker.Instance.RunTrackedAsync(
+            "TaskQueue.TypedModules",
+            ResolveTypedModulesSaveDisplayName(),
+            "TaskQueue.TypedModules.Flush",
+            Runtime.DiagnosticsService,
+            SaveBoundTaskModulesAsync,
+            cancellationToken);
+    }
+
+    private static string ResolveTypedModulesSaveDisplayName()
+    {
+        return "一键长草设置";
+    }
+
+    private void RegisterTaskQueueSavePending()
+    {
+        ConfigurationSaveTracker.Instance.MarkPending(
+            TaskQueueSaveKey,
+            ResolveTaskQueueSaveDisplayName(),
+            "TaskQueue.Save",
+            Runtime.DiagnosticsService,
+            SaveTaskQueueCoreAsync);
+    }
+
+    private Task<bool> SaveTaskQueueTrackedAsync(
+        CancellationToken cancellationToken = default,
+        string scope = "TaskQueue.Save")
+    {
+        return ConfigurationSaveTracker.Instance.RunTrackedAsync(
+            TaskQueueSaveKey,
+            ResolveTaskQueueSaveDisplayName(),
+            scope,
+            Runtime.DiagnosticsService,
+            SaveTaskQueueCoreAsync,
+            cancellationToken);
+    }
+
+    private async Task<bool> SaveTaskQueueCoreAsync(CancellationToken cancellationToken)
+    {
+        var result = await Runtime.TaskQueueFeatureService.SaveAsync(cancellationToken);
+        if (!result.Success)
+        {
+            await RecordFailedResultAsync("TaskQueue.Save", result, cancellationToken);
             return false;
         }
 
         return true;
+    }
+
+    private static string ResolveTaskQueueSaveDisplayName()
+    {
+        return "一键长草";
     }
 
     private void UpdateDownloadLog(DateTimeOffset timestamp, string level, string message)
@@ -3720,6 +3868,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         OverlayLogs.Clear();
         DownloadLogEntry = new TaskQueueLogEntryViewModel(string.Empty, string.Empty, "INFO");
         LastRuntimeStatus = null;
+        _nextLogEntryStartsNewCard = false;
     }
 
     public void AppendSystemLog(string message, string level = "INFO")
@@ -3733,7 +3882,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             DateTimeOffset.UtcNow,
             message,
             NormalizeLogLevel(level),
-            TaskQueueLogSplitMode.None,
+            TaskQueueLogSplitMode.Before,
             updateThumbnail: false);
     }
 
@@ -3773,57 +3922,112 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     {
         var logTime = FormatLogTimestamp(timestamp);
         var hasContent = !string.IsNullOrWhiteSpace(content);
+        var contentEntries = hasContent
+            ? SplitLogContentEntries(content).ToArray()
+            : [];
         var needsBeforeSplit = splitMode is TaskQueueLogSplitMode.Before or TaskQueueLogSplitMode.Both;
         var needsAfterSplit = splitMode is TaskQueueLogSplitMode.After or TaskQueueLogSplitMode.Both;
+        var shouldStartNextEntryOnNewCard = needsBeforeSplit || _nextLogEntryStartsNewCard;
 
-        if (needsBeforeSplit)
+        if (contentEntries.Length == 0 && !updateThumbnail)
         {
-            CreateNewLogCard();
-        }
-
-        if (LogCards.Count == 0 && (hasContent || updateThumbnail))
-        {
-            CreateNewLogCard();
-        }
-
-        if (LogCards.Count == 0)
-        {
+            _nextLogEntryStartsNewCard = shouldStartNextEntryOnNewCard || needsAfterSplit;
+            TrimLogCards();
             return;
         }
 
-        var card = LogCards[^1];
-        if (hasContent)
+        TaskQueueLogCardViewModel? lastEntryCard = null;
+        for (var i = 0; i < contentEntries.Length; i++)
         {
+            var card = GetOrCreateLogCardForEntry(shouldStartNextEntryOnNewCard || i > 0);
             var entry = new TaskQueueLogEntryViewModel(
                 logTime,
-                NormalizeLogContent(content, logTime),
+                NormalizeLogContent(contentEntries[i], logTime),
                 level);
             card.Append(entry);
             OverlayLogs.Add(entry);
             TrimOverlayLogs();
+            lastEntryCard = card;
         }
 
         if (updateThumbnail)
         {
-            _ = AttachThumbnailToCardAsync(card, forceScreenshot);
+            var card = lastEntryCard ?? FindLatestNonEmptyLogCard();
+            if (card is not null)
+            {
+                _ = AttachThumbnailToCardAsync(card, forceScreenshot);
+            }
         }
 
-        if (needsAfterSplit)
-        {
-            CreateNewLogCard();
-        }
-
+        _nextLogEntryStartsNewCard = contentEntries.Length > 0
+            ? needsAfterSplit
+            : shouldStartNextEntryOnNewCard || needsAfterSplit;
         TrimLogCards();
     }
 
-    private void CreateNewLogCard()
+    private TaskQueueLogCardViewModel GetOrCreateLogCardForEntry(bool startNewCard)
     {
-        if (LogCards.Count > 0 && LogCards[^1].Items.Count == 0)
+        if (!startNewCard && LogCards.Count > 0)
         {
-            return;
+            return LogCards[^1];
         }
 
-        LogCards.Add(new TaskQueueLogCardViewModel());
+        var card = new TaskQueueLogCardViewModel();
+        LogCards.Add(card);
+        return card;
+    }
+
+    private TaskQueueLogCardViewModel? FindLatestNonEmptyLogCard()
+    {
+        for (var i = LogCards.Count - 1; i >= 0; i--)
+        {
+            if (LogCards[i].Items.Count > 0)
+            {
+                return LogCards[i];
+            }
+        }
+
+        return null;
+    }
+
+    private static IEnumerable<string> SplitLogContentEntries(string content)
+    {
+        var normalized = content.Replace("\r\n", "\n").Replace('\r', '\n');
+        var lines = normalized.Split('\n');
+        if (lines.Length <= 1)
+        {
+            yield return content;
+            yield break;
+        }
+
+        var builder = new StringBuilder();
+        foreach (var rawLine in lines)
+        {
+            var line = rawLine.TrimEnd();
+            if (string.IsNullOrWhiteSpace(line))
+            {
+                continue;
+            }
+
+            var startsNewTimestampedEntry = LeadingLogTimestampPattern.IsMatch(line.TrimStart());
+            if (startsNewTimestampedEntry && builder.Length > 0)
+            {
+                yield return builder.ToString();
+                builder.Clear();
+            }
+
+            if (builder.Length > 0)
+            {
+                builder.AppendLine();
+            }
+
+            builder.Append(line);
+        }
+
+        if (builder.Length > 0)
+        {
+            yield return builder.ToString();
+        }
     }
 
     private void TrimOverlayLogs()
@@ -3859,21 +4063,18 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             return;
         }
 
-        var saveResult = await Runtime.SettingsFeatureService.SaveGlobalSettingsAsync(
-            new Dictionary<string, string>(StringComparer.Ordinal)
-            {
-                [ConfigurationKeys.OverlayTarget] = OverlayTargetPersistence.Serialize(selectedTarget),
-                [ConfigurationKeys.OverlayPreviewPinned] = OverlayTargetPersistence.SerializePreviewPreference(selectedTarget),
-            },
+        _ = await RunTrackedConfigurationSaveAsync(
+            "Overlay.TargetSelection",
+            "悬浮窗目标",
+            "Overlay.SaveTarget",
+            ct => Runtime.SettingsFeatureService.SaveGlobalSettingsAsync(
+                new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    [ConfigurationKeys.OverlayTarget] = OverlayTargetPersistence.Serialize(selectedTarget),
+                    [ConfigurationKeys.OverlayPreviewPinned] = OverlayTargetPersistence.SerializePreviewPreference(selectedTarget),
+                },
+                ct),
             cancellationToken);
-        if (saveResult.Success)
-        {
-            await RecordEventAsync("Overlay.SaveTarget", saveResult.Message, cancellationToken);
-            return;
-        }
-
-        LastErrorMessage = saveResult.Message;
-        await RecordFailedResultAsync("Overlay.SaveTarget", saveResult, cancellationToken);
     }
 
     private void OnOverlaySharedStateChanged(object? sender, PropertyChangedEventArgs e)
@@ -4195,7 +4396,12 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 _fightSanityMax.Value);
         }
 
-        return new(content, "SUCCESS");
+        return new(
+            content,
+            "SUCCESS",
+            SplitMode: TaskQueueLogSplitMode.Before,
+            UpdateThumbnail: true,
+            ForceScreenshot: true);
     }
 
     private TaskQueueCallbackUserLog BuildTaskChainErrorLog(string? taskChain)
@@ -5287,14 +5493,16 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             return;
         }
 
-        try
-        {
-            await Runtime.ConfigurationService.SaveAsync();
-        }
-        catch (Exception ex)
-        {
-            Runtime.LogService.Warn($"Failed to persist mall daily marker: {ex.Message}");
-        }
+        _ = await ConfigurationSaveTracker.Instance.RunTrackedAsync(
+            "TaskQueue.MallDailyMarker",
+            Texts.GetOrDefault("Mall.Title", "信用收取"),
+            "TaskQueue.MallDailyMarker.Save",
+            Runtime.DiagnosticsService,
+            async cancellationToken =>
+            {
+                await Runtime.ConfigurationService.SaveAsync(cancellationToken);
+                return true;
+            });
     }
 
     private void TrackAchievementsAfterStart(int enabledTaskCount)
@@ -5870,18 +6078,17 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             }
         }
 
-        try
-        {
-            await Runtime.ConfigurationService.SaveAsync(cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            await RecordUnhandledExceptionAsync(
-                "TaskQueue.SelectionBatchMode.Save",
-                ex,
-                UiErrorCode.UiOperationFailed,
-                "Failed to persist batch selection mode.");
-        }
+        _ = await ConfigurationSaveTracker.Instance.RunTrackedAsync(
+            "TaskQueue.SelectionBatchMode",
+            ResolveTaskQueueSaveDisplayName(),
+            "TaskQueue.SelectionBatchMode.Save",
+            Runtime.DiagnosticsService,
+            async ct =>
+            {
+                await Runtime.ConfigurationService.SaveAsync(ct);
+                return true;
+            },
+            cancellationToken);
     }
 
     private static string TryReadGlobalString(

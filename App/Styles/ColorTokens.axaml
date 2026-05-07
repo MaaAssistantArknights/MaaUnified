@@ -44,6 +44,10 @@
           <Color x:Key="MAA.Color.Action.PrimaryBackgroundDisabled">#FFB4C4D8</Color>
           <Color x:Key="MAA.Color.Action.PrimaryBorder">#FF245487</Color>
           <Color x:Key="MAA.Color.Action.PrimaryForeground">#FFFFFFFF</Color>
+          <Color x:Key="MAA.Color.Action.ButtonPrimaryBackground">#FF2F7CF6</Color>
+          <Color x:Key="MAA.Color.Action.ButtonPrimaryBackgroundHover">#FF438BFF</Color>
+          <Color x:Key="MAA.Color.Action.ButtonPrimaryBackgroundPressed">#FF256DE0</Color>
+          <Color x:Key="MAA.Color.Action.ButtonPrimaryBorder">#FF2B70DD</Color>
           <Color x:Key="MAA.Color.Action.SubtleBackground">#40FFFFFF</Color>
           <Color x:Key="MAA.Color.Action.SubtleBackgroundHover">#BFEEEEEE</Color>
           <Color x:Key="MAA.Color.Action.SubtleBackgroundPressed">#7FEEEEEE</Color>
@@ -114,9 +118,13 @@
           <Color x:Key="MAA.Color.Action.PrimaryBackground">#FF3F88D0</Color>
           <Color x:Key="MAA.Color.Action.PrimaryBackgroundHover">#FF5497D9</Color>
           <Color x:Key="MAA.Color.Action.PrimaryBackgroundPressed">#FF3578BD</Color>
-          <Color x:Key="MAA.Color.Action.PrimaryBackgroundDisabled">#FF42546B</Color>
+          <Color x:Key="MAA.Color.Action.PrimaryBackgroundDisabled">#FF445B7B</Color>
           <Color x:Key="MAA.Color.Action.PrimaryBorder">#FF6FA7DA</Color>
           <Color x:Key="MAA.Color.Action.PrimaryForeground">#FFF4F8FF</Color>
+          <Color x:Key="MAA.Color.Action.ButtonPrimaryBackground">#FF4D93F7</Color>
+          <Color x:Key="MAA.Color.Action.ButtonPrimaryBackgroundHover">#FF63A2FF</Color>
+          <Color x:Key="MAA.Color.Action.ButtonPrimaryBackgroundPressed">#FF3E82DD</Color>
+          <Color x:Key="MAA.Color.Action.ButtonPrimaryBorder">#FF7BB3FF</Color>
           <Color x:Key="MAA.Color.Action.SubtleBackground">#401C1C1C</Color>
           <Color x:Key="MAA.Color.Action.SubtleBackgroundHover">#BF303036</Color>
           <Color x:Key="MAA.Color.Action.SubtleBackgroundPressed">#7F303036</Color>

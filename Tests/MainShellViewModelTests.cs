@@ -1046,13 +1046,17 @@ public sealed class MainShellViewModelTests
         var content = File.ReadAllText(path);
 
         Assert.Contains("HasVisibleWindowUpdateInfo", content, StringComparison.Ordinal);
+        Assert.Contains("Tapped=\"OnWindowUpdateOverlayTapped\"", content, StringComparison.Ordinal);
         Assert.Contains("HasVisibleWindowVersionUpdateInfo", content, StringComparison.Ordinal);
+        Assert.Contains("Text=\"{Binding RootTexts[Main.Title.UpdateVersion]}\"", content, StringComparison.Ordinal);
         Assert.Contains("WindowVersionUpdateInfo", content, StringComparison.Ordinal);
-        Assert.Contains("Click=\"OnManualUpdateClick\"", content, StringComparison.Ordinal);
         Assert.Contains("HasVisibleWindowResourceUpdateInfo", content, StringComparison.Ordinal);
+        Assert.Contains("Text=\"{Binding RootTexts[Main.Title.UpdateResource]}\"", content, StringComparison.Ordinal);
         Assert.Contains("WindowResourceUpdateInfo", content, StringComparison.Ordinal);
-        Assert.Contains("Click=\"OnManualUpdateResourceClick\"", content, StringComparison.Ordinal);
+        Assert.Contains("main-shell-update-close", content, StringComparison.Ordinal);
         Assert.Contains("Click=\"OnDismissWindowUpdateClick\"", content, StringComparison.Ordinal);
+        Assert.DoesNotContain("Click=\"OnManualUpdateClick\"", content, StringComparison.Ordinal);
+        Assert.DoesNotContain("Click=\"OnManualUpdateResourceClick\"", content, StringComparison.Ordinal);
     }
 
     [Fact]

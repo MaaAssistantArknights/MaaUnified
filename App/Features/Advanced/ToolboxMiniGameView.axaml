@@ -1,134 +1,111 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:MAAUnified.App.Controls"
              x:Class="MAAUnified.App.Features.Advanced.ToolboxMiniGameView">
   <UserControl.Styles>
-    <Style Selector="Border.toolbox-minigame-section">
-      <Setter Property="Padding" Value="22" />
-    </Style>
-
-    <Style Selector="Border.toolbox-minigame-card">
-      <Setter Property="Padding" Value="16" />
-    </Style>
-
-    <Style Selector="Border.toolbox-minigame-action-card">
-      <Setter Property="Padding" Value="18" />
-    </Style>
-
-    <Style Selector="StackPanel.toolbox-minigame-section-stack">
+    <Style Selector="StackPanel.toolbox-minigame-root-stack">
       <Setter Property="Spacing" Value="16" />
     </Style>
 
-    <Style Selector="StackPanel.toolbox-minigame-card-stack">
+    <Style Selector="ScrollViewer.toolbox-minigame-scroll">
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <Style Selector="StackPanel.toolbox-minigame-secretfront-stack">
       <Setter Property="Spacing" Value="12" />
     </Style>
 
     <Style Selector="TextBlock.toolbox-minigame-field-label">
       <Setter Property="VerticalAlignment" Value="Center" />
-      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="FontSize" Value="12.5" />
+      <Setter Property="FontWeight" Value="Medium" />
       <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Secondary}" />
     </Style>
 
     <Style Selector="ComboBox.toolbox-minigame-selector">
-      <Setter Property="MinWidth" Value="220" />
+      <Setter Property="MinWidth" Value="240" />
       <Setter Property="HorizontalAlignment" Value="Stretch" />
     </Style>
 
+    <Style Selector="TextBlock.toolbox-minigame-context-text">
+      <Setter Property="FontSize" Value="11.5" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Text.Secondary}" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <Style Selector="TextBlock.toolbox-minigame-tip-text">
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Text.Secondary}" />
+      <Setter Property="Margin" Value="0,2,0,0" />
+    </Style>
+
     <Style Selector="Button.toolbox-minigame-action">
-      <Setter Property="MinWidth" Value="{DynamicResource MAA.Size.Toolbox.MiniGameButtonWidth}" />
-      <Setter Property="Height" Value="{DynamicResource MAA.Size.Toolbox.MiniGameButtonHeight}" />
-      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="MinWidth" Value="136" />
+      <Setter Property="Height" Value="46" />
+      <Setter Property="Padding" Value="20,0" />
+      <Setter Property="HorizontalAlignment" Value="Left" />
     </Style>
   </UserControl.Styles>
 
-  <ScrollViewer VerticalScrollBarVisibility="Auto">
+  <ScrollViewer Classes="toolbox-minigame-scroll"
+                VerticalScrollBarVisibility="Auto">
     <StackPanel Width="{DynamicResource MAA.Size.Toolbox.FormPanelWidth}"
-                Margin="4"
+                Margin="4,8"
                 HorizontalAlignment="Center"
-                Spacing="14">
-      <Border Classes="app-surface app-section toolbox-minigame-section">
-        <StackPanel Classes="toolbox-minigame-section-stack">
-          <TextBlock Classes="app-window-title"
-                     Text="{Binding MiniGameNameText}" />
-
-          <Border Classes="app-surface app-card toolbox-minigame-card">
-            <ComboBox Classes="app-input toolbox-minigame-selector"
-                      ItemsSource="{Binding MiniGameTaskList}"
-                      SelectedValueBinding="{Binding Value}"
-                      SelectedValue="{Binding MiniGameTaskName}">
-              <ComboBox.ItemTemplate>
-                <DataTemplate>
-                  <TextBlock Text="{Binding Display}" />
-                </DataTemplate>
-              </ComboBox.ItemTemplate>
-            </ComboBox>
-          </Border>
-        </StackPanel>
-      </Border>
-
-      <Border Classes="app-surface app-section toolbox-minigame-section"
-              IsVisible="{Binding IsMiniGameSecretFront}">
-        <StackPanel Classes="toolbox-minigame-section-stack">
-          <Border Classes="app-badge"
-                  HorizontalAlignment="Left">
-            <TextBlock Classes="app-badge-text"
-                       Text="{Binding SelectedMiniGameEntry.Display}" />
-          </Border>
-
-          <Border Classes="app-surface app-card toolbox-minigame-card">
-            <StackPanel Classes="toolbox-minigame-card-stack">
-              <Grid ColumnDefinitions="140,*">
-                <TextBlock Classes="app-caption toolbox-minigame-field-label"
-                           Text="{Binding MiniGameEndingText}" />
-                <ComboBox Grid.Column="1"
-                          Classes="app-input toolbox-minigame-selector"
-                          Margin="12,0,0,0"
-                          ItemsSource="{Binding MiniGameSecretFrontEndingOptions}"
-                          SelectedItem="{Binding MiniGameSecretFrontEnding}" />
-              </Grid>
-
-              <Grid ColumnDefinitions="140,*">
-                <TextBlock Classes="app-caption toolbox-minigame-field-label"
-                           Text="{Binding MiniGameEventPriorityText}" />
-                <ComboBox Grid.Column="1"
-                          Classes="app-input toolbox-minigame-selector"
-                          Margin="12,0,0,0"
-                          ItemsSource="{Binding MiniGameSecretFrontEventOptions}"
+                Classes="toolbox-minigame-root-stack">
+      <controls:AppSelect Classes="toolbox-minigame-selector"
+                          IsEnabled="{Binding Idle}"
+                          ItemsSource="{Binding MiniGameTaskList}"
                           SelectedValueBinding="{Binding Value}"
-                          SelectedValue="{Binding MiniGameSecretFrontEvent}">
-                  <ComboBox.ItemTemplate>
-                    <DataTemplate>
-                      <TextBlock Text="{Binding Label}" />
-                    </DataTemplate>
-                  </ComboBox.ItemTemplate>
-                </ComboBox>
-              </Grid>
-            </StackPanel>
-          </Border>
-        </StackPanel>
-      </Border>
+                          SelectedValue="{Binding MiniGameTaskName}">
+        <controls:AppSelect.ItemTemplate>
+          <DataTemplate>
+            <TextBlock Text="{Binding Display}" />
+          </DataTemplate>
+        </controls:AppSelect.ItemTemplate>
+      </controls:AppSelect>
 
-      <Border Classes="app-surface app-section toolbox-minigame-section">
-        <StackPanel Classes="toolbox-minigame-section-stack">
-          <Border Classes="app-badge"
-                  HorizontalAlignment="Left">
-            <TextBlock Classes="app-badge-text"
-                       Text="{Binding SelectedMiniGameEntry.Display}" />
-          </Border>
+      <TextBlock Classes="toolbox-minigame-context-text"
+                 Text="{Binding SelectedMiniGameEntry.Display}" />
 
-          <Border Classes="app-surface app-card toolbox-minigame-card">
-            <TextBlock Classes="app-body long-wrap"
-                       Text="{Binding MiniGameTip}" />
-          </Border>
-        </StackPanel>
-      </Border>
+      <StackPanel Classes="toolbox-minigame-secretfront-stack"
+                  IsVisible="{Binding IsMiniGameSecretFront}"
+                  IsEnabled="{Binding Idle}">
+        <Grid ColumnDefinitions="140,*">
+          <TextBlock Classes="toolbox-minigame-field-label"
+                     Text="{Binding MiniGameEndingText}" />
+          <controls:AppSelect Grid.Column="1"
+                              Classes="toolbox-minigame-selector"
+                              Margin="12,0,0,0"
+                              ItemsSource="{Binding MiniGameSecretFrontEndingOptions}"
+                              SelectedItem="{Binding MiniGameSecretFrontEnding}" />
+        </Grid>
 
-      <Border Classes="app-surface app-section toolbox-minigame-section">
-        <Border Classes="app-surface app-card toolbox-minigame-action-card">
-          <Button Classes="app-button app-primary toolbox-minigame-action"
-                  Content="{Binding MiniGameCommandText}"
-                  Click="OnMiniGameCommandClick" />
-        </Border>
-      </Border>
+        <Grid ColumnDefinitions="140,*">
+          <TextBlock Classes="toolbox-minigame-field-label"
+                     Text="{Binding MiniGameEventPriorityText}" />
+          <controls:AppSelect Grid.Column="1"
+                              Classes="toolbox-minigame-selector"
+                              Margin="12,0,0,0"
+                              ItemsSource="{Binding MiniGameSecretFrontEventOptions}"
+                              SelectedValueBinding="{Binding Value}"
+                              SelectedValue="{Binding MiniGameSecretFrontEvent}">
+            <controls:AppSelect.ItemTemplate>
+              <DataTemplate>
+                <TextBlock Text="{Binding Label}" />
+              </DataTemplate>
+            </controls:AppSelect.ItemTemplate>
+          </controls:AppSelect>
+        </Grid>
+      </StackPanel>
+
+      <TextBlock Classes="app-body long-wrap toolbox-minigame-tip-text"
+                 Text="{Binding MiniGameTip}" />
+
+      <Button Classes="app-button app-primary toolbox-minigame-action"
+              Content="{Binding MiniGameCommandText}"
+              IsEnabled="{Binding Inited}"
+              Click="OnMiniGameCommandClick" />
     </StackPanel>
   </ScrollViewer>
 </UserControl>

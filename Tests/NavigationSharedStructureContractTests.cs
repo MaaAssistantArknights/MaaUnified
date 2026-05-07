@@ -73,6 +73,8 @@ public sealed class NavigationSharedStructureContractTests
         Assert.Contains("controls|AppSelectionList.selection-list-rail.selection-list-rail-trailing-accessory-space Border.app-selection-list-item-shell", selectionStyles, StringComparison.Ordinal);
         Assert.Contains("controls|AppSelectionList.selection-list-surface Border.app-selection-list-item-shell", selectionStyles, StringComparison.Ordinal);
         Assert.Contains("controls|AppSelectionList.selection-list-none Border.app-selection-list-item-shell", selectionStyles, StringComparison.Ordinal);
+        Assert.Contains("controls|AppSelectionList.selection-list-reorderable ListBoxItem.dragging", selectionStyles, StringComparison.Ordinal);
+        Assert.Contains("Border.app-selection-list-reorder-drop-indicator", selectionStyles, StringComparison.Ordinal);
         Assert.Contains("controls|AppSelectionIndicatorPresenter.selection-indicator-rail.indicator-vertical /template/ Border#PART_Indicator", selectionStyles, StringComparison.Ordinal);
     }
 }

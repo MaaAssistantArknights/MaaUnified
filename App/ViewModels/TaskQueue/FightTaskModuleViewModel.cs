@@ -1,7 +1,9 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using MAAUnified.App.Services;
 using MAAUnified.App.ViewModels.Infrastructure;
 using MAAUnified.Application.Models;
 using MAAUnified.Application.Models.TaskParams;
@@ -78,6 +80,13 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
         "PR-C-2",
         "PR-D-1",
         "PR-D-2",
+    ];
+
+    private static readonly IReadOnlyList<string> StageActivityCandidateRelativePaths =
+    [
+        Path.Combine("cache", "gui", "StageActivityV2.json"),
+        Path.Combine("gui", "StageActivityV2.json"),
+        Path.Combine("resource", "gui", "StageActivityV2.json"),
     ];
 
     private static readonly IReadOnlyList<(string StageCode, string ZhTip, string EnTip, IReadOnlyList<string[]>? InventoryGroups)> DailyHintSpecs =
@@ -215,9 +224,15 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
         set => DropId = value?.Value ?? string.Empty;
     }
 
-    public bool IsMedicineToggleEnabled => UseStone == false;
+    public bool UseStoneDisplay
+    {
+        get => UseStone != false;
+        set => UseStone = value;
+    }
 
-    public bool IsMedicineInputEnabled => UseStone == false;
+    public bool IsMedicineToggleEnabled => !UseStoneDisplay;
+
+    public bool IsMedicineInputEnabled => !UseStoneDisplay;
 
     public bool ShowSeriesSetting => !HideSeries;
 
@@ -235,24 +250,24 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
         $"{Texts.GetOrDefault("Fight.UseStoneDisplay", Texts.GetOrDefault("Fight.UseStone", "Use stone"))}{(AllowUseStoneSave ? string.Empty : "*")}";
 
     public string StageSelectDisplayText => UseAlternateStage
-        ? Texts.GetOrDefault("StageSelect2", "Candidates")
+        ? Texts.GetOrDefault("Fight.StageSelect2", Texts.GetOrDefault("StageSelect2", "Candidates"))
         : Texts.GetOrDefault("Fight.StageSelect", "Stage");
 
-    public string AddStageText => Texts.GetOrDefault("AddStage", "Add candidate");
+    public string AddStageText => Texts.GetOrDefault("Fight.AddStage", Texts.GetOrDefault("AddStage", "Add candidate"));
 
-    public string CustomStageCodeText => Texts.GetOrDefault("CustomStageCode", "Manual entry of stage names");
+    public string CustomStageCodeText => Texts.GetOrDefault("Fight.CustomStageCode", Texts.GetOrDefault("CustomStageCode", "Manual entry of stage names"));
 
     public string CustomStageCodeTipText => Texts.GetOrDefault(
-        "CustomStageCodeTip",
-        "Support most main stage names and stage names from the original list.");
+        "Fight.CustomStageCodeTip",
+        Texts.GetOrDefault("CustomStageCodeTip", "Support most main stage names and stage names from the original list."));
 
     public string MultiTasksShareTipText => Texts.GetOrDefault(
-        "MultiTasksShareTip",
-        "The following options are shared across multiple tasks.");
+        "Fight.MultiTasksShareTip",
+        Texts.GetOrDefault("MultiTasksShareTip", "The following options are shared across multiple tasks."));
 
     public string AutoRestartOnDropText => Texts.GetOrDefault(
-        "AutoRestartOption",
-        "Restart when game disconnects");
+        "Fight.AutoRestartOption",
+        Texts.GetOrDefault("AutoRestartOption", "Restart when game disconnects"));
 
     public string UseWeeklyScheduleText => Texts.GetOrDefault("Fight.UseWeeklySchedule", "Enable weekly schedule");
 
@@ -273,6 +288,12 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
     public string WeeklyScheduleFridayText => Texts.GetOrDefault("Fight.WeeklySchedule.Friday", "Fri");
 
     public string WeeklyScheduleSaturdayText => Texts.GetOrDefault("Fight.WeeklySchedule.Saturday", "Sat");
+
+    public string MoveStagePlanEntryUpText => Texts.GetOrDefault("TaskQueue.Root.MoveUp", "Move up");
+
+    public string MoveStagePlanEntryDownText => Texts.GetOrDefault("TaskQueue.Root.MoveDown", "Move down");
+
+    public string RemoveStagePlanEntryText => Texts.GetOrDefault("TaskQueue.Root.Delete", "Delete");
 
     public string Stage
     {
@@ -327,7 +348,7 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
 
             if (value == false && UseStone != false)
             {
-                UseStone = false;
+                UseStoneDisplay = false;
             }
 
             OnPropertyChanged(nameof(IsMedicineToggleEnabled));
@@ -346,6 +367,7 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
         get => _useStone;
         set
         {
+            var requestedValue = value;
             if (!AllowUseStoneSave && value == true)
             {
                 value = null;
@@ -353,22 +375,29 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
 
             if (!SetTrackedProperty(ref _useStone, value))
             {
+                if (requestedValue != value)
+                {
+                    OnPropertyChanged(nameof(UseStone));
+                }
+
                 return;
             }
 
             if (value != false)
             {
-                if (UseMedicine == false)
-                {
-                    UseMedicine = value;
-                }
-
                 if (Medicine < 999)
                 {
                     Medicine = 999;
                 }
+
+                if (UseMedicine == false)
+                {
+                    UseMedicine = value;
+                }
             }
 
+            OnPropertyChanged(nameof(UseStoneDisplay));
+            OnPropertyChanged(nameof(IsMedicineToggleEnabled));
             OnPropertyChanged(nameof(IsMedicineInputEnabled));
         }
     }
@@ -823,6 +852,9 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
         OnPropertyChanged(nameof(WeeklyScheduleThursdayText));
         OnPropertyChanged(nameof(WeeklyScheduleFridayText));
         OnPropertyChanged(nameof(WeeklyScheduleSaturdayText));
+        OnPropertyChanged(nameof(MoveStagePlanEntryUpText));
+        OnPropertyChanged(nameof(MoveStagePlanEntryDownText));
+        OnPropertyChanged(nameof(RemoveStagePlanEntryText));
         RefreshStagePlanPresentation();
     }
 
@@ -1159,10 +1191,7 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
     {
         var normalizedClientType = NormalizeClientType(clientTypeOverride ?? ResolveClientTypeFromConfig());
         var dayOfWeek = MallDailyResetHelper.GetYjDate(DateTime.UtcNow, normalizedClientType).DayOfWeek;
-        var stageCodes = Runtime.StageManagerFeatureService.GetStageCodes(normalizedClientType, forceReload);
-        var currentStages = StagePlan
-            .Select(entry => FightStageSelection.NormalizeStoredValue(entry.Stage))
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var stageCodes = ResolveWpfStageSelectionCodes(normalizedClientType);
         var defaultStageDisplay = Texts.GetOrDefault("Fight.DefaultStage", "Cur/Last");
         var annihilationDisplay = UseCustomAnnihilation
             ? AnnihilationStageOptions.FirstOrDefault(
@@ -1183,39 +1212,239 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
             }
 
             var isOpen = IsStageOpen(normalizedStage, dayOfWeek);
-            var isCurrentStage = currentStages.Contains(normalizedStage);
-            if (HideUnavailableStage && !isOpen && !isCurrentStage)
+            if (HideUnavailableStage && !isOpen)
             {
                 continue;
             }
 
             var display = string.Equals(normalizedStage, "Annihilation", StringComparison.OrdinalIgnoreCase)
                 ? annihilationDisplay
-                : !isOpen && !isCurrentStage
-                    ? $"{normalizedStage} {BuildClosedSuffix()}"
-                    : normalizedStage;
+                : normalizedStage;
             list.Add(new StageOption(display, normalizedStage, isOpen, IsOutdated: false));
-        }
-
-        foreach (var currentStage in currentStages)
-        {
-            if (FightStageSelection.IsCurrentOrLast(currentStage)
-                || list.Any(option => string.Equals(option.Value, currentStage, StringComparison.OrdinalIgnoreCase)))
-            {
-                continue;
-            }
-
-            list.Add(new StageOption(
-                $"{currentStage} {BuildOutdatedSuffix()}",
-                currentStage,
-                IsOpen: false,
-                IsOutdated: true));
         }
 
         _stageOptions = list;
         OnPropertyChanged(nameof(StageOptions));
         OnPropertyChanged(nameof(SelectedStageOption));
         RefreshStagePlanPresentation();
+    }
+
+    private static IReadOnlyList<string> ResolveWpfStageSelectionCodes(string clientType)
+    {
+        var ordered = new List<string>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        AddStageCodes(FallbackStageCodes, ordered, seen);
+
+        if (TryLoadStageActivityStageCodes(clientType, out var activityCodes))
+        {
+            AddStageCodes(activityCodes, ordered, seen);
+        }
+
+        return ordered;
+    }
+
+    private static void AddStageCodes(IEnumerable<string> source, ICollection<string> target, ISet<string> seen)
+    {
+        foreach (var code in source)
+        {
+            var normalized = code.Trim();
+            if (!string.IsNullOrWhiteSpace(normalized) && seen.Add(normalized))
+            {
+                target.Add(normalized);
+            }
+        }
+    }
+
+    private static bool TryLoadStageActivityStageCodes(string clientType, out IReadOnlyList<string> stageCodes)
+    {
+        stageCodes = Array.Empty<string>();
+        var path = ResolveStageActivityPath();
+        if (path is null)
+        {
+            return false;
+        }
+
+        try
+        {
+            if (JsonNode.Parse(File.ReadAllText(path)) is not JsonObject root
+                || !TryResolveStageActivityClientNode(root, clientType, out var clientNode))
+            {
+                return false;
+            }
+
+            var result = new List<string>();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            AppendSideStoryStageCodes(clientNode["sideStoryStage"], result, seen);
+            stageCodes = result;
+            return result.Count > 0;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static string? ResolveStageActivityPath()
+    {
+        foreach (var root in EnumerateRuntimeRoots())
+        {
+            foreach (var relativePath in StageActivityCandidateRelativePaths)
+            {
+                var candidate = Path.Combine(root, relativePath);
+                if (File.Exists(candidate))
+                {
+                    return candidate;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static IEnumerable<string> EnumerateRuntimeRoots()
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var candidates = new[]
+        {
+            RuntimeLayout.ResolveRuntimeBaseDirectory(),
+            Environment.CurrentDirectory,
+            Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..")),
+        };
+
+        foreach (var candidate in candidates)
+        {
+            var current = new DirectoryInfo(Path.GetFullPath(candidate));
+            while (current is not null)
+            {
+                if (seen.Add(current.FullName))
+                {
+                    yield return current.FullName;
+                }
+
+                current = current.Parent;
+            }
+        }
+    }
+
+    private static bool TryResolveStageActivityClientNode(JsonObject root, string clientType, out JsonObject clientNode)
+    {
+        if (TryGetStageActivityClientNode(root, clientType, out clientNode))
+        {
+            return clientNode["sideStoryStage"] is not null;
+        }
+
+        if (!string.Equals(clientType, "Official", StringComparison.OrdinalIgnoreCase)
+            && TryGetStageActivityClientNode(root, "Official", out clientNode))
+        {
+            return clientNode["sideStoryStage"] is not null;
+        }
+
+        clientNode = null!;
+        return false;
+    }
+
+    private static bool TryGetStageActivityClientNode(JsonObject root, string clientType, out JsonObject clientNode)
+    {
+        clientNode = null!;
+        foreach (var pair in root)
+        {
+            if (!string.Equals(NormalizeClientType(pair.Key), clientType, StringComparison.OrdinalIgnoreCase)
+                || pair.Value is not JsonObject node)
+            {
+                continue;
+            }
+
+            clientNode = node;
+            return true;
+        }
+
+        return false;
+    }
+
+    private static void AppendSideStoryStageCodes(JsonNode? sideStoryNode, ICollection<string> target, ISet<string> seen)
+    {
+        if (sideStoryNode is not JsonObject sideStoryObject)
+        {
+            return;
+        }
+
+        foreach (var group in sideStoryObject)
+        {
+            if (group.Value is not JsonObject groupObject)
+            {
+                continue;
+            }
+
+            var groupActivity = groupObject["Activity"] ?? groupObject["activity"];
+            var stages = groupObject["Stages"] ?? groupObject["stages"];
+            if (stages is not JsonArray stageArray)
+            {
+                continue;
+            }
+
+            foreach (var stageNode in stageArray)
+            {
+                if (stageNode is not JsonObject stageObject)
+                {
+                    continue;
+                }
+
+                var activity = stageObject["Activity"] ?? stageObject["activity"] ?? groupActivity;
+                if (!IsActivityStageOpenOrWillOpen(activity)
+                    || !TryReadString(stageObject["Value"] ?? stageObject["value"], out var value)
+                    || string.IsNullOrWhiteSpace(value))
+                {
+                    continue;
+                }
+
+                AddStageCodes([value], target, seen);
+            }
+        }
+    }
+
+    private static bool IsActivityStageOpenOrWillOpen(JsonNode? activityNode)
+    {
+        if (activityNode is not JsonObject activity)
+        {
+            return false;
+        }
+
+        return !TryReadActivityTime(activity, "UtcExpireTime", out var expireTime)
+            || DateTime.UtcNow < expireTime;
+    }
+
+    private static bool TryReadActivityTime(JsonObject activity, string key, out DateTime utcTime)
+    {
+        utcTime = default;
+        if (!TryReadString(activity[key], out var raw) || string.IsNullOrWhiteSpace(raw))
+        {
+            return false;
+        }
+
+        var timezone = 0;
+        if (activity["TimeZone"] is JsonValue timezoneValue)
+        {
+            _ = timezoneValue.TryGetValue(out timezone);
+        }
+
+        if (DateTime.TryParseExact(
+                raw,
+                "yyyy/MM/dd HH:mm:ss",
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.None,
+                out var parsed))
+        {
+            utcTime = parsed.AddHours(-timezone);
+            return true;
+        }
+
+        if (DateTime.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out parsed))
+        {
+            utcTime = parsed.ToUniversalTime();
+            return true;
+        }
+
+        return false;
     }
 
     private string ResolveClientTypeFromConfig()
@@ -1541,7 +1770,10 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
 
     private void RefreshStagePlanPresentation()
     {
-        var dayOfWeek = MallDailyResetHelper.GetYjDate(DateTime.UtcNow, NormalizeClientType(ResolveClientTypeFromConfig())).DayOfWeek;
+        var normalizedClientType = NormalizeClientType(ResolveClientTypeFromConfig());
+        var dayOfWeek = MallDailyResetHelper.GetYjDate(DateTime.UtcNow, normalizedClientType).DayOfWeek;
+        var knownStageCodes = ResolveWpfStageSelectionCodes(normalizedClientType)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
         foreach (var entry in StagePlan)
         {
             var stage = FightStageSelection.NormalizeStoredValue(entry.Stage);
@@ -1558,8 +1790,15 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
                 continue;
             }
 
-            var isOpen = IsStageManually || IsStageOpen(stage, dayOfWeek);
-            entry.UpdateAvailability(isOpen, isOutdated: !IsStageManually, BuildStageStatusText(isOpen, isOutdated: !IsStageManually));
+            if (knownStageCodes.Contains(stage))
+            {
+                var knownStageIsOpen = IsStageManually || IsStageOpen(stage, dayOfWeek);
+                entry.UpdateAvailability(knownStageIsOpen, isOutdated: false, BuildStageStatusText(knownStageIsOpen, isOutdated: false));
+                continue;
+            }
+
+            var fallbackIsOpen = IsStageManually || IsStageOpen(stage, dayOfWeek);
+            entry.UpdateAvailability(fallbackIsOpen, isOutdated: !IsStageManually, BuildStageStatusText(fallbackIsOpen, isOutdated: !IsStageManually));
         }
     }
 
@@ -1570,7 +1809,7 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
             return BuildOutdatedSuffix();
         }
 
-        return isOpen ? string.Empty : BuildClosedSuffix();
+        return string.Empty;
     }
 
     private bool ResolveAutoRestartOnDrop()
@@ -1614,25 +1853,28 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
 
     private async Task PersistAutoRestartOnDropAsync(bool value)
     {
-        try
-        {
-            if (Runtime.ConfigurationService.TryGetCurrentProfile(out var profile))
+        _ = await ConfigurationSaveTracker.Instance.RunTrackedAsync(
+            "TaskQueue.Fight.AutoRestartOnDrop",
+            Texts.GetOrDefault("Fight.Title", "理智作战"),
+            "Fight.AutoRestartOnDrop.Save",
+            Runtime.DiagnosticsService,
+            async cancellationToken =>
             {
-                profile.Values[LegacyConfigurationKeys.AutoRestartOnDrop] = JsonValue.Create(value);
-            }
-            else
-            {
-                Runtime.ConfigurationService.CurrentConfig.GlobalValues[LegacyConfigurationKeys.AutoRestartOnDrop] = JsonValue.Create(value);
-            }
+                if (Runtime.ConfigurationService.TryGetCurrentProfile(out var profile))
+                {
+                    profile.Values[LegacyConfigurationKeys.AutoRestartOnDrop] = JsonValue.Create(value);
+                }
+                else
+                {
+                    Runtime.ConfigurationService.CurrentConfig.GlobalValues[LegacyConfigurationKeys.AutoRestartOnDrop] = JsonValue.Create(value);
+                }
 
-            await Runtime.ConfigurationService.SaveAsync();
-        }
-        catch (Exception ex)
+                await Runtime.ConfigurationService.SaveAsync(cancellationToken);
+                return true;
+            });
+        if (ConfigurationSaveTracker.Instance.IsPendingOrFailed("TaskQueue.Fight.AutoRestartOnDrop"))
         {
-            await Runtime.DiagnosticsService.RecordErrorAsync(
-                "Fight.AutoRestartOnDrop.Save",
-                "Failed to persist auto restart on drop setting.",
-                ex);
+            LastErrorMessage = string.Empty;
         }
     }
 

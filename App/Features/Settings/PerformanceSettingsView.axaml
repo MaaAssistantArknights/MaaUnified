@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:MAAUnified.App.Controls"
              xmlns:vm="clr-namespace:MAAUnified.App.ViewModels.Settings"
              Classes="settings-page"
              x:Class="MAAUnified.App.Features.Settings.PerformanceSettingsView">
@@ -8,15 +9,21 @@
     <TextBlock Classes="settings-page-title"
                Text="{Binding RootTexts[Settings.Section.Performance]}" />
 
-    <StackPanel Grid.Row="1"
+    <controls:AdaptiveSpacingStackPanel Grid.Row="1"
                 Margin="{DynamicResource MAA.Thickness.Settings.SectionTopMargin}"
                 Classes="settings-page-flow">
       <Grid Classes="settings-page-labeled-row"
             ColumnDefinitions="132,*">
         <TextBlock Classes="settings-label"
-                   Text="{Binding RootTexts[Settings.Performance.Gpu.Select]}" />
+                   TextWrapping="Wrap">
+          <Run Text="{Binding RootTexts[Settings.Performance.Gpu.Select]}" />
+          <Run Text="&#160;" />
+          <InlineUIContainer BaselineAlignment="Center">
+            <controls:TooltipHint Tip="{DynamicResource UseGpuForInferenceTip}" />
+          </InlineUIContainer>
+        </TextBlock>
         <ComboBox Grid.Column="1"
-                  Classes="app-input settings-input"
+                  Classes="settings-select"
                   Width="{DynamicResource MAA.Size.Settings.FieldPathWidth}"
                   HorizontalAlignment="Left"
                   ItemsSource="{Binding AvailableGpuOptions}"
@@ -31,14 +38,14 @@
         </ComboBox>
       </Grid>
 
-      <StackPanel Classes="settings-page-branch-block settings-page-compact-flow"
+      <controls:AdaptiveSpacingStackPanel Classes="settings-page-branch-block settings-page-compact-flow"
                   IsVisible="{Binding IsGpuCustomSelectionFieldsVisible}">
         <Grid Classes="settings-page-labeled-row"
               ColumnDefinitions="132,*">
           <TextBlock Classes="settings-label"
                      Text="{Binding RootTexts[Settings.Performance.Gpu.CustomDescription]}" />
           <TextBox Grid.Column="1"
-                   Classes="app-input"
+                   Classes="settings-input"
                    Width="{DynamicResource MAA.Size.Settings.FieldPathWidth}"
                    HorizontalAlignment="Left"
                    Text="{Binding GpuCustomDescription, UpdateSourceTrigger=LostFocus}"
@@ -50,16 +57,16 @@
           <TextBlock Classes="settings-label"
                      Text="{Binding RootTexts[Settings.Performance.Gpu.CustomInstancePath]}" />
           <TextBox Grid.Column="1"
-                   Classes="app-input"
+                   Classes="settings-input"
                    Width="{DynamicResource MAA.Size.Settings.FieldPathWidth}"
                    HorizontalAlignment="Left"
                    Text="{Binding GpuCustomInstancePath, UpdateSourceTrigger=LostFocus}"
                    IsEnabled="{Binding IsGpuSelectionEnabled}" />
         </Grid>
-      </StackPanel>
+      </controls:AdaptiveSpacingStackPanel>
 
       <Border Classes="settings-page-status-block">
-        <StackPanel Classes="settings-page-status-list">
+        <controls:AdaptiveSpacingStackPanel Classes="settings-page-status-list">
           <TextBlock Classes="app-body"
                      Text="{Binding GpuSupportMessage}"
                      IsVisible="{Binding HasGpuSupportMessage}" />
@@ -72,8 +79,8 @@
           <TextBlock Classes="state-warning"
                      Text="{Binding StartPerformanceValidationMessage}"
                      IsVisible="{Binding HasStartPerformanceValidationMessage}" />
-        </StackPanel>
+        </controls:AdaptiveSpacingStackPanel>
       </Border>
-    </StackPanel>
+    </controls:AdaptiveSpacingStackPanel>
   </Grid>
 </UserControl>

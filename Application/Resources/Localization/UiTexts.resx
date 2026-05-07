@@ -793,6 +793,9 @@ Session state `{0}` does not allow {2}.</value>
   <data name="Fight.StageSelect" xml:space="preserve">
     <value>关卡指定</value>
   </data>
+  <data name="Fight.StageSelect2" xml:space="preserve">
+    <value>备选关卡</value>
+  </data>
   <data name="Fight.Stone" xml:space="preserve">
     <value>源石数量</value>
   </data>
@@ -819,6 +822,48 @@ Session state `{0}` does not allow {2}.</value>
   </data>
   <data name="Fight.UseStoneDisplay" xml:space="preserve">
     <value>使用源石</value>
+  </data>
+  <data name="Fight.UseWeeklySchedule" xml:space="preserve">
+    <value>启用每周计划</value>
+  </data>
+  <data name="Fight.AddStage" xml:space="preserve">
+    <value>添加备选关卡</value>
+  </data>
+  <data name="Fight.CustomStageCode" xml:space="preserve">
+    <value>手动输入关卡名</value>
+  </data>
+  <data name="Fight.CustomStageCodeTip" xml:space="preserve">
+    <value>支持大多数主线关卡简称和原始关卡列表中的关卡名。</value>
+  </data>
+  <data name="Fight.MultiTasksShareTip" xml:space="preserve">
+    <value>以下选项会在多个理智作战任务之间共享。</value>
+  </data>
+  <data name="Fight.AutoRestartOption" xml:space="preserve">
+    <value>游戏掉线时自动重开</value>
+  </data>
+  <data name="Fight.UseWeeklyScheduleTip" xml:space="preserve">
+    <value>这里按游戏内刷新时间计算星期，而不是本地自然日。</value>
+  </data>
+  <data name="Fight.WeeklySchedule.Sunday" xml:space="preserve">
+    <value>周日</value>
+  </data>
+  <data name="Fight.WeeklySchedule.Monday" xml:space="preserve">
+    <value>周一</value>
+  </data>
+  <data name="Fight.WeeklySchedule.Tuesday" xml:space="preserve">
+    <value>周二</value>
+  </data>
+  <data name="Fight.WeeklySchedule.Wednesday" xml:space="preserve">
+    <value>周三</value>
+  </data>
+  <data name="Fight.WeeklySchedule.Thursday" xml:space="preserve">
+    <value>周四</value>
+  </data>
+  <data name="Fight.WeeklySchedule.Friday" xml:space="preserve">
+    <value>周五</value>
+  </data>
+  <data name="Fight.WeeklySchedule.Saturday" xml:space="preserve">
+    <value>周六</value>
   </data>
   <data name="FightCompleted" xml:space="preserve">
     <value>战斗完成</value>
@@ -2614,6 +2659,27 @@ Session state `{0}` does not allow {2}.</value>
   <data name="Settings.ConfigurationManager.SaveAsNew" xml:space="preserve">
     <value>另存为新配置</value>
   </data>
+  <data name="Settings.ConfigurationManager.SaveAsNewSucceededInline" xml:space="preserve">
+    <value>保存成功</value>
+  </data>
+  <data name="Settings.ConfigurationManager.SaveAsNewFailedInline" xml:space="preserve">
+    <value>保存失败：{0}</value>
+  </data>
+  <data name="Settings.ConfigurationManager.SaveAsNewFailedReason.Generic" xml:space="preserve">
+    <value>请稍后重试。</value>
+  </data>
+  <data name="Settings.ConfigurationManager.SaveAsNewFailedReason.ProfileAlreadyExists" xml:space="preserve">
+    <value>请换一个未使用的配置名称。</value>
+  </data>
+  <data name="Settings.ConfigurationManager.SaveAsNewFailedReason.ProfileNameEmpty" xml:space="preserve">
+    <value>请输入配置名称。</value>
+  </data>
+  <data name="Settings.ConfigurationManager.SaveAsNewFailedReason.ProfileNameInvalid" xml:space="preserve">
+    <value>配置名称无效。</value>
+  </data>
+  <data name="Settings.ConfigurationManager.SaveAsNewFailedReason.SourceProfileMissing" xml:space="preserve">
+    <value>当前配置不存在，请刷新后重试。</value>
+  </data>
   <data name="Settings.ConfigurationManager.SaveCurrent" xml:space="preserve">
     <value>保存当前配置</value>
   </data>
@@ -4091,6 +4157,18 @@ Session state `{0}` does not allow {2}.</value>
   </data>
   <data name="TaskQueue.Module.UserDataUpdate" xml:space="preserve">
     <value>更新数据</value>
+  </data>
+  <data name="TaskQueue.UserDataUpdate.TriggerInterval" xml:space="preserve">
+    <value>更新数据触发间隔</value>
+  </data>
+  <data name="TaskQueue.UserDataUpdate.Trigger.EveryTime" xml:space="preserve">
+    <value>每次触发</value>
+  </data>
+  <data name="TaskQueue.UserDataUpdate.Trigger.Daily" xml:space="preserve">
+    <value>每天一次</value>
+  </data>
+  <data name="TaskQueue.UserDataUpdate.Trigger.Weekly" xml:space="preserve">
+    <value>每周一次</value>
   </data>
   <data name="TaskQueue.Module.Fight" xml:space="preserve">
     <value>理智作战</value>

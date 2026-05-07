@@ -30,8 +30,7 @@
                     Classes="settings-content-scroll"
                     ScrollChanged="OnSectionScrollChanged">
         <StackPanel x:Name="SectionContentPanel"
-                    Classes="settings-content-panel"
-                    Spacing="28">
+                    Classes="settings-content-panel">
           <Border x:Name="SectionConfigurationManager"
                   Classes="settings-section-anchor" />
           <Border x:Name="SectionTimer"

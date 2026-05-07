@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:MAAUnified.App.Controls"
              x:Class="MAAUnified.App.Features.Advanced.ExternalNotificationProvidersView">
   <UserControl.Styles>
     <Style Selector="Border.external-notification-providers-section">
@@ -42,32 +43,31 @@
             <StackPanel Spacing="8">
               <TextBlock Classes="app-caption"
                          Text="{Binding Texts[Toolbox.Advanced.ExternalNotification.Provider]}" />
-              <ComboBox Width="240"
-                        ItemsSource="{Binding Providers}"
-                        SelectedItem="{Binding SelectedProvider}" />
+              <controls:AppSelect Width="240"
+                                  ItemsSource="{Binding Providers}"
+                                  SelectedItem="{Binding SelectedProvider}" />
             </StackPanel>
 
             <StackPanel Spacing="8">
               <TextBlock Classes="app-caption"
                          Text="{Binding Texts[Toolbox.Advanced.ExternalNotification.Parameters]}" />
-              <TextBox Classes="app-input app-input-block"
-                       Text="{Binding ParametersText}"
-                       Watermark="{Binding Texts[Toolbox.Advanced.ExternalNotification.Parameters.Watermark]}" />
+              <controls:AppTextInput Classes="settings-input-block"
+                                     Text="{Binding ParametersText}"
+                                     Watermark="{Binding Texts[Toolbox.Advanced.ExternalNotification.Parameters.Watermark]}" />
             </StackPanel>
 
             <StackPanel Spacing="8">
               <TextBlock Classes="app-caption"
                          Text="{Binding Texts[Toolbox.Advanced.ExternalNotification.MessageTitle]}" />
-              <TextBox Classes="app-input"
-                       Width="320"
-                       Text="{Binding Title}" />
+              <controls:AppTextInput Width="320"
+                                     Text="{Binding Title}" />
             </StackPanel>
 
             <StackPanel Spacing="8">
               <TextBlock Classes="app-caption"
                          Text="{Binding Texts[Toolbox.Advanced.ExternalNotification.MessageBody]}" />
-              <TextBox Classes="app-input app-input-block"
-                       Text="{Binding Message}" />
+              <controls:AppTextInput Classes="settings-input-block"
+                                     Text="{Binding Message}" />
             </StackPanel>
           </StackPanel>
         </Border>

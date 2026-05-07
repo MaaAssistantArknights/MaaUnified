@@ -5,10 +5,12 @@ using Avalonia.Threading;
 using System.Diagnostics;
 using MAAUnified.App.Services;
 using MAAUnified.App.ViewModels;
+using MAAUnified.App.ViewModels.Settings;
 using MAAUnified.App.Views;
 using MAAUnified.Application.Models;
 using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Features;
+using MAAUnified.Application.Services.Localization;
 using MAAUnified.Compat.Runtime;
 
 namespace MAAUnified.App;
@@ -25,9 +27,9 @@ public partial class App : Avalonia.Application
     private static int _shutdownStarted;
     private static AppCrashCaptureService? _crashCaptureService;
     private static DispatcherTimer? _uiLagProbeTimer;
+    private static UiFontFamilyResourceUpdater? _uiFontFamilyResourceUpdater;
     private static DateTimeOffset _uiLagProbeExpectedAtUtc;
     private static DateTimeOffset _lastUiLagLoggedAtUtc = DateTimeOffset.MinValue;
-
     public static MAAUnifiedRuntime Runtime { get; private set; } = null!;
 
     public override void Initialize()
@@ -49,6 +51,8 @@ public partial class App : Avalonia.Application
                 $"executableBaseDir={AppContext.BaseDirectory}; runtimeBaseDir={runtimeBaseDirectory}");
             Runtime = MAAUnifiedRuntimeFactory.Create(runtimeBaseDirectory);
             Program.RecordStartupStage("FrameworkInit.RuntimeCreate.End", "MAAUnified runtime created.");
+            ConfigureUiFontFamilyResource();
+            ConfigureLegacyLocalizationResources();
         }
         catch (Exception ex)
         {
@@ -219,7 +223,63 @@ public partial class App : Avalonia.Application
     private static void OnDesktopExit(object? sender, ControlledApplicationLifetimeExitEventArgs e)
     {
         StopUiLagProbe();
+        _uiFontFamilyResourceUpdater?.Dispose();
+        _uiFontFamilyResourceUpdater = null;
+        if (Current is App app)
+        {
+            Runtime.UiLanguageCoordinator.LanguageChanged -= app.OnLegacyLocalizationLanguageChanged;
+        }
+
         _ = DisposeRuntimeOnExitAsync();
+    }
+
+    private void ConfigureLegacyLocalizationResources()
+    {
+        ApplyLegacyLocalizationResources(Runtime.UiLanguageCoordinator.CurrentLanguage);
+        Runtime.UiLanguageCoordinator.LanguageChanged += OnLegacyLocalizationLanguageChanged;
+    }
+
+    private void OnLegacyLocalizationLanguageChanged(object? sender, UiLanguageChangedEventArgs e)
+    {
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            ApplyLegacyLocalizationResources(e.CurrentLanguage);
+            return;
+        }
+
+        Dispatcher.UIThread.Post(() => ApplyLegacyLocalizationResources(e.CurrentLanguage));
+    }
+
+    private void ApplyLegacyLocalizationResources(string? language)
+    {
+        foreach (var (key, value) in AchievementTextCatalog.GetAllStrings(language))
+        {
+            Resources[key] = value;
+        }
+    }
+
+    private void ConfigureUiFontFamilyResource()
+    {
+        var startupLanguage = StartupShellSnapshot.FromConfig(Runtime.ConfigurationService.CurrentConfig).Language;
+        _uiFontFamilyResourceUpdater?.Dispose();
+        _uiFontFamilyResourceUpdater = new UiFontFamilyResourceUpdater(
+            Resources,
+            Runtime.UiLanguageCoordinator,
+            new UiFontFamilyResolver(),
+            RecordUiFontFamilyFallback);
+
+        var resolution = _uiFontFamilyResourceUpdater.ApplyLanguage(startupLanguage);
+        Program.RecordStartupStage(
+            "FrameworkInit.UiFontFamily.Ready",
+            $"language={resolution.Language}; actual={resolution.Actual}");
+    }
+
+    private static void RecordUiFontFamilyFallback(UiFontFamilyResolution resolution)
+    {
+        var message =
+            $"UI font fallback: language={resolution.Language}; expected={resolution.Expected}; actual={resolution.Actual}; reason={resolution.Reason}";
+        Runtime.LogService.Warn(message);
+        _ = Runtime.DiagnosticsService.RecordEventAsync("App.UiFontFamily", message);
     }
 
     private static async Task DisposeRuntimeOnExitAsync()

@@ -1,0 +1,182 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="MAAUnified.App.Controls.AppSuggestInput"
+             x:Name="Root"
+             Classes="app-suggest-input">
+  <UserControl.Styles>
+    <Style Selector="ItemsControl.app-suggest-input-list ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.CornerRadius.SettingsInput}" />
+      <Setter Property="FocusAdorner" Value="{x:Null}" />
+      <Setter Property="Focusable" Value="False" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="MinHeight" Value="{DynamicResource MAA.App.Size.SettingsInputItemMinHeight}" />
+      <Setter Property="Opacity" Value="1" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="ItemsControl.app-suggest-input-list ContentPresenter /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.CornerRadius.SettingsInput}" />
+      <Setter Property="Padding" Value="0" />
+    </Style>
+
+    <Style Selector="ItemsControl.app-suggest-input-list.pointer-highlight ContentPresenter:pointerover">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+    </Style>
+
+    <Style Selector="ItemsControl.app-suggest-input-list.pointer-highlight ContentPresenter:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+    </Style>
+
+    <Style Selector="ItemsControl.app-suggest-input-list.selection-highlight ContentPresenter.keyboard-current">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+
+    <Style Selector="ItemsControl.app-suggest-input-list.selection-highlight ContentPresenter.keyboard-current /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+
+    <Style Selector="ItemsControl.app-suggest-input-list.selection-highlight ContentPresenter.keyboard-current:pointerover">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+
+    <Style Selector="ItemsControl.app-suggest-input-list.selection-highlight ContentPresenter.keyboard-current:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+
+    <Style Selector="Border.app-suggest-input-item-shell">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.CornerRadius.SettingsInput}" />
+      <Setter Property="MinHeight" Value="{DynamicResource MAA.App.Size.SettingsInputItemMinHeight}" />
+      <Setter Property="Padding" Value="{DynamicResource MAA.App.Thickness.SettingsInputItemPadding}" />
+    </Style>
+
+    <Style Selector="ItemsControl.app-suggest-input-list ContentPresenter:pointerover Border.app-suggest-input-item-shell">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <Style Selector="ItemsControl.app-suggest-input-list ContentPresenter.keyboard-current Border.app-suggest-input-item-shell">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <Style Selector="ItemsControl.app-suggest-input-list ContentPresenter.keyboard-current:pointerover Border.app-suggest-input-item-shell">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <Style Selector="ItemsControl.app-suggest-input-list.pointer-highlight ContentPresenter:pointerover Border.app-suggest-input-item-shell">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <Style Selector="ItemsControl.app-suggest-input-list.pointer-highlight ContentPresenter.pointer-current Border.app-suggest-input-item-shell">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.SettingsInput.ItemBackgroundHover}" />
+    </Style>
+
+    <Style Selector="ItemsControl.app-suggest-input-list.selection-highlight ContentPresenter.keyboard-current Border.app-suggest-input-item-shell">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.SettingsInput.ItemBackgroundSelected}" />
+    </Style>
+
+    <Style Selector="ItemsControl.app-suggest-input-list.selection-highlight ContentPresenter.keyboard-current:pointerover Border.app-suggest-input-item-shell">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.SettingsInput.ItemBackgroundSelected}" />
+    </Style>
+
+    <Style Selector="TextBlock.app-suggest-input-item-text">
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ItemForeground}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="ItemsControl.app-suggest-input-list.pointer-highlight ContentPresenter:pointerover TextBlock.app-suggest-input-item-text">
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ItemForeground}" />
+    </Style>
+
+    <Style Selector="ItemsControl.app-suggest-input-list.pointer-highlight ContentPresenter.pointer-current TextBlock.app-suggest-input-item-text">
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ItemForegroundHover}" />
+    </Style>
+
+    <Style Selector="ItemsControl.app-suggest-input-list.selection-highlight ContentPresenter.keyboard-current TextBlock.app-suggest-input-item-text">
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ItemForegroundSelected}" />
+    </Style>
+
+    <Style Selector="ItemsControl.app-suggest-input-list.selection-highlight ContentPresenter.keyboard-current:pointerover TextBlock.app-suggest-input-item-text">
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ItemForegroundSelected}" />
+    </Style>
+  </UserControl.Styles>
+  <Grid>
+    <Border x:Name="ShellBorder"
+            Classes="app-suggest-input-shell"
+            PointerPressed="OnShellPointerPressed">
+      <Grid ColumnDefinitions="*,Auto">
+        <TextBox x:Name="EditorTextBox"
+                 Classes="app-suggest-input-editor"
+                 Text="{Binding Text, ElementName=Root, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                 Watermark="{Binding Watermark, ElementName=Root}"
+                 GotFocus="OnEditorGotFocus"
+                 LostFocus="OnEditorLostFocus"
+                 KeyDown="OnEditorKeyDown" />
+
+        <Button x:Name="ToggleButton"
+                Grid.Column="1"
+                Classes="app-suggest-input-toggle"
+                Click="OnToggleButtonClick">
+          <Path Classes="app-suggest-input-chevron"
+                Data="M 1 1 L 5 5 L 9 1"
+                StrokeLineCap="Round" />
+        </Button>
+      </Grid>
+    </Border>
+
+    <Popup x:Name="DropDownPopup"
+           Classes="app-suggest-input-popup"
+           IsOpen="{Binding IsDropDownOpen, ElementName=Root, Mode=TwoWay}"
+           Placement="BottomEdgeAlignedLeft"
+           PlacementTarget="{Binding ElementName=ShellBorder}"
+           VerticalOffset="4"
+           IsLightDismissEnabled="True"
+           Closed="OnPopupClosed">
+      <Border Classes="app-suggest-input-popup-panel"
+              MinWidth="{Binding Bounds.Width, ElementName=ShellBorder}"
+              HorizontalAlignment="Left">
+        <ScrollViewer Classes="app-suggest-input-scroll"
+                      MaxHeight="{Binding MaxDropDownHeight, ElementName=Root}"
+                      HorizontalScrollBarVisibility="Disabled"
+                      VerticalScrollBarVisibility="Auto">
+          <ItemsControl x:Name="SuggestionItemsControl"
+                        Classes="app-suggest-input-list pointer-highlight"
+                        Focusable="False">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <StackPanel />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Border Classes="app-suggest-input-item-shell">
+                  <TextBlock Classes="app-suggest-input-item-text"
+                             Text="{Binding .}"
+                             TextTrimming="CharacterEllipsis" />
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+      </Border>
+    </Popup>
+  </Grid>
+</UserControl>

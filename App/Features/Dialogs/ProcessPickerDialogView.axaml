@@ -12,6 +12,55 @@
         ExtendClientAreaToDecorationsHint="True"
         ExtendClientAreaChromeHints="NoChrome"
         WindowStartupLocation="CenterOwner">
+  <Window.Styles>
+    <Style Selector="StackPanel.process-picker-intro">
+      <Setter Property="Spacing" Value="6" />
+      <Setter Property="Margin" Value="0,2,0,0" />
+    </Style>
+
+    <Style Selector="Border.process-picker-list-shell">
+      <Setter Property="Padding" Value="6" />
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Surface.Section}" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="8" />
+    </Style>
+
+    <Style Selector="controls|AppSelectionList.process-picker-list">
+      <Setter Property="Margin" Value="0" />
+      <Setter Property="Padding" Value="0" />
+    </Style>
+
+    <Style Selector="controls|AppSelectionList.process-picker-list ListBoxItem">
+      <Setter Property="Margin" Value="0,0,0,4" />
+    </Style>
+
+    <Style Selector="controls|AppSelectionList.process-picker-list Border.app-selection-list-item-shell">
+      <Setter Property="Padding" Value="12,10" />
+      <Setter Property="MinHeight" Value="58" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="6" />
+    </Style>
+
+    <Style Selector="controls|AppSelectionList.process-picker-list ListBoxItem:pointerover Border.app-selection-list-item-shell">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.SubtleBackgroundHover}" />
+    </Style>
+
+    <Style Selector="controls|AppSelectionList.process-picker-list ListBoxItem:selected Border.app-selection-list-item-shell">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Input.ItemBackgroundSelected}" />
+    </Style>
+
+    <Style Selector="Border.process-picker-empty">
+      <Setter Property="Padding" Value="24" />
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Surface.Section}" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="8" />
+    </Style>
+  </Window.Styles>
+
   <controls:AppWindowFrame x:Name="DialogShell"
                            Mode="CompactModal"
                            CloseRequested="OnShellCloseRequested">
@@ -22,21 +71,17 @@
     </controls:AppWindowFrame.HeaderContent>
     <controls:AppWindowFrame.Content>
       <Grid RowDefinitions="Auto,*">
-        <Border Classes="app-surface app-section">
-          <StackPanel Classes="app-compact-selection-intro">
-            <TextBlock Classes="section-title"
-                       Text="Running processes" />
-            <TextBlock x:Name="HintText"
-                       Classes="app-window-subtitle subtle long-wrap"
-                       Text="Choose the process that should receive the connection." />
-          </StackPanel>
-        </Border>
+        <StackPanel Classes="app-compact-selection-intro process-picker-intro">
+          <TextBlock x:Name="HintText"
+                     Classes="app-window-subtitle subtle long-wrap"
+                     Text="Choose the process that should receive the connection." />
+        </StackPanel>
 
         <Grid Grid.Row="1"
               Margin="0,14,0,0">
-          <Border Classes="app-surface app-card">
+          <Border Classes="process-picker-list-shell">
             <controls:AppSelectionList x:Name="ProcessList"
-                                       Classes="app-compact-selection-list"
+                                       Classes="app-compact-selection-list process-picker-list"
                                        VisualMode="Surface"
                                        SelectionMode="Single"
                                        SelectionChanged="OnProcessSelectionChanged"
@@ -68,7 +113,7 @@
           </Border>
 
           <Border x:Name="EmptyStatePanel"
-                  Classes="app-surface app-section"
+                  Classes="process-picker-empty"
                   IsVisible="False">
             <StackPanel Classes="app-compact-empty-state-content">
               <TextBlock Classes="app-window-title app-compact-empty-title"

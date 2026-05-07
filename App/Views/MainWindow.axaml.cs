@@ -44,9 +44,9 @@ public partial class MainWindow : Window
         new("MAA.Thickness.MarginSectionVertical", new Thickness(0, 6, 0, 6)),
         new("MAA.Thickness.MarginRightSection", new Thickness(0, 0, 6, 0)),
         new("MAA.Thickness.TabCompactPadding", new Thickness(8, 4)),
-        new("MAA.Thickness.CopilotNavTabPadding", new Thickness(8, 3, 8, 7)),
-        new("MAA.Thickness.RootNavTabPadding", new Thickness(8, 2, 8, 9)),
-        new("MAA.Thickness.ToolboxNavTabPadding", new Thickness(8, 2, 8, 9)),
+        new("MAA.Thickness.CopilotNavTabPadding", new Thickness(8, 0, 8, 5)),
+        new("MAA.Thickness.RootNavTabPadding", new Thickness(8, 0, 8, 0)),
+        new("MAA.Thickness.ToolboxNavTabPadding", new Thickness(8, 1, 8, 8)),
         new("MAA.FontSize.SectionTitle", 13.5d),
         new("MAA.FontSize.CopilotNavTab", 13.5d),
         new("MAA.Size.Action.Height", 28d),
@@ -57,9 +57,9 @@ public partial class MainWindow : Window
     ];
     private static readonly ResponsiveDoubleResourceRange[] ResponsiveWidthResourceRanges =
     [
-        new("MAA.Size.TaskQueue.ListPanelWidth", 250d, 276d),
-        new("MAA.Size.TaskQueue.ConfigPanelWidth", 252d, 280d),
-        new("MAA.Size.TaskQueue.LogPanelWidth", 342d, 380d),
+        new("MAA.Size.TaskQueue.ListPanelWidth", 236d, 276d),
+        new("MAA.Size.TaskQueue.ConfigPanelWidth", 324d, 450d),
+        new("MAA.Size.TaskQueue.LogPanelWidth", 304d, 440d),
         new("MAA.Size.TaskQueue.PostActionSummaryWidth", 170d, 185d),
         new("MAA.Size.TaskQueue.PostActionDescriptionWidth", 146d, 160d),
         new("MAA.Size.Settings.SectionListWidth", 200d, 224d),
@@ -179,6 +179,11 @@ public partial class MainWindow : Window
             await App.Runtime.DiagnosticsService.RecordEventAsync(
                 "App.Shell.Window.Close",
                 "source=window-chrome; confirmed");
+            if (!await CompleteConfigurationSavesBeforeCloseAsync("App.Shell.Window.Close.ConfigSave"))
+            {
+                return;
+            }
+
             _ = await ExitApplicationAsync("App.Shell.Window.Close.Exit");
         }
         finally
@@ -195,11 +200,11 @@ public partial class MainWindow : Window
         Program.RecordStartupStage("MainWindow.Opened", "Main window opened.");
         FitToCurrentScreenWorkingArea();
         UpdateAdaptiveLayoutMode(flushAllHosts: true);
-        UpdateAchievementToastVisibility();
         StartDialogErrorPumpIfNeeded();
         var vm = VM;
         if (vm is null || _platformBound)
         {
+            UpdateAchievementToastVisibility();
             return;
         }
 
@@ -210,6 +215,7 @@ public partial class MainWindow : Window
         vm = VM;
         if (vm is null || _platformBound || !IsVisible)
         {
+            UpdateAchievementToastVisibility();
             return;
         }
 
@@ -247,6 +253,8 @@ public partial class MainWindow : Window
         }
 
         await vm.ExecuteStartupLaunchBehaviorAsync(minimizeWindowAsync: MinimizeFromStartupAsync);
+        vm.MarkAchievementToastStartupCompleted();
+        UpdateAchievementToastVisibility();
         Program.RecordStartupStage("MainWindow.PlatformInit.End", "Platform initialization completed.");
     }
 
@@ -542,7 +550,8 @@ public partial class MainWindow : Window
         }
 
         var resources = EnsureResources(host);
-        resources["MAA.Thickness.CopilotRootMargin"] = new Thickness(Lerp(2d, 4d, metrics.WidthProgress));
+        var copilotSideMargin = Lerp(2d, 4d, metrics.WidthProgress);
+        resources["MAA.Thickness.CopilotRootMargin"] = new Thickness(copilotSideMargin, 0d, copilotSideMargin, copilotSideMargin);
         foreach (var range in ResponsiveWidthResourceRanges)
         {
             var value = Lerp(range.Minimum, range.Maximum, metrics.WidthProgress);
@@ -694,6 +703,24 @@ public partial class MainWindow : Window
 
     private void OnShellBackgroundVmPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (string.Equals(e.PropertyName, nameof(MainShellViewModel.SelectedRootTabIndex), StringComparison.Ordinal)
+            || string.Equals(e.PropertyName, nameof(MainShellViewModel.IsTaskQueueRootTabSelected), StringComparison.Ordinal)
+            || string.Equals(e.PropertyName, nameof(MainShellViewModel.IsCopilotRootTabSelected), StringComparison.Ordinal)
+            || string.Equals(e.PropertyName, nameof(MainShellViewModel.IsToolboxRootTabSelected), StringComparison.Ordinal)
+            || string.Equals(e.PropertyName, nameof(MainShellViewModel.IsSettingsRootTabSelected), StringComparison.Ordinal))
+        {
+            if (Dispatcher.UIThread.CheckAccess())
+            {
+                UpdateAdaptiveLayoutMode();
+            }
+            else
+            {
+                Dispatcher.UIThread.Post(() => UpdateAdaptiveLayoutMode(), DispatcherPriority.Render);
+            }
+
+            return;
+        }
+
         if (!string.Equals(e.PropertyName, nameof(MainShellViewModel.ShellBackgroundBlur), StringComparison.Ordinal)
             && !string.Equals(e.PropertyName, nameof(MainShellViewModel.ShellBackgroundImage), StringComparison.Ordinal)
             && !string.Equals(e.PropertyName, nameof(MainShellViewModel.HasShellBackgroundImage), StringComparison.Ordinal)
@@ -791,15 +818,15 @@ public partial class MainWindow : Window
 
     private void TryStartSettingsWarmup(MainShellViewModel vm)
     {
-        if (_settingsWarmupRootPage?.IsLoaded != true)
-        {
-            return;
-        }
-
         if (!_settingsSectionWarmupStarted)
         {
             _settingsSectionWarmupStarted = true;
             MAAUnified.App.Features.Root.SettingsView.StartBackgroundSectionWarmup();
+        }
+
+        if (_settingsWarmupRootPage?.IsLoaded != true)
+        {
+            return;
         }
 
         if (_settingsWarmupStarted)
@@ -875,6 +902,24 @@ public partial class MainWindow : Window
         if (sender is Button button && button.Tag is string toastId)
         {
             VM?.DismissAchievementToast(toastId);
+        }
+    }
+
+    private async void OnManualUpdateClick(object? sender, RoutedEventArgs e)
+    {
+        e.Handled = true;
+        if (VM is not null)
+        {
+            await VM.SettingsPage.CheckVersionUpdateAsync();
+        }
+    }
+
+    private async void OnManualUpdateResourceClick(object? sender, RoutedEventArgs e)
+    {
+        e.Handled = true;
+        if (VM is not null)
+        {
+            await VM.SettingsPage.ManualUpdateResourceAsync();
         }
     }
 
@@ -1077,11 +1122,13 @@ public partial class MainWindow : Window
             DataContext = VM.OverlayPresentation,
         };
         _overlayHostWindow.Show();
-        var handle = _overlayHostWindow.TryGetPlatformHandle()?.Handle ?? nint.Zero;
+        var platformHandle = _overlayHostWindow.TryGetPlatformHandle();
+        var handle = platformHandle?.Handle ?? nint.Zero;
         if (handle == nint.Zero)
         {
             await Dispatcher.UIThread.InvokeAsync(static () => { }, DispatcherPriority.Loaded);
-            handle = _overlayHostWindow.TryGetPlatformHandle()?.Handle ?? nint.Zero;
+            platformHandle = _overlayHostWindow.TryGetPlatformHandle();
+            handle = platformHandle?.Handle ?? nint.Zero;
         }
 
         if (handle == nint.Zero)
@@ -1094,6 +1141,21 @@ public partial class MainWindow : Window
             await App.Runtime.DiagnosticsService.RecordFailedResultAsync(
                 "PlatformCapability.Overlay.BindHost",
                 UiOperationResult.Fail(PlatformErrorCodes.OverlayHostNotBound, "Overlay host handle unavailable."),
+                cancellationToken);
+            return;
+        }
+
+        if (OperatingSystem.IsLinux()
+            && !string.Equals(platformHandle?.HandleDescriptor, "XID", StringComparison.OrdinalIgnoreCase))
+        {
+            var descriptor = string.IsNullOrWhiteSpace(platformHandle?.HandleDescriptor)
+                ? "<empty>"
+                : platformHandle.HandleDescriptor;
+            var message = $"Linux overlay host requires an X11 XID handle, but Avalonia returned '{descriptor}'.";
+            VM.PushGrowl(message);
+            await App.Runtime.DiagnosticsService.RecordFailedResultAsync(
+                "PlatformCapability.Overlay.BindHost",
+                UiOperationResult.Fail(PlatformErrorCodes.OverlayHostNotBound, message),
                 cancellationToken);
             return;
         }
@@ -1124,7 +1186,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        _overlayHostWindow.SetOverlayActive(e.Visible);
+        _overlayHostWindow.SetOverlayActive(e.Visible, e.Mode);
         if (!e.Visible || e.Mode != OverlayRuntimeMode.Preview)
         {
             return;
@@ -1177,6 +1239,13 @@ public partial class MainWindow : Window
                         confirmScope,
                         $"source={source}; cancelled",
                         cancellationToken);
+                    return;
+                }
+
+                if (!await CompleteConfigurationSavesBeforeCloseAsync(
+                        $"{confirmScope}.ConfigSave",
+                        cancellationToken))
+                {
                     return;
                 }
             }
@@ -1375,6 +1444,85 @@ public partial class MainWindow : Window
             vm.SettingsPage.IsVersionUpdateActionRunning,
             sourceScope,
             cancellationToken);
+    }
+
+    private async Task<bool> CompleteConfigurationSavesBeforeCloseAsync(
+        string sourceScope,
+        CancellationToken cancellationToken = default)
+    {
+        var vm = VM;
+        if (vm is null)
+        {
+            return true;
+        }
+
+        var tracker = ConfigurationSaveTracker.Instance;
+        ConfigurationSaveStatusDialogView? waitDialog = null;
+        Task<bool?>? waitDialogTask = null;
+        var waitingNames = tracker.HasActiveSaves
+            ? tracker.ActiveDisplayNames
+            : tracker.PendingOrFailedDisplayNames;
+        if (waitingNames.Count > 0)
+        {
+            var savingText = $"{JoinChineseNames(waitingNames)}正在保存，请稍等";
+            waitDialog = new ConfigurationSaveStatusDialogView();
+            waitDialog.ApplyMessage("正在保存", savingText, showConfirmButton: false);
+            waitDialogTask = waitDialog.ShowDialog<bool?>(this);
+        }
+
+        IReadOnlyList<string> failedNames;
+        try
+        {
+            await tracker.WaitForActiveSavesAsync(cancellationToken);
+            failedNames = await vm.FlushConfigurationSavesForCloseAsync(cancellationToken);
+        }
+        finally
+        {
+            if (waitDialog is not null)
+            {
+                waitDialog.Close(true);
+                if (waitDialogTask is not null)
+                {
+                    try
+                    {
+                        await waitDialogTask;
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        // Ignore late dialog close races while shutting down.
+                    }
+                }
+            }
+        }
+
+        failedNames = ConfigurationSaveTracker.Instance.FailedDisplayNames;
+        if (failedNames.Count == 0)
+        {
+            return true;
+        }
+
+        await App.Runtime.DialogFeatureService.ReportErrorAsync(
+            sourceScope,
+            MAAUnified.Application.Models.UiOperationResult.Fail(
+                MAAUnified.Application.Models.UiErrorCode.SettingsSaveFailed,
+                $"{JoinChineseNames(failedNames)}保存失败"),
+            cancellationToken);
+        return false;
+    }
+
+    private static string JoinChineseNames(IReadOnlyList<string> names)
+    {
+        var cleanNames = names
+            .Where(static name => !string.IsNullOrWhiteSpace(name))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        return cleanNames.Length switch
+        {
+            0 => "配置",
+            1 => cleanNames[0],
+            2 => $"{cleanNames[0]}和{cleanNames[1]}",
+            _ => string.Concat(string.Join("、", cleanNames.Take(cleanNames.Length - 1)), "和", cleanNames[^1]),
+        };
     }
 
     private async Task<bool> ExitApplicationAsync(string scope, CancellationToken cancellationToken = default)

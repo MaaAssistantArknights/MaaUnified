@@ -130,7 +130,7 @@ public partial class CopilotView : UserControl
         e.Handled = true;
     }
 
-    private async void OnFileSelectorSelectionCommitted(object? sender, CheckComboBoxSelectionCommittedEventArgs e)
+    private async void OnFileSelectorSelectionCommitted(object? sender, AppCopilotPathDropdownSelectionCommittedEventArgs e)
     {
         if (VM is null
             || e.SelectedItem is not CopilotPageViewModel.CopilotFileItemViewModel item

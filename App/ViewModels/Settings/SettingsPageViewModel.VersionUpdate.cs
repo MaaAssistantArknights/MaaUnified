@@ -24,6 +24,14 @@ public sealed partial class SettingsPageViewModel
 {
     public async Task SaveVersionUpdateSettingsAsync(CancellationToken cancellationToken = default)
     {
+        await RunSettingsSaveTargetAsync(
+            "Settings.AutoSave.VersionUpdate",
+            SaveVersionUpdateSettingsCoreAsync,
+            cancellationToken);
+    }
+
+    private async Task SaveVersionUpdateSettingsCoreAsync(CancellationToken cancellationToken = default)
+    {
         if (IsVersionUpdateActionRunning)
         {
             return;
@@ -971,6 +979,7 @@ public sealed partial class SettingsPageViewModel
 
         _hasPendingVersionUpdateAvailability = available;
         OnPropertyChanged(nameof(HasPendingVersionUpdateAvailability));
+        OnPropertyChanged(nameof(IssueReportVersionUpdateSummary));
         UpdateAvailabilityChanged?.Invoke(this, EventArgs.Empty);
     }
 

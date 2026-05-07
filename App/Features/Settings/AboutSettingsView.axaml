@@ -1,14 +1,29 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:MAAUnified.App.Controls"
              Classes="settings-page"
              x:Class="MAAUnified.App.Features.Settings.AboutSettingsView">
   <UserControl.Styles>
-    <Style Selector="StackPanel.about-settings-column">
-      <Setter Property="Spacing" Value="10" />
+    <Style Selector="WrapPanel.about-settings-link-grid">
+      <Setter Property="HorizontalAlignment" Value="Left" />
+      <Setter Property="MaxWidth" Value="{DynamicResource MAA.Size.Settings.ContentMaxWidth}" />
     </Style>
 
-    <Style Selector="Button.about-settings-action">
+    <Style Selector="Button.about-settings-link-chip">
       <Setter Property="HorizontalAlignment" Value="Left" />
+      <Setter Property="Margin" Value="0,0,8,8" />
+    </Style>
+
+    <Style Selector="Button.about-settings-announcement-button">
+      <Setter Property="HorizontalAlignment" Value="Left" />
+      <Setter Property="MinWidth" Value="184" />
+      <Setter Property="MinHeight" Value="42" />
+      <Setter Property="Padding" Value="22,0" />
+    </Style>
+
+    <Style Selector="StackPanel.about-settings-link-section">
+      <Setter Property="Spacing" Value="10" />
+      <Setter Property="Margin" Value="0,8,0,0" />
     </Style>
   </UserControl.Styles>
 
@@ -17,73 +32,68 @@
     <TextBlock Classes="settings-page-title"
                Text="{Binding RootTexts[Settings.Section.About]}" />
 
-    <StackPanel Grid.Row="1"
+    <controls:AdaptiveSpacingStackPanel Grid.Row="1"
                 Margin="{DynamicResource MAA.Thickness.Settings.SectionTopMargin}"
                 HorizontalAlignment="Left"
                 Classes="settings-page-flow">
-      <Grid Classes="settings-page-two-column"
-            HorizontalAlignment="Left"
-            ColumnDefinitions="Auto,24,Auto">
-        <StackPanel Classes="about-settings-column settings-page-column-stack">
-          <Button Classes="app-button app-secondary about-settings-action"
+      <StackPanel Classes="about-settings-link-section">
+        <Button Classes="app-button app-primary about-settings-announcement-button"
+                Content="{Binding RootTexts[Settings.Action.CheckAnnouncement]}"
+                Click="OnCheckAnnouncementClick" />
+
+        <Border Classes="settings-page-status-block"
+                IsVisible="{Binding HasAboutStatusBlockMessage}">
+          <controls:AdaptiveSpacingStackPanel Classes="settings-page-status-list">
+            <TextBlock MaxWidth="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
+                       Classes="app-body"
+                       Text="{Binding AboutStatusMessage}"
+                       IsVisible="{Binding HasAboutStatusMessage}"
+                       TextWrapping="Wrap" />
+            <TextBlock MaxWidth="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
+                       Classes="state-error app-body"
+                       Text="{Binding AboutErrorMessage}"
+                       IsVisible="{Binding HasAboutErrorMessage}"
+                       TextWrapping="Wrap" />
+          </controls:AdaptiveSpacingStackPanel>
+        </Border>
+
+        <WrapPanel Classes="about-settings-link-grid">
+          <Button Classes="app-button app-chip about-settings-link-chip"
                   Content="{Binding RootTexts[Settings.Action.OpenOfficial]}"
                   Click="OnOpenOfficialWebsiteClick" />
-          <Button Classes="app-button app-secondary about-settings-action"
+          <Button Classes="app-button app-chip about-settings-link-chip"
                   Content="bilibili"
                   Click="OnOpenBilibiliClick" />
-          <Button Classes="app-button app-secondary about-settings-action"
+          <Button Classes="app-button app-chip about-settings-link-chip"
                   Content="GitHub"
                   Click="OnOpenGithubClick" />
-          <Button Classes="app-button app-primary about-settings-action"
-                  Content="{Binding RootTexts[Settings.Action.CheckAnnouncement]}"
-                  Click="OnCheckAnnouncementClick" />
-        </StackPanel>
-
-        <StackPanel Grid.Column="2"
-                    Classes="about-settings-column settings-page-column-stack">
-          <Button Classes="app-button app-primary about-settings-action"
+          <Button Classes="app-button app-chip about-settings-link-chip"
                   Content="{Binding RootTexts[Settings.Action.OpenCommunity]}"
                   Click="OnOpenCommunityClick" />
-          <Button Classes="app-button app-secondary about-settings-action"
+          <Button Classes="app-button app-chip about-settings-link-chip"
                   Content="{Binding RootTexts[Settings.Action.OpenDownload]}"
                   Click="OnOpenDownloadClick" />
-          <Button Classes="app-button app-secondary about-settings-action"
+          <Button Classes="app-button app-chip about-settings-link-chip"
                   Content="QQ Group"
                   Click="OnOpenQqGroupClick" />
-          <Button Classes="app-button app-secondary about-settings-action"
+          <Button Classes="app-button app-chip about-settings-link-chip"
                   Content="QQ Channel"
                   Click="OnOpenQqChannelClick" />
-          <Button Classes="app-button app-secondary about-settings-action"
+          <Button Classes="app-button app-chip about-settings-link-chip"
                   Content="Telegram"
                   Click="OnOpenTelegramClick" />
-          <Button Classes="app-button app-secondary about-settings-action"
+          <Button Classes="app-button app-chip about-settings-link-chip"
                   Content="Discord"
                   Click="OnOpenDiscordClick" />
-        </StackPanel>
-      </Grid>
+        </WrapPanel>
+      </StackPanel>
 
-      <Border Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}"
-              Classes="app-surface app-card settings-page-meta-block">
-        <TextBlock MaxWidth="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
-                   HorizontalAlignment="Left"
-                   TextAlignment="Left"
-                   TextWrapping="Wrap"
-                   Classes="app-body"
-                   Text="{Binding AboutVersionInfo}" />
-      </Border>
-
-      <Border Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}"
-              Classes="settings-page-status-block">
-        <StackPanel Classes="settings-page-status-list">
-          <TextBlock Classes="app-body"
-                     Text="{Binding AboutStatusMessage}"
-                     TextWrapping="Wrap" />
-          <TextBlock Classes="state-error app-body"
-                     Text="{Binding AboutErrorMessage}"
-                     IsVisible="{Binding HasAboutErrorMessage}"
-                     TextWrapping="Wrap" />
-        </StackPanel>
-      </Border>
-    </StackPanel>
+      <TextBlock MaxWidth="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
+                 HorizontalAlignment="Left"
+                 TextAlignment="Left"
+                 TextWrapping="Wrap"
+                 Classes="app-caption"
+                 Text="{Binding AboutVersionInfo}" />
+    </controls:AdaptiveSpacingStackPanel>
   </Grid>
 </UserControl>

@@ -70,13 +70,12 @@
           <Grid RowDefinitions="Auto,Auto">
             <TextBlock Classes="section-title"
                        Text="Custom path" />
-            <TextBox x:Name="PathInput"
-                     Grid.Row="1"
-                     Margin="0,10,0,0"
-                     Classes="app-input"
-                     Watermark="/path/to/emulator"
-                     TextChanged="OnPathInputTextChanged"
-                     KeyDown="OnPathInputKeyDown" />
+            <controls:AppTextInput x:Name="PathInput"
+                                   Grid.Row="1"
+                                   Margin="0,10,0,0"
+                                   Watermark="/path/to/emulator"
+                                   TextChanged="OnPathInputTextChanged"
+                                   KeyDown="OnPathInputKeyDown" />
           </Grid>
         </Border>
       </Grid>

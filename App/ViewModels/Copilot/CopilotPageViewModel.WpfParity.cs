@@ -678,11 +678,11 @@ public sealed partial class CopilotPageViewModel
 
     private async Task PersistGlobalSettingCoreAsync(string key, string value)
     {
-        var result = await Runtime.SettingsFeatureService.SaveGlobalSettingAsync(key, value);
-        if (!result.Success)
-        {
-            await RecordFailedResultAsync($"Config.{key}", result);
-        }
+        _ = await RunTrackedConfigurationSaveAsync(
+            $"Copilot.Config.{key}",
+            Texts.GetOrDefault("Copilot.Title", "抄作业"),
+            $"Config.{key}.Save",
+            ct => Runtime.SettingsFeatureService.SaveGlobalSettingAsync(key, value, ct));
     }
 
     private void OnItemsCollectionChangedForWpfParity(object? sender, NotifyCollectionChangedEventArgs e)

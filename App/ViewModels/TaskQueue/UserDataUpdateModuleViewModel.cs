@@ -25,13 +25,13 @@ public sealed class UserDataUpdateModuleViewModel : TaskModuleSettingsViewModelB
         RefreshSyncTimesFromConfig();
     }
 
-    public string TitleText => Texts.GetOrDefault("TaskQueue.Module.UserDataUpdate", "Update user data");
+    public string TitleText => Texts.GetOrDefault("TaskQueue.Module.UserDataUpdate", "更新数据");
 
-    public string UpdateOperBoxText => Texts.GetOrDefault("Toolbox.ToolName.OperBox", "Operator recognition");
+    public string UpdateOperBoxText => Texts.GetOrDefault("Toolbox.ToolName.OperBox", "干员识别");
 
-    public string UpdateDepotText => Texts.GetOrDefault("Toolbox.ToolName.Depot", "Depot recognition");
+    public string UpdateDepotText => Texts.GetOrDefault("Toolbox.ToolName.Depot", "仓库识别");
 
-    public string TriggerIntervalText => Texts.GetOrDefault("TaskQueue.UserDataUpdate.TriggerInterval", "Trigger interval");
+    public string TriggerIntervalText => Texts.GetOrDefault("TaskQueue.UserDataUpdate.TriggerInterval", "更新数据触发间隔");
 
     public IReadOnlyList<StringOption> TriggerIntervalOptions => _triggerIntervalOptions;
 
@@ -132,9 +132,9 @@ public sealed class UserDataUpdateModuleViewModel : TaskModuleSettingsViewModelB
     {
         _triggerIntervalOptions =
         [
-            new StringOption(UserDataUpdateTaskParamsDto.TriggerEveryTime, Texts.GetOrDefault("TaskQueue.UserDataUpdate.Trigger.EveryTime", "Every time")),
-            new StringOption(UserDataUpdateTaskParamsDto.TriggerDaily, Texts.GetOrDefault("TaskQueue.UserDataUpdate.Trigger.Daily", "Daily")),
-            new StringOption(UserDataUpdateTaskParamsDto.TriggerWeekly, Texts.GetOrDefault("TaskQueue.UserDataUpdate.Trigger.Weekly", "Weekly")),
+            new StringOption(UserDataUpdateTaskParamsDto.TriggerEveryTime, Texts.GetOrDefault("TaskQueue.UserDataUpdate.Trigger.EveryTime", "每次触发")),
+            new StringOption(UserDataUpdateTaskParamsDto.TriggerDaily, Texts.GetOrDefault("TaskQueue.UserDataUpdate.Trigger.Daily", "每天一次")),
+            new StringOption(UserDataUpdateTaskParamsDto.TriggerWeekly, Texts.GetOrDefault("TaskQueue.UserDataUpdate.Trigger.Weekly", "每周一次")),
         ];
 
         OnPropertyChanged(nameof(TriggerIntervalOptions));
@@ -161,7 +161,7 @@ public sealed class UserDataUpdateModuleViewModel : TaskModuleSettingsViewModelB
         var formatted = syncTime.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
         return string.Format(
             CultureInfo.InvariantCulture,
-            Texts.GetOrDefault("Toolbox.Depot.LastSync", "Last sync: {0}"),
+            Texts.GetOrDefault("Toolbox.Depot.LastSync", "上次同步: {0}"),
             formatted);
     }
 

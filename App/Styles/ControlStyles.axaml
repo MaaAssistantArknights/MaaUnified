@@ -1,6 +1,7 @@
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:controls="clr-namespace:MAAUnified.App.Controls"
+        xmlns:documents="clr-namespace:Avalonia.Controls.Documents;assembly=Avalonia.Controls"
         xmlns:md="clr-namespace:MarkdownViewer.Core.Controls;assembly=MarkdownViewer.Core">
   <Styles.Resources>
     <Thickness x:Key="MAA.BorderThickness.Thin">1</Thickness>
@@ -13,11 +14,11 @@
     <CornerRadius x:Key="MAA.CornerRadius.SegmentRight">0,4,4,0</CornerRadius>
     <CornerRadius x:Key="MAA.CornerRadius.SegmentMiddle">0</CornerRadius>
 
-    <Thickness x:Key="MAA.Thickness.CopilotRootMargin">4</Thickness>
+    <Thickness x:Key="MAA.Thickness.CopilotRootMargin">4,0,4,4</Thickness>
     <Thickness x:Key="MAA.Thickness.PageMargin">10</Thickness>
     <Thickness x:Key="MAA.Thickness.SectionPadding">8</Thickness>
     <Thickness x:Key="MAA.Thickness.SectionPaddingStrong">8</Thickness>
-    <Thickness x:Key="MAA.Thickness.SectionTitleMargin">0,0,0,4</Thickness>
+    <Thickness x:Key="MAA.Thickness.SectionTitleMargin">0,0,0,2</Thickness>
     <Thickness x:Key="MAA.Thickness.MainWindowHeaderInfoMargin">0,0,10,0</Thickness>
     <Thickness x:Key="MAA.Thickness.MarginTopSection">0,8,0,0</Thickness>
     <Thickness x:Key="MAA.Thickness.MarginBottomSection">0,0,0,8</Thickness>
@@ -72,9 +73,9 @@
     <Thickness x:Key="MAA.Thickness.ActionCompactPadding">8,0</Thickness>
     <Thickness x:Key="MAA.Thickness.ActionIconPadding">0</Thickness>
     <Thickness x:Key="MAA.Thickness.TabCompactPadding">10,6</Thickness>
-    <Thickness x:Key="MAA.Thickness.CopilotNavTabPadding">10,4,10,9</Thickness>
-    <Thickness x:Key="MAA.Thickness.RootNavTabPadding">10,4,10,15</Thickness>
-    <Thickness x:Key="MAA.Thickness.ToolboxNavTabPadding">10,4,10,15</Thickness>
+    <Thickness x:Key="MAA.Thickness.CopilotNavTabPadding">10,0,10,6</Thickness>
+    <Thickness x:Key="MAA.Thickness.RootNavTabPadding">10,0,10,0</Thickness>
+    <Thickness x:Key="MAA.Thickness.ToolboxNavTabPadding">10,2,10,11</Thickness>
     <Thickness x:Key="MAA.Thickness.ToolboxNavContentMargin">0,12,0,0</Thickness>
 
     <x:Double x:Key="MAA.Spacing.Tight">2</x:Double>
@@ -88,6 +89,8 @@
     <x:Double x:Key="MAA.FontSize.ActionCompact">12</x:Double>
     <x:Double x:Key="MAA.FontSize.TabCompact">12.5</x:Double>
     <x:Double x:Key="MAA.FontSize.CopilotNavTab">14</x:Double>
+    <x:Double x:Key="MAA.FontSize.RootNavTab">15.5</x:Double>
+    <x:Double x:Key="MAA.LineHeight.RootNavTab">20</x:Double>
     <x:Double x:Key="MAA.Size.NavIndicator.Thickness">3</x:Double>
     <x:Double x:Key="MAA.Size.NavIndicator.MinLength">18</x:Double>
     <x:Double x:Key="MAA.Size.NavChrome.CornerRadius">10</x:Double>
@@ -132,12 +135,13 @@
     <x:Double x:Key="MAA.Size.Action.RunSecondaryHeight">40</x:Double>
     <x:Double x:Key="MAA.Size.TaskQueue.RowHeight">30</x:Double>
     <x:Double x:Key="MAA.Size.Tab.MinHeight">30</x:Double>
+    <x:Double x:Key="MAA.Size.RootNavTab.Height">36</x:Double>
     <x:Double x:Key="MAA.Size.TaskQueue.ListPanelWidth">276</x:Double>
-    <x:Double x:Key="MAA.Size.TaskQueue.LogPanelWidth">380</x:Double>
+    <x:Double x:Key="MAA.Size.TaskQueue.LogPanelWidth">440</x:Double>
     <x:Double x:Key="MAA.Size.TaskQueue.RenameTextWidth">220</x:Double>
     <x:Double x:Key="MAA.Size.TaskQueue.OverlayTargetWidth">220</x:Double>
-    <x:Double x:Key="MAA.Size.TaskQueue.ConfigPanelMaxWidth">340</x:Double>
-    <x:Double x:Key="MAA.Size.TaskQueue.ConfigPanelWidth">280</x:Double>
+    <x:Double x:Key="MAA.Size.TaskQueue.ConfigPanelMaxWidth">450</x:Double>
+    <x:Double x:Key="MAA.Size.TaskQueue.ConfigPanelWidth">450</x:Double>
     <x:Double x:Key="MAA.Size.TaskQueue.PostActionSummaryWidth">185</x:Double>
     <x:Double x:Key="MAA.Size.TaskQueue.PostActionDescriptionWidth">160</x:Double>
     <x:Double x:Key="MAA.Size.TaskQueue.PostActionDividerHeight">1</x:Double>
@@ -149,7 +153,7 @@
     <x:Double x:Key="MAA.Size.Toolbox.OperBoxCardMinHeight">118</x:Double>
     <x:Double x:Key="MAA.Size.Toolbox.OperBoxBadgeIcon">24</x:Double>
     <x:Double x:Key="MAA.Size.Toolbox.OperBoxWrapItemWidth">148</x:Double>
-    <x:Double x:Key="MAA.Size.Toolbox.RecruitTimePickerWidth">55</x:Double>
+    <x:Double x:Key="MAA.Size.Toolbox.RecruitTimePickerWidth">76</x:Double>
     <x:Double x:Key="MAA.Size.Toolbox.PeepFpsWidth">60</x:Double>
     <x:Double x:Key="MAA.Size.Toolbox.ActionButtonWidth">180</x:Double>
     <x:Double x:Key="MAA.Size.Toolbox.ActionButtonHeight">70</x:Double>
@@ -173,7 +177,7 @@
 
     <ColumnDefinitions x:Key="MAA.Layout.MainWindow.ConnectionColumns">Auto,220,170,220,*,Auto,Auto</ColumnDefinitions>
     <ColumnDefinitions x:Key="MAA.Layout.MainWindow.ContentColumns">*,260</ColumnDefinitions>
-    <ColumnDefinitions x:Key="MAA.Layout.TaskQueue.Columns">276,*,380</ColumnDefinitions>
+    <ColumnDefinitions x:Key="MAA.Layout.TaskQueue.Columns">Auto,*,Auto</ColumnDefinitions>
     <ColumnDefinitions x:Key="MAA.Layout.Settings.Columns">224,*</ColumnDefinitions>
     <ColumnDefinitions x:Key="MAA.Layout.Settings.TwoColumn">250,24,250</ColumnDefinitions>
     <ColumnDefinitions x:Key="MAA.Layout.Settings.TwoColumnAligned">250,24,250</ColumnDefinitions>
@@ -192,11 +196,71 @@
   <Style Selector="Window">
     <Setter Property="Background" Value="{DynamicResource MAA.Brush.Surface.Window}" />
     <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Text.Primary}" />
-    <Setter Property="FontFamily" Value="Segoe UI, Microsoft YaHei UI, sans-serif" />
+    <Setter Property="FontFamily" Value="{DynamicResource MAA.FontFamily.UI}" />
   </Style>
 
   <Style Selector="TextBlock">
     <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Text.Primary}" />
+    <Setter Property="FontFamily" Value="{DynamicResource MAA.FontFamily.UI}" />
+  </Style>
+
+  <Style Selector="TemplatedControl">
+    <Setter Property="FontFamily" Value="{DynamicResource MAA.FontFamily.UI}" />
+  </Style>
+
+  <Style Selector="ContentPresenter">
+    <Setter Property="FontFamily" Value="{DynamicResource MAA.FontFamily.UI}" />
+  </Style>
+
+  <Style Selector="TextPresenter">
+    <Setter Property="documents:TextElement.FontFamily" Value="{DynamicResource MAA.FontFamily.UI}" />
+  </Style>
+
+  <Style Selector="ToolTip TemplatedControl">
+    <Setter Property="FontFamily" Value="{DynamicResource MAA.FontFamily.UI}" />
+  </Style>
+
+  <Style Selector="ToolTip">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="ClipToBounds" Value="False" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <DoubleTransition Property="Opacity"
+                          Duration="0:0:0.12" />
+      </Transitions>
+    </Setter>
+  </Style>
+
+  <Style Selector="ToolTip ContentPresenter">
+    <Setter Property="FontFamily" Value="{DynamicResource MAA.FontFamily.UI}" />
+    <Setter Property="ClipToBounds" Value="False" />
+  </Style>
+
+  <Style Selector="ToolTip TextPresenter">
+    <Setter Property="documents:TextElement.FontFamily" Value="{DynamicResource MAA.FontFamily.UI}" />
+  </Style>
+
+  <Style Selector="ToolTip TextBlock">
+    <Setter Property="FontFamily" Value="{DynamicResource MAA.FontFamily.UI}" />
+  </Style>
+
+  <Style Selector="Popup TemplatedControl">
+    <Setter Property="FontFamily" Value="{DynamicResource MAA.FontFamily.UI}" />
+  </Style>
+
+  <Style Selector="Popup ContentPresenter">
+    <Setter Property="FontFamily" Value="{DynamicResource MAA.FontFamily.UI}" />
+  </Style>
+
+  <Style Selector="Popup TextPresenter">
+    <Setter Property="documents:TextElement.FontFamily" Value="{DynamicResource MAA.FontFamily.UI}" />
+  </Style>
+
+  <Style Selector="Popup TextBlock">
+    <Setter Property="FontFamily" Value="{DynamicResource MAA.FontFamily.UI}" />
   </Style>
 
   <Style Selector="TextBlock.subtle">
@@ -319,7 +383,7 @@
     <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.Toast.AchievementBorder}" />
     <Setter Property="BorderThickness" Value="{DynamicResource MAA.BorderThickness.Thin}" />
     <Setter Property="CornerRadius" Value="18" />
-    <Setter Property="ClipToBounds" Value="True" />
+    <Setter Property="ClipToBounds" Value="False" />
   </Style>
 
   <Style Selector="Border.achievement-toast-badge">
@@ -345,16 +409,13 @@
     <Setter Property="VerticalAlignment" Value="Center" />
   </Style>
 
-  <Style Selector="TextBlock.achievement-toast-medal-glyph">
-    <Setter Property="Width" Value="44" />
-    <Setter Property="Height" Value="44" />
-    <Setter Property="FontSize" Value="28" />
-    <Setter Property="FontWeight" Value="Bold" />
-    <Setter Property="Foreground" Value="#FFFFFFFF" />
-    <Setter Property="LineHeight" Value="44" />
+  <Style Selector="Path.achievement-toast-medal-glyph">
+    <Setter Property="Width" Value="24" />
+    <Setter Property="Height" Value="24" />
+    <Setter Property="Fill" Value="#FFFFFFFF" />
+    <Setter Property="Stretch" Value="Uniform" />
     <Setter Property="HorizontalAlignment" Value="Center" />
     <Setter Property="VerticalAlignment" Value="Center" />
-    <Setter Property="TextAlignment" Value="Center" />
   </Style>
 
   <Style Selector="TextBlock.achievement-toast-title">
@@ -434,21 +495,20 @@
   <Style Selector="Border.achievement-dialog-filter-selection-slider">
     <Setter Property="Height" Value="36" />
     <Setter Property="CornerRadius" Value="18" />
-    <Setter Property="Background" Value="#FF2F7CF6" />
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.ButtonPrimaryBackground}" />
   </Style>
 
   <Style Selector="Border.achievement-dialog-filter-selection-slider.animate">
     <Setter Property="Transitions">
       <Transitions>
         <DoubleTransition Property="Width"
-                          Duration="0:0:0.22" />
-        <TransformOperationsTransition Property="RenderTransform"
-                                       Duration="0:0:0.22" />
+                          Duration="0:0:0.15"
+                          Easing="CubicEaseOut" />
       </Transitions>
     </Setter>
   </Style>
 
-  <Style Selector="Button.app-button.app-chip.achievement-dialog-filter-chip">
+  <Style Selector="Button.app-button.app-slider-chip.achievement-dialog-filter-chip">
     <Setter Property="Height" Value="36" />
     <Setter Property="MinWidth" Value="80" />
     <Setter Property="Padding" Value="16,0" />
@@ -458,38 +518,47 @@
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="FontSize" Value="12.5" />
     <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Text.Secondary}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
   </Style>
 
-  <Style Selector="Button.app-button.app-chip.achievement-dialog-filter-chip:pointerover">
-    <Setter Property="Background" Value="{DynamicResource MAA.Brush.Action.SecondaryBackgroundHover}" />
+  <Style Selector="Button.app-button.app-slider-chip.achievement-dialog-filter-chip:pointerover">
+    <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
     <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Text.Primary}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
   </Style>
 
-  <Style Selector="Button.app-button.app-chip.achievement-dialog-filter-chip:pressed">
-    <Setter Property="Background" Value="{DynamicResource MAA.Brush.Action.SecondaryBackgroundPressed}" />
+  <Style Selector="Button.app-button.app-slider-chip.achievement-dialog-filter-chip:pressed">
+    <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Muted}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
   </Style>
 
-  <Style Selector="Button.app-button.app-chip.achievement-dialog-filter-chip.selected">
+  <Style Selector="Button.app-button.app-slider-chip.achievement-dialog-filter-chip.selected">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderBrush" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="Foreground" Value="White" />
+    <Setter Property="FontWeight" Value="SemiBold" />
   </Style>
 
-  <Style Selector="Button.app-button.app-chip.achievement-dialog-filter-chip.selected:pointerover">
+  <Style Selector="Button.app-button.app-slider-chip.achievement-dialog-filter-chip.selected:pointerover">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderBrush" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="Foreground" Value="White" />
+    <Setter Property="FontWeight" Value="SemiBold" />
   </Style>
 
-  <Style Selector="Button.app-button.app-chip.achievement-dialog-filter-chip.selected:pressed">
+  <Style Selector="Button.app-button.app-slider-chip.achievement-dialog-filter-chip.selected:pressed">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderBrush" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
-    <Setter Property="Foreground" Value="White" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Muted}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
   </Style>
 
   <Style Selector="Button.achievement-dialog-clear-chip">
@@ -851,7 +920,6 @@
   <Style Selector="Button.announcement-dialog-confirm-button.locked">
     <Setter Property="Background" Value="{DynamicResource MAA.Brush.Action.PrimaryBackgroundDisabled}" />
     <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Action.ForegroundDisabled}" />
-    <Setter Property="Cursor" Value="Arrow" />
   </Style>
 
   <Style Selector="Button.announcement-dialog-confirm-button.locked:pointerover">
@@ -880,7 +948,7 @@
   </Style>
 
   <Style Selector="StackPanel.settings-centered-column">
-    <Setter Property="HorizontalAlignment" Value="Center" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
     <Setter Property="VerticalAlignment" Value="Top" />
   </Style>
 
@@ -913,14 +981,15 @@
   </Style>
 
   <Style Selector="TextBlock.settings-centered-text">
-    <Setter Property="HorizontalAlignment" Value="Center" />
-    <Setter Property="TextAlignment" Value="Center" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
+    <Setter Property="TextAlignment" Value="Left" />
     <Setter Property="TextWrapping" Value="Wrap" />
   </Style>
 
   <Style Selector="TextBlock.settings-field-caption">
-    <Setter Property="HorizontalAlignment" Value="Center" />
-    <Setter Property="TextAlignment" Value="Center" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
+    <Setter Property="TextAlignment" Value="Left" />
+    <Setter Property="FontSize" Value="13.5" />
     <Setter Property="TextWrapping" Value="Wrap" />
     <Setter Property="Margin" Value="{DynamicResource MAA.Thickness.Settings.CaptionBottomMargin}" />
   </Style>
@@ -1362,26 +1431,53 @@
   <Style Selector="controls|AppSelectionIndicatorPresenter.selection-indicator-nav.indicator-horizontal /template/ Border#PART_IndicatorGlow">
     <Setter Property="Width" Value="{DynamicResource MAA.Size.NavIndicator.MinLength}" />
     <Setter Property="Height" Value="{DynamicResource MAA.Size.NavIndicator.Thickness}" />
-    <Setter Property="Margin" Value="0,0,0,0" />
+    <Setter Property="Margin" Value="0,0,0,3" />
     <Setter Property="HorizontalAlignment" Value="Left" />
-    <Setter Property="VerticalAlignment" Value="Bottom" />
+    <Setter Property="VerticalAlignment" Value="Top" />
     <Setter Property="Opacity" Value="0" />
     <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.PrimaryBackground}" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <ThicknessTransition Property="Margin"
+                             Duration="0:0:0.14"
+                             Easing="CubicEaseOut" />
+        <DoubleTransition Property="Width"
+                          Duration="0:0:0.12"
+                          Easing="CubicEaseOut" />
+        <DoubleTransition Property="Height"
+                          Duration="0:0:0.12"
+                          Easing="CubicEaseOut" />
+      </Transitions>
+    </Setter>
   </Style>
 
   <Style Selector="controls|AppSelectionIndicatorPresenter.selection-indicator-nav.indicator-horizontal /template/ Border#PART_Indicator">
     <Setter Property="Width" Value="{DynamicResource MAA.Size.NavIndicator.MinLength}" />
     <Setter Property="Height" Value="{DynamicResource MAA.Size.NavIndicator.Thickness}" />
-    <Setter Property="Margin" Value="0,0,0,0" />
+    <Setter Property="Margin" Value="0,0,0,3" />
     <Setter Property="HorizontalAlignment" Value="Left" />
-    <Setter Property="VerticalAlignment" Value="Bottom" />
+    <Setter Property="VerticalAlignment" Value="Top" />
     <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.PrimaryBackground}" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <ThicknessTransition Property="Margin"
+                             Duration="0:0:0.13"
+                             Easing="CubicEaseOut" />
+        <DoubleTransition Property="Width"
+                          Duration="0:0:0.11"
+                          Easing="CubicEaseOut" />
+        <DoubleTransition Property="Height"
+                          Duration="0:0:0.11"
+                          Easing="CubicEaseOut" />
+      </Transitions>
+    </Setter>
   </Style>
 
   <Style Selector="TabStrip.root-nav TabStripItem">
     <Setter Property="Padding" Value="{DynamicResource MAA.Thickness.RootNavTabPadding}" />
+    <Setter Property="Height" Value="{DynamicResource MAA.Size.RootNavTab.Height}" />
     <Setter Property="MinHeight" Value="{DynamicResource MAA.Size.Tab.MinHeight}" />
-    <Setter Property="FontSize" Value="15.5" />
+    <Setter Property="FontSize" Value="{DynamicResource MAA.FontSize.RootNavTab}" />
     <Setter Property="FontWeight" Value="Medium" />
     <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Secondary}" />
     <Setter Property="Background" Value="Transparent" />
@@ -1391,15 +1487,29 @@
       <ControlTemplate>
         <Border x:Name="PART_NavChrome"
                 Background="Transparent"
-                CornerRadius="10">
-          <ContentPresenter Margin="{TemplateBinding Padding}"
-                            HorizontalContentAlignment="Center"
-                            VerticalContentAlignment="Center"
-                            Content="{TemplateBinding Content}"
-                            ContentTemplate="{TemplateBinding ContentTemplate}" />
+                CornerRadius="10"
+                Height="{DynamicResource MAA.Size.RootNavTab.Height}">
+          <TextBlock Margin="{TemplateBinding Padding}"
+                     Height="{DynamicResource MAA.LineHeight.RootNavTab}"
+                     HorizontalAlignment="Center"
+                     VerticalAlignment="Center"
+                     FontSize="{DynamicResource MAA.FontSize.RootNavTab}"
+                     FontWeight="{TemplateBinding FontWeight}"
+                     Foreground="{TemplateBinding Foreground}"
+                     LineHeight="{DynamicResource MAA.LineHeight.RootNavTab}"
+                     MaxLines="1"
+                     Text="{TemplateBinding Content}"
+                     TextWrapping="NoWrap" />
         </Border>
       </ControlTemplate>
     </Setter>
+  </Style>
+
+  <Style Selector="TabStrip.root-nav TabStripItem TextBlock">
+    <Setter Property="LineHeight" Value="{DynamicResource MAA.LineHeight.RootNavTab}" />
+    <Setter Property="TextWrapping" Value="NoWrap" />
+    <Setter Property="MaxLines" Value="1" />
+    <Setter Property="VerticalAlignment" Value="Center" />
   </Style>
 
   <Style Selector="TabStrip.root-nav TabStripItem:selected">

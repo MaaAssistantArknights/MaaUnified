@@ -161,21 +161,18 @@ public sealed class OverlayAdvancedPageViewModel : PageViewModelBase
             return;
         }
 
-        var saveResult = await Runtime.SettingsFeatureService.SaveGlobalSettingsAsync(
-            new Dictionary<string, string>(StringComparer.Ordinal)
-            {
-                [Compat.Constants.ConfigurationKeys.OverlayTarget] = OverlayTargetPersistence.Serialize(selectedTarget),
-                [Compat.Constants.ConfigurationKeys.OverlayPreviewPinned] = OverlayTargetPersistence.SerializePreviewPreference(selectedTarget),
-            },
+        _ = await RunTrackedConfigurationSaveAsync(
+            "Advanced.Overlay.TargetSelection",
+            Texts.GetOrDefault("Overlay.Title", "悬浮窗"),
+            "Advanced.Overlay.SaveTarget",
+            ct => Runtime.SettingsFeatureService.SaveGlobalSettingsAsync(
+                new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    [Compat.Constants.ConfigurationKeys.OverlayTarget] = OverlayTargetPersistence.Serialize(selectedTarget),
+                    [Compat.Constants.ConfigurationKeys.OverlayPreviewPinned] = OverlayTargetPersistence.SerializePreviewPreference(selectedTarget),
+                },
+                ct),
             cancellationToken);
-        if (saveResult.Success)
-        {
-            await RecordEventAsync("Advanced.Overlay.SaveTarget", saveResult.Message, cancellationToken);
-            return;
-        }
-
-        LastErrorMessage = saveResult.Message;
-        await RecordFailedResultAsync("Advanced.Overlay.SaveTarget", saveResult, cancellationToken);
     }
 
     private void OnOverlaySharedStateChanged(object? sender, PropertyChangedEventArgs e)

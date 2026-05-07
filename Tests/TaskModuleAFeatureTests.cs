@@ -161,6 +161,56 @@ public sealed class TaskModuleAFeatureTests
     }
 
     [Fact]
+    public async Task RecruitModule_TimeSetters_ShouldNormalizeHourMinuteCombinationWithWraparoundSemantics()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var log = new UiLogService();
+        var diagnostics = new UiDiagnosticsService(fixture.Root, log);
+        var session = new UnifiedSessionService(fixture.Bridge, fixture.Config, log, new SessionStateMachine());
+        var platform = PlatformServicesFactory.CreateDefaults();
+        var platformCapabilityService = new PlatformCapabilityFeatureService(platform, diagnostics);
+        var connectFeatureService = new ConnectFeatureService(session, fixture.Config);
+        var runtime = new MAAUnifiedRuntime
+        {
+            CoreBridge = fixture.Bridge,
+            ConfigurationService = fixture.Config,
+            ResourceWorkflowService = new ResourceWorkflowService(fixture.Root, fixture.Bridge, log),
+            SessionService = session,
+            Platform = platform,
+            LogService = log,
+            DiagnosticsService = diagnostics,
+            ConnectFeatureService = connectFeatureService,
+            ShellFeatureService = new ShellFeatureService(connectFeatureService),
+            TaskQueueFeatureService = new TaskQueueFeatureService(session, fixture.Config),
+            CopilotFeatureService = new CopilotFeatureService(),
+            ToolboxFeatureService = new ToolboxFeatureService(),
+            RemoteControlFeatureService = new RemoteControlFeatureService(),
+            PlatformCapabilityService = platformCapabilityService,
+            OverlayFeatureService = new OverlayFeatureService(platformCapabilityService),
+            NotificationProviderFeatureService = new NotificationProviderFeatureService(),
+            SettingsFeatureService = new SettingsFeatureService(fixture.Config, platformCapabilityService, diagnostics),
+            DialogFeatureService = new DialogFeatureService(diagnostics),
+            PostActionFeatureService = new PostActionFeatureService(
+                fixture.Config,
+                diagnostics,
+                platform.PostActionExecutorService),
+        };
+        var module = new RecruitTaskModuleViewModel(runtime, new LocalizedTextMap { Language = "en-us" });
+
+        module.Level3Time = 90;
+        module.Level3Hour = 9;
+        Assert.Equal(510, module.Level3Time);
+        Assert.Equal(8, module.Level3Hour);
+        Assert.Equal(30, module.Level3Minute);
+
+        module.Level4Time = 540;
+        module.Level4Minute = 30;
+        Assert.Equal(510, module.Level4Time);
+        Assert.Equal(8, module.Level4Hour);
+        Assert.Equal(30, module.Level4Minute);
+    }
+
+    [Fact]
     public async Task GetRecruitParamsAsync_ReadsLevel6FromExistingParams_AndKeepsLegacyEntriesCompatible()
     {
         var root = Path.Combine(Path.GetTempPath(), "maa-unified-tests", Guid.NewGuid().ToString("N"));
@@ -844,6 +894,21 @@ public sealed class TaskModuleAFeatureTests
             "Issue.FightTimesOutOfRange",
             "Issue.FightDropMissing",
             "Issue.FightTimesMayNotExhausted",
+            "Fight.StageSelect2",
+            "Fight.AddStage",
+            "Fight.CustomStageCode",
+            "Fight.CustomStageCodeTip",
+            "Fight.MultiTasksShareTip",
+            "Fight.AutoRestartOption",
+            "Fight.UseWeeklySchedule",
+            "Fight.UseWeeklyScheduleTip",
+            "Fight.WeeklySchedule.Sunday",
+            "Fight.WeeklySchedule.Monday",
+            "Fight.WeeklySchedule.Tuesday",
+            "Fight.WeeklySchedule.Wednesday",
+            "Fight.WeeklySchedule.Thursday",
+            "Fight.WeeklySchedule.Friday",
+            "Fight.WeeklySchedule.Saturday",
             "Issue.RecruitTimesOutOfRange",
             "Issue.RecruitTimeOutOfRange",
             "Recruit.AutoSelectLevel6",

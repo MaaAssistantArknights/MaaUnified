@@ -18,9 +18,8 @@
             <StackPanel Spacing="10">
               <TextBlock Classes="app-body"
                          Text="{Binding Texts[Toolbox.Advanced.RemoteControl.GetTaskEndpoint]}" />
-              <TextBox Classes="app-input"
-                       Text="{Binding GetTaskEndpoint}"
-                       Watermark="{Binding Texts[Toolbox.Advanced.RemoteControl.GetTaskEndpoint.Watermark]}" />
+              <controls:AppTextInput Text="{Binding GetTaskEndpoint}"
+                                     Watermark="{Binding Texts[Toolbox.Advanced.RemoteControl.GetTaskEndpoint.Watermark]}" />
             </StackPanel>
           </Border>
 
@@ -29,9 +28,8 @@
             <StackPanel Spacing="10">
               <TextBlock Classes="app-body"
                          Text="{Binding Texts[Toolbox.Advanced.RemoteControl.ReportEndpoint]}" />
-              <TextBox Classes="app-input"
-                       Text="{Binding ReportEndpoint}"
-                       Watermark="{Binding Texts[Toolbox.Advanced.RemoteControl.ReportEndpoint.Watermark]}" />
+              <controls:AppTextInput Text="{Binding ReportEndpoint}"
+                                     Watermark="{Binding Texts[Toolbox.Advanced.RemoteControl.ReportEndpoint.Watermark]}" />
             </StackPanel>
           </Border>
 
@@ -40,11 +38,11 @@
             <StackPanel Spacing="12">
               <TextBlock Classes="app-body"
                          Text="{Binding Texts[Toolbox.Advanced.RemoteControl.PollInterval]}" />
-              <controls:VerticalSpinNumberBox Width="120"
-                                              HorizontalAlignment="Left"
-                                              Minimum="500"
-                                              Maximum="60000"
-                                              Value="{Binding PollIntervalMs}" />
+              <controls:AppNumberInput Width="120"
+                                       HorizontalAlignment="Left"
+                                       Minimum="500"
+                                       Maximum="60000"
+                                       Value="{Binding PollIntervalMs}" />
               <StackPanel Orientation="Horizontal"
                           Spacing="10">
                 <Button Classes="app-button app-secondary"

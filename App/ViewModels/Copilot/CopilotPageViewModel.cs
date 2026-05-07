@@ -1458,7 +1458,6 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
         {
             RestoreListSnapshot(snapshot);
             StatusMessage = persistenceFailureMessage;
-            LastErrorMessage = ex.Message;
             await RecordUnhandledExceptionAsync(
                 scope,
                 ex,
@@ -1490,21 +1489,32 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
     private async Task<UiOperationResult> PersistItemsAsync(CancellationToken cancellationToken)
     {
         var payload = SerializeItemsPayload();
-        var saveResult = await Runtime.SettingsFeatureService.SaveGlobalSettingAsync(
-            LegacyConfigurationKeys.CopilotTaskList,
-            payload,
+        UiOperationResult? saveResult = null;
+        var succeeded = await RunTrackedConfigurationSaveAsync(
+            CopilotTaskListConfigScope,
+            Texts.GetOrDefault("Copilot.Title", "抄作业"),
+            CopilotTaskListConfigScope,
+            async ct =>
+            {
+                saveResult = await Runtime.SettingsFeatureService.SaveGlobalSettingAsync(
+                    LegacyConfigurationKeys.CopilotTaskList,
+                    payload,
+                    ct);
+                return saveResult;
+            },
             cancellationToken);
-        if (!saveResult.Success)
+        if (!succeeded)
         {
-            await RecordFailedResultAsync(CopilotTaskListConfigScope, saveResult, cancellationToken);
-            return saveResult;
+            return saveResult ?? UiOperationResult.Fail(
+                UiErrorCode.CopilotListPersistenceFailed,
+                T("Copilot.Error.TaskListPersistFail", "Copilot 列表持久化失败。"));
         }
 
         await RecordEventAsync(
             CopilotTaskListConfigScope,
             $"Saved {Items.Count} copilot item(s).",
             cancellationToken);
-        return saveResult;
+        return UiOperationResult.Ok("Copilot task list saved.");
     }
 
     private static UiOperationResult BuildPersistFailedResult(string actionMessage, UiOperationResult persistResult)

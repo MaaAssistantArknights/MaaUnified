@@ -227,6 +227,9 @@
   <data name="Fight.StageSelect" xml:space="preserve">
     <value>關卡選擇</value>
   </data>
+  <data name="Fight.StageSelect2" xml:space="preserve">
+    <value>備選關卡</value>
+  </data>
   <data name="Fight.Stone" xml:space="preserve">
     <value>源石數量</value>
   </data>
@@ -253,6 +256,48 @@
   </data>
   <data name="Fight.UseStoneDisplay" xml:space="preserve">
     <value>剩餘理智</value>
+  </data>
+  <data name="Fight.UseWeeklySchedule" xml:space="preserve">
+    <value>啟用每週計畫</value>
+  </data>
+  <data name="Fight.AddStage" xml:space="preserve">
+    <value>新增備選關卡</value>
+  </data>
+  <data name="Fight.CustomStageCode" xml:space="preserve">
+    <value>手動輸入關卡名</value>
+  </data>
+  <data name="Fight.CustomStageCodeTip" xml:space="preserve">
+    <value>支援大多數主線關卡簡稱與原始清單中的關卡名稱。</value>
+  </data>
+  <data name="Fight.MultiTasksShareTip" xml:space="preserve">
+    <value>以下選項會在多個刷理智任務之間共用。</value>
+  </data>
+  <data name="Fight.AutoRestartOption" xml:space="preserve">
+    <value>遊戲斷線時自動重開</value>
+  </data>
+  <data name="Fight.UseWeeklyScheduleTip" xml:space="preserve">
+    <value>這裡依遊戲內刷新時間計算星期，而不是本地自然日。</value>
+  </data>
+  <data name="Fight.WeeklySchedule.Sunday" xml:space="preserve">
+    <value>週日</value>
+  </data>
+  <data name="Fight.WeeklySchedule.Monday" xml:space="preserve">
+    <value>週一</value>
+  </data>
+  <data name="Fight.WeeklySchedule.Tuesday" xml:space="preserve">
+    <value>週二</value>
+  </data>
+  <data name="Fight.WeeklySchedule.Wednesday" xml:space="preserve">
+    <value>週三</value>
+  </data>
+  <data name="Fight.WeeklySchedule.Thursday" xml:space="preserve">
+    <value>週四</value>
+  </data>
+  <data name="Fight.WeeklySchedule.Friday" xml:space="preserve">
+    <value>週五</value>
+  </data>
+  <data name="Fight.WeeklySchedule.Saturday" xml:space="preserve">
+    <value>週六</value>
   </data>
   <data name="FirstMoveAdvantage" xml:space="preserve">
     <value>先手必勝（先鋒、狙擊、特種）</value>
@@ -1472,6 +1517,27 @@
   <data name="Settings.ConfigurationManager.SaveAsNew" xml:space="preserve">
     <value>另存為新設定檔</value>
   </data>
+  <data name="Settings.ConfigurationManager.SaveAsNewSucceededInline" xml:space="preserve">
+    <value>儲存成功</value>
+  </data>
+  <data name="Settings.ConfigurationManager.SaveAsNewFailedInline" xml:space="preserve">
+    <value>儲存失敗：{0}</value>
+  </data>
+  <data name="Settings.ConfigurationManager.SaveAsNewFailedReason.Generic" xml:space="preserve">
+    <value>請稍後再試。</value>
+  </data>
+  <data name="Settings.ConfigurationManager.SaveAsNewFailedReason.ProfileAlreadyExists" xml:space="preserve">
+    <value>請換一個未使用的設定檔名稱。</value>
+  </data>
+  <data name="Settings.ConfigurationManager.SaveAsNewFailedReason.ProfileNameEmpty" xml:space="preserve">
+    <value>請輸入設定檔名稱。</value>
+  </data>
+  <data name="Settings.ConfigurationManager.SaveAsNewFailedReason.ProfileNameInvalid" xml:space="preserve">
+    <value>設定檔名稱無效。</value>
+  </data>
+  <data name="Settings.ConfigurationManager.SaveAsNewFailedReason.SourceProfileMissing" xml:space="preserve">
+    <value>目前設定檔不存在，請重新整理列表後再試。</value>
+  </data>
   <data name="Settings.ConfigurationManager.Status.AddFailed" xml:space="preserve">
     <value>設定檔新增失敗。</value>
   </data>
@@ -2517,6 +2583,18 @@
   </data>
   <data name="TaskQueue.Module.UserDataUpdate" xml:space="preserve">
     <value>更新使用者資料</value>
+  </data>
+  <data name="TaskQueue.UserDataUpdate.TriggerInterval" xml:space="preserve">
+    <value>更新資料觸發間隔</value>
+  </data>
+  <data name="TaskQueue.UserDataUpdate.Trigger.EveryTime" xml:space="preserve">
+    <value>每次觸發</value>
+  </data>
+  <data name="TaskQueue.UserDataUpdate.Trigger.Daily" xml:space="preserve">
+    <value>每天一次</value>
+  </data>
+  <data name="TaskQueue.UserDataUpdate.Trigger.Weekly" xml:space="preserve">
+    <value>每週一次</value>
   </data>
   <data name="TaskQueue.Module.Fight" xml:space="preserve">
     <value>理智作戰</value>

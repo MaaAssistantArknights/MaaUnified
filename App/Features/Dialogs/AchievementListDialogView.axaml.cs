@@ -1,8 +1,11 @@
 using System.Globalization;
 using Avalonia;
+using Avalonia.Animation;
+using Avalonia.Animation.Easings;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Media;
+using Avalonia.Threading;
 using MAAUnified.App.Infrastructure;
 using MAAUnified.App.ViewModels.Infrastructure;
 using MAAUnified.Application.Models;
@@ -23,6 +26,15 @@ public partial class AchievementListDialogView : Window, IDialogChromeAware
     private const string ClearFiltersKey = "Settings.Achievement.Dialog.ClearFilters";
     private const string EmptyTitleKey = "Settings.Achievement.Dialog.EmptyTitle";
     private const string EmptyDescriptionKey = "Settings.Achievement.Dialog.EmptyDescription";
+    private static readonly Transitions AnimatedFilterSliderTransformTransitions = new()
+    {
+        new DoubleTransition
+        {
+            Property = TranslateTransform.XProperty,
+            Duration = TimeSpan.FromSeconds(0.15),
+            Easing = new CubicEaseOut(),
+        },
+    };
 
     private readonly RootLocalizationTextMap _texts = new("Root.Localization.Dialog.AchievementList");
     private readonly AchievementListDialogPresenter _presenter = new();
@@ -39,16 +51,26 @@ public partial class AchievementListDialogView : Window, IDialogChromeAware
     private string _clearFiltersText = "Clear filters";
     private string _emptyTitleText = "No matching achievements";
     private string _emptyDescriptionText = "Try a different keyword or filter.";
+    private readonly TranslateTransform _filterSelectionSliderTransform;
     private bool _suppressFilterChanged;
+    private bool _isFilterSliderSyncQueued;
+    private bool _deferSilentFilterSliderSync;
+    private bool _pendingSilentFilterSliderSync;
     private double _filterSliderX = double.NaN;
     private double _filterSliderWidth = double.NaN;
 
     public AchievementListDialogView()
     {
         InitializeComponent();
+        _filterSelectionSliderTransform = FilterSelectionSlider.RenderTransform as TranslateTransform ?? new TranslateTransform();
+        FilterSelectionSlider.RenderTransform = _filterSelectionSliderTransform;
         WindowVisuals.ApplyDefaultIcon(this);
         Opened += OnOpened;
-        FilterStripTrack.LayoutUpdated += OnFilterStripTrackLayoutUpdated;
+        FilterStripTrack.SizeChanged += OnFilterSliderLayoutMetricChanged;
+        FilterAllButton.SizeChanged += OnFilterSliderLayoutMetricChanged;
+        FilterUnlockedButton.SizeChanged += OnFilterSliderLayoutMetricChanged;
+        FilterInProgressButton.SizeChanged += OnFilterSliderLayoutMetricChanged;
+        FilterNewButton.SizeChanged += OnFilterSliderLayoutMetricChanged;
     }
 
     public void ApplyRequest(AchievementListDialogRequest request)
@@ -166,12 +188,12 @@ public partial class AchievementListDialogView : Window, IDialogChromeAware
     private void OnOpened(object? sender, EventArgs e)
     {
         FilterInput.Focus();
-        SyncActiveFilterSlider(animate: false);
+        RequestSilentFilterSliderSync();
     }
 
-    private void OnFilterStripTrackLayoutUpdated(object? sender, EventArgs e)
+    private void OnFilterSliderLayoutMetricChanged(object? sender, SizeChangedEventArgs e)
     {
-        SyncActiveFilterSlider(animate: false);
+        RequestSilentFilterSliderSync();
     }
 
     private void SyncActiveFilterSlider(bool animate)
@@ -203,14 +225,64 @@ public partial class AchievementListDialogView : Window, IDialogChromeAware
         }
 
         FilterSelectionSlider.Classes.Set(FilterSliderAnimatedClass, animate);
+        _filterSelectionSliderTransform.Transitions = animate ? AnimatedFilterSliderTransformTransitions : null;
         FilterSelectionSlider.Width = targetWidth;
-        FilterSelectionSlider.RenderTransform = new TranslateTransform
-        {
-            X = targetX,
-        };
+        _filterSelectionSliderTransform.X = targetX;
         FilterSelectionSlider.IsVisible = true;
         _filterSliderX = targetX;
         _filterSliderWidth = targetWidth;
+
+        if (animate)
+        {
+            DeferSilentFilterSliderSyncUntilRender();
+        }
+    }
+
+    private void RequestSilentFilterSliderSync()
+    {
+        if (_deferSilentFilterSliderSync)
+        {
+            _pendingSilentFilterSliderSync = true;
+            return;
+        }
+
+        QueueSilentFilterSliderSync();
+    }
+
+    private void QueueSilentFilterSliderSync()
+    {
+        if (_isFilterSliderSyncQueued)
+        {
+            return;
+        }
+
+        _isFilterSliderSyncQueued = true;
+        Dispatcher.UIThread.Post(() =>
+        {
+            _isFilterSliderSyncQueued = false;
+            SyncActiveFilterSlider(animate: false);
+        }, DispatcherPriority.Render);
+    }
+
+    private void DeferSilentFilterSliderSyncUntilRender()
+    {
+        if (_deferSilentFilterSliderSync)
+        {
+            return;
+        }
+
+        _deferSilentFilterSliderSync = true;
+        Dispatcher.UIThread.Post(() =>
+        {
+            _deferSilentFilterSliderSync = false;
+            if (!_pendingSilentFilterSliderSync)
+            {
+                return;
+            }
+
+            _pendingSilentFilterSliderSync = false;
+            QueueSilentFilterSliderSync();
+        }, DispatcherPriority.Render);
     }
 
     private Button GetActiveFilterButton()

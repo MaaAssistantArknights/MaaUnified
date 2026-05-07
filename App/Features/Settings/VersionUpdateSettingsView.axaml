@@ -1,23 +1,16 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:MAAUnified.App.Controls"
              xmlns:vm="clr-namespace:MAAUnified.App.ViewModels.Settings"
              Classes="settings-page"
              x:Class="MAAUnified.App.Features.Settings.VersionUpdateSettingsView">
   <UserControl.Styles>
-    <Style Selector="Border.version-update-card">
-      <Setter Property="Padding" Value="16" />
-    </Style>
-
-    <Style Selector="StackPanel.version-update-section-stack">
+    <Style Selector="controls|AdaptiveSpacingStackPanel.version-update-section-stack">
       <Setter Property="Spacing" Value="16" />
     </Style>
 
-    <Style Selector="StackPanel.version-update-card-stack">
+    <Style Selector="controls|AdaptiveSpacingStackPanel.version-update-card-stack">
       <Setter Property="Spacing" Value="10" />
-    </Style>
-
-    <Style Selector="StackPanel.version-update-status-list">
-      <Setter Property="Spacing" Value="8" />
     </Style>
   </UserControl.Styles>
 
@@ -30,152 +23,162 @@
           Margin="{DynamicResource MAA.Thickness.Settings.SectionTopMargin}"
           Classes="settings-page-two-column"
           HorizontalAlignment="Left"
-          ColumnDefinitions="300,24,*">
-      <StackPanel Classes="version-update-section-stack settings-page-column-stack">
-        <Border Classes="app-surface app-card version-update-card">
-          <StackPanel Classes="version-update-card-stack settings-page-toggle-stack">
-            <CheckBox Classes="app-checkbox"
-                      Content="{Binding RootTexts[Settings.VersionUpdate.StartupCheck]}"
-                      IsChecked="{Binding VersionUpdateStartupCheck}" />
-            <CheckBox Classes="app-checkbox"
-                      Content="{Binding RootTexts[Settings.VersionUpdate.ScheduledCheck]}"
-                      IsChecked="{Binding VersionUpdateScheduledCheck}" />
-            <CheckBox Classes="app-checkbox"
-                      Content="{Binding RootTexts[Settings.VersionUpdate.AutoDownload]}"
-                      IsChecked="{Binding VersionUpdateAutoDownload}" />
-            <CheckBox Classes="app-checkbox"
-                      Content="{Binding RootTexts[Settings.VersionUpdate.AutoInstall]}"
-                      IsChecked="{Binding VersionUpdateAutoInstall}" />
-          </StackPanel>
-        </Border>
+          ColumnDefinitions="Auto,24,*">
+      <controls:AdaptiveSpacingStackPanel Classes="version-update-section-stack settings-page-column-stack">
+        <controls:AdaptiveSpacingStackPanel Classes="version-update-card-stack settings-page-toggle-stack">
+          <CheckBox Classes="app-checkbox"
+                    Content="{Binding RootTexts[Settings.VersionUpdate.StartupCheck]}"
+                    IsChecked="{Binding VersionUpdateStartupCheck}" />
+          <controls:AdaptiveSpacingStackPanel Classes="settings-page-inline-field-group">
+            <controls:AppHintedCheckBox Text="{Binding RootTexts[Settings.VersionUpdate.ScheduledCheck]}"
+                                         Tip="{DynamicResource UpdateAutoCheckTip}"
+                                         IsChecked="{Binding VersionUpdateScheduledCheck}" />
+          </controls:AdaptiveSpacingStackPanel>
+          <CheckBox Classes="app-checkbox"
+                    Content="{Binding RootTexts[Settings.VersionUpdate.AutoDownload]}"
+                    IsChecked="{Binding VersionUpdateAutoDownload}" />
+          <CheckBox Classes="app-checkbox"
+                    Content="{Binding RootTexts[Settings.VersionUpdate.AutoInstall]}"
+                    IsChecked="{Binding VersionUpdateAutoInstall}" />
+        </controls:AdaptiveSpacingStackPanel>
 
-        <Border Classes="app-surface app-card version-update-card">
-          <StackPanel Classes="version-update-card-stack settings-page-column-stack">
-            <Grid Classes="settings-page-labeled-row"
+        <controls:AdaptiveSpacingStackPanel Classes="version-update-card-stack settings-page-column-stack">
+          <Grid Classes="settings-page-labeled-row"
+                ColumnDefinitions="132,*">
+            <controls:AdaptiveSpacingStackPanel Classes="settings-page-inline-field-group">
+              <TextBlock Classes="settings-label"
+                         TextWrapping="Wrap">
+                <Run Text="{Binding RootTexts[Settings.VersionUpdate.Channel]}" />
+                <Run Text="&#160;" />
+                <InlineUIContainer BaselineAlignment="Center">
+                  <controls:TooltipHint Tip="{DynamicResource UpdateCheckTip}" />
+                </InlineUIContainer>
+              </TextBlock>
+            </controls:AdaptiveSpacingStackPanel>
+            <ComboBox Grid.Column="1"
+                      Classes="settings-select"
+                      Width="{DynamicResource MAA.Size.Settings.FieldSlimWidth}"
+                      HorizontalAlignment="Left"
+                      ItemsSource="{Binding VersionUpdateVersionTypeOptions}"
+                      SelectedItem="{Binding SelectedVersionUpdateVersionTypeOption, Mode=TwoWay}">
+              <ComboBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:DisplayValueOption">
+                  <TextBlock Text="{Binding Display}" />
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+          </Grid>
+
+          <Grid Classes="settings-page-labeled-row"
+                ColumnDefinitions="132,*">
+            <controls:AdaptiveSpacingStackPanel Classes="settings-page-inline-field-group">
+              <TextBlock Classes="settings-label"
+                         TextWrapping="Wrap">
+                <Run Text="{Binding RootTexts[Settings.VersionUpdate.Source]}" />
+                <Run Text="&#160;" />
+                <InlineUIContainer BaselineAlignment="Center">
+                  <controls:TooltipHint Tip="{DynamicResource UpdateSourceTip}" />
+                </InlineUIContainer>
+              </TextBlock>
+            </controls:AdaptiveSpacingStackPanel>
+            <ComboBox Grid.Column="1"
+                      Classes="settings-select"
+                      Width="{DynamicResource MAA.Size.Settings.FieldSlimWidth}"
+                      HorizontalAlignment="Left"
+                      ItemsSource="{Binding VersionUpdateResourceSourceOptions}"
+                      SelectedItem="{Binding SelectedVersionUpdateResourceSourceOption, Mode=TwoWay}">
+              <ComboBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:DisplayValueOption">
+                  <TextBlock Text="{Binding Display}" />
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+          </Grid>
+
+          <controls:AdaptiveSpacingStackPanel Classes="settings-page-inline-field-group"
+                      IsVisible="{Binding IsVersionUpdateGithubSource}">
+            <controls:AppHintedCheckBox Text="{Binding RootTexts[Settings.VersionUpdate.ForceGithub]}"
+                                         Tip="{DynamicResource ForceGithubGlobalSourceTip}"
+                                         IsChecked="{Binding VersionUpdateForceGithubSource}" />
+          </controls:AdaptiveSpacingStackPanel>
+
+          <controls:AdaptiveSpacingStackPanel Classes="settings-page-column-stack settings-page-meta-block"
+                      Spacing="8"
+                      IsVisible="{Binding IsVersionUpdateMirrorChyanSource}">
+            <Grid Classes="settings-page-labeled-action-row"
                   ColumnDefinitions="132,*">
               <TextBlock Classes="settings-label"
-                         Text="{Binding RootTexts[Settings.VersionUpdate.Channel]}" />
-              <ComboBox Grid.Column="1"
-                        Classes="app-input settings-input"
-                        Width="{DynamicResource MAA.Size.Settings.FieldSlimWidth}"
-                        HorizontalAlignment="Left"
-                        ItemsSource="{Binding VersionUpdateVersionTypeOptions}"
-                        SelectedItem="{Binding SelectedVersionUpdateVersionTypeOption, Mode=TwoWay}">
-                <ComboBox.ItemTemplate>
-                  <DataTemplate x:DataType="vm:DisplayValueOption">
-                    <TextBlock Text="{Binding Display}" />
-                  </DataTemplate>
-                </ComboBox.ItemTemplate>
-              </ComboBox>
+                         Text="{Binding RootTexts[Settings.VersionUpdate.MirrorCdk]}" />
+              <controls:AppActionInput Grid.Column="1"
+                                       Width="{DynamicResource MAA.Size.Settings.FieldSlimWidth}"
+                                       HorizontalAlignment="Left"
+                                       Text="{Binding VersionUpdateMirrorChyanCdk, UpdateSourceTrigger=LostFocus}"
+                                       ActionContent="{Binding RootTexts[Settings.VersionUpdate.Copy]}"
+                                       ActionClick="OnCopyMirrorChyanCdkClick" />
             </Grid>
 
-            <Grid Classes="settings-page-labeled-row"
-                  ColumnDefinitions="132,*">
-              <TextBlock Classes="settings-label"
-                         Text="{Binding RootTexts[Settings.VersionUpdate.Source]}" />
-              <ComboBox Grid.Column="1"
-                        Classes="app-input settings-input"
-                        Width="{DynamicResource MAA.Size.Settings.FieldSlimWidth}"
-                        HorizontalAlignment="Left"
-                        ItemsSource="{Binding VersionUpdateResourceSourceOptions}"
-                        SelectedItem="{Binding SelectedVersionUpdateResourceSourceOption, Mode=TwoWay}">
-                <ComboBox.ItemTemplate>
-                  <DataTemplate x:DataType="vm:DisplayValueOption">
-                    <TextBlock Text="{Binding Display}" />
-                  </DataTemplate>
-                </ComboBox.ItemTemplate>
-              </ComboBox>
-            </Grid>
+            <TextBlock Classes="app-caption state-warning"
+                       Text="{Binding VersionUpdateMirrorChyanCdkExpiryText}"
+                       TextWrapping="Wrap" />
 
-            <CheckBox Classes="app-checkbox"
-                      Content="{Binding RootTexts[Settings.VersionUpdate.ForceGithub]}"
-                      IsChecked="{Binding VersionUpdateForceGithubSource}"
-                      IsVisible="{Binding IsVersionUpdateGithubSource}" />
+            <Button HorizontalAlignment="Left"
+                    Classes="app-button app-secondary"
+                    Content="{Binding RootTexts[Settings.VersionUpdate.MirrorSite]}"
+                    Click="OnOpenMirrorChyanClick" />
+          </controls:AdaptiveSpacingStackPanel>
 
-            <StackPanel Classes="settings-page-column-stack settings-page-meta-block"
-                        Spacing="8"
-                        IsVisible="{Binding IsVersionUpdateMirrorChyanSource}">
-              <Grid Classes="settings-page-labeled-action-row"
-                    ColumnDefinitions="132,*,Auto">
-                <TextBlock Classes="settings-label"
-                           Text="{Binding RootTexts[Settings.VersionUpdate.MirrorCdk]}" />
-                <TextBox Grid.Column="1"
-                         Classes="app-input"
-                         Margin="0,0,8,0"
-                         Width="{DynamicResource MAA.Size.Settings.FieldSlimWidth}"
-                         HorizontalAlignment="Left"
-                         Text="{Binding VersionUpdateMirrorChyanCdk, UpdateSourceTrigger=LostFocus}" />
-                <Button Grid.Column="2"
-                        Classes="app-button app-secondary"
-                        Content="{Binding RootTexts[Settings.VersionUpdate.Copy]}"
-                        Click="OnCopyMirrorChyanCdkClick" />
-              </Grid>
+          <Grid Classes="settings-page-labeled-row"
+                ColumnDefinitions="132,*">
+            <TextBlock Classes="settings-label"
+                       Text="{Binding RootTexts[Settings.VersionUpdate.ProxyType]}" />
+            <ComboBox Grid.Column="1"
+                      Classes="settings-select"
+                      Width="{DynamicResource MAA.Size.Settings.FieldNarrowWidth}"
+                      HorizontalAlignment="Left"
+                      ItemsSource="{Binding VersionUpdateProxyTypeOptions}"
+                      SelectedItem="{Binding SelectedVersionUpdateProxyTypeOption, Mode=TwoWay}">
+              <ComboBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:DisplayValueOption">
+                  <TextBlock Text="{Binding Display}" />
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+          </Grid>
 
-              <TextBlock Classes="app-caption state-warning"
-                         Text="{Binding VersionUpdateMirrorChyanCdkExpiryText}"
-                         TextWrapping="Wrap" />
+          <Grid Classes="settings-page-labeled-row"
+                ColumnDefinitions="132,*">
+            <TextBlock Classes="settings-label"
+                       Text="{Binding RootTexts[Settings.VersionUpdate.ProxyAddress]}" />
+            <TextBox Grid.Column="1"
+                     Classes="settings-input"
+                     Width="{DynamicResource MAA.Size.Settings.FieldInputWidth}"
+                     HorizontalAlignment="Left"
+                     Watermark="{Binding RootTexts[Settings.VersionUpdate.ProxyAddressWatermark]}"
+                     Text="{Binding VersionUpdateProxy, UpdateSourceTrigger=LostFocus}" />
+          </Grid>
 
-              <Button HorizontalAlignment="Left"
-                      Classes="app-button app-secondary"
-                      Content="{Binding RootTexts[Settings.VersionUpdate.MirrorSite]}"
-                      Click="OnOpenMirrorChyanClick" />
-            </StackPanel>
-          </StackPanel>
-        </Border>
-      </StackPanel>
+          <Grid Classes="settings-page-labeled-row"
+                ColumnDefinitions="132,*">
+            <TextBlock Classes="settings-label"
+                       Text="{Binding RootTexts[Settings.VersionUpdate.ResourceApi]}" />
+            <TextBox Grid.Column="1"
+                     Classes="settings-input"
+                     Width="{DynamicResource MAA.Size.Settings.FieldInputWidth}"
+                     HorizontalAlignment="Left"
+                     Text="{Binding VersionUpdateResourceApi, UpdateSourceTrigger=LostFocus}" />
+          </Grid>
+        </controls:AdaptiveSpacingStackPanel>
 
-      <StackPanel Grid.Column="2"
+      </controls:AdaptiveSpacingStackPanel>
+
+      <controls:AdaptiveSpacingStackPanel Grid.Column="2"
                   Classes="version-update-section-stack settings-page-column-stack">
-        <Border Classes="app-surface app-card version-update-card">
-          <StackPanel Classes="version-update-card-stack settings-page-column-stack">
-            <Grid Classes="settings-page-labeled-row"
-                  ColumnDefinitions="132,*">
-              <TextBlock Classes="settings-label"
-                         Text="{Binding RootTexts[Settings.VersionUpdate.ProxyType]}" />
-              <ComboBox Grid.Column="1"
-                        Classes="app-input settings-input"
-                        Width="160"
-                        HorizontalAlignment="Left"
-                        ItemsSource="{Binding VersionUpdateProxyTypeOptions}"
-                        SelectedItem="{Binding SelectedVersionUpdateProxyTypeOption, Mode=TwoWay}">
-                <ComboBox.ItemTemplate>
-                  <DataTemplate x:DataType="vm:DisplayValueOption">
-                    <TextBlock Text="{Binding Display}" />
-                  </DataTemplate>
-                </ComboBox.ItemTemplate>
-              </ComboBox>
-            </Grid>
 
+        <Border Classes="grouped-card-frame"
+                Padding="18">
+          <controls:AdaptiveSpacingStackPanel Classes="version-update-card-stack settings-page-column-stack">
             <Grid Classes="settings-page-labeled-row"
-                  ColumnDefinitions="132,*">
-              <TextBlock Classes="settings-label"
-                         Text="{Binding RootTexts[Settings.VersionUpdate.ProxyAddress]}" />
-              <TextBox Grid.Column="1"
-                       Classes="app-input"
-                       Width="{DynamicResource MAA.Size.Settings.FieldSlimWidth}"
-                       HorizontalAlignment="Left"
-                       Watermark="{Binding RootTexts[Settings.VersionUpdate.ProxyAddressWatermark]}"
-                       Text="{Binding VersionUpdateProxy, UpdateSourceTrigger=LostFocus}" />
-            </Grid>
-
-            <Grid Classes="settings-page-labeled-row"
-                  ColumnDefinitions="132,*">
-              <TextBlock Classes="settings-label"
-                         Text="{Binding RootTexts[Settings.VersionUpdate.ResourceApi]}" />
-              <TextBox Grid.Column="1"
-                       Classes="app-input"
-                       MinWidth="260"
-                       MaxWidth="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
-                       HorizontalAlignment="Left"
-                       Text="{Binding VersionUpdateResourceApi, UpdateSourceTrigger=LostFocus}" />
-            </Grid>
-          </StackPanel>
-        </Border>
-
-        <Border Classes="app-surface app-card version-update-card settings-page-meta-block">
-          <StackPanel Classes="version-update-card-stack settings-page-column-stack">
-            <Grid Classes="settings-page-labeled-row"
-                  ColumnDefinitions="180,*">
+                  ColumnDefinitions="144,*">
               <TextBlock Classes="settings-label"
                          Text="{Binding RootTexts[Settings.VersionUpdate.PanelUiVersion]}" />
               <TextBlock Grid.Column="1"
@@ -185,7 +188,7 @@
             </Grid>
 
             <Grid Classes="settings-page-labeled-row"
-                  ColumnDefinitions="180,*">
+                  ColumnDefinitions="144,*">
               <TextBlock Classes="settings-label"
                          Text="{Binding RootTexts[Settings.VersionUpdate.PanelCoreVersion]}" />
               <TextBlock Grid.Column="1"
@@ -195,7 +198,7 @@
             </Grid>
 
             <Grid Classes="settings-page-labeled-row"
-                  ColumnDefinitions="180,*">
+                  ColumnDefinitions="144,*">
               <TextBlock Classes="settings-label"
                          Text="{Binding RootTexts[Settings.VersionUpdate.PanelResourceVersion]}" />
               <TextBlock Grid.Column="1"
@@ -205,7 +208,7 @@
             </Grid>
 
             <Grid Classes="settings-page-labeled-row"
-                  ColumnDefinitions="180,*">
+                  ColumnDefinitions="144,*">
               <TextBlock Classes="settings-label"
                          Text="{Binding RootTexts[Settings.VersionUpdate.PanelBuildTime]}" />
               <TextBlock Grid.Column="1"
@@ -215,7 +218,7 @@
             </Grid>
 
             <Grid Classes="settings-page-labeled-row"
-                  ColumnDefinitions="180,*">
+                  ColumnDefinitions="144,*">
               <TextBlock Classes="settings-label"
                          Text="{Binding RootTexts[Settings.VersionUpdate.PanelResourceTime]}" />
               <TextBlock Grid.Column="1"
@@ -223,52 +226,59 @@
                          Text="{Binding UpdatePanelResourceTime}"
                          TextWrapping="Wrap" />
             </Grid>
-          </StackPanel>
+          </controls:AdaptiveSpacingStackPanel>
         </Border>
 
-        <Border Classes="app-surface app-card version-update-card">
-          <StackPanel Classes="version-update-card-stack settings-page-column-stack">
-            <Button HorizontalAlignment="Left"
-                    Classes="app-button app-primary"
-                    Content="{Binding RootTexts[Settings.VersionUpdate.SoftwareUpdate]}"
-                    IsEnabled="{Binding CanRunVersionUpdateActions}"
-                    Click="OnCheckUpdateClick" />
-            <Button HorizontalAlignment="Left"
-                    Classes="app-button app-secondary"
-                    Content="{Binding RootTexts[Settings.VersionUpdate.Changelog]}"
-                    IsEnabled="{Binding CanRunVersionUpdateActions}"
-                    Click="OnOpenChangelogClick" />
-            <Button HorizontalAlignment="Left"
-                    Classes="app-button app-secondary"
-                    Content="{Binding RootTexts[Settings.VersionUpdate.ResourceUpdate]}"
-                    IsEnabled="{Binding CanRunVersionUpdateActions}"
-                    Click="OnUpdateResourceClick" />
-            <Button HorizontalAlignment="Left"
-                    Classes="app-button app-secondary"
-                    Content="{Binding RootTexts[Settings.VersionUpdate.ResourceRepository]}"
-                    Click="OnOpenResourceRepositoryClick" />
-          </StackPanel>
-        </Border>
-      </StackPanel>
+        <Grid Margin="0,8,0,0"
+              HorizontalAlignment="Left"
+              RowDefinitions="Auto,10,Auto"
+              ColumnDefinitions="Auto,12,Auto,24,Auto">
+          <Button Grid.Row="0"
+                  Grid.Column="0"
+                  HorizontalAlignment="Left"
+                  Classes="app-button app-primary"
+                  Content="{Binding RootTexts[Settings.VersionUpdate.SoftwareUpdate]}"
+                  IsEnabled="{Binding CanRunVersionUpdateActions}"
+                  Click="OnCheckUpdateClick" />
+          <Button Grid.Row="0"
+                  Grid.Column="4"
+                  HorizontalAlignment="Left"
+                  Classes="app-button app-secondary"
+                  Content="{Binding RootTexts[Settings.VersionUpdate.Changelog]}"
+                  IsEnabled="{Binding CanRunVersionUpdateActions}"
+                  Click="OnOpenChangelogClick" />
+
+          <Button Grid.Row="2"
+                  Grid.Column="0"
+                  HorizontalAlignment="Left"
+                  Classes="app-button app-primary"
+                  Content="{Binding RootTexts[Settings.VersionUpdate.ResourceUpdate]}"
+                  IsEnabled="{Binding CanRunVersionUpdateActions}"
+                  Click="OnUpdateResourceClick" />
+          <controls:TooltipHint Grid.Row="2"
+                                Grid.Column="2"
+                                VerticalAlignment="Center"
+                                Tip="{DynamicResource ResourceUpdateTip}" />
+          <Button Grid.Row="2"
+                  Grid.Column="4"
+                  HorizontalAlignment="Left"
+                  Classes="app-button app-secondary"
+                  Content="{Binding RootTexts[Settings.VersionUpdate.ResourceRepository]}"
+                  Click="OnOpenResourceRepositoryClick" />
+        </Grid>
+      </controls:AdaptiveSpacingStackPanel>
     </Grid>
 
     <Border Grid.Row="2"
             Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}"
             Classes="settings-page-status-block">
-      <StackPanel MaxWidth="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
-                  Classes="settings-page-status-list version-update-status-list">
+      <controls:AdaptiveSpacingStackPanel MaxWidth="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
+                  Classes="settings-page-status-list">
         <TextBlock Classes="app-window-subtitle subtle long-wrap"
                    Text="{Binding VersionUpdateActivityMessage}"
                    IsVisible="{Binding HasVersionUpdateActivityMessage}"
                    TextWrapping="Wrap" />
-        <TextBlock Classes="app-body long-wrap"
-                   Text="{Binding VersionUpdateStatusMessage}"
-                   TextWrapping="Wrap" />
-        <TextBlock Classes="app-body state-error"
-                   Text="{Binding VersionUpdateErrorMessage}"
-                   IsVisible="{Binding HasVersionUpdateErrorMessage}"
-                   TextWrapping="Wrap" />
-      </StackPanel>
+      </controls:AdaptiveSpacingStackPanel>
     </Border>
   </Grid>
 </UserControl>

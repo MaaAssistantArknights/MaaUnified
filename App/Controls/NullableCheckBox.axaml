@@ -1,0 +1,39 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:MAAUnified.App.Controls"
+             x:Class="MAAUnified.App.Controls.NullableCheckBox"
+             x:Name="Root"
+             ClipToBounds="False">
+  <UserControl.Styles>
+    <Style Selector="Grid.nullable-checkbox-root">
+      <Setter Property="MinHeight" Value="28" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="CheckBox.nullable-checkbox-check">
+      <Setter Property="Grid.Column" Value="0" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="controls|TooltipHint.nullable-checkbox-tip">
+      <Setter Property="Grid.Column" Value="1" />
+      <Setter Property="Margin" Value="{DynamicResource MAA.App.Settings.HintMargin}" />
+      <Setter Property="HorizontalAlignment" Value="Left" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+  </UserControl.Styles>
+
+  <Grid Classes="nullable-checkbox-root"
+        ColumnDefinitions="Auto,Auto">
+    <CheckBox Grid.Column="0"
+              Classes="app-checkbox nullable-checkbox-check"
+              Content="{Binding Text, ElementName=Root}"
+              IsChecked="{Binding IsChecked, ElementName=Root}"
+              IsThreeState="True" />
+
+    <controls:TooltipHint Classes="nullable-checkbox-tip"
+                          IsVisible="{Binding HasTip, ElementName=Root}"
+                          Tip="{Binding Tip, ElementName=Root}" />
+  </Grid>
+</UserControl>

@@ -1,7 +1,12 @@
 using Avalonia;
+using Avalonia.Animation;
+using Avalonia.Animation.Easings;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Media;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using System.ComponentModel;
 using MAAUnified.App.ViewModels;
@@ -11,21 +16,57 @@ namespace MAAUnified.App.Features.Root;
 
 public partial class TaskQueueView : UserControl
 {
-    private const string TaskRowDragFormat = "application/x-maa-task-row-index";
     private const double TaskRowDragStartThreshold = 4d;
+    private const double TaskRowAutoScrollEdge = 36d;
+    private const double TaskRowAutoScrollStep = 18d;
+    private const double TaskSelectionIndicatorHeight = 22d;
+    private const double TaskDropIndicatorHeight = 3d;
+    private const string TaskRowDraggingClass = "dragging";
+    private const string SettingsModeSliderAnimatedClass = "animate";
+    private static readonly TimeSpan LogThumbnailPreviewShowDelay = TimeSpan.FromSeconds(0.5);
+    private static readonly TimeSpan LogThumbnailPreviewFadeDuration = TimeSpan.FromSeconds(0.5);
+    private static readonly Transitions AnimatedSettingsModeSliderTransformTransitions = new()
+    {
+        new DoubleTransition
+        {
+            Property = TranslateTransform.XProperty,
+            Duration = TimeSpan.FromSeconds(0.15),
+            Easing = new CubicEaseOut(),
+        },
+    };
 
+    private readonly Dictionary<Control, LogThumbnailPreviewState> _logThumbnailPreviewStates = [];
+    private readonly TranslateTransform _settingsModeSelectionSliderTransform;
     private TaskQueuePageViewModel? _observedVm;
     private Point? _taskRowDragStart;
     private TaskQueueItemViewModel? _taskRowDragSource;
+    private Control? _taskRowDragSourceControl;
+    private IPointer? _taskRowDragPointer;
+    private int _taskRowDragSourceIndex = -1;
+    private int _taskRowInsertionIndex = -1;
     private bool _taskRowDragInProgress;
+    private bool _taskSelectionIndicatorUpdateQueued;
+    private bool _settingsModeSliderSyncQueued;
+    private bool _pendingSettingsModeSliderAnimate;
+    private double _settingsModeSliderX = double.NaN;
+    private double _settingsModeSliderWidth = double.NaN;
 
     public TaskQueueView()
     {
         InitializeComponent();
+        _settingsModeSelectionSliderTransform = SettingsModeSelectionSlider.RenderTransform as TranslateTransform ?? new TranslateTransform();
+        SettingsModeSelectionSlider.RenderTransform = _settingsModeSelectionSliderTransform;
+        AttachedToVisualTree += OnAttachedToVisualTree;
         DataContextChanged += OnDataContextChanged;
+        LayoutUpdated += OnLayoutUpdated;
         DetachedFromVisualTree += OnDetachedFromVisualTree;
+        SettingsModeTrack.SizeChanged += OnSettingsModeSliderLayoutMetricChanged;
+        GeneralSettingsModeButton.SizeChanged += OnSettingsModeSliderLayoutMetricChanged;
+        AdvancedSettingsModeButton.SizeChanged += OnSettingsModeSliderLayoutMetricChanged;
         UpdateVmSubscription();
         SyncTaskSettingsHost();
+        QueueTaskSelectionIndicatorUpdate();
+        QueueSettingsModeSliderSync();
     }
 
     private TaskQueuePageViewModel? VM => DataContext as TaskQueuePageViewModel;
@@ -34,11 +75,165 @@ public partial class TaskQueueView : UserControl
     {
         UpdateVmSubscription();
         SyncTaskSettingsHost();
+        QueueTaskSelectionIndicatorUpdate();
+    }
+
+    private void OnAttachedToVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
+    {
+        QueueTaskSelectionIndicatorUpdate();
+        QueueSettingsModeSliderSync();
+    }
+
+    private void OnLayoutUpdated(object? sender, EventArgs e)
+    {
+        if (!_taskRowDragInProgress)
+        {
+            UpdateTaskSelectionIndicator();
+        }
+
+        if (SettingsModeSwitch.IsVisible)
+        {
+            QueueSettingsModeSliderSync(resetMetrics: false);
+        }
     }
 
     private void OnDetachedFromVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
     {
+        ResetTaskRowDragState();
+        CloseLogThumbnailPreviewsImmediately();
+        HideTaskSelectionIndicator();
+        HideSettingsModeSlider();
         SetObservedVm(null);
+    }
+
+    private async void OnLogThumbnailPointerEntered(object? sender, PointerEventArgs e)
+    {
+        if (sender is not Control thumbnail)
+        {
+            return;
+        }
+
+        var state = GetLogThumbnailPreviewState(thumbnail);
+        state.PointerOverThumbnail = true;
+        state.CloseVersion++;
+        var openVersion = ++state.OpenVersion;
+
+        await Task.Delay(LogThumbnailPreviewShowDelay);
+        if (openVersion != state.OpenVersion || !state.PointerOverThumbnail)
+        {
+            return;
+        }
+
+        ShowLogThumbnailPreview(thumbnail, state);
+    }
+
+    private void OnLogThumbnailPointerExited(object? sender, PointerEventArgs e)
+    {
+        if (sender is not Control thumbnail || !_logThumbnailPreviewStates.TryGetValue(thumbnail, out var state))
+        {
+            return;
+        }
+
+        state.PointerOverThumbnail = false;
+        state.OpenVersion++;
+        ScheduleLogThumbnailPreviewClose(thumbnail, state);
+    }
+
+    private LogThumbnailPreviewState GetLogThumbnailPreviewState(Control thumbnail)
+    {
+        if (_logThumbnailPreviewStates.TryGetValue(thumbnail, out var state))
+        {
+            return state;
+        }
+
+        state = new LogThumbnailPreviewState();
+        _logThumbnailPreviewStates[thumbnail] = state;
+        return state;
+    }
+
+    private static bool TryResolveLogThumbnailPreview(Control thumbnail, out Popup popup, out Control preview)
+    {
+        popup = null!;
+        preview = null!;
+
+        if (thumbnail.Parent is not Panel panel)
+        {
+            return false;
+        }
+
+        foreach (var child in panel.Children)
+        {
+            if (child is Popup candidate && candidate.Classes.Contains("task-queue-log-image-popup"))
+            {
+                popup = candidate;
+                preview = candidate.Child as Control ?? candidate;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static void ShowLogThumbnailPreview(Control thumbnail, LogThumbnailPreviewState state)
+    {
+        if (!TryResolveLogThumbnailPreview(thumbnail, out var popup, out var preview))
+        {
+            return;
+        }
+
+        state.CloseVersion++;
+        if (!popup.IsOpen)
+        {
+            preview.Opacity = 0d;
+            popup.IsOpen = true;
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (popup.IsOpen && state.PointerOverThumbnail)
+                {
+                    preview.Opacity = 1d;
+                }
+            }, DispatcherPriority.Render);
+            return;
+        }
+
+        preview.Opacity = 1d;
+    }
+
+    private static async void ScheduleLogThumbnailPreviewClose(Control thumbnail, LogThumbnailPreviewState state)
+    {
+        if (!TryResolveLogThumbnailPreview(thumbnail, out var popup, out var preview) || !popup.IsOpen)
+        {
+            return;
+        }
+
+        preview.Opacity = 0d;
+        var closeVersion = ++state.CloseVersion;
+
+        await Task.Delay(LogThumbnailPreviewFadeDuration);
+        if (closeVersion == state.CloseVersion && !state.PointerOverThumbnail)
+        {
+            popup.IsOpen = false;
+        }
+    }
+
+    private void CloseLogThumbnailPreviewsImmediately()
+    {
+        foreach (var (thumbnail, state) in _logThumbnailPreviewStates)
+        {
+            state.PointerOverThumbnail = false;
+            state.OpenVersion++;
+            state.CloseVersion++;
+
+            if (!TryResolveLogThumbnailPreview(thumbnail, out var popup, out var preview))
+            {
+                continue;
+            }
+
+            preview.Opacity = 0d;
+            popup.IsOpen = false;
+        }
+
+        _logThumbnailPreviewStates.Clear();
     }
 
     private void UpdateVmSubscription()
@@ -67,13 +262,37 @@ public partial class TaskQueueView : UserControl
 
     private void OnVmPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (!string.IsNullOrEmpty(e.PropertyName)
-            && !string.Equals(e.PropertyName, nameof(TaskQueuePageViewModel.SelectedTaskSettingsViewModel), StringComparison.Ordinal))
+        var shouldSyncSettings = string.IsNullOrEmpty(e.PropertyName)
+            || string.Equals(e.PropertyName, nameof(TaskQueuePageViewModel.SelectedTaskSettingsViewModel), StringComparison.Ordinal);
+        var shouldUpdateSelectionIndicator = string.IsNullOrEmpty(e.PropertyName)
+            || string.Equals(e.PropertyName, nameof(TaskQueuePageViewModel.SelectedTask), StringComparison.Ordinal);
+        var shouldUpdateSettingsModeSlider = string.IsNullOrEmpty(e.PropertyName)
+            || string.Equals(e.PropertyName, nameof(TaskQueuePageViewModel.IsGeneralSettingsSelected), StringComparison.Ordinal)
+            || string.Equals(e.PropertyName, nameof(TaskQueuePageViewModel.IsAdvancedSettingsSelected), StringComparison.Ordinal)
+            || string.Equals(e.PropertyName, nameof(TaskQueuePageViewModel.ShowSettingsModeSwitch), StringComparison.Ordinal)
+            || string.Equals(e.PropertyName, nameof(TaskQueuePageViewModel.CanUseAdvancedSettings), StringComparison.Ordinal)
+            || string.Equals(e.PropertyName, nameof(TaskQueuePageViewModel.GeneralSettingsButtonText), StringComparison.Ordinal)
+            || string.Equals(e.PropertyName, nameof(TaskQueuePageViewModel.AdvancedSettingsButtonText), StringComparison.Ordinal);
+
+        if (shouldSyncSettings)
         {
-            return;
+            SyncTaskSettingsHost();
         }
 
-        SyncTaskSettingsHost();
+        if (shouldUpdateSelectionIndicator)
+        {
+            QueueTaskSelectionIndicatorUpdate();
+        }
+
+        if (shouldUpdateSettingsModeSlider)
+        {
+            QueueSettingsModeSliderSync();
+        }
+    }
+
+    private void OnSettingsModeSliderLayoutMetricChanged(object? sender, SizeChangedEventArgs e)
+    {
+        QueueSettingsModeSliderSync(resetMetrics: false);
     }
 
     private void SyncTaskSettingsHost()
@@ -220,11 +439,89 @@ public partial class TaskQueueView : UserControl
     private void OnSelectGeneralSettingsClick(object? sender, RoutedEventArgs e)
     {
         VM?.SelectGeneralSettingsMode();
+        QueueSettingsModeSliderSync(animate: true);
     }
 
     private void OnSelectAdvancedSettingsClick(object? sender, RoutedEventArgs e)
     {
         VM?.SelectAdvancedSettingsMode();
+        QueueSettingsModeSliderSync(animate: true);
+    }
+
+    private void QueueSettingsModeSliderSync(bool animate = false, bool resetMetrics = true)
+    {
+        if (resetMetrics)
+        {
+            _settingsModeSliderX = double.NaN;
+            _settingsModeSliderWidth = double.NaN;
+        }
+
+        _pendingSettingsModeSliderAnimate |= animate;
+        if (_settingsModeSliderSyncQueued)
+        {
+            return;
+        }
+
+        _settingsModeSliderSyncQueued = true;
+        Dispatcher.UIThread.Post(
+            () =>
+            {
+                _settingsModeSliderSyncQueued = false;
+                var shouldAnimate = _pendingSettingsModeSliderAnimate;
+                _pendingSettingsModeSliderAnimate = false;
+                SyncSettingsModeSlider(shouldAnimate);
+            },
+            DispatcherPriority.Loaded);
+    }
+
+    private void SyncSettingsModeSlider(bool animate)
+    {
+        if (!SettingsModeSwitch.IsVisible)
+        {
+            HideSettingsModeSlider();
+            return;
+        }
+
+        var activeButton = VM?.IsAdvancedSettingsSelected == true
+            ? AdvancedSettingsModeButton
+            : GeneralSettingsModeButton;
+        if (activeButton.Bounds.Width <= 0 || SettingsModeTrack.Bounds.Width <= 0)
+        {
+            return;
+        }
+
+        var origin = activeButton.TranslatePoint(new Point(0, 0), SettingsModeTrack);
+        if (origin is null)
+        {
+            return;
+        }
+
+        var targetX = origin.Value.X;
+        var targetWidth = activeButton.Bounds.Width;
+        if (SettingsModeSelectionSlider.IsVisible
+            && Math.Abs(_settingsModeSliderX - targetX) < 0.5
+            && Math.Abs(_settingsModeSliderWidth - targetWidth) < 0.5)
+        {
+            return;
+        }
+
+        SettingsModeSelectionSlider.Classes.Set(SettingsModeSliderAnimatedClass, animate);
+        _settingsModeSelectionSliderTransform.Transitions = animate ? AnimatedSettingsModeSliderTransformTransitions : null;
+        SettingsModeSelectionSlider.Width = targetWidth;
+        _settingsModeSelectionSliderTransform.X = targetX;
+        SettingsModeSelectionSlider.IsVisible = true;
+        _settingsModeSliderX = targetX;
+        _settingsModeSliderWidth = targetWidth;
+    }
+
+    private void HideSettingsModeSlider()
+    {
+        SettingsModeSelectionSlider.IsVisible = false;
+        SettingsModeSelectionSlider.Classes.Set(SettingsModeSliderAnimatedClass, false);
+        _settingsModeSelectionSliderTransform.Transitions = null;
+        _settingsModeSliderX = double.NaN;
+        _settingsModeSliderWidth = double.NaN;
+        _pendingSettingsModeSliderAnimate = false;
     }
 
     private void OnOpenPostActionClick(object? sender, RoutedEventArgs e)
@@ -308,21 +605,21 @@ public partial class TaskQueueView : UserControl
             return;
         }
 
-        if (e.Source is Button or CheckBox or MenuItem)
+        if (IsInteractiveTaskRowDragSource(e.Source, control))
         {
             ResetTaskRowDragState();
             return;
         }
 
         _taskRowDragSource = source;
+        _taskRowDragSourceControl = control;
         _taskRowDragStart = e.GetPosition(control);
     }
 
-    private async void OnTaskRowPointerMoved(object? sender, PointerEventArgs e)
+    private void OnTaskRowPointerMoved(object? sender, PointerEventArgs e)
     {
         if (VM is null
             || !VM.CanEdit
-            || _taskRowDragInProgress
             || _taskRowDragSource is null
             || _taskRowDragStart is null
             || sender is not Control control)
@@ -334,6 +631,13 @@ public partial class TaskQueueView : UserControl
         if (!point.Properties.IsLeftButtonPressed)
         {
             ResetTaskRowDragState();
+            return;
+        }
+
+        if (_taskRowDragInProgress)
+        {
+            UpdateTaskRowDrag(e);
+            e.Handled = true;
             return;
         }
 
@@ -350,65 +654,94 @@ public partial class TaskQueueView : UserControl
             return;
         }
 
-        _taskRowDragInProgress = true;
-        try
+        BeginTaskRowDrag(control, sourceIndex, e);
+        e.Handled = true;
+    }
+
+    private async void OnTaskRowPointerReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        if (!_taskRowDragInProgress || VM is null)
         {
-            var data = new DataObject();
-            data.Set(TaskRowDragFormat, sourceIndex);
-            await DragDrop.DoDragDrop(e, data, DragDropEffects.Move);
-        }
-        finally
-        {
-            _taskRowDragInProgress = false;
             ResetTaskRowDragState();
+            return;
         }
+
+        var source = _taskRowDragSource;
+        var sourceIndex = _taskRowDragSourceIndex;
+        var insertionIndex = _taskRowInsertionIndex;
+        var shouldMove = source is not null
+            && VM.CanEdit
+            && IsPointerInsideTaskList(e)
+            && sourceIndex >= 0
+            && sourceIndex < VM.Tasks.Count
+            && insertionIndex >= 0;
+
+        ResetTaskRowDragState();
+        e.Handled = true;
+
+        if (!shouldMove || source is null)
+        {
+            return;
+        }
+
+        var finalIndex = insertionIndex > sourceIndex ? insertionIndex - 1 : insertionIndex;
+        finalIndex = Math.Clamp(finalIndex, 0, VM.Tasks.Count - 1);
+        if (finalIndex == sourceIndex)
+        {
+            return;
+        }
+
+        VM.SelectedTask = source;
+        await VM.MoveSelectedTaskToAsync(finalIndex);
     }
 
     private void OnTaskRowDragOver(object? sender, DragEventArgs e)
     {
-        if (VM is null
-            || !VM.CanEdit
-            || sender is not Control control
-            || control.DataContext is not TaskQueueItemViewModel target
-            || !TryGetDragRowIndex(e.Data, out var sourceIndex))
-        {
-            e.DragEffects = DragDropEffects.None;
-            return;
-        }
-
-        var targetIndex = VM.Tasks.IndexOf(target);
-        if (sourceIndex < 0 || targetIndex < 0 || sourceIndex == targetIndex)
-        {
-            e.DragEffects = DragDropEffects.None;
-            return;
-        }
-
-        e.DragEffects = DragDropEffects.Move;
+        e.DragEffects = DragDropEffects.None;
         e.Handled = true;
     }
 
-    private async void OnTaskRowDrop(object? sender, DragEventArgs e)
+    private void OnTaskRowDrop(object? sender, DragEventArgs e)
     {
-        if (VM is null
-            || !VM.CanEdit
-            || sender is not Control control
-            || control.DataContext is not TaskQueueItemViewModel target
-            || !TryGetDragRowIndex(e.Data, out var sourceIndex)
-            || sourceIndex < 0
-            || sourceIndex >= VM.Tasks.Count)
-        {
-            return;
-        }
-
-        var targetIndex = VM.Tasks.IndexOf(target);
-        if (targetIndex < 0 || sourceIndex == targetIndex)
-        {
-            return;
-        }
-
-        VM.SelectedTask = VM.Tasks[sourceIndex];
-        await VM.MoveSelectedTaskToAsync(targetIndex);
         e.Handled = true;
+    }
+
+    private void BeginTaskRowDrag(Control sourceControl, int sourceIndex, PointerEventArgs e)
+    {
+        _taskRowDragInProgress = true;
+        _taskRowDragSourceControl = sourceControl;
+        _taskRowDragSourceIndex = sourceIndex;
+        _taskRowInsertionIndex = sourceIndex;
+
+        sourceControl.Classes.Set(TaskRowDraggingClass, true);
+        sourceControl.PointerReleased += OnTaskRowPointerReleased;
+        _taskRowDragPointer = e.Pointer;
+        e.Pointer.Capture(sourceControl);
+
+        HideTaskSelectionIndicator();
+        ShowTaskDragPreview();
+        UpdateTaskRowDrag(e);
+    }
+
+    private void UpdateTaskRowDrag(PointerEventArgs e)
+    {
+        if (!_taskRowDragInProgress)
+        {
+            return;
+        }
+
+        AutoScrollTaskList(e);
+        UpdateTaskDragPreview(e);
+
+        if (!TryResolveTaskInsertion(e, out var insertionIndex, out var indicatorLeft, out var indicatorTop, out var indicatorWidth))
+        {
+            HideTaskDropIndicator();
+            _taskRowInsertionIndex = -1;
+            return;
+        }
+
+        _taskRowInsertionIndex = insertionIndex;
+        UpdateTaskDropIndicator(indicatorLeft, indicatorTop, indicatorWidth);
     }
 
     private static bool TryGetTaskParameter(object? sender, out TaskQueueItemViewModel task)
@@ -458,28 +791,347 @@ public partial class TaskQueueView : UserControl
         return null;
     }
 
-    private static bool TryGetDragRowIndex(IDataObject data, out int index)
+    private bool TryResolveTaskInsertion(
+        PointerEventArgs e,
+        out int insertionIndex,
+        out double indicatorLeft,
+        out double indicatorTop,
+        out double indicatorWidth)
     {
-        index = -1;
-        if (!data.Contains(TaskRowDragFormat))
+        insertionIndex = -1;
+        indicatorLeft = 0d;
+        indicatorTop = 0d;
+        indicatorWidth = 0d;
+
+        var listBox = GetTaskListBox();
+        var indicator = GetTaskDropIndicator();
+        var indicatorParent = indicator?.Parent as Visual ?? listBox;
+        if (VM is null || listBox is null || indicatorParent is null)
         {
             return false;
         }
 
-        var raw = data.Get(TaskRowDragFormat);
-        if (raw is int value)
+        var rows = GetVisibleTaskRows(listBox)
+            .Select(row => new
+            {
+                Row = row,
+                Index = row.DataContext is TaskQueueItemViewModel task ? VM.Tasks.IndexOf(task) : -1,
+            })
+            .Where(item => item.Index >= 0)
+            .OrderBy(item => item.Index)
+            .ToArray();
+
+        if (rows.Length == 0)
         {
-            index = value;
-            return true;
+            return false;
         }
 
-        return raw is string text && int.TryParse(text, out index);
+        var pointerY = e.GetPosition(listBox).Y;
+        var selectedRow = rows[^1];
+        insertionIndex = selectedRow.Index + 1;
+
+        foreach (var item in rows)
+        {
+            var rowPointInList = item.Row.TranslatePoint(new Point(0d, 0d), listBox);
+            if (rowPointInList is null)
+            {
+                continue;
+            }
+
+            var centerY = rowPointInList.Value.Y + item.Row.Bounds.Height / 2d;
+            if (pointerY < centerY)
+            {
+                selectedRow = item;
+                insertionIndex = item.Index;
+                break;
+            }
+        }
+
+        var rowPoint = selectedRow.Row.TranslatePoint(new Point(0d, 0d), indicatorParent);
+        if (rowPoint is null)
+        {
+            return false;
+        }
+
+        var rowBottom = rowPoint.Value.Y + selectedRow.Row.Bounds.Height;
+        indicatorLeft = rowPoint.Value.X;
+        indicatorTop = insertionIndex <= selectedRow.Index ? rowPoint.Value.Y : rowBottom;
+        indicatorWidth = selectedRow.Row.Bounds.Width;
+        insertionIndex = Math.Clamp(insertionIndex, 0, VM.Tasks.Count);
+        return true;
+    }
+
+    private IEnumerable<Control> GetVisibleTaskRows(ListBox listBox)
+    {
+        return listBox.GetVisualDescendants()
+            .OfType<Control>()
+            .Where(control => control.Classes.Contains("task-queue-item-card")
+                && control.DataContext is TaskQueueItemViewModel
+                && control.IsEffectivelyVisible
+                && control.Bounds.Width > 0d
+                && control.Bounds.Height > 0d);
+    }
+
+    private void AutoScrollTaskList(PointerEventArgs e)
+    {
+        var scrollViewer = GetTaskListScrollViewer();
+        if (scrollViewer is null || scrollViewer.Viewport.Height <= 0d)
+        {
+            return;
+        }
+
+        var position = e.GetPosition(scrollViewer);
+        var delta = 0d;
+        if (position.Y < TaskRowAutoScrollEdge)
+        {
+            delta = -TaskRowAutoScrollStep;
+        }
+        else if (position.Y > scrollViewer.Bounds.Height - TaskRowAutoScrollEdge)
+        {
+            delta = TaskRowAutoScrollStep;
+        }
+
+        if (Math.Abs(delta) < 0.01d)
+        {
+            return;
+        }
+
+        var maxOffset = Math.Max(0d, scrollViewer.Extent.Height - scrollViewer.Viewport.Height);
+        var nextY = Math.Clamp(scrollViewer.Offset.Y + delta, 0d, maxOffset);
+        if (Math.Abs(nextY - scrollViewer.Offset.Y) > 0.01d)
+        {
+            scrollViewer.Offset = new Vector(scrollViewer.Offset.X, nextY);
+        }
+    }
+
+    private bool IsPointerInsideTaskList(PointerEventArgs e)
+    {
+        var listBox = GetTaskListBox();
+        if (listBox is null)
+        {
+            return false;
+        }
+
+        var position = e.GetPosition(listBox);
+        return position.X >= 0d
+            && position.Y >= 0d
+            && position.X <= listBox.Bounds.Width
+            && position.Y <= listBox.Bounds.Height;
+    }
+
+    private void ShowTaskDragPreview()
+    {
+        var preview = GetTaskDragPreview();
+        if (preview is null)
+        {
+            return;
+        }
+
+        preview.DataContext = _taskRowDragSource;
+        preview.Width = _taskRowDragSourceControl?.Bounds.Width ?? preview.Width;
+        preview.Height = _taskRowDragSourceControl?.Bounds.Height ?? preview.Height;
+        preview.IsVisible = true;
+    }
+
+    private void UpdateTaskDragPreview(PointerEventArgs e)
+    {
+        var preview = GetTaskDragPreview();
+        if (preview?.Parent is not Visual parent)
+        {
+            return;
+        }
+
+        var position = e.GetPosition(parent);
+        var dragStart = _taskRowDragStart ?? new Point(0d, 0d);
+        Canvas.SetLeft(preview, position.X - dragStart.X);
+        Canvas.SetTop(preview, position.Y - dragStart.Y);
+    }
+
+    private void UpdateTaskDropIndicator(double left, double top, double width)
+    {
+        var indicator = GetTaskDropIndicator();
+        if (indicator is null)
+        {
+            return;
+        }
+
+        indicator.Width = Math.Max(0d, width);
+        indicator.Height = TaskDropIndicatorHeight;
+        indicator.IsVisible = true;
+        indicator.Margin = new Thickness(left, top - TaskDropIndicatorHeight / 2d, 0d, 0d);
+    }
+
+    private void HideTaskDropIndicator()
+    {
+        var indicator = GetTaskDropIndicator();
+        if (indicator is not null)
+        {
+            indicator.IsVisible = false;
+        }
+    }
+
+    private void HideTaskDragPreview()
+    {
+        var preview = GetTaskDragPreview();
+        if (preview is not null)
+        {
+            preview.IsVisible = false;
+            preview.DataContext = null;
+        }
+    }
+
+    private ListBox? GetTaskListBox()
+    {
+        return this.FindControl<ListBox>("TaskListBox") ?? _taskRowDragSourceControl?.FindAncestorOfType<ListBox>();
+    }
+
+    private ScrollViewer? GetTaskListScrollViewer()
+    {
+        var listBox = GetTaskListBox();
+        return listBox?.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault();
+    }
+
+    private Border? GetTaskDropIndicator()
+    {
+        return this.FindControl<Border>("TaskDropIndicator");
+    }
+
+    private Border? GetTaskSelectionIndicator()
+    {
+        return this.FindControl<Border>("TaskSelectionIndicator");
+    }
+
+    private Border? GetTaskDragPreview()
+    {
+        return this.FindControl<Border>("TaskDragPreview");
+    }
+
+    private static bool IsInteractiveTaskRowDragSource(object? source, Control rowControl)
+    {
+        if (source is not Visual visual)
+        {
+            return false;
+        }
+
+        var current = visual;
+        while (current is not null)
+        {
+            if (ReferenceEquals(current, rowControl))
+            {
+                return false;
+            }
+
+            if (current is Button or CheckBox or MenuItem)
+            {
+                return true;
+            }
+
+            current = current.GetVisualParent();
+        }
+
+        return false;
     }
 
     private void ResetTaskRowDragState()
     {
+        if (_taskRowDragSourceControl is not null)
+        {
+            _taskRowDragSourceControl.Classes.Set(TaskRowDraggingClass, false);
+            _taskRowDragSourceControl.PointerReleased -= OnTaskRowPointerReleased;
+        }
+
+        HideTaskDropIndicator();
+        HideTaskDragPreview();
+        _taskRowDragPointer?.Capture(null);
         _taskRowDragStart = null;
         _taskRowDragSource = null;
+        _taskRowDragSourceControl = null;
+        _taskRowDragPointer = null;
+        _taskRowDragSourceIndex = -1;
+        _taskRowInsertionIndex = -1;
+        _taskRowDragInProgress = false;
+        QueueTaskSelectionIndicatorUpdate();
+    }
+
+    private void QueueTaskSelectionIndicatorUpdate()
+    {
+        if (_taskSelectionIndicatorUpdateQueued)
+        {
+            return;
+        }
+
+        _taskSelectionIndicatorUpdateQueued = true;
+        Dispatcher.UIThread.Post(
+            () =>
+            {
+                _taskSelectionIndicatorUpdateQueued = false;
+                UpdateTaskSelectionIndicator();
+            },
+            DispatcherPriority.Loaded);
+    }
+
+    private void UpdateTaskSelectionIndicator()
+    {
+        if (_taskRowDragInProgress)
+        {
+            HideTaskSelectionIndicator();
+            return;
+        }
+
+        var indicator = GetTaskSelectionIndicator();
+        var listBox = GetTaskListBox();
+        var selectedTask = VM?.SelectedTask;
+        var indicatorParent = indicator?.Parent as Visual ?? listBox;
+        if (indicator is null || listBox is null || selectedTask is null || indicatorParent is null)
+        {
+            HideTaskSelectionIndicator();
+            return;
+        }
+
+        var selectedRow = GetVisibleTaskRows(listBox)
+            .FirstOrDefault(row => ReferenceEquals(row.DataContext, selectedTask));
+        if (selectedRow is null)
+        {
+            HideTaskSelectionIndicator();
+            return;
+        }
+
+        var rowPoint = selectedRow.TranslatePoint(new Point(0d, 0d), indicatorParent);
+        if (rowPoint is null)
+        {
+            HideTaskSelectionIndicator();
+            return;
+        }
+
+        var leftInset = selectedRow is Border border ? border.Padding.Left : 0d;
+        var top = rowPoint.Value.Y + Math.Max(0d, selectedRow.Bounds.Height - TaskSelectionIndicatorHeight) / 2d;
+        var nextMargin = new Thickness(rowPoint.Value.X + leftInset, top, 0d, 0d);
+
+        indicator.Width = 3d;
+        indicator.Height = TaskSelectionIndicatorHeight;
+        indicator.Opacity = 1d;
+        indicator.IsVisible = true;
+        if (!AreClose(indicator.Margin, nextMargin))
+        {
+            indicator.Margin = nextMargin;
+        }
+    }
+
+    private void HideTaskSelectionIndicator()
+    {
+        var indicator = GetTaskSelectionIndicator();
+        if (indicator is not null)
+        {
+            indicator.IsVisible = false;
+        }
+    }
+
+    private static bool AreClose(Thickness current, Thickness next)
+    {
+        return Math.Abs(current.Left - next.Left) < 0.1d
+            && Math.Abs(current.Top - next.Top) < 0.1d
+            && Math.Abs(current.Right - next.Right) < 0.1d
+            && Math.Abs(current.Bottom - next.Bottom) < 0.1d;
     }
 
     private void OpenTaskRowContextMenu(Control rowControl)
@@ -515,5 +1167,14 @@ public partial class TaskQueueView : UserControl
 
         shell = null!;
         return false;
+    }
+
+    private sealed class LogThumbnailPreviewState
+    {
+        public bool PointerOverThumbnail { get; set; }
+
+        public int OpenVersion { get; set; }
+
+        public int CloseVersion { get; set; }
     }
 }

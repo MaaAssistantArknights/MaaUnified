@@ -513,7 +513,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
     public int RecruitLevel3Hour
     {
         get => RecruitLevel3Time / 60;
-        set => RecruitLevel3Time = (Math.Clamp(value, 1, 9) * 60) + RecruitLevel3Minute;
+        set => RecruitLevel3Time = (ClampRecruitHour(value, RecruitLevel3Minute) * 60) + RecruitLevel3Minute;
     }
 
     public int RecruitLevel3Minute
@@ -525,7 +525,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
     public int RecruitLevel4Hour
     {
         get => RecruitLevel4Time / 60;
-        set => RecruitLevel4Time = (Math.Clamp(value, 1, 9) * 60) + RecruitLevel4Minute;
+        set => RecruitLevel4Time = (ClampRecruitHour(value, RecruitLevel4Minute) * 60) + RecruitLevel4Minute;
     }
 
     public int RecruitLevel4Minute
@@ -537,7 +537,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
     public int RecruitLevel5Hour
     {
         get => RecruitLevel5Time / 60;
-        set => RecruitLevel5Time = (Math.Clamp(value, 1, 9) * 60) + RecruitLevel5Minute;
+        set => RecruitLevel5Time = (ClampRecruitHour(value, RecruitLevel5Minute) * 60) + RecruitLevel5Minute;
     }
 
     public int RecruitLevel5Minute
@@ -2637,15 +2637,12 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
             return;
         }
 
-        var result = await Runtime.SettingsFeatureService.SaveGlobalSettingsAsync(updates, cancellationToken);
-        if (!result.Success)
-        {
-            var failed = UiOperationResult.Fail(
-                result.Error?.Code ?? UiErrorCode.SettingsSaveFailed,
-                result.Message,
-                result.Error?.Details);
-            await RecordFailedResultAsync("Toolbox.ConfigBridge", failed, cancellationToken);
-        }
+        _ = await RunTrackedConfigurationSaveAsync(
+            $"Toolbox.ConfigBridge.{tool}",
+            T("Toolbox.Title", "工具箱"),
+            "Toolbox.ConfigBridge.Save",
+            ct => Runtime.SettingsFeatureService.SaveGlobalSettingsAsync(updates, ct),
+            cancellationToken);
     }
 
     private IReadOnlyDictionary<string, string> BuildBridgeUpdates(ToolboxToolKind tool)
@@ -2772,12 +2769,12 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
                 record.Success,
                 record.ResultSummary,
                 record.ErrorCode)));
-        var result = await Runtime.SettingsFeatureService.SaveGlobalSettingAsync(ToolboxExecutionHistoryKey, payload, cancellationToken);
-        if (!result.Success)
-        {
-            var failed = UiOperationResult.Fail(result.Error?.Code ?? UiErrorCode.SettingsSaveFailed, result.Message, result.Error?.Details);
-            await RecordFailedResultAsync(ToolboxHistorySaveScope, failed, cancellationToken);
-        }
+        _ = await RunTrackedConfigurationSaveAsync(
+            ToolboxHistorySaveScope,
+            T("Toolbox.Title", "工具箱"),
+            ToolboxHistorySaveScope,
+            ct => Runtime.SettingsFeatureService.SaveGlobalSettingAsync(ToolboxExecutionHistoryKey, payload, ct),
+            cancellationToken);
     }
 
     private async Task PersistOperBoxAsync(CancellationToken cancellationToken)
@@ -2804,12 +2801,12 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
             payload["syncTime"] = LastOperBoxSyncTime.Value.ToString("O", CultureInfo.InvariantCulture);
         }
 
-        var result = await Runtime.SettingsFeatureService.SaveGlobalSettingAsync(LegacyConfigurationKeys.OperBoxData, payload.ToJsonString(), cancellationToken);
-        if (!result.Success)
-        {
-            var failed = UiOperationResult.Fail(result.Error?.Code ?? UiErrorCode.SettingsSaveFailed, result.Message, result.Error?.Details);
-            await RecordFailedResultAsync(ToolboxLegacyResultScope, failed, cancellationToken);
-        }
+        _ = await RunTrackedConfigurationSaveAsync(
+            $"{ToolboxLegacyResultScope}.OperBox",
+            T("Toolbox.OperBox.Title", "干员识别"),
+            $"{ToolboxLegacyResultScope}.OperBox.Save",
+            ct => Runtime.SettingsFeatureService.SaveGlobalSettingAsync(LegacyConfigurationKeys.OperBoxData, payload.ToJsonString(), ct),
+            cancellationToken);
     }
 
     private async Task PersistDepotAsync(CancellationToken cancellationToken)
@@ -2830,12 +2827,12 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
             payload["syncTime"] = LastDepotSyncTime.Value.ToString("O", CultureInfo.InvariantCulture);
         }
 
-        var result = await Runtime.SettingsFeatureService.SaveGlobalSettingAsync(LegacyConfigurationKeys.DepotResult, payload.ToJsonString(), cancellationToken);
-        if (!result.Success)
-        {
-            var failed = UiOperationResult.Fail(result.Error?.Code ?? UiErrorCode.SettingsSaveFailed, result.Message, result.Error?.Details);
-            await RecordFailedResultAsync(ToolboxLegacyResultScope, failed, cancellationToken);
-        }
+        _ = await RunTrackedConfigurationSaveAsync(
+            $"{ToolboxLegacyResultScope}.Depot",
+            T("Toolbox.Depot.Title", "仓库识别"),
+            $"{ToolboxLegacyResultScope}.Depot.Save",
+            ct => Runtime.SettingsFeatureService.SaveGlobalSettingAsync(LegacyConfigurationKeys.DepotResult, payload.ToJsonString(), ct),
+            cancellationToken);
     }
 
     private void LoadOperBoxDetails()
@@ -3150,6 +3147,12 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
     private static int NormalizeRecruitMinutePart(int value)
     {
         return Math.Clamp(value / 10 * 10, 0, 50);
+    }
+
+    private static int ClampRecruitHour(int hour, int minutePart)
+    {
+        var maxHour = minutePart > 0 ? 8 : 9;
+        return Math.Clamp(hour, 1, maxHour);
     }
 
     private static bool TryParseRecruitMinutes(string value, out int parsed)

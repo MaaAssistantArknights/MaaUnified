@@ -30,7 +30,7 @@ public partial class ScreenshotPreviewWindow : Window
         PreviewHeaderText.Text = subtitle;
         PreviewHeaderText.IsVisible = !string.IsNullOrWhiteSpace(subtitle);
         PreviewStatusText.Text = statusText ?? string.Empty;
-        PreviewStatusText.IsVisible = !string.IsNullOrWhiteSpace(statusText);
+        PreviewStatusText.IsVisible = false;
     }
 
     private void OnCloseClick(object? sender, RoutedEventArgs e)

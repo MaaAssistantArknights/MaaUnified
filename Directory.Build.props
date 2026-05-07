@@ -6,6 +6,8 @@
     <FileVersion Condition="'$(FileVersion)' == ''">1.0.0.0</FileVersion>
     <MaaUnifiedReleaseChannel Condition="'$(MaaUnifiedReleaseChannel)' == ''">debug</MaaUnifiedReleaseChannel>
     <MaaUnifiedDiagnosticsProfile Condition="'$(MaaUnifiedDiagnosticsProfile)' == ''">full</MaaUnifiedDiagnosticsProfile>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <WarningsNotAsErrors>$(WarningsNotAsErrors);NU1903</WarningsNotAsErrors>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(MaaUnifiedReleaseChannel)' == 'formal'">

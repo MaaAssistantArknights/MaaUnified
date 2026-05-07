@@ -1,4 +1,5 @@
 using MAAUnified.App.ViewModels.Infrastructure;
+using MAAUnified.App.Services;
 using MAAUnified.Application.Models;
 using MAAUnified.Application.Services;
 using System.ComponentModel;
@@ -432,6 +433,12 @@ public sealed class PostActionModuleViewModel : ObservableObject
             return;
         }
 
+        ConfigurationSaveTracker.Instance.MarkPending(
+            "TaskQueue.PostAction",
+            Texts.GetOrDefault("PostAction.Title", "完成后动作"),
+            "PostAction.Persist",
+            _runtime.DiagnosticsService,
+            PersistCoreAsync);
         _persistDebounceCts?.Cancel();
         _persistDebounceCts?.Dispose();
         _persistDebounceCts = new CancellationTokenSource();
@@ -467,6 +474,17 @@ public sealed class PostActionModuleViewModel : ObservableObject
 
     private async Task<bool> PersistNowAsync(CancellationToken cancellationToken)
     {
+        return await ConfigurationSaveTracker.Instance.RunTrackedAsync(
+            "TaskQueue.PostAction",
+            Texts.GetOrDefault("PostAction.Title", "完成后动作"),
+            "PostAction.Persist",
+            _runtime.DiagnosticsService,
+            PersistCoreAsync,
+            cancellationToken);
+    }
+
+    private async Task<bool> PersistCoreAsync(CancellationToken cancellationToken)
+    {
         try
         {
             var persistent = BuildPersistentConfigForSave();
@@ -482,7 +500,6 @@ public sealed class PostActionModuleViewModel : ObservableObject
             _persistentConfig = persistent.Clone();
             _hasPendingCommandPersist = false;
             await ValidateAndUpdateWarningAsync(cancellationToken);
-            StatusMessage = save.Message;
             LastErrorMessage = string.Empty;
             return true;
         }

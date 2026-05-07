@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:MAAUnified.App.Controls"
              xmlns:vm="clr-namespace:MAAUnified.App.ViewModels.Settings"
              Classes="settings-page"
              x:Class="MAAUnified.App.Features.Settings.GuiSettingsView">
@@ -8,15 +9,14 @@
     <TextBlock Classes="settings-page-title"
                Text="{Binding RootTexts[Settings.Section.GUI]}" />
 
-    <StackPanel Grid.Row="1"
+    <controls:AdaptiveSpacingStackPanel Grid.Row="1"
                 Margin="{DynamicResource MAA.Thickness.Settings.SectionTopMargin}"
                 HorizontalAlignment="Left"
                 Classes="settings-page-flow">
       <Grid Classes="settings-page-two-column"
             HorizontalAlignment="Left"
-            ColumnDefinitions="340,24,*">
-        <StackPanel Classes="settings-page-column-stack settings-page-toggle-stack"
-                    Spacing="12">
+            ColumnDefinitions="Auto,24,Auto">
+        <controls:AdaptiveSpacingStackPanel Classes="settings-page-column-stack settings-page-toggle-stack">
           <CheckBox Classes="app-checkbox"
                     Content="{Binding RootTexts[Settings.GUI.UseTray]}"
                     IsChecked="{Binding UseTray}" />
@@ -24,24 +24,27 @@
                     Content="{Binding RootTexts[Settings.GUI.MinimizeToTray]}"
                     IsChecked="{Binding MinimizeToTray}"
                     IsVisible="{Binding CanMinimizeToTray}" />
-          <CheckBox Classes="app-checkbox"
-                    Content="{Binding RootTexts[Settings.GUI.UseNotify]}"
-                    IsChecked="{Binding UseNotify}" />
+          <controls:AdaptiveSpacingStackPanel Classes="settings-page-inline-field-group">
+            <controls:AppHintedCheckBox Text="{Binding RootTexts[Settings.GUI.UseNotify]}"
+                                         Tip="{DynamicResource SystemNotificationInfo}"
+                                         IsChecked="{Binding UseNotify}" />
+          </controls:AdaptiveSpacingStackPanel>
           <CheckBox Classes="app-checkbox"
                     Content="{Binding RootTexts[Settings.GUI.WindowTitleScrollable]}"
                     IsChecked="{Binding WindowTitleScrollable}" />
-          <CheckBox Classes="app-checkbox"
-                    Content="{Binding RootTexts[Settings.GUI.UseSoftwareRendering]}"
-                    IsChecked="{Binding UseSoftwareRendering}" />
+          <controls:AdaptiveSpacingStackPanel Classes="settings-page-inline-field-group">
+            <controls:AppHintedCheckBox Text="{Binding RootTexts[Settings.GUI.UseSoftwareRendering]}"
+                                         Tip="{DynamicResource BadModules.UseSoftwareRenderingTip}"
+                                         IsChecked="{Binding UseSoftwareRendering}" />
+          </controls:AdaptiveSpacingStackPanel>
 
-          <StackPanel Classes="settings-page-column-stack settings-page-meta-block"
-                      Spacing="8">
+          <controls:AdaptiveSpacingStackPanel Classes="settings-page-column-stack settings-page-meta-block">
             <Grid Classes="settings-page-labeled-row"
                   ColumnDefinitions="132,*">
               <TextBlock Classes="settings-label"
                          Text="{Binding RootTexts[Settings.GUI.LogItemDateFormat]}" />
               <ComboBox Grid.Column="1"
-                        Classes="app-input settings-input"
+                        Classes="settings-select"
                         Width="{DynamicResource MAA.Size.Settings.FieldCenteredWidth}"
                         HorizontalAlignment="Left"
                         ItemsSource="{Binding LogItemDateFormatOptions}"
@@ -57,18 +60,17 @@
                          Text="{Binding GuiLogItemDateFormatPreview}"
                          TextWrapping="Wrap" />
             </Grid>
-          </StackPanel>
-        </StackPanel>
+          </controls:AdaptiveSpacingStackPanel>
+        </controls:AdaptiveSpacingStackPanel>
 
-        <StackPanel Grid.Column="2"
-                    Classes="settings-page-column-stack"
-                    Spacing="14">
+        <controls:AdaptiveSpacingStackPanel Grid.Column="2"
+                    Classes="settings-page-column-stack">
           <Grid Classes="settings-page-labeled-row"
                 ColumnDefinitions="132,*">
             <TextBlock Classes="settings-label"
                        Text="{Binding RootTexts[Settings.GUI.Language]}" />
             <ComboBox Grid.Column="1"
-                      Classes="app-input settings-input"
+                      Classes="settings-select"
                       Width="{DynamicResource MAA.Size.Settings.FieldNarrowWidth}"
                       HorizontalAlignment="Left"
                       ItemsSource="{Binding SupportedLanguages}"
@@ -86,7 +88,7 @@
             <TextBlock Classes="settings-label"
                        Text="{Binding RootTexts[Settings.GUI.OperNameLanguage]}" />
             <ComboBox Grid.Column="1"
-                      Classes="app-input settings-input"
+                      Classes="settings-select"
                       Width="{DynamicResource MAA.Size.Settings.FieldCenteredWidth}"
                       HorizontalAlignment="Left"
                       ItemsSource="{Binding OperNameLanguageOptions}"
@@ -104,7 +106,7 @@
             <TextBlock Classes="settings-label"
                        Text="{Binding RootTexts[Settings.GUI.Theme]}" />
             <ComboBox Grid.Column="1"
-                      Classes="app-input settings-input"
+                      Classes="settings-select"
                       Width="{DynamicResource MAA.Size.Settings.FieldNarrowWidth}"
                       HorizontalAlignment="Left"
                       ItemsSource="{Binding ThemeOptions}"
@@ -122,7 +124,7 @@
             <TextBlock Classes="settings-label"
                        Text="{Binding RootTexts[Settings.GUI.InverseClearMode]}" />
             <ComboBox Grid.Column="1"
-                      Classes="app-input settings-input"
+                      Classes="settings-select"
                       Width="{DynamicResource MAA.Size.Settings.FieldCenteredWidth}"
                       HorizontalAlignment="Left"
                       ItemsSource="{Binding InverseClearModeOptions}"
@@ -134,17 +136,17 @@
               </ComboBox.ItemTemplate>
             </ComboBox>
           </Grid>
-        </StackPanel>
+        </controls:AdaptiveSpacingStackPanel>
       </Grid>
 
       <Border Classes="settings-page-status-block">
-        <StackPanel Classes="settings-page-status-list">
+        <controls:AdaptiveSpacingStackPanel Classes="settings-page-status-list">
           <TextBlock Classes="state-warning app-body"
                      Text="{Binding GuiSectionValidationMessage}"
                      IsVisible="{Binding HasGuiSectionValidationMessage}"
                      TextWrapping="Wrap" />
-        </StackPanel>
+        </controls:AdaptiveSpacingStackPanel>
       </Border>
-    </StackPanel>
+    </controls:AdaptiveSpacingStackPanel>
   </Grid>
 </UserControl>

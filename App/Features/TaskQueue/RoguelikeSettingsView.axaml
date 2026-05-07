@@ -3,333 +3,327 @@
              xmlns:controls="clr-namespace:MAAUnified.App.Controls"
              xmlns:vm="clr-namespace:MAAUnified.App.ViewModels.TaskQueue"
              x:Class="MAAUnified.App.Features.TaskQueue.RoguelikeSettingsView">
+  <UserControl.Styles>
+  </UserControl.Styles>
+
   <ScrollViewer HorizontalScrollBarVisibility="Disabled">
     <Grid RowDefinitions="Auto,Auto" Margin="2">
       <TextBlock Classes="section-title" Text="{Binding Texts[Roguelike.Title]}" />
 
-      <StackPanel Grid.Row="1"
-                  Classes="settings-form"
+      <controls:AdaptiveSpacingStackPanel Grid.Row="1"
+                  Classes="settings-form roguelike-layout"
                   Margin="{DynamicResource MAA.Thickness.Settings.SectionTopMargin}">
-        <StackPanel IsVisible="{Binding IsGeneralMode}" Spacing="{DynamicResource MAA.Spacing.Medium}">
+        <controls:AdaptiveSpacingStackPanel IsVisible="{Binding IsGeneralMode}" Classes="roguelike-section-content">
           <Border Classes="app-surface app-card">
-            <StackPanel Spacing="{DynamicResource MAA.Spacing.Medium}">
-              <StackPanel Classes="settings-centered-column">
+            <controls:AdaptiveSpacingStackPanel Classes="roguelike-card-content">
+              <controls:SettingsInlineRow>
                 <TextBlock Classes="settings-field-caption" Text="{Binding Texts[Roguelike.Theme]}" />
-                <ComboBox Classes="app-input"
-                          Width="{DynamicResource MAA.Size.Settings.FieldCenteredWidth}"
-                          ItemsSource="{Binding ThemeOptions}"
-                          SelectedValueBinding="{Binding Type}"
-                          SelectedValue="{Binding Theme}">
-                  <ComboBox.ItemTemplate>
+                <controls:AppSelect ItemsSource="{Binding ThemeOptions}"
+                                    SelectedValueBinding="{Binding Type}"
+                                    SelectedValue="{Binding Theme}">
+                  <controls:AppSelect.ItemTemplate>
                     <DataTemplate x:DataType="vm:TaskModuleOption">
                       <TextBlock Text="{Binding DisplayName}" />
                     </DataTemplate>
-                  </ComboBox.ItemTemplate>
-                </ComboBox>
-              </StackPanel>
+                  </controls:AppSelect.ItemTemplate>
+                </controls:AppSelect>
+              </controls:SettingsInlineRow>
 
-              <StackPanel Classes="settings-centered-column">
-                <Grid HorizontalAlignment="Center" ColumnDefinitions="Auto,Auto">
-                  <TextBlock Grid.Column="0"
-                             Classes="settings-field-caption"
-                             Margin="0"
-                             Text="{Binding Texts[Roguelike.Difficulty]}" />
-                  <controls:TooltipHint Grid.Column="1"
-                                        IsVisible="{Binding ShowJieGardenDifficultyTip}"
-                                        Margin="{DynamicResource MAA.Thickness.MarginLeftSmall}"
-                                        Tip="{Binding Texts[Roguelike.JieGardenDifficultyTip]}" />
-                </Grid>
-                <ComboBox Classes="app-input"
-                          Width="{DynamicResource MAA.Size.Settings.FieldCenteredWidth}"
-                          ItemsSource="{Binding DifficultyOptions}"
-                          SelectedValueBinding="{Binding Value}"
-                          SelectedValue="{Binding Difficulty}">
-                  <ComboBox.ItemTemplate>
+              <controls:SettingsInlineRow>
+                <TextBlock Classes="settings-field-caption"
+                           Margin="0"
+                           TextWrapping="Wrap">
+                  <Run Text="{Binding Texts[Roguelike.Difficulty]}" />
+                  <Run Text="&#160;" />
+                  <InlineUIContainer BaselineAlignment="Center">
+                    <controls:TooltipHint IsVisible="{Binding ShowJieGardenDifficultyTip}"
+                                          Tip="{Binding Texts[Roguelike.JieGardenDifficultyTip]}" />
+                  </InlineUIContainer>
+                </TextBlock>
+                <controls:AppSelect ItemsSource="{Binding DifficultyOptions}"
+                                    SelectedValueBinding="{Binding Value}"
+                                    SelectedValue="{Binding Difficulty}">
+                  <controls:AppSelect.ItemTemplate>
                     <DataTemplate x:DataType="vm:RoguelikeModuleViewModel+IntOption">
                       <TextBlock Text="{Binding DisplayName}" />
                     </DataTemplate>
-                  </ComboBox.ItemTemplate>
-                </ComboBox>
-              </StackPanel>
+                  </controls:AppSelect.ItemTemplate>
+                </controls:AppSelect>
+              </controls:SettingsInlineRow>
 
-              <StackPanel Classes="settings-centered-column">
+              <controls:SettingsInlineRow FieldWidth="{DynamicResource MAA.Size.Settings.FieldWideWidth}">
                 <TextBlock Classes="settings-field-caption" Text="{Binding Texts[Roguelike.Mode]}" />
-                <ComboBox Classes="app-input"
-                          Width="{DynamicResource MAA.Size.Settings.FieldCenteredWidth}"
-                          ItemsSource="{Binding ModeOptions}"
-                          SelectedValueBinding="{Binding Value}"
-                          SelectedValue="{Binding Mode}">
-                  <ComboBox.ItemTemplate>
+                <controls:AppSelect ItemsSource="{Binding ModeOptions}"
+                                    SelectedValueBinding="{Binding Value}"
+                                    SelectedValue="{Binding Mode}">
+                  <controls:AppSelect.ItemTemplate>
                     <DataTemplate x:DataType="vm:RoguelikeModuleViewModel+IntOption">
                       <TextBlock Text="{Binding DisplayName}" TextWrapping="Wrap" />
                     </DataTemplate>
-                  </ComboBox.ItemTemplate>
-                </ComboBox>
-              </StackPanel>
+                  </controls:AppSelect.ItemTemplate>
+                </controls:AppSelect>
+              </controls:SettingsInlineRow>
 
-              <StackPanel Classes="settings-centered-column"
-                          IsVisible="{Binding ShowCollectibleModeSquad}">
+              <controls:SettingsInlineRow IsVisible="{Binding ShowCollectibleModeSquad}">
                 <TextBlock Classes="settings-field-caption"
                            Text="{Binding Texts[Roguelike.CollectibleModeSquad]}" />
-                <ComboBox Classes="app-input"
-                          Width="{DynamicResource MAA.Size.Settings.FieldCenteredWidth}"
-                          ItemsSource="{Binding SquadOptions}"
-                          SelectedValueBinding="{Binding Type}"
-                          SelectedValue="{Binding CollectibleModeSquad}">
-                  <ComboBox.ItemTemplate>
+                <controls:AppSelect ItemsSource="{Binding SquadOptions}"
+                                    SelectedValueBinding="{Binding Type}"
+                                    SelectedValue="{Binding CollectibleModeSquad}">
+                  <controls:AppSelect.ItemTemplate>
                     <DataTemplate x:DataType="vm:TaskModuleOption">
                       <TextBlock Text="{Binding DisplayName}" />
                     </DataTemplate>
-                  </ComboBox.ItemTemplate>
-                </ComboBox>
-              </StackPanel>
-            </StackPanel>
+                  </controls:AppSelect.ItemTemplate>
+                </controls:AppSelect>
+              </controls:SettingsInlineRow>
+            </controls:AdaptiveSpacingStackPanel>
           </Border>
 
           <Border Classes="app-surface app-card">
-            <StackPanel Spacing="{DynamicResource MAA.Spacing.Medium}">
-              <StackPanel Classes="settings-centered-column">
+            <controls:AdaptiveSpacingStackPanel Classes="roguelike-card-content">
+              <controls:SettingsInlineRow>
                 <TextBlock Classes="settings-field-caption" Text="{Binding Texts[Roguelike.Squad]}" />
-                <ComboBox Classes="app-input"
-                          Width="{DynamicResource MAA.Size.Settings.FieldCenteredWidth}"
-                          ItemsSource="{Binding SquadOptions}"
-                          SelectedValueBinding="{Binding Type}"
-                          SelectedValue="{Binding Squad}">
-                  <ComboBox.ItemTemplate>
+                <controls:AppSelect ItemsSource="{Binding SquadOptions}"
+                                    SelectedValueBinding="{Binding Type}"
+                                    SelectedValue="{Binding Squad}">
+                  <controls:AppSelect.ItemTemplate>
                     <DataTemplate x:DataType="vm:TaskModuleOption">
                       <TextBlock Text="{Binding DisplayName}" />
                     </DataTemplate>
-                  </ComboBox.ItemTemplate>
-                </ComboBox>
-              </StackPanel>
+                  </controls:AppSelect.ItemTemplate>
+                </controls:AppSelect>
+              </controls:SettingsInlineRow>
 
-              <StackPanel Classes="settings-centered-column">
+              <controls:SettingsInlineRow FieldWidth="{DynamicResource MAA.Size.Settings.FieldWideWidth}">
                 <TextBlock Classes="settings-field-caption" Text="{Binding Texts[Roguelike.Roles]}" />
-                <ComboBox Classes="app-input"
-                          Width="{DynamicResource MAA.Size.Settings.FieldCenteredWidth}"
-                          ItemsSource="{Binding RolesOptions}"
-                          SelectedValueBinding="{Binding Type}"
-                          SelectedValue="{Binding Roles}">
-                  <ComboBox.ItemTemplate>
+                <controls:AppSelect ItemsSource="{Binding RolesOptions}"
+                                    SelectedValueBinding="{Binding Type}"
+                                    SelectedValue="{Binding Roles}">
+                  <controls:AppSelect.ItemTemplate>
                     <DataTemplate x:DataType="vm:TaskModuleOption">
                       <TextBlock Text="{Binding DisplayName}" TextWrapping="Wrap" />
                     </DataTemplate>
-                  </ComboBox.ItemTemplate>
-                </ComboBox>
-              </StackPanel>
+                  </controls:AppSelect.ItemTemplate>
+                </controls:AppSelect>
+              </controls:SettingsInlineRow>
 
-              <StackPanel Classes="settings-centered-column"
-                          IsVisible="{Binding ShowFindPlayTimeTarget}">
+              <controls:SettingsInlineRow IsVisible="{Binding ShowFindPlayTimeTarget}"
+                                          FieldWidth="{DynamicResource MAA.Size.Settings.FieldWideWidth}">
                 <TextBlock Classes="settings-field-caption"
                            Text="{Binding Texts[Roguelike.FindPlayTimeTarget]}" />
-                <ComboBox Classes="app-input"
-                          Width="{DynamicResource MAA.Size.Settings.FieldCenteredWidth}"
-                          ItemsSource="{Binding FindPlayTimeTargetOptions}"
-                          SelectedValueBinding="{Binding Value}"
-                          SelectedValue="{Binding FindPlayTimeTarget}">
-                  <ComboBox.ItemTemplate>
+                <controls:AppSelect ItemsSource="{Binding FindPlayTimeTargetOptions}"
+                                    SelectedValueBinding="{Binding Value}"
+                                    SelectedValue="{Binding FindPlayTimeTarget}">
+                  <controls:AppSelect.ItemTemplate>
                     <DataTemplate x:DataType="vm:RoguelikeModuleViewModel+IntOption">
                       <TextBlock Text="{Binding DisplayName}" />
                     </DataTemplate>
-                  </ComboBox.ItemTemplate>
-                </ComboBox>
-              </StackPanel>
+                  </controls:AppSelect.ItemTemplate>
+                </controls:AppSelect>
+              </controls:SettingsInlineRow>
 
-              <StackPanel Classes="settings-centered-column">
-                <Grid HorizontalAlignment="Center" ColumnDefinitions="Auto,Auto">
-                  <TextBlock Grid.Column="0"
-                             Classes="settings-field-caption"
-                             Margin="0"
-                             Text="{Binding Texts[Roguelike.CoreChar]}" />
-                  <controls:TooltipHint Grid.Column="1"
-                                        Margin="{DynamicResource MAA.Thickness.MarginLeftSmall}"
-                                        Tip="{Binding CoreCharTipText}" />
-                </Grid>
-                <AutoCompleteBox Width="{DynamicResource MAA.Size.Settings.FieldCenteredWidth}"
-                                 ItemsSource="{Binding CoreCharNameOptions}"
-                                 MinimumPrefixLength="0"
-                                 Text="{Binding CoreCharDisplayText, UpdateSourceTrigger=PropertyChanged}" />
-              </StackPanel>
-            </StackPanel>
+              <controls:SettingsInlineRow FieldWidth="{DynamicResource MAA.Size.Settings.FieldWideWidth}">
+                <TextBlock Classes="settings-field-caption"
+                           Margin="0"
+                           TextWrapping="Wrap">
+                  <Run Text="{Binding Texts[Roguelike.CoreChar]}" />
+                  <Run Text="&#160;" />
+                  <InlineUIContainer BaselineAlignment="Center">
+                    <controls:TooltipHint Tip="{Binding CoreCharTipText}" />
+                  </InlineUIContainer>
+                </TextBlock>
+                <controls:AppSuggestInput ItemsSource="{Binding CoreCharNameOptions}"
+                                          MinimumPrefixLength="0"
+                                          Text="{Binding CoreCharDisplayText, UpdateSourceTrigger=PropertyChanged}" />
+              </controls:SettingsInlineRow>
+            </controls:AdaptiveSpacingStackPanel>
           </Border>
-        </StackPanel>
+        </controls:AdaptiveSpacingStackPanel>
 
-        <StackPanel IsVisible="{Binding IsAdvancedMode}" Spacing="{DynamicResource MAA.Spacing.Medium}">
+        <controls:AdaptiveSpacingStackPanel IsVisible="{Binding IsAdvancedMode}" Classes="roguelike-section-content">
           <Border Classes="app-surface app-card">
-            <StackPanel Spacing="{DynamicResource MAA.Spacing.Medium}">
-              <StackPanel Classes="settings-centered-column">
+            <controls:AdaptiveSpacingStackPanel Classes="roguelike-card-content">
+              <controls:SettingsInlineRow>
                 <TextBlock Classes="settings-field-caption" Text="{Binding Texts[Roguelike.StartsCount]}" />
-                <controls:VerticalSpinNumberBox Width="{DynamicResource MAA.Size.Settings.FieldNarrowWidth}"
-                                                Minimum="0"
-                                                Maximum="9999999"
-                                                Value="{Binding StartsCount}" />
-              </StackPanel>
+                <controls:AppNumberInput Minimum="0"
+                                         Maximum="9999999"
+                                         Value="{Binding StartsCount}" />
+              </controls:SettingsInlineRow>
 
-              <CheckBox Content="{Binding Texts[Roguelike.InvestmentEnabled]}"
+              <CheckBox Classes="app-checkbox"
+                        Content="{Binding Texts[Roguelike.InvestmentEnabled]}"
                         IsChecked="{Binding InvestmentEnabled}"
                         IsEnabled="{Binding CanToggleInvestmentEnabled}" />
-              <CheckBox Content="{Binding Texts[Roguelike.StopWhenInvestmentFull]}"
+              <CheckBox Classes="app-checkbox"
+                        Content="{Binding Texts[Roguelike.StopWhenInvestmentFull]}"
                         IsChecked="{Binding StopWhenInvestmentFull}"
                         IsVisible="{Binding ShowStopWhenInvestmentFull}" />
-              <CheckBox Content="{Binding Texts[Roguelike.InvestmentWithMoreScore]}"
+              <CheckBox Classes="app-checkbox"
+                        Content="{Binding Texts[Roguelike.InvestmentWithMoreScore]}"
                         IsChecked="{Binding InvestmentWithMoreScore}"
                         IsVisible="{Binding ShowInvestmentWithMoreScore}" />
-              <CheckBox Content="{Binding Texts[Roguelike.CollectibleModeShopping]}"
+              <CheckBox Classes="app-checkbox"
+                        Content="{Binding Texts[Roguelike.CollectibleModeShopping]}"
                         IsChecked="{Binding CollectibleModeShopping}"
                         IsVisible="{Binding ShowCollectibleModeShopping}" />
 
-              <StackPanel Classes="settings-centered-column"
-                          IsVisible="{Binding ShowInvestmentsCount}">
+              <controls:SettingsInlineRow IsVisible="{Binding ShowInvestmentsCount}">
                 <TextBlock Classes="settings-field-caption"
                            Text="{Binding Texts[Roguelike.InvestmentsCount]}" />
-                <controls:VerticalSpinNumberBox Width="{DynamicResource MAA.Size.Settings.FieldNarrowWidth}"
-                                                Minimum="0"
-                                                Maximum="999999"
-                                                Value="{Binding InvestmentsCount}" />
-              </StackPanel>
+                <controls:AppNumberInput Minimum="0"
+                                         Maximum="999999"
+                                         Value="{Binding InvestmentsCount}" />
+              </controls:SettingsInlineRow>
 
-              <CheckBox Content="{Binding Texts[Roguelike.RefreshTraderWithDice]}"
+              <CheckBox Classes="app-checkbox"
+                        Content="{Binding Texts[Roguelike.RefreshTraderWithDice]}"
                         IsChecked="{Binding RefreshTraderWithDice}"
                         IsVisible="{Binding ShowRefreshTraderWithDice}" />
 
-              <CheckBox Content="{Binding Texts[Roguelike.StartWithEliteTwo]}"
+              <CheckBox Classes="app-checkbox"
+                        Content="{Binding Texts[Roguelike.StartWithEliteTwo]}"
                         IsChecked="{Binding StartWithEliteTwo}"
                         IsVisible="{Binding ShowStartWithEliteTwo}" />
-              <CheckBox Content="{Binding Texts[Roguelike.OnlyStartWithEliteTwo]}"
+              <CheckBox Classes="app-checkbox"
+                        Content="{Binding Texts[Roguelike.OnlyStartWithEliteTwo]}"
                         IsChecked="{Binding OnlyStartWithEliteTwo}"
                         IsVisible="{Binding ShowOnlyStartWithEliteTwoOption}" />
 
-              <controls:CheckComboBox IsVisible="{Binding ShowCollectibleStartRewardOptions}"
-                                      HeaderText="{Binding CollectibleStartRewardSummary}">
-                <controls:CheckComboBox.DropDownContent>
-                  <StackPanel Spacing="{DynamicResource MAA.Spacing.Small}">
-                    <CheckBox Content="{Binding Texts[Roguelike.Collectible.HotWater]}"
+              <controls:AppMultiSelectDropdown IsVisible="{Binding ShowCollectibleStartRewardOptions}"
+                                                HeaderText="{Binding CollectibleStartRewardSummary}">
+                <controls:AppMultiSelectDropdown.DropDownContent>
+                  <controls:AdaptiveSpacingStackPanel Classes="roguelike-card-content">
+                    <CheckBox Classes="app-checkbox"
+                              Content="{Binding Texts[Roguelike.Collectible.HotWater]}"
                               IsChecked="{Binding CollectibleHotWater}"
                               IsVisible="{Binding ShowCollectibleHotWater}" />
-                    <CheckBox Content="{Binding Texts[Roguelike.Collectible.Shield]}"
+                    <CheckBox Classes="app-checkbox"
+                              Content="{Binding Texts[Roguelike.Collectible.Shield]}"
                               IsChecked="{Binding CollectibleShield}"
                               IsVisible="{Binding ShowCollectibleShield}" />
-                    <CheckBox Content="{Binding Texts[Roguelike.Collectible.Ingot]}"
+                    <CheckBox Classes="app-checkbox"
+                              Content="{Binding Texts[Roguelike.Collectible.Ingot]}"
                               IsChecked="{Binding CollectibleIngot}"
                               IsVisible="{Binding ShowCollectibleIngot}" />
-                    <CheckBox Content="{Binding Texts[Roguelike.Collectible.Hope]}"
+                    <CheckBox Classes="app-checkbox"
+                              Content="{Binding Texts[Roguelike.Collectible.Hope]}"
                               IsChecked="{Binding CollectibleHope}"
                               IsVisible="{Binding ShowCollectibleHope}" />
-                    <CheckBox Content="{Binding Texts[Roguelike.Collectible.Random]}"
+                    <CheckBox Classes="app-checkbox"
+                              Content="{Binding Texts[Roguelike.Collectible.Random]}"
                               IsChecked="{Binding CollectibleRandom}"
                               IsVisible="{Binding ShowCollectibleRandom}" />
-                    <CheckBox Content="{Binding Texts[Roguelike.Collectible.Key]}"
+                    <CheckBox Classes="app-checkbox"
+                              Content="{Binding Texts[Roguelike.Collectible.Key]}"
                               IsChecked="{Binding CollectibleKey}"
                               IsVisible="{Binding ShowCollectibleKey}" />
-                    <CheckBox Content="{Binding Texts[Roguelike.Collectible.Dice]}"
+                    <CheckBox Classes="app-checkbox"
+                              Content="{Binding Texts[Roguelike.Collectible.Dice]}"
                               IsChecked="{Binding CollectibleDice}"
                               IsVisible="{Binding ShowCollectibleDice}" />
-                    <CheckBox Content="{Binding Texts[Roguelike.Collectible.Ideas]}"
+                    <CheckBox Classes="app-checkbox"
+                              Content="{Binding Texts[Roguelike.Collectible.Ideas]}"
                               IsChecked="{Binding CollectibleIdeas}"
                               IsVisible="{Binding ShowCollectibleIdeas}" />
-                    <CheckBox Content="{Binding Texts[Roguelike.Collectible.Ticket]}"
+                    <CheckBox Classes="app-checkbox"
+                              Content="{Binding Texts[Roguelike.Collectible.Ticket]}"
                               IsChecked="{Binding CollectibleTicket}"
                               IsVisible="{Binding ShowCollectibleTicket}" />
-                  </StackPanel>
-                </controls:CheckComboBox.DropDownContent>
-              </controls:CheckComboBox>
-            </StackPanel>
+                  </controls:AdaptiveSpacingStackPanel>
+                </controls:AppMultiSelectDropdown.DropDownContent>
+              </controls:AppMultiSelectDropdown>
+            </controls:AdaptiveSpacingStackPanel>
           </Border>
 
           <Border Classes="app-surface app-card">
-            <StackPanel Spacing="{DynamicResource MAA.Spacing.Medium}">
-              <StackPanel Spacing="{DynamicResource MAA.Spacing.Small}">
-                <CheckBox Content="{Binding Texts[Roguelike.FirstFloorFoldartal]}"
+            <controls:AdaptiveSpacingStackPanel Classes="roguelike-card-content">
+              <controls:AdaptiveSpacingStackPanel Classes="roguelike-card-content">
+                <CheckBox Classes="app-checkbox"
+                          Content="{Binding Texts[Roguelike.FirstFloorFoldartal]}"
                           IsChecked="{Binding FirstFloorFoldartalEnabled}"
                           IsVisible="{Binding ShowFirstFloorFoldartalToggle}" />
-                <TextBox Classes="app-input"
-                         Width="{DynamicResource MAA.Size.Settings.FieldCenteredWidth}"
-                         HorizontalAlignment="Center"
-                         IsVisible="{Binding ShowFirstFloorFoldartalText}"
-                         Text="{Binding FirstFloorFoldartal, UpdateSourceTrigger=LostFocus}" />
-              </StackPanel>
+                <controls:AppTextInput MaxWidth="{DynamicResource MAA.Size.Settings.FieldWideWidth}"
+                                       HorizontalAlignment="Stretch"
+                                       IsVisible="{Binding ShowFirstFloorFoldartalText}"
+                                       Text="{Binding FirstFloorFoldartal, UpdateSourceTrigger=LostFocus}" />
+              </controls:AdaptiveSpacingStackPanel>
 
-              <StackPanel Spacing="{DynamicResource MAA.Spacing.Small}">
-                <Grid HorizontalAlignment="Center"
-                      ColumnDefinitions="Auto,Auto"
-                      IsVisible="{Binding ShowStartFoldartalListToggle}">
-                  <CheckBox Grid.Column="0"
-                            Content="{Binding Texts[Roguelike.StartFoldartalList]}"
-                            IsChecked="{Binding StartFoldartalListEnabled}" />
-                  <controls:TooltipHint Grid.Column="1"
-                                        Margin="{DynamicResource MAA.Thickness.MarginLeftSmall}"
-                                        Tip="{Binding Texts[Roguelike.StartFoldartalTip]}" />
-                </Grid>
-                <TextBox Classes="app-input"
-                         Width="{DynamicResource MAA.Size.Settings.FieldCenteredWidth}"
-                         HorizontalAlignment="Center"
-                         IsVisible="{Binding ShowStartFoldartalListText}"
-                         Text="{Binding StartFoldartalListText, UpdateSourceTrigger=LostFocus}" />
-              </StackPanel>
+              <controls:AdaptiveSpacingStackPanel Classes="roguelike-card-content">
+                <controls:AppHintedCheckBox HorizontalAlignment="Left"
+                                             Text="{Binding Texts[Roguelike.StartFoldartalList]}"
+                                             Tip="{Binding Texts[Roguelike.StartFoldartalTip]}"
+                                             IsChecked="{Binding StartFoldartalListEnabled}"
+                                             IsVisible="{Binding ShowStartFoldartalListToggle}" />
+                <controls:AppTextInput MaxWidth="{DynamicResource MAA.Size.Settings.FieldWideWidth}"
+                                       HorizontalAlignment="Stretch"
+                                       IsVisible="{Binding ShowStartFoldartalListText}"
+                                       Text="{Binding StartFoldartalListText, UpdateSourceTrigger=LostFocus}" />
+              </controls:AdaptiveSpacingStackPanel>
 
-              <StackPanel Classes="settings-centered-column"
-                          IsVisible="{Binding ShowExpectedCollapsalParadigms}">
-                <Grid HorizontalAlignment="Center" ColumnDefinitions="Auto,Auto">
-                  <TextBlock Grid.Column="0"
-                             Classes="settings-field-caption"
-                             Margin="0"
-                             Text="{Binding Texts[Roguelike.ExpectedCollapsalParadigms]}" />
-                  <controls:TooltipHint Grid.Column="1"
-                                        Margin="{DynamicResource MAA.Thickness.MarginLeftSmall}"
-                                        Tip="{Binding Texts[Roguelike.ExpectedCollapsalParadigmsTip]}" />
-                </Grid>
-                <TextBox Classes="app-input"
-                         Width="{DynamicResource MAA.Size.Settings.FieldCenteredWidth}"
-                         Text="{Binding ExpectedCollapsalParadigmsText, UpdateSourceTrigger=LostFocus}" />
-              </StackPanel>
+              <controls:SettingsInlineRow IsVisible="{Binding ShowExpectedCollapsalParadigms}"
+                                          FieldWidth="{DynamicResource MAA.Size.Settings.FieldWideWidth}">
+                <TextBlock Classes="settings-field-caption"
+                           Margin="0"
+                           TextWrapping="Wrap">
+                  <Run Text="{Binding Texts[Roguelike.ExpectedCollapsalParadigms]}" />
+                  <Run Text="&#160;" />
+                  <InlineUIContainer BaselineAlignment="Center">
+                    <controls:TooltipHint Tip="{Binding Texts[Roguelike.ExpectedCollapsalParadigmsTip]}" />
+                  </InlineUIContainer>
+                </TextBlock>
+                <controls:AppTextInput Text="{Binding ExpectedCollapsalParadigmsText, UpdateSourceTrigger=LostFocus}" />
+              </controls:SettingsInlineRow>
 
-              <StackPanel Spacing="{DynamicResource MAA.Spacing.Small}">
-                <CheckBox Content="{Binding Texts[Roguelike.StartWithSeed]}"
+              <controls:AdaptiveSpacingStackPanel Classes="roguelike-card-content">
+                <CheckBox Classes="app-checkbox"
+                          Content="{Binding Texts[Roguelike.StartWithSeed]}"
                           IsChecked="{Binding StartWithSeedEnabled}"
                           IsVisible="{Binding ShowStartWithSeedToggle}" />
-                <TextBox Classes="app-input"
-                         Width="{DynamicResource MAA.Size.Settings.FieldCenteredWidth}"
-                         HorizontalAlignment="Center"
-                         IsVisible="{Binding ShowStartWithSeedInput}"
-                         Text="{Binding StartWithSeed, UpdateSourceTrigger=PropertyChanged}" />
-              </StackPanel>
-            </StackPanel>
+                <controls:AppTextInput MaxWidth="{DynamicResource MAA.Size.Settings.FieldWideWidth}"
+                                       HorizontalAlignment="Stretch"
+                                       IsVisible="{Binding ShowStartWithSeedInput}"
+                                       Text="{Binding StartWithSeed, UpdateSourceTrigger=PropertyChanged}" />
+              </controls:AdaptiveSpacingStackPanel>
+            </controls:AdaptiveSpacingStackPanel>
           </Border>
 
           <Border Classes="app-surface app-card">
-            <StackPanel Spacing="{DynamicResource MAA.Spacing.Medium}">
-              <Grid HorizontalAlignment="Center" ColumnDefinitions="Auto,Auto">
-                <CheckBox Grid.Column="0"
-                          Content="{Binding Texts[Roguelike.UseSupport]}"
-                          IsChecked="{Binding UseSupport}"
-                          IsEnabled="{Binding CanUseSupport}" />
-                <controls:TooltipHint Grid.Column="1"
-                                      Margin="{DynamicResource MAA.Thickness.MarginLeftSmall}"
-                                      Tip="{Binding Texts[Roguelike.UseSupportTip]}" />
-              </Grid>
+            <controls:AdaptiveSpacingStackPanel Classes="roguelike-card-content">
+              <controls:AppHintedCheckBox HorizontalAlignment="Left"
+                                           Text="{Binding Texts[Roguelike.UseSupport]}"
+                                           Tip="{Binding Texts[Roguelike.UseSupportTip]}"
+                                           IsChecked="{Binding UseSupport}"
+                                           CheckBoxIsEnabled="{Binding CanUseSupport}" />
 
-              <Grid HorizontalAlignment="Center"
+              <Grid HorizontalAlignment="Left"
                     ColumnDefinitions="Auto,*"
                     IsVisible="{Binding ShowUseNonfriendSupport}">
                 <TextBlock Margin="0,0,4,0" Text="└" />
                 <CheckBox Grid.Column="1"
+                          Classes="app-checkbox"
                           Content="{Binding Texts[Roguelike.UseNonfriendSupport]}"
                           IsChecked="{Binding UseNonfriendSupport}" />
               </Grid>
 
-              <CheckBox Content="{Binding Texts[Roguelike.StopAtFinalBoss]}"
+              <CheckBox Classes="app-checkbox"
+                        Content="{Binding Texts[Roguelike.StopAtFinalBoss]}"
                         IsChecked="{Binding StopAtFinalBoss}"
                         IsVisible="{Binding ShowStopAtFinalBoss}" />
-              <CheckBox Content="{Binding Texts[Roguelike.MonthlySquadAutoIterate]}"
+              <CheckBox Classes="app-checkbox"
+                        Content="{Binding Texts[Roguelike.MonthlySquadAutoIterate]}"
                         IsChecked="{Binding MonthlySquadAutoIterate}"
                         IsVisible="{Binding ShowMonthlySquadAutoIterate}" />
-              <CheckBox Content="{Binding Texts[Roguelike.MonthlySquadCheckComms]}"
+              <CheckBox Classes="app-checkbox"
+                        Content="{Binding Texts[Roguelike.MonthlySquadCheckComms]}"
                         IsChecked="{Binding MonthlySquadCheckComms}"
                         IsVisible="{Binding ShowMonthlySquadCheckComms}" />
-              <CheckBox Content="{Binding Texts[Roguelike.DeepExplorationAutoIterate]}"
+              <CheckBox Classes="app-checkbox"
+                        Content="{Binding Texts[Roguelike.DeepExplorationAutoIterate]}"
                         IsChecked="{Binding DeepExplorationAutoIterate}"
                         IsVisible="{Binding ShowDeepExplorationAutoIterate}" />
-              <CheckBox Content="{Binding Texts[Roguelike.StopAtMaxLevel]}"
+              <CheckBox Classes="app-checkbox"
+                        Content="{Binding Texts[Roguelike.StopAtMaxLevel]}"
                         IsChecked="{Binding StopAtMaxLevel}"
                         IsVisible="{Binding ShowStopAtMaxLevel}" />
 
@@ -337,27 +331,23 @@
                          FontWeight="Bold"
                          Text="{Binding Texts[Roguelike.MultiTaskSharedTip]}"
                          TextAlignment="Left" />
-              <CheckBox Content="{Binding Texts[Roguelike.DelayAbortUntilCombatComplete]}"
+              <CheckBox Classes="app-checkbox"
+                        Content="{Binding Texts[Roguelike.DelayAbortUntilCombatComplete]}"
                         IsChecked="{Binding DelayAbortUntilCombatComplete}" />
-            </StackPanel>
+            </controls:AdaptiveSpacingStackPanel>
           </Border>
-        </StackPanel>
+        </controls:AdaptiveSpacingStackPanel>
 
-        <Border Classes="app-surface app-section">
-          <StackPanel Spacing="4">
-            <TextBlock Classes="settings-note settings-centered-text long-wrap"
-                       Text="{Binding Texts[Common.LoadingTaskHint]}" />
-            <TextBlock Classes="settings-centered-text long-wrap" Text="{Binding StatusMessage}" />
-            <TextBlock Classes="state-error settings-centered-text long-wrap"
-                       Text="{Binding LastErrorMessage}" />
-            <StackPanel IsVisible="{Binding HasValidationIssues}" Spacing="4">
+        <controls:AdaptiveSpacingStackPanel Spacing="4">
+            <controls:AdaptiveSpacingStackPanel IsVisible="{Binding HasValidationIssues}" Spacing="4">
               <TextBlock Classes="state-warning settings-centered-text"
                          Text="{Binding Texts[Common.ValidationIssues]}" />
               <ListBox MaxHeight="96" ItemsSource="{Binding ValidationMessages}" />
-            </StackPanel>
-          </StackPanel>
-        </Border>
-      </StackPanel>
+            </controls:AdaptiveSpacingStackPanel>
+            <TextBlock Classes="settings-note settings-centered-text long-wrap"
+                       Text="{Binding StatusMessage}" />
+        </controls:AdaptiveSpacingStackPanel>
+      </controls:AdaptiveSpacingStackPanel>
     </Grid>
   </ScrollViewer>
 </UserControl>

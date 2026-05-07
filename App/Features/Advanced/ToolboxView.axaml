@@ -1,170 +1,35 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:views="clr-namespace:MAAUnified.App.Features.Advanced"
+             Classes="toolbox-page"
              x:Class="MAAUnified.App.Features.Advanced.ToolboxView">
-  <UserControl.Styles>
-    <Style Selector="Border.toolbox-shell">
-      <Setter Property="Padding" Value="0" />
-    </Style>
+  <Grid Margin="4,0,4,4"
+        RowDefinitions="*">
+    <TabControl Classes="toolbox-nav"
+                SelectedIndex="{Binding SelectedTabIndex}">
+      <TabItem Header="{Binding RecruitTabTitle}">
+        <views:ToolboxRecruitView />
+      </TabItem>
 
-    <Style Selector="StackPanel.toolbox-review-header">
-      <Setter Property="Spacing" Value="8" />
-    </Style>
+      <TabItem Header="{Binding OperBoxTabTitle}">
+        <views:ToolboxOperBoxView />
+      </TabItem>
 
-    <Style Selector="Border.app-badge.toolbox-review-chip">
-      <Setter Property="HorizontalAlignment" Value="Left" />
-    </Style>
+      <TabItem Header="{Binding DepotTabTitle}">
+        <views:ToolboxDepotView />
+      </TabItem>
 
-    <Style Selector="Border.toolbox-review-card">
-      <Setter Property="MinHeight" Value="120" />
-    </Style>
+      <TabItem Header="{Binding GachaTabTitle}">
+        <views:ToolboxGachaView />
+      </TabItem>
 
-    <Style Selector="StackPanel.toolbox-review-card-stack">
-      <Setter Property="Spacing" Value="12" />
-    </Style>
+      <TabItem Header="{Binding PeepTabTitle}">
+        <views:ToolboxPeepView />
+      </TabItem>
 
-    <Style Selector="Border.toolbox-review-history-card">
-      <Setter Property="Margin" Value="0,0,0,12" />
-    </Style>
-
-    <Style Selector="Border.toolbox-review-history-card.status-success">
-      <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.State.Success}" />
-    </Style>
-
-    <Style Selector="Border.toolbox-review-history-card.status-error">
-      <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.State.Error}" />
-    </Style>
-
-    <Style Selector="StackPanel.toolbox-review-history-stack">
-      <Setter Property="Spacing" Value="10" />
-    </Style>
-
-    <Style Selector="TextBlock.toolbox-review-summary-text">
-      <Setter Property="LineHeight" Value="20" />
-    </Style>
-
-    <Style Selector="Border.toolbox-review-history-error-badge">
-      <Setter Property="HorizontalAlignment" Value="Right" />
-      <Setter Property="VerticalAlignment" Value="Center" />
-    </Style>
-  </UserControl.Styles>
-
-  <Grid Margin="4"
-        RowDefinitions="Auto,Auto">
-    <Border Classes="app-surface app-section toolbox-shell">
-      <TabControl Classes="toolbox-nav"
-                  SelectedIndex="{Binding SelectedTabIndex}">
-        <TabItem Header="{Binding RecruitTabTitle}">
-          <views:ToolboxRecruitView />
-        </TabItem>
-
-        <TabItem Header="{Binding OperBoxTabTitle}">
-          <views:ToolboxOperBoxView />
-        </TabItem>
-
-        <TabItem Header="{Binding DepotTabTitle}">
-          <views:ToolboxDepotView />
-        </TabItem>
-
-        <TabItem Header="{Binding GachaTabTitle}">
-          <views:ToolboxGachaView />
-        </TabItem>
-
-        <TabItem Header="{Binding PeepTabTitle}">
-          <views:ToolboxPeepView />
-        </TabItem>
-
-        <TabItem Header="{Binding MiniGameTabTitle}">
-          <views:ToolboxMiniGameView />
-        </TabItem>
-      </TabControl>
-    </Border>
-
-    <StackPanel Grid.Row="1"
-                Classes="settings-form"
-                Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}">
-      <Border Classes="app-surface app-section">
-        <StackPanel Classes="toolbox-review-header">
-          <TextBlock Classes="section-title"
-                     Text="{Binding ExecutionReviewTitle}" />
-
-          <WrapPanel Classes="settings-wrap">
-            <Border Classes="app-surface app-card toolbox-review-card">
-              <StackPanel Classes="toolbox-review-card-stack">
-                <Border Classes="app-badge toolbox-review-chip">
-                  <TextBlock Classes="app-badge-text"
-                             Text="{Binding ExecutionReviewResultLabelText}" />
-                </Border>
-                <TextBlock Classes="app-body long-wrap toolbox-review-summary-text"
-                           Text="{Binding ResultText}" />
-              </StackPanel>
-            </Border>
-
-            <Border Classes="app-surface app-card toolbox-review-card">
-              <StackPanel Classes="toolbox-review-card-stack">
-                <Border Classes="app-badge toolbox-review-chip">
-                  <TextBlock Classes="app-badge-text"
-                             Text="{Binding ExecutionReviewParametersLabelText}" />
-                </Border>
-                <TextBlock Classes="app-body long-wrap toolbox-review-summary-text"
-                           Text="{Binding CurrentToolParameters}" />
-              </StackPanel>
-            </Border>
-          </WrapPanel>
-        </StackPanel>
-      </Border>
-
-      <Border Classes="app-surface app-section">
-        <StackPanel Spacing="14">
-          <Border Classes="app-badge toolbox-review-chip">
-            <TextBlock Classes="app-badge-text"
-                       Text="{Binding ExecutionReviewHistoryLabelText}" />
-          </Border>
-
-          <Border Classes="app-surface app-card">
-            <ScrollViewer HorizontalScrollBarVisibility="Disabled"
-                          VerticalScrollBarVisibility="Auto">
-              <ItemsControl ItemsSource="{Binding ExecutionHistory}"
-                            IsVisible="{Binding HasExecutionHistory}">
-                <ItemsControl.ItemTemplate>
-                  <DataTemplate>
-                    <Border Classes="app-surface app-card toolbox-review-history-card"
-                            Classes.status-success="{Binding Success}"
-                            Classes.status-error="{Binding HasErrorCode}">
-                      <StackPanel Classes="toolbox-review-history-stack">
-                        <Grid ColumnDefinitions="Auto,*,Auto"
-                              RowDefinitions="Auto,Auto">
-                          <TextBlock Classes="app-caption"
-                                     Text="{Binding ExecutedAt, StringFormat='{}{0:yyyy-MM-dd HH:mm:ss}'}" />
-                          <TextBlock Grid.Column="1"
-                                     Margin="12,0"
-                                     Classes="app-body long-wrap"
-                                     FontWeight="SemiBold"
-                                     Text="{Binding ToolName}" />
-                          <Border Grid.Column="2"
-                                  Classes="app-badge toolbox-review-history-error-badge"
-                                  IsVisible="{Binding HasErrorCode}">
-                            <TextBlock Classes="app-badge-text"
-                                       Text="{Binding ErrorCode}" />
-                          </Border>
-                          <TextBlock Grid.Row="1"
-                                     Grid.ColumnSpan="3"
-                                     Margin="0,4,0,0"
-                                     Classes="app-caption long-wrap"
-                                     Text="{Binding ParameterSummary}" />
-                        </Grid>
-
-                        <TextBlock Classes="app-body long-wrap"
-                                   Text="{Binding ResultSummary}" />
-                      </StackPanel>
-                    </Border>
-                  </DataTemplate>
-                </ItemsControl.ItemTemplate>
-              </ItemsControl>
-            </ScrollViewer>
-          </Border>
-        </StackPanel>
-      </Border>
-    </StackPanel>
+      <TabItem Header="{Binding MiniGameTabTitle}">
+        <views:ToolboxMiniGameView />
+      </TabItem>
+    </TabControl>
   </Grid>
 </UserControl>

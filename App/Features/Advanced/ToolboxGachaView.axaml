@@ -2,20 +2,12 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="MAAUnified.App.Features.Advanced.ToolboxGachaView">
   <UserControl.Styles>
-    <Style Selector="Border.toolbox-gacha-section">
-      <Setter Property="Padding" Value="22" />
-    </Style>
-
-    <Style Selector="Border.toolbox-gacha-card">
-      <Setter Property="Padding" Value="18" />
-    </Style>
-
-    <Style Selector="Border.toolbox-gacha-preview-card">
-      <Setter Property="Padding" Value="12" />
+    <Style Selector="StackPanel.toolbox-gacha-section">
+      <Setter Property="Spacing" Value="14" />
     </Style>
 
     <Style Selector="StackPanel.toolbox-gacha-section-stack">
-      <Setter Property="Spacing" Value="16" />
+      <Setter Property="Spacing" Value="14" />
     </Style>
 
     <Style Selector="TextBlock.toolbox-gacha-summary">
@@ -42,16 +34,11 @@
       <Setter Property="Margin" Value="16" />
     </Style>
 
-    <Style Selector="Border.toolbox-gacha-disclaimer-card">
-      <Setter Property="MaxWidth" Value="760" />
-      <Setter Property="HorizontalAlignment" Value="Center" />
-    </Style>
-
     <Style Selector="TextBlock.toolbox-gacha-disclaimer-lead">
       <Setter Property="HorizontalAlignment" Value="Center" />
       <Setter Property="TextAlignment" Value="Center" />
-      <Setter Property="FontSize" Value="{DynamicResource MAA.FontSize.Toolbox.WarningLead}" />
-      <Setter Property="FontWeight" Value="Bold" />
+      <Setter Property="FontSize" Value="26" />
+      <Setter Property="FontWeight" Value="SemiBold" />
       <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
 
@@ -86,108 +73,87 @@
                 VerticalScrollBarVisibility="Auto">
     <Grid Margin="{DynamicResource MAA.Thickness.Toolbox.PageMarginFlat}"
           RowDefinitions="Auto,Auto,Auto,Auto">
-      <Border Classes="app-surface app-section toolbox-gacha-section"
-              IsVisible="{Binding ShowGachaControls}">
+      <StackPanel Grid.Row="0"
+                  Classes="toolbox-gacha-section"
+                  IsVisible="{Binding ShowGachaControls}">
         <TextBlock Classes="app-window-subtitle long-wrap toolbox-gacha-summary"
                    Text="{Binding GachaInfo}" />
-      </Border>
+      </StackPanel>
 
-      <Border Grid.Row="1"
-              Margin="0,14,0,0"
-              Classes="app-surface app-section toolbox-gacha-section"
-              IsVisible="{Binding ShowGachaControls}">
-        <Border Classes="app-surface app-card toolbox-gacha-card toolbox-gacha-preview-card">
-          <Grid>
-            <Border Classes="toolbox-gacha-preview-frame">
-              <Image Classes="toolbox-gacha-preview-image"
-                     Source="{Binding PeepImage}"
-                     Stretch="Uniform"
-                     MaxHeight="{DynamicResource MAA.Size.Toolbox.GachaPreviewMaxHeight}" />
-            </Border>
+      <StackPanel Grid.Row="1"
+                  Margin="0,14,0,0"
+                  Classes="toolbox-gacha-section"
+                  IsVisible="{Binding ShowGachaControls}">
+        <Grid>
+          <Border Classes="toolbox-gacha-preview-frame">
+            <Image Classes="toolbox-gacha-preview-image"
+                   Source="{Binding PeepImage}"
+                   Stretch="Uniform"
+                   MaxHeight="{DynamicResource MAA.Size.Toolbox.GachaPreviewMaxHeight}" />
+          </Border>
 
-            <Border Classes="app-badge toolbox-gacha-fps-badge"
-                    IsVisible="{Binding ShowGachaPreview}">
-              <TextBlock Classes="app-badge-text"
-                         Text="{Binding PeepScreenFps, StringFormat='{}{0:F2} FPS'}" />
-            </Border>
-          </Grid>
-        </Border>
-      </Border>
+          <Border Classes="app-badge toolbox-gacha-fps-badge"
+                  IsVisible="{Binding ShowGachaPreview}">
+            <TextBlock Classes="app-badge-text"
+                       Text="{Binding PeepScreenFps, StringFormat='{}{0:F2} FPS'}" />
+          </Border>
+        </Grid>
+      </StackPanel>
 
-      <Border Grid.Row="2"
-              Margin="0,14,0,0"
-              Classes="app-surface app-section toolbox-gacha-section"
-              IsVisible="{Binding GachaShowDisclaimer}">
-        <Border Classes="app-surface app-card toolbox-gacha-card toolbox-gacha-disclaimer-card">
-          <StackPanel Classes="toolbox-gacha-section-stack">
-            <Border Classes="app-highlight app-warning-highlight">
-              <StackPanel Spacing="{DynamicResource MAA.Spacing.Small}">
-                <TextBlock Classes="toolbox-gacha-disclaimer-lead"
-                           Text="{Binding GachaDisclaimerLeadText}" />
+      <StackPanel Grid.Row="2"
+                  Margin="0,14,0,0"
+                  Classes="toolbox-gacha-section toolbox-gacha-section-stack"
+                  IsVisible="{Binding GachaShowDisclaimer}">
+        <TextBlock Classes="toolbox-gacha-disclaimer-lead"
+                   Text="{Binding GachaDisclaimerLeadText}" />
 
-                <TextBlock x:Name="GachaDisclaimerEmphasisText"
-                           Margin="{DynamicResource MAA.Thickness.Toolbox.WarningEmphasisMargin}"
-                           HorizontalAlignment="Center"
-                           TextAlignment="Center"
-                           FontSize="{DynamicResource MAA.FontSize.Toolbox.WarningEmphasis}"
-                           FontWeight="Bold"
-                           Text="{Binding GachaDisclaimerEmphasisText}"
-                           TextWrapping="Wrap">
-                  <TextBlock.Foreground>
-                    <LinearGradientBrush StartPoint="0%,50%"
-                                         EndPoint="100%,50%"
-                                         SpreadMethod="Repeat">
-                      <GradientStop Offset="0.00" Color="Red" />
-                      <GradientStop Offset="0.17" Color="Orange" />
-                      <GradientStop Offset="0.33" Color="Yellow" />
-                      <GradientStop Offset="0.50" Color="Green" />
-                      <GradientStop Offset="0.67" Color="Blue" />
-                      <GradientStop Offset="0.83" Color="Indigo" />
-                      <GradientStop Offset="1.00" Color="Violet" />
-                    </LinearGradientBrush>
-                  </TextBlock.Foreground>
-                  <TextBlock.Effect>
-                    <DropShadowDirectionEffect BlurRadius="8"
-                                               ShadowDepth="4"
-                                               Opacity="0.6"
-                                               Color="Black" />
-                  </TextBlock.Effect>
-                </TextBlock>
-              </StackPanel>
-            </Border>
+        <TextBlock x:Name="GachaDisclaimerEmphasisText"
+                   Margin="{DynamicResource MAA.Thickness.Toolbox.WarningEmphasisMargin}"
+                   HorizontalAlignment="Center"
+                   TextAlignment="Center"
+                   FontSize="{DynamicResource MAA.FontSize.Toolbox.WarningEmphasis}"
+                   FontWeight="Bold"
+                   Text="{Binding GachaDisclaimerEmphasisText}"
+                   TextWrapping="Wrap">
+          <TextBlock.Foreground>
+            <LinearGradientBrush StartPoint="0%,50%"
+                                 EndPoint="100%,50%"
+                                 SpreadMethod="Repeat">
+              <GradientStop Offset="0.00" Color="#F05A22" />
+              <GradientStop Offset="0.50" Color="#E0A72B" />
+              <GradientStop Offset="1.00" Color="#2C6E91" />
+            </LinearGradientBrush>
+          </TextBlock.Foreground>
+        </TextBlock>
 
-            <TextBlock Classes="app-body long-wrap toolbox-gacha-disclaimer-body"
-                       Text="{Binding GachaDisclaimerBodyText}" />
+        <TextBlock Classes="app-body long-wrap toolbox-gacha-disclaimer-body"
+                   Text="{Binding GachaDisclaimerBodyText}" />
 
-            <Button Classes="app-button app-primary toolbox-gacha-disclaimer-action"
-                    Content="{Binding GachaDisclaimerAcknowledgeText}"
-                    Click="OnGachaAgreeDisclaimerClick" />
+        <Button Classes="app-button app-primary toolbox-gacha-disclaimer-action"
+                Content="{Binding GachaDisclaimerAcknowledgeText}"
+                Click="OnGachaAgreeDisclaimerClick" />
 
-            <CheckBox Classes="app-checkbox toolbox-gacha-disclaimer-toggle"
-                      Content="{Binding GachaDisclaimerNoMoreText}"
-                      IsChecked="{Binding GachaShowDisclaimerNoMore}" />
-          </StackPanel>
-        </Border>
-      </Border>
+        <CheckBox Classes="app-checkbox toolbox-gacha-disclaimer-toggle"
+                  Content="{Binding GachaDisclaimerNoMoreText}"
+                  IsChecked="{Binding GachaShowDisclaimerNoMore}" />
+      </StackPanel>
 
-      <Border Grid.Row="3"
-              Margin="0,14,0,0"
-              Classes="app-surface app-section toolbox-gacha-section"
-              IsVisible="{Binding ShowGachaControls}">
-        <Border Classes="app-surface app-card toolbox-gacha-card">
-          <WrapPanel Classes="toolbox-gacha-actions">
-            <Button Classes="app-button app-secondary toolbox-gacha-action"
-                    Content="{Binding GachaDrawOnceText}"
-                    Click="OnGachaOnceClick" />
-            <Button Classes="app-button app-secondary toolbox-gacha-action"
-                    Content="{Binding GachaDrawTenText}"
-                    Click="OnGachaTenTimesClick" />
-            <Button Classes="app-button app-primary toolbox-gacha-action"
-                    Content="{Binding PeepCommandText}"
-                    Click="OnGachaPeepClick" />
-          </WrapPanel>
-        </Border>
-      </Border>
+      <StackPanel Grid.Row="3"
+                  Margin="0,14,0,0"
+                  Classes="toolbox-gacha-section"
+                  IsVisible="{Binding ShowGachaControls}">
+        <WrapPanel Classes="toolbox-gacha-actions">
+          <Button Classes="app-button app-secondary toolbox-gacha-action"
+                  Content="{Binding GachaDrawOnceText}"
+                  Click="OnGachaOnceClick" />
+          <Button Classes="app-button app-secondary toolbox-gacha-action"
+                  Content="{Binding GachaDrawTenText}"
+                  Click="OnGachaTenTimesClick" />
+          <Button Classes="app-button app-primary toolbox-gacha-action"
+                  Content="{Binding PeepCommandText}"
+                  Click="OnGachaPeepClick" />
+        </WrapPanel>
+      </StackPanel>
     </Grid>
   </ScrollViewer>
 </UserControl>

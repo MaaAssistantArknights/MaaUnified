@@ -91,6 +91,14 @@ public sealed partial class SettingsPageViewModel
 
     public async Task SaveRemoteControlAsync(CancellationToken cancellationToken = default)
     {
+        await RunSettingsSaveTargetAsync(
+            "Settings.AutoSave.Remote",
+            SaveRemoteControlCoreAsync,
+            cancellationToken);
+    }
+
+    private async Task SaveRemoteControlCoreAsync(CancellationToken cancellationToken = default)
+    {
         ClearRemoteControlStatus();
         var normalizedUserIdentity = (RemoteUserIdentity ?? string.Empty).Trim();
         var normalizedDeviceIdentity = (RemoteDeviceIdentity ?? string.Empty).Trim();
@@ -280,6 +288,14 @@ public sealed partial class SettingsPageViewModel
 
     public async Task SaveExternalNotificationAsync(CancellationToken cancellationToken = default)
     {
+        await RunSettingsSaveTargetAsync(
+            "Settings.AutoSave.Notification",
+            SaveExternalNotificationCoreAsync,
+            cancellationToken);
+    }
+
+    private async Task SaveExternalNotificationCoreAsync(CancellationToken cancellationToken = default)
+    {
         ClearExternalNotificationStatus();
         PersistCurrentProviderParameters();
         var enabledProviders = ResolveEnabledNotificationProviders();
@@ -319,9 +335,7 @@ public sealed partial class SettingsPageViewModel
             return;
         }
 
-        ExternalNotificationStatusMessage = RootTexts.GetOrDefault(
-            "Settings.ExternalNotification.Status.SaveSucceeded",
-            "External notification settings saved.");
+        ExternalNotificationStatusMessage = BuildExternalNotificationSaveStatusMessage(enabledProviders);
         ExternalNotificationErrorMessage = string.Empty;
         ExternalNotificationWarningMessage = string.Empty;
         StatusMessage = ExternalNotificationStatusMessage;
@@ -398,12 +412,10 @@ public sealed partial class SettingsPageViewModel
             NotificationProviderSelections.Add(selection);
         }
 
+        OnPropertyChanged(nameof(CanSelectExternalNotificationProvider));
         SynchronizeNotificationProviderSelectionsFromEnabledSet();
         _selectedNotificationProvider = NormalizeNotificationProvider(_selectedNotificationProvider);
-        var current = _notificationProviderParameters.TryGetValue(_selectedNotificationProvider, out var stored)
-            ? stored
-            : string.Empty;
-        UpdateProviderParameterMapFromText(_selectedNotificationProvider, current, markDirty: false);
+        RefreshSelectedNotificationProviderText(_selectedNotificationProvider);
         OnPropertyChanged(nameof(SelectedNotificationProvider));
     }
 
@@ -413,6 +425,24 @@ public sealed partial class SettingsPageViewModel
         {
             _notificationProviderParameters[SelectedNotificationProvider] = NotificationProviderParametersText;
         }
+    }
+
+    private void RefreshSelectedNotificationProviderText(string provider)
+    {
+        if (string.IsNullOrWhiteSpace(provider))
+        {
+            SetNotificationProviderParametersTextField(string.Empty);
+            return;
+        }
+
+        var stored = _notificationProviderParameters.TryGetValue(provider, out var existing)
+            ? existing
+            : string.Empty;
+        UpdateProviderParameterMapFromText(provider, stored, markDirty: false);
+        SetNotificationProviderParametersTextField(
+            _notificationProviderParameters.TryGetValue(provider, out var normalizedText)
+                ? normalizedText
+                : stored);
     }
 
     private Dictionary<string, string> EnsureProviderParameterMap(string provider)
@@ -619,10 +649,7 @@ public sealed partial class SettingsPageViewModel
         }
 
         _selectedNotificationProvider = selected;
-        var text = _notificationProviderParameters.TryGetValue(selected, out var storedText)
-            ? storedText
-            : string.Empty;
-        UpdateProviderParameterMapFromText(selected, text, markDirty: false);
+        RefreshSelectedNotificationProviderText(selected);
         OnPropertyChanged(nameof(SelectedNotificationProvider));
     }
 
@@ -1147,8 +1174,10 @@ public sealed partial class SettingsPageViewModel
 
         if (item.IsEnabled)
         {
+            var hadEnabledProviders = _enabledNotificationProviders.Count > 0;
             _enabledNotificationProviders.Add(item.Provider);
-            if (string.IsNullOrWhiteSpace(SelectedNotificationProvider))
+            if (!hadEnabledProviders
+                || !_enabledNotificationProviders.Contains(SelectedNotificationProvider))
             {
                 SelectedNotificationProvider = item.Provider;
             }
@@ -1214,8 +1243,6 @@ public sealed partial class SettingsPageViewModel
     {
         if (!ExternalNotificationEnabled)
         {
-            _enabledNotificationProviders.Clear();
-            SynchronizeNotificationProviderSelectionsFromEnabledSet();
             return [];
         }
 
@@ -1257,6 +1284,100 @@ public sealed partial class SettingsPageViewModel
             enabledProviders
                 .Select(MapProviderToLegacyDisplayName)
                 .Distinct(StringComparer.OrdinalIgnoreCase));
+    }
+
+    private string BuildExternalNotificationSaveStatusMessage(IReadOnlyCollection<string> enabledProviders)
+    {
+        var baseMessage = RootTexts.GetOrDefault(
+            "Settings.ExternalNotification.Status.SaveSucceeded",
+            "External notification settings saved.");
+        var summary = BuildExternalNotificationConfigurationSummary(enabledProviders);
+        return string.IsNullOrWhiteSpace(summary)
+            ? baseMessage
+            : $"{baseMessage} {summary}";
+    }
+
+    private string BuildExternalNotificationConfigurationSummary(IEnumerable<string> providers)
+    {
+        var summaryParts = new List<string>();
+        foreach (var provider in providers
+                     .Where(static provider => !string.IsNullOrWhiteSpace(provider))
+                     .Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            var providerSummary = BuildExternalNotificationProviderSummary(provider);
+            if (!string.IsNullOrWhiteSpace(providerSummary))
+            {
+                summaryParts.Add(providerSummary);
+            }
+        }
+
+        return string.Join(" | ", summaryParts);
+    }
+
+    private string BuildExternalNotificationProviderSummary(string provider)
+    {
+        var summaryFields = BuildExternalNotificationProviderSummaryFields(provider);
+        return summaryFields.Count == 0
+            ? MapProviderToLegacyDisplayName(provider)
+            : $"{MapProviderToLegacyDisplayName(provider)}: {string.Join(", ", summaryFields)}";
+    }
+
+    private List<string> BuildExternalNotificationProviderSummaryFields(string provider)
+    {
+        if (!_notificationProviderParameters.TryGetValue(provider, out var parameterText)
+            || string.IsNullOrWhiteSpace(parameterText)
+            || !TryParseProviderParameterText(parameterText, out var parsed, out _))
+        {
+            return [];
+        }
+
+        IEnumerable<string> orderedKeys = ProviderConfigKeyMap.TryGetValue(provider, out var keyMap)
+            ? keyMap.Keys
+            : parsed.Keys;
+        var summaryFields = new List<string>();
+        foreach (var key in orderedKeys)
+        {
+            if (!ShouldIncludeExternalNotificationSummaryField(provider, key)
+                || !parsed.TryGetValue(key, out var value)
+                || string.IsNullOrWhiteSpace(value))
+            {
+                continue;
+            }
+
+            summaryFields.Add($"{key}={value}");
+        }
+
+        return summaryFields;
+    }
+
+    private static bool ShouldIncludeExternalNotificationSummaryField(string provider, string key)
+    {
+        if (string.IsNullOrWhiteSpace(key))
+        {
+            return false;
+        }
+
+        return provider switch
+        {
+            "Smtp" => key.Equals("server", StringComparison.OrdinalIgnoreCase)
+                || key.Equals("port", StringComparison.OrdinalIgnoreCase)
+                || key.Equals("user", StringComparison.OrdinalIgnoreCase)
+                || key.Equals("from", StringComparison.OrdinalIgnoreCase)
+                || key.Equals("to", StringComparison.OrdinalIgnoreCase),
+            "Bark" => key.Equals("server", StringComparison.OrdinalIgnoreCase),
+            "Discord" => key.Equals("userId", StringComparison.OrdinalIgnoreCase),
+            "Telegram" => key.Equals("chatId", StringComparison.OrdinalIgnoreCase)
+                || key.Equals("topicId", StringComparison.OrdinalIgnoreCase),
+            "Qmsg" => key.Equals("server", StringComparison.OrdinalIgnoreCase)
+                || key.Equals("user", StringComparison.OrdinalIgnoreCase)
+                || key.Equals("bot", StringComparison.OrdinalIgnoreCase),
+            "Gotify" => key.Equals("server", StringComparison.OrdinalIgnoreCase),
+            _ => key.Contains("server", StringComparison.OrdinalIgnoreCase)
+                || key.EndsWith("Id", StringComparison.OrdinalIgnoreCase)
+                || key.Equals("from", StringComparison.OrdinalIgnoreCase)
+                || key.Equals("to", StringComparison.OrdinalIgnoreCase)
+                || key.Equals("user", StringComparison.OrdinalIgnoreCase),
+        };
     }
 
     private string FormatRemoteControlMessage(string? code, string fallbackMessage)

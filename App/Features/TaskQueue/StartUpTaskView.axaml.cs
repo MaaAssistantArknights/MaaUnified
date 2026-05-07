@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
+using MAAUnified.App.Controls;
 using MAAUnified.App.ViewModels.TaskQueue;
 
 namespace MAAUnified.App.Features.TaskQueue;
@@ -54,5 +55,33 @@ public partial class StartUpTaskView : UserControl
         {
             vm.AdbPath = path;
         }
+    }
+
+    private void OnConnectAddressItemDeleted(object? sender, AppHistoryInputItemEventArgs e)
+    {
+        if (VM is not null && e.Item is string address)
+        {
+            VM.RemoveAddressFromHistory(address);
+        }
+    }
+
+    private void OnConnectAddressSelectionCommitted(object? sender, AppHistoryInputItemEventArgs e)
+    {
+        if (VM is null || e.Item is not string address)
+        {
+            return;
+        }
+
+        VM.ConnectAddress = address;
+    }
+
+    private void OnConnectAddressEditorCommitted(object? sender, AppHistoryInputEditorCommittedEventArgs e)
+    {
+        if (VM is null)
+        {
+            return;
+        }
+
+        VM.ConnectAddress = e.Text;
     }
 }

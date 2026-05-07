@@ -10,6 +10,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using MAAUnified.App.Features.Dialogs;
+using MAAUnified.App.Services;
 using MAAUnified.App.ViewModels.Copilot;
 using MAAUnified.App.ViewModels.Infrastructure;
 using MAAUnified.App.ViewModels.Settings;
@@ -34,6 +35,7 @@ public sealed class MainShellViewModel : ObservableObject
     private const int WindowTitleScrollThreshold = 24;
     private const string WindowTitleScrollSpacer = "     ";
     private static readonly TimeSpan DeferredStartupCoreWarmupDelay = TimeSpan.FromMilliseconds(1500);
+    private static readonly TimeSpan FloatingOverlayAnimationDuration = TimeSpan.FromMilliseconds(220);
     private readonly MAAUnifiedRuntime _runtime;
     private readonly ConnectionGameSharedStateViewModel _connectionGameSharedState;
     private readonly SemaphoreSlim _guiApplySemaphore = new(1, 1);
@@ -79,6 +81,9 @@ public sealed class MainShellViewModel : ObservableObject
     private ImportSource _selectedImportSource = ImportSource.Auto;
     private ImportSourceOptionItem? _selectedImportSourceOption;
     private bool _achievementToastWindowVisible = true;
+    private bool _achievementToastStartupCompleted;
+    private bool _isWindowUpdateOverlayPresented;
+    private bool _isWindowUpdateOverlayAnimationHidden = true;
     private bool _hasBlockingConfigIssues;
     private int _blockingConfigIssueCount;
     private SessionState _currentSessionState;
@@ -87,6 +92,7 @@ public sealed class MainShellViewModel : ObservableObject
     private string _rootLogTimeFormat = DefaultLogItemDateFormat;
     private bool _windowTitleScrollable;
     private int _windowTitleScrollOffset;
+    private CancellationTokenSource? _windowUpdateOverlayAnimationCts;
     private Bitmap? _shellBackgroundImage;
     private double _shellBackgroundOpacity = 0.45;
     private int _shellBackgroundBlur = 12;
@@ -210,6 +216,30 @@ public sealed class MainShellViewModel : ObservableObject
     public RootPageHostViewModel SettingsRootPage { get; }
 
     public ConnectionGameSharedStateViewModel ConnectionGameSharedState => _connectionGameSharedState;
+
+    public async Task<IReadOnlyList<string>> FlushConfigurationSavesForCloseAsync(CancellationToken cancellationToken = default)
+    {
+        var failedNames = new List<string>();
+        if (!await TaskQueuePage.FlushConfigurationSavesForCloseAsync(cancellationToken))
+        {
+            failedNames.AddRange(ConfigurationSaveTracker.Instance.FailedDisplayNames);
+        }
+
+        if (TryGetSettingsPage(out var settingsPage))
+        {
+            if (!await settingsPage.FlushConfigurationSavesForCloseAsync(cancellationToken))
+            {
+                failedNames.AddRange(ConfigurationSaveTracker.Instance.FailedDisplayNames);
+            }
+        }
+
+        failedNames.AddRange(await ConfigurationSaveTracker.Instance.RetryPendingOrFailedAsync(cancellationToken: cancellationToken));
+        failedNames.AddRange(ConfigurationSaveTracker.Instance.FailedDisplayNames);
+        return failedNames
+            .Where(static name => !string.IsNullOrWhiteSpace(name))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+    }
 
     public IPlatformCapabilityService PlatformCapabilityService => _runtime.PlatformCapabilityService;
 
@@ -396,6 +426,20 @@ public sealed class MainShellViewModel : ObservableObject
     public bool HasVisibleWindowUpdateInfo
         => HasWindowUpdateInfo
            && !string.Equals(CurrentWindowUpdateOverlaySignature, _dismissedWindowUpdateOverlaySignature, StringComparison.Ordinal);
+
+    public bool HasMultipleWindowUpdates => HasWindowVersionUpdateInfo && HasWindowResourceUpdateInfo;
+
+    public bool IsWindowUpdateOverlayPresented
+    {
+        get => _isWindowUpdateOverlayPresented;
+        private set => SetProperty(ref _isWindowUpdateOverlayPresented, value);
+    }
+
+    public bool IsWindowUpdateOverlayAnimationHidden
+    {
+        get => _isWindowUpdateOverlayAnimationHidden;
+        private set => SetProperty(ref _isWindowUpdateOverlayAnimationHidden, value);
+    }
 
     public bool IsWindowUpdateActionRunning
     {
@@ -621,7 +665,7 @@ public sealed class MainShellViewModel : ObservableObject
                     cancellationToken);
                 if (loadResult.LoadedFromExistingConfig)
                 {
-                    ImportStatus = "已加载 config/avalonia.json";
+                    ImportStatus = string.Empty;
                 }
                 else if (loadResult.ImportReport is not null)
                 {
@@ -1643,20 +1687,18 @@ public sealed class MainShellViewModel : ObservableObject
     public void SetAchievementToastWindowVisible(bool visible)
     {
         _achievementToastWindowVisible = visible;
-        if (visible)
-        {
-            FlushPendingAchievementToasts();
-        }
+        TryFlushPendingAchievementToasts();
     }
 
     public void DismissAchievementToast(string id)
     {
         var toast = AchievementToasts.FirstOrDefault(item => string.Equals(item.Id, id, StringComparison.Ordinal));
-        if (toast is not null)
+        if (toast is null || !toast.BeginDismissAnimation())
         {
-            AchievementToasts.Remove(toast);
-            toast.Dispose();
+            return;
         }
+
+        _ = RemoveAchievementToastAfterAnimationAsync(toast);
     }
 
     public async Task ShowAchievementListDialogFromToastAsync(string toastId, CancellationToken cancellationToken = default)
@@ -1683,7 +1725,7 @@ public sealed class MainShellViewModel : ObservableObject
 
     private void HandleAchievementUnlocked(AchievementUnlockedEvent notification)
     {
-        if (!_achievementToastWindowVisible)
+        if (!_achievementToastWindowVisible || !_achievementToastStartupCompleted)
         {
             if (_pendingAchievementToasts.All(item => !string.Equals(item.Id, notification.Id, StringComparison.Ordinal)))
             {
@@ -1694,6 +1736,28 @@ public sealed class MainShellViewModel : ObservableObject
         }
 
         PresentAchievementToast(notification);
+    }
+
+    internal void MarkAchievementToastStartupCompleted()
+    {
+        if (_achievementToastStartupCompleted)
+        {
+            return;
+        }
+
+        _achievementToastStartupCompleted = true;
+        RecordStartupPhase("AchievementToast.Ready", "Achievement toast gate opened after deferred startup completed.");
+        TryFlushPendingAchievementToasts();
+    }
+
+    private void TryFlushPendingAchievementToasts()
+    {
+        if (!_achievementToastWindowVisible || !_achievementToastStartupCompleted)
+        {
+            return;
+        }
+
+        FlushPendingAchievementToasts();
     }
 
     private void FlushPendingAchievementToasts()
@@ -1727,12 +1791,25 @@ public sealed class MainShellViewModel : ObservableObject
                 DismissAchievementToast));
 
         const int maxVisible = 4;
-        while (AchievementToasts.Count > maxVisible)
+        while (AchievementToasts.Count(item => !item.IsDismissAnimationActive) > maxVisible)
         {
-            var removedToast = AchievementToasts[^1];
-            AchievementToasts.RemoveAt(AchievementToasts.Count - 1);
-            removedToast.Dispose();
+            var removedToast = AchievementToasts.Last(item => !item.IsDismissAnimationActive);
+            DismissAchievementToast(removedToast.Id);
         }
+    }
+
+    private async Task RemoveAchievementToastAfterAnimationAsync(AchievementToastItemViewModel toast)
+    {
+        await Task.Delay(FloatingOverlayAnimationDuration);
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            if (AchievementToasts.Contains(toast))
+            {
+                AchievementToasts.Remove(toast);
+            }
+
+            toast.Dispose();
+        });
     }
 
     private static string BuildLinkStartStateNotAllowedMessage(SessionState state)
@@ -2049,7 +2126,72 @@ public sealed class MainShellViewModel : ObservableObject
         OnPropertyChanged(nameof(HasVisibleWindowVersionUpdateInfo));
         OnPropertyChanged(nameof(HasVisibleWindowResourceUpdateInfo));
         OnPropertyChanged(nameof(HasMultipleVisibleWindowUpdates));
+        OnPropertyChanged(nameof(HasMultipleWindowUpdates));
         OnPropertyChanged(nameof(HasVisibleWindowUpdateInfo));
+        UpdateWindowUpdateOverlayPresentation();
+    }
+
+    private void UpdateWindowUpdateOverlayPresentation()
+    {
+        _windowUpdateOverlayAnimationCts?.Cancel();
+        _windowUpdateOverlayAnimationCts?.Dispose();
+        _windowUpdateOverlayAnimationCts = null;
+
+        if (HasVisibleWindowUpdateInfo)
+        {
+            var wasPresented = IsWindowUpdateOverlayPresented;
+            IsWindowUpdateOverlayPresented = true;
+
+            if (!wasPresented || IsWindowUpdateOverlayAnimationHidden)
+            {
+                IsWindowUpdateOverlayAnimationHidden = true;
+                Dispatcher.UIThread.Post(
+                    () =>
+                    {
+                        if (HasVisibleWindowUpdateInfo)
+                        {
+                            IsWindowUpdateOverlayAnimationHidden = false;
+                        }
+                    },
+                    DispatcherPriority.Loaded);
+            }
+            else
+            {
+                IsWindowUpdateOverlayAnimationHidden = false;
+            }
+
+            return;
+        }
+
+        if (!IsWindowUpdateOverlayPresented)
+        {
+            IsWindowUpdateOverlayAnimationHidden = true;
+            return;
+        }
+
+        IsWindowUpdateOverlayAnimationHidden = true;
+        _windowUpdateOverlayAnimationCts = new CancellationTokenSource();
+        _ = CompleteWindowUpdateOverlayDismissAsync(_windowUpdateOverlayAnimationCts.Token);
+    }
+
+    private async Task CompleteWindowUpdateOverlayDismissAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(FloatingOverlayAnimationDuration, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return;
+        }
+
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            if (!cancellationToken.IsCancellationRequested && !HasVisibleWindowUpdateInfo)
+            {
+                IsWindowUpdateOverlayPresented = false;
+            }
+        });
     }
 
     private static string FormatAchievementCelebrateText(string text)
@@ -2366,7 +2508,22 @@ public sealed class MainShellViewModel : ObservableObject
         try
         {
             config.CurrentProfile = targetProfile;
-            await _runtime.ConfigurationService.SaveAsync(cancellationToken);
+            var saved = await ConfigurationSaveTracker.Instance.RunTrackedAsync(
+                "Timer.Schedule.SwitchProfile",
+                "定时执行配置",
+                "Timer.Schedule.SwitchProfile.Save",
+                _runtime.DiagnosticsService,
+                async ct =>
+                {
+                    await _runtime.ConfigurationService.SaveAsync(ct);
+                    return true;
+                },
+                cancellationToken);
+            if (!saved)
+            {
+                return false;
+            }
+
             await TaskQueuePage.ReloadTasksAsync(cancellationToken);
             await TaskQueuePage.WaitForPendingBindingAsync(cancellationToken);
             SyncConnectionFromProfile();

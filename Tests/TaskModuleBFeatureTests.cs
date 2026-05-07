@@ -1003,6 +1003,20 @@ public sealed class TaskModuleBFeatureTests
     }
 
     [Fact]
+    public async Task Infrast_FacilitySelection_ReordersAndKeepsSelectionState()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var module = new InfrastModuleViewModel(fixture.Runtime, new LocalizedTextMap { Language = "en-us" });
+
+        var originalOrder = module.FacilityOptions.Select(option => option.Value).ToArray();
+        module.FacilityOptions[0].IsSelected = true;
+        module.MoveFacility(0, 2);
+
+        Assert.Equal(originalOrder[0], module.FacilityOptions[2].Value);
+        Assert.True(module.FacilityOptions[2].IsSelected);
+    }
+
+    [Fact]
     public async Task Award_RecruitConfirmation_ConfirmAndCancelBranches_WorkAsExpected()
     {
         await using var fixture = await TestFixture.CreateAsync();

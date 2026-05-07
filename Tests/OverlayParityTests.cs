@@ -128,7 +128,42 @@ public sealed class OverlayParityTests
         Assert.Contains("entry-5", vm.OverlayLogs[0].Content, StringComparison.Ordinal);
         Assert.Contains("entry-204", vm.OverlayLogs[^1].Content, StringComparison.Ordinal);
         Assert.NotEmpty(vm.LogCards);
-        Assert.Contains("entry-204", vm.LogCards[^1].Items[^1].Content, StringComparison.Ordinal);
+        Assert.Contains("entry-204", vm.LogCards[^1].Items[0].Content, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task TaskQueuePage_AppendSystemLog_ShouldCreateOneCardPerLogEntry()
+    {
+        await using var fixture = await OverlayFixture.CreateAsync();
+        var vm = fixture.Shell.TaskQueuePage;
+
+        vm.AppendSystemLog("first adb retry");
+        vm.AppendSystemLog("second adb retry");
+
+        Assert.Equal(2, vm.LogCards.Count);
+        Assert.Single(vm.LogCards[0].Items);
+        Assert.Single(vm.LogCards[1].Items);
+        Assert.Equal("first adb retry", vm.LogCards[0].PrimaryContent);
+        Assert.Equal("second adb retry", vm.LogCards[1].PrimaryContent);
+    }
+
+    [Fact]
+    public async Task TaskQueuePage_AppendSystemLog_ShouldSplitTimestampedMultilineMessagesIntoCards()
+    {
+        await using var fixture = await OverlayFixture.CreateAsync();
+        var vm = fixture.Shell.TaskQueuePage;
+
+        vm.AppendSystemLog("""
+            [12:00:01] adb connect failed
+            [12:00:02] retry adb connect
+            [12:00:03] adb connect failed again
+            """);
+
+        Assert.Equal(3, vm.LogCards.Count);
+        Assert.All(vm.LogCards, card => Assert.Single(card.Items));
+        Assert.Equal("adb connect failed", vm.LogCards[0].PrimaryContent);
+        Assert.Equal("retry adb connect", vm.LogCards[1].PrimaryContent);
+        Assert.Equal("adb connect failed again", vm.LogCards[2].PrimaryContent);
     }
 
     [Fact]

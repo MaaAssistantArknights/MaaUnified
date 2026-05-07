@@ -5,6 +5,7 @@ using MAAUnified.Application.Configuration;
 using MAAUnified.Application.Models.TaskParams;
 using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Features;
+using MAAUnified.Application.Services.TaskParams;
 using MAAUnified.Application.Orchestration;
 using MAAUnified.Compat.Constants;
 using MAAUnified.CoreBridge;
@@ -14,6 +15,14 @@ namespace MAAUnified.Tests;
 
 public sealed class FightTaskParityTests
 {
+    private static readonly IReadOnlyList<(string Stage, IReadOnlySet<DayOfWeek> OpenDays)> WeeklyStageFixtures =
+    [
+        ("CE-6", new HashSet<DayOfWeek> { DayOfWeek.Tuesday, DayOfWeek.Thursday, DayOfWeek.Saturday, DayOfWeek.Sunday }),
+        ("AP-5", new HashSet<DayOfWeek> { DayOfWeek.Monday, DayOfWeek.Thursday, DayOfWeek.Saturday, DayOfWeek.Sunday }),
+        ("CA-5", new HashSet<DayOfWeek> { DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Friday, DayOfWeek.Sunday }),
+        ("SK-5", new HashSet<DayOfWeek> { DayOfWeek.Monday, DayOfWeek.Wednesday, DayOfWeek.Friday, DayOfWeek.Saturday }),
+    ];
+
     [Fact]
     public async Task SaveFightParams_ShouldRoundTripStagePlanAndTriStateParityFields()
     {
@@ -153,6 +162,106 @@ public sealed class FightTaskParityTests
 
         Assert.True(module.AutoRestartOnDrop);
         Assert.True(fixture.Config.CurrentConfig.Profiles["Default"].Values[ConfigurationKeys.AutoRestartOnDrop]?.GetValue<bool>());
+    }
+
+    [Fact]
+    public async Task FightModule_StageOptions_ShouldUseWpfCuratedStageList()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var module = new FightTaskModuleViewModel(fixture.Runtime, new LocalizedTextMap { Language = "en-us" });
+        module.HideUnavailableStage = false;
+
+        var values = module.StageOptions.Select(option => option.Value).ToArray();
+
+        Assert.Contains(FightStageSelection.CurrentOrLast, values);
+        Assert.Contains("1-7", values);
+        Assert.Contains("Annihilation", values);
+        Assert.Contains("CE-6", values);
+        Assert.DoesNotContain("GT-1", values);
+        Assert.InRange(values.Length, 1, 40);
+    }
+
+    [Fact]
+    public async Task FightModule_ClosedStageOptions_ShouldBeSelectableWhenVisibleAndHiddenWhenRequested()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var module = new FightTaskModuleViewModel(fixture.Runtime, new LocalizedTextMap { Language = "en-us" });
+        var closedStage = ResolveClosedWeeklyStage();
+
+        module.HideUnavailableStage = false;
+
+        var visibleOption = Assert.Single(
+            module.StageOptions,
+            option => string.Equals(option.Value, closedStage, StringComparison.OrdinalIgnoreCase));
+        Assert.False(visibleOption.IsOpen);
+        Assert.False(visibleOption.IsOutdated);
+        Assert.Equal(closedStage, visibleOption.DisplayName);
+        Assert.DoesNotContain("(Closed)", visibleOption.DisplayName, StringComparison.OrdinalIgnoreCase);
+
+        module.SelectedStageOption = visibleOption;
+
+        Assert.Equal(closedStage, module.Stage);
+
+        module.HideUnavailableStage = true;
+
+        Assert.DoesNotContain(
+            module.StageOptions,
+            option => string.Equals(option.Value, closedStage, StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task FightModule_SelectedClosedStage_ShouldBePreservedInternallyWhenHidden()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var module = new FightTaskModuleViewModel(fixture.Runtime, new LocalizedTextMap { Language = "en-us" });
+        var closedStage = ResolveClosedWeeklyStage();
+
+        module.HideUnavailableStage = false;
+        module.Stage = closedStage;
+        module.HideUnavailableStage = true;
+
+        var entry = Assert.Single(module.StagePlan);
+        Assert.Equal(closedStage, module.Stage);
+        Assert.Equal(closedStage, entry.Stage);
+        Assert.Null(module.SelectedStageOption);
+        Assert.True(entry.IsClosed);
+        Assert.False(entry.IsOutdated);
+        Assert.Equal(string.Empty, entry.StatusText);
+        Assert.DoesNotContain(
+            module.StageOptions,
+            option => string.Equals(option.Value, closedStage, StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task FightModule_OutdatedSelectedStage_ShouldBePreservedInternallyButHiddenFromOptions()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var module = new FightTaskModuleViewModel(fixture.Runtime, new LocalizedTextMap { Language = "en-us" });
+        const string outdatedStage = "EXPIRED-STAGE-FOR-PARITY";
+
+        module.HideUnavailableStage = false;
+        module.Stage = outdatedStage;
+        module.RefreshStageOptions();
+
+        var entry = Assert.Single(module.StagePlan);
+        Assert.Equal(outdatedStage, module.Stage);
+        Assert.Equal(outdatedStage, entry.Stage);
+        Assert.Null(module.SelectedStageOption);
+        Assert.True(entry.IsOutdated);
+        Assert.Equal("(Outdated)", entry.StatusText);
+        Assert.DoesNotContain(
+            module.StageOptions,
+            option => string.Equals(option.Value, outdatedStage, StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(module.StageOptions, option => option.IsOutdated);
+        Assert.DoesNotContain(
+            module.StageOptions,
+            option => option.DisplayName.Contains("Outdated", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string ResolveClosedWeeklyStage()
+    {
+        var dayOfWeek = MallDailyResetHelper.GetYjDate(DateTime.UtcNow, "Official").DayOfWeek;
+        return WeeklyStageFixtures.First(candidate => !candidate.OpenDays.Contains(dayOfWeek)).Stage;
     }
 
     private static string CreateTempRoot()

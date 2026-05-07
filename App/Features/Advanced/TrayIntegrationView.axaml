@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:MAAUnified.App.Controls"
              x:Class="MAAUnified.App.Features.Advanced.TrayIntegrationView">
   <UserControl.Styles>
     <Style Selector="Border.tray-section">
@@ -82,15 +83,15 @@
             <StackPanel Spacing="8">
               <TextBlock Classes="app-caption"
                          Text="{Binding Texts[Toolbox.Advanced.Tray.MessageTitle]}" />
-              <TextBox Classes="app-input tray-title-input"
-                       Text="{Binding TrayMessageTitle}" />
+              <controls:AppTextInput Classes="tray-title-input"
+                                     Text="{Binding TrayMessageTitle}" />
             </StackPanel>
 
             <StackPanel Spacing="8">
               <TextBlock Classes="app-caption"
                          Text="{Binding Texts[Toolbox.Advanced.Tray.MessageBody]}" />
-              <TextBox Classes="app-input app-input-block tray-body-input"
-                       Text="{Binding TrayMessageBody}" />
+              <controls:AppTextInput Classes="settings-input-block tray-body-input"
+                                     Text="{Binding TrayMessageBody}" />
             </StackPanel>
 
             <Button Classes="app-button app-primary"

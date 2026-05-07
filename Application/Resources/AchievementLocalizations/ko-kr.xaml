@@ -1473,7 +1473,7 @@ MAA를 독립된 새 폴더에 압축 해제하거나, MAA에 속하지 않는 D
     <!--  Achievement  -->
     <system:String x:Key="AchievementCelebrate">🎉 도전과제 달성</system:String>
     <system:String x:Key="AchievementConditions" xml:space="preserve">달성 조건: </system:String>
-    <system:String x:Key="AchievementLevel" xml:space="preserve">도전과제 레벨: </system:String>
+    <system:String x:Key="AchievementLevel" xml:space="preserve">도전과제 수: </system:String>
     <system:String x:Key="AchievementView">도전과제 보기</system:String>
     <system:String x:Key="AchievementBackup">백업 저장하기</system:String>
     <system:String x:Key="AchievementRestore">백업 불러오기</system:String>

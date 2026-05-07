@@ -23,6 +23,14 @@ public sealed partial class SettingsPageViewModel
 {
     public async Task SaveConnectionGameSettingsAsync(CancellationToken cancellationToken = default)
     {
+        await RunSettingsSaveTargetAsync(
+            "Settings.AutoSave.ConnectionGame",
+            SaveConnectionGameSettingsCoreAsync,
+            cancellationToken);
+    }
+
+    private async Task SaveConnectionGameSettingsCoreAsync(CancellationToken cancellationToken = default)
+    {
         if (!Runtime.ConfigurationService.TryGetCurrentProfile(out var profile))
         {
             LastErrorMessage = string.Format(
@@ -48,6 +56,14 @@ public sealed partial class SettingsPageViewModel
 
     public async Task SaveTimerSettingsAsync(CancellationToken cancellationToken = default)
     {
+        await RunSettingsSaveTargetAsync(
+            "Settings.AutoSave.Timer",
+            SaveTimerSettingsCoreAsync,
+            cancellationToken);
+    }
+
+    private async Task SaveTimerSettingsCoreAsync(CancellationToken cancellationToken = default)
+    {
         var snapshot = BuildTimerSnapshot();
         var validation = ValidateTimerSnapshot(snapshot);
         if (!validation.Success)
@@ -68,7 +84,7 @@ public sealed partial class SettingsPageViewModel
         if (!await ApplyResultAsync(saveResult, "Settings.Save.Timer", cancellationToken))
         {
             HasPendingTimerChanges = true;
-            TimerValidationMessage = saveResult.Message;
+            MarkSettingsSaveFailure("Settings.AutoSave.Timer");
             return;
         }
 
@@ -191,6 +207,14 @@ public sealed partial class SettingsPageViewModel
 
     public async Task SaveStartPerformanceSettingsAsync(CancellationToken cancellationToken = default)
     {
+        await RunSettingsSaveTargetAsync(
+            "Settings.AutoSave.StartPerformance",
+            SaveStartPerformanceSettingsCoreAsync,
+            cancellationToken);
+    }
+
+    private async Task SaveStartPerformanceSettingsCoreAsync(CancellationToken cancellationToken = default)
+    {
         var persistedWarnings = new List<string>();
         var persistedSnapshot = ReadStartPerformanceSnapshot(Runtime.ConfigurationService.CurrentConfig, persistedWarnings);
         var snapshot = BuildNormalizedStartPerformanceSnapshot();
@@ -209,7 +233,9 @@ public sealed partial class SettingsPageViewModel
             return;
         }
 
-        if (persistedWarnings.Count == 0 && snapshot == persistedSnapshot)
+        if (persistedWarnings.Count == 0
+            && snapshot == persistedSnapshot
+            && HasExplicitStartPerformanceConfigValues(Runtime.ConfigurationService.CurrentConfig, snapshot))
         {
             HasPendingStartPerformanceChanges = false;
             StartPerformanceValidationMessage = string.Empty;
@@ -224,7 +250,7 @@ public sealed partial class SettingsPageViewModel
         if (!await ApplyResultAsync(saveResult, "Settings.Save.StartPerformance", cancellationToken))
         {
             HasPendingStartPerformanceChanges = true;
-            StartPerformanceValidationMessage = saveResult.Message;
+            MarkSettingsSaveFailure("Settings.AutoSave.StartPerformance");
             return;
         }
 
@@ -501,6 +527,51 @@ public sealed partial class SettingsPageViewModel
             PenguinId: ReadProfileString(config, ConfigurationKeys.PenguinId, string.Empty).Trim(),
             TaskTimeoutMinutes: Math.Max(0, ReadProfileInt(config, ConfigurationKeys.TaskTimeoutMinutes, DefaultTaskTimeoutMinutes)),
             ReminderIntervalMinutes: Math.Max(1, ReadProfileInt(config, ConfigurationKeys.ReminderIntervalMinutes, DefaultReminderIntervalMinutes)));
+    }
+
+    private static bool HasExplicitStartPerformanceConfigValues(
+        UnifiedConfig config,
+        StartPerformanceSettingsSnapshot snapshot)
+    {
+        if (!config.Profiles.TryGetValue(config.CurrentProfile, out var profile))
+        {
+            return false;
+        }
+
+        return HasExplicitSettingValues(config.GlobalValues, snapshot.ToGlobalSettingUpdates())
+               && HasExplicitSettingValues(profile.Values, snapshot.ToProfileSettingUpdates());
+    }
+
+    private static bool HasExplicitSettingValues(
+        IReadOnlyDictionary<string, JsonNode?> values,
+        IReadOnlyDictionary<string, string> expectedValues)
+    {
+        foreach (var (key, expectedValue) in expectedValues)
+        {
+            if (!values.TryGetValue(key, out var node) || node is null)
+            {
+                return false;
+            }
+
+            string actualValue;
+            if (node is JsonValue jsonValue
+                && jsonValue.TryGetValue(out string? textValue)
+                && textValue is not null)
+            {
+                actualValue = textValue;
+            }
+            else
+            {
+                actualValue = node.ToString();
+            }
+
+            if (!string.Equals(actualValue, expectedValue, StringComparison.Ordinal))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private void NormalizeUnsupportedGpuSettingsInConfig(UnifiedConfig config, ICollection<string> warnings)

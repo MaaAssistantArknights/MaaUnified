@@ -69,6 +69,32 @@ public sealed class SettingsUiAuditRegressionTests
         Assert.DoesNotContain("IsEnabled=\"False\"", startupCheckBlock, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void SettingsInlineActionRows_ShouldKeepRelatedControlsGroupedTightly()
+    {
+        var root = GetMaaUnifiedRoot();
+        var styles = File.ReadAllText(Path.Combine(root, "App", "Styles", "SettingsShellStyles.axaml"));
+        var connect = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "ConnectSettingsView.axaml"));
+        var background = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "BackgroundSettingsView.axaml"));
+        var start = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "StartSettingsView.axaml"));
+        var remote = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "RemoteControlSettingsView.axaml"));
+        var versionUpdate = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "VersionUpdateSettingsView.axaml"));
+
+        Assert.Contains("StackPanel.settings-page-inline-field-group", styles, StringComparison.Ordinal);
+
+        Assert.Contains("Classes=\"settings-page-inline-field-group\"", connect, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"settings-page-inline-field-group\"", background, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"settings-page-inline-field-group\"", start, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"settings-page-inline-field-group\"", remote, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"settings-page-inline-field-group\"", versionUpdate, StringComparison.Ordinal);
+
+        Assert.DoesNotContain("ColumnDefinitions=\"132,*,Auto\"", connect, StringComparison.Ordinal);
+        Assert.DoesNotContain("ColumnDefinitions=\"132,*,Auto\"", background, StringComparison.Ordinal);
+        Assert.DoesNotContain("ColumnDefinitions=\"132,*,Auto\"", start, StringComparison.Ordinal);
+        Assert.DoesNotContain("ColumnDefinitions=\"Auto,*,Auto\"", remote, StringComparison.Ordinal);
+        Assert.DoesNotContain("ColumnDefinitions=\"132,*,Auto\"", versionUpdate, StringComparison.Ordinal);
+    }
+
     private static string GetMaaUnifiedRoot()
     {
         return TestRepoLayout.GetMaaUnifiedRoot();

@@ -26,7 +26,6 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
         AppStickyTitleState PresenterState);
 
     private const int BackgroundSectionWarmupIntervalMs = 45;
-    private const int ProgressiveMaterializationLeadCount = 2;
     private const double StickyActivationPadding = 8d;
     private const double StickyTitleTopInset = 0d;
     private const double StickyTitleBottomInset = 0d;
@@ -70,6 +69,7 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
     private CancellationTokenSource? _progressiveMaterializationCts;
     private readonly HashSet<string> _pendingProgressiveSections = new(StringComparer.OrdinalIgnoreCase);
     private bool _sectionMaterializationInitialized;
+    private bool _selectedSectionScrollQueued;
     private SettingsPageViewModel? _observedViewModel;
     private bool _viewCompositionActive;
     private SettingsPageViewModel? _viewCompositionOwner;
@@ -666,7 +666,7 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
             return;
         }
 
-        var pendingSections = ResolveProgressiveMaterializationTargets(vm.SelectedSection?.Key)
+        var pendingSections = ResolveProgressiveMaterializationTargets()
             .Where(sectionKey => !_materializedSections.Contains(sectionKey))
             .ToArray();
         if (pendingSections.Length == 0)
@@ -679,34 +679,14 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
         foreach (var sectionKey in pendingSections)
         {
             _pendingProgressiveSections.Add(sectionKey);
-            _ = MaterializeSectionWhenReadyAsync(vm, sectionKey, _progressiveMaterializationCts.Token);
         }
+
+        _ = MaterializeSectionsSequentiallyAsync(vm, pendingSections, _progressiveMaterializationCts.Token);
     }
 
-    private static IEnumerable<string> ResolveProgressiveMaterializationTargets(string? selectedKey)
+    private static IEnumerable<string> ResolveProgressiveMaterializationTargets()
     {
-        if (SectionOrder.Length == 0)
-        {
-            yield break;
-        }
-
-        var startIndex = 0;
-        if (!string.IsNullOrWhiteSpace(selectedKey))
-        {
-            var selectedIndex = Array.FindIndex(
-                SectionOrder,
-                sectionKey => string.Equals(sectionKey, selectedKey, StringComparison.OrdinalIgnoreCase));
-            if (selectedIndex >= 0)
-            {
-                startIndex = selectedIndex;
-            }
-        }
-
-        var endIndex = Math.Min(SectionOrder.Length - 1, startIndex + ProgressiveMaterializationLeadCount);
-        for (var i = startIndex; i <= endIndex; i++)
-        {
-            yield return SectionOrder[i];
-        }
+        return SectionOrder;
     }
 
     private void CancelProgressiveSectionMaterialization()
@@ -742,6 +722,43 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
                 CompleteProgressiveSectionMaterialization(owner, sectionKey);
             },
             DispatcherPriority.Background);
+    }
+
+    private async Task MaterializeSectionsSequentiallyAsync(
+        SettingsPageViewModel owner,
+        IReadOnlyList<string> sectionKeys,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            for (var i = 0; i < sectionKeys.Count; i++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                await MaterializeSectionWhenReadyAsync(owner, sectionKeys[i], cancellationToken);
+                if (i + 1 < sectionKeys.Count)
+                {
+                    await Task.Delay(BackgroundSectionWarmupIntervalMs, cancellationToken);
+                }
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+        catch
+        {
+            await Dispatcher.UIThread.InvokeAsync(
+                () =>
+                {
+                    if (ReferenceEquals(_viewCompositionOwner, owner))
+                    {
+                        _pendingProgressiveSections.Clear();
+                        _progressiveMaterializationCts?.Dispose();
+                        _progressiveMaterializationCts = null;
+                        CompleteViewComposition();
+                    }
+                },
+                DispatcherPriority.Background);
+        }
     }
 
     private void CompleteProgressiveSectionMaterialization(SettingsPageViewModel owner, string sectionKey)
@@ -845,7 +862,12 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
             return;
         }
 
-        EnsureSectionsThrough(vm.SelectedSection.Key);
+        if (EnsureSectionsThrough(vm.SelectedSection.Key))
+        {
+            QueueScrollToSelectedSectionAfterLayout();
+            return;
+        }
+
         RefreshSectionTopCacheIfNeeded();
 
         if (!_sectionTopCache.TryGetValue(vm.SelectedSection.Key, out var top)
@@ -867,6 +889,29 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
             Math.Max(targetOffset, 0d));
         UpdateStickyTitlePresentation();
         StartProgressiveSectionMaterialization();
+    }
+
+    private void QueueScrollToSelectedSectionAfterLayout()
+    {
+        if (_selectedSectionScrollQueued)
+        {
+            return;
+        }
+
+        _selectedSectionScrollQueued = true;
+        Dispatcher.UIThread.Post(
+            () =>
+            {
+                _selectedSectionScrollQueued = false;
+                if (VisualRoot is null)
+                {
+                    return;
+                }
+
+                RefreshSectionTopCacheIfNeeded();
+                ScrollToSelectedSection();
+            },
+            DispatcherPriority.Background);
     }
 
     private SectionScrollPosition? CaptureCurrentSectionScrollPosition()
@@ -1169,31 +1214,7 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
     {
         get
         {
-            if (VM is null)
-            {
-                return string.Empty;
-            }
-
-            var selectedKey = VM.SelectedSection?.Key;
-            if (string.IsNullOrWhiteSpace(selectedKey))
-            {
-                return string.Empty;
-            }
-
-            var message = selectedKey switch
-            {
-                "ConfigurationManager" => FirstNonEmpty(VM.ConfigurationManagerStatusMessage, VM.StatusMessage),
-                "RemoteControl" => FirstNonEmpty(VM.RemoteControlStatusMessage, VM.StatusMessage),
-                "ExternalNotification" => FirstNonEmpty(VM.ExternalNotificationStatusMessage, VM.StatusMessage),
-                "HotKey" => FirstNonEmpty(VM.HotkeyStatusMessage, VM.StatusMessage),
-                "Achievement" => FirstNonEmpty(VM.AchievementStatusMessage, VM.StatusMessage),
-                "VersionUpdate" => FirstNonEmpty(VM.VersionUpdateStatusMessage, VM.StatusMessage),
-                "IssueReport" => FirstNonEmpty(VM.IssueReportStatusMessage, VM.StatusMessage),
-                "About" => FirstNonEmpty(VM.AboutStatusMessage, VM.StatusMessage),
-                _ => VM.StatusMessage,
-            };
-
-            return IsTransientSaveStateMessage(message) ? string.Empty : message;
+            return string.Empty;
         }
     }
 

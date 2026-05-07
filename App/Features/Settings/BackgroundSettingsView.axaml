@@ -9,31 +9,30 @@
     <TextBlock Classes="settings-page-title"
                Text="{Binding RootTexts[Settings.Section.Background]}" />
 
-    <StackPanel Grid.Row="1"
+    <controls:AdaptiveSpacingStackPanel Grid.Row="1"
                 Margin="{DynamicResource MAA.Thickness.Settings.SectionTopMargin}"
                 Classes="settings-page-flow">
       <Grid Classes="settings-page-labeled-action-row"
-            ColumnDefinitions="132,*,Auto">
+            ColumnDefinitions="132,*">
         <TextBlock Classes="settings-label"
                    Text="{Binding RootTexts[Settings.Background.ImagePath]}" />
-        <TextBox Grid.Column="1"
-                 Classes="app-input"
-                 Text="{Binding BackgroundImagePath, UpdateSourceTrigger=LostFocus}"
-                 LostFocus="OnBackgroundPathLostFocus"
-                 KeyDown="OnBackgroundPathKeyDown" />
-        <Button Grid.Column="2"
-                Classes="app-button app-secondary"
-                Margin="12,0,0,0"
-                Content="{Binding RootTexts[Settings.Start.SelectButton]}"
-                Click="OnSelectBackgroundImageClick" />
+        <controls:AdaptiveSpacingStackPanel Grid.Column="1"
+                    Classes="settings-page-inline-field-group">
+          <controls:AppActionInput Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
+                                   HorizontalAlignment="Left"
+                                   Text="{Binding BackgroundImagePath, UpdateSourceTrigger=LostFocus}"
+                                   ActionContent="{Binding RootTexts[Settings.Start.SelectButton]}"
+                                   EditorLostFocus="OnBackgroundPathLostFocus"
+                                   EditorKeyDown="OnBackgroundPathKeyDown"
+                                   ActionClick="OnSelectBackgroundImageClick" />
+        </controls:AdaptiveSpacingStackPanel>
       </Grid>
 
       <Grid Classes="settings-page-labeled-row"
             ColumnDefinitions="132,*">
         <TextBlock Classes="settings-label"
                    Text="{Binding RootTexts[Settings.Background.Opacity]}" />
-        <controls:VerticalSpinNumberBox Grid.Column="1"
-                                        Classes="settings-spin"
+        <controls:AppNumberInput Grid.Column="1"
                                         Width="{DynamicResource MAA.Size.Settings.FieldNarrowWidth}"
                                         HorizontalAlignment="Left"
                                         Minimum="0"
@@ -45,8 +44,7 @@
             ColumnDefinitions="132,*">
         <TextBlock Classes="settings-label"
                    Text="{Binding RootTexts[Settings.Background.BlurRadius]}" />
-        <controls:VerticalSpinNumberBox Grid.Column="1"
-                                        Classes="settings-spin"
+        <controls:AppNumberInput Grid.Column="1"
                                         Width="{DynamicResource MAA.Size.Settings.FieldNarrowWidth}"
                                         HorizontalAlignment="Left"
                                         Minimum="0"
@@ -59,7 +57,7 @@
         <TextBlock Classes="settings-label"
                    Text="{Binding RootTexts[Settings.Background.StretchMode]}" />
         <ComboBox Grid.Column="1"
-                  Classes="app-input settings-input"
+                  Classes="settings-select"
                   Width="{DynamicResource MAA.Size.Settings.FieldCenteredWidth}"
                   HorizontalAlignment="Left"
                   ItemsSource="{Binding BackgroundStretchModes}"
@@ -73,14 +71,14 @@
       </Grid>
 
       <Border Classes="settings-page-status-block">
-        <StackPanel Classes="settings-page-status-list">
+        <controls:AdaptiveSpacingStackPanel Classes="settings-page-status-list">
           <TextBlock MaxWidth="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
                      Classes="state-warning app-body"
                      Text="{Binding BackgroundValidationMessage}"
                      TextWrapping="Wrap"
                      IsVisible="{Binding HasBackgroundValidationMessage}" />
-        </StackPanel>
+        </controls:AdaptiveSpacingStackPanel>
       </Border>
-    </StackPanel>
+    </controls:AdaptiveSpacingStackPanel>
   </Grid>
 </UserControl>

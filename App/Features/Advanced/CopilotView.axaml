@@ -3,33 +3,82 @@
              xmlns:controls="clr-namespace:MAAUnified.App.Controls"
              xmlns:taskVm="clr-namespace:MAAUnified.App.ViewModels.TaskQueue"
              x:Class="MAAUnified.App.Features.Advanced.CopilotView"
+             Classes="copilot-page"
              DragDrop.AllowDrop="True"
              DragDrop.DragOver="OnCopilotDragOver"
              DragDrop.Drop="OnCopilotDrop">
   <UserControl.Styles>
     <Style Selector="Border.copilot-main-section">
-      <Setter Property="Padding" Value="22" />
+      <Setter Property="Padding" Value="4,0,4,0" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="0" />
+      <Setter Property="BoxShadow" Value="0 0 0 0 #00000000" />
+      <Setter Property="ClipToBounds" Value="False" />
     </Style>
     <Style Selector="Border.copilot-side-section">
-      <Setter Property="Padding" Value="18" />
+      <Setter Property="Padding" Value="4,0,4,0" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="0" />
+      <Setter Property="BoxShadow" Value="0 0 0 0 #00000000" />
+      <Setter Property="ClipToBounds" Value="False" />
     </Style>
     <Style Selector="Border.copilot-file-strip">
-      <Setter Property="Padding" Value="14" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="0" />
+      <Setter Property="BoxShadow" Value="0 0 0 0 #00000000" />
+      <Setter Property="ClipToBounds" Value="False" />
     </Style>
     <Style Selector="Border.copilot-config-card">
-      <Setter Property="Padding" Value="18" />
+      <Setter Property="Padding" Value="8,12,8,0" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="0" />
+      <Setter Property="BoxShadow" Value="0 0 0 0 #00000000" />
+      <Setter Property="ClipToBounds" Value="False" />
     </Style>
     <Style Selector="Border.copilot-list-panel">
       <Setter Property="Padding" Value="14" />
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Surface.Card}" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.CornerRadius.Card}" />
+      <Setter Property="BoxShadow" Value="{DynamicResource MAA.App.BoxShadow.Card}" />
+      <Setter Property="ClipToBounds" Value="False" />
     </Style>
     <Style Selector="Border.copilot-status-card">
-      <Setter Property="Padding" Value="14" />
+      <Setter Property="Padding" Value="2,0,2,8" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="0" />
+      <Setter Property="BoxShadow" Value="0 0 0 0 #00000000" />
+      <Setter Property="ClipToBounds" Value="False" />
     </Style>
     <Style Selector="Border.copilot-log-panel">
-      <Setter Property="Padding" Value="12,12,8,12" />
+      <Setter Property="Padding" Value="10,10,6,10" />
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Surface.Card}" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.CornerRadius.Card}" />
+      <Setter Property="BoxShadow" Value="{DynamicResource MAA.App.BoxShadow.Card}" />
+      <Setter Property="ClipToBounds" Value="False" />
     </Style>
     <Style Selector="Border.copilot-feedback-card">
       <Setter Property="Padding" Value="14" />
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Surface.Card}" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.CornerRadius.Card}" />
+      <Setter Property="BoxShadow" Value="{DynamicResource MAA.App.BoxShadow.Card}" />
+      <Setter Property="ClipToBounds" Value="False" />
     </Style>
     <Style Selector="Border.copilot-popup-shell">
       <Setter Property="Padding" Value="16" />
@@ -37,6 +86,11 @@
     <Style Selector="Border.copilot-log-entry">
       <Setter Property="Margin" Value="0,0,0,10" />
       <Setter Property="Padding" Value="12,10" />
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Surface.Card}" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="BoxShadow" Value="{DynamicResource MAA.App.BoxShadow.Card}" />
+      <Setter Property="ClipToBounds" Value="False" />
     </Style>
     <Style Selector="StackPanel.copilot-option-stack">
       <Setter Property="Spacing" Value="10" />
@@ -75,23 +129,7 @@
       <Setter Property="BorderBrush" Value="Transparent" />
     </Style>
     <Style Selector="ComboBox.copilot-combo">
-      <Setter Property="Height" Value="{DynamicResource MAA.App.Size.InputHeight}" />
-      <Setter Property="Padding" Value="{DynamicResource MAA.App.Thickness.InputPadding}" />
-      <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.CornerRadius.Input}" />
-      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Input.Background}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Input.Border}" />
-      <Setter Property="BorderThickness" Value="{DynamicResource MAA.BorderThickness.Thin}" />
-      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
       <Setter Property="VerticalContentAlignment" Value="Center" />
-    </Style>
-    <Style Selector="ComboBox.copilot-combo:pointerover">
-      <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Input.BorderHover}" />
-    </Style>
-    <Style Selector="ComboBox.copilot-combo:focus">
-      <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Input.BorderFocus}" />
-    </Style>
-    <Style Selector="ComboBox.copilot-combo:focus-visible">
-      <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Input.BorderFocus}" />
     </Style>
     <Style Selector="controls|ReorderableList ListBox">
       <Setter Property="Background" Value="Transparent" />
@@ -106,31 +144,40 @@
       <Setter Property="HorizontalContentAlignment" Value="Stretch" />
     </Style>
     <Style Selector="Border.copilot-list-item-shell">
-      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Surface.Card}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Border.Card}" />
-      <Setter Property="BorderThickness" Value="{DynamicResource MAA.BorderThickness.Thin}" />
-      <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.CornerRadius.Card}" />
-      <Setter Property="Padding" Value="12" />
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Surface.Section}" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="Padding" Value="10,10,12,10" />
       <Setter Property="Transitions">
         <Transitions>
           <BrushTransition Property="Background"
-                           Duration="0:0:0.18" />
-          <BrushTransition Property="BorderBrush"
                            Duration="0:0:0.18" />
         </Transitions>
       </Setter>
     </Style>
     <Style Selector="controls|ReorderableList ListBoxItem:pointerover Border.copilot-list-item-shell">
-      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Surface.Section}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Border.Section}" />
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Surface.Card}" />
     </Style>
     <Style Selector="controls|ReorderableList ListBoxItem:selected Border.copilot-list-item-shell">
       <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Selection.Background}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Selection.Border}" />
     </Style>
     <Style Selector="controls|ReorderableList ListBoxItem:selected:pointerover Border.copilot-list-item-shell">
       <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Selection.Background}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Selection.Border}" />
+    </Style>
+    <Style Selector="Border.copilot-list-item-accent">
+      <Setter Property="Width" Value="3" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="CornerRadius" Value="2" />
+      <Setter Property="Transitions">
+        <Transitions>
+          <BrushTransition Property="Background"
+                           Duration="0:0:0.18" />
+        </Transitions>
+      </Setter>
+    </Style>
+    <Style Selector="controls|ReorderableList ListBoxItem:selected Border.copilot-list-item-accent">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.Accent}" />
     </Style>
   </UserControl.Styles>
   <UserControl.DataTemplates>
@@ -159,7 +206,7 @@
       <Grid RowDefinitions="Auto,*,Auto">
         <StackPanel Grid.Row="0"
                     HorizontalAlignment="Stretch"
-                    Spacing="14">
+                    Spacing="8">
           <TabStrip Classes="copilot-nav"
                     SelectedIndex="{Binding CopilotTabIndex}"
                     IsEnabled="{Binding CanEdit}">
@@ -171,19 +218,17 @@
 
           <Border Classes="app-surface app-card copilot-file-strip">
             <Grid ColumnDefinitions="*,Auto,Auto,Auto">
-              <controls:CheckComboBox Grid.Column="0"
-                                      Text="{Binding DisplayFilename}"
-                                      Watermark="{Binding PathOrCodeWatermark}"
-                                      IsEditable="True"
-                                      IsEnabled="{Binding CanEdit}"
-                                      IsTreeMode="True"
-                                      ItemsSource="{Binding FileItems}"
-                                      IsDropDownOpen="{Binding IsFilePopupOpen}"
-                                      DragDrop.AllowDrop="True"
-                                      DragDrop.DragOver="OnCopilotDragOver"
-                                      DragDrop.Drop="OnCopilotDrop"
-                                      EditorCommitted="OnFileSelectorEditorCommitted"
-                                      SelectionCommitted="OnFileSelectorSelectionCommitted" />
+              <controls:AppCopilotPathDropdown Grid.Column="0"
+                                                Text="{Binding DisplayFilename}"
+                                                Watermark="{Binding PathOrCodeWatermark}"
+                                                IsEnabled="{Binding CanEdit}"
+                                                ItemsSource="{Binding FileItems}"
+                                                IsDropDownOpen="{Binding IsFilePopupOpen}"
+                                                DragDrop.AllowDrop="True"
+                                                DragDrop.DragOver="OnCopilotDragOver"
+                                                DragDrop.Drop="OnCopilotDrop"
+                                                EditorCommitted="OnFileSelectorEditorCommitted"
+                                                SelectionCommitted="OnFileSelectorSelectionCommitted" />
 
               <Button Grid.Column="1"
                       Classes="app-button app-secondary copilot-icon"
@@ -212,7 +257,7 @@
         </StackPanel>
 
         <Grid Grid.Row="1"
-              Margin="0,18,0,0"
+              Margin="0,12,0,0"
               ColumnDefinitions="*,18,Auto">
           <Border Grid.Column="0"
                   Classes="app-surface app-card copilot-config-card">
@@ -234,19 +279,21 @@
                         IsEnabled="{Binding CanStop}" />
               </Grid>
 
-              <StackPanel Grid.Row="1"
-                          Margin="0,16,0,0"
-                          HorizontalAlignment="Stretch"
-                          Classes="copilot-option-stack"
-                          IsEnabled="{Binding CanEdit}">
-                <StackPanel Orientation="Horizontal"
-                            IsVisible="{Binding ShowFormationGroup}">
-                  <CheckBox Classes="app-checkbox"
-                            Content="{Binding AutoSquadText}"
-                            IsChecked="{Binding Form}" />
-                  <controls:TooltipHint Margin="{DynamicResource MAA.Thickness.MarginLeftTooltip}"
-                                        Tip="{Binding AutoSquadTip}" />
-                </StackPanel>
+              <ScrollViewer Grid.Row="1"
+                            Margin="0,16,0,0"
+                            HorizontalScrollBarVisibility="Disabled"
+                            VerticalScrollBarVisibility="Auto">
+                <StackPanel HorizontalAlignment="Stretch"
+                            Classes="copilot-option-stack"
+                            IsEnabled="{Binding CanEdit}">
+                  <StackPanel Orientation="Horizontal"
+                              IsVisible="{Binding ShowFormationGroup}">
+                    <CheckBox Classes="app-checkbox"
+                              Content="{Binding AutoSquadText}"
+                              IsChecked="{Binding Form}" />
+                    <controls:TooltipHint Margin="{DynamicResource MAA.Thickness.MarginLeftTooltip}"
+                                          Tip="{Binding AutoSquadTip}" />
+                  </StackPanel>
 
                 <StackPanel Orientation="Horizontal"
                             Margin="24,0,0,0"
@@ -254,19 +301,19 @@
                   <CheckBox Classes="app-checkbox"
                             Content="{Binding UseFormationText}"
                             IsChecked="{Binding UseFormation}" />
-                  <ComboBox Width="100"
-                            Margin="8,0,0,0"
-                            Classes="copilot-combo"
-                            IsVisible="{Binding UseFormation}"
-                            ItemsSource="{Binding FormationOptions}"
-                            SelectedValueBinding="{Binding Value}"
-                            SelectedValue="{Binding FormationIndex}">
-                    <ComboBox.ItemTemplate>
+                  <controls:AppSelect Width="100"
+                                      Margin="8,0,0,0"
+                                      Classes="copilot-combo"
+                                      IsVisible="{Binding UseFormation}"
+                                      ItemsSource="{Binding FormationOptions}"
+                                      SelectedValueBinding="{Binding Value}"
+                                      SelectedValue="{Binding FormationIndex}">
+                    <controls:AppSelect.ItemTemplate>
                       <DataTemplate>
                         <TextBlock Text="{Binding DisplayName}" />
                       </DataTemplate>
-                    </ComboBox.ItemTemplate>
-                  </ComboBox>
+                    </controls:AppSelect.ItemTemplate>
+                  </controls:AppSelect>
                 </StackPanel>
 
                 <StackPanel Orientation="Horizontal"
@@ -287,19 +334,19 @@
                     <controls:TooltipHint Margin="{DynamicResource MAA.Thickness.MarginLeftTooltip}"
                                           Tip="{Binding UseSupportUnitTip}" />
                   </StackPanel>
-                  <ComboBox Width="120"
-                            Margin="24,0,0,0"
-                            Classes="copilot-combo"
-                            IsVisible="{Binding UseSupportUnitUsage}"
-                            ItemsSource="{Binding SupportUnitUsageOptions}"
-                            SelectedValueBinding="{Binding Value}"
-                            SelectedValue="{Binding SupportUnitUsage}">
-                    <ComboBox.ItemTemplate>
+                  <controls:AppSelect Width="120"
+                                      Margin="24,0,0,0"
+                                      Classes="copilot-combo"
+                                      IsVisible="{Binding UseSupportUnitUsage}"
+                                      ItemsSource="{Binding SupportUnitUsageOptions}"
+                                      SelectedValueBinding="{Binding Value}"
+                                      SelectedValue="{Binding SupportUnitUsage}">
+                    <controls:AppSelect.ItemTemplate>
                       <DataTemplate>
                         <TextBlock Text="{Binding DisplayName}" />
                       </DataTemplate>
-                    </ComboBox.ItemTemplate>
-                  </ComboBox>
+                    </controls:AppSelect.ItemTemplate>
+                  </controls:AppSelect>
                 </StackPanel>
 
                 <CheckBox Classes="app-checkbox"
@@ -337,25 +384,24 @@
                               <DataTemplate>
                                 <Grid ColumnDefinitions="*,72,120,Auto"
                                       Margin="0,0,0,8">
-                                  <TextBox Classes="app-input"
-                                           Text="{Binding Name}"
-                                           Watermark="{Binding DataContext.OperatorNameWatermark, RelativeSource={RelativeSource AncestorType=UserControl}}" />
-                                  <controls:VerticalSpinNumberBox Grid.Column="1"
-                                                                  Margin="8,0,0,0"
-                                                                  Minimum="0"
-                                                                  Maximum="3"
-                                                                  Value="{Binding Skill}" />
-                                  <ComboBox Grid.Column="2"
-                                            Margin="8,0,0,0"
-                                            Classes="copilot-combo"
-                                            ItemsSource="{Binding DataContext.ModuleOptions, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                            SelectedIndex="{Binding Module}">
-                                    <ComboBox.ItemTemplate>
+                                  <controls:AppTextInput Text="{Binding Name}"
+                                                         Watermark="{Binding DataContext.OperatorNameWatermark, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                                  <controls:AppNumberInput Grid.Column="1"
+                                                           Margin="8,0,0,0"
+                                                           Minimum="0"
+                                                           Maximum="3"
+                                                           Value="{Binding Skill}" />
+                                  <controls:AppSelect Grid.Column="2"
+                                                      Margin="8,0,0,0"
+                                                      Classes="copilot-combo"
+                                                      ItemsSource="{Binding DataContext.ModuleOptions, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                      SelectedIndex="{Binding Module}">
+                                    <controls:AppSelect.ItemTemplate>
                                       <DataTemplate>
                                         <TextBlock Text="{Binding DisplayName}" />
                                       </DataTemplate>
-                                    </ComboBox.ItemTemplate>
-                                  </ComboBox>
+                                    </controls:AppSelect.ItemTemplate>
+                                  </controls:AppSelect>
                                   <Button Grid.Column="3"
                                           Classes="app-button app-secondary copilot-list-action"
                                           Margin="8,0,0,0"
@@ -403,17 +449,18 @@
                           IsChecked="{Binding UseSanityPotion}"
                           IsVisible="{Binding ShowUseSanityPotion}" />
 
-                <StackPanel Orientation="Horizontal"
-                            IsVisible="{Binding ShowLoopSetting}">
-                  <CheckBox Classes="app-checkbox"
-                            Content="{Binding LoopTimesText}"
-                            IsChecked="{Binding Loop}" />
-                  <controls:VerticalSpinNumberBox Margin="8,0,0,0"
-                                                  Minimum="1"
-                                                  Maximum="9999"
-                                                  Value="{Binding LoopTimes}" />
+                  <StackPanel Orientation="Horizontal"
+                              IsVisible="{Binding ShowLoopSetting}">
+                    <CheckBox Classes="app-checkbox"
+                              Content="{Binding LoopTimesText}"
+                              IsChecked="{Binding Loop}" />
+                    <controls:AppNumberInput Margin="8,0,0,0"
+                                             Minimum="1"
+                                             Maximum="9999"
+                                             Value="{Binding LoopTimes}" />
+                  </StackPanel>
                 </StackPanel>
-              </StackPanel>
+              </ScrollViewer>
             </Grid>
           </Border>
 
@@ -429,19 +476,22 @@
                 <controls:ReorderableList.ItemTemplate>
                   <DataTemplate>
                     <Border Classes="copilot-list-item-shell">
-                      <Grid ColumnDefinitions="*,Auto,Auto">
-                        <CheckBox Classes="app-checkbox"
+                      <Grid ColumnDefinitions="3,*,Auto,Auto">
+                        <Border Classes="copilot-list-item-accent" />
+                        <CheckBox Grid.Column="1"
+                                  Margin="10,0,0,0"
+                                  Classes="app-checkbox"
                                   Content="{Binding DisplayName}"
                                   IsChecked="{Binding IsChecked}"
                                   ToolTip.Tip="{Binding ExecutionPathHint}" />
-                        <Button Grid.Column="1"
+                        <Button Grid.Column="2"
                                 Classes="app-button app-secondary copilot-list-action"
                                 Margin="8,0,0,0"
                                 Content="{Binding DataContext.LoadButtonText, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                 Tag="{Binding}"
                                 Click="OnLoadListItemClick"
                                 PointerPressed="OnLoadListItemPointerPressed" />
-                        <Button Grid.Column="2"
+                        <Button Grid.Column="3"
                                 Classes="app-button app-secondary copilot-list-action"
                                 Margin="8,0,0,0"
                                 Content="{Binding DataContext.DeleteButtonText, RelativeSource={RelativeSource AncestorType=UserControl}}"
@@ -462,12 +512,11 @@
                         ToolTip.Tip="{Binding ImportBatchButtonTip}"
                         Click="OnImportFilesClick"
                         IsEnabled="{Binding CanEdit}" />
-                <TextBox Grid.Column="1"
-                         Margin="8,0,0,0"
-                         Classes="app-input"
-                         Text="{Binding CopilotTaskName}"
-                         Watermark="{Binding StageNameWatermark}"
-                         ToolTip.Tip="{Binding StageNameTip}" />
+                <controls:AppTextInput Grid.Column="1"
+                                       Margin="8,0,0,0"
+                                       Text="{Binding CopilotTaskName}"
+                                       Watermark="{Binding StageNameWatermark}"
+                                       ToolTip.Tip="{Binding StageNameTip}" />
                 <Button Grid.Column="2"
                         Classes="app-button app-secondary copilot-list-action"
                         Margin="8,0,0,0"

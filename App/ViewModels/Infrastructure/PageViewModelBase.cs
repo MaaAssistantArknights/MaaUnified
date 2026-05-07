@@ -1,6 +1,7 @@
 using MAAUnified.Application.Configuration;
 using MAAUnified.Application.Models;
 using MAAUnified.Application.Services;
+using MAAUnified.App.Services;
 
 namespace MAAUnified.App.ViewModels.Infrastructure;
 
@@ -73,15 +74,27 @@ public abstract class PageViewModelBase : ObservableObject
     {
         if (result.Success)
         {
-            StatusMessage = result.Message;
+            if (!IsConfigurationSaveScope(scope))
+            {
+                StatusMessage = result.Message;
+            }
+
             LastErrorMessage = string.Empty;
             await RecordEventAsync(scope, result.Message, cancellationToken);
             return true;
         }
 
-        LastErrorMessage = result.Message;
         await RecordFailedResultAsync(scope, result, cancellationToken);
-        await Runtime.DialogFeatureService.ReportErrorAsync(scope, result, cancellationToken);
+        if (IsConfigurationSaveScope(scope))
+        {
+            return false;
+        }
+
+        LastErrorMessage = result.Message;
+        if (!IsConfigurationSaveScope(scope))
+        {
+            await Runtime.DialogFeatureService.ReportErrorAsync(scope, result, cancellationToken);
+        }
         return false;
     }
 
@@ -89,20 +102,67 @@ public abstract class PageViewModelBase : ObservableObject
     {
         if (result.Success)
         {
-            StatusMessage = result.Message;
+            if (!IsConfigurationSaveScope(scope))
+            {
+                StatusMessage = result.Message;
+            }
+
             LastErrorMessage = string.Empty;
             await RecordEventAsync(scope, result.Message, cancellationToken);
             return result.Value;
         }
 
-        LastErrorMessage = result.Message;
         var failed = UiOperationResult.Fail(
             result.Error?.Code ?? UiErrorCode.UiOperationFailed,
             result.Message,
             result.Error?.Details);
         await RecordFailedResultAsync(scope, failed, cancellationToken);
-        await Runtime.DialogFeatureService.ReportErrorAsync(scope, failed, cancellationToken);
+        if (IsConfigurationSaveScope(scope))
+        {
+            return default;
+        }
+
+        LastErrorMessage = result.Message;
+        if (!IsConfigurationSaveScope(scope))
+        {
+            await Runtime.DialogFeatureService.ReportErrorAsync(scope, failed, cancellationToken);
+        }
         return default;
+    }
+
+    private static bool IsConfigurationSaveScope(string scope)
+    {
+        return scope.Contains(".Save", StringComparison.OrdinalIgnoreCase)
+            || scope.Contains("AutoSave", StringComparison.OrdinalIgnoreCase)
+            || scope.Contains(".Persist", StringComparison.OrdinalIgnoreCase);
+    }
+
+    protected Task<bool> RunTrackedConfigurationSaveAsync(
+        string key,
+        string displayName,
+        string scope,
+        Func<CancellationToken, Task<UiOperationResult>> saveAsync,
+        CancellationToken cancellationToken = default)
+    {
+        return ConfigurationSaveTracker.Instance.RunTrackedAsync(
+            key,
+            displayName,
+            scope,
+            Runtime.DiagnosticsService,
+            async ct =>
+            {
+                var result = await saveAsync(ct);
+                if (result.Success)
+                {
+                    LastErrorMessage = string.Empty;
+                    await RecordEventAsync(scope, result.Message, ct);
+                    return true;
+                }
+
+                await RecordFailedResultAsync(scope, result, ct);
+                return false;
+            },
+            cancellationToken);
     }
 
     protected async Task<bool> ApplyResultAsync(

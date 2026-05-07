@@ -17,41 +17,39 @@
     </Style>
 
     <Style Selector="TextBlock.startup-field-label">
-      <Setter Property="FontWeight" Value="SemiBold" />
-      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Text.Primary}" />
+      <Setter Property="FontWeight" Value="Normal" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Secondary}" />
       <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
     <Style Selector="ListBox.startup-validation-list">
       <Setter Property="MaxHeight" Value="96" />
     </Style>
+
   </UserControl.Styles>
 
-  <StackPanel Margin="2" Classes="startup-layout">
+  <controls:AdaptiveSpacingStackPanel Margin="2" Classes="startup-layout">
     <TextBlock Classes="section-title" Text="{Binding Texts[StartUp.Title]}" />
 
-    <Border Classes="app-surface app-section">
-      <StackPanel Classes="startup-section-content">
+    <controls:AdaptiveSpacingStackPanel Classes="startup-section-content">
         <Border Classes="app-surface app-card"
                 IsVisible="{Binding ShowAccountSwitch}">
-          <StackPanel Classes="startup-card-content">
-            <Grid ColumnDefinitions="Auto,Auto,*">
-              <TextBlock Classes="startup-field-label"
-                         Text="{Binding Texts[StartUp.AccountSwitch]}" />
-              <controls:TooltipHint Grid.Column="1"
-                                    Margin="6,0,0,0"
-                                    Tip="{Binding Texts[StartUp.AccountSwitchTip]}" />
-            </Grid>
+          <controls:SettingsInlineRow Classes="startup-card-content"
+                                      FieldWidth="{DynamicResource MAA.Size.Settings.FieldWidth}">
+            <TextBlock Classes="startup-field-label">
+              <Run Text="{Binding Texts[StartUp.AccountSwitch]}" />
+              <Run Text="&#160;" />
+              <InlineUIContainer BaselineAlignment="Center">
+                <controls:TooltipHint Tip="{Binding Texts[StartUp.AccountSwitchTip]}" />
+              </InlineUIContainer>
+            </TextBlock>
 
-            <TextBox Classes="app-input app-input-block"
-                     Text="{Binding AccountName, UpdateSourceTrigger=LostFocus}" />
-
-            <Button Classes="app-button app-secondary"
-                    HorizontalAlignment="Left"
-                    Content="{Binding Texts[StartUp.AccountSwitchManualRun]}"
-                    IsEnabled="{Binding CanRunAccountSwitchNow}"
-                    Click="OnAccountSwitchManualRunClick" />
-          </StackPanel>
+            <controls:AppActionInput HorizontalAlignment="Left"
+                                     Text="{Binding AccountName, UpdateSourceTrigger=LostFocus}"
+                                     ActionContent="{Binding Texts[StartUp.AccountSwitchManualRun]}"
+                                     ActionClick="OnAccountSwitchManualRunClick" />
+          </controls:SettingsInlineRow>
         </Border>
 
         <Border Classes="app-surface app-card">
@@ -60,128 +58,107 @@
                     IsChecked="{Binding StartGameEnabled}"
                     IsEnabled="{Binding CanEditStartGameEnabled}" />
         </Border>
-      </StackPanel>
-    </Border>
+      </controls:AdaptiveSpacingStackPanel>
 
-    <Border Classes="app-surface app-section">
-      <StackPanel Classes="startup-section-content">
+    <controls:AdaptiveSpacingStackPanel Classes="startup-section-content">
         <Border Classes="app-surface app-card">
-          <StackPanel Classes="startup-card-content">
+          <controls:SettingsInlineRow Classes="startup-card-content">
             <TextBlock Classes="startup-field-label"
                        Text="{Binding Texts[StartUp.ClientType]}" />
-            <ComboBox ItemsSource="{Binding ClientTypeOptions}"
-                      SelectedValueBinding="{Binding Type}"
-                      SelectedValue="{Binding SelectedClientTypeValue}">
-              <ComboBox.ItemTemplate>
+            <controls:AppSelect ItemsSource="{Binding ClientTypeOptions}"
+                                SelectedValueBinding="{Binding Type}"
+                                SelectedValue="{Binding SelectedClientTypeValue}">
+              <controls:AppSelect.ItemTemplate>
                 <DataTemplate x:DataType="vm:TaskModuleOption">
                   <TextBlock Text="{Binding DisplayName}" />
                 </DataTemplate>
-              </ComboBox.ItemTemplate>
-            </ComboBox>
-          </StackPanel>
+              </controls:AppSelect.ItemTemplate>
+            </controls:AppSelect>
+          </controls:SettingsInlineRow>
         </Border>
 
         <Border Classes="app-surface app-card">
-          <StackPanel Classes="startup-card-content">
+          <controls:SettingsInlineRow Classes="startup-card-content">
             <TextBlock Classes="startup-field-label"
                        Text="{Binding Texts[StartUp.ConnectConfig]}" />
-            <ComboBox ItemsSource="{Binding ConnectConfigOptions}"
-                      SelectedValueBinding="{Binding Type}"
-                      SelectedValue="{Binding SelectedConnectConfigValue}">
-              <ComboBox.ItemTemplate>
+            <controls:AppSelect ItemsSource="{Binding ConnectConfigOptions}"
+                                SelectedValueBinding="{Binding Type}"
+                                SelectedValue="{Binding SelectedConnectConfigValue}">
+              <controls:AppSelect.ItemTemplate>
                 <DataTemplate x:DataType="vm:TaskModuleOption">
                   <TextBlock Text="{Binding DisplayName}" />
                 </DataTemplate>
-              </ComboBox.ItemTemplate>
-            </ComboBox>
-          </StackPanel>
+              </controls:AppSelect.ItemTemplate>
+            </controls:AppSelect>
+          </controls:SettingsInlineRow>
         </Border>
 
         <Border Classes="app-surface app-card">
-          <StackPanel Classes="startup-card-content">
-            <Grid ColumnDefinitions="Auto,Auto,*">
-              <TextBlock Classes="startup-field-label"
-                         Text="{Binding Texts[StartUp.ConnectAddress]}" />
-              <controls:TooltipHint Grid.Column="1"
-                                    Margin="6,0,0,0"
-                                    Tip="{Binding Texts[StartUp.ConnectionAddressTip]}" />
-            </Grid>
+          <controls:SettingsInlineRow Classes="startup-card-content"
+                                      FieldWidth="{DynamicResource MAA.Size.Settings.FieldInputWidth}">
+            <TextBlock Classes="startup-field-label">
+              <Run Text="{Binding Texts[StartUp.ConnectAddress]}" />
+              <Run Text="&#160;" />
+              <InlineUIContainer BaselineAlignment="Center">
+                <controls:TooltipHint Tip="{Binding Texts[StartUp.ConnectionAddressTip]}" />
+              </InlineUIContainer>
+            </TextBlock>
 
-            <AutoCompleteBox ItemsSource="{Binding ConnectAddressHistory}"
-                             Text="{Binding ConnectAddress, UpdateSourceTrigger=LostFocus}" />
-          </StackPanel>
+            <controls:AppHistoryInput ItemsSource="{Binding ConnectAddressHistory}"
+                                      Text="{Binding ConnectAddress, Mode=TwoWay}"
+                                      ItemDeleted="OnConnectAddressItemDeleted"
+                                      EditorCommitted="OnConnectAddressEditorCommitted"
+                                      SelectionCommitted="OnConnectAddressSelectionCommitted" />
+          </controls:SettingsInlineRow>
         </Border>
-      </StackPanel>
-    </Border>
+      </controls:AdaptiveSpacingStackPanel>
 
-    <Border Classes="app-surface app-section">
-      <StackPanel Classes="startup-section-content">
+    <controls:AdaptiveSpacingStackPanel Classes="startup-section-content">
         <Border Classes="app-surface app-card">
-          <StackPanel Classes="startup-card-content">
+          <controls:SettingsInlineRow Classes="startup-card-content"
+                                      FieldWidth="{DynamicResource MAA.Size.Settings.FieldInputWidth}">
             <TextBlock Classes="startup-field-label"
                        Text="{Binding Texts[StartUp.AdbPath]}" />
 
-            <TextBox Classes="app-input app-input-block"
-                     Text="{Binding AdbPath, UpdateSourceTrigger=LostFocus}" />
-
-            <Button Classes="app-button app-secondary"
-                    HorizontalAlignment="Left"
-                    Content="{Binding Texts[StartUp.Select]}"
-                    Click="OnSelectAdbPathClick" />
-          </StackPanel>
+            <controls:AppActionInput Text="{Binding AdbPath, UpdateSourceTrigger=LostFocus}"
+                                     ActionContent="{Binding Texts[StartUp.Select]}"
+                                     ActionClick="OnSelectAdbPathClick" />
+          </controls:SettingsInlineRow>
         </Border>
 
         <Border Classes="app-surface app-card">
-          <StackPanel Classes="startup-card-content">
+          <controls:SettingsInlineRow Classes="startup-card-content">
             <TextBlock Classes="startup-field-label"
                        Text="{Binding Texts[StartUp.TouchMode]}" />
-            <ComboBox ItemsSource="{Binding TouchModeOptions}"
-                      SelectedValueBinding="{Binding Type}"
-                      SelectedValue="{Binding SelectedTouchModeValue}">
-              <ComboBox.ItemTemplate>
+            <controls:AppSelect ItemsSource="{Binding TouchModeOptions}"
+                                SelectedValueBinding="{Binding Type}"
+                                SelectedValue="{Binding SelectedTouchModeValue}">
+              <controls:AppSelect.ItemTemplate>
                 <DataTemplate x:DataType="vm:TaskModuleOption">
                   <TextBlock Text="{Binding DisplayName}" />
                 </DataTemplate>
-              </ComboBox.ItemTemplate>
-            </ComboBox>
-          </StackPanel>
+              </controls:AppSelect.ItemTemplate>
+            </controls:AppSelect>
+          </controls:SettingsInlineRow>
         </Border>
 
         <Border Classes="app-surface app-card">
-          <Grid ColumnDefinitions="Auto,Auto,*">
-            <CheckBox Classes="app-checkbox"
-                      Content="{Binding Texts[StartUp.AutoDetect]}"
-                      IsChecked="{Binding AutoDetectConnection}" />
-            <controls:TooltipHint Grid.Column="1"
-                                  Margin="6,0,0,0"
-                                  VerticalAlignment="Center"
-                                  Tip="{Binding Texts[StartUp.AutoDetectConnectionTip]}" />
-          </Grid>
+          <controls:AppHintedCheckBox Text="{Binding Texts[StartUp.AutoDetect]}"
+                                       Tip="{Binding Texts[StartUp.AutoDetectConnectionTip]}"
+                                       IsChecked="{Binding AutoDetectConnection}" />
         </Border>
-      </StackPanel>
-    </Border>
+      </controls:AdaptiveSpacingStackPanel>
 
-    <Border Classes="app-surface app-section">
-      <StackPanel Classes="startup-section-content">
-        <Border Classes="app-surface app-card">
-          <StackPanel Classes="startup-card-content">
-            <TextBlock Classes="long-wrap"
-                       Text="{Binding StatusMessage}" />
-            <TextBlock Classes="long-wrap state-error"
-                       Text="{Binding LastErrorMessage}" />
-          </StackPanel>
-        </Border>
-
+    <controls:AdaptiveSpacingStackPanel Classes="startup-section-content">
         <Border Classes="app-surface app-card"
                 IsVisible="{Binding HasValidationIssues}">
-          <StackPanel Classes="startup-card-content">
+          <controls:AdaptiveSpacingStackPanel Classes="startup-card-content">
             <TextBlock Classes="startup-field-label"
                        Text="{Binding Texts[Common.ValidationIssues]}" />
             <ListBox Classes="startup-validation-list"
                      ItemsSource="{Binding ValidationMessages}" />
-          </StackPanel>
+          </controls:AdaptiveSpacingStackPanel>
         </Border>
-      </StackPanel>
-    </Border>
-  </StackPanel>
+      </controls:AdaptiveSpacingStackPanel>
+  </controls:AdaptiveSpacingStackPanel>
 </UserControl>

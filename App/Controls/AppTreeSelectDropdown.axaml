@@ -1,0 +1,179 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="MAAUnified.App.Controls.AppTreeSelectDropdown"
+             x:Name="Root">
+  <UserControl.Styles>
+    <Style Selector="Border.app-tree-select-shell">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.SettingsInput.Background}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.SettingsInput.Border}" />
+      <Setter Property="BorderThickness" Value="{DynamicResource MAA.BorderThickness.Thin}" />
+      <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.CornerRadius.SettingsInput}" />
+      <Setter Property="Height" Value="{DynamicResource MAA.App.Size.InputHeight}" />
+      <Setter Property="MinHeight" Value="{DynamicResource MAA.App.Size.InputHeight}" />
+      <Setter Property="Padding" Value="{DynamicResource MAA.App.Thickness.SettingsInputShellPadding}" />
+    </Style>
+    <Style Selector="Border.app-tree-select-shell:pointerover">
+      <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.SettingsInput.BorderHover}" />
+    </Style>
+    <Style Selector="Border.app-tree-select-shell.open">
+      <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.SettingsInput.BorderFocus}" />
+    </Style>
+    <Style Selector="Border.app-tree-select-shell.focused">
+      <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.SettingsInput.BorderFocus}" />
+    </Style>
+    <Style Selector="Border.app-tree-select-shell:disabled">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.SettingsInput.BackgroundDisabled}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Action.DisabledBorder}" />
+      <Setter Property="Opacity" Value="1" />
+    </Style>
+    <Style Selector="TextBox.app-tree-select-editor">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="FocusAdorner" Value="{x:Null}" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.Foreground}" />
+      <Setter Property="Padding" Value="0,1,0,0" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="TextBox.app-tree-select-editor:disabled">
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ForegroundDisabled}" />
+    </Style>
+    <Style Selector="TextBox.app-tree-select-editor /template/ Border">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+    <Style Selector="Button.app-tree-select-arrow">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.Chevron}" />
+      <Setter Property="Width" Value="{DynamicResource MAA.App.Size.SettingsInputDropDownButtonWidth}" />
+      <Setter Property="MinWidth" Value="{DynamicResource MAA.App.Size.SettingsInputDropDownButtonWidth}" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="Margin" Value="0" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="CornerRadius" Value="0" />
+      <Setter Property="Focusable" Value="False" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.app-tree-select-arrow:pointerover">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ChevronHover}" />
+    </Style>
+    <Style Selector="Button.app-tree-select-arrow:disabled">
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ChevronDisabled}" />
+    </Style>
+    <Style Selector="Path.app-tree-select-arrow-icon">
+      <Setter Property="Width" Value="{DynamicResource MAA.App.Size.SettingsInputChevronWidth}" />
+      <Setter Property="Height" Value="{DynamicResource MAA.App.Size.SettingsInputChevronHeight}" />
+      <Setter Property="StrokeThickness" Value="1.4" />
+      <Setter Property="Stroke" Value="{DynamicResource MAA.Brush.App.SettingsInput.Chevron}" />
+      <Setter Property="Stretch" Value="Fill" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.app-tree-select-arrow:pointerover Path.app-tree-select-arrow-icon">
+      <Setter Property="Stroke" Value="{DynamicResource MAA.Brush.App.SettingsInput.ChevronHover}" />
+    </Style>
+    <Style Selector="Popup.app-tree-select-popup">
+      <Setter Property="WindowManagerAddShadowHint" Value="False" />
+    </Style>
+    <Style Selector="Border.app-tree-select-panel">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.SettingsInput.PopupBackground}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.SettingsInput.PopupBorder}" />
+      <Setter Property="BorderThickness" Value="{DynamicResource MAA.BorderThickness.Thin}" />
+      <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.CornerRadius.SettingsInputPopup}" />
+      <Setter Property="Padding" Value="{DynamicResource MAA.App.Thickness.SettingsInputPopupPadding}" />
+    </Style>
+    <Style Selector="TreeView.app-tree-select-list">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+    <Style Selector="TreeView.app-tree-select-list TreeViewItem">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="{DynamicResource MAA.App.Thickness.SettingsInputItemPadding}" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ItemForeground}" />
+      <Setter Property="MinHeight" Value="36" />
+      <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.CornerRadius.SettingsInput}" />
+      <Setter Property="Opacity" Value="1" />
+    </Style>
+    <Style Selector="TreeView.app-tree-select-list TreeViewItem:pointerover">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.SettingsInput.ItemBackgroundHover}" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ItemForegroundHover}" />
+    </Style>
+    <Style Selector="TreeView.app-tree-select-list TreeViewItem:selected">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.SettingsInput.ItemBackgroundSelected}" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ItemForegroundSelected}" />
+    </Style>
+    <Style Selector="TreeView.app-tree-select-list ToggleButton">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ItemForeground}" />
+      <Setter Property="MinWidth" Value="24" />
+      <Setter Property="MinHeight" Value="28" />
+      <Setter Property="Padding" Value="4" />
+      <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.CornerRadius.SettingsInput}" />
+    </Style>
+    <Style Selector="TreeView.app-tree-select-list ToggleButton:pointerover">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ItemForegroundHover}" />
+    </Style>
+  </UserControl.Styles>
+
+  <Grid>
+    <Border x:Name="ShellBorder"
+            Classes="app-tree-select-shell"
+            PointerPressed="OnShellPointerPressed">
+      <Grid ColumnDefinitions="*,Auto">
+        <TextBox x:Name="EditableTextBox"
+                 Classes="app-tree-select-editor"
+                 Text="{Binding Text, ElementName=Root, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                 Watermark="{Binding Watermark, ElementName=Root}"
+                 GotFocus="OnEditableTextBoxGotFocus"
+                 LostFocus="OnEditableTextBoxLostFocus"
+                 KeyDown="OnEditableTextBoxKeyDown" />
+        <Button Grid.Column="1"
+                Classes="app-tree-select-arrow"
+                Click="OnToggleButtonClick">
+          <Path Classes="app-tree-select-arrow-icon"
+                Data="M 1 1 L 5 5 L 9 1"
+                StrokeLineCap="Round" />
+        </Button>
+      </Grid>
+    </Border>
+
+    <Popup x:Name="DropDownPopup"
+           Classes="app-tree-select-popup"
+           IsOpen="{Binding IsDropDownOpen, ElementName=Root, Mode=TwoWay}"
+           Placement="BottomEdgeAlignedLeft"
+           VerticalOffset="4"
+           IsLightDismissEnabled="True"
+           Closed="OnPopupClosed">
+      <Border Classes="app-tree-select-panel"
+              MinWidth="{Binding Bounds.Width, ElementName=ShellBorder}"
+              HorizontalAlignment="Left">
+        <ScrollViewer MaxHeight="{Binding MaxDropDownHeight, ElementName=Root}"
+                      HorizontalScrollBarVisibility="Disabled"
+                      VerticalScrollBarVisibility="Auto">
+          <TreeView x:Name="TreeView"
+                    Classes="app-tree-select-list"
+                    ItemsSource="{Binding ItemsSource, ElementName=Root}"
+                    SelectionChanged="OnTreeViewSelectionChanged">
+            <TreeView.ItemTemplate>
+              <TreeDataTemplate ItemsSource="{Binding Children}">
+                <TextBlock Margin="4,2"
+                           Text="{Binding}" />
+              </TreeDataTemplate>
+            </TreeView.ItemTemplate>
+          </TreeView>
+        </ScrollViewer>
+      </Border>
+    </Popup>
+  </Grid>
+</UserControl>

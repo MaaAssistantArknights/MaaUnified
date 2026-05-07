@@ -4,11 +4,11 @@
              x:Class="MAAUnified.App.Features.TaskQueue.AwardSettingsView">
   <UserControl.Styles>
     <Style Selector="StackPanel.award-layout">
-      <Setter Property="Spacing" Value="{DynamicResource MAA.Spacing.Medium}" />
+      <Setter Property="Spacing" Value="{DynamicResource MAA.App.Settings.PageCompactFlowSpacing}" />
     </Style>
 
     <Style Selector="StackPanel.award-section-content">
-      <Setter Property="Spacing" Value="{DynamicResource MAA.Spacing.Small}" />
+      <Setter Property="Spacing" Value="{DynamicResource MAA.App.Settings.PageCompactFlowSpacing}" />
     </Style>
 
     <Style Selector="Border.award-card">
@@ -16,68 +16,55 @@
     </Style>
 
     <Style Selector="StackPanel.award-card-content">
-      <Setter Property="Spacing" Value="8" />
+      <Setter Property="Spacing" Value="{DynamicResource MAA.App.Settings.PageToggleStackSpacing}" />
     </Style>
   </UserControl.Styles>
 
-  <StackPanel Margin="4" Classes="award-layout">
+  <controls:AdaptiveSpacingStackPanel Margin="4" Classes="award-layout">
     <TextBlock Classes="section-title" Text="{Binding Texts[Award.Title]}" />
 
-    <Border Classes="app-surface app-section">
-      <StackPanel Classes="award-section-content">
-        <Border Classes="app-surface app-card award-card">
-          <StackPanel Classes="award-card-content">
-            <CheckBox Classes="app-checkbox"
-                      Content="{Binding Texts[Award.Award]}"
-                      IsChecked="{Binding Award}" />
-            <CheckBox Classes="app-checkbox"
-                      Content="{Binding Texts[Award.Mail]}"
-                      IsChecked="{Binding Mail}" />
+    <controls:AdaptiveSpacingStackPanel Classes="award-section-content">
+      <Border Classes="app-surface app-card award-card">
+        <controls:AdaptiveSpacingStackPanel Classes="award-card-content">
+          <CheckBox Classes="app-checkbox"
+                    Content="{Binding Texts[Award.Award]}"
+                    IsChecked="{Binding Award}" />
+          <CheckBox Classes="app-checkbox"
+                    Content="{Binding Texts[Award.Mail]}"
+                    IsChecked="{Binding Mail}" />
 
-            <Grid ColumnDefinitions="Auto,Auto,*">
-              <CheckBox Classes="app-checkbox"
-                        Content="{Binding Texts[Award.Recruit]}"
-                        IsChecked="{Binding FreeGacha}" />
-              <controls:TooltipHint Grid.Column="1"
-                                    Margin="6,0,0,0"
-                                    VerticalAlignment="Center"
-                                    Tip="{Binding Texts[Award.FreeGachaTip]}" />
-            </Grid>
+          <controls:AppHintedCheckBox Text="{Binding Texts[Award.Recruit]}"
+                                       Tip="{Binding Texts[Award.FreeGachaTip]}"
+                                       IsChecked="{Binding FreeGacha}" />
 
-            <CheckBox Classes="app-checkbox"
-                      Content="{Binding Texts[Award.Orundum]}"
-                      IsChecked="{Binding Orundum}" />
-            <CheckBox Classes="app-checkbox"
-                      Content="{Binding Texts[Award.Mining]}"
-                      IsChecked="{Binding Mining}" />
-            <CheckBox Classes="app-checkbox"
-                      Content="{Binding Texts[Award.Special]}"
-                      IsChecked="{Binding SpecialAccess}" />
-          </StackPanel>
-        </Border>
+          <CheckBox Classes="app-checkbox"
+                    Content="{Binding Texts[Award.Orundum]}"
+                    IsChecked="{Binding Orundum}" />
+          <CheckBox Classes="app-checkbox"
+                    Content="{Binding Texts[Award.Mining]}"
+                    IsChecked="{Binding Mining}" />
+          <CheckBox Classes="app-checkbox"
+                    Content="{Binding Texts[Award.Special]}"
+                    IsChecked="{Binding SpecialAccess}" />
+        </controls:AdaptiveSpacingStackPanel>
+      </Border>
 
-        <Border Classes="app-surface app-card award-card"
-                IsVisible="{Binding PendingFreeGachaConfirmation}">
-          <StackPanel Classes="award-card-content">
-            <TextBlock Classes="app-body long-wrap state-warning"
-                       Text="{Binding Texts[Award.GachaWarning]}" />
-
-            <Button Classes="app-button app-secondary"
-                    HorizontalAlignment="Left"
-                    Content="{Binding Texts[Award.Confirm]}"
-                    Click="OnConfirmRecruitClick" />
-            <Button Classes="app-button app-secondary"
-                    HorizontalAlignment="Left"
-                    Content="{Binding Texts[Award.Cancel]}"
-                    Click="OnCancelRecruitClick" />
-          </StackPanel>
-        </Border>
-
-        <Border Classes="app-surface app-card award-card">
+      <Border Classes="app-surface app-card award-card"
+              IsVisible="{Binding PendingFreeGachaConfirmation}">
+        <controls:AdaptiveSpacingStackPanel Classes="award-card-content">
           <TextBlock Classes="app-body long-wrap state-warning"
-                     Text="{Binding StatusMessage}" />
-        </Border>
-      </StackPanel>
-    </Border>
-  </StackPanel>
+                     Text="{Binding Texts[Award.GachaWarning]}" />
+
+          <Button Classes="app-button app-secondary"
+                  HorizontalAlignment="Left"
+                  Content="{Binding Texts[Award.Confirm]}"
+                  Click="OnConfirmRecruitClick" />
+          <Button Classes="app-button app-secondary"
+                  HorizontalAlignment="Left"
+                  Content="{Binding Texts[Award.Cancel]}"
+                  Click="OnCancelRecruitClick" />
+        </controls:AdaptiveSpacingStackPanel>
+      </Border>
+    </controls:AdaptiveSpacingStackPanel>
+  </controls:AdaptiveSpacingStackPanel>
 </UserControl>

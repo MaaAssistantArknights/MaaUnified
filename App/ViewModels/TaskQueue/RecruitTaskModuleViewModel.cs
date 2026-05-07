@@ -216,37 +216,49 @@ public sealed class RecruitTaskModuleViewModel : TypedTaskModuleViewModelBase<Re
     public int Level3Hour
     {
         get => Level3Time / 60;
-        set => Level3Time = (value * 60) + Level3Minute;
+        set => Level3Time = (ClampRecruitHour(value, Level3Minute) * 60) + Level3Minute;
     }
 
     public int Level3Minute
     {
         get => (Level3Time % 60) / 10 * 10;
-        set => Level3Time = (Level3Hour * 60) + value;
+        set
+        {
+            var minute = NormalizeRecruitMinutePart(value);
+            Level3Time = (ClampRecruitHour(Level3Hour, minute) * 60) + minute;
+        }
     }
 
     public int Level4Hour
     {
         get => Level4Time / 60;
-        set => Level4Time = (value * 60) + Level4Minute;
+        set => Level4Time = (ClampRecruitHour(value, Level4Minute) * 60) + Level4Minute;
     }
 
     public int Level4Minute
     {
         get => (Level4Time % 60) / 10 * 10;
-        set => Level4Time = (Level4Hour * 60) + value;
+        set
+        {
+            var minute = NormalizeRecruitMinutePart(value);
+            Level4Time = (ClampRecruitHour(Level4Hour, minute) * 60) + minute;
+        }
     }
 
     public int Level5Hour
     {
         get => Level5Time / 60;
-        set => Level5Time = (value * 60) + Level5Minute;
+        set => Level5Time = (ClampRecruitHour(value, Level5Minute) * 60) + Level5Minute;
     }
 
     public int Level5Minute
     {
         get => (Level5Time % 60) / 10 * 10;
-        set => Level5Time = (Level5Hour * 60) + value;
+        set
+        {
+            var minute = NormalizeRecruitMinutePart(value);
+            Level5Time = (ClampRecruitHour(Level5Hour, minute) * 60) + minute;
+        }
     }
 
     protected override Task<UiOperationResult<RecruitTaskParamsDto>> LoadDtoAsync(int index, CancellationToken cancellationToken)
@@ -538,6 +550,17 @@ public sealed class RecruitTaskModuleViewModel : TypedTaskModuleViewModelBase<Re
             > MaxRecruitTime => MinRecruitTime,
             _ => value / 10 * 10,
         };
+    }
+
+    private static int NormalizeRecruitMinutePart(int value)
+    {
+        return Math.Clamp(value / 10 * 10, 0, 50);
+    }
+
+    private static int ClampRecruitHour(int hour, int minutePart)
+    {
+        var maxHour = minutePart > 0 ? 8 : 9;
+        return Math.Clamp(hour, 1, maxHour);
     }
 
     public sealed record ExtraTagsModeOption(int Value, string DisplayName);

@@ -2,14 +2,11 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Data;
 using Avalonia.Interactivity;
-using Avalonia.VisualTree;
 
 namespace MAAUnified.App.Controls;
 
 public partial class VerticalSpinNumberBox : UserControl
 {
-    private bool _settingsSpinClassAppliedByContext;
-
     public static readonly StyledProperty<int> MinimumProperty =
         AvaloniaProperty.Register<VerticalSpinNumberBox, int>(nameof(Minimum), 0);
 
@@ -28,6 +25,9 @@ public partial class VerticalSpinNumberBox : UserControl
     public static readonly StyledProperty<string> FormatStringProperty =
         AvaloniaProperty.Register<VerticalSpinNumberBox, string>(nameof(FormatString), "F0");
 
+    public static readonly StyledProperty<bool> WrapAroundStepProperty =
+        AvaloniaProperty.Register<VerticalSpinNumberBox, bool>(nameof(WrapAroundStep), false);
+
     static VerticalSpinNumberBox()
     {
         MinimumProperty.Changed.AddClassHandler<VerticalSpinNumberBox>((box, _) => box.CoerceValueWithinRange());
@@ -40,23 +40,6 @@ public partial class VerticalSpinNumberBox : UserControl
         InitializeComponent();
         AddHandler(GotFocusEvent, OnFocusChanged, RoutingStrategies.Bubble);
         AddHandler(LostFocusEvent, OnFocusChanged, RoutingStrategies.Bubble);
-    }
-
-    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
-    {
-        base.OnAttachedToVisualTree(e);
-        UpdateSettingsSpinVariantFromContext();
-    }
-
-    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
-    {
-        if (_settingsSpinClassAppliedByContext)
-        {
-            Classes.Remove("settings-spin");
-            _settingsSpinClassAppliedByContext = false;
-        }
-
-        base.OnDetachedFromVisualTree(e);
     }
 
     public int Minimum
@@ -89,6 +72,12 @@ public partial class VerticalSpinNumberBox : UserControl
         set => SetValue(FormatStringProperty, value);
     }
 
+    public bool WrapAroundStep
+    {
+        get => GetValue(WrapAroundStepProperty);
+        set => SetValue(WrapAroundStepProperty, value);
+    }
+
     private void OnIncreaseClick(object? sender, RoutedEventArgs e)
     {
         Step(+1);
@@ -110,32 +99,6 @@ public partial class VerticalSpinNumberBox : UserControl
         SpinRootBorder.Classes.Set("focused", IsKeyboardFocusWithin);
     }
 
-    private void UpdateSettingsSpinVariantFromContext()
-    {
-        if (Classes.Contains("settings-spin"))
-        {
-            _settingsSpinClassAppliedByContext = false;
-            return;
-        }
-
-        var shouldUseSettingsSpin = IsInsideSettingsPage();
-        Classes.Set("settings-spin", shouldUseSettingsSpin);
-        _settingsSpinClassAppliedByContext = shouldUseSettingsSpin;
-    }
-
-    private bool IsInsideSettingsPage()
-    {
-        for (var ancestor = this.GetVisualParent(); ancestor is not null; ancestor = ancestor.GetVisualParent())
-        {
-            if (ancestor is StyledElement styledElement && styledElement.Classes.Contains("settings-page"))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
     private void Step(int direction)
     {
         if (!IsEnabled || direction == 0)
@@ -143,8 +106,25 @@ public partial class VerticalSpinNumberBox : UserControl
             return;
         }
 
+        var min = Math.Min(Minimum, Maximum);
+        var max = Math.Max(Minimum, Maximum);
         var step = Increment <= 0 ? 1 : Increment;
         var stepped = (long)Value + ((long)step * direction);
+        if (WrapAroundStep)
+        {
+            if (direction > 0 && stepped > max)
+            {
+                SetCurrentValue(ValueProperty, min);
+                return;
+            }
+
+            if (direction < 0 && stepped < min)
+            {
+                SetCurrentValue(ValueProperty, max);
+                return;
+            }
+        }
+
         SetCurrentValue(ValueProperty, ClampToRange(stepped));
     }
 

@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:MAAUnified.App.Controls"
              x:Class="MAAUnified.App.Features.Advanced.StageManagerView">
   <UserControl.Styles>
     <Style Selector="StackPanel.stage-manager-section-stack">
@@ -51,11 +52,10 @@
           <StackPanel Spacing="6">
             <TextBlock Classes="app-caption stage-manager-field-label"
                        Text="{Binding Texts[Toolbox.Advanced.StageManager.ClientType]}" />
-            <ComboBox Classes="app-input"
-                      MinWidth="220"
-                      HorizontalAlignment="Left"
-                      ItemsSource="{Binding ClientTypeOptions}"
-                      SelectedItem="{Binding ClientType}" />
+            <controls:AppSelect MinWidth="220"
+                                HorizontalAlignment="Left"
+                                ItemsSource="{Binding ClientTypeOptions}"
+                                SelectedItem="{Binding ClientType}" />
           </StackPanel>
 
           <WrapPanel Classes="tool-action-bar">
@@ -78,11 +78,11 @@
           <StackPanel Classes="stage-manager-card-stack">
             <TextBlock Classes="stage-manager-card-title"
                        Text="{Binding Texts[Toolbox.Advanced.StageManager.StageCodes]}" />
-            <TextBox Classes="app-input app-input-block stage-manager-editor"
-                     Text="{Binding StageCodesText}"
-                     AcceptsReturn="True"
-                     Watermark="{Binding Texts[Toolbox.Advanced.StageManager.StageCodes.Watermark]}"
-                     TextWrapping="Wrap" />
+            <controls:AppTextInput Classes="settings-input-block stage-manager-editor"
+                                   Text="{Binding StageCodesText}"
+                                   AcceptsReturn="True"
+                                   Watermark="{Binding Texts[Toolbox.Advanced.StageManager.StageCodes.Watermark]}"
+                                   TextWrapping="Wrap" />
           </StackPanel>
         </Border>
       </Border>
@@ -97,11 +97,11 @@
                 <TextBlock Classes="app-badge-text"
                            Text="{Binding Texts[Toolbox.Advanced.StageManager.LocalResources]}" />
               </Border>
-              <TextBox Classes="app-input app-input-block stage-manager-reference"
-                       Text="{Binding LocalStageCodesText}"
-                       AcceptsReturn="True"
-                       IsReadOnly="True"
-                       TextWrapping="Wrap" />
+              <controls:AppTextInput Classes="settings-input-block stage-manager-reference"
+                                     Text="{Binding LocalStageCodesText}"
+                                     AcceptsReturn="True"
+                                     IsReadOnly="True"
+                                     TextWrapping="Wrap" />
             </StackPanel>
           </Border>
 
@@ -112,11 +112,11 @@
                 <TextBlock Classes="app-badge-text"
                            Text="{Binding Texts[Toolbox.Advanced.StageManager.WebResources]}" />
               </Border>
-              <TextBox Classes="app-input app-input-block stage-manager-reference"
-                       Text="{Binding WebStageCodesText}"
-                       AcceptsReturn="True"
-                       IsReadOnly="True"
-                       TextWrapping="Wrap" />
+              <controls:AppTextInput Classes="settings-input-block stage-manager-reference"
+                                     Text="{Binding WebStageCodesText}"
+                                     AcceptsReturn="True"
+                                     IsReadOnly="True"
+                                     TextWrapping="Wrap" />
             </StackPanel>
           </Border>
         </WrapPanel>
@@ -137,9 +137,8 @@
                          Text="{Binding Texts[Toolbox.Advanced.StageManager.LastSelectedStage]}" />
               <StackPanel Orientation="Horizontal"
                           Spacing="12">
-                <TextBox Classes="app-input"
-                         Width="220"
-                         Text="{Binding LastSelectedStage}" />
+                <controls:AppTextInput Width="220"
+                                       Text="{Binding LastSelectedStage}" />
                 <Button Classes="app-button app-primary"
                         Content="{Binding Texts[Toolbox.Advanced.StageManager.Save]}"
                         Click="OnSaveClick" />

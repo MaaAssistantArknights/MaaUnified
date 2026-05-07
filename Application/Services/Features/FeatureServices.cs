@@ -1222,11 +1222,17 @@ public sealed class TaskQueueFeatureService : ITaskQueueFeatureService
     private string BuildTaskParamsUpdatedMessage(UnifiedTaskItem task, bool persisted)
     {
         var localizer = CreateTaskQueueLocalizer();
-        var key = persisted ? "TaskQueue.Status.ParamsUpdatedPersisted" : "TaskQueue.Status.ParamsUpdated";
+        var key = persisted
+            ? "TaskQueue.Status.ParamsUpdatedPersisted"
+            : "TaskQueue.Status.ParamsUpdated";
         var fallback = persisted
             ? "Updated params for `{0}` and persisted."
             : "Updated params for `{0}`.";
-        return FormatTaskQueueMessage(localizer, key, fallback, ResolveTaskDisplayName(task, localizer));
+        return FormatTaskQueueMessage(
+            localizer,
+            key,
+            fallback,
+            ResolveTaskDisplayName(task, localizer));
     }
 
     private string BuildTaskTypeMismatchMessage(string expectedType)

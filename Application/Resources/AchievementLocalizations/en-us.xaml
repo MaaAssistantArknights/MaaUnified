@@ -1471,7 +1471,7 @@ If you want to run multiple MAA at the same time, please copy the whole MAA and 
     <!--  Achievement  -->
     <system:String x:Key="AchievementCelebrate">🎉 Achievement Unlocked</system:String>
     <system:String x:Key="AchievementConditions" xml:space="preserve">Unlock Condition: </system:String>
-    <system:String x:Key="AchievementLevel" xml:space="preserve">Achievement Level: </system:String>
+    <system:String x:Key="AchievementLevel" xml:space="preserve">Achievement count: </system:String>
     <system:String x:Key="AchievementView">View Achievements</system:String>
     <system:String x:Key="AchievementBackup">Backup Achievements</system:String>
     <system:String x:Key="AchievementRestore">Restore Backup</system:String>

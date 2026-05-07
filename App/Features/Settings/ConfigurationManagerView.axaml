@@ -1,25 +1,33 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:MAAUnified.App.Controls"
              Classes="settings-page"
              x:Class="MAAUnified.App.Features.Settings.ConfigurationManagerView">
+  <UserControl.Styles>
+    <Style Selector="UserControl.settings-page Grid.configuration-manager-action-grid">
+      <Setter Property="HorizontalAlignment" Value="Left" />
+    </Style>
+
+    <Style Selector="UserControl.settings-page Button.configuration-manager-action-button">
+      <Setter Property="MinWidth" Value="144" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+    </Style>
+  </UserControl.Styles>
+
   <Grid Margin="4"
         RowDefinitions="Auto,Auto">
     <TextBlock Classes="settings-page-title"
                Text="{Binding RootTexts[Settings.Section.ConfigurationManager]}" />
 
-    <StackPanel Grid.Row="1"
+    <controls:AdaptiveSpacingStackPanel Grid.Row="1"
                 Classes="settings-page-flow"
                 Margin="{DynamicResource MAA.Thickness.Settings.SectionTopMargin}">
-      <TextBlock MaxWidth="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
-                 Classes="app-window-subtitle"
-                 Text="{Binding RootTexts[Settings.ConfigurationManager.AutoSavedCurrent]}" />
-
       <Grid Classes="settings-page-labeled-row"
             ColumnDefinitions="132,*">
         <TextBlock Classes="settings-label"
                    Text="{Binding RootTexts[Settings.ConfigurationManager.ProfileName]}" />
         <ComboBox Grid.Column="1"
-                  Classes="app-input settings-input configuration-manager-profile-picker"
+                  Classes="settings-select configuration-manager-profile-picker"
                   Width="{DynamicResource MAA.Size.Settings.ColumnWidth}"
                   HorizontalAlignment="Left"
                   ItemsSource="{Binding ConfigurationProfiles}"
@@ -47,64 +55,59 @@
           </ComboBox.ItemTemplate>
           <ComboBox.SelectionBoxItemTemplate>
             <DataTemplate>
-              <Border Classes="settings-dropdown-item-shell settings-dropdown-selected-shell">
-                <Grid ColumnDefinitions="*,Auto">
-                  <TextBlock Grid.Column="0"
-                             Classes="settings-dropdown-item-text settings-dropdown-selected-text"
-                             Text="{Binding .}" />
-                  <Button Grid.Column="1"
-                          Classes="settings-dropdown-delete-button settings-dropdown-selected-delete-button"
-                          Tag="{Binding .}"
-                          Content="×"
-                          PointerPressed="OnDropdownDeleteButtonPointerPressed"
-                          PointerReleased="OnDropdownDeleteButtonPointerReleased"
-                          Click="OnDeleteProfileEntryClick" />
-                </Grid>
-              </Border>
+              <TextBlock Text="{Binding .}" />
             </DataTemplate>
           </ComboBox.SelectionBoxItemTemplate>
         </ComboBox>
       </Grid>
 
       <Grid Classes="settings-page-labeled-action-row"
-            ColumnDefinitions="132,Auto,Auto">
+            ColumnDefinitions="132,*">
         <TextBlock Classes="settings-label"
                    Text="{Binding RootTexts[Settings.ConfigurationManager.SaveAsNew]}" />
-        <TextBox Grid.Column="1"
-                 Classes="app-input"
-                 Width="{DynamicResource MAA.Size.Settings.FieldInputWidth}"
-                 Margin="0,0,12,0"
-                 Text="{Binding ConfigurationManagerNewProfileName, UpdateSourceTrigger=LostFocus}"
-                 Watermark="{Binding RootTexts[Settings.ConfigurationManager.NewProfileWatermark]}" />
-        <Button Grid.Column="2"
-                Classes="app-button app-primary"
-                Content="{Binding RootTexts[Settings.ConfigurationManager.SaveAsNew]}"
-                Click="OnCreateProfileClick" />
+        <Grid Grid.Column="1"
+              HorizontalAlignment="Left"
+              ColumnDefinitions="Auto,Auto">
+          <controls:AppActionInput Width="{DynamicResource MAA.Size.Settings.FieldInputWidth}"
+                                   HorizontalAlignment="Left"
+                                   Text="{Binding ConfigurationManagerNewProfileName, UpdateSourceTrigger=LostFocus}"
+                                   Watermark="{Binding RootTexts[Settings.ConfigurationManager.NewProfileWatermark]}"
+                                   ActionContent="{Binding RootTexts[Settings.ConfigurationManager.SaveAsNew]}"
+                                   ActionClick="OnCreateProfileClick" />
+          <TextBlock Grid.Column="1"
+                     Margin="8,0,0,0"
+                     VerticalAlignment="Center"
+                     Classes="app-caption state-success"
+                     Text="{Binding ConfigurationManagerSaveAsNewSucceededText}"
+                     IsVisible="{Binding HasConfigurationManagerSaveAsNewSucceeded}"
+                     TextWrapping="NoWrap" />
+          <TextBlock Grid.Column="1"
+                     Margin="8,0,0,0"
+                     VerticalAlignment="Center"
+                     Classes="app-caption state-error"
+                     Text="{Binding ConfigurationManagerSaveAsNewFailedText}"
+                     IsVisible="{Binding HasConfigurationManagerSaveAsNewFailed}"
+                     TextWrapping="NoWrap" />
+        </Grid>
       </Grid>
 
       <Border Classes="settings-page-subtle-divider" />
 
-      <WrapPanel Classes="settings-section-action-bar">
-        <Button Classes="app-button app-secondary"
-                Content="{Binding RootTexts[Settings.ConfigurationManager.ExportAll]}"
-                Click="OnExportAllProfilesClick" />
-        <Button Classes="app-button app-secondary"
+      <Grid Classes="configuration-manager-action-grid"
+            RowDefinitions="Auto,10,Auto"
+            ColumnDefinitions="Auto,12,Auto">
+        <Button Classes="app-button app-secondary configuration-manager-action-button"
                 Content="{Binding RootTexts[Settings.ConfigurationManager.ExportCurrent]}"
                 Click="OnExportCurrentProfileClick" />
-        <Button Classes="app-button app-primary"
+        <Button Grid.Row="2"
+                Classes="app-button app-secondary configuration-manager-action-button"
+                Content="{Binding RootTexts[Settings.ConfigurationManager.ExportAll]}"
+                Click="OnExportAllProfilesClick" />
+        <Button Grid.Column="2"
+                Classes="app-button app-secondary configuration-manager-action-button"
                 Content="{Binding RootTexts[Settings.ConfigurationManager.Import]}"
                 Click="OnImportProfilesClick" />
-      </WrapPanel>
-
-      <Border Classes="settings-page-status-block">
-        <StackPanel Classes="settings-page-status-list">
-          <TextBlock Classes="app-body"
-                     Text="{Binding ConfigurationManagerStatusMessage}" />
-          <TextBlock Classes="state-error app-body"
-                     Text="{Binding ConfigurationManagerErrorMessage}"
-                     IsVisible="{Binding HasConfigurationManagerErrorMessage}" />
-        </StackPanel>
-      </Border>
-    </StackPanel>
+      </Grid>
+    </controls:AdaptiveSpacingStackPanel>
   </Grid>
 </UserControl>

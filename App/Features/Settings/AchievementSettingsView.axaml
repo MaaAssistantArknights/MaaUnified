@@ -1,18 +1,57 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:MAAUnified.App.Controls"
              Classes="settings-page"
              x:Class="MAAUnified.App.Features.Settings.AchievementSettingsView">
   <UserControl.Styles>
-    <Style Selector="Border.achievement-settings-medal-shell">
-      <Setter Property="Width" Value="108" />
-      <Setter Property="Height" Value="108" />
-      <Setter Property="Padding" Value="8" />
-      <Setter Property="CornerRadius" Value="54" />
+    <Style Selector="Border.achievement-settings-overview">
+      <Setter Property="Padding" Value="36,32" />
+      <Setter Property="Width" Value="640" />
+      <Setter Property="MinHeight" Value="260" />
+    </Style>
+
+    <Style Selector="controls|AdaptiveSpacingStackPanel.achievement-settings-overview-copy">
       <Setter Property="HorizontalAlignment" Value="Left" />
+      <Setter Property="Spacing" Value="12" />
+      <Setter Property="TargetPitch" Value="42" />
+      <Setter Property="MinGap" Value="8" />
+      <Setter Property="MaxGap" Value="12" />
+      <Setter Property="ShortRowSlot" Value="28" />
+    </Style>
+
+    <Style Selector="StackPanel.achievement-settings-action-row">
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="Spacing" Value="8" />
+    </Style>
+
+    <Style Selector="StackPanel.achievement-settings-backup-row">
+      <Setter Property="HorizontalAlignment" Value="Left" />
+      <Setter Property="Spacing" Value="8" />
+    </Style>
+
+    <Style Selector="Button.achievement-settings-chip">
+      <Setter Property="HorizontalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="Border.achievement-settings-medal-shell">
+      <Setter Property="Width" Value="120" />
+      <Setter Property="Height" Value="120" />
+      <Setter Property="Padding" Value="8" />
+      <Setter Property="CornerRadius" Value="60" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
       <Setter Property="Background" Value="#1AFFFFFF" />
       <Setter Property="BorderThickness" Value="2" />
     </Style>
 
+    <Style Selector="StackPanel.achievement-settings-debug-entry">
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="Margin" Value="12,0" />
+      <Setter Property="Spacing" Value="16" />
+    </Style>
+
+    <Style Selector="TextBlock.achievement-settings-debug-tip">
+      <Setter Property="MaxWidth" Value="180" />
+    </Style>
   </UserControl.Styles>
 
   <Grid Margin="4"
@@ -20,77 +59,76 @@
     <TextBlock Classes="settings-page-title"
                Text="{Binding RootTexts[Settings.Section.Achievement]}" />
 
-    <StackPanel Grid.Row="1"
+    <controls:AdaptiveSpacingStackPanel Grid.Row="1"
                 Margin="{DynamicResource MAA.Thickness.Settings.SectionTopMargin}"
                 HorizontalAlignment="Left"
+                MaxWidth="640"
                 Classes="settings-page-flow">
-      <Border Classes="settings-page-meta-block">
-        <StackPanel Classes="settings-page-compact-flow"
-                    HorizontalAlignment="Left">
-          <TextBlock HorizontalAlignment="Left"
-                     TextAlignment="Left"
-                     Classes="app-window-title"
-                     Text="{Binding AchievementLevelText}" />
-          <Button Classes="app-button app-primary"
-                  HorizontalAlignment="Left"
-                  Content="{Binding RootTexts[Settings.Action.ShowAchievement]}"
-                  Click="OnShowAchievementListClick" />
-
-          <StackPanel Classes="settings-page-compact-flow"
-                      HorizontalAlignment="Left"
-                      IsVisible="{Binding CanUseAchievementDebugEntry}">
-            <Border Classes="achievement-settings-medal-shell"
-                    BorderBrush="{Binding AchievementDebugMedalColor}"
-                    PointerPressed="OnAchievementDebugPointerPressed">
-              <ToolTip.Tip>
-                <ToolTip Content="{Binding AchievementDebugTip}" />
-              </ToolTip.Tip>
+      <Border Classes="grouped-card-frame compact achievement-settings-overview">
+        <StackPanel Spacing="18"
+                    VerticalAlignment="Center">
+          <Grid ColumnDefinitions="Auto,64,*">
+            <StackPanel Classes="achievement-settings-debug-entry"
+                        VerticalAlignment="Center"
+                        IsVisible="{Binding CanUseAchievementDebugEntry}">
+              <Border Classes="achievement-settings-medal-shell"
+                      BorderBrush="{Binding AchievementDebugMedalColor}"
+                      PointerPressed="OnAchievementDebugPointerPressed">
+                <ToolTip.Tip>
+                  <ToolTip Content="{Binding AchievementDebugTip}" />
+                </ToolTip.Tip>
+                <TextBlock HorizontalAlignment="Center"
+                           VerticalAlignment="Center"
+                           FontSize="24"
+                           FontWeight="Bold"
+                           Foreground="{Binding AchievementDebugMedalColor}"
+                           Text="MAA" />
+              </Border>
               <TextBlock HorizontalAlignment="Center"
-                         VerticalAlignment="Center"
-                         FontSize="24"
-                         FontWeight="Bold"
-                         Foreground="{Binding AchievementDebugMedalColor}"
-                         Text="MAA" />
-            </Border>
-            <TextBlock HorizontalAlignment="Left"
-                       TextAlignment="Left"
-                       TextWrapping="Wrap"
-                       Classes="app-caption"
-                       Text="{Binding AchievementDebugTip}" />
+                         TextAlignment="Center"
+                         TextWrapping="Wrap"
+                         Classes="app-caption achievement-settings-debug-tip"
+                         Text="{Binding AchievementDebugTip}" />
+            </StackPanel>
+
+            <controls:AdaptiveSpacingStackPanel Classes="achievement-settings-overview-copy"
+                        Grid.Column="2"
+                        HorizontalAlignment="Left"
+                        VerticalAlignment="Center">
+              <TextBlock HorizontalAlignment="Left"
+                         TextAlignment="Left"
+                         Classes="app-window-title"
+                         Text="{Binding AchievementLevelText}" />
+              <Button Classes="app-button app-primary"
+                      HorizontalAlignment="Left"
+                      Content="{Binding RootTexts[Settings.Action.ShowAchievement]}"
+                      Click="OnShowAchievementListClick" />
+              <StackPanel Classes="achievement-settings-backup-row"
+                          Orientation="Horizontal">
+                <Button Classes="app-button app-chip achievement-settings-chip"
+                        Content="{Binding RootTexts[Settings.Achievement.Backup]}"
+                        Click="OnBackupAchievementClick" />
+                <Button Classes="app-button app-chip achievement-settings-chip"
+                        Content="{Binding RootTexts[Settings.Achievement.Restore]}"
+                        Click="OnRestoreAchievementClick" />
+              </StackPanel>
+            </controls:AdaptiveSpacingStackPanel>
+          </Grid>
+
+          <StackPanel Classes="achievement-settings-action-row"
+                      Orientation="Horizontal"
+                      IsVisible="{Binding CanUseAchievementDebugActions}">
+            <Button Classes="app-button app-chip achievement-settings-chip"
+                    Content="{Binding RootTexts[Settings.Achievement.UnlockAll]}"
+                    Click="OnUnlockAllAchievementClick" />
+            <Button Classes="app-button app-chip achievement-settings-chip"
+                    Content="{Binding RootTexts[Settings.Achievement.LockAll]}"
+                    Click="OnLockAllAchievementClick" />
           </StackPanel>
         </StackPanel>
       </Border>
 
-      <Grid Classes="settings-page-two-column"
-            HorizontalAlignment="Left"
-            ColumnDefinitions="Auto,12,Auto">
-        <Button Classes="app-button app-secondary"
-                HorizontalAlignment="Left"
-                Content="{Binding RootTexts[Settings.Achievement.Backup]}"
-                Click="OnBackupAchievementClick" />
-        <Button Grid.Column="2"
-                Classes="app-button app-secondary"
-                HorizontalAlignment="Left"
-                Content="{Binding RootTexts[Settings.Achievement.Restore]}"
-                Click="OnRestoreAchievementClick" />
-      </Grid>
-
-      <Grid Classes="settings-page-two-column"
-            HorizontalAlignment="Left"
-            ColumnDefinitions="Auto,12,Auto"
-            IsVisible="{Binding CanUseAchievementDebugActions}">
-        <Button Classes="app-button app-secondary"
-                HorizontalAlignment="Left"
-                Content="{Binding RootTexts[Settings.Achievement.UnlockAll]}"
-                Click="OnUnlockAllAchievementClick" />
-        <Button Grid.Column="2"
-                Classes="app-button app-secondary"
-                HorizontalAlignment="Left"
-                Content="{Binding RootTexts[Settings.Achievement.LockAll]}"
-                Click="OnLockAllAchievementClick" />
-      </Grid>
-
-      <StackPanel Classes="settings-page-compact-flow">
+      <controls:AdaptiveSpacingStackPanel Classes="settings-page-compact-flow settings-page-meta-block">
         <CheckBox Classes="app-checkbox"
                   Content="{Binding RootTexts[Settings.Achievement.PopupDisabled]}"
                   IsChecked="{Binding AchievementPopupDisabled}" />
@@ -98,21 +136,23 @@
                   Content="{Binding RootTexts[Settings.Achievement.PopupAutoClose]}"
                   IsChecked="{Binding AchievementPopupAutoClose}"
                   IsVisible="{Binding CanEditAchievementPopupAutoClose}" />
-      </StackPanel>
-    </StackPanel>
+      </controls:AdaptiveSpacingStackPanel>
 
-    <Border Grid.Row="2"
-            Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}"
-            Classes="settings-page-status-block">
-      <StackPanel Classes="settings-page-status-list">
-        <TextBlock TextWrapping="Wrap"
-                   Classes="app-body"
-                   Text="{Binding AchievementStatusMessage}" />
-        <TextBlock TextWrapping="Wrap"
-                   Classes="state-error"
-                   Text="{Binding AchievementErrorMessage}"
-                   IsVisible="{Binding HasAchievementErrorMessage}" />
-      </StackPanel>
-    </Border>
+      <Border Classes="settings-page-status-block"
+              IsVisible="{Binding HasAchievementStatusBlockMessage}">
+        <controls:AdaptiveSpacingStackPanel Classes="settings-page-status-list">
+          <TextBlock MaxWidth="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
+                     TextWrapping="Wrap"
+                     Classes="app-body"
+                     Text="{Binding AchievementStatusMessage}"
+                     IsVisible="{Binding HasAchievementStatusMessage}" />
+          <TextBlock MaxWidth="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
+                     TextWrapping="Wrap"
+                     Classes="state-error app-body"
+                     Text="{Binding AchievementErrorMessage}"
+                     IsVisible="{Binding HasAchievementErrorMessage}" />
+        </controls:AdaptiveSpacingStackPanel>
+      </Border>
+    </controls:AdaptiveSpacingStackPanel>
   </Grid>
 </UserControl>

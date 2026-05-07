@@ -133,13 +133,14 @@ public sealed class SlidingIndicatorController : IDisposable
             return;
         }
 
-        if (container.Bounds.Width <= 0d || container.Bounds.Height <= 0d)
+        var layoutTarget = ResolveLayoutTarget(container);
+        if (layoutTarget.Bounds.Width <= 0d || layoutTarget.Bounds.Height <= 0d)
         {
             TryQueueRetry();
             return;
         }
 
-        var point = container.TranslatePoint(default, _presenter);
+        var point = layoutTarget.TranslatePoint(default, _presenter);
         if (point is null)
         {
             RefreshScrollViewer();
@@ -147,8 +148,22 @@ public sealed class SlidingIndicatorController : IDisposable
             return;
         }
 
-        ApplyIndicatorLayout(container.Bounds, point.Value);
+        ApplyIndicatorLayout(layoutTarget.Bounds, point.Value);
         _retryAttempts = 0;
+    }
+
+    private Control ResolveLayoutTarget(Control container)
+    {
+        if (_presenter.Orientation != AppIndicatorOrientation.Horizontal)
+        {
+            return container;
+        }
+
+        return container
+            .GetVisualDescendants()
+            .OfType<Control>()
+            .FirstOrDefault(static control => string.Equals(control.Name, "PART_NavChrome", StringComparison.Ordinal))
+            ?? container;
     }
 
     private void ApplyIndicatorLayout(Rect containerBounds, Point point)
@@ -160,13 +175,15 @@ public sealed class SlidingIndicatorController : IDisposable
         {
             var width = ClampLength(containerBounds.Width - leadingInset - trailingInset);
             var left = point.X + leadingInset;
-            ApplyHorizontal(_indicator, _indicatorBaseMargin, left, width);
-            ApplyHorizontal(_indicatorGlow, _indicatorGlowBaseMargin, left, width);
+            var bottom = point.Y + containerBounds.Height;
+            ApplyHorizontal(_indicator, _indicatorBaseMargin, left, width, bottom);
+            ApplyHorizontal(_indicatorGlow, _indicatorGlowBaseMargin, left, width, bottom);
             return;
         }
 
-        var height = ClampLength(containerBounds.Height - leadingInset - trailingInset);
-        var top = point.Y + leadingInset;
+        var availableHeight = Math.Max(0d, containerBounds.Height - leadingInset - trailingInset);
+        var height = ClampLength(availableHeight);
+        var top = point.Y + leadingInset + Math.Max(0d, (availableHeight - height) / 2d);
         ApplyVertical(_indicator, _indicatorBaseMargin, top, height);
         ApplyVertical(_indicatorGlow, _indicatorGlowBaseMargin, top, height);
     }
@@ -183,7 +200,7 @@ public sealed class SlidingIndicatorController : IDisposable
         return Math.Max(clamped, min);
     }
 
-    private static void ApplyHorizontal(Border? border, Thickness baseMargin, double left, double width)
+    private static void ApplyHorizontal(Border? border, Thickness baseMargin, double left, double width, double bottom)
     {
         if (border is null)
         {
@@ -197,11 +214,28 @@ public sealed class SlidingIndicatorController : IDisposable
             border.Width = width;
         }
 
-        var margin = new Thickness(baseMargin.Left + left, baseMargin.Top, baseMargin.Right, baseMargin.Bottom);
+        var height = ResolveIndicatorHeight(border);
+        var top = Math.Max(0d, bottom - height - Math.Max(0d, baseMargin.Bottom));
+        var margin = new Thickness(baseMargin.Left + left, baseMargin.Top + top, baseMargin.Right, baseMargin.Bottom);
         if (!border.Margin.Equals(margin))
         {
             border.Margin = margin;
         }
+    }
+
+    private static double ResolveIndicatorHeight(Border border)
+    {
+        if (!double.IsNaN(border.Height) && border.Height > 0d)
+        {
+            return border.Height;
+        }
+
+        if (border.Bounds.Height > 0d)
+        {
+            return border.Bounds.Height;
+        }
+
+        return Math.Max(0d, border.DesiredSize.Height);
     }
 
     private static void ApplyVertical(Border? border, Thickness baseMargin, double top, double height)

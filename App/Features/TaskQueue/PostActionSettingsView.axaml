@@ -4,114 +4,85 @@
              x:Class="MAAUnified.App.Features.TaskQueue.PostActionSettingsView">
   <UserControl.Styles>
     <Style Selector="StackPanel.post-action-layout">
-      <Setter Property="Spacing" Value="{DynamicResource MAA.Spacing.Medium}" />
+      <Setter Property="Spacing" Value="{DynamicResource MAA.App.Settings.PageFlowSpacing}" />
     </Style>
 
-    <Style Selector="StackPanel.post-action-section-content">
-      <Setter Property="Spacing" Value="{DynamicResource MAA.Spacing.Small}" />
+    <Style Selector="StackPanel.post-action-title-stack">
+      <Setter Property="Spacing" Value="{DynamicResource MAA.App.Settings.PageCompactFlowSpacing}" />
     </Style>
 
-    <Style Selector="Border.post-action-card">
-      <Setter Property="Padding" Value="14" />
+    <Style Selector="controls|AdaptiveSpacingStackPanel.post-action-toggle-stack">
+      <Setter Property="Spacing" Value="{DynamicResource MAA.App.Settings.PageToggleStackSpacing}" />
     </Style>
 
-    <Style Selector="StackPanel.post-action-card-content">
+    <Style Selector="Border.post-action-status-block">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="0" />
+    </Style>
+
+    <Style Selector="controls|AdaptiveSpacingStackPanel.post-action-status-list">
       <Setter Property="Spacing" Value="8" />
     </Style>
   </UserControl.Styles>
 
   <StackPanel Margin="4" Classes="post-action-layout">
-    <TextBlock Classes="section-title" Text="{Binding Texts[PostAction.Title]}" />
+    <StackPanel Classes="post-action-title-stack">
+      <TextBlock Classes="section-title" Text="{Binding Texts[PostAction.Title]}" />
 
-    <Border Classes="app-surface app-section">
-      <StackPanel Classes="post-action-section-content">
-        <Border Classes="app-surface app-card post-action-card">
-          <Grid ColumnDefinitions="Auto,Auto,*">
-            <CheckBox Classes="app-checkbox"
-                      Content="{Binding Texts[PostAction.Once]}"
-                      IsChecked="{Binding Once}" />
-            <controls:TooltipHint Grid.Column="1"
-                                  Margin="6,0,0,0"
-                                  VerticalAlignment="Center"
-                                  Tip="{Binding Texts[PostAction.OnceTip]}" />
-          </Grid>
-        </Border>
+      <controls:AppHintedCheckBox Text="{Binding Texts[PostAction.Once]}"
+                                   Tip="{Binding Texts[PostAction.OnceTip]}"
+                                   IsChecked="{Binding Once}" />
+    </StackPanel>
 
-        <Border Classes="app-surface app-card post-action-card">
-          <StackPanel Classes="post-action-card-content">
-            <CheckBox Classes="app-checkbox"
-                      Content="{Binding Texts[PostAction.BackToHome]}"
-                      IsChecked="{Binding BackToAndroidHome}" />
-            <CheckBox Classes="app-checkbox"
-                      Content="{Binding Texts[PostAction.ExitArknights]}"
-                      IsChecked="{Binding ExitArknights}" />
-            <CheckBox Classes="app-checkbox"
-                      Content="{Binding Texts[PostAction.ExitEmulator]}"
-                      IsChecked="{Binding ExitEmulator}"
-                      IsVisible="{Binding ShowExitEmulator}" />
-            <CheckBox Classes="app-checkbox"
-                      Content="{Binding Texts[PostAction.ExitSelf]}"
-                      IsChecked="{Binding ExitSelf}" />
-            <CheckBox Classes="app-checkbox"
-                      Content="{Binding Texts[PostAction.IfNoOther]}"
-                      IsChecked="{Binding IfNoOtherMaa}"
-                      IsEnabled="{Binding CanUseIfNoOtherMaa}" />
-          </StackPanel>
-        </Border>
-      </StackPanel>
-    </Border>
+    <controls:AdaptiveSpacingStackPanel Classes="post-action-toggle-stack">
+      <CheckBox Classes="app-checkbox"
+                Content="{Binding Texts[PostAction.BackToHome]}"
+                IsChecked="{Binding BackToAndroidHome}" />
+      <CheckBox Classes="app-checkbox"
+                Content="{Binding Texts[PostAction.ExitArknights]}"
+                IsChecked="{Binding ExitArknights}" />
+      <CheckBox Classes="app-checkbox"
+                Content="{Binding Texts[PostAction.ExitEmulator]}"
+                IsChecked="{Binding ExitEmulator}"
+                IsVisible="{Binding ShowExitEmulator}" />
+      <CheckBox Classes="app-checkbox"
+                Content="{Binding Texts[PostAction.ExitSelf]}"
+                IsChecked="{Binding ExitSelf}" />
+      <CheckBox Classes="app-checkbox"
+                Content="{Binding Texts[PostAction.IfNoOther]}"
+                IsChecked="{Binding IfNoOtherMaa}"
+                IsEnabled="{Binding CanUseIfNoOtherMaa}" />
+    </controls:AdaptiveSpacingStackPanel>
 
-    <Border Classes="app-surface app-section">
-      <StackPanel Classes="post-action-section-content">
-        <Border Classes="app-surface app-card post-action-card">
-          <CheckBox Classes="app-checkbox"
-                    Content="{Binding Texts[PostAction.Sleep]}"
-                    IsChecked="{Binding Sleep}" />
-        </Border>
+    <controls:AdaptiveSpacingStackPanel Classes="post-action-toggle-stack">
+      <CheckBox Classes="app-checkbox"
+                Content="{Binding Texts[PostAction.Sleep]}"
+                IsChecked="{Binding Sleep}" />
 
-        <Border Classes="app-surface app-card post-action-card"
-                IsVisible="{Binding ShowHibernate}">
-          <Grid ColumnDefinitions="Auto,Auto,*">
-            <CheckBox Classes="app-checkbox"
-                      Content="{Binding Texts[PostAction.Hibernate]}"
-                      IsChecked="{Binding Hibernate}" />
-            <controls:TooltipHint Grid.Column="1"
-                                  Margin="6,0,0,0"
-                                  VerticalAlignment="Center"
-                                  Tip="{Binding Texts[PostAction.HibernateTip]}" />
-          </Grid>
-        </Border>
+      <controls:AppHintedCheckBox Text="{Binding Texts[PostAction.Hibernate]}"
+                                   Tip="{Binding Texts[PostAction.HibernateTip]}"
+                                   IsChecked="{Binding Hibernate}"
+                                   IsVisible="{Binding ShowHibernate}" />
 
-        <Border Classes="app-surface app-card post-action-card">
-          <CheckBox Classes="app-checkbox"
-                    Content="{Binding Texts[PostAction.Shutdown]}"
-                    IsChecked="{Binding Shutdown}" />
-        </Border>
-      </StackPanel>
-    </Border>
+      <CheckBox Classes="app-checkbox"
+                Content="{Binding Texts[PostAction.Shutdown]}"
+                IsChecked="{Binding Shutdown}" />
+    </controls:AdaptiveSpacingStackPanel>
 
-    <Border Classes="app-surface app-section">
-      <StackPanel Classes="post-action-section-content">
-        <Border Classes="app-surface app-card post-action-card">
-          <Button Classes="app-button app-secondary"
-                  HorizontalAlignment="Left"
-                  Content="{Binding Texts[PostAction.Clear]}"
-                  Click="OnClearClick" />
-        </Border>
-      </StackPanel>
-    </Border>
+    <Button Classes="app-button app-secondary"
+            HorizontalAlignment="Left"
+            Content="{Binding Texts[PostAction.Clear]}"
+            Click="OnClearClick" />
 
-    <Border Classes="app-surface app-section">
-      <StackPanel Classes="post-action-section-content">
-        <Border Classes="app-surface app-card post-action-card">
-          <StackPanel Classes="post-action-card-content">
-            <TextBlock Classes="app-body long-wrap state-warning"
-                       Text="{Binding StatusMessage}" />
-            <TextBlock Classes="app-body long-wrap state-error"
-                       Text="{Binding LastErrorMessage}" />
-          </StackPanel>
-        </Border>
-      </StackPanel>
+    <Border Classes="post-action-status-block">
+      <controls:AdaptiveSpacingStackPanel Classes="post-action-status-list">
+        <TextBlock Classes="app-body long-wrap state-warning"
+                   Text="{Binding StatusMessage}" />
+        <TextBlock Classes="app-body long-wrap state-error"
+                   Text="{Binding LastErrorMessage}" />
+      </controls:AdaptiveSpacingStackPanel>
     </Border>
   </StackPanel>
 </UserControl>

@@ -115,6 +115,58 @@ public sealed class TaskQueueG2FeatureTests
     }
 
     [Fact]
+    public async Task StartAsync_ShouldEnterRunningUiStateWhileAutoConnectIsPending()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup-a")).Success);
+        fixture.Bridge.ConnectDelay = TimeSpan.FromMilliseconds(200);
+        fixture.Bridge.ConnectStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var shared = new ConnectionGameSharedStateViewModel
+        {
+            ConnectAddress = "127.0.0.1:5555",
+        };
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, shared);
+        await vm.InitializeAsync();
+
+        var startTask = vm.StartAsync();
+        await fixture.Bridge.ConnectStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+        Assert.True(vm.IsRunning);
+        Assert.False(vm.CanEdit);
+        Assert.False(vm.CanToggleRun);
+
+        await startTask;
+
+        Assert.True(vm.IsRunning);
+        Assert.True(vm.CanToggleRun);
+        Assert.Equal(SessionState.Running, vm.CurrentSessionState);
+    }
+
+    [Fact]
+    public async Task StartAsync_AutoConnectFailure_ShouldReturnToEditableStateAndReportError()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup-a")).Success);
+        fixture.Bridge.ForceConnectFailure = true;
+
+        var shared = new ConnectionGameSharedStateViewModel
+        {
+            ConnectAddress = "127.0.0.1:5555",
+        };
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, shared);
+        await vm.InitializeAsync();
+
+        await vm.StartAsync();
+
+        Assert.False(vm.IsRunning);
+        Assert.True(vm.CanEdit);
+        Assert.True(vm.CanToggleRun);
+        Assert.Equal(0, fixture.Bridge.StartCallCount);
+        Assert.Contains("Connection failed", vm.LastErrorMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Callback_TaskChainStart_WithTaskIndex_ShouldUpdateOnlyTargetTask()
     {
         await using var fixture = await TestFixture.CreateAsync();
@@ -195,6 +247,32 @@ public sealed class TaskQueueG2FeatureTests
         Assert.Equal(startLogBefore, logEntries[0].Content);
         Assert.Contains("Combat", logEntries[^1].Content, StringComparison.Ordinal);
         Assert.NotEqual(startLogBefore, logEntries[^1].Content);
+    }
+
+    [Fact]
+    public async Task Callback_TaskChainCompleted_ShouldUseSeparateLogCardFromTaskStart()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "开始唤醒")).Success);
+        fixture.Bridge.NextImageBytes = SinglePixelPng;
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        await InvokeCallbackAsync(vm, new CoreCallbackEvent(
+            10001,
+            "TaskChainStart",
+            """{"task_chain":"StartUp","task_index":0,"run_id":"run-g2-startup-split"}""",
+            DateTimeOffset.UtcNow));
+        await InvokeCallbackAsync(vm, new CoreCallbackEvent(
+            10002,
+            "TaskChainCompleted",
+            """{"task_chain":"StartUp","task_index":0,"run_id":"run-g2-startup-split"}""",
+            DateTimeOffset.UtcNow));
+
+        Assert.Equal(2, vm.LogCards.Count);
+        Assert.Contains("开始任务: 开始唤醒", vm.LogCards[0].PrimaryContent, StringComparison.Ordinal);
+        Assert.Contains("完成任务: 开始唤醒", vm.LogCards[1].PrimaryContent, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -778,17 +856,29 @@ public sealed class TaskQueueG2FeatureTests
 
         public int GetImageCallCount { get; private set; }
 
+        public TimeSpan ConnectDelay { get; set; }
+
+        public bool ForceConnectFailure { get; set; }
+
+        public TaskCompletionSource<bool>? ConnectStarted { get; set; }
+
         public byte[]? NextImageBytes { get; set; }
 
         public Task<CoreResult<CoreInitializeInfo>> InitializeAsync(CoreInitializeRequest request, CancellationToken cancellationToken = default)
             => Task.FromResult(CoreResult<CoreInitializeInfo>.Ok(new CoreInitializeInfo(request.BaseDirectory, "fake", "fake", request.ClientType)));
 
-        public Task<CoreResult<bool>> ConnectAsync(CoreConnectionInfo connectionInfo, CancellationToken cancellationToken = default)
+        public async Task<CoreResult<bool>> ConnectAsync(CoreConnectionInfo connectionInfo, CancellationToken cancellationToken = default)
         {
-            _connected = !string.IsNullOrWhiteSpace(connectionInfo.Address);
-            return Task.FromResult(_connected
+            ConnectStarted?.TrySetResult(true);
+            if (ConnectDelay > TimeSpan.Zero)
+            {
+                await Task.Delay(ConnectDelay, cancellationToken);
+            }
+
+            _connected = !ForceConnectFailure && !string.IsNullOrWhiteSpace(connectionInfo.Address);
+            return _connected
                 ? CoreResult<bool>.Ok(true)
-                : CoreResult<bool>.Fail(new CoreError(CoreErrorCode.ConnectFailed, "connect failed")));
+                : CoreResult<bool>.Fail(new CoreError(CoreErrorCode.ConnectFailed, "connect failed"));
         }
 
         public Task<CoreResult<int>> AppendTaskAsync(CoreTaskRequest task, CancellationToken cancellationToken = default)

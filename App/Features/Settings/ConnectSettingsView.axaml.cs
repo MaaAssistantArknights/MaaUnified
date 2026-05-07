@@ -9,15 +9,12 @@ using System.Text;
 using System.Text.Json;
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Interactivity;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
-using Avalonia.VisualTree;
 using Avalonia.Threading;
 using MAAUnified.Application.Models;
 using MAAUnified.App.Controls;
-using MAAUnified.App.Features.Dialogs;
 using MAAUnified.App.Views;
 using MAAUnified.App.ViewModels.Settings;
 using MAAUnified.Application.Services.Localization;
@@ -72,52 +69,17 @@ public partial class ConnectSettingsView : UserControl
         }
     }
 
-    private async void OnRemoveAddressHistoryClick(object? sender, RoutedEventArgs e)
+    private void OnConnectAddressItemDeleted(object? sender, AppHistoryInputItemEventArgs e)
     {
-        e.Handled = true;
-
-        var vm = VM;
-        if (vm is null || sender is not Button { Tag: string address } button)
+        if (VM is not null && e.Item is string address)
         {
-            return;
-        }
-
-        var reopenOwner = ResolveOwningDropDown(button);
-        try
-        {
-            var confirmed = await ShowWarningDialogAsync(
-                App.Runtime.UiLanguageCoordinator.CurrentLanguage,
-                T("Settings.Action.Delete", "Delete"),
-                BuildDeleteAddressMessage(address),
-                confirmText: T("Settings.Action.Delete", "Delete"),
-                cancelText: T("Settings.Action.Cancel", "Cancel"),
-                sourceScope: "Settings.Connect.AddressHistory.DeleteConfirm.Dialog");
-            if (!confirmed)
-            {
-                return;
-            }
-
-            vm.RemoveAddressFromHistory(address);
-        }
-        finally
-        {
-            ReopenOwningDropDown(reopenOwner);
+            VM.RemoveAddressFromHistory(address);
         }
     }
 
-    private void OnDropdownDeleteButtonPointerPressed(object? sender, Avalonia.Input.PointerPressedEventArgs e)
+    private void OnConnectAddressSelectionCommitted(object? sender, AppHistoryInputItemEventArgs e)
     {
-        e.Handled = true;
-    }
-
-    private void OnDropdownDeleteButtonPointerReleased(object? sender, Avalonia.Input.PointerReleasedEventArgs e)
-    {
-        e.Handled = true;
-    }
-
-    private void OnConnectAddressSelectionCommitted(object? sender, CheckComboBoxSelectionCommittedEventArgs e)
-    {
-        if (VM is null || e.SelectedItem is not string address)
+        if (VM is null || e.Item is not string address)
         {
             return;
         }
@@ -125,69 +87,14 @@ public partial class ConnectSettingsView : UserControl
         VM.ConnectAddress = address;
     }
 
-    private string BuildDeleteAddressMessage(string address)
+    private void OnConnectAddressEditorCommitted(object? sender, AppHistoryInputEditorCommittedEventArgs e)
     {
-        var language = UiLanguageCatalog.Normalize(App.Runtime.UiLanguageCoordinator.CurrentLanguage);
-        return language.StartsWith("zh", StringComparison.OrdinalIgnoreCase)
-            ? $"确定删除已保存地址“{address}”吗？"
-            : $"Delete saved address \"{address}\"?";
-    }
-
-    private static Control? ResolveOwningDropDown(Control source)
-    {
-        if (source is Visual visual)
+        if (VM is null)
         {
-            if (visual.FindAncestorOfType<CheckComboBox>() is { } checkComboBox)
-            {
-                return checkComboBox;
-            }
-
-            if (visual.FindAncestorOfType<ComboBox>() is { } comboBox)
-            {
-                return comboBox;
-            }
+            return;
         }
 
-        return null;
-    }
-
-    private static void ReopenOwningDropDown(Control? owner)
-    {
-        switch (owner)
-        {
-            case CheckComboBox checkComboBox:
-                checkComboBox.IsDropDownOpen = true;
-                break;
-            case ComboBox comboBox:
-                comboBox.IsDropDownOpen = true;
-                break;
-        }
-    }
-
-    private static async Task<bool> ShowWarningDialogAsync(
-        string? language,
-        string title,
-        string message,
-        string confirmText,
-        string cancelText,
-        string sourceScope)
-    {
-        var completion = await ResolveDialogService().ShowWarningConfirmAsync(
-            new WarningConfirmDialogRequest(
-                Title: title,
-                Message: message,
-                ConfirmText: confirmText,
-                CancelText: cancelText,
-                Language: language ?? "en-us"),
-            sourceScope);
-        return completion.Return == DialogReturnSemantic.Confirm;
-    }
-
-    private static IAppDialogService ResolveDialogService()
-    {
-        return Avalonia.Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime
-            ? new AvaloniaDialogService(App.Runtime)
-            : NoOpAppDialogService.Instance;
+        VM.ConnectAddress = e.Text;
     }
 
     private void OnMuMuExtrasChecked(object? sender, RoutedEventArgs e)

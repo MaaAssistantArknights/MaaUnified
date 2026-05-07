@@ -144,9 +144,11 @@ public sealed class StageManagerPageViewModel : PageViewModelBase
             AutoIterate: AutoIterate,
             LastSelectedStage: LastSelectedStage,
             ClientType: ClientType);
-        await ApplyResultAsync(
-            await Runtime.StageManagerFeatureService.SaveConfigAsync(config, cancellationToken),
+        _ = await RunTrackedConfigurationSaveAsync(
+            "Advanced.StageManager",
+            Texts.GetOrDefault("StageManager.Title", "关卡管理"),
             "Advanced.StageManager.Save",
+            ct => Runtime.StageManagerFeatureService.SaveConfigAsync(config, ct),
             cancellationToken);
     }
 

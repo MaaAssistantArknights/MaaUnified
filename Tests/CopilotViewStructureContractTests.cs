@@ -9,14 +9,22 @@ public sealed class CopilotViewStructureContractTests
         var xaml = File.ReadAllText(Path.Combine(root, "App", "Features", "Advanced", "CopilotView.axaml"));
 
         Assert.Contains("Content=\"{Binding StartButtonText}\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Header=\"{Binding MainTabTitle}\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("<TabControl Classes=\"copilot-nav\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("<TabStrip Classes=\"copilot-nav\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("<TabStripItem Content=\"{Binding MainTabTitle}\" />", xaml, StringComparison.Ordinal);
+        Assert.Contains("<TabStripItem Content=\"{Binding SecurityTabTitle}\" />", xaml, StringComparison.Ordinal);
+        Assert.Contains("<TabStripItem Content=\"{Binding ParadoxTabTitle}\" />", xaml, StringComparison.Ordinal);
+        Assert.Contains("<TabStripItem Content=\"{Binding OtherTabTitle}\" />", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("<TabControl Classes=\"copilot-nav\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Header=\"{Binding MainTabTitle}\"", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("Texts[Copilot.", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("Content=\"开始\"", xaml, StringComparison.Ordinal);
         Assert.Contains("IsVisible=\"{Binding CanEdit}\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("<controls:CheckComboBox", xaml, StringComparison.Ordinal);
-        Assert.Contains("IsEditable=\"True\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("IsTreeMode=\"True\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("<controls:AppCopilotPathDropdown", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("<controls:AppTreeSelectDropdown", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("<controls:CheckComboBox", xaml, StringComparison.Ordinal);
+        Assert.Contains("Text=\"{Binding DisplayFilename}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Watermark=\"{Binding PathOrCodeWatermark}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("IsDropDownOpen=\"{Binding IsFilePopupOpen}\"", xaml, StringComparison.Ordinal);
         Assert.Contains("ItemsSource=\"{Binding FileItems}\"", xaml, StringComparison.Ordinal);
         Assert.Contains("EditorCommitted=\"OnFileSelectorEditorCommitted\"", xaml, StringComparison.Ordinal);
         Assert.Contains("SelectionCommitted=\"OnFileSelectorSelectionCommitted\"", xaml, StringComparison.Ordinal);
@@ -37,17 +45,21 @@ public sealed class CopilotViewStructureContractTests
     }
 
     [Fact]
-    public void ConnectSettingsView_ShouldUseStandardComboBox_ForConnectConfigSelection_AndKeepCheckComboBoxForEditableAddress()
+    public void ConnectSettingsView_ShouldUseStandardComboBox_ForConnectConfigSelection_AndAppHistoryInputForEditableAddress()
     {
         var root = GetMaaUnifiedRoot();
         var xaml = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "ConnectSettingsView.axaml"));
 
-        Assert.Contains("<controls:CheckComboBox", xaml, StringComparison.Ordinal);
+        Assert.Contains("<controls:AppHistoryInput", xaml, StringComparison.Ordinal);
         Assert.Contains("ItemsSource=\"{Binding ConnectConfigOptions}\"", xaml, StringComparison.Ordinal);
         Assert.Contains("SelectedItem=\"{Binding SelectedConnectConfigOption, Mode=TwoWay}\"", xaml, StringComparison.Ordinal);
         Assert.Contains("ItemsSource=\"{Binding ConnectAddressHistory}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Text=\"{Binding ConnectAddress, Mode=TwoWay}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("ItemDeleted=\"OnConnectAddressItemDeleted\"", xaml, StringComparison.Ordinal);
         Assert.Contains("SelectionCommitted=\"OnConnectAddressSelectionCommitted\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("EditorCommitted=\"OnConnectAddressEditorCommitted\"", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("HeaderText=\"{Binding SelectedConnectConfigOption.DisplayName}\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("<controls:CheckComboBox", xaml, StringComparison.Ordinal);
 
         var connectConfigBindingIndex = xaml.IndexOf("ItemsSource=\"{Binding ConnectConfigOptions}\"", StringComparison.Ordinal);
         Assert.True(connectConfigBindingIndex >= 0, "Connect settings should bind the connect config selector to ConnectConfigOptions.");
@@ -58,21 +70,47 @@ public sealed class CopilotViewStructureContractTests
     }
 
     [Fact]
-    public void CheckComboBox_ShouldUseOutlinedArrowAndSolidDropdownPanel()
+    public void AppDropdownControls_ShouldUseOutlinedArrowAndSolidDropdownPanel()
     {
         var root = GetMaaUnifiedRoot();
-        var xaml = File.ReadAllText(Path.Combine(root, "App", "Controls", "CheckComboBox.axaml"));
+        var multiSelectXaml = File.ReadAllText(Path.Combine(root, "App", "Controls", "AppMultiSelectDropdown.axaml"));
+        var treeSelectXaml = File.ReadAllText(Path.Combine(root, "App", "Controls", "AppTreeSelectDropdown.axaml"));
+        var copilotPathXaml = File.ReadAllText(Path.Combine(root, "App", "Controls", "AppCopilotPathDropdown.axaml"));
 
-        Assert.Contains("Data=\"M 1 1 L 5 5 L 9 1\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Stroke=\"{DynamicResource MAA.Brush.Text.Secondary}\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Classes=\"combo-dropdown-panel\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Value=\"{DynamicResource MAA.Brush.Surface.SectionStrong}\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Placement=\"BottomEdgeAlignedLeft\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("HorizontalAlignment=\"Left\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Style Selector=\"Button.combo-arrow:pointerover\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Style Selector=\"TreeView.combo-dropdown ToggleButton:pointerover\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("<Setter Property=\"MinWidth\" Value=\"36\" />", xaml, StringComparison.Ordinal);
-        Assert.Contains("<Setter Property=\"MinWidth\" Value=\"24\" />", xaml, StringComparison.Ordinal);
+        Assert.True(File.Exists(Path.Combine(root, "App", "Controls", "AppTreeSelectDropdown.axaml")));
+
+        foreach (var xaml in new[] { multiSelectXaml, treeSelectXaml, copilotPathXaml })
+        {
+            Assert.Contains("Data=\"M 1 1 L 5 5 L 9 1\"", xaml, StringComparison.Ordinal);
+            Assert.Contains("<Setter Property=\"Stroke\" Value=\"{DynamicResource MAA.Brush.App.SettingsInput.Chevron}\" />", xaml, StringComparison.Ordinal);
+            Assert.Contains("Placement=\"BottomEdgeAlignedLeft\"", xaml, StringComparison.Ordinal);
+            Assert.Contains("HorizontalAlignment=\"Left\"", xaml, StringComparison.Ordinal);
+            Assert.Contains("<Setter Property=\"Background\" Value=\"{DynamicResource MAA.Brush.App.SettingsInput.PopupBackground}\" />", xaml, StringComparison.Ordinal);
+            Assert.Contains("<Setter Property=\"BorderBrush\" Value=\"{DynamicResource MAA.Brush.App.SettingsInput.PopupBorder}\" />", xaml, StringComparison.Ordinal);
+        }
+
+        foreach (var xaml in new[] { multiSelectXaml, treeSelectXaml })
+        {
+            Assert.Contains("<Setter Property=\"Width\" Value=\"{DynamicResource MAA.App.Size.SettingsInputDropDownButtonWidth}\" />", xaml, StringComparison.Ordinal);
+            Assert.Contains("<Setter Property=\"MinWidth\" Value=\"{DynamicResource MAA.App.Size.SettingsInputDropDownButtonWidth}\" />", xaml, StringComparison.Ordinal);
+        }
+
+        Assert.Contains("Classes=\"app-dropdown-panel\"", multiSelectXaml, StringComparison.Ordinal);
+        Assert.Contains("Style Selector=\"Button.app-dropdown-arrow:pointerover\"", multiSelectXaml, StringComparison.Ordinal);
+        Assert.Contains("Style Selector=\"ListBox.app-dropdown-list ListBoxItem:pointerover /template/ ContentPresenter\"", multiSelectXaml, StringComparison.Ordinal);
+
+        Assert.Contains("Classes=\"app-tree-select-panel\"", treeSelectXaml, StringComparison.Ordinal);
+        Assert.Contains("Style Selector=\"Button.app-tree-select-arrow:pointerover\"", treeSelectXaml, StringComparison.Ordinal);
+        Assert.Contains("Style Selector=\"TreeView.app-tree-select-list ToggleButton:pointerover\"", treeSelectXaml, StringComparison.Ordinal);
+
+        Assert.Contains("Classes=\"app-copilot-path-popup-panel\"", copilotPathXaml, StringComparison.Ordinal);
+        Assert.Contains("Style Selector=\"Button.app-copilot-path-toggle:pointerover\"", copilotPathXaml, StringComparison.Ordinal);
+        Assert.Contains("Style Selector=\"Button.app-copilot-path-row:pointerover Border.app-copilot-path-row-shell\"", copilotPathXaml, StringComparison.Ordinal);
+        Assert.Contains("Style Selector=\"Button.app-copilot-path-row.current Border.app-copilot-path-row-shell\"", copilotPathXaml, StringComparison.Ordinal);
+        Assert.Contains("ItemsControl x:Name=\"VisibleRowsControl\"", copilotPathXaml, StringComparison.Ordinal);
+        Assert.Contains("Classes.current=\"{Binding IsCurrent}\"", copilotPathXaml, StringComparison.Ordinal);
+        Assert.Contains("ShowCollapsedChevron", copilotPathXaml, StringComparison.Ordinal);
+        Assert.Contains("ShowExpandedChevron", copilotPathXaml, StringComparison.Ordinal);
     }
 
     private static string GetMaaUnifiedRoot()

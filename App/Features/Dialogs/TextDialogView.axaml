@@ -24,17 +24,16 @@
               Margin="0,10,0,0">
           <Border x:Name="EditableInputPanel"
                   Classes="app-surface app-section">
-            <TextBox x:Name="InputBox"
-                     Classes="app-input"
-                     AcceptsReturn="False"
-                     ScrollViewer.VerticalScrollBarVisibility="Auto"
-                     TextWrapping="NoWrap" />
+            <controls:AppTextInput x:Name="InputBox"
+                                   AcceptsReturn="False"
+                                   ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                   TextWrapping="NoWrap" />
           </Border>
           <Border x:Name="ReadOnlyContentPanel"
                   Classes="app-surface app-section"
                   IsVisible="False">
             <TextBox x:Name="ReadOnlyContentBox"
-                     Classes="app-input app-input-block"
+                     Classes="settings-input settings-input-block"
                      AcceptsReturn="True"
                      IsReadOnly="True"
                      ScrollViewer.VerticalScrollBarVisibility="Auto"

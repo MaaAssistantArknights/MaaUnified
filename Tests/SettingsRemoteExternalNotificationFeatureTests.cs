@@ -112,6 +112,33 @@ public sealed class SettingsRemoteExternalNotificationFeatureTests
     }
 
     [Fact]
+    public async Task ExternalNotification_ProviderSelection_BootstrapsEditableState_AndDisablesWithLastProvider()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync(
+            notificationProviderFeatureService: new ScriptedNotificationProviderFeatureService());
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        var telegram = vm.NotificationProviderSelections.Single(
+            static item => string.Equals(item.Provider, "Telegram", StringComparison.OrdinalIgnoreCase));
+
+        Assert.False(vm.ExternalNotificationEnabled);
+        Assert.False(vm.CanEditExternalNotification);
+        Assert.True(vm.CanSelectExternalNotificationProvider);
+
+        telegram.IsEnabled = true;
+
+        Assert.True(vm.ExternalNotificationEnabled);
+        Assert.True(vm.CanEditExternalNotification);
+        Assert.Equal("Telegram", vm.SelectedNotificationProvider);
+
+        telegram.IsEnabled = false;
+
+        Assert.False(vm.ExternalNotificationEnabled);
+        Assert.False(vm.CanEditExternalNotification);
+    }
+
+    [Fact]
     public async Task ExternalNotification_ValidateParameters_AllProviders_DataDriven()
     {
         var service = new NotificationProviderFeatureService();
@@ -336,6 +363,7 @@ public sealed class SettingsRemoteExternalNotificationFeatureTests
 
                 await vm.SaveExternalNotificationAsync();
 
+                Assert.Contains("server=smtp.example.com", vm.StatusMessage, StringComparison.Ordinal);
                 Assert.Equal(
                     "SMTP,Telegram",
                     ReadCurrentProfileString(first.Config, ConfigurationKeys.ExternalNotificationEnabled));
@@ -351,6 +379,7 @@ public sealed class SettingsRemoteExternalNotificationFeatureTests
             var reloaded = new SettingsPageViewModel(second.Runtime, new ConnectionGameSharedStateViewModel());
             await reloaded.InitializeAsync();
 
+            Assert.Contains("server=smtp.example.com", reloaded.StatusMessage, StringComparison.Ordinal);
             Assert.True(reloaded.ExternalNotificationEnabled);
             Assert.True(reloaded.ExternalNotificationSendWhenComplete);
             Assert.True(reloaded.ExternalNotificationSendWhenError);
@@ -428,6 +457,57 @@ public sealed class SettingsRemoteExternalNotificationFeatureTests
         Assert.Equal(
             "SMTP,Telegram,Custom Webhook",
             ReadCurrentProfileString(fixture.Config, ConfigurationKeys.ExternalNotificationEnabled));
+    }
+
+    [Fact]
+    public async Task ConfigurationManager_SaveAsNew_TracksInlineSuccessState()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync();
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        var newProfileName = $"Alpha-{Guid.NewGuid():N}";
+        Assert.DoesNotContain(
+            vm.ConfigurationProfiles,
+            profile => string.Equals(profile, newProfileName, StringComparison.OrdinalIgnoreCase));
+        vm.ConfigurationManagerNewProfileName = newProfileName;
+
+        await vm.AddConfigurationProfileAsync();
+
+        Assert.Contains(vm.ConfigurationProfiles, profile => string.Equals(profile, newProfileName, StringComparison.OrdinalIgnoreCase));
+        Assert.True(fixture.Config.CurrentConfig.Profiles.ContainsKey(newProfileName));
+        Assert.True(vm.HasConfigurationManagerSaveAsNewSucceeded);
+        Assert.Equal("保存成功", vm.ConfigurationManagerSaveAsNewSucceededText);
+        Assert.Empty(vm.ConfigurationManagerNewProfileName);
+
+        vm.ConfigurationManagerNewProfileName = "Beta";
+
+        Assert.False(vm.HasConfigurationManagerSaveAsNewSucceeded);
+        Assert.Equal(string.Empty, vm.ConfigurationManagerSaveAsNewSucceededText);
+    }
+
+    [Fact]
+    public async Task ConfigurationManager_SaveAsNew_DuplicateProfile_ShowsInlineFailureAndKeepsInput()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync();
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        const string existingProfileName = "Default";
+        vm.ConfigurationManagerNewProfileName = existingProfileName;
+
+        await vm.AddConfigurationProfileAsync();
+
+        Assert.False(vm.HasConfigurationManagerSaveAsNewSucceeded);
+        Assert.Equal(string.Empty, vm.ConfigurationManagerSaveAsNewSucceededText);
+        Assert.True(vm.HasConfigurationManagerSaveAsNewFailed);
+        Assert.Equal("保存失败：请换一个未使用的配置名称。", vm.ConfigurationManagerSaveAsNewFailedText);
+        Assert.Equal(existingProfileName, vm.ConfigurationManagerNewProfileName);
+
+        vm.ConfigurationManagerNewProfileName = $"{existingProfileName}-copy";
+
+        Assert.False(vm.HasConfigurationManagerSaveAsNewFailed);
+        Assert.Equal(string.Empty, vm.ConfigurationManagerSaveAsNewFailedText);
     }
 
     private static async Task<string> RunExternalFailureCaseAsync(
@@ -568,6 +648,7 @@ public sealed class SettingsRemoteExternalNotificationFeatureTests
                 OverlayFeatureService = new OverlayFeatureService(capability),
                 NotificationProviderFeatureService = notificationProviderFeatureService ?? new NotificationProviderFeatureService(),
                 SettingsFeatureService = new SettingsFeatureService(config, capability, diagnostics),
+                ConfigurationProfileFeatureService = new ConfigurationProfileFeatureService(config),
                 DialogFeatureService = new DialogFeatureService(diagnostics),
                 PostActionFeatureService = new PostActionFeatureService(
                     config,

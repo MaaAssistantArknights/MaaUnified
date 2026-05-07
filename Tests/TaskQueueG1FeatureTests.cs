@@ -12,6 +12,7 @@ using MAAUnified.App.ViewModels.Settings;
 using MAAUnified.App.ViewModels.TaskQueue;
 using MAAUnified.Application.Configuration;
 using MAAUnified.Application.Models;
+using MAAUnified.Application.Models.TaskParams;
 using MAAUnified.Application.Orchestration;
 using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Features;
@@ -396,6 +397,7 @@ public sealed class TaskQueueG1FeatureTests
             TaskModuleTypes.Award,
             TaskModuleTypes.Roguelike,
             TaskModuleTypes.Reclamation,
+            TaskModuleTypes.UserDataUpdate,
             TaskModuleTypes.Custom,
             TaskModuleTypes.PostAction,
         };
@@ -418,6 +420,7 @@ public sealed class TaskQueueG1FeatureTests
             [TaskModuleTypes.Award] = (false, false),
             [TaskModuleTypes.Roguelike] = (true, true),
             [TaskModuleTypes.Reclamation] = (true, true),
+            [TaskModuleTypes.UserDataUpdate] = (false, false),
             [TaskModuleTypes.Custom] = (false, true),
             [TaskModuleTypes.PostAction] = (false, false),
         };
@@ -438,6 +441,28 @@ public sealed class TaskQueueG1FeatureTests
             Assert.Equal(expectedState.canAdvanced, vm.IsAdvancedSettingsSelected);
             Assert.Equal(!expectedState.canAdvanced, vm.IsGeneralSettingsSelected);
         }
+    }
+
+    [Fact]
+    public async Task SelectedTask_UserDataUpdate_ShouldHideSettingsModeSwitch()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.UserDataUpdate, "user-data-update")).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        vm.SelectedTask = Assert.Single(vm.Tasks);
+        await vm.WaitForPendingBindingAsync();
+
+        Assert.True(vm.IsUserDataUpdateTaskSelected);
+        Assert.False(vm.CanUseAdvancedSettings);
+        Assert.False(vm.ShowSettingsModeSwitch);
+
+        vm.SelectAdvancedSettingsMode();
+
+        Assert.False(vm.IsAdvancedSettingsSelected);
+        Assert.True(vm.IsGeneralSettingsSelected);
     }
 
     [Fact]
@@ -959,6 +984,38 @@ public sealed class TaskQueueG1FeatureTests
     {
         return typeof(RoguelikeModuleViewModel).GetField("_battleDataCache", BindingFlags.NonPublic | BindingFlags.Static)
             ?? throw new MissingFieldException(typeof(RoguelikeModuleViewModel).FullName, "_battleDataCache");
+    }
+
+    [Fact]
+    public async Task RoguelikeModule_WhenCoreCharCleared_SupportFlagsAreNotPersisted()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var vm = new RoguelikeModuleViewModel(fixture.Runtime, new LocalizedTextMap());
+
+        vm.CoreChar = "Amiya";
+        vm.UseSupport = true;
+        vm.UseNonfriendSupport = true;
+
+        Assert.True(vm.CanUseSupport);
+        Assert.True(vm.ShowUseNonfriendSupport);
+
+        vm.CoreChar = string.Empty;
+
+        Assert.False(vm.CanUseSupport);
+        Assert.False(vm.UseSupport);
+        Assert.False(vm.ShowUseNonfriendSupport);
+
+        var dto = BuildRoguelikeDto(vm);
+        Assert.False(dto.UseSupport);
+        Assert.False(dto.UseNonfriendSupport);
+    }
+
+    private static RoguelikeTaskParamsDto BuildRoguelikeDto(RoguelikeModuleViewModel vm)
+    {
+        var method = typeof(RoguelikeModuleViewModel).GetMethod("BuildDto", BindingFlags.NonPublic | BindingFlags.Instance)
+            ?? throw new MissingMethodException(typeof(RoguelikeModuleViewModel).FullName, "BuildDto");
+
+        return Assert.IsType<RoguelikeTaskParamsDto>(method.Invoke(vm, null));
     }
 
     private static string ResolveRepoRoot()

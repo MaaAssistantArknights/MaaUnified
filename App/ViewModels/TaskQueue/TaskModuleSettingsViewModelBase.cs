@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using System.ComponentModel;
+using MAAUnified.App.Services;
 using MAAUnified.App.ViewModels.Infrastructure;
 using MAAUnified.Application.Services;
 
@@ -108,6 +109,12 @@ public abstract class TaskModuleSettingsViewModelBase : ObservableObject
             return;
         }
 
+        ConfigurationSaveTracker.Instance.MarkPending(
+            $"TaskQueue.{ModuleType}",
+            ResolveSaveDisplayName(),
+            $"TaskQueue.{ModuleType}.Persist",
+            Runtime.DiagnosticsService,
+            PersistCoreAsync);
         _persistDebounceCts?.Cancel();
         _persistDebounceCts?.Dispose();
         _persistDebounceCts = new CancellationTokenSource();
@@ -135,6 +142,17 @@ public abstract class TaskModuleSettingsViewModelBase : ObservableObject
 
     private async Task<bool> PersistNowAsync(CancellationToken cancellationToken)
     {
+        return await ConfigurationSaveTracker.Instance.RunTrackedAsync(
+            $"TaskQueue.{ModuleType}",
+            ResolveSaveDisplayName(),
+            $"TaskQueue.{ModuleType}.Persist",
+            Runtime.DiagnosticsService,
+            PersistCoreAsync,
+            cancellationToken);
+    }
+
+    private async Task<bool> PersistCoreAsync(CancellationToken cancellationToken)
+    {
         await _persistLock.WaitAsync(cancellationToken);
         try
         {
@@ -157,7 +175,7 @@ public abstract class TaskModuleSettingsViewModelBase : ObservableObject
             }
 
             LastErrorMessage = string.Empty;
-            StatusMessage = update.Message;
+            StatusMessage = string.Empty;
             return true;
         }
         catch (Exception ex)
@@ -170,5 +188,19 @@ public abstract class TaskModuleSettingsViewModelBase : ObservableObject
         {
             _persistLock.Release();
         }
+    }
+
+    private string ResolveSaveDisplayName()
+    {
+        return ModuleType switch
+        {
+            "Infrast" => Texts.GetOrDefault("Infrast.Title", "基建换班"),
+            "Mall" => Texts.GetOrDefault("Mall.Title", "信用收取"),
+            "Award" => Texts.GetOrDefault("Award.Title", "领取奖励"),
+            "TaskQueue.UserDataUpdate" => Texts.GetOrDefault("UserDataUpdate.Title", "数据更新"),
+            _ => ModuleType.StartsWith("TaskQueue.", StringComparison.Ordinal)
+                ? ModuleType["TaskQueue.".Length..]
+                : ModuleType,
+        };
     }
 }

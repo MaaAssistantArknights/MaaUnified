@@ -305,6 +305,9 @@
   <data name="Fight.StageSelect" xml:space="preserve">
     <value>ステージ</value>
   </data>
+  <data name="Fight.StageSelect2" xml:space="preserve">
+    <value>候補ステージ</value>
+  </data>
   <data name="Fight.Stone" xml:space="preserve">
     <value>源石数</value>
   </data>
@@ -331,6 +334,48 @@
   </data>
   <data name="Fight.UseStoneDisplay" xml:space="preserve">
     <value>余剰理性の消費</value>
+  </data>
+  <data name="Fight.UseWeeklySchedule" xml:space="preserve">
+    <value>週間スケジュールを使う</value>
+  </data>
+  <data name="Fight.AddStage" xml:space="preserve">
+    <value>候補を追加</value>
+  </data>
+  <data name="Fight.CustomStageCode" xml:space="preserve">
+    <value>ステージ名を手動入力</value>
+  </data>
+  <data name="Fight.CustomStageCodeTip" xml:space="preserve">
+    <value>多くのメインステージ略称と元のステージ一覧にある名称に対応します。</value>
+  </data>
+  <data name="Fight.MultiTasksShareTip" xml:space="preserve">
+    <value>以下の項目は複数の作戦タスクで共有されます。</value>
+  </data>
+  <data name="Fight.AutoRestartOption" xml:space="preserve">
+    <value>ゲーム切断時に自動で再起動</value>
+  </data>
+  <data name="Fight.UseWeeklyScheduleTip" xml:space="preserve">
+    <value>ここでの曜日はローカル時刻ではなく、ゲーム内の更新時刻基準です。</value>
+  </data>
+  <data name="Fight.WeeklySchedule.Sunday" xml:space="preserve">
+    <value>日</value>
+  </data>
+  <data name="Fight.WeeklySchedule.Monday" xml:space="preserve">
+    <value>月</value>
+  </data>
+  <data name="Fight.WeeklySchedule.Tuesday" xml:space="preserve">
+    <value>火</value>
+  </data>
+  <data name="Fight.WeeklySchedule.Wednesday" xml:space="preserve">
+    <value>水</value>
+  </data>
+  <data name="Fight.WeeklySchedule.Thursday" xml:space="preserve">
+    <value>木</value>
+  </data>
+  <data name="Fight.WeeklySchedule.Friday" xml:space="preserve">
+    <value>金</value>
+  </data>
+  <data name="Fight.WeeklySchedule.Saturday" xml:space="preserve">
+    <value>土</value>
   </data>
   <data name="FirstMoveAdvantage" xml:space="preserve">
     <value>先手必勝（先鋒、狙撃、特殊）</value>
@@ -1550,6 +1595,27 @@
   <data name="Settings.ConfigurationManager.SaveAsNew" xml:space="preserve">
     <value>新規として保存</value>
   </data>
+  <data name="Settings.ConfigurationManager.SaveAsNewSucceededInline" xml:space="preserve">
+    <value>保存しました</value>
+  </data>
+  <data name="Settings.ConfigurationManager.SaveAsNewFailedInline" xml:space="preserve">
+    <value>保存に失敗しました: {0}</value>
+  </data>
+  <data name="Settings.ConfigurationManager.SaveAsNewFailedReason.Generic" xml:space="preserve">
+    <value>しばらくしてからもう一度お試しください。</value>
+  </data>
+  <data name="Settings.ConfigurationManager.SaveAsNewFailedReason.ProfileAlreadyExists" xml:space="preserve">
+    <value>未使用のプロファイル名に変更してください。</value>
+  </data>
+  <data name="Settings.ConfigurationManager.SaveAsNewFailedReason.ProfileNameEmpty" xml:space="preserve">
+    <value>プロファイル名を入力してください。</value>
+  </data>
+  <data name="Settings.ConfigurationManager.SaveAsNewFailedReason.ProfileNameInvalid" xml:space="preserve">
+    <value>プロファイル名が無効です。</value>
+  </data>
+  <data name="Settings.ConfigurationManager.SaveAsNewFailedReason.SourceProfileMissing" xml:space="preserve">
+    <value>現在のプロファイルが見つかりません。一覧を更新してから再試行してください。</value>
+  </data>
   <data name="Settings.ConfigurationManager.Status.AddFailed" xml:space="preserve">
     <value>設定の追加に失敗しました。</value>
   </data>
@@ -2595,6 +2661,18 @@
   </data>
   <data name="TaskQueue.Module.UserDataUpdate" xml:space="preserve">
     <value>ユーザーデータ更新</value>
+  </data>
+  <data name="TaskQueue.UserDataUpdate.TriggerInterval" xml:space="preserve">
+    <value>更新データの実行間隔</value>
+  </data>
+  <data name="TaskQueue.UserDataUpdate.Trigger.EveryTime" xml:space="preserve">
+    <value>毎回</value>
+  </data>
+  <data name="TaskQueue.UserDataUpdate.Trigger.Daily" xml:space="preserve">
+    <value>毎日</value>
+  </data>
+  <data name="TaskQueue.UserDataUpdate.Trigger.Weekly" xml:space="preserve">
+    <value>毎週</value>
   </data>
   <data name="TaskQueue.Module.Fight" xml:space="preserve">
     <value>作戦</value>

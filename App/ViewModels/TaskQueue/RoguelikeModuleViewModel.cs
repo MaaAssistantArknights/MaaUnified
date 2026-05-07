@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Text.Json.Nodes;
+using MAAUnified.App.Services;
 using MAAUnified.Application.Models;
 using MAAUnified.Application.Models.TaskParams;
 using MAAUnified.Application.Services;
@@ -1718,26 +1719,25 @@ public sealed class RoguelikeModuleViewModel : TypedTaskModuleViewModelBase<Rogu
 
     private async Task PersistDelayAbortUntilCombatCompleteAsync(bool value)
     {
-        try
-        {
-            if (Runtime.ConfigurationService.TryGetCurrentProfile(out var profile))
+        _ = await ConfigurationSaveTracker.Instance.RunTrackedAsync(
+            "TaskQueue.Roguelike.DelayAbortUntilCombatComplete",
+            Texts.GetOrDefault("Roguelike.Title", "集成战略"),
+            "Roguelike.DelayAbortUntilCombatComplete.Save",
+            Runtime.DiagnosticsService,
+            async cancellationToken =>
             {
-                profile.Values[DelayAbortUntilCombatCompleteConfigKey] = JsonValue.Create(value);
-            }
-            else
-            {
-                Runtime.ConfigurationService.CurrentConfig.GlobalValues[DelayAbortUntilCombatCompleteConfigKey] = JsonValue.Create(value);
-            }
+                if (Runtime.ConfigurationService.TryGetCurrentProfile(out var profile))
+                {
+                    profile.Values[DelayAbortUntilCombatCompleteConfigKey] = JsonValue.Create(value);
+                }
+                else
+                {
+                    Runtime.ConfigurationService.CurrentConfig.GlobalValues[DelayAbortUntilCombatCompleteConfigKey] = JsonValue.Create(value);
+                }
 
-            await Runtime.ConfigurationService.SaveAsync();
-        }
-        catch (Exception ex)
-        {
-            await Runtime.DiagnosticsService.RecordErrorAsync(
-                "Roguelike.DelayAbortUntilCombatComplete.Save",
-                "Failed to persist Roguelike delay-abort setting.",
-                ex);
-        }
+                await Runtime.ConfigurationService.SaveAsync(cancellationToken);
+                return true;
+            });
     }
 
     private void ApplyPersistentDelayAbortSetting(bool value)
