@@ -6,7 +6,9 @@
   <Grid Margin="4,0,4,4"
         RowDefinitions="*">
     <TabControl Classes="toolbox-nav"
-                SelectedIndex="{Binding SelectedTabIndex}">
+                x:Name="ToolboxTabs"
+                SelectedIndex="{Binding SelectedTabIndex}"
+                SelectionChanged="OnToolboxTabSelectionChanged">
       <TabItem Header="{Binding RecruitTabTitle}">
         <views:ToolboxRecruitView />
       </TabItem>

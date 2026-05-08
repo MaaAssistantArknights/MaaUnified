@@ -13,9 +13,9 @@
                 Margin="{DynamicResource MAA.Thickness.Settings.SectionTopMargin}"
                 Classes="settings-page-flow">
       <Grid Classes="settings-page-labeled-action-row"
-            ColumnDefinitions="132,*">
-        <TextBlock Classes="settings-label"
-                   Text="{Binding RootTexts[Settings.Background.ImagePath]}" />
+            controls:SettingsLabelWidthCoordinator.GroupKey="Background.Main"
+            ColumnDefinitions="Auto,*">
+        <controls:SettingsLabel Text="{Binding RootTexts[Settings.Background.ImagePath]}" />
         <controls:AdaptiveSpacingStackPanel Grid.Column="1"
                     Classes="settings-page-inline-field-group">
           <controls:AppActionInput Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
@@ -29,9 +29,9 @@
       </Grid>
 
       <Grid Classes="settings-page-labeled-row"
-            ColumnDefinitions="132,*">
-        <TextBlock Classes="settings-label"
-                   Text="{Binding RootTexts[Settings.Background.Opacity]}" />
+            controls:SettingsLabelWidthCoordinator.GroupKey="Background.Main"
+            ColumnDefinitions="Auto,*">
+        <controls:SettingsLabel Text="{Binding RootTexts[Settings.Background.Opacity]}" />
         <controls:AppNumberInput Grid.Column="1"
                                         Width="{DynamicResource MAA.Size.Settings.FieldNarrowWidth}"
                                         HorizontalAlignment="Left"
@@ -41,9 +41,9 @@
       </Grid>
 
       <Grid Classes="settings-page-labeled-row"
-            ColumnDefinitions="132,*">
-        <TextBlock Classes="settings-label"
-                   Text="{Binding RootTexts[Settings.Background.BlurRadius]}" />
+            controls:SettingsLabelWidthCoordinator.GroupKey="Background.Main"
+            ColumnDefinitions="Auto,*">
+        <controls:SettingsLabel Text="{Binding RootTexts[Settings.Background.BlurRadius]}" />
         <controls:AppNumberInput Grid.Column="1"
                                         Width="{DynamicResource MAA.Size.Settings.FieldNarrowWidth}"
                                         HorizontalAlignment="Left"
@@ -53,9 +53,9 @@
       </Grid>
 
       <Grid Classes="settings-page-labeled-row"
-            ColumnDefinitions="132,*">
-        <TextBlock Classes="settings-label"
-                   Text="{Binding RootTexts[Settings.Background.StretchMode]}" />
+            controls:SettingsLabelWidthCoordinator.GroupKey="Background.Main"
+            ColumnDefinitions="Auto,*">
+        <controls:SettingsLabel Text="{Binding RootTexts[Settings.Background.StretchMode]}" />
         <ComboBox Grid.Column="1"
                   Classes="settings-select"
                   Width="{DynamicResource MAA.Size.Settings.FieldCenteredWidth}"

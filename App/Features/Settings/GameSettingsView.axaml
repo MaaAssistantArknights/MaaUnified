@@ -13,9 +13,9 @@
                 Margin="{DynamicResource MAA.Thickness.Settings.SectionTopMargin}"
                 Classes="settings-page-flow">
       <Grid Classes="settings-page-labeled-row"
-            ColumnDefinitions="132,*">
-        <TextBlock Classes="settings-label"
-                   Text="{Binding RootTexts[Settings.Game.ClientType]}" />
+            controls:SettingsLabelWidthCoordinator.GroupKey="Game.Main"
+            ColumnDefinitions="Auto,*">
+        <controls:SettingsLabel Text="{Binding RootTexts[Settings.Game.ClientType]}" />
         <ComboBox Grid.Column="1"
                   Classes="settings-select"
                   Width="{DynamicResource MAA.Size.Settings.FieldInputWidth}"
@@ -61,15 +61,10 @@
                 IsChecked="{Binding DeploymentWithPause}" />
 
       <Grid Classes="settings-page-labeled-row"
-            ColumnDefinitions="132,*">
-        <TextBlock Classes="settings-label"
-                   TextWrapping="Wrap">
-          <Run Text="{Binding RootTexts[Settings.Game.StartsWithScript]}" />
-          <Run Text="&#160;" />
-          <InlineUIContainer BaselineAlignment="Center">
-            <controls:TooltipHint Tip="{Binding RootTexts[Settings.Game.StartsWithScriptTip]}" />
-          </InlineUIContainer>
-        </TextBlock>
+            controls:SettingsLabelWidthCoordinator.GroupKey="Game.Main"
+            ColumnDefinitions="Auto,*">
+        <controls:SettingsLabel Text="{Binding RootTexts[Settings.Game.StartsWithScript]}"
+                                Tip="{Binding RootTexts[Settings.Game.StartsWithScriptTip]}" />
         <TextBox Grid.Column="1"
                  Classes="settings-input"
                  Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
@@ -81,15 +76,10 @@
       </Grid>
 
       <Grid Classes="settings-page-labeled-row"
-            ColumnDefinitions="132,*">
-        <TextBlock Classes="settings-label"
-                   TextWrapping="Wrap">
-          <Run Text="{Binding RootTexts[Settings.Game.EndsWithScript]}" />
-          <Run Text="&#160;" />
-          <InlineUIContainer BaselineAlignment="Center">
-            <controls:TooltipHint Tip="{Binding RootTexts[Settings.Game.EndsWithScriptTip]}" />
-          </InlineUIContainer>
-        </TextBlock>
+            controls:SettingsLabelWidthCoordinator.GroupKey="Game.Main"
+            ColumnDefinitions="Auto,*">
+        <controls:SettingsLabel Text="{Binding RootTexts[Settings.Game.EndsWithScript]}"
+                                Tip="{Binding RootTexts[Settings.Game.EndsWithScriptTip]}" />
         <TextBox Grid.Column="1"
                  Classes="settings-input"
                  Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
@@ -135,10 +125,10 @@
       </Grid>
 
       <Grid Classes="settings-page-labeled-row"
-            ColumnDefinitions="132,*"
+            controls:SettingsLabelWidthCoordinator.GroupKey="Game.Main"
+            ColumnDefinitions="Auto,*"
             IsVisible="{Binding ShowPenguinIdField}">
-        <TextBlock Classes="settings-label"
-                   Text="{Binding RootTexts[Settings.Game.PenguinId]}" />
+        <controls:SettingsLabel Text="{Binding RootTexts[Settings.Game.PenguinId]}" />
         <TextBox Grid.Column="1"
                  Classes="settings-input"
                  Width="{DynamicResource MAA.Size.Settings.FieldInputWidth}"
@@ -149,9 +139,9 @@
       <Grid Classes="settings-page-two-column"
             ColumnDefinitions="Auto,24,Auto">
         <Grid Classes="settings-page-labeled-row"
-              ColumnDefinitions="132,*">
-          <TextBlock Classes="settings-label"
-                     Text="{Binding RootTexts[Settings.Game.TaskTimeoutMinutes]}" />
+              controls:SettingsLabelWidthCoordinator.GroupKey="Game.Timeouts"
+              ColumnDefinitions="Auto,*">
+          <controls:SettingsLabel Text="{Binding RootTexts[Settings.Game.TaskTimeoutMinutes]}" />
           <controls:AppNumberInput Grid.Column="1"
                                           Width="{DynamicResource MAA.Size.Settings.FieldNarrowWidth}"
                                           HorizontalAlignment="Left"
@@ -162,9 +152,9 @@
 
         <Grid Grid.Column="2"
               Classes="settings-page-labeled-row"
-              ColumnDefinitions="132,*">
-          <TextBlock Classes="settings-label"
-                     Text="{Binding RootTexts[Settings.Game.ReminderIntervalMinutes]}" />
+              controls:SettingsLabelWidthCoordinator.GroupKey="Game.Timeouts"
+              ColumnDefinitions="Auto,*">
+          <controls:SettingsLabel Text="{Binding RootTexts[Settings.Game.ReminderIntervalMinutes]}" />
           <controls:AppNumberInput Grid.Column="1"
                                           Width="{DynamicResource MAA.Size.Settings.FieldNarrowWidth}"
                                           HorizontalAlignment="Left"

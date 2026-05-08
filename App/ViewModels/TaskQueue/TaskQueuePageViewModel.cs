@@ -6040,13 +6040,13 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
     private void OnUnifiedLanguageChanged(object? sender, UiLanguageChangedEventArgs e)
     {
-        if (Dispatcher.UIThread.CheckAccess() || Avalonia.Application.Current is null)
+        if (Avalonia.Application.Current is null)
         {
             SetLanguage(e.CurrentLanguage);
             return;
         }
 
-        Dispatcher.UIThread.Post(() => SetLanguage(e.CurrentLanguage));
+        Dispatcher.UIThread.Post(() => SetLanguage(e.CurrentLanguage), DispatcherPriority.Background);
     }
 
     private void RefreshSelectionBatchModeFromConfig()

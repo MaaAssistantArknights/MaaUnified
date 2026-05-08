@@ -160,27 +160,50 @@
                           VerticalAlignment="Top"
                           IsVisible="{TemplateBinding ShowCloseButton}">
                     <Button.Content>
-                      <Path Width="10"
-                            Height="10"
-                            Data="M1 1 L9 9 M9 1 L1 9"
+                      <Path Width="8.5"
+                            Height="8.5"
+                            Data="M1 1 L7.5 7.5 M7.5 1 L1 7.5"
                             HorizontalAlignment="Center"
                             VerticalAlignment="Center"
                             Stretch="Fill"
                             Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
-                            StrokeThickness="1.6"
+                            StrokeThickness="1.35"
                             StrokeLineCap="Round" />
                     </Button.Content>
                   </Button>
                   <Button x:Name="PART_LeftMinimizeButton"
                           Classes="app-button app-subtle app-icon-only app-window-control app-window-minimize"
                           VerticalAlignment="Top"
-                          IsVisible="{TemplateBinding ShowMinimizeButton}"
-                          Content="−" />
+                          IsVisible="{TemplateBinding ShowMinimizeButton}">
+                    <Button.Content>
+                      <Border Width="9"
+                              Height="1.35"
+                              HorizontalAlignment="Center"
+                              VerticalAlignment="Center"
+                              Background="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                              CornerRadius="999" />
+                    </Button.Content>
+                  </Button>
                   <Button x:Name="PART_LeftMaximizeButton"
                           Classes="app-button app-subtle app-icon-only app-window-control app-window-maximize"
                           VerticalAlignment="Top"
-                          IsVisible="{TemplateBinding ShowMaximizeButton}"
-                          Content="▢" />
+                          IsVisible="{TemplateBinding ShowMaximizeButton}">
+                    <Button.Content>
+                      <Grid Width="8.5"
+                            Height="8.5">
+                        <Path Classes="app-window-maximize-icon-normal"
+                              Data="M2 2 H8 V8 H2 Z"
+                              Stretch="Fill"
+                              Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                              StrokeThickness="1.1" />
+                        <Path Classes="app-window-maximize-icon-restore"
+                              Data="M2 4 H6 V8 H2 Z M4 2 H8 V6"
+                              Stretch="Fill"
+                              Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                              StrokeThickness="1.1" />
+                      </Grid>
+                    </Button.Content>
+                  </Button>
                 </StackPanel>
 
                 <Border x:Name="PART_HeaderDragArea"
@@ -200,26 +223,49 @@
                   <Button x:Name="PART_RightMinimizeButton"
                           Classes="app-button app-subtle app-icon-only app-window-control app-window-minimize"
                           VerticalAlignment="Top"
-                          IsVisible="{TemplateBinding ShowMinimizeButton}"
-                          Content="−" />
+                          IsVisible="{TemplateBinding ShowMinimizeButton}">
+                    <Button.Content>
+                      <Border Width="9"
+                              Height="1.35"
+                              HorizontalAlignment="Center"
+                              VerticalAlignment="Center"
+                              Background="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                              CornerRadius="999" />
+                    </Button.Content>
+                  </Button>
                   <Button x:Name="PART_RightMaximizeButton"
                           Classes="app-button app-subtle app-icon-only app-window-control app-window-maximize"
                           VerticalAlignment="Top"
-                          IsVisible="{TemplateBinding ShowMaximizeButton}"
-                          Content="▢" />
+                          IsVisible="{TemplateBinding ShowMaximizeButton}">
+                    <Button.Content>
+                      <Grid Width="8.5"
+                            Height="8.5">
+                        <Path Classes="app-window-maximize-icon-normal"
+                              Data="M2 2 H8 V8 H2 Z"
+                              Stretch="Fill"
+                              Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                              StrokeThickness="1.1" />
+                        <Path Classes="app-window-maximize-icon-restore"
+                              Data="M2 4 H6 V8 H2 Z M4 2 H8 V6"
+                              Stretch="Fill"
+                              Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                              StrokeThickness="1.1" />
+                      </Grid>
+                    </Button.Content>
+                  </Button>
                   <Button x:Name="PART_RightCloseButton"
                           Classes="app-button app-subtle app-icon-only app-window-control app-window-close"
                           VerticalAlignment="Top"
                           IsVisible="{TemplateBinding ShowCloseButton}">
                     <Button.Content>
-                      <Path Width="10"
-                            Height="10"
-                            Data="M1 1 L9 9 M9 1 L1 9"
+                      <Path Width="8.5"
+                            Height="8.5"
+                            Data="M1 1 L7.5 7.5 M7.5 1 L1 7.5"
                             HorizontalAlignment="Center"
                             VerticalAlignment="Center"
                             Stretch="Fill"
                             Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
-                            StrokeThickness="1.6"
+                            StrokeThickness="1.35"
                             StrokeLineCap="Round" />
                     </Button.Content>
                   </Button>
@@ -317,16 +363,20 @@
     <Setter Property="IsVisible" Value="False" />
   </Style>
 
-  <Style Selector="controls|AppWindowFrame /template/ Button.app-window-maximize">
-    <Setter Property="Content" Value="▢" />
+  <Style Selector="controls|AppWindowFrame /template/ Path.app-window-maximize-icon-restore">
+    <Setter Property="IsVisible" Value="False" />
   </Style>
 
   <Style Selector="controls|AppWindowFrame /template/ Border#PART_FrameSurface">
     <Setter Property="BoxShadow" Value="0 0 24 0 #29000000" />
   </Style>
 
-  <Style Selector="controls|AppWindowFrame:window-maximized /template/ Button.app-window-maximize">
-    <Setter Property="Content" Value="❐" />
+  <Style Selector="controls|AppWindowFrame:window-maximized /template/ Path.app-window-maximize-icon-normal">
+    <Setter Property="IsVisible" Value="False" />
+  </Style>
+
+  <Style Selector="controls|AppWindowFrame:window-maximized /template/ Path.app-window-maximize-icon-restore">
+    <Setter Property="IsVisible" Value="True" />
   </Style>
 
   <Style Selector="controls|AppWindowFrame:window-maximized">
@@ -848,17 +898,21 @@
 
   <Style Selector="Button.app-window-control">
     <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Secondary}" />
-    <Setter Property="FontSize" Value="14" />
+    <Setter Property="Width" Value="34" />
+    <Setter Property="MinWidth" Value="34" />
+    <Setter Property="Height" Value="34" />
+    <Setter Property="CornerRadius" Value="17" />
+    <Setter Property="FontSize" Value="13" />
     <Setter Property="FontWeight" Value="SemiBold" />
   </Style>
 
   <Style Selector="Button.app-window-minimize">
-    <Setter Property="FontSize" Value="18" />
+    <Setter Property="FontSize" Value="13" />
   </Style>
 
   <Style Selector="Button.app-window-close">
     <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Close.Foreground}" />
-    <Setter Property="FontSize" Value="16" />
+    <Setter Property="FontSize" Value="13" />
     <Setter Property="FontWeight" Value="Bold" />
   </Style>
 

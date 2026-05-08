@@ -304,7 +304,7 @@ public sealed class SettingsViewStructureContractTests
 
         var external = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "ExternalNotificationSettingsView.axaml"));
         Assert.Contains("ExternalNotificationCustomWebhookPlaceholders", external, StringComparison.Ordinal);
-        Assert.Contains("TooltipHint", external, StringComparison.Ordinal);
+        Assert.Contains("SettingsLabel", external, StringComparison.Ordinal);
     }
 
     [Fact]

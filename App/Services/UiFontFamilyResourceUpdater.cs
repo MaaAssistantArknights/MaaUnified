@@ -49,7 +49,7 @@ public sealed class UiFontFamilyResourceUpdater : IDisposable
 
     private void OnLanguageChanged(object? sender, UiLanguageChangedEventArgs e)
     {
-        if (Dispatcher.UIThread.CheckAccess())
+        if (Avalonia.Application.Current is null)
         {
             ApplyLanguage(e.CurrentLanguage);
             return;
@@ -63,7 +63,7 @@ public sealed class UiFontFamilyResourceUpdater : IDisposable
                     ApplyLanguage(e.CurrentLanguage);
                 }
             },
-            DispatcherPriority.Send);
+            DispatcherPriority.Background);
     }
 
     private void RecordDiagnosticsOnce(UiFontFamilyResolution resolution)

@@ -26,15 +26,15 @@
     <Setter Property="Width" Value="{DynamicResource MAA.Size.Settings.SectionListWidth}" />
     <Setter Property="Padding" Value="{DynamicResource MAA.App.Settings.RailPadding}" />
     <Setter Property="BorderThickness" Value="0" />
-    <Setter Property="CornerRadius" Value="20" />
+    <Setter Property="CornerRadius" Value="24" />
     <Setter Property="ClipToBounds" Value="True" />
     <Setter Property="Background">
       <LinearGradientBrush StartPoint="0,0"
                            EndPoint="0,1">
         <GradientStop Offset="0"
-                      Color="#FFF1F6FD" />
+                      Color="#FFFAFCFF" />
         <GradientStop Offset="1"
-                      Color="#FFE7EEF9" />
+                      Color="#FFF3F7FE" />
       </LinearGradientBrush>
     </Setter>
   </Style>
@@ -78,7 +78,7 @@
   </Style>
 
   <Style Selector="controls|AppSelectionList.settings-rail ListBoxItem:pointerover Border.settings-rail-item">
-    <Setter Property="Background" Value="#55E9F3FE" />
+    <Setter Property="Background" Value="#3DE9F3FE" />
   </Style>
 
   <Style Selector="controls|AppSelectionList.settings-rail ListBoxItem:pointerover TextBlock.settings-rail-item-text">
@@ -261,11 +261,14 @@
   <Style Selector="UserControl.settings-page Grid.settings-page-labeled-row">
     <Setter Property="HorizontalAlignment" Value="Left" />
     <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="controls:SettingsLabelWidthCoordinator.MaxLabelWidth" Value="{DynamicResource MAA.Size.Settings.LabelMaxWidth}" />
+    <Setter Property="controls:SettingsLabelWidthCoordinator.FieldGap" Value="{DynamicResource MAA.Size.Settings.LabelFieldGap}" />
   </Style>
 
   <Style Selector="UserControl.settings-page Grid.settings-page-labeled-row > TextBlock,
                    UserControl.settings-page Grid.settings-page-labeled-row > TextBox,
                    UserControl.settings-page Grid.settings-page-labeled-row > ComboBox,
+                   UserControl.settings-page Grid.settings-page-labeled-row > controls|SettingsLabel,
                    UserControl.settings-page Grid.settings-page-labeled-row > controls|AppNumberInput,
                    UserControl.settings-page Grid.settings-page-labeled-row > controls|AppActionInput,
                    UserControl.settings-page Grid.settings-page-labeled-row > controls|AdaptiveSpacingStackPanel">
@@ -275,11 +278,14 @@
   <Style Selector="UserControl.settings-page Grid.settings-page-labeled-action-row">
     <Setter Property="HorizontalAlignment" Value="Left" />
     <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="controls:SettingsLabelWidthCoordinator.MaxLabelWidth" Value="{DynamicResource MAA.Size.Settings.LabelMaxWidth}" />
+    <Setter Property="controls:SettingsLabelWidthCoordinator.FieldGap" Value="{DynamicResource MAA.Size.Settings.LabelFieldGap}" />
   </Style>
 
   <Style Selector="UserControl.settings-page Grid.settings-page-labeled-action-row > TextBlock,
                    UserControl.settings-page Grid.settings-page-labeled-action-row > TextBox,
                    UserControl.settings-page Grid.settings-page-labeled-action-row > ComboBox,
+                   UserControl.settings-page Grid.settings-page-labeled-action-row > controls|SettingsLabel,
                    UserControl.settings-page Grid.settings-page-labeled-action-row > controls|AppNumberInput,
                    UserControl.settings-page Grid.settings-page-labeled-action-row > controls|AppActionInput,
                    UserControl.settings-page Grid.settings-page-labeled-action-row > controls|AdaptiveSpacingStackPanel">
@@ -515,10 +521,10 @@
   <Style Selector="UserControl.settings-page Border.settings-shadow-card">
     <Setter Property="Margin" Value="0" />
     <Setter Property="Padding" Value="14" />
-    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Surface.Section}" />
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Surface.Card}" />
     <Setter Property="BorderBrush" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
-    <Setter Property="CornerRadius" Value="6" />
+    <Setter Property="CornerRadius" Value="8" />
     <Setter Property="BoxShadow" Value="0 0 0 0 #00000000" />
     <Setter Property="ClipToBounds" Value="False" />
   </Style>
@@ -529,7 +535,7 @@
   </Style>
 
   <Style Selector="UserControl.settings-page Border.settings-shadow-card.timer-settings-slot">
-    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Surface.Section}" />
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Surface.Card}" />
     <Setter Property="BorderBrush" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="BoxShadow" Value="0 0 0 0 #00000000" />
@@ -553,6 +559,21 @@
     <Setter Property="VerticalAlignment" Value="Center" />
   </Style>
 
+  <Style Selector="UserControl.settings-page controls|SettingsLabel">
+    <Setter Property="Margin" Value="0" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page controls|SettingsLabel TextBlock.settings-label-text">
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Secondary}" />
+    <Setter Property="FontSize" Value="13.5" />
+    <Setter Property="FontWeight" Value="Normal" />
+    <Setter Property="LineHeight" Value="20" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+  </Style>
+
   <Style Selector="UserControl.settings-page controls|TooltipHint">
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="HorizontalAlignment" Value="Left" />
@@ -569,6 +590,12 @@
     <Setter Property="Margin" Value="{DynamicResource MAA.App.Settings.HintMargin}" />
   </Style>
 
+  <Style Selector="UserControl.settings-page controls|SettingsLabel controls|TooltipHint.settings-label-tip">
+    <Setter Property="Margin" Value="0" />
+    <Setter Property="HorizontalAlignment" Value="Right" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
   <Style Selector="UserControl.settings-page TextBlock.app-window-subtitle">
     <Setter Property="MaxWidth" Value="720" />
   </Style>
@@ -583,10 +610,10 @@
   </Style>
 
   <Style Selector="UserControl.settings-page Border.settings-page-soft-panel">
-    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Surface.Section}" />
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Surface.Card}" />
     <Setter Property="BorderBrush" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
-    <Setter Property="CornerRadius" Value="6" />
+    <Setter Property="CornerRadius" Value="8" />
     <Setter Property="BoxShadow" Value="0 0 0 0 #00000000" />
     <Setter Property="ClipToBounds" Value="False" />
   </Style>

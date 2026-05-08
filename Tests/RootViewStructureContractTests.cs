@@ -77,6 +77,8 @@ public sealed class RootViewStructureContractTests
         Assert.Contains("Classes=\"grouped-card-frame compact task-queue-list-frame\"", text, StringComparison.Ordinal);
         Assert.Contains("Classes=\"grouped-card-footer-action task-queue-card-action\"", text, StringComparison.Ordinal);
         Assert.Contains("Classes=\"grouped-card-footer-action task-queue-card-action grouped-card-footer-post-action task-queue-post-action-row\"", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("task-queue-card-action app-button", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("task-queue-post-action-row app-button", text, StringComparison.Ordinal);
         Assert.DoesNotContain("Classes=\"app-button task-queue-card-action\"", text, StringComparison.Ordinal);
         Assert.Contains("Classes=\"task-queue-list-action-separator\"", text, StringComparison.Ordinal);
         Assert.Contains("<controls:AppSelectionList x:Name=\"TaskListBox\"", text, StringComparison.Ordinal);

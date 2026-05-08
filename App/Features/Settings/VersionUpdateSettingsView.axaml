@@ -44,17 +44,10 @@
 
         <controls:AdaptiveSpacingStackPanel Classes="version-update-card-stack settings-page-column-stack">
           <Grid Classes="settings-page-labeled-row"
-                ColumnDefinitions="132,*">
-            <controls:AdaptiveSpacingStackPanel Classes="settings-page-inline-field-group">
-              <TextBlock Classes="settings-label"
-                         TextWrapping="Wrap">
-                <Run Text="{Binding RootTexts[Settings.VersionUpdate.Channel]}" />
-                <Run Text="&#160;" />
-                <InlineUIContainer BaselineAlignment="Center">
-                  <controls:TooltipHint Tip="{DynamicResource UpdateCheckTip}" />
-                </InlineUIContainer>
-              </TextBlock>
-            </controls:AdaptiveSpacingStackPanel>
+                controls:SettingsLabelWidthCoordinator.GroupKey="VersionUpdate.Main"
+                ColumnDefinitions="Auto,*">
+            <controls:SettingsLabel Text="{Binding RootTexts[Settings.VersionUpdate.Channel]}"
+                                    Tip="{DynamicResource UpdateCheckTip}" />
             <ComboBox Grid.Column="1"
                       Classes="settings-select"
                       Width="{DynamicResource MAA.Size.Settings.FieldSlimWidth}"
@@ -70,17 +63,10 @@
           </Grid>
 
           <Grid Classes="settings-page-labeled-row"
-                ColumnDefinitions="132,*">
-            <controls:AdaptiveSpacingStackPanel Classes="settings-page-inline-field-group">
-              <TextBlock Classes="settings-label"
-                         TextWrapping="Wrap">
-                <Run Text="{Binding RootTexts[Settings.VersionUpdate.Source]}" />
-                <Run Text="&#160;" />
-                <InlineUIContainer BaselineAlignment="Center">
-                  <controls:TooltipHint Tip="{DynamicResource UpdateSourceTip}" />
-                </InlineUIContainer>
-              </TextBlock>
-            </controls:AdaptiveSpacingStackPanel>
+                controls:SettingsLabelWidthCoordinator.GroupKey="VersionUpdate.Main"
+                ColumnDefinitions="Auto,*">
+            <controls:SettingsLabel Text="{Binding RootTexts[Settings.VersionUpdate.Source]}"
+                                    Tip="{DynamicResource UpdateSourceTip}" />
             <ComboBox Grid.Column="1"
                       Classes="settings-select"
                       Width="{DynamicResource MAA.Size.Settings.FieldSlimWidth}"
@@ -106,9 +92,9 @@
                       Spacing="8"
                       IsVisible="{Binding IsVersionUpdateMirrorChyanSource}">
             <Grid Classes="settings-page-labeled-action-row"
-                  ColumnDefinitions="132,*">
-              <TextBlock Classes="settings-label"
-                         Text="{Binding RootTexts[Settings.VersionUpdate.MirrorCdk]}" />
+                  controls:SettingsLabelWidthCoordinator.GroupKey="VersionUpdate.Main"
+                  ColumnDefinitions="Auto,*">
+              <controls:SettingsLabel Text="{Binding RootTexts[Settings.VersionUpdate.MirrorCdk]}" />
               <controls:AppActionInput Grid.Column="1"
                                        Width="{DynamicResource MAA.Size.Settings.FieldSlimWidth}"
                                        HorizontalAlignment="Left"
@@ -128,9 +114,9 @@
           </controls:AdaptiveSpacingStackPanel>
 
           <Grid Classes="settings-page-labeled-row"
-                ColumnDefinitions="132,*">
-            <TextBlock Classes="settings-label"
-                       Text="{Binding RootTexts[Settings.VersionUpdate.ProxyType]}" />
+                controls:SettingsLabelWidthCoordinator.GroupKey="VersionUpdate.Main"
+                ColumnDefinitions="Auto,*">
+            <controls:SettingsLabel Text="{Binding RootTexts[Settings.VersionUpdate.ProxyType]}" />
             <ComboBox Grid.Column="1"
                       Classes="settings-select"
                       Width="{DynamicResource MAA.Size.Settings.FieldNarrowWidth}"
@@ -146,9 +132,9 @@
           </Grid>
 
           <Grid Classes="settings-page-labeled-row"
-                ColumnDefinitions="132,*">
-            <TextBlock Classes="settings-label"
-                       Text="{Binding RootTexts[Settings.VersionUpdate.ProxyAddress]}" />
+                controls:SettingsLabelWidthCoordinator.GroupKey="VersionUpdate.Main"
+                ColumnDefinitions="Auto,*">
+            <controls:SettingsLabel Text="{Binding RootTexts[Settings.VersionUpdate.ProxyAddress]}" />
             <TextBox Grid.Column="1"
                      Classes="settings-input"
                      Width="{DynamicResource MAA.Size.Settings.FieldInputWidth}"
@@ -158,9 +144,9 @@
           </Grid>
 
           <Grid Classes="settings-page-labeled-row"
-                ColumnDefinitions="132,*">
-            <TextBlock Classes="settings-label"
-                       Text="{Binding RootTexts[Settings.VersionUpdate.ResourceApi]}" />
+                controls:SettingsLabelWidthCoordinator.GroupKey="VersionUpdate.Main"
+                ColumnDefinitions="Auto,*">
+            <controls:SettingsLabel Text="{Binding RootTexts[Settings.VersionUpdate.ResourceApi]}" />
             <TextBox Grid.Column="1"
                      Classes="settings-input"
                      Width="{DynamicResource MAA.Size.Settings.FieldInputWidth}"
@@ -178,9 +164,9 @@
                 Padding="18">
           <controls:AdaptiveSpacingStackPanel Classes="version-update-card-stack settings-page-column-stack">
             <Grid Classes="settings-page-labeled-row"
-                  ColumnDefinitions="144,*">
-              <TextBlock Classes="settings-label"
-                         Text="{Binding RootTexts[Settings.VersionUpdate.PanelUiVersion]}" />
+                  controls:SettingsLabelWidthCoordinator.GroupKey="VersionUpdate.Panel"
+                  ColumnDefinitions="Auto,*">
+              <controls:SettingsLabel Text="{Binding RootTexts[Settings.VersionUpdate.PanelUiVersion]}" />
               <TextBlock Grid.Column="1"
                          Classes="app-body"
                          Text="{Binding UpdatePanelUiVersion}"
@@ -188,9 +174,9 @@
             </Grid>
 
             <Grid Classes="settings-page-labeled-row"
-                  ColumnDefinitions="144,*">
-              <TextBlock Classes="settings-label"
-                         Text="{Binding RootTexts[Settings.VersionUpdate.PanelCoreVersion]}" />
+                  controls:SettingsLabelWidthCoordinator.GroupKey="VersionUpdate.Panel"
+                  ColumnDefinitions="Auto,*">
+              <controls:SettingsLabel Text="{Binding RootTexts[Settings.VersionUpdate.PanelCoreVersion]}" />
               <TextBlock Grid.Column="1"
                          Classes="app-body"
                          Text="{Binding UpdatePanelCoreVersion}"
@@ -198,9 +184,9 @@
             </Grid>
 
             <Grid Classes="settings-page-labeled-row"
-                  ColumnDefinitions="144,*">
-              <TextBlock Classes="settings-label"
-                         Text="{Binding RootTexts[Settings.VersionUpdate.PanelResourceVersion]}" />
+                  controls:SettingsLabelWidthCoordinator.GroupKey="VersionUpdate.Panel"
+                  ColumnDefinitions="Auto,*">
+              <controls:SettingsLabel Text="{Binding RootTexts[Settings.VersionUpdate.PanelResourceVersion]}" />
               <TextBlock Grid.Column="1"
                          Classes="app-body"
                          Text="{Binding UpdatePanelResourceVersion}"
@@ -208,9 +194,9 @@
             </Grid>
 
             <Grid Classes="settings-page-labeled-row"
-                  ColumnDefinitions="144,*">
-              <TextBlock Classes="settings-label"
-                         Text="{Binding RootTexts[Settings.VersionUpdate.PanelBuildTime]}" />
+                  controls:SettingsLabelWidthCoordinator.GroupKey="VersionUpdate.Panel"
+                  ColumnDefinitions="Auto,*">
+              <controls:SettingsLabel Text="{Binding RootTexts[Settings.VersionUpdate.PanelBuildTime]}" />
               <TextBlock Grid.Column="1"
                          Classes="app-body"
                          Text="{Binding UpdatePanelBuildTime}"
@@ -218,9 +204,9 @@
             </Grid>
 
             <Grid Classes="settings-page-labeled-row"
-                  ColumnDefinitions="144,*">
-              <TextBlock Classes="settings-label"
-                         Text="{Binding RootTexts[Settings.VersionUpdate.PanelResourceTime]}" />
+                  controls:SettingsLabelWidthCoordinator.GroupKey="VersionUpdate.Panel"
+                  ColumnDefinitions="Auto,*">
+              <controls:SettingsLabel Text="{Binding RootTexts[Settings.VersionUpdate.PanelResourceTime]}" />
               <TextBlock Grid.Column="1"
                          Classes="app-body"
                          Text="{Binding UpdatePanelResourceTime}"

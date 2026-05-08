@@ -37,6 +37,10 @@
     <Style Selector="TextBlock.external-notification-section-title">
       <Setter Property="FontWeight" Value="SemiBold" />
     </Style>
+
+    <Style Selector="controls|AdaptiveSpacingStackPanel.external-notification-field-stack TextBlock.app-caption">
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
   </UserControl.Styles>
 
   <Grid Margin="4"
@@ -346,16 +350,8 @@
           </controls:AdaptiveSpacingStackPanel>
           <controls:AdaptiveSpacingStackPanel Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
                       Classes="external-notification-field-stack settings-page-column-stack">
-            <controls:AdaptiveSpacingStackPanel Classes="settings-page-inline-field-group">
-              <TextBlock Classes="app-caption"
-                         TextWrapping="Wrap">
-                <Run Text="{DynamicResource ExternalNotificationCustomWebhookBody}" />
-                <Run Text="&#160;" />
-                <InlineUIContainer BaselineAlignment="Center">
-                  <controls:TooltipHint Tip="{DynamicResource ExternalNotificationCustomWebhookPlaceholders}" />
-                </InlineUIContainer>
-              </TextBlock>
-            </controls:AdaptiveSpacingStackPanel>
+            <controls:SettingsLabel Text="{DynamicResource ExternalNotificationCustomWebhookBody}"
+                                    Tip="{DynamicResource ExternalNotificationCustomWebhookPlaceholders}" />
             <TextBox Height="120"
                      AcceptsReturn="True"
                      TextWrapping="Wrap"

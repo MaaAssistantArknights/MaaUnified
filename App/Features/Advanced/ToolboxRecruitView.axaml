@@ -34,6 +34,62 @@
     <Style Selector="Button.toolbox-recruit-action">
       <Setter Property="HorizontalAlignment" Value="Stretch" />
     </Style>
+
+    <Style Selector="Border.toolbox-recruit-result-panel">
+      <Setter Property="MinHeight" Value="{DynamicResource MAA.Size.Toolbox.RecruitResultMinHeight}" />
+      <Setter Property="Padding" Value="12" />
+    </Style>
+
+    <Style Selector="StackPanel.toolbox-recruit-result-row-stack">
+      <Setter Property="Spacing" Value="6" />
+    </Style>
+
+    <Style Selector="Border.toolbox-recruit-result-line">
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="0" />
+    </Style>
+
+    <Style Selector="Border.toolbox-recruit-result-line.tag-line">
+      <Setter Property="Margin" Value="0,0,0,2" />
+    </Style>
+
+    <Style Selector="Border.toolbox-recruit-result-token">
+      <Setter Property="Margin" Value="0,0,8,6" />
+      <Setter Property="Padding" Value="9,4" />
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.Dialog.FilterChipBackground}" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="999" />
+    </Style>
+
+    <Style Selector="Border.toolbox-recruit-result-token.level-token">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.PrimaryBackground}" />
+    </Style>
+
+    <Style Selector="Border.toolbox-recruit-result-token.operator-token">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Surface.Section}" />
+    </Style>
+
+    <Style Selector="TextBlock.toolbox-recruit-result-token-text">
+      <Setter Property="FontSize" Value="12.5" />
+      <Setter Property="FontWeight" Value="Medium" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Secondary}" />
+      <Setter Property="TextWrapping" Value="NoWrap" />
+    </Style>
+
+    <Style Selector="Border.toolbox-recruit-result-token.level-token TextBlock.toolbox-recruit-result-token-text">
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Action.PrimaryForeground}" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <Style Selector="Border.toolbox-recruit-result-token.operator-token TextBlock.toolbox-recruit-result-token-text">
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <Style Selector="TextBlock.toolbox-recruit-result-token-text.operator-token-text">
+      <Setter Property="Foreground" Value="{Binding Foreground}" />
+    </Style>
   </UserControl.Styles>
 
   <Grid Margin="{DynamicResource MAA.Thickness.Toolbox.PageMargin}"
@@ -48,31 +104,39 @@
     <StackPanel Grid.Row="1"
                 Margin="0,14,0,0"
                 Classes="toolbox-recruit-section toolbox-recruit-section-stack">
-      <Border MinHeight="{DynamicResource MAA.Size.Toolbox.RecruitResultMinHeight}">
+      <Border Classes="grouped-card-frame toolbox-recruit-result-panel">
         <ScrollViewer VerticalScrollBarVisibility="Auto"
                       HorizontalScrollBarVisibility="Disabled">
           <ItemsControl ItemsSource="{Binding RecruitResultLines}"
                         IsVisible="{Binding HasRecruitResults}">
             <ItemsControl.ItemTemplate>
               <DataTemplate>
-                <StackPanel>
-                  <ItemsControl ItemsSource="{Binding Segments}"
-                                IsVisible="{Binding HasSegments}">
-                    <ItemsControl.ItemsPanel>
-                      <ItemsPanelTemplate>
-                        <WrapPanel />
-                      </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                    <ItemsControl.ItemTemplate>
-                      <DataTemplate>
-                        <TextBlock Margin="0,0,12,0"
-                                   Classes="app-body"
-                                   Foreground="{Binding Foreground}"
-                                   Text="{Binding Text}"
-                                   TextWrapping="NoWrap" />
-                      </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                  </ItemsControl>
+                <StackPanel Classes="toolbox-recruit-result-row-stack">
+                  <Border Classes="toolbox-recruit-result-line"
+                          Classes.tag-line="{Binding IsTagLine}"
+                          Classes.operator-line="{Binding IsOperatorLine}"
+                          IsVisible="{Binding HasSegments}">
+                    <ItemsControl ItemsSource="{Binding Segments}">
+                      <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                          <WrapPanel />
+                        </ItemsPanelTemplate>
+                      </ItemsControl.ItemsPanel>
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                          <Border Classes="toolbox-recruit-result-token"
+                                  Classes.level-token="{Binding IsLevelToken}"
+                                  Classes.tag-token="{Binding IsTagToken}"
+                                  Classes.operator-token="{Binding IsOperatorToken}">
+                            <TextBlock Classes="toolbox-recruit-result-token-text"
+                                       Classes.operator-token-text="{Binding IsOperatorToken}"
+                                       Text="{Binding Text}"
+                                       TextWrapping="NoWrap" />
+                          </Border>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </Border>
                   <Border Height="{Binding SpacerHeight}"
                           Background="Transparent"
                           IsVisible="{Binding HasSpacer}" />

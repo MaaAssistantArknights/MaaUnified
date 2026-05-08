@@ -26,6 +26,9 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
         AppStickyTitleState PresenterState);
 
     private const int BackgroundSectionWarmupIntervalMs = 45;
+    private const int ResizeLayoutSettleDelayMs = 180;
+    private const int ResizeActiveSectionRadius = 1;
+    private const double ResizeFallbackPlaceholderHeight = 96d;
     private const double StickyActivationPadding = 8d;
     private const double StickyTitleTopInset = 0d;
     private const double StickyTitleBottomInset = 0d;
@@ -55,7 +58,9 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
     private static int _backgroundSectionWarmupIndex;
 
     private readonly Dictionary<string, Border> _sectionAnchors = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, Control> _materializedSectionContent = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, TextBlock> _sectionTitleAnchors = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, double> _sectionPlaceholderHeights = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _materializedSections = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, double> _sectionTopCache = new(StringComparer.OrdinalIgnoreCase);
     private ScrollViewer? _sectionScrollViewer;
@@ -73,6 +78,10 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
     private SettingsPageViewModel? _observedViewModel;
     private bool _viewCompositionActive;
     private SettingsPageViewModel? _viewCompositionOwner;
+    private DispatcherTimer? _resizeLayoutSettleTimer;
+    private bool _isResizeLayoutThrottled;
+    private bool _hasObservedResizeLayoutSize;
+    private Size _lastObservedResizeLayoutSize;
     private event PropertyChangedEventHandler? ViewPropertyChanged;
 
     public SettingsView()
@@ -81,6 +90,7 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
         // Legacy local transforms (_stickyCurrentTitleTransform / _stickyIncomingTitleTransform)
         // are now owned by AppStickyTitlePresenter to keep the animation contract centralized.
         StickyTitlePresenter.State = AppStickyTitleState.Hidden;
+        SizeChanged += OnRootSizeChanged;
         AttachedToVisualTree += (_, _) =>
         {
             BindViewModelNotifications();
@@ -95,6 +105,8 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
         };
         DetachedFromVisualTree += (_, _) =>
         {
+            EndResizeLayoutThrottle();
+            _hasObservedResizeLayoutSize = false;
             CancelProgressiveSectionMaterialization();
             CompleteViewComposition();
             if (_sectionContentPanel is not null)
@@ -320,6 +332,7 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
         }
 
         RaiseSectionChromePropertyChanged();
+        ApplyResizeSectionScope();
         Dispatcher.UIThread.Post(ScrollToSelectedSection, DispatcherPriority.Background);
     }
 
@@ -373,11 +386,15 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
 
     private void ResetSectionMaterialization()
     {
+        EndResizeLayoutThrottle(restoreDeferredSections: false);
         foreach (var anchor in _sectionAnchors.Values)
         {
             anchor.Child = null;
+            ClearSectionPlaceholderHeight(anchor);
         }
 
+        _materializedSectionContent.Clear();
+        _sectionPlaceholderHeights.Clear();
         _sectionTitleAnchors.Clear();
         _materializedSections.Clear();
         InvalidateSectionTopCache();
@@ -450,7 +467,8 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
 
         ApplySectionDataContext(key, content);
         MarkSectionWarmupPrepared(key);
-        anchor.Child = content;
+        _materializedSectionContent[key] = content;
+        AttachOrDeferSectionContentForCurrentResizeState(key, anchor, content);
         UpdateSectionTitleAnchor(key, content);
         _materializedSections.Add(key);
         InvalidateSectionTopCache();
@@ -852,6 +870,265 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
         }
     }
 
+    private void OnRootSizeChanged(object? sender, SizeChangedEventArgs e)
+    {
+        if (VisualRoot is null || !_sectionMaterializationInitialized || _sectionAnchors.Count == 0)
+        {
+            return;
+        }
+
+        var currentSize = Bounds.Size;
+        if (currentSize.Width <= 0d || currentSize.Height <= 0d)
+        {
+            return;
+        }
+
+        if (!_hasObservedResizeLayoutSize)
+        {
+            _hasObservedResizeLayoutSize = true;
+            _lastObservedResizeLayoutSize = currentSize;
+            return;
+        }
+
+        if (Math.Abs(currentSize.Width - _lastObservedResizeLayoutSize.Width) < 0.5d
+            && Math.Abs(currentSize.Height - _lastObservedResizeLayoutSize.Height) < 0.5d)
+        {
+            return;
+        }
+
+        _lastObservedResizeLayoutSize = currentSize;
+        BeginResizeLayoutThrottle();
+        RestartResizeLayoutSettleTimer();
+    }
+
+    private void BeginResizeLayoutThrottle()
+    {
+        _isResizeLayoutThrottled = true;
+        RecordMaterializedSectionHeights();
+        ApplyResizeSectionScope();
+    }
+
+    private void RestartResizeLayoutSettleTimer()
+    {
+        _resizeLayoutSettleTimer ??= CreateResizeLayoutSettleTimer();
+        _resizeLayoutSettleTimer.Stop();
+        _resizeLayoutSettleTimer.Start();
+    }
+
+    private DispatcherTimer CreateResizeLayoutSettleTimer()
+    {
+        var timer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(ResizeLayoutSettleDelayMs),
+        };
+        timer.Tick += OnResizeLayoutSettleTimerTick;
+        return timer;
+    }
+
+    private void OnResizeLayoutSettleTimerTick(object? sender, EventArgs e)
+    {
+        _resizeLayoutSettleTimer?.Stop();
+        EndResizeLayoutThrottle();
+    }
+
+    private void EndResizeLayoutThrottle(bool restoreDeferredSections = true)
+    {
+        _resizeLayoutSettleTimer?.Stop();
+        if (!_isResizeLayoutThrottled)
+        {
+            return;
+        }
+
+        var scrollPosition = CaptureCurrentSectionScrollPosition();
+        _isResizeLayoutThrottled = false;
+        if (!restoreDeferredSections)
+        {
+            return;
+        }
+
+        RestoreAllMaterializedSectionContent();
+        InvalidateSectionTopCache();
+        Dispatcher.UIThread.Post(
+            () =>
+            {
+                if (VisualRoot is null)
+                {
+                    return;
+                }
+
+                if (!RestoreSectionScrollPosition(scrollPosition))
+                {
+                    RefreshSectionTopCacheIfNeeded();
+                    UpdateStickyTitlePresentation();
+                }
+            },
+            DispatcherPriority.Loaded);
+    }
+
+    private void RecordMaterializedSectionHeights()
+    {
+        foreach (var sectionKey in _materializedSections)
+        {
+            if (!_sectionAnchors.TryGetValue(sectionKey, out var anchor))
+            {
+                continue;
+            }
+
+            var height = ResolveSectionPlaceholderHeight(anchor);
+            if (height > 0d)
+            {
+                _sectionPlaceholderHeights[sectionKey] = height;
+            }
+        }
+    }
+
+    private double ResolveSectionPlaceholderHeight(Border anchor)
+    {
+        var height = Math.Max(anchor.Bounds.Height, anchor.DesiredSize.Height);
+        if (height > 0d)
+        {
+            return height;
+        }
+
+        if (anchor.Child is Control child)
+        {
+            return Math.Max(child.Bounds.Height, child.DesiredSize.Height);
+        }
+
+        return 0d;
+    }
+
+    private void ApplyResizeSectionScope()
+    {
+        if (!_isResizeLayoutThrottled)
+        {
+            return;
+        }
+
+        foreach (var sectionKey in _materializedSections)
+        {
+            if (!_sectionAnchors.TryGetValue(sectionKey, out var anchor)
+                || !_materializedSectionContent.TryGetValue(sectionKey, out var content))
+            {
+                continue;
+            }
+
+            if (ShouldKeepSectionAttachedDuringResize(sectionKey))
+            {
+                AttachSectionContent(sectionKey, anchor, content);
+            }
+            else
+            {
+                DeferSectionContentForResize(sectionKey, anchor, content);
+            }
+        }
+
+        InvalidateSectionTopCache();
+        QueueSectionLayoutRefresh();
+    }
+
+    private void AttachOrDeferSectionContentForCurrentResizeState(string key, Border anchor, Control content)
+    {
+        if (!_isResizeLayoutThrottled
+            || ShouldKeepSectionAttachedDuringResize(key))
+        {
+            AttachSectionContent(key, anchor, content);
+            return;
+        }
+
+        DeferSectionContentForResize(key, anchor, content);
+    }
+
+    private void AttachSectionContent(string key, Border anchor, Control content)
+    {
+        ClearSectionPlaceholderHeight(anchor);
+        if (!ReferenceEquals(anchor.Child, content))
+        {
+            anchor.Child = content;
+        }
+
+        UpdateSectionTitleAnchor(key, content);
+    }
+
+    private void DeferSectionContentForResize(string key, Border anchor, Control content)
+    {
+        if (ReferenceEquals(anchor.Child, content))
+        {
+            var measuredHeight = ResolveSectionPlaceholderHeight(anchor);
+            if (measuredHeight > 0d)
+            {
+                _sectionPlaceholderHeights[key] = measuredHeight;
+            }
+
+            anchor.Child = null;
+        }
+
+        var placeholderHeight = _sectionPlaceholderHeights.TryGetValue(key, out var height) && height > 0d
+            ? height
+            : ResizeFallbackPlaceholderHeight;
+        SetSectionPlaceholderHeight(anchor, placeholderHeight);
+    }
+
+    private void RestoreAllMaterializedSectionContent()
+    {
+        foreach (var sectionKey in _materializedSections)
+        {
+            if (!_sectionAnchors.TryGetValue(sectionKey, out var anchor)
+                || !_materializedSectionContent.TryGetValue(sectionKey, out var content))
+            {
+                continue;
+            }
+
+            AttachSectionContent(sectionKey, anchor, content);
+        }
+    }
+
+    private bool ShouldKeepSectionAttachedDuringResize(string key)
+    {
+        var activeIndex = ResolveSelectedSectionIndex();
+        var candidateIndex = ResolveSectionIndex(key);
+        if (activeIndex < 0 || candidateIndex < 0)
+        {
+            return true;
+        }
+
+        return Math.Abs(candidateIndex - activeIndex) <= ResizeActiveSectionRadius;
+    }
+
+    private int ResolveSelectedSectionIndex()
+    {
+        var selectedKey = VM?.SelectedSection?.Key;
+        return string.IsNullOrWhiteSpace(selectedKey)
+            ? -1
+            : ResolveSectionIndex(selectedKey);
+    }
+
+    private static int ResolveSectionIndex(string key)
+    {
+        for (var i = 0; i < SectionOrder.Length; i++)
+        {
+            if (string.Equals(SectionOrder[i], key, StringComparison.OrdinalIgnoreCase))
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    private static void SetSectionPlaceholderHeight(Border anchor, double height)
+    {
+        var resolvedHeight = Math.Max(1d, height);
+        anchor.Height = resolvedHeight;
+        anchor.MinHeight = resolvedHeight;
+    }
+
+    private static void ClearSectionPlaceholderHeight(Border anchor)
+    {
+        anchor.Height = double.NaN;
+        anchor.MinHeight = 0d;
+    }
+
     private void ScrollToSelectedSection()
     {
         var vm = VM;
@@ -864,6 +1141,7 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
 
         if (EnsureSectionsThrough(vm.SelectedSection.Key))
         {
+            ApplyResizeSectionScope();
             QueueScrollToSelectedSectionAfterLayout();
             return;
         }
@@ -998,6 +1276,7 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
 
         SuppressSectionSelectionChangedOnce();
         vm.SelectedSection = candidate;
+        ApplyResizeSectionScope();
     }
 
     private void SuppressSectionSelectionChangedOnce()

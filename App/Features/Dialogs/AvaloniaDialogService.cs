@@ -373,13 +373,13 @@ public sealed class AvaloniaDialogService : IAppDialogService
                 return;
             }
 
-            if (Dispatcher.UIThread.CheckAccess() || Avalonia.Application.Current is null)
+            if (Avalonia.Application.Current is null)
             {
                 Apply(e.CurrentLanguage);
                 return;
             }
 
-            Dispatcher.UIThread.Post(() => Apply(e.CurrentLanguage));
+            Dispatcher.UIThread.Post(() => Apply(e.CurrentLanguage), DispatcherPriority.Background);
         }
 
         private void Apply(string? language)

@@ -76,18 +76,10 @@
                     Classes="start-settings-stack settings-page-column-stack"
                     IsVisible="{Binding CanEditEmulatorLaunchSettings}">
           <Grid Classes="settings-page-labeled-action-row"
-                ColumnDefinitions="132,*">
-            <controls:AdaptiveSpacingStackPanel Classes="settings-page-inline-field-group">
-              <TextBlock Classes="settings-label"
-                         VerticalAlignment="Center"
-                         TextWrapping="Wrap">
-                <Run Text="{Binding RootTexts[Settings.Start.EmulatorPath]}" />
-                <Run Text="&#160;" />
-                <InlineUIContainer BaselineAlignment="Center">
-                  <controls:TooltipHint Tip="{Binding RootTexts[Settings.Start.EmulatorPathTip]}" />
-                </InlineUIContainer>
-              </TextBlock>
-            </controls:AdaptiveSpacingStackPanel>
+                controls:SettingsLabelWidthCoordinator.GroupKey="Start.Emulator"
+                ColumnDefinitions="Auto,*">
+            <controls:SettingsLabel Text="{Binding RootTexts[Settings.Start.EmulatorPath]}"
+                                    Tip="{Binding RootTexts[Settings.Start.EmulatorPathTip]}" />
             <controls:AppActionInput Grid.Column="1"
                                      Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
                                      HorizontalAlignment="Left"
@@ -97,18 +89,10 @@
           </Grid>
 
           <Grid Classes="settings-page-labeled-row"
-                ColumnDefinitions="132,*">
-            <controls:AdaptiveSpacingStackPanel Classes="settings-page-inline-field-group">
-              <TextBlock Classes="settings-label"
-                         VerticalAlignment="Center"
-                         TextWrapping="Wrap">
-                <Run Text="{Binding RootTexts[Settings.Start.EmulatorExtraArgs]}" />
-                <Run Text="&#160;" />
-                <InlineUIContainer BaselineAlignment="Center">
-                  <controls:TooltipHint Tip="{Binding RootTexts[Settings.Start.EmulatorExtraArgsTip]}" />
-                </InlineUIContainer>
-              </TextBlock>
-            </controls:AdaptiveSpacingStackPanel>
+                controls:SettingsLabelWidthCoordinator.GroupKey="Start.Emulator"
+                ColumnDefinitions="Auto,*">
+            <controls:SettingsLabel Text="{Binding RootTexts[Settings.Start.EmulatorExtraArgs]}"
+                                    Tip="{Binding RootTexts[Settings.Start.EmulatorExtraArgsTip]}" />
             <TextBox Grid.Column="1"
                      Classes="settings-input"
                      IsEnabled="{Binding CanEditEmulatorLaunchSettings}"
@@ -116,9 +100,9 @@
           </Grid>
 
           <Grid Classes="settings-page-labeled-row"
-                ColumnDefinitions="132,*">
-            <TextBlock Classes="settings-label"
-                       Text="{Binding RootTexts[Settings.Start.EmulatorWaitSeconds]}" />
+                controls:SettingsLabelWidthCoordinator.GroupKey="Start.Emulator"
+                ColumnDefinitions="Auto,*">
+            <controls:SettingsLabel Text="{Binding RootTexts[Settings.Start.EmulatorWaitSeconds]}" />
             <controls:AdaptiveSpacingStackPanel Grid.Column="1"
                         Spacing="6">
               <controls:AppNumberInput

@@ -23,9 +23,9 @@
                 Classes="settings-page-flow"
                 Margin="{DynamicResource MAA.Thickness.Settings.SectionTopMargin}">
       <Grid Classes="settings-page-labeled-row"
-            ColumnDefinitions="132,*">
-        <TextBlock Classes="settings-label"
-                   Text="{Binding RootTexts[Settings.ConfigurationManager.ProfileName]}" />
+            controls:SettingsLabelWidthCoordinator.GroupKey="ConfigurationManager.Main"
+            ColumnDefinitions="Auto,*">
+        <controls:SettingsLabel Text="{Binding RootTexts[Settings.ConfigurationManager.ProfileName]}" />
         <ComboBox Grid.Column="1"
                   Classes="settings-select configuration-manager-profile-picker"
                   Width="{DynamicResource MAA.Size.Settings.ColumnWidth}"
@@ -62,9 +62,9 @@
       </Grid>
 
       <Grid Classes="settings-page-labeled-action-row"
-            ColumnDefinitions="132,*">
-        <TextBlock Classes="settings-label"
-                   Text="{Binding RootTexts[Settings.ConfigurationManager.SaveAsNew]}" />
+            controls:SettingsLabelWidthCoordinator.GroupKey="ConfigurationManager.Main"
+            ColumnDefinitions="Auto,*">
+        <controls:SettingsLabel Text="{Binding RootTexts[Settings.ConfigurationManager.SaveAsNew]}" />
         <Grid Grid.Column="1"
               HorizontalAlignment="Left"
               ColumnDefinitions="Auto,Auto">

@@ -23,9 +23,9 @@
       </Border>
 
       <Grid Classes="settings-page-labeled-row"
-            ColumnDefinitions="132,*">
-        <TextBlock Classes="settings-label"
-                   Text="{Binding RootTexts[Settings.RemoteControl.GetTaskEndpoint]}" />
+            controls:SettingsLabelWidthCoordinator.GroupKey="RemoteControl.Main"
+            ColumnDefinitions="Auto,*">
+        <controls:SettingsLabel Text="{Binding RootTexts[Settings.RemoteControl.GetTaskEndpoint]}" />
         <TextBox Grid.Column="1"
                  Classes="settings-input"
                  Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
@@ -35,9 +35,9 @@
       </Grid>
 
       <Grid Classes="settings-page-labeled-row"
-            ColumnDefinitions="132,*">
-        <TextBlock Classes="settings-label"
-                   Text="{Binding RootTexts[Settings.RemoteControl.ReportTaskEndpoint]}" />
+            controls:SettingsLabelWidthCoordinator.GroupKey="RemoteControl.Main"
+            ColumnDefinitions="Auto,*">
+        <controls:SettingsLabel Text="{Binding RootTexts[Settings.RemoteControl.ReportTaskEndpoint]}" />
         <TextBox Grid.Column="1"
                  Classes="settings-input"
                  Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
@@ -47,9 +47,9 @@
       </Grid>
 
       <Grid Classes="settings-page-labeled-row"
-            ColumnDefinitions="132,*">
-        <TextBlock Classes="settings-label"
-                   Text="{Binding RootTexts[Settings.RemoteControl.PollIntervalMs]}" />
+            controls:SettingsLabelWidthCoordinator.GroupKey="RemoteControl.Main"
+            ColumnDefinitions="Auto,*">
+        <controls:SettingsLabel Text="{Binding RootTexts[Settings.RemoteControl.PollIntervalMs]}" />
         <controls:AppNumberInput Grid.Column="1"
                                         Width="{DynamicResource MAA.Size.Settings.FieldNarrowWidth}"
                                         HorizontalAlignment="Left"
@@ -59,9 +59,9 @@
       </Grid>
 
       <Grid Classes="settings-page-labeled-action-row"
-            ColumnDefinitions="132,*">
-        <TextBlock Classes="settings-label"
-                   Text="{Binding RootTexts[Settings.RemoteControl.UserIdentity]}" />
+            controls:SettingsLabelWidthCoordinator.GroupKey="RemoteControl.Main"
+            ColumnDefinitions="Auto,*">
+        <controls:SettingsLabel Text="{Binding RootTexts[Settings.RemoteControl.UserIdentity]}" />
         <controls:AdaptiveSpacingStackPanel Grid.Column="1"
                     Classes="settings-page-inline-field-group">
           <controls:AppActionInput Width="{DynamicResource MAA.Size.Settings.FieldInputWidth}"
@@ -74,9 +74,9 @@
       </Grid>
 
       <Grid Classes="settings-page-labeled-action-row"
-            ColumnDefinitions="132,*">
-        <TextBlock Classes="settings-label"
-                   Text="{Binding RootTexts[Settings.RemoteControl.DeviceIdentity]}" />
+            controls:SettingsLabelWidthCoordinator.GroupKey="RemoteControl.Main"
+            ColumnDefinitions="Auto,*">
+        <controls:SettingsLabel Text="{Binding RootTexts[Settings.RemoteControl.DeviceIdentity]}" />
         <controls:AppActionInput Grid.Column="1"
                                  Width="{DynamicResource RemoteControlDeviceIdentityInputWidth}"
                                  HorizontalAlignment="Left"

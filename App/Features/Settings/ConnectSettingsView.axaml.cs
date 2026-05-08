@@ -506,7 +506,7 @@ public partial class ConnectSettingsView : UserControl
             return;
         }
 
-        Dispatcher.UIThread.Post(UpdateScreenshotPreviewWindowChrome);
+        Dispatcher.UIThread.Post(UpdateScreenshotPreviewWindowChrome, DispatcherPriority.Background);
     }
 
     private void UpdateScreenshotPreviewWindowChrome()

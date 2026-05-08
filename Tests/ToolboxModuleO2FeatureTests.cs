@@ -222,6 +222,57 @@ public sealed class ToolboxModuleO2FeatureTests
     }
 
     [Fact]
+    public async Task StartDepotAsync_ShouldClearPreviousResultsBeforeRecognition()
+    {
+        var globalSeeds = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [LegacyConfigurationKeys.DepotResult] = "{\"done\":true,\"data\":\"{\\\"2001\\\":123}\"}",
+        };
+
+        await using var fixture = await ToolboxTestFixture.CreateAsync(globalSeeds);
+        var vm = new ToolboxPageViewModel(fixture.Runtime, fixture.ConnectionState);
+        await vm.InitializeAsync();
+        Assert.Single(vm.DepotResult);
+
+        var changed = new List<string?>();
+        vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+
+        await vm.StartDepotAsync();
+
+        Assert.Empty(vm.DepotResult);
+        Assert.False(vm.HasDepotResult);
+        Assert.DoesNotContain("2001", vm.ArkPlannerResult, StringComparison.Ordinal);
+        Assert.DoesNotContain("2001", vm.LoliconResult, StringComparison.Ordinal);
+        Assert.Contains(nameof(ToolboxPageViewModel.ArkPlannerResult), changed);
+        Assert.Contains(nameof(ToolboxPageViewModel.LoliconResult), changed);
+        Assert.Equal(ToolboxExecutionState.Executing, vm.ExecutionState);
+        Assert.Equal("Depot", Assert.Single(fixture.Bridge.AppendedTasks).Type);
+    }
+
+    [Fact]
+    public async Task StartToolAsync_WhenToolboxBusy_ShouldShowDedicatedBusyDialogWithoutAppending()
+    {
+        await using var fixture = await ToolboxTestFixture.CreateAsync();
+        var dialogService = new RecordingDialogService(DialogReturnSemantic.Cancel);
+        var vm = new ToolboxPageViewModel(fixture.Runtime, fixture.ConnectionState, dialogService);
+        await vm.InitializeAsync();
+
+        await vm.StartRecruitAsync();
+        await vm.StartDepotAsync();
+
+        Assert.Equal(1, dialogService.WarningConfirmCallCount);
+        Assert.Equal("Toolbox.Busy", dialogService.LastScope);
+        Assert.NotNull(dialogService.LastRequest);
+        Assert.Contains("正在执行", dialogService.LastRequest!.Title, StringComparison.Ordinal);
+        Assert.Contains("招募识别", dialogService.LastRequest.Message, StringComparison.Ordinal);
+        var appendedTask = Assert.Single(fixture.Bridge.AppendedTasks);
+        Assert.Equal("Recruit", appendedTask.Type);
+        Assert.Equal("Toolbox", fixture.Runtime.SessionService.CurrentRunOwner);
+        Assert.Equal(ToolboxExecutionState.Executing, vm.ExecutionState);
+        Assert.Equal(UiErrorCode.ToolboxExecutionFailed, vm.LastExecutionErrorCode);
+    }
+
+    [Fact]
     public async Task StartGachaAsync_ShouldStartCustomTaskAndAutoPeep()
     {
         await using var fixture = await ToolboxTestFixture.CreateAsync();

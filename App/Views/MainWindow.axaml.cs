@@ -372,13 +372,7 @@ public partial class MainWindow : Window
 
     private void OnUiLanguageChanged(object? sender, UiLanguageChangedEventArgs e)
     {
-        if (!Dispatcher.UIThread.CheckAccess())
-        {
-            Dispatcher.UIThread.Post(RefreshLocalizedLayout, DispatcherPriority.Loaded);
-            return;
-        }
-
-        RefreshLocalizedLayout();
+        Dispatcher.UIThread.Post(RefreshLocalizedLayout, DispatcherPriority.Background);
     }
 
     private void RefreshLocalizedLayout()

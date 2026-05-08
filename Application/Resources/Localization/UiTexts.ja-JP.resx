@@ -431,6 +431,33 @@
   <data name="Infrast.Drones" xml:space="preserve">
     <value>ドローン戦略</value>
   </data>
+  <data name="Control" xml:space="preserve">
+    <value>制御中枢</value>
+  </data>
+  <data name="Dorm" xml:space="preserve">
+    <value>宿舎</value>
+  </data>
+  <data name="Mfg" xml:space="preserve">
+    <value>製造所</value>
+  </data>
+  <data name="Office" xml:space="preserve">
+    <value>事務室</value>
+  </data>
+  <data name="Power" xml:space="preserve">
+    <value>発電所</value>
+  </data>
+  <data name="Processing" xml:space="preserve">
+    <value>加工所</value>
+  </data>
+  <data name="Reception" xml:space="preserve">
+    <value>応接室</value>
+  </data>
+  <data name="Trade" xml:space="preserve">
+    <value>貿易所</value>
+  </data>
+  <data name="Training" xml:space="preserve">
+    <value>訓練室</value>
+  </data>
   <data name="Infrast.Error.CustomFileNotFound" xml:space="preserve">
     <value>カスタム基地構成ファイルが見つかりません：{0}</value>
   </data>
@@ -3069,6 +3096,21 @@
   </data>
   <data name="Toolbox.Error.ToolboxBusy" xml:space="preserve">
     <value>Toolbox で既にタスクが実行中です。先に停止してください。</value>
+  </data>
+  <data name="Toolbox.BusyDialog.CloseButton" xml:space="preserve">
+    <value>了解</value>
+  </data>
+  <data name="Toolbox.BusyDialog.CurrentTask" xml:space="preserve">
+    <value>現在のタスク</value>
+  </data>
+  <data name="Toolbox.BusyDialog.Message" xml:space="preserve">
+    <value>{0} はまだ実行中です。新しいツールタスクを開始する前に停止してください。</value>
+  </data>
+  <data name="Toolbox.BusyDialog.StopButton" xml:space="preserve">
+    <value>現在のタスクを停止</value>
+  </data>
+  <data name="Toolbox.BusyDialog.Title" xml:space="preserve">
+    <value>Toolbox は実行中です</value>
   </data>
   <data name="Toolbox.ExecutionReview.HistoryLabel" xml:space="preserve">
     <value>履歴</value>

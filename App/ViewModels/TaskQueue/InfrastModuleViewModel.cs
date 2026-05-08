@@ -617,7 +617,19 @@ public sealed class InfrastModuleViewModel : TaskModuleSettingsViewModelBase
         OnPropertyChanged(nameof(SelectedModeOption));
         OnPropertyChanged(nameof(SelectedDroneOption));
         OnPropertyChanged(nameof(SelectedDefaultInfrastOption));
+        RefreshFacilityDisplayNames();
     }
+
+    private void RefreshFacilityDisplayNames()
+    {
+        foreach (var option in FacilityOptions)
+        {
+            option.DisplayName = ResolveFacilityDisplayName(option.Value);
+        }
+    }
+
+    private string ResolveFacilityDisplayName(string value)
+        => Texts.GetOrDefault(value, value);
 
     private void ConfigureFacilityOptions(IEnumerable<string> enabledFacilities)
     {
@@ -648,7 +660,7 @@ public sealed class InfrastModuleViewModel : TaskModuleSettingsViewModelBase
             FacilityOptions.Clear();
             foreach (var name in orderedNames)
             {
-                var option = new FacilityOption(name, name)
+                var option = new FacilityOption(name, ResolveFacilityDisplayName(name))
                 {
                     IsSelected = enabledSet.Contains(name),
                 };
@@ -876,16 +888,21 @@ public sealed class InfrastModuleViewModel : TaskModuleSettingsViewModelBase
     public sealed class FacilityOption : ObservableObject
     {
         private bool _isSelected;
+        private string _displayName;
 
         public FacilityOption(string value, string displayName)
         {
             Value = value;
-            DisplayName = displayName;
+            _displayName = displayName;
         }
 
         public string Value { get; }
 
-        public string DisplayName { get; }
+        public string DisplayName
+        {
+            get => _displayName;
+            set => SetProperty(ref _displayName, value);
+        }
 
         public bool IsSelected
         {

@@ -84,6 +84,7 @@ public sealed class MainShellViewModel : ObservableObject
     private bool _achievementToastStartupCompleted;
     private bool _isWindowUpdateOverlayPresented;
     private bool _isWindowUpdateOverlayAnimationHidden = true;
+    private bool _isShellBlockingOperationOverlayVisible;
     private bool _hasBlockingConfigIssues;
     private int _blockingConfigIssueCount;
     private SessionState _currentSessionState;
@@ -274,6 +275,10 @@ public sealed class MainShellViewModel : ObservableObject
     public bool IsSettingsRootTabSelected => SelectedRootTabIndex == 3;
 
     public bool ShowWindowOverlayButton => IsTaskQueueRootTabSelected || IsCopilotRootTabSelected;
+
+    public bool IsBlockingOperationOverlayVisible =>
+        _isShellBlockingOperationOverlayVisible ||
+        (TryGetSettingsPage(out var settingsPage) && settingsPage.IsBlockingOperationOverlayVisible);
 
     public bool IsWindowTopMost
     {
@@ -1214,6 +1219,7 @@ public sealed class MainShellViewModel : ObservableObject
         page.ResourceVersionUpdated += OnSettingsResourceVersionUpdated;
         page.UpdateAvailabilityChanged += OnSettingsUpdateAvailabilityChanged;
         page.ConfigurationContextChanged += OnSettingsConfigurationContextChanged;
+        page.PropertyChanged += OnSettingsPagePropertyChanged;
         page.ApplyStartupSnapshot(BuildLatestShellSnapshot());
         ApplySettingsUpdateAvailabilityState(page);
 
@@ -1684,6 +1690,29 @@ public sealed class MainShellViewModel : ObservableObject
         }
     }
 
+    private void SetShellBlockingOperationOverlayVisible(bool visible)
+    {
+        if (_isShellBlockingOperationOverlayVisible == visible)
+        {
+            return;
+        }
+
+        _isShellBlockingOperationOverlayVisible = visible;
+        OnPropertyChanged(nameof(IsBlockingOperationOverlayVisible));
+    }
+
+    private static Task WaitForBlockingOperationOverlayRenderAsync()
+    {
+        if (Avalonia.Application.Current is null || !Dispatcher.UIThread.CheckAccess())
+        {
+            return Task.CompletedTask;
+        }
+
+        return Dispatcher.UIThread.InvokeAsync(
+            static () => { },
+            DispatcherPriority.Loaded).GetTask();
+    }
+
     public void SetAchievementToastWindowVisible(bool visible)
     {
         _achievementToastWindowVisible = visible;
@@ -1927,6 +1956,14 @@ public sealed class MainShellViewModel : ObservableObject
             .GetTask()
             .GetAwaiter()
             .GetResult();
+    }
+
+    private void OnSettingsPagePropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (string.Equals(e.PropertyName, nameof(SettingsPageViewModel.IsBlockingOperationOverlayVisible), StringComparison.Ordinal))
+        {
+            OnPropertyChanged(nameof(IsBlockingOperationOverlayVisible));
+        }
     }
 
     private async void OnSettingsConfigurationContextChanged(object? sender, ConfigurationContextChangedEventArgs e)
@@ -2948,12 +2985,14 @@ public sealed class MainShellViewModel : ObservableObject
         string previousLanguage,
         string nextLanguage)
     {
-        if (Dispatcher.UIThread.CheckAccess() || Avalonia.Application.Current is null)
+        if (Avalonia.Application.Current is null)
         {
             return ApplyCoordinatedLanguageChangeAsync(previousLanguage, nextLanguage);
         }
 
-        return Dispatcher.UIThread.InvokeAsync(() => ApplyCoordinatedLanguageChangeAsync(previousLanguage, nextLanguage));
+        return Dispatcher.UIThread.InvokeAsync(
+            () => ApplyCoordinatedLanguageChangeAsync(previousLanguage, nextLanguage),
+            DispatcherPriority.Background);
     }
 
     private async Task ApplyCoordinatedLanguageChangeAsync(
@@ -2964,15 +3003,21 @@ public sealed class MainShellViewModel : ObservableObject
         CurrentShellLanguage = nextLanguage;
         _runtime.AchievementTrackerService.SetCurrentLanguage(nextLanguage);
         RootTexts.Language = nextLanguage;
+        await YieldForBlockingOperationOverlayFrameAsync();
+
         TaskQueuePage.SetLanguage(nextLanguage);
+        await YieldForBlockingOperationOverlayFrameAsync();
+
         if (TryGetCopilotPage(out var copilotPage))
         {
             copilotPage.SetLanguage(nextLanguage);
+            await YieldForBlockingOperationOverlayFrameAsync();
         }
 
         if (TryGetToolboxPage(out var toolboxPage))
         {
             toolboxPage.SetLanguage(nextLanguage);
+            await YieldForBlockingOperationOverlayFrameAsync();
         }
 
         if (TryGetSettingsPage(out var settingsPage))
@@ -2982,6 +3027,7 @@ public sealed class MainShellViewModel : ObservableObject
                 settingsPage.StartSelf,
                 ReportLocalizationFallback);
             ApplySettingsUpdateAvailabilityState(settingsPage);
+            await YieldForBlockingOperationOverlayFrameAsync();
         }
 
         RefreshRootTextState();
@@ -2998,48 +3044,69 @@ public sealed class MainShellViewModel : ObservableObject
         }
     }
 
+    private static Task YieldForBlockingOperationOverlayFrameAsync()
+    {
+        if (Avalonia.Application.Current is null || !Dispatcher.UIThread.CheckAccess())
+        {
+            return Task.CompletedTask;
+        }
+
+        return Dispatcher.UIThread.InvokeAsync(
+            static () => { },
+            DispatcherPriority.Loaded).GetTask();
+    }
+
     private async Task SwitchLanguageCoreAsync(
         string? targetLanguage,
         string successScope,
         string? source,
         CancellationToken cancellationToken)
     {
-        var switchResult = await _runtime.ShellFeatureService.SwitchLanguageAsync(
-            CurrentShellLanguage,
-            targetLanguage,
-            cancellationToken);
-        if (!switchResult.Success || string.IsNullOrWhiteSpace(switchResult.Value))
+        SetShellBlockingOperationOverlayVisible(true);
+        try
         {
-            PushGrowl(switchResult.Message);
-            _ = await ApplyResultAsync(
-                UiOperationResult.Fail(
-                    switchResult.Error?.Code ?? UiErrorCode.LanguageSwitchFailed,
-                    switchResult.Message,
-                    switchResult.Error?.Details),
-                successScope,
+            await WaitForBlockingOperationOverlayRenderAsync();
+            var switchResult = await _runtime.ShellFeatureService.SwitchLanguageAsync(
+                CurrentShellLanguage,
+                targetLanguage,
                 cancellationToken);
-            return;
-        }
+            if (!switchResult.Success || string.IsNullOrWhiteSpace(switchResult.Value))
+            {
+                PushGrowl(switchResult.Message);
+                _ = await ApplyResultAsync(
+                    UiOperationResult.Fail(
+                        switchResult.Error?.Code ?? UiErrorCode.LanguageSwitchFailed,
+                        switchResult.Message,
+                        switchResult.Error?.Details),
+                    successScope,
+                    cancellationToken);
+                return;
+            }
 
-        var next = switchResult.Value;
-        var changeResult = await _runtime.UiLanguageCoordinator.ChangeLanguageAsync(next, cancellationToken);
-        var appliedLanguage = await ApplyResultAsync(changeResult, successScope, cancellationToken);
-        if (appliedLanguage is null)
+            var next = switchResult.Value;
+            var changeResult = await ChangeLanguageCoordinatorAsync(next, cancellationToken);
+            var appliedLanguage = await ApplyResultAsync(changeResult, successScope, cancellationToken);
+            if (appliedLanguage is null)
+            {
+                return;
+            }
+
+            await _pendingLanguageApplyTask;
+
+            PushGrowl($"语言切换为: {next}");
+
+            var message = source is null
+                ? $"Language switched to {next}."
+                : $"source={source}; target={(string.IsNullOrWhiteSpace(targetLanguage) ? "cycle" : targetLanguage)}; result={next}";
+            await RecordEventAsync(
+                successScope,
+                message,
+                cancellationToken);
+        }
+        finally
         {
-            return;
+            SetShellBlockingOperationOverlayVisible(false);
         }
-
-        await _pendingLanguageApplyTask;
-
-        PushGrowl($"语言切换为: {next}");
-
-        var message = source is null
-            ? $"Language switched to {next}."
-            : $"source={source}; target={(string.IsNullOrWhiteSpace(targetLanguage) ? "cycle" : targetLanguage)}; result={next}";
-        await RecordEventAsync(
-            successScope,
-            message,
-            cancellationToken);
     }
 
     private async Task SyncLanguageCoordinatorWithConfigAsync(CancellationToken cancellationToken = default)
@@ -3053,6 +3120,20 @@ public sealed class MainShellViewModel : ObservableObject
         var result = await _runtime.UiLanguageCoordinator.ChangeLanguageAsync(normalized, cancellationToken);
         await ApplyResultAsync(result, "App.Shell.Language.SyncFromConfig", cancellationToken);
         await _pendingLanguageApplyTask;
+    }
+
+    private Task<UiOperationResult<string>> ChangeLanguageCoordinatorAsync(
+        string targetLanguage,
+        CancellationToken cancellationToken)
+    {
+        if (Avalonia.Application.Current is null || !Dispatcher.UIThread.CheckAccess())
+        {
+            return _runtime.UiLanguageCoordinator.ChangeLanguageAsync(targetLanguage, cancellationToken);
+        }
+
+        return Task.Run(
+            () => _runtime.UiLanguageCoordinator.ChangeLanguageAsync(targetLanguage, cancellationToken),
+            cancellationToken);
     }
 
     private void RefreshRootPageHostStatusText()

@@ -1042,6 +1042,33 @@ Do not adjust the proxy multiplier setting in the game</value>
   <data name="Infrast.Drones" xml:space="preserve">
     <value>Drones</value>
   </data>
+  <data name="Control" xml:space="preserve">
+    <value>Control Center</value>
+  </data>
+  <data name="Dorm" xml:space="preserve">
+    <value>Dormitory</value>
+  </data>
+  <data name="Mfg" xml:space="preserve">
+    <value>Factory</value>
+  </data>
+  <data name="Office" xml:space="preserve">
+    <value>Office</value>
+  </data>
+  <data name="Power" xml:space="preserve">
+    <value>Power Plant</value>
+  </data>
+  <data name="Processing" xml:space="preserve">
+    <value>Workshop</value>
+  </data>
+  <data name="Reception" xml:space="preserve">
+    <value>Reception Room</value>
+  </data>
+  <data name="Trade" xml:space="preserve">
+    <value>Trading Post</value>
+  </data>
+  <data name="Training" xml:space="preserve">
+    <value>Training Room</value>
+  </data>
   <data name="Infrast.Error.CustomFileNotFound" xml:space="preserve">
     <value>Custom file not found: {0}</value>
   </data>
@@ -4666,6 +4693,21 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
   </data>
   <data name="Toolbox.Error.ToolboxBusy" xml:space="preserve">
     <value>Toolbox already has a running task. Stop it first.</value>
+  </data>
+  <data name="Toolbox.BusyDialog.CloseButton" xml:space="preserve">
+    <value>Got it</value>
+  </data>
+  <data name="Toolbox.BusyDialog.CurrentTask" xml:space="preserve">
+    <value>current task</value>
+  </data>
+  <data name="Toolbox.BusyDialog.Message" xml:space="preserve">
+    <value>{0} is still running. Stop it before starting another toolbox task.</value>
+  </data>
+  <data name="Toolbox.BusyDialog.StopButton" xml:space="preserve">
+    <value>Stop current task</value>
+  </data>
+  <data name="Toolbox.BusyDialog.Title" xml:space="preserve">
+    <value>Toolbox is busy</value>
   </data>
   <data name="Toolbox.ExecutionReview.HistoryLabel" xml:space="preserve">
     <value>History</value>

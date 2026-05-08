@@ -40,9 +40,9 @@
 
           <controls:AdaptiveSpacingStackPanel Classes="settings-page-column-stack settings-page-meta-block">
             <Grid Classes="settings-page-labeled-row"
-                  ColumnDefinitions="132,*">
-              <TextBlock Classes="settings-label"
-                         Text="{Binding RootTexts[Settings.GUI.LogItemDateFormat]}" />
+                  controls:SettingsLabelWidthCoordinator.GroupKey="Gui.Log"
+                  ColumnDefinitions="Auto,*">
+              <controls:SettingsLabel Text="{Binding RootTexts[Settings.GUI.LogItemDateFormat]}" />
               <ComboBox Grid.Column="1"
                         Classes="settings-select"
                         Width="{DynamicResource MAA.Size.Settings.FieldCenteredWidth}"
@@ -52,9 +52,9 @@
             </Grid>
 
             <Grid Classes="settings-page-labeled-row"
-                  ColumnDefinitions="132,*">
-              <TextBlock Classes="settings-label"
-                         Text="{Binding RootTexts[Settings.GUI.LogItemDateFormat.PreviewCaption]}" />
+                  controls:SettingsLabelWidthCoordinator.GroupKey="Gui.Log"
+                  ColumnDefinitions="Auto,*">
+              <controls:SettingsLabel Text="{Binding RootTexts[Settings.GUI.LogItemDateFormat.PreviewCaption]}" />
               <TextBlock Grid.Column="1"
                          Classes="app-body"
                          Text="{Binding GuiLogItemDateFormatPreview}"
@@ -66,9 +66,9 @@
         <controls:AdaptiveSpacingStackPanel Grid.Column="2"
                     Classes="settings-page-column-stack">
           <Grid Classes="settings-page-labeled-row"
-                ColumnDefinitions="132,*">
-            <TextBlock Classes="settings-label"
-                       Text="{Binding RootTexts[Settings.GUI.Language]}" />
+                controls:SettingsLabelWidthCoordinator.GroupKey="Gui.Main"
+                ColumnDefinitions="Auto,*">
+            <controls:SettingsLabel Text="{Binding RootTexts[Settings.GUI.Language]}" />
             <ComboBox Grid.Column="1"
                       Classes="settings-select"
                       Width="{DynamicResource MAA.Size.Settings.FieldNarrowWidth}"
@@ -84,9 +84,9 @@
           </Grid>
 
           <Grid Classes="settings-page-labeled-row"
-                ColumnDefinitions="132,*">
-            <TextBlock Classes="settings-label"
-                       Text="{Binding RootTexts[Settings.GUI.OperNameLanguage]}" />
+                controls:SettingsLabelWidthCoordinator.GroupKey="Gui.Main"
+                ColumnDefinitions="Auto,*">
+            <controls:SettingsLabel Text="{Binding RootTexts[Settings.GUI.OperNameLanguage]}" />
             <ComboBox Grid.Column="1"
                       Classes="settings-select"
                       Width="{DynamicResource MAA.Size.Settings.FieldCenteredWidth}"
@@ -102,9 +102,9 @@
           </Grid>
 
           <Grid Classes="settings-page-labeled-row"
-                ColumnDefinitions="132,*">
-            <TextBlock Classes="settings-label"
-                       Text="{Binding RootTexts[Settings.GUI.Theme]}" />
+                controls:SettingsLabelWidthCoordinator.GroupKey="Gui.Main"
+                ColumnDefinitions="Auto,*">
+            <controls:SettingsLabel Text="{Binding RootTexts[Settings.GUI.Theme]}" />
             <ComboBox Grid.Column="1"
                       Classes="settings-select"
                       Width="{DynamicResource MAA.Size.Settings.FieldNarrowWidth}"
@@ -120,9 +120,9 @@
           </Grid>
 
           <Grid Classes="settings-page-labeled-row"
-                ColumnDefinitions="132,*">
-            <TextBlock Classes="settings-label"
-                       Text="{Binding RootTexts[Settings.GUI.InverseClearMode]}" />
+                controls:SettingsLabelWidthCoordinator.GroupKey="Gui.Main"
+                ColumnDefinitions="Auto,*">
+            <controls:SettingsLabel Text="{Binding RootTexts[Settings.GUI.InverseClearMode]}" />
             <ComboBox Grid.Column="1"
                       Classes="settings-select"
                       Width="{DynamicResource MAA.Size.Settings.FieldCenteredWidth}"

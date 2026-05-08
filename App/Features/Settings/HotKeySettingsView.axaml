@@ -28,16 +28,11 @@
                  TextWrapping="Wrap" />
 
       <Grid Classes="settings-page-labeled-row"
-            ColumnDefinitions="184,*"
+            controls:SettingsLabelWidthCoordinator.GroupKey="HotKey.Main"
+            ColumnDefinitions="Auto,*"
             RowDefinitions="Auto,Auto,Auto">
-        <TextBlock Classes="settings-label"
-                   TextWrapping="Wrap">
-          <Run Text="{Binding ShowGuiHotkeyState.Title}" />
-          <Run Text="&#160;" />
-          <InlineUIContainer BaselineAlignment="Center">
-            <controls:TooltipHint Tip="{DynamicResource HotKeyChangingTip}" />
-          </InlineUIContainer>
-        </TextBlock>
+        <controls:SettingsLabel Text="{Binding ShowGuiHotkeyState.Title}"
+                                Tip="{DynamicResource HotKeyChangingTip}" />
         <Border Grid.Column="1"
                 Classes="settings-input-group"
                 HorizontalAlignment="Left"
@@ -80,16 +75,11 @@
       </Grid>
 
       <Grid Classes="settings-page-labeled-row"
-            ColumnDefinitions="184,*"
+            controls:SettingsLabelWidthCoordinator.GroupKey="HotKey.Main"
+            ColumnDefinitions="Auto,*"
             RowDefinitions="Auto,Auto,Auto">
-        <TextBlock Classes="settings-label"
-                   TextWrapping="Wrap">
-          <Run Text="{Binding LinkStartHotkeyState.Title}" />
-          <Run Text="&#160;" />
-          <InlineUIContainer BaselineAlignment="Center">
-            <controls:TooltipHint Tip="{DynamicResource HotKeyChangingTip}" />
-          </InlineUIContainer>
-        </TextBlock>
+        <controls:SettingsLabel Text="{Binding LinkStartHotkeyState.Title}"
+                                Tip="{DynamicResource HotKeyChangingTip}" />
         <Border Grid.Column="1"
                 Classes="settings-input-group"
                 HorizontalAlignment="Left"

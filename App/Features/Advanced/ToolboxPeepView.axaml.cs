@@ -8,11 +8,14 @@ namespace MAAUnified.App.Features.Advanced;
 
 public partial class ToolboxPeepView : UserControl
 {
+    private const double PeepPreviewAspectRatio = 16d / 9d;
+
     private bool? _peepControlsDockedRight;
 
     public ToolboxPeepView()
     {
         InitializeComponent();
+        AttachedToVisualTree += (_, _) => SyncPeepControlDock();
     }
 
     private ToolboxPageViewModel? VM => DataContext as ToolboxPageViewModel;
@@ -34,10 +37,24 @@ public partial class ToolboxPeepView : UserControl
         }
     }
 
-    private void OnPeepSizeChanged(object? sender, SizeChangedEventArgs e)
+    private void OnPeepLayoutSizeChanged(object? sender, SizeChangedEventArgs e)
     {
-        var size = e.NewSize;
-        var dockRight = size.Width >= 760 && size.Width > size.Height * 1.28;
+        UpdatePeepControlDock(e.NewSize);
+    }
+
+    private void SyncPeepControlDock()
+    {
+        UpdatePeepControlDock(Bounds.Size);
+    }
+
+    private void UpdatePeepControlDock(Size size)
+    {
+        if (size.Width <= 0 || size.Height <= 0)
+        {
+            return;
+        }
+
+        var dockRight = ShouldDockPeepControlsRight(size);
         if (_peepControlsDockedRight == dockRight)
         {
             return;
@@ -45,6 +62,11 @@ public partial class ToolboxPeepView : UserControl
 
         _peepControlsDockedRight = dockRight;
         ApplyPeepControlDock(dockRight);
+    }
+
+    private static bool ShouldDockPeepControlsRight(Size size)
+    {
+        return size.Width / size.Height >= PeepPreviewAspectRatio;
     }
 
     private void ApplyPeepControlDock(bool dockRight)
@@ -55,10 +77,18 @@ public partial class ToolboxPeepView : UserControl
             Grid.SetRow(PeepControlPanel, 0);
             Grid.SetColumn(PeepControlPanel, 1);
             Grid.SetColumnSpan(PeepControlPanel, 1);
-            PeepControlPanel.Orientation = Orientation.Vertical;
+            PeepControlPanel.RowDefinitions = new RowDefinitions("Auto,Auto");
+            PeepControlPanel.ColumnDefinitions = new ColumnDefinitions("Auto");
+            Grid.SetRow(PeepCommandControlGroup, 0);
+            Grid.SetColumn(PeepCommandControlGroup, 0);
+            Grid.SetRow(PeepFpsControlGroup, 1);
+            Grid.SetColumn(PeepFpsControlGroup, 0);
+            PeepFpsControlGroup.Orientation = Orientation.Vertical;
             PeepControlPanel.HorizontalAlignment = HorizontalAlignment.Right;
-            PeepControlPanel.VerticalAlignment = VerticalAlignment.Bottom;
+            PeepControlPanel.VerticalAlignment = VerticalAlignment.Center;
             PeepControlPanel.Margin = new Thickness(16, 0, 0, 0);
+            PeepFpsControlGroup.Margin = new Thickness(0, 12, 0, 0);
+            PeepFpsControlGroup.HorizontalAlignment = HorizontalAlignment.Center;
             return;
         }
 
@@ -66,9 +96,17 @@ public partial class ToolboxPeepView : UserControl
         Grid.SetRow(PeepControlPanel, 1);
         Grid.SetColumn(PeepControlPanel, 0);
         Grid.SetColumnSpan(PeepControlPanel, 2);
-        PeepControlPanel.Orientation = Orientation.Horizontal;
-        PeepControlPanel.HorizontalAlignment = HorizontalAlignment.Center;
-        PeepControlPanel.VerticalAlignment = VerticalAlignment.Bottom;
+        PeepControlPanel.RowDefinitions = new RowDefinitions("Auto");
+        PeepControlPanel.ColumnDefinitions = new ColumnDefinitions("*,Auto,*");
+        Grid.SetRow(PeepCommandControlGroup, 0);
+        Grid.SetColumn(PeepCommandControlGroup, 1);
+        Grid.SetRow(PeepFpsControlGroup, 0);
+        Grid.SetColumn(PeepFpsControlGroup, 2);
+        PeepFpsControlGroup.Orientation = Orientation.Horizontal;
+        PeepControlPanel.HorizontalAlignment = HorizontalAlignment.Stretch;
+        PeepControlPanel.VerticalAlignment = VerticalAlignment.Center;
         PeepControlPanel.Margin = new Thickness(0, 14, 0, 0);
+        PeepFpsControlGroup.Margin = new Thickness(24, 0, 0, 0);
+        PeepFpsControlGroup.HorizontalAlignment = HorizontalAlignment.Left;
     }
 }

@@ -1,5 +1,11 @@
 using System.Text.Json.Nodes;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.LogicalTree;
 using Avalonia.Media;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
+using MAAUnified.App.Features.Advanced;
 using MAAUnified.App.ViewModels.Toolbox;
 using MAAUnified.App.ViewModels.TaskQueue;
 using MAAUnified.CoreBridge;
@@ -62,8 +68,6 @@ public sealed class ToolboxModuleO3FeatureTests
                     },
                 },
             }));
-        vm.ApplyRuntimeCallback(CreateCallback("TaskChainCompleted"));
-
         Assert.Equal(ToolboxExecutionState.Succeeded, vm.ExecutionState);
         Assert.Null(fixture.Runtime.SessionService.CurrentRunOwner);
         Assert.Contains("先锋干员", vm.RecruitInfo, StringComparison.Ordinal);
@@ -215,13 +219,40 @@ public sealed class ToolboxModuleO3FeatureTests
                     ["done"] = true,
                 },
             }));
-        vm.ApplyRuntimeCallback(CreateCallback("TaskChainCompleted"));
-
         Assert.Equal(ToolboxExecutionState.Succeeded, vm.ExecutionState);
+        Assert.Null(fixture.Runtime.SessionService.CurrentRunOwner);
         Assert.Single(vm.OperBoxHaveList);
         Assert.Equal("char_003_kalts", vm.OperBoxHaveList[0].Id);
 
         await WaitForSettingAsync(fixture, LegacyConfigurationKeys.OperBoxData, expectedSubstring: "char_003_kalts");
+    }
+
+    [Fact]
+    public async Task ApplyRuntimeCallback_DepotDone_ShouldCompleteRunWithoutTopLevelCallback()
+    {
+        await using var fixture = await ToolboxTestFixture.CreateAsync();
+        var vm = new ToolboxPageViewModel(fixture.Runtime, fixture.ConnectionState);
+        await vm.InitializeAsync();
+
+        await vm.StartDepotAsync();
+
+        vm.ApplyRuntimeCallback(CreateCallback(
+            "SubTaskExtraInfo",
+            new JsonObject
+            {
+                ["taskchain"] = "Depot",
+                ["what"] = "DepotResult",
+                ["details"] = new JsonObject
+                {
+                    ["done"] = true,
+                    ["data"] = "{\"2001\":7}",
+                },
+            }));
+
+        Assert.Equal(ToolboxExecutionState.Succeeded, vm.ExecutionState);
+        Assert.Null(fixture.Runtime.SessionService.CurrentRunOwner);
+        Assert.Equal("2001", Assert.Single(vm.DepotResult).Id);
+        await WaitForSettingAsync(fixture, LegacyConfigurationKeys.DepotResult);
     }
 
     [Fact]
@@ -328,26 +359,35 @@ public sealed class ToolboxModuleO3FeatureTests
         Assert.DoesNotContain("<views:RemoteControlCenterView", toolboxXaml, StringComparison.Ordinal);
         Assert.DoesNotContain("<views:ExternalNotificationProvidersView", toolboxXaml, StringComparison.Ordinal);
         Assert.DoesNotContain("<views:WebApiView", toolboxXaml, StringComparison.Ordinal);
-        Assert.Contains("Text=\"{Binding ExecutionReviewTitle}\"", toolboxXaml, StringComparison.Ordinal);
-        Assert.Contains("Text=\"{Binding ResultText}\"", toolboxXaml, StringComparison.Ordinal);
-        Assert.Contains("Text=\"{Binding CurrentToolParameters}\"", toolboxXaml, StringComparison.Ordinal);
-        Assert.Contains("ItemsSource=\"{Binding ExecutionHistory}\"", toolboxXaml, StringComparison.Ordinal);
-        Assert.Contains("Classes.status-success=\"{Binding Success}\"", toolboxXaml, StringComparison.Ordinal);
-        Assert.Contains("Classes.status-error=\"{Binding HasErrorCode}\"", toolboxXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("ExecutionReview", toolboxXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Text=\"{Binding ResultText}\"", toolboxXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Text=\"{Binding CurrentToolParameters}\"", toolboxXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("ItemsSource=\"{Binding ExecutionHistory}\"", toolboxXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Classes.status-success=\"{Binding Success}\"", toolboxXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Classes.status-error=\"{Binding HasErrorCode}\"", toolboxXaml, StringComparison.Ordinal);
         Assert.DoesNotContain("Legacy structure contract anchors", toolboxXaml, StringComparison.Ordinal);
         Assert.DoesNotContain("执行成功示例", toolboxXaml, StringComparison.Ordinal);
         Assert.DoesNotContain("执行失败示例", toolboxXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("toolbox-page-title", recruitXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("toolbox-page-title", operBoxXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("toolbox-page-title", depotXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("toolbox-page-title", gachaXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("toolbox-page-title", peepXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("toolbox-minigame-title", miniGameXaml, StringComparison.Ordinal);
 
         Assert.Contains("ItemsSource=\"{Binding Segments}\"", recruitXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("ExecutionReviewResultLabelText", recruitXaml, StringComparison.Ordinal);
         Assert.Contains("Text=\"{Binding RecruitFixedSixStarText}\"", recruitXaml, StringComparison.Ordinal);
         Assert.Contains("Content=\"{Binding StartRecognitionText}\"", recruitXaml, StringComparison.Ordinal);
 
+        Assert.DoesNotContain("ExecutionReviewResultLabelText", operBoxXaml, StringComparison.Ordinal);
         Assert.Contains("Text=\"{Binding OperBoxCopyToClipboardText}\"", operBoxXaml, StringComparison.Ordinal);
         Assert.Contains("Content=\"{Binding StartRecognitionText}\"", operBoxXaml, StringComparison.Ordinal);
         Assert.Contains("Source=\"{Binding EliteIconImage}\"", operBoxXaml, StringComparison.Ordinal);
         Assert.Contains("Source=\"{Binding PotentialIconImage}\"", operBoxXaml, StringComparison.Ordinal);
         Assert.Contains("DropShadowDirectionEffect", operBoxXaml, StringComparison.Ordinal);
 
+        Assert.DoesNotContain("ExecutionReviewResultLabelText", depotXaml, StringComparison.Ordinal);
         Assert.Contains("Text=\"{Binding DepotExportArkPlannerText}\"", depotXaml, StringComparison.Ordinal);
         Assert.Contains("Text=\"{Binding DepotExportLoliconText}\"", depotXaml, StringComparison.Ordinal);
         Assert.Contains("Content=\"{Binding StartRecognitionText}\"", depotXaml, StringComparison.Ordinal);
@@ -362,7 +402,38 @@ public sealed class ToolboxModuleO3FeatureTests
         Assert.Contains("SpreadMethod=\"Repeat\"", gachaXaml, StringComparison.Ordinal);
 
         Assert.Contains("Content=\"{Binding PeepCommandText}\"", peepXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Text=\"{Binding PeepCommandText}\"", peepXaml, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"PeepDisplayArea\"", peepXaml, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"PeepControlPanel\"", peepXaml, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"PeepCommandControlGroup\"", peepXaml, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"PeepFpsControlGroup\"", peepXaml, StringComparison.Ordinal);
+        Assert.Contains("ColumnDefinitions=\"*,Auto,*\"", peepXaml, StringComparison.Ordinal);
+        Assert.Contains("Orientation=\"Horizontal\"", peepXaml, StringComparison.Ordinal);
+        Assert.Contains("SizeChanged=\"OnPeepLayoutSizeChanged\"", peepXaml, StringComparison.Ordinal);
+        Assert.Contains("PeepPreviewAspectRatio = 16d / 9d", ReadAdvancedView(root, "ToolboxPeepView.axaml.cs"), StringComparison.Ordinal);
         Assert.Contains("Content=\"{Binding MiniGameCommandText}\"", miniGameXaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ToolboxView_ShouldInstantiateAndMeasureDefaultTab()
+    {
+        await using var fixture = await ToolboxTestFixture.CreateAsync();
+        var vm = new ToolboxPageViewModel(fixture.Runtime, fixture.ConnectionState);
+        await vm.InitializeAsync();
+
+        EnsureAvaloniaApplication();
+        var view = new ToolboxView
+        {
+            DataContext = vm,
+        };
+
+        view.Measure(new Size(1280, 900));
+        view.Arrange(new Rect(0, 0, 1280, 900));
+        Dispatcher.UIThread.RunJobs(null);
+
+        Assert.Contains(
+            view.GetLogicalDescendants().OfType<TabControl>(),
+            tab => tab.Classes.Contains("toolbox-nav"));
     }
 
     private static CoreCallbackEvent CreateCallback(string msgName, JsonObject? payload = null)
@@ -373,6 +444,17 @@ public sealed class ToolboxModuleO3FeatureTests
     private static string ReadAdvancedView(string root, string fileName)
     {
         return File.ReadAllText(Path.Combine(root, "App", "Features", "Advanced", fileName));
+    }
+
+    private static void EnsureAvaloniaApplication()
+    {
+        if (global::Avalonia.Application.Current is not null)
+        {
+            return;
+        }
+
+        var app = new MAAUnified.App.App();
+        app.Initialize();
     }
 
     private static async Task WaitForSettingAsync(ToolboxTestFixture fixture, string key, string? expectedSubstring = null)

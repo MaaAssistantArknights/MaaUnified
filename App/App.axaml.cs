@@ -241,13 +241,17 @@ public partial class App : Avalonia.Application
 
     private void OnLegacyLocalizationLanguageChanged(object? sender, UiLanguageChangedEventArgs e)
     {
-        if (Dispatcher.UIThread.CheckAccess())
+        if (!Dispatcher.UIThread.CheckAccess())
         {
-            ApplyLegacyLocalizationResources(e.CurrentLanguage);
+            Dispatcher.UIThread.Post(
+                () => ApplyLegacyLocalizationResources(e.CurrentLanguage),
+                DispatcherPriority.Background);
             return;
         }
 
-        Dispatcher.UIThread.Post(() => ApplyLegacyLocalizationResources(e.CurrentLanguage));
+        Dispatcher.UIThread.Post(
+            () => ApplyLegacyLocalizationResources(e.CurrentLanguage),
+            DispatcherPriority.Background);
     }
 
     private void ApplyLegacyLocalizationResources(string? language)

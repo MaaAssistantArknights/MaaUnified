@@ -118,6 +118,8 @@
     <x:Double x:Key="MAA.Size.Settings.ColumnWidth">250</x:Double>
     <x:Double x:Key="MAA.Size.Settings.LabelWidth">132</x:Double>
     <x:Double x:Key="MAA.Size.Settings.LabelWideWidth">152</x:Double>
+    <x:Double x:Key="MAA.Size.Settings.LabelMaxWidth">220</x:Double>
+    <x:Double x:Key="MAA.Size.Settings.LabelFieldGap">12</x:Double>
     <x:Double x:Key="MAA.Size.Settings.FieldTinyWidth">55</x:Double>
     <x:Double x:Key="MAA.Size.Settings.FieldSlimWidth">144</x:Double>
     <x:Double x:Key="MAA.Size.Settings.FieldNarrowWidth">170</x:Double>
@@ -1416,16 +1418,26 @@
                                                     MinimumLength="{DynamicResource MAA.Size.NavIndicator.MinLength}" />
           </Grid>
 
-          <ContentPresenter x:Name="PART_SelectedContentHost"
-                            Grid.Row="1"
-                            Margin="{DynamicResource MAA.Thickness.ToolboxNavContentMargin}"
-                            Content="{TemplateBinding SelectedContent}"
-                            ContentTemplate="{TemplateBinding SelectedContentTemplate}"
-                            HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
-                            VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
+          <ScrollViewer Grid.Row="1"
+                        Classes="toolbox-nav-content-scroll"
+                        HorizontalScrollBarVisibility="Disabled"
+                        VerticalScrollBarVisibility="Auto">
+            <ContentPresenter x:Name="PART_SelectedContentHost"
+                              Margin="{DynamicResource MAA.Thickness.ToolboxNavContentMargin}"
+                              Content="{TemplateBinding SelectedContent}"
+                              ContentTemplate="{TemplateBinding SelectedContentTemplate}"
+                              HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                              VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
+          </ScrollViewer>
         </Grid>
       </ControlTemplate>
     </Setter>
+  </Style>
+
+  <Style Selector="ScrollViewer.toolbox-nav-content-scroll">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
   </Style>
 
   <Style Selector="controls|AppSelectionIndicatorPresenter.selection-indicator-nav.indicator-horizontal /template/ Border#PART_IndicatorGlow">

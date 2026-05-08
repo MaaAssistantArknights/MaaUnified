@@ -1042,6 +1042,33 @@ Session state `{0}` does not allow {2}.</value>
   <data name="Infrast.Drones" xml:space="preserve">
     <value>无人机策略</value>
   </data>
+  <data name="Control" xml:space="preserve">
+    <value>控制中枢</value>
+  </data>
+  <data name="Dorm" xml:space="preserve">
+    <value>宿舍</value>
+  </data>
+  <data name="Mfg" xml:space="preserve">
+    <value>制造站</value>
+  </data>
+  <data name="Office" xml:space="preserve">
+    <value>办公室</value>
+  </data>
+  <data name="Power" xml:space="preserve">
+    <value>发电站</value>
+  </data>
+  <data name="Processing" xml:space="preserve">
+    <value>加工站</value>
+  </data>
+  <data name="Reception" xml:space="preserve">
+    <value>会客室</value>
+  </data>
+  <data name="Trade" xml:space="preserve">
+    <value>贸易站</value>
+  </data>
+  <data name="Training" xml:space="preserve">
+    <value>训练室</value>
+  </data>
   <data name="Infrast.Error.CustomFileNotFound" xml:space="preserve">
     <value>自定义文件不存在：{0}</value>
   </data>
@@ -4655,6 +4682,21 @@ Session state `{0}` does not allow {2}.</value>
   </data>
   <data name="Toolbox.Error.ToolboxBusy" xml:space="preserve">
     <value>Toolbox 当前已有任务在运行，请先停止。</value>
+  </data>
+  <data name="Toolbox.BusyDialog.CloseButton" xml:space="preserve">
+    <value>知道了</value>
+  </data>
+  <data name="Toolbox.BusyDialog.CurrentTask" xml:space="preserve">
+    <value>当前任务</value>
+  </data>
+  <data name="Toolbox.BusyDialog.Message" xml:space="preserve">
+    <value>{0} 仍在运行。请先停止当前任务，再启动新的小工具任务。</value>
+  </data>
+  <data name="Toolbox.BusyDialog.StopButton" xml:space="preserve">
+    <value>停止当前任务</value>
+  </data>
+  <data name="Toolbox.BusyDialog.Title" xml:space="preserve">
+    <value>小工具正在执行</value>
   </data>
   <data name="Toolbox.ExecutionReview.HistoryLabel" xml:space="preserve">
     <value>历史记录</value>

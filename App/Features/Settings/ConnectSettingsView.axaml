@@ -64,9 +64,9 @@
 
         <controls:AdaptiveSpacingStackPanel Classes="settings-page-column-stack connect-settings-section">
           <Grid Classes="settings-page-labeled-row"
-                ColumnDefinitions="132,*">
-            <TextBlock Classes="settings-label"
-                       Text="{Binding RootTexts[Settings.Connect.Configuration]}" />
+                controls:SettingsLabelWidthCoordinator.GroupKey="Connect.AdbCore"
+                ColumnDefinitions="Auto,*">
+            <controls:SettingsLabel Text="{Binding RootTexts[Settings.Connect.Configuration]}" />
             <ComboBox Grid.Column="1"
                       Classes="settings-select"
                       Width="{DynamicResource MAA.Size.Settings.FieldInputWidth}"
@@ -90,15 +90,10 @@
           <controls:AdaptiveSpacingStackPanel Classes="settings-page-compact-flow settings-page-column-stack"
                       IsVisible="{Binding IsAdbConnectionMode}">
             <Grid Classes="settings-page-labeled-row"
-                  ColumnDefinitions="132,*">
-              <TextBlock Classes="settings-label"
-                         TextWrapping="Wrap">
-                <Run Text="{Binding RootTexts[Settings.Connect.Address]}" />
-                <Run Text="&#160;" />
-                <InlineUIContainer BaselineAlignment="Center">
-                  <controls:TooltipHint Tip="{Binding RootTexts[Settings.Connect.AddressTip]}" />
-                </InlineUIContainer>
-              </TextBlock>
+                  controls:SettingsLabelWidthCoordinator.GroupKey="Connect.AdbCore"
+                  ColumnDefinitions="Auto,*">
+              <controls:SettingsLabel Text="{Binding RootTexts[Settings.Connect.Address]}"
+                                      Tip="{Binding RootTexts[Settings.Connect.AddressTip]}" />
               <controls:AdaptiveSpacingStackPanel Grid.Column="1"
                           Classes="settings-page-inline-field-group">
                 <controls:AppHistoryInput Classes="settings-input"
@@ -114,9 +109,9 @@
             </Grid>
 
             <Grid Classes="settings-page-labeled-action-row"
-                  ColumnDefinitions="132,*">
-              <TextBlock Classes="settings-label"
-                         Text="{Binding RootTexts[Settings.Connect.AdbPath]}" />
+                  controls:SettingsLabelWidthCoordinator.GroupKey="Connect.AdbCore"
+                  ColumnDefinitions="Auto,*">
+              <controls:SettingsLabel Text="{Binding RootTexts[Settings.Connect.AdbPath]}" />
               <controls:AppActionInput Grid.Column="1"
                                        Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
                                        HorizontalAlignment="Left"
@@ -130,9 +125,9 @@
           <controls:AdaptiveSpacingStackPanel Classes="settings-page-compact-flow settings-page-column-stack settings-page-branch-block"
                       IsVisible="{Binding IsAttachWindowMode}">
             <Grid Classes="settings-page-labeled-row"
-                  ColumnDefinitions="132,*">
-              <TextBlock Classes="settings-label"
-                         Text="{Binding RootTexts[Settings.Connect.ScreencapMethod]}" />
+                  controls:SettingsLabelWidthCoordinator.GroupKey="Connect.AttachWindow"
+                  ColumnDefinitions="Auto,*">
+              <controls:SettingsLabel Text="{Binding RootTexts[Settings.Connect.ScreencapMethod]}" />
               <ComboBox Grid.Column="1"
                         Classes="settings-select"
                         Width="{DynamicResource MAA.Size.Settings.FieldInputWidth}"
@@ -148,9 +143,9 @@
             </Grid>
 
             <Grid Classes="settings-page-labeled-row"
-                  ColumnDefinitions="132,*">
-              <TextBlock Classes="settings-label"
-                         Text="{Binding RootTexts[Settings.Connect.MouseInput]}" />
+                  controls:SettingsLabelWidthCoordinator.GroupKey="Connect.AttachWindow"
+                  ColumnDefinitions="Auto,*">
+              <controls:SettingsLabel Text="{Binding RootTexts[Settings.Connect.MouseInput]}" />
               <ComboBox Grid.Column="1"
                         Classes="settings-select"
                         Width="{DynamicResource MAA.Size.Settings.FieldInputWidth}"
@@ -166,9 +161,9 @@
             </Grid>
 
             <Grid Classes="settings-page-labeled-row"
-                  ColumnDefinitions="132,*">
-              <TextBlock Classes="settings-label"
-                         Text="{Binding RootTexts[Settings.Connect.KeyboardInput]}" />
+                  controls:SettingsLabelWidthCoordinator.GroupKey="Connect.AttachWindow"
+                  ColumnDefinitions="Auto,*">
+              <controls:SettingsLabel Text="{Binding RootTexts[Settings.Connect.KeyboardInput]}" />
               <ComboBox Grid.Column="1"
                         Classes="settings-select"
                         Width="{DynamicResource MAA.Size.Settings.FieldInputWidth}"
@@ -201,9 +196,9 @@
                         Classes="settings-page-compact-flow settings-page-column-stack"
                         IsVisible="{Binding MuMu12ExtrasEnabled}">
               <Grid Classes="settings-page-labeled-row"
-                    ColumnDefinitions="132,*">
-                <TextBlock Classes="settings-label"
-                           Text="{Binding RootTexts[Settings.Connect.MuMu.EmulatorPath]}" />
+                    controls:SettingsLabelWidthCoordinator.GroupKey="Connect.MuMu"
+                    ColumnDefinitions="Auto,*">
+                <controls:SettingsLabel Text="{Binding RootTexts[Settings.Connect.MuMu.EmulatorPath]}" />
                 <TextBox Grid.Column="1"
                          Classes="settings-input"
                          Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
@@ -217,10 +212,10 @@
                         IsChecked="{Binding MuMuBridgeConnection}" />
 
               <Grid Classes="settings-page-labeled-row"
-                    ColumnDefinitions="132,*"
+                    controls:SettingsLabelWidthCoordinator.GroupKey="Connect.MuMu"
+                    ColumnDefinitions="Auto,*"
                     IsVisible="{Binding MuMuBridgeConnection}">
-                <TextBlock Classes="settings-label"
-                           Text="{Binding RootTexts[Settings.Connect.InstanceId]}" />
+                <controls:SettingsLabel Text="{Binding RootTexts[Settings.Connect.InstanceId]}" />
                 <TextBox Grid.Column="1"
                          Classes="settings-input"
                          Width="{DynamicResource MAA.Size.Settings.FieldSlimWidth}"
@@ -241,9 +236,9 @@
                         Classes="settings-page-compact-flow settings-page-column-stack"
                         IsVisible="{Binding LdPlayerExtrasEnabled}">
               <Grid Classes="settings-page-labeled-row"
-                    ColumnDefinitions="132,*">
-                <TextBlock Classes="settings-label"
-                           Text="{Binding RootTexts[Settings.Connect.LdPlayer.EmulatorPath]}" />
+                    controls:SettingsLabelWidthCoordinator.GroupKey="Connect.LdPlayer"
+                    ColumnDefinitions="Auto,*">
+                <controls:SettingsLabel Text="{Binding RootTexts[Settings.Connect.LdPlayer.EmulatorPath]}" />
                 <TextBox Grid.Column="1"
                          Classes="settings-input"
                          Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
@@ -257,10 +252,10 @@
                         IsChecked="{Binding LdPlayerManualSetIndex}" />
 
               <Grid Classes="settings-page-labeled-row"
-                    ColumnDefinitions="132,*"
+                    controls:SettingsLabelWidthCoordinator.GroupKey="Connect.LdPlayer"
+                    ColumnDefinitions="Auto,*"
                     IsVisible="{Binding LdPlayerManualSetIndex}">
-                <TextBlock Classes="settings-label"
-                           Text="{Binding RootTexts[Settings.Connect.InstanceId]}" />
+                <controls:SettingsLabel Text="{Binding RootTexts[Settings.Connect.InstanceId]}" />
                 <TextBox Grid.Column="1"
                          Classes="settings-input"
                          Width="{DynamicResource MAA.Size.Settings.FieldSlimWidth}"
@@ -305,9 +300,9 @@
           </controls:AdaptiveSpacingStackPanel>
 
           <Grid Classes="settings-page-labeled-action-row"
-                ColumnDefinitions="132,Auto,Auto">
-            <TextBlock Classes="settings-label"
-                       Text="{Binding RootTexts[Settings.Connect.TouchMode]}" />
+                controls:SettingsLabelWidthCoordinator.GroupKey="Connect.AdbAdvanced"
+                ColumnDefinitions="Auto,Auto,Auto">
+            <controls:SettingsLabel Text="{Binding RootTexts[Settings.Connect.TouchMode]}" />
             <ComboBox Grid.Column="1"
                       Classes="settings-select"
                       Width="{DynamicResource MAA.Size.Settings.FieldCenteredWidth}"
