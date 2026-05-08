@@ -206,6 +206,27 @@ public sealed class UiDiagnosticsService
         return WriteLineAsync(EventLogPath, line, cancellationToken);
     }
 
+    public Task RecordTemporaryTimingAsync(
+        string scope,
+        double elapsedMs,
+        IReadOnlyDictionary<string, object?>? fields = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(scope))
+        {
+            return Task.CompletedTask;
+        }
+
+        var timestamp = DateTimeOffset.UtcNow;
+        var payload = new UiPerformanceEventLogLine(
+            timestamp,
+            "temporary_timing",
+            scope.Trim(),
+            Math.Max(0, elapsedMs),
+            fields is null || fields.Count == 0 ? null : new Dictionary<string, object?>(fields));
+        return WriteLineAsync(EventLogPath, $"{timestamp:O} [TEMP-PERF] {JsonSerializer.Serialize(payload)}", cancellationToken);
+    }
+
     public Task RecordPlatformEventAsync(
         PlatformCapabilityId capability,
         string action,

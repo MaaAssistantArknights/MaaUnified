@@ -814,12 +814,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
                 try
                 {
                     _suppressSelectedLanguageChangeRequest = true;
-                    ApplyLanguageSideEffectsAsync(
-                            previousLanguage,
-                            normalized,
-                            allowRenderYields: false)
-                        .GetAwaiter()
-                        .GetResult();
+                    ApplyLanguageSideEffectsImmediately(previousLanguage, normalized);
                 }
                 finally
                 {
@@ -3393,22 +3388,65 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
 
     public async Task ChangeLanguageAsync(string targetLanguage, CancellationToken cancellationToken = default)
     {
+        var total = Stopwatch.StartNew();
+        var step = Stopwatch.StartNew();
+        var normalized = NormalizeLanguage(targetLanguage);
+        var previousLanguage = Language;
         BeginBlockingOperationOverlay();
         try
         {
             await WaitForBlockingOperationOverlayRenderAsync();
-            var normalized = NormalizeLanguage(targetLanguage);
-            var previousLanguage = Language;
+            _ = RecordLanguageSwitchTimingAsync(
+                "Settings.ChangeLanguage.OverlayRendered",
+                step,
+                previousLanguage,
+                normalized,
+                cancellationToken);
+
+            step.Restart();
             var changeResult = await ChangeLanguageCoordinatorAsync(normalized, cancellationToken);
-            var appliedLanguage = await ApplyResultAsync(changeResult, "Settings.Gui.Language.Change", cancellationToken);
+            _ = RecordLanguageSwitchTimingAsync(
+                "Settings.ChangeLanguage.Coordinator",
+                step,
+                previousLanguage,
+                normalized,
+                cancellationToken,
+                ("success", changeResult.Success));
+
+            step.Restart();
+            var appliedLanguage = await ApplyLanguageChangeResultAsync(changeResult, cancellationToken);
+            _ = RecordLanguageSwitchTimingAsync(
+                "Settings.ChangeLanguage.ApplyResult",
+                step,
+                previousLanguage,
+                normalized,
+                cancellationToken,
+                ("appliedLanguage", appliedLanguage));
             if (appliedLanguage is null)
             {
                 SetSelectedLanguageValue(Language, requestLanguageChange: false);
                 return;
             }
 
+            step.Restart();
             await _pendingUnifiedLanguageApplyTask;
-            await WaitForPostedLanguageRefreshAsync();
+            _ = RecordLanguageSwitchTimingAsync(
+                "Settings.ChangeLanguage.WaitPostedApply",
+                step,
+                previousLanguage,
+                appliedLanguage,
+                cancellationToken);
+
+            step.Restart();
+            await WaitForPostedLanguageRefreshAsync(previousLanguage, appliedLanguage, cancellationToken);
+            _ = RecordLanguageSwitchTimingAsync(
+                "Settings.ChangeLanguage.WaitViewRefresh",
+                step,
+                previousLanguage,
+                appliedLanguage,
+                cancellationToken);
+
+            step.Restart();
             if (!string.Equals(Language, appliedLanguage, StringComparison.OrdinalIgnoreCase))
             {
                 ApplyUnifiedLanguage(appliedLanguage);
@@ -3422,10 +3460,24 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
             {
                 _ = Runtime.AchievementTrackerService.Unlock("Linguist");
             }
+
+            _ = RecordLanguageSwitchTimingAsync(
+                "Settings.ChangeLanguage.FinalSync",
+                step,
+                previousLanguage,
+                appliedLanguage,
+                cancellationToken);
         }
         finally
         {
             EndBlockingOperationOverlay();
+            _ = RecordTemporaryTimingAsync(
+                "Settings.ChangeLanguage.Total",
+                total.Elapsed.TotalMilliseconds,
+                cancellationToken,
+                ("from", previousLanguage),
+                ("target", normalized),
+                ("current", Language));
         }
     }
 
@@ -5379,7 +5431,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
     {
         return Dispatcher.UIThread.InvokeAsync(
             () => ApplyUnifiedLanguageAsync(language),
-            DispatcherPriority.Background);
+            DispatcherPriority.Send);
     }
 
     private async Task ApplyUnifiedLanguageAsync(string? language)
@@ -5426,6 +5478,8 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         string normalized,
         bool allowRenderYields)
     {
+        var total = Stopwatch.StartNew();
+        var step = Stopwatch.StartNew();
         SetSelectedLanguageValue(normalized, requestLanguageChange: false);
         RootTexts.Language = normalized;
         OnPropertyChanged(nameof(RootTexts));
@@ -5434,21 +5488,90 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         Runtime.AchievementTrackerService.SetCurrentLanguage(normalized);
         RefreshHotkeyUiText();
         OnPropertyChanged(nameof(HotkeyCaptureGuideText));
+        _ = RecordLanguageApplyTimingAsync(
+            "Settings.ApplyLanguage.CoreText",
+            step,
+            previousLanguage,
+            normalized,
+            allowRenderYields);
         await YieldForBlockingOperationOverlayFrameAsync(allowRenderYields);
 
+        step.Restart();
         RebuildGuiOptionLists();
+        _ = RecordLanguageApplyTimingAsync(
+            "Settings.ApplyLanguage.GuiOptions",
+            step,
+            previousLanguage,
+            normalized,
+            allowRenderYields);
         await YieldForBlockingOperationOverlayFrameAsync(allowRenderYields);
 
+        step.Restart();
         RebuildSections(SelectedSection?.Key);
+        _ = RecordLanguageApplyTimingAsync(
+            "Settings.ApplyLanguage.Sections",
+            step,
+            previousLanguage,
+            normalized,
+            allowRenderYields,
+            ("sectionCount", Sections.Count));
         await YieldForBlockingOperationOverlayFrameAsync(allowRenderYields);
 
+        step.Restart();
         RebuildVersionUpdateOptionLists();
         if (IsSettingsDataBucketLoaded(SettingsDataBucketStartPerformance))
         {
             RefreshGpuUiState();
         }
 
+        _ = RecordLanguageApplyTimingAsync(
+            "Settings.ApplyLanguage.VersionUpdateAndGpu",
+            step,
+            previousLanguage,
+            normalized,
+            allowRenderYields);
         await YieldForBlockingOperationOverlayFrameAsync(allowRenderYields);
+
+        step.Restart();
+        RefreshAchievementUiState();
+        UpdateAchievementPolicySummary(new AchievementPolicy(AchievementPopupDisabled, AchievementPopupAutoClose));
+        OnPropertyChanged(nameof(VersionUpdateMirrorChyanCdkExpiryText));
+        OnPropertyChanged(nameof(PendingResourceUpdateSummary));
+        MarkGuiSettingsDirty();
+        NotifyGuiSettingsPreviewChanged();
+        RefreshRightPaneLocalization();
+        _ = RecordLanguageApplyTimingAsync(
+            "Settings.ApplyLanguage.AchievementValidationAndPreview",
+            step,
+            previousLanguage,
+            normalized,
+            allowRenderYields);
+        _ = RecordLanguageApplyTimingAsync(
+            "Settings.ApplyLanguage.Total",
+            total,
+            previousLanguage,
+            normalized,
+            allowRenderYields);
+    }
+
+    private void ApplyLanguageSideEffectsImmediately(string previousLanguage, string normalized)
+    {
+        SetSelectedLanguageValue(normalized, requestLanguageChange: false);
+        RootTexts.Language = normalized;
+        OnPropertyChanged(nameof(RootTexts));
+        RefreshNotificationTemplateLocalization(previousLanguage, normalized);
+        ConnectionGameSharedState.SetLanguage(normalized);
+        Runtime.AchievementTrackerService.SetCurrentLanguage(normalized);
+        RefreshHotkeyUiText();
+        OnPropertyChanged(nameof(HotkeyCaptureGuideText));
+
+        RebuildGuiOptionLists();
+        RebuildSections(SelectedSection?.Key);
+        RebuildVersionUpdateOptionLists();
+        if (IsSettingsDataBucketLoaded(SettingsDataBucketStartPerformance))
+        {
+            RefreshGpuUiState();
+        }
 
         RefreshAchievementUiState();
         UpdateAchievementPolicySummary(new AchievementPolicy(AchievementPopupDisabled, AchievementPopupAutoClose));
@@ -6510,6 +6633,21 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
             result.Error?.Details);
         await RecordFailedResultAsync(scope, failed, cancellationToken);
         return default;
+    }
+
+    private async Task<string?> ApplyLanguageChangeResultAsync(
+        UiOperationResult<string> result,
+        CancellationToken cancellationToken)
+    {
+        const string scope = "Settings.Gui.Language.Change";
+        if (result.Success)
+        {
+            LastErrorMessage = string.Empty;
+            await RecordEventAsync(scope, result.Message, cancellationToken);
+            return result.Value;
+        }
+
+        return await ApplyResultAsync(result, scope, cancellationToken);
     }
 
     private string BuildMirrorChyanExpiryText(string? rawValue)
@@ -7994,16 +8132,44 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
             DispatcherPriority.Loaded).GetTask();
     }
 
-    private static Task WaitForPostedLanguageRefreshAsync()
+    private async Task WaitForPostedLanguageRefreshAsync(
+        string fromLanguage,
+        string targetLanguage,
+        CancellationToken cancellationToken)
     {
         if (Avalonia.Application.Current is null || !Dispatcher.UIThread.CheckAccess())
         {
-            return Task.CompletedTask;
+            return;
         }
 
-        return Dispatcher.UIThread.InvokeAsync(
+        var total = Stopwatch.StartNew();
+        var loaded = Stopwatch.StartNew();
+        await Dispatcher.UIThread.InvokeAsync(
+            static () => { },
+            DispatcherPriority.Loaded).GetTask();
+        _ = RecordLanguageSwitchTimingAsync(
+            "Settings.ChangeLanguage.WaitViewRefresh.Loaded",
+            loaded,
+            fromLanguage,
+            targetLanguage,
+            cancellationToken);
+
+        var background = Stopwatch.StartNew();
+        await Dispatcher.UIThread.InvokeAsync(
             static () => { },
             DispatcherPriority.Background).GetTask();
+        _ = RecordLanguageSwitchTimingAsync(
+            "Settings.ChangeLanguage.WaitViewRefresh.Background",
+            background,
+            fromLanguage,
+            targetLanguage,
+            cancellationToken);
+        _ = RecordLanguageSwitchTimingAsync(
+            "Settings.ChangeLanguage.WaitViewRefresh.ProbeTotal",
+            total,
+            fromLanguage,
+            targetLanguage,
+            cancellationToken);
     }
 
     private static Task YieldForBlockingOperationOverlayFrameAsync(bool allowRenderYields)
@@ -8016,6 +8182,54 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         return Dispatcher.UIThread.InvokeAsync(
             static () => { },
             DispatcherPriority.Loaded).GetTask();
+    }
+
+    private Task RecordLanguageSwitchTimingAsync(
+        string scope,
+        Stopwatch stopwatch,
+        string fromLanguage,
+        string targetLanguage,
+        CancellationToken cancellationToken,
+        params (string Key, object? Value)[] fields)
+    {
+        return RecordTemporaryTimingAsync(
+            scope,
+            stopwatch.Elapsed.TotalMilliseconds,
+            cancellationToken,
+            [("from", fromLanguage), ("target", targetLanguage), .. fields]);
+    }
+
+    private Task RecordLanguageApplyTimingAsync(
+        string scope,
+        Stopwatch stopwatch,
+        string fromLanguage,
+        string targetLanguage,
+        bool allowRenderYields,
+        params (string Key, object? Value)[] fields)
+    {
+        return RecordTemporaryTimingAsync(
+            scope,
+            stopwatch.Elapsed.TotalMilliseconds,
+            CancellationToken.None,
+            [("from", fromLanguage), ("target", targetLanguage), ("renderYields", allowRenderYields), .. fields]);
+    }
+
+    private Task RecordTemporaryTimingAsync(
+        string scope,
+        double elapsedMs,
+        CancellationToken cancellationToken,
+        params (string Key, object? Value)[] fields)
+    {
+        var payload = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (key, value) in fields)
+        {
+            if (!string.IsNullOrWhiteSpace(key))
+            {
+                payload[key] = value;
+            }
+        }
+
+        return RecordTemporaryTimingAsync(scope, elapsedMs, payload, cancellationToken);
     }
 
     private Task<UiOperationResult<string>> ChangeLanguageCoordinatorAsync(
@@ -9214,7 +9428,34 @@ public sealed record GpuOptionDisplayItem(
     GpuOptionDescriptor Descriptor,
     string Display);
 
-public sealed record DisplayValueOption(string Display, string Value);
+public sealed class DisplayValueOption : IEquatable<DisplayValueOption>
+{
+    public DisplayValueOption(string display, string value)
+    {
+        Display = display;
+        Value = value;
+    }
+
+    public string Display { get; }
+
+    public string Value { get; }
+
+    public bool Equals(DisplayValueOption? other)
+    {
+        return other is not null
+               && string.Equals(Value, other.Value, StringComparison.OrdinalIgnoreCase);
+    }
+
+    public override bool Equals(object? obj)
+    {
+        return obj is DisplayValueOption other && Equals(other);
+    }
+
+    public override int GetHashCode()
+    {
+        return StringComparer.OrdinalIgnoreCase.GetHashCode(Value ?? string.Empty);
+    }
+}
 
 public sealed record TimerSlotSettingsSnapshot(
     int Index,

@@ -18,18 +18,13 @@
     </Style>
   </UserControl.Styles>
 
-  <Grid RowDefinitions="Auto,Auto" Margin="4">
-    <TextBlock Classes="section-title" Text="{Binding Texts[Reclamation.Title]}" />
-
-    <controls:AdaptiveSpacingStackPanel Grid.Row="1"
-                Margin="{DynamicResource MAA.Thickness.Settings.SectionTopMargin}"
-                Spacing="{DynamicResource MAA.Spacing.Medium}">
+  <Grid RowDefinitions="Auto" Margin="4">
+    <controls:AdaptiveSpacingStackPanel Spacing="{DynamicResource MAA.Spacing.Medium}">
       <controls:AdaptiveSpacingStackPanel Classes="reclamation-settings-section-stack"
                   IsVisible="{Binding IsGeneralMode}">
           <Border Classes="app-surface app-card">
-            <controls:SettingsInlineRow>
-              <TextBlock Classes="settings-field-caption"
-                         Text="{Binding Texts[Reclamation.Theme]}" />
+            <controls:SettingsInlineRow controls:SettingsLabelWidthCoordinator.GroupKey="TaskQueue.Fields">
+              <controls:SettingsLabel Text="{Binding Texts[Reclamation.Theme]}" />
               <controls:AppSelect ItemsSource="{Binding ThemeOptions}"
                                   SelectedValueBinding="{Binding Type}"
                                   SelectedValue="{Binding Theme}">
@@ -44,9 +39,9 @@
 
           <Border Classes="app-surface app-card">
             <controls:AdaptiveSpacingStackPanel Spacing="6">
-              <controls:SettingsInlineRow FieldWidth="{DynamicResource MAA.Size.Settings.FieldWideWidth}">
-                <TextBlock Classes="settings-field-caption"
-                           Text="{Binding Texts[Reclamation.Mode]}" />
+              <controls:SettingsInlineRow FieldWidth="{DynamicResource MAA.Size.Settings.FieldWideWidth}"
+                                          controls:SettingsLabelWidthCoordinator.GroupKey="TaskQueue.Fields">
+                <controls:SettingsLabel Text="{Binding Texts[Reclamation.Mode]}" />
                 <controls:AppSelect ItemsSource="{Binding ModeOptions}"
                                     SelectedValueBinding="{Binding Value}"
                                     SelectedValue="{Binding Mode}">
@@ -79,9 +74,9 @@
 
           <Border Classes="app-surface app-card">
             <controls:AdaptiveSpacingStackPanel Spacing="{DynamicResource MAA.App.Settings.PageToggleStackSpacing}">
-              <controls:SettingsInlineRow FieldWidth="{DynamicResource MAA.Size.Settings.FieldWideWidth}">
-                <TextBlock Classes="settings-field-caption"
-                           Text="{Binding Texts[Reclamation.IncrementMode]}" />
+              <controls:SettingsInlineRow FieldWidth="{DynamicResource MAA.Size.Settings.FieldWideWidth}"
+                                          controls:SettingsLabelWidthCoordinator.GroupKey="TaskQueue.Fields">
+                <controls:SettingsLabel Text="{Binding Texts[Reclamation.IncrementMode]}" />
                 <controls:AppSelect IsEnabled="{Binding IsArchiveSettingsEnabled}"
                                     ItemsSource="{Binding IncrementModeOptions}"
                                     SelectedValueBinding="{Binding Value}"
@@ -93,9 +88,8 @@
                   </controls:AppSelect.ItemTemplate>
                 </controls:AppSelect>
               </controls:SettingsInlineRow>
-              <controls:SettingsInlineRow>
-                <TextBlock Classes="settings-field-caption"
-                           Text="{Binding Texts[Reclamation.NumCraftBatches]}" />
+              <controls:SettingsInlineRow controls:SettingsLabelWidthCoordinator.GroupKey="TaskQueue.Fields">
+                <controls:SettingsLabel Text="{Binding Texts[Reclamation.NumCraftBatches]}" />
                 <controls:AppNumberInput Minimum="0"
                                          Maximum="99999"
                                          IsEnabled="{Binding IsArchiveSettingsEnabled}"

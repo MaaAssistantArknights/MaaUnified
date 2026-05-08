@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Metadata;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.VisualTree;
 
 namespace MAAUnified.App.Controls;
@@ -106,6 +107,7 @@ public class AppWindowFrame : ContentControl
     {
         HasHeaderContent = HeaderContent is not null;
         HasActions = ActionsContent is not null;
+        AddHandler(PointerReleasedEvent, OnPointerReleasedForInputFocusDismiss, RoutingStrategies.Bubble, handledEventsToo: true);
         UpdateWindowControlsPlacementState();
         UpdateModeState();
         UpdateEffectiveHorizontalContentInset();
@@ -121,6 +123,68 @@ public class AppWindowFrame : ContentControl
     {
         get => GetValue(HeaderContentProperty);
         set => SetValue(HeaderContentProperty, value);
+    }
+
+    private void OnPointerReleasedForInputFocusDismiss(object? sender, PointerReleasedEventArgs e)
+    {
+        var focusManager = TopLevel.GetTopLevel(this)?.FocusManager;
+        var focusedElement = focusManager?.GetFocusedElement();
+        if (focusedElement is not Visual focusedVisual || !IsTextEditingFocus(focusedVisual))
+        {
+            return;
+        }
+
+        if (e.Source is Visual sourceVisual && IsWithinActiveInputSurface(sourceVisual, focusedVisual))
+        {
+            return;
+        }
+
+        focusManager?.ClearFocus();
+    }
+
+    private static bool IsTextEditingFocus(Visual visual)
+    {
+        return visual.GetSelfAndVisualAncestors().Any(static ancestor =>
+            ancestor is TextBox
+                or ComboBox
+                or NumericUpDown
+                or AppTextInput
+                or AppSelect
+                or AppNumberInput
+                or VerticalSpinNumberBox
+                or AppActionInput
+                or AppHistoryInput
+                or AppSuggestInput
+                or AppCopilotPathDropdown
+                or AppMultiSelect
+                or AppMultiSelectDropdown);
+    }
+
+    private static bool IsWithinActiveInputSurface(Visual sourceVisual, Visual focusedVisual)
+    {
+        var activeInputSurface = GetActiveInputSurface(focusedVisual);
+        return activeInputSurface is not null
+            && sourceVisual.GetSelfAndVisualAncestors().Contains(activeInputSurface);
+    }
+
+    private static Visual? GetActiveInputSurface(Visual focusedVisual)
+    {
+        var ancestors = focusedVisual.GetSelfAndVisualAncestors().ToArray();
+        return ancestors.FirstOrDefault(static ancestor =>
+                   ancestor is AppActionInput
+                       or AppHistoryInput
+                       or AppSuggestInput
+                       or AppCopilotPathDropdown
+                       or AppMultiSelect
+                       or AppMultiSelectDropdown
+                       or AppNumberInput
+                       or VerticalSpinNumberBox)
+               ?? ancestors.FirstOrDefault(static ancestor =>
+                   ancestor is TextBox
+                       or ComboBox
+                       or NumericUpDown
+                       or AppTextInput
+                       or AppSelect);
     }
 
     public object? ActionsContent

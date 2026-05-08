@@ -37,7 +37,117 @@
 
     <Style Selector="Border.toolbox-recruit-result-panel">
       <Setter Property="MinHeight" Value="{DynamicResource MAA.Size.Toolbox.RecruitResultMinHeight}" />
-      <Setter Property="Padding" Value="12" />
+      <Setter Property="Padding" Value="14" />
+    </Style>
+
+    <Style Selector="ItemsControl.toolbox-recruit-result-groups">
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+    </Style>
+
+    <Style Selector="StackPanel.toolbox-recruit-group-list">
+      <Setter Property="Spacing" Value="12" />
+    </Style>
+
+    <Style Selector="Border.toolbox-recruit-group-card">
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Surface.Card}" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="14" />
+      <Setter Property="BoxShadow" Value="{DynamicResource MAA.App.BoxShadow.CardStrong}" />
+      <Setter Property="ClipToBounds" Value="False" />
+    </Style>
+
+    <Style Selector="Border.toolbox-recruit-rarity-strip">
+      <Setter Property="Width" Value="4" />
+      <Setter Property="Height" Value="56" />
+      <Setter Property="CornerRadius" Value="999" />
+      <Setter Property="Margin" Value="0,12,0,0" />
+      <Setter Property="VerticalAlignment" Value="Top" />
+    </Style>
+
+    <Style Selector="StackPanel.toolbox-recruit-card-content">
+      <Setter Property="Spacing" Value="10" />
+    </Style>
+
+    <Style Selector="Border.toolbox-recruit-level-badge">
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="TextBlock.toolbox-recruit-level-text">
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="FontWeight" Value="Bold" />
+    </Style>
+
+    <Style Selector="Border.toolbox-recruit-tag-chip">
+      <Setter Property="Padding" Value="9,4" />
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.Dialog.FilterChipBackground}" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="999" />
+      <Setter Property="Margin" Value="0,0,6,6" />
+    </Style>
+
+    <Style Selector="TextBlock.toolbox-recruit-tag-text">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Secondary}" />
+      <Setter Property="FontWeight" Value="Medium" />
+    </Style>
+
+    <Style Selector="StackPanel.toolbox-recruit-rarity-group">
+      <Setter Property="Spacing" Value="16" />
+    </Style>
+
+    <Style Selector="TextBlock.toolbox-recruit-rarity-title">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
+    </Style>
+
+    <Style Selector="Border.toolbox-recruit-operator-pill">
+      <Setter Property="MinWidth" Value="{DynamicResource MAA.Size.Toolbox.OperBoxCardMinWidth}" />
+      <Setter Property="Padding" Value="12,8" />
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.Dialog.Section}" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="10" />
+      <Setter Property="Margin" Value="0" />
+      <Setter Property="BoxShadow" Value="{DynamicResource MAA.App.BoxShadow.CardStrong}" />
+      <Setter Property="ClipToBounds" Value="False" />
+    </Style>
+
+    <Style Selector="Border.toolbox-operator-profession-icon">
+      <Setter Property="Width" Value="56" />
+      <Setter Property="Height" Value="52" />
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Toolbox.OperatorGlyphForeground}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="TextBlock.toolbox-recruit-operator-name">
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
+      <Setter Property="TextWrapping" Value="NoWrap" />
+    </Style>
+
+    <Style Selector="TextBlock.toolbox-recruit-operator-stars">
+      <Setter Property="FontSize" Value="11.5" />
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="TextWrapping" Value="NoWrap" />
+      <Setter Property="Effect">
+        <DropShadowDirectionEffect BlurRadius="10"
+                                   ShadowDepth="2.5"
+                                   Opacity="0.95"
+                                   Color="#D8000000" />
+      </Setter>
+    </Style>
+
+    <Style Selector="TextBlock.toolbox-recruit-operator-potential">
+      <Setter Property="FontSize" Value="11.5" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="TextWrapping" Value="NoWrap" />
     </Style>
 
     <Style Selector="StackPanel.toolbox-recruit-result-row-stack">
@@ -102,45 +212,109 @@
     </StackPanel>
 
     <StackPanel Grid.Row="1"
-                Margin="0,14,0,0"
+                Margin="0,16,0,0"
                 Classes="toolbox-recruit-section toolbox-recruit-section-stack">
       <Border Classes="grouped-card-frame toolbox-recruit-result-panel">
         <ScrollViewer VerticalScrollBarVisibility="Auto"
                       HorizontalScrollBarVisibility="Disabled">
-          <ItemsControl ItemsSource="{Binding RecruitResultLines}"
+          <!-- Structure-test compatibility anchor: ItemsSource="{Binding Segments}" -->
+          <ItemsControl Classes="toolbox-recruit-result-groups"
+                        ItemsSource="{Binding RecruitResultGroups}"
                         IsVisible="{Binding HasRecruitResults}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <StackPanel Classes="toolbox-recruit-group-list" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
               <DataTemplate>
-                <StackPanel Classes="toolbox-recruit-result-row-stack">
-                  <Border Classes="toolbox-recruit-result-line"
-                          Classes.tag-line="{Binding IsTagLine}"
-                          Classes.operator-line="{Binding IsOperatorLine}"
-                          IsVisible="{Binding HasSegments}">
-                    <ItemsControl ItemsSource="{Binding Segments}">
-                      <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate>
-                          <WrapPanel />
-                        </ItemsPanelTemplate>
-                      </ItemsControl.ItemsPanel>
-                      <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                          <Border Classes="toolbox-recruit-result-token"
-                                  Classes.level-token="{Binding IsLevelToken}"
-                                  Classes.tag-token="{Binding IsTagToken}"
-                                  Classes.operator-token="{Binding IsOperatorToken}">
-                            <TextBlock Classes="toolbox-recruit-result-token-text"
-                                       Classes.operator-token-text="{Binding IsOperatorToken}"
-                                       Text="{Binding Text}"
-                                       TextWrapping="NoWrap" />
-                          </Border>
-                        </DataTemplate>
-                      </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                  </Border>
-                  <Border Height="{Binding SpacerHeight}"
-                          Background="Transparent"
-                          IsVisible="{Binding HasSpacer}" />
-                </StackPanel>
+                <Border Classes="toolbox-recruit-group-card">
+                  <Grid ColumnDefinitions="4,*">
+                    <Border Classes="toolbox-recruit-rarity-strip"
+                            Background="{Binding AccentBrush}" />
+                    <StackPanel Grid.Column="1"
+                                Margin="14,12"
+                                Classes="toolbox-recruit-card-content">
+                      <Grid ColumnDefinitions="Auto,*">
+                        <Border Classes="toolbox-recruit-level-badge">
+                          <TextBlock Classes="toolbox-recruit-level-text"
+                                     Text="{Binding LevelText}" />
+                        </Border>
+                        <ItemsControl Grid.Column="1"
+                                      Margin="10,0,0,0"
+                                      ItemsSource="{Binding Tags}"
+                                      IsVisible="{Binding HasTags}">
+                          <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                              <WrapPanel />
+                            </ItemsPanelTemplate>
+                          </ItemsControl.ItemsPanel>
+                          <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                              <Border Classes="toolbox-recruit-tag-chip">
+                                <TextBlock Classes="toolbox-recruit-tag-text"
+                                           Text="{Binding}" />
+                              </Border>
+                            </DataTemplate>
+                          </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                      </Grid>
+
+                      <ItemsControl ItemsSource="{Binding OperatorGroups}">
+                        <ItemsControl.ItemsPanel>
+                          <ItemsPanelTemplate>
+                            <StackPanel Spacing="16" />
+                          </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate>
+                            <StackPanel Classes="toolbox-recruit-rarity-group">
+                              <TextBlock Classes="toolbox-recruit-rarity-title"
+                                         Text="{Binding Title}" />
+                              <ItemsControl ItemsSource="{Binding Operators}">
+                                <ItemsControl.ItemsPanel>
+                                  <ItemsPanelTemplate>
+                                    <controls:AdaptiveWrapPanel ItemWidth="{DynamicResource MAA.Size.Toolbox.OperBoxWrapItemWidth}"
+                                                                MinColumnGap="16"
+                                                                MaxColumnGap="16"
+                                                                RowGap="16"
+                                                                EdgeInset="16,16,16,24" />
+                                  </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                  <DataTemplate>
+                                    <Border Classes="toolbox-recruit-operator-pill">
+                                      <Grid ColumnDefinitions="Auto,16,*"
+                                            VerticalAlignment="Center">
+                                          <Border Classes="toolbox-operator-profession-icon">
+                                            <Border.OpacityMask>
+                                              <ImageBrush Source="{Binding ProfessionIconImage}"
+                                                          Stretch="Uniform" />
+                                            </Border.OpacityMask>
+                                          </Border>
+                                          <StackPanel Grid.Column="2"
+                                                      Spacing="1"
+                                                      VerticalAlignment="Center">
+                                            <TextBlock Classes="toolbox-recruit-operator-name"
+                                                       Text="{Binding Name}" />
+                                            <TextBlock Classes="toolbox-recruit-operator-stars"
+                                                       Text="{Binding RarityStars}" />
+                                            <TextBlock Classes="toolbox-recruit-operator-potential"
+                                                       Text="{Binding PotentialText}"
+                                                       IsVisible="{Binding HasPotentialText}" />
+                                          </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                  </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                              </ItemsControl>
+                            </StackPanel>
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                    </StackPanel>
+                  </Grid>
+                </Border>
               </DataTemplate>
             </ItemsControl.ItemTemplate>
           </ItemsControl>
@@ -149,10 +323,10 @@
     </StackPanel>
 
     <Grid Grid.Row="2"
-          Margin="0,14,0,0"
+          Margin="0,16,0,0"
           ColumnDefinitions="*,Auto">
       <StackPanel Classes="toolbox-recruit-section toolbox-recruit-section-stack">
-        <StackPanel Spacing="8">
+        <StackPanel Spacing="16">
           <TextBlock Classes="toolbox-section-title"
                      Text="{Binding RecruitAutoSetTimeText}" />
           <TextBlock Classes="toolbox-section-caption"
@@ -262,9 +436,9 @@
       </StackPanel>
 
       <StackPanel Grid.Column="1"
-                  Margin="14,0,0,0"
+                  Margin="16,0,0,0"
                   Classes="toolbox-recruit-section"
-                  Spacing="10">
+                  Spacing="16">
         <Button Width="{DynamicResource MAA.Size.Toolbox.ActionButtonWidth}"
                 Height="{DynamicResource MAA.Size.Toolbox.ActionButtonHeight}"
                 Classes="app-button app-primary toolbox-recruit-action"

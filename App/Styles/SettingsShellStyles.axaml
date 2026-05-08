@@ -11,13 +11,13 @@
     <Thickness x:Key="MAA.App.Settings.SubtleDividerMargin">0,2,0,2</Thickness>
     <Thickness x:Key="MAA.App.Settings.LabelMargin">0,0,6,0</Thickness>
     <Thickness x:Key="MAA.App.Settings.HintMargin">6,0,0,0</Thickness>
-    <x:Double x:Key="MAA.App.Settings.PageFlowSpacing">16</x:Double>
+    <x:Double x:Key="MAA.App.Settings.PageFlowSpacing">18</x:Double>
     <x:Double x:Key="MAA.App.Settings.PageCompactFlowSpacing">8</x:Double>
     <x:Double x:Key="MAA.App.Settings.PageColumnStackSpacing">16</x:Double>
     <x:Double x:Key="MAA.App.Settings.PageToggleStackSpacing">6</x:Double>
     <x:Double x:Key="MAA.App.Settings.FieldHeaderGap">6</x:Double>
     <x:Double x:Key="MAA.App.Settings.PageMetaBlockSpacing">4</x:Double>
-    <x:Double x:Key="MAA.App.Settings.SectionSpacing">18</x:Double>
+    <x:Double x:Key="MAA.App.Settings.SectionSpacing">20</x:Double>
     <x:Double x:Key="MAA.App.Settings.RailItemMinHeight">44</x:Double>
     <x:Double x:Key="MAA.App.Settings.RowMinHeight">38</x:Double>
   </Styles.Resources>
@@ -28,15 +28,7 @@
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="CornerRadius" Value="24" />
     <Setter Property="ClipToBounds" Value="True" />
-    <Setter Property="Background">
-      <LinearGradientBrush StartPoint="0,0"
-                           EndPoint="0,1">
-        <GradientStop Offset="0"
-                      Color="#FFFAFCFF" />
-        <GradientStop Offset="1"
-                      Color="#FFF3F7FE" />
-      </LinearGradientBrush>
-    </Setter>
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Surface.Section}" />
   </Style>
 
   <Style Selector="controls|AppSelectionList.settings-rail">
@@ -55,8 +47,8 @@
     <Setter Property="CornerRadius" Value="12" />
     <Setter Property="Transitions">
       <Transitions>
-        <BrushTransition Property="Background" Duration="0:0:0.18" />
-        <BrushTransition Property="BorderBrush" Duration="0:0:0.18" />
+        <BrushTransition Property="Background" Duration="0:0:0.11" />
+        <BrushTransition Property="BorderBrush" Duration="0:0:0.11" />
       </Transitions>
     </Setter>
   </Style>
@@ -72,13 +64,13 @@
     <Setter Property="LineHeight" Value="17" />
     <Setter Property="Transitions">
       <Transitions>
-        <BrushTransition Property="Foreground" Duration="0:0:0.18" />
+        <BrushTransition Property="Foreground" Duration="0:0:0.11" />
       </Transitions>
     </Setter>
   </Style>
 
   <Style Selector="controls|AppSelectionList.settings-rail ListBoxItem:pointerover Border.settings-rail-item">
-    <Setter Property="Background" Value="#3DE9F3FE" />
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.Settings.RailItemHover}" />
   </Style>
 
   <Style Selector="controls|AppSelectionList.settings-rail ListBoxItem:pointerover TextBlock.settings-rail-item-text">
@@ -186,7 +178,7 @@
     <Setter Property="ClipToBounds" Value="True" />
     <Setter Property="Margin" Value="0" />
     <Setter Property="Padding" Value="0,6,0,4" />
-    <Setter Property="Background" Value="#F9FFFFFF" />
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.Settings.StickyTitleBackground}" />
     <Setter Property="HorizontalAlignment" Value="Left" />
     <Setter Property="RenderTransform">
       <TranslateTransform Y="0" />
@@ -210,7 +202,7 @@
 
   <Style Selector="Border.settings-sticky-title-current-shell">
     <Setter Property="Padding" Value="0,6,0,4" />
-    <Setter Property="Background" Value="#F9FFFFFF" />
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.Settings.StickyTitleBackground}" />
     <Setter Property="HorizontalAlignment" Value="Left" />
   </Style>
 
@@ -268,6 +260,8 @@
   <Style Selector="UserControl.settings-page Grid.settings-page-labeled-row > TextBlock,
                    UserControl.settings-page Grid.settings-page-labeled-row > TextBox,
                    UserControl.settings-page Grid.settings-page-labeled-row > ComboBox,
+                   UserControl.settings-page Grid.settings-page-labeled-row > controls|AppTextInput,
+                   UserControl.settings-page Grid.settings-page-labeled-row > controls|AppSelect,
                    UserControl.settings-page Grid.settings-page-labeled-row > controls|SettingsLabel,
                    UserControl.settings-page Grid.settings-page-labeled-row > controls|AppNumberInput,
                    UserControl.settings-page Grid.settings-page-labeled-row > controls|AppActionInput,
@@ -285,6 +279,8 @@
   <Style Selector="UserControl.settings-page Grid.settings-page-labeled-action-row > TextBlock,
                    UserControl.settings-page Grid.settings-page-labeled-action-row > TextBox,
                    UserControl.settings-page Grid.settings-page-labeled-action-row > ComboBox,
+                   UserControl.settings-page Grid.settings-page-labeled-action-row > controls|AppTextInput,
+                   UserControl.settings-page Grid.settings-page-labeled-action-row > controls|AppSelect,
                    UserControl.settings-page Grid.settings-page-labeled-action-row > controls|SettingsLabel,
                    UserControl.settings-page Grid.settings-page-labeled-action-row > controls|AppNumberInput,
                    UserControl.settings-page Grid.settings-page-labeled-action-row > controls|AppActionInput,
@@ -519,13 +515,13 @@
   </Style>
 
   <Style Selector="UserControl.settings-page Border.settings-shadow-card">
-    <Setter Property="Margin" Value="0" />
-    <Setter Property="Padding" Value="14" />
+    <Setter Property="Margin" Value="3,3,3,5" />
+    <Setter Property="Padding" Value="12" />
     <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Surface.Card}" />
     <Setter Property="BorderBrush" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
-    <Setter Property="CornerRadius" Value="8" />
-    <Setter Property="BoxShadow" Value="0 0 0 0 #00000000" />
+    <Setter Property="CornerRadius" Value="10" />
+    <Setter Property="BoxShadow" Value="{DynamicResource MAA.App.BoxShadow.Card}" />
     <Setter Property="ClipToBounds" Value="False" />
   </Style>
 
@@ -538,7 +534,7 @@
     <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Surface.Card}" />
     <Setter Property="BorderBrush" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
-    <Setter Property="BoxShadow" Value="0 0 0 0 #00000000" />
+    <Setter Property="BoxShadow" Value="{DynamicResource MAA.App.BoxShadow.Card}" />
   </Style>
 
   <Style Selector="UserControl.settings-page Button">
@@ -601,11 +597,11 @@
   </Style>
 
   <Style Selector="TextBlock.settings-page-title">
-    <Setter Property="Margin" Value="0,0,12,0" />
-    <Setter Property="FontSize" Value="28" />
+    <Setter Property="Margin" Value="0,0,12,2" />
+    <Setter Property="FontSize" Value="29" />
     <Setter Property="FontWeight" Value="SemiBold" />
     <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
-    <Setter Property="LineHeight" Value="38" />
+    <Setter Property="LineHeight" Value="36" />
     <Setter Property="TextWrapping" Value="Wrap" />
   </Style>
 
@@ -613,8 +609,8 @@
     <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Surface.Card}" />
     <Setter Property="BorderBrush" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
-    <Setter Property="CornerRadius" Value="8" />
-    <Setter Property="BoxShadow" Value="0 0 0 0 #00000000" />
+    <Setter Property="CornerRadius" Value="10" />
+    <Setter Property="BoxShadow" Value="{DynamicResource MAA.App.BoxShadow.Card}" />
     <Setter Property="ClipToBounds" Value="False" />
   </Style>
 </Styles>

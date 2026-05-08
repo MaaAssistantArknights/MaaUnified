@@ -501,7 +501,7 @@ public sealed class StyleTokenContractTests
                 totalButtons++;
                 var attrs = match.Groups[1].Value;
                 Assert.Matches(
-                    "Classes=\"[^\"]*\\b(?:wpf-button|app-button|achievement-toast-close|copilot-link)\\b[^\"]*\"",
+                    "Classes=\"[^\"]*\\b(?:wpf-button|app-button|grouped-card-footer-action|achievement-toast-close|copilot-link)\\b[^\"]*\"",
                     attrs);
             }
         }

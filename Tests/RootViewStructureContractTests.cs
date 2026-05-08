@@ -222,7 +222,8 @@ public sealed class RootViewStructureContractTests
 
         var recruitText = File.ReadAllText(
             Path.Combine(root, "App", "Features", "TaskQueue", "RecruitSettingsView.axaml"));
-        Assert.Contains("<controls:AppMultiSelectDropdown", recruitText, StringComparison.Ordinal);
+        Assert.Contains("<controls:AppMultiSelect", recruitText, StringComparison.Ordinal);
+        Assert.DoesNotContain("<controls:AppMultiSelectDropdown", recruitText, StringComparison.Ordinal);
         Assert.DoesNotContain("<controls:CheckComboBox", recruitText, StringComparison.Ordinal);
     }
 

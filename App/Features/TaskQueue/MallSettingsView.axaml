@@ -39,10 +39,8 @@
     </Style>
   </UserControl.Styles>
 
-  <Grid RowDefinitions="Auto,Auto" Margin="2">
-    <TextBlock Classes="section-title" Text="{Binding Texts[Mall.Title]}" />
-
-    <controls:AdaptiveSpacingStackPanel Grid.Row="1" Classes="task-settings-section">
+  <Grid RowDefinitions="Auto" Margin="2">
+    <controls:AdaptiveSpacingStackPanel Classes="task-settings-section">
       <Border Classes="mall-section"
               IsVisible="{Binding IsGeneralMode}">
         <controls:AdaptiveSpacingStackPanel Classes="mall-section-stack">
@@ -61,9 +59,11 @@
               <Border Classes="mall-detail-card"
                       IsVisible="{Binding ShowVisitFriendsDetails}">
                 <controls:AdaptiveSpacingStackPanel Classes="mall-card-stack">
-                  <CheckBox Classes="app-checkbox"
-                            Content="{Binding Texts[Mall.OnlyOnceADay]}"
-                            IsChecked="{Binding VisitFriendsOnceADay}" />
+                  <controls:SettingsDependentRow>
+                    <CheckBox Classes="app-checkbox"
+                              Content="{Binding Texts[Mall.OnlyOnceADay]}"
+                              IsChecked="{Binding VisitFriendsOnceADay}" />
+                  </controls:SettingsDependentRow>
                 </controls:AdaptiveSpacingStackPanel>
               </Border>
             </controls:AdaptiveSpacingStackPanel>
@@ -78,23 +78,27 @@
               <Border Classes="mall-detail-card"
                       IsVisible="{Binding ShowCreditFightDetails}">
                 <controls:AdaptiveSpacingStackPanel Classes="mall-card-stack">
-                  <CheckBox Classes="app-checkbox"
-                            Content="{Binding Texts[Mall.OnlyOnceADay]}"
-                            IsChecked="{Binding CreditFightOnceADay}" />
+                  <controls:SettingsDependentRow Glyph="├">
+                    <CheckBox Classes="app-checkbox"
+                              Content="{Binding Texts[Mall.OnlyOnceADay]}"
+                              IsChecked="{Binding CreditFightOnceADay}" />
+                  </controls:SettingsDependentRow>
 
-                  <controls:SettingsInlineRow Classes="task-settings-field-stack">
-                    <TextBlock Classes="app-caption"
-                               Text="{Binding Texts[Mall.UseFormation]}" />
-                    <controls:AppSelect ItemsSource="{Binding FormationOptions}"
-                                        SelectedValueBinding="{Binding Value}"
-                                        SelectedValue="{Binding FormationIndex}">
-                      <controls:AppSelect.ItemTemplate>
-                        <DataTemplate x:DataType="vm:MallModuleViewModel+IntOption">
-                          <TextBlock Text="{Binding DisplayName}" />
-                        </DataTemplate>
-                      </controls:AppSelect.ItemTemplate>
-                    </controls:AppSelect>
-                  </controls:SettingsInlineRow>
+                  <controls:SettingsDependentRow>
+                    <controls:SettingsInlineRow Classes="task-settings-field-stack"
+                                                controls:SettingsLabelWidthCoordinator.GroupKey="TaskQueue.Fields">
+                      <controls:SettingsLabel Text="{Binding Texts[Mall.UseFormation]}" />
+                      <controls:AppSelect ItemsSource="{Binding FormationOptions}"
+                                          SelectedValueBinding="{Binding Value}"
+                                          SelectedValue="{Binding FormationIndex}">
+                        <controls:AppSelect.ItemTemplate>
+                          <DataTemplate x:DataType="vm:MallModuleViewModel+IntOption">
+                            <TextBlock Text="{Binding DisplayName}" />
+                          </DataTemplate>
+                        </controls:AppSelect.ItemTemplate>
+                      </controls:AppSelect>
+                    </controls:SettingsInlineRow>
+                  </controls:SettingsDependentRow>
                 </controls:AdaptiveSpacingStackPanel>
               </Border>
             </controls:AdaptiveSpacingStackPanel>
@@ -142,14 +146,8 @@
 
           <Border Classes="app-surface app-card">
             <controls:AdaptiveSpacingStackPanel Classes="mall-card-stack">
-              <TextBlock VerticalAlignment="Center"
-                         TextWrapping="Wrap">
-                <Run Text="{Binding Texts[Mall.BuyFirst]}" />
-                <Run Text="&#160;" />
-                <InlineUIContainer BaselineAlignment="Center">
-                  <controls:TooltipHint Tip="{Binding Texts[Mall.Drink]}" />
-                </InlineUIContainer>
-              </TextBlock>
+              <controls:SettingsLabel Text="{Binding Texts[Mall.BuyFirst]}"
+                                      Tip="{Binding Texts[Mall.Drink]}" />
               <controls:AppTextInput Classes="settings-input-block"
                                      IsEnabled="{Binding IsShoppingSettingsEnabled}"
                                      Text="{Binding BuyFirstText, UpdateSourceTrigger=LostFocus}" />

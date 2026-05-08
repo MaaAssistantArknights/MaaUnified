@@ -73,12 +73,12 @@
                       Classes="app-button app-chip achievement-dialog-clear-chip"
                       Click="OnClearFiltersClick" />
             </StackPanel>
-            <TextBox x:Name="FilterInput"
-                     Grid.Column="2"
-                     Classes="app-input app-search-input"
-                     Watermark="Filter"
-                     HorizontalAlignment="Stretch"
-                     TextChanged="OnFilterChanged" />
+            <controls:AppTextInput x:Name="FilterInput"
+                                   Grid.Column="2"
+                                   Classes="app-input app-search-input"
+                                   Watermark="Filter"
+                                   HorizontalAlignment="Stretch"
+                                   TextChanged="OnFilterChanged" />
           </Grid>
         </Border>
 

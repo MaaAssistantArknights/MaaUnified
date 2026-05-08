@@ -3508,8 +3508,14 @@
   <data name="Dialog.Error.CloseButton" xml:space="preserve">
     <value>シャットダウン</value>
   </data>
+  <data name="Dialog.Error.ConnectFailedTitle" xml:space="preserve">
+    <value>エミュレーターへの接続に失敗しました</value>
+  </data>
   <data name="Dialog.Error.CopyButton" xml:space="preserve">
     <value>コピー</value>
+  </data>
+  <data name="Dialog.Error.CopyErrorInfoButton" xml:space="preserve">
+    <value>エラー情報をコピー</value>
   </data>
   <data name="Dialog.Warning.CancelButton" xml:space="preserve">
     <value>キャンセル</value>

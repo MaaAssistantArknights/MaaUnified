@@ -237,6 +237,29 @@
       <Setter Property="GapWidth" Value="6" />
       <Setter Property="FieldWidth" Value="{DynamicResource MAA.Size.Settings.FieldCenteredWidth}" />
       <Setter Property="NumberFieldWidth" Value="{DynamicResource MAA.Size.Settings.FieldCompactWidth}" />
+      <Setter Property="controls:SettingsLabelWidthCoordinator.MaxLabelWidth" Value="{DynamicResource MAA.Size.TaskQueue.SettingsLabelMaxWidth}" />
+      <Setter Property="controls:SettingsLabelWidthCoordinator.FieldGap" Value="{DynamicResource MAA.Size.TaskQueue.SettingsLabelFieldGap}" />
+    </Style>
+
+    <Style Selector="Grid.task-queue-config-panel controls|SettingsLabel">
+      <Setter Property="Margin" Value="0" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="Grid.task-queue-config-panel controls|SettingsLabel TextBlock.settings-label-text">
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Secondary}" />
+      <Setter Property="FontSize" Value="13.5" />
+      <Setter Property="FontWeight" Value="Normal" />
+      <Setter Property="LineHeight" Value="20" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <Style Selector="Grid.task-queue-config-panel controls|SettingsLabel controls|TooltipHint.settings-label-tip">
+      <Setter Property="Margin" Value="0" />
+      <Setter Property="HorizontalAlignment" Value="Right" />
+      <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
     <Style Selector="Grid.task-queue-config-panel Grid.task-settings-inline-row TextBlock.settings-inline-label">
@@ -264,7 +287,7 @@
                      Grid.task-queue-config-panel Grid.task-settings-inline-row controls|AppSuggestInput,
                      Grid.task-queue-config-panel Grid.task-settings-inline-row controls|AppHistoryInput,
                      Grid.task-queue-config-panel Grid.task-settings-inline-row controls|AppActionInput,
-                     Grid.task-queue-config-panel Grid.task-settings-inline-row controls|AppMultiSelectDropdown">
+                     Grid.task-queue-config-panel Grid.task-settings-inline-row controls|AppMultiSelect">
       <Setter Property="HorizontalAlignment" Value="Left" />
       <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
@@ -353,13 +376,10 @@
 
     <Style Selector="controls|AppSelectionList.task-queue-list Border.task-queue-item-card">
       <Setter Property="Margin" Value="0" />
-      <Setter Property="Padding" Value="8,0,6,0" />
-      <Setter Property="MinHeight" Value="{DynamicResource MAA.Size.TaskQueue.RowHeight}" />
       <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
     <Style Selector="controls|AppSelectionList.task-queue-list ListBoxItem">
-      <Setter Property="Margin" Value="0,3,0,3" />
       <Setter Property="MinHeight" Value="0" />
     </Style>
 
@@ -421,7 +441,24 @@
       <Setter Property="MinWidth" Value="28" />
       <Setter Property="Height" Value="28" />
       <Setter Property="Padding" Value="0" />
-      <Setter Property="FontSize" Value="16" />
+      <Setter Property="FontSize" Value="15" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="TextBlock.task-queue-row-action-glyph">
+      <Setter Property="Width" Value="28" />
+      <Setter Property="Height" Value="28" />
+      <Setter Property="FontSize" Value="15" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="LineHeight" Value="28" />
+      <Setter Property="TextAlignment" Value="Center" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Foreground" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+      <Setter Property="RenderTransform">
+        <TranslateTransform Y="-0.5" />
+      </Setter>
     </Style>
 
     <Style Selector="Grid.task-queue-post-action-row-content">
@@ -624,15 +661,9 @@
       </Setter>
     </Style>
 
-    <Style Selector="Border.task-drag-preview">
-      <Setter Property="Margin" Value="0,1,0,1" />
-      <Setter Property="Padding" Value="8,0,6,0" />
-      <Setter Property="MinHeight" Value="36" />
-      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Surface.Section}" />
-      <Setter Property="BorderBrush" Value="Transparent" />
-      <Setter Property="BorderThickness" Value="0" />
-      <Setter Property="CornerRadius" Value="6" />
-      <Setter Property="IsHitTestVisible" Value="False" />
+    <Style Selector="Button.task-queue-run-button">
+      <Setter Property="Width" Value="232" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
     </Style>
   </UserControl.Styles>
 
@@ -666,8 +697,18 @@
                           DragDrop.DragOver="OnTaskRowDragOver"
                           DragDrop.Drop="OnTaskRowDrop"
                           PointerPressed="OnTaskRowPointerPressed"
-                          PointerMoved="OnTaskRowPointerMoved"
-                          ToolTip.Tip="{Binding ToolTipText}">
+                          PointerMoved="OnTaskRowPointerMoved">
+                    <ToolTip.Tip>
+                      <Grid Margin="14"
+                            Background="Transparent"
+                            ClipToBounds="False">
+                        <Border Classes="app-tooltip-card">
+                          <TextBlock Classes="app-tooltip-card-text"
+                                     Text="{Binding ToolTipText}" />
+                        </Border>
+                      </Grid>
+                    </ToolTip.Tip>
+
                     <Border.ContextMenu>
                       <ContextMenu>
                         <MenuItem Header="{Binding TaskMenuRunOnceText}"
@@ -710,9 +751,20 @@
                       <Button Grid.Column="3"
                               Classes="app-button app-subtle app-icon-only task-queue-row-action"
                               Margin="{DynamicResource MAA.Thickness.MarginActionButtonLeft}"
-                              Content="{Binding DataContext.TaskMenuIconText, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                              ToolTip.Tip="{Binding DataContext.TaskMenuTooltipText, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                              Click="OnTaskGearClick" />
+                              Click="OnTaskGearClick">
+                        <ToolTip.Tip>
+                          <Grid Margin="14"
+                                Background="Transparent"
+                                ClipToBounds="False">
+                            <Border Classes="app-tooltip-card">
+                              <TextBlock Classes="app-tooltip-card-text"
+                                         Text="{Binding DataContext.TaskMenuTooltipText, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                            </Border>
+                          </Grid>
+                        </ToolTip.Tip>
+                        <TextBlock Classes="task-queue-row-action-glyph"
+                                   Text="{Binding DataContext.TaskMenuIconText, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                      </Button>
                     </Grid>
                   </Border>
                 </DataTemplate>
@@ -728,7 +780,7 @@
                       Classes="task-drop-indicator"
                       IsVisible="False" />
               <Border x:Name="TaskDragPreview"
-                      Classes="app-surface app-card task-queue-item-card task-drag-preview"
+                      Classes="app-selection-list-item-shell selection-list-section-card-preview task-queue-item-card"
                       Classes.status-running="{Binding IsStatusRunning}"
                       Classes.status-success="{Binding IsStatusSuccess}"
                       Classes.status-error="{Binding IsStatusError}"
@@ -754,8 +806,10 @@
                   <Button Grid.Column="3"
                           Classes="app-button app-subtle app-icon-only task-queue-row-action"
                           Margin="{DynamicResource MAA.Thickness.MarginActionButtonLeft}"
-                          Content="{Binding DataContext.TaskMenuIconText, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                          Focusable="False" />
+                          Focusable="False">
+                    <TextBlock Classes="task-queue-row-action-glyph"
+                               Text="{Binding DataContext.TaskMenuIconText, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                  </Button>
                 </Grid>
               </Border>
             </Canvas>
@@ -834,9 +888,8 @@
                 Margin="0,6,0,0"
                 Classes="app-surface app-card task-queue-run-card">
           <Grid RowDefinitions="Auto,Auto,Auto">
-            <Button Classes="app-button app-primary"
+            <Button Classes="app-button app-primary task-queue-run-button"
                     Grid.Row="0"
-                    HorizontalAlignment="Stretch"
                     Content="{Binding RunButtonText}"
                     IsEnabled="{Binding CanToggleRun}"
                     Click="OnToggleRunClick" />

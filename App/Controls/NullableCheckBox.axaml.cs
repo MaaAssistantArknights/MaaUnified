@@ -27,6 +27,7 @@ public partial class NullableCheckBox : UserControl
     public NullableCheckBox()
     {
         InitializeComponent();
+        AttachedToVisualTree += (_, _) => SettingsLabelWidthCoordinator.InvalidateNearestGroup(this);
     }
 
     public bool? IsChecked
@@ -60,6 +61,11 @@ public partial class NullableCheckBox : UserControl
         if (change.Property == TipProperty)
         {
             HasTip = !string.IsNullOrWhiteSpace(Tip);
+            SettingsLabelWidthCoordinator.InvalidateNearestGroup(this);
+        }
+        else if (change.Property == TextProperty)
+        {
+            SettingsLabelWidthCoordinator.InvalidateNearestGroup(this);
         }
     }
 }

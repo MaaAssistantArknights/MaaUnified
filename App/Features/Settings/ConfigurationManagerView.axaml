@@ -26,7 +26,7 @@
             controls:SettingsLabelWidthCoordinator.GroupKey="ConfigurationManager.Main"
             ColumnDefinitions="Auto,*">
         <controls:SettingsLabel Text="{Binding RootTexts[Settings.ConfigurationManager.ProfileName]}" />
-        <ComboBox Grid.Column="1"
+        <controls:AppSelect Grid.Column="1"
                   Classes="settings-select configuration-manager-profile-picker"
                   Width="{DynamicResource MAA.Size.Settings.ColumnWidth}"
                   HorizontalAlignment="Left"
@@ -34,7 +34,7 @@
                   SelectedValueBinding="{Binding .}"
                   SelectedValue="{Binding ConfigurationManagerSelectedProfile}"
                   SelectionChanged="OnConfigurationProfileSelectionChanged">
-          <ComboBox.ItemTemplate>
+          <controls:AppSelect.ItemTemplate>
             <DataTemplate>
               <Border Classes="settings-dropdown-item-shell">
                 <Grid ColumnDefinitions="*,Auto">
@@ -52,13 +52,13 @@
                 </Grid>
               </Border>
             </DataTemplate>
-          </ComboBox.ItemTemplate>
-          <ComboBox.SelectionBoxItemTemplate>
+          </controls:AppSelect.ItemTemplate>
+          <controls:AppSelect.SelectionBoxItemTemplate>
             <DataTemplate>
               <TextBlock Text="{Binding .}" />
             </DataTemplate>
-          </ComboBox.SelectionBoxItemTemplate>
-        </ComboBox>
+          </controls:AppSelect.SelectionBoxItemTemplate>
+        </controls:AppSelect>
       </Grid>
 
       <Grid Classes="settings-page-labeled-action-row"

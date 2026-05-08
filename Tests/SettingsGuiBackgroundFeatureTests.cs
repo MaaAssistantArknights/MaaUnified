@@ -152,6 +152,13 @@ public sealed class SettingsGuiBackgroundFeatureTests
         var originalInverseSwitchable = FindDisplay(vm.InverseClearModeOptions, "ClearInverse");
         var originalVersionChannelBeta = FindDisplay(vm.VersionUpdateVersionTypeOptions, "Beta");
         var originalResourceSourceMirror = FindDisplay(vm.VersionUpdateResourceSourceOptions, "MirrorChyan");
+        var selectedThemeBeforeLanguageChange = vm.SelectedThemeOption;
+        var selectedOperNameBeforeLanguageChange = vm.SelectedOperNameLanguageOption;
+        var selectedStretchBeforeLanguageChange = vm.SelectedBackgroundStretchModeOption;
+        var selectedInverseBeforeLanguageChange = vm.SelectedInverseClearModeOption;
+        var selectedVersionTypeBeforeLanguageChange = vm.SelectedVersionUpdateVersionTypeOption;
+        var selectedResourceSourceBeforeLanguageChange = vm.SelectedVersionUpdateResourceSourceOption;
+        var selectedProxyTypeBeforeLanguageChange = vm.SelectedVersionUpdateProxyTypeOption;
 
         await vm.ChangeLanguageAsync("en-us");
         await WaitUntilAsync(() => string.Equals(vm.Language, "en-us", StringComparison.OrdinalIgnoreCase));
@@ -178,6 +185,21 @@ public sealed class SettingsGuiBackgroundFeatureTests
         Assert.Equal("Beta", vm.SelectedVersionUpdateVersionTypeOption?.Value);
         Assert.Equal("MirrorChyan", vm.SelectedVersionUpdateResourceSourceOption?.Value);
         Assert.Equal("socks5", vm.SelectedVersionUpdateProxyTypeOption?.Value);
+
+        Assert.NotSame(selectedThemeBeforeLanguageChange, vm.SelectedThemeOption);
+        Assert.NotSame(selectedOperNameBeforeLanguageChange, vm.SelectedOperNameLanguageOption);
+        Assert.NotSame(selectedStretchBeforeLanguageChange, vm.SelectedBackgroundStretchModeOption);
+        Assert.NotSame(selectedInverseBeforeLanguageChange, vm.SelectedInverseClearModeOption);
+        Assert.NotSame(selectedVersionTypeBeforeLanguageChange, vm.SelectedVersionUpdateVersionTypeOption);
+        Assert.NotSame(selectedResourceSourceBeforeLanguageChange, vm.SelectedVersionUpdateResourceSourceOption);
+        Assert.NotSame(selectedProxyTypeBeforeLanguageChange, vm.SelectedVersionUpdateProxyTypeOption);
+        Assert.Equal(selectedThemeBeforeLanguageChange, vm.SelectedThemeOption);
+        Assert.Equal(selectedOperNameBeforeLanguageChange, vm.SelectedOperNameLanguageOption);
+        Assert.Equal(selectedStretchBeforeLanguageChange, vm.SelectedBackgroundStretchModeOption);
+        Assert.Equal(selectedInverseBeforeLanguageChange, vm.SelectedInverseClearModeOption);
+        Assert.Equal(selectedVersionTypeBeforeLanguageChange, vm.SelectedVersionUpdateVersionTypeOption);
+        Assert.Equal(selectedResourceSourceBeforeLanguageChange, vm.SelectedVersionUpdateResourceSourceOption);
+        Assert.Equal(selectedProxyTypeBeforeLanguageChange, vm.SelectedVersionUpdateProxyTypeOption);
     }
 
     [Fact]

@@ -7,6 +7,8 @@ namespace MAAUnified.App.Features.Advanced;
 
 public partial class ToolboxView : UserControl
 {
+    private const int OperBoxTabIndex = 1;
+    private const int DepotTabIndex = 2;
     private const int PeepTabIndex = 4;
 
     public ToolboxView()
@@ -36,7 +38,7 @@ public partial class ToolboxView : UserControl
             return;
         }
 
-        scrollViewer.VerticalScrollBarVisibility = ToolboxTabs.SelectedIndex == PeepTabIndex
+        scrollViewer.VerticalScrollBarVisibility = ToolboxTabs.SelectedIndex is OperBoxTabIndex or DepotTabIndex or PeepTabIndex
             ? ScrollBarVisibility.Disabled
             : ScrollBarVisibility.Auto;
     }

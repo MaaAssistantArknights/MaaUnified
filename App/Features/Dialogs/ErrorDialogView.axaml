@@ -21,14 +21,53 @@
                  Text="Context" />
     </controls:AppWindowFrame.HeaderContent>
     <controls:AppWindowFrame.Content>
-      <Border Classes="app-surface app-section">
-        <TextBox x:Name="ErrorDetailBox"
-                 Classes="settings-input settings-input-block"
-                 AcceptsReturn="True"
-                 IsReadOnly="True"
-                 ScrollViewer.VerticalScrollBarVisibility="Auto"
-                 TextWrapping="Wrap" />
-      </Border>
+      <Grid RowDefinitions="Auto,*">
+        <Border Classes="error-dialog-summary-panel">
+          <Grid ColumnDefinitions="Auto,*">
+            <Border x:Name="SummaryHero"
+                    Classes="app-hero error-dialog-hero"
+                    VerticalAlignment="Top">
+              <TextBlock Classes="app-hero-glyph error-dialog-hero-glyph"
+                         Text="!" />
+            </Border>
+
+            <StackPanel x:Name="SummaryContentPanel"
+                        Grid.Column="1"
+                        Margin="18,2,0,0"
+                        Spacing="12">
+              <TextBlock x:Name="FriendlyMessageText"
+                         Classes="app-lead long-wrap"
+                         Text="" />
+              <Border x:Name="SuggestionPanel"
+                      Classes="error-dialog-suggestion-panel"
+                      IsVisible="False">
+                <TextBlock x:Name="SuggestionText"
+                           Classes="app-body long-wrap"
+                           Text="" />
+              </Border>
+            </StackPanel>
+          </Grid>
+        </Border>
+
+        <Grid x:Name="DetailHost"
+              Grid.Row="1"
+              Margin="0,18,0,0"
+              RowDefinitions="Auto,*">
+          <TextBlock x:Name="DetailSectionTitle"
+                     Classes="section-title"
+                     Text="Error details" />
+          <Border Grid.Row="1"
+                  Margin="0,8,0,0"
+                  Classes="error-dialog-detail-panel">
+            <TextBox x:Name="ErrorDetailBox"
+                     Classes="settings-input settings-input-block error-dialog-detail-box"
+                     AcceptsReturn="True"
+                     IsReadOnly="True"
+                     ScrollViewer.VerticalScrollBarVisibility="Auto"
+                     TextWrapping="Wrap" />
+          </Border>
+        </Grid>
+      </Grid>
     </controls:AppWindowFrame.Content>
     <controls:AppWindowFrame.ActionsContent>
       <StackPanel Orientation="Horizontal"

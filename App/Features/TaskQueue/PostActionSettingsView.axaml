@@ -7,10 +7,6 @@
       <Setter Property="Spacing" Value="{DynamicResource MAA.App.Settings.PageFlowSpacing}" />
     </Style>
 
-    <Style Selector="StackPanel.post-action-title-stack">
-      <Setter Property="Spacing" Value="{DynamicResource MAA.App.Settings.PageCompactFlowSpacing}" />
-    </Style>
-
     <Style Selector="controls|AdaptiveSpacingStackPanel.post-action-toggle-stack">
       <Setter Property="Spacing" Value="{DynamicResource MAA.App.Settings.PageToggleStackSpacing}" />
     </Style>
@@ -28,13 +24,9 @@
   </UserControl.Styles>
 
   <StackPanel Margin="4" Classes="post-action-layout">
-    <StackPanel Classes="post-action-title-stack">
-      <TextBlock Classes="section-title" Text="{Binding Texts[PostAction.Title]}" />
-
-      <controls:AppHintedCheckBox Text="{Binding Texts[PostAction.Once]}"
-                                   Tip="{Binding Texts[PostAction.OnceTip]}"
-                                   IsChecked="{Binding Once}" />
-    </StackPanel>
+    <controls:AppHintedCheckBox Text="{Binding Texts[PostAction.Once]}"
+                                 Tip="{Binding Texts[PostAction.OnceTip]}"
+                                 IsChecked="{Binding Once}" />
 
     <controls:AdaptiveSpacingStackPanel Classes="post-action-toggle-stack">
       <CheckBox Classes="app-checkbox"

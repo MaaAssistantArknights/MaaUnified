@@ -5,6 +5,7 @@ using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
+using MAAUnified.App.Controls;
 using MAAUnified.App.Features.Dialogs;
 using MAAUnified.App.ViewModels.Infrastructure;
 using MAAUnified.Application.Models;
@@ -109,6 +110,24 @@ public sealed class DialogModuleP1FeatureTests
         Assert.Equal("配置名称不能为空。", localized.Message);
         Assert.Equal("请输入配置名称后再试。", DialogTextCatalog.BuildErrorSuggestion("zh-cn", result));
         Assert.Contains("原始消息", localized.Error?.Details ?? string.Empty, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void DialogTextCatalog_ShouldProvideFriendlyConnectFailedMessage()
+    {
+        var result = UiOperationResult.Fail(
+            UiErrorCode.ConnectFailed,
+            "Connection command failed to exec",
+            "{\"adb\":\"/usr/bin/adb\",\"address\":\"192.168.1.105:16384\"}");
+
+        var localized = DialogTextCatalog.LocalizeErrorResult("zh-cn", result);
+
+        Assert.Equal("连接模拟器失败。", localized.Message);
+        Assert.Equal("连接模拟器失败。", localized.Error?.Message);
+        Assert.Equal("连接模拟器失败", DialogTextCatalog.ErrorDialogConnectFailedTitle("zh-cn"));
+        Assert.Equal("复制报错信息", DialogTextCatalog.ErrorDialogCopyErrorInfoButton("zh-cn"));
+        Assert.Contains("原始消息", localized.Error?.Details ?? string.Empty, StringComparison.Ordinal);
+        Assert.Contains("ADB", DialogTextCatalog.BuildErrorSuggestion("zh-cn", result), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -290,6 +309,7 @@ public sealed class DialogModuleP1FeatureTests
         Assert.Contains("ReserveTrailingAccessorySpace=\"True\"", xaml, StringComparison.Ordinal);
         Assert.Contains("app-selection-list-item-shell", xaml, StringComparison.Ordinal);
         Assert.Contains("announcement-dialog-sticky-title-viewport", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("announcement-dialog-section-list", xaml + controlStyles, StringComparison.Ordinal);
         Assert.DoesNotContain("announcement-dialog-list-selection-surface", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("announcement-dialog-read-progress", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("announcement-dialog-action-lock-scrim", xaml, StringComparison.Ordinal);
@@ -309,6 +329,8 @@ public sealed class DialogModuleP1FeatureTests
         Assert.Contains("controls|AppSelectionIndicatorPresenter", selectionListStyles, StringComparison.Ordinal);
         Assert.Contains("controls|AppSelectionIndicatorPresenter.selection-indicator-rail.indicator-vertical /template/ Border#PART_IndicatorGlow", selectionListStyles, StringComparison.Ordinal);
         Assert.Contains("controls|AppSelectionIndicatorPresenter.selection-indicator-rail.indicator-vertical /template/ Border#PART_Indicator", selectionListStyles, StringComparison.Ordinal);
+        Assert.Contains("<x:Double x:Key=\"MAA.App.SelectionIndicator.RailMaxLength\">22</x:Double>", selectionListStyles, StringComparison.Ordinal);
+        Assert.Contains("<Setter Property=\"Width\" Value=\"3\" />", selectionListStyles, StringComparison.Ordinal);
         Assert.Contains("<ThicknessTransition Property=\"Margin\"", selectionListStyles, StringComparison.Ordinal);
         Assert.DoesNotContain("selection-list-rail ListBoxItem:selected Border.app-selection-list-item-shell", selectionListStyles, StringComparison.Ordinal);
         Assert.DoesNotContain("selection-list-rail ListBoxItem:pointerover Border.app-selection-list-item-shell", selectionListStyles, StringComparison.Ordinal);
@@ -441,10 +463,30 @@ public sealed class DialogModuleP1FeatureTests
         Assert.Contains("<controls:AppTextInput x:Name=\"InputBox\"", textDialogXaml, StringComparison.Ordinal);
         Assert.Contains("ApplyInputMode(request.MultiLine);", textDialogCode, StringComparison.Ordinal);
         Assert.Contains("Classes.Set(\"settings-input\", true);", appTextInputCode, StringComparison.Ordinal);
-        Assert.Contains("Classes=\"settings-input settings-input-block\"", errorDialogXaml, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"settings-input settings-input-block error-dialog-detail-box\"", errorDialogXaml, StringComparison.Ordinal);
         Assert.Contains("Classes=\"settings-input settings-input-block\"", versionUpdateXaml, StringComparison.Ordinal);
         Assert.Contains("Classes=\"settings-input settings-input-block\"", textDialogXaml, StringComparison.Ordinal);
         Assert.Contains("Style Selector=\"TextBox.settings-input.settings-input-block\"", inputStyles, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ErrorDialog_ShouldShowFriendlySummaryBeforeRawDetails()
+    {
+        var root = BaselineTestSupport.GetMaaUnifiedRoot();
+        var errorDialogXaml = File.ReadAllText(Path.Combine(root, "App", "Features", "Dialogs", "ErrorDialogView.axaml"));
+        var errorDialogCode = File.ReadAllText(Path.Combine(root, "App", "Features", "Dialogs", "ErrorDialogView.axaml.cs"));
+
+        Assert.Contains("x:Name=\"FriendlyMessageText\"", errorDialogXaml, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"SuggestionPanel\"", errorDialogXaml, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"DetailSectionTitle\"", errorDialogXaml, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"DetailHost\"", errorDialogXaml, StringComparison.Ordinal);
+        Assert.Contains("FriendlyMessageText.Text = _simpleConnectFailureMode", errorDialogCode, StringComparison.Ordinal);
+        Assert.Contains("SuggestionPanel.IsVisible = !_simpleConnectFailureMode && !string.IsNullOrWhiteSpace(request.Suggestion);", errorDialogCode, StringComparison.Ordinal);
+        Assert.Contains("_simpleConnectFailureMode = request.Result.Error?.Code == UiErrorCode.ConnectFailed;", errorDialogCode, StringComparison.Ordinal);
+        Assert.Contains("SizeToContent = SizeToContent.Height;", errorDialogCode, StringComparison.Ordinal);
+        Assert.Contains("FriendlyMessageText.Classes.Set(\"error-dialog-simple-message\", _simpleConnectFailureMode);", errorDialogCode, StringComparison.Ordinal);
+        Assert.Contains("DetailHost.IsVisible = !_simpleConnectFailureMode;", errorDialogCode, StringComparison.Ordinal);
+        Assert.Contains("CancelButton.IsVisible = !_simpleConnectFailureMode;", errorDialogCode, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -641,7 +683,7 @@ public sealed class DialogModuleP1FeatureTests
     public void AchievementListDialogView_BuildPayload_ShouldReturnFilterTextAndEmptySelection()
     {
         var view = (AchievementListDialogView)RuntimeHelpers.GetUninitializedObject(typeof(AchievementListDialogView));
-        SetAchievementListDialogField(view, "FilterInput", new TextBox { Text = "keyword" });
+        SetAchievementListDialogField(view, "FilterInput", new AppTextInput { Text = "keyword" });
 
         var payload = view.BuildPayload();
 

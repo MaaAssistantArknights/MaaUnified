@@ -22,6 +22,50 @@ public partial class App : Avalonia.Application
     private static readonly TimeSpan UiLagProbeInterval = TimeSpan.FromMilliseconds(250);
     private static readonly TimeSpan UiLagLogMinInterval = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan RuntimeDisposeTimeout = TimeSpan.FromSeconds(4);
+    private static readonly string[] LegacyLocalizationResourceKeys =
+    [
+        "AlwaysAutoDetectConnectionTip",
+        "BadModules.UseSoftwareRenderingTip",
+        "ExternalNotificationBarkSendKey",
+        "ExternalNotificationBarkServer",
+        "ExternalNotificationCustomWebhook",
+        "ExternalNotificationCustomWebhookBody",
+        "ExternalNotificationCustomWebhookPlaceholders",
+        "ExternalNotificationCustomWebhookUrl",
+        "ExternalNotificationDingTalkAccessToken",
+        "ExternalNotificationDingTalkSecret",
+        "ExternalNotificationDiscordBotToken",
+        "ExternalNotificationDiscordUserId",
+        "ExternalNotificationDiscordWebhookUrl",
+        "ExternalNotificationGotifyServer",
+        "ExternalNotificationGotifyToken",
+        "ExternalNotificationQmsgBot",
+        "ExternalNotificationQmsgKey",
+        "ExternalNotificationQmsgServer",
+        "ExternalNotificationQmsgUser",
+        "ExternalNotificationServerChanSendKey",
+        "ExternalNotificationSmtpAuth",
+        "ExternalNotificationSmtpFrom",
+        "ExternalNotificationSmtpPassword",
+        "ExternalNotificationSmtpPort",
+        "ExternalNotificationSmtpServer",
+        "ExternalNotificationSmtpSsl",
+        "ExternalNotificationSmtpTo",
+        "ExternalNotificationSmtpUser",
+        "ExternalNotificationTelegramBotToken",
+        "ExternalNotificationTelegramChatId",
+        "ExternalNotificationTelegramTopicId",
+        "ForceGithubGlobalSourceTip",
+        "ForceScheduledStartTip",
+        "HotKeyChangingTip",
+        "ResourceUpdateTip",
+        "SystemNotificationInfo",
+        "TimerCustomConfigTip",
+        "UpdateAutoCheckTip",
+        "UpdateCheckTip",
+        "UpdateSourceTip",
+        "UseGpuForInferenceTip",
+    ];
     private const double UiLagThresholdMs = 120;
     private static bool _globalExceptionHandlersRegistered;
     private static int _shutdownStarted;
@@ -241,25 +285,96 @@ public partial class App : Avalonia.Application
 
     private void OnLegacyLocalizationLanguageChanged(object? sender, UiLanguageChangedEventArgs e)
     {
+        var queueDelay = Stopwatch.StartNew();
         if (!Dispatcher.UIThread.CheckAccess())
         {
             Dispatcher.UIThread.Post(
-                () => ApplyLegacyLocalizationResources(e.CurrentLanguage),
+                () =>
+                {
+                    _ = RecordAppTemporaryTimingAsync(
+                        "App.LegacyLocalization.QueueDelay",
+                        queueDelay.Elapsed.TotalMilliseconds,
+                        ("language", e.CurrentLanguage),
+                        ("postedFromUiThread", false));
+                    ApplyLegacyLocalizationResources(e.CurrentLanguage);
+                },
                 DispatcherPriority.Background);
             return;
         }
 
         Dispatcher.UIThread.Post(
-            () => ApplyLegacyLocalizationResources(e.CurrentLanguage),
+            () =>
+            {
+                _ = RecordAppTemporaryTimingAsync(
+                    "App.LegacyLocalization.QueueDelay",
+                    queueDelay.Elapsed.TotalMilliseconds,
+                    ("language", e.CurrentLanguage),
+                    ("postedFromUiThread", true));
+                ApplyLegacyLocalizationResources(e.CurrentLanguage);
+            },
             DispatcherPriority.Background);
     }
 
     private void ApplyLegacyLocalizationResources(string? language)
     {
-        foreach (var (key, value) in AchievementTextCatalog.GetAllStrings(language))
+        var total = Stopwatch.StartNew();
+        var step = Stopwatch.StartNew();
+        var entries = AchievementTextCatalog.GetAllStrings(language);
+        _ = RecordAppTemporaryTimingAsync(
+            "App.LegacyLocalization.LoadCatalog",
+            step.Elapsed.TotalMilliseconds,
+            ("language", language),
+            ("entryCount", entries.Count));
+
+        step.Restart();
+        var appliedCount = 0;
+        foreach (var key in LegacyLocalizationResourceKeys)
         {
+            if (!entries.TryGetValue(key, out var value))
+            {
+                continue;
+            }
+
             Resources[key] = value;
+            appliedCount++;
         }
+
+        _ = RecordAppTemporaryTimingAsync(
+            "App.LegacyLocalization.ApplyResources",
+            step.Elapsed.TotalMilliseconds,
+            ("language", language),
+            ("entryCount", entries.Count),
+            ("allowlistCount", LegacyLocalizationResourceKeys.Length),
+            ("appliedCount", appliedCount));
+        _ = RecordAppTemporaryTimingAsync(
+            "App.LegacyLocalization.Total",
+            total.Elapsed.TotalMilliseconds,
+            ("language", language),
+            ("entryCount", entries.Count),
+            ("allowlistCount", LegacyLocalizationResourceKeys.Length),
+            ("appliedCount", appliedCount));
+    }
+
+    private static Task RecordAppTemporaryTimingAsync(
+        string scope,
+        double elapsedMs,
+        params (string Key, object? Value)[] fields)
+    {
+        if (Runtime is not { } runtime)
+        {
+            return Task.CompletedTask;
+        }
+
+        var payload = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (key, value) in fields)
+        {
+            if (!string.IsNullOrWhiteSpace(key))
+            {
+                payload[key] = value;
+            }
+        }
+
+        return runtime.DiagnosticsService.RecordTemporaryTimingAsync(scope, elapsedMs, payload);
     }
 
     private void ConfigureUiFontFamilyResource()

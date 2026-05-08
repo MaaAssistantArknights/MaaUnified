@@ -30,20 +30,14 @@
   </UserControl.Styles>
 
   <controls:AdaptiveSpacingStackPanel Margin="2" Classes="startup-layout">
-    <TextBlock Classes="section-title" Text="{Binding Texts[StartUp.Title]}" />
-
     <controls:AdaptiveSpacingStackPanel Classes="startup-section-content">
         <Border Classes="app-surface app-card"
                 IsVisible="{Binding ShowAccountSwitch}">
           <controls:SettingsInlineRow Classes="startup-card-content"
-                                      FieldWidth="{DynamicResource MAA.Size.Settings.FieldWidth}">
-            <TextBlock Classes="startup-field-label">
-              <Run Text="{Binding Texts[StartUp.AccountSwitch]}" />
-              <Run Text="&#160;" />
-              <InlineUIContainer BaselineAlignment="Center">
-                <controls:TooltipHint Tip="{Binding Texts[StartUp.AccountSwitchTip]}" />
-              </InlineUIContainer>
-            </TextBlock>
+                                      FieldWidth="{DynamicResource MAA.Size.Settings.FieldWidth}"
+                                      controls:SettingsLabelWidthCoordinator.GroupKey="TaskQueue.Fields">
+            <controls:SettingsLabel Text="{Binding Texts[StartUp.AccountSwitch]}"
+                                    Tip="{Binding Texts[StartUp.AccountSwitchTip]}" />
 
             <controls:AppActionInput HorizontalAlignment="Left"
                                      Text="{Binding AccountName, UpdateSourceTrigger=LostFocus}"
@@ -62,9 +56,9 @@
 
     <controls:AdaptiveSpacingStackPanel Classes="startup-section-content">
         <Border Classes="app-surface app-card">
-          <controls:SettingsInlineRow Classes="startup-card-content">
-            <TextBlock Classes="startup-field-label"
-                       Text="{Binding Texts[StartUp.ClientType]}" />
+          <controls:SettingsInlineRow Classes="startup-card-content"
+                                      controls:SettingsLabelWidthCoordinator.GroupKey="TaskQueue.Fields">
+            <controls:SettingsLabel Text="{Binding Texts[StartUp.ClientType]}" />
             <controls:AppSelect ItemsSource="{Binding ClientTypeOptions}"
                                 SelectedValueBinding="{Binding Type}"
                                 SelectedValue="{Binding SelectedClientTypeValue}">
@@ -78,9 +72,9 @@
         </Border>
 
         <Border Classes="app-surface app-card">
-          <controls:SettingsInlineRow Classes="startup-card-content">
-            <TextBlock Classes="startup-field-label"
-                       Text="{Binding Texts[StartUp.ConnectConfig]}" />
+          <controls:SettingsInlineRow Classes="startup-card-content"
+                                      controls:SettingsLabelWidthCoordinator.GroupKey="TaskQueue.Fields">
+            <controls:SettingsLabel Text="{Binding Texts[StartUp.ConnectConfig]}" />
             <controls:AppSelect ItemsSource="{Binding ConnectConfigOptions}"
                                 SelectedValueBinding="{Binding Type}"
                                 SelectedValue="{Binding SelectedConnectConfigValue}">
@@ -95,14 +89,10 @@
 
         <Border Classes="app-surface app-card">
           <controls:SettingsInlineRow Classes="startup-card-content"
-                                      FieldWidth="{DynamicResource MAA.Size.Settings.FieldInputWidth}">
-            <TextBlock Classes="startup-field-label">
-              <Run Text="{Binding Texts[StartUp.ConnectAddress]}" />
-              <Run Text="&#160;" />
-              <InlineUIContainer BaselineAlignment="Center">
-                <controls:TooltipHint Tip="{Binding Texts[StartUp.ConnectionAddressTip]}" />
-              </InlineUIContainer>
-            </TextBlock>
+                                      FieldWidth="{DynamicResource MAA.Size.Settings.FieldInputWidth}"
+                                      controls:SettingsLabelWidthCoordinator.GroupKey="TaskQueue.Fields">
+            <controls:SettingsLabel Text="{Binding Texts[StartUp.ConnectAddress]}"
+                                    Tip="{Binding Texts[StartUp.ConnectionAddressTip]}" />
 
             <controls:AppHistoryInput ItemsSource="{Binding ConnectAddressHistory}"
                                       Text="{Binding ConnectAddress, Mode=TwoWay}"
@@ -116,9 +106,9 @@
     <controls:AdaptiveSpacingStackPanel Classes="startup-section-content">
         <Border Classes="app-surface app-card">
           <controls:SettingsInlineRow Classes="startup-card-content"
-                                      FieldWidth="{DynamicResource MAA.Size.Settings.FieldInputWidth}">
-            <TextBlock Classes="startup-field-label"
-                       Text="{Binding Texts[StartUp.AdbPath]}" />
+                                      FieldWidth="{DynamicResource MAA.Size.Settings.FieldInputWidth}"
+                                      controls:SettingsLabelWidthCoordinator.GroupKey="TaskQueue.Fields">
+            <controls:SettingsLabel Text="{Binding Texts[StartUp.AdbPath]}" />
 
             <controls:AppActionInput Text="{Binding AdbPath, UpdateSourceTrigger=LostFocus}"
                                      ActionContent="{Binding Texts[StartUp.Select]}"
@@ -127,9 +117,9 @@
         </Border>
 
         <Border Classes="app-surface app-card">
-          <controls:SettingsInlineRow Classes="startup-card-content">
-            <TextBlock Classes="startup-field-label"
-                       Text="{Binding Texts[StartUp.TouchMode]}" />
+          <controls:SettingsInlineRow Classes="startup-card-content"
+                                      controls:SettingsLabelWidthCoordinator.GroupKey="TaskQueue.Fields">
+            <controls:SettingsLabel Text="{Binding Texts[StartUp.TouchMode]}" />
             <controls:AppSelect ItemsSource="{Binding TouchModeOptions}"
                                 SelectedValueBinding="{Binding Type}"
                                 SelectedValue="{Binding SelectedTouchModeValue}">

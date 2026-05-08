@@ -17,6 +17,7 @@ public sealed class SlidingIndicatorController : IDisposable
     private Border? _indicator;
     private Border? _indicatorGlow;
     private ScrollViewer? _scrollViewer;
+    private Control? _selectedContainer;
     private Thickness _indicatorBaseMargin;
     private Thickness _indicatorGlowBaseMargin;
     private bool _updateQueued;
@@ -129,10 +130,12 @@ public sealed class SlidingIndicatorController : IDisposable
 
         if (_target.SelectedItem is null || _target.ContainerFromItem(_target.SelectedItem) is not Control container)
         {
+            SetSelectedContainer(null);
             Reset();
             return;
         }
 
+        SetSelectedContainer(container);
         var layoutTarget = ResolveLayoutTarget(container);
         if (layoutTarget.Bounds.Width <= 0d || layoutTarget.Bounds.Height <= 0d)
         {
@@ -295,6 +298,7 @@ public sealed class SlidingIndicatorController : IDisposable
         }
 
         DetachScrollViewer();
+        SetSelectedContainer(null);
         _target = null;
     }
 
@@ -345,6 +349,30 @@ public sealed class SlidingIndicatorController : IDisposable
     private void OnTargetSizeChanged(object? sender, SizeChangedEventArgs e)
     {
         QueueUpdate();
+    }
+
+    private void SetSelectedContainer(Control? container)
+    {
+        if (ReferenceEquals(_selectedContainer, container))
+        {
+            return;
+        }
+
+        if (_selectedContainer is not null)
+        {
+            _selectedContainer.SizeChanged -= OnSelectedContainerSizeChanged;
+        }
+
+        _selectedContainer = container;
+        if (_selectedContainer is not null)
+        {
+            _selectedContainer.SizeChanged += OnSelectedContainerSizeChanged;
+        }
+    }
+
+    private void OnSelectedContainerSizeChanged(object? sender, SizeChangedEventArgs e)
+    {
+        QueueUpdate(resetRetryBudget: false, priority: DispatcherPriority.Render);
     }
 
     private void OnScrollViewerScrollChanged(object? sender, ScrollChangedEventArgs e)

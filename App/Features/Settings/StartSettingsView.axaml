@@ -93,7 +93,7 @@
                 ColumnDefinitions="Auto,*">
             <controls:SettingsLabel Text="{Binding RootTexts[Settings.Start.EmulatorExtraArgs]}"
                                     Tip="{Binding RootTexts[Settings.Start.EmulatorExtraArgsTip]}" />
-            <TextBox Grid.Column="1"
+            <controls:AppTextInput Grid.Column="1"
                      Classes="settings-input"
                      IsEnabled="{Binding CanEditEmulatorLaunchSettings}"
                      Text="{Binding EmulatorAddCommand, UpdateSourceTrigger=LostFocus}" />

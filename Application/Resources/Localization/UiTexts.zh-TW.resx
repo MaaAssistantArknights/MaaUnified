@@ -3481,8 +3481,14 @@
   <data name="Dialog.Error.CloseButton" xml:space="preserve">
     <value>關閉</value>
   </data>
+  <data name="Dialog.Error.ConnectFailedTitle" xml:space="preserve">
+    <value>連線模擬器失敗</value>
+  </data>
   <data name="Dialog.Error.CopyButton" xml:space="preserve">
     <value>複製</value>
+  </data>
+  <data name="Dialog.Error.CopyErrorInfoButton" xml:space="preserve">
+    <value>複製錯誤資訊</value>
   </data>
   <data name="Dialog.Error.IssueReportButton" xml:space="preserve">
     <value>問題回饋</value>

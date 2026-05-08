@@ -14,6 +14,9 @@ public partial class SettingsLabel : UserControl
     public static readonly StyledProperty<string?> TipProperty =
         AvaloniaProperty.Register<SettingsLabel, string?>(nameof(Tip));
 
+    public static readonly StyledProperty<bool> ShowTipProperty =
+        AvaloniaProperty.Register<SettingsLabel, bool>(nameof(ShowTip), true);
+
     public static readonly DirectProperty<SettingsLabel, bool> HasTipProperty =
         AvaloniaProperty.RegisterDirect<SettingsLabel, bool>(
             nameof(HasTip),
@@ -36,6 +39,12 @@ public partial class SettingsLabel : UserControl
     {
         get => GetValue(TipProperty);
         set => SetValue(TipProperty, value);
+    }
+
+    public bool ShowTip
+    {
+        get => GetValue(ShowTipProperty);
+        set => SetValue(ShowTipProperty, value);
     }
 
     public bool HasTip
@@ -62,9 +71,9 @@ public partial class SettingsLabel : UserControl
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
-        if (change.Property == TipProperty)
+        if (change.Property == TipProperty || change.Property == ShowTipProperty)
         {
-            HasTip = !string.IsNullOrWhiteSpace(Tip);
+            UpdateHasTip();
             UpdateTextMaxWidth();
             SettingsLabelWidthCoordinator.InvalidateNearestGroup(this);
         }
@@ -125,5 +134,10 @@ public partial class SettingsLabel : UserControl
         }
 
         return Math.Ceiling(gapWidth + tipWidth);
+    }
+
+    private void UpdateHasTip()
+    {
+        HasTip = ShowTip && !string.IsNullOrWhiteSpace(Tip);
     }
 }

@@ -1282,4 +1282,31 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
     }
 }
 
-public sealed record ConnectionGameOptionItem(string Value, string DisplayName);
+public sealed class ConnectionGameOptionItem : IEquatable<ConnectionGameOptionItem>
+{
+    public ConnectionGameOptionItem(string value, string displayName)
+    {
+        Value = value;
+        DisplayName = displayName;
+    }
+
+    public string Value { get; }
+
+    public string DisplayName { get; }
+
+    public bool Equals(ConnectionGameOptionItem? other)
+    {
+        return other is not null
+               && string.Equals(Value, other.Value, StringComparison.OrdinalIgnoreCase);
+    }
+
+    public override bool Equals(object? obj)
+    {
+        return obj is ConnectionGameOptionItem other && Equals(other);
+    }
+
+    public override int GetHashCode()
+    {
+        return StringComparer.OrdinalIgnoreCase.GetHashCode(Value ?? string.Empty);
+    }
+}

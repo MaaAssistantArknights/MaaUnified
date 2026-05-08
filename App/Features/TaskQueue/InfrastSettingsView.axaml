@@ -30,33 +30,18 @@
     <Style Selector="controls|AppSelectionList.infrast-facility-list">
       <Setter Property="Margin" Value="0" />
     </Style>
-    <Style Selector="controls|AppSelectionList.infrast-facility-list ListBoxItem">
-      <Setter Property="Margin" Value="0,0,0,4" />
-    </Style>
-    <Style Selector="controls|AppSelectionList.infrast-facility-list Border.app-selection-list-item-shell">
-      <Setter Property="Padding" Value="8,4" />
-      <Setter Property="CornerRadius" Value="5" />
-    </Style>
   </UserControl.Styles>
 
   <controls:AdaptiveSpacingStackPanel Margin="2"
               Classes="infrast-layout">
-    <TextBlock Classes="section-title" Text="{Binding Texts[Infrast.Title]}" />
-
     <controls:AdaptiveSpacingStackPanel IsVisible="{Binding IsGeneralMode}"
                 Classes="infrast-section-content">
         <Border Classes="app-surface app-card">
           <controls:AdaptiveSpacingStackPanel Classes="infrast-section-body">
-            <controls:SettingsInlineRow>
-              <TextBlock Classes="infrast-section-heading"
-                         TextWrapping="Wrap">
-                <Run Text="{Binding Texts[Infrast.Mode]}" />
-                <Run Text="&#160;" />
-                <InlineUIContainer BaselineAlignment="Center">
-                  <controls:TooltipHint IsVisible="{Binding ShowRotationTip}"
-                                        Tip="{Binding Texts[Infrast.ModeRotationToolTip]}" />
-                </InlineUIContainer>
-              </TextBlock>
+            <controls:SettingsInlineRow controls:SettingsLabelWidthCoordinator.GroupKey="TaskQueue.Fields">
+              <controls:SettingsLabel Text="{Binding Texts[Infrast.Mode]}"
+                                      Tip="{Binding Texts[Infrast.ModeRotationToolTip]}"
+                                      ShowTip="{Binding ShowRotationTip}" />
               <controls:AppSelect ItemsSource="{Binding ModeOptions}"
                                   SelectedValueBinding="{Binding Value}"
                                   SelectedValue="{Binding Mode}">
@@ -76,15 +61,10 @@
         <Border Classes="app-surface app-card"
                 IsVisible="{Binding ShowCustomModeSettings}">
           <controls:AdaptiveSpacingStackPanel Classes="infrast-section-body">
-            <controls:SettingsInlineRow FieldWidth="{DynamicResource MAA.Size.Settings.FieldWideWidth}">
-              <TextBlock Classes="infrast-section-heading"
-                         TextWrapping="Wrap">
-                <Run Text="{Binding Texts[Infrast.Plan]}" />
-                <Run Text="&#160;" />
-                <InlineUIContainer BaselineAlignment="Center">
-                  <controls:TooltipHint Tip="{Binding Texts[Infrast.CustomPlanToolTip]}" />
-                </InlineUIContainer>
-              </TextBlock>
+            <controls:SettingsInlineRow FieldWidth="{DynamicResource MAA.Size.Settings.FieldWideWidth}"
+                                        controls:SettingsLabelWidthCoordinator.GroupKey="TaskQueue.Fields">
+              <controls:SettingsLabel Text="{Binding Texts[Infrast.Plan]}"
+                                      Tip="{Binding Texts[Infrast.CustomPlanToolTip]}" />
               <controls:AppSelect ItemsSource="{Binding PlanOptions}"
                                   SelectedValueBinding="{Binding Index}"
                                   SelectedValue="{Binding SelectedPlanIndex}">
@@ -100,10 +80,9 @@
                     Click="OnReloadPlansClick" />
 
             <controls:AdaptiveSpacingStackPanel Classes="infrast-field-group">
-              <controls:SettingsInlineRow FieldWidth="{DynamicResource MAA.Size.Settings.FieldWideWidth}">
-                <TextBlock Classes="subtle"
-                           Text="{Binding Texts[Infrast.DefaultPreset]}"
-                           TextWrapping="Wrap" />
+              <controls:SettingsInlineRow FieldWidth="{DynamicResource MAA.Size.Settings.FieldWideWidth}"
+                                          controls:SettingsLabelWidthCoordinator.GroupKey="TaskQueue.Fields">
+                <controls:SettingsLabel Text="{Binding Texts[Infrast.DefaultPreset]}" />
                 <controls:AppSelect ItemsSource="{Binding DefaultInfrastOptions}"
                                     SelectedValueBinding="{Binding Value}"
                                     SelectedValue="{Binding DefaultInfrast}">
@@ -120,10 +99,9 @@
             </controls:AdaptiveSpacingStackPanel>
 
             <controls:SettingsInlineRow Classes="infrast-field-group"
-                                        FieldWidth="{DynamicResource MAA.Size.Settings.FieldInputWidth}">
-              <TextBlock Classes="subtle"
-                         Text="{Binding Texts[Infrast.File]}"
-                         TextWrapping="Wrap" />
+                                        FieldWidth="{DynamicResource MAA.Size.Settings.FieldInputWidth}"
+                                        controls:SettingsLabelWidthCoordinator.GroupKey="TaskQueue.Fields">
+              <controls:SettingsLabel Text="{Binding Texts[Infrast.File]}" />
               <controls:AppTextInput IsReadOnly="{Binding IsCustomFileReadOnly}"
                                      Text="{Binding CustomFilePath, UpdateSourceTrigger=LostFocus}" />
             </controls:SettingsInlineRow>
@@ -132,8 +110,8 @@
 
         <Border Classes="app-surface app-card">
           <controls:AdaptiveSpacingStackPanel Classes="infrast-section-body">
-            <controls:SettingsInlineRow>
-              <TextBlock Classes="infrast-section-heading" Text="{Binding Texts[Infrast.Drones]}" />
+            <controls:SettingsInlineRow controls:SettingsLabelWidthCoordinator.GroupKey="TaskQueue.Fields">
+              <controls:SettingsLabel Text="{Binding Texts[Infrast.Drones]}" />
               <controls:AppSelect ItemsSource="{Binding DroneOptions}"
                                   IsEnabled="{Binding CanEditDrones}"
                                   SelectedValueBinding="{Binding Value}"
@@ -146,24 +124,22 @@
               </controls:AppSelect>
             </controls:SettingsInlineRow>
 
-            <controls:AdaptiveSpacingStackPanel IsVisible="{Binding ShowThresholdSettings}"
-                        Classes="infrast-field-group">
+            <controls:SettingsInlineRow IsVisible="{Binding ShowThresholdSettings}"
+                                        FieldWidth="{DynamicResource MAA.Size.Settings.FieldSlimWidth}"
+                                        controls:SettingsLabelWidthCoordinator.GroupKey="TaskQueue.Fields">
+              <controls:SettingsLabel Text="{Binding Texts[Infrast.Threshold]}"
+                                      Tip="{Binding Texts[Infrast.ThresholdTip]}" />
               <Grid ColumnDefinitions="*,Auto">
-                <TextBlock Classes="subtle"
-                           TextWrapping="Wrap">
-                  <Run Text="{Binding Texts[Infrast.Threshold]}" />
-                  <Run Text="&#160;" />
-                  <InlineUIContainer BaselineAlignment="Center">
-                    <controls:TooltipHint Tip="{Binding Texts[Infrast.ThresholdTip]}" />
-                  </InlineUIContainer>
-                </TextBlock>
+                <controls:AppNumberInput Minimum="0"
+                                         Maximum="100"
+                                         Value="{Binding DormThresholdPercent}" />
                 <TextBlock Grid.Column="1"
+                           Margin="8,0,0,0"
                            Classes="subtle"
-                           HorizontalAlignment="Right"
-                           Text="{Binding DormThresholdPercent, StringFormat='{}{0}%'}" />
+                           VerticalAlignment="Center"
+                           Text="%" />
               </Grid>
-              <Slider Minimum="0" Maximum="100" Value="{Binding DormThresholdPercent}" />
-            </controls:AdaptiveSpacingStackPanel>
+            </controls:SettingsInlineRow>
           </controls:AdaptiveSpacingStackPanel>
         </Border>
 

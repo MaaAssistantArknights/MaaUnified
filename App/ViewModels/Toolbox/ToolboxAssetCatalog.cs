@@ -10,12 +10,14 @@ internal static class ToolboxAssetCatalog
 {
     private const string DefaultClientType = "Official";
     private const string DefaultLanguage = "zh-cn";
+    private const string ItemAssetUriPrefix = "avares://MAAUnified/Assets/Toolbox/Items/";
     private static readonly object CharacterGate = new();
     private static readonly object ItemGate = new();
     private static readonly object ImageGate = new();
     private static readonly object MiniGameGate = new();
     private static IReadOnlyList<string>? _testBaseDirectories;
     private static IReadOnlyDictionary<string, ToolboxOperatorAsset>? _characters;
+    private static readonly Dictionary<string, IReadOnlyDictionary<string, ToolboxItemAsset>> ItemAssetsByLanguage = new(StringComparer.OrdinalIgnoreCase);
     private static readonly Dictionary<string, IReadOnlyDictionary<string, string>> ItemNamesByLanguage = new(StringComparer.OrdinalIgnoreCase);
     private static readonly Dictionary<string, Bitmap?> BitmapCache = new(StringComparer.Ordinal);
     private static readonly Dictionary<string, IReadOnlyList<ToolboxMiniGameEntry>> MiniGamesByClient = new(StringComparer.OrdinalIgnoreCase);
@@ -91,8 +93,27 @@ internal static class ToolboxAssetCatalog
         {
             if (!ItemNamesByLanguage.TryGetValue(normalizedLanguage, out var items))
             {
-                items = LoadItemNames(normalizedLanguage);
+                items = GetItemAssets(normalizedLanguage)
+                    .ToDictionary(pair => pair.Key, pair => pair.Value.Name, StringComparer.Ordinal);
                 ItemNamesByLanguage[normalizedLanguage] = items;
+            }
+
+            return items;
+        }
+    }
+
+    public static IReadOnlyDictionary<string, ToolboxItemAsset> GetItemAssets(string language)
+    {
+        var normalizedLanguage = UiLanguageCatalog.IsSupported(language)
+            ? UiLanguageCatalog.Normalize(language)
+            : UiLanguageCatalog.DefaultLanguage;
+
+        lock (ItemGate)
+        {
+            if (!ItemAssetsByLanguage.TryGetValue(normalizedLanguage, out var items))
+            {
+                items = LoadItemAssets(normalizedLanguage);
+                ItemAssetsByLanguage[normalizedLanguage] = items;
             }
 
             return items;
@@ -147,6 +168,12 @@ internal static class ToolboxAssetCatalog
 
     public static string? ResolveItemImagePath(string itemId)
     {
+        var assetPath = ResolveItemAssetPath(itemId);
+        if (!string.IsNullOrWhiteSpace(assetPath))
+        {
+            return assetPath;
+        }
+
         foreach (var root in EnumerateBaseDirectories())
         {
             var path = Path.Combine(root, "resource", "template", "items", $"{itemId}.png");
@@ -174,7 +201,8 @@ internal static class ToolboxAssetCatalog
                 return cached;
             }
 
-            var bitmap = TryLoadFileBitmap(ResolveItemImagePath(normalized));
+            var bitmap = TryLoadAssetBitmap(BuildItemAssetUri(normalized))
+                ?? TryLoadFileBitmap(ResolveItemImagePath(normalized));
             BitmapCache[$"item:{normalized}"] = bitmap;
             return bitmap;
         }
@@ -191,6 +219,12 @@ internal static class ToolboxAssetCatalog
         return ResolveEmbeddedBitmap($"operator:potential:{normalized}", $"avares://MAAUnified/Assets/Toolbox/Operator/Potential_{normalized}.png");
     }
 
+    public static Bitmap? ResolveOperatorProfessionBitmap(string? profession)
+    {
+        var assetName = ResolveOperatorProfessionAssetName(profession);
+        return ResolveEmbeddedBitmap($"operator:profession:{assetName}", $"avares://MAAUnified/Assets/Toolbox/Operator/Profession/{assetName}.png");
+    }
+
     internal static string? ResolveOperatorEliteAssetPath(int elite)
     {
         return ResolveAssetFilePath($"avares://MAAUnified/Assets/Toolbox/Operator/Elite_{Math.Clamp(elite, 0, 2)}.png");
@@ -200,6 +234,11 @@ internal static class ToolboxAssetCatalog
     {
         var normalized = potential is >= 1 and <= 6 ? potential : 1;
         return ResolveAssetFilePath($"avares://MAAUnified/Assets/Toolbox/Operator/Potential_{normalized}.png");
+    }
+
+    internal static string? ResolveOperatorProfessionAssetPath(string? profession)
+    {
+        return ResolveAssetFilePath($"avares://MAAUnified/Assets/Toolbox/Operator/Profession/{ResolveOperatorProfessionAssetName(profession)}.png");
     }
 
     internal static IDisposable PushTestBaseDirectoriesForTests(params string[] directories)
@@ -224,6 +263,7 @@ internal static class ToolboxAssetCatalog
 
         lock (ItemGate)
         {
+            ItemAssetsByLanguage.Clear();
             ItemNamesByLanguage.Clear();
         }
 
@@ -293,6 +333,8 @@ internal static class ToolboxAssetCatalog
                 _ = TryReadBool(node["name_jp_unavailable"], out var nameJpUnavailable);
                 _ = TryReadBool(node["name_kr_unavailable"], out var nameKrUnavailable);
                 _ = TryReadInt(node["rarity"], out var rarity);
+                _ = TryReadString(node["profession"], out var profession);
+                _ = TryReadString(node["position"], out var position);
 
                 result[pair.Key] = new ToolboxOperatorAsset(
                     pair.Key,
@@ -302,6 +344,8 @@ internal static class ToolboxAssetCatalog
                     string.IsNullOrWhiteSpace(nameJp) ? null : nameJp,
                     string.IsNullOrWhiteSpace(nameKr) ? null : nameKr,
                     rarity,
+                    profession,
+                    position,
                     nameTwUnavailable,
                     nameEnUnavailable,
                     nameJpUnavailable,
@@ -316,12 +360,28 @@ internal static class ToolboxAssetCatalog
         }
     }
 
-    private static IReadOnlyDictionary<string, string> LoadItemNames(string language)
+    private static string ResolveOperatorProfessionAssetName(string? profession)
+    {
+        return (profession ?? string.Empty).Trim().ToUpperInvariant() switch
+        {
+            "PIONEER" => "Pioneer",
+            "WARRIOR" => "Warrior",
+            "TANK" => "Tank",
+            "SNIPER" => "Sniper",
+            "CASTER" => "Caster",
+            "MEDIC" => "Medic",
+            "SUPPORT" => "Support",
+            "SPECIAL" => "Special",
+            _ => "Pioneer",
+        };
+    }
+
+    private static IReadOnlyDictionary<string, ToolboxItemAsset> LoadItemAssets(string language)
     {
         var path = ResolveItemIndexPath(language);
         if (path is null)
         {
-            return new Dictionary<string, string>(StringComparer.Ordinal);
+            return new Dictionary<string, ToolboxItemAsset>(StringComparer.Ordinal);
         }
 
         try
@@ -329,10 +389,10 @@ internal static class ToolboxAssetCatalog
             var root = JsonNode.Parse(File.ReadAllText(path)) as JsonObject;
             if (root is null)
             {
-                return new Dictionary<string, string>(StringComparer.Ordinal);
+                return new Dictionary<string, ToolboxItemAsset>(StringComparer.Ordinal);
             }
 
-            var result = new Dictionary<string, string>(StringComparer.Ordinal);
+            var result = new Dictionary<string, ToolboxItemAsset>(StringComparer.Ordinal);
             foreach (var pair in root)
             {
                 if (pair.Value is not JsonObject node || string.IsNullOrWhiteSpace(pair.Key))
@@ -342,7 +402,13 @@ internal static class ToolboxAssetCatalog
 
                 if (TryReadString(node["name"], out var name) && !string.IsNullOrWhiteSpace(name))
                 {
-                    result[pair.Key] = name;
+                    _ = TryReadString(node["classifyType"], out var classifyType);
+                    _ = TryReadInt(node["sortId"], out var sortId);
+                    result[pair.Key] = new ToolboxItemAsset(
+                        pair.Key,
+                        name,
+                        string.IsNullOrWhiteSpace(classifyType) ? "NONE" : classifyType,
+                        sortId);
                 }
             }
 
@@ -350,7 +416,7 @@ internal static class ToolboxAssetCatalog
         }
         catch
         {
-            return new Dictionary<string, string>(StringComparer.Ordinal);
+            return new Dictionary<string, ToolboxItemAsset>(StringComparer.Ordinal);
         }
     }
 
@@ -566,6 +632,16 @@ internal static class ToolboxAssetCatalog
         }
 
         return null;
+    }
+
+    private static string BuildItemAssetUri(string itemId)
+    {
+        return $"{ItemAssetUriPrefix}{itemId}.png";
+    }
+
+    private static string? ResolveItemAssetPath(string itemId)
+    {
+        return ResolveAssetFilePath(BuildItemAssetUri(itemId));
     }
 
     private static string? ResolveBattleDataPath()
@@ -839,9 +915,17 @@ internal sealed record ToolboxOperatorAsset(
     string? NameJp,
     string? NameKr,
     int Rarity,
+    string Profession,
+    string Position,
     bool NameTwUnavailable,
     bool NameEnUnavailable,
     bool NameJpUnavailable,
     bool NameKrUnavailable);
+
+public sealed record ToolboxItemAsset(
+    string Id,
+    string Name,
+    string ClassifyType,
+    int SortId);
 
 public sealed record ToolboxMiniGameEntry(string Display, string Value, string Tip);

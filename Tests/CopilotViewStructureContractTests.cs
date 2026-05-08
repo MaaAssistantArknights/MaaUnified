@@ -73,35 +73,27 @@ public sealed class CopilotViewStructureContractTests
     public void AppDropdownControls_ShouldUseOutlinedArrowAndSolidDropdownPanel()
     {
         var root = GetMaaUnifiedRoot();
-        var multiSelectXaml = File.ReadAllText(Path.Combine(root, "App", "Controls", "AppMultiSelectDropdown.axaml"));
-        var treeSelectXaml = File.ReadAllText(Path.Combine(root, "App", "Controls", "AppTreeSelectDropdown.axaml"));
+        var multiSelectXaml = File.ReadAllText(Path.Combine(root, "App", "Controls", "AppMultiSelect.axaml"));
         var copilotPathXaml = File.ReadAllText(Path.Combine(root, "App", "Controls", "AppCopilotPathDropdown.axaml"));
 
-        Assert.True(File.Exists(Path.Combine(root, "App", "Controls", "AppTreeSelectDropdown.axaml")));
+        Assert.False(File.Exists(Path.Combine(root, "App", "Controls", "AppTreeSelectDropdown.axaml")));
+        Assert.False(File.Exists(Path.Combine(root, "App", "Controls", "DelimitedTextListEditor.axaml")));
 
-        foreach (var xaml in new[] { multiSelectXaml, treeSelectXaml, copilotPathXaml })
+        foreach (var xaml in new[] { multiSelectXaml, copilotPathXaml })
         {
             Assert.Contains("Data=\"M 1 1 L 5 5 L 9 1\"", xaml, StringComparison.Ordinal);
             Assert.Contains("<Setter Property=\"Stroke\" Value=\"{DynamicResource MAA.Brush.App.SettingsInput.Chevron}\" />", xaml, StringComparison.Ordinal);
             Assert.Contains("Placement=\"BottomEdgeAlignedLeft\"", xaml, StringComparison.Ordinal);
             Assert.Contains("HorizontalAlignment=\"Left\"", xaml, StringComparison.Ordinal);
             Assert.Contains("<Setter Property=\"Background\" Value=\"{DynamicResource MAA.Brush.App.SettingsInput.PopupBackground}\" />", xaml, StringComparison.Ordinal);
-            Assert.Contains("<Setter Property=\"BorderBrush\" Value=\"{DynamicResource MAA.Brush.App.SettingsInput.PopupBorder}\" />", xaml, StringComparison.Ordinal);
         }
 
-        foreach (var xaml in new[] { multiSelectXaml, treeSelectXaml })
-        {
-            Assert.Contains("<Setter Property=\"Width\" Value=\"{DynamicResource MAA.App.Size.SettingsInputDropDownButtonWidth}\" />", xaml, StringComparison.Ordinal);
-            Assert.Contains("<Setter Property=\"MinWidth\" Value=\"{DynamicResource MAA.App.Size.SettingsInputDropDownButtonWidth}\" />", xaml, StringComparison.Ordinal);
-        }
-
-        Assert.Contains("Classes=\"app-dropdown-panel\"", multiSelectXaml, StringComparison.Ordinal);
-        Assert.Contains("Style Selector=\"Button.app-dropdown-arrow:pointerover\"", multiSelectXaml, StringComparison.Ordinal);
-        Assert.Contains("Style Selector=\"ListBox.app-dropdown-list ListBoxItem:pointerover /template/ ContentPresenter\"", multiSelectXaml, StringComparison.Ordinal);
-
-        Assert.Contains("Classes=\"app-tree-select-panel\"", treeSelectXaml, StringComparison.Ordinal);
-        Assert.Contains("Style Selector=\"Button.app-tree-select-arrow:pointerover\"", treeSelectXaml, StringComparison.Ordinal);
-        Assert.Contains("Style Selector=\"TreeView.app-tree-select-list ToggleButton:pointerover\"", treeSelectXaml, StringComparison.Ordinal);
+        Assert.Contains("<Setter Property=\"Width\" Value=\"{DynamicResource MAA.App.Size.InputHeight}\" />", multiSelectXaml, StringComparison.Ordinal);
+        Assert.Contains("<Setter Property=\"MinWidth\" Value=\"{DynamicResource MAA.App.Size.InputHeight}\" />", multiSelectXaml, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"app-multi-select-panel\"", multiSelectXaml, StringComparison.Ordinal);
+        Assert.Contains("<Setter Property=\"BorderBrush\" Value=\"Transparent\" />", multiSelectXaml, StringComparison.Ordinal);
+        Assert.Contains("<Setter Property=\"BoxShadow\" Value=\"{DynamicResource MAA.App.BoxShadow.Card}\" />", multiSelectXaml, StringComparison.Ordinal);
+        Assert.Contains("Style Selector=\"ToggleButton.app-multi-select-option:checked\"", multiSelectXaml, StringComparison.Ordinal);
 
         Assert.Contains("Classes=\"app-copilot-path-popup-panel\"", copilotPathXaml, StringComparison.Ordinal);
         Assert.Contains("Style Selector=\"Button.app-copilot-path-toggle:pointerover\"", copilotPathXaml, StringComparison.Ordinal);

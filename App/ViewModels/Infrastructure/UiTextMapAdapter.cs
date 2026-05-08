@@ -30,6 +30,7 @@ public abstract class UiTextMapAdapter : ObservableObject
 
             _localizer.Language = normalized;
             OnPropertyChanged(string.Empty);
+            OnPropertyChanged("Item");
             OnPropertyChanged("Item[]");
         }
     }

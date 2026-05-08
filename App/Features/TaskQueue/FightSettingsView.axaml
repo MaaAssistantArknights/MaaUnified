@@ -88,8 +88,6 @@
   </UserControl.Styles>
 
   <controls:AdaptiveSpacingStackPanel Margin="4" Classes="fight-settings-root">
-    <TextBlock Classes="section-title" Text="{Binding Texts[Fight.Title]}" />
-
     <controls:AdaptiveSpacingStackPanel Classes="fight-settings-root">
       <controls:AdaptiveSpacingStackPanel IsVisible="{Binding IsGeneralMode}" Classes="fight-settings-group task-settings-section">
         <ItemsControl ItemsSource="{Binding StagePlan}">
@@ -102,9 +100,9 @@
             <DataTemplate x:DataType="vm:FightTaskModuleViewModel+StagePlanEntry">
               <Border Classes="app-surface app-card fight-settings-card">
                 <controls:SettingsInlineRow Classes="task-settings-card-content"
-                                            FieldWidth="{DynamicResource MAA.Size.Settings.FieldWideWidth}">
-                  <TextBlock Classes="fight-settings-field-label"
-                             Text="{Binding DataContext.StageSelectDisplayText, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                                            FieldWidth="{DynamicResource MAA.Size.Settings.FieldWideWidth}"
+                                            controls:SettingsLabelWidthCoordinator.GroupKey="TaskQueue.Fields">
+                  <controls:SettingsLabel Text="{Binding DataContext.StageSelectDisplayText, RelativeSource={RelativeSource AncestorType=UserControl}}" />
                   <Grid Classes="stage-plan-row"
                         ColumnDefinitions="*,8,Auto,8,Auto,8,Auto,8,Auto">
                     <controls:AppSelect Grid.Column="0"
@@ -171,7 +169,7 @@
 
         <Border Classes="app-surface app-card fight-settings-card">
           <controls:AdaptiveSpacingStackPanel Classes="task-settings-card-content">
-            <controls:SettingsInlineRow>
+            <controls:SettingsInlineRow controls:SettingsLabelWidthCoordinator.GroupKey="TaskQueue.Fields">
               <controls:NullableCheckBox Classes="fight-compact"
                                          Text="{Binding Texts[Fight.UseMedicine]}"
                                          IsChecked="{Binding UseMedicine}"
@@ -184,7 +182,7 @@
                                        IsEnabled="{Binding IsMedicineInputEnabled}" />
             </controls:SettingsInlineRow>
 
-            <controls:SettingsInlineRow>
+            <controls:SettingsInlineRow controls:SettingsLabelWidthCoordinator.GroupKey="TaskQueue.Fields">
               <controls:NullableCheckBox Classes="fight-compact"
                                          Text="{Binding UseStoneDisplayName}"
                                          IsChecked="{Binding UseStone}" />
@@ -195,7 +193,7 @@
                                        Value="{Binding Stone}" />
             </controls:SettingsInlineRow>
 
-            <controls:SettingsInlineRow>
+            <controls:SettingsInlineRow controls:SettingsLabelWidthCoordinator.GroupKey="TaskQueue.Fields">
               <controls:NullableCheckBox Classes="fight-compact"
                                          Text="{Binding Texts[Fight.PerformBattles]}"
                                          IsChecked="{Binding EnableTimesLimit}" />
@@ -210,14 +208,10 @@
 
         <Border Classes="app-surface app-card fight-settings-card"
                 IsVisible="{Binding ShowSeriesSetting}">
-          <controls:SettingsInlineRow Classes="task-settings-card-content">
-            <TextBlock Classes="fight-settings-field-label">
-              <Run Text="{Binding Texts[Fight.Series]}" />
-              <Run Text="&#160;" />
-              <InlineUIContainer BaselineAlignment="Center">
-                <controls:TooltipHint Tip="{Binding Texts[Fight.SeriesTip]}" />
-              </InlineUIContainer>
-            </TextBlock>
+          <controls:SettingsInlineRow Classes="task-settings-card-content"
+                                      controls:SettingsLabelWidthCoordinator.GroupKey="TaskQueue.Fields">
+            <controls:SettingsLabel Text="{Binding Texts[Fight.Series]}"
+                                    Tip="{Binding Texts[Fight.SeriesTip]}" />
             <controls:AppSelect Grid.Column="2"
                                 Classes="fight-settings-inline-select"
                                 ItemsSource="{Binding SeriesOptions}"
@@ -235,7 +229,8 @@
         <Border Classes="app-surface app-card fight-settings-card">
           <controls:SettingsInlineRow Classes="task-settings-card-content"
                                       FieldWidth="{DynamicResource MAA.Size.Settings.FieldWideWidth}"
-                                      RowDefinitions="Auto,Auto">
+                                      RowDefinitions="Auto,Auto"
+                                      controls:SettingsLabelWidthCoordinator.GroupKey="TaskQueue.Fields">
             <controls:NullableCheckBox Classes="fight-compact"
                                        Text="{Binding Texts[Fight.AssignedMaterial]}"
                                        Tip="{Binding Texts[Fight.SpecifiedDropsTip]}"
@@ -274,9 +269,9 @@
             <CheckBox Classes="app-checkbox"
                       Content="{Binding Texts[Fight.UseCustomAnnihilation]}"
                       IsChecked="{Binding UseCustomAnnihilation}" />
-            <controls:SettingsInlineRow FieldWidth="{DynamicResource MAA.Size.Settings.FieldWideWidth}">
-              <TextBlock Classes="fight-settings-field-label"
-                         Text="{Binding Texts[Fight.AnnihilationStage]}" />
+            <controls:SettingsInlineRow FieldWidth="{DynamicResource MAA.Size.Settings.FieldWideWidth}"
+                                        controls:SettingsLabelWidthCoordinator.GroupKey="TaskQueue.Fields">
+              <controls:SettingsLabel Text="{Binding Texts[Fight.AnnihilationStage]}" />
               <controls:AppSelect Grid.Column="2"
                                   Classes="fight-settings-inline-select"
                                   IsEnabled="{Binding UseCustomAnnihilation}"
@@ -295,6 +290,47 @@
 
         <Border Classes="app-surface app-card fight-settings-card">
           <controls:AdaptiveSpacingStackPanel Classes="fight-settings-card-content task-settings-card-content">
+            <controls:AppHintedCheckBox Text="{Binding Texts[Fight.DrGrandet]}"
+                                         Tip="{Binding Texts[Fight.DrGrandetTip]}"
+                                         IsChecked="{Binding IsDrGrandet}" />
+            <controls:SettingsDependentRow>
+              <CheckBox Classes="app-checkbox"
+                        HorizontalAlignment="Stretch"
+                        IsChecked="{Binding UseExpiringMedicine}">
+                <TextBlock Text="{Binding Texts[Fight.UseExpiringMedicine]}"
+                           TextWrapping="Wrap" />
+              </CheckBox>
+            </controls:SettingsDependentRow>
+            <CheckBox Classes="app-checkbox"
+                      Content="{Binding Texts[Fight.HideSeries]}"
+                      IsChecked="{Binding HideSeries}" />
+            <controls:AppHintedCheckBox Text="{Binding CustomStageCodeText}"
+                                         Tip="{Binding CustomStageCodeTipText}"
+                                         IsChecked="{Binding IsStageManually}" />
+            <controls:AppHintedCheckBox Text="{Binding Texts[Fight.AllowUseStoneSave]}"
+                                         Tip="{Binding Texts[Fight.AllowUseStoneSaveWarning]}"
+                                         IsChecked="{Binding AllowUseStoneSave}" />
+            <controls:SettingsInlineRow controls:SettingsLabelWidthCoordinator.GroupKey="TaskQueue.Fields">
+              <controls:SettingsLabel Text="{Binding Texts[Fight.StageResetMode]}" />
+              <controls:AppSelect Grid.Column="2"
+                                  Classes="fight-settings-inline-select"
+                                  ItemsSource="{Binding StageResetModeOptions}"
+                                  SelectedValueBinding="{Binding Value}"
+                                  SelectedValue="{Binding StageResetMode}">
+                <controls:AppSelect.ItemTemplate>
+                  <DataTemplate x:DataType="vm:FightTaskModuleViewModel+StringOption">
+                    <TextBlock Text="{Binding DisplayName}" />
+                  </DataTemplate>
+                </controls:AppSelect.ItemTemplate>
+              </controls:AppSelect>
+            </controls:SettingsInlineRow>
+            <CheckBox Classes="app-checkbox"
+                      Content="{Binding Texts[Fight.UseAlternateStage]}"
+                      IsChecked="{Binding UseAlternateStage}" />
+            <CheckBox Classes="app-checkbox"
+                      Content="{Binding Texts[Fight.HideUnavailableStage]}"
+                      IsChecked="{Binding HideUnavailableStage}"
+                      IsEnabled="{Binding IsHideUnavailableStageEnabled}" />
             <controls:AppHintedCheckBox Text="{Binding UseWeeklyScheduleText}"
                                          Tip="{Binding UseWeeklyScheduleTip}"
                                          IsChecked="{Binding UseWeeklySchedule}" />
@@ -328,48 +364,6 @@
                         Content="{Binding WeeklyScheduleSaturdayText}"
                         IsChecked="{Binding WeeklyScheduleSaturday}" />
             </WrapPanel>
-          </controls:AdaptiveSpacingStackPanel>
-        </Border>
-
-        <Border Classes="app-surface app-card fight-settings-card">
-          <controls:AdaptiveSpacingStackPanel Classes="fight-settings-card-content task-settings-card-content">
-            <controls:AppHintedCheckBox Text="{Binding Texts[Fight.DrGrandet]}"
-                                         Tip="{Binding Texts[Fight.DrGrandetTip]}"
-                                         IsChecked="{Binding IsDrGrandet}" />
-            <CheckBox Classes="app-checkbox"
-                      Content="{Binding Texts[Fight.UseExpiringMedicine]}"
-                      IsChecked="{Binding UseExpiringMedicine}" />
-            <CheckBox Classes="app-checkbox"
-                      Content="{Binding Texts[Fight.HideSeries]}"
-                      IsChecked="{Binding HideSeries}" />
-            <controls:AppHintedCheckBox Text="{Binding CustomStageCodeText}"
-                                         Tip="{Binding CustomStageCodeTipText}"
-                                         IsChecked="{Binding IsStageManually}" />
-            <controls:AppHintedCheckBox Text="{Binding Texts[Fight.AllowUseStoneSave]}"
-                                         Tip="{Binding Texts[Fight.AllowUseStoneSaveWarning]}"
-                                         IsChecked="{Binding AllowUseStoneSave}" />
-            <controls:SettingsInlineRow>
-              <TextBlock Classes="fight-settings-field-label"
-                         Text="{Binding Texts[Fight.StageResetMode]}" />
-              <controls:AppSelect Grid.Column="2"
-                                  Classes="fight-settings-inline-select"
-                                  ItemsSource="{Binding StageResetModeOptions}"
-                                  SelectedValueBinding="{Binding Value}"
-                                  SelectedValue="{Binding StageResetMode}">
-                <controls:AppSelect.ItemTemplate>
-                  <DataTemplate x:DataType="vm:FightTaskModuleViewModel+StringOption">
-                    <TextBlock Text="{Binding DisplayName}" />
-                  </DataTemplate>
-                </controls:AppSelect.ItemTemplate>
-              </controls:AppSelect>
-            </controls:SettingsInlineRow>
-            <CheckBox Classes="app-checkbox"
-                      Content="{Binding Texts[Fight.UseAlternateStage]}"
-                      IsChecked="{Binding UseAlternateStage}" />
-            <CheckBox Classes="app-checkbox"
-                      Content="{Binding Texts[Fight.HideUnavailableStage]}"
-                      IsChecked="{Binding HideUnavailableStage}"
-                      IsEnabled="{Binding IsHideUnavailableStageEnabled}" />
           </controls:AdaptiveSpacingStackPanel>
         </Border>
 

@@ -3,6 +3,7 @@ using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 
 namespace MAAUnified.App.Controls;
 
@@ -31,6 +32,7 @@ public sealed class SettingsLabelWidthCoordinator
         GroupKeyProperty.Changed.AddClassHandler<Grid>((grid, _) => OnRowGroupingChanged(grid));
         MaxLabelWidthProperty.Changed.AddClassHandler<Grid>((grid, _) => ScheduleRecalculate(grid));
         FieldGapProperty.Changed.AddClassHandler<Grid>((grid, _) => ScheduleRecalculate(grid));
+        Visual.IsVisibleProperty.Changed.AddClassHandler<Control>((control, _) => OnVisibilityChanged(control));
     }
 
     public static string? GetGroupKey(Grid element)
@@ -105,6 +107,22 @@ public sealed class SettingsLabelWidthCoordinator
         }
     }
 
+    private static void OnVisibilityChanged(Control control)
+    {
+        if (control is Grid row && !string.IsNullOrWhiteSpace(GetGroupKey(row)))
+        {
+            ScheduleRecalculate(row);
+        }
+
+        foreach (var groupedRow in control
+                     .GetVisualDescendants()
+                     .OfType<Grid>()
+                     .Where(row => !string.IsNullOrWhiteSpace(GetGroupKey(row))))
+        {
+            ScheduleRecalculate(groupedRow);
+        }
+    }
+
     private static void ScheduleRecalculate(Grid row)
     {
         var key = GetGroupKey(row);
@@ -136,6 +154,7 @@ public sealed class SettingsLabelWidthCoordinator
             .Select(reference => reference.TryGetTarget(out var row) ? row : null)
             .OfType<Grid>()
             .Where(row => string.Equals(GetGroupKey(row), groupKey, StringComparison.Ordinal)
+                && row.IsEffectivelyVisible
                 && ReferenceEquals(FindScope(row), scope))
             .ToArray();
 
@@ -150,10 +169,7 @@ public sealed class SettingsLabelWidthCoordinator
             .DefaultIfEmpty(DefaultMaxLabelWidth)
             .Min();
 
-        var measuredWidths = rows
-            .Select(FindSettingsLabel)
-            .Where(label => label is not null)
-            .Select(label => label!.MeasureNaturalLabelWidth());
+        var measuredWidths = rows.SelectMany(MeasureNaturalLabelWidths);
 
         var fieldGap = rows
             .Select(GetFieldGap)
@@ -191,6 +207,17 @@ public sealed class SettingsLabelWidthCoordinator
 
     private static void ApplyLabelWidth(Grid row, double width)
     {
+        if (row is SettingsInlineRow inlineRow)
+        {
+            var inlineLabelWidth = Math.Max(0d, width - Math.Max(0d, inlineRow.GapWidth));
+            if (Math.Abs(inlineRow.LabelWidth - inlineLabelWidth) > 0.5)
+            {
+                inlineRow.LabelWidth = inlineLabelWidth;
+            }
+
+            return;
+        }
+
         if (row.ColumnDefinitions.Count == 0)
         {
             row.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
@@ -204,17 +231,67 @@ public sealed class SettingsLabelWidthCoordinator
         }
     }
 
-    private static SettingsLabel? FindSettingsLabel(Grid row)
+    private static IEnumerable<double> MeasureNaturalLabelWidths(Grid row)
     {
-        foreach (var child in row.Children)
+        var children = row is SettingsInlineRow
+            ? GetInlineRowLabelChildren(row)
+            : row.Children
+                .Where(child => child.IsEffectivelyVisible && Grid.GetColumn(child) == 0)
+                .OfType<Control>();
+
+        foreach (var child in children)
         {
-            if (Grid.GetColumn(child) == 0 && child is SettingsLabel label)
+            var measuredWidth = MeasureNaturalLabelWidth(child);
+            if (measuredWidth > 0d && !double.IsNaN(measuredWidth))
             {
-                return label;
+                yield return measuredWidth;
             }
         }
+    }
 
-        return null;
+    private static IEnumerable<Control> GetInlineRowLabelChildren(Grid row)
+    {
+        var visibleIndex = 0;
+        foreach (var child in row.Children.OfType<Control>())
+        {
+            if (!child.IsEffectivelyVisible)
+            {
+                continue;
+            }
+
+            if (visibleIndex % 2 == 0)
+            {
+                yield return child;
+            }
+
+            visibleIndex++;
+        }
+    }
+
+    private static double MeasureNaturalLabelWidth(Control label)
+    {
+        if (label is SettingsLabel settingsLabel)
+        {
+            return settingsLabel.MeasureNaturalLabelWidth();
+        }
+
+        if (label is TextBlock textBlock)
+        {
+            return MeasureTextBlockNaturalWidth(textBlock);
+        }
+
+        label.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        return Math.Ceiling(label.DesiredSize.Width);
+    }
+
+    private static double MeasureTextBlockNaturalWidth(TextBlock textBlock)
+    {
+        var previousMaxWidth = textBlock.MaxWidth;
+        textBlock.MaxWidth = double.PositiveInfinity;
+        textBlock.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        var width = textBlock.DesiredSize.Width;
+        textBlock.MaxWidth = previousMaxWidth;
+        return Math.Ceiling(width);
     }
 
     private static Grid? FindGroupedRow(Control control)

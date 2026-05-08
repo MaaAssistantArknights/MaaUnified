@@ -279,6 +279,12 @@ public sealed class SettingsModuleAK1FeatureTests
         Assert.NotSame(selectedScreencapBefore, state.SelectedAttachWindowScreencapOption);
         Assert.NotSame(selectedMouseBefore, state.SelectedAttachWindowMouseOption);
         Assert.NotSame(selectedKeyboardBefore, state.SelectedAttachWindowKeyboardOption);
+        Assert.Equal(selectedConnectConfigBefore, state.SelectedConnectConfigOption);
+        Assert.Equal(selectedClientTypeBefore, state.SelectedClientTypeOption);
+        Assert.Equal(selectedTouchModeBefore, state.SelectedTouchModeOption);
+        Assert.Equal(selectedScreencapBefore, state.SelectedAttachWindowScreencapOption);
+        Assert.Equal(selectedMouseBefore, state.SelectedAttachWindowMouseOption);
+        Assert.Equal(selectedKeyboardBefore, state.SelectedAttachWindowKeyboardOption);
 
         Assert.Same(
             state.ConnectConfigOptions.First(option => string.Equals(option.Value, "MuMuEmulator12", StringComparison.OrdinalIgnoreCase)),

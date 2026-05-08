@@ -26,7 +26,7 @@
             controls:SettingsLabelWidthCoordinator.GroupKey="RemoteControl.Main"
             ColumnDefinitions="Auto,*">
         <controls:SettingsLabel Text="{Binding RootTexts[Settings.RemoteControl.GetTaskEndpoint]}" />
-        <TextBox Grid.Column="1"
+        <controls:AppTextInput Grid.Column="1"
                  Classes="settings-input"
                  Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
                  HorizontalAlignment="Left"
@@ -38,7 +38,7 @@
             controls:SettingsLabelWidthCoordinator.GroupKey="RemoteControl.Main"
             ColumnDefinitions="Auto,*">
         <controls:SettingsLabel Text="{Binding RootTexts[Settings.RemoteControl.ReportTaskEndpoint]}" />
-        <TextBox Grid.Column="1"
+        <controls:AppTextInput Grid.Column="1"
                  Classes="settings-input"
                  Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
                  HorizontalAlignment="Left"

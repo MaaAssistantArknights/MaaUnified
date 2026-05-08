@@ -13,6 +13,22 @@ public partial class ToolboxOperBoxView : UserControl
 
     private ToolboxPageViewModel? VM => DataContext as ToolboxPageViewModel;
 
+    private void OnSelectOperBoxNotHaveClick(object? sender, RoutedEventArgs e)
+    {
+        if (VM is not null)
+        {
+            VM.OperBoxSelectedIndex = 0;
+        }
+    }
+
+    private void OnSelectOperBoxHaveClick(object? sender, RoutedEventArgs e)
+    {
+        if (VM is not null)
+        {
+            VM.OperBoxSelectedIndex = 1;
+        }
+    }
+
     private async void OnOperBoxStartClick(object? sender, RoutedEventArgs e)
     {
         if (VM is not null)

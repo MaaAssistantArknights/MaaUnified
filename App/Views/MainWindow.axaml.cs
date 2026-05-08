@@ -78,8 +78,6 @@ public partial class MainWindow : Window
         new("MAA.Size.Settings.FieldWideWidth", 252d, 280d),
         new("MAA.Size.Settings.FieldExtraWideWidth", 306d, 340d),
         new("MAA.Size.Settings.WrapItemWidth", 198d, 220d),
-        new("MAA.Size.Toolbox.DepotWrapItemWidth", 142d, 158d),
-        new("MAA.Size.Toolbox.OperBoxWrapItemWidth", 133d, 148d),
         new("MAA.Size.Toolbox.ActionButtonWidth", 162d, 180d),
         new("MAA.Size.Toolbox.WarningTextMaxWidth", 504d, 560d),
         new("MAA.Size.Toolbox.FormPanelWidth", 580d, 640d),
@@ -1646,15 +1644,25 @@ public partial class MainWindow : Window
         App.Runtime.AchievementTrackerService.SetCurrentLanguage(language);
         _ = App.Runtime.AchievementTrackerService.Unlock("CongratulationError");
         var localizedResult = DialogTextCatalog.LocalizeErrorResult(language, dialogError.Result);
+        var isConnectFailed = dialogError.Result.Error?.Code == UiErrorCode.ConnectFailed;
         var chrome = DialogTextCatalog.CreateCatalog(
             language,
             nextLanguage => new DialogChromeSnapshot(
-                title: DialogTextCatalog.ErrorDialogTitle(nextLanguage),
-                confirmText: DialogTextCatalog.ErrorDialogCloseButton(nextLanguage),
+                title: isConnectFailed
+                    ? DialogTextCatalog.ErrorDialogConnectFailedTitle(nextLanguage)
+                    : DialogTextCatalog.ErrorDialogTitle(nextLanguage),
+                confirmText: isConnectFailed
+                    ? DialogTextCatalog.WarningDialogConfirmButton(nextLanguage)
+                    : DialogTextCatalog.ErrorDialogCloseButton(nextLanguage),
                 cancelText: DialogTextCatalog.ErrorDialogIgnoreButton(nextLanguage),
                 namedTexts: DialogTextCatalog.CreateNamedTexts(
+                    (DialogTextCatalog.ChromeKeys.Prompt, isConnectFailed
+                        ? DialogTextCatalog.BuildErrorSuggestion(nextLanguage, dialogError.Result)
+                        : string.Empty),
                     (DialogTextCatalog.ChromeKeys.SectionTitle, DialogTextCatalog.ErrorDialogSectionTitle(nextLanguage)),
-                    (DialogTextCatalog.ChromeKeys.CopyButton, DialogTextCatalog.ErrorDialogCopyButton(nextLanguage)),
+                    (DialogTextCatalog.ChromeKeys.CopyButton, isConnectFailed
+                        ? DialogTextCatalog.ErrorDialogCopyErrorInfoButton(nextLanguage)
+                        : DialogTextCatalog.ErrorDialogCopyButton(nextLanguage)),
                     (DialogTextCatalog.ChromeKeys.IssueReportButton, DialogTextCatalog.ErrorDialogIssueReportButton(nextLanguage)),
                     (DialogTextCatalog.ChromeKeys.TimestampLabel, DialogTextCatalog.ErrorDialogTimestampLabel(nextLanguage)),
                     (DialogTextCatalog.ChromeKeys.ContextLabel, DialogTextCatalog.ErrorDialogContextLabel(nextLanguage)),

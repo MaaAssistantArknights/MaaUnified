@@ -716,7 +716,20 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
     public string TaskListTitleText => RootTexts.GetOrDefault("TaskQueue.Root.TaskListTitle", "Task list");
 
-    public string TaskConfigTitleText => RootTexts.GetOrDefault("TaskQueue.Root.TaskConfigTitle", "Task config");
+    public string TaskConfigTitleText
+    {
+        get
+        {
+            var baseTitle = RootTexts.GetOrDefault("TaskQueue.Root.TaskConfigTitle", "Task config");
+            var detailTitle = IsPostActionPanelSelected || IsPostActionTaskSelected
+                ? PostActionActionTitle
+                : SelectedTask?.DisplayName;
+
+            return string.IsNullOrWhiteSpace(detailTitle)
+                ? baseTitle
+                : $"{baseTitle} - {detailTitle}";
+        }
+    }
 
     public string LogsTitleText => RootTexts.GetOrDefault("TaskQueue.Root.LogsTitle", "Logs");
 
@@ -732,7 +745,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
     public string TaskMenuDeleteText => RootTexts.GetOrDefault("TaskQueue.Root.Delete", "Delete");
 
-    public string TaskMenuIconText => RootTexts.GetOrDefault("TaskQueue.Root.TaskMenuIcon", "...");
+    public string TaskMenuIconText => RootTexts.GetOrDefault("TaskQueue.Root.TaskMenuIcon", "⚙");
 
     public string AddTaskButtonText => RootTexts.GetOrDefault("TaskQueue.Root.AddTaskIcon", "+");
 
@@ -1039,6 +1052,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         RootTexts.Language = normalized;
         OnPropertyChanged(nameof(Texts));
         OnPropertyChanged(nameof(RootTexts));
+
         DailyStageHint = FightTaskModuleViewModel.BuildDailyResourceHint(
             Texts.Language,
             _connectionGameSharedState.ClientType,
@@ -1049,13 +1063,16 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         OverlayStatusText = string.IsNullOrWhiteSpace(_overlaySharedState.StatusMessage)
             ? Texts.GetOrDefault("TaskQueue.OverlayDisconnected", "Overlay disconnected")
             : _overlaySharedState.StatusMessage;
+
         FightModule.RefreshStageOptions(_connectionGameSharedState.ClientType);
         RebuildTaskModuleOptions();
         RefreshTaskItemsLocalization();
+
         UpdatePostActionSummary();
         RefreshSelectedTaskValidationSummaryLocalization();
         NotifyRootChromeTextChanged();
         RaiseSelectedTaskProjectionChanged();
+
         if (SelectedTask is not null || ShowPostActionSettingsPanel)
         {
             ResetSelectedTaskSettingsHost();
@@ -1205,6 +1222,10 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         item.RefreshLocalizedText(ResolveModuleDisplayName, ResolveStatusDisplayName);
         item.DisplayName = ResolveTaskDisplayName(item);
         item.RefreshToolTipText();
+        if (ReferenceEquals(item, SelectedTask))
+        {
+            OnPropertyChanged(nameof(TaskConfigTitleText));
+        }
     }
 
     private void RefreshTaskItemsLocalization()
@@ -1260,6 +1281,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     private void UpdatePostActionSummary()
     {
         OnPropertyChanged(nameof(PostActionActionTitle));
+        OnPropertyChanged(nameof(TaskConfigTitleText));
         OnPropertyChanged(nameof(PostActionActionDescription));
     }
 
@@ -1467,19 +1489,27 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
     private async void OnTaskPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (sender is TaskQueueItemViewModel task
+            && ReferenceEquals(task, SelectedTask)
+            && (string.Equals(e.PropertyName, nameof(TaskQueueItemViewModel.DisplayName), StringComparison.Ordinal)
+                || string.Equals(e.PropertyName, nameof(TaskQueueItemViewModel.Name), StringComparison.Ordinal)))
+        {
+            OnPropertyChanged(nameof(TaskConfigTitleText));
+        }
+
         if (!string.Equals(e.PropertyName, nameof(TaskQueueItemViewModel.IsEnabled), StringComparison.Ordinal))
         {
             return;
         }
 
-        if (sender is not TaskQueueItemViewModel task || _suppressTaskEnabledSync)
+        if (sender is not TaskQueueItemViewModel changedTask || _suppressTaskEnabledSync)
         {
             return;
         }
 
         try
         {
-            await PersistTaskEnabledStateAsync(task);
+            await PersistTaskEnabledStateAsync(changedTask);
         }
         catch (Exception ex)
         {
@@ -1779,6 +1809,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     {
         OnPropertyChanged(nameof(IsNoTaskSelected));
         OnPropertyChanged(nameof(ShowTaskConfigHint));
+        OnPropertyChanged(nameof(TaskConfigTitleText));
         OnPropertyChanged(nameof(IsStartUpTaskSelected));
         OnPropertyChanged(nameof(IsFightTaskSelected));
         OnPropertyChanged(nameof(IsRecruitTaskSelected));
@@ -6046,7 +6077,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             return;
         }
 
-        Dispatcher.UIThread.Post(() => SetLanguage(e.CurrentLanguage), DispatcherPriority.Background);
+        Dispatcher.UIThread.Post(() => SetLanguage(e.CurrentLanguage), DispatcherPriority.Send);
     }
 
     private void RefreshSelectionBatchModeFromConfig()

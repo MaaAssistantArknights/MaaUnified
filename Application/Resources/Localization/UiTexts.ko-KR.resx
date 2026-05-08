@@ -3509,8 +3509,14 @@ OF-1 스테이지가 개방되지 않은 경우에는 선택하지 마세요.</v
   <data name="Dialog.Error.CloseButton" xml:space="preserve">
     <value>끄기</value>
   </data>
+  <data name="Dialog.Error.ConnectFailedTitle" xml:space="preserve">
+    <value>에뮬레이터 연결 실패</value>
+  </data>
   <data name="Dialog.Error.CopyButton" xml:space="preserve">
     <value>복사</value>
+  </data>
+  <data name="Dialog.Error.CopyErrorInfoButton" xml:space="preserve">
+    <value>오류 정보 복사</value>
   </data>
   <data name="Dialog.Warning.CancelButton" xml:space="preserve">
     <value>취소</value>

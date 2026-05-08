@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using Avalonia;
@@ -26,6 +27,8 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
         AppStickyTitleState PresenterState);
 
     private const int BackgroundSectionWarmupIntervalMs = 45;
+    private const int LocalizedSectionRefreshInitialDelayMs = 750;
+    private const int LocalizedSectionRefreshIntervalMs = 180;
     private const int ResizeLayoutSettleDelayMs = 180;
     private const int ResizeActiveSectionRadius = 1;
     private const double ResizeFallbackPlaceholderHeight = 96d;
@@ -68,6 +71,7 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
     private bool _suppressSectionSelectionChanged;
     private bool _suppressSectionScrollChanged;
     private bool _sectionLayoutRefreshQueued;
+    private bool _localizedSectionRefreshQueued;
     private bool _sectionTopCacheDirty = true;
     private double _lastKnownExtentHeight = -1d;
     private double _lastKnownViewportHeight = -1d;
@@ -172,7 +176,7 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
         RefreshSectionLayoutReferences();
         BeginViewComposition();
         RebuildSectionAnchors();
-        EnsureSectionMaterializationInitialized();
+        EnsureSectionMaterializationInitialized(forceReset: true);
         EnsureCurrentSectionMaterialized();
         StartProgressiveSectionMaterialization();
     }
@@ -229,7 +233,6 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
             || string.Equals(e.PropertyName, nameof(SettingsPageViewModel.SelectedSectionTitle), StringComparison.Ordinal)
             || string.Equals(e.PropertyName, nameof(SettingsPageViewModel.RootTexts), StringComparison.Ordinal)
             || string.Equals(e.PropertyName, nameof(SettingsPageViewModel.Language), StringComparison.Ordinal)
-            || string.Equals(e.PropertyName, nameof(SettingsPageViewModel.StatusMessage), StringComparison.Ordinal)
             || string.Equals(e.PropertyName, nameof(SettingsPageViewModel.RemoteControlStatusMessage), StringComparison.Ordinal)
             || string.Equals(e.PropertyName, nameof(SettingsPageViewModel.ExternalNotificationStatusMessage), StringComparison.Ordinal)
             || string.Equals(e.PropertyName, nameof(SettingsPageViewModel.HotkeyStatusMessage), StringComparison.Ordinal)
@@ -248,32 +251,124 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
             return;
         }
 
-        Dispatcher.UIThread.Post(RefreshLocalizedSections, DispatcherPriority.Loaded);
+        QueueLocalizedSectionsRefresh();
+    }
+
+    private void QueueLocalizedSectionsRefresh()
+    {
+        if (_localizedSectionRefreshQueued)
+        {
+            return;
+        }
+
+        _localizedSectionRefreshQueued = true;
+        var queueDelay = Stopwatch.StartNew();
+        Dispatcher.UIThread.Post(
+            () =>
+            {
+                _ = RecordSettingsViewTimingAsync(
+                    "SettingsView.RefreshLocalizedSections.QueueDelay",
+                    queueDelay,
+                    ("anchorCount", _sectionAnchors.Count),
+                    ("materializedCount", _materializedSections.Count));
+                _localizedSectionRefreshQueued = false;
+                RefreshLocalizedSections();
+            },
+            DispatcherPriority.Loaded);
     }
 
     private void RefreshLocalizedSections()
     {
+        var total = Stopwatch.StartNew();
+        var step = Stopwatch.StartNew();
         if (VM is null || _sectionAnchors.Count == 0)
         {
             return;
         }
 
+        var materializedBefore = _materializedSections.Count;
+        var sectionsToRematerialize = _materializedSections.ToArray();
         RaiseSectionChromePropertyChanged();
+        _ = RecordSettingsViewTimingAsync(
+            "SettingsView.RefreshLocalizedSections.Chrome",
+            step,
+            ("materializedBefore", materializedBefore));
+
+        step.Restart();
         var scrollPosition = CaptureCurrentSectionScrollPosition();
+        _ = RecordSettingsViewTimingAsync(
+            "SettingsView.RefreshLocalizedSections.CaptureScroll",
+            step,
+            ("hasScrollPosition", scrollPosition.HasValue));
+
+        step.Restart();
         CancelProgressiveSectionMaterialization();
         BeginViewComposition();
+        _ = RecordSettingsViewTimingAsync(
+            "SettingsView.RefreshLocalizedSections.BeginComposition",
+            step,
+            ("pendingProgressive", _pendingProgressiveSections.Count));
+
+        step.Restart();
         EnsureSectionMaterializationInitialized(forceReset: true);
-        EnsureCurrentSectionMaterialized(materializeThroughSelection: true);
+        foreach (var sectionKey in sectionsToRematerialize)
+        {
+            EnsureSectionMaterialized(sectionKey);
+        }
+
+        EnsureCurrentSectionMaterialized();
+        _ = RecordSettingsViewTimingAsync(
+            "SettingsView.RefreshLocalizedSections.MaterializeCurrent",
+            step,
+            ("materializedBefore", materializedBefore),
+            ("materializedAfter", _materializedSections.Count),
+            ("rematerializedCount", sectionsToRematerialize.Length));
+
+        step.Restart();
+        RefreshSectionTopCacheIfNeeded();
+        UpdateStickyTitlePresentation();
+        _ = RecordSettingsViewTimingAsync(
+            "SettingsView.RefreshLocalizedSections.LayoutState",
+            step,
+            ("anchorCount", _sectionAnchors.Count),
+            ("materializedCount", _materializedSections.Count));
+
+        var restoreQueueDelay = Stopwatch.StartNew();
         Dispatcher.UIThread.Post(
             () =>
             {
+                _ = RecordSettingsViewTimingAsync(
+                    "SettingsView.RefreshLocalizedSections.RestoreScroll.QueueDelay",
+                    restoreQueueDelay,
+                    ("hasScrollPosition", scrollPosition.HasValue));
+                var restore = Stopwatch.StartNew();
                 if (!RestoreSectionScrollPosition(scrollPosition))
                 {
                     ScrollToSelectedSection();
                 }
+
+                _ = RecordSettingsViewTimingAsync(
+                    "SettingsView.RefreshLocalizedSections.RestoreScroll",
+                    restore,
+                    ("hasScrollPosition", scrollPosition.HasValue));
             },
             DispatcherPriority.Loaded);
-        StartProgressiveSectionMaterialization();
+
+        step.Restart();
+        StartProgressiveSectionMaterialization(
+            initialDelayMs: LocalizedSectionRefreshInitialDelayMs,
+            intervalMs: LocalizedSectionRefreshIntervalMs,
+            dispatcherPriority: DispatcherPriority.Background);
+        _ = RecordSettingsViewTimingAsync(
+            "SettingsView.RefreshLocalizedSections.StartProgressive",
+            step,
+            ("pendingProgressive", _pendingProgressiveSections.Count));
+        _ = RecordSettingsViewTimingAsync(
+            "SettingsView.RefreshLocalizedSections",
+            total,
+            ("materializedBefore", materializedBefore),
+            ("materializedAfter", _materializedSections.Count),
+            ("pendingProgressive", _pendingProgressiveSections.Count));
     }
 
     private void RefreshSectionLayoutReferences()
@@ -675,7 +770,10 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
         return false;
     }
 
-    private void StartProgressiveSectionMaterialization()
+    private void StartProgressiveSectionMaterialization(
+        int initialDelayMs = 0,
+        int intervalMs = BackgroundSectionWarmupIntervalMs,
+        DispatcherPriority? dispatcherPriority = null)
     {
         CancelProgressiveSectionMaterialization();
         if (VM is not { } vm)
@@ -699,7 +797,13 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
             _pendingProgressiveSections.Add(sectionKey);
         }
 
-        _ = MaterializeSectionsSequentiallyAsync(vm, pendingSections, _progressiveMaterializationCts.Token);
+        _ = MaterializeSectionsSequentiallyAsync(
+            vm,
+            pendingSections,
+            _progressiveMaterializationCts.Token,
+            initialDelayMs,
+            intervalMs,
+            dispatcherPriority ?? DispatcherPriority.Background);
     }
 
     private static IEnumerable<string> ResolveProgressiveMaterializationTargets()
@@ -718,8 +822,10 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
     private async Task MaterializeSectionWhenReadyAsync(
         SettingsPageViewModel owner,
         string sectionKey,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        DispatcherPriority dispatcherPriority)
     {
+        var dataLoad = Stopwatch.StartNew();
         try
         {
             await owner.EnsureSectionDataLoadedAsync(sectionKey, cancellationToken);
@@ -727,10 +833,18 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
         }
+        finally
+        {
+            _ = RecordSettingsViewTimingAsync(
+                "SettingsView.MaterializeSection.DataLoad",
+                dataLoad,
+                ("section", sectionKey));
+        }
 
         await Dispatcher.UIThread.InvokeAsync(
             () =>
             {
+                var attach = Stopwatch.StartNew();
                 if (!cancellationToken.IsCancellationRequested
                     && ReferenceEquals(VM, owner))
                 {
@@ -738,24 +852,38 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
                 }
 
                 CompleteProgressiveSectionMaterialization(owner, sectionKey);
+                _ = RecordSettingsViewTimingAsync(
+                    "SettingsView.MaterializeSection.Attach",
+                    attach,
+                    ("section", sectionKey),
+                    ("materializedCount", _materializedSections.Count),
+                    ("pendingProgressive", _pendingProgressiveSections.Count));
             },
-            DispatcherPriority.Background);
+            dispatcherPriority);
     }
 
     private async Task MaterializeSectionsSequentiallyAsync(
         SettingsPageViewModel owner,
         IReadOnlyList<string> sectionKeys,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        int initialDelayMs,
+        int intervalMs,
+        DispatcherPriority dispatcherPriority)
     {
         try
         {
+            if (initialDelayMs > 0)
+            {
+                await Task.Delay(initialDelayMs, cancellationToken);
+            }
+
             for (var i = 0; i < sectionKeys.Count; i++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                await MaterializeSectionWhenReadyAsync(owner, sectionKeys[i], cancellationToken);
+                await MaterializeSectionWhenReadyAsync(owner, sectionKeys[i], cancellationToken, dispatcherPriority);
                 if (i + 1 < sectionKeys.Count)
                 {
-                    await Task.Delay(BackgroundSectionWarmupIntervalMs, cancellationToken);
+                    await Task.Delay(Math.Max(intervalMs, 0), cancellationToken);
                 }
             }
         }
@@ -1525,6 +1653,31 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
     {
         ViewPropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+    }
+
+    private static Task RecordSettingsViewTimingAsync(
+        string scope,
+        Stopwatch stopwatch,
+        params (string Key, object? Value)[] fields)
+    {
+        if (App.Runtime is not { } runtime)
+        {
+            return Task.CompletedTask;
+        }
+
+        var payload = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (key, value) in fields)
+        {
+            if (!string.IsNullOrWhiteSpace(key))
+            {
+                payload[key] = value;
+            }
+        }
+
+        return runtime.DiagnosticsService.RecordTemporaryTimingAsync(
+            scope,
+            stopwatch.Elapsed.TotalMilliseconds,
+            payload);
     }
 
     private static string FirstNonEmpty(string primary, string fallback)

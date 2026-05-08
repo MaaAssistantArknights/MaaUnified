@@ -624,6 +624,9 @@ Session state `{0}` does not allow {2}.</value>
   <data name="Dialog.Error.CloseButton" xml:space="preserve">
     <value>关闭</value>
   </data>
+  <data name="Dialog.Error.ConnectFailedTitle" xml:space="preserve">
+    <value>连接模拟器失败</value>
+  </data>
   <data name="Dialog.Error.CodeLabel" xml:space="preserve">
     <value>错误码</value>
   </data>
@@ -632,6 +635,9 @@ Session state `{0}` does not allow {2}.</value>
   </data>
   <data name="Dialog.Error.CopyButton" xml:space="preserve">
     <value>复制</value>
+  </data>
+  <data name="Dialog.Error.CopyErrorInfoButton" xml:space="preserve">
+    <value>复制报错信息</value>
   </data>
   <data name="Dialog.Error.DetailsLabel" xml:space="preserve">
     <value>详情</value>

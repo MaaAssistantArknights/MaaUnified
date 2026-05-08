@@ -11,22 +11,26 @@
       <Setter Property="ClipToBounds" Value="True" />
       <Setter Property="MinWidth" Value="72" />
       <Setter Property="Height" Value="{DynamicResource MAA.App.Size.InputHeight}" />
-      <Setter Property="Padding" Value="0" />
+      <Setter Property="Padding" Value="{DynamicResource MAA.BorderThickness.Thin}" />
       <Setter Property="UseLayoutRounding" Value="True" />
       <Setter Property="Transitions">
         <Transitions>
-          <BrushTransition Property="Background" Duration="0:0:0.16" />
-          <BrushTransition Property="BorderBrush" Duration="0:0:0.16" />
+          <BrushTransition Property="Background" Duration="0:0:0.11" />
+          <BrushTransition Property="BorderBrush" Duration="0:0:0.11" />
         </Transitions>
       </Setter>
     </Style>
 
     <Style Selector="Border.spin-root:pointerover">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.SettingsInput.BackgroundHover}" />
       <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.SettingsInput.BorderHover}" />
     </Style>
 
     <Style Selector="Border.spin-root.focused">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.SettingsInput.BackgroundHover}" />
       <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.SettingsInput.BorderFocus}" />
+      <Setter Property="BorderThickness" Value="{DynamicResource MAA.BorderThickness.Thin}" />
+      <Setter Property="BoxShadow" Value="{DynamicResource MAA.App.BoxShadow.InputFocus}" />
     </Style>
 
     <Style Selector="Border.spin-root:disabled">
@@ -42,10 +46,10 @@
       <Setter Property="BorderBrush" Value="Transparent" />
       <Setter Property="BorderThickness" Value="0" />
       <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.CornerRadius.SettingsInputGroupAction}" />
-      <Setter Property="ClipToBounds" Value="True" />
+      <Setter Property="ClipToBounds" Value="False" />
       <Setter Property="HorizontalAlignment" Value="Right" />
       <Setter Property="VerticalAlignment" Value="Stretch" />
-      <Setter Property="Margin" Value="0,1,1,1" />
+      <Setter Property="Margin" Value="0,1,0,1" />
       <Setter Property="Opacity" Value="0" />
       <Setter Property="IsHitTestVisible" Value="False" />
       <Setter Property="UseLayoutRounding" Value="True" />
@@ -99,6 +103,13 @@
       <Setter Property="FocusAdorner" Value="{x:Null}" />
     </Style>
 
+    <Style Selector="NumericUpDown.spin-editor:focus, NumericUpDown.spin-editor:focus-visible, NumericUpDown.spin-editor:focus-within">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="FocusAdorner" Value="{x:Null}" />
+    </Style>
+
     <Style Selector="NumericUpDown.spin-editor:disabled">
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ForegroundDisabled}" />
@@ -118,16 +129,29 @@
       <Setter Property="FocusAdorner" Value="{x:Null}" />
     </Style>
 
-    <Style Selector="NumericUpDown.spin-editor /template/ TextBox#PART_TextBox:pointerover">
+    <Style Selector="NumericUpDown.spin-editor /template/ TextBox">
+      <Setter Property="Background" Value="Transparent" />
       <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="FocusAdorner" Value="{x:Null}" />
+    </Style>
+
+    <Style Selector="NumericUpDown.spin-editor /template/ TextBox#PART_TextBox:pointerover">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
     </Style>
 
     <Style Selector="NumericUpDown.spin-editor /template/ TextBox#PART_TextBox:focus">
+      <Setter Property="Background" Value="Transparent" />
       <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
     </Style>
 
     <Style Selector="NumericUpDown.spin-editor /template/ TextBox#PART_TextBox:focus-visible">
+      <Setter Property="Background" Value="Transparent" />
       <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
     </Style>
 
     <Style Selector="NumericUpDown.spin-editor /template/ Border">
@@ -138,8 +162,46 @@
       <Setter Property="ClipToBounds" Value="True" />
     </Style>
 
+    <Style Selector="NumericUpDown.spin-editor /template/ Border#PART_Border, NumericUpDown.spin-editor /template/ Border#PART_BorderElement">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="0" />
+      <Setter Property="ClipToBounds" Value="True" />
+    </Style>
+
+    <Style Selector="NumericUpDown.spin-editor:pointerover /template/ Border, NumericUpDown.spin-editor:focus /template/ Border, NumericUpDown.spin-editor:focus-visible /template/ Border, NumericUpDown.spin-editor:focus-within /template/ Border, NumericUpDown.spin-editor:disabled /template/ Border">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="0" />
+    </Style>
+
+    <Style Selector="NumericUpDown.spin-editor /template/ TextBox#PART_TextBox /template/ Border">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="0" />
+    </Style>
+
+    <Style Selector="NumericUpDown.spin-editor /template/ TextBox#PART_TextBox /template/ Border#PART_Border, NumericUpDown.spin-editor /template/ TextBox#PART_TextBox /template/ Border#PART_BorderElement">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="0" />
+    </Style>
+
+    <Style Selector="NumericUpDown.spin-editor /template/ TextBox#PART_TextBox:pointerover /template/ Border, NumericUpDown.spin-editor /template/ TextBox#PART_TextBox:focus /template/ Border, NumericUpDown.spin-editor /template/ TextBox#PART_TextBox:focus-visible /template/ Border, NumericUpDown.spin-editor /template/ TextBox#PART_TextBox:focus-within /template/ Border, NumericUpDown.spin-editor:disabled /template/ TextBox#PART_TextBox /template/ Border">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="0" />
+    </Style>
+
     <Style Selector="NumericUpDown.spin-editor:disabled /template/ TextBox#PART_TextBox">
       <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
       <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ForegroundDisabled}" />
       <Setter Property="Opacity" Value="1" />
     </Style>
@@ -159,7 +221,7 @@
       <Setter Property="UseLayoutRounding" Value="True" />
       <Setter Property="Transitions">
         <Transitions>
-          <BrushTransition Property="Background" Duration="0:0:0.12" />
+          <BrushTransition Property="Background" Duration="0:0:0.11" />
         </Transitions>
       </Setter>
       <Setter Property="Template">
@@ -172,6 +234,7 @@
                               VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
                               Content="{TemplateBinding Content}"
                               ContentTemplate="{TemplateBinding ContentTemplate}"
+                              ClipToBounds="False"
                               Margin="{TemplateBinding Padding}" />
           </Border>
         </ControlTemplate>
@@ -180,7 +243,7 @@
 
     <Style Selector="Button.spin-button /template/ Border">
       <Setter Property="BorderThickness" Value="0" />
-      <Setter Property="ClipToBounds" Value="True" />
+      <Setter Property="ClipToBounds" Value="False" />
     </Style>
 
     <Style Selector="Button.spin-button-top">
@@ -192,13 +255,13 @@
     </Style>
 
     <Style Selector="Button.spin-button:pointerover">
-      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.SettingsInput.GroupActionBackgroundHover}" />
-      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ChevronHover}" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="#FF000000" />
     </Style>
 
     <Style Selector="Button.spin-button:pressed">
-      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.SettingsInput.GroupActionBackgroundPressed}" />
-      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ChevronHover}" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="#FF000000" />
     </Style>
 
     <Style Selector="Button.spin-button:disabled">
@@ -213,6 +276,9 @@
       <Setter Property="HorizontalAlignment" Value="Center" />
       <Setter Property="VerticalAlignment" Value="Center" />
       <Setter Property="UseLayoutRounding" Value="True" />
+      <Setter Property="RenderTransform">
+        <TranslateTransform X="1.5" />
+      </Setter>
     </Style>
 
     <Style Selector="Border.spin-button-glyph">
@@ -234,11 +300,11 @@
     </Style>
 
     <Style Selector="Button.spin-button:pointerover Border.spin-button-glyph">
-      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.SettingsInput.ChevronHover}" />
+      <Setter Property="Background" Value="#FF000000" />
     </Style>
 
     <Style Selector="Button.spin-button:pressed Border.spin-button-glyph">
-      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.SettingsInput.ChevronHover}" />
+      <Setter Property="Background" Value="#FF000000" />
     </Style>
 
     <Style Selector="Button.spin-button:disabled Border.spin-button-glyph">

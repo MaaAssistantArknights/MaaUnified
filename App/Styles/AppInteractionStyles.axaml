@@ -50,20 +50,6 @@
     <Setter Property="ClipToBounds" Value="True" />
   </Style>
 
-  <Style Selector="controls|DelimitedTextListEditor">
-    <Setter Property="MinWidth" Value="280" />
-  </Style>
-
-  <Style Selector="controls|DelimitedTextListEditor TextBox.app-delimited-text-editor-input">
-    <Setter Property="MinHeight" Value="88" />
-    <Setter Property="TextWrapping" Value="Wrap" />
-    <Setter Property="AcceptsReturn" Value="True" />
-  </Style>
-
-  <Style Selector="controls|DelimitedTextListEditor Border.app-delimited-text-list-editor-preview">
-    <Setter Property="Padding" Value="{DynamicResource MAA.App.Interaction.ListEditorPreviewPadding}" />
-  </Style>
-
   <Style Selector="controls|ReorderableList">
     <Setter Property="MinWidth" Value="320" />
     <Setter Property="MinHeight" Value="180" />

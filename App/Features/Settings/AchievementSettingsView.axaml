@@ -75,7 +75,14 @@
                       BorderBrush="{Binding AchievementDebugMedalColor}"
                       PointerPressed="OnAchievementDebugPointerPressed">
                 <ToolTip.Tip>
-                  <ToolTip Content="{Binding AchievementDebugTip}" />
+                  <Grid Margin="14"
+                        Background="Transparent"
+                        ClipToBounds="False">
+                    <Border Classes="app-tooltip-card">
+                      <TextBlock Classes="app-tooltip-card-text"
+                                 Text="{Binding AchievementDebugTip}" />
+                    </Border>
+                  </Grid>
                 </ToolTip.Tip>
                 <TextBlock HorizontalAlignment="Center"
                            VerticalAlignment="Center"

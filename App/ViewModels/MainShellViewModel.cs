@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json.Nodes;
 using Avalonia;
@@ -2992,7 +2993,7 @@ public sealed class MainShellViewModel : ObservableObject
 
         return Dispatcher.UIThread.InvokeAsync(
             () => ApplyCoordinatedLanguageChangeAsync(previousLanguage, nextLanguage),
-            DispatcherPriority.Background);
+            DispatcherPriority.Send);
     }
 
     private async Task ApplyCoordinatedLanguageChangeAsync(
@@ -3000,47 +3001,155 @@ public sealed class MainShellViewModel : ObservableObject
         string nextLanguage,
         CancellationToken cancellationToken = default)
     {
-        CurrentShellLanguage = nextLanguage;
-        _runtime.AchievementTrackerService.SetCurrentLanguage(nextLanguage);
-        RootTexts.Language = nextLanguage;
-        await YieldForBlockingOperationOverlayFrameAsync();
-
-        TaskQueuePage.SetLanguage(nextLanguage);
-        await YieldForBlockingOperationOverlayFrameAsync();
-
-        if (TryGetCopilotPage(out var copilotPage))
+        var total = Stopwatch.StartNew();
+        var step = Stopwatch.StartNew();
+        try
         {
-            copilotPage.SetLanguage(nextLanguage);
-            await YieldForBlockingOperationOverlayFrameAsync();
-        }
-
-        if (TryGetToolboxPage(out var toolboxPage))
-        {
-            toolboxPage.SetLanguage(nextLanguage);
-            await YieldForBlockingOperationOverlayFrameAsync();
-        }
-
-        if (TryGetSettingsPage(out var settingsPage))
-        {
-            settingsPage.AutostartStatus = PlatformCapabilityTextMap.FormatAutostartStatus(
+            CurrentShellLanguage = nextLanguage;
+            _runtime.AchievementTrackerService.SetCurrentLanguage(nextLanguage);
+            RootTexts.Language = nextLanguage;
+            _ = RecordLanguageTimingAsync(
+                "Shell.ApplyLanguage.Root",
+                step,
+                previousLanguage,
                 nextLanguage,
-                settingsPage.StartSelf,
-                ReportLocalizationFallback);
-            ApplySettingsUpdateAvailabilityState(settingsPage);
+                cancellationToken);
             await YieldForBlockingOperationOverlayFrameAsync();
+
+            step.Restart();
+            TaskQueuePage.SetLanguage(nextLanguage);
+            _ = RecordLanguageTimingAsync(
+                "Shell.ApplyLanguage.TaskQueue",
+                step,
+                previousLanguage,
+                nextLanguage,
+                cancellationToken);
+            await YieldForBlockingOperationOverlayFrameAsync();
+
+            step.Restart();
+            if (TryGetCopilotPage(out var copilotPage))
+            {
+                copilotPage.SetLanguage(nextLanguage);
+                _ = RecordLanguageTimingAsync(
+                    "Shell.ApplyLanguage.Copilot",
+                    step,
+                    previousLanguage,
+                    nextLanguage,
+                    cancellationToken,
+                    ("loaded", true));
+            }
+            else
+            {
+                _ = RecordLanguageTimingAsync(
+                    "Shell.ApplyLanguage.Copilot",
+                    step,
+                    previousLanguage,
+                    nextLanguage,
+                    cancellationToken,
+                    ("loaded", false));
+            }
+
+            await YieldForBlockingOperationOverlayFrameAsync();
+
+            step.Restart();
+            if (TryGetToolboxPage(out var toolboxPage))
+            {
+                toolboxPage.SetLanguage(nextLanguage);
+                _ = RecordLanguageTimingAsync(
+                    "Shell.ApplyLanguage.Toolbox",
+                    step,
+                    previousLanguage,
+                    nextLanguage,
+                    cancellationToken,
+                    ("loaded", true));
+            }
+            else
+            {
+                _ = RecordLanguageTimingAsync(
+                    "Shell.ApplyLanguage.Toolbox",
+                    step,
+                    previousLanguage,
+                    nextLanguage,
+                    cancellationToken,
+                    ("loaded", false));
+            }
+
+            await YieldForBlockingOperationOverlayFrameAsync();
+
+            step.Restart();
+            if (TryGetSettingsPage(out var settingsPage))
+            {
+                settingsPage.AutostartStatus = PlatformCapabilityTextMap.FormatAutostartStatus(
+                    nextLanguage,
+                    settingsPage.StartSelf,
+                    ReportLocalizationFallback);
+                ApplySettingsUpdateAvailabilityState(settingsPage);
+                _ = RecordLanguageTimingAsync(
+                    "Shell.ApplyLanguage.SettingsShellState",
+                    step,
+                    previousLanguage,
+                    nextLanguage,
+                    cancellationToken,
+                    ("loaded", true));
+            }
+            else
+            {
+                _ = RecordLanguageTimingAsync(
+                    "Shell.ApplyLanguage.SettingsShellState",
+                    step,
+                    previousLanguage,
+                    nextLanguage,
+                    cancellationToken,
+                    ("loaded", false));
+            }
+
+            await YieldForBlockingOperationOverlayFrameAsync();
+
+            step.Restart();
+            RefreshRootTextState();
+            await RefreshCapabilitySummaryAsync(cancellationToken);
+            _ = RecordLanguageTimingAsync(
+                "Shell.ApplyLanguage.CapabilitySummary",
+                step,
+                previousLanguage,
+                nextLanguage,
+                cancellationToken);
+
+            step.Restart();
+            var trayRefresh = await _runtime.PlatformCapabilityService.InitializeTrayAsync(
+                "MaaAssistantArknights",
+                PlatformCapabilityTextMap.CreateTrayMenuText(nextLanguage, ReportLocalizationFallback),
+                cancellationToken);
+            _ = RecordLanguageTimingAsync(
+                "Shell.ApplyLanguage.TrayInitialize",
+                step,
+                previousLanguage,
+                nextLanguage,
+                cancellationToken,
+                ("success", trayRefresh.Success));
+
+            step.Restart();
+            if (await ApplyResultAsync(trayRefresh, "App.Shell.SwitchLanguage.TrayRefresh", cancellationToken)
+                && !string.Equals(previousLanguage, nextLanguage, StringComparison.OrdinalIgnoreCase))
+            {
+                _ = _runtime.AchievementTrackerService.Unlock("Linguist");
+            }
+
+            _ = RecordLanguageTimingAsync(
+                "Shell.ApplyLanguage.TrayApplyResult",
+                step,
+                previousLanguage,
+                nextLanguage,
+                cancellationToken);
         }
-
-        RefreshRootTextState();
-        await RefreshCapabilitySummaryAsync(cancellationToken);
-
-        var trayRefresh = await _runtime.PlatformCapabilityService.InitializeTrayAsync(
-            "MaaAssistantArknights",
-            PlatformCapabilityTextMap.CreateTrayMenuText(nextLanguage, ReportLocalizationFallback),
-            cancellationToken);
-        if (await ApplyResultAsync(trayRefresh, "App.Shell.SwitchLanguage.TrayRefresh", cancellationToken)
-            && !string.Equals(previousLanguage, nextLanguage, StringComparison.OrdinalIgnoreCase))
+        finally
         {
-            _ = _runtime.AchievementTrackerService.Unlock("Linguist");
+            _ = RecordLanguageTimingAsync(
+                "Shell.ApplyLanguage.Total",
+                total,
+                previousLanguage,
+                nextLanguage,
+                cancellationToken);
         }
     }
 
@@ -3054,6 +3163,39 @@ public sealed class MainShellViewModel : ObservableObject
         return Dispatcher.UIThread.InvokeAsync(
             static () => { },
             DispatcherPriority.Loaded).GetTask();
+    }
+
+    private Task RecordLanguageTimingAsync(
+        string scope,
+        Stopwatch stopwatch,
+        string fromLanguage,
+        string targetLanguage,
+        CancellationToken cancellationToken,
+        params (string Key, object? Value)[] fields)
+    {
+        var payload = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["from"] = fromLanguage,
+            ["target"] = targetLanguage,
+            ["current"] = CurrentShellLanguage,
+            ["selectedRoot"] = SelectedRootTabIndex >= 0 && SelectedRootTabIndex < RootTabs.Count
+                ? RootTabs[SelectedRootTabIndex]
+                : SelectedRootTabIndex.ToString(CultureInfo.InvariantCulture),
+        };
+
+        foreach (var (key, value) in fields)
+        {
+            if (!string.IsNullOrWhiteSpace(key))
+            {
+                payload[key] = value;
+            }
+        }
+
+        return _runtime.DiagnosticsService.RecordTemporaryTimingAsync(
+            scope,
+            stopwatch.Elapsed.TotalMilliseconds,
+            payload,
+            cancellationToken);
     }
 
     private async Task SwitchLanguageCoreAsync(

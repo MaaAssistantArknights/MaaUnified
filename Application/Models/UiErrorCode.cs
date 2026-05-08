@@ -11,6 +11,7 @@ public static class UiErrorCode
     public const string AppRestartUnsupported = "AppRestartUnsupported";
     public const string AutostartQueryFailed = "AutostartQueryFailed";
     public const string CoreUnknown = "CoreUnknown";
+    public const string ConnectFailed = "ConnectFailed";
     public const string ImportFailed = "ImportFailed";
     public const string InvalidWaitTime = "InvalidWaitTime";
     public const string LanguageNotSupported = "LanguageNotSupported";

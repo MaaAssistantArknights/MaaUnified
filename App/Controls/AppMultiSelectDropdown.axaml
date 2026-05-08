@@ -11,12 +11,22 @@
       <Setter Property="Height" Value="{DynamicResource MAA.App.Size.InputHeight}" />
       <Setter Property="MinHeight" Value="{DynamicResource MAA.App.Size.InputHeight}" />
       <Setter Property="Padding" Value="{DynamicResource MAA.App.Thickness.SettingsInputShellPadding}" />
+      <Setter Property="Transitions">
+        <Transitions>
+          <BrushTransition Property="Background" Duration="0:0:0.11" />
+          <BrushTransition Property="BorderBrush" Duration="0:0:0.11" />
+        </Transitions>
+      </Setter>
     </Style>
     <Style Selector="Border.app-dropdown-shell:pointerover">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.SettingsInput.BackgroundHover}" />
       <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.SettingsInput.BorderHover}" />
     </Style>
     <Style Selector="Border.app-dropdown-shell.open">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.SettingsInput.BackgroundHover}" />
       <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.SettingsInput.BorderFocus}" />
+      <Setter Property="BorderThickness" Value="{DynamicResource MAA.BorderThickness.Thin}" />
+      <Setter Property="BoxShadow" Value="{DynamicResource MAA.App.BoxShadow.InputFocus}" />
     </Style>
     <Style Selector="Border.app-dropdown-shell:disabled">
       <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.SettingsInput.BackgroundDisabled}" />

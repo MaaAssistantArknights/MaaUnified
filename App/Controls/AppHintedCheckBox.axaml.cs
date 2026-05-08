@@ -33,6 +33,7 @@ public partial class AppHintedCheckBox : UserControl
     public AppHintedCheckBox()
     {
         InitializeComponent();
+        AttachedToVisualTree += (_, _) => SettingsLabelWidthCoordinator.InvalidateNearestGroup(this);
     }
 
     public bool? IsChecked
@@ -78,6 +79,11 @@ public partial class AppHintedCheckBox : UserControl
         if (change.Property == TipProperty)
         {
             HasTip = !string.IsNullOrWhiteSpace(Tip);
+            SettingsLabelWidthCoordinator.InvalidateNearestGroup(this);
+        }
+        else if (change.Property == TextProperty)
+        {
+            SettingsLabelWidthCoordinator.InvalidateNearestGroup(this);
         }
     }
 }

@@ -49,6 +49,15 @@ public abstract class PageViewModelBase : ObservableObject
         return Runtime.DiagnosticsService.RecordConfigValidationFailureAsync(issue, cancellationToken);
     }
 
+    protected Task RecordTemporaryTimingAsync(
+        string scope,
+        double elapsedMs,
+        IReadOnlyDictionary<string, object?>? fields = null,
+        CancellationToken cancellationToken = default)
+    {
+        return Runtime.DiagnosticsService.RecordTemporaryTimingAsync(scope, elapsedMs, fields, cancellationToken);
+    }
+
     protected async Task RecordUnhandledExceptionAsync(
         string scope,
         Exception exception,

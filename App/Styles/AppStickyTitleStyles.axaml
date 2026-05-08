@@ -69,13 +69,13 @@
 
   <Style Selector="controls|AppStickyTitlePresenter.settings-sticky-title Border.app-sticky-title-current-shell">
     <Setter Property="Padding" Value="0,6,0,4" />
-    <Setter Property="Background" Value="#F9FFFFFF" />
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.Settings.StickyTitleBackground}" />
     <Setter Property="HorizontalAlignment" Value="Left" />
   </Style>
 
   <Style Selector="controls|AppStickyTitlePresenter.settings-sticky-title Border.app-sticky-title-transition-shell">
     <Setter Property="Padding" Value="0,6,0,4" />
-    <Setter Property="Background" Value="#F9FFFFFF" />
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.Settings.StickyTitleBackground}" />
     <Setter Property="HorizontalAlignment" Value="Left" />
   </Style>
 
@@ -90,18 +90,19 @@
 
   <Style Selector="controls|AppStickyTitlePresenter.announcement-dialog-sticky-title Border.app-sticky-title-current-shell">
     <Setter Property="Padding" Value="0,6,0,4" />
-    <Setter Property="Background" Value="#F9FFFFFF" />
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.Announcement.StickyTitleBackground}" />
   </Style>
 
   <Style Selector="controls|AppStickyTitlePresenter.announcement-dialog-sticky-title Border.app-sticky-title-transition-shell">
     <Setter Property="Padding" Value="0,6,0,4" />
-    <Setter Property="Background" Value="#F9FFFFFF" />
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.Announcement.StickyTitleBackground}" />
   </Style>
 
   <Style Selector="controls|AppStickyTitlePresenter.announcement-dialog-sticky-title TextBlock.app-sticky-title-text">
     <Setter Property="Margin" Value="0,0,12,0" />
     <Setter Property="FontSize" Value="28" />
     <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
     <Setter Property="TextWrapping" Value="Wrap" />
   </Style>
 </Styles>

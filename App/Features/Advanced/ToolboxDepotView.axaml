@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:MAAUnified.App.Controls"
              x:Class="MAAUnified.App.Features.Advanced.ToolboxDepotView">
   <UserControl.Styles>
     <Style Selector="StackPanel.toolbox-depot-section">
@@ -22,26 +23,66 @@
     </Style>
 
     <Style Selector="Border.toolbox-depot-item-card">
-      <Setter Property="Margin" Value="{DynamicResource MAA.Thickness.Toolbox.CardMargin}" />
+      <Setter Property="Margin" Value="0" />
       <Setter Property="MinWidth" Value="{DynamicResource MAA.Size.Toolbox.DepotCardMinWidth}" />
-      <Setter Property="Padding" Value="16" />
+      <Setter Property="MinHeight" Value="88" />
+      <Setter Property="Padding" Value="12,12" />
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Surface.Card}" />
       <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="12" />
+      <Setter Property="BoxShadow" Value="{DynamicResource MAA.App.BoxShadow.CardStrong}" />
+      <Setter Property="ClipToBounds" Value="False" />
+    </Style>
+
+    <Style Selector="StackPanel.toolbox-depot-group-stack">
+      <Setter Property="Spacing" Value="14" />
+    </Style>
+
+    <Style Selector="StackPanel.toolbox-depot-item-group">
+      <Setter Property="Spacing" Value="8" />
+    </Style>
+
+    <Style Selector="TextBlock.toolbox-depot-group-title">
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
+    </Style>
+
+    <Style Selector="TextBlock.toolbox-depot-group-category">
+      <Setter Property="FontSize" Value="11.5" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Secondary}" />
+      <Setter Property="FontWeight" Value="Medium" />
+    </Style>
+
+    <Style Selector="Border.toolbox-depot-group-rule">
+      <Setter Property="Height" Value="1" />
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.Dialog.SectionBorder}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
     <Style Selector="StackPanel.toolbox-depot-item-stack">
-      <Setter Property="HorizontalAlignment" Value="Center" />
-      <Setter Property="Spacing" Value="10" />
+      <Setter Property="Spacing" Value="4" />
+      <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
     <Style Selector="TextBlock.toolbox-depot-item-name">
-      <Setter Property="HorizontalAlignment" Value="Center" />
-      <Setter Property="TextAlignment" Value="Center" />
-      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="HorizontalAlignment" Value="Left" />
+      <Setter Property="TextAlignment" Value="Left" />
+      <Setter Property="TextWrapping" Value="NoWrap" />
       <Setter Property="FontWeight" Value="SemiBold" />
     </Style>
 
-    <Style Selector="Border.toolbox-depot-count-badge">
-      <Setter Property="HorizontalAlignment" Value="Center" />
+    <Style Selector="TextBlock.toolbox-depot-count-text">
+      <Setter Property="FontSize" Value="15" />
+      <Setter Property="FontWeight" Value="Bold" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Action.PrimaryBackground}" />
+      <Setter Property="TextWrapping" Value="NoWrap" />
+    </Style>
+
+    <Style Selector="Image.toolbox-depot-item-image">
+      <Setter Property="Width" Value="{DynamicResource MAA.Size.Toolbox.DepotCardImage}" />
+      <Setter Property="Height" Value="{DynamicResource MAA.Size.Toolbox.DepotCardImage}" />
+      <Setter Property="Stretch" Value="Uniform" />
     </Style>
 
     <Style Selector="WrapPanel.toolbox-depot-actions">
@@ -49,65 +90,93 @@
     </Style>
 
     <Style Selector="Button.toolbox-depot-action">
-      <Setter Property="Width" Value="{DynamicResource MAA.Size.Toolbox.ActionButtonWidth}" />
-      <Setter Property="Height" Value="{DynamicResource MAA.Size.Toolbox.ActionButtonHeight}" />
+      <Setter Property="Width" Value="198" />
+      <Setter Property="Height" Value="62" />
       <Setter Property="Margin" Value="{DynamicResource MAA.Thickness.Toolbox.ButtonWideMargin}" />
+    </Style>
+
+    <Style Selector="Grid.toolbox-depot-action-row">
+      <Setter Property="RenderTransform">
+        <TranslateTransform Y="4" />
+      </Setter>
     </Style>
   </UserControl.Styles>
 
-  <Grid Margin="{DynamicResource MAA.Thickness.Toolbox.PageMargin}"
-        RowDefinitions="Auto,*,Auto">
-    <StackPanel Grid.Row="0"
-                Classes="toolbox-depot-section toolbox-depot-stack">
-      <Border Classes="toolbox-chip toolbox-depot-sync-badge"
-              IsVisible="{Binding HasLastDepotSyncTime}">
-        <TextBlock Classes="toolbox-chip-text"
-                   Text="{Binding LastDepotSyncDisplayText}" />
-      </Border>
-
-      <TextBlock Classes="app-window-subtitle long-wrap toolbox-depot-summary"
-                 Text="{Binding DepotInfo}" />
-    </StackPanel>
-
-    <StackPanel Grid.Row="1"
-                Margin="0,14,0,0"
-                Classes="toolbox-depot-section"
-                Spacing="12">
+  <Grid Margin="20,0,20,4"
+        RowDefinitions="*,Auto">
+    <Grid Grid.Row="0"
+          Margin="0">
       <ScrollViewer HorizontalScrollBarVisibility="Disabled"
                     VerticalScrollBarVisibility="Auto">
-        <ItemsControl Width="{Binding DepotPanelWidth}"
-                      HorizontalAlignment="Center"
-                      ItemsSource="{Binding DepotResult}">
-          <ItemsControl.ItemsPanel>
-            <ItemsPanelTemplate>
-              <WrapPanel ItemWidth="{DynamicResource MAA.Size.Toolbox.DepotWrapItemWidth}" />
-            </ItemsPanelTemplate>
-          </ItemsControl.ItemsPanel>
-          <ItemsControl.ItemTemplate>
-            <DataTemplate>
-              <Border Classes="app-surface app-card toolbox-depot-item-card">
-                <StackPanel Classes="toolbox-depot-item-stack">
-                  <Image Width="{DynamicResource MAA.Size.Toolbox.DepotCardImage}"
-                         Height="{DynamicResource MAA.Size.Toolbox.DepotCardImage}"
-                         Source="{Binding ItemImage}"
-                         Stretch="Uniform" />
-                  <TextBlock Classes="app-body toolbox-depot-item-name"
-                             Text="{Binding Name}" />
-                  <Border Classes="app-badge toolbox-depot-count-badge">
-                    <TextBlock Classes="app-badge-text"
-                               Text="{Binding DisplayCount}" />
-                  </Border>
-                </StackPanel>
-              </Border>
-            </DataTemplate>
-          </ItemsControl.ItemTemplate>
-        </ItemsControl>
-      </ScrollViewer>
-    </StackPanel>
+        <StackPanel Classes="toolbox-depot-section toolbox-depot-stack">
+          <Border Classes="toolbox-chip toolbox-depot-sync-badge"
+                  IsVisible="{Binding HasLastDepotSyncTime}">
+            <TextBlock Classes="toolbox-chip-text"
+                       Text="{Binding LastDepotSyncDisplayText}" />
+          </Border>
 
-    <StackPanel Grid.Row="2"
-                Margin="{DynamicResource MAA.Thickness.Toolbox.ActionTopMargin}"
-                Classes="toolbox-depot-section">
+          <TextBlock Classes="app-window-subtitle long-wrap toolbox-depot-summary"
+                     Text="{Binding DepotTipText}" />
+
+          <ItemsControl HorizontalAlignment="Stretch"
+                        ItemsSource="{Binding DepotGroups}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <StackPanel Classes="toolbox-depot-group-stack" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <StackPanel Classes="toolbox-depot-item-group">
+                  <Grid ColumnDefinitions="Auto,16,*">
+                    <TextBlock Classes="toolbox-depot-group-title"
+                               Text="{Binding Title}" />
+                    <Border Grid.Column="2"
+                            Classes="toolbox-depot-group-rule" />
+                  </Grid>
+                  <ItemsControl ItemsSource="{Binding Items}">
+                    <ItemsControl.ItemsPanel>
+                      <ItemsPanelTemplate>
+                        <controls:AdaptiveWrapPanel ItemWidth="{DynamicResource MAA.Size.Toolbox.DepotWrapItemWidth}"
+                                                    ItemHeight="88"
+                                                    MinColumnGap="16"
+                                                    MaxColumnGap="16"
+                                                    RowGap="16"
+                                                    EdgeInset="16,16,16,24" />
+                      </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate>
+                        <Border Classes="toolbox-depot-item-card">
+                          <Grid ColumnDefinitions="Auto,12,*"
+                                VerticalAlignment="Center">
+                            <Image Classes="toolbox-depot-item-image"
+                                   Source="{Binding ItemImage}" />
+                            <StackPanel Grid.Column="2"
+                                        Classes="toolbox-depot-item-stack">
+                              <TextBlock Classes="app-body toolbox-depot-item-name"
+                                         Text="{Binding Name}" />
+                              <TextBlock Classes="toolbox-depot-count-text"
+                                         Text="{Binding DisplayCount}" />
+                            </StackPanel>
+                          </Grid>
+                        </Border>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </ScrollViewer>
+    </Grid>
+
+    <Grid Grid.Row="1"
+          Margin="0,8,0,0"
+          Classes="toolbox-depot-action-row"
+          ColumnDefinitions="Auto,16,*"
+          HorizontalAlignment="Center">
       <WrapPanel Classes="toolbox-depot-actions">
         <Button Classes="app-button app-secondary toolbox-depot-action"
                 Click="OnDepotExportArkPlannerClick">
@@ -125,6 +194,12 @@
                 Content="{Binding StartRecognitionText}"
                 Click="OnDepotStartClick" />
       </WrapPanel>
-    </StackPanel>
+      <TextBlock Grid.Column="2"
+                 MaxWidth="220"
+                 VerticalAlignment="Center"
+                 Classes="app-caption subtle long-wrap"
+                 Text="{Binding DepotInfo}"
+                 IsVisible="{Binding HasDepotInfo}" />
+    </Grid>
   </Grid>
 </UserControl>

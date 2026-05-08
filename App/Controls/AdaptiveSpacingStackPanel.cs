@@ -17,6 +17,8 @@ public class AdaptiveSpacingStackPanel : StackPanel
     private const double MaxToggleCompactGap = 10;
     private const double DefaultMixedInteractiveGap = 8;
     private const double MaxMixedInteractiveGap = 12;
+    private const double DependentRowGapReduction = 11;
+    private const double MinDependentRowGap = -6;
     private const double DefaultSupplementaryGap = 4;
     private const double MaxSupplementaryGap = 6;
     private const double CaptionSlot = 16;
@@ -231,7 +233,7 @@ public class AdaptiveSpacingStackPanel : StackPanel
         if (previous.TrailingRole == AdaptiveSpacingRole.Toggle
             && next.LeadingRole == AdaptiveSpacingRole.Toggle)
         {
-            return ResolveCompactGap(MaxToggleCompactGap);
+            return ResolveDependentLeadingGap(next, ResolveCompactGap(MaxToggleCompactGap));
         }
 
         if (previous.TrailingRole == AdaptiveSpacingRole.Divider)
@@ -254,6 +256,13 @@ public class AdaptiveSpacingStackPanel : StackPanel
         var max = Math.Max(min, MaxGap);
 
         return Math.Clamp(gap, min, max);
+    }
+
+    private static double ResolveDependentLeadingGap(ChildMetrics next, double gap)
+    {
+        return next.IsDependentLeading
+            ? Math.Max(MinDependentRowGap, gap - DependentRowGapReduction)
+            : gap;
     }
 
     private double ResolveCompactGap(double maxGap)
@@ -334,53 +343,53 @@ public class AdaptiveSpacingStackPanel : StackPanel
         }
 
         var slot = GetEffectiveHeight(child.DesiredSize.Height);
-        return new ChildMetrics(AdaptiveSpacingRole.Generic, AdaptiveSpacingRole.Generic, slot, slot, false);
+        return new ChildMetrics(AdaptiveSpacingRole.Generic, AdaptiveSpacingRole.Generic, slot, slot, false, false);
     }
 
     private bool TryResolveLeafMetrics(Control child, out ChildMetrics metrics)
     {
         if (child is Border border && border.Classes.Contains("settings-page-subtle-divider"))
         {
-            metrics = new ChildMetrics(AdaptiveSpacingRole.Divider, AdaptiveSpacingRole.Divider, 0, 0, false);
+            metrics = new ChildMetrics(AdaptiveSpacingRole.Divider, AdaptiveSpacingRole.Divider, 0, 0, false, false);
             return true;
         }
 
         if (child is SettingsInlineRow)
         {
             var slot = Math.Max(FieldControlSlot, child.DesiredSize.Height);
-            metrics = new ChildMetrics(AdaptiveSpacingRole.FieldControl, AdaptiveSpacingRole.FieldControl, slot, slot, false);
+            metrics = new ChildMetrics(AdaptiveSpacingRole.FieldControl, AdaptiveSpacingRole.FieldControl, slot, slot, false, false);
             return true;
         }
 
         if (child is Grid grid && IsFieldGrid(grid))
         {
             var slot = Math.Max(FieldControlSlot, child.DesiredSize.Height);
-            metrics = new ChildMetrics(AdaptiveSpacingRole.FieldControl, AdaptiveSpacingRole.FieldControl, slot, slot, false);
+            metrics = new ChildMetrics(AdaptiveSpacingRole.FieldControl, AdaptiveSpacingRole.FieldControl, slot, slot, false, false);
             return true;
         }
 
         if (child is TextBox or ComboBox or NumericUpDown
             or AppTextInput or AppSelect or AppNumberInput
             or AppSuggestInput or AppHistoryInput or AppActionInput
-            or AppMultiSelectDropdown or AppTreeSelectDropdown
-            or DelimitedTextListEditor or VerticalSpinNumberBox)
+            or AppMultiSelect or AppMultiSelectDropdown
+            or VerticalSpinNumberBox)
         {
             var slot = Math.Max(FieldControlSlot, child.DesiredSize.Height);
-            metrics = new ChildMetrics(AdaptiveSpacingRole.FieldControl, AdaptiveSpacingRole.FieldControl, slot, slot, false);
+            metrics = new ChildMetrics(AdaptiveSpacingRole.FieldControl, AdaptiveSpacingRole.FieldControl, slot, slot, false, false);
             return true;
         }
 
         if (child is CheckBox or AppHintedCheckBox or NullableCheckBox)
         {
             var slot = Math.Max(ToggleSlot, child.DesiredSize.Height);
-            metrics = new ChildMetrics(AdaptiveSpacingRole.Toggle, AdaptiveSpacingRole.Toggle, slot, slot, false);
+            metrics = new ChildMetrics(AdaptiveSpacingRole.Toggle, AdaptiveSpacingRole.Toggle, slot, slot, child is SettingsDependentRow, false);
             return true;
         }
 
         if (child is Button)
         {
             var slot = Math.Max(ActionSlot, child.DesiredSize.Height);
-            metrics = new ChildMetrics(AdaptiveSpacingRole.Action, AdaptiveSpacingRole.Action, slot, slot, false);
+            metrics = new ChildMetrics(AdaptiveSpacingRole.Action, AdaptiveSpacingRole.Action, slot, slot, false, false);
             return true;
         }
 
@@ -395,7 +404,7 @@ public class AdaptiveSpacingStackPanel : StackPanel
                 _ => GetEffectiveHeight(child.DesiredSize.Height),
             };
 
-            metrics = new ChildMetrics(role, role, slot, slot, false);
+            metrics = new ChildMetrics(role, role, slot, slot, false, false);
             return true;
         }
 
@@ -411,6 +420,17 @@ public class AdaptiveSpacingStackPanel : StackPanel
 
         switch (child)
         {
+            case SettingsDependentRow { Content: Control innerChild }:
+                if (!innerChild.IsVisible)
+                {
+                    return false;
+                }
+
+                first = ResolveMetrics(innerChild);
+                first = first.Value with { IsDependentLeading = true };
+                last = first;
+                break;
+
             case Border { Child: Control innerChild }:
                 if (!innerChild.IsVisible)
                 {
@@ -450,6 +470,7 @@ public class AdaptiveSpacingStackPanel : StackPanel
             last.Value.TrailingRole,
             first.Value.TopSlot,
             last.Value.BottomSlot,
+            first.Value.IsDependentLeading,
             true);
         return true;
     }
@@ -533,8 +554,9 @@ public class AdaptiveSpacingStackPanel : StackPanel
         AdaptiveSpacingRole TrailingRole,
         double TopSlot,
         double BottomSlot,
+        bool IsDependentLeading,
         bool IsComposite)
     {
-        public static ChildMetrics Empty => new(AdaptiveSpacingRole.Generic, AdaptiveSpacingRole.Generic, 0, 0, false);
+        public static ChildMetrics Empty => new(AdaptiveSpacingRole.Generic, AdaptiveSpacingRole.Generic, 0, 0, false, false);
     }
 }

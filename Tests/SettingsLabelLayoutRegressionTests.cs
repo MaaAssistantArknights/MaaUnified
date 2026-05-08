@@ -21,13 +21,15 @@ public sealed class SettingsLabelLayoutRegressionTests
         Assert.Contains("Margin=\"0\"", xaml, StringComparison.Ordinal);
         Assert.Contains("IsVisible=\"{Binding HasTip, ElementName=Root}\"", xaml, StringComparison.Ordinal);
         var styles = File.ReadAllText(Path.Combine(root, "App", "Styles", "SettingsShellStyles.axaml"));
-        Assert.Contains("<Thickness x:Key=\"MAA.App.Settings.HintMargin\">8,0,0,0</Thickness>", styles, StringComparison.Ordinal);
+        Assert.Contains("<Thickness x:Key=\"MAA.App.Settings.HintMargin\">6,0,0,0</Thickness>", styles, StringComparison.Ordinal);
         Assert.Contains("controls|SettingsLabel controls|TooltipHint.settings-label-tip", styles, StringComparison.Ordinal);
         Assert.Contains("Property=\"Margin\" Value=\"0\"", styles, StringComparison.Ordinal);
         Assert.Contains("nameof(Text)", code, StringComparison.Ordinal);
         Assert.Contains("nameof(Tip)", code, StringComparison.Ordinal);
+        Assert.Contains("nameof(ShowTip)", code, StringComparison.Ordinal);
         Assert.Contains("MeasureNaturalLabelWidth()", code, StringComparison.Ordinal);
         Assert.Contains("MeasureHintReserveWidth()", code, StringComparison.Ordinal);
+        Assert.Contains("UpdateHasTip()", code, StringComparison.Ordinal);
         Assert.Contains("UpdateTextMaxWidth()", code, StringComparison.Ordinal);
         Assert.Contains("change.Property == BoundsProperty", code, StringComparison.Ordinal);
     }
@@ -51,6 +53,11 @@ public sealed class SettingsLabelLayoutRegressionTests
         Assert.Contains("change.Property == TextProperty", labelCode, StringComparison.Ordinal);
         Assert.Contains("change.Property == TipProperty", labelCode, StringComparison.Ordinal);
         Assert.Contains("SettingsLabelWidthCoordinator.InvalidateNearestGroup(this);", labelCode, StringComparison.Ordinal);
+        Assert.Contains("Visual.IsVisibleProperty.Changed", coordinatorCode, StringComparison.Ordinal);
+        Assert.Contains("OnVisibilityChanged", coordinatorCode, StringComparison.Ordinal);
+        Assert.Contains("row.IsEffectivelyVisible", coordinatorCode, StringComparison.Ordinal);
+        Assert.Contains("MeasureNaturalLabelWidths", coordinatorCode, StringComparison.Ordinal);
+        Assert.Contains("GetInlineRowLabelChildren", coordinatorCode, StringComparison.Ordinal);
         Assert.DoesNotContain("SizeChanged", coordinatorCode, StringComparison.Ordinal);
         Assert.DoesNotContain("BoundsProperty", coordinatorCode, StringComparison.Ordinal);
         Assert.DoesNotContain("LayoutUpdated", coordinatorCode, StringComparison.Ordinal);
@@ -120,6 +127,32 @@ public sealed class SettingsLabelLayoutRegressionTests
         Assert.Contains("<x:Double x:Key=\"MAA.Size.Settings.LabelFieldGap\">12</x:Double>", controlStyles, StringComparison.Ordinal);
         Assert.Contains("Property=\"controls:SettingsLabelWidthCoordinator.MaxLabelWidth\" Value=\"{DynamicResource MAA.Size.Settings.LabelMaxWidth}\"", settingsStyles, StringComparison.Ordinal);
         Assert.Contains("Property=\"controls:SettingsLabelWidthCoordinator.FieldGap\" Value=\"{DynamicResource MAA.Size.Settings.LabelFieldGap}\"", settingsStyles, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TaskQueueSettingsRows_ShouldUseSharedLabelWidthWithNarrowerMaximum()
+    {
+        var root = GetMaaUnifiedRoot();
+        var controlStyles = File.ReadAllText(Path.Combine(root, "App", "Styles", "ControlStyles.axaml"));
+        var taskQueue = File.ReadAllText(Path.Combine(root, "App", "Features", "Root", "TaskQueueView.axaml"));
+        var infrast = File.ReadAllText(Path.Combine(root, "App", "Features", "TaskQueue", "InfrastSettingsView.axaml"));
+        var roguelike = File.ReadAllText(Path.Combine(root, "App", "Features", "TaskQueue", "RoguelikeSettingsView.axaml"));
+        var fight = File.ReadAllText(Path.Combine(root, "App", "Features", "TaskQueue", "FightSettingsView.axaml"));
+
+        Assert.Contains("<x:Double x:Key=\"MAA.Size.TaskQueue.SettingsLabelMaxWidth\">156</x:Double>", controlStyles, StringComparison.Ordinal);
+        Assert.Contains("controls:SettingsLabelWidthCoordinator.MaxLabelWidth\" Value=\"{DynamicResource MAA.Size.TaskQueue.SettingsLabelMaxWidth}\"", taskQueue, StringComparison.Ordinal);
+        Assert.Contains("controls:SettingsLabelWidthCoordinator.GroupKey=\"TaskQueue.Fields\"", infrast, StringComparison.Ordinal);
+        Assert.Contains("Text=\"{Binding Texts[Infrast.Threshold]}\"", infrast, StringComparison.Ordinal);
+        Assert.Contains("Tip=\"{Binding Texts[Infrast.ThresholdTip]}\"", infrast, StringComparison.Ordinal);
+        Assert.True(
+            CountOccurrences(roguelike, "controls:SettingsLabelWidthCoordinator.GroupKey=\"TaskQueue.Fields\"") >= 8,
+            "Roguelike task settings should stay in the shared task label group; hidden rows are filtered by coordinator visibility.");
+        Assert.DoesNotContain("controls:SettingsLabelWidthCoordinator.GroupKey=\"Roguelike.", roguelike, StringComparison.Ordinal);
+        Assert.Contains("Text=\"{Binding Texts[Fight.AssignedMaterial]}\"", fight, StringComparison.Ordinal);
+        Assert.Contains("Tip=\"{Binding Texts[Fight.SpecifiedDropsTip]}\"", fight, StringComparison.Ordinal);
+        Assert.True(
+            CountOccurrences(fight, "controls:SettingsLabelWidthCoordinator.GroupKey=\"TaskQueue.Fields\"") >= 7,
+            "Fight inline rows, including checkbox labels, should participate in the shared task label group.");
     }
 
     private static string ReadSettingsView(string root, string file)

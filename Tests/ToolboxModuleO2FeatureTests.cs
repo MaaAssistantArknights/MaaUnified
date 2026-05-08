@@ -85,7 +85,9 @@ public sealed class ToolboxModuleO2FeatureTests
 
         Assert.NotNull(ToolboxAssetCatalog.ResolveOperatorEliteAssetPath(vm.OperBoxHaveList[0].Elite));
         Assert.NotNull(ToolboxAssetCatalog.ResolveOperatorPotentialAssetPath(vm.OperBoxHaveList[0].Potential));
-        Assert.NotNull(ToolboxAssetCatalog.ResolveItemImagePath(vm.DepotResult[0].Id));
+        var itemPath = ToolboxAssetCatalog.ResolveItemImagePath(vm.DepotResult[0].Id);
+        Assert.NotNull(itemPath);
+        Assert.Contains(Path.Combine("Assets", "Toolbox", "Items"), itemPath!, StringComparison.Ordinal);
 
         vm.MiniGameTaskName = "SS@Store@Begin";
         Assert.Equal("请在活动商店页面开始。\n不买无限池。", vm.MiniGameTip);
@@ -270,6 +272,31 @@ public sealed class ToolboxModuleO2FeatureTests
         Assert.Equal("Toolbox", fixture.Runtime.SessionService.CurrentRunOwner);
         Assert.Equal(ToolboxExecutionState.Executing, vm.ExecutionState);
         Assert.Equal(UiErrorCode.ToolboxExecutionFailed, vm.LastExecutionErrorCode);
+    }
+
+    [Fact]
+    public async Task StartOperBoxAsync_WhenConnectionFails_ShouldReportFriendlyConnectFailedError()
+    {
+        await using var fixture = await ToolboxTestFixture.CreateAsync();
+        fixture.Bridge.ForceConnectFailure = true;
+        DialogErrorRaisedEvent? raised = null;
+        fixture.Runtime.DialogFeatureService.ErrorRaised += (_, e) => raised = e;
+        var vm = new ToolboxPageViewModel(fixture.Runtime, fixture.ConnectionState);
+        await vm.InitializeAsync();
+
+        await vm.StartOperBoxAsync();
+
+        Assert.Equal(ToolboxExecutionState.Failed, vm.ExecutionState);
+        Assert.Equal(UiErrorCode.ConnectFailed, vm.LastExecutionErrorCode);
+        Assert.NotNull(raised);
+        Assert.Equal("Toolbox.OperBox", raised!.Context);
+        Assert.Equal(UiErrorCode.ConnectFailed, raised.Result.Error?.Code);
+        Assert.DoesNotContain("Connection command failed to exec", raised.Result.Message, StringComparison.Ordinal);
+        Assert.Contains("\"stage\":\"connect\"", raised.Result.Error?.Details ?? string.Empty, StringComparison.Ordinal);
+
+        var localized = DialogTextCatalog.LocalizeErrorResult("zh-cn", raised.Result);
+        Assert.Equal("连接模拟器失败。", localized.Message);
+        Assert.Contains("ADB", DialogTextCatalog.BuildErrorSuggestion("zh-cn", raised.Result), StringComparison.Ordinal);
     }
 
     [Fact]

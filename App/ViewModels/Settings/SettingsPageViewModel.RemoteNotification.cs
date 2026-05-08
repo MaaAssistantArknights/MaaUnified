@@ -902,9 +902,7 @@ public sealed partial class SettingsPageViewModel
                 return;
             }
 
-            AboutStatusMessage = LocalizeSettingsText(
-                "Settings.About.Status.AnnouncementSaveSucceeded",
-                "公告状态已保存。");
+            AboutStatusMessage = string.Empty;
             AboutErrorMessage = string.Empty;
             return;
         }

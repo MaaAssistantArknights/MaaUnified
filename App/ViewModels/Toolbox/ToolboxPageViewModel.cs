@@ -6,6 +6,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Avalonia;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
@@ -93,10 +94,12 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         nameof(StartRecognitionText),
         nameof(RecruitPotentialTip),
         nameof(OperBoxCopyToClipboardText),
+        nameof(OperBoxTipText),
         nameof(OperBoxNotHaveHeader),
         nameof(OperBoxHaveHeader),
         nameof(LastOperBoxSyncTimeText),
         nameof(LastOperBoxSyncDisplayText),
+        nameof(DepotTipText),
         nameof(DepotExportArkPlannerText),
         nameof(DepotExportLoliconText),
         nameof(LastDepotSyncTimeText),
@@ -227,17 +230,21 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
 
         _resultText = T("Toolbox.Status.WaitingForExecution", "Waiting to execute tool.");
         _recruitInfo = T("Toolbox.Tip.RecruitRecognition", "Tip: this feature is independent from the main-page auto recruit flow.");
-        _operBoxInfo = T("Toolbox.Tip.OperBoxRecognition", "Special markers may affect recognition accuracy.");
-        _depotInfo = T("Toolbox.Tip.DepotRecognition", "This feature is experimental. Please verify recognition results.");
+        _operBoxInfo = string.Empty;
+        _depotInfo = string.Empty;
         _gachaInfo = T("Toolbox.Tip.GachaInit", "Gacha hint.");
         _miniGameTip = T("Toolbox.Tip.MiniGameNameEmpty", "Select a mini-game above to start.");
 
         ExecutionHistory = new ObservableCollection<ToolExecutionRecord>();
         ExecutionHistory.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasExecutionHistory));
-        RecruitResultLines = new ObservableCollection<RecruitResultLineViewModel>();
+        RecruitResultLines = new BatchedObservableCollection<RecruitResultLineViewModel>();
+        RecruitResultGroups = new BatchedObservableCollection<RecruitResultGroupViewModel>();
         OperBoxHaveList = new BatchedObservableCollection<OperBoxOperatorItemViewModel>();
         OperBoxNotHaveList = new BatchedObservableCollection<OperBoxOperatorItemViewModel>();
-        DepotResult = new ObservableCollection<DepotItemViewModel>();
+        OperBoxHaveGroups = new BatchedObservableCollection<OperBoxOperatorGroupViewModel>();
+        OperBoxNotHaveGroups = new BatchedObservableCollection<OperBoxOperatorGroupViewModel>();
+        DepotResult = new BatchedObservableCollection<DepotItemViewModel>();
+        DepotGroups = new BatchedObservableCollection<DepotItemGroupViewModel>();
         MiniGameTaskList = new ObservableCollection<ToolboxMiniGameEntry>();
         RebuildMiniGameSecretFrontEventOptions();
         MiniGameSecretFrontEndingOptions =
@@ -253,6 +260,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         _gachaTipTimer.Tick += (_, _) => RefreshGachaTip();
 
         RecruitResultLines.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasRecruitResults));
+        RecruitResultGroups.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasRecruitResults));
         OperBoxHaveList.CollectionChanged += (_, _) =>
         {
             OnPropertyChanged(nameof(OperBoxHaveHeader));
@@ -269,6 +277,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
             OnPropertyChanged(nameof(DepotPanelWidth));
             OnPropertyChanged(nameof(ArkPlannerResult));
             OnPropertyChanged(nameof(LoliconResult));
+            RebuildDepotGroups();
         };
 
         runtime.SessionService.CallbackProjected += OnSessionCallbackProjected;
@@ -351,11 +360,19 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
 
     public ObservableCollection<RecruitResultLineViewModel> RecruitResultLines { get; }
 
+    public ObservableCollection<RecruitResultGroupViewModel> RecruitResultGroups { get; }
+
     public ObservableCollection<OperBoxOperatorItemViewModel> OperBoxHaveList { get; }
 
     public ObservableCollection<OperBoxOperatorItemViewModel> OperBoxNotHaveList { get; }
 
+    public ObservableCollection<OperBoxOperatorGroupViewModel> OperBoxHaveGroups { get; }
+
+    public ObservableCollection<OperBoxOperatorGroupViewModel> OperBoxNotHaveGroups { get; }
+
     public ObservableCollection<DepotItemViewModel> DepotResult { get; }
+
+    public ObservableCollection<DepotItemGroupViewModel> DepotGroups { get; }
 
     public ObservableCollection<ToolboxMiniGameEntry> MiniGameTaskList { get; }
 
@@ -430,7 +447,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         private set => SetProperty(ref _lastExecutionAt, value);
     }
 
-    public bool HasRecruitResults => RecruitResultLines.Count > 0;
+    public bool HasRecruitResults => RecruitResultLines.Count > 0 || RecruitResultGroups.Count > 0;
 
     public bool ShowRecruitAutoSetTimeControls => RecruitAutoSetTime;
 
@@ -604,14 +621,35 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
     public string OperBoxInfo
     {
         get => _operBoxInfo;
-        set => SetProperty(ref _operBoxInfo, value);
+        set
+        {
+            if (SetProperty(ref _operBoxInfo, value))
+            {
+                OnPropertyChanged(nameof(HasOperBoxInfo));
+            }
+        }
     }
+
+    public bool HasOperBoxInfo => !string.IsNullOrWhiteSpace(OperBoxInfo);
+
+    public string OperBoxTipText => T("Toolbox.Tip.OperBoxRecognition", "Special markers may affect recognition accuracy.");
 
     public int OperBoxSelectedIndex
     {
         get => _operBoxSelectedIndex;
-        set => SetProperty(ref _operBoxSelectedIndex, Math.Clamp(value, 0, 1));
+        set
+        {
+            if (SetProperty(ref _operBoxSelectedIndex, Math.Clamp(value, 0, 1)))
+            {
+                OnPropertyChanged(nameof(IsOperBoxNotHaveSelected));
+                OnPropertyChanged(nameof(IsOperBoxHaveSelected));
+            }
+        }
     }
+
+    public bool IsOperBoxNotHaveSelected => OperBoxSelectedIndex == 0;
+
+    public bool IsOperBoxHaveSelected => OperBoxSelectedIndex == 1;
 
     public string OperBoxNotHaveHeader => string.Format(
         CultureInfo.InvariantCulture,
@@ -672,8 +710,18 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
     public string DepotInfo
     {
         get => _depotInfo;
-        set => SetProperty(ref _depotInfo, value);
+        set
+        {
+            if (SetProperty(ref _depotInfo, value))
+            {
+                OnPropertyChanged(nameof(HasDepotInfo));
+            }
+        }
     }
+
+    public bool HasDepotInfo => !string.IsNullOrWhiteSpace(DepotInfo);
+
+    public string DepotTipText => T("Toolbox.Tip.DepotRecognition", "This feature is experimental. Please verify recognition results.");
 
     public DateTimeOffset? LastDepotSyncTime
     {
@@ -1547,6 +1595,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
     {
         RecruitInfo = T("Toolbox.Status.Recognizing", "Recognizing...");
         RecruitResultLines.Clear();
+        RecruitResultGroups.Clear();
         _lastRecruitResult = null;
     }
 
@@ -1557,6 +1606,8 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         _operBoxPotential.Clear();
         OperBoxHaveList.Clear();
         OperBoxNotHaveList.Clear();
+        OperBoxHaveGroups.Clear();
+        OperBoxNotHaveGroups.Clear();
         _operBoxListsMaterialized = false;
         OperBoxSelectedIndex = 1;
         LastOperBoxSyncTime = null;
@@ -1570,15 +1621,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
 
     private void ClearDepotRecognitionResults()
     {
-        if (DepotResult.Count > 0)
-        {
-            DepotResult.Clear();
-        }
-        else
-        {
-            OnPropertyChanged(nameof(ArkPlannerResult));
-            OnPropertyChanged(nameof(LoliconResult));
-        }
+        ReplaceCollectionItems(DepotResult, Array.Empty<DepotItemViewModel>());
     }
 
     private void PrepareGachaForStart()
@@ -1835,16 +1878,6 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
             RecruitInfo = T("Toolbox.Tip.RecruitRecognition", "Tip: this feature is independent from the main-page auto recruit flow.");
         }
 
-        if (_activeTool != ToolboxToolKind.OperBox)
-        {
-            OperBoxInfo = T("Toolbox.Tip.OperBoxRecognition", "Special markers may affect recognition accuracy.");
-        }
-
-        if (!HasDepotResult && _activeTool != ToolboxToolKind.Depot)
-        {
-            DepotInfo = T("Toolbox.Tip.DepotRecognition", "This feature is experimental. Please verify recognition results.");
-        }
-
         if (!IsGachaInProgress)
         {
             GachaInfo = T("Toolbox.Tip.GachaInit", "Gacha hint.");
@@ -1881,16 +1914,22 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
             .Select(item => new KeyValuePair<string, int>(item.Id, item.Count))
             .ToArray();
         var itemNames = ToolboxAssetCatalog.GetItemNames(_currentLanguage);
-        DepotResult.Clear();
-
-        foreach (var pair in snapshot.OrderBy(pair => pair.Key, StringComparer.Ordinal))
-        {
-            DepotResult.Add(new DepotItemViewModel(
-                pair.Key,
-                itemNames.TryGetValue(pair.Key, out var name) ? name : pair.Key,
-                pair.Value,
-                ToolboxAssetCatalog.ResolveItemImagePath(pair.Key)));
-        }
+        var itemAssets = ToolboxAssetCatalog.GetItemAssets(_currentLanguage);
+        var items = snapshot
+            .OrderBy(pair => pair.Key, StringComparer.Ordinal)
+            .Select(pair =>
+            {
+                itemAssets.TryGetValue(pair.Key, out var asset);
+                return new DepotItemViewModel(
+                    pair.Key,
+                    asset?.Name ?? (itemNames.TryGetValue(pair.Key, out var name) ? name : pair.Key),
+                    pair.Value,
+                    ToolboxAssetCatalog.ResolveItemImagePath(pair.Key),
+                    asset?.ClassifyType,
+                    asset?.SortId ?? 0);
+            })
+            .ToArray();
+        ReplaceCollectionItems(DepotResult, items);
     }
 
     private void OnUnifiedLanguageChanged(object? sender, UiLanguageChangedEventArgs e)
@@ -1901,7 +1940,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
             return;
         }
 
-        Dispatcher.UIThread.Post(() => SetLanguage(e.CurrentLanguage), DispatcherPriority.Background);
+        Dispatcher.UIThread.Post(() => SetLanguage(e.CurrentLanguage), DispatcherPriority.Send);
     }
 
     private static IReadOnlyList<string> GetDefaultAddresses(string connectConfig)
@@ -2038,8 +2077,10 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
             _lastRecruitResult = resultArray?.DeepClone() as JsonArray;
         }
 
-        RecruitResultLines.Clear();
+        var lines = new List<RecruitResultLineViewModel>();
+        var groups = new List<RecruitResultGroupViewModel>();
         var language = _currentLanguage;
+        var operators = ToolboxAssetCatalog.GetOperators();
 
         foreach (var comboNode in resultArray ?? [])
         {
@@ -2050,6 +2091,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
 
             var tagLevel = ReadInt(combo, "level");
             var tags = ReadStringArray(combo["tags"]);
+            var recruitCards = new List<RecruitOperatorCardViewModel>();
             var tagSegments = new List<RecruitResultSegmentViewModel>
             {
                 new($"{tagLevel}★", null, RecruitResultSegmentKind.Level),
@@ -2058,7 +2100,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
                 tag,
                 null,
                 RecruitResultSegmentKind.Tag)));
-            RecruitResultLines.Add(new RecruitResultLineViewModel(tagSegments, RecruitResultLineKind.TagLine));
+            lines.Add(new RecruitResultLineViewModel(tagSegments, RecruitResultLineKind.TagLine));
 
             var operatorsWithPotential = (combo["opers"] as JsonArray ?? [])
                 .OfType<JsonObject>()
@@ -2091,7 +2133,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
                 var operName = ReadString(oper, "name");
 
                 if (!string.IsNullOrWhiteSpace(operId)
-                    && ToolboxAssetCatalog.GetOperators().TryGetValue(operId, out var asset))
+                    && operators.TryGetValue(operId, out var asset))
                 {
                     operName = ToolboxAssetCatalog.GetLocalizedOperatorName(asset, language);
                 }
@@ -2117,17 +2159,41 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
                     $"{operName}{suffix}",
                     ResolveStarBrush(operLevel),
                     RecruitResultSegmentKind.Operator));
+                recruitCards.Add(new RecruitOperatorCardViewModel(
+                    operName,
+                    operLevel,
+                    ResolveProfessionText(!string.IsNullOrWhiteSpace(operId) && operators.TryGetValue(operId, out var cardAsset)
+                        ? cardAsset.Profession
+                        : string.Empty),
+                    !string.IsNullOrWhiteSpace(operId) && operators.TryGetValue(operId, out var iconAsset)
+                        ? iconAsset.Profession
+                        : string.Empty,
+                    suffix.Trim(),
+                    ResolveRarityAccentBrush(operLevel)));
             }
 
             if (operatorSegments.Count > 0)
             {
-                RecruitResultLines.Add(new RecruitResultLineViewModel(
+                lines.Add(new RecruitResultLineViewModel(
                     operatorSegments,
                     RecruitResultLineKind.OperatorLine));
             }
 
-            RecruitResultLines.Add(RecruitResultLineViewModel.CreateSpacer());
+            if (recruitCards.Count > 0)
+            {
+                groups.Add(new RecruitResultGroupViewModel(
+                    tagLevel,
+                    $"{tagLevel}★",
+                    tags,
+                    ResolveRarityAccentBrush(tagLevel),
+                    GroupRecruitOperatorCards(recruitCards)));
+            }
+
+            lines.Add(RecruitResultLineViewModel.CreateSpacer());
         }
+
+        ReplaceCollectionItems(RecruitResultLines, lines);
+        ReplaceCollectionItems(RecruitResultGroups, groups);
     }
 
     private void ApplyOperBoxRecognition(JsonObject details)
@@ -2182,8 +2248,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
 
         RebuildOperBoxLists();
         LastOperBoxSyncTime = DateTimeOffset.UtcNow;
-        OperBoxInfo = $"{T("Toolbox.Status.RecognitionCompleted", "Recognition completed.")}{Environment.NewLine}" +
-            T("Toolbox.Tip.OperBoxRecognition", "Special markers may affect recognition accuracy.");
+        OperBoxInfo = T("Toolbox.Status.RecognitionCompleted", "Recognition completed.");
         _ = PersistOperBoxAsync(CancellationToken.None);
     }
 
@@ -2225,11 +2290,16 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
                 displayName = ToolboxAssetCatalog.GetLocalizedOperatorName(asset, language);
                 rarity = asset.Rarity;
             }
+            var profession = operators.TryGetValue(owned.Id, out var professionAsset)
+                ? professionAsset.Profession
+                : string.Empty;
 
             haveItems.Add(new OperBoxOperatorItemViewModel(
                 owned.Id,
                 displayName,
                 rarity,
+                ResolveProfessionText(profession),
+                profession,
                 owned.Elite,
                 owned.Level,
                 owned.Potential,
@@ -2247,6 +2317,8 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
                 asset.Id,
                 ToolboxAssetCatalog.GetLocalizedOperatorName(asset, language),
                 asset.Rarity,
+                ResolveProfessionText(asset.Profession),
+                asset.Profession,
                 elite: 0,
                 level: 0,
                 potential: 0,
@@ -2257,6 +2329,8 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
 
         ReplaceCollectionItems(OperBoxHaveList, haveItems);
         ReplaceCollectionItems(OperBoxNotHaveList, notHaveItems);
+        ReplaceCollectionItems(OperBoxHaveGroups, GroupOperBoxOperators(haveItems));
+        ReplaceCollectionItems(OperBoxNotHaveGroups, GroupOperBoxOperators(notHaveItems));
         _operBoxListsMaterialized = haveItems.Count > 0 || notHaveItems.Count > 0;
         OperBoxSelectedIndex = OperBoxNotHaveList.Count > 0 ? 0 : 1;
     }
@@ -2264,22 +2338,28 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
     private void ApplyDepotRecognition(JsonObject details, bool updateSyncTime)
     {
         var counts = ParseDepotCounts(details);
-        DepotResult.Clear();
         var itemNames = ToolboxAssetCatalog.GetItemNames(_currentLanguage);
+        var itemAssets = ToolboxAssetCatalog.GetItemAssets(_currentLanguage);
+        var items = new List<DepotItemViewModel>(counts.Count);
 
         foreach (var pair in counts.OrderBy(pair => pair.Key, StringComparer.Ordinal))
         {
+            itemAssets.TryGetValue(pair.Key, out var asset);
             if (pair.Value > Runtime.AchievementTrackerService.GetProgress("WarehouseMiser"))
             {
                 _ = Runtime.AchievementTrackerService.SetProgress("WarehouseMiser", pair.Value);
             }
 
-            DepotResult.Add(new DepotItemViewModel(
+            items.Add(new DepotItemViewModel(
                 pair.Key,
-                itemNames.TryGetValue(pair.Key, out var name) ? name : pair.Key,
+                asset?.Name ?? (itemNames.TryGetValue(pair.Key, out var name) ? name : pair.Key),
                 pair.Value,
-                ToolboxAssetCatalog.ResolveItemImagePath(pair.Key)));
+                ToolboxAssetCatalog.ResolveItemImagePath(pair.Key),
+                asset?.ClassifyType,
+                asset?.SortId ?? 0));
         }
+
+        ReplaceCollectionItems(DepotResult, items);
 
         var done = ReadBool(details, "done");
         if (!done)
@@ -2352,8 +2432,9 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
             return;
         }
 
+        var itemAssets = ToolboxAssetCatalog.GetItemAssets(_currentLanguage);
         var itemNames = ToolboxAssetCatalog.GetItemNames(_currentLanguage);
-        var byId = DepotResult.ToDictionary(item => item.Id, StringComparer.Ordinal);
+        var countsById = DepotResult.ToDictionary(item => item.Id, item => item.Count, StringComparer.Ordinal);
         var changed = false;
 
         foreach (var node in stats)
@@ -2385,20 +2466,18 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
                 continue;
             }
 
-            if (byId.TryGetValue(itemId, out var existing))
+            if (countsById.TryGetValue(itemId, out var existingCount))
             {
-                existing.Count += addQuantity;
-                if (existing.Count > Runtime.AchievementTrackerService.GetProgress("WarehouseMiser"))
+                var newCount = existingCount + addQuantity;
+                countsById[itemId] = newCount;
+                if (newCount > Runtime.AchievementTrackerService.GetProgress("WarehouseMiser"))
                 {
-                    _ = Runtime.AchievementTrackerService.SetProgress("WarehouseMiser", existing.Count);
+                    _ = Runtime.AchievementTrackerService.SetProgress("WarehouseMiser", newCount);
                 }
             }
             else
             {
-                var name = itemNames.TryGetValue(itemId, out var itemName) ? itemName : itemId;
-                var created = new DepotItemViewModel(itemId, name, addQuantity, ToolboxAssetCatalog.ResolveItemImagePath(itemId));
-                byId[itemId] = created;
-                DepotResult.Add(created);
+                countsById[itemId] = addQuantity;
                 if (addQuantity > Runtime.AchievementTrackerService.GetProgress("WarehouseMiser"))
                 {
                     _ = Runtime.AchievementTrackerService.SetProgress("WarehouseMiser", addQuantity);
@@ -2413,12 +2492,21 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
             return;
         }
 
-        var ordered = DepotResult.OrderBy(item => item.Id, StringComparer.Ordinal).ToArray();
-        DepotResult.Clear();
-        foreach (var item in ordered)
-        {
-            DepotResult.Add(item);
-        }
+        var items = countsById
+            .OrderBy(pair => pair.Key, StringComparer.Ordinal)
+            .Select(pair =>
+            {
+                itemAssets.TryGetValue(pair.Key, out var asset);
+                return new DepotItemViewModel(
+                    pair.Key,
+                    asset?.Name ?? (itemNames.TryGetValue(pair.Key, out var name) ? name : pair.Key),
+                    pair.Value,
+                    ToolboxAssetCatalog.ResolveItemImagePath(pair.Key),
+                    asset?.ClassifyType,
+                    asset?.SortId ?? 0);
+            })
+            .ToArray();
+        ReplaceCollectionItems(DepotResult, items);
 
         _ = PersistDepotAsync(CancellationToken.None);
     }
@@ -3051,6 +3139,8 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         _operBoxPotential.Clear();
         OperBoxHaveList.Clear();
         OperBoxNotHaveList.Clear();
+        OperBoxHaveGroups.Clear();
+        OperBoxNotHaveGroups.Clear();
         _operBoxListsMaterialized = false;
         LastOperBoxSyncTime = null;
 
@@ -3108,7 +3198,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
 
     private void LoadDepotDetails()
     {
-        DepotResult.Clear();
+        ReplaceCollectionItems(DepotResult, Array.Empty<DepotItemViewModel>());
         if (!Runtime.ConfigurationService.CurrentConfig.GlobalValues.TryGetValue(LegacyConfigurationKeys.DepotResult, out var node) || node is null)
         {
             return;
@@ -3730,6 +3820,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
             : message.Trim();
         return code switch
         {
+            UiErrorCode.ConnectFailed => T("Toolbox.Error.ConnectionFailed", "Connection failed."),
             UiErrorCode.ToolboxInvalidParameters => string.Format(
                 CultureInfo.InvariantCulture,
                 T("Toolbox.Error.InvalidParameters", "Invalid parameters: {0} ({1})"),
@@ -3757,6 +3848,191 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         };
     }
 
+    private void RebuildDepotGroups()
+    {
+        var groups = DepotResult
+            .OrderBy(item => ResolveDepotCategorySort(item.ClassifyType))
+            .ThenByDescending(item => item.SortId)
+            .ThenBy(item => item.Id, StringComparer.Ordinal)
+            .GroupBy(item => ResolveDepotGroupKey(item), StringComparer.Ordinal)
+            .Select(group =>
+            {
+                var first = group.First();
+                return new DepotItemGroupViewModel(
+                    ResolveDepotGroupTitle(first),
+                    ResolveDepotCategoryTitle(first.ClassifyType),
+                    group.ToArray());
+            })
+            .ToArray();
+
+        ReplaceCollectionItems(DepotGroups, groups);
+    }
+
+    private IReadOnlyList<RecruitOperatorRarityGroupViewModel> GroupRecruitOperatorCards(IEnumerable<RecruitOperatorCardViewModel> items)
+    {
+        return items
+            .GroupBy(item => item.Rarity)
+            .OrderByDescending(group => group.Key)
+            .Select(group => new RecruitOperatorRarityGroupViewModel(
+                $"{group.Key}★",
+                ResolveRarityAccentBrush(group.Key),
+                group
+                    .OrderBy(item => ResolveProfessionSort(item.ProfessionText))
+                    .ThenBy(item => item.Name, StringComparer.CurrentCulture)
+                    .ToArray()))
+            .ToArray();
+    }
+
+    private IReadOnlyList<OperBoxOperatorGroupViewModel> GroupOperBoxOperators(IEnumerable<OperBoxOperatorItemViewModel> items)
+    {
+        return items
+            .GroupBy(item => item.Rarity)
+            .OrderByDescending(group => group.Key)
+            .Select(group => new OperBoxOperatorGroupViewModel(
+                $"{group.Key}★",
+                ResolveRarityAccentBrush(group.Key),
+                group
+                    .OrderBy(item => ResolveProfessionSort(item.ProfessionText))
+                    .ThenBy(item => item.Name, StringComparer.CurrentCulture)
+                    .ToArray()))
+            .ToArray();
+    }
+
+    private string ResolveProfessionText(string? profession)
+    {
+        var normalized = (profession ?? string.Empty).Trim().ToUpperInvariant();
+        var useChinese = _currentLanguage.StartsWith("zh", StringComparison.OrdinalIgnoreCase);
+        return normalized switch
+        {
+            "PIONEER" => useChinese ? "先锋" : "Vanguard",
+            "WARRIOR" => useChinese ? "近卫" : "Guard",
+            "TANK" => useChinese ? "重装" : "Defender",
+            "SNIPER" => useChinese ? "狙击" : "Sniper",
+            "CASTER" => useChinese ? "术师" : "Caster",
+            "MEDIC" => useChinese ? "医疗" : "Medic",
+            "SUPPORT" => useChinese ? "辅助" : "Supporter",
+            "SPECIAL" => useChinese ? "特种" : "Specialist",
+            _ => useChinese ? "干员" : "Operator",
+        };
+    }
+
+    private static int ResolveProfessionSort(string professionText)
+    {
+        return professionText switch
+        {
+            "先锋" or "Vanguard" => 0,
+            "近卫" or "Guard" => 1,
+            "重装" or "Defender" => 2,
+            "狙击" or "Sniper" => 3,
+            "术师" or "Caster" => 4,
+            "医疗" or "Medic" => 5,
+            "辅助" or "Supporter" => 6,
+            "特种" or "Specialist" => 7,
+            _ => 99,
+        };
+    }
+
+    private string ResolveDepotCategoryTitle(string? classifyType)
+    {
+        var normalized = (classifyType ?? string.Empty).Trim().ToUpperInvariant();
+        var useChinese = _currentLanguage.StartsWith("zh", StringComparison.OrdinalIgnoreCase);
+        return normalized switch
+        {
+            "MATERIAL" => useChinese ? "材料" : "Materials",
+            "CONSUME" => useChinese ? "消耗品" : "Consumables",
+            "NORMAL" => useChinese ? "常规物品" : "Regular Items",
+            "NONE" => useChinese ? "其他" : "Other",
+            _ => useChinese ? "其他" : "Other",
+        };
+    }
+
+    private static int ResolveDepotCategorySort(string? classifyType)
+    {
+        return (classifyType ?? string.Empty).Trim().ToUpperInvariant() switch
+        {
+            "MATERIAL" => 0,
+            "CONSUME" => 1,
+            "NORMAL" => 2,
+            _ => 9,
+        };
+    }
+
+    private static string ResolveDepotGroupKey(DepotItemViewModel item)
+    {
+        if (item.Id is "2001" or "2002" or "2003" or "2004")
+        {
+            return "battle-record";
+        }
+
+        if (item.Id.StartsWith("32", StringComparison.Ordinal) && item.Id.Length >= 3)
+        {
+            return $"chip-{item.Id[..3]}";
+        }
+
+        if (item.SortId > 0)
+        {
+            return $"{item.ClassifyType}:{item.SortId / 10}";
+        }
+
+        return $"{item.ClassifyType}:{item.Id}";
+    }
+
+    private string ResolveDepotGroupTitle(DepotItemViewModel first)
+    {
+        if (first.Id is "2001" or "2002" or "2003" or "2004")
+        {
+            return _currentLanguage.StartsWith("zh", StringComparison.OrdinalIgnoreCase)
+                ? "作战记录"
+                : "Battle Records";
+        }
+
+        var useChinese = _currentLanguage.StartsWith("zh", StringComparison.OrdinalIgnoreCase);
+        var sortBand = first.SortId / 1000;
+        if (sortBand == 80)
+        {
+            return useChinese ? "技巧概要" : "Skill Summaries";
+        }
+
+        if (sortBand == 90)
+        {
+            return useChinese ? "模组材料" : "Module Materials";
+        }
+
+        if (first.Id.StartsWith("32", StringComparison.Ordinal))
+        {
+            return ResolveDepotChipGroupTitle(first.Name, useChinese);
+        }
+
+        if (first.ClassifyType.Equals("MATERIAL", StringComparison.OrdinalIgnoreCase))
+        {
+            return first.SortId / 10 == 10000
+                ? useChinese ? "高级材料" : "Advanced Materials"
+                : first.Name;
+        }
+
+        return ResolveDepotCategoryTitle(first.ClassifyType);
+    }
+
+    private static string ResolveDepotChipGroupTitle(string name, bool useChinese)
+    {
+        if (!useChinese)
+        {
+            return name
+                .Replace(" Dualchip", " Chips", StringComparison.OrdinalIgnoreCase)
+                .Replace(" Chip Pack", " Chips", StringComparison.OrdinalIgnoreCase);
+        }
+
+        foreach (var suffix in new[] { "双芯片", "芯片组", "芯片" })
+        {
+            if (name.EndsWith(suffix, StringComparison.Ordinal))
+            {
+                return $"{name[..^suffix.Length]}芯片";
+            }
+        }
+
+        return name;
+    }
+
     private static IBrush ResolveStarBrush(int star)
     {
         return star switch
@@ -3766,6 +4042,38 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
             4 => Brushes.SkyBlue,
             3 => Brushes.LightGreen,
             _ => Brushes.LightGray,
+        };
+    }
+
+    public static IBrush ResolveRarityAccentBrushForBinding(int star)
+    {
+        return ResolveRarityAccentBrush(star);
+    }
+
+    private static IBrush ResolveRarityAccentBrush(int star)
+    {
+        if (star >= 6)
+        {
+            return new LinearGradientBrush
+            {
+                StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+                EndPoint = new RelativePoint(1, 1, RelativeUnit.Relative),
+                GradientStops =
+                {
+                    new GradientStop(Color.Parse("#FF65D9FF"), 0),
+                    new GradientStop(Color.Parse("#FF9B6CFF"), 0.35),
+                    new GradientStop(Color.Parse("#FFFFC857"), 0.68),
+                    new GradientStop(Color.Parse("#FFFF6B8A"), 1),
+                },
+            };
+        }
+
+        return star switch
+        {
+            5 => new SolidColorBrush(Color.Parse("#FFD89A29")),
+            4 => new SolidColorBrush(Color.Parse("#FF8D68D8")),
+            3 => new SolidColorBrush(Color.Parse("#FFE9EDF4")),
+            _ => new SolidColorBrush(Color.Parse("#FFB8C0CC")),
         };
     }
 
@@ -3909,6 +4217,36 @@ public sealed class RecruitResultSegmentViewModel : ObservableObject
     }
 }
 
+public sealed record RecruitResultGroupViewModel(
+    int TagLevel,
+    string LevelText,
+    IReadOnlyList<string> Tags,
+    IBrush AccentBrush,
+    IReadOnlyList<RecruitOperatorRarityGroupViewModel> OperatorGroups)
+{
+    public bool HasTags => Tags.Count > 0;
+}
+
+public sealed record RecruitOperatorRarityGroupViewModel(
+    string Title,
+    IBrush AccentBrush,
+    IReadOnlyList<RecruitOperatorCardViewModel> Operators);
+
+public sealed record RecruitOperatorCardViewModel(
+    string Name,
+    int Rarity,
+    string ProfessionText,
+    string Profession,
+    string PotentialText,
+    IBrush AccentBrush)
+{
+    public string RarityStars => Rarity <= 0 ? string.Empty : new string('★', Rarity);
+
+    public Bitmap? ProfessionIconImage => ToolboxAssetCatalog.ResolveOperatorProfessionBitmap(Profession);
+
+    public bool HasPotentialText => !string.IsNullOrWhiteSpace(PotentialText);
+}
+
 public sealed class OperBoxOperatorItemViewModel : ObservableObject
 {
     private int _elite;
@@ -3921,6 +4259,8 @@ public sealed class OperBoxOperatorItemViewModel : ObservableObject
         string id,
         string name,
         int rarity,
+        string professionText,
+        string profession,
         int elite,
         int level,
         int potential,
@@ -3932,6 +4272,8 @@ public sealed class OperBoxOperatorItemViewModel : ObservableObject
         Name = name;
         Rarity = rarity;
         RarityBrush = ResolveRarityBrush(rarity);
+        ProfessionText = professionText;
+        Profession = profession;
         _elite = elite;
         _level = level;
         _potential = potential;
@@ -3951,6 +4293,12 @@ public sealed class OperBoxOperatorItemViewModel : ObservableObject
     public int Rarity { get; }
 
     public IBrush RarityBrush { get; }
+
+    public string ProfessionText { get; }
+
+    public string Profession { get; }
+
+    public Bitmap? ProfessionIconImage => ToolboxAssetCatalog.ResolveOperatorProfessionBitmap(Profession);
 
     public bool Own { get; }
 
@@ -4012,16 +4360,14 @@ public sealed class OperBoxOperatorItemViewModel : ObservableObject
 
     private static IBrush ResolveRarityBrush(int rarity)
     {
-        return rarity switch
-        {
-            >= 6 => Brushes.Gold,
-            5 => Brushes.Orange,
-            4 => Brushes.SkyBlue,
-            3 => Brushes.LightGreen,
-            _ => Brushes.LightGray,
-        };
+        return ToolboxPageViewModel.ResolveRarityAccentBrushForBinding(rarity);
     }
 }
+
+public sealed record OperBoxOperatorGroupViewModel(
+    string Title,
+    IBrush AccentBrush,
+    IReadOnlyList<OperBoxOperatorItemViewModel> Operators);
 
 internal sealed class BatchedObservableCollection<T> : ObservableCollection<T>
 {
@@ -4045,12 +4391,15 @@ public sealed class DepotItemViewModel : ObservableObject
     private int _count;
     private readonly Bitmap? _itemImage;
 
-    public DepotItemViewModel(string id, string name, int count, string? imagePath)
+    public DepotItemViewModel(string id, string name, int count, string? imagePath, string? classifyType = null, int sortId = 0)
     {
         Id = id;
         Name = name;
         _count = count;
         ImagePath = imagePath;
+        ClassifyType = string.IsNullOrWhiteSpace(classifyType) ? "NONE" : classifyType;
+        SortId = sortId;
+        AccentBrush = ResolveDepotAccentBrush(ClassifyType);
         _itemImage = ToolboxAssetCatalog.ResolveItemBitmap(id);
     }
 
@@ -4059,6 +4408,12 @@ public sealed class DepotItemViewModel : ObservableObject
     public string Name { get; }
 
     public string? ImagePath { get; }
+
+    public string ClassifyType { get; }
+
+    public int SortId { get; }
+
+    public IBrush AccentBrush { get; }
 
     public Bitmap? ItemImage => _itemImage;
 
@@ -4075,7 +4430,23 @@ public sealed class DepotItemViewModel : ObservableObject
     }
 
     public string DisplayCount => Count.ToString(CultureInfo.InvariantCulture);
+
+    private static IBrush ResolveDepotAccentBrush(string classifyType)
+    {
+        return classifyType.Trim().ToUpperInvariant() switch
+        {
+            "MATERIAL" => new SolidColorBrush(Color.Parse("#FF2F6FB2")),
+            "CONSUME" => new SolidColorBrush(Color.Parse("#FF64748B")),
+            "NORMAL" => new SolidColorBrush(Color.Parse("#FF7C8BA3")),
+            _ => new SolidColorBrush(Color.Parse("#FFB8C0CC")),
+        };
+    }
 }
+
+public sealed record DepotItemGroupViewModel(
+    string Title,
+    string Category,
+    IReadOnlyList<DepotItemViewModel> Items);
 
 file sealed record RecruitOperatorProjection(
     JsonObject Operator,

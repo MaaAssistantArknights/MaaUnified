@@ -67,18 +67,18 @@
                 controls:SettingsLabelWidthCoordinator.GroupKey="Connect.AdbCore"
                 ColumnDefinitions="Auto,*">
             <controls:SettingsLabel Text="{Binding RootTexts[Settings.Connect.Configuration]}" />
-            <ComboBox Grid.Column="1"
+            <controls:AppSelect Grid.Column="1"
                       Classes="settings-select"
                       Width="{DynamicResource MAA.Size.Settings.FieldInputWidth}"
                       HorizontalAlignment="Left"
                       ItemsSource="{Binding ConnectConfigOptions}"
                       SelectedItem="{Binding SelectedConnectConfigOption, Mode=TwoWay}">
-              <ComboBox.ItemTemplate>
+              <controls:AppSelect.ItemTemplate>
                 <DataTemplate x:DataType="vm:ConnectionGameOptionItem">
                   <TextBlock Text="{Binding DisplayName}" />
                 </DataTemplate>
-              </ComboBox.ItemTemplate>
-            </ComboBox>
+              </controls:AppSelect.ItemTemplate>
+            </controls:AppSelect>
           </Grid>
 
           <Border Classes="app-highlight app-warning-highlight"
@@ -128,54 +128,54 @@
                   controls:SettingsLabelWidthCoordinator.GroupKey="Connect.AttachWindow"
                   ColumnDefinitions="Auto,*">
               <controls:SettingsLabel Text="{Binding RootTexts[Settings.Connect.ScreencapMethod]}" />
-              <ComboBox Grid.Column="1"
+              <controls:AppSelect Grid.Column="1"
                         Classes="settings-select"
                         Width="{DynamicResource MAA.Size.Settings.FieldInputWidth}"
                         HorizontalAlignment="Left"
                         ItemsSource="{Binding AttachWindowScreencapOptions}"
                         SelectedItem="{Binding SelectedAttachWindowScreencapOption, Mode=TwoWay}">
-                <ComboBox.ItemTemplate>
+                <controls:AppSelect.ItemTemplate>
                   <DataTemplate x:DataType="vm:ConnectionGameOptionItem">
                     <TextBlock Text="{Binding DisplayName}" />
                   </DataTemplate>
-                </ComboBox.ItemTemplate>
-              </ComboBox>
+                </controls:AppSelect.ItemTemplate>
+              </controls:AppSelect>
             </Grid>
 
             <Grid Classes="settings-page-labeled-row"
                   controls:SettingsLabelWidthCoordinator.GroupKey="Connect.AttachWindow"
                   ColumnDefinitions="Auto,*">
               <controls:SettingsLabel Text="{Binding RootTexts[Settings.Connect.MouseInput]}" />
-              <ComboBox Grid.Column="1"
+              <controls:AppSelect Grid.Column="1"
                         Classes="settings-select"
                         Width="{DynamicResource MAA.Size.Settings.FieldInputWidth}"
                         HorizontalAlignment="Left"
                         ItemsSource="{Binding AttachWindowInputOptions}"
                         SelectedItem="{Binding SelectedAttachWindowMouseOption, Mode=TwoWay}">
-                <ComboBox.ItemTemplate>
+                <controls:AppSelect.ItemTemplate>
                   <DataTemplate x:DataType="vm:ConnectionGameOptionItem">
                     <TextBlock Text="{Binding DisplayName}" />
                   </DataTemplate>
-                </ComboBox.ItemTemplate>
-              </ComboBox>
+                </controls:AppSelect.ItemTemplate>
+              </controls:AppSelect>
             </Grid>
 
             <Grid Classes="settings-page-labeled-row"
                   controls:SettingsLabelWidthCoordinator.GroupKey="Connect.AttachWindow"
                   ColumnDefinitions="Auto,*">
               <controls:SettingsLabel Text="{Binding RootTexts[Settings.Connect.KeyboardInput]}" />
-              <ComboBox Grid.Column="1"
+              <controls:AppSelect Grid.Column="1"
                         Classes="settings-select"
                         Width="{DynamicResource MAA.Size.Settings.FieldInputWidth}"
                         HorizontalAlignment="Left"
                         ItemsSource="{Binding AttachWindowInputOptions}"
                         SelectedItem="{Binding SelectedAttachWindowKeyboardOption, Mode=TwoWay}">
-                <ComboBox.ItemTemplate>
+                <controls:AppSelect.ItemTemplate>
                   <DataTemplate x:DataType="vm:ConnectionGameOptionItem">
                     <TextBlock Text="{Binding DisplayName}" />
                   </DataTemplate>
-                </ComboBox.ItemTemplate>
-              </ComboBox>
+                </controls:AppSelect.ItemTemplate>
+              </controls:AppSelect>
             </Grid>
           </controls:AdaptiveSpacingStackPanel>
         </controls:AdaptiveSpacingStackPanel>
@@ -199,7 +199,7 @@
                     controls:SettingsLabelWidthCoordinator.GroupKey="Connect.MuMu"
                     ColumnDefinitions="Auto,*">
                 <controls:SettingsLabel Text="{Binding RootTexts[Settings.Connect.MuMu.EmulatorPath]}" />
-                <TextBox Grid.Column="1"
+                <controls:AppTextInput Grid.Column="1"
                          Classes="settings-input"
                          Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
                          HorizontalAlignment="Left"
@@ -216,7 +216,7 @@
                     ColumnDefinitions="Auto,*"
                     IsVisible="{Binding MuMuBridgeConnection}">
                 <controls:SettingsLabel Text="{Binding RootTexts[Settings.Connect.InstanceId]}" />
-                <TextBox Grid.Column="1"
+                <controls:AppTextInput Grid.Column="1"
                          Classes="settings-input"
                          Width="{DynamicResource MAA.Size.Settings.FieldSlimWidth}"
                          HorizontalAlignment="Left"
@@ -239,7 +239,7 @@
                     controls:SettingsLabelWidthCoordinator.GroupKey="Connect.LdPlayer"
                     ColumnDefinitions="Auto,*">
                 <controls:SettingsLabel Text="{Binding RootTexts[Settings.Connect.LdPlayer.EmulatorPath]}" />
-                <TextBox Grid.Column="1"
+                <controls:AppTextInput Grid.Column="1"
                          Classes="settings-input"
                          Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
                          HorizontalAlignment="Left"
@@ -256,7 +256,7 @@
                     ColumnDefinitions="Auto,*"
                     IsVisible="{Binding LdPlayerManualSetIndex}">
                 <controls:SettingsLabel Text="{Binding RootTexts[Settings.Connect.InstanceId]}" />
-                <TextBox Grid.Column="1"
+                <controls:AppTextInput Grid.Column="1"
                          Classes="settings-input"
                          Width="{DynamicResource MAA.Size.Settings.FieldSlimWidth}"
                          HorizontalAlignment="Left"
@@ -303,19 +303,19 @@
                 controls:SettingsLabelWidthCoordinator.GroupKey="Connect.AdbAdvanced"
                 ColumnDefinitions="Auto,Auto,Auto">
             <controls:SettingsLabel Text="{Binding RootTexts[Settings.Connect.TouchMode]}" />
-            <ComboBox Grid.Column="1"
+            <controls:AppSelect Grid.Column="1"
                       Classes="settings-select"
                       Width="{DynamicResource MAA.Size.Settings.FieldCenteredWidth}"
                       HorizontalAlignment="Left"
                       IsEnabled="{Binding CanEditAdbConnectionFields}"
                       ItemsSource="{Binding TouchModeOptions}"
                       SelectedItem="{Binding SelectedTouchModeOption, Mode=TwoWay}">
-              <ComboBox.ItemTemplate>
+              <controls:AppSelect.ItemTemplate>
                 <DataTemplate x:DataType="vm:ConnectionGameOptionItem">
                   <TextBlock Text="{Binding DisplayName}" />
                 </DataTemplate>
-              </ComboBox.ItemTemplate>
-            </ComboBox>
+              </controls:AppSelect.ItemTemplate>
+            </controls:AppSelect>
             <Button Grid.Column="2"
                     Classes="app-button app-secondary"
                     Margin="12,0,0,0"

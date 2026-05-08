@@ -246,6 +246,35 @@ public sealed class AdaptiveSpacingStackPanelTests
             $"Expected input/checkbox gap ({mixedBackwardGap}) to stay tighter than input/input gap ({fieldGap}).");
     }
 
+    [Fact]
+    public void DependentToggleRows_ShouldKeepToggleRhythm()
+    {
+        var panel = new AdaptiveSpacingStackPanel
+        {
+            Spacing = 6,
+            TargetPitch = 46,
+            MinGap = 6,
+            MaxGap = 18,
+            ShortRowSlot = 20,
+        };
+
+        var parentToggle = new FixedCheckBox(160, 20, "A");
+        var dependentToggle = new FixedDependentRow(new FixedCheckBox(160, 20, "B"));
+        var nextToggle = new FixedCheckBox(160, 20, "C");
+
+        panel.Children.Add(parentToggle);
+        panel.Children.Add(dependentToggle);
+        panel.Children.Add(nextToggle);
+
+        Layout(panel, 420);
+
+        var parentToDependentGap = dependentToggle.Bounds.Top - parentToggle.Bounds.Bottom;
+        var dependentToNextGap = nextToggle.Bounds.Top - dependentToggle.Bounds.Bottom;
+
+        Assert.InRange(parentToDependentGap, -6, 0);
+        Assert.InRange(dependentToNextGap, 6, 10);
+    }
+
     private static AdaptiveSpacingStackPanel CreateFieldGroup()
     {
         var group = new AdaptiveSpacingStackPanel
@@ -333,6 +362,23 @@ public sealed class AdaptiveSpacingStackPanelTests
         protected override Size MeasureOverride(Size availableSize)
         {
             return new Size(_width, _height);
+        }
+    }
+
+    private sealed class FixedDependentRow : SettingsDependentRow
+    {
+        private readonly Control _content;
+
+        public FixedDependentRow(Control content)
+        {
+            _content = content;
+            Content = content;
+        }
+
+        protected override Size MeasureOverride(Size availableSize)
+        {
+            _content.Measure(availableSize);
+            return _content.DesiredSize;
         }
     }
 

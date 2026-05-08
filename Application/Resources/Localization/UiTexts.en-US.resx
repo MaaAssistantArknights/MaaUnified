@@ -624,6 +624,9 @@ Remaining credits: </value>
   <data name="Dialog.Error.CloseButton" xml:space="preserve">
     <value>Close</value>
   </data>
+  <data name="Dialog.Error.ConnectFailedTitle" xml:space="preserve">
+    <value>Failed to connect to emulator</value>
+  </data>
   <data name="Dialog.Error.CodeLabel" xml:space="preserve">
     <value>Code</value>
   </data>
@@ -632,6 +635,9 @@ Remaining credits: </value>
   </data>
   <data name="Dialog.Error.CopyButton" xml:space="preserve">
     <value>Copy</value>
+  </data>
+  <data name="Dialog.Error.CopyErrorInfoButton" xml:space="preserve">
+    <value>Copy error info</value>
   </data>
   <data name="Dialog.Error.DetailsLabel" xml:space="preserve">
     <value>Details</value>

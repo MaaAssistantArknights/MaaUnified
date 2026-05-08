@@ -256,6 +256,33 @@ public sealed class ToolboxModuleO3FeatureTests
     }
 
     [Fact]
+    public async Task ApplyRuntimeCallback_DepotDone_ShouldUseSpecificDepotGroupTitles()
+    {
+        await using var fixture = await ToolboxTestFixture.CreateAsync();
+        var vm = new ToolboxPageViewModel(fixture.Runtime, fixture.ConnectionState);
+        await vm.InitializeAsync();
+
+        await vm.StartDepotAsync();
+
+        vm.ApplyRuntimeCallback(CreateCallback(
+            "SubTaskExtraInfo",
+            new JsonObject
+            {
+                ["taskchain"] = "Depot",
+                ["what"] = "DepotResult",
+                ["details"] = new JsonObject
+                {
+                    ["done"] = true,
+                    ["data"] = "{\"3301\":7}",
+                },
+            }));
+
+        var group = Assert.Single(vm.DepotGroups);
+        Assert.Equal("技巧概要", group.Title);
+        Assert.Equal("材料", group.Category);
+    }
+
+    [Fact]
     public async Task ApplyRuntimeCallback_StageDrops_ShouldUpdateDepotAndPersistLegacyResult()
     {
         await using var fixture = await ToolboxTestFixture.CreateAsync();
@@ -385,6 +412,12 @@ public sealed class ToolboxModuleO3FeatureTests
         Assert.Contains("Content=\"{Binding StartRecognitionText}\"", operBoxXaml, StringComparison.Ordinal);
         Assert.Contains("Source=\"{Binding EliteIconImage}\"", operBoxXaml, StringComparison.Ordinal);
         Assert.Contains("Source=\"{Binding PotentialIconImage}\"", operBoxXaml, StringComparison.Ordinal);
+        Assert.Contains("<Border Classes=\"toolbox-operbox-profession-icon\">", operBoxXaml, StringComparison.Ordinal);
+        Assert.Contains("<Border Classes=\"toolbox-operator-profession-icon\">", recruitXaml, StringComparison.Ordinal);
+        Assert.Contains("MAA.Brush.App.Toolbox.OperatorGlyphForeground", operBoxXaml, StringComparison.Ordinal);
+        Assert.Contains("MAA.Brush.App.Toolbox.OperatorGlyphForeground", recruitXaml, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"toolbox-recruit-operator-stars\"", recruitXaml, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"toolbox-recruit-operator-potential\"", recruitXaml, StringComparison.Ordinal);
         Assert.Contains("DropShadowDirectionEffect", operBoxXaml, StringComparison.Ordinal);
 
         Assert.DoesNotContain("ExecutionReviewResultLabelText", depotXaml, StringComparison.Ordinal);

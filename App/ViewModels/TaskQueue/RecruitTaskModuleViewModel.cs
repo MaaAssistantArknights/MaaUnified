@@ -423,7 +423,7 @@ public sealed class RecruitTaskModuleViewModel : TypedTaskModuleViewModelBase<Re
             return Texts.GetOrDefault("Recruit.FirstTags", "First tags");
         }
 
-        return string.Join(" / ", selected);
+        return string.Join(", ", selected);
     }
 
     private IReadOnlyList<(string Display, string Value)> ResolveRecruitTags()

@@ -1829,7 +1829,7 @@ public sealed class RoguelikeModuleViewModel : TypedTaskModuleViewModelBase<Rogu
             return Texts.GetOrDefault("Roguelike.StartWithSelectList", "Expected rewards in collectible start mode");
         }
 
-        return string.Join(" / ", selected);
+        return string.Join(", ", selected);
     }
 
     private void AppendCollectibleSummaryToken(List<string> selected, bool enabled, string textKey, string fallback)

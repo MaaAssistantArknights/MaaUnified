@@ -15,8 +15,6 @@
 
   <controls:AdaptiveSpacingStackPanel Margin="2"
               Classes="recruit-layout">
-    <TextBlock Classes="section-title" Text="{Binding Texts[Recruit.Title]}" />
-
     <Border
             IsVisible="{Binding IsGeneralMode}">
       <controls:AdaptiveSpacingStackPanel Classes="recruit-section-content">
@@ -65,21 +63,25 @@
               <TextBlock Classes="subtle"
                          Text="{Binding Texts[Recruit.FirstTags]}"
                          TextWrapping="Wrap" />
-              <controls:AppMultiSelectDropdown HeaderText="{Binding FirstTagsSummary}">
-                <controls:AppMultiSelectDropdown.DropDownContent>
-                  <ListBox Classes="app-dropdown-list"
-                           ItemsSource="{Binding FirstTagOptions}"
-                           MaxHeight="160">
-                    <ListBox.ItemTemplate>
+              <controls:AppMultiSelect HeaderText="{Binding FirstTagsSummary}">
+                <controls:AppMultiSelect.DropDownContent>
+                  <ItemsControl ItemsSource="{Binding FirstTagOptions}">
+                    <ItemsControl.ItemsPanel>
+                      <ItemsPanelTemplate>
+                        <StackPanel Spacing="4" />
+                      </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
                       <DataTemplate x:DataType="vm:RecruitTaskModuleViewModel+RecruitTagOption">
-                        <CheckBox Classes="app-checkbox"
-                                  Content="{Binding DisplayName}"
-                                  IsChecked="{Binding IsSelected}" />
+                        <ToggleButton Classes="app-multi-select-option"
+                                      IsChecked="{Binding IsSelected}">
+                          <TextBlock Text="{Binding DisplayName}" />
+                        </ToggleButton>
                       </DataTemplate>
-                    </ListBox.ItemTemplate>
-                  </ListBox>
-                </controls:AppMultiSelectDropdown.DropDownContent>
-              </controls:AppMultiSelectDropdown>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </controls:AppMultiSelect.DropDownContent>
+              </controls:AppMultiSelect>
             </controls:SettingsInlineRow>
           </Border>
         </controls:AdaptiveSpacingStackPanel>

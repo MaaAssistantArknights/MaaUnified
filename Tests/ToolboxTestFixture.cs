@@ -156,12 +156,23 @@ internal sealed class ToolboxTestFixture : IAsyncDisposable
 
         public int StopCallCount { get; private set; }
 
+        public bool ForceConnectFailure { get; set; }
+
+        public CoreErrorCode ConnectFailureCode { get; set; } = CoreErrorCode.ConnectFailed;
+
+        public string ConnectFailureMessage { get; set; } = "Connection command failed to exec";
+
         public Task<CoreResult<CoreInitializeInfo>> InitializeAsync(CoreInitializeRequest request, CancellationToken cancellationToken = default)
             => Task.FromResult(CoreResult<CoreInitializeInfo>.Ok(new CoreInitializeInfo(request.BaseDirectory, "fake", "fake", request.ClientType)));
 
         public Task<CoreResult<bool>> ConnectAsync(CoreConnectionInfo connectionInfo, CancellationToken cancellationToken = default)
         {
             ConnectCallCount++;
+            if (ForceConnectFailure)
+            {
+                return Task.FromResult(CoreResult<bool>.Fail(new CoreError(ConnectFailureCode, ConnectFailureMessage)));
+            }
+
             return Task.FromResult(CoreResult<bool>.Ok(true));
         }
 

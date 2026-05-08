@@ -20,8 +20,6 @@
   </UserControl.Styles>
 
   <controls:AdaptiveSpacingStackPanel Margin="4" Classes="user-data-update-content">
-    <TextBlock Classes="section-title" Text="{Binding TitleText}" />
-
     <controls:AdaptiveSpacingStackPanel Classes="user-data-update-content">
       <Border Classes="app-surface app-card">
         <controls:AdaptiveSpacingStackPanel Classes="user-data-update-card-content">

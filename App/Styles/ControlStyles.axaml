@@ -5,6 +5,7 @@
         xmlns:md="clr-namespace:MarkdownViewer.Core.Controls;assembly=MarkdownViewer.Core">
   <Styles.Resources>
     <Thickness x:Key="MAA.BorderThickness.Thin">1</Thickness>
+    <Thickness x:Key="MAA.BorderThickness.Focus">1.5</Thickness>
 
     <CornerRadius x:Key="MAA.CornerRadius.Item">4</CornerRadius>
     <CornerRadius x:Key="MAA.CornerRadius.Section">4</CornerRadius>
@@ -49,7 +50,7 @@
     <Thickness x:Key="MAA.Thickness.Toolbox.WarningButtonMargin">0,18,0,0</Thickness>
     <Thickness x:Key="MAA.Thickness.Toolbox.MiniGameButtonMargin">10,14,0,0</Thickness>
     <Thickness x:Key="MAA.Thickness.Toolbox.BadgePadding">4,2</Thickness>
-    <Thickness x:Key="MAA.Thickness.Toolbox.OperBoxCardPadding">10,14</Thickness>
+    <Thickness x:Key="MAA.Thickness.Toolbox.OperBoxCardPadding">12,9</Thickness>
     <Thickness x:Key="MAA.Thickness.Toolbox.OperBoxBadgeMargin">4,0</Thickness>
     <Thickness x:Key="MAA.Thickness.MarginActionButtonLeft">6,0,0,0</Thickness>
     <Thickness x:Key="MAA.Thickness.MarginActionTight">-1,0,0,0</Thickness>
@@ -144,17 +145,24 @@
     <x:Double x:Key="MAA.Size.TaskQueue.OverlayTargetWidth">220</x:Double>
     <x:Double x:Key="MAA.Size.TaskQueue.ConfigPanelMaxWidth">450</x:Double>
     <x:Double x:Key="MAA.Size.TaskQueue.ConfigPanelWidth">450</x:Double>
+    <x:Double x:Key="MAA.Size.TaskQueue.SettingsLabelMaxWidth">156</x:Double>
+    <x:Double x:Key="MAA.Size.TaskQueue.SettingsLabelFieldGap">8</x:Double>
     <x:Double x:Key="MAA.Size.TaskQueue.PostActionSummaryWidth">185</x:Double>
     <x:Double x:Key="MAA.Size.TaskQueue.PostActionDescriptionWidth">160</x:Double>
     <x:Double x:Key="MAA.Size.TaskQueue.PostActionDividerHeight">1</x:Double>
-    <x:Double x:Key="MAA.Size.Toolbox.DepotCardMinWidth">150</x:Double>
+    <x:Double x:Key="MAA.Size.Toolbox.DepotCardMinWidth">186</x:Double>
     <x:Double x:Key="MAA.Size.Toolbox.DepotIcon">36</x:Double>
     <x:Double x:Key="MAA.Size.Toolbox.DepotCardImage">50</x:Double>
-    <x:Double x:Key="MAA.Size.Toolbox.DepotWrapItemWidth">158</x:Double>
-    <x:Double x:Key="MAA.Size.Toolbox.OperBoxCardMinWidth">140</x:Double>
-    <x:Double x:Key="MAA.Size.Toolbox.OperBoxCardMinHeight">118</x:Double>
+    <x:Double x:Key="MAA.Size.Toolbox.DepotWrapItemWidth">194</x:Double>
+    <!-- OperBox card width calculation:
+         padding 24 + rarity strip 4 + left content margin 12 + profession 48
+         + column gap 12 + status row max width (elite 30 + gap 3 + ~28 for Lv.90 + gap 3 + potential 25)
+         ~= 189. Keep the card at 206 and the slot at 214 so AdaptiveWrapPanel
+         can preserve 16px gaps without letting neighboring cards visually collide. -->
+    <x:Double x:Key="MAA.Size.Toolbox.OperBoxCardMinWidth">206</x:Double>
+    <x:Double x:Key="MAA.Size.Toolbox.OperBoxCardMinHeight">108</x:Double>
     <x:Double x:Key="MAA.Size.Toolbox.OperBoxBadgeIcon">24</x:Double>
-    <x:Double x:Key="MAA.Size.Toolbox.OperBoxWrapItemWidth">148</x:Double>
+    <x:Double x:Key="MAA.Size.Toolbox.OperBoxWrapItemWidth">214</x:Double>
     <x:Double x:Key="MAA.Size.Toolbox.RecruitTimePickerWidth">76</x:Double>
     <x:Double x:Key="MAA.Size.Toolbox.PeepFpsWidth">60</x:Double>
     <x:Double x:Key="MAA.Size.Toolbox.ActionButtonWidth">180</x:Double>
@@ -171,7 +179,7 @@
     <x:Double x:Key="MAA.Size.Toolbox.WarningTextMaxWidth">560</x:Double>
     <x:Double x:Key="MAA.Size.Toolbox.FormPanelWidth">640</x:Double>
     <x:Double x:Key="MAA.Size.Toolbox.PeepFormPanelWidth">360</x:Double>
-    <x:Double x:Key="MAA.Size.Copilot.SidePanelWidth">420</x:Double>
+    <x:Double x:Key="MAA.Size.Copilot.SidePanelWidth">460</x:Double>
 
     <x:Double x:Key="MAA.FontSize.Toolbox.WarningLead">24</x:Double>
     <x:Double x:Key="MAA.FontSize.Toolbox.WarningEmphasis">52</x:Double>
@@ -247,6 +255,23 @@
 
   <Style Selector="ToolTip TextBlock">
     <Setter Property="FontFamily" Value="{DynamicResource MAA.FontFamily.UI}" />
+  </Style>
+
+  <Style Selector="Border.app-tooltip-card">
+    <Setter Property="MaxWidth" Value="340" />
+    <Setter Property="Padding" Value="12,9" />
+    <Setter Property="Background" Value="#FFFFFFFF" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.CornerRadius.Badge}" />
+    <Setter Property="BoxShadow" Value="{DynamicResource MAA.App.BoxShadow.Card}" />
+    <Setter Property="ClipToBounds" Value="False" />
+  </Style>
+
+  <Style Selector="TextBlock.app-tooltip-card-text">
+    <Setter Property="MaxWidth" Value="316" />
+    <Setter Property="Foreground" Value="#2F343A" />
+    <Setter Property="TextWrapping" Value="Wrap" />
   </Style>
 
   <Style Selector="Popup TemplatedControl">
@@ -690,15 +715,7 @@
     <Setter Property="Padding" Value="12,12,4,8" />
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="CornerRadius" Value="24" />
-    <Setter Property="Background">
-      <LinearGradientBrush StartPoint="0,0"
-                           EndPoint="0,1">
-        <GradientStop Offset="0"
-                      Color="#FFF1F6FD" />
-        <GradientStop Offset="1"
-                      Color="#FFE7EEF9" />
-      </LinearGradientBrush>
-    </Setter>
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Surface.Section}" />
   </Style>
 
   <Style Selector="TextBlock.announcement-dialog-list-title">
@@ -800,7 +817,7 @@
     <Setter Property="ClipToBounds" Value="True" />
     <Setter Property="Margin" Value="0" />
     <Setter Property="Padding" Value="0,6,0,4" />
-    <Setter Property="Background" Value="#F9FFFFFF" />
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.Announcement.StickyTitleBackground}" />
     <Setter Property="RenderTransform">
       <TranslateTransform Y="0" />
     </Setter>
@@ -823,7 +840,7 @@
 
   <Style Selector="Border.announcement-dialog-sticky-title-current-shell">
     <Setter Property="Padding" Value="0,6,0,4" />
-    <Setter Property="Background" Value="#F9FFFFFF" />
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.Announcement.StickyTitleBackground}" />
   </Style>
 
   <Style Selector="TextBlock.announcement-dialog-section-heading">
@@ -834,6 +851,7 @@
     <Setter Property="Margin" Value="0,0,12,0" />
     <Setter Property="FontSize" Value="28" />
     <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Text.Primary}" />
     <Setter Property="TextWrapping" Value="Wrap" />
   </Style>
 
@@ -1529,12 +1547,17 @@
     <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
   </Style>
 
+  <Style Selector="TabStrip.root-nav TabStripItem:pointerover">
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
+  </Style>
+
   <Style Selector="TabStrip.root-nav TabStripItem:pointerover /template/ Border#PART_NavChrome">
-    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.SubtleBackgroundHover}" />
+    <Setter Property="Background" Value="Transparent" />
   </Style>
 
   <Style Selector="TabStrip.root-nav TabStripItem:pressed /template/ Border#PART_NavChrome">
-    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.SubtleBackgroundPressed}" />
+    <Setter Property="Background" Value="Transparent" />
   </Style>
 
   <Style Selector="TabStrip.root-nav TabStripItem:selected /template/ Border#PART_NavChrome">
@@ -1546,7 +1569,7 @@
     <Setter Property="Transitions">
       <Transitions>
         <BrushTransition Property="Background"
-                         Duration="0:0:0.16" />
+                         Duration="0:0:0.11" />
       </Transitions>
     </Setter>
   </Style>
@@ -1580,12 +1603,17 @@
     <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
   </Style>
 
+  <Style Selector="TabStrip.copilot-nav TabStripItem:pointerover">
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
+  </Style>
+
   <Style Selector="TabStrip.copilot-nav TabStripItem:pointerover /template/ Border#PART_NavChrome">
-    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.SubtleBackgroundHover}" />
+    <Setter Property="Background" Value="Transparent" />
   </Style>
 
   <Style Selector="TabStrip.copilot-nav TabStripItem:pressed /template/ Border#PART_NavChrome">
-    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.SubtleBackgroundPressed}" />
+    <Setter Property="Background" Value="Transparent" />
   </Style>
 
   <Style Selector="TabStrip.copilot-nav TabStripItem:selected /template/ Border#PART_NavChrome">
@@ -1597,7 +1625,7 @@
     <Setter Property="Transitions">
       <Transitions>
         <BrushTransition Property="Background"
-                         Duration="0:0:0.16" />
+                         Duration="0:0:0.11" />
       </Transitions>
     </Setter>
   </Style>
@@ -1631,12 +1659,17 @@
     <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
   </Style>
 
+  <Style Selector="TabControl.toolbox-nav TabItem:pointerover">
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
+  </Style>
+
   <Style Selector="TabControl.toolbox-nav TabItem:pointerover /template/ Border#PART_NavChrome">
-    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.SubtleBackgroundHover}" />
+    <Setter Property="Background" Value="Transparent" />
   </Style>
 
   <Style Selector="TabControl.toolbox-nav TabItem:pressed /template/ Border#PART_NavChrome">
-    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.SubtleBackgroundPressed}" />
+    <Setter Property="Background" Value="Transparent" />
   </Style>
 
   <Style Selector="TabControl.toolbox-nav TabItem:selected /template/ Border#PART_NavChrome">
@@ -1648,7 +1681,7 @@
     <Setter Property="Transitions">
       <Transitions>
         <BrushTransition Property="Background"
-                         Duration="0:0:0.16" />
+                         Duration="0:0:0.11" />
       </Transitions>
     </Setter>
   </Style>
