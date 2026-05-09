@@ -1,38 +1,56 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:MAAUnified.App.Controls"
         x:Class="MAAUnified.App.Features.Dialogs.VersionUpdateDialogView"
         Width="680"
         Height="520"
         MinWidth="580"
         MinHeight="420"
+        CanResize="False"
+        Background="Transparent"
+        SystemDecorations="None"
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaChromeHints="NoChrome"
         WindowStartupLocation="CenterOwner">
-  <Grid Margin="10" RowDefinitions="Auto,Auto,Auto,*,Auto">
-    <TextBlock x:Name="DialogTitleText"
-               Classes="section-title"
-               Text="Version Update" />
-    <TextBlock x:Name="VersionLine"
-               Grid.Row="1"
-               Margin="0,8,0,0"
-               Classes="long-wrap"
-               Text="Current -> Target" />
-    <TextBlock x:Name="SummaryLine"
-               Grid.Row="2"
-               Margin="0,6,0,0"
-               Classes="long-wrap"
-               Text="Summary" />
-    <TextBox x:Name="BodyBox"
-             Grid.Row="3"
-             Margin="0,10,0,0"
-             IsReadOnly="True"
-             TextWrapping="Wrap"
-             AcceptsReturn="True" />
-    <StackPanel Grid.Row="4"
-                Orientation="Horizontal"
-                Spacing="8"
-                HorizontalAlignment="Right"
-                Margin="0,12,0,0">
-      <Button Classes="wpf-button wpf-button-secondary" x:Name="CancelButton" Content="Later" Click="OnCancelClick" />
-      <Button x:Name="ConfirmButton" Classes="wpf-button" Content="Confirm" Click="OnConfirmClick" />
-    </StackPanel>
-  </Grid>
+  <controls:AppWindowFrame x:Name="DialogShell"
+                           Mode="CompactModal"
+                           CloseRequested="OnShellCloseRequested">
+    <controls:AppWindowFrame.Content>
+      <Grid RowDefinitions="Auto,*">
+        <StackPanel Spacing="8">
+          <TextBlock x:Name="VersionLine"
+                     Classes="section-title"
+                     Text="Current -> Target" />
+          <TextBlock x:Name="SummaryLine"
+                     Classes="app-body"
+                     Text="Summary" />
+        </StackPanel>
+        <Border Grid.Row="1"
+                Margin="0,12,0,0"
+                Classes="app-surface app-section">
+          <TextBox x:Name="BodyBox"
+                   Classes="settings-input settings-input-block"
+                   AcceptsReturn="True"
+                   IsReadOnly="True"
+                   ScrollViewer.VerticalScrollBarVisibility="Auto"
+                   TextWrapping="Wrap" />
+        </Border>
+      </Grid>
+    </controls:AppWindowFrame.Content>
+    <controls:AppWindowFrame.ActionsContent>
+      <StackPanel Orientation="Horizontal"
+                  Spacing="10">
+        <Button x:Name="CancelButton"
+                Classes="app-button app-secondary"
+                Content="Later"
+                IsCancel="True"
+                Click="OnCancelClick" />
+        <Button x:Name="ConfirmButton"
+                Classes="app-button app-primary"
+                Content="Confirm"
+                IsDefault="True"
+                Click="OnConfirmClick" />
+      </StackPanel>
+    </controls:AppWindowFrame.ActionsContent>
+  </controls:AppWindowFrame>
 </Window>

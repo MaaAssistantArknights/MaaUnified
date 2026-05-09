@@ -2,82 +2,83 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:controls="clr-namespace:MAAUnified.App.Controls"
              xmlns:vm="clr-namespace:MAAUnified.App.ViewModels.Settings"
+             Classes="settings-page"
              x:Class="MAAUnified.App.Features.Settings.BackgroundSettingsView">
-  <Grid Margin="4" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto">
-    <Grid ColumnDefinitions="Auto,*">
-      <TextBlock Classes="section-title" Text="{Binding RootTexts[Settings.Section.Background]}" />
-      <TextBlock Grid.Column="1"
-                 HorizontalAlignment="Right"
-                 VerticalAlignment="Center"
-                 Classes="state-warning"
-                 Text="{Binding RootTexts[Settings.State.Saving]}"
-                 IsVisible="{Binding IsGuiSaveInProgress}" />
-      <TextBlock Grid.Column="1"
-                 HorizontalAlignment="Right"
-                 VerticalAlignment="Center"
-                 Classes="state-success"
-                 Text="{Binding RootTexts[Settings.State.Saved]}"
-                 IsVisible="{Binding HasGuiSaveSucceeded}" />
-    </Grid>
-    <StackPanel Grid.Row="1"
-                Classes="settings-centered-column"
-                Margin="{DynamicResource MAA.Thickness.Settings.SectionTopMargin}">
-      <TextBlock Classes="settings-field-caption" Text="{Binding RootTexts[Settings.Background.ImagePath]}" />
-      <Grid Width="{DynamicResource MAA.Size.Settings.FieldPathWidth}"
-            ColumnDefinitions="*,Auto">
-        <TextBox Text="{Binding BackgroundImagePath, UpdateSourceTrigger=LostFocus}"
-                 LostFocus="OnBackgroundPathLostFocus"
-                 KeyDown="OnBackgroundPathKeyDown" />
-        <Button Grid.Column="1"
-                Classes="wpf-button wpf-button-secondary"
-                Margin="{DynamicResource MAA.Thickness.MarginActionButtonLeft}"
-                Content="{Binding RootTexts[Settings.Start.SelectButton]}"
-                Click="OnSelectBackgroundImageClick" />
+  <Grid Margin="4"
+        RowDefinitions="Auto,Auto">
+    <TextBlock Classes="settings-page-title"
+               Text="{Binding RootTexts[Settings.Section.Background]}" />
+
+    <controls:AdaptiveSpacingStackPanel Grid.Row="1"
+                Margin="{DynamicResource MAA.Thickness.Settings.SectionTopMargin}"
+                Classes="settings-page-flow">
+      <Grid Classes="settings-page-labeled-action-row"
+            controls:SettingsLabelWidthCoordinator.GroupKey="Background.Main"
+            ColumnDefinitions="Auto,*">
+        <controls:SettingsLabel Text="{Binding RootTexts[Settings.Background.ImagePath]}" />
+        <controls:AdaptiveSpacingStackPanel Grid.Column="1"
+                    Classes="settings-page-inline-field-group">
+          <controls:AppActionInput Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
+                                   HorizontalAlignment="Left"
+                                   Text="{Binding BackgroundImagePath, UpdateSourceTrigger=LostFocus}"
+                                   ActionContent="{Binding RootTexts[Settings.Start.SelectButton]}"
+                                   EditorLostFocus="OnBackgroundPathLostFocus"
+                                   EditorKeyDown="OnBackgroundPathKeyDown"
+                                   ActionClick="OnSelectBackgroundImageClick" />
+        </controls:AdaptiveSpacingStackPanel>
       </Grid>
-    </StackPanel>
 
-    <StackPanel Grid.Row="2"
-                Classes="settings-centered-column"
-                Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}">
-      <TextBlock Classes="settings-field-caption" Text="{Binding RootTexts[Settings.Background.Opacity]}" />
-      <controls:VerticalSpinNumberBox Width="{DynamicResource MAA.Size.Settings.FieldNarrowWidth}"
-                                      Minimum="0"
-                                      Maximum="100"
-                                      Value="{Binding BackgroundOpacity}" />
-    </StackPanel>
+      <Grid Classes="settings-page-labeled-row"
+            controls:SettingsLabelWidthCoordinator.GroupKey="Background.Main"
+            ColumnDefinitions="Auto,*">
+        <controls:SettingsLabel Text="{Binding RootTexts[Settings.Background.Opacity]}" />
+        <controls:AppNumberInput Grid.Column="1"
+                                        Width="{DynamicResource MAA.Size.Settings.FieldNarrowWidth}"
+                                        HorizontalAlignment="Left"
+                                        Minimum="0"
+                                        Maximum="100"
+                                        Value="{Binding BackgroundOpacity}" />
+      </Grid>
 
-    <StackPanel Grid.Row="3"
-                Classes="settings-centered-column"
-                Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}">
-      <TextBlock Classes="settings-field-caption" Text="{Binding RootTexts[Settings.Background.BlurRadius]}" />
-      <controls:VerticalSpinNumberBox Width="{DynamicResource MAA.Size.Settings.FieldNarrowWidth}"
-                                      Minimum="0"
-                                      Maximum="80"
-                                      Value="{Binding BackgroundBlur}" />
-    </StackPanel>
+      <Grid Classes="settings-page-labeled-row"
+            controls:SettingsLabelWidthCoordinator.GroupKey="Background.Main"
+            ColumnDefinitions="Auto,*">
+        <controls:SettingsLabel Text="{Binding RootTexts[Settings.Background.BlurRadius]}" />
+        <controls:AppNumberInput Grid.Column="1"
+                                        Width="{DynamicResource MAA.Size.Settings.FieldNarrowWidth}"
+                                        HorizontalAlignment="Left"
+                                        Minimum="0"
+                                        Maximum="80"
+                                        Value="{Binding BackgroundBlur}" />
+      </Grid>
 
-    <StackPanel Grid.Row="4"
-                Classes="settings-centered-column"
-                Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}">
-      <TextBlock Classes="settings-field-caption" Text="{Binding RootTexts[Settings.Background.StretchMode]}" />
-      <ComboBox Width="{DynamicResource MAA.Size.Settings.FieldCenteredWidth}"
-                ItemsSource="{Binding BackgroundStretchModes}"
-                SelectedItem="{Binding SelectedBackgroundStretchModeOption, Mode=TwoWay}">
-        <ComboBox.ItemTemplate>
-          <DataTemplate x:DataType="vm:DisplayValueOption">
-            <TextBlock Text="{Binding Display}" />
-          </DataTemplate>
-        </ComboBox.ItemTemplate>
-      </ComboBox>
-    </StackPanel>
+      <Grid Classes="settings-page-labeled-row"
+            controls:SettingsLabelWidthCoordinator.GroupKey="Background.Main"
+            ColumnDefinitions="Auto,*">
+        <controls:SettingsLabel Text="{Binding RootTexts[Settings.Background.StretchMode]}" />
+        <controls:AppSelect Grid.Column="1"
+                  Classes="settings-select"
+                  Width="{DynamicResource MAA.Size.Settings.FieldCenteredWidth}"
+                  HorizontalAlignment="Left"
+                  ItemsSource="{Binding BackgroundStretchModes}"
+                  SelectedItem="{Binding SelectedBackgroundStretchModeOption, Mode=TwoWay}">
+          <controls:AppSelect.ItemTemplate>
+            <DataTemplate x:DataType="vm:DisplayValueOption">
+              <TextBlock Text="{Binding Display}" />
+            </DataTemplate>
+          </controls:AppSelect.ItemTemplate>
+        </controls:AppSelect>
+      </Grid>
 
-    <StackPanel Grid.Row="5"
-                Classes="settings-form settings-form-narrow"
-                Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}"
-                Spacing="4">
-      <TextBlock Classes="state-warning settings-centered-text"
-                 Text="{Binding BackgroundValidationMessage}"
-                 IsVisible="{Binding HasBackgroundValidationMessage}" />
-    </StackPanel>
+      <Border Classes="settings-page-status-block">
+        <controls:AdaptiveSpacingStackPanel Classes="settings-page-status-list">
+          <TextBlock MaxWidth="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
+                     Classes="state-warning app-body"
+                     Text="{Binding BackgroundValidationMessage}"
+                     TextWrapping="Wrap"
+                     IsVisible="{Binding HasBackgroundValidationMessage}" />
+        </controls:AdaptiveSpacingStackPanel>
+      </Border>
+    </controls:AdaptiveSpacingStackPanel>
   </Grid>
 </UserControl>

@@ -1,4 +1,4 @@
-name: Build MAAUnified (Avalonia + MaaCore Runtime)
+name: Build MAAUnified Debug Packages
 
 on:
   workflow_dispatch:
@@ -29,18 +29,19 @@ on:
 
 jobs:
   meta:
-    name: Resolve version tag
+    name: Resolve debug build metadata
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.out.outputs.tag }}
+      version_suffix: ${{ steps.out.outputs.version_suffix }}
+      informational_version: ${{ steps.out.outputs.informational_version }}
     steps:
       - id: out
         run: |
-          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
-            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
-          else
-            echo "tag=preview-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
-          fi
+          short_sha="${GITHUB_SHA::7}"
+          echo "tag=debug-${short_sha}" >> "$GITHUB_OUTPUT"
+          echo "version_suffix=debug.${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
+          echo "informational_version=debug-${short_sha}" >> "$GITHUB_OUTPUT"
 
   build:
     name: Build ${{ matrix.name }}
@@ -144,27 +145,79 @@ jobs:
           cmake --install build --config RelWithDebInfo
 
       - name: Publish MAAUnified app
-        run: dotnet publish src/MAAUnified/App/MAAUnified.App.csproj -c Release -r ${{ matrix.rid }} --self-contained ${{ matrix.self_contained }} -o publish
+        shell: bash
+        run: >
+          dotnet publish src/MAAUnified/App/MAAUnified.App.csproj -c Release -r ${{ matrix.rid }}
+          --self-contained ${{ matrix.self_contained }} -o staging/bin
+          -p:VersionPrefix=1.0.0
+          -p:VersionSuffix=${{ needs.meta.outputs.version_suffix }}
+          -p:AssemblyVersion=1.0.0.0
+          -p:FileVersion=1.0.0.0
+          -p:InformationalVersion="${{ needs.meta.outputs.informational_version }}"
+          -p:MaaUnifiedReleaseChannel=debug
+          -p:MaaUnifiedDiagnosticsProfile=full
 
       - name: Merge MaaCore runtime (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          Copy-Item install\* publish\ -Recurse -Force
-          if (!(Test-Path "publish\MaaCore.dll")) { throw "MaaCore.dll not found in publish output." }
-          if (!(Test-Path "publish\resource")) { throw "resource directory not found in publish output." }
+          New-Item -ItemType Directory -Path staging -Force | Out-Null
+          Copy-Item install\* staging\ -Recurse -Force
+          if (!(Test-Path "staging\MaaCore.dll")) { throw "MaaCore.dll not found in staging output." }
+          if (!(Test-Path "staging\resource")) { throw "resource directory not found in staging output." }
 
       - name: Merge MaaCore runtime (Unix)
         if: runner.os != 'Windows'
         shell: bash
         run: |
-          cp -a install/. publish/
+          mkdir -p staging
+          cp -a install/. staging/
           if [[ "$RUNNER_OS" == "Linux" ]]; then
-            test -f publish/libMaaCore.so
+            test -f staging/libMaaCore.so
           else
-            test -f publish/libMaaCore.dylib
+            test -f staging/libMaaCore.dylib
           fi
-          test -d publish/resource
+          test -d staging/resource
+
+      - name: Create root launcher scripts (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: pwsh -File src/MAAUnified/CI/create-windows-launcher.ps1 -TargetDir staging
+
+      - name: Create root launcher scripts (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          if [[ "$RUNNER_OS" == "macOS" ]]; then
+            bash src/MAAUnified/CI/create-unix-launchers.sh staging macos
+          else
+            bash src/MAAUnified/CI/create-unix-launchers.sh staging linux
+          fi
+
+      - name: Validate staging layout (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (!(Test-Path "staging\bin\MAAUnified.exe")) { throw "Managed app executable not found under staging/bin." }
+          if (!(Test-Path "staging\resource")) { throw "resource directory not found under staging root." }
+          if (!(Test-Path "staging\MAAUnified.cmd")) { throw "Root launcher script not found." }
+          $rootManaged = @(Get-ChildItem staging -File | Where-Object { $_.Name -like 'System.*.dll' -or $_.Name -like 'Avalonia.*.dll' })
+          if ($rootManaged.Count -gt 0) { throw "Managed DLLs should not be placed at staging root." }
+
+      - name: Validate staging layout (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          test -x staging/bin/MAAUnified
+          test -d staging/resource
+          if [[ "$RUNNER_OS" == "macOS" ]]; then
+            test -x staging/MAAUnified
+            test -x staging/MAAUnified.command
+          else
+            test -x staging/MAAUnified
+            test -x staging/MAAUnified.sh
+          fi
+          ! find staging -maxdepth 1 -type f \( -name 'System.*.dll' -o -name 'Avalonia.*.dll' \) | grep -q .
 
       - name: Package (Windows)
         if: runner.os == 'Windows'
@@ -172,7 +225,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Path release -Force | Out-Null
           $name = "MAAUnified-${{ needs.meta.outputs.tag }}-${{ matrix.name }}"
-          Compress-Archive -Path publish\* -DestinationPath "release\$name.zip"
+          Compress-Archive -Path staging\* -DestinationPath "release\$name.zip"
 
       - name: Package (Unix)
         if: runner.os != 'Windows'
@@ -180,10 +233,10 @@ jobs:
         run: |
           mkdir -p release
           name="MAAUnified-${{ needs.meta.outputs.tag }}-${{ matrix.name }}"
-          tar -czf "release/${name}.tar.gz" -C publish .
+          tar -czf "release/${name}.tar.gz" -C staging .
 
       - name: Upload artifact
         uses: actions/upload-artifact@v6
         with:
-          name: MAAUnified-${{ matrix.name }}
+          name: MAAUnified-${{ needs.meta.outputs.tag }}-${{ matrix.name }}
           path: release/*

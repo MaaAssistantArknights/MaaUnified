@@ -3,77 +3,133 @@
              xmlns:controls="clr-namespace:MAAUnified.App.Controls"
              xmlns:vm="clr-namespace:MAAUnified.App.ViewModels.TaskQueue"
              x:Class="MAAUnified.App.Features.TaskQueue.ReclamationSettingsView">
-  <Grid RowDefinitions="Auto,Auto" Margin="2">
-    <TextBlock Classes="section-title" Text="{Binding Texts[Reclamation.Title]}" />
+  <UserControl.Styles>
+    <Style Selector="StackPanel.reclamation-settings-section-stack">
+      <Setter Property="Spacing" Value="{DynamicResource MAA.App.Settings.PageCompactFlowSpacing}" />
+    </Style>
+    <Style Selector="controls|AdaptiveSpacingStackPanel.reclamation-settings-section-stack">
+      <Setter Property="Spacing" Value="{DynamicResource MAA.App.Settings.PageCompactFlowSpacing}" />
+    </Style>
+    <Style Selector="StackPanel.reclamation-settings-status-stack">
+      <Setter Property="Spacing" Value="{DynamicResource MAA.App.Settings.PageToggleStackSpacing}" />
+    </Style>
+    <Style Selector="controls|AdaptiveSpacingStackPanel.reclamation-settings-status-stack">
+      <Setter Property="Spacing" Value="{DynamicResource MAA.App.Settings.PageToggleStackSpacing}" />
+    </Style>
+  </UserControl.Styles>
 
-    <StackPanel Grid.Row="1" Spacing="{DynamicResource MAA.Spacing.Small}">
-      <StackPanel IsVisible="{Binding IsGeneralMode}" Spacing="{DynamicResource MAA.Spacing.Small}">
-        <TextBlock Text="{Binding Texts[Reclamation.Theme]}" />
-        <ComboBox ItemsSource="{Binding ThemeOptions}"
-                  SelectedValueBinding="{Binding Type}"
-                  SelectedValue="{Binding Theme}">
-          <ComboBox.ItemTemplate>
-            <DataTemplate x:DataType="vm:TaskModuleOption">
-              <TextBlock Text="{Binding DisplayName}" />
-            </DataTemplate>
-          </ComboBox.ItemTemplate>
-        </ComboBox>
+  <Grid RowDefinitions="Auto" Margin="4">
+    <controls:AdaptiveSpacingStackPanel Spacing="{DynamicResource MAA.Spacing.Medium}">
+      <controls:AdaptiveSpacingStackPanel Classes="reclamation-settings-section-stack"
+                  IsVisible="{Binding IsGeneralMode}">
+          <Border Classes="app-surface app-card">
+            <controls:SettingsInlineRow controls:SettingsLabelWidthCoordinator.GroupKey="TaskQueue.Fields">
+              <controls:SettingsLabel Text="{Binding Texts[Reclamation.Theme]}" />
+              <controls:AppSelect ItemsSource="{Binding ThemeOptions}"
+                                  SelectedValueBinding="{Binding Type}"
+                                  SelectedValue="{Binding Theme}">
+                <controls:AppSelect.ItemTemplate>
+                  <DataTemplate x:DataType="vm:TaskModuleOption">
+                    <TextBlock Text="{Binding DisplayName}" />
+                  </DataTemplate>
+                </controls:AppSelect.ItemTemplate>
+              </controls:AppSelect>
+            </controls:SettingsInlineRow>
+          </Border>
 
-        <TextBlock Text="{Binding Texts[Reclamation.Mode]}" />
-        <ComboBox ItemsSource="{Binding ModeOptions}"
-                  SelectedValueBinding="{Binding Value}"
-                  SelectedValue="{Binding Mode}">
-          <ComboBox.ItemTemplate>
-            <DataTemplate x:DataType="vm:ReclamationModuleViewModel+IntOption">
-              <TextBlock Text="{Binding DisplayName}" TextWrapping="Wrap" />
-            </DataTemplate>
-          </ComboBox.ItemTemplate>
-        </ComboBox>
+          <Border Classes="app-surface app-card">
+            <controls:AdaptiveSpacingStackPanel Spacing="6">
+              <controls:SettingsInlineRow FieldWidth="{DynamicResource MAA.Size.Settings.FieldWideWidth}"
+                                          controls:SettingsLabelWidthCoordinator.GroupKey="TaskQueue.Fields">
+                <controls:SettingsLabel Text="{Binding Texts[Reclamation.Mode]}" />
+                <controls:AppSelect ItemsSource="{Binding ModeOptions}"
+                                    SelectedValueBinding="{Binding Value}"
+                                    SelectedValue="{Binding Mode}">
+                  <controls:AppSelect.ItemTemplate>
+                    <DataTemplate x:DataType="vm:ReclamationModuleViewModel+IntOption">
+                      <TextBlock Text="{Binding DisplayName}" TextWrapping="Wrap" />
+                    </DataTemplate>
+                  </controls:AppSelect.ItemTemplate>
+                </controls:AppSelect>
+              </controls:SettingsInlineRow>
+              <TextBlock Classes="settings-note settings-centered-text long-wrap"
+                         Text="{Binding Texts[Reclamation.EarlyTip]}" />
+            </controls:AdaptiveSpacingStackPanel>
+          </Border>
+      </controls:AdaptiveSpacingStackPanel>
 
-        <TextBlock Classes="subtle"
-                   Margin="{DynamicResource MAA.Thickness.MarginTopSmall}"
-                   Text="{Binding Texts[Reclamation.EarlyTip]}"
-                   TextWrapping="Wrap" />
-      </StackPanel>
+      <controls:AdaptiveSpacingStackPanel Classes="reclamation-settings-section-stack"
+                  IsVisible="{Binding IsAdvancedMode}">
+          <Border Classes="app-surface app-card">
+            <controls:AdaptiveSpacingStackPanel Spacing="{DynamicResource MAA.App.Settings.PageToggleStackSpacing}">
+              <TextBlock Classes="settings-note settings-centered-text long-wrap"
+                         Text="{Binding Texts[Reclamation.ToolToCraftTip]}" />
+              <controls:AppTextInput MaxWidth="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
+                                     HorizontalAlignment="Stretch"
+                                     Watermark="{Binding Texts[Reclamation.ToolToCraftPlaceholder]}"
+                                     IsEnabled="{Binding IsArchiveSettingsEnabled}"
+                                     Text="{Binding ToolsToCraftText, UpdateSourceTrigger=LostFocus}" />
+            </controls:AdaptiveSpacingStackPanel>
+          </Border>
 
-      <StackPanel IsVisible="{Binding IsAdvancedMode}" Spacing="{DynamicResource MAA.Spacing.Small}">
-        <TextBlock Text="{Binding Texts[Reclamation.ToolToCraftTip]}" />
-        <TextBox Watermark="{Binding Texts[Reclamation.ToolToCraftPlaceholder]}"
-                 IsEnabled="{Binding IsArchiveSettingsEnabled}"
-                 Text="{Binding ToolsToCraftText, UpdateSourceTrigger=LostFocus}" />
+          <Border Classes="app-surface app-card">
+            <controls:AdaptiveSpacingStackPanel Spacing="{DynamicResource MAA.App.Settings.PageToggleStackSpacing}">
+              <controls:SettingsInlineRow FieldWidth="{DynamicResource MAA.Size.Settings.FieldWideWidth}"
+                                          controls:SettingsLabelWidthCoordinator.GroupKey="TaskQueue.Fields">
+                <controls:SettingsLabel Text="{Binding Texts[Reclamation.IncrementMode]}" />
+                <controls:AppSelect IsEnabled="{Binding IsArchiveSettingsEnabled}"
+                                    ItemsSource="{Binding IncrementModeOptions}"
+                                    SelectedValueBinding="{Binding Value}"
+                                    SelectedValue="{Binding IncrementMode}">
+                  <controls:AppSelect.ItemTemplate>
+                    <DataTemplate x:DataType="vm:ReclamationModuleViewModel+IntOption">
+                      <TextBlock Text="{Binding DisplayName}" />
+                    </DataTemplate>
+                  </controls:AppSelect.ItemTemplate>
+                </controls:AppSelect>
+              </controls:SettingsInlineRow>
+              <controls:SettingsInlineRow controls:SettingsLabelWidthCoordinator.GroupKey="TaskQueue.Fields">
+                <controls:SettingsLabel Text="{Binding Texts[Reclamation.NumCraftBatches]}" />
+                <controls:AppNumberInput Minimum="0"
+                                         Maximum="99999"
+                                         IsEnabled="{Binding IsArchiveSettingsEnabled}"
+                                         Value="{Binding NumCraftBatches}" />
+              </controls:SettingsInlineRow>
+            </controls:AdaptiveSpacingStackPanel>
+          </Border>
 
-        <TextBlock Text="{Binding Texts[Reclamation.IncrementMode]}" />
-        <ComboBox IsEnabled="{Binding IsArchiveSettingsEnabled}"
-                  ItemsSource="{Binding IncrementModeOptions}"
-                  SelectedValueBinding="{Binding Value}"
-                  SelectedValue="{Binding IncrementMode}">
-          <ComboBox.ItemTemplate>
-            <DataTemplate x:DataType="vm:ReclamationModuleViewModel+IntOption">
-              <TextBlock Text="{Binding DisplayName}" />
-            </DataTemplate>
-          </ComboBox.ItemTemplate>
-        </ComboBox>
+          <Border Classes="app-surface app-card"
+                  IsVisible="{Binding ShowClearStore}">
+            <controls:AdaptiveSpacingStackPanel>
+              <CheckBox Classes="app-checkbox"
+                        Content="{Binding Texts[Reclamation.ClearStore]}"
+                        IsChecked="{Binding ClearStore}"
+                        IsVisible="{Binding ShowClearStore}" />
+            </controls:AdaptiveSpacingStackPanel>
+          </Border>
+      </controls:AdaptiveSpacingStackPanel>
 
-        <TextBlock Text="{Binding Texts[Reclamation.NumCraftBatches]}" />
-        <controls:VerticalSpinNumberBox Minimum="0"
-                                        Maximum="99999"
-                                        IsEnabled="{Binding IsArchiveSettingsEnabled}"
-                                        Value="{Binding NumCraftBatches}" />
-
-        <CheckBox Content="{Binding Texts[Reclamation.ClearStore]}"
-                  IsChecked="{Binding ClearStore}"
-                  IsVisible="{Binding ShowClearStore}" />
-      </StackPanel>
-
-      <TextBlock Text="{Binding Texts[Common.LoadingTaskHint]}" />
-      <TextBlock Text="{Binding StatusMessage}" />
-      <TextBlock Foreground="{DynamicResource MAA.ErrorBrush}"
-                 Text="{Binding LastErrorMessage}"
-                 TextWrapping="Wrap" />
-      <StackPanel IsVisible="{Binding HasValidationIssues}">
-        <TextBlock Text="{Binding Texts[Common.ValidationIssues]}" />
-        <ListBox MaxHeight="96" ItemsSource="{Binding ValidationMessages}" />
-      </StackPanel>
-    </StackPanel>
+      <controls:AdaptiveSpacingStackPanel Classes="reclamation-settings-status-stack">
+          <Border Classes="app-surface app-card"
+                  IsVisible="{Binding HasValidationIssues}">
+            <controls:AdaptiveSpacingStackPanel Spacing="{DynamicResource MAA.App.Settings.PageToggleStackSpacing}">
+              <TextBlock Classes="settings-centered-text subtle"
+                         Text="{Binding Texts[Common.ValidationIssues]}" />
+              <ListBox MaxHeight="96"
+                       ItemsSource="{Binding ValidationMessages}">
+                <ListBox.ItemTemplate>
+                  <DataTemplate>
+                    <TextBlock Classes="long-wrap"
+                               Text="{Binding .}"
+                               TextWrapping="Wrap" />
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+            </controls:AdaptiveSpacingStackPanel>
+          </Border>
+          <TextBlock Classes="settings-note settings-centered-text long-wrap"
+                     Text="{Binding StatusMessage}" />
+      </controls:AdaptiveSpacingStackPanel>
+    </controls:AdaptiveSpacingStackPanel>
   </Grid>
 </UserControl>

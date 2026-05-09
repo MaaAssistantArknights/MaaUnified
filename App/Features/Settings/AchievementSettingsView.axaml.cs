@@ -22,14 +22,6 @@ public partial class AchievementSettingsView : UserControl
     private SettingsPageViewModel? VM => DataContext as SettingsPageViewModel;
     private string T(string key) => VM?.RootTexts[key] ?? key;
 
-    private async void OnSaveAchievementClick(object? sender, RoutedEventArgs e)
-    {
-        if (VM is not null)
-        {
-            await VM.SaveAchievementSettingsAsync();
-        }
-    }
-
     private async void OnRefreshAchievementClick(object? sender, RoutedEventArgs e)
     {
         if (VM is not null)

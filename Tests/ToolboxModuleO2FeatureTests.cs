@@ -2,8 +2,11 @@ using System.Globalization;
 using System.Text.RegularExpressions;
 using System.Text.Json.Nodes;
 using Avalonia.Threading;
+using MAAUnified.App.Features.Dialogs;
+using MAAUnified.App.ViewModels.Infrastructure;
 using MAAUnified.App.ViewModels.Toolbox;
 using MAAUnified.Application.Models;
+using MAAUnified.CoreBridge;
 using LegacyConfigurationKeys = MAAUnified.Compat.Constants.ConfigurationKeys;
 
 namespace MAAUnified.Tests;
@@ -83,7 +86,9 @@ public sealed class ToolboxModuleO2FeatureTests
 
         Assert.NotNull(ToolboxAssetCatalog.ResolveOperatorEliteAssetPath(vm.OperBoxHaveList[0].Elite));
         Assert.NotNull(ToolboxAssetCatalog.ResolveOperatorPotentialAssetPath(vm.OperBoxHaveList[0].Potential));
-        Assert.NotNull(ToolboxAssetCatalog.ResolveItemImagePath(vm.DepotResult[0].Id));
+        var itemPath = ToolboxAssetCatalog.ResolveItemImagePath(vm.DepotResult[0].Id);
+        Assert.NotNull(itemPath);
+        Assert.Contains(Path.Combine("Assets", "Toolbox", "Items"), itemPath!, StringComparison.Ordinal);
 
         vm.MiniGameTaskName = "SS@Store@Begin";
         Assert.Equal("请在活动商店页面开始。\n不买无限池。", vm.MiniGameTip);
@@ -220,6 +225,135 @@ public sealed class ToolboxModuleO2FeatureTests
     }
 
     [Fact]
+    public async Task StartDepotAsync_ShouldClearPreviousResultsBeforeRecognition()
+    {
+        var globalSeeds = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [LegacyConfigurationKeys.DepotResult] = "{\"done\":true,\"data\":\"{\\\"2001\\\":123}\"}",
+        };
+
+        await using var fixture = await ToolboxTestFixture.CreateAsync(globalSeeds);
+        var vm = new ToolboxPageViewModel(fixture.Runtime, fixture.ConnectionState);
+        await vm.InitializeAsync();
+        Assert.Single(vm.DepotResult);
+
+        var changed = new List<string?>();
+        vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+
+        await vm.StartDepotAsync();
+
+        Assert.Empty(vm.DepotResult);
+        Assert.False(vm.HasDepotResult);
+        Assert.DoesNotContain("2001", vm.ArkPlannerResult, StringComparison.Ordinal);
+        Assert.DoesNotContain("2001", vm.LoliconResult, StringComparison.Ordinal);
+        Assert.Contains(nameof(ToolboxPageViewModel.ArkPlannerResult), changed);
+        Assert.Contains(nameof(ToolboxPageViewModel.LoliconResult), changed);
+        Assert.Equal(ToolboxExecutionState.Executing, vm.ExecutionState);
+        Assert.Equal("Depot", Assert.Single(fixture.Bridge.AppendedTasks).Type);
+    }
+
+    [Fact]
+    public async Task StartToolAsync_WhenToolboxBusy_ShouldShowDedicatedBusyDialogWithoutAppending()
+    {
+        await using var fixture = await ToolboxTestFixture.CreateAsync();
+        var dialogService = new RecordingDialogService(DialogReturnSemantic.Confirm);
+        var vm = new ToolboxPageViewModel(fixture.Runtime, fixture.ConnectionState, dialogService);
+        await vm.InitializeAsync();
+
+        DialogErrorRaisedEvent? raised = null;
+        fixture.Runtime.DialogFeatureService.ErrorRaised += (_, e) => raised = e;
+
+        await vm.StartRecruitAsync();
+        await vm.StartDepotAsync();
+
+        Assert.Equal(1, dialogService.WarningConfirmCallCount);
+        Assert.Equal("Toolbox.Busy", dialogService.LastScope);
+        Assert.NotNull(dialogService.LastRequest);
+        Assert.Contains("正在执行", dialogService.LastRequest!.Title, StringComparison.Ordinal);
+        Assert.Contains("招募识别", dialogService.LastRequest.Message, StringComparison.Ordinal);
+        var appendedTask = Assert.Single(fixture.Bridge.AppendedTasks);
+        Assert.Equal("Recruit", appendedTask.Type);
+        Assert.Equal("Toolbox", fixture.Runtime.SessionService.CurrentRunOwner);
+        Assert.Equal(ToolboxExecutionState.Executing, vm.ExecutionState);
+        Assert.Equal(UiErrorCode.ToolboxExecutionFailed, vm.LastExecutionErrorCode);
+        Assert.Null(raised);
+        Assert.Equal(0, dialogService.ErrorCallCount);
+    }
+
+    [Fact]
+    public async Task StartToolAsync_WhenBridgeNotInitialized_ShouldShowRetryableDialogWithoutGlobalErrorPopup()
+    {
+        await using var fixture = await ToolboxTestFixture.CreateAsync();
+        fixture.Bridge.ForceConnectFailure = true;
+        fixture.Bridge.ConnectFailureCode = CoreErrorCode.NotInitialized;
+        fixture.Bridge.ConnectFailureMessage = "Bridge is not initialized.";
+        var dialogService = new RecordingDialogService(DialogReturnSemantic.Close);
+        DialogErrorRaisedEvent? raised = null;
+        fixture.Runtime.DialogFeatureService.ErrorRaised += (_, e) => raised = e;
+        var vm = new ToolboxPageViewModel(fixture.Runtime, fixture.ConnectionState, dialogService);
+        await vm.InitializeAsync();
+
+        await vm.StartRecruitAsync();
+
+        Assert.Equal(1, dialogService.WarningConfirmCallCount);
+        Assert.Equal("Toolbox.RetryableError", dialogService.LastScope);
+        Assert.NotNull(dialogService.LastRequest);
+        Assert.Contains("手速", dialogService.LastRequest!.Message, StringComparison.Ordinal);
+        Assert.Equal("重试", dialogService.LastRequest.ConfirmText);
+        Assert.Equal("稍后再试", dialogService.LastRequest.CancelText);
+        Assert.Equal(ToolboxExecutionState.Failed, vm.ExecutionState);
+        Assert.Equal(CoreErrorCode.NotInitialized.ToString(), vm.LastExecutionErrorCode);
+        Assert.Null(raised);
+        Assert.Equal(0, dialogService.ErrorCallCount);
+    }
+
+    [Fact]
+    public async Task StartToolAsync_WhenBridgeNotInitializedAndDetailsClicked_ShouldOpenErrorDetails()
+    {
+        await using var fixture = await ToolboxTestFixture.CreateAsync();
+        fixture.Bridge.ForceConnectFailure = true;
+        fixture.Bridge.ConnectFailureCode = CoreErrorCode.NotInitialized;
+        fixture.Bridge.ConnectFailureMessage = "Bridge is not initialized.";
+        var dialogService = new RecordingDialogService(DialogReturnSemantic.Details);
+        var vm = new ToolboxPageViewModel(fixture.Runtime, fixture.ConnectionState, dialogService);
+        await vm.InitializeAsync();
+
+        await vm.StartRecruitAsync();
+
+        Assert.Equal(1, dialogService.WarningConfirmCallCount);
+        Assert.Equal(1, dialogService.ErrorCallCount);
+        Assert.Equal("Toolbox.Busy.ErrorDetails", dialogService.LastErrorScope);
+        Assert.NotNull(dialogService.LastErrorRequest);
+        Assert.Equal("Toolbox.Recruit", dialogService.LastErrorRequest!.Context);
+        Assert.Equal(CoreErrorCode.NotInitialized.ToString(), dialogService.LastErrorRequest.Result.Error?.Code);
+    }
+
+    [Fact]
+    public async Task StartOperBoxAsync_WhenConnectionFails_ShouldReportFriendlyConnectFailedError()
+    {
+        await using var fixture = await ToolboxTestFixture.CreateAsync();
+        fixture.Bridge.ForceConnectFailure = true;
+        DialogErrorRaisedEvent? raised = null;
+        fixture.Runtime.DialogFeatureService.ErrorRaised += (_, e) => raised = e;
+        var vm = new ToolboxPageViewModel(fixture.Runtime, fixture.ConnectionState);
+        await vm.InitializeAsync();
+
+        await vm.StartOperBoxAsync();
+
+        Assert.Equal(ToolboxExecutionState.Failed, vm.ExecutionState);
+        Assert.Equal(UiErrorCode.ConnectFailed, vm.LastExecutionErrorCode);
+        Assert.NotNull(raised);
+        Assert.Equal("Toolbox.OperBox", raised!.Context);
+        Assert.Equal(UiErrorCode.ConnectFailed, raised.Result.Error?.Code);
+        Assert.DoesNotContain("Connection command failed to exec", raised.Result.Message, StringComparison.Ordinal);
+        Assert.Contains("\"stage\":\"connect\"", raised.Result.Error?.Details ?? string.Empty, StringComparison.Ordinal);
+
+        var localized = DialogTextCatalog.LocalizeErrorResult("zh-cn", raised.Result);
+        Assert.Equal("连接模拟器失败。", localized.Message);
+        Assert.Contains("ADB", DialogTextCatalog.BuildErrorSuggestion("zh-cn", raised.Result), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task StartGachaAsync_ShouldStartCustomTaskAndAutoPeep()
     {
         await using var fixture = await ToolboxTestFixture.CreateAsync();
@@ -235,6 +369,54 @@ public sealed class ToolboxModuleO2FeatureTests
         Assert.Equal(1, fixture.Bridge.StartCallCount);
         Assert.Single(fixture.Bridge.AppendedTasks);
         Assert.Contains("GachaTenTimes", fixture.Bridge.AppendedTasks[0].ParamsJson, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ConfirmGachaDisclaimerAsync_ShouldIssueLocalizedDialogRequest_AndAcceptOnConfirm()
+    {
+        await using var fixture = await ToolboxTestFixture.CreateAsync();
+        var dialogService = new RecordingDialogService(DialogReturnSemantic.Confirm);
+        var vm = new ToolboxPageViewModel(fixture.Runtime, fixture.ConnectionState, dialogService);
+        await vm.InitializeAsync();
+
+        vm.SetLanguage("en-us");
+
+        var confirmed = await vm.ConfirmGachaDisclaimerAsync();
+
+        Assert.True(confirmed);
+        Assert.False(vm.GachaShowDisclaimer);
+        Assert.Equal(1, dialogService.WarningConfirmCallCount);
+        Assert.Equal("Toolbox.Gacha.Disclaimer", dialogService.LastScope);
+        var request = dialogService.LastRequest;
+        Assert.NotNull(request);
+        Assert.Equal(DialogTextCatalog.WarningDialogTitle("en-us"), request.Title);
+        Assert.Equal(vm.GachaWarningText, request.Message);
+        Assert.Equal(DialogTextCatalog.WarningDialogConfirmButton("en-us"), request.ConfirmText);
+        Assert.Equal(DialogTextCatalog.WarningDialogCancelButton("en-us"), request.CancelText);
+        Assert.Equal("en-us", request.Language);
+
+        var chrome = request.Chrome;
+        Assert.NotNull(chrome);
+        var chromeSnapshot = chrome!.GetSnapshot("en-us");
+        Assert.Equal(vm.GachaWarningText, chromeSnapshot.GetNamedTextOrDefault(DialogTextCatalog.ChromeKeys.Prompt));
+        Assert.Equal(vm.GachaDisclaimerLeadText, chromeSnapshot.GetNamedTextOrDefault(DialogTextCatalog.ChromeKeys.LeadText));
+        Assert.Equal(vm.GachaDisclaimerEmphasisText, chromeSnapshot.GetNamedTextOrDefault(DialogTextCatalog.ChromeKeys.EmphasisText));
+        Assert.Equal(vm.GachaDisclaimerBodyText, chromeSnapshot.GetNamedTextOrDefault(DialogTextCatalog.ChromeKeys.DetailText));
+    }
+
+    [Fact]
+    public async Task ConfirmGachaDisclaimerAsync_ShouldKeepDisclaimerVisible_WhenDialogIsNotConfirmed()
+    {
+        await using var fixture = await ToolboxTestFixture.CreateAsync();
+        var dialogService = new RecordingDialogService(DialogReturnSemantic.Cancel);
+        var vm = new ToolboxPageViewModel(fixture.Runtime, fixture.ConnectionState, dialogService);
+        await vm.InitializeAsync();
+
+        var confirmed = await vm.ConfirmGachaDisclaimerAsync();
+
+        Assert.False(confirmed);
+        Assert.True(vm.GachaShowDisclaimer);
+        Assert.Equal(1, dialogService.WarningConfirmCallCount);
     }
 
     [Fact]
@@ -355,5 +537,89 @@ public sealed class ToolboxModuleO2FeatureTests
         var suffix = template[(index + placeholder.Length)..];
         var pattern = $"^{Regex.Escape(prefix)}\\d+{Regex.Escape(suffix)}$";
         Assert.Matches(pattern, actual);
+    }
+
+    private sealed class RecordingDialogService : IAppDialogService
+    {
+        private readonly DialogReturnSemantic _warningConfirmReturn;
+
+        public RecordingDialogService(DialogReturnSemantic warningConfirmReturn)
+        {
+            _warningConfirmReturn = warningConfirmReturn;
+        }
+
+        public int WarningConfirmCallCount { get; private set; }
+
+        public string? LastScope { get; private set; }
+
+        public WarningConfirmDialogRequest? LastRequest { get; private set; }
+
+        public int ErrorCallCount { get; private set; }
+
+        public string? LastErrorScope { get; private set; }
+
+        public ErrorDialogRequest? LastErrorRequest { get; private set; }
+
+        public Task<DialogCompletion<AnnouncementDialogPayload>> ShowAnnouncementAsync(
+            AnnouncementDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<AnnouncementDialogPayload>(DialogReturnSemantic.Close, null, "recording"));
+
+        public Task<DialogCompletion<VersionUpdateDialogPayload>> ShowVersionUpdateAsync(
+            VersionUpdateDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<VersionUpdateDialogPayload>(DialogReturnSemantic.Close, null, "recording"));
+
+        public Task<DialogCompletion<ProcessPickerDialogPayload>> ShowProcessPickerAsync(
+            ProcessPickerDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<ProcessPickerDialogPayload>(DialogReturnSemantic.Close, null, "recording"));
+
+        public Task<DialogCompletion<EmulatorPathDialogPayload>> ShowEmulatorPathAsync(
+            EmulatorPathDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<EmulatorPathDialogPayload>(DialogReturnSemantic.Close, null, "recording"));
+
+        public Task<DialogCompletion<ErrorDialogPayload>> ShowErrorAsync(
+            ErrorDialogRequest request,
+            string sourceScope,
+            Func<CancellationToken, Task<UiOperationResult>>? openIssueReportAsync = null,
+            CancellationToken cancellationToken = default)
+        {
+            ErrorCallCount++;
+            LastErrorScope = sourceScope;
+            LastErrorRequest = request;
+            return Task.FromResult(new DialogCompletion<ErrorDialogPayload>(DialogReturnSemantic.Close, null, "recording"));
+        }
+
+        public Task<DialogCompletion<AchievementListDialogPayload>> ShowAchievementListAsync(
+            AchievementListDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<AchievementListDialogPayload>(DialogReturnSemantic.Close, null, "recording"));
+
+        public Task<DialogCompletion<TextDialogPayload>> ShowTextAsync(
+            TextDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<TextDialogPayload>(DialogReturnSemantic.Close, null, "recording"));
+
+        public Task<DialogCompletion<WarningConfirmDialogPayload>> ShowWarningConfirmAsync(
+            WarningConfirmDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+        {
+            WarningConfirmCallCount++;
+            LastScope = sourceScope;
+            LastRequest = request;
+            return Task.FromResult(new DialogCompletion<WarningConfirmDialogPayload>(
+                _warningConfirmReturn,
+                _warningConfirmReturn == DialogReturnSemantic.Confirm ? new WarningConfirmDialogPayload(true) : null,
+                "recording"));
+        }
     }
 }

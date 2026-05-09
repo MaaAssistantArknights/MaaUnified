@@ -1,0 +1,48 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:MAAUnified.App.Controls"
+        x:Class="MAAUnified.App.Views.ScreenshotPreviewWindow"
+        Width="980"
+        Height="680"
+        MinWidth="720"
+        MinHeight="480"
+        CanResize="True"
+        Background="Transparent"
+        SystemDecorations="None"
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaChromeHints="NoChrome"
+        WindowStartupLocation="CenterOwner"
+        Title="Screenshot Preview">
+  <controls:AppWindowFrame x:Name="DialogShell"
+                           Title="Screenshot Preview"
+                           Mode="ResizableDialog"
+                           CapWindowHeightToOwner="True"
+                           CloseRequested="OnShellCloseRequested">
+    <controls:AppWindowFrame.HeaderContent>
+      <TextBlock x:Name="PreviewHeaderText"
+                 Classes="app-window-subtitle dialog-window-subtitle long-wrap"
+                 IsVisible="False"
+                 Text="" />
+    </controls:AppWindowFrame.HeaderContent>
+    <controls:AppWindowFrame.Content>
+      <Grid>
+        <TextBlock x:Name="PreviewSectionTitleText"
+                   IsVisible="False"
+                   Text="Screenshot Preview" />
+        <TextBlock x:Name="PreviewStatusText"
+                   IsVisible="False"
+                   Text="" />
+        <Image x:Name="PreviewImage"
+               HorizontalAlignment="Stretch"
+               VerticalAlignment="Stretch"
+               Stretch="Uniform" />
+      </Grid>
+    </controls:AppWindowFrame.Content>
+    <controls:AppWindowFrame.ActionsContent>
+      <Button x:Name="CloseActionButton"
+              Classes="app-button app-primary"
+              Content="Close"
+              Click="OnCloseClick" />
+    </controls:AppWindowFrame.ActionsContent>
+  </controls:AppWindowFrame>
+</Window>

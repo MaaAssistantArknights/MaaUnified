@@ -6,15 +6,19 @@ public sealed class FightTaskParamsDto
 {
     public string Stage { get; set; } = FightStageSelection.CurrentOrLast;
 
-    public bool UseMedicine { get; set; }
+    public List<string> StagePlan { get; set; } = [FightStageSelection.CurrentOrLast];
+
+    public bool IsStageManually { get; set; }
+
+    public bool? UseMedicine { get; set; } = false;
 
     public int Medicine { get; set; }
 
-    public bool UseStone { get; set; }
+    public bool? UseStone { get; set; } = false;
 
     public int Stone { get; set; }
 
-    public bool EnableTimesLimit { get; set; }
+    public bool? EnableTimesLimit { get; set; } = false;
 
     public int Times { get; set; } = int.MaxValue;
 
@@ -24,7 +28,7 @@ public sealed class FightTaskParamsDto
 
     public bool UseExpiringMedicine { get; set; }
 
-    public bool EnableTargetDrop { get; set; }
+    public bool? EnableTargetDrop { get; set; } = false;
 
     public string DropId { get; set; } = string.Empty;
 
@@ -43,6 +47,22 @@ public sealed class FightTaskParamsDto
     public bool HideSeries { get; set; }
 
     public bool AllowUseStoneSave { get; set; }
+
+    public bool UseWeeklySchedule { get; set; }
+
+    public bool WeeklyScheduleSunday { get; set; } = true;
+
+    public bool WeeklyScheduleMonday { get; set; } = true;
+
+    public bool WeeklyScheduleTuesday { get; set; } = true;
+
+    public bool WeeklyScheduleWednesday { get; set; } = true;
+
+    public bool WeeklyScheduleThursday { get; set; } = true;
+
+    public bool WeeklyScheduleFriday { get; set; } = true;
+
+    public bool WeeklyScheduleSaturday { get; set; } = true;
 }
 
 public static class FightStageSelection
@@ -60,6 +80,25 @@ public static class FightStageSelection
         return IsCurrentOrLast(stage)
             ? CurrentOrLast
             : stage!.Trim();
+    }
+
+    public static string NormalizePlanEntry(string? stage)
+    {
+        return NormalizeStoredValue(stage);
+    }
+
+    public static List<string> NormalizeStagePlan(IEnumerable<string?>? stagePlan)
+    {
+        var normalized = (stagePlan ?? [])
+            .Select(NormalizePlanEntry)
+            .ToList();
+
+        if (normalized.Count == 0)
+        {
+            normalized.Add(CurrentOrLast);
+        }
+
+        return normalized;
     }
 
     public static string ToCoreStage(string? stage)

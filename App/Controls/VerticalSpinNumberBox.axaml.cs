@@ -25,6 +25,9 @@ public partial class VerticalSpinNumberBox : UserControl
     public static readonly StyledProperty<string> FormatStringProperty =
         AvaloniaProperty.Register<VerticalSpinNumberBox, string>(nameof(FormatString), "F0");
 
+    public static readonly StyledProperty<bool> WrapAroundStepProperty =
+        AvaloniaProperty.Register<VerticalSpinNumberBox, bool>(nameof(WrapAroundStep), false);
+
     static VerticalSpinNumberBox()
     {
         MinimumProperty.Changed.AddClassHandler<VerticalSpinNumberBox>((box, _) => box.CoerceValueWithinRange());
@@ -35,6 +38,8 @@ public partial class VerticalSpinNumberBox : UserControl
     public VerticalSpinNumberBox()
     {
         InitializeComponent();
+        AddHandler(GotFocusEvent, OnFocusChanged, RoutingStrategies.Bubble);
+        AddHandler(LostFocusEvent, OnFocusChanged, RoutingStrategies.Bubble);
     }
 
     public int Minimum
@@ -67,6 +72,12 @@ public partial class VerticalSpinNumberBox : UserControl
         set => SetValue(FormatStringProperty, value);
     }
 
+    public bool WrapAroundStep
+    {
+        get => GetValue(WrapAroundStepProperty);
+        set => SetValue(WrapAroundStepProperty, value);
+    }
+
     private void OnIncreaseClick(object? sender, RoutedEventArgs e)
     {
         Step(+1);
@@ -77,6 +88,17 @@ public partial class VerticalSpinNumberBox : UserControl
         Step(-1);
     }
 
+    private void OnFocusChanged(object? sender, RoutedEventArgs e)
+    {
+        UpdateFocusedState();
+    }
+
+    private void UpdateFocusedState()
+    {
+        PseudoClasses.Set(":focused", IsKeyboardFocusWithin);
+        SpinRootBorder.Classes.Set("focused", IsKeyboardFocusWithin);
+    }
+
     private void Step(int direction)
     {
         if (!IsEnabled || direction == 0)
@@ -84,8 +106,25 @@ public partial class VerticalSpinNumberBox : UserControl
             return;
         }
 
+        var min = Math.Min(Minimum, Maximum);
+        var max = Math.Max(Minimum, Maximum);
         var step = Increment <= 0 ? 1 : Increment;
         var stepped = (long)Value + ((long)step * direction);
+        if (WrapAroundStep)
+        {
+            if (direction > 0 && stepped > max)
+            {
+                SetCurrentValue(ValueProperty, min);
+                return;
+            }
+
+            if (direction < 0 && stepped < min)
+            {
+                SetCurrentValue(ValueProperty, max);
+                return;
+            }
+        }
+
         SetCurrentValue(ValueProperty, ClampToRange(stepped));
     }
 

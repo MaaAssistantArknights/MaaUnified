@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using MAAUnified.App.Services;
 using MAAUnified.App.ViewModels.Infrastructure;
 using MAAUnified.Application.Models;
 using MAAUnified.Application.Services;
@@ -120,6 +121,7 @@ public sealed class InfrastModuleViewModel : TaskModuleSettingsViewModelBase
                 PlanOptions.Clear();
                 _parsedPlans.Clear();
                 SelectedPlan = null;
+                StatusMessage = string.Empty;
                 LastErrorMessage = string.Empty;
             }
         }
@@ -233,7 +235,7 @@ public sealed class InfrastModuleViewModel : TaskModuleSettingsViewModelBase
 
             if (readOnly)
             {
-                var defaultPath = Path.Combine(AppContext.BaseDirectory, "resource", "custom_infrast", normalized);
+                var defaultPath = Path.Combine(global::MAAUnified.Compat.Runtime.RuntimeLayout.ResolveRuntimeBaseDirectory(), "resource", "custom_infrast", normalized);
                 CustomFilePath = defaultPath;
             }
 
@@ -394,6 +396,21 @@ public sealed class InfrastModuleViewModel : TaskModuleSettingsViewModelBase
         QueuePersist();
     }
 
+    public void MoveFacility(int sourceIndex, int targetIndex)
+    {
+        if (sourceIndex < 0
+            || targetIndex < 0
+            || sourceIndex >= FacilityOptions.Count
+            || targetIndex >= FacilityOptions.Count
+            || sourceIndex == targetIndex)
+        {
+            return;
+        }
+
+        FacilityOptions.Move(sourceIndex, targetIndex);
+        QueuePersist();
+    }
+
     public void SelectCustomFile(string path)
     {
         if (string.IsNullOrWhiteSpace(path))
@@ -424,6 +441,7 @@ public sealed class InfrastModuleViewModel : TaskModuleSettingsViewModelBase
 
         if (!File.Exists(CustomFilePath))
         {
+            StatusMessage = string.Empty;
             LastErrorMessage = string.Format(
                 Texts.GetOrDefault("Infrast.Error.CustomFileNotFound", "Custom file not found: {0}"),
                 CustomFilePath);
@@ -483,11 +501,13 @@ public sealed class InfrastModuleViewModel : TaskModuleSettingsViewModelBase
             }
 
             StatusMessage = string.Format(
+                CultureInfo.CurrentCulture,
                 Texts.GetOrDefault("Infrast.Status.LoadedPlans", "Loaded {0} plans."),
-                PlanOptions.Count);
+                _parsedPlans.Count);
         }
         catch (Exception ex)
         {
+            StatusMessage = string.Empty;
             LastErrorMessage = Texts.GetOrDefault("Infrast.Error.ParseFailed", "Failed to parse custom infrast file.");
             await Runtime.DiagnosticsService.RecordFailedResultAsync(
                 "Infrast.ParsePlan",
@@ -597,7 +617,19 @@ public sealed class InfrastModuleViewModel : TaskModuleSettingsViewModelBase
         OnPropertyChanged(nameof(SelectedModeOption));
         OnPropertyChanged(nameof(SelectedDroneOption));
         OnPropertyChanged(nameof(SelectedDefaultInfrastOption));
+        RefreshFacilityDisplayNames();
     }
+
+    private void RefreshFacilityDisplayNames()
+    {
+        foreach (var option in FacilityOptions)
+        {
+            option.DisplayName = ResolveFacilityDisplayName(option.Value);
+        }
+    }
+
+    private string ResolveFacilityDisplayName(string value)
+        => Texts.GetOrDefault(value, value);
 
     private void ConfigureFacilityOptions(IEnumerable<string> enabledFacilities)
     {
@@ -628,7 +660,7 @@ public sealed class InfrastModuleViewModel : TaskModuleSettingsViewModelBase
             FacilityOptions.Clear();
             foreach (var name in orderedNames)
             {
-                var option = new FacilityOption(name, name)
+                var option = new FacilityOption(name, ResolveFacilityDisplayName(name))
                 {
                     IsSelected = enabledSet.Contains(name),
                 };
@@ -675,26 +707,25 @@ public sealed class InfrastModuleViewModel : TaskModuleSettingsViewModelBase
 
     private async Task PersistDefaultInfrastAsync(string value)
     {
-        try
-        {
-            if (Runtime.ConfigurationService.TryGetCurrentProfile(out var profile))
+        _ = await ConfigurationSaveTracker.Instance.RunTrackedAsync(
+            "TaskQueue.Infrast.DefaultInfrast",
+            Texts.GetOrDefault("Infrast.Title", "基建换班"),
+            "Infrast.DefaultInfrast.Save",
+            Runtime.DiagnosticsService,
+            async cancellationToken =>
             {
-                profile.Values[ConfigurationKeys.DefaultInfrast] = JsonValue.Create(value);
-            }
-            else
-            {
-                Runtime.ConfigurationService.CurrentConfig.GlobalValues[ConfigurationKeys.DefaultInfrast] = JsonValue.Create(value);
-            }
+                if (Runtime.ConfigurationService.TryGetCurrentProfile(out var profile))
+                {
+                    profile.Values[ConfigurationKeys.DefaultInfrast] = JsonValue.Create(value);
+                }
+                else
+                {
+                    Runtime.ConfigurationService.CurrentConfig.GlobalValues[ConfigurationKeys.DefaultInfrast] = JsonValue.Create(value);
+                }
 
-            await Runtime.ConfigurationService.SaveAsync();
-        }
-        catch (Exception ex)
-        {
-            await Runtime.DiagnosticsService.RecordErrorAsync(
-                "Infrast.DefaultInfrast.Save",
-                "Failed to persist default infrast preset.",
-                ex);
-        }
+                await Runtime.ConfigurationService.SaveAsync(cancellationToken);
+                return true;
+            });
     }
 
     private static bool IsUserDefinedDefault(string value)
@@ -857,16 +888,21 @@ public sealed class InfrastModuleViewModel : TaskModuleSettingsViewModelBase
     public sealed class FacilityOption : ObservableObject
     {
         private bool _isSelected;
+        private string _displayName;
 
         public FacilityOption(string value, string displayName)
         {
             Value = value;
-            DisplayName = displayName;
+            _displayName = displayName;
         }
 
         public string Value { get; }
 
-        public string DisplayName { get; }
+        public string DisplayName
+        {
+            get => _displayName;
+            set => SetProperty(ref _displayName, value);
+        }
 
         public bool IsSelected
         {

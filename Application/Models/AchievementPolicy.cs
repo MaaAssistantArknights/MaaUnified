@@ -8,7 +8,7 @@ public sealed record AchievementPolicy(
 {
     public static AchievementPolicy Default { get; } = new(
         PopupDisabled: false,
-        PopupAutoClose: false);
+        PopupAutoClose: true);
 
     public IReadOnlyDictionary<string, string> ToProfileSettingUpdates()
     {

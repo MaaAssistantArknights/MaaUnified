@@ -386,18 +386,22 @@ public sealed class SessionStateSyncTests
         Assert.True(session.TryBeginRun("TaskQueue", out var owner1));
         Assert.Equal("TaskQueue", owner1);
         Assert.True(session.IsRunOwner("TaskQueue"));
+        Assert.Equal("TaskQueue", session.CurrentRunOwnerDisplayName);
 
         Assert.False(session.TryBeginRun("Copilot", out var currentOwner));
         Assert.Equal("TaskQueue", currentOwner);
         Assert.True(session.IsRunOwner("TaskQueue"));
+        Assert.Equal("TaskQueue", session.CurrentRunOwnerDisplayName);
 
         session.EndRun("Copilot");
         Assert.True(session.IsRunOwner("TaskQueue"));
 
         session.EndRun("TaskQueue");
         Assert.False(session.IsRunOwner("TaskQueue"));
-        Assert.True(session.TryBeginRun("Copilot", out var owner2));
+        Assert.Null(session.CurrentRunOwnerDisplayName);
+        Assert.True(session.TryBeginRun("Copilot", "作业站", out var owner2));
         Assert.Equal("Copilot", owner2);
+        Assert.Equal("作业站", session.CurrentRunOwnerDisplayName);
     }
 
     [Fact]
@@ -444,6 +448,64 @@ public sealed class SessionStateSyncTests
                    && log.Message.Contains("Append task blocked `Recruit`", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public async Task ReloadResourceWhenIdleAsync_WhenSessionIsIdle_ShouldReloadImmediately()
+    {
+        var bridge = new FakeBridge
+        {
+            RuntimeStatus = new CoreRuntimeStatus(Initialized: true, Connected: true, Running: false),
+        };
+        var session = new UnifiedSessionService(bridge, CreateConfigService(), new UiLogService(), new SessionStateMachine());
+
+        var result = await session.ReloadResourceWhenIdleAsync("YoStarEN");
+
+        Assert.True(result.Success);
+        Assert.Equal(1, bridge.ReloadResourceCallCount);
+        Assert.Equal("YoStarEN", bridge.LastReloadClientType);
+    }
+
+    [Fact]
+    public async Task ReloadResourceWhenIdleAsync_WhenSessionIsRunning_ShouldWaitUntilIdleThenReload()
+    {
+        var bridge = new FakeBridge
+        {
+            RuntimeStatus = new CoreRuntimeStatus(Initialized: true, Connected: true, Running: true),
+        };
+        var session = new UnifiedSessionService(bridge, CreateConfigService(), new UiLogService(), new SessionStateMachine());
+        Assert.True((await session.ConnectAsync("127.0.0.1:5555", "General", null)).Success);
+        Assert.True((await session.StartAsync()).Success);
+        Assert.Equal(SessionState.Running, session.CurrentState);
+
+        var reloadTask = session.ReloadResourceWhenIdleAsync(waitTimeout: TimeSpan.FromSeconds(2));
+        await Task.Delay(120);
+        Assert.Equal(0, bridge.ReloadResourceCallCount);
+
+        bridge.RuntimeStatus = new CoreRuntimeStatus(Initialized: true, Connected: true, Running: false);
+        var result = await reloadTask;
+
+        Assert.True(result.Success);
+        Assert.Equal(1, bridge.ReloadResourceCallCount);
+    }
+
+    [Fact]
+    public async Task ReloadResourceWhenIdleAsync_WhenSessionStaysBusy_ShouldTimeoutWithoutReload()
+    {
+        var bridge = new FakeBridge
+        {
+            RuntimeStatus = new CoreRuntimeStatus(Initialized: true, Connected: true, Running: true),
+        };
+        var session = new UnifiedSessionService(bridge, CreateConfigService(), new UiLogService(), new SessionStateMachine());
+        Assert.True((await session.ConnectAsync("127.0.0.1:5555", "General", null)).Success);
+        Assert.True((await session.StartAsync()).Success);
+        Assert.Equal(SessionState.Running, session.CurrentState);
+
+        var result = await session.ReloadResourceWhenIdleAsync(waitTimeout: TimeSpan.FromMilliseconds(300));
+
+        Assert.False(result.Success);
+        Assert.Equal(CoreErrorCode.ConnectTimeout, result.Error?.Code);
+        Assert.Equal(0, bridge.ReloadResourceCallCount);
+    }
+
     private static async Task WaitUntilAsync(Func<bool> condition, int timeoutMs = 2000)
     {
         var startedAt = Environment.TickCount64;
@@ -478,7 +540,13 @@ public sealed class SessionStateSyncTests
 
         public bool StopSucceeds { get; init; } = true;
 
-        public CoreRuntimeStatus RuntimeStatus { get; init; } = new(true, true, false);
+        public CoreRuntimeStatus RuntimeStatus { get; set; } = new(true, true, false);
+
+        public bool ReloadResourceSucceeds { get; init; } = true;
+
+        public int ReloadResourceCallCount { get; private set; }
+
+        public string? LastReloadClientType { get; private set; }
 
         public Task<CoreResult<CoreInitializeInfo>> InitializeAsync(CoreInitializeRequest request, CancellationToken cancellationToken = default)
             => Task.FromResult(CoreResult<CoreInitializeInfo>.Ok(new CoreInitializeInfo(request.BaseDirectory, "fake", "fake", request.ClientType)));
@@ -503,6 +571,15 @@ public sealed class SessionStateSyncTests
 
         public Task<CoreResult<CoreRuntimeStatus>> GetRuntimeStatusAsync(CancellationToken cancellationToken = default)
             => Task.FromResult(CoreResult<CoreRuntimeStatus>.Ok(RuntimeStatus));
+
+        public Task<CoreResult<bool>> ReloadResourceAsync(string? clientType = null, CancellationToken cancellationToken = default)
+        {
+            ReloadResourceCallCount++;
+            LastReloadClientType = clientType;
+            return Task.FromResult(ReloadResourceSucceeds
+                ? CoreResult<bool>.Ok(true)
+                : CoreResult<bool>.Fail(new CoreError(CoreErrorCode.ResourceLoadFailed, "reload failed")));
+        }
 
         public Task<CoreResult<bool>> AttachWindowAsync(CoreAttachWindowRequest request, CancellationToken cancellationToken = default)
             => Task.FromResult(CoreResult<bool>.Fail(new CoreError(CoreErrorCode.NotSupported, "not supported")));

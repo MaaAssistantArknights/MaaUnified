@@ -1,0 +1,32 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:MAAUnified.App.Controls"
+             x:Class="MAAUnified.App.Controls.SettingsLabel"
+             x:Name="Root"
+             ClipToBounds="False"
+             VerticalAlignment="Center"
+             UseLayoutRounding="True">
+  <Grid ColumnDefinitions="Auto,Auto,Auto"
+        HorizontalAlignment="Left"
+        VerticalAlignment="Center"
+        ClipToBounds="False">
+    <TextBlock x:Name="PART_LabelText"
+               Classes="settings-label-text"
+               VerticalAlignment="Center"
+               Text="{Binding Text, ElementName=Root}"
+               TextWrapping="Wrap" />
+    <Border x:Name="PART_HintGap"
+            Grid.Column="1"
+            Width="0"
+            Height="0"
+            Margin="{DynamicResource MAA.App.Settings.HintMargin}"
+            IsVisible="{Binding HasTip, ElementName=Root}" />
+    <controls:TooltipHint x:Name="PART_Tip"
+                          Grid.Column="2"
+                          Classes="settings-label-tip"
+                          Margin="0"
+                          VerticalAlignment="Center"
+                          IsVisible="{Binding HasTip, ElementName=Root}"
+                          Tip="{Binding Tip, ElementName=Root}" />
+  </Grid>
+</UserControl>

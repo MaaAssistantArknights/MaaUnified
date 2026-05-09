@@ -8,6 +8,10 @@ namespace MAAUnified.App.Features.Dialogs;
 
 public partial class VersionUpdateDialogView : Window, IDialogChromeAware
 {
+    private string _currentVersion = string.Empty;
+    private string _targetVersion = string.Empty;
+    private string _summary = string.Empty;
+
     public VersionUpdateDialogView()
     {
         InitializeComponent();
@@ -16,26 +20,26 @@ public partial class VersionUpdateDialogView : Window, IDialogChromeAware
 
     public void ApplyRequest(VersionUpdateDialogRequest request)
     {
+        _currentVersion = request.CurrentVersion;
+        _targetVersion = request.TargetVersion;
+        _summary = request.Summary;
         Title = request.Title;
-        DialogTitleText.Text = request.Title;
-        VersionLine.Text = $"{request.CurrentVersion} -> {request.TargetVersion}";
-        SummaryLine.Text = request.Summary;
+        DialogShell.Title = request.Title;
+        VersionLine.Text = $"{_currentVersion} -> {_targetVersion}";
+        SummaryLine.Text = _summary;
         BodyBox.Text = request.Body;
+        BodyBox.CaretIndex = 0;
         ConfirmButton.Content = request.ConfirmText;
         CancelButton.Content = request.CancelText;
     }
 
     public VersionUpdateDialogPayload BuildPayload()
     {
-        var versionText = VersionLine.Text ?? string.Empty;
-        var split = versionText.Split("->", StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-        var currentVersion = split.Length > 0 ? split[0] : string.Empty;
-        var targetVersion = split.Length > 1 ? split[1] : string.Empty;
         return new VersionUpdateDialogPayload(
             Action: "confirm",
-            CurrentVersion: currentVersion,
-            TargetVersion: targetVersion,
-            Summary: SummaryLine.Text ?? string.Empty);
+            CurrentVersion: _currentVersion,
+            TargetVersion: _targetVersion,
+            Summary: _summary);
     }
 
     private void OnConfirmClick(object? sender, RoutedEventArgs e)
@@ -48,10 +52,15 @@ public partial class VersionUpdateDialogView : Window, IDialogChromeAware
         Close(DialogReturnSemantic.Cancel);
     }
 
+    private void OnShellCloseRequested(object? sender, EventArgs e)
+    {
+        Close();
+    }
+
     public void ApplyDialogChrome(DialogChromeSnapshot chrome)
     {
         Title = chrome.Title;
-        DialogTitleText.Text = chrome.GetNamedTextOrDefault(DialogTextCatalog.ChromeKeys.SectionTitle, chrome.Title);
+        DialogShell.Title = chrome.GetNamedTextOrDefault(DialogTextCatalog.ChromeKeys.SectionTitle, chrome.Title);
         ConfirmButton.Content = chrome.ConfirmText ?? ConfirmButton.Content;
         CancelButton.Content = chrome.CancelText ?? CancelButton.Content;
     }

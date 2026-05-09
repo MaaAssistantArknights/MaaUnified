@@ -12,6 +12,9 @@ public static class DialogTextCatalog
     public static class ChromeKeys
     {
         public const string Prompt = "Prompt";
+        public const string LeadText = "LeadText";
+        public const string EmphasisText = "EmphasisText";
+        public const string DetailText = "DetailText";
         public const string FilterWatermark = "FilterWatermark";
         public const string RefreshButton = "RefreshButton";
         public const string RefreshingButton = "RefreshingButton";
@@ -24,6 +27,7 @@ public static class DialogTextCatalog
         public const string MessageLabel = "MessageLabel";
         public const string DetailsLabel = "DetailsLabel";
         public const string SuggestionLabel = "SuggestionLabel";
+        public const string DetailsButton = "DetailsButton";
     }
 
     public static bool UseChinese(string? language)
@@ -43,6 +47,11 @@ public static class DialogTextCatalog
         return GetText(language, "Dialog.Error.Title", "错误提示", "Error");
     }
 
+    public static string ErrorDialogConnectFailedTitle(string? language)
+    {
+        return GetText(language, "Dialog.Error.ConnectFailedTitle", "连接模拟器失败", "Failed to connect to emulator");
+    }
+
     public static string ErrorDialogSectionTitle(string? language)
     {
         return GetText(language, "Dialog.Error.SectionTitle", "错误详情", "Error");
@@ -51,6 +60,11 @@ public static class DialogTextCatalog
     public static string ErrorDialogCopyButton(string? language)
     {
         return GetText(language, "Dialog.Error.CopyButton", "复制", "Copy");
+    }
+
+    public static string ErrorDialogCopyErrorInfoButton(string? language)
+    {
+        return GetText(language, "Dialog.Error.CopyErrorInfoButton", "详细报错", "Error details");
     }
 
     public static string ErrorDialogIssueReportButton(string? language)
@@ -116,6 +130,11 @@ public static class DialogTextCatalog
     public static string WarningDialogCancelButton(string? language)
     {
         return GetText(language, "Dialog.Warning.CancelButton", "取消", "Cancel");
+    }
+
+    public static string WarningDialogDetailsButton(string? language)
+    {
+        return GetText(language, "Dialog.Warning.DetailsButton", "详细报错", "Error details");
     }
 
     private static string GetText(string? language, string key, string zhFallback, string enFallback)
@@ -226,6 +245,12 @@ public static class DialogTextCatalog
             UiErrorCode.EmulatorPathNotFound
                 => Select(language, "请检查模拟器路径是否存在。", "Check whether the emulator path exists."),
 
+            UiErrorCode.ConnectFailed
+                => Select(
+                    language,
+                    "请确认模拟器已启动，并检查连接地址、ADB 路径和连接配置后重试；如使用局域网地址，请确认设备与电脑在同一网络内。",
+                    "Make sure the emulator is running, then check the connection address, ADB path, and connection profile. For LAN addresses, confirm the device and computer are on the same network."),
+
             UiErrorCode.PlatformOperationFailed
                 => Select(
                     language,
@@ -275,6 +300,9 @@ public static class DialogTextCatalog
 
             UiErrorCode.EmulatorPathNotFound
                 => Select(language, "找不到模拟器路径。", "Emulator path was not found."),
+
+            UiErrorCode.ConnectFailed
+                => Select(language, "连接模拟器失败。", "Failed to connect to the emulator."),
 
             _ => PlatformCapabilityTextMap.FormatErrorCode(
                 UseChinese(language) ? "zh-cn" : "en-us",

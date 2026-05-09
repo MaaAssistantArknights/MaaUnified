@@ -4,6 +4,7 @@ using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Text;
 using Microsoft.Win32;
+using MAAUnified.Compat.Runtime;
 
 namespace MAAUnified.Platform;
 
@@ -148,7 +149,7 @@ public sealed class WindowsGpuCapabilityService : IGpuCapabilityService
                 $"Timed out after {GpuProbeTimeout.TotalSeconds:0.##} seconds while probing Windows GPU capabilities. " +
                 "The probe is waiting on DXGI adapter enumeration / D3D12 feature checks / DisplayConfig adapter mapping. " +
                 $"TaskStatus={probeTask.Status}; OS={RuntimeInformation.OSDescription}; ProcessArch={RuntimeInformation.ProcessArchitecture}; " +
-                $"BaseDir={AppContext.BaseDirectory}; Progress={probeProgress.BuildSummary()}.");
+                $"ExecutableBaseDir={AppContext.BaseDirectory}; RuntimeBaseDir={RuntimeLayout.ResolveRuntimeBaseDirectory()}; Progress={probeProgress.BuildSummary()}.");
             WriteProbeDiagnosticsLog(probeProgress, outcome: "timeout", exception: timeout);
             lock (_candidateProbeGate)
             {
@@ -184,7 +185,7 @@ public sealed class WindowsGpuCapabilityService : IGpuCapabilityService
 
             throw new InvalidOperationException(
                 "Windows GPU capability probe failed. " +
-                $"OS={RuntimeInformation.OSDescription}; ProcessArch={RuntimeInformation.ProcessArchitecture}; BaseDir={AppContext.BaseDirectory}. " +
+                $"OS={RuntimeInformation.OSDescription}; ProcessArch={RuntimeInformation.ProcessArchitecture}; ExecutableBaseDir={AppContext.BaseDirectory}; RuntimeBaseDir={RuntimeLayout.ResolveRuntimeBaseDirectory()}. " +
                 $"The failure happened after the probe task completed. Progress={probeProgress.BuildSummary()}",
                 ex);
         }
@@ -984,9 +985,12 @@ public sealed class WindowsGpuCapabilityService : IGpuCapabilityService
         IReadOnlyList<WindowsGpuCandidate>? candidates = null,
         Exception? exception = null)
     {
+#if MAAUNIFIED_MINIMAL_DIAGNOSTICS
+        return;
+#else
         try
         {
-            var debugDirectory = Path.Combine(AppContext.BaseDirectory, "debug");
+            var debugDirectory = Path.Combine(RuntimeLayout.ResolveRuntimeBaseDirectory(), "debug");
             Directory.CreateDirectory(debugDirectory);
 
             var builder = new StringBuilder();
@@ -994,7 +998,8 @@ public sealed class WindowsGpuCapabilityService : IGpuCapabilityService
             builder.AppendLine($"Outcome: {outcome}");
             builder.AppendLine($"OS: {RuntimeInformation.OSDescription}");
             builder.AppendLine($"ProcessArchitecture: {RuntimeInformation.ProcessArchitecture}");
-            builder.AppendLine($"BaseDirectory: {AppContext.BaseDirectory}");
+            builder.AppendLine($"ExecutableBaseDirectory: {AppContext.BaseDirectory}");
+            builder.AppendLine($"RuntimeBaseDirectory: {RuntimeLayout.ResolveRuntimeBaseDirectory()}");
             builder.AppendLine($"Summary: {progress.BuildSummary()}");
 
             if (candidates is not null)
@@ -1034,6 +1039,7 @@ public sealed class WindowsGpuCapabilityService : IGpuCapabilityService
         {
             // Probe diagnostics are best-effort only.
         }
+#endif
     }
 
     private sealed class GpuProbeProgress

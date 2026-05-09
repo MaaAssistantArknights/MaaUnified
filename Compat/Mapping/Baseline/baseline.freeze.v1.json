@@ -1444,6 +1444,108 @@
       "waiver_scope": null
     },
     {
+      "item_id": "Advanced.StageManager",
+      "kind": "Feature",
+      "group": "Advanced",
+      "display_name": "StageManager",
+      "wpf_reference": "WPF::StageManager",
+      "avalonia_path": "App/Features/Advanced/StageManagerView.axaml",
+      "parity_status": "Aligned",
+      "priority": "P0",
+      "fields": [
+        {
+          "field_id": "primary_state",
+          "name": "PrimaryState",
+          "default_value": "ClientType=Official",
+          "source": "WPF baseline freeze",
+          "notes": "Default value snapshot for migration acceptance."
+        }
+      ],
+      "interactions": [
+        {
+          "interaction_id": "open",
+          "action": "Open module page from root navigation.",
+          "expected_result": "Page renders and remains interactive.",
+          "fallback_behavior": "Show readable error message without process crash."
+        }
+      ],
+      "visibility_rules": [
+        {
+          "rule_id": "active_module",
+          "condition": "Module selected from root tabs/section list.",
+          "expected_visibility": "Visible"
+        }
+      ],
+      "error_feedback": [
+        {
+          "code": "UiOperationFailed",
+          "trigger": "Feature operation failure.",
+          "user_message": "Error is surfaced via LastError/LastErrorMessage.",
+          "log_path": "debug/avalonia-ui-errors.log",
+          "non_crash": true
+        }
+      ],
+      "evidence": {
+        "ui_path": "App/Features/Advanced/StageManagerView.axaml",
+        "log_path": "debug/avalonia-ui-events.log",
+        "scope": "Feature.Advanced.StageManager",
+        "case_id": "BL-032"
+      },
+      "waiver": null,
+      "waiver_scope": null
+    },
+    {
+      "item_id": "Advanced.WebApi",
+      "kind": "Feature",
+      "group": "Advanced",
+      "display_name": "WebApi",
+      "wpf_reference": "WPF::WebApi",
+      "avalonia_path": "App/Features/Advanced/WebApiView.axaml",
+      "parity_status": "Aligned",
+      "priority": "P0",
+      "fields": [
+        {
+          "field_id": "primary_state",
+          "name": "PrimaryState",
+          "default_value": "Enabled=false; Host=127.0.0.1; Port=51888",
+          "source": "WPF baseline freeze",
+          "notes": "Default value snapshot for migration acceptance."
+        }
+      ],
+      "interactions": [
+        {
+          "interaction_id": "open",
+          "action": "Open module page from root navigation.",
+          "expected_result": "Page renders and remains interactive.",
+          "fallback_behavior": "Show readable error message without process crash."
+        }
+      ],
+      "visibility_rules": [
+        {
+          "rule_id": "active_module",
+          "condition": "Module selected from root tabs/section list.",
+          "expected_visibility": "Visible"
+        }
+      ],
+      "error_feedback": [
+        {
+          "code": "UiOperationFailed",
+          "trigger": "Feature operation failure.",
+          "user_message": "Error is surfaced via LastError/LastErrorMessage.",
+          "log_path": "debug/avalonia-ui-errors.log",
+          "non_crash": true
+        }
+      ],
+      "evidence": {
+        "ui_path": "App/Features/Advanced/WebApiView.axaml",
+        "log_path": "debug/avalonia-ui-events.log",
+        "scope": "Feature.Advanced.WebApi",
+        "case_id": "BL-033"
+      },
+      "waiver": null,
+      "waiver_scope": null
+    },
+    {
       "item_id": "Dialog.Announcement",
       "kind": "Feature",
       "group": "Dialogs",
@@ -2568,25 +2670,39 @@
       },
       "mapping_target": "SettingsPageViewModel.UseTray"
     },
-    {
-      "key": "GUI.MinimizeToTray",
-      "owner_item_id": "Settings.Gui",
-      "parity_status": "Aligned",
-      "priority": "P0",
-      "notes": "Mapped to SettingsPageViewModel.MinimizeToTray.",
-      "evidence": {
-        "ui_path": "App/Features/Settings/GuiSettingsView.axaml",
-        "log_path": "debug/avalonia-ui-events.log",
-        "scope": "Config.GUI.MinimizeToTray",
-        "case_id": "CFG-010"
-      },
-      "mapping_target": "SettingsPageViewModel.MinimizeToTray"
-    },
-    {
-      "key": "GUI.HideCloseButton",
-      "owner_item_id": "Settings.Gui",
-      "parity_status": "Aligned",
-      "priority": "P0",
+	    {
+	      "key": "GUI.MinimizeToTray",
+	      "owner_item_id": "Settings.Gui",
+	      "parity_status": "Aligned",
+	      "priority": "P0",
+	      "notes": "Mapped to SettingsPageViewModel.MinimizeToTray.",
+	      "evidence": {
+	        "ui_path": "App/Features/Settings/GuiSettingsView.axaml",
+	        "log_path": "debug/avalonia-ui-events.log",
+	        "scope": "Config.GUI.MinimizeToTray",
+	        "case_id": "CFG-010"
+	      },
+	      "mapping_target": "SettingsPageViewModel.MinimizeToTray"
+	    },
+	    {
+	      "key": "GUI.UseNotify",
+	      "owner_item_id": "Settings.Gui",
+	      "parity_status": "Aligned",
+	      "priority": "P0",
+	      "notes": "Mapped to SettingsPageViewModel.UseNotify.",
+	      "evidence": {
+	        "ui_path": "App/Features/Settings/GuiSettingsView.axaml",
+	        "log_path": "debug/avalonia-ui-events.log",
+	        "scope": "Config.GUI.UseNotify",
+	        "case_id": "CFG-010A"
+	      },
+	      "mapping_target": "SettingsPageViewModel.UseNotify"
+	    },
+	    {
+	      "key": "GUI.HideCloseButton",
+	      "owner_item_id": "Settings.Gui",
+	      "parity_status": "Aligned",
+	      "priority": "P0",
       "notes": "Aligned mapping implemented in Avalonia runtime; see evidence and validation tests.",
       "evidence": {
         "ui_path": "App/Features/Settings/GuiSettingsView.axaml",
@@ -6772,10 +6888,10 @@
       }
     }
   ],
-  "metadata": {
-    "feature_item_count": 36,
-    "system_item_count": 13,
-    "config_key_count": 293,
-    "fallback_record_count": 15
-  }
-}
+	  "metadata": {
+	    "feature_item_count": 38,
+	    "system_item_count": 13,
+	    "config_key_count": 294,
+	    "fallback_record_count": 15
+	  }
+	}

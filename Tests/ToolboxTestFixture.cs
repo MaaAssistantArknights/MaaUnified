@@ -144,6 +144,7 @@ internal sealed class ToolboxTestFixture : IAsyncDisposable
     {
         private static readonly byte[] TinyPng =
             Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO7+W0cAAAAASUVORK5CYII=");
+        private static readonly byte[] RawBgrFrame = BuildRawBgrFrame();
 
         private readonly Channel<CoreCallbackEvent> _callbacks = Channel.CreateUnbounded<CoreCallbackEvent>();
         private int _nextTaskId = 1;
@@ -156,12 +157,25 @@ internal sealed class ToolboxTestFixture : IAsyncDisposable
 
         public int StopCallCount { get; private set; }
 
+        public int GetImageBgrCallCount { get; private set; }
+
+        public bool ForceConnectFailure { get; set; }
+
+        public CoreErrorCode ConnectFailureCode { get; set; } = CoreErrorCode.ConnectFailed;
+
+        public string ConnectFailureMessage { get; set; } = "Connection command failed to exec";
+
         public Task<CoreResult<CoreInitializeInfo>> InitializeAsync(CoreInitializeRequest request, CancellationToken cancellationToken = default)
             => Task.FromResult(CoreResult<CoreInitializeInfo>.Ok(new CoreInitializeInfo(request.BaseDirectory, "fake", "fake", request.ClientType)));
 
         public Task<CoreResult<bool>> ConnectAsync(CoreConnectionInfo connectionInfo, CancellationToken cancellationToken = default)
         {
             ConnectCallCount++;
+            if (ForceConnectFailure)
+            {
+                return Task.FromResult(CoreResult<bool>.Fail(new CoreError(ConnectFailureCode, ConnectFailureMessage)));
+            }
+
             return Task.FromResult(CoreResult<bool>.Ok(true));
         }
 
@@ -192,6 +206,12 @@ internal sealed class ToolboxTestFixture : IAsyncDisposable
         public Task<CoreResult<byte[]>> GetImageAsync(CancellationToken cancellationToken = default)
             => Task.FromResult(CoreResult<byte[]>.Ok(TinyPng));
 
+        public Task<CoreResult<byte[]>> GetImageBgrAsync(bool forceScreencap = false, CancellationToken cancellationToken = default)
+        {
+            GetImageBgrCallCount++;
+            return Task.FromResult(CoreResult<byte[]>.Ok(RawBgrFrame));
+        }
+
         public async IAsyncEnumerable<CoreCallbackEvent> CallbackStreamAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             await foreach (var callback in _callbacks.Reader.ReadAllAsync(cancellationToken))
@@ -209,6 +229,26 @@ internal sealed class ToolboxTestFixture : IAsyncDisposable
         {
             _callbacks.Writer.TryComplete();
             return ValueTask.CompletedTask;
+        }
+
+        private static byte[] BuildRawBgrFrame()
+        {
+            const int width = 1280;
+            const int height = 720;
+            const int channels = 3;
+            var data = new byte[width * height * channels];
+            for (var y = 0; y < height; y++)
+            {
+                for (var x = 0; x < width; x++)
+                {
+                    var offset = ((y * width) + x) * channels;
+                    data[offset] = (byte)(x % 256);
+                    data[offset + 1] = (byte)(y % 256);
+                    data[offset + 2] = 96;
+                }
+            }
+
+            return data;
         }
     }
 }

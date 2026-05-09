@@ -3,96 +3,185 @@
              xmlns:controls="clr-namespace:MAAUnified.App.Controls"
              xmlns:vm="clr-namespace:MAAUnified.App.ViewModels.TaskQueue"
              x:Class="MAAUnified.App.Features.TaskQueue.MallSettingsView">
-  <Grid RowDefinitions="Auto,Auto" Margin="2">
-    <TextBlock Classes="section-title" Text="{Binding Texts[Mall.Title]}" />
+  <UserControl.Styles>
+    <Style Selector="Border.mall-section">
+      <Setter Property="Margin" Value="0,2,0,0" />
+    </Style>
 
-    <StackPanel Grid.Row="1" Spacing="{DynamicResource MAA.Spacing.Small}">
-      <StackPanel IsVisible="{Binding IsGeneralMode}" Spacing="{DynamicResource MAA.Spacing.Small}">
-        <CheckBox Content="{Binding Texts[Mall.VisitFriends]}" IsChecked="{Binding VisitFriends}" />
-        <StackPanel IsVisible="{Binding ShowVisitFriendsDetails}"
-                    Margin="{DynamicResource MAA.Thickness.MarginLeftSmall}"
-                    Spacing="{DynamicResource MAA.Spacing.Tight}">
-          <CheckBox Content="{Binding Texts[Mall.OnlyOnceADay]}" IsChecked="{Binding VisitFriendsOnceADay}" />
-        </StackPanel>
+    <Style Selector="StackPanel.mall-section-stack,
+                     controls|AdaptiveSpacingStackPanel.mall-section-stack">
+      <Setter Property="Spacing" Value="{DynamicResource MAA.App.Settings.PageCompactFlowSpacing}" />
+    </Style>
 
-        <Grid ColumnDefinitions="Auto,Auto">
-          <CheckBox Content="{Binding Texts[Mall.CreditFight]}" IsChecked="{Binding CreditFight}" />
-          <controls:TooltipHint Grid.Column="1"
-                                Margin="{DynamicResource MAA.Thickness.MarginLeftSmall}"
-                                Tip="{Binding Texts[Mall.CreditFightTip]}" />
-        </Grid>
-        <StackPanel IsVisible="{Binding ShowCreditFightDetails}"
-                    Margin="{DynamicResource MAA.Thickness.MarginLeftSmall}"
-                    Spacing="{DynamicResource MAA.Spacing.Tight}">
-          <CheckBox Content="{Binding Texts[Mall.OnlyOnceADay]}" IsChecked="{Binding CreditFightOnceADay}" />
-          <Grid ColumnDefinitions="Auto,*" VerticalAlignment="Center">
-            <TextBlock VerticalAlignment="Center" Text="{Binding Texts[Mall.UseFormation]}" />
-            <ComboBox Grid.Column="1"
-                      Margin="{DynamicResource MAA.Thickness.MarginActionButtonLeft}"
-                      ItemsSource="{Binding FormationOptions}"
-                      SelectedValueBinding="{Binding Value}"
-                      SelectedValue="{Binding FormationIndex}">
-              <ComboBox.ItemTemplate>
-                <DataTemplate x:DataType="vm:MallModuleViewModel+IntOption">
-                  <TextBlock Text="{Binding DisplayName}" />
-                </DataTemplate>
-              </ComboBox.ItemTemplate>
-            </ComboBox>
-          </Grid>
-        </StackPanel>
+    <Style Selector="StackPanel.mall-card-stack,
+                     controls|AdaptiveSpacingStackPanel.mall-card-stack">
+      <Setter Property="Spacing" Value="{DynamicResource MAA.App.Settings.PageToggleStackSpacing}" />
+    </Style>
+    <Style Selector="controls|AdaptiveSpacingStackPanel.mall-info-note-stack">
+      <Setter Property="Spacing" Value="4" />
+      <Setter Property="TargetPitch" Value="44" />
+      <Setter Property="MinGap" Value="4" />
+      <Setter Property="MaxGap" Value="8" />
+      <Setter Property="ShortRowSlot" Value="24" />
+      <Setter Property="SupplementaryTextGap" Value="4" />
+    </Style>
+    <Style Selector="TextBlock.mall-info-note">
+      <Setter Property="LineHeight" Value="16" />
+    </Style>
 
-        <CheckBox Content="{Binding Texts[Mall.Shopping]}" IsChecked="{Binding Shopping}" />
-        <TextBlock Classes="subtle"
-                   Text="{Binding Texts[Mall.ReceptionOptionsRequireInfrast]}"
-                   TextWrapping="Wrap" />
-        <Border Classes="wpf-card wpf-card-compact">
-          <StackPanel Spacing="{DynamicResource MAA.Spacing.Tight}">
-            <TextBlock Text="{Binding Texts[Mall.InfrastReceptionMessageBoardReceive]}" TextWrapping="Wrap" />
-            <TextBlock Text="{Binding Texts[Mall.InfrastReceptionClueExchange]}" TextWrapping="Wrap" />
-            <TextBlock Text="{Binding Texts[Mall.InfrastReceptionSendClue]}" TextWrapping="Wrap" />
-          </StackPanel>
-        </Border>
-      </StackPanel>
+    <Style Selector="Border.mall-detail-card">
+      <Setter Property="Margin" Value="0,4,0,0" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="ClipToBounds" Value="False" />
+    </Style>
+  </UserControl.Styles>
 
-      <StackPanel IsVisible="{Binding IsAdvancedMode}" Spacing="{DynamicResource MAA.Spacing.Small}">
-        <Grid ColumnDefinitions="Auto,Auto">
-          <TextBlock Text="{Binding Texts[Mall.BuyFirst]}" />
-          <controls:TooltipHint Grid.Column="1"
-                                Margin="{DynamicResource MAA.Thickness.MarginLeftSmall}"
-                                Tip="{Binding Texts[Mall.Drink]}" />
-        </Grid>
-        <TextBox IsEnabled="{Binding IsShoppingSettingsEnabled}"
-                 Text="{Binding BuyFirstText, UpdateSourceTrigger=LostFocus}" />
+  <Grid RowDefinitions="Auto" Margin="2">
+    <controls:AdaptiveSpacingStackPanel Classes="task-settings-section">
+      <Border Classes="mall-section"
+              IsVisible="{Binding IsGeneralMode}">
+        <controls:AdaptiveSpacingStackPanel Classes="mall-section-stack">
+          <TextBlock Classes="app-caption">
+            <Run Text="{Binding Texts[Mall.VisitFriends]}" />
+            <Run Text=" / " />
+            <Run Text="{Binding Texts[Mall.CreditFight]}" />
+          </TextBlock>
 
-        <TextBlock Text="{Binding Texts[Mall.Blacklist]}" />
-        <TextBox IsEnabled="{Binding IsShoppingSettingsEnabled}"
-                 Text="{Binding BlacklistText, UpdateSourceTrigger=LostFocus}" />
+          <Border Classes="app-surface app-card">
+            <controls:AdaptiveSpacingStackPanel Classes="mall-card-stack">
+              <CheckBox Classes="app-checkbox"
+                        Content="{Binding Texts[Mall.VisitFriends]}"
+                        IsChecked="{Binding VisitFriends}" />
 
-        <CheckBox Content="{Binding Texts[Mall.ForceShopping]}"
-                  IsChecked="{Binding ForceShoppingIfCreditFull}"
-                  IsEnabled="{Binding IsShoppingSettingsEnabled}" />
-        <Grid ColumnDefinitions="Auto,Auto">
-          <CheckBox Content="{Binding Texts[Mall.OnlyDiscount]}"
-                    IsChecked="{Binding OnlyBuyDiscount}"
-                    IsEnabled="{Binding IsShoppingSettingsEnabled}" />
-          <controls:TooltipHint Grid.Column="1"
-                                Margin="{DynamicResource MAA.Thickness.MarginLeftSmall}"
-                                Tip="{Binding Texts[Mall.OnlyDiscountTip]}" />
-        </Grid>
-        <Grid ColumnDefinitions="Auto,Auto">
-          <CheckBox Content="{Binding Texts[Mall.Reserve]}"
-                    IsChecked="{Binding ReserveMaxCredit}"
-                    IsEnabled="{Binding IsShoppingSettingsEnabled}" />
-          <controls:TooltipHint Grid.Column="1"
-                                Margin="{DynamicResource MAA.Thickness.MarginLeftSmall}"
-                                Tip="{Binding Texts[Mall.ReserveTip]}" />
-        </Grid>
-      </StackPanel>
+              <Border Classes="mall-detail-card"
+                      IsVisible="{Binding ShowVisitFriendsDetails}">
+                <controls:AdaptiveSpacingStackPanel Classes="mall-card-stack">
+                  <controls:SettingsDependentRow>
+                    <CheckBox Classes="app-checkbox"
+                              Content="{Binding Texts[Mall.OnlyOnceADay]}"
+                              IsChecked="{Binding VisitFriendsOnceADay}" />
+                  </controls:SettingsDependentRow>
+                </controls:AdaptiveSpacingStackPanel>
+              </Border>
+            </controls:AdaptiveSpacingStackPanel>
+          </Border>
 
-      <TextBlock Text="{Binding StatusMessage}" />
-      <TextBlock Foreground="{DynamicResource MAA.ErrorBrush}"
-                 Text="{Binding LastErrorMessage}"
-                 TextWrapping="Wrap" />
-    </StackPanel>
+          <Border Classes="app-surface app-card">
+            <controls:AdaptiveSpacingStackPanel Classes="mall-card-stack">
+              <controls:AppHintedCheckBox Text="{Binding Texts[Mall.CreditFight]}"
+                                           Tip="{Binding Texts[Mall.CreditFightTip]}"
+                                           IsChecked="{Binding CreditFight}" />
+
+              <Border Classes="mall-detail-card"
+                      IsVisible="{Binding ShowCreditFightDetails}">
+                <controls:AdaptiveSpacingStackPanel Classes="mall-card-stack">
+                  <controls:SettingsDependentRow Glyph="├">
+                    <CheckBox Classes="app-checkbox"
+                              Content="{Binding Texts[Mall.OnlyOnceADay]}"
+                              IsChecked="{Binding CreditFightOnceADay}" />
+                  </controls:SettingsDependentRow>
+
+                  <controls:SettingsDependentRow>
+                    <controls:SettingsInlineRow Classes="task-settings-field-stack"
+                                                controls:SettingsLabelWidthCoordinator.GroupKey="TaskQueue.Fields">
+                      <controls:SettingsLabel Text="{Binding Texts[Mall.UseFormation]}" />
+                      <controls:AppSelect ItemsSource="{Binding FormationOptions}"
+                                          SelectedValueBinding="{Binding Value}"
+                                          SelectedValue="{Binding FormationIndex}">
+                        <controls:AppSelect.ItemTemplate>
+                          <DataTemplate x:DataType="vm:MallModuleViewModel+IntOption">
+                            <TextBlock Text="{Binding DisplayName}" />
+                          </DataTemplate>
+                        </controls:AppSelect.ItemTemplate>
+                      </controls:AppSelect>
+                    </controls:SettingsInlineRow>
+                  </controls:SettingsDependentRow>
+                </controls:AdaptiveSpacingStackPanel>
+              </Border>
+            </controls:AdaptiveSpacingStackPanel>
+          </Border>
+        </controls:AdaptiveSpacingStackPanel>
+      </Border>
+
+      <Border Classes="mall-section"
+              IsVisible="{Binding IsGeneralMode}">
+        <controls:AdaptiveSpacingStackPanel Classes="mall-section-stack">
+          <TextBlock Classes="app-caption"
+                     Text="{Binding Texts[Mall.Shopping]}" />
+
+          <Border Classes="app-surface app-card">
+            <controls:AdaptiveSpacingStackPanel Classes="mall-card-stack">
+              <CheckBox Classes="app-checkbox"
+                        Content="{Binding Texts[Mall.Shopping]}"
+                        IsChecked="{Binding Shopping}" />
+            </controls:AdaptiveSpacingStackPanel>
+          </Border>
+
+          <Border Classes="app-surface app-card">
+            <controls:AdaptiveSpacingStackPanel Classes="mall-info-note-stack">
+              <TextBlock Classes="app-body task-settings-info-heading mall-info-note"
+                         Text="{Binding Texts[Mall.ReceptionOptionsRequireInfrast]}" />
+              <TextBlock Classes="app-caption task-settings-info-body mall-info-note"
+                         Text="{Binding Texts[Mall.InfrastReceptionMessageBoardReceive]}"
+                         TextWrapping="Wrap" />
+              <TextBlock Classes="app-caption task-settings-info-body mall-info-note"
+                         Text="{Binding Texts[Mall.InfrastReceptionClueExchange]}"
+                         TextWrapping="Wrap" />
+              <TextBlock Classes="app-caption task-settings-info-body mall-info-note"
+                         Text="{Binding Texts[Mall.InfrastReceptionSendClue]}"
+                         TextWrapping="Wrap" />
+            </controls:AdaptiveSpacingStackPanel>
+          </Border>
+        </controls:AdaptiveSpacingStackPanel>
+      </Border>
+
+      <Border Classes="mall-section"
+              IsVisible="{Binding IsAdvancedMode}">
+        <controls:AdaptiveSpacingStackPanel Classes="mall-section-stack">
+          <TextBlock Classes="app-caption"
+                     Text="{Binding Texts[Mall.Shopping]}" />
+
+          <Border Classes="app-surface app-card">
+            <controls:AdaptiveSpacingStackPanel Classes="mall-card-stack">
+              <controls:SettingsLabel Text="{Binding Texts[Mall.BuyFirst]}"
+                                      Tip="{Binding Texts[Mall.Drink]}" />
+              <controls:AppTextInput Classes="settings-input-block"
+                                     IsEnabled="{Binding IsShoppingSettingsEnabled}"
+                                     Text="{Binding BuyFirstText, UpdateSourceTrigger=LostFocus}" />
+            </controls:AdaptiveSpacingStackPanel>
+          </Border>
+
+          <Border Classes="app-surface app-card">
+            <controls:AdaptiveSpacingStackPanel Classes="mall-card-stack">
+              <TextBlock Classes="app-caption"
+                         Text="{Binding Texts[Mall.Blacklist]}" />
+              <controls:AppTextInput Classes="settings-input-block"
+                                     IsEnabled="{Binding IsShoppingSettingsEnabled}"
+                                     Text="{Binding BlacklistText, UpdateSourceTrigger=LostFocus}" />
+            </controls:AdaptiveSpacingStackPanel>
+          </Border>
+
+          <Border Classes="app-surface app-card">
+            <controls:AdaptiveSpacingStackPanel Classes="mall-card-stack">
+              <CheckBox Classes="app-checkbox"
+                        Content="{Binding Texts[Mall.ForceShopping]}"
+                        IsChecked="{Binding ForceShoppingIfCreditFull}"
+                        IsEnabled="{Binding IsShoppingSettingsEnabled}" />
+              <controls:AppHintedCheckBox Text="{Binding Texts[Mall.OnlyDiscount]}"
+                                           Tip="{Binding Texts[Mall.OnlyDiscountTip]}"
+                                           IsChecked="{Binding OnlyBuyDiscount}"
+                                           IsEnabled="{Binding IsShoppingSettingsEnabled}" />
+              <controls:AppHintedCheckBox Text="{Binding Texts[Mall.Reserve]}"
+                                           Tip="{Binding Texts[Mall.ReserveTip]}"
+                                           IsChecked="{Binding ReserveMaxCredit}"
+                                           IsEnabled="{Binding IsShoppingSettingsEnabled}" />
+            </controls:AdaptiveSpacingStackPanel>
+          </Border>
+        </controls:AdaptiveSpacingStackPanel>
+      </Border>
+    </controls:AdaptiveSpacingStackPanel>
   </Grid>
 </UserControl>

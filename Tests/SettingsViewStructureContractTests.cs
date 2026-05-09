@@ -30,7 +30,11 @@ public sealed class SettingsViewStructureContractTests
         foreach (var relative in files)
         {
             var text = File.ReadAllText(Path.Combine(root, relative.Replace('/', Path.DirectorySeparatorChar)));
-            Assert.Contains("settings-form", text, StringComparison.Ordinal);
+            Assert.True(
+                text.Contains("settings-form", StringComparison.Ordinal)
+                || text.Contains("settings-page-flow", StringComparison.Ordinal)
+                || text.Contains("settings-page-two-column", StringComparison.Ordinal),
+                $"{relative} should use a shared settings layout class.");
         }
     }
 
@@ -41,9 +45,18 @@ public sealed class SettingsViewStructureContractTests
 
         var gui = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "GuiSettingsView.axaml"));
         Assert.Contains("IsVisible=\"{Binding CanMinimizeToTray}\"", gui, StringComparison.Ordinal);
+        Assert.Contains("RootTexts[Settings.GUI.UseNotify]", gui, StringComparison.Ordinal);
 
         var start = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "StartSettingsView.axaml"));
         Assert.Contains("IsVisible=\"{Binding CanEditEmulatorLaunchSettings}\"", start, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"app-caption settings-note start-settings-note\"", start, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"start-settings-note-pair\"", start, StringComparison.Ordinal);
+        Assert.Contains("start-settings-toggle-stack", start, StringComparison.Ordinal);
+        Assert.Contains("AfterSupplementaryTextGap", start, StringComparison.Ordinal);
+        Assert.Contains("Style Selector=\"TextBlock.start-settings-note\"", start, StringComparison.Ordinal);
+        Assert.Contains("<Setter Property=\"Margin\" Value=\"28,-3,0,0\" />", start, StringComparison.Ordinal);
+        Assert.Contains("MAA.Brush.App.Action.DisabledForeground", start, StringComparison.Ordinal);
+        Assert.DoesNotContain("settings-page-indented-note", start, StringComparison.Ordinal);
 
         var timer = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "TimerSettingsView.axaml"));
         Assert.Contains("IsVisible=\"{Binding ForceScheduledStart}\"", timer, StringComparison.Ordinal);
@@ -54,10 +67,31 @@ public sealed class SettingsViewStructureContractTests
         Assert.Contains("OnRestoreAchievementClick", achievement, StringComparison.Ordinal);
         Assert.Contains("OnAchievementDebugPointerPressed", achievement, StringComparison.Ordinal);
         Assert.Contains("IsVisible=\"{Binding CanUseAchievementDebugActions}\"", achievement, StringComparison.Ordinal);
+        Assert.DoesNotContain("OnRefreshAchievementClick", achievement, StringComparison.Ordinal);
+        Assert.DoesNotContain("OnOpenAchievementGuideClick", achievement, StringComparison.Ordinal);
 
         var external = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "ExternalNotificationSettingsView.axaml"));
         Assert.Contains("IsEnabled=\"{Binding CanEditExternalNotification}\"", external, StringComparison.Ordinal);
         Assert.Contains("IsEnabled=\"{Binding CanEditExternalNotificationDetails}\"", external, StringComparison.Ordinal);
+        Assert.Contains("Text=\"Server Chan\"", external, StringComparison.Ordinal);
+        Assert.Contains("Text=\"Telegram bot\"", external, StringComparison.Ordinal);
+        Assert.Contains("Text=\"Discord WebHook\"", external, StringComparison.Ordinal);
+        Assert.Contains("Text=\"SMTP\"", external, StringComparison.Ordinal);
+        Assert.Contains("ExternalNotificationCustomWebhook", external, StringComparison.Ordinal);
+        Assert.DoesNotContain("NotificationProviderParametersText", external, StringComparison.Ordinal);
+
+        var issue = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "IssueReportView.axaml"));
+        Assert.Contains("Click=\"OnOpenRuntimeLogWindowClick\"", issue, StringComparison.Ordinal);
+        Assert.Contains("IsVisible=\"{Binding CanOpenRuntimeLogWindow}\"", issue, StringComparison.Ordinal);
+        Assert.Contains("Settings.IssueReport.DeveloperMode", issue, StringComparison.Ordinal);
+        Assert.Contains("Settings.IssueReport.DeveloperModeNote", issue, StringComparison.Ordinal);
+        Assert.Contains("IsVisible=\"{Binding CanUseDeveloperMode}\"", issue, StringComparison.Ordinal);
+        Assert.Contains("IsVisible=\"{Binding CanUseIssueReportMaintenanceTools}\"", issue, StringComparison.Ordinal);
+        Assert.Contains("IsChecked=\"{Binding DeveloperModeEnabled}\"", issue, StringComparison.Ordinal);
+        Assert.Contains("IssueReportClearImageCacheTip", issue, StringComparison.Ordinal);
+        Assert.Contains("PendingResourceUpdateSummary", issue, StringComparison.Ordinal);
+        Assert.Contains("IssueReportVersionUpdateSummary", issue, StringComparison.Ordinal);
+        Assert.Contains("RootTexts[Settings.IssueReport.CheckUpdateBeforeReportingIssue]", issue, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -80,6 +114,33 @@ public sealed class SettingsViewStructureContractTests
         Assert.Contains("RootTexts[Settings.Action.OpenDownload]", about, StringComparison.Ordinal);
         Assert.DoesNotContain("Content=\"社区\"", about, StringComparison.Ordinal);
         Assert.DoesNotContain("Content=\"下载页\"", about, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SettingsShellStyles_ShouldKeepTightNotesVerticalOnly_AndProvideScrollTailSpacer()
+    {
+        var root = GetMaaUnifiedRoot();
+        var styles = File.ReadAllText(Path.Combine(root, "App", "Styles", "SettingsShellStyles.axaml"));
+        var issueReport = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "IssueReportView.axaml"));
+        var settingsVm = File.ReadAllText(Path.Combine(root, "App", "ViewModels", "Settings", "SettingsPageViewModel.cs"));
+
+        Assert.DoesNotContain("settings-page-tight-note-stack", styles, StringComparison.Ordinal);
+        Assert.DoesNotContain("Grid.settings-page-labeled-row\">\n    <Setter Property=\"HorizontalAlignment\" Value=\"Left\" />\n    <Setter Property=\"MinHeight\"", styles, StringComparison.Ordinal);
+        Assert.DoesNotContain("Grid.settings-page-labeled-action-row\">\n    <Setter Property=\"HorizontalAlignment\" Value=\"Left\" />\n    <Setter Property=\"MinHeight\"", styles, StringComparison.Ordinal);
+        Assert.Contains("Style Selector=\"UserControl.settings-page CheckBox.app-checkbox\"", styles, StringComparison.Ordinal);
+        Assert.Contains("<Setter Property=\"MinHeight\" Value=\"20\" />", styles, StringComparison.Ordinal);
+        Assert.Contains("<Setter Property=\"Padding\" Value=\"0\" />", styles, StringComparison.Ordinal);
+        Assert.DoesNotContain("settings-page-indented-note", styles, StringComparison.Ordinal);
+
+        Assert.Contains("Text=\"{Binding IssueReportPath}\"", issueReport, StringComparison.Ordinal);
+        Assert.Contains("IsVisible=\"{Binding HasIssueReportPath}\"", issueReport, StringComparison.Ordinal);
+        Assert.Contains("Text=\"{Binding IssueReportStatusMessage}\"", issueReport, StringComparison.Ordinal);
+        Assert.Contains("IsVisible=\"{Binding HasIssueReportStatusMessage}\"", issueReport, StringComparison.Ordinal);
+        Assert.Contains("Text=\"{Binding IssueReportErrorMessage}\"", issueReport, StringComparison.Ordinal);
+        Assert.Contains("IsVisible=\"{Binding HasIssueReportErrorMessage}\"", issueReport, StringComparison.Ordinal);
+
+        Assert.Contains("public bool HasIssueReportPath => !string.IsNullOrWhiteSpace(IssueReportPath);", settingsVm, StringComparison.Ordinal);
+        Assert.Contains("public bool HasIssueReportStatusMessage => !string.IsNullOrWhiteSpace(IssueReportStatusMessage);", settingsVm, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -131,6 +192,10 @@ public sealed class SettingsViewStructureContractTests
         Assert.Contains("SelectedValueBinding=\"{Binding .}\"", configManager, StringComparison.Ordinal);
         Assert.Contains("SelectedValue=\"{Binding ConfigurationManagerSelectedProfile}\"", configManager, StringComparison.Ordinal);
         Assert.DoesNotContain("SelectedItem=\"{Binding ConfigurationManagerSelectedProfile}\"", configManager, StringComparison.Ordinal);
+        Assert.Contains("Text=\"{Binding ConfigurationManagerSaveAsNewSucceededText}\"", configManager, StringComparison.Ordinal);
+        Assert.Contains("Text=\"{Binding ConfigurationManagerSaveAsNewFailedText}\"", configManager, StringComparison.Ordinal);
+        Assert.Contains("HasConfigurationManagerSaveAsNewFailed", configManager, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"app-caption state-error\"", configManager, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -180,6 +245,177 @@ public sealed class SettingsViewStructureContractTests
         Assert.True(
             itemsControlIndex < validationMessageIndex,
             "Timer validation message should be rendered after the timer slots list.");
+    }
+
+    [Fact]
+    public void ConnectAndGameSettingsViews_ShouldExposeWpfParityEntryPoints()
+    {
+        var root = GetMaaUnifiedRoot();
+
+        var connect = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "ConnectSettingsView.axaml"));
+        Assert.Contains("ItemDeleted=\"OnConnectAddressItemDeleted\"", connect, StringComparison.Ordinal);
+        Assert.Contains("SelectionCommitted=\"OnConnectAddressSelectionCommitted\"", connect, StringComparison.Ordinal);
+        Assert.Contains("EditorCommitted=\"OnConnectAddressEditorCommitted\"", connect, StringComparison.Ordinal);
+        Assert.Contains("<controls:AppHistoryInput", connect, StringComparison.Ordinal);
+        Assert.DoesNotContain("<controls:CheckComboBox", connect, StringComparison.Ordinal);
+        Assert.DoesNotContain("<AutoCompleteBox", connect, StringComparison.Ordinal);
+        Assert.Contains("OnMuMuExtrasChecked", connect, StringComparison.Ordinal);
+        Assert.Contains("OnLdPlayerExtrasChecked", connect, StringComparison.Ordinal);
+        Assert.Contains("OnMuMuEmulatorPathLostFocus", connect, StringComparison.Ordinal);
+        Assert.Contains("OnLdPlayerEmulatorPathLostFocus", connect, StringComparison.Ordinal);
+
+        var game = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "GameSettingsView.axaml"));
+        Assert.Contains("ColumnDefinitions=\"Auto,12,Auto\"", game, StringComparison.Ordinal);
+        Assert.Contains("OnOpenYoStarResolutionGuideClick", game, StringComparison.Ordinal);
+        Assert.Contains("OnOpenOverseasAdaptationGuideClick", game, StringComparison.Ordinal);
+        Assert.Contains("OnScriptPathDragOver", game, StringComparison.Ordinal);
+        Assert.Contains("OnStartsWithScriptDrop", game, StringComparison.Ordinal);
+        Assert.Contains("OnEndsWithScriptDrop", game, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SettingsViews_ShouldExposeWpfParityTooltipHints()
+    {
+        var root = GetMaaUnifiedRoot();
+
+        var connect = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "ConnectSettingsView.axaml"));
+        Assert.Contains("AlwaysAutoDetectConnectionTip", connect, StringComparison.Ordinal);
+
+        var performance = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "PerformanceSettingsView.axaml"));
+        Assert.Contains("UseGpuForInferenceTip", performance, StringComparison.Ordinal);
+
+        var timer = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "TimerSettingsView.axaml"));
+        Assert.Contains("ForceScheduledStartTip", timer, StringComparison.Ordinal);
+        Assert.Contains("TimerCustomConfigTip", timer, StringComparison.Ordinal);
+
+        var hotKey = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "HotKeySettingsView.axaml"));
+        Assert.Contains("HotKeyChangingTip", hotKey, StringComparison.Ordinal);
+
+        var gui = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "GuiSettingsView.axaml"));
+        Assert.Contains("SystemNotificationInfo", gui, StringComparison.Ordinal);
+        Assert.Contains("BadModules.UseSoftwareRenderingTip", gui, StringComparison.Ordinal);
+
+        var versionUpdate = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "VersionUpdateSettingsView.axaml"));
+        Assert.Contains("UpdateAutoCheckTip", versionUpdate, StringComparison.Ordinal);
+        Assert.Contains("UpdateCheckTip", versionUpdate, StringComparison.Ordinal);
+        Assert.Contains("UpdateSourceTip", versionUpdate, StringComparison.Ordinal);
+        Assert.Contains("ForceGithubGlobalSourceTip", versionUpdate, StringComparison.Ordinal);
+        Assert.Contains("ResourceUpdateTip", versionUpdate, StringComparison.Ordinal);
+
+        var external = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "ExternalNotificationSettingsView.axaml"));
+        Assert.Contains("ExternalNotificationCustomWebhookPlaceholders", external, StringComparison.Ordinal);
+        Assert.Contains("SettingsLabel", external, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SettingsViews_ShouldKeepWpfInspiredLayoutOrder_ForKeySections()
+    {
+        var root = GetMaaUnifiedRoot();
+
+        var configManager = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "ConfigurationManagerView.axaml"));
+        Assert.Contains("OnDeleteProfileEntryClick", configManager, StringComparison.Ordinal);
+        Assert.True(
+            configManager.IndexOf("SelectionChanged=\"OnConfigurationProfileSelectionChanged\"", StringComparison.Ordinal)
+            < configManager.IndexOf("OnCreateProfileClick", StringComparison.Ordinal),
+            "Configuration manager should place profile switching before create/save-as-new.");
+
+        var start = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "StartSettingsView.axaml"));
+        Assert.Contains("Classes=\"settings-page-two-column\"", start, StringComparison.Ordinal);
+        Assert.Matches("ColumnDefinitions=\"(?:Auto|\\d+),24,(?:Auto|\\d+)\"", start);
+
+        var gui = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "GuiSettingsView.axaml"));
+        Assert.Contains("Classes=\"settings-page-two-column\"", gui, StringComparison.Ordinal);
+        Assert.True(
+            gui.IndexOf("RootTexts[Settings.GUI.UseTray]", StringComparison.Ordinal)
+            < gui.IndexOf("RootTexts[Settings.GUI.Language]", StringComparison.Ordinal),
+            "GUI settings should render behavior toggles before selector controls.");
+
+        var background = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "BackgroundSettingsView.axaml"));
+        Assert.DoesNotContain("<WrapPanel", background, StringComparison.Ordinal);
+        Assert.True(
+            background.IndexOf("RootTexts[Settings.Background.ImagePath]", StringComparison.Ordinal)
+            < background.IndexOf("RootTexts[Settings.Background.Opacity]", StringComparison.Ordinal)
+            && background.IndexOf("RootTexts[Settings.Background.Opacity]", StringComparison.Ordinal)
+            < background.IndexOf("RootTexts[Settings.Background.BlurRadius]", StringComparison.Ordinal)
+            && background.IndexOf("RootTexts[Settings.Background.BlurRadius]", StringComparison.Ordinal)
+            < background.IndexOf("RootTexts[Settings.Background.StretchMode]", StringComparison.Ordinal),
+            "Background settings should follow the WPF-inspired top-down order.");
+
+        var hotkey = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "HotKeySettingsView.axaml"));
+        Assert.Contains("Settings.Action.RegisterHotkeys", hotkey, StringComparison.Ordinal);
+        Assert.True(
+            hotkey.IndexOf("ShowGuiHotkeyState.Title", StringComparison.Ordinal)
+            < hotkey.IndexOf("LinkStartHotkeyState.Title", StringComparison.Ordinal),
+            "Hotkey settings should keep Show GUI before Link Start.");
+
+        var remote = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "RemoteControlSettingsView.axaml"));
+        Assert.Contains("Classes=\"settings-page-inline-field-group\"", remote, StringComparison.Ordinal);
+        Assert.DoesNotContain("ColumnDefinitions=\"Auto,*,Auto\"", remote, StringComparison.Ordinal);
+        Assert.True(
+            remote.IndexOf("Settings.RemoteControl.GetTaskEndpoint", StringComparison.Ordinal)
+            < remote.IndexOf("Settings.RemoteControl.ReportTaskEndpoint", StringComparison.Ordinal)
+            && remote.IndexOf("Settings.RemoteControl.ReportTaskEndpoint", StringComparison.Ordinal)
+            < remote.IndexOf("Settings.RemoteControl.PollIntervalMs", StringComparison.Ordinal),
+            "Remote control fields should follow the WPF label-input row order.");
+
+        var issueReport = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "IssueReportView.axaml"));
+        Assert.Contains("ColumnDefinitions=\"*,24,*\"", issueReport, StringComparison.Ordinal);
+        Assert.True(
+            issueReport.IndexOf("Settings.IssueReport.Faq", StringComparison.Ordinal)
+            < issueReport.IndexOf("Settings.IssueReport.IssueEntry", StringComparison.Ordinal)
+            && issueReport.IndexOf("Settings.Action.BuildIssueReport", StringComparison.Ordinal)
+            < issueReport.IndexOf("Settings.IssueReport.OpenRuntimeLogWindow", StringComparison.Ordinal),
+            "Issue report actions should keep the WPF-inspired left/right action order.");
+
+        var versionUpdate = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "VersionUpdateSettingsView.axaml"));
+        Assert.Contains("Classes=\"settings-page-two-column\"", versionUpdate, StringComparison.Ordinal);
+        Assert.Contains("<Border Classes=\"grouped-card-frame\"", versionUpdate, StringComparison.Ordinal);
+        Assert.DoesNotContain("Style Selector=\"Border.version-update-card\"", versionUpdate, StringComparison.Ordinal);
+        Assert.DoesNotContain("ColumnDefinitions=\"300,24,*\"", versionUpdate, StringComparison.Ordinal);
+        Assert.True(
+            versionUpdate.IndexOf("Settings.VersionUpdate.ProxyAddress", StringComparison.Ordinal)
+            < versionUpdate.IndexOf("<Border Classes=\"grouped-card-frame\"", StringComparison.Ordinal)
+            && versionUpdate.IndexOf("Settings.VersionUpdate.ResourceApi", StringComparison.Ordinal)
+            < versionUpdate.IndexOf("<Border Classes=\"grouped-card-frame\"", StringComparison.Ordinal),
+            "Version update inputs should stay in the left column before the right-side version card.");
+        Assert.True(
+            versionUpdate.IndexOf("Settings.VersionUpdate.PanelUiVersion", StringComparison.Ordinal)
+            < versionUpdate.IndexOf("Settings.VersionUpdate.SoftwareUpdate", StringComparison.Ordinal),
+            "Version info should remain above the right-side action buttons.");
+        Assert.True(
+            versionUpdate.IndexOf("Settings.VersionUpdate.SoftwareUpdate", StringComparison.Ordinal)
+            < versionUpdate.IndexOf("Settings.VersionUpdate.ResourceUpdate", StringComparison.Ordinal),
+            "Version update actions should keep software update before resource update.");
+        Assert.Contains("RowDefinitions=\"Auto,10,Auto\"", versionUpdate, StringComparison.Ordinal);
+        Assert.Contains("ColumnDefinitions=\"Auto,12,Auto,24,Auto\"", versionUpdate, StringComparison.Ordinal);
+        Assert.Contains("Grid.Column=\"2\"", versionUpdate, StringComparison.Ordinal);
+        Assert.Contains("Tip=\"{DynamicResource ResourceUpdateTip}\"", versionUpdate, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void MainWindowSettingsWarmup_ShouldTriggerDeferredDataAndBackgroundSectionPrewarmWhenSettingsRootLoads()
+    {
+        var root = GetMaaUnifiedRoot();
+
+        var mainWindow = File.ReadAllText(Path.Combine(root, "App", "Views", "MainWindow.axaml.cs"));
+        Assert.Contains("if (_settingsWarmupRootPage?.IsLoaded != true)", mainWindow, StringComparison.Ordinal);
+        Assert.Contains("if (!_settingsSectionWarmupStarted)", mainWindow, StringComparison.Ordinal);
+        Assert.Contains("MAAUnified.App.Features.Root.SettingsView.StartBackgroundSectionWarmup();", mainWindow, StringComparison.Ordinal);
+        Assert.Contains("_ = WarmupSettingsPageAsync(vm);", mainWindow, StringComparison.Ordinal);
+        Assert.Contains("await vm.SettingsPage.WarmupDeferredSectionDataAsync();", mainWindow, StringComparison.Ordinal);
+        Assert.True(
+            mainWindow.IndexOf("MAAUnified.App.Features.Root.SettingsView.StartBackgroundSectionWarmup();", StringComparison.Ordinal)
+            < mainWindow.IndexOf("if (_settingsWarmupRootPage?.IsLoaded != true)", StringComparison.Ordinal),
+            "Settings section control warmup should start after first screen, before waiting for the settings root page to load.");
+
+        var settingsView = File.ReadAllText(Path.Combine(root, "App", "Features", "Root", "SettingsView.axaml.cs"));
+        Assert.Contains("if (_backgroundSectionWarmupTimer is not null || PrewarmedSectionKeys.Count >= SectionOrder.Length)", settingsView, StringComparison.Ordinal);
+        Assert.Contains("PrewarmedSectionContentCache[sectionKey] = content;", settingsView, StringComparison.Ordinal);
+        Assert.Contains("PrewarmedSectionKeys.Add(sectionKey);", settingsView, StringComparison.Ordinal);
+        Assert.Contains("private static IEnumerable<string> ResolveProgressiveMaterializationTargets()", settingsView, StringComparison.Ordinal);
+        Assert.Contains("return SectionOrder;", settingsView, StringComparison.Ordinal);
+        Assert.Contains("MaterializeSectionsSequentiallyAsync(", settingsView, StringComparison.Ordinal);
+        Assert.Contains("QueueScrollToSelectedSectionAfterLayout()", settingsView, StringComparison.Ordinal);
     }
 
     [Fact]

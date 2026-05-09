@@ -5,6 +5,7 @@ using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Threading;
 using MAAUnified.App.ViewModels.Infrastructure;
+using MAAUnified.Platform;
 
 namespace MAAUnified.App.Views;
 
@@ -12,6 +13,8 @@ public partial class OverlayHostWindow : Window
 {
     private const double OverlayPanelMargin = 8d;
     private const double OverlayPanelMaxWidth = 250d;
+    private const double NativeAttachedLogicalWidth = OverlayPanelMaxWidth + (OverlayPanelMargin * 2d);
+    private const double NativeAttachedLogicalHeight = 240d;
     private const int PreviewWindowWidth = 320;
     private const int PreviewWindowHeight = 240;
     private const int PreviewWindowMargin = 24;
@@ -19,6 +22,7 @@ public partial class OverlayHostWindow : Window
     private INotifyCollectionChanged? _currentLogCollection;
     private Border? _overlayPanel;
     private ScrollViewer? _overlayScroller;
+    private bool _nativeAttached;
 
     public OverlayHostWindow()
     {
@@ -57,8 +61,9 @@ public partial class OverlayHostWindow : Window
         SizeChanged += (_, _) => UpdatePanelConstraints();
     }
 
-    public void SetOverlayActive(bool active)
+    public void SetOverlayActive(bool active, OverlayRuntimeMode mode = OverlayRuntimeMode.Preview)
     {
+        _nativeAttached = active && mode == OverlayRuntimeMode.Native;
         if (_overlayPanel is not null)
         {
             _overlayPanel.IsVisible = active;
@@ -70,6 +75,12 @@ public partial class OverlayHostWindow : Window
             Height = 1d;
             UpdatePanelConstraints();
             return;
+        }
+
+        if (_nativeAttached)
+        {
+            Width = Math.Max(Width, NativeAttachedLogicalWidth);
+            Height = Math.Max(Height, NativeAttachedLogicalHeight);
         }
 
         UpdatePanelConstraints();
@@ -173,8 +184,10 @@ public partial class OverlayHostWindow : Window
             return;
         }
 
-        var availableWidth = Math.Max(1d, Bounds.Width - (OverlayPanelMargin * 2d));
-        var availableHeight = Math.Max(1d, Bounds.Height - (OverlayPanelMargin * 2d));
+        var logicalWidth = _nativeAttached ? Math.Max(Bounds.Width, NativeAttachedLogicalWidth) : Bounds.Width;
+        var logicalHeight = _nativeAttached ? Math.Max(Bounds.Height, NativeAttachedLogicalHeight) : Bounds.Height;
+        var availableWidth = Math.Max(1d, logicalWidth - (OverlayPanelMargin * 2d));
+        var availableHeight = Math.Max(1d, logicalHeight - (OverlayPanelMargin * 2d));
         _overlayPanel.MaxWidth = Math.Min(OverlayPanelMaxWidth, availableWidth);
         _overlayScroller.MaxHeight = availableHeight;
     }

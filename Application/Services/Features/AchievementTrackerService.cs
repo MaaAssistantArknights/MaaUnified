@@ -5,6 +5,7 @@ using System.Text.Json.Serialization;
 using MAAUnified.Application.Models;
 using MAAUnified.Application.Services.Localization;
 using MAAUnified.Compat.Constants;
+using MAAUnified.Compat.Runtime;
 
 namespace MAAUnified.Application.Services.Features;
 
@@ -818,7 +819,7 @@ public sealed class AchievementTrackerService : IAchievementTrackerService
         var config = _configService.CurrentConfig;
         return new AchievementPolicy(
             PopupDisabled: ReadProfileBool(config, ConfigurationKeys.AchievementPopupDisabled, false),
-            PopupAutoClose: ReadProfileBool(config, ConfigurationKeys.AchievementPopupAutoClose, false));
+            PopupAutoClose: ReadProfileBool(config, ConfigurationKeys.AchievementPopupAutoClose, true));
     }
 
     private static bool ReadProfileBool(UnifiedConfig config, string key, bool fallback)
@@ -890,7 +891,7 @@ public sealed class AchievementTrackerService : IAchievementTrackerService
     }
 
     private static string ResolveDefaultBaseDirectory()
-        => AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        => RuntimeLayout.ResolveRuntimeBaseDirectory();
 
     private static string DialogText(string language, string zh, string en)
     {

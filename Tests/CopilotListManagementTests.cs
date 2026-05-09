@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using System.Text.Json.Nodes;
 using System.Threading.Channels;
+using MAAUnified.App.Features.Dialogs;
 using MAAUnified.App.ViewModels.Copilot;
 using MAAUnified.Application.Configuration;
 using MAAUnified.Application.Models;
@@ -78,6 +79,163 @@ public sealed class CopilotListManagementTests
         Assert.Equal("First", persistedArray[0]?["Name"]?.GetValue<string>());
         Assert.Equal("Second", persistedArray[1]?["Name"]?.GetValue<string>());
         Assert.Equal("Third", persistedArray[2]?["Name"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task MoveListItemToAsync_ShouldMoveRequestedItem_KeepSelectionAndPersist()
+    {
+        await using var fixture = await CopilotFixture.CreateAsync();
+        var vm = fixture.ViewModel;
+
+        await vm.AddEmptyTaskAsync();
+        await vm.AddEmptyTaskAsync();
+        await vm.AddEmptyTaskAsync();
+        vm.Items[0].Name = "First";
+        vm.Items[1].Name = "Second";
+        vm.Items[2].Name = "Third";
+        var movedItem = vm.Items[2];
+
+        await vm.MoveListItemToAsync(movedItem, 0);
+
+        Assert.Equal(["Third", "First", "Second"], vm.Items.Select(i => i.Name).ToArray());
+        Assert.Same(movedItem, vm.SelectedItem);
+
+        var persistedArray = Assert.IsType<JsonArray>(JsonNode.Parse(GetPersistedTaskListPayload(fixture.Config)!));
+        Assert.Equal("Third", persistedArray[0]?["Name"]?.GetValue<string>());
+        Assert.Equal("First", persistedArray[1]?["Name"]?.GetValue<string>());
+        Assert.Equal("Second", persistedArray[2]?["Name"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task MoveListItemToAsync_WhenPersistenceFails_ShouldRollbackOrder()
+    {
+        await using var fixture = await CopilotFixture.CreateAsync(failPersistence: true);
+        var vm = fixture.ViewModel;
+
+        vm.Items.Add(new CopilotItemViewModel("First", vm.Types[0]));
+        vm.Items.Add(new CopilotItemViewModel("Second", vm.Types[0]));
+        vm.Items.Add(new CopilotItemViewModel("Third", vm.Types[0]));
+        var movedItem = vm.Items[2];
+
+        await vm.MoveListItemToAsync(movedItem, 0);
+
+        Assert.Equal(["First", "Second", "Third"], vm.Items.Select(i => i.Name).ToArray());
+        Assert.Same(movedItem, vm.SelectedItem);
+        Assert.Contains("失败", vm.StatusMessage, StringComparison.Ordinal);
+        Assert.Contains("持久化", vm.LastErrorMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task SetListItemCheckedAsync_ShouldUpdateItemAndPersist()
+    {
+        await using var fixture = await CopilotFixture.CreateAsync();
+        var vm = fixture.ViewModel;
+
+        await vm.AddEmptyTaskAsync();
+        var item = Assert.Single(vm.Items);
+
+        await vm.SetListItemCheckedAsync(item, false);
+
+        Assert.False(item.IsChecked);
+        var persistedArray = Assert.IsType<JsonArray>(JsonNode.Parse(GetPersistedTaskListPayload(fixture.Config)!));
+        Assert.False(persistedArray[0]?["IsChecked"]?.GetValue<bool>());
+    }
+
+    [Fact]
+    public async Task ToggleListItemRaidAsync_ShouldToggleRaidFlagAndPersist()
+    {
+        await using var fixture = await CopilotFixture.CreateAsync();
+        var vm = fixture.ViewModel;
+
+        await vm.AddEmptyTaskAsync();
+        var item = Assert.Single(vm.Items);
+
+        await vm.ToggleListItemRaidAsync(item);
+
+        Assert.True(item.IsRaid);
+        Assert.Contains(vm.RaidLabelText, item.DisplayName, StringComparison.Ordinal);
+        var persistedArray = Assert.IsType<JsonArray>(JsonNode.Parse(GetPersistedTaskListPayload(fixture.Config)!));
+        Assert.True(persistedArray[0]?["IsRaid"]?.GetValue<bool>());
+    }
+
+    [Fact]
+    public async Task ConfirmAndClearAllAsync_WhenCancelled_ShouldKeepItemsAndSkipPersistence()
+    {
+        var dialog = new ScriptedDialogService(DialogReturnSemantic.Cancel);
+        await using var fixture = await CopilotFixture.CreateAsync(dialogService: dialog);
+        var vm = fixture.ViewModel;
+
+        await vm.AddEmptyTaskAsync();
+        await vm.AddEmptyTaskAsync();
+        var persistedBefore = GetPersistedTaskListPayload(fixture.Config);
+
+        await vm.ConfirmAndClearAllAsync();
+
+        Assert.Equal(2, vm.Items.Count);
+        Assert.Equal(1, dialog.WarningConfirmCallCount);
+        Assert.Equal(persistedBefore, GetPersistedTaskListPayload(fixture.Config));
+    }
+
+    [Fact]
+    public async Task ConfirmAndClearAllAsync_WhenConfirmed_ShouldClearItemsAndPersist()
+    {
+        var dialog = new ScriptedDialogService(DialogReturnSemantic.Confirm);
+        await using var fixture = await CopilotFixture.CreateAsync(dialogService: dialog);
+        var vm = fixture.ViewModel;
+
+        await vm.AddEmptyTaskAsync();
+        await vm.AddEmptyTaskAsync();
+
+        await vm.ConfirmAndClearAllAsync();
+
+        Assert.Empty(vm.Items);
+        Assert.Null(vm.SelectedItem);
+        Assert.Equal(1, dialog.WarningConfirmCallCount);
+        Assert.Equal(vm.ClearAllConfirmTitleText, dialog.WarningConfirmRequests[0].Title);
+        Assert.Equal(vm.ClearAllConfirmMessageText, dialog.WarningConfirmRequests[0].Message);
+        Assert.Equal(vm.ClearAllConfirmButtonText, dialog.WarningConfirmRequests[0].ConfirmText);
+        var persistedArray = Assert.IsType<JsonArray>(JsonNode.Parse(GetPersistedTaskListPayload(fixture.Config)!));
+        Assert.Empty(persistedArray);
+    }
+
+    [Fact]
+    public async Task CopilotTaskName_ShouldRenameActiveListItemAndPersistWithoutSchemaExpansion()
+    {
+        await using var fixture = await CopilotFixture.CreateAsync();
+        var vm = fixture.ViewModel;
+
+        await vm.AddEmptyTaskAsync();
+        var item = Assert.Single(vm.Items);
+        item.SourcePath = "resource/copilot/old-name.json";
+        item.InlinePayload = string.Empty;
+        vm.SelectedItem = item;
+
+        vm.CopilotTaskName = "JT8-3";
+
+        Assert.Equal("JT8-3", item.Name);
+        Assert.True(await WaitForPersistedItemNameAsync(fixture.Config, "JT8-3"));
+        var persistedArray = Assert.IsType<JsonArray>(JsonNode.Parse(GetPersistedTaskListPayload(fixture.Config)!));
+        var persistedItem = Assert.IsType<JsonObject>(persistedArray[0]);
+        Assert.Equal("JT8-3", persistedItem["Name"]?.GetValue<string>());
+        Assert.DoesNotContain("stage_name", persistedItem.Select(property => property.Key), StringComparer.OrdinalIgnoreCase);
+        Assert.DoesNotContain("StageName", persistedItem.Select(property => property.Key), StringComparer.Ordinal);
+    }
+
+    [Fact]
+    public async Task CopilotTabIndex_ShouldUpdateActiveListItemTypeAndPersist()
+    {
+        await using var fixture = await CopilotFixture.CreateAsync();
+        var vm = fixture.ViewModel;
+
+        await vm.AddEmptyTaskAsync();
+        var item = Assert.Single(vm.Items);
+        vm.SelectedItem = item;
+
+        vm.CopilotTabIndex = 3;
+
+        Assert.Equal(3, item.TabIndex);
+        Assert.Equal(vm.Types[3], item.Type);
+        Assert.True(await WaitForPersistedItemTabAsync(fixture.Config, item.Name, 3, vm.Types[3]));
     }
 
     [Fact]
@@ -262,6 +420,56 @@ public sealed class CopilotListManagementTests
         return false;
     }
 
+    private static async Task<bool> WaitForPersistedItemNameAsync(
+        UnifiedConfigurationService config,
+        string expectedName,
+        int retry = 30,
+        int delayMs = 25)
+    {
+        for (var i = 0; i < retry; i++)
+        {
+            var payload = GetPersistedTaskListPayload(config);
+            if (!string.IsNullOrWhiteSpace(payload)
+                && JsonNode.Parse(payload) is JsonArray array
+                && array.OfType<JsonObject>().Any(item =>
+                    string.Equals(item["Name"]?.GetValue<string>(), expectedName, StringComparison.Ordinal)))
+            {
+                return true;
+            }
+
+            await Task.Delay(delayMs);
+        }
+
+        return false;
+    }
+
+    private static async Task<bool> WaitForPersistedItemTabAsync(
+        UnifiedConfigurationService config,
+        string expectedName,
+        int expectedTabIndex,
+        string expectedType,
+        int retry = 30,
+        int delayMs = 25)
+    {
+        for (var i = 0; i < retry; i++)
+        {
+            var payload = GetPersistedTaskListPayload(config);
+            if (!string.IsNullOrWhiteSpace(payload)
+                && JsonNode.Parse(payload) is JsonArray array
+                && array.OfType<JsonObject>().Any(item =>
+                    string.Equals(item["Name"]?.GetValue<string>(), expectedName, StringComparison.Ordinal)
+                    && item["TabIndex"]?.GetValue<int>() == expectedTabIndex
+                    && string.Equals(item["Type"]?.GetValue<string>(), expectedType, StringComparison.Ordinal)))
+            {
+                return true;
+            }
+
+            await Task.Delay(delayMs);
+        }
+
+        return false;
+    }
+
     private sealed class CopilotFixture : IAsyncDisposable
     {
         private CopilotFixture(
@@ -286,7 +494,8 @@ public sealed class CopilotListManagementTests
 
         public static async Task<CopilotFixture> CreateAsync(
             bool failPersistence = false,
-            string? persistedPayload = null)
+            string? persistedPayload = null,
+            IAppDialogService? dialogService = null)
         {
             var root = Path.Combine(Path.GetTempPath(), "maa-unified-tests", Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(Path.Combine(root, "config"));
@@ -352,7 +561,7 @@ public sealed class CopilotListManagementTests
                     platform.PostActionExecutorService),
             };
 
-            var vm = new CopilotPageViewModel(runtime);
+            var vm = new CopilotPageViewModel(runtime, dialogService);
             return new CopilotFixture(root, config, runtime, vm);
         }
 
@@ -367,6 +576,76 @@ public sealed class CopilotListManagementTests
             {
                 // ignore cleanup failures in temporary test directories
             }
+        }
+    }
+
+    private sealed class ScriptedDialogService : IAppDialogService
+    {
+        private readonly DialogReturnSemantic _warningConfirmReturn;
+
+        public ScriptedDialogService(DialogReturnSemantic warningConfirmReturn)
+        {
+            _warningConfirmReturn = warningConfirmReturn;
+        }
+
+        public int WarningConfirmCallCount { get; private set; }
+
+        public List<WarningConfirmDialogRequest> WarningConfirmRequests { get; } = [];
+
+        public Task<DialogCompletion<AnnouncementDialogPayload>> ShowAnnouncementAsync(
+            AnnouncementDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<AnnouncementDialogPayload>(DialogReturnSemantic.Close, null, "scripted"));
+
+        public Task<DialogCompletion<VersionUpdateDialogPayload>> ShowVersionUpdateAsync(
+            VersionUpdateDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<VersionUpdateDialogPayload>(DialogReturnSemantic.Close, null, "scripted"));
+
+        public Task<DialogCompletion<ProcessPickerDialogPayload>> ShowProcessPickerAsync(
+            ProcessPickerDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<ProcessPickerDialogPayload>(DialogReturnSemantic.Close, null, "scripted"));
+
+        public Task<DialogCompletion<EmulatorPathDialogPayload>> ShowEmulatorPathAsync(
+            EmulatorPathDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<EmulatorPathDialogPayload>(DialogReturnSemantic.Close, null, "scripted"));
+
+        public Task<DialogCompletion<ErrorDialogPayload>> ShowErrorAsync(
+            ErrorDialogRequest request,
+            string sourceScope,
+            Func<CancellationToken, Task<UiOperationResult>>? openIssueReportAsync = null,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<ErrorDialogPayload>(DialogReturnSemantic.Close, null, "scripted"));
+
+        public Task<DialogCompletion<AchievementListDialogPayload>> ShowAchievementListAsync(
+            AchievementListDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<AchievementListDialogPayload>(DialogReturnSemantic.Close, null, "scripted"));
+
+        public Task<DialogCompletion<TextDialogPayload>> ShowTextAsync(
+            TextDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<TextDialogPayload>(DialogReturnSemantic.Close, null, "scripted"));
+
+        public Task<DialogCompletion<WarningConfirmDialogPayload>> ShowWarningConfirmAsync(
+            WarningConfirmDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+        {
+            WarningConfirmCallCount++;
+            WarningConfirmRequests.Add(request);
+            return Task.FromResult(new DialogCompletion<WarningConfirmDialogPayload>(
+                _warningConfirmReturn,
+                _warningConfirmReturn == DialogReturnSemantic.Confirm ? new WarningConfirmDialogPayload(true) : null,
+                "scripted"));
         }
     }
 

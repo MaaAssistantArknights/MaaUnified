@@ -5,12 +5,40 @@ namespace MAAUnified.Application.Models;
 public sealed record AnnouncementState(
     string AnnouncementInfo,
     bool DoNotRemindThisAnnouncementAgain,
-    bool DoNotShowAnnouncement)
+    bool DoNotShowAnnouncement,
+    string LastFetchedSourceUrl = "",
+    DateTimeOffset? LastFetchedAtUtc = null)
 {
     public static AnnouncementState Default { get; } = new(
         AnnouncementInfo: string.Empty,
         DoNotRemindThisAnnouncementAgain: false,
-        DoNotShowAnnouncement: false);
+        DoNotShowAnnouncement: false,
+        LastFetchedSourceUrl: string.Empty,
+        LastFetchedAtUtc: null);
+
+    public AnnouncementState WithFetchedAnnouncement(string announcementInfo, Uri sourceUri, DateTimeOffset fetchedAtUtc)
+    {
+        return this with
+        {
+            AnnouncementInfo = announcementInfo,
+            DoNotRemindThisAnnouncementAgain = false,
+            LastFetchedSourceUrl = sourceUri.ToString(),
+            LastFetchedAtUtc = fetchedAtUtc,
+        };
+    }
+
+    public bool HasAnnouncementInfo => !string.IsNullOrWhiteSpace(AnnouncementInfo);
+
+    public AnnouncementState WithDialogPreferences(
+        bool doNotRemindThisAnnouncementAgain,
+        bool doNotShowAnnouncement)
+    {
+        return this with
+        {
+            DoNotRemindThisAnnouncementAgain = doNotRemindThisAnnouncementAgain,
+            DoNotShowAnnouncement = doNotShowAnnouncement,
+        };
+    }
 
     public IReadOnlyDictionary<string, string> ToGlobalSettingUpdates()
     {

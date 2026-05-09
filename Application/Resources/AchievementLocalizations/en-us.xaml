@@ -1086,7 +1086,7 @@ Right-click to clear inactive jobs</system:String>
     <system:String x:Key="ErrorCrashMessageGenerateReport">Please use “{key=Settings} - {key=IssueReport} - {key=GenerateSupportPayload}” to generate an error report, and click the blue ｢{key=Issue}｣ link to submit feedback.</system:String>
     <system:String x:Key="ErrorCrashMessageHelpTip">If you need help from others, please send the generated error report file instead of sending screenshots, screen recordings, photos of the screen, recorded videos, hand-drawn pictures, or transcribed content of this window.</system:String>
     <system:String x:Key="ErrorCrashDialogTitle">Reason for the last crash</system:String>
-    <system:String x:Key="CopyErrorMessage">Copy error message</system:String>
+    <system:String x:Key="CopyErrorMessage">Error details</system:String>
     <!--  !ErrorView  -->
     <!--  AsstProxy  -->
     <system:String x:Key="ResourceBroken">The resources are damaged, please download the full package again.\n\n{key=FullPackageUpgradeTips}</system:String>
@@ -1471,7 +1471,7 @@ If you want to run multiple MAA at the same time, please copy the whole MAA and 
     <!--  Achievement  -->
     <system:String x:Key="AchievementCelebrate">🎉 Achievement Unlocked</system:String>
     <system:String x:Key="AchievementConditions" xml:space="preserve">Unlock Condition: </system:String>
-    <system:String x:Key="AchievementLevel" xml:space="preserve">Achievement Level: </system:String>
+    <system:String x:Key="AchievementLevel" xml:space="preserve">Achievement count: </system:String>
     <system:String x:Key="AchievementView">View Achievements</system:String>
     <system:String x:Key="AchievementBackup">Backup Achievements</system:String>
     <system:String x:Key="AchievementRestore">Restore Backup</system:String>

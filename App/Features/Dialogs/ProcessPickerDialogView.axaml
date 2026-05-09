@@ -1,36 +1,146 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:MAAUnified.App.Controls"
         x:Class="MAAUnified.App.Features.Dialogs.ProcessPickerDialogView"
         Width="620"
         Height="460"
         MinWidth="520"
         MinHeight="360"
+        CanResize="False"
+        Background="Transparent"
+        SystemDecorations="None"
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaChromeHints="NoChrome"
         WindowStartupLocation="CenterOwner">
-  <Grid Margin="10" RowDefinitions="Auto,*,Auto">
-    <TextBlock x:Name="DialogTitleText"
-               Classes="section-title"
-               Text="Process Picker" />
-    <ListBox x:Name="ProcessList"
-             Grid.Row="1"
-             Margin="0,8,0,0"
-             SelectionMode="Single">
-      <ListBox.ItemTemplate>
-        <DataTemplate>
-          <TextBlock Classes="long-wrap" Text="{Binding DisplayName}" />
-        </DataTemplate>
-      </ListBox.ItemTemplate>
-    </ListBox>
-    <StackPanel Grid.Row="2"
-                Orientation="Horizontal"
-                Spacing="8"
-                HorizontalAlignment="Right"
-                Margin="0,12,0,0">
-      <Button x:Name="RefreshButton"
-              Classes="wpf-button wpf-button-secondary"
-              Content="Refresh"
-              Click="OnRefreshClick" />
-      <Button Classes="wpf-button wpf-button-secondary" x:Name="CancelButton" Content="Cancel" Click="OnCancelClick" />
-      <Button x:Name="ConfirmButton" Classes="wpf-button" Content="Select" Click="OnConfirmClick" />
-    </StackPanel>
-  </Grid>
+  <Window.Styles>
+    <Style Selector="StackPanel.process-picker-intro">
+      <Setter Property="Spacing" Value="6" />
+      <Setter Property="Margin" Value="0,2,0,0" />
+    </Style>
+
+    <Style Selector="Border.process-picker-list-shell">
+      <Setter Property="Padding" Value="6" />
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Surface.Section}" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="8" />
+    </Style>
+
+    <Style Selector="controls|AppSelectionList.process-picker-list">
+      <Setter Property="Margin" Value="0" />
+      <Setter Property="Padding" Value="0" />
+    </Style>
+
+    <Style Selector="controls|AppSelectionList.process-picker-list ListBoxItem">
+      <Setter Property="Margin" Value="0,0,0,4" />
+    </Style>
+
+    <Style Selector="controls|AppSelectionList.process-picker-list Border.app-selection-list-item-shell">
+      <Setter Property="Padding" Value="12,10" />
+      <Setter Property="MinHeight" Value="58" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="6" />
+    </Style>
+
+    <Style Selector="controls|AppSelectionList.process-picker-list ListBoxItem:pointerover Border.app-selection-list-item-shell">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.SubtleBackgroundHover}" />
+    </Style>
+
+    <Style Selector="controls|AppSelectionList.process-picker-list ListBoxItem:selected Border.app-selection-list-item-shell">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Input.ItemBackgroundSelected}" />
+    </Style>
+
+    <Style Selector="Border.process-picker-empty">
+      <Setter Property="Padding" Value="24" />
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Surface.Section}" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="8" />
+    </Style>
+  </Window.Styles>
+
+  <controls:AppWindowFrame x:Name="DialogShell"
+                           Mode="CompactModal"
+                           CloseRequested="OnShellCloseRequested">
+    <controls:AppWindowFrame.HeaderContent>
+      <TextBlock x:Name="SelectionSummaryText"
+                 Classes="app-window-subtitle long-wrap"
+                 Text="No running process found" />
+    </controls:AppWindowFrame.HeaderContent>
+    <controls:AppWindowFrame.Content>
+      <Grid RowDefinitions="Auto,*">
+        <StackPanel Classes="app-compact-selection-intro process-picker-intro">
+          <TextBlock x:Name="HintText"
+                     Classes="app-window-subtitle subtle long-wrap"
+                     Text="Choose the process that should receive the connection." />
+        </StackPanel>
+
+        <Grid Grid.Row="1"
+              Margin="0,14,0,0">
+          <Border Classes="process-picker-list-shell">
+            <controls:AppSelectionList x:Name="ProcessList"
+                                       Classes="app-compact-selection-list process-picker-list"
+                                       VisualMode="Surface"
+                                       SelectionMode="Single"
+                                       SelectionChanged="OnProcessSelectionChanged"
+                                       DoubleTapped="OnProcessListDoubleTapped"
+                                       KeyDown="OnProcessListKeyDown">
+              <controls:AppSelectionList.ItemTemplate>
+                <DataTemplate>
+                  <Border Classes="app-selection-list-item-shell">
+                    <Grid ColumnDefinitions="*,Auto"
+                          RowDefinitions="Auto,Auto">
+                      <TextBlock Classes="section-title long-wrap"
+                                 Text="{Binding DisplayName}" />
+                      <Border Grid.Column="1"
+                              Classes="app-badge"
+                              IsVisible="{Binding IsPrimary}">
+                        <TextBlock Classes="app-badge-text"
+                                   Text="Primary" />
+                      </Border>
+                      <TextBlock Grid.Row="1"
+                                 Grid.ColumnSpan="2"
+                                 Margin="0,8,0,0"
+                                 Classes="app-caption long-ellipsis"
+                                 Text="{Binding Id}" />
+                    </Grid>
+                  </Border>
+                </DataTemplate>
+              </controls:AppSelectionList.ItemTemplate>
+            </controls:AppSelectionList>
+          </Border>
+
+          <Border x:Name="EmptyStatePanel"
+                  Classes="process-picker-empty"
+                  IsVisible="False">
+            <StackPanel Classes="app-compact-empty-state-content">
+              <TextBlock Classes="app-window-title app-compact-empty-title"
+                         Text="No running process found" />
+              <TextBlock Classes="app-window-subtitle app-compact-empty-body"
+                         Text="Refresh to scan again, or check whether the target app is already open." />
+            </StackPanel>
+          </Border>
+        </Grid>
+      </Grid>
+    </controls:AppWindowFrame.Content>
+    <controls:AppWindowFrame.ActionsContent>
+      <StackPanel Orientation="Horizontal"
+                  Spacing="10">
+        <Button x:Name="RefreshButton"
+                Classes="app-button app-secondary"
+                Content="Refresh"
+                Click="OnRefreshClick" />
+        <Button x:Name="CancelButton"
+                Classes="app-button app-secondary"
+                Content="Cancel"
+                Click="OnCancelClick" />
+        <Button x:Name="ConfirmButton"
+                Classes="app-button app-primary"
+                Content="Select"
+                Click="OnConfirmClick" />
+      </StackPanel>
+    </controls:AppWindowFrame.ActionsContent>
+  </controls:AppWindowFrame>
 </Window>

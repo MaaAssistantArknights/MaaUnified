@@ -2,238 +2,336 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:controls="clr-namespace:MAAUnified.App.Controls"
              xmlns:vm="clr-namespace:MAAUnified.App.ViewModels.Settings"
+             Classes="settings-page"
              x:Class="MAAUnified.App.Features.Settings.ConnectSettingsView">
-  <Grid Margin="4" RowDefinitions="Auto,*">
-    <TextBlock Classes="section-title" Text="{Binding RootTexts[Settings.Section.Connect]}" />
+  <UserControl.Styles>
+    <Style Selector="StackPanel.connect-settings-section">
+      <Setter Property="Spacing" Value="10" />
+    </Style>
 
-    <ScrollViewer Grid.Row="1"
-                  Margin="{DynamicResource MAA.Thickness.Settings.SectionTopMargin}"
-                  HorizontalScrollBarVisibility="Disabled">
-      <StackPanel Classes="settings-form">
-        <StackPanel Orientation="Horizontal"
-                    HorizontalAlignment="Center"
-                    Spacing="{DynamicResource MAA.Spacing.Large}"
+    <Style Selector="StackPanel.connect-settings-toggle-list">
+      <Setter Property="Spacing" Value="8" />
+    </Style>
+
+    <Style Selector="TextBlock.connect-settings-status-text">
+      <Setter Property="MaxWidth" Value="{DynamicResource MAA.Size.Settings.ContentMaxWidth}" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <Style Selector="controls|AdaptiveSpacingStackPanel.connect-settings-screenshot-action-row">
+      <Setter Property="Spacing" Value="10" />
+      <Setter Property="TargetPitch" Value="38" />
+      <Setter Property="MinGap" Value="8" />
+      <Setter Property="MaxGap" Value="12" />
+    </Style>
+
+    <Style Selector="TextBlock.connect-settings-test-result">
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="HorizontalAlignment" Value="Left" />
+      <Setter Property="TextAlignment" Value="Left" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Secondary}" />
+    </Style>
+  </UserControl.Styles>
+
+  <Grid Margin="4"
+        RowDefinitions="Auto,*">
+    <TextBlock Classes="settings-page-title"
+               Text="{Binding RootTexts[Settings.Section.Connect]}" />
+
+    <controls:AdaptiveSpacingStackPanel Grid.Row="1"
+                Margin="{DynamicResource MAA.Thickness.Settings.SectionTopMargin}"
+                Classes="settings-page-flow">
+        <controls:AdaptiveSpacingStackPanel Classes="settings-page-compact-flow settings-page-branch-block settings-page-toggle-stack connect-settings-section"
                     IsVisible="{Binding IsAdbConnectionMode}">
-          <Grid ColumnDefinitions="Auto,Auto">
-            <CheckBox Content="{Binding RootTexts[Settings.Connect.AutoDetect]}"
-                      IsChecked="{Binding AutoDetect}" />
-            <controls:TooltipHint Grid.Column="1"
-                                  Margin="{DynamicResource MAA.Thickness.MarginLeftSmall}"
-                                  Tip="{Binding RootTexts[Settings.Connect.AutoDetectTip]}" />
+          <controls:AdaptiveSpacingStackPanel Classes="connect-settings-toggle-list">
+            <controls:AdaptiveSpacingStackPanel Classes="settings-page-inline-field-group">
+              <controls:AppHintedCheckBox Text="{Binding RootTexts[Settings.Connect.AutoDetect]}"
+                                           Tip="{Binding RootTexts[Settings.Connect.AutoDetectTip]}"
+                                           IsChecked="{Binding AutoDetect}" />
+            </controls:AdaptiveSpacingStackPanel>
+
+            <controls:AdaptiveSpacingStackPanel Classes="settings-page-inline-field-group settings-page-branch-block"
+                        IsVisible="{Binding AutoDetect}">
+              <controls:AppHintedCheckBox Text="{Binding RootTexts[Settings.Connect.AlwaysAutoDetect]}"
+                                           Tip="{DynamicResource AlwaysAutoDetectConnectionTip}"
+                                           IsChecked="{Binding AlwaysAutoDetect}" />
+            </controls:AdaptiveSpacingStackPanel>
+          </controls:AdaptiveSpacingStackPanel>
+        </controls:AdaptiveSpacingStackPanel>
+
+        <Border Classes="settings-page-subtle-divider"
+                IsVisible="{Binding IsAdbConnectionMode}" />
+
+        <controls:AdaptiveSpacingStackPanel Classes="settings-page-column-stack connect-settings-section">
+          <Grid Classes="settings-page-labeled-row"
+                controls:SettingsLabelWidthCoordinator.GroupKey="Connect.AdbCore"
+                ColumnDefinitions="Auto,*">
+            <controls:SettingsLabel Text="{Binding RootTexts[Settings.Connect.Configuration]}" />
+            <controls:AppSelect Grid.Column="1"
+                      Classes="settings-select"
+                      Width="{DynamicResource MAA.Size.Settings.FieldInputWidth}"
+                      HorizontalAlignment="Left"
+                      ItemsSource="{Binding ConnectConfigOptions}"
+                      SelectedItem="{Binding SelectedConnectConfigOption, Mode=TwoWay}">
+              <controls:AppSelect.ItemTemplate>
+                <DataTemplate x:DataType="vm:ConnectionGameOptionItem">
+                  <TextBlock Text="{Binding DisplayName}" />
+                </DataTemplate>
+              </controls:AppSelect.ItemTemplate>
+            </controls:AppSelect>
           </Grid>
-          <CheckBox Content="{Binding RootTexts[Settings.Connect.AlwaysAutoDetect]}"
-                    IsChecked="{Binding AlwaysAutoDetect}"
-                    IsVisible="{Binding AutoDetect}" />
-        </StackPanel>
 
-        <StackPanel Classes="settings-centered-column">
-          <TextBlock Classes="settings-field-caption" Text="{Binding RootTexts[Settings.Connect.Configuration]}" />
-          <controls:CheckComboBox Width="{DynamicResource MAA.Size.Settings.FieldInputWidth}"
-                                  HeaderText="{Binding SelectedConnectConfigOption.DisplayName}"
-                                  ItemsSource="{Binding ConnectConfigOptions}"
-                                  SelectedItem="{Binding SelectedConnectConfigOption, Mode=TwoWay}">
-            <controls:CheckComboBox.ItemTemplate>
-              <DataTemplate x:DataType="vm:ConnectionGameOptionItem">
-                <TextBlock Text="{Binding DisplayName}" />
-              </DataTemplate>
-            </controls:CheckComboBox.ItemTemplate>
-          </controls:CheckComboBox>
-        </StackPanel>
+          <Border Classes="app-highlight app-warning-highlight"
+                  IsVisible="{Binding IsAttachWindowMode}">
+            <TextBlock Classes="state-warning app-caption long-wrap"
+                       Text="{Binding RootTexts[Settings.Connect.AttachWindowWarning]}" />
+          </Border>
 
-        <TextBlock Classes="state-warning settings-centered-text"
-                   HorizontalAlignment="Center"
-                   MaxWidth="{DynamicResource MAA.Size.Settings.FormNarrowMaxWidth}"
-                   Text="{Binding RootTexts[Settings.Connect.AttachWindowWarning]}"
-                   IsVisible="{Binding IsAttachWindowMode}" />
-
-        <StackPanel Classes="settings-centered-column"
-                    Spacing="{DynamicResource MAA.Spacing.Medium}"
-                    IsVisible="{Binding IsAdbConnectionMode}">
-          <StackPanel Classes="settings-centered-column">
-            <Grid HorizontalAlignment="Center"
-                  ColumnDefinitions="Auto,Auto">
-              <TextBlock Grid.Column="0"
-                         Classes="settings-field-caption"
-                         Margin="0"
-                         Text="{Binding RootTexts[Settings.Connect.Address]}" />
-              <controls:TooltipHint Grid.Column="1" Tip="{Binding RootTexts[Settings.Connect.AddressTip]}" />
+          <controls:AdaptiveSpacingStackPanel Classes="settings-page-compact-flow settings-page-column-stack"
+                      IsVisible="{Binding IsAdbConnectionMode}">
+            <Grid Classes="settings-page-labeled-row"
+                  controls:SettingsLabelWidthCoordinator.GroupKey="Connect.AdbCore"
+                  ColumnDefinitions="Auto,*">
+              <controls:SettingsLabel Text="{Binding RootTexts[Settings.Connect.Address]}"
+                                      Tip="{Binding RootTexts[Settings.Connect.AddressTip]}" />
+              <controls:AdaptiveSpacingStackPanel Grid.Column="1"
+                          Classes="settings-page-inline-field-group">
+                <controls:AppHistoryInput Classes="settings-input"
+                                          Width="{DynamicResource MAA.Size.Settings.FieldInputWidth}"
+                                          HorizontalAlignment="Left"
+                                          IsEnabled="{Binding CanEditAdbConnectionFields}"
+                                          ItemsSource="{Binding ConnectAddressHistory}"
+                                          Text="{Binding ConnectAddress, Mode=TwoWay}"
+                                          ItemDeleted="OnConnectAddressItemDeleted"
+                                          EditorCommitted="OnConnectAddressEditorCommitted"
+                                          SelectionCommitted="OnConnectAddressSelectionCommitted" />
+              </controls:AdaptiveSpacingStackPanel>
             </Grid>
-            <AutoCompleteBox Width="{DynamicResource MAA.Size.Settings.FieldInputWidth}"
-                             IsEnabled="{Binding CanEditAdbConnectionFields}"
-                             ItemsSource="{Binding ConnectAddressHistory}"
-                             Text="{Binding ConnectAddress, UpdateSourceTrigger=LostFocus}" />
-          </StackPanel>
 
-          <StackPanel Classes="settings-centered-column">
-            <TextBlock Classes="settings-field-caption" Text="{Binding RootTexts[Settings.Connect.AdbPath]}" />
-            <Grid Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
-                  ColumnDefinitions="*,Auto">
-              <TextBox IsEnabled="{Binding CanEditAdbConnectionFields}"
-                       Text="{Binding AdbPath, UpdateSourceTrigger=LostFocus}" />
-              <Button Grid.Column="1"
-                      Classes="wpf-button wpf-button-secondary"
-                      Margin="{DynamicResource MAA.Thickness.MarginActionButtonLeft}"
-                      Content="{Binding RootTexts[Settings.Start.SelectButton]}"
-                      IsEnabled="{Binding CanEditAdbConnectionFields}"
-                      Click="OnSelectAdbPathClick" />
+            <Grid Classes="settings-page-labeled-action-row"
+                  controls:SettingsLabelWidthCoordinator.GroupKey="Connect.AdbCore"
+                  ColumnDefinitions="Auto,*">
+              <controls:SettingsLabel Text="{Binding RootTexts[Settings.Connect.AdbPath]}" />
+              <controls:AppActionInput Grid.Column="1"
+                                       Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
+                                       HorizontalAlignment="Left"
+                                       IsEnabled="{Binding CanEditAdbConnectionFields}"
+                                       Text="{Binding AdbPath, UpdateSourceTrigger=LostFocus}"
+                                       ActionContent="{Binding RootTexts[Settings.Start.SelectButton]}"
+                                       ActionClick="OnSelectAdbPathClick" />
             </Grid>
-          </StackPanel>
-        </StackPanel>
+          </controls:AdaptiveSpacingStackPanel>
 
-        <StackPanel Classes="settings-centered-column"
-                    Spacing="{DynamicResource MAA.Spacing.Medium}"
-                    IsVisible="{Binding ShowMuMuExtrasSection}">
-          <CheckBox HorizontalAlignment="Center"
-                    Content="{Binding RootTexts[Settings.Connect.MuMu.EnableExtras]}"
-                    IsChecked="{Binding MuMu12ExtrasEnabled}" />
-          <StackPanel Classes="settings-centered-column"
-                      Spacing="{DynamicResource MAA.Spacing.Small}"
-                      IsVisible="{Binding MuMu12ExtrasEnabled}">
-            <TextBlock Classes="settings-field-caption" Text="{Binding RootTexts[Settings.Connect.MuMu.EmulatorPath]}" />
-            <TextBox Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
-                     Text="{Binding MuMu12EmulatorPath, UpdateSourceTrigger=LostFocus}" />
-            <CheckBox HorizontalAlignment="Center"
-                      Content="{Binding RootTexts[Settings.Connect.MuMu.BridgeConnection]}"
-                      IsChecked="{Binding MuMuBridgeConnection}" />
-            <StackPanel Classes="settings-centered-column"
-                        IsVisible="{Binding MuMuBridgeConnection}">
-              <TextBlock Classes="settings-field-caption" Text="{Binding RootTexts[Settings.Connect.InstanceId]}" />
-              <TextBox Width="{DynamicResource MAA.Size.Settings.FieldSlimWidth}"
-                       Text="{Binding MuMu12Index, UpdateSourceTrigger=LostFocus}" />
-            </StackPanel>
-          </StackPanel>
-        </StackPanel>
+          <controls:AdaptiveSpacingStackPanel Classes="settings-page-compact-flow settings-page-column-stack settings-page-branch-block"
+                      IsVisible="{Binding IsAttachWindowMode}">
+            <Grid Classes="settings-page-labeled-row"
+                  controls:SettingsLabelWidthCoordinator.GroupKey="Connect.AttachWindow"
+                  ColumnDefinitions="Auto,*">
+              <controls:SettingsLabel Text="{Binding RootTexts[Settings.Connect.ScreencapMethod]}" />
+              <controls:AppSelect Grid.Column="1"
+                        Classes="settings-select"
+                        Width="{DynamicResource MAA.Size.Settings.FieldInputWidth}"
+                        HorizontalAlignment="Left"
+                        ItemsSource="{Binding AttachWindowScreencapOptions}"
+                        SelectedItem="{Binding SelectedAttachWindowScreencapOption, Mode=TwoWay}">
+                <controls:AppSelect.ItemTemplate>
+                  <DataTemplate x:DataType="vm:ConnectionGameOptionItem">
+                    <TextBlock Text="{Binding DisplayName}" />
+                  </DataTemplate>
+                </controls:AppSelect.ItemTemplate>
+              </controls:AppSelect>
+            </Grid>
 
-        <StackPanel Classes="settings-centered-column"
-                    Spacing="{DynamicResource MAA.Spacing.Medium}"
-                    IsVisible="{Binding ShowLdPlayerExtrasSection}">
-          <CheckBox HorizontalAlignment="Center"
-                    Content="{Binding RootTexts[Settings.Connect.LdPlayer.EnableExtras]}"
-                    IsChecked="{Binding LdPlayerExtrasEnabled}" />
-          <StackPanel Classes="settings-centered-column"
-                      Spacing="{DynamicResource MAA.Spacing.Small}"
-                      IsVisible="{Binding LdPlayerExtrasEnabled}">
-            <TextBlock Classes="settings-field-caption" Text="{Binding RootTexts[Settings.Connect.LdPlayer.EmulatorPath]}" />
-            <TextBox Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
-                     Text="{Binding LdPlayerEmulatorPath, UpdateSourceTrigger=LostFocus}" />
-            <CheckBox HorizontalAlignment="Center"
-                      Content="{Binding RootTexts[Settings.Connect.LdPlayer.ManualSetIndex]}"
-                      IsChecked="{Binding LdPlayerManualSetIndex}" />
-            <StackPanel Classes="settings-centered-column"
-                        IsVisible="{Binding LdPlayerManualSetIndex}">
-              <TextBlock Classes="settings-field-caption" Text="{Binding RootTexts[Settings.Connect.InstanceId]}" />
-              <TextBox Width="{DynamicResource MAA.Size.Settings.FieldSlimWidth}"
-                       Text="{Binding LdPlayerIndex, UpdateSourceTrigger=LostFocus}" />
-            </StackPanel>
-          </StackPanel>
-        </StackPanel>
+            <Grid Classes="settings-page-labeled-row"
+                  controls:SettingsLabelWidthCoordinator.GroupKey="Connect.AttachWindow"
+                  ColumnDefinitions="Auto,*">
+              <controls:SettingsLabel Text="{Binding RootTexts[Settings.Connect.MouseInput]}" />
+              <controls:AppSelect Grid.Column="1"
+                        Classes="settings-select"
+                        Width="{DynamicResource MAA.Size.Settings.FieldInputWidth}"
+                        HorizontalAlignment="Left"
+                        ItemsSource="{Binding AttachWindowInputOptions}"
+                        SelectedItem="{Binding SelectedAttachWindowMouseOption, Mode=TwoWay}">
+                <controls:AppSelect.ItemTemplate>
+                  <DataTemplate x:DataType="vm:ConnectionGameOptionItem">
+                    <TextBlock Text="{Binding DisplayName}" />
+                  </DataTemplate>
+                </controls:AppSelect.ItemTemplate>
+              </controls:AppSelect>
+            </Grid>
 
-        <StackPanel Classes="settings-centered-column"
-                    Spacing="{DynamicResource MAA.Spacing.Medium}"
-                    IsVisible="{Binding IsAttachWindowMode}">
-          <StackPanel Classes="settings-centered-column">
-            <TextBlock Classes="settings-field-caption" Text="{Binding RootTexts[Settings.Connect.ScreencapMethod]}" />
-            <ComboBox Width="{DynamicResource MAA.Size.Settings.FieldInputWidth}"
-                      ItemsSource="{Binding AttachWindowScreencapOptions}"
-                      SelectedItem="{Binding SelectedAttachWindowScreencapOption, Mode=TwoWay}">
-              <ComboBox.ItemTemplate>
-                <DataTemplate x:DataType="vm:ConnectionGameOptionItem">
-                  <TextBlock Text="{Binding DisplayName}" />
-                </DataTemplate>
-              </ComboBox.ItemTemplate>
-            </ComboBox>
-          </StackPanel>
+            <Grid Classes="settings-page-labeled-row"
+                  controls:SettingsLabelWidthCoordinator.GroupKey="Connect.AttachWindow"
+                  ColumnDefinitions="Auto,*">
+              <controls:SettingsLabel Text="{Binding RootTexts[Settings.Connect.KeyboardInput]}" />
+              <controls:AppSelect Grid.Column="1"
+                        Classes="settings-select"
+                        Width="{DynamicResource MAA.Size.Settings.FieldInputWidth}"
+                        HorizontalAlignment="Left"
+                        ItemsSource="{Binding AttachWindowInputOptions}"
+                        SelectedItem="{Binding SelectedAttachWindowKeyboardOption, Mode=TwoWay}">
+                <controls:AppSelect.ItemTemplate>
+                  <DataTemplate x:DataType="vm:ConnectionGameOptionItem">
+                    <TextBlock Text="{Binding DisplayName}" />
+                  </DataTemplate>
+                </controls:AppSelect.ItemTemplate>
+              </controls:AppSelect>
+            </Grid>
+          </controls:AdaptiveSpacingStackPanel>
+        </controls:AdaptiveSpacingStackPanel>
 
-          <StackPanel Classes="settings-centered-column">
-            <TextBlock Classes="settings-field-caption" Text="{Binding RootTexts[Settings.Connect.MouseInput]}" />
-            <ComboBox Width="{DynamicResource MAA.Size.Settings.FieldInputWidth}"
-                      ItemsSource="{Binding AttachWindowInputOptions}"
-                      SelectedItem="{Binding SelectedAttachWindowMouseOption, Mode=TwoWay}">
-              <ComboBox.ItemTemplate>
-                <DataTemplate x:DataType="vm:ConnectionGameOptionItem">
-                  <TextBlock Text="{Binding DisplayName}" />
-                </DataTemplate>
-              </ComboBox.ItemTemplate>
-            </ComboBox>
-          </StackPanel>
+        <Border Classes="settings-page-subtle-divider"
+                IsVisible="{Binding IsAdbConnectionMode}" />
 
-          <StackPanel Classes="settings-centered-column">
-            <TextBlock Classes="settings-field-caption" Text="{Binding RootTexts[Settings.Connect.KeyboardInput]}" />
-            <ComboBox Width="{DynamicResource MAA.Size.Settings.FieldInputWidth}"
-                      ItemsSource="{Binding AttachWindowInputOptions}"
-                      SelectedItem="{Binding SelectedAttachWindowKeyboardOption, Mode=TwoWay}">
-              <ComboBox.ItemTemplate>
-                <DataTemplate x:DataType="vm:ConnectionGameOptionItem">
-                  <TextBlock Text="{Binding DisplayName}" />
-                </DataTemplate>
-              </ComboBox.ItemTemplate>
-            </ComboBox>
-          </StackPanel>
-        </StackPanel>
-
-        <Button Classes="wpf-button wpf-button-secondary"
-                HorizontalAlignment="Center"
-                Content="{Binding RootTexts[Settings.Connect.ScreenshotTest]}"
-                Click="OnScreenshotTestClick" />
-
-        <TextBlock Classes="settings-centered-text subtle"
-                   Text="{Binding TestLinkInfo}"
-                   IsVisible="{Binding HasTestLinkInfo}" />
-        <TextBlock Classes="settings-centered-text subtle"
-                   Text="{Binding ScreencapCost}" />
-
-        <StackPanel Classes="settings-centered-column"
-                    Spacing="{DynamicResource MAA.Spacing.Small}"
+        <controls:AdaptiveSpacingStackPanel Classes="settings-page-column-stack settings-page-branch-block connect-settings-section"
                     IsVisible="{Binding IsAdbConnectionMode}">
-          <Grid HorizontalAlignment="Center"
-                ColumnDefinitions="Auto,Auto">
-            <CheckBox Content="{Binding RootTexts[Settings.Start.RetryOnDisconnected]}"
-                      IsChecked="{Binding RetryOnDisconnected}" />
-            <controls:TooltipHint Grid.Column="1"
-                                  Margin="{DynamicResource MAA.Thickness.MarginLeftTooltip}"
-                                  Tip="{Binding RootTexts[Settings.Start.RetryOnDisconnectedTip]}" />
-          </Grid>
-          <CheckBox HorizontalAlignment="Center"
-                    Content="{Binding RootTexts[Settings.Connect.AllowAdbRestart]}"
-                    IsChecked="{Binding AllowAdbRestart}" />
-          <CheckBox HorizontalAlignment="Center"
-                    Content="{Binding RootTexts[Settings.Connect.AllowAdbHardRestart]}"
-                    IsChecked="{Binding AllowAdbHardRestart}" />
-        </StackPanel>
+          <controls:AdaptiveSpacingStackPanel Classes="settings-page-compact-flow settings-page-branch-block"
+                      IsVisible="{Binding ShowMuMuExtrasSection}">
+            <CheckBox Classes="app-checkbox"
+                      Content="{Binding RootTexts[Settings.Connect.MuMu.EnableExtras]}"
+                      IsChecked="{Binding MuMu12ExtrasEnabled}"
+                      Checked="OnMuMuExtrasChecked" />
 
-        <StackPanel Classes="settings-centered-column"
-                    Spacing="{DynamicResource MAA.Spacing.Small}"
+            <controls:AdaptiveSpacingStackPanel Margin="{DynamicResource MAA.Thickness.Settings.BranchIndent}"
+                        Classes="settings-page-compact-flow settings-page-column-stack"
+                        IsVisible="{Binding MuMu12ExtrasEnabled}">
+              <Grid Classes="settings-page-labeled-row"
+                    controls:SettingsLabelWidthCoordinator.GroupKey="Connect.MuMu"
+                    ColumnDefinitions="Auto,*">
+                <controls:SettingsLabel Text="{Binding RootTexts[Settings.Connect.MuMu.EmulatorPath]}" />
+                <controls:AppTextInput Grid.Column="1"
+                         Classes="settings-input"
+                         Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
+                         HorizontalAlignment="Left"
+                         Text="{Binding MuMu12EmulatorPath, UpdateSourceTrigger=LostFocus}"
+                         LostFocus="OnMuMuEmulatorPathLostFocus" />
+              </Grid>
+
+              <CheckBox Classes="app-checkbox"
+                        Content="{Binding RootTexts[Settings.Connect.MuMu.BridgeConnection]}"
+                        IsChecked="{Binding MuMuBridgeConnection}" />
+
+              <Grid Classes="settings-page-labeled-row"
+                    controls:SettingsLabelWidthCoordinator.GroupKey="Connect.MuMu"
+                    ColumnDefinitions="Auto,*"
+                    IsVisible="{Binding MuMuBridgeConnection}">
+                <controls:SettingsLabel Text="{Binding RootTexts[Settings.Connect.InstanceId]}" />
+                <controls:AppTextInput Grid.Column="1"
+                         Classes="settings-input"
+                         Width="{DynamicResource MAA.Size.Settings.FieldSlimWidth}"
+                         HorizontalAlignment="Left"
+                         Text="{Binding MuMu12Index, UpdateSourceTrigger=LostFocus}" />
+              </Grid>
+            </controls:AdaptiveSpacingStackPanel>
+          </controls:AdaptiveSpacingStackPanel>
+
+          <controls:AdaptiveSpacingStackPanel Classes="settings-page-compact-flow settings-page-branch-block"
+                      IsVisible="{Binding ShowLdPlayerExtrasSection}">
+            <CheckBox Classes="app-checkbox"
+                      Content="{Binding RootTexts[Settings.Connect.LdPlayer.EnableExtras]}"
+                      IsChecked="{Binding LdPlayerExtrasEnabled}"
+                      Checked="OnLdPlayerExtrasChecked" />
+
+            <controls:AdaptiveSpacingStackPanel Margin="{DynamicResource MAA.Thickness.Settings.BranchIndent}"
+                        Classes="settings-page-compact-flow settings-page-column-stack"
+                        IsVisible="{Binding LdPlayerExtrasEnabled}">
+              <Grid Classes="settings-page-labeled-row"
+                    controls:SettingsLabelWidthCoordinator.GroupKey="Connect.LdPlayer"
+                    ColumnDefinitions="Auto,*">
+                <controls:SettingsLabel Text="{Binding RootTexts[Settings.Connect.LdPlayer.EmulatorPath]}" />
+                <controls:AppTextInput Grid.Column="1"
+                         Classes="settings-input"
+                         Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
+                         HorizontalAlignment="Left"
+                         Text="{Binding LdPlayerEmulatorPath, UpdateSourceTrigger=LostFocus}"
+                         LostFocus="OnLdPlayerEmulatorPathLostFocus" />
+              </Grid>
+
+              <CheckBox Classes="app-checkbox"
+                        Content="{Binding RootTexts[Settings.Connect.LdPlayer.ManualSetIndex]}"
+                        IsChecked="{Binding LdPlayerManualSetIndex}" />
+
+              <Grid Classes="settings-page-labeled-row"
+                    controls:SettingsLabelWidthCoordinator.GroupKey="Connect.LdPlayer"
+                    ColumnDefinitions="Auto,*"
+                    IsVisible="{Binding LdPlayerManualSetIndex}">
+                <controls:SettingsLabel Text="{Binding RootTexts[Settings.Connect.InstanceId]}" />
+                <controls:AppTextInput Grid.Column="1"
+                         Classes="settings-input"
+                         Width="{DynamicResource MAA.Size.Settings.FieldSlimWidth}"
+                         HorizontalAlignment="Left"
+                         Text="{Binding LdPlayerIndex, UpdateSourceTrigger=LostFocus}" />
+              </Grid>
+            </controls:AdaptiveSpacingStackPanel>
+          </controls:AdaptiveSpacingStackPanel>
+        </controls:AdaptiveSpacingStackPanel>
+
+        <Border Classes="settings-page-subtle-divider" />
+
+        <controls:AdaptiveSpacingStackPanel Classes="settings-page-compact-flow settings-page-status-block connect-settings-section">
+          <controls:AdaptiveSpacingStackPanel Classes="connect-settings-screenshot-action-row">
+            <Button Classes="app-button app-secondary"
+                    HorizontalAlignment="Left"
+                    Content="{Binding RootTexts[Settings.Connect.ScreenshotTest]}"
+                    Click="OnScreenshotTestClick" />
+            <TextBlock Classes="app-caption connect-settings-status-text connect-settings-test-result"
+                       Text="{Binding TestLinkInfo}"
+                       IsVisible="{Binding HasTestLinkInfo}" />
+          </controls:AdaptiveSpacingStackPanel>
+        </controls:AdaptiveSpacingStackPanel>
+
+        <Border Classes="settings-page-subtle-divider"
+                IsVisible="{Binding IsAdbConnectionMode}" />
+
+        <controls:AdaptiveSpacingStackPanel Classes="settings-page-column-stack settings-page-branch-block connect-settings-section"
                     IsVisible="{Binding IsAdbConnectionMode}">
-          <TextBlock Classes="settings-field-caption" Text="{Binding RootTexts[Settings.Connect.TouchMode]}" />
-          <StackPanel Orientation="Horizontal"
-                      HorizontalAlignment="Center"
-                      Spacing="{DynamicResource MAA.Spacing.Small}">
-            <ComboBox Width="{DynamicResource MAA.Size.Settings.FieldCenteredWidth}"
+          <controls:AdaptiveSpacingStackPanel Classes="connect-settings-toggle-list settings-page-toggle-stack">
+            <controls:AdaptiveSpacingStackPanel Classes="settings-page-inline-field-group">
+              <controls:AppHintedCheckBox Text="{Binding RootTexts[Settings.Start.RetryOnDisconnected]}"
+                                           Tip="{Binding RootTexts[Settings.Start.RetryOnDisconnectedTip]}"
+                                           IsChecked="{Binding RetryOnDisconnected}" />
+            </controls:AdaptiveSpacingStackPanel>
+            <CheckBox Classes="app-checkbox"
+                      Content="{Binding RootTexts[Settings.Connect.AllowAdbRestart]}"
+                      IsChecked="{Binding AllowAdbRestart}" />
+            <CheckBox Classes="app-checkbox"
+                      Content="{Binding RootTexts[Settings.Connect.AllowAdbHardRestart]}"
+                      IsChecked="{Binding AllowAdbHardRestart}" />
+          </controls:AdaptiveSpacingStackPanel>
+
+          <Grid Classes="settings-page-labeled-action-row"
+                controls:SettingsLabelWidthCoordinator.GroupKey="Connect.AdbAdvanced"
+                ColumnDefinitions="Auto,Auto,Auto">
+            <controls:SettingsLabel Text="{Binding RootTexts[Settings.Connect.TouchMode]}" />
+            <controls:AppSelect Grid.Column="1"
+                      Classes="settings-select"
+                      Width="{DynamicResource MAA.Size.Settings.FieldCenteredWidth}"
+                      HorizontalAlignment="Left"
                       IsEnabled="{Binding CanEditAdbConnectionFields}"
                       ItemsSource="{Binding TouchModeOptions}"
                       SelectedItem="{Binding SelectedTouchModeOption, Mode=TwoWay}">
-              <ComboBox.ItemTemplate>
+              <controls:AppSelect.ItemTemplate>
                 <DataTemplate x:DataType="vm:ConnectionGameOptionItem">
                   <TextBlock Text="{Binding DisplayName}" />
                 </DataTemplate>
-              </ComboBox.ItemTemplate>
-            </ComboBox>
-            <Button Classes="wpf-button wpf-button-secondary"
+              </controls:AppSelect.ItemTemplate>
+            </controls:AppSelect>
+            <Button Grid.Column="2"
+                    Classes="app-button app-secondary"
+                    Margin="12,0,0,0"
                     Content="{Binding RootTexts[Settings.Connect.ReplaceAdb]}"
                     Click="OnReplaceAdbClick" />
-          </StackPanel>
-        </StackPanel>
+          </Grid>
 
-        <StackPanel Orientation="Horizontal"
-                    HorizontalAlignment="Center"
-                    Spacing="{DynamicResource MAA.Spacing.Large}"
-                    IsVisible="{Binding IsAdbConnectionMode}">
-          <CheckBox Content="{Binding RootTexts[Settings.Connect.KillAdbOnExit]}"
-                    IsChecked="{Binding KillAdbOnExit}" />
-          <CheckBox Content="{Binding RootTexts[Settings.Connect.AdbLiteEnabled]}"
-                    IsChecked="{Binding AdbLiteEnabled}" />
-        </StackPanel>
-      </StackPanel>
-    </ScrollViewer>
+          <controls:AdaptiveSpacingStackPanel Classes="connect-settings-toggle-list settings-page-toggle-stack">
+            <CheckBox Classes="app-checkbox"
+                      Content="{Binding RootTexts[Settings.Connect.KillAdbOnExit]}"
+                      IsChecked="{Binding KillAdbOnExit}" />
+            <CheckBox Classes="app-checkbox"
+                      Content="{Binding RootTexts[Settings.Connect.AdbLiteEnabled]}"
+                      IsChecked="{Binding AdbLiteEnabled}" />
+          </controls:AdaptiveSpacingStackPanel>
+        </controls:AdaptiveSpacingStackPanel>
+    </controls:AdaptiveSpacingStackPanel>
   </Grid>
 </UserControl>

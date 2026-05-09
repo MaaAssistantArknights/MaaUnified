@@ -1,0 +1,545 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:MAAUnified.App.Controls">
+  <Styles.Resources>
+    <Thickness x:Key="MAA.App.Settings.RailPadding">14,12,8,10</Thickness>
+    <Thickness x:Key="MAA.App.Settings.RailItemPadding">20,6,14,6</Thickness>
+    <Thickness x:Key="MAA.App.Settings.SectionIntroPadding">0,0,0,4</Thickness>
+    <Thickness x:Key="MAA.App.Settings.ActionBarPadding">0</Thickness>
+    <Thickness x:Key="MAA.App.Settings.StatusPanelPadding">0</Thickness>
+    <Thickness x:Key="MAA.App.Settings.RowSpacing">0,8,0,0</Thickness>
+    <Thickness x:Key="MAA.App.Settings.SubtleDividerMargin">0,2,0,2</Thickness>
+    <Thickness x:Key="MAA.App.Settings.LabelMargin">0,0,6,0</Thickness>
+    <Thickness x:Key="MAA.App.Settings.HintMargin">6,0,0,0</Thickness>
+    <x:Double x:Key="MAA.App.Settings.PageFlowSpacing">18</x:Double>
+    <x:Double x:Key="MAA.App.Settings.PageCompactFlowSpacing">8</x:Double>
+    <x:Double x:Key="MAA.App.Settings.PageColumnStackSpacing">16</x:Double>
+    <x:Double x:Key="MAA.App.Settings.PageToggleStackSpacing">6</x:Double>
+    <x:Double x:Key="MAA.App.Settings.FieldHeaderGap">6</x:Double>
+    <x:Double x:Key="MAA.App.Settings.PageMetaBlockSpacing">4</x:Double>
+    <x:Double x:Key="MAA.App.Settings.SectionSpacing">20</x:Double>
+    <x:Double x:Key="MAA.App.Settings.RailItemMinHeight">38</x:Double>
+    <x:Double x:Key="MAA.App.Settings.RowMinHeight">38</x:Double>
+  </Styles.Resources>
+
+  <Style Selector="Border.settings-rail">
+    <Setter Property="Width" Value="{DynamicResource MAA.Size.Settings.SectionListWidth}" />
+    <Setter Property="Padding" Value="{DynamicResource MAA.App.Settings.RailPadding}" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="ClipToBounds" Value="True" />
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Surface.Section}" />
+  </Style>
+
+  <Style Selector="controls|AppSelectionList.settings-rail">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+  </Style>
+
+  <Style Selector="controls|AppSelectionList.settings-rail Border.settings-rail-item">
+    <Setter Property="MinHeight" Value="{DynamicResource MAA.App.Settings.RailItemMinHeight}" />
+    <Setter Property="Padding" Value="{DynamicResource MAA.App.Settings.RailItemPadding}" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="0:0:0.11" />
+        <BrushTransition Property="BorderBrush" Duration="0:0:0.11" />
+      </Transitions>
+    </Setter>
+  </Style>
+
+  <Style Selector="TextBlock.settings-rail-item-text">
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Secondary}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="TextWrapping" Value="WrapWithOverflow" />
+    <Setter Property="MaxLines" Value="2" />
+    <Setter Property="LineHeight" Value="18" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Foreground" Duration="0:0:0.11" />
+      </Transitions>
+    </Setter>
+  </Style>
+
+  <Style Selector="controls|AppSelectionList.settings-rail ListBoxItem:pointerover Border.settings-rail-item">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.Settings.RailItemHover}" />
+  </Style>
+
+  <Style Selector="controls|AppSelectionList.settings-rail ListBoxItem:pointerover TextBlock.settings-rail-item-text">
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
+  </Style>
+
+  <Style Selector="controls|AppSelectionList.settings-rail ListBoxItem:selected Border.settings-rail-item">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+  </Style>
+
+  <Style Selector="controls|AppSelectionList.settings-rail ListBoxItem:selected:pointerover Border.settings-rail-item">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
+  <Style Selector="controls|AppSelectionList.settings-rail /template/ controls|AppSelectionIndicatorPresenter.selection-indicator-rail.indicator-vertical /template/ Border#PART_IndicatorGlow">
+    <Setter Property="Width" Value="0" />
+    <Setter Property="Opacity" Value="0" />
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
+  <Style Selector="controls|AppSelectionList.settings-rail /template/ controls|AppSelectionIndicatorPresenter.selection-indicator-rail.indicator-vertical /template/ Border#PART_Indicator">
+    <Setter Property="Width" Value="3" />
+    <Setter Property="Margin" Value="8,0,0,0" />
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.PrimaryBackground}" />
+  </Style>
+
+  <Style Selector="controls|AppSelectionList.settings-rail ListBoxItem:selected TextBlock.settings-rail-item-text">
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
+  </Style>
+
+  <Style Selector="controls|AppSelectionList.settings-rail:disabled TextBlock.settings-rail-item-text">
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Action.DisabledForeground}" />
+  </Style>
+
+  <Style Selector="StackPanel.settings-section-shell">
+    <Setter Property="Spacing" Value="{DynamicResource MAA.App.Settings.SectionSpacing}" />
+  </Style>
+
+  <Style Selector="ScrollViewer.settings-content-scroll">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0,0,12,0" />
+  </Style>
+
+  <Style Selector="ScrollViewer.settings-content-scroll /template/ ScrollBar">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
+  <Style Selector="StackPanel.settings-content-panel">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Spacing" Value="{DynamicResource MAA.App.Settings.SectionSpacing}" />
+  </Style>
+
+  <Style Selector="Border.settings-section-anchor">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Margin" Value="0" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page StackPanel.settings-page-flow">
+    <Setter Property="HorizontalAlignment" Value="Left" />
+    <Setter Property="Margin" Value="{DynamicResource MAA.Thickness.Settings.PageContentIndent}" />
+    <Setter Property="MaxWidth" Value="{DynamicResource MAA.Size.Settings.FormMaxWidth}" />
+    <Setter Property="Spacing" Value="{DynamicResource MAA.App.Settings.PageFlowSpacing}" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page controls|AdaptiveSpacingStackPanel">
+    <Setter Property="Spacing" Value="{DynamicResource MAA.App.Settings.PageCompactFlowSpacing}" />
+    <Setter Property="TargetPitch" Value="48" />
+    <Setter Property="MinGap" Value="8" />
+    <Setter Property="MaxGap" Value="16" />
+    <Setter Property="ShortRowSlot" Value="28" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page controls|AdaptiveSpacingStackPanel.settings-page-flow">
+    <Setter Property="HorizontalAlignment" Value="Left" />
+    <Setter Property="Margin" Value="{DynamicResource MAA.Thickness.Settings.PageContentIndent}" />
+    <Setter Property="MaxWidth" Value="{DynamicResource MAA.Size.Settings.FormMaxWidth}" />
+    <Setter Property="Spacing" Value="{DynamicResource MAA.App.Settings.PageFlowSpacing}" />
+    <Setter Property="TargetPitch" Value="50" />
+    <Setter Property="MinGap" Value="10" />
+    <Setter Property="MaxGap" Value="18" />
+    <Setter Property="ShortRowSlot" Value="28" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page StackPanel.settings-page-compact-flow">
+    <Setter Property="Spacing" Value="{DynamicResource MAA.App.Settings.PageCompactFlowSpacing}" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page controls|AdaptiveSpacingStackPanel.settings-page-compact-flow">
+    <Setter Property="Spacing" Value="{DynamicResource MAA.App.Settings.PageCompactFlowSpacing}" />
+    <Setter Property="TargetPitch" Value="48" />
+    <Setter Property="MinGap" Value="8" />
+    <Setter Property="MaxGap" Value="16" />
+    <Setter Property="ShortRowSlot" Value="28" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page Grid.settings-page-two-column">
+    <Setter Property="HorizontalAlignment" Value="Left" />
+    <Setter Property="Margin" Value="{DynamicResource MAA.Thickness.Settings.PageContentIndent}" />
+    <Setter Property="MaxWidth" Value="{DynamicResource MAA.Size.Settings.FormMaxWidth}" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page Grid.settings-page-labeled-row">
+    <Setter Property="HorizontalAlignment" Value="Left" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="controls:SettingsLabelWidthCoordinator.MaxLabelWidth" Value="{DynamicResource MAA.Size.Settings.LabelMaxWidth}" />
+    <Setter Property="controls:SettingsLabelWidthCoordinator.FieldGap" Value="{DynamicResource MAA.Size.Settings.LabelFieldGap}" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page Grid.settings-page-labeled-row > TextBlock,
+                   UserControl.settings-page Grid.settings-page-labeled-row > TextBox,
+                   UserControl.settings-page Grid.settings-page-labeled-row > ComboBox,
+                   UserControl.settings-page Grid.settings-page-labeled-row > controls|AppTextInput,
+                   UserControl.settings-page Grid.settings-page-labeled-row > controls|AppSelect,
+                   UserControl.settings-page Grid.settings-page-labeled-row > controls|SettingsLabel,
+                   UserControl.settings-page Grid.settings-page-labeled-row > controls|AppNumberInput,
+                   UserControl.settings-page Grid.settings-page-labeled-row > controls|AppActionInput,
+                   UserControl.settings-page Grid.settings-page-labeled-row > controls|AdaptiveSpacingStackPanel">
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page Grid.settings-page-labeled-action-row">
+    <Setter Property="HorizontalAlignment" Value="Left" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="controls:SettingsLabelWidthCoordinator.MaxLabelWidth" Value="{DynamicResource MAA.Size.Settings.LabelMaxWidth}" />
+    <Setter Property="controls:SettingsLabelWidthCoordinator.FieldGap" Value="{DynamicResource MAA.Size.Settings.LabelFieldGap}" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page Grid.settings-page-labeled-action-row > TextBlock,
+                   UserControl.settings-page Grid.settings-page-labeled-action-row > TextBox,
+                   UserControl.settings-page Grid.settings-page-labeled-action-row > ComboBox,
+                   UserControl.settings-page Grid.settings-page-labeled-action-row > controls|AppTextInput,
+                   UserControl.settings-page Grid.settings-page-labeled-action-row > controls|AppSelect,
+                   UserControl.settings-page Grid.settings-page-labeled-action-row > controls|SettingsLabel,
+                   UserControl.settings-page Grid.settings-page-labeled-action-row > controls|AppNumberInput,
+                   UserControl.settings-page Grid.settings-page-labeled-action-row > controls|AppActionInput,
+                   UserControl.settings-page Grid.settings-page-labeled-action-row > controls|AdaptiveSpacingStackPanel">
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page Grid.settings-page-paired-row">
+    <Setter Property="HorizontalAlignment" Value="Left" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page Grid.settings-page-action-pair">
+    <Setter Property="HorizontalAlignment" Value="Left" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page StackPanel.settings-page-column-stack">
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="VerticalAlignment" Value="Top" />
+    <Setter Property="Spacing" Value="{DynamicResource MAA.App.Settings.PageColumnStackSpacing}" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page controls|AdaptiveSpacingStackPanel.settings-page-column-stack">
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="VerticalAlignment" Value="Top" />
+    <Setter Property="Spacing" Value="{DynamicResource MAA.App.Settings.PageColumnStackSpacing}" />
+    <Setter Property="TargetPitch" Value="50" />
+    <Setter Property="MinGap" Value="10" />
+    <Setter Property="MaxGap" Value="18" />
+    <Setter Property="ShortRowSlot" Value="28" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page StackPanel.settings-page-inline-field-group">
+    <Setter Property="Orientation" Value="Horizontal" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Spacing" Value="{DynamicResource MAA.App.Settings.FieldHeaderGap}" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page controls|AdaptiveSpacingStackPanel.settings-page-inline-field-group">
+    <Setter Property="Orientation" Value="Horizontal" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Spacing" Value="{DynamicResource MAA.App.Settings.FieldHeaderGap}" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page StackPanel.settings-page-inline-field-group TextBlock.settings-label">
+    <Setter Property="Margin" Value="0" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page StackPanel.settings-page-branch-block">
+    <Setter Property="Margin" Value="{DynamicResource MAA.Thickness.Settings.BranchIndent}" />
+    <Setter Property="Spacing" Value="{DynamicResource MAA.App.Settings.PageCompactFlowSpacing}" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page controls|AdaptiveSpacingStackPanel.settings-page-branch-block">
+    <Setter Property="Margin" Value="{DynamicResource MAA.Thickness.Settings.BranchIndent}" />
+    <Setter Property="Spacing" Value="{DynamicResource MAA.App.Settings.PageCompactFlowSpacing}" />
+    <Setter Property="TargetPitch" Value="48" />
+    <Setter Property="MinGap" Value="8" />
+    <Setter Property="MaxGap" Value="16" />
+    <Setter Property="ShortRowSlot" Value="28" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page Grid.settings-page-branch-block">
+    <Setter Property="Margin" Value="{DynamicResource MAA.Thickness.Settings.BranchIndent}" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page Border.settings-page-branch-block">
+    <Setter Property="Margin" Value="{DynamicResource MAA.Thickness.Settings.BranchIndent}" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page StackPanel.settings-page-toggle-stack">
+    <Setter Property="Spacing" Value="{DynamicResource MAA.App.Settings.PageToggleStackSpacing}" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page controls|AdaptiveSpacingStackPanel.settings-page-toggle-stack">
+    <Setter Property="Spacing" Value="{DynamicResource MAA.App.Settings.PageToggleStackSpacing}" />
+    <Setter Property="TargetPitch" Value="46" />
+    <Setter Property="MinGap" Value="6" />
+    <Setter Property="MaxGap" Value="18" />
+    <Setter Property="ShortRowSlot" Value="20" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page CheckBox.app-checkbox">
+    <Setter Property="MinHeight" Value="20" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page controls|AppHintedCheckBox,
+                   UserControl.settings-page controls|NullableCheckBox">
+    <Setter Property="MinHeight" Value="20" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page WrapPanel.settings-page-matrix">
+    <Setter Property="HorizontalAlignment" Value="Left" />
+    <Setter Property="Orientation" Value="Horizontal" />
+    <Setter Property="ItemWidth" Value="{DynamicResource MAA.Size.Settings.WrapItemWidth}" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page Grid.settings-page-matrix">
+    <Setter Property="HorizontalAlignment" Value="Left" />
+    <Setter Property="MaxWidth" Value="{DynamicResource MAA.Size.Settings.FormMaxWidth}" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page StackPanel.settings-page-matrix">
+    <Setter Property="HorizontalAlignment" Value="Left" />
+    <Setter Property="MaxWidth" Value="{DynamicResource MAA.Size.Settings.FormMaxWidth}" />
+    <Setter Property="Spacing" Value="12" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page Border.settings-page-matrix-item">
+    <Setter Property="MinWidth" Value="{DynamicResource MAA.Size.Settings.WrapItemWidth}" />
+    <Setter Property="Margin" Value="0,0,12,12" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page StackPanel.settings-page-matrix-item">
+    <Setter Property="MinWidth" Value="{DynamicResource MAA.Size.Settings.WrapItemWidth}" />
+    <Setter Property="Margin" Value="0,0,12,12" />
+    <Setter Property="Spacing" Value="{DynamicResource MAA.App.Settings.PageToggleStackSpacing}" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page Grid.settings-page-matrix-item">
+    <Setter Property="MinWidth" Value="{DynamicResource MAA.Size.Settings.WrapItemWidth}" />
+    <Setter Property="Margin" Value="0,0,12,12" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page StackPanel.settings-page-meta-block">
+    <Setter Property="MaxWidth" Value="{DynamicResource MAA.Size.Settings.ContentMaxWidth}" />
+    <Setter Property="Spacing" Value="{DynamicResource MAA.App.Settings.PageMetaBlockSpacing}" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page Border.settings-page-meta-block">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page StackPanel.settings-page-status-list">
+    <Setter Property="Spacing" Value="8" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page Border.settings-page-status-block">
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page Border.settings-page-subtle-divider">
+    <Setter Property="Margin" Value="{DynamicResource MAA.App.Settings.SubtleDividerMargin}" />
+    <Setter Property="Height" Value="1" />
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Border.Section}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+
+  <Style Selector="TextBlock.settings-root-intro">
+    <Setter Property="Margin" Value="{DynamicResource MAA.App.Settings.SectionIntroPadding}" />
+    <Setter Property="MaxWidth" Value="780" />
+  </Style>
+
+  <Style Selector="WrapPanel.settings-section-action-bar">
+    <Setter Property="ItemHeight" Value="{DynamicResource MAA.App.Size.ButtonHeight}" />
+    <Setter Property="Margin" Value="{DynamicResource MAA.App.Settings.ActionBarPadding}" />
+    <Setter Property="Orientation" Value="Horizontal" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
+  </Style>
+
+  <Style Selector="StackPanel.settings-section-actions">
+    <Setter Property="Orientation" Value="Horizontal" />
+    <Setter Property="Spacing" Value="10" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
+  </Style>
+
+  <Style Selector="StackPanel.settings-section-action-bar">
+    <Setter Property="Orientation" Value="Horizontal" />
+    <Setter Property="Spacing" Value="10" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
+  </Style>
+
+  <Style Selector="DockPanel.settings-section-actions">
+    <Setter Property="LastChildFill" Value="False" />
+  </Style>
+
+  <Style Selector="DockPanel.settings-section-action-bar">
+    <Setter Property="LastChildFill" Value="False" />
+  </Style>
+
+  <Style Selector="Border.settings-status-panel">
+    <Setter Property="Padding" Value="{DynamicResource MAA.App.Settings.StatusPanelPadding}" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="0" />
+  </Style>
+
+  <Style Selector="Border.settings-status-panel.status-warning">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page Border.app-surface.app-section">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="0" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page Border.app-surface.app-card">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="BoxShadow" Value="0 0 0 0 #00000000" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page Border.settings-shadow-card">
+    <Setter Property="Margin" Value="2,2,2,4" />
+    <Setter Property="Padding" Value="12" />
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Surface.Card}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="BoxShadow" Value="{DynamicResource MAA.App.BoxShadow.Card}" />
+    <Setter Property="ClipToBounds" Value="False" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page Border.settings-shadow-card.settings-card-elevated">
+    <Setter Property="Margin" Value="2,2,2,4" />
+    <Setter Property="BoxShadow" Value="{DynamicResource MAA.App.BoxShadow.Card}" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page Border.settings-shadow-card.timer-settings-slot">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Surface.Card}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="BoxShadow" Value="{DynamicResource MAA.App.BoxShadow.Card}" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page Button">
+    <Setter Property="HorizontalAlignment" Value="Left" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page TextBlock.section-title">
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Margin" Value="0,6,0,4" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page TextBlock.settings-label">
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Secondary}" />
+    <Setter Property="FontSize" Value="13.5" />
+    <Setter Property="FontWeight" Value="Normal" />
+    <Setter Property="LineHeight" Value="20" />
+    <Setter Property="Margin" Value="{DynamicResource MAA.App.Settings.LabelMargin}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page controls|SettingsLabel">
+    <Setter Property="Margin" Value="0" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page controls|SettingsLabel TextBlock.settings-label-text">
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Secondary}" />
+    <Setter Property="FontSize" Value="13.5" />
+    <Setter Property="FontWeight" Value="Normal" />
+    <Setter Property="LineHeight" Value="20" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page controls|TooltipHint">
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
+    <Setter Property="Margin" Value="{DynamicResource MAA.App.Settings.HintMargin}" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page StackPanel.settings-page-inline-field-group controls|TooltipHint,
+                   UserControl.settings-page controls|AdaptiveSpacingStackPanel.settings-page-inline-field-group controls|TooltipHint">
+    <Setter Property="Margin" Value="0" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page controls|AppHintedCheckBox controls|TooltipHint.hinted-checkbox-tip,
+                   UserControl.settings-page controls|NullableCheckBox controls|TooltipHint.nullable-checkbox-tip">
+    <Setter Property="Margin" Value="{DynamicResource MAA.App.Settings.HintMargin}" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page controls|SettingsLabel controls|TooltipHint.settings-label-tip">
+    <Setter Property="Margin" Value="0" />
+    <Setter Property="HorizontalAlignment" Value="Right" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page TextBlock.app-window-subtitle">
+    <Setter Property="MaxWidth" Value="720" />
+  </Style>
+
+  <Style Selector="TextBlock.settings-page-title">
+    <Setter Property="Margin" Value="0,0,12,0" />
+    <Setter Property="FontSize" Value="28" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
+    <Setter Property="LineHeight" Value="34" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+  </Style>
+
+  <Style Selector="UserControl.settings-page Border.settings-page-soft-panel">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Surface.Card}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="BoxShadow" Value="{DynamicResource MAA.App.BoxShadow.Card}" />
+    <Setter Property="ClipToBounds" Value="False" />
+  </Style>
+</Styles>

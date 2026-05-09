@@ -1,14 +1,17 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json.Nodes;
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using MAAUnified.App.Features.Dialogs;
+using MAAUnified.App.Services;
 using MAAUnified.App.ViewModels.Copilot;
 using MAAUnified.App.ViewModels.Infrastructure;
 using MAAUnified.App.ViewModels.Settings;
@@ -33,6 +36,7 @@ public sealed class MainShellViewModel : ObservableObject
     private const int WindowTitleScrollThreshold = 24;
     private const string WindowTitleScrollSpacer = "     ";
     private static readonly TimeSpan DeferredStartupCoreWarmupDelay = TimeSpan.FromMilliseconds(1500);
+    private static readonly TimeSpan FloatingOverlayAnimationDuration = TimeSpan.FromMilliseconds(220);
     private readonly MAAUnifiedRuntime _runtime;
     private readonly ConnectionGameSharedStateViewModel _connectionGameSharedState;
     private readonly SemaphoreSlim _guiApplySemaphore = new(1, 1);
@@ -69,6 +73,7 @@ public sealed class MainShellViewModel : ObservableObject
     private string _windowTitle = AppDisplayName;
     private string _windowVersionUpdateInfo = string.Empty;
     private string _windowResourceUpdateInfo = string.Empty;
+    private bool _isWindowUpdateActionRunning;
     private string _importStatus = string.Empty;
     private string _capabilitySummary = string.Empty;
     private string _currentShellLanguage = UiLanguageCatalog.DefaultLanguage;
@@ -77,6 +82,10 @@ public sealed class MainShellViewModel : ObservableObject
     private ImportSource _selectedImportSource = ImportSource.Auto;
     private ImportSourceOptionItem? _selectedImportSourceOption;
     private bool _achievementToastWindowVisible = true;
+    private bool _achievementToastStartupCompleted;
+    private bool _isWindowUpdateOverlayPresented;
+    private bool _isWindowUpdateOverlayAnimationHidden = true;
+    private bool _isShellBlockingOperationOverlayVisible;
     private bool _hasBlockingConfigIssues;
     private int _blockingConfigIssueCount;
     private SessionState _currentSessionState;
@@ -85,12 +94,14 @@ public sealed class MainShellViewModel : ObservableObject
     private string _rootLogTimeFormat = DefaultLogItemDateFormat;
     private bool _windowTitleScrollable;
     private int _windowTitleScrollOffset;
+    private CancellationTokenSource? _windowUpdateOverlayAnimationCts;
     private Bitmap? _shellBackgroundImage;
     private double _shellBackgroundOpacity = 0.45;
     private int _shellBackgroundBlur = 12;
     private Stretch _shellBackgroundStretch = Stretch.UniformToFill;
     private bool _schemaMigrationNoticeShown;
     private StartupShellSnapshot _startupSnapshot = StartupShellSnapshot.Default;
+    private string _dismissedWindowUpdateOverlaySignature = string.Empty;
 
     public MainShellViewModel(MAAUnifiedRuntime runtime, IAppDialogService? dialogService = null)
     {
@@ -124,7 +135,8 @@ public sealed class MainShellViewModel : ObservableObject
             ReportLocalizationFallback,
             _dialogService,
             NavigateToSettingsSection,
-            EnsureCoreReadyForExecutionAsync);
+            EnsureCoreReadyForExecutionAsync,
+            StopRunOwnerFromDialogAsync);
         Program.RecordStartupStage("FrameworkInit.ViewModel.MainShell.TaskQueue.End", "TaskQueuePageViewModel created.");
         Program.RecordStartupStage("FrameworkInit.ViewModel.MainShell.Pages.Deferred", "Secondary page view models deferred for lazy creation.");
         var (taskQueuePendingTitle, taskQueuePendingMessage) = GetRootPagePendingText(RootPageStatusKind.TaskQueue);
@@ -208,6 +220,30 @@ public sealed class MainShellViewModel : ObservableObject
 
     public ConnectionGameSharedStateViewModel ConnectionGameSharedState => _connectionGameSharedState;
 
+    public async Task<IReadOnlyList<string>> FlushConfigurationSavesForCloseAsync(CancellationToken cancellationToken = default)
+    {
+        var failedNames = new List<string>();
+        if (!await TaskQueuePage.FlushConfigurationSavesForCloseAsync(cancellationToken))
+        {
+            failedNames.AddRange(ConfigurationSaveTracker.Instance.FailedDisplayNames);
+        }
+
+        if (TryGetSettingsPage(out var settingsPage))
+        {
+            if (!await settingsPage.FlushConfigurationSavesForCloseAsync(cancellationToken))
+            {
+                failedNames.AddRange(ConfigurationSaveTracker.Instance.FailedDisplayNames);
+            }
+        }
+
+        failedNames.AddRange(await ConfigurationSaveTracker.Instance.RetryPendingOrFailedAsync(cancellationToken: cancellationToken));
+        failedNames.AddRange(ConfigurationSaveTracker.Instance.FailedDisplayNames);
+        return failedNames
+            .Where(static name => !string.IsNullOrWhiteSpace(name))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+    }
+
     public IPlatformCapabilityService PlatformCapabilityService => _runtime.PlatformCapabilityService;
 
     public string CurrentShellLanguage
@@ -227,6 +263,7 @@ public sealed class MainShellViewModel : ObservableObject
                 OnPropertyChanged(nameof(IsCopilotRootTabSelected));
                 OnPropertyChanged(nameof(IsToolboxRootTabSelected));
                 OnPropertyChanged(nameof(IsSettingsRootTabSelected));
+                OnPropertyChanged(nameof(ShowWindowOverlayButton));
             }
         }
     }
@@ -238,6 +275,12 @@ public sealed class MainShellViewModel : ObservableObject
     public bool IsToolboxRootTabSelected => SelectedRootTabIndex == 2;
 
     public bool IsSettingsRootTabSelected => SelectedRootTabIndex == 3;
+
+    public bool ShowWindowOverlayButton => IsTaskQueueRootTabSelected || IsCopilotRootTabSelected;
+
+    public bool IsBlockingOperationOverlayVisible =>
+        _isShellBlockingOperationOverlayVisible ||
+        (TryGetSettingsPage(out var settingsPage) && settingsPage.IsBlockingOperationOverlayVisible);
 
     public bool IsWindowTopMost
     {
@@ -260,6 +303,7 @@ public sealed class MainShellViewModel : ObservableObject
             {
                 OnPropertyChanged(nameof(HasWindowVersionUpdateInfo));
                 OnPropertyChanged(nameof(HasWindowUpdateInfo));
+                NotifyWindowUpdateOverlayVisibilityChanged();
                 RefreshWindowTitle();
             }
         }
@@ -274,6 +318,7 @@ public sealed class MainShellViewModel : ObservableObject
             {
                 OnPropertyChanged(nameof(HasWindowResourceUpdateInfo));
                 OnPropertyChanged(nameof(HasWindowUpdateInfo));
+                NotifyWindowUpdateOverlayVisibilityChanged();
                 RefreshWindowTitle();
             }
         }
@@ -378,6 +423,44 @@ public sealed class MainShellViewModel : ObservableObject
     public bool HasWindowResourceUpdateInfo => !string.IsNullOrWhiteSpace(WindowResourceUpdateInfo);
 
     public bool HasWindowUpdateInfo => HasWindowVersionUpdateInfo || HasWindowResourceUpdateInfo;
+
+    public bool HasVisibleWindowVersionUpdateInfo => HasWindowVersionUpdateInfo && HasVisibleWindowUpdateInfo;
+
+    public bool HasVisibleWindowResourceUpdateInfo => HasWindowResourceUpdateInfo && HasVisibleWindowUpdateInfo;
+
+    public bool HasMultipleVisibleWindowUpdates => HasVisibleWindowVersionUpdateInfo && HasVisibleWindowResourceUpdateInfo;
+
+    public bool HasVisibleWindowUpdateInfo
+        => HasWindowUpdateInfo
+           && !string.Equals(CurrentWindowUpdateOverlaySignature, _dismissedWindowUpdateOverlaySignature, StringComparison.Ordinal);
+
+    public bool HasMultipleWindowUpdates => HasWindowVersionUpdateInfo && HasWindowResourceUpdateInfo;
+
+    public bool IsWindowUpdateOverlayPresented
+    {
+        get => _isWindowUpdateOverlayPresented;
+        private set => SetProperty(ref _isWindowUpdateOverlayPresented, value);
+    }
+
+    public bool IsWindowUpdateOverlayAnimationHidden
+    {
+        get => _isWindowUpdateOverlayAnimationHidden;
+        private set => SetProperty(ref _isWindowUpdateOverlayAnimationHidden, value);
+    }
+
+    public bool IsWindowUpdateActionRunning
+    {
+        get => _isWindowUpdateActionRunning;
+        private set
+        {
+            if (SetProperty(ref _isWindowUpdateActionRunning, value))
+            {
+                OnPropertyChanged(nameof(CanTriggerWindowUpdateActions));
+            }
+        }
+    }
+
+    public bool CanTriggerWindowUpdateActions => !IsWindowUpdateActionRunning;
 
     public bool HasLastError => !string.IsNullOrWhiteSpace(LastError);
 
@@ -589,7 +672,7 @@ public sealed class MainShellViewModel : ObservableObject
                     cancellationToken);
                 if (loadResult.LoadedFromExistingConfig)
                 {
-                    ImportStatus = "已加载 config/avalonia.json";
+                    ImportStatus = string.Empty;
                 }
                 else if (loadResult.ImportReport is not null)
                 {
@@ -668,19 +751,36 @@ public sealed class MainShellViewModel : ObservableObject
     {
         RecordStartupPhase("Deferred.Begin", "Running deferred startup stages after first screen ready.");
         var strictValidationTask = RunStrictConfigValidationAsync(cancellationToken);
-        var settingsLoaded = await InitializeDeferredPagesAsync(cancellationToken);
+        var settingsLoaded = await InitializeDeferredSettingsPageAsync(cancellationToken);
         await strictValidationTask;
         if (settingsLoaded && TryGetSettingsPage(out var settingsPage))
         {
             await ApplyGuiSettingsAsync(settingsPage.CurrentGuiSnapshot, cancellationToken);
         }
 
-        await ShowSchemaMigrationNoticeIfNeededAsync(loadResult, cancellationToken);
+        StartBackgroundStartupDialog(
+            ct => ShowSchemaMigrationNoticeIfNeededAsync(loadResult, ct),
+            cancellationToken);
+        if (settingsLoaded && TryGetSettingsPage(out var startupSettingsPage))
+        {
+            StartBackgroundStartupDialog(
+                ct => RunStartupAnnouncementWorkflowAsync(startupSettingsPage, ct),
+                cancellationToken);
+        }
+
+        await InitializeRemainingDeferredPagesAsync(cancellationToken);
         ScheduleDeferredCoreWarmupAfterStartup();
         await RefreshCapabilitySummaryAsync(cancellationToken);
         RefreshRootTextState();
         await SyncTrayMenuStateAsync(cancellationToken);
         StartTimerScheduler();
+        if (settingsLoaded && TryGetSettingsPage(out var versionUpdateSettingsPage))
+        {
+            StartBackgroundStartupDialog(
+                ct => RunStartupVersionUpdateWorkflowAsync(versionUpdateSettingsPage, ct),
+                cancellationToken);
+        }
+
         UpdateStartupPhase("启动完成", "后台页面初始化完成，核心组件将在界面就绪后继续后台预热。");
         RecordStartupPhase("Deferred.End", "Deferred startup stages completed.");
     }
@@ -796,7 +896,20 @@ public sealed class MainShellViewModel : ObservableObject
         return true;
     }
 
-    private async Task<bool> InitializeDeferredPagesAsync(CancellationToken cancellationToken)
+    private async Task<bool> InitializeDeferredSettingsPageAsync(CancellationToken cancellationToken)
+    {
+        var settingsPage = EnsureSettingsPage();
+        return await InitializeDeferredRootPageAsync(
+            "Settings",
+            "Settings",
+            "Settings 页面正在后台初始化。",
+            SettingsRootPage,
+            ct => settingsPage.InitializeAsync(ct),
+            settingsPage,
+            cancellationToken);
+    }
+
+    private async Task InitializeRemainingDeferredPagesAsync(CancellationToken cancellationToken)
     {
         var taskQueueDeferredTask = InitializeTaskQueueDeferredStartupAsync(cancellationToken);
         var copilotPage = EnsureCopilotPage();
@@ -817,17 +930,7 @@ public sealed class MainShellViewModel : ObservableObject
             ct => toolboxPage.InitializeAsync(ct),
             toolboxPage,
             cancellationToken);
-        var settingsPage = EnsureSettingsPage();
-        var settingsLoaded = await InitializeDeferredRootPageAsync(
-            "Settings",
-            "Settings",
-            "Settings 页面正在后台初始化。",
-            SettingsRootPage,
-            ct => settingsPage.InitializeAsync(ct),
-            settingsPage,
-            cancellationToken);
         await taskQueueDeferredTask;
-        return settingsLoaded;
     }
 
     private void ScheduleDeferredCoreWarmupAfterStartup()
@@ -1081,14 +1184,75 @@ public sealed class MainShellViewModel : ObservableObject
 
     private CopilotPageViewModel CreateCopilotPage()
     {
-        var page = new CopilotPageViewModel(_runtime);
+        var page = new CopilotPageViewModel(
+            _runtime,
+            _dialogService,
+            StopRunOwnerFromDialogAsync,
+            EnsureConnectedForSecondaryRunAsync);
         page.SetLanguage(CurrentShellLanguage);
         return page;
     }
 
+    private async Task<UiOperationResult> EnsureConnectedForSecondaryRunAsync(CancellationToken cancellationToken)
+    {
+        CurrentSessionState = _runtime.SessionService.CurrentState;
+        if (CurrentSessionState == SessionState.Connected)
+        {
+            return UiOperationResult.Ok("Session already connected.");
+        }
+
+        if (CurrentSessionState is SessionState.Running or SessionState.Stopping)
+        {
+            return UiOperationResult.Fail(
+                UiErrorCode.OperationAlreadyRunning,
+                "Execution is already running.");
+        }
+
+        if (!await EnsureCoreReadyForExecutionAsync(cancellationToken))
+        {
+            return UiOperationResult.Fail(
+                UiErrorCode.SessionStateNotAllowed,
+                GetCoreUnavailableMessage());
+        }
+
+        var connectResult = await ConnectWithCurrentSettingsAsync(cancellationToken);
+        CurrentSessionState = _runtime.SessionService.CurrentState;
+        if (connectResult.Success && CurrentSessionState == SessionState.Connected)
+        {
+            GlobalStatus = connectResult.Message;
+            PushGrowl(connectResult.Message);
+            return connectResult;
+        }
+
+        return UiOperationResult.Fail(
+            connectResult.Error?.Code ?? UiErrorCode.SessionStateNotAllowed,
+            BuildConnectionFailureMessage(connectResult),
+            connectResult.Error?.Details);
+    }
+
+    private async Task StopRunOwnerFromDialogAsync(string owner, CancellationToken cancellationToken)
+    {
+        var normalizedOwner = string.IsNullOrWhiteSpace(owner) ? string.Empty : owner.Trim();
+        if (string.Equals(normalizedOwner, "Toolbox", StringComparison.Ordinal))
+        {
+            await EnsureToolboxPage().StopActiveToolAsync(cancellationToken);
+        }
+        else if (string.Equals(normalizedOwner, "TaskQueue", StringComparison.Ordinal))
+        {
+            await TaskQueuePage.StopAsync(cancellationToken);
+        }
+        else if (string.Equals(normalizedOwner, "Copilot", StringComparison.Ordinal) && TryGetCopilotPage(out var copilotPage))
+        {
+            await copilotPage.StopAsync(cancellationToken);
+        }
+
+        CurrentSessionState = _runtime.SessionService.CurrentState;
+        await SyncTrayMenuStateAsync(cancellationToken);
+    }
+
     private ToolboxPageViewModel CreateToolboxPage()
     {
-        var page = new ToolboxPageViewModel(_runtime, _connectionGameSharedState);
+        var page = new ToolboxPageViewModel(_runtime, _connectionGameSharedState, _dialogService, StopRunOwnerFromDialogAsync);
         page.SetLanguage(CurrentShellLanguage);
         return page;
     }
@@ -1118,6 +1282,7 @@ public sealed class MainShellViewModel : ObservableObject
         page.ResourceVersionUpdated += OnSettingsResourceVersionUpdated;
         page.UpdateAvailabilityChanged += OnSettingsUpdateAvailabilityChanged;
         page.ConfigurationContextChanged += OnSettingsConfigurationContextChanged;
+        page.PropertyChanged += OnSettingsPagePropertyChanged;
         page.ApplyStartupSnapshot(BuildLatestShellSnapshot());
         ApplySettingsUpdateAvailabilityState(page);
 
@@ -1454,6 +1619,16 @@ public sealed class MainShellViewModel : ObservableObject
                     if (!CanStartExecution)
                     {
                         CurrentSessionState = _runtime.SessionService.CurrentState;
+                        if (CurrentSessionState is SessionState.Running or SessionState.Stopping)
+                        {
+                            await TaskQueuePage.ToggleRunAsync(cancellationToken);
+                            await RecordEventAsync(
+                                scope,
+                                $"source={source}; running-dialog",
+                                cancellationToken);
+                            return ShellUiAction.None;
+                        }
+
                         var blockedMessage = CurrentSessionState switch
                         {
                             SessionState.Running or SessionState.Stopping => "任务正在执行中，Start 已禁用。",
@@ -1588,22 +1763,55 @@ public sealed class MainShellViewModel : ObservableObject
         }
     }
 
+    private void SetShellBlockingOperationOverlayVisible(bool visible)
+    {
+        if (_isShellBlockingOperationOverlayVisible == visible)
+        {
+            return;
+        }
+
+        _isShellBlockingOperationOverlayVisible = visible;
+        OnPropertyChanged(nameof(IsBlockingOperationOverlayVisible));
+    }
+
+    private static Task WaitForBlockingOperationOverlayRenderAsync()
+    {
+        if (Avalonia.Application.Current is null || !Dispatcher.UIThread.CheckAccess())
+        {
+            return Task.CompletedTask;
+        }
+
+        return Dispatcher.UIThread.InvokeAsync(
+            static () => { },
+            DispatcherPriority.Loaded).GetTask();
+    }
+
     public void SetAchievementToastWindowVisible(bool visible)
     {
         _achievementToastWindowVisible = visible;
-        if (visible)
-        {
-            FlushPendingAchievementToasts();
-        }
+        TryFlushPendingAchievementToasts();
     }
 
     public void DismissAchievementToast(string id)
     {
         var toast = AchievementToasts.FirstOrDefault(item => string.Equals(item.Id, id, StringComparison.Ordinal));
-        if (toast is not null)
+        if (toast is null || !toast.BeginDismissAnimation())
         {
-            AchievementToasts.Remove(toast);
+            return;
         }
+
+        _ = RemoveAchievementToastAfterAnimationAsync(toast);
+    }
+
+    public async Task ShowAchievementListDialogFromToastAsync(string toastId, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(toastId))
+        {
+            return;
+        }
+
+        DismissAchievementToast(toastId);
+        await SettingsPage.ShowAchievementListDialogAsync(cancellationToken);
     }
 
     private void OnAchievementUnlocked(object? sender, AchievementUnlockedEvent notification)
@@ -1619,7 +1827,7 @@ public sealed class MainShellViewModel : ObservableObject
 
     private void HandleAchievementUnlocked(AchievementUnlockedEvent notification)
     {
-        if (!_achievementToastWindowVisible)
+        if (!_achievementToastWindowVisible || !_achievementToastStartupCompleted)
         {
             if (_pendingAchievementToasts.All(item => !string.Equals(item.Id, notification.Id, StringComparison.Ordinal)))
             {
@@ -1630,6 +1838,28 @@ public sealed class MainShellViewModel : ObservableObject
         }
 
         PresentAchievementToast(notification);
+    }
+
+    internal void MarkAchievementToastStartupCompleted()
+    {
+        if (_achievementToastStartupCompleted)
+        {
+            return;
+        }
+
+        _achievementToastStartupCompleted = true;
+        RecordStartupPhase("AchievementToast.Ready", "Achievement toast gate opened after deferred startup completed.");
+        TryFlushPendingAchievementToasts();
+    }
+
+    private void TryFlushPendingAchievementToasts()
+    {
+        if (!_achievementToastWindowVisible || !_achievementToastStartupCompleted)
+        {
+            return;
+        }
+
+        FlushPendingAchievementToasts();
     }
 
     private void FlushPendingAchievementToasts()
@@ -1651,38 +1881,37 @@ public sealed class MainShellViewModel : ObservableObject
             0,
             new AchievementToastItemViewModel(
                 notification.Id,
+                FormatAchievementCelebrateText(
+                    AchievementTextCatalog.GetString("AchievementCelebrate", CurrentShellLanguage, "Achievement Unlocked")
+                        .Replace("🎉", string.Empty, StringComparison.Ordinal)
+                        .Trim()),
                 notification.Title,
                 notification.Description,
                 notification.MedalColor,
                 notification.AutoClose,
-                notification.UnlockedAtUtc));
+                notification.UnlockedAtUtc,
+                DismissAchievementToast));
 
         const int maxVisible = 4;
-        while (AchievementToasts.Count > maxVisible)
+        while (AchievementToasts.Count(item => !item.IsDismissAnimationActive) > maxVisible)
         {
-            AchievementToasts.RemoveAt(AchievementToasts.Count - 1);
+            var removedToast = AchievementToasts.Last(item => !item.IsDismissAnimationActive);
+            DismissAchievementToast(removedToast.Id);
         }
-
-        if (!notification.AutoClose)
-        {
-            return;
-        }
-
-        _ = AutoDismissAchievementToastAsync(notification.Id);
     }
 
-    private async Task AutoDismissAchievementToastAsync(string id)
+    private async Task RemoveAchievementToastAfterAnimationAsync(AchievementToastItemViewModel toast)
     {
-        try
+        await Task.Delay(FloatingOverlayAnimationDuration);
+        await Dispatcher.UIThread.InvokeAsync(() =>
         {
-            await Task.Delay(TimeSpan.FromSeconds(15), _startupCts.Token);
-        }
-        catch (OperationCanceledException)
-        {
-            return;
-        }
+            if (AchievementToasts.Contains(toast))
+            {
+                AchievementToasts.Remove(toast);
+            }
 
-        Dispatcher.UIThread.Post(() => DismissAchievementToast(id));
+            toast.Dispose();
+        });
     }
 
     private static string BuildLinkStartStateNotAllowedMessage(SessionState state)
@@ -1793,7 +2022,21 @@ public sealed class MainShellViewModel : ObservableObject
             return;
         }
 
-        Dispatcher.UIThread.Post(() => ApplySettingsUpdateAvailabilityState(page));
+        Dispatcher.UIThread
+            .InvokeAsync(
+                () => ApplySettingsUpdateAvailabilityState(page),
+                DispatcherPriority.Send)
+            .GetTask()
+            .GetAwaiter()
+            .GetResult();
+    }
+
+    private void OnSettingsPagePropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (string.Equals(e.PropertyName, nameof(SettingsPageViewModel.IsBlockingOperationOverlayVisible), StringComparison.Ordinal))
+        {
+            OnPropertyChanged(nameof(IsBlockingOperationOverlayVisible));
+        }
     }
 
     private async void OnSettingsConfigurationContextChanged(object? sender, ConfigurationContextChangedEventArgs e)
@@ -1840,33 +2083,244 @@ public sealed class MainShellViewModel : ObservableObject
         {
             WindowVersionUpdateInfo = string.Empty;
             WindowResourceUpdateInfo = string.Empty;
+            IsWindowUpdateActionRunning = false;
             return;
         }
 
+        IsWindowUpdateActionRunning = page.IsVersionUpdateActionRunning;
         WindowVersionUpdateInfo = page.HasPendingVersionUpdateAvailability
             ? RootTexts["Main.Update.VersionAvailable"]
             : string.Empty;
-        WindowResourceUpdateInfo = string.Empty;
+        WindowResourceUpdateInfo = page.PendingResourceUpdateSummary;
+    }
+
+    private async Task RunStartupVersionUpdateWorkflowAsync(
+        SettingsPageViewModel settingsPage,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await settingsPage.EnsureSectionDataLoadedAsync("VersionUpdate", cancellationToken);
+            await settingsPage.RunStartupVersionUpdateCheckAsync(cancellationToken);
+            await Dispatcher.UIThread.InvokeAsync(
+                () => ApplySettingsUpdateAvailabilityState(settingsPage),
+                DispatcherPriority.Send,
+                cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // no-op
+        }
+        catch (Exception ex)
+        {
+            await RecordUnhandledExceptionAsync(
+                "App.Initialize.VersionUpdate",
+                ex,
+                UiErrorCode.UiOperationFailed,
+                $"启动更新检查失败: {ex.Message}",
+                cancellationToken);
+        }
+    }
+
+    private async Task RunStartupAnnouncementWorkflowAsync(
+        SettingsPageViewModel settingsPage,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await settingsPage.ShowStartupAnnouncementAsync(cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // no-op
+        }
+        catch (Exception ex)
+        {
+            await RecordUnhandledExceptionAsync(
+                "App.Initialize.Announcement",
+                ex,
+                UiErrorCode.UiOperationFailed,
+                $"启动公告检查失败: {ex.Message}",
+                cancellationToken);
+        }
+    }
+
+    private void StartBackgroundStartupDialog(
+        Func<CancellationToken, Task> operation,
+        CancellationToken cancellationToken)
+    {
+        _ = ObserveBackgroundStartupDialogAsync(operation, cancellationToken);
+    }
+
+    private static async Task ObserveBackgroundStartupDialogAsync(
+        Func<CancellationToken, Task> operation,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await operation(cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // no-op
+        }
+    }
+
+    private static void ShowAndActivateMainWindow()
+    {
+        if (Avalonia.Application.Current?.ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime { MainWindow: { } mainWindow })
+        {
+            return;
+        }
+
+        if (!mainWindow.IsVisible)
+        {
+            mainWindow.Show();
+        }
+
+        if (mainWindow.WindowState == WindowState.Minimized)
+        {
+            mainWindow.WindowState = WindowState.Normal;
+        }
+
+        mainWindow.Activate();
     }
 
     private void RefreshWindowTitle()
     {
-        var updateTags = new List<string>();
+        var updateMessages = new List<string>();
         if (HasWindowVersionUpdateInfo)
         {
-            updateTags.Add(RootTexts.GetOrDefault("Main.Title.UpdateVersion", "Version Update"));
+            updateMessages.Add(WindowVersionUpdateInfo.Trim());
         }
 
         if (HasWindowResourceUpdateInfo)
         {
-            updateTags.Add(RootTexts.GetOrDefault("Main.Title.UpdateResource", "Resource Update"));
+            updateMessages.Add(WindowResourceUpdateInfo.Trim());
         }
 
-        _windowTitleSource = updateTags.Count == 0
+        _windowTitleSource = updateMessages.Count == 0
             ? AppDisplayName
-            : $"{AppDisplayName} [{string.Join(" / ", updateTags)}]";
+            : $"{AppDisplayName} - {string.Join(" / ", updateMessages)}";
         _windowTitleScrollOffset = 0;
         UpdateWindowTitleDisplay();
+    }
+
+    public void DismissWindowUpdateOverlay()
+    {
+        if (!HasWindowUpdateInfo)
+        {
+            return;
+        }
+
+        _dismissedWindowUpdateOverlaySignature = CurrentWindowUpdateOverlaySignature;
+        NotifyWindowUpdateOverlayVisibilityChanged();
+    }
+
+    public void OpenVersionUpdateSectionFromWindowOverlay()
+    {
+        DismissWindowUpdateOverlay();
+        NavigateToSettingsSection("VersionUpdate");
+    }
+
+    private string CurrentWindowUpdateOverlaySignature
+        => string.Concat(WindowVersionUpdateInfo.Trim(), "\n", WindowResourceUpdateInfo.Trim());
+
+    private void NotifyWindowUpdateOverlayVisibilityChanged()
+    {
+        if (string.IsNullOrEmpty(CurrentWindowUpdateOverlaySignature))
+        {
+            _dismissedWindowUpdateOverlaySignature = string.Empty;
+        }
+
+        OnPropertyChanged(nameof(HasVisibleWindowVersionUpdateInfo));
+        OnPropertyChanged(nameof(HasVisibleWindowResourceUpdateInfo));
+        OnPropertyChanged(nameof(HasMultipleVisibleWindowUpdates));
+        OnPropertyChanged(nameof(HasMultipleWindowUpdates));
+        OnPropertyChanged(nameof(HasVisibleWindowUpdateInfo));
+        UpdateWindowUpdateOverlayPresentation();
+    }
+
+    private void UpdateWindowUpdateOverlayPresentation()
+    {
+        _windowUpdateOverlayAnimationCts?.Cancel();
+        _windowUpdateOverlayAnimationCts?.Dispose();
+        _windowUpdateOverlayAnimationCts = null;
+
+        if (HasVisibleWindowUpdateInfo)
+        {
+            var wasPresented = IsWindowUpdateOverlayPresented;
+            IsWindowUpdateOverlayPresented = true;
+
+            if (!wasPresented || IsWindowUpdateOverlayAnimationHidden)
+            {
+                IsWindowUpdateOverlayAnimationHidden = true;
+                Dispatcher.UIThread.Post(
+                    () =>
+                    {
+                        if (HasVisibleWindowUpdateInfo)
+                        {
+                            IsWindowUpdateOverlayAnimationHidden = false;
+                        }
+                    },
+                    DispatcherPriority.Loaded);
+            }
+            else
+            {
+                IsWindowUpdateOverlayAnimationHidden = false;
+            }
+
+            return;
+        }
+
+        if (!IsWindowUpdateOverlayPresented)
+        {
+            IsWindowUpdateOverlayAnimationHidden = true;
+            return;
+        }
+
+        IsWindowUpdateOverlayAnimationHidden = true;
+        _windowUpdateOverlayAnimationCts = new CancellationTokenSource();
+        _ = CompleteWindowUpdateOverlayDismissAsync(_windowUpdateOverlayAnimationCts.Token);
+    }
+
+    private async Task CompleteWindowUpdateOverlayDismissAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(FloatingOverlayAnimationDuration, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return;
+        }
+
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            if (!cancellationToken.IsCancellationRequested && !HasVisibleWindowUpdateInfo)
+            {
+                IsWindowUpdateOverlayPresented = false;
+            }
+        });
+    }
+
+    private static string FormatAchievementCelebrateText(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return text;
+        }
+
+        if (!text.Contains(' ', StringComparison.Ordinal)
+            || !text.Any(static character => character is >= 'A' and <= 'Z' or >= 'a' and <= 'z'))
+        {
+            return text;
+        }
+
+        var firstSpaceIndex = text.IndexOf(' ');
+        return firstSpaceIndex > 0
+            ? text[..firstSpaceIndex] + Environment.NewLine + text[(firstSpaceIndex + 1)..]
+            : text;
     }
 
     private async Task HandleSettingsConfigurationContextChangedAsync(ConfigurationContextChangedEventArgs change)
@@ -2067,6 +2521,10 @@ public sealed class MainShellViewModel : ObservableObject
         {
             if (SettingsPage.ShowWindowBeforeForceScheduledStart)
             {
+                await Dispatcher.UIThread.InvokeAsync(
+                    ShowAndActivateMainWindow,
+                    DispatcherPriority.Send,
+                    cancellationToken);
                 PushGrowl("定时触发：强制执行前显示窗口。");
             }
 
@@ -2160,7 +2618,22 @@ public sealed class MainShellViewModel : ObservableObject
         try
         {
             config.CurrentProfile = targetProfile;
-            await _runtime.ConfigurationService.SaveAsync(cancellationToken);
+            var saved = await ConfigurationSaveTracker.Instance.RunTrackedAsync(
+                "Timer.Schedule.SwitchProfile",
+                "定时执行配置",
+                "Timer.Schedule.SwitchProfile.Save",
+                _runtime.DiagnosticsService,
+                async ct =>
+                {
+                    await _runtime.ConfigurationService.SaveAsync(ct);
+                    return true;
+                },
+                cancellationToken);
+            if (!saved)
+            {
+                return false;
+            }
+
             await TaskQueuePage.ReloadTasksAsync(cancellationToken);
             await TaskQueuePage.WaitForPendingBindingAsync(cancellationToken);
             SyncConnectionFromProfile();
@@ -2421,6 +2894,16 @@ public sealed class MainShellViewModel : ObservableObject
         _schemaMigrationNoticeShown = true;
         try
         {
+            var noticeBody = string.Format(
+                CultureInfo.CurrentCulture,
+                RootTexts.GetOrDefault(
+                    "Main.SchemaMigration.Dialog.Prompt",
+                    "The configuration schema is older than the latest version.{4}Current version: v{0}{4}Latest version: v{1}{4}{4}{2}{4}Suggested action: {3}{4}A backup named avalonia.json.schema-v{0}.bak.<timestamp> will be created before writing the latest schema."),
+                notice.CurrentSchemaVersion,
+                notice.LatestSchemaVersion,
+                notice.Message,
+                notice.SuggestedAction,
+                Environment.NewLine);
             var chrome = DialogTextCatalog.CreateRootCatalog(
                 CurrentShellLanguage,
                 "Root.Localization.MainShell",
@@ -2433,27 +2916,15 @@ public sealed class MainShellViewModel : ObservableObject
                         "I Understand"),
                     cancelText: texts.GetOrDefault(
                         "Main.SchemaMigration.Dialog.Cancel",
-                        "Close"),
-                    namedTexts: DialogTextCatalog.CreateNamedTexts(
-                        (
-                            DialogTextCatalog.ChromeKeys.Prompt,
-                            string.Format(
-                                CultureInfo.CurrentCulture,
-                                texts.GetOrDefault(
-                                    "Main.SchemaMigration.Dialog.Prompt",
-                                    "The configuration schema is older than the latest version.{4}Current version: v{0}{4}Latest version: v{1}{4}{4}{2}{4}Suggested action: {3}{4}A backup named avalonia.json.schema-v{0}.bak.<timestamp> will be created before writing the latest schema."),
-                                notice.CurrentSchemaVersion,
-                                notice.LatestSchemaVersion,
-                                notice.Message,
-                                notice.SuggestedAction,
-                                Environment.NewLine)))));
+                        "Close")));
             var chromeSnapshot = chrome.GetSnapshot();
             var completion = await _dialogService.ShowTextAsync(
                 new TextDialogRequest(
                     Title: chromeSnapshot.Title,
-                    Prompt: chromeSnapshot.GetNamedTextOrDefault(DialogTextCatalog.ChromeKeys.Prompt, string.Empty),
-                    DefaultText: string.Empty,
+                    Prompt: notice.Message,
+                    DefaultText: noticeBody,
                     MultiLine: true,
+                    ReadOnlyContent: true,
                     ConfirmText: chromeSnapshot.ConfirmText ?? RootTexts.GetOrDefault("Main.SchemaMigration.Dialog.Confirm", "I Understand"),
                     CancelText: chromeSnapshot.CancelText ?? RootTexts.GetOrDefault("Main.SchemaMigration.Dialog.Cancel", "Close"),
                     Chrome: chrome),
@@ -2587,12 +3058,14 @@ public sealed class MainShellViewModel : ObservableObject
         string previousLanguage,
         string nextLanguage)
     {
-        if (Dispatcher.UIThread.CheckAccess() || Avalonia.Application.Current is null)
+        if (Avalonia.Application.Current is null)
         {
             return ApplyCoordinatedLanguageChangeAsync(previousLanguage, nextLanguage);
         }
 
-        return Dispatcher.UIThread.InvokeAsync(() => ApplyCoordinatedLanguageChangeAsync(previousLanguage, nextLanguage));
+        return Dispatcher.UIThread.InvokeAsync(
+            () => ApplyCoordinatedLanguageChangeAsync(previousLanguage, nextLanguage),
+            DispatcherPriority.Send);
     }
 
     private async Task ApplyCoordinatedLanguageChangeAsync(
@@ -2600,40 +3073,201 @@ public sealed class MainShellViewModel : ObservableObject
         string nextLanguage,
         CancellationToken cancellationToken = default)
     {
-        CurrentShellLanguage = nextLanguage;
-        _runtime.AchievementTrackerService.SetCurrentLanguage(nextLanguage);
-        RootTexts.Language = nextLanguage;
-        TaskQueuePage.SetLanguage(nextLanguage);
-        if (TryGetCopilotPage(out var copilotPage))
+        var total = Stopwatch.StartNew();
+        var step = Stopwatch.StartNew();
+        try
         {
-            copilotPage.SetLanguage(nextLanguage);
-        }
-
-        if (TryGetToolboxPage(out var toolboxPage))
-        {
-            toolboxPage.SetLanguage(nextLanguage);
-        }
-
-        if (TryGetSettingsPage(out var settingsPage))
-        {
-            settingsPage.AutostartStatus = PlatformCapabilityTextMap.FormatAutostartStatus(
+            CurrentShellLanguage = nextLanguage;
+            _runtime.AchievementTrackerService.SetCurrentLanguage(nextLanguage);
+            RootTexts.Language = nextLanguage;
+            _ = RecordLanguageTimingAsync(
+                "Shell.ApplyLanguage.Root",
+                step,
+                previousLanguage,
                 nextLanguage,
-                settingsPage.StartSelf,
-                ReportLocalizationFallback);
+                cancellationToken);
+            await YieldForBlockingOperationOverlayFrameAsync();
+
+            step.Restart();
+            TaskQueuePage.SetLanguage(nextLanguage);
+            _ = RecordLanguageTimingAsync(
+                "Shell.ApplyLanguage.TaskQueue",
+                step,
+                previousLanguage,
+                nextLanguage,
+                cancellationToken);
+            await YieldForBlockingOperationOverlayFrameAsync();
+
+            step.Restart();
+            if (TryGetCopilotPage(out var copilotPage))
+            {
+                copilotPage.SetLanguage(nextLanguage);
+                _ = RecordLanguageTimingAsync(
+                    "Shell.ApplyLanguage.Copilot",
+                    step,
+                    previousLanguage,
+                    nextLanguage,
+                    cancellationToken,
+                    ("loaded", true));
+            }
+            else
+            {
+                _ = RecordLanguageTimingAsync(
+                    "Shell.ApplyLanguage.Copilot",
+                    step,
+                    previousLanguage,
+                    nextLanguage,
+                    cancellationToken,
+                    ("loaded", false));
+            }
+
+            await YieldForBlockingOperationOverlayFrameAsync();
+
+            step.Restart();
+            if (TryGetToolboxPage(out var toolboxPage))
+            {
+                toolboxPage.SetLanguage(nextLanguage);
+                _ = RecordLanguageTimingAsync(
+                    "Shell.ApplyLanguage.Toolbox",
+                    step,
+                    previousLanguage,
+                    nextLanguage,
+                    cancellationToken,
+                    ("loaded", true));
+            }
+            else
+            {
+                _ = RecordLanguageTimingAsync(
+                    "Shell.ApplyLanguage.Toolbox",
+                    step,
+                    previousLanguage,
+                    nextLanguage,
+                    cancellationToken,
+                    ("loaded", false));
+            }
+
+            await YieldForBlockingOperationOverlayFrameAsync();
+
+            step.Restart();
+            if (TryGetSettingsPage(out var settingsPage))
+            {
+                settingsPage.AutostartStatus = PlatformCapabilityTextMap.FormatAutostartStatus(
+                    nextLanguage,
+                    settingsPage.StartSelf,
+                    ReportLocalizationFallback);
+                ApplySettingsUpdateAvailabilityState(settingsPage);
+                _ = RecordLanguageTimingAsync(
+                    "Shell.ApplyLanguage.SettingsShellState",
+                    step,
+                    previousLanguage,
+                    nextLanguage,
+                    cancellationToken,
+                    ("loaded", true));
+            }
+            else
+            {
+                _ = RecordLanguageTimingAsync(
+                    "Shell.ApplyLanguage.SettingsShellState",
+                    step,
+                    previousLanguage,
+                    nextLanguage,
+                    cancellationToken,
+                    ("loaded", false));
+            }
+
+            await YieldForBlockingOperationOverlayFrameAsync();
+
+            step.Restart();
+            RefreshRootTextState();
+            await RefreshCapabilitySummaryAsync(cancellationToken);
+            _ = RecordLanguageTimingAsync(
+                "Shell.ApplyLanguage.CapabilitySummary",
+                step,
+                previousLanguage,
+                nextLanguage,
+                cancellationToken);
+
+            step.Restart();
+            var trayRefresh = await _runtime.PlatformCapabilityService.InitializeTrayAsync(
+                "MaaAssistantArknights",
+                PlatformCapabilityTextMap.CreateTrayMenuText(nextLanguage, ReportLocalizationFallback),
+                cancellationToken);
+            _ = RecordLanguageTimingAsync(
+                "Shell.ApplyLanguage.TrayInitialize",
+                step,
+                previousLanguage,
+                nextLanguage,
+                cancellationToken,
+                ("success", trayRefresh.Success));
+
+            step.Restart();
+            if (await ApplyResultAsync(trayRefresh, "App.Shell.SwitchLanguage.TrayRefresh", cancellationToken)
+                && !string.Equals(previousLanguage, nextLanguage, StringComparison.OrdinalIgnoreCase))
+            {
+                _ = _runtime.AchievementTrackerService.Unlock("Linguist");
+            }
+
+            _ = RecordLanguageTimingAsync(
+                "Shell.ApplyLanguage.TrayApplyResult",
+                step,
+                previousLanguage,
+                nextLanguage,
+                cancellationToken);
         }
-
-        RefreshRootTextState();
-        await RefreshCapabilitySummaryAsync(cancellationToken);
-
-        var trayRefresh = await _runtime.PlatformCapabilityService.InitializeTrayAsync(
-            "MaaAssistantArknights",
-            PlatformCapabilityTextMap.CreateTrayMenuText(nextLanguage, ReportLocalizationFallback),
-            cancellationToken);
-        if (await ApplyResultAsync(trayRefresh, "App.Shell.SwitchLanguage.TrayRefresh", cancellationToken)
-            && !string.Equals(previousLanguage, nextLanguage, StringComparison.OrdinalIgnoreCase))
+        finally
         {
-            _ = _runtime.AchievementTrackerService.Unlock("Linguist");
+            _ = RecordLanguageTimingAsync(
+                "Shell.ApplyLanguage.Total",
+                total,
+                previousLanguage,
+                nextLanguage,
+                cancellationToken);
         }
+    }
+
+    private static Task YieldForBlockingOperationOverlayFrameAsync()
+    {
+        if (Avalonia.Application.Current is null || !Dispatcher.UIThread.CheckAccess())
+        {
+            return Task.CompletedTask;
+        }
+
+        return Dispatcher.UIThread.InvokeAsync(
+            static () => { },
+            DispatcherPriority.Loaded).GetTask();
+    }
+
+    private Task RecordLanguageTimingAsync(
+        string scope,
+        Stopwatch stopwatch,
+        string fromLanguage,
+        string targetLanguage,
+        CancellationToken cancellationToken,
+        params (string Key, object? Value)[] fields)
+    {
+        var payload = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["from"] = fromLanguage,
+            ["target"] = targetLanguage,
+            ["current"] = CurrentShellLanguage,
+            ["selectedRoot"] = SelectedRootTabIndex >= 0 && SelectedRootTabIndex < RootTabs.Count
+                ? RootTabs[SelectedRootTabIndex]
+                : SelectedRootTabIndex.ToString(CultureInfo.InvariantCulture),
+        };
+
+        foreach (var (key, value) in fields)
+        {
+            if (!string.IsNullOrWhiteSpace(key))
+            {
+                payload[key] = value;
+            }
+        }
+
+        return _runtime.DiagnosticsService.RecordTemporaryTimingAsync(
+            scope,
+            stopwatch.Elapsed.TotalMilliseconds,
+            payload,
+            cancellationToken);
     }
 
     private async Task SwitchLanguageCoreAsync(
@@ -2642,42 +3276,51 @@ public sealed class MainShellViewModel : ObservableObject
         string? source,
         CancellationToken cancellationToken)
     {
-        var switchResult = await _runtime.ShellFeatureService.SwitchLanguageAsync(
-            CurrentShellLanguage,
-            targetLanguage,
-            cancellationToken);
-        if (!switchResult.Success || string.IsNullOrWhiteSpace(switchResult.Value))
+        SetShellBlockingOperationOverlayVisible(true);
+        try
         {
-            PushGrowl(switchResult.Message);
-            _ = await ApplyResultAsync(
-                UiOperationResult.Fail(
-                    switchResult.Error?.Code ?? UiErrorCode.LanguageSwitchFailed,
-                    switchResult.Message,
-                    switchResult.Error?.Details),
-                successScope,
+            await WaitForBlockingOperationOverlayRenderAsync();
+            var switchResult = await _runtime.ShellFeatureService.SwitchLanguageAsync(
+                CurrentShellLanguage,
+                targetLanguage,
                 cancellationToken);
-            return;
-        }
+            if (!switchResult.Success || string.IsNullOrWhiteSpace(switchResult.Value))
+            {
+                PushGrowl(switchResult.Message);
+                _ = await ApplyResultAsync(
+                    UiOperationResult.Fail(
+                        switchResult.Error?.Code ?? UiErrorCode.LanguageSwitchFailed,
+                        switchResult.Message,
+                        switchResult.Error?.Details),
+                    successScope,
+                    cancellationToken);
+                return;
+            }
 
-        var next = switchResult.Value;
-        var changeResult = await _runtime.UiLanguageCoordinator.ChangeLanguageAsync(next, cancellationToken);
-        var appliedLanguage = await ApplyResultAsync(changeResult, successScope, cancellationToken);
-        if (appliedLanguage is null)
+            var next = switchResult.Value;
+            var changeResult = await ChangeLanguageCoordinatorAsync(next, cancellationToken);
+            var appliedLanguage = await ApplyResultAsync(changeResult, successScope, cancellationToken);
+            if (appliedLanguage is null)
+            {
+                return;
+            }
+
+            await _pendingLanguageApplyTask;
+
+            PushGrowl($"语言切换为: {next}");
+
+            var message = source is null
+                ? $"Language switched to {next}."
+                : $"source={source}; target={(string.IsNullOrWhiteSpace(targetLanguage) ? "cycle" : targetLanguage)}; result={next}";
+            await RecordEventAsync(
+                successScope,
+                message,
+                cancellationToken);
+        }
+        finally
         {
-            return;
+            SetShellBlockingOperationOverlayVisible(false);
         }
-
-        await _pendingLanguageApplyTask;
-
-        PushGrowl($"语言切换为: {next}");
-
-        var message = source is null
-            ? $"Language switched to {next}."
-            : $"source={source}; target={(string.IsNullOrWhiteSpace(targetLanguage) ? "cycle" : targetLanguage)}; result={next}";
-        await RecordEventAsync(
-            successScope,
-            message,
-            cancellationToken);
     }
 
     private async Task SyncLanguageCoordinatorWithConfigAsync(CancellationToken cancellationToken = default)
@@ -2691,6 +3334,20 @@ public sealed class MainShellViewModel : ObservableObject
         var result = await _runtime.UiLanguageCoordinator.ChangeLanguageAsync(normalized, cancellationToken);
         await ApplyResultAsync(result, "App.Shell.Language.SyncFromConfig", cancellationToken);
         await _pendingLanguageApplyTask;
+    }
+
+    private Task<UiOperationResult<string>> ChangeLanguageCoordinatorAsync(
+        string targetLanguage,
+        CancellationToken cancellationToken)
+    {
+        if (Avalonia.Application.Current is null || !Dispatcher.UIThread.CheckAccess())
+        {
+            return _runtime.UiLanguageCoordinator.ChangeLanguageAsync(targetLanguage, cancellationToken);
+        }
+
+        return Task.Run(
+            () => _runtime.UiLanguageCoordinator.ChangeLanguageAsync(targetLanguage, cancellationToken),
+            cancellationToken);
     }
 
     private void RefreshRootPageHostStatusText()

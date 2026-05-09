@@ -1,0 +1,359 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="MAAUnified.App.Controls.AppHistoryInput"
+             x:Name="Root"
+             Classes="app-history-input">
+  <UserControl.Styles>
+    <Style Selector="Border.app-history-input-shell">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.SettingsInput.Background}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.SettingsInput.Border}" />
+      <Setter Property="BorderThickness" Value="{DynamicResource MAA.BorderThickness.Thin}" />
+      <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.CornerRadius.SettingsInput}" />
+      <Setter Property="Height" Value="{DynamicResource MAA.App.Size.InputHeight}" />
+      <Setter Property="MinHeight" Value="{DynamicResource MAA.App.Size.InputHeight}" />
+      <Setter Property="Padding" Value="{DynamicResource MAA.App.Thickness.SettingsInputShellPadding}" />
+      <Setter Property="Transitions">
+        <Transitions>
+          <BrushTransition Property="Background" Duration="0:0:0.11" />
+          <BrushTransition Property="BorderBrush" Duration="0:0:0.11" />
+        </Transitions>
+      </Setter>
+    </Style>
+
+    <Style Selector="Border.app-history-input-shell:pointerover">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.SettingsInput.BackgroundHover}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.SettingsInput.BorderHover}" />
+    </Style>
+
+    <Style Selector="Border.app-history-input-shell.open">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.SettingsInput.BackgroundHover}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.SettingsInput.BorderFocus}" />
+      <Setter Property="BorderThickness" Value="{DynamicResource MAA.BorderThickness.Thin}" />
+      <Setter Property="BoxShadow" Value="{DynamicResource MAA.App.BoxShadow.InputFocus}" />
+    </Style>
+
+    <Style Selector="Border.app-history-input-shell.focused">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.SettingsInput.BackgroundHover}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.SettingsInput.BorderFocus}" />
+      <Setter Property="BorderThickness" Value="{DynamicResource MAA.BorderThickness.Thin}" />
+      <Setter Property="BoxShadow" Value="{DynamicResource MAA.App.BoxShadow.InputFocus}" />
+    </Style>
+
+    <Style Selector="Border.app-history-input-shell:disabled">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.SettingsInput.BackgroundDisabled}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.SettingsInput.BorderDisabled}" />
+      <Setter Property="Opacity" Value="1" />
+    </Style>
+
+    <Style Selector="TextBox.app-history-input-editor">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="FocusAdorner" Value="{x:Null}" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.Foreground}" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="TextBox.app-history-input-editor:disabled">
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ForegroundDisabled}" />
+    </Style>
+
+    <Style Selector="TextBox.app-history-input-editor /template/ Border">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+
+    <Style Selector="TextBox.app-history-input-editor:focus /template/ Border">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+
+    <Style Selector="TextBox.app-history-input-editor:focus-visible /template/ Border">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+
+    <Style Selector="TextBox.app-history-input-editor:disabled /template/ Border">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+
+    <Style Selector="Button.app-history-input-toggle">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="0" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.Chevron}" />
+      <Setter Property="Width" Value="{DynamicResource MAA.App.Size.InputHeight}" />
+      <Setter Property="MinWidth" Value="{DynamicResource MAA.App.Size.InputHeight}" />
+      <Setter Property="Height" Value="{DynamicResource MAA.App.Size.InputHeight}" />
+      <Setter Property="MinHeight" Value="{DynamicResource MAA.App.Size.InputHeight}" />
+      <Setter Property="Margin" Value="0" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Focusable" Value="False" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Border Background="{TemplateBinding Background}"
+                  BorderBrush="{TemplateBinding BorderBrush}"
+                  BorderThickness="{TemplateBinding BorderThickness}"
+                  CornerRadius="{TemplateBinding CornerRadius}">
+            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                              Content="{TemplateBinding Content}"
+                              ContentTemplate="{TemplateBinding ContentTemplate}"
+                              Margin="{TemplateBinding Padding}" />
+          </Border>
+        </ControlTemplate>
+      </Setter>
+    </Style>
+
+    <Style Selector="Button.app-history-input-toggle:pointerover">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ChevronHover}" />
+    </Style>
+
+    <Style Selector="Button.app-history-input-toggle:pressed">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <Style Selector="Button.app-history-input-toggle:disabled">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ChevronDisabled}" />
+      <Setter Property="Opacity" Value="1" />
+    </Style>
+
+    <Style Selector="Path.app-history-input-chevron">
+      <Setter Property="Width" Value="{DynamicResource MAA.App.Size.SettingsInputChevronWidth}" />
+      <Setter Property="Height" Value="{DynamicResource MAA.App.Size.SettingsInputChevronHeight}" />
+      <Setter Property="Stretch" Value="Uniform" />
+      <Setter Property="Stroke" Value="{DynamicResource MAA.Brush.App.SettingsInput.Chevron}" />
+      <Setter Property="StrokeThickness" Value="1.4" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="Button.app-history-input-toggle:pointerover Path.app-history-input-chevron">
+      <Setter Property="Stroke" Value="{DynamicResource MAA.Brush.App.SettingsInput.ChevronHover}" />
+    </Style>
+
+    <Style Selector="Button.app-history-input-toggle:pressed Path.app-history-input-chevron">
+      <Setter Property="Stroke" Value="{DynamicResource MAA.Brush.App.SettingsInput.ChevronHover}" />
+    </Style>
+
+    <Style Selector="Button.app-history-input-toggle:disabled Path.app-history-input-chevron">
+      <Setter Property="Stroke" Value="{DynamicResource MAA.Brush.App.SettingsInput.ChevronDisabled}" />
+    </Style>
+
+    <Style Selector="Popup.app-history-input-popup">
+      <Setter Property="WindowManagerAddShadowHint" Value="False" />
+    </Style>
+
+    <Style Selector="Border.app-history-input-popup-panel">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.SettingsInput.PopupBackground}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.SettingsInput.PopupBorder}" />
+      <Setter Property="BorderThickness" Value="{DynamicResource MAA.BorderThickness.Thin}" />
+      <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.CornerRadius.SettingsInputPopup}" />
+      <Setter Property="Padding" Value="{DynamicResource MAA.App.Thickness.SettingsInputPopupPadding}" />
+    </Style>
+
+    <Style Selector="ScrollViewer.app-history-input-scroll">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.SettingsInput.PopupScrollViewerBackground}" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="0" />
+    </Style>
+
+    <Style Selector="ListBox.app-history-input-list">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+
+    <Style Selector="ListBox.app-history-input-list ListBoxItem">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.CornerRadius.SettingsInput}" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="MinHeight" Value="{DynamicResource MAA.App.Size.SettingsInputItemMinHeight}" />
+      <Setter Property="Opacity" Value="1" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="ListBox.app-history-input-list ListBoxItem /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.CornerRadius.SettingsInput}" />
+      <Setter Property="Padding" Value="0" />
+    </Style>
+
+    <Style Selector="Border.app-history-input-item-shell">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.CornerRadius.SettingsInput}" />
+      <Setter Property="MinHeight" Value="{DynamicResource MAA.App.Size.SettingsInputItemMinHeight}" />
+      <Setter Property="Padding" Value="{DynamicResource MAA.App.Thickness.SettingsInputItemPadding}" />
+    </Style>
+
+    <Style Selector="ListBox.app-history-input-list ListBoxItem:pointerover Border.app-history-input-item-shell">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.SettingsInput.ItemBackgroundHover}" />
+    </Style>
+
+    <Style Selector="ListBox.app-history-input-list ListBoxItem:selected Border.app-history-input-item-shell">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.SettingsInput.ItemBackgroundSelected}" />
+    </Style>
+
+    <Style Selector="ListBox.app-history-input-list ListBoxItem:selected:pointerover Border.app-history-input-item-shell">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.SettingsInput.ItemBackgroundSelected}" />
+    </Style>
+
+    <Style Selector="TextBlock.app-history-input-item-text">
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ItemForeground}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="ListBox.app-history-input-list ListBoxItem:pointerover TextBlock.app-history-input-item-text">
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ItemForegroundHover}" />
+    </Style>
+
+    <Style Selector="ListBox.app-history-input-list ListBoxItem:selected TextBlock.app-history-input-item-text">
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ItemForegroundSelected}" />
+    </Style>
+
+    <Style Selector="ListBox.app-history-input-list ListBoxItem:selected:pointerover TextBlock.app-history-input-item-text">
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ItemForegroundSelected}" />
+    </Style>
+
+    <Style Selector="Button.app-history-input-delete">
+      <Setter Property="Width" Value="{DynamicResource MAA.App.Size.SettingsDropdownDeleteButtonSize}" />
+      <Setter Property="MinWidth" Value="{DynamicResource MAA.App.Size.SettingsDropdownDeleteButtonSize}" />
+      <Setter Property="Height" Value="{DynamicResource MAA.App.Size.SettingsDropdownDeleteButtonSize}" />
+      <Setter Property="MinHeight" Value="{DynamicResource MAA.App.Size.SettingsDropdownDeleteButtonSize}" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Margin" Value="{DynamicResource MAA.App.Thickness.SettingsDropdownDeleteButtonMargin}" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="11" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.Chevron}" />
+      <Setter Property="Focusable" Value="False" />
+      <Setter Property="HorizontalAlignment" Value="Right" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Border Background="{TemplateBinding Background}"
+                  BorderBrush="{TemplateBinding BorderBrush}"
+                  BorderThickness="{TemplateBinding BorderThickness}"
+                  CornerRadius="{TemplateBinding CornerRadius}">
+            <Path Width="8"
+                  Height="8"
+                  Data="M1 1 L7 7 M7 1 L1 7"
+                  HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                  VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                  Stroke="{TemplateBinding Foreground}"
+                  StrokeThickness="1.45"
+                  StrokeLineCap="Round" />
+          </Border>
+        </ControlTemplate>
+      </Setter>
+    </Style>
+
+    <Style Selector="Button.app-history-input-delete:pointerover">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.SettingsInput.GroupActionBackgroundHover}" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ChevronHover}" />
+    </Style>
+
+    <Style Selector="Button.app-history-input-delete:pressed">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.SettingsInput.GroupActionBackgroundPressed}" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ChevronHover}" />
+    </Style>
+
+    <Style Selector="Button.app-history-input-delete:disabled">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ChevronDisabled}" />
+      <Setter Property="Opacity" Value="1" />
+    </Style>
+  </UserControl.Styles>
+
+  <Grid>
+    <Border x:Name="ShellBorder"
+            Classes="app-history-input-shell"
+            PointerPressed="OnShellPointerPressed">
+      <Grid ColumnDefinitions="*,Auto">
+        <TextBox x:Name="EditorTextBox"
+                 Classes="app-history-input-editor"
+                 Text="{Binding Text, ElementName=Root, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                 Watermark="{Binding Watermark, ElementName=Root}"
+                 GotFocus="OnEditorGotFocus"
+                 LostFocus="OnEditorLostFocus"
+                 KeyDown="OnEditorKeyDown" />
+
+        <Button x:Name="ToggleButton"
+                Grid.Column="1"
+                Classes="app-history-input-toggle"
+                Click="OnToggleButtonClick">
+          <Path Classes="app-history-input-chevron"
+                Data="M 1 1 L 5 5 L 9 1"
+                StrokeLineCap="Round" />
+        </Button>
+      </Grid>
+    </Border>
+
+    <Popup x:Name="DropDownPopup"
+           Classes="app-history-input-popup"
+           IsOpen="{Binding IsDropDownOpen, ElementName=Root, Mode=TwoWay}"
+           Placement="BottomEdgeAlignedLeft"
+           PlacementTarget="{Binding ElementName=ShellBorder}"
+           VerticalOffset="4"
+           IsLightDismissEnabled="True"
+           Closed="OnPopupClosed">
+      <Border Classes="app-history-input-popup-panel"
+              MinWidth="{Binding Bounds.Width, ElementName=ShellBorder}"
+              HorizontalAlignment="Left">
+        <ScrollViewer Classes="app-history-input-scroll"
+                      MaxHeight="{Binding MaxDropDownHeight, ElementName=Root}"
+                      HorizontalScrollBarVisibility="Disabled"
+                      VerticalScrollBarVisibility="Auto">
+          <ListBox x:Name="HistoryListBox"
+                   Classes="app-history-input-list"
+                   ItemsSource="{Binding ItemsSource, ElementName=Root}"
+                   SelectionChanged="OnHistorySelectionChanged">
+            <ListBox.ItemTemplate>
+              <DataTemplate>
+                <Border Classes="app-history-input-item-shell">
+                  <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Grid.Column="0"
+                               Classes="app-history-input-item-text"
+                               Margin="0,0,10,0"
+                               Text="{Binding .}"
+                               TextTrimming="CharacterEllipsis" />
+                    <Button Grid.Column="1"
+                            Classes="app-history-input-delete"
+                            Tag="{Binding .}"
+                            Click="OnDeleteButtonClick"
+                            PointerPressed="OnDeleteButtonPointerPressed"
+                            PointerReleased="OnDeleteButtonPointerReleased" />
+                  </Grid>
+                </Border>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+        </ScrollViewer>
+      </Border>
+    </Popup>
+  </Grid>
+</UserControl>

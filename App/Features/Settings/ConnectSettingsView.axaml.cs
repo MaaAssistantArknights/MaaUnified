@@ -10,21 +10,21 @@ using System.Text.Json;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
-using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using MAAUnified.Application.Models;
+using MAAUnified.App.Controls;
+using MAAUnified.App.Views;
 using MAAUnified.App.ViewModels.Settings;
 using MAAUnified.Application.Services.Localization;
+using MAAUnified.Compat.Runtime;
 
 namespace MAAUnified.App.Features.Settings;
 
 public partial class ConnectSettingsView : UserControl
 {
-    private Window? _screenshotPreviewWindow;
-    private Image? _screenshotPreviewImage;
-    private Bitmap? _screenshotPreviewBitmap;
+    private ScreenshotPreviewWindow? _screenshotPreviewWindow;
 
     public ConnectSettingsView()
     {
@@ -33,6 +33,7 @@ public partial class ConnectSettingsView : UserControl
     }
 
     private ConnectionGameSharedStateViewModel? VM => DataContext as ConnectionGameSharedStateViewModel;
+    private string T(string key, string fallback) => VM?.RootTexts[key] ?? fallback;
 
     private async void OnSelectAdbPathClick(object? sender, RoutedEventArgs e)
     {
@@ -65,6 +66,102 @@ public partial class ConnectSettingsView : UserControl
         {
             vm.AdbPath = path;
             _ = vm.ResolveEffectiveAdbPath(updateStateWhenResolved: true);
+        }
+    }
+
+    private void OnConnectAddressItemDeleted(object? sender, AppHistoryInputItemEventArgs e)
+    {
+        if (VM is not null && e.Item is string address)
+        {
+            VM.RemoveAddressFromHistory(address);
+        }
+    }
+
+    private void OnConnectAddressSelectionCommitted(object? sender, AppHistoryInputItemEventArgs e)
+    {
+        if (VM is null || e.Item is not string address)
+        {
+            return;
+        }
+
+        VM.ConnectAddress = address;
+    }
+
+    private void OnConnectAddressEditorCommitted(object? sender, AppHistoryInputEditorCommittedEventArgs e)
+    {
+        if (VM is null)
+        {
+            return;
+        }
+
+        VM.ConnectAddress = e.Text;
+    }
+
+    private void OnMuMuExtrasChecked(object? sender, RoutedEventArgs e)
+    {
+        var vm = VM;
+        if (vm is null)
+        {
+            return;
+        }
+
+        if (vm.AutoDetectMuMu12EmulatorPathIfNeeded())
+        {
+            vm.TestLinkInfo = $"MuMu path auto-detected: {vm.MuMu12EmulatorPath}";
+            return;
+        }
+
+        if (!vm.ValidateMuMu12EmulatorPath(out var error) && !string.IsNullOrWhiteSpace(error))
+        {
+            vm.TestLinkInfo = error;
+        }
+    }
+
+    private void OnMuMuEmulatorPathLostFocus(object? sender, RoutedEventArgs e)
+    {
+        var vm = VM;
+        if (vm is null)
+        {
+            return;
+        }
+
+        if (!vm.ValidateMuMu12EmulatorPath(out var error) && !string.IsNullOrWhiteSpace(error))
+        {
+            vm.TestLinkInfo = error;
+        }
+    }
+
+    private void OnLdPlayerExtrasChecked(object? sender, RoutedEventArgs e)
+    {
+        var vm = VM;
+        if (vm is null)
+        {
+            return;
+        }
+
+        if (vm.AutoDetectLdPlayerEmulatorPathIfNeeded())
+        {
+            vm.TestLinkInfo = $"LDPlayer path auto-detected: {vm.LdPlayerEmulatorPath}";
+            return;
+        }
+
+        if (!vm.ValidateLdPlayerEmulatorPath(out var error) && !string.IsNullOrWhiteSpace(error))
+        {
+            vm.TestLinkInfo = error;
+        }
+    }
+
+    private void OnLdPlayerEmulatorPathLostFocus(object? sender, RoutedEventArgs e)
+    {
+        var vm = VM;
+        if (vm is null)
+        {
+            return;
+        }
+
+        if (!vm.ValidateLdPlayerEmulatorPath(out var error) && !string.IsNullOrWhiteSpace(error))
+        {
+            vm.TestLinkInfo = error;
         }
     }
 
@@ -176,7 +273,7 @@ public partial class ConnectSettingsView : UserControl
 
             vm.TestLinkInfo = T("Settings.Connect.Status.DownloadingAdb");
 
-            var baseDirectory = AppContext.BaseDirectory;
+            var baseDirectory = RuntimeLayout.ResolveRuntimeBaseDirectory();
             var cacheDirectory = Path.Combine(baseDirectory, "cache", "adb");
             Directory.CreateDirectory(cacheDirectory);
 
@@ -347,27 +444,21 @@ public partial class ConnectSettingsView : UserControl
 
     private void ShowOrUpdateScreenshotPreview(byte[] imageBytes)
     {
-        Bitmap bitmap;
-        using (var stream = new MemoryStream(imageBytes, writable: false))
-        {
-            bitmap = new Bitmap(stream);
-        }
+        using var stream = new MemoryStream(imageBytes, writable: false);
+        var bitmap = new Bitmap(stream);
 
         EnsureScreenshotPreviewWindow();
-
-        var previous = _screenshotPreviewBitmap;
-        _screenshotPreviewBitmap = bitmap;
-        if (_screenshotPreviewImage is not null)
-        {
-            _screenshotPreviewImage.Source = bitmap;
-        }
-
-        previous?.Dispose();
-
         if (_screenshotPreviewWindow is null)
         {
+            bitmap.Dispose();
             return;
         }
+
+        _screenshotPreviewWindow.SetPreview(
+            bitmap,
+            BuildScreenshotPreviewTitle(),
+            BuildScreenshotPreviewSubtitle(),
+            BuildScreenshotPreviewStatusText());
 
         if (_screenshotPreviewWindow.IsVisible)
         {
@@ -386,49 +477,25 @@ public partial class ConnectSettingsView : UserControl
 
     private void EnsureScreenshotPreviewWindow()
     {
-        if (_screenshotPreviewWindow is not null && _screenshotPreviewImage is not null)
+        if (_screenshotPreviewWindow is not null)
         {
             return;
         }
 
-        var image = new Image
-        {
-            Stretch = Stretch.Uniform,
-        };
-
-        var host = new Border
-        {
-            Background = Brushes.Black,
-            Padding = new Thickness(4),
-            Child = image,
-        };
-
-        var window = new Window
-        {
-            Title = T("Settings.Connect.Dialog.ScreenshotPreview"),
-            Width = 800,
-            Height = 480,
-            MinWidth = 480,
-            MinHeight = 320,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            Content = host,
-        };
+        var window = new ScreenshotPreviewWindow();
 
         window.Closed += (_, _) =>
         {
-            _screenshotPreviewBitmap?.Dispose();
-            _screenshotPreviewBitmap = null;
-            _screenshotPreviewImage = null;
             _screenshotPreviewWindow = null;
         };
 
-        _screenshotPreviewImage = image;
         _screenshotPreviewWindow = window;
     }
 
     protected override void OnDetachedFromVisualTree(Avalonia.VisualTreeAttachmentEventArgs e)
     {
         App.Runtime.UiLanguageCoordinator.LanguageChanged -= OnUiLanguageChanged;
+        CloseScreenshotPreviewWindow();
         base.OnDetachedFromVisualTree(e);
     }
 
@@ -439,15 +506,54 @@ public partial class ConnectSettingsView : UserControl
             return;
         }
 
-        Dispatcher.UIThread.Post(UpdateScreenshotPreviewWindowTitle);
+        Dispatcher.UIThread.Post(UpdateScreenshotPreviewWindowChrome, DispatcherPriority.Background);
     }
 
-    private void UpdateScreenshotPreviewWindowTitle()
+    private void UpdateScreenshotPreviewWindowChrome()
     {
         if (_screenshotPreviewWindow is not null)
         {
-            _screenshotPreviewWindow.Title = T("Settings.Connect.Dialog.ScreenshotPreview");
+            _screenshotPreviewWindow.UpdateChrome(
+                BuildScreenshotPreviewTitle(),
+                BuildScreenshotPreviewSubtitle(),
+                BuildScreenshotPreviewStatusText());
         }
+    }
+
+    private string BuildScreenshotPreviewTitle()
+    {
+        return T("Settings.Connect.Dialog.ScreenshotPreview");
+    }
+
+    private string BuildScreenshotPreviewSubtitle()
+    {
+        var vm = VM;
+        if (vm is null)
+        {
+            return string.Empty;
+        }
+
+        var address = string.IsNullOrWhiteSpace(vm.ConnectAddress) ? "ADB / attach window" : vm.ConnectAddress.Trim();
+        return string.IsNullOrWhiteSpace(vm.ScreencapCost)
+            ? address
+            : $"{address} · {vm.ScreencapCost}";
+    }
+
+    private string? BuildScreenshotPreviewStatusText()
+    {
+        var info = VM?.TestLinkInfo;
+        return string.IsNullOrWhiteSpace(info) ? null : info.Trim();
+    }
+
+    private void CloseScreenshotPreviewWindow()
+    {
+        if (_screenshotPreviewWindow is null)
+        {
+            return;
+        }
+
+        _screenshotPreviewWindow.Close();
+        _screenshotPreviewWindow = null;
     }
 
     private readonly record struct AdbPackageInfo(string Url, string FileName, string AdbRelativePath)

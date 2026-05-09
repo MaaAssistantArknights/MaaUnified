@@ -2,39 +2,49 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:controls="clr-namespace:MAAUnified.App.Controls"
              x:Class="MAAUnified.App.Features.TaskQueue.AwardSettingsView">
-  <Grid RowDefinitions="Auto,Auto,Auto,Auto" Margin="2">
-    <TextBlock Classes="section-title" Text="{Binding Texts[Award.Title]}" />
+  <UserControl.Styles>
+    <Style Selector="StackPanel.award-card-content">
+      <Setter Property="Spacing" Value="{DynamicResource MAA.App.Settings.PageToggleStackSpacing}" />
+    </Style>
+  </UserControl.Styles>
 
-    <StackPanel Grid.Row="1" Spacing="{DynamicResource MAA.Spacing.Small}">
-      <CheckBox Content="{Binding Texts[Award.Award]}" IsChecked="{Binding Award}" />
-      <CheckBox Content="{Binding Texts[Award.Mail]}" IsChecked="{Binding Mail}" />
+  <controls:AdaptiveSpacingStackPanel Classes="award-card-content">
+    <CheckBox Classes="app-checkbox"
+              Content="{Binding Texts[Award.Award]}"
+              IsChecked="{Binding Award}" />
+    <CheckBox Classes="app-checkbox"
+              Content="{Binding Texts[Award.Mail]}"
+              IsChecked="{Binding Mail}" />
 
-      <Grid ColumnDefinitions="Auto,Auto">
-        <CheckBox Content="{Binding Texts[Award.Recruit]}" IsChecked="{Binding FreeGacha}" />
-        <controls:TooltipHint Grid.Column="1"
-                              Margin="{DynamicResource MAA.Thickness.MarginLeftSmall}"
-                              Tip="{Binding Texts[Award.FreeGachaTip]}" />
-      </Grid>
+    <controls:AppHintedCheckBox Text="{Binding Texts[Award.Recruit]}"
+                                 Tip="{Binding Texts[Award.FreeGachaTip]}"
+                                 IsChecked="{Binding FreeGacha}" />
 
-      <CheckBox Content="{Binding Texts[Award.Orundum]}" IsChecked="{Binding Orundum}" />
-      <CheckBox Content="{Binding Texts[Award.Mining]}" IsChecked="{Binding Mining}" />
-      <CheckBox Content="{Binding Texts[Award.Special]}" IsChecked="{Binding SpecialAccess}" />
-    </StackPanel>
+    <CheckBox Classes="app-checkbox"
+              Content="{Binding Texts[Award.Orundum]}"
+              IsChecked="{Binding Orundum}" />
+    <CheckBox Classes="app-checkbox"
+              Content="{Binding Texts[Award.Mining]}"
+              IsChecked="{Binding Mining}" />
+    <CheckBox Classes="app-checkbox"
+              Content="{Binding Texts[Award.Special]}"
+              IsChecked="{Binding SpecialAccess}" />
 
-    <Border Grid.Row="2"
-            Padding="8"
-            Margin="0,8,0,0"
-            CornerRadius="6"
-            BorderThickness="1"
-            BorderBrush="{DynamicResource MAA.WarningBrush}"
+    <Border Classes="app-surface app-card"
             IsVisible="{Binding PendingFreeGachaConfirmation}">
-      <StackPanel Spacing="{DynamicResource MAA.Spacing.Small}">
-        <TextBlock Text="{Binding Texts[Award.GachaWarning]}" TextWrapping="Wrap" />
-        <Button Classes="wpf-button wpf-button-secondary" Content="{Binding Texts[Award.Confirm]}" Click="OnConfirmRecruitClick" />
-        <Button Classes="wpf-button wpf-button-secondary" Content="{Binding Texts[Award.Cancel]}" Click="OnCancelRecruitClick" />
-      </StackPanel>
-    </Border>
+      <controls:AdaptiveSpacingStackPanel Classes="award-card-content">
+        <TextBlock Classes="app-body long-wrap state-warning"
+                   Text="{Binding Texts[Award.GachaWarning]}" />
 
-    <TextBlock Grid.Row="3" Foreground="{DynamicResource MAA.WarningBrush}" Text="{Binding StatusMessage}" />
-  </Grid>
+        <Button Classes="app-button app-secondary"
+                HorizontalAlignment="Left"
+                Content="{Binding Texts[Award.Confirm]}"
+                Click="OnConfirmRecruitClick" />
+        <Button Classes="app-button app-secondary"
+                HorizontalAlignment="Left"
+                Content="{Binding Texts[Award.Cancel]}"
+                Click="OnCancelRecruitClick" />
+      </controls:AdaptiveSpacingStackPanel>
+    </Border>
+  </controls:AdaptiveSpacingStackPanel>
 </UserControl>

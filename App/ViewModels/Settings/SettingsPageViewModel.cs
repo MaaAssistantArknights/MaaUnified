@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Globalization;
 using System.Diagnostics;
+using System.Net.Http;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text.Json;
@@ -9,12 +10,14 @@ using System.Text.Json.Nodes;
 using Avalonia.Threading;
 using LegacyConfigurationKeys = MAAUnified.Compat.Constants.ConfigurationKeys;
 using MAAUnified.App.Features.Dialogs;
+using MAAUnified.App.Services;
 using MAAUnified.App.ViewModels.Infrastructure;
 using MAAUnified.Application.Configuration;
 using MAAUnified.Application.Models;
 using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Localization;
 using MAAUnified.Compat.Constants;
+using MAAUnified.Compat.Runtime;
 using MAAUnified.CoreBridge;
 using MAAUnified.Platform;
 
@@ -66,6 +69,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
     private const string SettingsDataBucketHotKey = "HotKey";
     private const string SettingsDataBucketTimer = "Timer";
     private const string SettingsDataBucketStartPerformance = "StartPerformance";
+    private const string SettingsDataBucketAutostart = "Autostart";
     private const string SettingsDataBucketConnectionGame = "ConnectionGame";
     private const string SettingsDataBucketRemoteControl = "RemoteControl";
     private const string SettingsDataBucketExternalNotification = "ExternalNotification";
@@ -77,6 +81,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         SettingsDataBucketHotKey,
         SettingsDataBucketTimer,
         SettingsDataBucketStartPerformance,
+        SettingsDataBucketAutostart,
         SettingsDataBucketConnectionGame,
         SettingsDataBucketRemoteControl,
         SettingsDataBucketExternalNotification,
@@ -173,6 +178,41 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
                 ["body"] = ConfigurationKeys.ExternalNotificationCustomWebhookBody,
             },
         };
+    private static readonly IReadOnlyDictionary<string, IReadOnlyList<string>> ProviderFieldPropertyMap =
+        new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["ServerChan"] = [nameof(ServerChanSendKey)],
+            ["Telegram"] = [nameof(TelegramBotToken), nameof(TelegramChatId), nameof(TelegramTopicId)],
+            ["Discord"] = [nameof(DiscordBotToken), nameof(DiscordUserId), nameof(DiscordWebhookUrl)],
+            ["DingTalk"] = [nameof(DingTalkAccessToken), nameof(DingTalkSecret)],
+            ["Smtp"] = [
+                nameof(SmtpServer),
+                nameof(SmtpPort),
+                nameof(SmtpUseSsl),
+                nameof(SmtpRequireAuthentication),
+                nameof(SmtpUser),
+                nameof(SmtpPassword),
+                nameof(SmtpFrom),
+                nameof(SmtpTo),
+            ],
+            ["Bark"] = [nameof(BarkServer), nameof(BarkSendKey)],
+            ["Qmsg"] = [nameof(QmsgServer), nameof(QmsgKey), nameof(QmsgUser), nameof(QmsgBot)],
+            ["Gotify"] = [nameof(GotifyServer), nameof(GotifyToken)],
+            ["CustomWebhook"] = [nameof(CustomWebhookUrl), nameof(CustomWebhookBody)],
+        };
+    private static readonly IReadOnlyList<string> ExternalNotificationSectionPropertyNames =
+        [
+            nameof(ServerChanSectionVisible),
+            nameof(TelegramSectionVisible),
+            nameof(DiscordSectionVisible),
+            nameof(DiscordWebhookSectionVisible),
+            nameof(DingTalkSectionVisible),
+            nameof(SmtpSectionVisible),
+            nameof(BarkSectionVisible),
+            nameof(QmsgSectionVisible),
+            nameof(GotifySectionVisible),
+            nameof(CustomWebhookSectionVisible),
+        ];
     private static readonly JsonSerializerOptions ConfigExportSerializerOptions = new()
     {
         WriteIndented = true,
@@ -194,7 +234,11 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
     private CancellationTokenSource? _autostartFeedbackCts;
     private readonly SemaphoreSlim _settingsDataLoadSemaphore = new(1, 1);
     private readonly HashSet<string> _loadedSettingsDataBuckets = new(StringComparer.OrdinalIgnoreCase);
+    private readonly object _settingsSaveFailureGate = new();
+    private readonly HashSet<string> _settingsSaveFailureScopes = new(StringComparer.Ordinal);
+    private TaskCompletionSource<bool> _startupAnnouncementCompletionSource = CreateCompletedTaskCompletionSource();
     private bool _deferredSectionDataLoadEnabled;
+    private bool _deferredSectionDataLoadRequested;
     private bool _suppressVersionUpdateResourceRefresh;
     private long _gpuRefreshSequence;
     private bool _autoSaveReady;
@@ -214,6 +258,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
     private string _operNameLanguage = DefaultOperNameLanguage;
     private string _inverseClearMode = DefaultInverseClearMode;
     private bool _useTray = true;
+    private bool _useNotify = true;
     private bool _minimizeToTray;
     private bool _windowTitleScrollable;
     private bool _useSoftwareRendering;
@@ -329,10 +374,16 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
     private string _versionUpdatePackage = string.Empty;
     private bool _versionUpdateDoNotShow;
     private bool _versionUpdateStartupCheckTriggered;
+    private string _versionUpdateLastScheduledMinuteKey = string.Empty;
+    private int _versionUpdateScheduledCheckRunning;
+    private string _versionUpdateActivityMessage = string.Empty;
     private string _versionUpdateStatusMessage = string.Empty;
     private string _versionUpdateErrorMessage = string.Empty;
     private bool _hasPendingVersionUpdateAvailability;
     private bool _hasPendingResourceUpdateAvailability;
+    private string _pendingResourceUpdateDisplayVersion = string.Empty;
+    private string _pendingResourceUpdateReleaseNote = string.Empty;
+    private DateTimeOffset? _pendingResourceUpdateVersionTimestamp;
     private IReadOnlyList<DisplayValueOption> _themeOptions = [];
     private IReadOnlyList<DisplayValueOption> _supportedLanguages = [];
     private IReadOnlyList<DisplayValueOption> _backgroundStretchModes = [];
@@ -349,6 +400,9 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
     private bool _isVersionUpdateActionRunning;
     private string _configurationManagerSelectedProfile = string.Empty;
     private string _configurationManagerNewProfileName = string.Empty;
+    private bool _suppressConfigurationManagerSaveAsNewSuccessReset;
+    private string _configurationManagerSaveAsNewSucceededText = string.Empty;
+    private string _configurationManagerSaveAsNewFailedText = string.Empty;
     private string _configurationManagerStatusMessage = string.Empty;
     private string _configurationManagerErrorMessage = string.Empty;
     private bool _achievementPopupDisabled;
@@ -367,15 +421,24 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
     private string _aboutErrorMessage = string.Empty;
     private readonly Dictionary<string, string> _notificationProviderParameters =
         new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, Dictionary<string, string>> _providerParameterValues =
+        new(StringComparer.OrdinalIgnoreCase);
+    private bool _suppressProviderParameterDirtyTracking;
+    private bool _isApplyingProviderParametersText;
     private readonly Func<string, CancellationToken, Task<UiOperationResult>> _openExternalTargetAsync;
     private readonly IAppDialogService _dialogService;
     private readonly IUiLanguageCoordinator _uiLanguageCoordinator;
     private readonly Func<string?> _coreVersionResolver;
+    private readonly HttpClient _aboutAnnouncementHttpClient;
+    private readonly TimeSpan _aboutAnnouncementTimeout;
     private readonly DispatcherTimer _versionUpdateSchedulerTimer = new()
     {
-        Interval = TimeSpan.FromHours(1),
+        Interval = TimeSpan.FromSeconds(10),
     };
     private string? _pendingLanguageChangeTarget;
+    private Task _pendingUnifiedLanguageApplyTask = Task.CompletedTask;
+    private int _blockingOperationOverlayDepth;
+    private bool _isBlockingOperationOverlayVisible;
 
     public SettingsPageViewModel(
         MAAUnifiedRuntime runtime,
@@ -383,7 +446,9 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         Action<LocalizationFallbackInfo>? localizationFallbackReporter = null,
         Func<string, CancellationToken, Task<UiOperationResult>>? openExternalTargetAsync = null,
         IAppDialogService? dialogService = null,
-        Func<string?>? coreVersionResolver = null)
+        Func<string?>? coreVersionResolver = null,
+        HttpClient? aboutAnnouncementHttpClient = null,
+        TimeSpan? aboutAnnouncementTimeout = null)
         : base(runtime)
     {
         _localizationFallbackReporter = localizationFallbackReporter;
@@ -391,6 +456,10 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         _dialogService = dialogService ?? NoOpAppDialogService.Instance;
         _uiLanguageCoordinator = runtime.UiLanguageCoordinator;
         _coreVersionResolver = coreVersionResolver ?? ResolveCurrentCoreVersion;
+        _aboutAnnouncementHttpClient = aboutAnnouncementHttpClient ?? SharedAboutAnnouncementHttpClient;
+        _aboutAnnouncementTimeout = aboutAnnouncementTimeout is { } timeout && timeout > TimeSpan.Zero
+            ? timeout
+            : DefaultAboutAnnouncementTimeout;
         _uiLanguageCoordinator.LanguageChanged += OnUnifiedLanguageChanged;
         _versionUpdateSchedulerTimer.Tick += OnVersionUpdateSchedulerTick;
         RootTexts = new RootLocalizationTextMap("Root.Localization.Settings");
@@ -515,6 +584,12 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         set => SetSelectedLanguageValue(value, requestLanguageChange: true);
     }
 
+    public bool IsBlockingOperationOverlayVisible
+    {
+        get => _isBlockingOperationOverlayVisible;
+        private set => SetProperty(ref _isBlockingOperationOverlayVisible, value);
+    }
+
     public DisplayValueOption? SelectedBackgroundStretchModeOption
     {
         get => BackgroundStretchModes.FirstOrDefault(
@@ -625,6 +700,9 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
 
     public ObservableCollection<string> AvailableNotificationProviders { get; } = new();
 
+    public Task WaitForStartupAnnouncementCompletionAsync(CancellationToken cancellationToken = default)
+        => _startupAnnouncementCompletionSource.Task.WaitAsync(cancellationToken);
+
     public SettingsSectionViewModel? SelectedSection
     {
         get => _selectedSection;
@@ -660,6 +738,23 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
     }
 
     public string SelectedSectionTitle => SelectedSection?.DisplayName ?? string.Empty;
+
+    private static TaskCompletionSource<bool> CreateCompletedTaskCompletionSource()
+    {
+        var source = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        source.TrySetResult(true);
+        return source;
+    }
+
+    private void ResetStartupAnnouncementCompletion()
+    {
+        _startupAnnouncementCompletionSource = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+    }
+
+    private void CompleteStartupAnnouncementCompletion()
+    {
+        _startupAnnouncementCompletionSource.TrySetResult(true);
+    }
 
     public bool IsConfigurationManagerSelected => IsSelectedSection("ConfigurationManager");
 
@@ -719,28 +814,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
                 try
                 {
                     _suppressSelectedLanguageChangeRequest = true;
-                    SetSelectedLanguageValue(normalized, requestLanguageChange: false);
-                    RootTexts.Language = normalized;
-                    OnPropertyChanged(nameof(RootTexts));
-                    RefreshNotificationTemplateLocalization(previousLanguage, normalized);
-                    ConnectionGameSharedState.SetLanguage(normalized);
-                    Runtime.AchievementTrackerService.SetCurrentLanguage(normalized);
-                    RefreshHotkeyUiText();
-                    OnPropertyChanged(nameof(HotkeyCaptureGuideText));
-                    RebuildGuiOptionLists();
-                    RebuildSections(SelectedSection?.Key);
-                    RebuildVersionUpdateOptionLists();
-                    if (IsSettingsDataBucketLoaded(SettingsDataBucketStartPerformance))
-                    {
-                        RefreshGpuUiState();
-                    }
-
-                    RefreshAchievementUiState();
-                    UpdateAchievementPolicySummary(new AchievementPolicy(AchievementPopupDisabled, AchievementPopupAutoClose));
-                    OnPropertyChanged(nameof(VersionUpdateMirrorChyanCdkExpiryText));
-                    MarkGuiSettingsDirty();
-                    NotifyGuiSettingsPreviewChanged();
-                    RefreshRightPaneLocalization();
+                    ApplyLanguageSideEffectsImmediately(previousLanguage, normalized);
                 }
                 finally
                 {
@@ -834,6 +908,19 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         }
     }
 
+    public bool UseNotify
+    {
+        get => _useNotify;
+        set
+        {
+            if (SetProperty(ref _useNotify, value))
+            {
+                MarkGuiSettingsDirty();
+                NotifyGuiSettingsPreviewChanged();
+            }
+        }
+    }
+
     public bool WindowTitleScrollable
     {
         get => _windowTitleScrollable;
@@ -865,13 +952,20 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         get => _developerModeEnabled;
         set
         {
-            if (SetProperty(ref _developerModeEnabled, value))
+            var normalized = global::MAAUnified.Platform.MaaUnifiedBuildFlavor.ExposesDeveloperTools && value;
+            if (SetProperty(ref _developerModeEnabled, normalized))
             {
-                Runtime.LogService.SetVerboseEnabled(value);
+                Runtime.LogService.SetVerboseEnabled(normalized);
                 MarkGuiSettingsDirty();
             }
         }
     }
+
+    public bool CanUseDeveloperMode => global::MAAUnified.Platform.MaaUnifiedBuildFlavor.ExposesDeveloperTools;
+
+    public bool CanOpenRuntimeLogWindow => true;
+
+    public bool CanUseIssueReportMaintenanceTools => true;
 
     public bool StartSelf
     {
@@ -1058,13 +1152,25 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
     public string IssueReportPath
     {
         get => _issueReportPath;
-        set => SetProperty(ref _issueReportPath, value);
+        set
+        {
+            if (SetProperty(ref _issueReportPath, value))
+            {
+                OnPropertyChanged(nameof(HasIssueReportPath));
+            }
+        }
     }
 
     public string IssueReportStatusMessage
     {
         get => _issueReportStatusMessage;
-        private set => SetProperty(ref _issueReportStatusMessage, value);
+        private set
+        {
+            if (SetProperty(ref _issueReportStatusMessage, value))
+            {
+                OnPropertyChanged(nameof(HasIssueReportStatusMessage));
+            }
+        }
     }
 
     public string IssueReportErrorMessage
@@ -1078,6 +1184,10 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
             }
         }
     }
+
+    public bool HasIssueReportPath => !string.IsNullOrWhiteSpace(IssueReportPath);
+
+    public bool HasIssueReportStatusMessage => !string.IsNullOrWhiteSpace(IssueReportStatusMessage);
 
     public bool HasIssueReportErrorMessage => !string.IsNullOrWhiteSpace(IssueReportErrorMessage);
 
@@ -1204,6 +1314,8 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
 
     public bool CanEditExternalNotification => ExternalNotificationEnabled;
 
+    public bool CanSelectExternalNotificationProvider => NotificationProviderSelections.Count > 0;
+
     public bool CanEditExternalNotificationDetails =>
         ExternalNotificationEnabled && ExternalNotificationSendWhenComplete;
 
@@ -1230,9 +1342,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
 
             if (SetProperty(ref _selectedNotificationProvider, normalized))
             {
-                NotificationProviderParametersText = _notificationProviderParameters.TryGetValue(normalized, out var stored)
-                    ? stored
-                    : string.Empty;
+                RefreshSelectedNotificationProviderText(normalized);
             }
         }
     }
@@ -1240,7 +1350,18 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
     public string NotificationProviderParametersText
     {
         get => _notificationProviderParametersText;
-        set => SetProperty(ref _notificationProviderParametersText, value ?? string.Empty);
+        set
+        {
+            var normalized = value ?? string.Empty;
+            if (SetProperty(ref _notificationProviderParametersText, normalized))
+            {
+                UpdateProviderParameterMapFromText(_selectedNotificationProvider, normalized, markDirty: false);
+                if (!_suppressProviderParameterDirtyTracking)
+                {
+                    MarkExternalNotificationDirty();
+                }
+            }
+        }
     }
 
     public string ExternalNotificationStatusMessage
@@ -1288,6 +1409,483 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
     public bool HasExternalNotificationErrorMessage =>
         ExternalNotificationEnabled && !string.IsNullOrWhiteSpace(ExternalNotificationErrorMessage);
 
+    public bool ServerChanSectionVisible => _enabledNotificationProviders.Contains("ServerChan");
+
+    public bool TelegramSectionVisible => _enabledNotificationProviders.Contains("Telegram");
+
+    public bool DiscordSectionVisible => _enabledNotificationProviders.Contains("Discord");
+
+    public bool DiscordWebhookSectionVisible => DiscordSectionVisible;
+
+    public bool DingTalkSectionVisible => _enabledNotificationProviders.Contains("DingTalk");
+
+    public bool SmtpSectionVisible => _enabledNotificationProviders.Contains("Smtp");
+
+    public bool BarkSectionVisible => _enabledNotificationProviders.Contains("Bark");
+
+    public bool QmsgSectionVisible => _enabledNotificationProviders.Contains("Qmsg");
+
+    public bool GotifySectionVisible => _enabledNotificationProviders.Contains("Gotify");
+
+    public bool CustomWebhookSectionVisible => _enabledNotificationProviders.Contains("CustomWebhook");
+
+    public string ServerChanSendKey
+    {
+        get => GetProviderParameterValue("ServerChan", "sendKey");
+        set
+        {
+            var normalized = value ?? string.Empty;
+            if (string.Equals(GetProviderParameterValue("ServerChan", "sendKey"), normalized, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            SetProviderParameterValue("ServerChan", "sendKey", normalized);
+            OnPropertyChanged(nameof(ServerChanSendKey));
+            MarkExternalNotificationDirty();
+        }
+    }
+
+    public string TelegramBotToken
+    {
+        get => GetProviderParameterValue("Telegram", "botToken");
+        set
+        {
+            var normalized = value ?? string.Empty;
+            if (string.Equals(GetProviderParameterValue("Telegram", "botToken"), normalized, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            SetProviderParameterValue("Telegram", "botToken", normalized);
+            OnPropertyChanged(nameof(TelegramBotToken));
+            MarkExternalNotificationDirty();
+        }
+    }
+
+    public string TelegramChatId
+    {
+        get => GetProviderParameterValue("Telegram", "chatId");
+        set
+        {
+            var normalized = value ?? string.Empty;
+            if (string.Equals(GetProviderParameterValue("Telegram", "chatId"), normalized, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            SetProviderParameterValue("Telegram", "chatId", normalized);
+            OnPropertyChanged(nameof(TelegramChatId));
+            MarkExternalNotificationDirty();
+        }
+    }
+
+    public string TelegramTopicId
+    {
+        get => GetProviderParameterValue("Telegram", "topicId");
+        set
+        {
+            var normalized = value ?? string.Empty;
+            if (string.Equals(GetProviderParameterValue("Telegram", "topicId"), normalized, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            SetProviderParameterValue("Telegram", "topicId", normalized);
+            OnPropertyChanged(nameof(TelegramTopicId));
+            MarkExternalNotificationDirty();
+        }
+    }
+
+    public string DiscordBotToken
+    {
+        get => GetProviderParameterValue("Discord", "botToken");
+        set
+        {
+            var normalized = value ?? string.Empty;
+            if (string.Equals(GetProviderParameterValue("Discord", "botToken"), normalized, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            SetProviderParameterValue("Discord", "botToken", normalized);
+            OnPropertyChanged(nameof(DiscordBotToken));
+            MarkExternalNotificationDirty();
+        }
+    }
+
+    public string DiscordUserId
+    {
+        get => GetProviderParameterValue("Discord", "userId");
+        set
+        {
+            var normalized = value ?? string.Empty;
+            if (string.Equals(GetProviderParameterValue("Discord", "userId"), normalized, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            SetProviderParameterValue("Discord", "userId", normalized);
+            OnPropertyChanged(nameof(DiscordUserId));
+            MarkExternalNotificationDirty();
+        }
+    }
+
+    public string DiscordWebhookUrl
+    {
+        get => GetProviderParameterValue("Discord", "webhookUrl");
+        set
+        {
+            var normalized = value ?? string.Empty;
+            if (string.Equals(GetProviderParameterValue("Discord", "webhookUrl"), normalized, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            SetProviderParameterValue("Discord", "webhookUrl", normalized);
+            OnPropertyChanged(nameof(DiscordWebhookUrl));
+            MarkExternalNotificationDirty();
+        }
+    }
+
+    public string DingTalkAccessToken
+    {
+        get => GetProviderParameterValue("DingTalk", "accessToken");
+        set
+        {
+            var normalized = value ?? string.Empty;
+            if (string.Equals(GetProviderParameterValue("DingTalk", "accessToken"), normalized, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            SetProviderParameterValue("DingTalk", "accessToken", normalized);
+            OnPropertyChanged(nameof(DingTalkAccessToken));
+            MarkExternalNotificationDirty();
+        }
+    }
+
+    public string DingTalkSecret
+    {
+        get => GetProviderParameterValue("DingTalk", "secret");
+        set
+        {
+            var normalized = value ?? string.Empty;
+            if (string.Equals(GetProviderParameterValue("DingTalk", "secret"), normalized, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            SetProviderParameterValue("DingTalk", "secret", normalized);
+            OnPropertyChanged(nameof(DingTalkSecret));
+            MarkExternalNotificationDirty();
+        }
+    }
+
+    public string SmtpServer
+    {
+        get => GetProviderParameterValue("Smtp", "server");
+        set
+        {
+            var normalized = value ?? string.Empty;
+            if (string.Equals(GetProviderParameterValue("Smtp", "server"), normalized, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            SetProviderParameterValue("Smtp", "server", normalized);
+            OnPropertyChanged(nameof(SmtpServer));
+            MarkExternalNotificationDirty();
+        }
+    }
+
+    public string SmtpPort
+    {
+        get => GetProviderParameterValue("Smtp", "port");
+        set
+        {
+            var normalized = value ?? string.Empty;
+            if (string.Equals(GetProviderParameterValue("Smtp", "port"), normalized, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            SetProviderParameterValue("Smtp", "port", normalized);
+            OnPropertyChanged(nameof(SmtpPort));
+            MarkExternalNotificationDirty();
+        }
+    }
+
+    public bool SmtpUseSsl
+    {
+        get => TryGetProviderParameterBool("Smtp", "useSsl", out var value) && value;
+        set
+        {
+            if (SmtpUseSsl == value)
+            {
+                return;
+            }
+
+            SetProviderParameterValue("Smtp", "useSsl", value ? bool.TrueString : bool.FalseString);
+            OnPropertyChanged(nameof(SmtpUseSsl));
+            MarkExternalNotificationDirty();
+        }
+    }
+
+    public bool SmtpRequireAuthentication
+    {
+        get => TryGetProviderParameterBool("Smtp", "requiresAuthentication", out var value) && value;
+        set
+        {
+            if (SmtpRequireAuthentication == value)
+            {
+                return;
+            }
+
+            SetProviderParameterValue("Smtp", "requiresAuthentication", value ? bool.TrueString : bool.FalseString);
+            OnPropertyChanged(nameof(SmtpRequireAuthentication));
+            MarkExternalNotificationDirty();
+        }
+    }
+
+    public string SmtpUser
+    {
+        get => GetProviderParameterValue("Smtp", "user");
+        set
+        {
+            var normalized = value ?? string.Empty;
+            if (string.Equals(GetProviderParameterValue("Smtp", "user"), normalized, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            SetProviderParameterValue("Smtp", "user", normalized);
+            OnPropertyChanged(nameof(SmtpUser));
+            MarkExternalNotificationDirty();
+        }
+    }
+
+    public string SmtpPassword
+    {
+        get => GetProviderParameterValue("Smtp", "password");
+        set
+        {
+            var normalized = value ?? string.Empty;
+            if (string.Equals(GetProviderParameterValue("Smtp", "password"), normalized, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            SetProviderParameterValue("Smtp", "password", normalized);
+            OnPropertyChanged(nameof(SmtpPassword));
+            MarkExternalNotificationDirty();
+        }
+    }
+
+    public string SmtpFrom
+    {
+        get => GetProviderParameterValue("Smtp", "from");
+        set
+        {
+            var normalized = value ?? string.Empty;
+            if (string.Equals(GetProviderParameterValue("Smtp", "from"), normalized, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            SetProviderParameterValue("Smtp", "from", normalized);
+            OnPropertyChanged(nameof(SmtpFrom));
+            MarkExternalNotificationDirty();
+        }
+    }
+
+    public string SmtpTo
+    {
+        get => GetProviderParameterValue("Smtp", "to");
+        set
+        {
+            var normalized = value ?? string.Empty;
+            if (string.Equals(GetProviderParameterValue("Smtp", "to"), normalized, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            SetProviderParameterValue("Smtp", "to", normalized);
+            OnPropertyChanged(nameof(SmtpTo));
+            MarkExternalNotificationDirty();
+        }
+    }
+
+    public string BarkServer
+    {
+        get => GetProviderParameterValue("Bark", "server");
+        set
+        {
+            var normalized = value ?? string.Empty;
+            if (string.Equals(GetProviderParameterValue("Bark", "server"), normalized, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            SetProviderParameterValue("Bark", "server", normalized);
+            OnPropertyChanged(nameof(BarkServer));
+            MarkExternalNotificationDirty();
+        }
+    }
+
+    public string BarkSendKey
+    {
+        get => GetProviderParameterValue("Bark", "sendKey");
+        set
+        {
+            var normalized = value ?? string.Empty;
+            if (string.Equals(GetProviderParameterValue("Bark", "sendKey"), normalized, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            SetProviderParameterValue("Bark", "sendKey", normalized);
+            OnPropertyChanged(nameof(BarkSendKey));
+            MarkExternalNotificationDirty();
+        }
+    }
+
+    public string QmsgServer
+    {
+        get => GetProviderParameterValue("Qmsg", "server");
+        set
+        {
+            var normalized = value ?? string.Empty;
+            if (string.Equals(GetProviderParameterValue("Qmsg", "server"), normalized, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            SetProviderParameterValue("Qmsg", "server", normalized);
+            OnPropertyChanged(nameof(QmsgServer));
+            MarkExternalNotificationDirty();
+        }
+    }
+
+    public string QmsgKey
+    {
+        get => GetProviderParameterValue("Qmsg", "key");
+        set
+        {
+            var normalized = value ?? string.Empty;
+            if (string.Equals(GetProviderParameterValue("Qmsg", "key"), normalized, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            SetProviderParameterValue("Qmsg", "key", normalized);
+            OnPropertyChanged(nameof(QmsgKey));
+            MarkExternalNotificationDirty();
+        }
+    }
+
+    public string QmsgUser
+    {
+        get => GetProviderParameterValue("Qmsg", "user");
+        set
+        {
+            var normalized = value ?? string.Empty;
+            if (string.Equals(GetProviderParameterValue("Qmsg", "user"), normalized, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            SetProviderParameterValue("Qmsg", "user", normalized);
+            OnPropertyChanged(nameof(QmsgUser));
+            MarkExternalNotificationDirty();
+        }
+    }
+
+    public string QmsgBot
+    {
+        get => GetProviderParameterValue("Qmsg", "bot");
+        set
+        {
+            var normalized = value ?? string.Empty;
+            if (string.Equals(GetProviderParameterValue("Qmsg", "bot"), normalized, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            SetProviderParameterValue("Qmsg", "bot", normalized);
+            OnPropertyChanged(nameof(QmsgBot));
+            MarkExternalNotificationDirty();
+        }
+    }
+
+    public string GotifyServer
+    {
+        get => GetProviderParameterValue("Gotify", "server");
+        set
+        {
+            var normalized = value ?? string.Empty;
+            if (string.Equals(GetProviderParameterValue("Gotify", "server"), normalized, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            SetProviderParameterValue("Gotify", "server", normalized);
+            OnPropertyChanged(nameof(GotifyServer));
+            MarkExternalNotificationDirty();
+        }
+    }
+
+    public string GotifyToken
+    {
+        get => GetProviderParameterValue("Gotify", "token");
+        set
+        {
+            var normalized = value ?? string.Empty;
+            if (string.Equals(GetProviderParameterValue("Gotify", "token"), normalized, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            SetProviderParameterValue("Gotify", "token", normalized);
+            OnPropertyChanged(nameof(GotifyToken));
+            MarkExternalNotificationDirty();
+        }
+    }
+
+    public string CustomWebhookUrl
+    {
+        get => GetProviderParameterValue("CustomWebhook", "url");
+        set
+        {
+            var normalized = value ?? string.Empty;
+            if (string.Equals(GetProviderParameterValue("CustomWebhook", "url"), normalized, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            SetProviderParameterValue("CustomWebhook", "url", normalized);
+            OnPropertyChanged(nameof(CustomWebhookUrl));
+            MarkExternalNotificationDirty();
+        }
+    }
+
+    public string CustomWebhookBody
+    {
+        get => GetProviderParameterValue("CustomWebhook", "body");
+        set
+        {
+            var normalized = value ?? string.Empty;
+            if (string.Equals(GetProviderParameterValue("CustomWebhook", "body"), normalized, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            SetProviderParameterValue("CustomWebhook", "body", normalized);
+            OnPropertyChanged(nameof(CustomWebhookBody));
+            MarkExternalNotificationDirty();
+        }
+    }
+
     public string ConfigurationManagerSelectedProfile
     {
         get => _configurationManagerSelectedProfile;
@@ -1297,7 +1895,41 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
     public string ConfigurationManagerNewProfileName
     {
         get => _configurationManagerNewProfileName;
-        set => SetProperty(ref _configurationManagerNewProfileName, value ?? string.Empty);
+        set
+        {
+            if (SetProperty(ref _configurationManagerNewProfileName, value ?? string.Empty))
+            {
+                if (!_suppressConfigurationManagerSaveAsNewSuccessReset)
+                {
+                    ConfigurationManagerSaveAsNewSucceededText = string.Empty;
+                    ConfigurationManagerSaveAsNewFailedText = string.Empty;
+                }
+            }
+        }
+    }
+
+    public string ConfigurationManagerSaveAsNewSucceededText
+    {
+        get => _configurationManagerSaveAsNewSucceededText;
+        private set
+        {
+            if (SetProperty(ref _configurationManagerSaveAsNewSucceededText, value))
+            {
+                OnPropertyChanged(nameof(HasConfigurationManagerSaveAsNewSucceeded));
+            }
+        }
+    }
+
+    public string ConfigurationManagerSaveAsNewFailedText
+    {
+        get => _configurationManagerSaveAsNewFailedText;
+        private set
+        {
+            if (SetProperty(ref _configurationManagerSaveAsNewFailedText, value))
+            {
+                OnPropertyChanged(nameof(HasConfigurationManagerSaveAsNewFailed));
+            }
+        }
     }
 
     public string ConfigurationManagerStatusMessage
@@ -1319,6 +1951,12 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
     }
 
     public bool HasConfigurationManagerErrorMessage => !string.IsNullOrWhiteSpace(ConfigurationManagerErrorMessage);
+
+    public bool HasConfigurationManagerSaveAsNewSucceeded =>
+        !string.IsNullOrWhiteSpace(ConfigurationManagerSaveAsNewSucceededText);
+
+    public bool HasConfigurationManagerSaveAsNewFailed =>
+        !string.IsNullOrWhiteSpace(ConfigurationManagerSaveAsNewFailedText);
 
     public string VersionUpdateProxy
     {
@@ -1489,6 +2127,20 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         private set => SetProperty(ref _versionUpdateStatusMessage, value);
     }
 
+    public string VersionUpdateActivityMessage
+    {
+        get => _versionUpdateActivityMessage;
+        private set
+        {
+            if (SetProperty(ref _versionUpdateActivityMessage, value))
+            {
+                OnPropertyChanged(nameof(HasVersionUpdateActivityMessage));
+            }
+        }
+    }
+
+    public bool HasVersionUpdateActivityMessage => !string.IsNullOrWhiteSpace(VersionUpdateActivityMessage);
+
     public string VersionUpdateErrorMessage
     {
         get => _versionUpdateErrorMessage;
@@ -1506,6 +2158,25 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
     public bool HasPendingVersionUpdateAvailability => _hasPendingVersionUpdateAvailability;
 
     public bool HasPendingResourceUpdateAvailability => _hasPendingResourceUpdateAvailability;
+
+    public string PendingResourceUpdateSummary => BuildPendingResourceUpdateSummary();
+
+    public bool HasIssueReportUpdateAvailability =>
+        HasPendingVersionUpdateAvailability || HasPendingResourceUpdateAvailability;
+
+    public bool ShowIssueReportPreflightNote => !HasIssueReportUpdateAvailability;
+
+    public string IssueReportVersionUpdateSummary => HasPendingVersionUpdateAvailability
+        ? RootTexts.GetOrDefault(
+            "Main.Update.VersionAvailable",
+            "版本更新可用，点击设置 > Version Update")
+        : string.Empty;
+
+    public string IssueReportUpdateNotice => BuildIssueReportUpdateNoticeText();
+
+    public string IssueReportClearImageCacheTip => LocalizeSettingsText(
+        "Settings.IssueReport.ClearImageCacheTip",
+        "通常无需手动清理图片缓存，仅建议排障时使用。");
 
     public bool IsVersionUpdateMirrorChyanSource =>
         string.Equals(VersionUpdateResourceSource, "MirrorChyan", StringComparison.OrdinalIgnoreCase);
@@ -1553,6 +2224,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
             if (SetProperty(ref _isVersionUpdateActionRunning, value))
             {
                 OnPropertyChanged(nameof(CanRunVersionUpdateActions));
+                UpdateAvailabilityChanged?.Invoke(this, EventArgs.Empty);
             }
         }
     }
@@ -1611,7 +2283,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
     }
 
     public string AchievementLevelText
-        => $"{AchievementTextCatalog.GetString("AchievementLevel", Language, "成就等级：")}{AchievementUnlockedCount}/{AchievementTotalCount}";
+        => $"{AchievementTextCatalog.GetString("AchievementLevel", Language, "成就数量：")}{AchievementUnlockedCount}/{AchievementTotalCount}";
 
     public bool AchievementDebugEnabled
     {
@@ -1624,6 +2296,8 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
             }
         }
     }
+
+    public bool CanUseAchievementDebugEntry => true;
 
     public bool CanUseAchievementDebugActions => AchievementDebugEnabled;
 
@@ -1642,7 +2316,14 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
     public string AchievementStatusMessage
     {
         get => _achievementStatusMessage;
-        private set => SetProperty(ref _achievementStatusMessage, value);
+        private set
+        {
+            if (SetProperty(ref _achievementStatusMessage, value))
+            {
+                OnPropertyChanged(nameof(HasAchievementStatusMessage));
+                OnPropertyChanged(nameof(HasAchievementStatusBlockMessage));
+            }
+        }
     }
 
     public string AchievementErrorMessage
@@ -1653,11 +2334,16 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
             if (SetProperty(ref _achievementErrorMessage, value))
             {
                 OnPropertyChanged(nameof(HasAchievementErrorMessage));
+                OnPropertyChanged(nameof(HasAchievementStatusBlockMessage));
             }
         }
     }
 
+    public bool HasAchievementStatusMessage => !string.IsNullOrWhiteSpace(AchievementStatusMessage);
+
     public bool HasAchievementErrorMessage => !string.IsNullOrWhiteSpace(AchievementErrorMessage);
+
+    public bool HasAchievementStatusBlockMessage => HasAchievementStatusMessage || HasAchievementErrorMessage;
 
     public string AchievementPolicySummary
     {
@@ -1674,7 +2360,14 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
     public string AboutStatusMessage
     {
         get => _aboutStatusMessage;
-        private set => SetProperty(ref _aboutStatusMessage, value);
+        private set
+        {
+            if (SetProperty(ref _aboutStatusMessage, value))
+            {
+                OnPropertyChanged(nameof(HasAboutStatusMessage));
+                OnPropertyChanged(nameof(HasAboutStatusBlockMessage));
+            }
+        }
     }
 
     public string AboutErrorMessage
@@ -1685,11 +2378,16 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
             if (SetProperty(ref _aboutErrorMessage, value))
             {
                 OnPropertyChanged(nameof(HasAboutErrorMessage));
+                OnPropertyChanged(nameof(HasAboutStatusBlockMessage));
             }
         }
     }
 
+    public bool HasAboutStatusMessage => !string.IsNullOrWhiteSpace(AboutStatusMessage);
+
     public bool HasAboutErrorMessage => !string.IsNullOrWhiteSpace(AboutErrorMessage);
+
+    public bool HasAboutStatusBlockMessage => HasAboutStatusMessage || HasAboutErrorMessage;
 
     public async Task ExecuteSectionActionAsync(SettingsSectionActionItem? action, CancellationToken cancellationToken = default)
     {
@@ -2625,11 +3323,17 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         {
             await LoadInitialSettingsAsync(cancellationToken);
             await RefreshConfigurationProfilesAsync(cancellationToken);
-            await LoadImmediateSettingsDataAsync(cancellationToken);
-            await RefreshAutostartStatusAsync(cancellationToken);
-            _deferredSectionDataLoadEnabled = true;
-            await EnsureSectionDataLoadedAsync(SelectedSection?.Key, cancellationToken);
+            _deferredSectionDataLoadEnabled = _deferredSectionDataLoadRequested;
+            if (_deferredSectionDataLoadEnabled)
+            {
+                await EnsureSectionDataLoadedAsync(SelectedSection?.Key, cancellationToken);
+            }
+            else
+            {
+                await WarmupDeferredSectionDataAsync(cancellationToken);
+            }
 
+            RestoreExternalNotificationStatusSummaryIfIdle();
             await RecordEventAsync("Settings", "Settings page initialized.", cancellationToken);
             initialized = true;
         }
@@ -2648,6 +3352,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
             return;
         }
 
+        EnableDeferredSectionDataLoad();
         SuspendAutoSave(repairTimerProfilesOnResume: true);
     }
 
@@ -2665,39 +3370,123 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
             return;
         }
 
+        DisableDeferredSectionDataLoad();
         ResumeAutoSave();
+    }
+
+    public void EnableDeferredSectionDataLoad()
+    {
+        _deferredSectionDataLoadRequested = true;
+        _deferredSectionDataLoadEnabled = true;
+    }
+
+    public void DisableDeferredSectionDataLoad()
+    {
+        _deferredSectionDataLoadRequested = false;
+        _deferredSectionDataLoadEnabled = false;
     }
 
     public async Task ChangeLanguageAsync(string targetLanguage, CancellationToken cancellationToken = default)
     {
+        var total = Stopwatch.StartNew();
+        var step = Stopwatch.StartNew();
         var normalized = NormalizeLanguage(targetLanguage);
         var previousLanguage = Language;
-        var changeResult = await _uiLanguageCoordinator.ChangeLanguageAsync(normalized, cancellationToken);
-        var appliedLanguage = await ApplyResultAsync(changeResult, "Settings.Gui.Language.Change", cancellationToken);
-        if (appliedLanguage is null)
+        BeginBlockingOperationOverlay();
+        try
         {
-            SetSelectedLanguageValue(Language, requestLanguageChange: false);
-            return;
-        }
+            await WaitForBlockingOperationOverlayRenderAsync();
+            _ = RecordLanguageSwitchTimingAsync(
+                "Settings.ChangeLanguage.OverlayRendered",
+                step,
+                previousLanguage,
+                normalized,
+                cancellationToken);
 
-        if (!string.Equals(Language, appliedLanguage, StringComparison.OrdinalIgnoreCase))
-        {
-            ApplyUnifiedLanguage(appliedLanguage);
-        }
-        else
-        {
-            SetSelectedLanguageValue(appliedLanguage, requestLanguageChange: false);
-        }
+            step.Restart();
+            var changeResult = await ChangeLanguageCoordinatorAsync(normalized, cancellationToken);
+            _ = RecordLanguageSwitchTimingAsync(
+                "Settings.ChangeLanguage.Coordinator",
+                step,
+                previousLanguage,
+                normalized,
+                cancellationToken,
+                ("success", changeResult.Success));
 
-        if (!string.Equals(previousLanguage, appliedLanguage, StringComparison.OrdinalIgnoreCase))
+            step.Restart();
+            var appliedLanguage = await ApplyLanguageChangeResultAsync(changeResult, cancellationToken);
+            _ = RecordLanguageSwitchTimingAsync(
+                "Settings.ChangeLanguage.ApplyResult",
+                step,
+                previousLanguage,
+                normalized,
+                cancellationToken,
+                ("appliedLanguage", appliedLanguage));
+            if (appliedLanguage is null)
+            {
+                SetSelectedLanguageValue(Language, requestLanguageChange: false);
+                return;
+            }
+
+            step.Restart();
+            await _pendingUnifiedLanguageApplyTask;
+            _ = RecordLanguageSwitchTimingAsync(
+                "Settings.ChangeLanguage.WaitPostedApply",
+                step,
+                previousLanguage,
+                appliedLanguage,
+                cancellationToken);
+
+            step.Restart();
+            await WaitForPostedLanguageRefreshAsync(previousLanguage, appliedLanguage, cancellationToken);
+            _ = RecordLanguageSwitchTimingAsync(
+                "Settings.ChangeLanguage.WaitViewRefresh",
+                step,
+                previousLanguage,
+                appliedLanguage,
+                cancellationToken);
+
+            step.Restart();
+            if (!string.Equals(Language, appliedLanguage, StringComparison.OrdinalIgnoreCase))
+            {
+                ApplyUnifiedLanguage(appliedLanguage);
+            }
+            else
+            {
+                SetSelectedLanguageValue(appliedLanguage, requestLanguageChange: false);
+            }
+
+            if (!string.Equals(previousLanguage, appliedLanguage, StringComparison.OrdinalIgnoreCase))
+            {
+                _ = Runtime.AchievementTrackerService.Unlock("Linguist");
+            }
+
+            _ = RecordLanguageSwitchTimingAsync(
+                "Settings.ChangeLanguage.FinalSync",
+                step,
+                previousLanguage,
+                appliedLanguage,
+                cancellationToken);
+        }
+        finally
         {
-            _ = Runtime.AchievementTrackerService.Unlock("Linguist");
+            EndBlockingOperationOverlay();
+            _ = RecordTemporaryTimingAsync(
+                "Settings.ChangeLanguage.Total",
+                total.Elapsed.TotalMilliseconds,
+                cancellationToken,
+                ("from", previousLanguage),
+                ("target", normalized),
+                ("current", Language));
         }
     }
 
     public async Task SaveGuiSettingsAsync(CancellationToken cancellationToken = default)
     {
-        await SaveGuiSettingsCoreAsync(triggeredByAutoSave: false, cancellationToken);
+        await RunSettingsSaveTargetAsync(
+            "Settings.AutoSave.Gui",
+            ct => SaveGuiSettingsCoreAsync(triggeredByAutoSave: false, cancellationToken: ct),
+            cancellationToken);
     }
 
     public async Task RefreshConfigurationProfilesAsync(CancellationToken cancellationToken = default)
@@ -2726,10 +3515,25 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
             failureMessage: LocalizeSettingsText(
                 "Settings.ConfigurationManager.Status.AddFailed",
                 "配置新增失败。"),
-            cancellationToken);
+            cancellationToken: cancellationToken,
+            suppressFailureDialog: true,
+            onFailure: SetConfigurationManagerSaveAsNewFailure);
         if (result.Success)
         {
-            ConfigurationManagerNewProfileName = string.Empty;
+            _suppressConfigurationManagerSaveAsNewSuccessReset = true;
+            try
+            {
+                ConfigurationManagerNewProfileName = string.Empty;
+            }
+            finally
+            {
+                _suppressConfigurationManagerSaveAsNewSuccessReset = false;
+            }
+
+            ConfigurationManagerSaveAsNewFailedText = string.Empty;
+            ConfigurationManagerSaveAsNewSucceededText = LocalizeSettingsText(
+                "Settings.ConfigurationManager.SaveAsNewSucceededInline",
+                "保存成功");
         }
     }
 
@@ -2877,32 +3681,29 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
     public async Task SaveCurrentConfigurationAsync(CancellationToken cancellationToken = default)
     {
         ClearConfigurationManagerStatus();
-        try
+        var saved = await ConfigurationSaveTracker.Instance.RunTrackedAsync(
+            "Settings.ConfigurationManager.Current",
+            LocalizeSettingsText("Settings.ConfigurationManager.Title", "配置管理"),
+            "Settings.ConfigurationManager.SaveCurrent",
+            Runtime.DiagnosticsService,
+            async ct =>
+            {
+                await Runtime.ConfigurationService.SaveAsync(ct);
+                return true;
+            },
+            cancellationToken);
+        if (saved)
         {
-            await Runtime.ConfigurationService.SaveAsync(cancellationToken);
             await LoadConfigurationProfilesAsync(
                 "Settings.ConfigurationManager.ReloadAfterSave",
                 cancellationToken,
                 updateStatus: false);
-            ConfigurationManagerStatusMessage = LocalizeSettingsText(
-                "Settings.ConfigurationManager.Status.SaveCurrentSucceeded",
-                "当前配置已保存。");
+            ConfigurationManagerStatusMessage = string.Empty;
             ConfigurationManagerErrorMessage = string.Empty;
-            StatusMessage = ConfigurationManagerStatusMessage;
             LastErrorMessage = string.Empty;
-            await RecordEventAsync("Settings.ConfigurationManager.SaveCurrent", ConfigurationManagerStatusMessage, cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            ConfigurationManagerStatusMessage = LocalizeSettingsText(
-                "Settings.ConfigurationManager.Status.SaveCurrentFailed",
-                "当前配置保存失败。");
-            ConfigurationManagerErrorMessage = ex.Message;
-            await RecordUnhandledExceptionAsync(
+            await RecordEventAsync(
                 "Settings.ConfigurationManager.SaveCurrent",
-                ex,
-                UiErrorCode.ConfigurationProfileSaveFailed,
-                "Failed to save current configuration.",
+                "Current configuration saved.",
                 cancellationToken);
         }
     }
@@ -3075,7 +3876,22 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
                 currentConfig.CurrentProfile = currentConfig.Profiles.Keys.First();
             }
 
-            await Runtime.ConfigurationService.SaveAsync(cancellationToken);
+            var saved = await ConfigurationSaveTracker.Instance.RunTrackedAsync(
+                "Settings.ConfigurationManager.Import",
+                LocalizeSettingsText("Settings.ConfigurationManager.Title", "配置管理"),
+                "Settings.ConfigurationManager.Import.Save",
+                Runtime.DiagnosticsService,
+                async ct =>
+                {
+                    await Runtime.ConfigurationService.SaveAsync(ct);
+                    return true;
+                },
+                cancellationToken);
+            if (!saved)
+            {
+                return;
+            }
+
             var importSuccessMessage = renamedCount > 0
                 ? FormatSettingsText(
                     "Settings.ConfigurationManager.Status.ImportSucceededWithRename",
@@ -3171,6 +3987,14 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
 
     public async Task SaveAchievementSettingsAsync(CancellationToken cancellationToken = default)
     {
+        await RunSettingsSaveTargetAsync(
+            "Settings.AutoSave.Achievement",
+            SaveAchievementSettingsCoreAsync,
+            cancellationToken);
+    }
+
+    private async Task SaveAchievementSettingsCoreAsync(CancellationToken cancellationToken = default)
+    {
         AchievementStatusMessage = string.Empty;
         AchievementErrorMessage = string.Empty;
 
@@ -3259,7 +4083,10 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
                     DialogTextCatalog.Select(language, "搜索成就", "Filter achievements"));
                 return new DialogChromeSnapshot(
                     title: AchievementTextCatalog.GetString("AchievementList", language, "成就列表"),
-                    confirmText: DialogTextCatalog.WarningDialogConfirmButton(language),
+                    confirmText: GetSettingsTextForLanguage(
+                        language,
+                        "Settings.Action.Close",
+                        DialogTextCatalog.ErrorDialogCloseButton(language)),
                     cancelText: DialogTextCatalog.WarningDialogCancelButton(language),
                     namedTexts: DialogTextCatalog.CreateNamedTexts(
                         (DialogTextCatalog.ChromeKeys.FilterWatermark, filterWatermark)));
@@ -3269,13 +4096,17 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
             Title: chromeSnapshot.Title,
             Items: snapshot.Items,
             InitialFilter: string.Empty,
-            ConfirmText: chromeSnapshot.ConfirmText ?? DialogTextCatalog.WarningDialogConfirmButton(Language),
+            ConfirmText: chromeSnapshot.ConfirmText ?? RootTexts.GetOrDefault(
+                "Settings.Action.Close",
+                DialogTextCatalog.ErrorDialogCloseButton(Language)),
             CancelText: chromeSnapshot.CancelText ?? DialogTextCatalog.WarningDialogCancelButton(Language),
             FilterWatermark: chromeSnapshot.GetNamedTextOrDefault(
                 DialogTextCatalog.ChromeKeys.FilterWatermark,
                 RootTexts.GetOrDefault(
                     "Settings.Achievement.Dialog.FilterWatermark",
                     DialogTextCatalog.Select(Language, "搜索成就", "Filter achievements"))),
+            UnlockedCount: snapshot.UnlockedCount,
+            TotalCount: snapshot.TotalCount,
             Chrome: chrome);
         var dialogResult = await _dialogService.ShowAchievementListAsync(request, "Settings.Achievement.Dialog", cancellationToken);
         AchievementStatusMessage = dialogResult.Return switch
@@ -3463,36 +4294,20 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         var serializedHotkeys = HotkeyConfigurationCodec.Serialize(
             persistedShowGui,
             persistedLinkStart);
-        var saveResult = await Runtime.SettingsFeatureService.SaveGlobalSettingsAsync(
-            new Dictionary<string, string>(StringComparer.Ordinal)
-            {
-                [ConfigurationKeys.HotKeys] = serializedHotkeys,
-            },
+        var saveSucceeded = await RunTrackedConfigurationSaveAsync(
+            "Settings.Hotkey",
+            FormatSettingsText("Settings.Section.HotKey", "热键设置"),
+            "Settings.Hotkey.Save",
+            ct => Runtime.SettingsFeatureService.SaveGlobalSettingsAsync(
+                new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    [ConfigurationKeys.HotKeys] = serializedHotkeys,
+                },
+                ct),
             cancellationToken);
 
-        if (!saveResult.Success)
+        if (!saveSucceeded)
         {
-            HotkeyErrorMessage = FormatSettingsText(
-                "Settings.Hotkey.Error.PersistenceFailed",
-                "热键已更新，但持久化失败：{0}",
-                saveResult.Message);
-            HotkeyStatusMessage = FormatSettingsText(
-                "Settings.Hotkey.Status.PersistenceFailed",
-                "{0}: 热键已更新，但持久化失败。",
-                GetHotkeySourceText(source));
-            LastErrorMessage = HotkeyErrorMessage;
-            StatusMessage = HotkeyStatusMessage;
-            await RecordErrorAsync(
-                "Settings.Hotkey.Save",
-                HotkeyErrorMessage,
-                cancellationToken: cancellationToken);
-            await RecordFailedResultAsync(
-                "Settings.Hotkey.Batch",
-                UiOperationResult.Fail(
-                    saveResult.Error?.Code ?? UiErrorCode.HotkeyPersistenceFailed,
-                    HotkeyStatusMessage,
-                    saveResult.Error?.Details),
-                cancellationToken);
             await RefreshHotkeyRuntimeStateAsync(cancellationToken);
             await RefreshHotkeyFallbackWarningAsync(source, cancellationToken);
             return;
@@ -3751,15 +4566,38 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
     public async Task CheckAboutAnnouncementAsync(CancellationToken cancellationToken = default)
     {
         ClearAboutStatus();
-        var result = await Runtime.AnnouncementFeatureService.LoadStateAsync(cancellationToken);
-        var state = await ApplyResultAsync(result, "Settings.About.CheckAnnouncement", cancellationToken);
+        var loadResult = await Runtime.AnnouncementFeatureService.LoadStateAsync(cancellationToken);
+        var state = await ApplyResultAsync(loadResult, "Settings.About.CheckAnnouncement", cancellationToken);
         if (state is null)
         {
             AboutStatusMessage = LocalizeSettingsText(
                 "Settings.About.Status.AnnouncementLoadFailed",
                 "公告读取失败。");
-            AboutErrorMessage = result.Message;
+            AboutErrorMessage = loadResult.Message;
             return;
+        }
+
+        var fetchResult = await FetchLatestAnnouncementInfoAsync(cancellationToken);
+        if (fetchResult.Success && fetchResult.Value is not null && !string.IsNullOrWhiteSpace(fetchResult.Value.Content))
+        {
+            var latestInfo = fetchResult.Value.Content.Trim();
+            if (!string.Equals(latestInfo, state.AnnouncementInfo, StringComparison.Ordinal))
+            {
+                state = state with
+                {
+                    AnnouncementInfo = latestInfo,
+                    DoNotRemindThisAnnouncementAgain = false,
+                };
+                var saveFetchedState = await Runtime.AnnouncementFeatureService.SaveStateAsync(state, cancellationToken);
+                if (!await ApplyResultAsync(saveFetchedState, "Settings.About.Announcement.SaveFetched", cancellationToken))
+                {
+                    AboutStatusMessage = LocalizeSettingsText(
+                        "Settings.About.Status.AnnouncementSaveFailed",
+                        "公告状态保存失败。");
+                    AboutErrorMessage = saveFetchedState.Message;
+                    return;
+                }
+            }
         }
 
         var info = string.IsNullOrWhiteSpace(state.AnnouncementInfo)
@@ -3780,67 +4618,8 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         AboutErrorMessage = string.Empty;
     }
 
-    public async Task CheckAboutAnnouncementWithDialogAsync(CancellationToken cancellationToken = default)
-    {
-        ClearAboutStatus();
-        var result = await Runtime.AnnouncementFeatureService.LoadStateAsync(cancellationToken);
-        var state = await ApplyResultAsync(result, "Settings.About.CheckAnnouncement", cancellationToken);
-        if (state is null)
-        {
-            AboutStatusMessage = LocalizeSettingsText(
-                "Settings.About.Status.AnnouncementLoadFailed",
-                "公告读取失败。");
-            AboutErrorMessage = result.Message;
-            return;
-        }
-
-        var announcementChrome = CreateSettingsDialogChrome(
-            texts => new DialogChromeSnapshot(
-                title: texts.GetOrDefault("Settings.About.Dialog.Title", "Announcement"),
-                confirmText: texts.GetOrDefault("Settings.About.Dialog.Confirm", "Confirm"),
-                cancelText: texts.GetOrDefault("Settings.About.Dialog.Cancel", "Cancel")));
-        var announcementChromeSnapshot = announcementChrome.GetSnapshot();
-        var request = new AnnouncementDialogRequest(
-            Title: announcementChromeSnapshot.Title,
-            AnnouncementInfo: state.AnnouncementInfo,
-            DoNotRemindThisAnnouncementAgain: state.DoNotRemindThisAnnouncementAgain,
-            DoNotShowAnnouncement: state.DoNotShowAnnouncement,
-            ConfirmText: announcementChromeSnapshot.ConfirmText ?? LocalizeSettingsText("Settings.About.Dialog.Confirm", "Confirm"),
-            CancelText: announcementChromeSnapshot.CancelText ?? LocalizeSettingsText("Settings.About.Dialog.Cancel", "Cancel"),
-            Chrome: announcementChrome);
-        var dialogResult = await _dialogService.ShowAnnouncementAsync(request, "Settings.About.Announcement.Dialog", cancellationToken);
-        if (dialogResult.Return == DialogReturnSemantic.Confirm && dialogResult.Payload is not null)
-        {
-            var nextState = new AnnouncementState(
-                AnnouncementInfo: dialogResult.Payload.AnnouncementInfo,
-                DoNotRemindThisAnnouncementAgain: dialogResult.Payload.DoNotRemindThisAnnouncementAgain,
-                DoNotShowAnnouncement: dialogResult.Payload.DoNotShowAnnouncement);
-            var saveResult = await Runtime.AnnouncementFeatureService.SaveStateAsync(nextState, cancellationToken);
-            if (!await ApplyResultAsync(saveResult, "Settings.About.Announcement.Save", cancellationToken))
-            {
-                AboutStatusMessage = LocalizeSettingsText(
-                    "Settings.About.Status.AnnouncementSaveFailed",
-                    "公告状态保存失败。");
-                AboutErrorMessage = saveResult.Message;
-                return;
-            }
-
-            AboutStatusMessage = LocalizeSettingsText(
-                "Settings.About.Status.AnnouncementSaveSucceeded",
-                "公告状态已保存。");
-            AboutErrorMessage = string.Empty;
-            return;
-        }
-
-        AboutStatusMessage = dialogResult.Return == DialogReturnSemantic.Cancel
-            ? LocalizeSettingsText(
-                "Settings.About.Status.AnnouncementDialogCancelled",
-                "公告弹窗已取消。")
-            : LocalizeSettingsText(
-                "Settings.About.Status.AnnouncementDialogClosed",
-                "公告弹窗已关闭。");
-        AboutErrorMessage = string.Empty;
-    }
+    public Task CheckAboutAnnouncementWithDialogAsync(CancellationToken cancellationToken = default)
+        => CheckAndDownloadAboutAnnouncementWithDialogAsync(cancellationToken);
 
     public async Task ApplyAutostartAsync(CancellationToken cancellationToken = default)
     {
@@ -3970,7 +4749,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
             if (!await ApplyResultAsync(saveResult, "Settings.Save.GuiBatch", cancellationToken))
             {
                 HasPendingGuiChanges = true;
-                SetGuiValidationMessageForCurrentSection(saveResult.Message);
+                MarkSettingsSaveFailure("Settings.AutoSave.Gui");
                 return;
             }
 
@@ -4005,15 +4784,14 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         catch (Exception ex)
         {
             HasPendingGuiChanges = true;
-            SetGuiValidationMessageForCurrentSection(
-                string.Format(
-                    RootTexts.GetOrDefault("Settings.SaveScoped.Error.SaveFailed", "Failed to save settings: {0}"),
-                    ex.Message));
+            MarkSettingsSaveFailure("Settings.AutoSave.Gui");
             await RecordUnhandledExceptionAsync(
                 "Settings.Save.GuiBatch",
                 ex,
                 UiErrorCode.SettingsSaveFailed,
-                GuiValidationMessage,
+                string.Format(
+                    RootTexts.GetOrDefault("Settings.SaveScoped.Error.SaveFailed", "Failed to save settings: {0}"),
+                    ex.Message),
                 cancellationToken);
         }
         finally
@@ -4089,7 +4867,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
                 ref _startPerformanceAutoSaveCts,
                 "Settings.AutoSave.StartPerformance",
                 550,
-                SaveStartPerformanceSettingsAsync);
+                SaveStartPerformanceSettingsCoreAsync);
         }
 
         if (HasPendingTimerChanges && !_suppressTimerDirtyTracking)
@@ -4098,7 +4876,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
                 ref _timerAutoSaveCts,
                 "Settings.AutoSave.Timer",
                 550,
-                SaveTimerSettingsAsync);
+                SaveTimerSettingsCoreAsync);
         }
     }
 
@@ -4190,7 +4968,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
             ref _startPerformanceAutoSaveCts,
             "Settings.AutoSave.StartPerformance",
             550,
-            SaveStartPerformanceSettingsAsync);
+            SaveStartPerformanceSettingsCoreAsync);
     }
 
     private void MarkTimerDirty()
@@ -4206,7 +4984,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
             ref _timerAutoSaveCts,
             "Settings.AutoSave.Timer",
             550,
-            SaveTimerSettingsAsync);
+            SaveTimerSettingsCoreAsync);
     }
 
     private void MarkConnectionGameDirty()
@@ -4220,7 +4998,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
             ref _connectionGameAutoSaveCts,
             "Settings.AutoSave.ConnectionGame",
             500,
-            SaveConnectionGameSettingsAsync);
+            SaveConnectionGameSettingsCoreAsync);
     }
 
     private void MarkRemoteControlDirty()
@@ -4234,7 +5012,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
             ref _remoteControlAutoSaveCts,
             "Settings.AutoSave.Remote",
             650,
-            SaveRemoteControlAsync);
+            SaveRemoteControlCoreAsync);
     }
 
     private void MarkExternalNotificationDirty()
@@ -4248,7 +5026,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
             ref _externalNotificationAutoSaveCts,
             "Settings.AutoSave.Notification",
             700,
-            SaveExternalNotificationAsync);
+            SaveExternalNotificationCoreAsync);
     }
 
     private void MarkVersionUpdateDirty()
@@ -4262,7 +5040,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
             ref _versionUpdateAutoSaveCts,
             "Settings.AutoSave.VersionUpdate",
             700,
-            SaveVersionUpdateSettingsAsync);
+            SaveVersionUpdateSettingsCoreAsync);
     }
 
     private void MarkAchievementDirty()
@@ -4276,7 +5054,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
             ref _achievementAutoSaveCts,
             "Settings.AutoSave.Achievement",
             500,
-            SaveAchievementSettingsAsync);
+            SaveAchievementSettingsCoreAsync);
     }
 
     private void MarkAutostartDirty()
@@ -4301,6 +5079,12 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         Func<CancellationToken, Task> saveAsync)
     {
         CancelAutoSaveCts(ref debounceCts);
+        ConfigurationSaveTracker.Instance.MarkPending(
+            scope,
+            ResolveSettingsSaveDisplayName(scope),
+            scope,
+            Runtime.DiagnosticsService,
+            CreateSettingsSaveRetry(scope, saveAsync));
         debounceCts = new CancellationTokenSource();
         var token = debounceCts.Token;
 
@@ -4318,10 +5102,11 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
             await Task.Delay(delayMs, cancellationToken);
             if (IsPageAutoSaveSuppressed)
             {
+                ConfigurationSaveTracker.Instance.ClearPending(scope);
                 return;
             }
 
-            await saveAsync(cancellationToken);
+            await RunSettingsSaveTargetAsync(scope, saveAsync, cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -4335,6 +5120,185 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
                 UiErrorCode.SettingsSaveFailed,
                 $"{scope} failed.");
         }
+    }
+
+    private async Task<bool> RunSettingsSaveTargetAsync(
+        string scope,
+        Func<CancellationToken, Task> saveAsync,
+        CancellationToken cancellationToken)
+    {
+        return await ConfigurationSaveTracker.Instance.RunTrackedAsync(
+            scope,
+            ResolveSettingsSaveDisplayName(scope),
+            scope,
+            Runtime.DiagnosticsService,
+            CreateSettingsSaveRetry(scope, saveAsync),
+            cancellationToken);
+    }
+
+    private Func<CancellationToken, Task<bool>> CreateSettingsSaveRetry(
+        string scope,
+        Func<CancellationToken, Task> saveAsync)
+    {
+        return async ct =>
+        {
+            ClearSettingsSaveFailure(scope);
+            await saveAsync(ct);
+            return !HasSettingsSaveFailure(scope);
+        };
+    }
+
+    private void RegisterSettingsSaveTarget(string scope)
+    {
+        var saveAsync = ResolveSettingsSaveAction(scope);
+        if (saveAsync is null)
+        {
+            return;
+        }
+
+        ConfigurationSaveTracker.Instance.MarkPending(
+            scope,
+            ResolveSettingsSaveDisplayName(scope),
+            scope,
+            Runtime.DiagnosticsService,
+            CreateSettingsSaveRetry(scope, saveAsync));
+    }
+
+    private void MarkSettingsSaveFailure(string scope)
+    {
+        if (!string.IsNullOrWhiteSpace(scope))
+        {
+            lock (_settingsSaveFailureGate)
+            {
+                _settingsSaveFailureScopes.Add(scope);
+            }
+        }
+    }
+
+    private void ClearSettingsSaveFailure(string scope)
+    {
+        if (!string.IsNullOrWhiteSpace(scope))
+        {
+            lock (_settingsSaveFailureGate)
+            {
+                _settingsSaveFailureScopes.Remove(scope);
+            }
+        }
+    }
+
+    private bool HasSettingsSaveFailure(string scope)
+    {
+        lock (_settingsSaveFailureGate)
+        {
+            if (_settingsSaveFailureScopes.Contains(scope))
+            {
+                return true;
+            }
+        }
+
+        return scope switch
+        {
+            "Settings.AutoSave.Gui" => !string.IsNullOrWhiteSpace(GuiValidationMessage),
+            "Settings.AutoSave.StartPerformance" => !string.IsNullOrWhiteSpace(StartPerformanceValidationMessage),
+            "Settings.AutoSave.Timer" => !string.IsNullOrWhiteSpace(TimerValidationMessage),
+            "Settings.AutoSave.ConnectionGame" => !string.IsNullOrWhiteSpace(LastErrorMessage),
+            "Settings.AutoSave.Remote" => !string.IsNullOrWhiteSpace(RemoteControlErrorMessage),
+            "Settings.AutoSave.Notification" => !string.IsNullOrWhiteSpace(ExternalNotificationErrorMessage),
+            "Settings.AutoSave.VersionUpdate" => !string.IsNullOrWhiteSpace(VersionUpdateErrorMessage),
+            "Settings.AutoSave.Achievement" => !string.IsNullOrWhiteSpace(AchievementErrorMessage),
+            "Settings.AutoSave.Autostart" => !string.IsNullOrWhiteSpace(AutostartErrorMessage),
+            _ => !string.IsNullOrWhiteSpace(LastErrorMessage),
+        };
+    }
+
+    private string ResolveSettingsSaveDisplayName(string scope)
+    {
+        var sectionKey = scope switch
+        {
+            "Settings.AutoSave.Gui" => "GUI",
+            "Settings.AutoSave.StartPerformance" => "Performance",
+            "Settings.AutoSave.Timer" => "Timer",
+            "Settings.AutoSave.ConnectionGame" => "Connect",
+            "Settings.AutoSave.Remote" => "RemoteControl",
+            "Settings.AutoSave.Notification" => "ExternalNotification",
+            "Settings.AutoSave.VersionUpdate" => "VersionUpdate",
+            "Settings.AutoSave.Achievement" => "Achievement",
+            "Settings.AutoSave.Autostart" => "Start",
+            _ => string.Empty,
+        };
+        if (!string.IsNullOrWhiteSpace(sectionKey))
+        {
+            var displayName = Sections.FirstOrDefault(section => string.Equals(section.Key, sectionKey, StringComparison.Ordinal))?.DisplayName;
+            if (!string.IsNullOrWhiteSpace(displayName))
+            {
+                return displayName;
+            }
+        }
+
+        return scope switch
+        {
+            "Settings.AutoSave.Gui" => "界面设置",
+            "Settings.AutoSave.StartPerformance" => "运行设置",
+            "Settings.AutoSave.Timer" => "定时执行",
+            "Settings.AutoSave.ConnectionGame" => "连接设置",
+            "Settings.AutoSave.Remote" => "远程控制",
+            "Settings.AutoSave.Notification" => "外部通知",
+            "Settings.AutoSave.VersionUpdate" => "版本更新",
+            "Settings.AutoSave.Achievement" => "成就设置",
+            "Settings.AutoSave.Autostart" => "启动设置",
+            _ => "设置",
+        };
+    }
+
+    public async Task<bool> FlushConfigurationSavesForCloseAsync(CancellationToken cancellationToken = default)
+    {
+        var scopes = new HashSet<string>(
+            ConfigurationSaveTracker.Instance.PendingOrFailedKeys
+                .Where(static key => key.StartsWith("Settings.AutoSave.", StringComparison.Ordinal)),
+            StringComparer.Ordinal);
+
+        if (HasPendingGuiChanges && !_suppressGuiAutoSave)
+        {
+            RegisterSettingsSaveTarget("Settings.AutoSave.Gui");
+        }
+
+        if (HasPendingStartPerformanceChanges && !_suppressStartPerformanceDirtyTracking)
+        {
+            RegisterSettingsSaveTarget("Settings.AutoSave.StartPerformance");
+        }
+
+        if (HasPendingTimerChanges && !_suppressTimerDirtyTracking)
+        {
+            RegisterSettingsSaveTarget("Settings.AutoSave.Timer");
+        }
+
+        CancelPendingAutoSaveRequests();
+        foreach (var scope in scopes)
+        {
+            RegisterSettingsSaveTarget(scope);
+        }
+
+        var failedNames = await ConfigurationSaveTracker.Instance.RetryPendingOrFailedAsync(
+            static key => key.StartsWith("Settings.AutoSave.", StringComparison.Ordinal),
+            cancellationToken);
+        return failedNames.Count == 0;
+    }
+
+    private Func<CancellationToken, Task>? ResolveSettingsSaveAction(string scope)
+    {
+        return scope switch
+        {
+            "Settings.AutoSave.Gui" => ct => SaveGuiSettingsCoreAsync(triggeredByAutoSave: true, cancellationToken: ct),
+            "Settings.AutoSave.StartPerformance" => SaveStartPerformanceSettingsCoreAsync,
+            "Settings.AutoSave.Timer" => SaveTimerSettingsCoreAsync,
+            "Settings.AutoSave.ConnectionGame" => SaveConnectionGameSettingsCoreAsync,
+            "Settings.AutoSave.Remote" => SaveRemoteControlCoreAsync,
+            "Settings.AutoSave.Notification" => SaveExternalNotificationCoreAsync,
+            "Settings.AutoSave.VersionUpdate" => SaveVersionUpdateSettingsCoreAsync,
+            "Settings.AutoSave.Achievement" => SaveAchievementSettingsCoreAsync,
+            "Settings.AutoSave.Autostart" => ApplyAutostartAsync,
+            _ => null,
+        };
     }
 
     private void OnSettingsPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -4434,13 +5398,14 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
 
     private void OnUnifiedLanguageChanged(object? sender, UiLanguageChangedEventArgs e)
     {
-        if (Dispatcher.UIThread.CheckAccess() || Avalonia.Application.Current is null)
+        if (Avalonia.Application.Current is null)
         {
             ApplyUnifiedLanguage(e.CurrentLanguage);
+            _pendingUnifiedLanguageApplyTask = Task.CompletedTask;
             return;
         }
 
-        Dispatcher.UIThread.Post(() => ApplyUnifiedLanguage(e.CurrentLanguage));
+        _pendingUnifiedLanguageApplyTask = ScheduleUnifiedLanguageApplyAsync(e.CurrentLanguage);
     }
 
     private void ApplyUnifiedLanguage(string? language)
@@ -4460,6 +5425,161 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
             _suppressPageAutoSave = previousSuppressPageAutoSave;
             HasPendingGuiChanges = hadPendingGuiChanges;
         }
+    }
+
+    private Task ScheduleUnifiedLanguageApplyAsync(string? language)
+    {
+        return Dispatcher.UIThread.InvokeAsync(
+            () => ApplyUnifiedLanguageAsync(language),
+            DispatcherPriority.Send);
+    }
+
+    private async Task ApplyUnifiedLanguageAsync(string? language)
+    {
+        var hadPendingGuiChanges = HasPendingGuiChanges;
+        var previousSuppressPageAutoSave = _suppressPageAutoSave;
+        var previousSuppressGuiAutoSave = _suppressGuiAutoSave;
+        try
+        {
+            _suppressPageAutoSave = true;
+            _suppressGuiAutoSave = true;
+            await SetLanguageAsync(NormalizeLanguage(language), allowRenderYields: true);
+        }
+        finally
+        {
+            _suppressGuiAutoSave = previousSuppressGuiAutoSave;
+            _suppressPageAutoSave = previousSuppressPageAutoSave;
+            HasPendingGuiChanges = hadPendingGuiChanges;
+        }
+    }
+
+    private async Task SetLanguageAsync(string normalized, bool allowRenderYields)
+    {
+        var previousLanguage = _language;
+        if (!SetProperty(ref _language, normalized))
+        {
+            return;
+        }
+
+        var previousSuppressSelectedLanguageChangeRequest = _suppressSelectedLanguageChangeRequest;
+        try
+        {
+            _suppressSelectedLanguageChangeRequest = true;
+            await ApplyLanguageSideEffectsAsync(previousLanguage, normalized, allowRenderYields);
+        }
+        finally
+        {
+            _suppressSelectedLanguageChangeRequest = previousSuppressSelectedLanguageChangeRequest;
+        }
+    }
+
+    private async Task ApplyLanguageSideEffectsAsync(
+        string previousLanguage,
+        string normalized,
+        bool allowRenderYields)
+    {
+        var total = Stopwatch.StartNew();
+        var step = Stopwatch.StartNew();
+        SetSelectedLanguageValue(normalized, requestLanguageChange: false);
+        RootTexts.Language = normalized;
+        OnPropertyChanged(nameof(RootTexts));
+        RefreshNotificationTemplateLocalization(previousLanguage, normalized);
+        ConnectionGameSharedState.SetLanguage(normalized);
+        Runtime.AchievementTrackerService.SetCurrentLanguage(normalized);
+        RefreshHotkeyUiText();
+        OnPropertyChanged(nameof(HotkeyCaptureGuideText));
+        _ = RecordLanguageApplyTimingAsync(
+            "Settings.ApplyLanguage.CoreText",
+            step,
+            previousLanguage,
+            normalized,
+            allowRenderYields);
+        await YieldForBlockingOperationOverlayFrameAsync(allowRenderYields);
+
+        step.Restart();
+        RebuildGuiOptionLists();
+        _ = RecordLanguageApplyTimingAsync(
+            "Settings.ApplyLanguage.GuiOptions",
+            step,
+            previousLanguage,
+            normalized,
+            allowRenderYields);
+        await YieldForBlockingOperationOverlayFrameAsync(allowRenderYields);
+
+        step.Restart();
+        RebuildSections(SelectedSection?.Key);
+        _ = RecordLanguageApplyTimingAsync(
+            "Settings.ApplyLanguage.Sections",
+            step,
+            previousLanguage,
+            normalized,
+            allowRenderYields,
+            ("sectionCount", Sections.Count));
+        await YieldForBlockingOperationOverlayFrameAsync(allowRenderYields);
+
+        step.Restart();
+        RebuildVersionUpdateOptionLists();
+        if (IsSettingsDataBucketLoaded(SettingsDataBucketStartPerformance))
+        {
+            RefreshGpuUiState();
+        }
+
+        _ = RecordLanguageApplyTimingAsync(
+            "Settings.ApplyLanguage.VersionUpdateAndGpu",
+            step,
+            previousLanguage,
+            normalized,
+            allowRenderYields);
+        await YieldForBlockingOperationOverlayFrameAsync(allowRenderYields);
+
+        step.Restart();
+        RefreshAchievementUiState();
+        UpdateAchievementPolicySummary(new AchievementPolicy(AchievementPopupDisabled, AchievementPopupAutoClose));
+        OnPropertyChanged(nameof(VersionUpdateMirrorChyanCdkExpiryText));
+        OnPropertyChanged(nameof(PendingResourceUpdateSummary));
+        MarkGuiSettingsDirty();
+        NotifyGuiSettingsPreviewChanged();
+        RefreshRightPaneLocalization();
+        _ = RecordLanguageApplyTimingAsync(
+            "Settings.ApplyLanguage.AchievementValidationAndPreview",
+            step,
+            previousLanguage,
+            normalized,
+            allowRenderYields);
+        _ = RecordLanguageApplyTimingAsync(
+            "Settings.ApplyLanguage.Total",
+            total,
+            previousLanguage,
+            normalized,
+            allowRenderYields);
+    }
+
+    private void ApplyLanguageSideEffectsImmediately(string previousLanguage, string normalized)
+    {
+        SetSelectedLanguageValue(normalized, requestLanguageChange: false);
+        RootTexts.Language = normalized;
+        OnPropertyChanged(nameof(RootTexts));
+        RefreshNotificationTemplateLocalization(previousLanguage, normalized);
+        ConnectionGameSharedState.SetLanguage(normalized);
+        Runtime.AchievementTrackerService.SetCurrentLanguage(normalized);
+        RefreshHotkeyUiText();
+        OnPropertyChanged(nameof(HotkeyCaptureGuideText));
+
+        RebuildGuiOptionLists();
+        RebuildSections(SelectedSection?.Key);
+        RebuildVersionUpdateOptionLists();
+        if (IsSettingsDataBucketLoaded(SettingsDataBucketStartPerformance))
+        {
+            RefreshGpuUiState();
+        }
+
+        RefreshAchievementUiState();
+        UpdateAchievementPolicySummary(new AchievementPolicy(AchievementPopupDisabled, AchievementPopupAutoClose));
+        OnPropertyChanged(nameof(VersionUpdateMirrorChyanCdkExpiryText));
+        OnPropertyChanged(nameof(PendingResourceUpdateSummary));
+        MarkGuiSettingsDirty();
+        NotifyGuiSettingsPreviewChanged();
+        RefreshRightPaneLocalization();
     }
 
     private void OnTimerSlotPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -4575,6 +5695,8 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
 
     private void ClearConfigurationManagerStatus()
     {
+        ConfigurationManagerSaveAsNewSucceededText = string.Empty;
+        ConfigurationManagerSaveAsNewFailedText = string.Empty;
         ConfigurationManagerStatusMessage = string.Empty;
         ConfigurationManagerErrorMessage = string.Empty;
     }
@@ -4654,17 +5776,39 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         string scope,
         string successMessage,
         string failureMessage,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool suppressFailureDialog = false,
+        Action<UiOperationResult<ConfigurationProfileState>>? onFailure = null)
     {
-        var payload = await ApplyResultAsync(result, scope, cancellationToken);
-        if (payload is null)
+        if (!result.Success || result.Value is null)
         {
+            var failed = UiOperationResult.Fail(
+                result.Error?.Code ?? UiErrorCode.UiOperationFailed,
+                result.Message,
+                result.Error?.Details);
+            if (suppressFailureDialog)
+            {
+                await RecordFailedResultAsync(scope, failed, cancellationToken);
+                LastErrorMessage = result.Message;
+            }
+            else
+            {
+                _ = await ApplyResultAsync(result, scope, cancellationToken);
+            }
+
             ConfigurationManagerErrorMessage = result.Message;
             ConfigurationManagerStatusMessage = failureMessage;
+            onFailure?.Invoke(result);
             await LoadConfigurationProfilesAsync(
                 "Settings.ConfigurationManager.ReloadAfterFailure",
                 cancellationToken,
                 updateStatus: false);
+            return false;
+        }
+
+        var payload = await ApplyResultAsync(result, scope, cancellationToken);
+        if (payload is null)
+        {
             return false;
         }
 
@@ -4673,6 +5817,34 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         ConfigurationManagerStatusMessage = successMessage;
         ConfigurationManagerErrorMessage = string.Empty;
         return true;
+    }
+
+    private void SetConfigurationManagerSaveAsNewFailure(UiOperationResult<ConfigurationProfileState> result)
+    {
+        var reason = result.Error?.Code switch
+        {
+            UiErrorCode.ConfigurationProfileAlreadyExists => LocalizeSettingsText(
+                "Settings.ConfigurationManager.SaveAsNewFailedReason.ProfileAlreadyExists",
+                "请换一个未使用的配置名称。"),
+            UiErrorCode.ConfigurationProfileInvalidName when result.Message.Contains("cannot be empty", StringComparison.OrdinalIgnoreCase) => LocalizeSettingsText(
+                "Settings.ConfigurationManager.SaveAsNewFailedReason.ProfileNameEmpty",
+                "请输入配置名称。"),
+            UiErrorCode.ConfigurationProfileInvalidName => LocalizeSettingsText(
+                "Settings.ConfigurationManager.SaveAsNewFailedReason.ProfileNameInvalid",
+                "配置名称无效。"),
+            UiErrorCode.ConfigurationProfileNotFound => LocalizeSettingsText(
+                "Settings.ConfigurationManager.SaveAsNewFailedReason.SourceProfileMissing",
+                "当前配置不存在，请刷新后重试。"),
+            _ => LocalizeSettingsText(
+                "Settings.ConfigurationManager.SaveAsNewFailedReason.Generic",
+                "请稍后重试。"),
+        };
+
+        ConfigurationManagerSaveAsNewSucceededText = string.Empty;
+        ConfigurationManagerSaveAsNewFailedText = FormatSettingsText(
+            "Settings.ConfigurationManager.SaveAsNewFailedInline",
+            "保存失败：{0}",
+            reason);
     }
 
     private void ApplyConfigurationProfileState(ConfigurationProfileState state)
@@ -5240,6 +6412,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         return new GuiSettingsSnapshot(
             Theme: NormalizeTheme(Theme),
             UseTray: UseTray,
+            UseNotify: UseNotify,
             MinimizeToTray: UseTray && MinimizeToTray,
             WindowTitleScrollable: WindowTitleScrollable,
             UseSoftwareRendering: UseSoftwareRendering,
@@ -5261,6 +6434,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         {
             Theme = snapshot.Theme;
             UseTray = snapshot.UseTray;
+            UseNotify = snapshot.UseNotify;
             MinimizeToTray = snapshot.MinimizeToTray;
             WindowTitleScrollable = snapshot.WindowTitleScrollable;
             UseSoftwareRendering = snapshot.UseSoftwareRendering;
@@ -5461,6 +6635,21 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         return default;
     }
 
+    private async Task<string?> ApplyLanguageChangeResultAsync(
+        UiOperationResult<string> result,
+        CancellationToken cancellationToken)
+    {
+        const string scope = "Settings.Gui.Language.Change";
+        if (result.Success)
+        {
+            LastErrorMessage = string.Empty;
+            await RecordEventAsync(scope, result.Message, cancellationToken);
+            return result.Value;
+        }
+
+        return await ApplyResultAsync(result, scope, cancellationToken);
+    }
+
     private string BuildMirrorChyanExpiryText(string? rawValue)
     {
         if (!long.TryParse(rawValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out var unixSeconds)
@@ -5512,8 +6701,8 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
     {
         var baseDirectories = new[]
         {
-            AppContext.BaseDirectory,
             ResolveRuntimeBaseDirectory(),
+            AppContext.BaseDirectory,
         };
 
         foreach (var baseDirectory in baseDirectories
@@ -5656,7 +6845,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
             }
         }
 
-        return Environment.CurrentDirectory;
+        return RuntimeLayout.ResolveRuntimeBaseDirectory();
     }
 
     private async Task OpenAboutExternalTargetAsync(
@@ -5819,6 +7008,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
                 _suppressPageAutoSave = previousSuppress;
             }
             UseTray = ReadGlobalBool(config, ConfigurationKeys.UseTray, true);
+            UseNotify = ReadGlobalBool(config, ConfigurationKeys.UseNotify, true);
             MinimizeToTray = ReadGlobalBool(config, ConfigurationKeys.MinimizeToTray, false);
             WindowTitleScrollable = ReadGlobalBool(config, ConfigurationKeys.WindowTitleScrollable, false);
             UseSoftwareRendering = rawUseSoftwareRendering;
@@ -5835,7 +7025,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
             RemoteUserIdentity = ReadProfileString(config, ConfigurationKeys.RemoteControlUserIdentity, string.Empty).Trim();
             RemoteDeviceIdentity = ReadProfileString(config, ConfigurationKeys.RemoteControlDeviceIdentity, string.Empty).Trim();
             RemotePollInterval = ReadProfileInt(config, ConfigurationKeys.RemoteControlPollIntervalMs, DefaultRemotePollIntervalMs);
-            ExternalNotificationEnabled = ReadProfileBool(config, ConfigurationKeys.ExternalNotificationEnabled, false);
+            ExternalNotificationEnabled = false;
             ExternalNotificationSendWhenComplete = ReadProfileBool(config, ConfigurationKeys.ExternalNotificationSendWhenComplete, true);
             ExternalNotificationSendWhenError = ReadProfileBool(config, ConfigurationKeys.ExternalNotificationSendWhenError, true);
             ExternalNotificationSendWhenTimeout = ReadProfileBool(config, ConfigurationKeys.ExternalNotificationSendWhenTimeout, true);
@@ -5869,13 +7059,13 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         {
             ApplyVersionUpdatePolicy(versionPolicyResult.Value);
             SyncVersionUpdateAvailabilityFromState();
-            SetPendingResourceUpdateAvailability(false);
+            SetPendingResourceUpdateState(null);
             VersionUpdateErrorMessage = string.Empty;
         }
         else
         {
             SetPendingVersionUpdateAvailability(false);
-            SetPendingResourceUpdateAvailability(false);
+            SetPendingResourceUpdateState(null);
             VersionUpdateErrorMessage = versionPolicyResult.Message;
         }
 
@@ -5955,12 +7145,33 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
                 TimerValidationMessage = string.Empty;
             }
 
+            RestoreExternalNotificationStatusSummaryIfIdle();
             MarkAllSettingsDataBucketsLoaded();
         }
         finally
         {
             _suppressPageAutoSave = previousSuppressPageAutoSave;
             ResumeAutoSave();
+        }
+    }
+
+    private void RestoreExternalNotificationStatusSummaryIfIdle()
+    {
+        if (!ExternalNotificationEnabled
+            || HasGuiValidationMessage
+            || HasHotkeyWarningMessage
+            || HasStartPerformanceValidationMessage
+            || HasTimerValidationMessage
+            || !string.IsNullOrWhiteSpace(LastErrorMessage))
+        {
+            return;
+        }
+
+        var summary = BuildExternalNotificationConfigurationSummary(
+            AvailableNotificationProviders.Where(provider => _enabledNotificationProviders.Contains(provider)));
+        if (!string.IsNullOrWhiteSpace(summary))
+        {
+            StatusMessage = summary;
         }
     }
 
@@ -6105,9 +7316,37 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         OnPropertyChanged(nameof(HotkeyStatusMessage));
         OnPropertyChanged(nameof(IssueReportStatusMessage));
         OnPropertyChanged(nameof(AboutStatusMessage));
+        OnPropertyChanged(nameof(HasAboutStatusMessage));
+        OnPropertyChanged(nameof(HasAboutStatusBlockMessage));
         OnPropertyChanged(nameof(GpuSupportMessage));
         OnPropertyChanged(nameof(HasGpuSupportMessage));
         OnPropertyChanged(nameof(StatusMessage));
+        OnPropertyChanged(nameof(HasIssueReportUpdateAvailability));
+        OnPropertyChanged(nameof(ShowIssueReportPreflightNote));
+        OnPropertyChanged(nameof(IssueReportVersionUpdateSummary));
+        OnPropertyChanged(nameof(IssueReportUpdateNotice));
+        OnPropertyChanged(nameof(IssueReportClearImageCacheTip));
+    }
+
+    private string BuildIssueReportUpdateNoticeText()
+    {
+        if (HasPendingVersionUpdateAvailability && HasPendingResourceUpdateAvailability)
+        {
+            return LocalizeSettingsText(
+                "Settings.IssueReport.UpdateAvailable.Both",
+                "检测到软件和资源更新可用，建议先更新后再提交 Issue。");
+        }
+
+        if (HasPendingVersionUpdateAvailability)
+        {
+            return LocalizeSettingsText(
+                "Settings.IssueReport.UpdateAvailable.Software",
+                "检测到软件更新可用，建议先更新后再提交 Issue。");
+        }
+
+        return LocalizeSettingsText(
+            "Settings.IssueReport.UpdateAvailable.Resource",
+            "检测到资源更新可用，建议先更新资源后再提交 Issue。");
     }
 
     private void ClearGuiValidationMessages()
@@ -6246,7 +7485,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
             "HotKey" => [SettingsDataBucketHotKey],
             "Timer" => [SettingsDataBucketTimer],
             "Performance" => [SettingsDataBucketStartPerformance],
-            "Start" => [SettingsDataBucketStartPerformance],
+            "Start" => [SettingsDataBucketStartPerformance, SettingsDataBucketAutostart, SettingsDataBucketConnectionGame],
             "Game" => [SettingsDataBucketConnectionGame, SettingsDataBucketStartPerformance],
             "Connect" => [SettingsDataBucketConnectionGame],
             "RemoteControl" => [SettingsDataBucketRemoteControl],
@@ -6259,11 +7498,6 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
 
     public async Task EnsureSectionDataLoadedAsync(string? sectionKey, CancellationToken cancellationToken = default)
     {
-        if (!_deferredSectionDataLoadEnabled)
-        {
-            return;
-        }
-
         foreach (var bucket in GetSettingsDataBucketsForSection(sectionKey))
         {
             await EnsureSettingsDataBucketLoadedAsync(bucket, cancellationToken);
@@ -6272,11 +7506,6 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
 
     public async Task WarmupDeferredSectionDataAsync(CancellationToken cancellationToken = default)
     {
-        if (!_deferredSectionDataLoadEnabled)
-        {
-            return;
-        }
-
         foreach (var bucket in AllSettingsDataBuckets)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -6324,6 +7553,9 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
             case SettingsDataBucketStartPerformance:
                 await LoadStartPerformanceDataFromConfigAsync(config, cancellationToken);
                 break;
+            case SettingsDataBucketAutostart:
+                await RefreshAutostartStatusAsync(cancellationToken);
+                break;
             case SettingsDataBucketConnectionGame:
                 LoadConnectionSharedStateFromConfig();
                 break;
@@ -6354,16 +7586,6 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         _loadedSettingsDataBuckets.Clear();
         await LoadGuiBackgroundBaselineFromConfigAsync(Runtime.ConfigurationService.CurrentConfig, cancellationToken);
         MarkSettingsDataBucketsLoaded(SettingsDataBucketGuiBackground);
-    }
-
-    private async Task LoadImmediateSettingsDataAsync(CancellationToken cancellationToken)
-    {
-        await EnsureSettingsDataBucketLoadedAsync(SettingsDataBucketConnectionGame, cancellationToken);
-        await EnsureSettingsDataBucketLoadedAsync(SettingsDataBucketRemoteControl, cancellationToken);
-        await EnsureSettingsDataBucketLoadedAsync(SettingsDataBucketExternalNotification, cancellationToken);
-        await EnsureSettingsDataBucketLoadedAsync(SettingsDataBucketTimer, cancellationToken);
-        await EnsureSettingsDataBucketLoadedAsync(SettingsDataBucketStartPerformance, cancellationToken);
-        await EnsureSettingsDataBucketLoadedAsync(SettingsDataBucketHotKey, cancellationToken);
     }
 
     private async Task LoadGuiBackgroundBaselineFromConfigAsync(
@@ -6572,15 +7794,24 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         CancellationToken cancellationToken)
     {
         await EnsureNotificationProvidersLoadedAsync(cancellationToken);
+        var configurationSummary = string.Empty;
         RunWithSuppressedSettingsBackfill(() =>
         {
-            ExternalNotificationEnabled = ReadProfileBool(config, ConfigurationKeys.ExternalNotificationEnabled, false);
+            ExternalNotificationEnabled = false;
             ExternalNotificationSendWhenComplete = ReadProfileBool(config, ConfigurationKeys.ExternalNotificationSendWhenComplete, true);
             ExternalNotificationSendWhenError = ReadProfileBool(config, ConfigurationKeys.ExternalNotificationSendWhenError, true);
             ExternalNotificationSendWhenTimeout = ReadProfileBool(config, ConfigurationKeys.ExternalNotificationSendWhenTimeout, true);
             ExternalNotificationEnableDetails = ReadProfileBool(config, ConfigurationKeys.ExternalNotificationEnableDetails, false);
             LoadExternalNotificationProviderParametersFromConfig(config);
+            configurationSummary = BuildExternalNotificationConfigurationSummary(
+                AvailableNotificationProviders.Where(provider => _enabledNotificationProviders.Contains(provider)));
         });
+
+        if (!string.IsNullOrWhiteSpace(configurationSummary)
+            && string.IsNullOrWhiteSpace(StatusMessage))
+        {
+            StatusMessage = configurationSummary;
+        }
     }
 
     private async Task LoadVersionUpdateDataFromConfigAsync(CancellationToken cancellationToken)
@@ -6678,9 +7909,40 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         bool fallback,
         ConfigValuePreference preference)
     {
-        if (TryGetConfigNode(config, key, preference, out var node) && node is not null)
+        if (!TryGetConfigNode(config, key, preference, out var node) || node is null)
         {
-            return bool.TryParse(node.ToString(), out var parsed) ? parsed : fallback;
+            return fallback;
+        }
+
+        if (node is JsonValue value)
+        {
+            if (value.TryGetValue(out bool parsedBool))
+            {
+                return parsedBool;
+            }
+
+            if (value.TryGetValue(out int parsedInt))
+            {
+                return parsedInt != 0;
+            }
+
+            if (value.TryGetValue(out string? text))
+            {
+                if (bool.TryParse(text, out var parsedTextBool))
+                {
+                    return parsedTextBool;
+                }
+
+                if (int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedTextInt))
+                {
+                    return parsedTextInt != 0;
+                }
+            }
+        }
+
+        if (bool.TryParse(node.ToString(), out var parsed))
+        {
+            return parsed;
         }
 
         return fallback;
@@ -6785,6 +8047,22 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
             PreferredGpuInstancePath: PerformancePreferredGpuInstancePath);
     }
 
+    private static bool IsSameGpuPreference(
+        GpuPreference left,
+        GpuPreference right)
+    {
+        return left.UseGpu == right.UseGpu
+               && left.AllowDeprecatedGpu == right.AllowDeprecatedGpu
+               && string.Equals(
+                   left.PreferredGpuDescription?.Trim(),
+                   right.PreferredGpuDescription?.Trim(),
+                   StringComparison.Ordinal)
+               && string.Equals(
+                   left.PreferredGpuInstancePath?.Trim(),
+                   right.PreferredGpuInstancePath?.Trim(),
+                   StringComparison.Ordinal);
+    }
+
     private static bool IsNonUiThreadContext()
     {
         if (Avalonia.Application.Current is null)
@@ -6815,6 +8093,157 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         }
 
         return true;
+    }
+
+    private void BeginBlockingOperationOverlay()
+    {
+        _blockingOperationOverlayDepth++;
+        if (_blockingOperationOverlayDepth == 1)
+        {
+            IsBlockingOperationOverlayVisible = true;
+        }
+    }
+
+    private void EndBlockingOperationOverlay()
+    {
+        if (_blockingOperationOverlayDepth <= 0)
+        {
+            _blockingOperationOverlayDepth = 0;
+            IsBlockingOperationOverlayVisible = false;
+            return;
+        }
+
+        _blockingOperationOverlayDepth--;
+        if (_blockingOperationOverlayDepth == 0)
+        {
+            IsBlockingOperationOverlayVisible = false;
+        }
+    }
+
+    private static Task WaitForBlockingOperationOverlayRenderAsync()
+    {
+        if (Avalonia.Application.Current is null || !Dispatcher.UIThread.CheckAccess())
+        {
+            return Task.CompletedTask;
+        }
+
+        return Dispatcher.UIThread.InvokeAsync(
+            static () => { },
+            DispatcherPriority.Loaded).GetTask();
+    }
+
+    private async Task WaitForPostedLanguageRefreshAsync(
+        string fromLanguage,
+        string targetLanguage,
+        CancellationToken cancellationToken)
+    {
+        if (Avalonia.Application.Current is null || !Dispatcher.UIThread.CheckAccess())
+        {
+            return;
+        }
+
+        var total = Stopwatch.StartNew();
+        var loaded = Stopwatch.StartNew();
+        await Dispatcher.UIThread.InvokeAsync(
+            static () => { },
+            DispatcherPriority.Loaded).GetTask();
+        _ = RecordLanguageSwitchTimingAsync(
+            "Settings.ChangeLanguage.WaitViewRefresh.Loaded",
+            loaded,
+            fromLanguage,
+            targetLanguage,
+            cancellationToken);
+
+        var background = Stopwatch.StartNew();
+        await Dispatcher.UIThread.InvokeAsync(
+            static () => { },
+            DispatcherPriority.Background).GetTask();
+        _ = RecordLanguageSwitchTimingAsync(
+            "Settings.ChangeLanguage.WaitViewRefresh.Background",
+            background,
+            fromLanguage,
+            targetLanguage,
+            cancellationToken);
+        _ = RecordLanguageSwitchTimingAsync(
+            "Settings.ChangeLanguage.WaitViewRefresh.ProbeTotal",
+            total,
+            fromLanguage,
+            targetLanguage,
+            cancellationToken);
+    }
+
+    private static Task YieldForBlockingOperationOverlayFrameAsync(bool allowRenderYields)
+    {
+        if (!allowRenderYields || Avalonia.Application.Current is null || !Dispatcher.UIThread.CheckAccess())
+        {
+            return Task.CompletedTask;
+        }
+
+        return Dispatcher.UIThread.InvokeAsync(
+            static () => { },
+            DispatcherPriority.Loaded).GetTask();
+    }
+
+    private Task RecordLanguageSwitchTimingAsync(
+        string scope,
+        Stopwatch stopwatch,
+        string fromLanguage,
+        string targetLanguage,
+        CancellationToken cancellationToken,
+        params (string Key, object? Value)[] fields)
+    {
+        return RecordTemporaryTimingAsync(
+            scope,
+            stopwatch.Elapsed.TotalMilliseconds,
+            cancellationToken,
+            [("from", fromLanguage), ("target", targetLanguage), .. fields]);
+    }
+
+    private Task RecordLanguageApplyTimingAsync(
+        string scope,
+        Stopwatch stopwatch,
+        string fromLanguage,
+        string targetLanguage,
+        bool allowRenderYields,
+        params (string Key, object? Value)[] fields)
+    {
+        return RecordTemporaryTimingAsync(
+            scope,
+            stopwatch.Elapsed.TotalMilliseconds,
+            CancellationToken.None,
+            [("from", fromLanguage), ("target", targetLanguage), ("renderYields", allowRenderYields), .. fields]);
+    }
+
+    private Task RecordTemporaryTimingAsync(
+        string scope,
+        double elapsedMs,
+        CancellationToken cancellationToken,
+        params (string Key, object? Value)[] fields)
+    {
+        var payload = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (key, value) in fields)
+        {
+            if (!string.IsNullOrWhiteSpace(key))
+            {
+                payload[key] = value;
+            }
+        }
+
+        return RecordTemporaryTimingAsync(scope, elapsedMs, payload, cancellationToken);
+    }
+
+    private Task<UiOperationResult<string>> ChangeLanguageCoordinatorAsync(
+        string normalized,
+        CancellationToken cancellationToken)
+    {
+        if (Avalonia.Application.Current is null || !Dispatcher.UIThread.CheckAccess())
+        {
+            return _uiLanguageCoordinator.ChangeLanguageAsync(normalized, cancellationToken);
+        }
+
+        return Task.Run(
+            () => _uiLanguageCoordinator.ChangeLanguageAsync(normalized, cancellationToken),
+            cancellationToken);
     }
 
     private void RequestLanguageChangeFromSelection(string targetLanguage)
@@ -6906,6 +8335,13 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
                 if (_suppressGpuUiRefresh
                     || cancellationToken.IsCancellationRequested
                     || refreshSequence != Interlocked.Read(ref _gpuRefreshSequence))
+                {
+                    return;
+                }
+
+                // Drop stale probe results to avoid reverting an explicit GPU selection
+                // when preference fields changed while this probe was running.
+                if (!IsSameGpuPreference(preference, BuildCurrentGpuPreference()))
                 {
                     return;
                 }
@@ -7200,6 +8636,57 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
     private string LocalizeRootText(string? key)
     {
         return string.IsNullOrWhiteSpace(key) ? string.Empty : RootTexts[key];
+    }
+
+    private string BuildPendingResourceUpdateSummary()
+    {
+        if (!_hasPendingResourceUpdateAvailability)
+        {
+            return string.Empty;
+        }
+
+        var versionLabel = BuildPendingResourceUpdateVersionLabel();
+        if (string.IsNullOrWhiteSpace(versionLabel))
+        {
+            return RootTexts.GetOrDefault(
+                "Main.Update.ResourceAvailable",
+                "资源更新可用，点击检查资源");
+        }
+
+        var template = RootTexts.GetOrDefault(
+            "Main.Update.ResourceDetected",
+            "检测到资源更新: {0}");
+        return string.Format(CultureInfo.CurrentCulture, template, versionLabel);
+    }
+
+    private string BuildPendingResourceUpdateVersionLabel()
+    {
+        var releaseNote = _pendingResourceUpdateReleaseNote.Trim();
+        if (_pendingResourceUpdateVersionTimestamp is DateTimeOffset timestamp
+            && !string.IsNullOrWhiteSpace(releaseNote))
+        {
+            return FormatPendingResourceVersionLabel(releaseNote, timestamp);
+        }
+
+        if (!string.IsNullOrWhiteSpace(releaseNote))
+        {
+            return releaseNote;
+        }
+
+        return _pendingResourceUpdateDisplayVersion.Trim();
+    }
+
+    private string FormatPendingResourceVersionLabel(string releaseNote, DateTimeOffset timestamp)
+    {
+        var localTimestamp = timestamp.ToLocalTime();
+        return UiLanguageCatalog.Normalize(Language) switch
+        {
+            "zh-cn" or "zh-tw" => $"{releaseNote}{localTimestamp:MMdd}",
+            "en-us" => $"{localTimestamp:dd/MM} {releaseNote}",
+            _ => $"{localTimestamp.ToString(
+                CultureInfo.CurrentCulture.DateTimeFormat.ShortDatePattern.Replace("yyyy", string.Empty).Trim('/', '.'),
+                CultureInfo.CurrentCulture)} {releaseNote}",
+        };
     }
 
     private void ApplyGpuProbeFailureState(Exception exception)
@@ -7817,6 +9304,7 @@ internal enum ConfigValuePreference
 public sealed record GuiSettingsSnapshot(
     string Theme,
     bool UseTray,
+    bool UseNotify,
     bool MinimizeToTray,
     bool WindowTitleScrollable,
     bool UseSoftwareRendering,
@@ -7835,6 +9323,7 @@ public sealed record GuiSettingsSnapshot(
         {
             ["Theme.Mode"] = Theme,
             [ConfigurationKeys.UseTray] = UseTray.ToString(),
+            [ConfigurationKeys.UseNotify] = UseNotify.ToString(),
             [ConfigurationKeys.MinimizeToTray] = MinimizeToTray.ToString(),
             [ConfigurationKeys.WindowTitleScrollable] = WindowTitleScrollable.ToString(),
             [ConfigurationKeys.IgnoreBadModulesAndUseSoftwareRendering] = UseSoftwareRendering.ToString(),
@@ -7939,7 +9428,34 @@ public sealed record GpuOptionDisplayItem(
     GpuOptionDescriptor Descriptor,
     string Display);
 
-public sealed record DisplayValueOption(string Display, string Value);
+public sealed class DisplayValueOption : IEquatable<DisplayValueOption>
+{
+    public DisplayValueOption(string display, string value)
+    {
+        Display = display;
+        Value = value;
+    }
+
+    public string Display { get; }
+
+    public string Value { get; }
+
+    public bool Equals(DisplayValueOption? other)
+    {
+        return other is not null
+               && string.Equals(Value, other.Value, StringComparison.OrdinalIgnoreCase);
+    }
+
+    public override bool Equals(object? obj)
+    {
+        return obj is DisplayValueOption other && Equals(other);
+    }
+
+    public override int GetHashCode()
+    {
+        return StringComparer.OrdinalIgnoreCase.GetHashCode(Value ?? string.Empty);
+    }
+}
 
 public sealed record TimerSlotSettingsSnapshot(
     int Index,

@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
+using MAAUnified.App.Controls;
 using MAAUnified.App.ViewModels.TaskQueue;
 
 namespace MAAUnified.App.Features.TaskQueue;
@@ -10,6 +11,7 @@ public partial class InfrastSettingsView : UserControl
     public InfrastSettingsView()
     {
         InitializeComponent();
+        FacilitySelectionList.ItemReorderRequested += OnFacilityItemReorderRequested;
     }
 
     private InfrastModuleViewModel? VM => DataContext as InfrastModuleViewModel;
@@ -71,5 +73,10 @@ public partial class InfrastSettingsView : UserControl
     private void OnClearFacilityClick(object? sender, RoutedEventArgs e)
     {
         VM?.ClearFacility();
+    }
+
+    private void OnFacilityItemReorderRequested(object? sender, AppSelectionListItemReorderEventArgs e)
+    {
+        VM?.MoveFacility(e.SourceIndex, e.TargetIndex);
     }
 }

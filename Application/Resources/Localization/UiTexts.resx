@@ -185,6 +185,30 @@
   <data name="Copilot.List.InlineJsonHint" xml:space="preserve">
     <value>内嵌 JSON</value>
   </data>
+  <data name="Copilot.List.Button.ClearAll" xml:space="preserve">
+    <value>删除全部</value>
+  </data>
+  <data name="Copilot.List.Button.Disable" xml:space="preserve">
+    <value>禁用</value>
+  </data>
+  <data name="Copilot.List.Button.Enable" xml:space="preserve">
+    <value>启用</value>
+  </data>
+  <data name="Copilot.List.Button.LoadSingle" xml:space="preserve">
+    <value>载入单个</value>
+  </data>
+  <data name="Copilot.List.Button.ToggleRaid" xml:space="preserve">
+    <value>切换突袭</value>
+  </data>
+  <data name="Copilot.List.ClearAllConfirm.Confirm" xml:space="preserve">
+    <value>删除全部</value>
+  </data>
+  <data name="Copilot.List.ClearAllConfirm.Message" xml:space="preserve">
+    <value>将删除战斗列表中的全部作业，此操作不可撤销。</value>
+  </data>
+  <data name="Copilot.List.ClearAllConfirm.Title" xml:space="preserve">
+    <value>删除战斗列表</value>
+  </data>
   <data name="Copilot.List.RaidLabel" xml:space="preserve">
     <value>突袭</value>
   </data>
@@ -198,7 +222,7 @@
     <value>未找到可导入的作业文件。</value>
   </data>
   <data name="Copilot.Error.ClearPersistFail" xml:space="preserve">
-    <value>清空作业列表失败：列表保存失败。</value>
+    <value>删除全部作业失败：列表保存失败。</value>
   </data>
   <data name="Copilot.Error.CurrentPayloadNotObject" xml:space="preserve">
     <value>当前作业必须是单个 JSON 对象。</value>
@@ -263,6 +287,9 @@
   <data name="Copilot.Error.SelectTaskToSort" xml:space="preserve">
     <value>请选择要排序的作业。</value>
   </data>
+  <data name="Copilot.Error.SelectTaskToUpdate" xml:space="preserve">
+    <value>请选择要更新的作业。</value>
+  </data>
   <data name="Copilot.Error.SessionStateNotAllowed" xml:space="preserve">
     <value>会话状态 `{0}` 不允许{1}。
 Session state `{0}` does not allow {2}.</value>
@@ -284,6 +311,24 @@ Session state `{0}` does not allow {2}.</value>
   </data>
   <data name="Copilot.Error.StopRunOwnerBlocked" xml:space="preserve">
     <value>Copilot 停止被拦截：当前运行所有者为 `{0}`。</value>
+  </data>
+  <data name="Copilot.Error.UpdateListItemPersistFail" xml:space="preserve">
+    <value>更新作业列表失败：列表保存失败。</value>
+  </data>
+  <data name="Copilot.RunOwnerBlockedDialog.ConfirmButton" xml:space="preserve">
+    <value>确认</value>
+  </data>
+  <data name="Copilot.RunOwnerBlockedDialog.DetailsButton" xml:space="preserve">
+    <value>详细报错</value>
+  </data>
+  <data name="Copilot.RunOwnerBlockedDialog.Message" xml:space="preserve">
+    <value>{0} 正在运行。请先停止当前任务，再启动 Copilot。</value>
+  </data>
+  <data name="Copilot.RunOwnerBlockedDialog.StopButton" xml:space="preserve">
+    <value>停止任务</value>
+  </data>
+  <data name="Copilot.RunOwnerBlockedDialog.Title" xml:space="preserve">
+    <value>Copilot 启动被拦截</value>
   </data>
   <data name="Copilot.Error.ValidateTabMismatch" xml:space="preserve">
     <value>当前选择的作业与页签不匹配</value>
@@ -316,7 +361,7 @@ Session state `{0}` does not allow {2}.</value>
 8. 战斗列表:
 ● 选择作业后，检查下方关卡名是否正确 (例: CV-EX-1)。
 ● 添加: 左键 = 普通难度，右键 = 突袭难度。
-● 清除: 左键 = 全部清空，右键 = 仅移除未激活任务。
+● 删除全部: 删除全部任务。
 ● 请在能看到目标关卡名的界面启动，不支持跨章节导航。
 ● 遇到理智不足、战斗失败、未能三星结算时将自动中止。</value>
   </data>
@@ -325,6 +370,9 @@ Session state `{0}` does not allow {2}.</value>
   </data>
   <data name="Copilot.Hint.ListPanelEnabled" xml:space="preserve">
     <value>战斗列表中的勾选项会参与启动。</value>
+  </data>
+  <data name="Copilot.Hint.LoadedFile" xml:space="preserve">
+    <value>已导入作业文件：{0}</value>
   </data>
   <data name="Copilot.Input.OperatorNameWatermark" xml:space="preserve">
     <value>干员名</value>
@@ -420,7 +468,10 @@ Session state `{0}` does not allow {2}.</value>
     <value>没有未激活作业需要清理。</value>
   </data>
   <data name="Copilot.Status.ClearSuccess" xml:space="preserve">
-    <value>已清空作业列表。</value>
+    <value>已删除全部作业。</value>
+  </data>
+  <data name="Copilot.Status.ClearCancelled" xml:space="preserve">
+    <value>已取消删除全部作业。</value>
   </data>
   <data name="Copilot.Status.CorruptedListIgnored" xml:space="preserve">
     <value>已忽略损坏的 Copilot 列表配置。</value>
@@ -470,6 +521,18 @@ Session state `{0}` does not allow {2}.</value>
   <data name="Copilot.Status.LoadedFeedbackLikeSuccess" xml:space="preserve">
     <value>已提交点赞。</value>
   </data>
+  <data name="Copilot.Status.ListItemDisabled" xml:space="preserve">
+    <value>已禁用作业。</value>
+  </data>
+  <data name="Copilot.Status.ListItemEnabled" xml:space="preserve">
+    <value>已启用作业。</value>
+  </data>
+  <data name="Copilot.Status.ListItemRaidDisabled" xml:space="preserve">
+    <value>已切换为普通作业。</value>
+  </data>
+  <data name="Copilot.Status.ListItemRaidEnabled" xml:space="preserve">
+    <value>已切换为突袭作业。</value>
+  </data>
   <data name="Copilot.Status.MoveDownSuccess" xml:space="preserve">
     <value>已将选中作业下移。</value>
   </data>
@@ -496,6 +559,15 @@ Session state `{0}` does not allow {2}.</value>
   </data>
   <data name="Copilot.Status.StopFailed" xml:space="preserve">
     <value>停止失败。</value>
+  </data>
+  <data name="Copilot.Status.UpdateListItemFailed" xml:space="preserve">
+    <value>更新作业失败。</value>
+  </data>
+  <data name="Copilot.Status.UpdateListItemNameFailed" xml:space="preserve">
+    <value>更新作业名称失败。</value>
+  </data>
+  <data name="Copilot.Status.UpdateListItemNameSuccess" xml:space="preserve">
+    <value>已更新作业名称：{0}</value>
   </data>
   <data name="Copilot.Tab.Display.Main" xml:space="preserve">
     <value>主线/故事集/SideStory</value>
@@ -539,8 +611,7 @@ Session state `{0}` does not allow {2}.</value>
 当「战斗列表」启用后，选择单个作业时会自动添加到「战斗列表」</value>
   </data>
   <data name="Copilot.Tip.ClearList" xml:space="preserve">
-    <value>左键清除所有任务
-右键清除未激活任务</value>
+    <value>删除战斗列表中的全部作业。</value>
   </data>
   <data name="Copilot.Tip.File" xml:space="preserve">
     <value>作业文件可以直接用鼠标拖进来哦 (oﾟvﾟ)ノ</value>
@@ -624,6 +695,9 @@ Session state `{0}` does not allow {2}.</value>
   <data name="Dialog.Error.CloseButton" xml:space="preserve">
     <value>关闭</value>
   </data>
+  <data name="Dialog.Error.ConnectFailedTitle" xml:space="preserve">
+    <value>连接模拟器失败</value>
+  </data>
   <data name="Dialog.Error.CodeLabel" xml:space="preserve">
     <value>错误码</value>
   </data>
@@ -632,6 +706,9 @@ Session state `{0}` does not allow {2}.</value>
   </data>
   <data name="Dialog.Error.CopyButton" xml:space="preserve">
     <value>复制</value>
+  </data>
+  <data name="Dialog.Error.CopyErrorInfoButton" xml:space="preserve">
+    <value>详细报错</value>
   </data>
   <data name="Dialog.Error.DetailsLabel" xml:space="preserve">
     <value>详情</value>
@@ -665,6 +742,9 @@ Session state `{0}` does not allow {2}.</value>
   </data>
   <data name="Dialog.Warning.ConfirmButton" xml:space="preserve">
     <value>确认</value>
+  </data>
+  <data name="Dialog.Warning.DetailsButton" xml:space="preserve">
+    <value>详细报错</value>
   </data>
   <data name="Dialog.Warning.Prompt" xml:space="preserve">
     <value>确认执行此操作？</value>
@@ -793,6 +873,9 @@ Session state `{0}` does not allow {2}.</value>
   <data name="Fight.StageSelect" xml:space="preserve">
     <value>关卡指定</value>
   </data>
+  <data name="Fight.StageSelect2" xml:space="preserve">
+    <value>备选关卡</value>
+  </data>
   <data name="Fight.Stone" xml:space="preserve">
     <value>源石数量</value>
   </data>
@@ -819,6 +902,48 @@ Session state `{0}` does not allow {2}.</value>
   </data>
   <data name="Fight.UseStoneDisplay" xml:space="preserve">
     <value>使用源石</value>
+  </data>
+  <data name="Fight.UseWeeklySchedule" xml:space="preserve">
+    <value>启用每周计划</value>
+  </data>
+  <data name="Fight.AddStage" xml:space="preserve">
+    <value>添加备选关卡</value>
+  </data>
+  <data name="Fight.CustomStageCode" xml:space="preserve">
+    <value>手动输入关卡名</value>
+  </data>
+  <data name="Fight.CustomStageCodeTip" xml:space="preserve">
+    <value>支持大多数主线关卡简称和原始关卡列表中的关卡名。</value>
+  </data>
+  <data name="Fight.MultiTasksShareTip" xml:space="preserve">
+    <value>以下选项会在多个理智作战任务之间共享。</value>
+  </data>
+  <data name="Fight.AutoRestartOption" xml:space="preserve">
+    <value>游戏掉线时自动重开</value>
+  </data>
+  <data name="Fight.UseWeeklyScheduleTip" xml:space="preserve">
+    <value>这里按游戏内刷新时间计算星期，而不是本地自然日。</value>
+  </data>
+  <data name="Fight.WeeklySchedule.Sunday" xml:space="preserve">
+    <value>周日</value>
+  </data>
+  <data name="Fight.WeeklySchedule.Monday" xml:space="preserve">
+    <value>周一</value>
+  </data>
+  <data name="Fight.WeeklySchedule.Tuesday" xml:space="preserve">
+    <value>周二</value>
+  </data>
+  <data name="Fight.WeeklySchedule.Wednesday" xml:space="preserve">
+    <value>周三</value>
+  </data>
+  <data name="Fight.WeeklySchedule.Thursday" xml:space="preserve">
+    <value>周四</value>
+  </data>
+  <data name="Fight.WeeklySchedule.Friday" xml:space="preserve">
+    <value>周五</value>
+  </data>
+  <data name="Fight.WeeklySchedule.Saturday" xml:space="preserve">
+    <value>周六</value>
   </data>
   <data name="FightCompleted" xml:space="preserve">
     <value>战斗完成</value>
@@ -996,6 +1121,33 @@ Session state `{0}` does not allow {2}.</value>
   </data>
   <data name="Infrast.Drones" xml:space="preserve">
     <value>无人机策略</value>
+  </data>
+  <data name="Control" xml:space="preserve">
+    <value>控制中枢</value>
+  </data>
+  <data name="Dorm" xml:space="preserve">
+    <value>宿舍</value>
+  </data>
+  <data name="Mfg" xml:space="preserve">
+    <value>制造站</value>
+  </data>
+  <data name="Office" xml:space="preserve">
+    <value>办公室</value>
+  </data>
+  <data name="Power" xml:space="preserve">
+    <value>发电站</value>
+  </data>
+  <data name="Processing" xml:space="preserve">
+    <value>加工站</value>
+  </data>
+  <data name="Reception" xml:space="preserve">
+    <value>会客室</value>
+  </data>
+  <data name="Trade" xml:space="preserve">
+    <value>贸易站</value>
+  </data>
+  <data name="Training" xml:space="preserve">
+    <value>训练室</value>
   </data>
   <data name="Infrast.Error.CustomFileNotFound" xml:space="preserve">
     <value>自定义文件不存在：{0}</value>
@@ -1387,6 +1539,9 @@ Session state `{0}` does not allow {2}.</value>
   </data>
   <data name="Main.Update.ResourceAvailable" xml:space="preserve">
     <value>资源更新可用，点击检查资源</value>
+  </data>
+  <data name="Main.Update.ResourceDetected" xml:space="preserve">
+    <value>检测到资源更新: {0}</value>
   </data>
   <data name="Main.Update.VersionAvailable" xml:space="preserve">
     <value>版本更新可用，点击设置 &gt; Version Update</value>
@@ -2080,14 +2235,74 @@ Session state `{0}` does not allow {2}.</value>
   <data name="Settings.About.Dialog.Confirm" xml:space="preserve">
     <value>确认</value>
   </data>
+  <data name="Settings.About.Dialog.ConfirmLocked" xml:space="preserve">
+    <value>请先阅读公告</value>
+  </data>
+  <data name="Settings.About.Dialog.ConfirmBlocked1" xml:space="preserve">
+    <value>没看完点什么确认</value>
+  </data>
+  <data name="Settings.About.Dialog.ConfirmBlocked2" xml:space="preserve">
+    <value>说的就是你，还点</value>
+  </data>
+  <data name="Settings.About.Dialog.ConfirmBlocked3" xml:space="preserve">
+    <value>还点</value>
+  </data>
   <data name="Settings.About.Dialog.DoNotRemindThisAnnouncementAgain" xml:space="preserve">
-    <value>不再提醒此公告</value>
+    <value>下次公告更新前不再显示</value>
   </data>
   <data name="Settings.About.Dialog.DoNotShowAnnouncement" xml:space="preserve">
     <value>不显示公告</value>
   </data>
   <data name="Settings.About.Dialog.Title" xml:space="preserve">
     <value>公告</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadProgress.PendingBadge" xml:space="preserve">
+    <value>阅读门禁</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadProgress.PendingTitle" xml:space="preserve">
+    <value>滚动到底部以解锁确认</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadProgress.PendingCaption" xml:space="preserve">
+    <value>继续向下浏览所有章节。确认按钮和“下次公告更新前不再显示”会在阅读完成后一起解锁。</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadProgress.PendingFooterHint" xml:space="preserve">
+    <value>这个选项会在你阅读完成后解锁，所以底部操作会始终集中在同一区域。</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadProgress.ReadyBadge" xml:space="preserve">
+    <value>已解锁</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadProgress.ReadyTitle" xml:space="preserve">
+    <value>现在可以确认</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadProgress.ReadyCaption" xml:space="preserve">
+    <value>现在可以确认，也可以选择在下次公告内容更新前不再显示。</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadProgress.ReadyFooterHint" xml:space="preserve">
+    <value>如果你不想在这次公告内容变更前再次看到它，可以先勾选左侧选项，再从右侧确认。</value>
+  </data>
+  <data name="Settings.About.Dialog.SectionsTitle" xml:space="preserve">
+    <value>公告分栏</value>
+  </data>
+  <data name="Settings.About.Dialog.SectionsCaption" xml:space="preserve">
+    <value>选择左侧分栏以查看完整公告内容。</value>
+  </data>
+  <data name="Settings.About.Dialog.Lead" xml:space="preserve">
+    <value>请仔细阅读最新公告后再关闭此窗口。</value>
+  </data>
+  <data name="Settings.About.Dialog.BottomHint" xml:space="preserve">
+    <value>未读完公告前，暂时无法直接关闭。</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadHint" xml:space="preserve">
+    <value>滚动到底部后，才可以关闭此公告，或选择在下次更新前不再显示。</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadFinishedHint" xml:space="preserve">
+    <value>已完整阅读公告，现在可以关闭此窗口。</value>
+  </data>
+  <data name="Settings.About.Dialog.MetaCurrentSection" xml:space="preserve">
+    <value>当前查看</value>
+  </data>
+  <data name="Settings.About.Dialog.MetaSectionFormat" xml:space="preserve">
+    <value>第 {0} / {1} 节</value>
   </data>
   <data name="Settings.About.OpenCommunity" xml:space="preserve">
     <value>打开社区入口</value>
@@ -2143,8 +2358,35 @@ Session state `{0}` does not allow {2}.</value>
   <data name="Settings.Achievement.Dialog.FilterWatermark" xml:space="preserve">
     <value>搜索成就</value>
   </data>
+  <data name="Settings.Achievement.Dialog.FilterAll" xml:space="preserve">
+    <value>全部</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.FilterUnlocked" xml:space="preserve">
+    <value>已解锁</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.FilterInProgress" xml:space="preserve">
+    <value>进行中</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.FilterNew" xml:space="preserve">
+    <value>新解锁</value>
+  </data>
   <data name="Settings.Achievement.Dialog.ProgressFormat" xml:space="preserve">
     <value>进度：{0}</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.ResultsFormat" xml:space="preserve">
+    <value>显示 {0} 项</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.ClearFilters" xml:space="preserve">
+    <value>清除筛选</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.EmptyTitle" xml:space="preserve">
+    <value>没有找到匹配的成就</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.EmptyDescription" xml:space="preserve">
+    <value>试试更换关键词或筛选条件。</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.OverviewFormat" xml:space="preserve">
+    <value>已解锁 {0} / {1} · 完成率 {2}%</value>
   </data>
   <data name="Settings.Achievement.Dialog.Snapshot" xml:space="preserve">
     <value>成就对话快照</value>
@@ -2524,6 +2766,27 @@ Session state `{0}` does not allow {2}.</value>
   <data name="Settings.ConfigurationManager.SaveAsNew" xml:space="preserve">
     <value>另存为新配置</value>
   </data>
+  <data name="Settings.ConfigurationManager.SaveAsNewSucceededInline" xml:space="preserve">
+    <value>保存成功</value>
+  </data>
+  <data name="Settings.ConfigurationManager.SaveAsNewFailedInline" xml:space="preserve">
+    <value>保存失败：{0}</value>
+  </data>
+  <data name="Settings.ConfigurationManager.SaveAsNewFailedReason.Generic" xml:space="preserve">
+    <value>请稍后重试。</value>
+  </data>
+  <data name="Settings.ConfigurationManager.SaveAsNewFailedReason.ProfileAlreadyExists" xml:space="preserve">
+    <value>请换一个未使用的配置名称。</value>
+  </data>
+  <data name="Settings.ConfigurationManager.SaveAsNewFailedReason.ProfileNameEmpty" xml:space="preserve">
+    <value>请输入配置名称。</value>
+  </data>
+  <data name="Settings.ConfigurationManager.SaveAsNewFailedReason.ProfileNameInvalid" xml:space="preserve">
+    <value>配置名称无效。</value>
+  </data>
+  <data name="Settings.ConfigurationManager.SaveAsNewFailedReason.SourceProfileMissing" xml:space="preserve">
+    <value>当前配置不存在，请刷新后重试。</value>
+  </data>
   <data name="Settings.ConfigurationManager.SaveCurrent" xml:space="preserve">
     <value>保存当前配置</value>
   </data>
@@ -2857,6 +3120,9 @@ Session state `{0}` does not allow {2}.</value>
   <data name="Settings.GUI.UseTray" xml:space="preserve">
     <value>显示托盘图标</value>
   </data>
+  <data name="Settings.GUI.UseNotify" xml:space="preserve">
+    <value>显示系统通知</value>
+  </data>
   <data name="Settings.GUI.WindowTitleScrollable" xml:space="preserve">
     <value>窗口标题滚动</value>
   </data>
@@ -3027,6 +3293,12 @@ Session state `{0}` does not allow {2}.</value>
   </data>
   <data name="Settings.IssueReport.OpenRuntimeLogWindow" xml:space="preserve">
     <value>打开运行日志窗口</value>
+  </data>
+  <data name="Settings.IssueReport.CheckUpdateBeforeReportingIssue" xml:space="preserve">
+    <value>请先升级并测试新版是否仍有此问题，确认非 ｢{key=Help}｣ 后再进行 ｢{key=Issue}｣</value>
+  </data>
+  <data name="Settings.IssueReport.CheckHelpBeforeReportingIssue" xml:space="preserve">
+    <value>请在确认您的问题不属于 ｢{key=Help}｣ 后，再进行 ｢{key=Issue}｣</value>
   </data>
   <data name="Settings.IssueReport.PreflightNote" xml:space="preserve">
     <value>提交反馈前请先阅读 FAQ，附上日志压缩包可更快定位问题。</value>
@@ -3530,7 +3802,7 @@ Session state `{0}` does not allow {2}.</value>
     <value>代理地址</value>
   </data>
   <data name="Settings.VersionUpdate.ProxyAddressWatermark" xml:space="preserve">
-    <value>&lt;IP&gt;:&lt;ポート&gt;</value>
+    <value>&lt;IP&gt;:&lt;Port&gt;</value>
   </data>
   <data name="Settings.VersionUpdate.ProxyType" xml:space="preserve">
     <value>代理类型</value>
@@ -3556,6 +3828,36 @@ Session state `{0}` does not allow {2}.</value>
   <data name="Settings.VersionUpdate.StartupCheck" xml:space="preserve">
     <value>启动时检查更新</value>
   </data>
+  <data name="Settings.VersionUpdate.Activity.CheckingSoftware" xml:space="preserve">
+    <value>正在检查软件更新……</value>
+  </data>
+  <data name="Settings.VersionUpdate.Activity.CheckingResource" xml:space="preserve">
+    <value>正在检查资源更新……</value>
+  </data>
+  <data name="Settings.VersionUpdate.Activity.ResourceDownloadingGlobalSource" xml:space="preserve">
+    <value>正在使用 ｢GlobalSource｣ 下载……</value>
+  </data>
+  <data name="Settings.VersionUpdate.Activity.ResourceDownloadingMirrorChyan" xml:space="preserve">
+    <value>正在使用 ｢MirrorChyan｣ 下载……</value>
+  </data>
+  <data name="Settings.VersionUpdate.Activity.ResourcePreparing" xml:space="preserve">
+    <value>正在编制索引</value>
+  </data>
+  <data name="Settings.VersionUpdate.Activity.ResourceUpdated" xml:space="preserve">
+    <value>游戏资源已更新。</value>
+  </data>
+  <data name="Settings.VersionUpdate.Activity.ResourceUpdating" xml:space="preserve">
+    <value>游戏资源正在更新。</value>
+  </data>
+  <data name="Settings.VersionUpdate.Activity.ResourceUpdatingMirrorChyan" xml:space="preserve">
+    <value>正在使用 ｢MirrorChyan｣ 更新资源{0}……</value>
+  </data>
+  <data name="Settings.VersionUpdate.Activity.SoftwarePackageDownloaded" xml:space="preserve">
+    <value>软件更新包已下载完成。</value>
+  </data>
+  <data name="Settings.VersionUpdate.Activity.SoftwarePackageDownloading" xml:space="preserve">
+    <value>正在下载软件更新包……</value>
+  </data>
   <data name="Settings.VersionUpdate.Status.CheckFailed" xml:space="preserve">
     <value>检查更新失败。</value>
   </data>
@@ -3567,6 +3869,18 @@ Session state `{0}` does not allow {2}.</value>
   </data>
   <data name="Settings.VersionUpdate.Status.DialogConfirmed" xml:space="preserve">
     <value>版本更新弹窗确认完成。</value>
+  </data>
+  <data name="Settings.VersionUpdate.Status.FirstBootShown" xml:space="preserve">
+    <value>已显示更新说明。</value>
+  </data>
+  <data name="Settings.VersionUpdate.Status.PackageDownloadFailed" xml:space="preserve">
+    <value>更新失败。</value>
+  </data>
+  <data name="Settings.VersionUpdate.Status.PackageUnavailable" xml:space="preserve">
+    <value>更新失败。</value>
+  </data>
+  <data name="Settings.VersionUpdate.Status.WindowsManualUpdateRequired" xml:space="preserve">
+    <value>Windows 版目前暂未在 release 发布，请手动更新。</value>
   </data>
   <data name="Settings.VersionUpdate.Status.MirrorCdkExpired" xml:space="preserve">
     <value>MirrorChyan CDK 已过期。</value>
@@ -3603,6 +3917,78 @@ Session state `{0}` does not allow {2}.</value>
   </data>
   <data name="Settings.VersionUpdate.Status.ResourceUpdateFailed" xml:space="preserve">
     <value>更新资源失败。</value>
+  </data>
+  <data name="Settings.VersionUpdate.Status.MirrorChyanCdkRequired" xml:space="preserve">
+    <value>请前往 设置 &gt; Version Update 配置 Mirror酱 CDK 或切换更新源。</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.Checking" xml:space="preserve">
+    <value>正在检查资源更新。源={0}，客户端={1}</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.CheckFailedHttp" xml:space="preserve">
+    <value>资源更新检查失败，HTTP 状态码 {0}。</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.CheckFailed" xml:space="preserve">
+    <value>资源更新检查失败。</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.CheckFailedWithMessage" xml:space="preserve">
+    <value>资源更新检查失败：{0}</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.AlreadyLatest" xml:space="preserve">
+    <value>资源已是最新版本。</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.Available" xml:space="preserve">
+    <value>检测到资源更新：{0}。</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.AvailableRequiresCdk" xml:space="preserve">
+    <value>检测到资源更新：{0}。MirrorChyan 直链下载需要 CDK。</value>
+  </data>
+  <data name="VersionUpdate.Log.Software.Checking" xml:space="preserve">
+    <value>正在检查软件更新。通道={0}，当前版本={1}</value>
+  </data>
+  <data name="VersionUpdate.Log.Software.PreparingPackage" xml:space="preserve">
+    <value>正在准备软件下载包。</value>
+  </data>
+  <data name="VersionUpdate.Log.Software.PreparingNamedPackage" xml:space="preserve">
+    <value>正在准备软件下载包：{0}</value>
+  </data>
+  <data name="VersionUpdate.Log.Software.PackageReady" xml:space="preserve">
+    <value>软件下载包已准备完成，重启后即可应用。</value>
+  </data>
+  <data name="VersionUpdate.Log.Software.NamedPackageReady" xml:space="preserve">
+    <value>软件下载包 {0} 已准备完成，重启后即可应用。</value>
+  </data>
+  <data name="VersionUpdate.Log.Software.PackagePrepareFailed" xml:space="preserve">
+    <value>软件下载包准备失败。</value>
+  </data>
+  <data name="VersionUpdate.Log.Software.PackagePrepareFailedWithMessage" xml:space="preserve">
+    <value>软件下载包准备失败：{0}</value>
+  </data>
+  <data name="VersionUpdate.Log.Software.Available" xml:space="preserve">
+    <value>检测到软件更新：{0}</value>
+  </data>
+  <data name="VersionUpdate.Log.Software.AlreadyLatest" xml:space="preserve">
+    <value>当前 {0} 通道已是最新版本。</value>
+  </data>
+  <data name="VersionUpdate.Log.Software.CheckFailedWithMessage" xml:space="preserve">
+    <value>软件更新检查失败：{0}</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.GithubStart" xml:space="preserve">
+    <value>开始从 Github 更新资源。</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.GithubCompleted" xml:space="preserve">
+    <value>已从 Github 完成资源更新。</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.GithubFailedWithMessage" xml:space="preserve">
+    <value>Github 资源更新失败：{0}</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.MirrorChyanStart" xml:space="preserve">
+    <value>开始从 MirrorChyan 更新资源。</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.MirrorChyanCompleted" xml:space="preserve">
+    <value>已从 MirrorChyan 完成资源更新。</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.MirrorChyanFailedWithMessage" xml:space="preserve">
+    <value>MirrorChyan 资源更新失败：{0}</value>
   </data>
   <data name="Settings.VersionUpdate.Status.SaveChannelFailed" xml:space="preserve">
     <value>版本更新通道配置保存失败。</value>
@@ -3875,6 +4261,21 @@ Session state `{0}` does not allow {2}.</value>
   </data>
   <data name="TaskQueue.Module.Custom" xml:space="preserve">
     <value>自定义任务</value>
+  </data>
+  <data name="TaskQueue.Module.UserDataUpdate" xml:space="preserve">
+    <value>更新数据</value>
+  </data>
+  <data name="TaskQueue.UserDataUpdate.TriggerInterval" xml:space="preserve">
+    <value>更新数据触发间隔</value>
+  </data>
+  <data name="TaskQueue.UserDataUpdate.Trigger.EveryTime" xml:space="preserve">
+    <value>每次触发</value>
+  </data>
+  <data name="TaskQueue.UserDataUpdate.Trigger.Daily" xml:space="preserve">
+    <value>每天一次</value>
+  </data>
+  <data name="TaskQueue.UserDataUpdate.Trigger.Weekly" xml:space="preserve">
+    <value>每周一次</value>
   </data>
   <data name="TaskQueue.Module.Fight" xml:space="preserve">
     <value>理智作战</value>
@@ -4240,7 +4641,7 @@ Session state `{0}` does not allow {2}.</value>
     <value>托盘集成</value>
   </data>
   <data name="Toolbox.Advanced.Tab.WebApi" xml:space="preserve">
-    <value>WebApi(兼容)</value>
+    <value>WebApi</value>
   </data>
   <data name="Toolbox.Advanced.Tray.ApplyVisibility" xml:space="preserve">
     <value>应用可见性</value>
@@ -4306,10 +4707,10 @@ Session state `{0}` does not allow {2}.</value>
     <value>停止服务</value>
   </data>
   <data name="Toolbox.Advanced.WebApi.Title" xml:space="preserve">
-    <value>WebApi(兼容)</value>
+    <value>WebApi</value>
   </data>
   <data name="Toolbox.Advanced.WebApi.Warning" xml:space="preserve">
-    <value>该面板用于兼容旧版 WebApi 接入。仅在你明确需要外部调用时启用，并建议配置访问令牌。</value>
+    <value>该高级页保留对旧版 WebApi 接入的兼容。仅在你明确需要外部调用时启用，并建议尽量配置访问令牌。</value>
   </data>
   <data name="Toolbox.Depot.ExportArkPlanner" xml:space="preserve">
     <value>导出至企鹅物流刷图规划</value>
@@ -4361,6 +4762,42 @@ Session state `{0}` does not allow {2}.</value>
   </data>
   <data name="Toolbox.Error.ToolboxBusy" xml:space="preserve">
     <value>Toolbox 当前已有任务在运行，请先停止。</value>
+  </data>
+  <data name="Toolbox.BusyDialog.CloseButton" xml:space="preserve">
+    <value>知道了</value>
+  </data>
+  <data name="Toolbox.BusyDialog.ConfirmButton" xml:space="preserve">
+    <value>确认</value>
+  </data>
+  <data name="Toolbox.BusyDialog.CurrentTask" xml:space="preserve">
+    <value>当前任务</value>
+  </data>
+  <data name="Toolbox.BusyDialog.DetailsButton" xml:space="preserve">
+    <value>详细报错</value>
+  </data>
+  <data name="Toolbox.BusyDialog.Message" xml:space="preserve">
+    <value>{0} 仍在运行。请先停止当前任务，再启动新的小工具任务。</value>
+  </data>
+  <data name="Toolbox.BusyDialog.StopButton" xml:space="preserve">
+    <value>停止当前任务</value>
+  </data>
+  <data name="Toolbox.BusyDialog.Title" xml:space="preserve">
+    <value>小工具正在执行</value>
+  </data>
+  <data name="Toolbox.RetryableDialog.DetailsButton" xml:space="preserve">
+    <value>详细报错</value>
+  </data>
+  <data name="Toolbox.RetryableDialog.LaterButton" xml:space="preserve">
+    <value>稍后再试</value>
+  </data>
+  <data name="Toolbox.RetryableDialog.Message" xml:space="preserve">
+    <value>你的手速怎么这么快，不过被我料到了。小工具还没准备好，稍后再试一下。</value>
+  </data>
+  <data name="Toolbox.RetryableDialog.RetryButton" xml:space="preserve">
+    <value>重试</value>
+  </data>
+  <data name="Toolbox.RetryableDialog.Title" xml:space="preserve">
+    <value>小工具还没准备好</value>
   </data>
   <data name="Toolbox.ExecutionReview.HistoryLabel" xml:space="preserve">
     <value>历史记录</value>
@@ -4729,6 +5166,9 @@ Session state `{0}` does not allow {2}.</value>
   <data name="Settings.VersionUpdate.RestartPending" xml:space="preserve">
     <value>更新包已下载完成，请稍后重启 MAA 以应用更新。</value>
   </data>
+  <data name="Settings.VersionUpdate.RestartPendingWhileRunning" xml:space="preserve">
+    <value>更新包已下载完成。当前任务仍在运行，请在空闲时重启 MAA 以应用更新。</value>
+  </data>
   <data name="Settings.VersionUpdate.SoftwarePlaceholder.Cancel" xml:space="preserve">
     <value>关闭</value>
   </data>
@@ -4736,10 +5176,10 @@ Session state `{0}` does not allow {2}.</value>
     <value>知道了</value>
   </data>
   <data name="Settings.VersionUpdate.SoftwarePlaceholder.Message" xml:space="preserve">
-    <value>MAA Unified 暂未实现软件更新。请继续使用 WPF 版本处理软件更新。</value>
+    <value>软件更新已接入。请前往“设置 &gt; Version Update”检查、下载并应用更新。</value>
   </data>
   <data name="Settings.VersionUpdate.SoftwarePlaceholder.Status" xml:space="preserve">
-    <value>MAA Unified 暂未实现软件更新。</value>
+    <value>软件更新已可用。</value>
   </data>
   <data name="Settings.VersionUpdate.SoftwarePlaceholder.Title" xml:space="preserve">
     <value>软件更新</value>

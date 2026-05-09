@@ -115,6 +115,58 @@ public sealed class TaskQueueG2FeatureTests
     }
 
     [Fact]
+    public async Task StartAsync_ShouldEnterRunningUiStateWhileAutoConnectIsPending()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup-a")).Success);
+        fixture.Bridge.ConnectDelay = TimeSpan.FromMilliseconds(200);
+        fixture.Bridge.ConnectStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var shared = new ConnectionGameSharedStateViewModel
+        {
+            ConnectAddress = "127.0.0.1:5555",
+        };
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, shared);
+        await vm.InitializeAsync();
+
+        var startTask = vm.StartAsync();
+        await fixture.Bridge.ConnectStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+        Assert.True(vm.IsRunning);
+        Assert.False(vm.CanEdit);
+        Assert.False(vm.CanToggleRun);
+
+        await startTask;
+
+        Assert.True(vm.IsRunning);
+        Assert.True(vm.CanToggleRun);
+        Assert.Equal(SessionState.Running, vm.CurrentSessionState);
+    }
+
+    [Fact]
+    public async Task StartAsync_AutoConnectFailure_ShouldReturnToEditableStateAndReportError()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup-a")).Success);
+        fixture.Bridge.ForceConnectFailure = true;
+
+        var shared = new ConnectionGameSharedStateViewModel
+        {
+            ConnectAddress = "127.0.0.1:5555",
+        };
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, shared);
+        await vm.InitializeAsync();
+
+        await vm.StartAsync();
+
+        Assert.False(vm.IsRunning);
+        Assert.True(vm.CanEdit);
+        Assert.True(vm.CanToggleRun);
+        Assert.Equal(0, fixture.Bridge.StartCallCount);
+        Assert.Contains("Connection failed", vm.LastErrorMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Callback_TaskChainStart_WithTaskIndex_ShouldUpdateOnlyTargetTask()
     {
         await using var fixture = await TestFixture.CreateAsync();
@@ -195,6 +247,32 @@ public sealed class TaskQueueG2FeatureTests
         Assert.Equal(startLogBefore, logEntries[0].Content);
         Assert.Contains("Combat", logEntries[^1].Content, StringComparison.Ordinal);
         Assert.NotEqual(startLogBefore, logEntries[^1].Content);
+    }
+
+    [Fact]
+    public async Task Callback_TaskChainCompleted_ShouldUseSeparateLogCardFromTaskStart()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "开始唤醒")).Success);
+        fixture.Bridge.NextImageBytes = SinglePixelPng;
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        await InvokeCallbackAsync(vm, new CoreCallbackEvent(
+            10001,
+            "TaskChainStart",
+            """{"task_chain":"StartUp","task_index":0,"run_id":"run-g2-startup-split"}""",
+            DateTimeOffset.UtcNow));
+        await InvokeCallbackAsync(vm, new CoreCallbackEvent(
+            10002,
+            "TaskChainCompleted",
+            """{"task_chain":"StartUp","task_index":0,"run_id":"run-g2-startup-split"}""",
+            DateTimeOffset.UtcNow));
+
+        Assert.Equal(2, vm.LogCards.Count);
+        Assert.Contains("开始任务: 开始唤醒", vm.LogCards[0].PrimaryContent, StringComparison.Ordinal);
+        Assert.Contains("完成任务: 开始唤醒", vm.LogCards[1].PrimaryContent, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -448,6 +526,53 @@ public sealed class TaskQueueG2FeatureTests
     }
 
     [Fact]
+    public async Task Callback_AllTasksCompleted_WithUseNotifyEnabled_ShouldSendSystemNotificationOncePerRunId()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        fixture.Runtime.ConfigurationService.CurrentConfig.GlobalValues[LegacyConfigurationKeys.UseNotify] = JsonValue.Create("True");
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Fight", "fight-a")).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        vm.Tasks[0].Status = TaskQueueItemStatus.Running;
+
+        var callback = new CoreCallbackEvent(
+            3,
+            "AllTasksCompleted",
+            """{"task_chain":"Fight","task_index":0,"run_id":"run-g2-notify"}""",
+            DateTimeOffset.UtcNow);
+
+        await InvokeCallbackAsync(vm, callback);
+        await InvokeCallbackAsync(vm, callback);
+
+        Assert.True(await WaitForConditionAsync(() => fixture.NotificationTracker.NotificationCallCount == 1));
+        Assert.Equal(1, fixture.NotificationTracker.NotificationCallCount);
+        Assert.False(string.IsNullOrWhiteSpace(fixture.NotificationTracker.LastTitle));
+        Assert.False(string.IsNullOrWhiteSpace(fixture.NotificationTracker.LastMessage));
+    }
+
+    [Fact]
+    public async Task Callback_TaskChainError_WithUseNotifyDisabled_ShouldNotSendSystemNotification()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        fixture.Runtime.ConfigurationService.CurrentConfig.GlobalValues[LegacyConfigurationKeys.UseNotify] = JsonValue.Create("False");
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Fight", "fight-a")).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        await InvokeCallbackAsync(vm, new CoreCallbackEvent(
+            10000,
+            "TaskChainError",
+            """{"task_chain":"Fight","task_index":0,"run_id":"run-g2-no-notify"}""",
+            DateTimeOffset.UtcNow));
+
+        await Task.Delay(50);
+
+        Assert.Equal(0, fixture.NotificationTracker.NotificationCallCount);
+    }
+
+    [Fact]
     public async Task CallbackPayloadMalformed_ShouldWarnAndContinue()
     {
         await using var fixture = await TestFixture.CreateAsync();
@@ -614,13 +739,15 @@ public sealed class TaskQueueG2FeatureTests
             MAAUnifiedRuntime runtime,
             TaskQueueFeatureService taskQueue,
             CapturingBridge bridge,
-            CountingPostActionFeatureService postAction)
+            CountingPostActionFeatureService postAction,
+            NotificationTrackingPlatformCapabilityService notificationTracker)
         {
             Root = root;
             Runtime = runtime;
             TaskQueue = taskQueue;
             Bridge = bridge;
             PostAction = postAction;
+            NotificationTracker = notificationTracker;
         }
 
         public string Root { get; }
@@ -632,6 +759,8 @@ public sealed class TaskQueueG2FeatureTests
         public CapturingBridge Bridge { get; }
 
         public CountingPostActionFeatureService PostAction { get; }
+
+        public NotificationTrackingPlatformCapabilityService NotificationTracker { get; }
 
         public static async Task<TestFixture> CreateAsync(string language = "zh-cn")
         {
@@ -665,6 +794,7 @@ public sealed class TaskQueueG2FeatureTests
             };
 
             var capability = new PlatformCapabilityFeatureService(platform, diagnostics);
+            var notificationTracker = new NotificationTrackingPlatformCapabilityService(capability);
             var connect = new ConnectFeatureService(session, config);
             var postAction = new CountingPostActionFeatureService();
             var achievementTracker = new AchievementTrackerService(config, root);
@@ -684,16 +814,16 @@ public sealed class TaskQueueG2FeatureTests
                 CopilotFeatureService = new CopilotFeatureService(),
                 ToolboxFeatureService = new ToolboxFeatureService(),
                 RemoteControlFeatureService = new RemoteControlFeatureService(),
-                PlatformCapabilityService = capability,
-                OverlayFeatureService = new OverlayFeatureService(capability),
+                PlatformCapabilityService = notificationTracker,
+                OverlayFeatureService = new OverlayFeatureService(notificationTracker),
                 NotificationProviderFeatureService = new NotificationProviderFeatureService(),
-                SettingsFeatureService = new SettingsFeatureService(config, capability, diagnostics),
+                SettingsFeatureService = new SettingsFeatureService(config, notificationTracker, diagnostics),
                 AchievementTrackerService = achievementTracker,
                 DialogFeatureService = new DialogFeatureService(diagnostics),
                 PostActionFeatureService = postAction,
             };
 
-            return new TestFixture(root, runtime, taskQueue, bridge, postAction);
+            return new TestFixture(root, runtime, taskQueue, bridge, postAction, notificationTracker);
         }
 
         public async ValueTask DisposeAsync()
@@ -726,17 +856,29 @@ public sealed class TaskQueueG2FeatureTests
 
         public int GetImageCallCount { get; private set; }
 
+        public TimeSpan ConnectDelay { get; set; }
+
+        public bool ForceConnectFailure { get; set; }
+
+        public TaskCompletionSource<bool>? ConnectStarted { get; set; }
+
         public byte[]? NextImageBytes { get; set; }
 
         public Task<CoreResult<CoreInitializeInfo>> InitializeAsync(CoreInitializeRequest request, CancellationToken cancellationToken = default)
             => Task.FromResult(CoreResult<CoreInitializeInfo>.Ok(new CoreInitializeInfo(request.BaseDirectory, "fake", "fake", request.ClientType)));
 
-        public Task<CoreResult<bool>> ConnectAsync(CoreConnectionInfo connectionInfo, CancellationToken cancellationToken = default)
+        public async Task<CoreResult<bool>> ConnectAsync(CoreConnectionInfo connectionInfo, CancellationToken cancellationToken = default)
         {
-            _connected = !string.IsNullOrWhiteSpace(connectionInfo.Address);
-            return Task.FromResult(_connected
+            ConnectStarted?.TrySetResult(true);
+            if (ConnectDelay > TimeSpan.Zero)
+            {
+                await Task.Delay(ConnectDelay, cancellationToken);
+            }
+
+            _connected = !ForceConnectFailure && !string.IsNullOrWhiteSpace(connectionInfo.Address);
+            return _connected
                 ? CoreResult<bool>.Ok(true)
-                : CoreResult<bool>.Fail(new CoreError(CoreErrorCode.ConnectFailed, "connect failed")));
+                : CoreResult<bool>.Fail(new CoreError(CoreErrorCode.ConnectFailed, "connect failed"));
         }
 
         public Task<CoreResult<int>> AppendTaskAsync(CoreTaskRequest task, CancellationToken cancellationToken = default)

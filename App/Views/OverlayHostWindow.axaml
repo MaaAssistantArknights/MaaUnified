@@ -6,26 +6,57 @@
         x:DataType="vm:OverlayPresentationViewModel">
   <Window.Styles>
     <Style Selector="Border#OverlayPanel">
-      <Setter Property="CornerRadius" Value="10" />
-      <Setter Property="Background" Value="#7A1A1E25" />
-      <Setter Property="BorderBrush" Value="#5CFFFFFF" />
+      <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.CornerRadius.Card}" />
+      <Setter Property="Background">
+        <Setter.Value>
+          <SolidColorBrush Color="{DynamicResource MAA.Color.Dialog.CardSurface}"
+                           Opacity="0.9" />
+        </Setter.Value>
+      </Setter>
+      <Setter Property="BorderBrush">
+        <Setter.Value>
+          <SolidColorBrush Color="{DynamicResource MAA.Color.Dialog.CardBorder}"
+                           Opacity="0.86" />
+        </Setter.Value>
+      </Setter>
       <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="Padding" Value="14,12" />
+      <Setter Property="ClipToBounds" Value="True" />
+      <Setter Property="Effect">
+        <Setter.Value>
+          <DropShadowDirectionEffect BlurRadius="24"
+                                     ShadowDepth="4"
+                                     Opacity="0.22"
+                                     Color="Black" />
+        </Setter.Value>
+      </Setter>
     </Style>
     <Style Selector="TextBlock.overlay-log-time">
-      <Setter Property="FontSize" Value="11" />
-      <Setter Property="Foreground" Value="#CCFFFFFF" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Muted}" />
+      <Setter Property="LineHeight" Value="20" />
       <Setter Property="VerticalAlignment" Value="Top" />
+      <Setter Property="TextWrapping" Value="NoWrap" />
     </Style>
     <Style Selector="TextBlock.overlay-log-content">
       <Setter Property="FontSize" Value="12" />
-      <Setter Property="Foreground" Value="#FFF5F7FA" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Secondary}" />
       <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="LineHeight" Value="20" />
+      <Setter Property="VerticalAlignment" Value="Top" />
+    </Style>
+    <Style Selector="TextBlock.overlay-log-content.state-warning">
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.State.Warning}" />
+    </Style>
+    <Style Selector="TextBlock.overlay-log-content.state-error">
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.State.Error}" />
     </Style>
   </Window.Styles>
 
   <Window.DataTemplates>
     <DataTemplate DataType="taskVm:TaskQueueLogEntryViewModel">
-      <Grid ColumnDefinitions="Auto,*">
+      <Grid Classes="overlay-log-entry"
+            ColumnDefinitions="Auto,*">
         <TextBlock Classes="overlay-log-time"
                    IsVisible="{Binding HasTime}"
                    Text="{Binding Time}" />
@@ -33,7 +64,7 @@
                    Classes="overlay-log-content"
                    Classes.state-error="{Binding IsError}"
                    Classes.state-warning="{Binding IsWarning}"
-                   Margin="8,0,0,0"
+                   Margin="10,0,0,0"
                    Text="{Binding Content}" />
       </Grid>
     </DataTemplate>
@@ -44,8 +75,7 @@
             HorizontalAlignment="Left"
             VerticalAlignment="Top"
             Margin="8"
-            MaxWidth="250"
-            Padding="10,8">
+            MaxWidth="250">
       <ScrollViewer x:Name="OverlayScroller"
                     HorizontalScrollBarVisibility="Disabled"
                     VerticalScrollBarVisibility="Hidden">

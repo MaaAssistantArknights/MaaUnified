@@ -88,6 +88,155 @@ public sealed class SettingsModuleAK1FeatureTests
     }
 
     [Fact]
+    public void ConnectionGameSharedState_ConnectAndTouchOptions_ShouldIncludeWpfParityEntries()
+    {
+        var state = new ConnectionGameSharedStateViewModel();
+
+        Assert.Contains(
+            state.ConnectConfigOptions,
+            option => string.Equals(option.Value, "AVD", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(
+            state.TouchModeOptions,
+            option => string.Equals(option.Value, "MaaFwAdb", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void ConnectionGameSharedState_AvdConfig_ShouldProvideEmulatorCandidatesWhenAutoDetectEnabled()
+    {
+        var state = new ConnectionGameSharedStateViewModel
+        {
+            ConnectConfig = "AVD",
+            AutoDetect = true,
+            AlwaysAutoDetect = false,
+            ConnectAddress = string.Empty,
+        };
+
+        var candidates = state.BuildConnectAddressCandidates(includeConfiguredAddress: true);
+
+        Assert.Contains("emulator-5554", candidates);
+    }
+
+    [Fact]
+    public void ConnectionGameSharedState_RemoveAddressFromHistory_ShouldDeleteOnlyTargetEntry()
+    {
+        var state = new ConnectionGameSharedStateViewModel();
+        state.ConnectAddress = "127.0.0.1:5555";
+        state.ConnectAddress = "127.0.0.1:5556";
+        state.ConnectAddress = "127.0.0.1:5557";
+
+        state.RemoveAddressFromHistory("127.0.0.1:5556");
+
+        Assert.DoesNotContain("127.0.0.1:5556", state.ConnectAddressHistory);
+        Assert.Contains("127.0.0.1:5555", state.ConnectAddressHistory);
+        Assert.Contains("127.0.0.1:5557", state.ConnectAddressHistory);
+    }
+
+    [Fact]
+    public void ConnectionGameSharedState_MuMuExtras_ShouldAutoDetectAndValidateEmulatorPath()
+    {
+        var state = new ConnectionGameSharedStateViewModel
+        {
+            ConnectConfig = "MuMuEmulator12",
+        };
+
+        var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var autoDetectedPath = Path.Combine(userProfile, "Netease", "MuMuPlayerGlobal-12.0");
+        var rendererDirectory = Path.Combine(autoDetectedPath, "shell", "sdk");
+        var rendererPath = Path.Combine(rendererDirectory, "external_renderer_ipc.dll");
+        var createdDirectory = !Directory.Exists(autoDetectedPath);
+        Directory.CreateDirectory(rendererDirectory);
+        File.WriteAllText(rendererPath, "test");
+
+        try
+        {
+            state.MuMu12ExtrasEnabled = true;
+
+            Assert.False(string.IsNullOrWhiteSpace(state.MuMu12EmulatorPath));
+            Assert.True(state.ValidateMuMu12EmulatorPath(out var validationError), validationError);
+
+            var invalidPath = Path.Combine(Path.GetTempPath(), "maa-unified-invalid-mumu", Guid.NewGuid().ToString("N"));
+            var previousPath = state.MuMu12EmulatorPath;
+            state.MuMu12EmulatorPath = invalidPath;
+            Assert.Equal(previousPath, state.MuMu12EmulatorPath);
+            Assert.False(string.IsNullOrWhiteSpace(state.TestLinkInfo));
+        }
+        finally
+        {
+            if (File.Exists(rendererPath))
+            {
+                File.Delete(rendererPath);
+            }
+
+            if (createdDirectory && Directory.Exists(autoDetectedPath))
+            {
+                Directory.Delete(autoDetectedPath, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void ConnectionGameSharedState_LdPlayerExtras_ShouldAutoDetectAndValidateEmulatorPath()
+    {
+        var state = new ConnectionGameSharedStateViewModel
+        {
+            ConnectConfig = "LDPlayer",
+        };
+
+        var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var autoDetectedPath = Path.Combine(userProfile, "leidian", "LDPlayer9");
+        var openGlLibraryPath = Path.Combine(autoDetectedPath, "ldopengl64.dll");
+        var createdDirectory = !Directory.Exists(autoDetectedPath);
+        Directory.CreateDirectory(autoDetectedPath);
+        File.WriteAllText(openGlLibraryPath, "test");
+
+        try
+        {
+            state.LdPlayerExtrasEnabled = true;
+
+            Assert.False(string.IsNullOrWhiteSpace(state.LdPlayerEmulatorPath));
+            Assert.True(state.ValidateLdPlayerEmulatorPath(out var validationError), validationError);
+
+            var invalidPath = Path.Combine(Path.GetTempPath(), "maa-unified-invalid-ld", Guid.NewGuid().ToString("N"));
+            var previousPath = state.LdPlayerEmulatorPath;
+            state.LdPlayerEmulatorPath = invalidPath;
+            Assert.Equal(previousPath, state.LdPlayerEmulatorPath);
+            Assert.False(string.IsNullOrWhiteSpace(state.TestLinkInfo));
+        }
+        finally
+        {
+            if (File.Exists(openGlLibraryPath))
+            {
+                File.Delete(openGlLibraryPath);
+            }
+
+            if (createdDirectory && Directory.Exists(autoDetectedPath))
+            {
+                Directory.Delete(autoDetectedPath, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void ConnectionGameSharedState_ClientTypeFlags_ShouldExposeYoStarAndOverseasHints()
+    {
+        var state = new ConnectionGameSharedStateViewModel
+        {
+            ClientType = "Official",
+        };
+
+        Assert.False(state.IsYoStarEnClientType);
+        Assert.False(state.ShowOverseasClientHint);
+
+        state.ClientType = "YoStarEN";
+        Assert.True(state.IsYoStarEnClientType);
+        Assert.True(state.ShowOverseasClientHint);
+
+        state.ClientType = "Bilibili";
+        Assert.False(state.IsYoStarEnClientType);
+        Assert.False(state.ShowOverseasClientHint);
+    }
+
+    [Fact]
     public void ConnectionGameSharedState_SetLanguage_AfterOptionsRebuild_SelectedOptionsShouldUseNewListEntries()
     {
         var state = new ConnectionGameSharedStateViewModel
@@ -130,6 +279,12 @@ public sealed class SettingsModuleAK1FeatureTests
         Assert.NotSame(selectedScreencapBefore, state.SelectedAttachWindowScreencapOption);
         Assert.NotSame(selectedMouseBefore, state.SelectedAttachWindowMouseOption);
         Assert.NotSame(selectedKeyboardBefore, state.SelectedAttachWindowKeyboardOption);
+        Assert.Equal(selectedConnectConfigBefore, state.SelectedConnectConfigOption);
+        Assert.Equal(selectedClientTypeBefore, state.SelectedClientTypeOption);
+        Assert.Equal(selectedTouchModeBefore, state.SelectedTouchModeOption);
+        Assert.Equal(selectedScreencapBefore, state.SelectedAttachWindowScreencapOption);
+        Assert.Equal(selectedMouseBefore, state.SelectedAttachWindowMouseOption);
+        Assert.Equal(selectedKeyboardBefore, state.SelectedAttachWindowKeyboardOption);
 
         Assert.Same(
             state.ConnectConfigOptions.First(option => string.Equals(option.Value, "MuMuEmulator12", StringComparison.OrdinalIgnoreCase)),
@@ -377,6 +532,16 @@ public sealed class SettingsModuleAK1FeatureTests
         await fixture.Shell.SettingsPage.SaveStartPerformanceSettingsAsync();
 
         Assert.True(fixture.Bridge.LastAppliedInstanceOptions?.DeploymentWithPause);
+    }
+
+    [Fact]
+    public async Task SaveStartPerformanceSettings_WithNoEffectiveChange_ShouldSkipCoreSync()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+
+        await fixture.Shell.SettingsPage.SaveStartPerformanceSettingsAsync();
+
+        Assert.Null(fixture.Bridge.LastAppliedInstanceOptions);
     }
 
     [Fact]

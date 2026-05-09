@@ -112,8 +112,62 @@
   <data name="Copilot.List.InlineJsonHint" xml:space="preserve">
     <value>埋め込み JSON</value>
   </data>
+  <data name="Copilot.List.Button.ClearAll" xml:space="preserve">
+    <value>すべて削除</value>
+  </data>
+  <data name="Copilot.List.Button.Disable" xml:space="preserve">
+    <value>無効化</value>
+  </data>
+  <data name="Copilot.List.Button.Enable" xml:space="preserve">
+    <value>有効化</value>
+  </data>
+  <data name="Copilot.List.Button.LoadSingle" xml:space="preserve">
+    <value>単体読み込み</value>
+  </data>
+  <data name="Copilot.List.Button.ToggleRaid" xml:space="preserve">
+    <value>強襲切替</value>
+  </data>
+  <data name="Copilot.List.ClearAllConfirm.Confirm" xml:space="preserve">
+    <value>すべて削除</value>
+  </data>
+  <data name="Copilot.List.ClearAllConfirm.Message" xml:space="preserve">
+    <value>戦闘リストのすべての作業を削除します。この操作は元に戻せません。</value>
+  </data>
+  <data name="Copilot.List.ClearAllConfirm.Title" xml:space="preserve">
+    <value>戦闘リストを削除</value>
+  </data>
   <data name="Copilot.List.RaidLabel" xml:space="preserve">
     <value>強襲</value>
+  </data>
+  <data name="Copilot.Error.SelectTaskToUpdate" xml:space="preserve">
+    <value>更新する作業を選択してください。</value>
+  </data>
+  <data name="Copilot.Error.UpdateListItemPersistFail" xml:space="preserve">
+    <value>作業リストの更新に失敗しました: リストを保存できませんでした。</value>
+  </data>
+  <data name="Copilot.Status.ClearCancelled" xml:space="preserve">
+    <value>すべての作業の削除をキャンセルしました。</value>
+  </data>
+  <data name="Copilot.Status.ListItemDisabled" xml:space="preserve">
+    <value>作業を無効化しました。</value>
+  </data>
+  <data name="Copilot.Status.ListItemEnabled" xml:space="preserve">
+    <value>作業を有効化しました。</value>
+  </data>
+  <data name="Copilot.Status.ListItemRaidDisabled" xml:space="preserve">
+    <value>通常作業に切り替えました。</value>
+  </data>
+  <data name="Copilot.Status.ListItemRaidEnabled" xml:space="preserve">
+    <value>強襲作業に切り替えました。</value>
+  </data>
+  <data name="Copilot.Status.UpdateListItemFailed" xml:space="preserve">
+    <value>作業の更新に失敗しました。</value>
+  </data>
+  <data name="Copilot.Status.UpdateListItemNameFailed" xml:space="preserve">
+    <value>作業名の更新に失敗しました。</value>
+  </data>
+  <data name="Copilot.Status.UpdateListItemNameSuccess" xml:space="preserve">
+    <value>作業名を更新しました: {0}</value>
   </data>
   <data name="Copilot.FilePicker.ImportBatch.Title" xml:space="preserve">
     <value>作業を一括インポート</value>
@@ -305,6 +359,9 @@
   <data name="Fight.StageSelect" xml:space="preserve">
     <value>ステージ</value>
   </data>
+  <data name="Fight.StageSelect2" xml:space="preserve">
+    <value>候補ステージ</value>
+  </data>
   <data name="Fight.Stone" xml:space="preserve">
     <value>源石数</value>
   </data>
@@ -331,6 +388,48 @@
   </data>
   <data name="Fight.UseStoneDisplay" xml:space="preserve">
     <value>余剰理性の消費</value>
+  </data>
+  <data name="Fight.UseWeeklySchedule" xml:space="preserve">
+    <value>週間スケジュールを使う</value>
+  </data>
+  <data name="Fight.AddStage" xml:space="preserve">
+    <value>候補を追加</value>
+  </data>
+  <data name="Fight.CustomStageCode" xml:space="preserve">
+    <value>ステージ名を手動入力</value>
+  </data>
+  <data name="Fight.CustomStageCodeTip" xml:space="preserve">
+    <value>多くのメインステージ略称と元のステージ一覧にある名称に対応します。</value>
+  </data>
+  <data name="Fight.MultiTasksShareTip" xml:space="preserve">
+    <value>以下の項目は複数の作戦タスクで共有されます。</value>
+  </data>
+  <data name="Fight.AutoRestartOption" xml:space="preserve">
+    <value>ゲーム切断時に自動で再起動</value>
+  </data>
+  <data name="Fight.UseWeeklyScheduleTip" xml:space="preserve">
+    <value>ここでの曜日はローカル時刻ではなく、ゲーム内の更新時刻基準です。</value>
+  </data>
+  <data name="Fight.WeeklySchedule.Sunday" xml:space="preserve">
+    <value>日</value>
+  </data>
+  <data name="Fight.WeeklySchedule.Monday" xml:space="preserve">
+    <value>月</value>
+  </data>
+  <data name="Fight.WeeklySchedule.Tuesday" xml:space="preserve">
+    <value>火</value>
+  </data>
+  <data name="Fight.WeeklySchedule.Wednesday" xml:space="preserve">
+    <value>水</value>
+  </data>
+  <data name="Fight.WeeklySchedule.Thursday" xml:space="preserve">
+    <value>木</value>
+  </data>
+  <data name="Fight.WeeklySchedule.Friday" xml:space="preserve">
+    <value>金</value>
+  </data>
+  <data name="Fight.WeeklySchedule.Saturday" xml:space="preserve">
+    <value>土</value>
   </data>
   <data name="FirstMoveAdvantage" xml:space="preserve">
     <value>先手必勝（先鋒、狙撃、特殊）</value>
@@ -385,6 +484,33 @@
   </data>
   <data name="Infrast.Drones" xml:space="preserve">
     <value>ドローン戦略</value>
+  </data>
+  <data name="Control" xml:space="preserve">
+    <value>制御中枢</value>
+  </data>
+  <data name="Dorm" xml:space="preserve">
+    <value>宿舎</value>
+  </data>
+  <data name="Mfg" xml:space="preserve">
+    <value>製造所</value>
+  </data>
+  <data name="Office" xml:space="preserve">
+    <value>事務室</value>
+  </data>
+  <data name="Power" xml:space="preserve">
+    <value>発電所</value>
+  </data>
+  <data name="Processing" xml:space="preserve">
+    <value>加工所</value>
+  </data>
+  <data name="Reception" xml:space="preserve">
+    <value>応接室</value>
+  </data>
+  <data name="Trade" xml:space="preserve">
+    <value>貿易所</value>
+  </data>
+  <data name="Training" xml:space="preserve">
+    <value>訓練室</value>
   </data>
   <data name="Infrast.Error.CustomFileNotFound" xml:space="preserve">
     <value>カスタム基地構成ファイルが見つかりません：{0}</value>
@@ -1082,14 +1208,74 @@
   <data name="Settings.About.Dialog.Confirm" xml:space="preserve">
     <value>確認</value>
   </data>
+  <data name="Settings.About.Dialog.ConfirmLocked" xml:space="preserve">
+    <value>先にお知らせを読み終えてください</value>
+  </data>
+  <data name="Settings.About.Dialog.ConfirmBlocked1" xml:space="preserve">
+    <value>まだ読んでいません。読み終わってから確認してください。</value>
+  </data>
+  <data name="Settings.About.Dialog.ConfirmBlocked2" xml:space="preserve">
+    <value>そう、あなたですね、まだ押す</value>
+  </data>
+  <data name="Settings.About.Dialog.ConfirmBlocked3" xml:space="preserve">
+    <value>まだ押す</value>
+  </data>
   <data name="Settings.About.Dialog.DoNotRemindThisAnnouncementAgain" xml:space="preserve">
-    <value>このお知らせを再通知しない</value>
+    <value>次回のお知らせ更新まで表示しない</value>
   </data>
   <data name="Settings.About.Dialog.DoNotShowAnnouncement" xml:space="preserve">
     <value>お知らせを表示しない</value>
   </data>
   <data name="Settings.About.Dialog.Title" xml:space="preserve">
     <value>お知らせ</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadProgress.PendingBadge" xml:space="preserve">
+    <value>閲覧ロック</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadProgress.PendingTitle" xml:space="preserve">
+    <value>一番下までスクロールすると確認できます</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadProgress.PendingCaption" xml:space="preserve">
+    <value>最後まで読むと、確認ボタンと「次回のお知らせ更新まで表示しない」が一緒に解放されます。</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadProgress.PendingFooterHint" xml:space="preserve">
+    <value>この操作エリアは、読み終えるまでまとめてロックされたままです。</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadProgress.ReadyBadge" xml:space="preserve">
+    <value>解放済み</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadProgress.ReadyTitle" xml:space="preserve">
+    <value>これで確認できます</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadProgress.ReadyCaption" xml:space="preserve">
+    <value>確認できるようになりました。必要なら、このお知らせを次回更新まで非表示にもできます。</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadProgress.ReadyFooterHint" xml:space="preserve">
+    <value>同じ内容を次回更新まで表示したくない場合は、左側の項目を選んでから確認してください。</value>
+  </data>
+  <data name="Settings.About.Dialog.SectionsTitle" xml:space="preserve">
+    <value>お知らせ一覧</value>
+  </data>
+  <data name="Settings.About.Dialog.SectionsCaption" xml:space="preserve">
+    <value>左側の項目を選ぶと、該当セクションの全文を確認できます。</value>
+  </data>
+  <data name="Settings.About.Dialog.Lead" xml:space="preserve">
+    <value>このウィンドウを閉じる前に、最新のお知らせを最後まで読んでください。</value>
+  </data>
+  <data name="Settings.About.Dialog.BottomHint" xml:space="preserve">
+    <value>未読のお知らせはまだ閉じられません。</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadHint" xml:space="preserve">
+    <value>一番下までスクロールすると閉じられます。次回更新まで非表示にもできます。</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadFinishedHint" xml:space="preserve">
+    <value>お知らせを最後まで読みました。これで閉じられます。</value>
+  </data>
+  <data name="Settings.About.Dialog.MetaCurrentSection" xml:space="preserve">
+    <value>現在のセクション</value>
+  </data>
+  <data name="Settings.About.Dialog.MetaSectionFormat" xml:space="preserve">
+    <value>セクション {0} / {1}</value>
   </data>
   <data name="Settings.About.OpenCommunity" xml:space="preserve">
     <value>コミュニティ入口を開く</value>
@@ -1145,8 +1331,35 @@
   <data name="Settings.Achievement.Dialog.FilterWatermark" xml:space="preserve">
     <value>実績を検索</value>
   </data>
+  <data name="Settings.Achievement.Dialog.FilterAll" xml:space="preserve">
+    <value>すべて</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.FilterUnlocked" xml:space="preserve">
+    <value>解除済み</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.FilterInProgress" xml:space="preserve">
+    <value>進行中</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.FilterNew" xml:space="preserve">
+    <value>新規解除</value>
+  </data>
   <data name="Settings.Achievement.Dialog.ProgressFormat" xml:space="preserve">
     <value>進捗: {0}</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.ResultsFormat" xml:space="preserve">
+    <value>{0}件を表示</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.ClearFilters" xml:space="preserve">
+    <value>フィルターをクリア</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.EmptyTitle" xml:space="preserve">
+    <value>条件に一致する実績がありません</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.EmptyDescription" xml:space="preserve">
+    <value>キーワードやフィルター条件を変えてみてください。</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.OverviewFormat" xml:space="preserve">
+    <value>解除済み {0} / {1} ・達成率 {2}%</value>
   </data>
   <data name="Settings.Achievement.Dialog.Snapshot" xml:space="preserve">
     <value>実績ダイアログのスナップショット</value>
@@ -1463,6 +1676,27 @@
   <data name="Settings.ConfigurationManager.SaveAsNew" xml:space="preserve">
     <value>新規として保存</value>
   </data>
+  <data name="Settings.ConfigurationManager.SaveAsNewSucceededInline" xml:space="preserve">
+    <value>保存しました</value>
+  </data>
+  <data name="Settings.ConfigurationManager.SaveAsNewFailedInline" xml:space="preserve">
+    <value>保存に失敗しました: {0}</value>
+  </data>
+  <data name="Settings.ConfigurationManager.SaveAsNewFailedReason.Generic" xml:space="preserve">
+    <value>しばらくしてからもう一度お試しください。</value>
+  </data>
+  <data name="Settings.ConfigurationManager.SaveAsNewFailedReason.ProfileAlreadyExists" xml:space="preserve">
+    <value>未使用のプロファイル名に変更してください。</value>
+  </data>
+  <data name="Settings.ConfigurationManager.SaveAsNewFailedReason.ProfileNameEmpty" xml:space="preserve">
+    <value>プロファイル名を入力してください。</value>
+  </data>
+  <data name="Settings.ConfigurationManager.SaveAsNewFailedReason.ProfileNameInvalid" xml:space="preserve">
+    <value>プロファイル名が無効です。</value>
+  </data>
+  <data name="Settings.ConfigurationManager.SaveAsNewFailedReason.SourceProfileMissing" xml:space="preserve">
+    <value>現在のプロファイルが見つかりません。一覧を更新してから再試行してください。</value>
+  </data>
   <data name="Settings.ConfigurationManager.Status.AddFailed" xml:space="preserve">
     <value>設定の追加に失敗しました。</value>
   </data>
@@ -1769,6 +2003,9 @@
   <data name="Settings.GUI.UseTray" xml:space="preserve">
     <value>トレイアイコンを表示</value>
   </data>
+  <data name="Settings.GUI.UseNotify" xml:space="preserve">
+    <value>システム通知を表示</value>
+  </data>
   <data name="Settings.GUI.WindowTitleScrollable" xml:space="preserve">
     <value>ウィンドウタイトルをスクロール</value>
   </data>
@@ -1918,6 +2155,12 @@
   </data>
   <data name="Settings.IssueReport.OpenRuntimeLogWindow" xml:space="preserve">
     <value>実行ログウィンドウを開く</value>
+  </data>
+  <data name="Settings.IssueReport.CheckUpdateBeforeReportingIssue" xml:space="preserve">
+    <value>まずアップグレードして新しいバージョンで問題が再現するか確認し、一般的な問題でないことを確認してから報告してください。</value>
+  </data>
+  <data name="Settings.IssueReport.CheckHelpBeforeReportingIssue" xml:space="preserve">
+    <value>問題を報告する前に、よくある質問に該当しないことを確認してください</value>
   </data>
   <data name="Settings.IssueReport.PreflightNote" xml:space="preserve">
     <value>フィードバック送信前に FAQ を確認してください。ログ圧縮パッケージを添付すると問題特定が早くなります。</value>
@@ -2247,7 +2490,7 @@
     <value>プロキシアドレス</value>
   </data>
   <data name="Settings.VersionUpdate.ProxyAddressWatermark" xml:space="preserve">
-    <value>&lt;IP&gt;:&lt;連接埠&gt;</value>
+    <value>&lt;IP&gt;:&lt;Port&gt;</value>
   </data>
   <data name="Settings.VersionUpdate.ProxyType" xml:space="preserve">
     <value>プロキシ種類</value>
@@ -2284,6 +2527,15 @@
   </data>
   <data name="Settings.VersionUpdate.Status.DialogConfirmed" xml:space="preserve">
     <value>バージョン更新ダイアログを確認しました。</value>
+  </data>
+  <data name="Settings.VersionUpdate.Status.PackageDownloadFailed" xml:space="preserve">
+    <value>更新に失敗しました。</value>
+  </data>
+  <data name="Settings.VersionUpdate.Status.PackageUnavailable" xml:space="preserve">
+    <value>更新に失敗しました。</value>
+  </data>
+  <data name="Settings.VersionUpdate.Status.WindowsManualUpdateRequired" xml:space="preserve">
+    <value>Windows 版はまだ release で公開されていません。手動で更新してください。</value>
   </data>
   <data name="Settings.VersionUpdate.Status.MirrorCdkExpired" xml:space="preserve">
     <value>MirrorChyan CDK は期限切れです。</value>
@@ -2487,6 +2739,21 @@
   </data>
   <data name="TaskQueue.Module.Custom" xml:space="preserve">
     <value>カスタムタスク</value>
+  </data>
+  <data name="TaskQueue.Module.UserDataUpdate" xml:space="preserve">
+    <value>ユーザーデータ更新</value>
+  </data>
+  <data name="TaskQueue.UserDataUpdate.TriggerInterval" xml:space="preserve">
+    <value>更新データの実行間隔</value>
+  </data>
+  <data name="TaskQueue.UserDataUpdate.Trigger.EveryTime" xml:space="preserve">
+    <value>毎回</value>
+  </data>
+  <data name="TaskQueue.UserDataUpdate.Trigger.Daily" xml:space="preserve">
+    <value>毎日</value>
+  </data>
+  <data name="TaskQueue.UserDataUpdate.Trigger.Weekly" xml:space="preserve">
+    <value>毎週</value>
   </data>
   <data name="TaskQueue.Module.Fight" xml:space="preserve">
     <value>作戦</value>
@@ -2762,7 +3029,7 @@
     <value>トレイ統合</value>
   </data>
   <data name="Toolbox.Advanced.Tab.WebApi" xml:space="preserve">
-    <value>WebApi（互換）</value>
+    <value>WebApi</value>
   </data>
   <data name="Toolbox.Advanced.Tray.ApplyVisibility" xml:space="preserve">
     <value>表示設定を適用</value>
@@ -2828,10 +3095,10 @@
     <value>サービスを停止</value>
   </data>
   <data name="Toolbox.Advanced.WebApi.Title" xml:space="preserve">
-    <value>WebApi（互換）</value>
+    <value>WebApi</value>
   </data>
   <data name="Toolbox.Advanced.WebApi.Warning" xml:space="preserve">
-    <value>このパネルは旧版 WebApi 互換のためのものです。外部アクセスが明確に必要な場合のみ有効化し、可能であればアクセストークンを設定してください。</value>
+    <value>この高度な機能ページは旧版 WebApi クライアントとの互換性を維持します。外部アクセスが明確に必要な場合のみ有効化し、可能であればアクセストークンを設定してください。</value>
   </data>
   <data name="Toolbox.Depot.ExportArkPlanner" xml:space="preserve">
     <value>Penguin Stats 周回計画へエクスポート</value>
@@ -2883,6 +3150,27 @@
   </data>
   <data name="Toolbox.Error.ToolboxBusy" xml:space="preserve">
     <value>Toolbox で既にタスクが実行中です。先に停止してください。</value>
+  </data>
+  <data name="Toolbox.BusyDialog.CloseButton" xml:space="preserve">
+    <value>了解</value>
+  </data>
+  <data name="Toolbox.BusyDialog.ConfirmButton" xml:space="preserve">
+    <value>確認</value>
+  </data>
+  <data name="Toolbox.BusyDialog.CurrentTask" xml:space="preserve">
+    <value>現在のタスク</value>
+  </data>
+  <data name="Toolbox.BusyDialog.DetailsButton" xml:space="preserve">
+    <value>エラー詳細</value>
+  </data>
+  <data name="Toolbox.BusyDialog.Message" xml:space="preserve">
+    <value>{0} はまだ実行中です。新しいツールタスクを開始する前に停止してください。</value>
+  </data>
+  <data name="Toolbox.BusyDialog.StopButton" xml:space="preserve">
+    <value>現在のタスクを停止</value>
+  </data>
+  <data name="Toolbox.BusyDialog.Title" xml:space="preserve">
+    <value>Toolbox は実行中です</value>
   </data>
   <data name="Toolbox.ExecutionReview.HistoryLabel" xml:space="preserve">
     <value>履歴</value>
@@ -3218,6 +3506,21 @@
   <data name="Copilot.Error.ValidateTabMismatch" xml:space="preserve">
     <value>選択した作業が現在のタブと一致しません</value>
   </data>
+  <data name="Copilot.RunOwnerBlockedDialog.ConfirmButton" xml:space="preserve">
+    <value>確認</value>
+  </data>
+  <data name="Copilot.RunOwnerBlockedDialog.DetailsButton" xml:space="preserve">
+    <value>エラー詳細</value>
+  </data>
+  <data name="Copilot.RunOwnerBlockedDialog.Message" xml:space="preserve">
+    <value>{0} が実行中です。Copilot を開始する前に現在のタスクを停止してください。</value>
+  </data>
+  <data name="Copilot.RunOwnerBlockedDialog.StopButton" xml:space="preserve">
+    <value>タスクを停止</value>
+  </data>
+  <data name="Copilot.RunOwnerBlockedDialog.Title" xml:space="preserve">
+    <value>Copilot の開始がブロックされました</value>
+  </data>
   <data name="Copilot.Option.Module.None" xml:space="preserve">
     <value>モジュールなし</value>
   </data>
@@ -3235,8 +3538,7 @@
 右クリックしてレイドの難易度を追加します</value>
   </data>
   <data name="Copilot.Tip.ClearList" xml:space="preserve">
-    <value>左クリックですべてのタスクをクリア
-右クリックで非アクティブなタスクをクリア</value>
+    <value>戦闘リストのすべての作業を削除します。</value>
   </data>
   <data name="Copilot.Tip.File" xml:space="preserve">
     <value>攻略ファイルはマウスで直接ドラッグして取り込むことがきます(oﾟvﾟ)ノ</value>
@@ -3280,14 +3582,23 @@
   <data name="Dialog.Error.CloseButton" xml:space="preserve">
     <value>シャットダウン</value>
   </data>
+  <data name="Dialog.Error.ConnectFailedTitle" xml:space="preserve">
+    <value>エミュレーターへの接続に失敗しました</value>
+  </data>
   <data name="Dialog.Error.CopyButton" xml:space="preserve">
     <value>コピー</value>
+  </data>
+  <data name="Dialog.Error.CopyErrorInfoButton" xml:space="preserve">
+    <value>エラー詳細</value>
   </data>
   <data name="Dialog.Warning.CancelButton" xml:space="preserve">
     <value>キャンセル</value>
   </data>
   <data name="Dialog.Warning.ConfirmButton" xml:space="preserve">
     <value>認識する</value>
+  </data>
+  <data name="Dialog.Warning.DetailsButton" xml:space="preserve">
+    <value>エラー詳細</value>
   </data>
   <data name="Dialog.Warning.Title" xml:space="preserve">
     <value>警告</value>
@@ -3967,6 +4278,9 @@
   <data name="Settings.VersionUpdate.RestartPending" xml:space="preserve">
     <value>更新パッケージのダウンロードが完了しました。更新を適用するには、後で MAA を再起動してください。</value>
   </data>
+  <data name="Settings.VersionUpdate.RestartPendingWhileRunning" xml:space="preserve">
+    <value>更新パッケージのダウンロードが完了しました。現在タスクが実行中のため、空き時間に MAA を再起動して更新を適用してください。</value>
+  </data>
   <data name="Settings.VersionUpdate.SoftwarePlaceholder.Cancel" xml:space="preserve">
     <value>閉じる</value>
   </data>
@@ -3974,10 +4288,10 @@
     <value>わかりました</value>
   </data>
   <data name="Settings.VersionUpdate.SoftwarePlaceholder.Message" xml:space="preserve">
-    <value>MAA Unified ではソフトウェア更新がまだ実装されていません。ソフトウェア更新には WPF 版を引き続き使用してください。</value>
+    <value>ソフトウェア更新は利用可能です。「設定 &gt; Version Update」から更新の確認、ダウンロード、適用を行ってください。</value>
   </data>
   <data name="Settings.VersionUpdate.SoftwarePlaceholder.Status" xml:space="preserve">
-    <value>MAA Unified ではソフトウェア更新がまだ実装されていません。</value>
+    <value>ソフトウェア更新は利用可能です。</value>
   </data>
   <data name="Settings.VersionUpdate.SoftwarePlaceholder.Title" xml:space="preserve">
     <value>ソフトウェア更新</value>

@@ -1,33 +1,61 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:MAAUnified.App.Controls"
         x:Class="MAAUnified.App.Views.RuntimeLogWindow"
         Width="920"
         Height="700"
         MinWidth="760"
         MinHeight="560"
+        CanResize="True"
+        Background="Transparent"
+        SystemDecorations="None"
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaChromeHints="NoChrome"
+        WindowStartupLocation="CenterOwner"
         Title="Runtime Logs">
-  <Grid Margin="{DynamicResource MAA.Thickness.PageMargin}" RowDefinitions="*,*">
-    <Border Classes="wpf-panel wpf-panel-strong">
-      <Grid RowDefinitions="Auto,Auto,*">
-        <TextBlock Classes="section-title" Text="{Binding RootTexts[Main.Sidebar.GrowlAndCapability]}" />
-        <TextBlock Grid.Row="1"
-                   Classes="long-wrap subtle"
-                   Text="{Binding CapabilitySummary}" />
-        <ListBox Grid.Row="2"
-                 Margin="{DynamicResource MAA.Thickness.MarginTopList}"
-                 ItemsSource="{Binding GrowlMessages}" />
-      </Grid>
-    </Border>
+  <controls:AppWindowFrame x:Name="DialogShell"
+                           Title="Runtime Logs"
+                           Mode="ResizableDialog"
+                           CapWindowHeightToOwner="True"
+                           CloseRequested="OnShellCloseRequested">
+    <controls:AppWindowFrame.HeaderContent>
+      <TextBlock x:Name="LogHeaderText"
+                 Classes="app-window-subtitle dialog-window-subtitle long-wrap"
+                 Text="{Binding CapabilitySummary}" />
+    </controls:AppWindowFrame.HeaderContent>
+    <controls:AppWindowFrame.Content>
+      <Grid RowDefinitions="*,*">
+        <Border Classes="app-surface app-section">
+          <Grid RowDefinitions="Auto,Auto,*">
+            <TextBlock Classes="section-title"
+                       Text="{Binding RootTexts[Main.Sidebar.GrowlAndCapability]}" />
+            <TextBlock Grid.Row="1"
+                       Classes="long-wrap subtle"
+                       Text="{Binding CapabilitySummary}" />
+            <ListBox Grid.Row="2"
+                     Margin="{DynamicResource MAA.Thickness.MarginTopList}"
+                     ItemsSource="{Binding GrowlMessages}" />
+          </Grid>
+        </Border>
 
-    <Border Grid.Row="1"
-            Classes="wpf-panel wpf-panel-strong"
-            Margin="{DynamicResource MAA.Thickness.MarginTopSection}">
-      <Grid RowDefinitions="Auto,*">
-        <TextBlock Classes="section-title" Text="{Binding RootTexts[Main.Footer.RootLogs]}" />
-        <ListBox Grid.Row="1"
-                 Margin="{DynamicResource MAA.Thickness.MarginTopList}"
-                 ItemsSource="{Binding RootLogs}" />
+        <Border Grid.Row="1"
+                Margin="{DynamicResource MAA.Thickness.MarginTopSection}"
+                Classes="app-surface app-section">
+          <Grid RowDefinitions="Auto,*">
+            <TextBlock Classes="section-title"
+                       Text="{Binding RootTexts[Main.Footer.RootLogs]}" />
+            <ListBox Grid.Row="1"
+                     Margin="{DynamicResource MAA.Thickness.MarginTopList}"
+                     ItemsSource="{Binding RootLogs}" />
+          </Grid>
+        </Border>
       </Grid>
-    </Border>
-  </Grid>
+    </controls:AppWindowFrame.Content>
+    <controls:AppWindowFrame.ActionsContent>
+      <Button x:Name="CloseActionButton"
+              Classes="app-button app-primary"
+              Content="Close"
+              Click="OnCloseClick" />
+    </controls:AppWindowFrame.ActionsContent>
+  </controls:AppWindowFrame>
 </Window>

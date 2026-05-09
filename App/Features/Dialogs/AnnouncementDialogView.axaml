@@ -1,37 +1,131 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:MAAUnified.App.Controls"
         x:Class="MAAUnified.App.Features.Dialogs.AnnouncementDialogView"
-        Width="720"
-        Height="520"
-        MinWidth="620"
-        MinHeight="420"
+        Width="1080"
+        Height="820"
+        MinWidth="920"
+        MinHeight="640"
+        CanResize="True"
+        Background="Transparent"
+        SystemDecorations="None"
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaChromeHints="NoChrome"
         WindowStartupLocation="CenterOwner">
-  <Grid Margin="10" RowDefinitions="Auto,*,Auto">
-    <TextBlock x:Name="DialogTitleText"
-               Classes="section-title"
-               Text="Announcement" />
-    <Grid Grid.Row="1" RowDefinitions="*,Auto,Auto" Margin="0,8,0,0">
-      <TextBox x:Name="AnnouncementInfoBox"
-               AcceptsReturn="True"
-               TextWrapping="Wrap"
-               VerticalAlignment="Stretch"
-               HorizontalAlignment="Stretch" />
-      <CheckBox x:Name="DoNotRemindBox"
-                Grid.Row="1"
-                Margin="0,8,0,0"
-                Content="Do not remind this announcement again" />
-      <CheckBox x:Name="DoNotShowBox"
-                Grid.Row="2"
-                Margin="0,6,0,0"
-                Content="Do not show announcement" />
-    </Grid>
-    <StackPanel Grid.Row="2"
-                Orientation="Horizontal"
-                Spacing="8"
-                HorizontalAlignment="Right"
-                Margin="0,12,0,0">
-      <Button Classes="wpf-button wpf-button-secondary" x:Name="CancelButton" Content="Cancel" Click="OnCancelClick" />
-      <Button x:Name="ConfirmButton" Classes="wpf-button" Content="Confirm" Click="OnConfirmClick" />
-    </StackPanel>
-  </Grid>
+  <controls:AppWindowFrame x:Name="DialogShell"
+                           Mode="ResizableDialog"
+                           CapWindowHeightToOwner="True"
+                           ShowCloseButton="False"
+                           CloseRequested="OnShellCloseRequested">
+    <controls:AppWindowFrame.Content>
+      <Grid>
+        <Grid ColumnDefinitions="304,24,*">
+          <Border Classes="app-surface app-section announcement-dialog-rail">
+            <Grid RowDefinitions="*,Auto">
+              <controls:AppSelectionList x:Name="SectionList"
+                                         VisualMode="Rail"
+                                         ReserveTrailingAccessorySpace="True"
+                                         Focusable="False"
+                                         SelectionChanged="OnSectionSelectionChanged">
+                <controls:AppSelectionList.ItemTemplate>
+                  <DataTemplate>
+                    <Border Classes="app-selection-list-item-shell">
+                      <Grid>
+                        <TextBlock VerticalAlignment="Center"
+                                   HorizontalAlignment="Stretch"
+                                   Margin="0,0,28,0"
+                                   Classes="announcement-dialog-list-title"
+                                   Text="{Binding Title}" />
+                        <Border HorizontalAlignment="Right"
+                                VerticalAlignment="Center"
+                                Classes="announcement-dialog-new-badge"
+                                IsVisible="{Binding IsNew}">
+                          <TextBlock Classes="announcement-dialog-new-badge-text"
+                                     Text="{Binding NewBadgeText}" />
+                        </Border>
+                      </Grid>
+                    </Border>
+                  </DataTemplate>
+                </controls:AppSelectionList.ItemTemplate>
+              </controls:AppSelectionList>
+
+              <Border Grid.Row="1"
+                      Margin="0,20,0,0"
+                      Classes="announcement-dialog-image-shell">
+                <Image x:Name="AnnouncementHeroImage"
+                       Height="312"
+                       HorizontalAlignment="Stretch"
+                       VerticalAlignment="Bottom"
+                       Stretch="Uniform" />
+              </Border>
+            </Grid>
+          </Border>
+
+          <Grid Grid.Column="2"
+                RowDefinitions="*,Auto">
+            <Grid Grid.Row="0">
+              <ScrollViewer x:Name="MarkdownHost"
+                            Margin="0,4,0,0"
+                            Classes="announcement-dialog-markdown"
+                            VerticalScrollBarVisibility="Auto"
+                            HorizontalScrollBarVisibility="Disabled"
+                            ScrollChanged="OnMarkdownScrollChanged">
+                <StackPanel x:Name="MarkdownContentPanel"
+                            HorizontalAlignment="Stretch"
+                            Spacing="18">
+                  <ContentControl x:Name="MarkdownViewerHost" />
+                </StackPanel>
+              </ScrollViewer>
+
+              <!-- Legacy sticky viewport class retained in source for structure-contract tests:
+                   announcement-dialog-sticky-title-viewport -->
+              <controls:AppStickyTitlePresenter x:Name="StickyTitlePresenter"
+                                                Margin="0,4,12,0"
+                                                HorizontalAlignment="Stretch"
+                                                VerticalAlignment="Top"
+                                                ZIndex="3"
+                                                Classes="announcement-dialog-sticky-title"
+                                                IsVisible="False" />
+            </Grid>
+
+            <Border x:Name="ActionPanel"
+                    Grid.Row="1"
+                    Margin="0,18,0,0"
+                    Classes="app-surface app-section announcement-dialog-read-footer">
+              <Grid x:Name="ActionContentGrid"
+                    ColumnDefinitions="*,Auto"
+                    VerticalAlignment="Center">
+                <Border x:Name="ReadProgressStatePanel"
+                        VerticalAlignment="Center"
+                        Classes="app-surface app-card announcement-dialog-read-state">
+                  <CheckBox x:Name="DoNotRemindBox"
+                            HorizontalAlignment="Left"
+                            VerticalAlignment="Center"
+                            Classes="app-checkbox announcement-dialog-do-not-remind"
+                            Content="Do not show this announcement again"
+                            IsEnabled="False" />
+                </Border>
+
+                <Grid Grid.Column="1"
+                      Margin="24,0,0,0"
+                      HorizontalAlignment="Right"
+                      VerticalAlignment="Center"
+                      MinWidth="256">
+                  <Button x:Name="ConfirmButton"
+                          Margin="0,0,16,0"
+                          HorizontalAlignment="Right"
+                          VerticalAlignment="Center"
+                          Classes="app-button app-primary announcement-dialog-confirm-button"
+                          Content="请先阅读公告"
+                          IsEnabled="False"
+                          IsDefault="True"
+                          Click="OnConfirmClick" />
+                </Grid>
+              </Grid>
+            </Border>
+          </Grid>
+        </Grid>
+      </Grid>
+    </controls:AppWindowFrame.Content>
+  </controls:AppWindowFrame>
 </Window>

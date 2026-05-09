@@ -2,18 +2,21 @@ using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Globalization;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Avalonia.Threading;
 using MAAUnified.Application.Models;
 using MAAUnified.App.ViewModels.Infrastructure;
 using MAAUnified.CoreBridge;
+using MAAUnified.Compat.Runtime;
 using LegacyConfigurationKeys = MAAUnified.Compat.Constants.ConfigurationKeys;
 
 namespace MAAUnified.App.ViewModels.Copilot;
 
 public sealed partial class CopilotPageViewModel
 {
+    private const string CopilotIdPrefix = "maa://";
     private const string PrtsPlusUrl = "https://prts.plus";
     private const string MapPrtsUrl = "https://map.ark-nights.com/areas?coord_override=maa";
     private static readonly Regex InvalidNavigationStageNameRegex = new(
@@ -66,6 +69,14 @@ public sealed partial class CopilotPageViewModel
         nameof(AddListButtonTip),
         nameof(ClearButtonText),
         nameof(ClearButtonTip),
+        nameof(CopilotListLoadSingleButtonText),
+        nameof(CopilotListToggleRaidButtonText),
+        nameof(CopilotListEnableButtonText),
+        nameof(CopilotListDisableButtonText),
+        nameof(ClearAllButtonText),
+        nameof(ClearAllConfirmTitleText),
+        nameof(ClearAllConfirmMessageText),
+        nameof(ClearAllConfirmButtonText),
         nameof(RatingPromptText),
         nameof(LikeButtonText),
         nameof(DislikeButtonText),
@@ -73,6 +84,7 @@ public sealed partial class CopilotPageViewModel
         nameof(ImportBatchFilePickerTitle),
         nameof(HelpText),
         nameof(ListSelectionHint),
+        nameof(LoadedCopilotInputHint),
         nameof(RaidLabelText),
         nameof(InlineJsonHintText),
     ];
@@ -104,6 +116,8 @@ public sealed partial class CopilotPageViewModel
     private string _copilotUrl = PrtsPlusUrl;
     private string _mapUrl = MapPrtsUrl;
     private bool _suppressAutoAddLoadedCopilot;
+    private bool _suppressCopilotTaskNameListItemSync;
+    private int _copilotTaskNamePersistVersion;
     private string _lastRenderedHelpText = string.Empty;
     private IReadOnlyList<IntOption> _supportUnitUsageOptions = [];
     private IReadOnlyList<IntOption> _moduleOptions = [];
@@ -156,7 +170,9 @@ public sealed partial class CopilotPageViewModel
 
     public string PasteSetButtonTip => T("Copilot.Tip.PasteSet", "读取剪贴板并添加为作业集");
 
-    public string StartButtonText => T("Copilot.Action.Start", "开始");
+    public string StartButtonText => IsStartRequestActive
+        ? T("Copilot.Status.Starting", "启动中...")
+        : T("Copilot.Action.Start", "开始");
 
     public string StopButtonText => T("Copilot.Action.Stop", "停止");
 
@@ -218,7 +234,23 @@ public sealed partial class CopilotPageViewModel
 
     public string ClearButtonText => T("Copilot.Button.Clear", "清除");
 
-    public string ClearButtonTip => T("Copilot.Tip.ClearList", "左键清空全部\n右键仅清理未激活项");
+    public string ClearButtonTip => T("Copilot.Tip.ClearList", "删除战斗列表中的全部作业。");
+
+    public string CopilotListLoadSingleButtonText => T("Copilot.List.Button.LoadSingle", "载入单个");
+
+    public string CopilotListToggleRaidButtonText => T("Copilot.List.Button.ToggleRaid", "切换突袭");
+
+    public string CopilotListEnableButtonText => T("Copilot.List.Button.Enable", "启用");
+
+    public string CopilotListDisableButtonText => T("Copilot.List.Button.Disable", "禁用");
+
+    public string ClearAllButtonText => T("Copilot.List.Button.ClearAll", "删除全部");
+
+    public string ClearAllConfirmTitleText => T("Copilot.List.ClearAllConfirm.Title", "删除战斗列表");
+
+    public string ClearAllConfirmMessageText => T("Copilot.List.ClearAllConfirm.Message", "将删除战斗列表中的全部作业，此操作不可撤销。");
+
+    public string ClearAllConfirmButtonText => T("Copilot.List.ClearAllConfirm.Confirm", "删除全部");
 
     public string RatingPromptText => T("Copilot.Rating.Prompt", "作业怎么样？评价下吧！");
 
@@ -242,7 +274,7 @@ public sealed partial class CopilotPageViewModel
 
     public bool CanEdit => !IsRunning;
 
-    public bool ShowClipboardSetButton => CopilotTabIndex is 0 or 2;
+    public bool ShowClipboardSetButton => true;
 
     public bool Form
     {
@@ -391,7 +423,8 @@ public sealed partial class CopilotPageViewModel
 
     public bool ShowUseCopilotList => CopilotTabIndex is 0 or 2;
 
-    public bool ShowCopilotListPanel => UseCopilotList && ShowUseCopilotList;
+    public bool ShowCopilotListPanel
+        => (UseCopilotList && CopilotTabIndex is 0 or 2) || CopilotTabIndex is 1 or 3;
 
     public bool ShowUseSanityPotion => UseCopilotList && CopilotTabIndex == 0;
 
@@ -428,8 +461,79 @@ public sealed partial class CopilotPageViewModel
         set
         {
             var sanitized = InvalidNavigationStageNameRegex.Replace(value ?? string.Empty, string.Empty).Trim();
-            SetProperty(ref _copilotTaskName, sanitized);
+            if (SetProperty(ref _copilotTaskName, sanitized)
+                && !_suppressCopilotTaskNameListItemSync)
+            {
+                SyncCopilotTaskNameToSelectedItem(sanitized);
+            }
         }
+    }
+
+    private void SyncCopilotTaskNameToSelectedItem(string name)
+    {
+        var item = SelectedItem;
+        if (item is null
+            || string.Equals(item.Name, name, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        var version = ++_copilotTaskNamePersistVersion;
+        item.Name = name;
+        _ = PersistCopilotTaskNameChangeAsync(item, name, version, CancellationToken.None);
+    }
+
+    private async Task PersistCopilotTaskNameChangeAsync(
+        CopilotItemViewModel item,
+        string name,
+        int version,
+        CancellationToken cancellationToken)
+    {
+        UiOperationResult persistResult;
+        try
+        {
+            persistResult = await PersistItemsAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            if (version != _copilotTaskNamePersistVersion || !ReferenceEquals(SelectedItem, item))
+            {
+                return;
+            }
+
+            StatusMessage = T("Copilot.Status.UpdateListItemNameFailed", "更新作业名称失败。");
+            await RecordUnhandledExceptionAsync(
+                "Copilot.List.Rename",
+                ex,
+                UiErrorCode.CopilotListPersistenceFailed,
+                T("Copilot.Error.UpdateListItemPersistFail", "更新作业列表失败：列表保存失败。"),
+                cancellationToken);
+            return;
+        }
+
+        if (version != _copilotTaskNamePersistVersion || !ReferenceEquals(SelectedItem, item))
+        {
+            return;
+        }
+
+        if (!persistResult.Success)
+        {
+            StatusMessage = T("Copilot.Status.UpdateListItemNameFailed", "更新作业名称失败。");
+            LastErrorMessage = persistResult.Message;
+            await RecordFailedResultAsync(
+                "Copilot.List.Rename",
+                BuildPersistFailedResult(
+                    T("Copilot.Error.UpdateListItemPersistFail", "更新作业列表失败：列表保存失败。"),
+                    persistResult),
+                cancellationToken);
+            return;
+        }
+
+        StatusMessage = string.Format(
+            T("Copilot.Status.UpdateListItemNameSuccess", "已更新作业名称：{0}"),
+            name);
+        LastErrorMessage = string.Empty;
+        await RecordEventAsync("Copilot.List.Rename", StatusMessage, cancellationToken);
     }
 
     public bool IsFilePopupOpen
@@ -447,11 +551,38 @@ public sealed partial class CopilotPageViewModel
     public string DisplayFilename
     {
         get => _displayFilename;
-        set => SetProperty(ref _displayFilename, value ?? string.Empty);
+        set
+        {
+            if (SetProperty(ref _displayFilename, value ?? string.Empty))
+            {
+                OnPropertyChanged(nameof(LoadedCopilotInputHint));
+            }
+        }
     }
 
     public bool HasLoadedCopilot
         => !string.IsNullOrWhiteSpace(_loadedSourcePath) || !string.IsNullOrWhiteSpace(_loadedInlinePayload);
+
+    public string LoadedCopilotInputHint
+    {
+        get
+        {
+            if (!HasLoadedCopilot)
+            {
+                return string.Empty;
+            }
+
+            var display = !string.IsNullOrWhiteSpace(_loadedSourcePath)
+                ? BuildDisplayFilename(_loadedSourcePath, string.Empty)
+                : !string.IsNullOrWhiteSpace(_loadedDisplayName)
+                    ? _loadedDisplayName
+                    : T("Copilot.List.InlineJsonHint", "inline-json");
+            return string.Format(
+                CultureInfo.InvariantCulture,
+                T("Copilot.Hint.LoadedFile", "已导入作业文件：{0}"),
+                display);
+        }
+    }
 
     public bool CouldLikeWebJson
     {
@@ -568,9 +699,94 @@ public sealed partial class CopilotPageViewModel
 
     private void OnSelectedTypeIndexChanged()
     {
+        if (!_suppressSelectedTypeListItemSync)
+        {
+            SyncSelectedTypeIndexToSelectedItem();
+        }
+
         OnPropertyChanged(nameof(CopilotTabIndex));
         OnPropertyChanged(nameof(Form));
         RefreshVisibilityState();
+    }
+
+    private void SyncSelectedTypeIndexToSelectedItem()
+    {
+        var item = SelectedItem;
+        if (item is null)
+        {
+            return;
+        }
+
+        var tabIndex = Math.Clamp(SelectedTypeIndex, 0, Types.Count - 1);
+        var type = ResolveTypeDisplayNameForTab(tabIndex);
+        if (item.TabIndex == tabIndex
+            && string.Equals(item.Type, type, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        var previousTabIndex = item.TabIndex;
+        var previousType = item.Type;
+        var version = ++_selectedTypePersistVersion;
+        item.TabIndex = tabIndex;
+        item.Type = type;
+        _ = PersistSelectedTypeChangeAsync(item, previousType, previousTabIndex, version, CancellationToken.None);
+    }
+
+    private async Task PersistSelectedTypeChangeAsync(
+        CopilotItemViewModel item,
+        string previousType,
+        int? previousTabIndex,
+        int version,
+        CancellationToken cancellationToken)
+    {
+        UiOperationResult persistResult;
+        try
+        {
+            persistResult = await PersistItemsAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            if (version != _selectedTypePersistVersion || !ReferenceEquals(SelectedItem, item))
+            {
+                return;
+            }
+
+            item.Type = previousType;
+            item.TabIndex = previousTabIndex;
+            StatusMessage = T("Copilot.Status.UpdateListItemFailed", "更新作业失败。");
+            await RecordUnhandledExceptionAsync(
+                "Copilot.List.UpdateType",
+                ex,
+                UiErrorCode.CopilotListPersistenceFailed,
+                T("Copilot.Error.UpdateListItemPersistFail", "更新作业列表失败：列表保存失败。"),
+                cancellationToken);
+            return;
+        }
+
+        if (version != _selectedTypePersistVersion || !ReferenceEquals(SelectedItem, item))
+        {
+            return;
+        }
+
+        if (!persistResult.Success)
+        {
+            item.Type = previousType;
+            item.TabIndex = previousTabIndex;
+            StatusMessage = T("Copilot.Status.UpdateListItemFailed", "更新作业失败。");
+            LastErrorMessage = persistResult.Message;
+            await RecordFailedResultAsync(
+                "Copilot.List.UpdateType",
+                BuildPersistFailedResult(
+                    T("Copilot.Error.UpdateListItemPersistFail", "更新作业列表失败：列表保存失败。"),
+                    persistResult),
+                cancellationToken);
+            return;
+        }
+
+        StatusMessage = T("Copilot.Status.UpdateListItemSuccess", "已更新作业。");
+        LastErrorMessage = string.Empty;
+        await RecordEventAsync("Copilot.List.UpdateType", StatusMessage, cancellationToken);
     }
 
     private void RefreshVisibilityState()
@@ -675,11 +891,11 @@ public sealed partial class CopilotPageViewModel
 
     private async Task PersistGlobalSettingCoreAsync(string key, string value)
     {
-        var result = await Runtime.SettingsFeatureService.SaveGlobalSettingAsync(key, value);
-        if (!result.Success)
-        {
-            await RecordFailedResultAsync($"Config.{key}", result);
-        }
+        _ = await RunTrackedConfigurationSaveAsync(
+            $"Copilot.Config.{key}",
+            Texts.GetOrDefault("Copilot.Title", "抄作业"),
+            $"Config.{key}.Save",
+            ct => Runtime.SettingsFeatureService.SaveGlobalSettingAsync(key, value, ct));
     }
 
     private void OnItemsCollectionChangedForWpfParity(object? sender, NotifyCollectionChangedEventArgs e)
@@ -724,19 +940,7 @@ public sealed partial class CopilotPageViewModel
 
     private void OnTrackedCopilotItemPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (sender is not CopilotItemViewModel)
-        {
-            return;
-        }
-
-        if (e.PropertyName is nameof(CopilotItemViewModel.Status)
-            or nameof(CopilotItemViewModel.DisplayName)
-            or nameof(CopilotItemViewModel.ExecutionPathHint))
-        {
-            return;
-        }
-
-        _ = PersistItemsAsync(CancellationToken.None);
+        // Item setters only notify UI. List persistence is triggered by page-level operations.
     }
 
     public void ToggleFilePopup()
@@ -826,6 +1030,47 @@ public sealed partial class CopilotPageViewModel
             return;
         }
 
+        if (LooksLikeCopilotCodeSource(raw))
+        {
+            var remote = await Runtime.CopilotFeatureService.LoadFromCodeAsync(raw, cancellationToken);
+            if (!remote.Success || remote.Value is null)
+            {
+                StatusMessage = T("Copilot.Status.LoadCurrentFailed", "读取作业失败。");
+                LastErrorMessage = remote.Message;
+                await RecordFailedResultAsync(
+                    "Copilot.LoadCurrent.Code",
+                    UiOperationResult.Fail(remote.Error?.Code ?? UiErrorCode.CopilotPayloadInvalidType, remote.Message, remote.Error?.Details),
+                    cancellationToken);
+                return;
+            }
+
+            if (!TryReadLoadedCopilotDescriptor(remote.Value.PayloadJson, sourcePath: null, out var descriptor, out var warning))
+            {
+                StatusMessage = T("Copilot.Status.LoadCurrentFailed", "读取作业失败。");
+                LastErrorMessage = warning;
+                await RecordFailedResultAsync(
+                    "Copilot.LoadCurrent.Code",
+                    UiOperationResult.Fail(UiErrorCode.CopilotPayloadInvalidType, warning),
+                    cancellationToken);
+                return;
+            }
+
+            if (descriptor.CopilotId <= 0)
+            {
+                descriptor = descriptor with { CopilotId = remote.Value.CopilotId };
+            }
+
+            ApplyLoadedCopilot(string.Empty, remote.Value.PayloadJson, descriptor);
+            var displayCode = BuildCopilotCodeDisplay(remote.Value.CopilotId);
+            DisplayFilename = displayCode;
+            FilePath = displayCode;
+            StatusMessage = remote.Message;
+            LastErrorMessage = string.Empty;
+            await RecordEventAsync("Copilot.LoadCurrent.Code", StatusMessage, cancellationToken);
+            await TryAutoAddLoadedCopilotAsync(cancellationToken);
+            return;
+        }
+
         if (raw.StartsWith('{') || raw.StartsWith('['))
         {
             await LoadCurrentFromClipboardAsync(raw, cancellationToken);
@@ -879,15 +1124,56 @@ public sealed partial class CopilotPageViewModel
         }
 
         ApplyLoadedCopilot(normalizedPath, string.Empty, descriptor);
-        StatusMessage = result.Message;
+        StatusMessage = string.Empty;
         LastErrorMessage = string.Empty;
-        await RecordEventAsync("Copilot.LoadCurrent.File", StatusMessage, cancellationToken);
+        await RecordEventAsync("Copilot.LoadCurrent.File", result.Message, cancellationToken);
         await TryAutoAddLoadedCopilotAsync(cancellationToken);
     }
 
     public async Task LoadCurrentFromClipboardAsync(string payload, CancellationToken cancellationToken = default)
     {
         var normalized = (payload ?? string.Empty).Trim();
+        if (LooksLikeCopilotCodeSource(normalized))
+        {
+            var remote = await Runtime.CopilotFeatureService.LoadFromCodeAsync(normalized, cancellationToken);
+            if (!remote.Success || remote.Value is null)
+            {
+                StatusMessage = T("Copilot.Status.LoadClipboardFailed", "读取剪贴板作业失败。");
+                LastErrorMessage = remote.Message;
+                await RecordFailedResultAsync(
+                    "Copilot.LoadCurrent.Clipboard",
+                    UiOperationResult.Fail(remote.Error?.Code ?? UiErrorCode.CopilotPayloadInvalidType, remote.Message, remote.Error?.Details),
+                    cancellationToken);
+                return;
+            }
+
+            if (!TryReadLoadedCopilotDescriptor(remote.Value.PayloadJson, sourcePath: null, out var remoteDescriptor, out var remoteWarning))
+            {
+                StatusMessage = T("Copilot.Status.LoadClipboardFailed", "读取剪贴板作业失败。");
+                LastErrorMessage = remoteWarning;
+                await RecordFailedResultAsync(
+                    "Copilot.LoadCurrent.Clipboard",
+                    UiOperationResult.Fail(UiErrorCode.CopilotPayloadInvalidType, remoteWarning),
+                    cancellationToken);
+                return;
+            }
+
+            if (remoteDescriptor.CopilotId <= 0)
+            {
+                remoteDescriptor = remoteDescriptor with { CopilotId = remote.Value.CopilotId };
+            }
+
+            ApplyLoadedCopilot(string.Empty, remote.Value.PayloadJson, remoteDescriptor);
+            var displayCode = BuildCopilotCodeDisplay(remote.Value.CopilotId);
+            DisplayFilename = displayCode;
+            FilePath = displayCode;
+            StatusMessage = remote.Message;
+            LastErrorMessage = string.Empty;
+            await RecordEventAsync("Copilot.LoadCurrent.Clipboard", StatusMessage, cancellationToken);
+            await TryAutoAddLoadedCopilotAsync(cancellationToken);
+            return;
+        }
+
         var result = await Runtime.CopilotFeatureService.ImportFromClipboardAsync(normalized, cancellationToken);
         if (!result.Success)
         {
@@ -924,15 +1210,63 @@ public sealed partial class CopilotPageViewModel
 
     public async Task LoadCurrentFromClipboardSetAsync(string payload, CancellationToken cancellationToken = default)
     {
-        if (CopilotTabIndex is 1 or 3)
+        var normalizedPayload = (payload ?? string.Empty).Trim();
+        if (LooksLikeCopilotCodeSource(normalizedPayload))
         {
+            var setResult = await Runtime.CopilotFeatureService.LoadSetFromCodeAsync(normalizedPayload, cancellationToken);
+            if (!setResult.Success || setResult.Value is null)
+            {
+                StatusMessage = T("Copilot.Status.LoadSetFailed", "读取作业集失败。");
+                LastErrorMessage = setResult.Message;
+                await RecordFailedResultAsync(
+                    "Copilot.LoadSet.Clipboard",
+                    UiOperationResult.Fail(setResult.Error?.Code ?? UiErrorCode.CopilotPayloadInvalidType, setResult.Message, setResult.Error?.Details),
+                    cancellationToken);
+                return;
+            }
+
+            var remoteSet = setResult.Value;
+            UseCopilotList = true;
+            var remoteAdded = 0;
+            foreach (var remote in remoteSet.Items)
+            {
+                if (!TryReadLoadedCopilotDescriptor(remote.PayloadJson, sourcePath: null, out var descriptor, out _))
+                {
+                    continue;
+                }
+
+                if (descriptor.CopilotId <= 0)
+                {
+                    descriptor = descriptor with { CopilotId = remote.CopilotId };
+                }
+
+                Items.Add(CreateListItemFromDescriptor(descriptor, string.Empty, remote.PayloadJson, isRaid: false));
+                remoteAdded++;
+            }
+
+            if (remoteAdded == 0)
+            {
+                StatusMessage = T("Copilot.Status.LoadSetFailed", "读取作业集失败。");
+                LastErrorMessage = T("Copilot.Error.LoadSetNoRecognized", "作业集内没有可识别的作业条目。");
+                return;
+            }
+
+            SetSelectedItemSilently(Items.LastOrDefault());
+            await PersistItemsAsync(cancellationToken);
+            StatusMessage = setResult.Message;
+            LastErrorMessage = remoteSet.FailedCopilotIds.Count > 0
+                ? string.Format(
+                    T("Copilot.Status.LoadSetPartialFailed", "以下作业加载失败：{0}"),
+                    string.Join(", ", remoteSet.FailedCopilotIds))
+                : string.Empty;
+            await RecordEventAsync("Copilot.LoadSet.Clipboard", StatusMessage, cancellationToken);
             return;
         }
 
         JsonNode? root;
         try
         {
-            root = JsonNode.Parse((payload ?? string.Empty).Trim());
+            root = JsonNode.Parse(normalizedPayload);
         }
         catch (Exception ex)
         {
@@ -1175,7 +1509,7 @@ public sealed partial class CopilotPageViewModel
             payload.Add(new JsonObject
             {
                 ["name"] = item.Name.Trim(),
-                ["skill"] = Math.Clamp(item.Skill, 1, 3),
+                ["skill"] = Math.Clamp(item.Skill, 0, 3),
                 ["module"] = Math.Clamp(item.Module, 0, 4),
             });
         }
@@ -1217,6 +1551,7 @@ public sealed partial class CopilotPageViewModel
             ? T("Copilot.Status.LoadedFeedbackLikeSuccess", "已提交点赞。")
             : T("Copilot.Status.LoadedFeedbackDislikeSuccess", "已提交点踩。");
         LastErrorMessage = string.Empty;
+        CouldLikeWebJson = false;
         await RecordEventAsync("Copilot.Feedback.Loaded", StatusMessage, cancellationToken);
     }
 
@@ -1247,11 +1582,12 @@ public sealed partial class CopilotPageViewModel
         _loadedCopilotId = descriptor.CopilotId;
         FilePath = !string.IsNullOrWhiteSpace(sourcePath) ? sourcePath : inlinePayload;
         DisplayFilename = BuildDisplayFilename(sourcePath, inlinePayload);
-        CopilotTaskName = descriptor.StageName;
+        SetCopilotTaskNameFromLoadedCopilot(descriptor.StageName);
         CopilotUrl = PrtsPlusUrl;
         MapUrl = MapPrtsUrl;
         CouldLikeWebJson = descriptor.CopilotId > 0;
         OnPropertyChanged(nameof(HasLoadedCopilot));
+        OnPropertyChanged(nameof(LoadedCopilotInputHint));
     }
 
     private void ClearLoadedCopilot()
@@ -1264,9 +1600,24 @@ public sealed partial class CopilotPageViewModel
         _loadedCopilotId = 0;
         FilePath = string.Empty;
         DisplayFilename = string.Empty;
-        CopilotTaskName = string.Empty;
+        SetCopilotTaskNameFromLoadedCopilot(string.Empty);
         CouldLikeWebJson = false;
         OnPropertyChanged(nameof(HasLoadedCopilot));
+        OnPropertyChanged(nameof(LoadedCopilotInputHint));
+    }
+
+    private void SetCopilotTaskNameFromLoadedCopilot(string name)
+    {
+        var previousSuppress = _suppressCopilotTaskNameListItemSync;
+        _suppressCopilotTaskNameListItemSync = true;
+        try
+        {
+            CopilotTaskName = name;
+        }
+        finally
+        {
+            _suppressCopilotTaskNameListItemSync = previousSuppress;
+        }
     }
 
     private string BuildDisplayFilename(string sourcePath, string inlinePayload)
@@ -1288,7 +1639,7 @@ public sealed partial class CopilotPageViewModel
 
     private static string ResolveCopilotResourceRoot()
     {
-        return Path.Combine(AppContext.BaseDirectory, "resource", "copilot");
+        return Path.Combine(RuntimeLayout.ResolveRuntimeBaseDirectory(), "resource", "copilot");
     }
 
     private CopilotFileItemViewModel CreateFileNode(string filePath, string root)
@@ -1338,7 +1689,34 @@ public sealed partial class CopilotPageViewModel
             return raw;
         }
 
-        return Path.Combine(AppContext.BaseDirectory, raw);
+        return Path.Combine(RuntimeLayout.ResolveRuntimeBaseDirectory(), raw);
+    }
+
+    private static bool LooksLikeCopilotCodeSource(string source)
+    {
+        if (string.IsNullOrWhiteSpace(source))
+        {
+            return false;
+        }
+
+        var normalized = source.Trim();
+        if (int.TryParse(normalized, out _))
+        {
+            return true;
+        }
+
+        if (!normalized.StartsWith(CopilotIdPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var remainder = normalized[CopilotIdPrefix.Length..].TrimStart('/');
+        return int.TryParse(remainder, out _);
+    }
+
+    private static string BuildCopilotCodeDisplay(int copilotId)
+    {
+        return $"{CopilotIdPrefix}{copilotId}";
     }
 
     private static string ResolveTypeDisplayNameForTab(int tabIndex)
@@ -1492,7 +1870,7 @@ public sealed partial class CopilotPageViewModel
                 fallbackItems.Add(new CopilotUserAdditionalItemViewModel
                 {
                     Name = parts[0],
-                    Skill = parts.Length > 1 && int.TryParse(parts[1], out var skill) ? Math.Clamp(skill, 1, 3) : 1,
+                    Skill = parts.Length > 1 && int.TryParse(parts[1], out var skill) ? Math.Clamp(skill, 0, 3) : 0,
                     Module = 0,
                 });
             }
@@ -1517,7 +1895,7 @@ public sealed partial class CopilotPageViewModel
             parsedItems.Add(new CopilotUserAdditionalItemViewModel
             {
                 Name = name,
-                Skill = Math.Clamp(ReadJsonInt(item, "skill") ?? 1, 1, 3),
+                Skill = Math.Clamp(ReadJsonInt(item, "skill") ?? 0, 0, 3),
                 Module = Math.Clamp(ReadJsonInt(item, "module") ?? 0, 0, 4),
             });
         }
@@ -1538,7 +1916,7 @@ public sealed partial class CopilotPageViewModel
             result.Add(new JsonObject
             {
                 ["name"] = item.Name.Trim(),
-                ["skill"] = Math.Clamp(item.Skill, 1, 3),
+                ["skill"] = Math.Clamp(item.Skill, 0, 3),
                 ["module"] = Math.Clamp(item.Module, 0, 4),
             });
         }
@@ -1943,7 +2321,7 @@ public sealed partial class CopilotPageViewModel
         }
 
         var debugDirectory = Path.GetDirectoryName(Runtime.DiagnosticsService.EventLogPath)
-            ?? Path.Combine(AppContext.BaseDirectory, "debug");
+            ?? Path.Combine(RuntimeLayout.ResolveRuntimeBaseDirectory(), "debug");
         var directory = Path.Combine(debugDirectory, "copilot-cache");
         Directory.CreateDirectory(directory);
         var baseName = string.IsNullOrWhiteSpace(displayName) ? "copilot-inline" : displayName;
@@ -2028,7 +2406,7 @@ public sealed partial class CopilotPageViewModel
     public sealed class CopilotUserAdditionalItemViewModel : ObservableObject
     {
         private string _name = string.Empty;
-        private int _skill = 1;
+        private int _skill;
         private int _module;
 
         public string Name
@@ -2040,7 +2418,7 @@ public sealed partial class CopilotPageViewModel
         public int Skill
         {
             get => _skill;
-            set => SetProperty(ref _skill, Math.Clamp(value, 1, 3));
+            set => SetProperty(ref _skill, Math.Clamp(value, 0, 3));
         }
 
         public int Module

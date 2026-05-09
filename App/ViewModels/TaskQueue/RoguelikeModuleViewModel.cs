@@ -1,11 +1,13 @@
 using System.ComponentModel;
 using System.Text.Json.Nodes;
+using MAAUnified.App.Services;
 using MAAUnified.Application.Models;
 using MAAUnified.Application.Models.TaskParams;
 using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Localization;
 using MAAUnified.Application.Services.TaskParams;
 using MAAUnified.Compat.Constants;
+using MAAUnified.Compat.Runtime;
 
 namespace MAAUnified.App.ViewModels.TaskQueue;
 
@@ -1454,9 +1456,10 @@ public sealed class RoguelikeModuleViewModel : TypedTaskModuleViewModelBase<Rogu
 
     private static string? ResolveRoguelikeRecruitmentFilePath(string theme)
     {
+        var runtimeBaseDirectory = RuntimeLayout.ResolveRuntimeBaseDirectory();
         var candidates = new[]
         {
-            Path.Combine(AppContext.BaseDirectory, "resource", "roguelike", theme, "recruitment.json"),
+            Path.Combine(runtimeBaseDirectory, "resource", "roguelike", theme, "recruitment.json"),
             Path.Combine(Environment.CurrentDirectory, "resource", "roguelike", theme, "recruitment.json"),
         };
 
@@ -1473,9 +1476,10 @@ public sealed class RoguelikeModuleViewModel : TypedTaskModuleViewModelBase<Rogu
 
     private static string? ResolveBattleDataFilePath()
     {
+        var runtimeBaseDirectory = RuntimeLayout.ResolveRuntimeBaseDirectory();
         var candidates = new[]
         {
-            Path.Combine(AppContext.BaseDirectory, "resource", "battle_data.json"),
+            Path.Combine(runtimeBaseDirectory, "resource", "battle_data.json"),
             Path.Combine(Environment.CurrentDirectory, "resource", "battle_data.json"),
         };
 
@@ -1715,26 +1719,25 @@ public sealed class RoguelikeModuleViewModel : TypedTaskModuleViewModelBase<Rogu
 
     private async Task PersistDelayAbortUntilCombatCompleteAsync(bool value)
     {
-        try
-        {
-            if (Runtime.ConfigurationService.TryGetCurrentProfile(out var profile))
+        _ = await ConfigurationSaveTracker.Instance.RunTrackedAsync(
+            "TaskQueue.Roguelike.DelayAbortUntilCombatComplete",
+            Texts.GetOrDefault("Roguelike.Title", "集成战略"),
+            "Roguelike.DelayAbortUntilCombatComplete.Save",
+            Runtime.DiagnosticsService,
+            async cancellationToken =>
             {
-                profile.Values[DelayAbortUntilCombatCompleteConfigKey] = JsonValue.Create(value);
-            }
-            else
-            {
-                Runtime.ConfigurationService.CurrentConfig.GlobalValues[DelayAbortUntilCombatCompleteConfigKey] = JsonValue.Create(value);
-            }
+                if (Runtime.ConfigurationService.TryGetCurrentProfile(out var profile))
+                {
+                    profile.Values[DelayAbortUntilCombatCompleteConfigKey] = JsonValue.Create(value);
+                }
+                else
+                {
+                    Runtime.ConfigurationService.CurrentConfig.GlobalValues[DelayAbortUntilCombatCompleteConfigKey] = JsonValue.Create(value);
+                }
 
-            await Runtime.ConfigurationService.SaveAsync();
-        }
-        catch (Exception ex)
-        {
-            await Runtime.DiagnosticsService.RecordErrorAsync(
-                "Roguelike.DelayAbortUntilCombatComplete.Save",
-                "Failed to persist Roguelike delay-abort setting.",
-                ex);
-        }
+                await Runtime.ConfigurationService.SaveAsync(cancellationToken);
+                return true;
+            });
     }
 
     private void ApplyPersistentDelayAbortSetting(bool value)
@@ -1826,7 +1829,7 @@ public sealed class RoguelikeModuleViewModel : TypedTaskModuleViewModelBase<Rogu
             return Texts.GetOrDefault("Roguelike.StartWithSelectList", "Expected rewards in collectible start mode");
         }
 
-        return string.Join(" / ", selected);
+        return string.Join(", ", selected);
     }
 
     private void AppendCollectibleSummaryToken(List<string> selected, bool enabled, string textKey, string fallback)

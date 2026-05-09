@@ -17,6 +17,7 @@ public enum DialogReturnSemantic
     Confirm = 0,
     Cancel = 1,
     Close = 2,
+    Details = 3,
 }
 
 public sealed record DialogTraceToken(
@@ -107,7 +108,6 @@ public sealed record AnnouncementDialogRequest(
     DialogChromeCatalog? Chrome = null);
 
 public sealed record AnnouncementDialogPayload(
-    string AnnouncementInfo,
     bool DoNotRemindThisAnnouncementAgain,
     bool DoNotShowAnnouncement);
 
@@ -197,6 +197,8 @@ public sealed record AchievementListDialogRequest(
     string ConfirmText = "Confirm",
     string CancelText = "Cancel",
     string FilterWatermark = "Filter",
+    int UnlockedCount = 0,
+    int TotalCount = 0,
     DialogChromeCatalog? Chrome = null);
 
 public sealed record AchievementListDialogPayload(
@@ -208,6 +210,7 @@ public sealed record TextDialogRequest(
     string Prompt,
     string DefaultText,
     bool MultiLine = false,
+    bool ReadOnlyContent = false,
     string ConfirmText = "Confirm",
     string CancelText = "Cancel",
     DialogChromeCatalog? Chrome = null);

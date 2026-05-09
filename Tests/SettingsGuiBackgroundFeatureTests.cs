@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text.Json.Nodes;
 using Avalonia.Controls;
+using Avalonia.Threading;
 using MAAUnified.App.Features.Settings;
 using MAAUnified.App.ViewModels;
 using MAAUnified.App.ViewModels.Settings;
@@ -35,6 +36,7 @@ public sealed class SettingsGuiBackgroundFeatureTests
         vm.Theme = "Dark";
         SelectLanguageThroughView(view, vm, "en-us");
         vm.UseTray = false;
+        vm.UseNotify = false;
         vm.MinimizeToTray = true;
         vm.WindowTitleScrollable = false;
         vm.BackgroundImagePath = path;
@@ -54,6 +56,7 @@ public sealed class SettingsGuiBackgroundFeatureTests
         Assert.Equal("en-us", vm.SelectedLanguageValue);
         Assert.Equal("en-us", vm.SelectedLanguageOption?.Value);
         Assert.Equal("False", ReadGlobalString(fixture.Config, ConfigurationKeys.UseTray));
+        Assert.Equal("False", ReadGlobalString(fixture.Config, ConfigurationKeys.UseNotify));
         Assert.Equal("False", ReadGlobalString(fixture.Config, ConfigurationKeys.MinimizeToTray));
         Assert.Equal("False", ReadGlobalString(fixture.Config, ConfigurationKeys.WindowTitleScrollable));
         Assert.Equal(path, ReadGlobalString(fixture.Config, ConfigurationKeys.BackgroundImagePath));
@@ -149,6 +152,13 @@ public sealed class SettingsGuiBackgroundFeatureTests
         var originalInverseSwitchable = FindDisplay(vm.InverseClearModeOptions, "ClearInverse");
         var originalVersionChannelBeta = FindDisplay(vm.VersionUpdateVersionTypeOptions, "Beta");
         var originalResourceSourceMirror = FindDisplay(vm.VersionUpdateResourceSourceOptions, "MirrorChyan");
+        var selectedThemeBeforeLanguageChange = vm.SelectedThemeOption;
+        var selectedOperNameBeforeLanguageChange = vm.SelectedOperNameLanguageOption;
+        var selectedStretchBeforeLanguageChange = vm.SelectedBackgroundStretchModeOption;
+        var selectedInverseBeforeLanguageChange = vm.SelectedInverseClearModeOption;
+        var selectedVersionTypeBeforeLanguageChange = vm.SelectedVersionUpdateVersionTypeOption;
+        var selectedResourceSourceBeforeLanguageChange = vm.SelectedVersionUpdateResourceSourceOption;
+        var selectedProxyTypeBeforeLanguageChange = vm.SelectedVersionUpdateProxyTypeOption;
 
         await vm.ChangeLanguageAsync("en-us");
         await WaitUntilAsync(() => string.Equals(vm.Language, "en-us", StringComparison.OrdinalIgnoreCase));
@@ -175,6 +185,21 @@ public sealed class SettingsGuiBackgroundFeatureTests
         Assert.Equal("Beta", vm.SelectedVersionUpdateVersionTypeOption?.Value);
         Assert.Equal("MirrorChyan", vm.SelectedVersionUpdateResourceSourceOption?.Value);
         Assert.Equal("socks5", vm.SelectedVersionUpdateProxyTypeOption?.Value);
+
+        Assert.NotSame(selectedThemeBeforeLanguageChange, vm.SelectedThemeOption);
+        Assert.NotSame(selectedOperNameBeforeLanguageChange, vm.SelectedOperNameLanguageOption);
+        Assert.NotSame(selectedStretchBeforeLanguageChange, vm.SelectedBackgroundStretchModeOption);
+        Assert.NotSame(selectedInverseBeforeLanguageChange, vm.SelectedInverseClearModeOption);
+        Assert.NotSame(selectedVersionTypeBeforeLanguageChange, vm.SelectedVersionUpdateVersionTypeOption);
+        Assert.NotSame(selectedResourceSourceBeforeLanguageChange, vm.SelectedVersionUpdateResourceSourceOption);
+        Assert.NotSame(selectedProxyTypeBeforeLanguageChange, vm.SelectedVersionUpdateProxyTypeOption);
+        Assert.Equal(selectedThemeBeforeLanguageChange, vm.SelectedThemeOption);
+        Assert.Equal(selectedOperNameBeforeLanguageChange, vm.SelectedOperNameLanguageOption);
+        Assert.Equal(selectedStretchBeforeLanguageChange, vm.SelectedBackgroundStretchModeOption);
+        Assert.Equal(selectedInverseBeforeLanguageChange, vm.SelectedInverseClearModeOption);
+        Assert.Equal(selectedVersionTypeBeforeLanguageChange, vm.SelectedVersionUpdateVersionTypeOption);
+        Assert.Equal(selectedResourceSourceBeforeLanguageChange, vm.SelectedVersionUpdateResourceSourceOption);
+        Assert.Equal(selectedProxyTypeBeforeLanguageChange, vm.SelectedVersionUpdateProxyTypeOption);
     }
 
     [Fact]
@@ -185,26 +210,41 @@ public sealed class SettingsGuiBackgroundFeatureTests
         await vm.InitializeAsync();
         var settingsChanged = new List<string>();
         var connectChanged = new List<string>();
+        var changeLock = new object();
         vm.PropertyChanged += (_, e) =>
         {
             if (!string.IsNullOrWhiteSpace(e.PropertyName))
             {
-                settingsChanged.Add(e.PropertyName);
+                lock (changeLock)
+                {
+                    settingsChanged.Add(e.PropertyName);
+                }
             }
         };
         vm.ConnectionGameSharedState.PropertyChanged += (_, e) =>
         {
             if (!string.IsNullOrWhiteSpace(e.PropertyName))
             {
-                connectChanged.Add(e.PropertyName);
+                lock (changeLock)
+                {
+                    connectChanged.Add(e.PropertyName);
+                }
             }
         };
 
         await vm.ChangeLanguageAsync("en-us");
         await WaitUntilAsync(() => string.Equals(vm.Language, "en-us", StringComparison.OrdinalIgnoreCase));
 
-        Assert.Contains(nameof(SettingsPageViewModel.RootTexts), settingsChanged);
-        Assert.Contains(nameof(ConnectionGameSharedStateViewModel.RootTexts), connectChanged);
+        string[] settingsSnapshot;
+        string[] connectSnapshot;
+        lock (changeLock)
+        {
+            settingsSnapshot = settingsChanged.ToArray();
+            connectSnapshot = connectChanged.ToArray();
+        }
+
+        Assert.Contains(nameof(SettingsPageViewModel.RootTexts), settingsSnapshot);
+        Assert.Contains(nameof(ConnectionGameSharedStateViewModel.RootTexts), connectSnapshot);
     }
 
     [Fact]
@@ -341,6 +381,7 @@ public sealed class SettingsGuiBackgroundFeatureTests
                     IsUpdateAvailable: true,
                     DisplayVersion: "2026-04-03 10:00:00",
                     ReleaseNote: "episode",
+                    VersionTimestamp: null,
                     RequiresMirrorChyanCdk: true,
                     DownloadUrl: null),
                 "检测到资源更新，可手动更新。"),
@@ -348,15 +389,66 @@ public sealed class SettingsGuiBackgroundFeatureTests
         await using var fixture = await RuntimeFixture.CreateAsync(versionUpdateFeatureService: versionUpdate);
         var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
         await vm.InitializeAsync();
+        vm.VersionUpdateResourceSource = "MirrorChyan";
 
         Assert.False(vm.HasPendingVersionUpdateAvailability);
         Assert.False(vm.HasPendingResourceUpdateAvailability);
 
         await vm.RunStartupVersionUpdateCheckAsync();
 
-        Assert.False(vm.HasPendingVersionUpdateAvailability);
-        Assert.False(vm.HasPendingResourceUpdateAvailability);
+        Assert.True(vm.HasPendingVersionUpdateAvailability);
+        Assert.True(vm.HasPendingResourceUpdateAvailability);
+        Assert.Contains("episode", vm.PendingResourceUpdateSummary, StringComparison.Ordinal);
+        Assert.Equal(1, versionUpdate.CheckResourceCallCount);
+        Assert.Equal(0, versionUpdate.UpdateResourceCallCount);
+        var bridge = Assert.IsType<FakeBridge>(fixture.Runtime.CoreBridge);
+        Assert.Equal(0, bridge.ReloadResourceCallCount);
+    }
+
+    [Fact]
+    public async Task StartupVersionUpdateCheck_WhenGithubResourceUpdateAvailable_ShouldNotAutoApply()
+    {
+        var versionUpdate = new SpyVersionUpdateFeatureService
+        {
+            CheckResourceUpdateResult = UiOperationResult<ResourceUpdateCheckResult>.Ok(
+                new ResourceUpdateCheckResult(
+                    IsUpdateAvailable: true,
+                    DisplayVersion: "2026-04-22 08:48:01",
+                    ReleaseNote: "episode",
+                    VersionTimestamp: null,
+                    RequiresMirrorChyanCdk: false,
+                    DownloadUrl: "https://example.com/resource.zip"),
+                "检测到资源更新，可手动更新。"),
+        };
+        await using var fixture = await RuntimeFixture.CreateAsync(versionUpdateFeatureService: versionUpdate);
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        vm.VersionUpdateResourceSource = "Github";
+
+        await vm.RunStartupVersionUpdateCheckAsync();
+
+        Assert.True(vm.HasPendingResourceUpdateAvailability);
+        Assert.Contains("episode", vm.PendingResourceUpdateSummary, StringComparison.Ordinal);
+        Assert.Equal(1, versionUpdate.CheckResourceCallCount);
+        Assert.Equal(0, versionUpdate.UpdateResourceCallCount);
+        var bridge = Assert.IsType<FakeBridge>(fixture.Runtime.CoreBridge);
+        Assert.Equal(0, bridge.ReloadResourceCallCount);
+    }
+
+    [Fact]
+    public async Task ManualUpdateResource_WhenMirrorChyanWithoutCdk_ShouldShortCircuitWithLocalizedGuidance()
+    {
+        var versionUpdate = new SpyVersionUpdateFeatureService();
+        await using var fixture = await RuntimeFixture.CreateAsync(versionUpdateFeatureService: versionUpdate);
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        vm.VersionUpdateResourceSource = "MirrorChyan";
+        vm.VersionUpdateMirrorChyanCdk = string.Empty;
+
+        await vm.ManualUpdateResourceAsync();
+
         Assert.Equal(0, versionUpdate.CheckResourceCallCount);
+        Assert.Contains("CDK", vm.VersionUpdateStatusMessage, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -369,6 +461,7 @@ public sealed class SettingsGuiBackgroundFeatureTests
                     IsUpdateAvailable: false,
                     DisplayVersion: string.Empty,
                     ReleaseNote: string.Empty,
+                    VersionTimestamp: null,
                     RequiresMirrorChyanCdk: false,
                     DownloadUrl: null),
                 "资源已是最新版本。"),
@@ -383,6 +476,76 @@ public sealed class SettingsGuiBackgroundFeatureTests
         Assert.Equal(0, versionUpdate.UpdateResourceCallCount);
         Assert.Contains("最新", vm.VersionUpdateStatusMessage, StringComparison.Ordinal);
         Assert.False(vm.HasPendingResourceUpdateAvailability);
+    }
+
+    [Fact]
+    public async Task ManualUpdateResource_WhenDownloading_ShouldShowProgressInSettings()
+    {
+        var versionUpdate = new SpyVersionUpdateFeatureService
+        {
+            EmitResourceProgress = true,
+            CheckResourceUpdateResult = UiOperationResult<ResourceUpdateCheckResult>.Ok(
+                new ResourceUpdateCheckResult(
+                    IsUpdateAvailable: true,
+                    DisplayVersion: "2026-04-09",
+                    ReleaseNote: "2026-04-09",
+                    VersionTimestamp: null,
+                    RequiresMirrorChyanCdk: false,
+                    DownloadUrl: "https://example.com/resource.zip"),
+                "检测到资源更新。"),
+        };
+        await using var fixture = await RuntimeFixture.CreateAsync(versionUpdateFeatureService: versionUpdate);
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        await vm.ManualUpdateResourceAsync();
+
+        await WaitUntilAsync(() =>
+        {
+            Dispatcher.UIThread.RunJobs(null);
+            return vm.VersionUpdateActivityMessage.Contains("游戏资源已更新", StringComparison.Ordinal);
+        });
+        Assert.Contains("游戏资源已更新", vm.VersionUpdateActivityMessage, StringComparison.Ordinal);
+        Assert.Contains("资源更新完成", vm.VersionUpdateStatusMessage, StringComparison.Ordinal);
+        var bridge = Assert.IsType<FakeBridge>(fixture.Runtime.CoreBridge);
+        Assert.Equal(1, bridge.ReloadResourceCallCount);
+    }
+
+    [Fact]
+    public async Task CheckVersionUpdateAsync_WhenPackageDownloads_ShouldShowProgressInSettings()
+    {
+        var versionUpdate = new SpyVersionUpdateFeatureService
+        {
+            EmitSoftwareProgress = true,
+            CheckForUpdatesResult = UiOperationResult<VersionUpdateCheckResult>.Ok(
+                new VersionUpdateCheckResult(
+                    Channel: "Stable",
+                    CurrentVersion: "v1.0.0",
+                    TargetVersion: "v1.1.0",
+                    ReleaseName: "v1.1.0",
+                    Summary: "summary",
+                    Body: "body",
+                    PackageName: "MAA-v1.1.0-win-x64.zip",
+                    PackageDownloadUrl: new Uri("https://example.com/MAA-v1.1.0-win-x64.zip"),
+                    PackageSize: 64 * 1024 * 1024,
+                    IsNewVersion: true,
+                    HasPackage: true,
+                    PreparedPackagePath: "/tmp/MAA-v1.1.0-win-x64.zip"),
+                "检测到新版本。"),
+        };
+        await using var fixture = await RuntimeFixture.CreateAsync(versionUpdateFeatureService: versionUpdate);
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        await vm.CheckVersionUpdateAsync();
+
+        await WaitUntilAsync(() =>
+        {
+            Dispatcher.UIThread.RunJobs(null);
+            return vm.VersionUpdateActivityMessage.Contains("下载完成", StringComparison.Ordinal);
+        });
+        Assert.Contains("下载完成", vm.VersionUpdateActivityMessage, StringComparison.Ordinal);
+        Assert.True(vm.HasPendingVersionUpdateAvailability);
     }
 
     [Fact]
@@ -1001,6 +1164,10 @@ public sealed class SettingsGuiBackgroundFeatureTests
 
         public int UpdateResourceCallCount { get; private set; }
 
+        public bool EmitSoftwareProgress { get; set; }
+
+        public bool EmitResourceProgress { get; set; }
+
         public UiOperationResult<VersionUpdateCheckResult> CheckForUpdatesResult { get; set; } =
             UiOperationResult<VersionUpdateCheckResult>.Ok(
                 new VersionUpdateCheckResult(
@@ -1023,6 +1190,7 @@ public sealed class SettingsGuiBackgroundFeatureTests
                     IsUpdateAvailable: false,
                     DisplayVersion: string.Empty,
                     ReleaseNote: string.Empty,
+                    VersionTimestamp: null,
                     RequiresMirrorChyanCdk: false,
                     DownloadUrl: null),
                 "Resources are up to date.");
@@ -1063,10 +1231,33 @@ public sealed class SettingsGuiBackgroundFeatureTests
         public Task<UiOperationResult<string>> UpdateResourceAsync(
             VersionUpdatePolicy policy,
             string? clientType,
+            IProgress<VersionUpdateProgressInfo>? progress = null,
             CancellationToken cancellationToken = default)
         {
             UpdateResourceCallCount++;
-            return Task.FromResult(UiOperationResult<string>.Ok(string.Empty, "Updated."));
+            if (EmitResourceProgress)
+            {
+                progress?.Report(new VersionUpdateProgressInfo(
+                    VersionUpdateProgressOperation.ResourcePackage,
+                    VersionUpdateProgressStage.Started,
+                    VersionUpdateProgressSource.GlobalSource));
+                progress?.Report(new VersionUpdateProgressInfo(
+                    VersionUpdateProgressOperation.ResourcePackage,
+                    VersionUpdateProgressStage.Downloading,
+                    VersionUpdateProgressSource.GlobalSource,
+                    BytesTransferred: 8 * 1024 * 1024,
+                    TotalBytes: 16 * 1024 * 1024,
+                    BytesPerSecond: 2 * 1024 * 1024));
+                progress?.Report(new VersionUpdateProgressInfo(
+                    VersionUpdateProgressOperation.ResourcePackage,
+                    VersionUpdateProgressStage.Preparing,
+                    VersionUpdateProgressSource.GlobalSource));
+                progress?.Report(new VersionUpdateProgressInfo(
+                    VersionUpdateProgressOperation.ResourcePackage,
+                    VersionUpdateProgressStage.Completed,
+                    VersionUpdateProgressSource.GlobalSource));
+            }
+            return Task.FromResult(UiOperationResult<string>.Ok("资源更新完成（Github）。", "Updated."));
         }
 
         public Task<UiOperationResult<ResourceUpdateCheckResult>> CheckResourceUpdateAsync(
@@ -1081,8 +1272,25 @@ public sealed class SettingsGuiBackgroundFeatureTests
         public Task<UiOperationResult<VersionUpdateCheckResult>> CheckForUpdatesAsync(
             VersionUpdatePolicy policy,
             string currentVersion,
+            IProgress<VersionUpdateProgressInfo>? progress = null,
             CancellationToken cancellationToken = default)
         {
+            if (EmitSoftwareProgress)
+            {
+                progress?.Report(new VersionUpdateProgressInfo(
+                    VersionUpdateProgressOperation.SoftwarePackage,
+                    VersionUpdateProgressStage.Started));
+                progress?.Report(new VersionUpdateProgressInfo(
+                    VersionUpdateProgressOperation.SoftwarePackage,
+                    VersionUpdateProgressStage.Downloading,
+                    BytesTransferred: 32 * 1024 * 1024,
+                    TotalBytes: 64 * 1024 * 1024,
+                    BytesPerSecond: 4 * 1024 * 1024));
+                progress?.Report(new VersionUpdateProgressInfo(
+                    VersionUpdateProgressOperation.SoftwarePackage,
+                    VersionUpdateProgressStage.Completed));
+            }
+
             return Task.FromResult(CheckForUpdatesResult with
             {
                 Value = CheckForUpdatesResult.Value is null
@@ -1094,6 +1302,8 @@ public sealed class SettingsGuiBackgroundFeatureTests
 
     private sealed class FakeBridge : IMaaCoreBridge
     {
+        public int ReloadResourceCallCount { get; private set; }
+
         public Task<CoreResult<CoreInitializeInfo>> InitializeAsync(
             CoreInitializeRequest request,
             CancellationToken cancellationToken = default)
@@ -1124,6 +1334,12 @@ public sealed class SettingsGuiBackgroundFeatureTests
         public Task<CoreResult<CoreRuntimeStatus>> GetRuntimeStatusAsync(CancellationToken cancellationToken = default)
         {
             return Task.FromResult(CoreResult<CoreRuntimeStatus>.Ok(new CoreRuntimeStatus(true, true, false)));
+        }
+
+        public Task<CoreResult<bool>> ReloadResourceAsync(string? clientType = null, CancellationToken cancellationToken = default)
+        {
+            ReloadResourceCallCount++;
+            return Task.FromResult(CoreResult<bool>.Ok(true));
         }
 
         public Task<CoreResult<bool>> AttachWindowAsync(CoreAttachWindowRequest request, CancellationToken cancellationToken = default)

@@ -13,19 +13,22 @@ public partial class RemoteControlSettingsView : UserControl
 
     private SettingsPageViewModel? VM => DataContext as SettingsPageViewModel;
 
-    private async void OnSaveRemoteClick(object? sender, RoutedEventArgs e)
-    {
-        if (VM is not null)
-        {
-            await VM.SaveRemoteControlAsync();
-        }
-    }
-
     private async void OnTestRemoteConnectivityClick(object? sender, RoutedEventArgs e)
     {
         if (VM is not null)
         {
             await VM.TestRemoteControlConnectivityAsync();
         }
+    }
+
+    private async void OnRegenerateRemoteDeviceIdentityClick(object? sender, RoutedEventArgs e)
+    {
+        if (VM is null)
+        {
+            return;
+        }
+
+        VM.RemoteDeviceIdentity = Guid.NewGuid().ToString("N");
+        await VM.SaveRemoteControlAsync();
     }
 }

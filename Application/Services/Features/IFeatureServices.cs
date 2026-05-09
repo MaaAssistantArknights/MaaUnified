@@ -129,6 +129,14 @@ public interface ITaskQueueFeatureService
 
 public interface ICopilotFeatureService
 {
+    Task<UiOperationResult<CopilotRemotePayload>> LoadFromCodeAsync(
+        string source,
+        CancellationToken cancellationToken = default);
+
+    Task<UiOperationResult<CopilotRemoteSetPayload>> LoadSetFromCodeAsync(
+        string source,
+        CancellationToken cancellationToken = default);
+
     Task<string> ImportCopilotAsync(string source, CancellationToken cancellationToken = default);
 
     Task<UiOperationResult> ImportFromFileAsync(string filePath, CancellationToken cancellationToken = default);
@@ -137,6 +145,19 @@ public interface ICopilotFeatureService
 
     Task<UiOperationResult> SubmitFeedbackAsync(string copilotId, bool like, CancellationToken cancellationToken = default);
 }
+
+public sealed record CopilotRemotePayload(
+    int CopilotId,
+    string PayloadJson,
+    string Title = "",
+    string Description = "");
+
+public sealed record CopilotRemoteSetPayload(
+    int SetId,
+    string Name,
+    string Description,
+    IReadOnlyList<CopilotRemotePayload> Items,
+    IReadOnlyList<int> FailedCopilotIds);
 
 public interface IToolboxFeatureService
 {
@@ -240,6 +261,7 @@ public interface IVersionUpdateFeatureService
     Task<UiOperationResult<string>> UpdateResourceAsync(
         VersionUpdatePolicy policy,
         string? clientType,
+        IProgress<VersionUpdateProgressInfo>? progress = null,
         CancellationToken cancellationToken = default);
 
     Task<UiOperationResult<ResourceUpdateCheckResult>> CheckResourceUpdateAsync(
@@ -250,6 +272,7 @@ public interface IVersionUpdateFeatureService
     Task<UiOperationResult<VersionUpdateCheckResult>> CheckForUpdatesAsync(
         VersionUpdatePolicy policy,
         string currentVersion,
+        IProgress<VersionUpdateProgressInfo>? progress = null,
         CancellationToken cancellationToken = default);
 }
 

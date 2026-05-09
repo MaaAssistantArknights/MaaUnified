@@ -2,41 +2,78 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:controls="clr-namespace:MAAUnified.App.Controls"
              x:Class="MAAUnified.App.Features.Advanced.RemoteControlCenterView">
-  <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,*">
-    <TextBlock Classes="section-title" Text="{Binding Texts[Toolbox.Advanced.RemoteControl.Title]}" />
-    <Grid Grid.Row="1" ColumnDefinitions="Auto,*">
-      <TextBlock VerticalAlignment="Center" Text="{Binding Texts[Toolbox.Advanced.RemoteControl.GetTaskEndpoint]}" />
-      <TextBox Text="{Binding GetTaskEndpoint}" Watermark="{Binding Texts[Toolbox.Advanced.RemoteControl.GetTaskEndpoint.Watermark]}" />
-    </Grid>
-    <Grid Grid.Row="2" ColumnDefinitions="Auto,*">
-      <TextBlock VerticalAlignment="Center" Text="{Binding Texts[Toolbox.Advanced.RemoteControl.ReportEndpoint]}" />
-      <TextBox Text="{Binding ReportEndpoint}" Watermark="{Binding Texts[Toolbox.Advanced.RemoteControl.ReportEndpoint.Watermark]}" />
-    </Grid>
-    <Grid Grid.Row="3" ColumnDefinitions="Auto,120,Auto,*">
-      <TextBlock VerticalAlignment="Center" Text="{Binding Texts[Toolbox.Advanced.RemoteControl.PollInterval]}" />
-      <controls:VerticalSpinNumberBox Grid.Column="1"
-                                      Minimum="500"
-                                      Maximum="60000"
-                                      Value="{Binding PollIntervalMs}" />
-      <Button Grid.Column="2"
-              Classes="wpf-button"
-              Margin="{DynamicResource MAA.Thickness.MarginActionButtonLeft}"
-              Content="{Binding Texts[Toolbox.Advanced.RemoteControl.TestConnectivity]}"
-              Click="OnTestConnectivityClick" />
-      <Button Grid.Column="3"
-              Classes="wpf-button"
-              Margin="{DynamicResource MAA.Thickness.MarginActionButtonLeft}"
-              HorizontalAlignment="Left"
-              Content="{Binding Texts[Toolbox.Advanced.RemoteControl.Save]}"
-              Click="OnSaveClick" />
-    </Grid>
-    <TextBlock Grid.Row="4"
-               Classes="state-warning long-wrap"
-               Text="{Binding WarningMessage}"
-               IsVisible="{Binding HasWarningMessage}" />
-    <StackPanel Grid.Row="5" Spacing="{DynamicResource MAA.Spacing.Small}">
-      <TextBlock Text="{Binding StatusMessage}" />
-      <TextBlock Classes="state-error long-wrap" Text="{Binding LastErrorMessage}" />
+  <Grid Margin="4"
+        RowDefinitions="Auto,Auto">
+    <TextBlock Classes="section-title"
+               Text="{Binding Texts[Toolbox.Advanced.RemoteControl.Title]}" />
+
+    <StackPanel Grid.Row="1"
+                Classes="settings-form"
+                Margin="{DynamicResource MAA.Thickness.Settings.SectionTopMargin}">
+      <Border Classes="app-surface app-section"
+              Padding="22">
+        <StackPanel Spacing="16">
+          <Border Classes="app-surface app-card"
+                  Padding="16">
+            <StackPanel Spacing="10">
+              <TextBlock Classes="app-body"
+                         Text="{Binding Texts[Toolbox.Advanced.RemoteControl.GetTaskEndpoint]}" />
+              <controls:AppTextInput Text="{Binding GetTaskEndpoint}"
+                                     Watermark="{Binding Texts[Toolbox.Advanced.RemoteControl.GetTaskEndpoint.Watermark]}" />
+            </StackPanel>
+          </Border>
+
+          <Border Classes="app-surface app-card"
+                  Padding="16">
+            <StackPanel Spacing="10">
+              <TextBlock Classes="app-body"
+                         Text="{Binding Texts[Toolbox.Advanced.RemoteControl.ReportEndpoint]}" />
+              <controls:AppTextInput Text="{Binding ReportEndpoint}"
+                                     Watermark="{Binding Texts[Toolbox.Advanced.RemoteControl.ReportEndpoint.Watermark]}" />
+            </StackPanel>
+          </Border>
+
+          <Border Classes="app-surface app-card"
+                  Padding="16">
+            <StackPanel Spacing="12">
+              <TextBlock Classes="app-body"
+                         Text="{Binding Texts[Toolbox.Advanced.RemoteControl.PollInterval]}" />
+              <controls:AppNumberInput Width="120"
+                                       HorizontalAlignment="Left"
+                                       Minimum="500"
+                                       Maximum="60000"
+                                       Value="{Binding PollIntervalMs}" />
+              <StackPanel Orientation="Horizontal"
+                          Spacing="10">
+                <Button Classes="app-button app-secondary"
+                        HorizontalAlignment="Left"
+                        Content="{Binding Texts[Toolbox.Advanced.RemoteControl.TestConnectivity]}"
+                        Click="OnTestConnectivityClick" />
+                <Button Classes="app-button app-primary"
+                        HorizontalAlignment="Left"
+                        Content="{Binding Texts[Toolbox.Advanced.RemoteControl.Save]}"
+                        Click="OnSaveClick" />
+              </StackPanel>
+            </StackPanel>
+          </Border>
+        </StackPanel>
+      </Border>
+
+      <Border Classes="app-highlight app-warning-highlight"
+              IsVisible="{Binding HasWarningMessage}">
+        <TextBlock Classes="app-body state-warning long-wrap"
+                   Text="{Binding WarningMessage}" />
+      </Border>
+
+      <Border Classes="app-surface app-section"
+              Padding="22">
+        <StackPanel Spacing="8">
+          <TextBlock Classes="app-body long-wrap"
+                     Text="{Binding StatusMessage}" />
+          <TextBlock Classes="state-error long-wrap"
+                     Text="{Binding LastErrorMessage}" />
+        </StackPanel>
+      </Border>
     </StackPanel>
   </Grid>
 </UserControl>

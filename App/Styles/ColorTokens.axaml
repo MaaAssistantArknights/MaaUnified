@@ -44,23 +44,66 @@
           <Color x:Key="MAA.Color.Action.PrimaryBackgroundDisabled">#FFB4C4D8</Color>
           <Color x:Key="MAA.Color.Action.PrimaryBorder">#FF245487</Color>
           <Color x:Key="MAA.Color.Action.PrimaryForeground">#FFFFFFFF</Color>
+          <Color x:Key="MAA.Color.Action.ButtonPrimaryBackground">#FF2F7CF6</Color>
+          <Color x:Key="MAA.Color.Action.ButtonPrimaryBackgroundHover">#FF3A82F0</Color>
+          <Color x:Key="MAA.Color.Action.ButtonPrimaryBackgroundPressed">#FF256DE0</Color>
+          <Color x:Key="MAA.Color.Action.ButtonPrimaryBorder">#FF2B70DD</Color>
           <Color x:Key="MAA.Color.Action.SubtleBackground">#40FFFFFF</Color>
           <Color x:Key="MAA.Color.Action.SubtleBackgroundHover">#BFEEEEEE</Color>
           <Color x:Key="MAA.Color.Action.SubtleBackgroundPressed">#7FEEEEEE</Color>
           <Color x:Key="MAA.Color.Action.SubtleBorder">#00FFFFFF</Color>
           <Color x:Key="MAA.Color.Action.SubtleForeground">#FF596579</Color>
+          <Color x:Key="MAA.Color.Toast.AchievementBackground">#FFFFFFFF</Color>
+          <Color x:Key="MAA.Color.Toast.AchievementBorder">#FFDDE3EA</Color>
+          <Color x:Key="MAA.Color.Toast.AchievementBadgeBackground">#FFEAF1FE</Color>
+          <Color x:Key="MAA.Color.Toast.AchievementBadgeForeground">#FF2D5F9C</Color>
+          <Color x:Key="MAA.Color.Toast.AchievementCloseForeground">#FF738091</Color>
+          <Color x:Key="MAA.Color.Toast.AchievementCloseHoverBackground">#120F172A</Color>
+          <Color x:Key="MAA.Color.Toast.AchievementClosePressedBackground">#1E0F172A</Color>
+          <Color x:Key="MAA.Color.Toast.AchievementMedalSurface">#FFF8FBFE</Color>
+          <Color x:Key="MAA.Color.Toast.AchievementMedalBorder">#66D7DFE6</Color>
+          <Color x:Key="MAA.Color.Dialog.Surface">#FFFFFFFF</Color>
+          <Color x:Key="MAA.Color.Dialog.Border">#FFDDE4EC</Color>
+          <Color x:Key="MAA.Color.Dialog.Section">#FFF7F9FC</Color>
+          <Color x:Key="MAA.Color.Dialog.SectionBorder">#FFE6EBF1</Color>
+          <Color x:Key="MAA.Color.Dialog.CardSurface">#FFFFFFFF</Color>
+          <Color x:Key="MAA.Color.Dialog.CardBorder">#FFDCE4ED</Color>
+          <Color x:Key="MAA.Color.Dialog.CloseForeground">#FF6B7788</Color>
+          <Color x:Key="MAA.Color.Dialog.CloseHoverBackground">#120F172A</Color>
+          <Color x:Key="MAA.Color.Dialog.ClosePressedBackground">#1E0F172A</Color>
+          <Color x:Key="MAA.Color.Dialog.FilterChipBackground">#FFFFFFFF</Color>
+          <Color x:Key="MAA.Color.Dialog.FilterChipBorder">#FFC9D4E0</Color>
+          <Color x:Key="MAA.Color.Dialog.FilterChipForeground">#FF445166</Color>
+          <Color x:Key="MAA.Color.Dialog.FilterChipSelectedBackground">#FFEAF1FE</Color>
+          <Color x:Key="MAA.Color.Dialog.FilterChipSelectedBorder">#FF8FB4E6</Color>
+          <Color x:Key="MAA.Color.Dialog.FilterChipSelectedForeground">#FF245487</Color>
+          <Color x:Key="MAA.Color.SelectionList.SectionCardBackground">#FFF3F3F3</Color>
+          <Color x:Key="MAA.Color.Input.BackgroundHover">#FFFFFFFF</Color>
+          <Color x:Key="MAA.Color.Input.BackgroundDisabled">#FFF5F7FA</Color>
+          <Color x:Key="MAA.Color.Input.BorderDisabled">#FFDDE4EC</Color>
+          <Color x:Key="MAA.Color.Input.ForegroundDisabled">#FF98A4B5</Color>
+          <Color x:Key="MAA.Color.Input.ItemBackgroundHover">#FFECF2FB</Color>
+          <Color x:Key="MAA.Color.SettingsInput.BackgroundHover">#FFFFFFFF</Color>
+          <Color x:Key="MAA.Color.SettingsInput.BackgroundDisabled">#FFF5F7FA</Color>
+          <Color x:Key="MAA.Color.SettingsInput.BorderDisabled">#FFDDE4EC</Color>
+          <Color x:Key="MAA.Color.SettingsInput.ForegroundDisabled">#FF98A4B5</Color>
+          <Color x:Key="MAA.Color.SettingsInput.ItemBackgroundHover">#FFECF2FB</Color>
+          <Color x:Key="MAA.Color.Settings.RailItemHover">#26EAF1FE</Color>
+          <Color x:Key="MAA.Color.Announcement.StickyTitleBackground">#F9FFFFFF</Color>
           <Color x:Key="MAA.Color.Toolbox.PreviewBadgeBackground">#EE404040</Color>
           <Color x:Key="MAA.Color.Toolbox.PreviewBadgeForeground">#FF7FFFD4</Color>
+          <Color x:Key="MAA.Color.Toolbox.OperatorCardBackground">#FFFFFFFF</Color>
+          <Color x:Key="MAA.Color.Toolbox.OperatorGlyphForeground">#FF1E2228</Color>
         </ResourceDictionary>
         <ResourceDictionary x:Key="Dark">
           <Color x:Key="MAA.Color.Surface.Window">#FF1A1D23</Color>
-          <Color x:Key="MAA.Color.Surface.Section">#FF252A33</Color>
-          <Color x:Key="MAA.Color.Surface.SectionStrong">#FF2C323D</Color>
+          <Color x:Key="MAA.Color.Surface.Section">#FF29313C</Color>
+          <Color x:Key="MAA.Color.Surface.SectionStrong">#FF29313C</Color>
           <Color x:Key="MAA.Color.Surface.Warning">#22FFB347</Color>
           <Color x:Key="MAA.Color.Wpf.Region25">#401C1C1C</Color>
           <Color x:Key="MAA.Color.Wpf.Region75">#BF1C1C1C</Color>
-          <Color x:Key="MAA.Color.Wpf.HoverRegion25">#40303036</Color>
-          <Color x:Key="MAA.Color.Wpf.HoverRegion75">#BF303036</Color>
+          <Color x:Key="MAA.Color.Wpf.HoverRegion25">#26FFFFFF</Color>
+          <Color x:Key="MAA.Color.Wpf.HoverRegion75">#33FFFFFF</Color>
           <Color x:Key="MAA.Color.Wpf.TaskStatus.Running">#20326CF3</Color>
           <Color x:Key="MAA.Color.Wpf.TaskStatus.Success">#2090EE90</Color>
           <Color x:Key="MAA.Color.Wpf.TaskStatus.Error">#20FF4444</Color>
@@ -76,7 +119,7 @@
           <Color x:Key="MAA.Color.State.Skipped">#FF7A8090</Color>
           <Color x:Key="MAA.Color.State.Idle">#FF596170</Color>
           <Color x:Key="MAA.Color.Action.Background">#FF303744</Color>
-          <Color x:Key="MAA.Color.Action.BackgroundHover">#FF3A4454</Color>
+          <Color x:Key="MAA.Color.Action.BackgroundHover">#FF3B4656</Color>
           <Color x:Key="MAA.Color.Action.BackgroundPressed">#FF26303E</Color>
           <Color x:Key="MAA.Color.Action.BackgroundDisabled">#FF2A3140</Color>
           <Color x:Key="MAA.Color.Action.Border">#FF5A687E</Color>
@@ -84,22 +127,65 @@
           <Color x:Key="MAA.Color.Action.ForegroundDisabled">#FF8C98AA</Color>
           <Color x:Key="MAA.Color.Action.SecondaryForeground">#FFE4EAF4</Color>
           <Color x:Key="MAA.Color.Action.SecondaryBackground">#401C1C1C</Color>
-          <Color x:Key="MAA.Color.Action.SecondaryBackgroundHover">#BF303036</Color>
-          <Color x:Key="MAA.Color.Action.SecondaryBackgroundPressed">#7F303036</Color>
+          <Color x:Key="MAA.Color.Action.SecondaryBackgroundHover">#FF3B4656</Color>
+          <Color x:Key="MAA.Color.Action.SecondaryBackgroundPressed">#FF303A48</Color>
           <Color x:Key="MAA.Color.Action.SecondaryBorder">#FF5D6A80</Color>
           <Color x:Key="MAA.Color.Action.PrimaryBackground">#FF3F88D0</Color>
           <Color x:Key="MAA.Color.Action.PrimaryBackgroundHover">#FF5497D9</Color>
           <Color x:Key="MAA.Color.Action.PrimaryBackgroundPressed">#FF3578BD</Color>
-          <Color x:Key="MAA.Color.Action.PrimaryBackgroundDisabled">#FF42546B</Color>
+          <Color x:Key="MAA.Color.Action.PrimaryBackgroundDisabled">#FF445B7B</Color>
           <Color x:Key="MAA.Color.Action.PrimaryBorder">#FF6FA7DA</Color>
           <Color x:Key="MAA.Color.Action.PrimaryForeground">#FFF4F8FF</Color>
+          <Color x:Key="MAA.Color.Action.ButtonPrimaryBackground">#FF4D93F7</Color>
+          <Color x:Key="MAA.Color.Action.ButtonPrimaryBackgroundHover">#FF579AF7</Color>
+          <Color x:Key="MAA.Color.Action.ButtonPrimaryBackgroundPressed">#FF3E82DD</Color>
+          <Color x:Key="MAA.Color.Action.ButtonPrimaryBorder">#FF7BB3FF</Color>
           <Color x:Key="MAA.Color.Action.SubtleBackground">#401C1C1C</Color>
-          <Color x:Key="MAA.Color.Action.SubtleBackgroundHover">#BF303036</Color>
-          <Color x:Key="MAA.Color.Action.SubtleBackgroundPressed">#7F303036</Color>
+          <Color x:Key="MAA.Color.Action.SubtleBackgroundHover">#FF3B4656</Color>
+          <Color x:Key="MAA.Color.Action.SubtleBackgroundPressed">#FF303A48</Color>
           <Color x:Key="MAA.Color.Action.SubtleBorder">#00FFFFFF</Color>
           <Color x:Key="MAA.Color.Action.SubtleForeground">#FFC5CEDC</Color>
+          <Color x:Key="MAA.Color.Toast.AchievementBackground">#F72D3541</Color>
+          <Color x:Key="MAA.Color.Toast.AchievementBorder">#FF4D596B</Color>
+          <Color x:Key="MAA.Color.Toast.AchievementBadgeBackground">#224F8FE0</Color>
+          <Color x:Key="MAA.Color.Toast.AchievementBadgeForeground">#FFCAE1FF</Color>
+          <Color x:Key="MAA.Color.Toast.AchievementCloseForeground">#FFB9C4D5</Color>
+          <Color x:Key="MAA.Color.Toast.AchievementCloseHoverBackground">#20FFFFFF</Color>
+          <Color x:Key="MAA.Color.Toast.AchievementClosePressedBackground">#30FFFFFF</Color>
+          <Color x:Key="MAA.Color.Toast.AchievementMedalSurface">#14FFFFFF</Color>
+          <Color x:Key="MAA.Color.Toast.AchievementMedalBorder">#33FFFFFF</Color>
+          <Color x:Key="MAA.Color.Dialog.Surface">#FF232A34</Color>
+          <Color x:Key="MAA.Color.Dialog.Border">#FF485465</Color>
+          <Color x:Key="MAA.Color.Dialog.Section">#FF29313C</Color>
+          <Color x:Key="MAA.Color.Dialog.SectionBorder">#FF465265</Color>
+          <Color x:Key="MAA.Color.Dialog.CardSurface">#FF29313C</Color>
+          <Color x:Key="MAA.Color.Dialog.CardBorder">#FF465265</Color>
+          <Color x:Key="MAA.Color.Dialog.CloseForeground">#FFB7C1D1</Color>
+          <Color x:Key="MAA.Color.Dialog.CloseHoverBackground">#20FFFFFF</Color>
+          <Color x:Key="MAA.Color.Dialog.ClosePressedBackground">#30FFFFFF</Color>
+          <Color x:Key="MAA.Color.Dialog.FilterChipBackground">#FF303946</Color>
+          <Color x:Key="MAA.Color.Dialog.FilterChipBorder">#FF535F72</Color>
+          <Color x:Key="MAA.Color.Dialog.FilterChipForeground">#FFD8E1EE</Color>
+          <Color x:Key="MAA.Color.Dialog.FilterChipSelectedBackground">#223F88D0</Color>
+          <Color x:Key="MAA.Color.Dialog.FilterChipSelectedBorder">#FF6FA7DA</Color>
+          <Color x:Key="MAA.Color.Dialog.FilterChipSelectedForeground">#FFF4F8FF</Color>
+          <Color x:Key="MAA.Color.SelectionList.SectionCardBackground">#FF303946</Color>
+          <Color x:Key="MAA.Color.Input.BackgroundHover">#FF3B4656</Color>
+          <Color x:Key="MAA.Color.Input.BackgroundDisabled">#FF252D38</Color>
+          <Color x:Key="MAA.Color.Input.BorderDisabled">#FF3F4A5B</Color>
+          <Color x:Key="MAA.Color.Input.ForegroundDisabled">#FF8793A4</Color>
+          <Color x:Key="MAA.Color.Input.ItemBackgroundHover">#FF3B4656</Color>
+          <Color x:Key="MAA.Color.SettingsInput.BackgroundHover">#FF3B4656</Color>
+          <Color x:Key="MAA.Color.SettingsInput.BackgroundDisabled">#FF252D38</Color>
+          <Color x:Key="MAA.Color.SettingsInput.BorderDisabled">#FF3F4A5B</Color>
+          <Color x:Key="MAA.Color.SettingsInput.ForegroundDisabled">#FF8793A4</Color>
+          <Color x:Key="MAA.Color.SettingsInput.ItemBackgroundHover">#FF3B4656</Color>
+          <Color x:Key="MAA.Color.Settings.RailItemHover">#20FFFFFF</Color>
+          <Color x:Key="MAA.Color.Announcement.StickyTitleBackground">#F9232A34</Color>
           <Color x:Key="MAA.Color.Toolbox.PreviewBadgeBackground">#EE101317</Color>
           <Color x:Key="MAA.Color.Toolbox.PreviewBadgeForeground">#FF89F0D2</Color>
+          <Color x:Key="MAA.Color.Toolbox.OperatorCardBackground">#FF354150</Color>
+          <Color x:Key="MAA.Color.Toolbox.OperatorGlyphForeground">#FFFFFFFF</Color>
         </ResourceDictionary>
       </ResourceDictionary.ThemeDictionaries>
 
@@ -148,8 +234,36 @@
       <SolidColorBrush x:Key="MAA.Brush.Action.SubtleBackgroundPressed" Color="{DynamicResource MAA.Color.Action.SubtleBackgroundPressed}" />
       <SolidColorBrush x:Key="MAA.Brush.Action.SubtleBorder" Color="{DynamicResource MAA.Color.Action.SubtleBorder}" />
       <SolidColorBrush x:Key="MAA.Brush.Action.SubtleForeground" Color="{DynamicResource MAA.Color.Action.SubtleForeground}" />
+      <SolidColorBrush x:Key="MAA.Brush.Toast.AchievementBackground" Color="{DynamicResource MAA.Color.Toast.AchievementBackground}" />
+      <SolidColorBrush x:Key="MAA.Brush.Toast.AchievementBorder" Color="{DynamicResource MAA.Color.Toast.AchievementBorder}" />
+      <SolidColorBrush x:Key="MAA.Brush.Toast.AchievementBadgeBackground" Color="{DynamicResource MAA.Color.Toast.AchievementBadgeBackground}" />
+      <SolidColorBrush x:Key="MAA.Brush.Toast.AchievementBadgeForeground" Color="{DynamicResource MAA.Color.Toast.AchievementBadgeForeground}" />
+      <SolidColorBrush x:Key="MAA.Brush.Toast.AchievementCloseForeground" Color="{DynamicResource MAA.Color.Toast.AchievementCloseForeground}" />
+      <SolidColorBrush x:Key="MAA.Brush.Toast.AchievementCloseHoverBackground" Color="{DynamicResource MAA.Color.Toast.AchievementCloseHoverBackground}" />
+      <SolidColorBrush x:Key="MAA.Brush.Toast.AchievementClosePressedBackground" Color="{DynamicResource MAA.Color.Toast.AchievementClosePressedBackground}" />
+      <SolidColorBrush x:Key="MAA.Brush.Toast.AchievementMedalSurface" Color="{DynamicResource MAA.Color.Toast.AchievementMedalSurface}" />
+      <SolidColorBrush x:Key="MAA.Brush.Toast.AchievementMedalBorder" Color="{DynamicResource MAA.Color.Toast.AchievementMedalBorder}" />
+      <SolidColorBrush x:Key="MAA.Brush.Dialog.Surface" Color="{DynamicResource MAA.Color.Dialog.Surface}" />
+      <SolidColorBrush x:Key="MAA.Brush.Dialog.Border" Color="{DynamicResource MAA.Color.Dialog.Border}" />
+      <SolidColorBrush x:Key="MAA.Brush.Dialog.Section" Color="{DynamicResource MAA.Color.Dialog.Section}" />
+      <SolidColorBrush x:Key="MAA.Brush.Dialog.SectionBorder" Color="{DynamicResource MAA.Color.Dialog.SectionBorder}" />
+      <SolidColorBrush x:Key="MAA.Brush.Dialog.CardSurface" Color="{DynamicResource MAA.Color.Dialog.CardSurface}" />
+      <SolidColorBrush x:Key="MAA.Brush.Dialog.CardBorder" Color="{DynamicResource MAA.Color.Dialog.CardBorder}" />
+      <SolidColorBrush x:Key="MAA.Brush.Dialog.CloseForeground" Color="{DynamicResource MAA.Color.Dialog.CloseForeground}" />
+      <SolidColorBrush x:Key="MAA.Brush.Dialog.CloseHoverBackground" Color="{DynamicResource MAA.Color.Dialog.CloseHoverBackground}" />
+      <SolidColorBrush x:Key="MAA.Brush.Dialog.ClosePressedBackground" Color="{DynamicResource MAA.Color.Dialog.ClosePressedBackground}" />
+      <SolidColorBrush x:Key="MAA.Brush.Dialog.FilterChipBackground" Color="{DynamicResource MAA.Color.Dialog.FilterChipBackground}" />
+      <SolidColorBrush x:Key="MAA.Brush.Dialog.FilterChipBorder" Color="{DynamicResource MAA.Color.Dialog.FilterChipBorder}" />
+      <SolidColorBrush x:Key="MAA.Brush.Dialog.FilterChipForeground" Color="{DynamicResource MAA.Color.Dialog.FilterChipForeground}" />
+      <SolidColorBrush x:Key="MAA.Brush.Dialog.FilterChipSelectedBackground" Color="{DynamicResource MAA.Color.Dialog.FilterChipSelectedBackground}" />
+      <SolidColorBrush x:Key="MAA.Brush.Dialog.FilterChipSelectedBorder" Color="{DynamicResource MAA.Color.Dialog.FilterChipSelectedBorder}" />
+      <SolidColorBrush x:Key="MAA.Brush.Dialog.FilterChipSelectedForeground" Color="{DynamicResource MAA.Color.Dialog.FilterChipSelectedForeground}" />
+      <SolidColorBrush x:Key="MAA.Brush.SelectionList.SectionCardBackground" Color="{DynamicResource MAA.Color.SelectionList.SectionCardBackground}" />
+      <SolidColorBrush x:Key="MAA.Brush.Settings.RailItemHover" Color="{DynamicResource MAA.Color.Settings.RailItemHover}" />
+      <SolidColorBrush x:Key="MAA.Brush.Announcement.StickyTitleBackground" Color="{DynamicResource MAA.Color.Announcement.StickyTitleBackground}" />
       <SolidColorBrush x:Key="MAA.Brush.Toolbox.PreviewBadgeBackground" Color="{DynamicResource MAA.Color.Toolbox.PreviewBadgeBackground}" />
       <SolidColorBrush x:Key="MAA.Brush.Toolbox.PreviewBadgeForeground" Color="{DynamicResource MAA.Color.Toolbox.PreviewBadgeForeground}" />
+      <SolidColorBrush x:Key="MAA.Brush.Toolbox.OperatorCardBackground" Color="{DynamicResource MAA.Color.Toolbox.OperatorCardBackground}" />
 
       <SolidColorBrush x:Key="MAA.BackgroundBrush" Color="{DynamicResource MAA.Color.Surface.Window}" />
       <SolidColorBrush x:Key="MAA.RegionBrush" Color="{DynamicResource MAA.Color.Surface.Section}" />

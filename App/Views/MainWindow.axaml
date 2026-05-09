@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:controls="clr-namespace:MAAUnified.App.Controls"
         xmlns:viewModels="clr-namespace:MAAUnified.App.ViewModels"
         xmlns:rootViews="clr-namespace:MAAUnified.App.Features.Root"
         xmlns:advancedViews="clr-namespace:MAAUnified.App.Features.Advanced"
@@ -15,37 +16,40 @@
         Height="{DynamicResource MAA.Size.MainWindow.Height}"
         MinWidth="{DynamicResource MAA.Size.MainWindow.MinWidth}"
         MinHeight="{DynamicResource MAA.Size.MainWindow.MinHeight}"
+        CanResize="True"
+        Background="Transparent"
+        SystemDecorations="None"
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaChromeHints="NoChrome"
         Title="{Binding WindowTitle}"
         Topmost="{Binding IsWindowTopMost}">
   <Window.DataTemplates>
     <DataTemplate DataType="viewModels:RootPageHostViewModel">
-      <Border Classes="wpf-panel">
-        <Grid RowDefinitions="Auto,Auto,Auto,*">
-          <TextBlock Classes="section-title"
-                     HorizontalAlignment="Center"
+      <Border Classes="app-surface app-section main-shell-placeholder">
+        <StackPanel Classes="app-compact-empty-state-content"
+                    Spacing="18">
+          <TextBlock Classes="app-window-title app-compact-empty-title"
                      Text="{Binding StatusTitle}" />
-          <ProgressBar Grid.Row="1"
-                       Width="{DynamicResource MAA.Size.TaskQueue.PostActionSummaryWidth}"
-                       Margin="{DynamicResource MAA.Thickness.MarginTopSection}"
-                       HorizontalAlignment="Center"
-                       IsIndeterminate="True"
-                       IsVisible="{Binding IsLoading}" />
-          <TextBlock Grid.Row="2"
-                     Width="{DynamicResource MAA.Size.TaskQueue.PostActionSummaryWidth}"
-                     Margin="{DynamicResource MAA.Thickness.MarginTopSection}"
-                     HorizontalAlignment="Center"
-                     TextAlignment="Center"
-                     Classes="long-wrap subtle"
-                     Text="{Binding StatusMessage}" />
-          <TextBlock Grid.Row="3"
-                     Width="{DynamicResource MAA.Size.TaskQueue.ConfigPanelWidth}"
-                     Margin="{DynamicResource MAA.Thickness.MarginTopSection}"
-                     HorizontalAlignment="Center"
-                     TextAlignment="Center"
-                     Classes="long-wrap state-error"
-                     Text="{Binding ErrorMessage}"
-                     IsVisible="{Binding HasErrorMessage}" />
-        </Grid>
+          <Border Classes="app-surface app-card main-shell-placeholder-card">
+            <StackPanel Spacing="12">
+              <TextBlock Width="{DynamicResource MAA.Size.TaskQueue.PostActionSummaryWidth}"
+                         HorizontalAlignment="Center"
+                         TextAlignment="Center"
+                         Classes="app-window-subtitle app-compact-empty-body"
+                         Text="{Binding StatusMessage}" />
+              <ProgressBar Width="{DynamicResource MAA.Size.TaskQueue.PostActionSummaryWidth}"
+                           HorizontalAlignment="Center"
+                           IsIndeterminate="True"
+                           IsVisible="{Binding IsLoading}" />
+              <TextBlock Width="{DynamicResource MAA.Size.TaskQueue.ConfigPanelWidth}"
+                         HorizontalAlignment="Center"
+                         TextAlignment="Center"
+                         Classes="app-caption app-compact-empty-body state-error"
+                         Text="{Binding ErrorMessage}"
+                         IsVisible="{Binding HasErrorMessage}" />
+            </StackPanel>
+          </Border>
+        </StackPanel>
       </Border>
     </DataTemplate>
     <DataTemplate DataType="taskVm:TaskQueuePageViewModel">
@@ -61,83 +65,585 @@
       <rootViews:SettingsView />
     </DataTemplate>
     <DataTemplate DataType="viewModels:AchievementToastItemViewModel">
-      <Border Width="320"
-              Margin="0,0,0,8"
-              Padding="10"
-              CornerRadius="12"
-              Background="#F7FFF6E8"
-              BorderBrush="#44252F1D"
-              BorderThickness="1">
-        <Grid ColumnDefinitions="Auto,*,Auto">
-          <Border Width="18"
-                  Height="18"
-                  Margin="0,4,10,0"
-                  CornerRadius="9"
-                  Background="{Binding MedalColor}"
-                  VerticalAlignment="Top" />
-          <StackPanel Grid.Column="1" Spacing="4">
-            <TextBlock FontWeight="Bold" Text="{Binding Title}" />
-            <TextBlock Classes="long-wrap" Opacity="0.88" Text="{Binding Description}" />
-          </StackPanel>
-          <Button Grid.Column="2"
-                  Width="26"
-                  Height="26"
-                  Padding="0"
-                  Margin="8,0,0,0"
-                  Classes="wpf-button wpf-button-secondary"
-                  Content="x"
-                  Tag="{Binding Id}"
-                  Click="OnDismissAchievementToastClick" />
-        </Grid>
+      <Border Classes="main-shell-floating-card-shadow-host achievement-toast-shadow-host"
+              Classes.is-floating-overlay-hidden="{Binding IsAnimationHidden}">
+        <Border Classes="achievement-toast main-shell-floating-card interactive app-surface app-card"
+                PointerEntered="OnAchievementToastPointerEntered"
+                PointerExited="OnAchievementToastPointerExited"
+                Tapped="OnAchievementToastTapped">
+          <Grid ColumnDefinitions="Auto,*,Auto"
+                Classes="main-shell-floating-card-layout">
+            <StackPanel Margin="18,18,14,18"
+                        Spacing="10"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center">
+              <Border HorizontalAlignment="Center"
+                      Background="{Binding MedalColor}"
+                      Classes="achievement-toast-medal-core">
+                <Viewbox Width="23"
+                         Height="23"
+                         HorizontalAlignment="Center"
+                         VerticalAlignment="Center">
+                  <Path Classes="achievement-toast-medal-glyph"
+                        Data="M12,2.2 L14.94,8.16 L21.52,9.12 L16.76,13.76 L17.88,20.32 L12,17.23 L6.12,20.32 L7.24,13.76 L2.48,9.12 L9.06,8.16 Z" />
+                </Viewbox>
+              </Border>
+              <Border Classes="app-badge achievement-toast-badge">
+                <TextBlock Classes="app-badge-text achievement-toast-badge-text"
+                           Text="{Binding CelebrateText}" />
+              </Border>
+            </StackPanel>
+
+            <StackPanel Grid.Column="1"
+                        Margin="0,18,0,18"
+                        VerticalAlignment="Center"
+                        Spacing="8">
+              <TextBlock Classes="achievement-toast-title main-shell-floating-card-title"
+                         Text="{Binding Title}" />
+              <TextBlock Classes="achievement-toast-description main-shell-floating-card-description app-body"
+                         Text="{Binding Description}" />
+            </StackPanel>
+
+            <Grid Grid.Column="2"
+                  Margin="0,0,16,0"
+                  Classes="achievement-toast-close-shell main-shell-floating-card-close-shell"
+                  VerticalAlignment="Center">
+              <Grid Classes="main-shell-floating-card-close-core">
+                <controls:CircularCountdownRing Width="28"
+                                                Height="28"
+                                                Margin="0"
+                                                StrokeThickness="2"
+                                                HorizontalAlignment="Center"
+                                                VerticalAlignment="Center"
+                                                UseLayoutRounding="True"
+                                                IsHitTestVisible="False"
+                                                IsVisible="{Binding IsCloseCountdownVisible}"
+                                                Progress="{Binding CloseCountdownProgress}"
+                                                TrackBrush="{DynamicResource MAA.Brush.App.Border.Section}"
+                                                ProgressBrush="{DynamicResource MAA.Brush.App.Text.Muted}" />
+                <Button Classes="app-button app-subtle achievement-toast-close main-shell-floating-card-close"
+                        Tag="{Binding Id}"
+                        Tapped="OnFloatingOverlayCloseButtonTapped"
+                        Click="OnDismissAchievementToastClick">
+                  <Viewbox Classes="main-shell-floating-card-close-icon"
+                           Stretch="Uniform">
+                    <Path Data="M1 1 L9 9 M9 1 L1 9"
+                          Stretch="Uniform"
+                          Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                          StrokeThickness="0.8"
+                          StrokeLineCap="Round" />
+                  </Viewbox>
+                </Button>
+              </Grid>
+            </Grid>
+          </Grid>
+        </Border>
       </Border>
     </DataTemplate>
   </Window.DataTemplates>
-  <Grid x:Name="ShellRoot"
-        Margin="{DynamicResource MAA.Thickness.PageMargin}">
-    <Image
-           Source="{Binding ShellBackgroundImage}"
-           Opacity="{Binding ShellBackgroundOpacity}"
-           Stretch="{Binding ShellBackgroundStretch}"
-           IsVisible="{Binding HasShellBackgroundImage}"
-           IsHitTestVisible="False">
-      <Image.Effect>
-        <BlurEffect Radius="{Binding ShellBackgroundBlur}" />
-      </Image.Effect>
-    </Image>
+  <Window.Styles>
+    <Style Selector="Border.main-shell-placeholder">
+      <Setter Property="MinHeight" Value="340" />
+    </Style>
+    <Style Selector="Border.main-shell-placeholder-card">
+      <Setter Property="MaxWidth" Value="520" />
+    </Style>
+    <Style Selector="Border.main-shell-content-surface">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="0" />
+      <Setter Property="Padding" Value="0" />
+    </Style>
+    <Style Selector="Border.main-shell-content-surface.settings-root-content-surface">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="0" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="BoxShadow" Value="0 0 0 0 #00000000" />
+      <Setter Property="ClipToBounds" Value="False" />
+    </Style>
+    <Style Selector="ContentControl.settings-root-host">
+      <Setter Property="Opacity" Value="0" />
+      <Setter Property="IsHitTestVisible" Value="False" />
+      <Setter Property="IsEnabled" Value="False" />
+      <Setter Property="ZIndex" Value="0" />
+    </Style>
+    <Style Selector="ContentControl.settings-root-host.settings-root-host-selected">
+      <Setter Property="Opacity" Value="1" />
+      <Setter Property="IsHitTestVisible" Value="True" />
+      <Setter Property="IsEnabled" Value="True" />
+      <Setter Property="ZIndex" Value="1" />
+    </Style>
+    <Style Selector="Border.main-shell-utility-card">
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="0" />
+    </Style>
+    <Style Selector="ItemsControl.achievement-toast-host">
+      <Setter Property="MinWidth" Value="376" />
+      <Setter Property="ClipToBounds" Value="False" />
+    </Style>
+    <Style Selector="ItemsControl.achievement-toast-host ContentPresenter">
+      <Setter Property="ClipToBounds" Value="False" />
+    </Style>
+    <Style Selector="StackPanel.main-shell-floating-overlays">
+      <Setter Property="Width" Value="376" />
+      <Setter Property="ClipToBounds" Value="False" />
+    </Style>
+    <Style Selector="Border.main-shell-floating-card-shadow-host">
+      <Setter Property="Width" Value="376" />
+      <Setter Property="Padding" Value="8,8,8,10" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="ClipToBounds" Value="False" />
+      <Setter Property="Opacity" Value="1" />
+      <Setter Property="RenderTransform">
+        <TranslateTransform X="0" />
+      </Setter>
+      <Setter Property="Transitions">
+        <Transitions>
+          <DoubleTransition Property="Opacity"
+                            Duration="0:0:0.22" />
+          <TransformOperationsTransition Property="RenderTransform"
+                                         Duration="0:0:0.22" />
+        </Transitions>
+      </Setter>
+    </Style>
+    <Style Selector="Border.main-shell-floating-card-shadow-host.is-floating-overlay-hidden">
+      <Setter Property="Opacity" Value="0" />
+      <Setter Property="RenderTransform">
+        <TranslateTransform X="32" />
+      </Setter>
+    </Style>
+    <Style Selector="Border.main-shell-floating-card">
+      <Setter Property="Width" Value="356" />
+      <Setter Property="HorizontalAlignment" Value="Right" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Surface.Card}" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.CornerRadius.Card}" />
+      <Setter Property="BoxShadow" Value="{DynamicResource MAA.App.BoxShadow.Card}" />
+      <Setter Property="ClipToBounds" Value="False" />
+    </Style>
+    <Style Selector="Border.achievement-toast.main-shell-floating-card">
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="ClipToBounds" Value="False" />
+    </Style>
+    <Style Selector="Border.main-shell-floating-card.interactive">
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="Grid.main-shell-floating-card-layout">
+      <Setter Property="MinHeight" Value="0" />
+    </Style>
+    <Style Selector="Border.main-shell-floating-card-icon-shell">
+      <Setter Property="Width" Value="44" />
+      <Setter Property="Height" Value="44" />
+      <Setter Property="CornerRadius" Value="22" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="VerticalAlignment" Value="Top" />
+    </Style>
+    <Style Selector="TextBlock.main-shell-floating-card-title">
+      <Setter Property="FontSize" Value="16" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <Style Selector="TextBlock.main-shell-floating-card-description">
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Secondary}" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="LineHeight" Value="20" />
+    </Style>
+    <Style Selector="Grid.main-shell-floating-card-close-shell">
+      <Setter Property="Width" Value="40" />
+      <Setter Property="Height" Value="40" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="UseLayoutRounding" Value="True" />
+    </Style>
+    <Style Selector="Grid.main-shell-floating-card-close-core">
+      <Setter Property="Width" Value="28" />
+      <Setter Property="Height" Value="28" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="UseLayoutRounding" Value="True" />
+    </Style>
+    <Style Selector="Viewbox.main-shell-floating-card-close-icon">
+      <Setter Property="Width" Value="10" />
+      <Setter Property="Height" Value="10" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.app-button.main-shell-floating-card-close">
+      <Setter Property="Width" Value="28" />
+      <Setter Property="Height" Value="28" />
+      <Setter Property="MinWidth" Value="28" />
+      <Setter Property="MinHeight" Value="28" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="CornerRadius" Value="14" />
+      <Setter Property="ClipToBounds" Value="True" />
+      <Setter Property="UseLayoutRounding" Value="True" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.app-button.main-shell-floating-card-close:pointerover">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.SubtleBackgroundHover}" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
+    </Style>
+    <Style Selector="Button.app-button.main-shell-floating-card-close:pressed">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.SubtleBackgroundPressed}" />
+    </Style>
+    <Style Selector="Border.main-shell-update-overlay-card">
+      <Setter Property="Width" Value="356" />
+    </Style>
+    <Style Selector="Button.app-button.window-overlay-toggle">
+      <Setter Property="Width" Value="36" />
+      <Setter Property="MinWidth" Value="36" />
+      <Setter Property="Height" Value="36" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="CornerRadius" Value="18" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="ClipToBounds" Value="True" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="Transitions">
+        <Transitions>
+          <DoubleTransition Property="Width"
+                            Duration="0:0:0.20" />
+          <BrushTransition Property="Background"
+                           Duration="0:0:0.18" />
+          <BrushTransition Property="BorderBrush"
+                           Duration="0:0:0.18" />
+        </Transitions>
+      </Setter>
+    </Style>
+    <Style Selector="Button.app-button.window-overlay-toggle:pointerover">
+      <Setter Property="Width" Value="112" />
+      <Setter Property="Padding" Value="12,0" />
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.SecondaryBackgroundHover}" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+    </Style>
+    <Style Selector="Button.app-button.window-overlay-toggle /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="18" />
+    </Style>
+    <Style Selector="Button.app-button.window-overlay-toggle:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.SecondaryBackgroundHover}" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+    </Style>
+    <Style Selector="Button.app-button.window-overlay-toggle:pressed /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.SecondaryBackgroundPressed}" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+    </Style>
+    <Style Selector="TextBlock.window-overlay-toggle-label">
+      <Setter Property="Margin" Value="0" />
+      <Setter Property="MaxWidth" Value="0" />
+      <Setter Property="Opacity" Value="0" />
+      <Setter Property="TextWrapping" Value="NoWrap" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Transitions">
+        <Transitions>
+          <DoubleTransition Property="Opacity"
+                            Duration="0:0:0.15" />
+          <DoubleTransition Property="MaxWidth"
+                            Duration="0:0:0.20" />
+          <ThicknessTransition Property="Margin"
+                               Duration="0:0:0.20" />
+        </Transitions>
+      </Setter>
+    </Style>
+    <Style Selector="Button.window-overlay-toggle:pointerover TextBlock.window-overlay-toggle-label">
+      <Setter Property="Margin" Value="8,0,0,0" />
+      <Setter Property="MaxWidth" Value="72" />
+      <Setter Property="Opacity" Value="1" />
+    </Style>
+    <Style Selector="Border.overlay-indicator">
+      <Setter Property="Width" Value="10" />
+      <Setter Property="Height" Value="10" />
+      <Setter Property="CornerRadius" Value="999" />
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Text.Secondary}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Border.overlay-indicator.mode-preview">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.State.Warning}" />
+    </Style>
+    <Style Selector="Border.overlay-indicator.mode-native">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.State.Success}" />
+    </Style>
+    <Style Selector="Border.overlay-indicator.mode-hidden">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Text.Secondary}" />
+    </Style>
+    <Style Selector="Border.achievement-toast">
+      <Setter Property="MinHeight" Value="116" />
+    </Style>
+    <Style Selector="Border.achievement-toast-badge">
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+    <Style Selector="TextBlock.achievement-toast-badge-text">
+      <Setter Property="MaxWidth" Value="72" />
+      <Setter Property="TextAlignment" Value="Center" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Toast.AchievementBadgeForeground}" />
+    </Style>
+    <Style Selector="TextBlock.achievement-toast-title">
+      <Setter Property="MaxWidth" Value="192" />
+    </Style>
+    <Style Selector="TextBlock.achievement-toast-description">
+      <Setter Property="MaxWidth" Value="192" />
+    </Style>
+    <Style Selector="Button.app-button.achievement-toast-close">
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Secondary}" />
+    </Style>
+    <Style Selector="Border.main-shell-update-icon-shell">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+    <Style Selector="TextBlock.main-shell-update-icon-glyph">
+      <Setter Property="FontSize" Value="18" />
+      <Setter Property="FontWeight" Value="Bold" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Badge.Foreground}" />
+    </Style>
+    <Style Selector="Border.main-shell-update-section-divider">
+      <Setter Property="Height" Value="1" />
+      <Setter Property="Background" Value="#66D8E2ED" />
+    </Style>
+    <Style Selector="TextBlock.main-shell-update-description">
+      <Setter Property="FontWeight" Value="Normal" />
+    </Style>
+    <Style Selector="Button.app-button.main-shell-update-close">
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Secondary}" />
+    </Style>
+    <Style Selector="Button.main-shell-update-action">
+      <Setter Property="Height" Value="NaN" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Margin" Value="0" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="VerticalContentAlignment" Value="Stretch" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="0" />
+    </Style>
+    <Style Selector="Border.main-shell-blocking-overlay">
+      <Setter Property="Background" Value="#72FFFFFF" />
+      <Setter Property="ClipToBounds" Value="False" />
+    </Style>
+    <Style Selector="Border.main-shell-loading-card">
+      <Setter Property="Width" Value="108" />
+      <Setter Property="Height" Value="108" />
+      <Setter Property="Padding" Value="22" />
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Surface.Card}" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="16" />
+      <Setter Property="BoxShadow" Value="{DynamicResource MAA.App.BoxShadow.Card}" />
+      <Setter Property="ClipToBounds" Value="False" />
+    </Style>
+  </Window.Styles>
+  <controls:AppWindowFrame x:Name="WindowShellFrame"
+                           Title="{Binding WindowTitle}"
+                           Mode="ResizableDialog"
+                           ShowMinimizeButton="True"
+                           ShowMaximizeButton="True"
+                           ShowCloseButton="True">
+    <controls:AppWindowFrame.Content>
+      <Grid>
+        <Grid x:Name="ShellRoot"
+              Margin="{DynamicResource MAA.Thickness.PageMargin}">
+          <Image
+                 x:Name="ShellBackgroundImageHost"
+                 Source="{Binding ShellBackgroundImage}"
+                 Opacity="{Binding ShellBackgroundOpacity}"
+                 Stretch="{Binding ShellBackgroundStretch}"
+                 IsVisible="{Binding HasShellBackgroundImage}"
+                 IsHitTestVisible="False" />
 
-    <Grid RowDefinitions="Auto,*"
-          Width="{DynamicResource MAA.Size.MainWindow.LayoutWidth}"
-          MaxWidth="{DynamicResource MAA.Size.MainWindow.ContentMaxWidth}"
-          HorizontalAlignment="Center">
-      <TabStrip Classes="root-nav"
-                SelectedIndex="{Binding SelectedRootTabIndex}">
-        <TabStripItem Content="{Binding TaskQueueTabTitle}" />
-        <TabStripItem Content="{Binding CopilotTabTitle}" />
-        <TabStripItem Content="{Binding ToolboxTabTitle}" />
-        <TabStripItem Content="{Binding SettingsTabTitle}" />
-      </TabStrip>
+          <Grid RowDefinitions="Auto,*"
+                Width="{DynamicResource MAA.Size.MainWindow.LayoutWidth}"
+                MaxWidth="{DynamicResource MAA.Size.MainWindow.ContentMaxWidth}"
+                HorizontalAlignment="Center">
+            <Grid ColumnDefinitions="*,Auto">
+              <TabStrip Classes="root-nav"
+                        Margin="10,0,10,2"
+                        SelectedIndex="{Binding SelectedRootTabIndex}">
+                <TabStripItem Content="{Binding TaskQueueTabTitle}" />
+                <TabStripItem Content="{Binding CopilotTabTitle}" />
+                <TabStripItem Content="{Binding ToolboxTabTitle}" />
+                <TabStripItem Content="{Binding SettingsTabTitle}" />
+              </TabStrip>
 
-      <Grid Grid.Row="1">
-        <ContentControl Content="{Binding TaskQueueRootPage.PageContent}"
-                        IsVisible="{Binding IsTaskQueueRootTabSelected}" />
-        <ContentControl Content="{Binding CopilotRootPage.PageContent}"
-                        IsVisible="{Binding IsCopilotRootTabSelected}" />
-        <ContentControl Content="{Binding ToolboxRootPage.PageContent}"
-                        IsVisible="{Binding IsToolboxRootTabSelected}" />
-        <ContentControl Content="{Binding SettingsRootPage.PageContent}"
-                        IsVisible="{Binding IsSettingsRootTabSelected}" />
+              <StackPanel Grid.Column="1"
+                          Margin="18,0,0,0"
+                          HorizontalAlignment="Right"
+                          VerticalAlignment="Top"
+                          Spacing="10">
+                <Border Classes="app-surface app-card main-shell-utility-card"
+                        IsVisible="{Binding ShowWindowOverlayButton}">
+                  <Button Classes="app-button app-secondary window-overlay-toggle"
+                          HorizontalAlignment="Stretch"
+                          IsVisible="{Binding ShowWindowOverlayButton}"
+                          ToolTip.Tip="{Binding TaskQueuePage.OverlayButtonToolTip}"
+                          ToolTip.ShowDelay="1000"
+                          Click="OnWindowOverlayToggleClick"
+                          PointerPressed="OnWindowOverlayButtonPointerPressed">
+                    <StackPanel Orientation="Horizontal"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                Spacing="0">
+                      <Border Classes="overlay-indicator"
+                              Classes.mode-hidden="{Binding TaskQueuePage.IsOverlayHiddenMode}"
+                              Classes.mode-preview="{Binding TaskQueuePage.IsOverlayPreviewMode}"
+                              Classes.mode-native="{Binding TaskQueuePage.IsOverlayNativeMode}" />
+                      <TextBlock Classes="window-overlay-toggle-label"
+                                 Text="{Binding TaskQueuePage.OverlayButtonText}" />
+                    </StackPanel>
+                  </Button>
+                </Border>
+              </StackPanel>
+            </Grid>
+
+            <Border Grid.Row="1"
+                    Margin="0,14,0,0"
+                    Classes="app-surface app-section main-shell-content-surface"
+                    Classes.settings-root-content-surface="{Binding IsSettingsRootTabSelected}">
+              <Grid>
+                <ContentControl x:Name="TaskQueueRootHost"
+                                Content="{Binding TaskQueueRootPage.PageContent}"
+                                IsVisible="{Binding IsTaskQueueRootTabSelected}" />
+                <ContentControl x:Name="CopilotRootHost"
+                                Content="{Binding CopilotRootPage.PageContent}"
+                                IsVisible="{Binding IsCopilotRootTabSelected}" />
+                <ContentControl x:Name="ToolboxRootHost"
+                                Content="{Binding ToolboxRootPage.PageContent}"
+                                IsVisible="{Binding IsToolboxRootTabSelected}" />
+                <ContentControl x:Name="SettingsRootHost"
+                                Content="{Binding SettingsRootPage.PageContent}"
+                                Classes="settings-root-host"
+                                Classes.settings-root-host-selected="{Binding IsSettingsRootTabSelected}" />
+
+              </Grid>
+            </Border>
+
+          </Grid>
+        </Grid>
+
+        <Border Classes="main-shell-blocking-overlay"
+                IsVisible="{Binding IsBlockingOperationOverlayVisible}"
+                ZIndex="20">
+          <Border Classes="main-shell-loading-card"
+                  HorizontalAlignment="Center"
+                  VerticalAlignment="Center">
+            <controls:LoadingRing Width="56"
+                                  Height="56"
+                                  IsVisible="{Binding IsBlockingOperationOverlayVisible}"
+                                  HorizontalAlignment="Center"
+                                  VerticalAlignment="Center"
+                                  StrokeThickness="4"
+                                  SweepAngle="285"
+                                  DotBrush="{DynamicResource MAA.Brush.App.Action.PrimaryBackground}" />
+          </Border>
+        </Border>
+
+        <StackPanel HorizontalAlignment="Right"
+                    VerticalAlignment="Top"
+                    Margin="0,8,0,0"
+                    Spacing="12"
+                    ZIndex="8"
+                    Classes="main-shell-floating-overlays">
+          <Border Classes="main-shell-floating-card-shadow-host main-shell-update-shadow-host"
+                  Classes.is-floating-overlay-hidden="{Binding IsWindowUpdateOverlayAnimationHidden}"
+                  IsVisible="{Binding IsWindowUpdateOverlayPresented}">
+            <Border Classes="main-shell-update-overlay-card main-shell-floating-card interactive app-surface app-card"
+                    Classes.is-window-update-logically-visible="{Binding HasVisibleWindowUpdateInfo}"
+                    Tapped="OnWindowUpdateOverlayTapped">
+              <Grid ColumnDefinitions="Auto,*,Auto"
+                    Classes="main-shell-update-overlay-layout main-shell-floating-card-layout">
+                <Border Margin="18,18,14,18"
+                        VerticalAlignment="Center"
+                        Classes="main-shell-floating-card-icon-shell main-shell-update-icon-shell">
+                  <TextBlock Classes="main-shell-update-icon-glyph"
+                             Text="↻" />
+                </Border>
+
+                <StackPanel Grid.Column="1"
+                            Margin="0,18,0,18"
+                            Spacing="12">
+                  <StackPanel Spacing="8"
+                              IsVisible="{Binding HasVisibleWindowVersionUpdateInfo}">
+                    <TextBlock Classes="main-shell-floating-card-title main-shell-update-title"
+                               Text="{Binding RootTexts[Main.Title.UpdateVersion]}" />
+                    <TextBlock Classes="main-shell-floating-card-description main-shell-update-description app-body"
+                               Text="{Binding WindowVersionUpdateInfo}" />
+                  </StackPanel>
+
+                  <Border Classes="main-shell-update-section-divider"
+                          IsVisible="{Binding HasMultipleVisibleWindowUpdates}" />
+
+                  <StackPanel Spacing="8"
+                              IsVisible="{Binding HasVisibleWindowResourceUpdateInfo}">
+                    <TextBlock Classes="main-shell-floating-card-title main-shell-update-title"
+                               Text="{Binding RootTexts[Main.Title.UpdateResource]}" />
+                    <TextBlock Classes="main-shell-floating-card-description main-shell-update-description app-body"
+                               Text="{Binding WindowResourceUpdateInfo}" />
+                  </StackPanel>
+                </StackPanel>
+
+                <Grid Grid.Column="2"
+                      Margin="0,0,16,0"
+                      Classes="main-shell-floating-card-close-shell"
+                      VerticalAlignment="Center">
+                  <Grid Classes="main-shell-floating-card-close-core">
+                    <Button Classes="app-button app-subtle app-hoverless main-shell-update-close main-shell-floating-card-close"
+                            ToolTip.Tip="{Binding RootTexts[Settings.Action.Close]}"
+                            Tapped="OnFloatingOverlayCloseButtonTapped"
+                            Click="OnDismissWindowUpdateClick">
+                      <Viewbox Classes="main-shell-floating-card-close-icon"
+                               Stretch="Uniform">
+                        <Path Data="M1 1 L9 9 M9 1 L1 9"
+                              Stretch="Uniform"
+                              Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                              StrokeThickness="0.8"
+                              StrokeLineCap="Round" />
+                      </Viewbox>
+                    </Button>
+                  </Grid>
+                </Grid>
+              </Grid>
+            </Border>
+          </Border>
+
+          <ItemsControl Classes="achievement-toast-host achievement-toast-overlay-host"
+                        ItemsSource="{Binding AchievementToasts}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <StackPanel Spacing="0"
+                            ClipToBounds="False" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+          </ItemsControl>
+        </StackPanel>
       </Grid>
-    </Grid>
-
-    <ItemsControl ItemsSource="{Binding AchievementToasts}"
-                  HorizontalAlignment="Right"
-                  VerticalAlignment="Top"
-                  Margin="0,12,8,0">
-      <ItemsControl.ItemsPanel>
-        <ItemsPanelTemplate>
-          <StackPanel Spacing="0" />
-        </ItemsPanelTemplate>
-      </ItemsControl.ItemsPanel>
-    </ItemsControl>
-  </Grid>
+    </controls:AppWindowFrame.Content>
+  </controls:AppWindowFrame>
 </Window>

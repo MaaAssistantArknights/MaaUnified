@@ -1,63 +1,64 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:controls="clr-namespace:MAAUnified.App.Controls"
+             Classes="settings-page"
              x:Class="MAAUnified.App.Features.Settings.TimerSettingsView">
-  <Grid RowDefinitions="Auto,Auto,*,Auto" Margin="4">
-    <Grid ColumnDefinitions="Auto,*">
-      <TextBlock Classes="section-title" Text="{Binding RootTexts[Settings.Section.Timer]}" />
-      <TextBlock Grid.Column="1"
-                 HorizontalAlignment="Right"
-                 VerticalAlignment="Center"
-                 Classes="state-warning"
-                 Text="{Binding RootTexts[Settings.State.Saving]}"
-                 IsVisible="{Binding IsTimerSaveInProgress}" />
-      <TextBlock Grid.Column="1"
-                 HorizontalAlignment="Right"
-                 VerticalAlignment="Center"
-                 Classes="state-success"
-                 Text="{Binding RootTexts[Settings.State.Saved]}"
-                 IsVisible="{Binding HasTimerSaveSucceeded}" />
-    </Grid>
+  <UserControl.Styles>
+    <Style Selector="StackPanel.timer-settings-column">
+      <Setter Property="Spacing" Value="14" />
+    </Style>
 
-    <StackPanel Grid.Row="1"
-                Classes="settings-centered-column"
+    <Style Selector="Border.timer-settings-slot">
+      <Setter Property="Padding" Value="12" />
+      <Setter Property="MinWidth" Value="292" />
+    </Style>
+
+    <Style Selector="StackPanel.timer-settings-slot-stack">
+      <Setter Property="Spacing" Value="10" />
+    </Style>
+  </UserControl.Styles>
+
+  <Grid Margin="4"
+        RowDefinitions="Auto,Auto">
+    <TextBlock Classes="settings-page-title"
+               Text="{Binding RootTexts[Settings.Section.Timer]}" />
+
+    <controls:AdaptiveSpacingStackPanel Grid.Row="1"
                 Margin="{DynamicResource MAA.Thickness.Settings.SectionTopMargin}"
-                Spacing="{DynamicResource MAA.Spacing.Small}">
-      <StackPanel Orientation="Horizontal"
-                  HorizontalAlignment="Center"
-                  Spacing="{DynamicResource MAA.Spacing.Large}">
-        <CheckBox Content="{Binding RootTexts[Settings.Timer.ForceScheduledStart]}" IsChecked="{Binding ForceScheduledStart}" />
-        <CheckBox Content="{Binding RootTexts[Settings.Timer.CustomConfig]}" IsChecked="{Binding CustomTimerConfig}" />
-      </StackPanel>
+                Classes="settings-page-flow">
+      <controls:AdaptiveSpacingStackPanel Classes="settings-page-compact-flow settings-page-branch-block">
+        <controls:AdaptiveSpacingStackPanel Classes="settings-page-inline-field-group">
+          <controls:AdaptiveSpacingStackPanel Classes="settings-page-inline-field-group">
+            <controls:AppHintedCheckBox Text="{Binding RootTexts[Settings.Timer.ForceScheduledStart]}"
+                                         Tip="{DynamicResource ForceScheduledStartTip}"
+                                         IsChecked="{Binding ForceScheduledStart}" />
+          </controls:AdaptiveSpacingStackPanel>
+          <controls:AdaptiveSpacingStackPanel Classes="settings-page-inline-field-group">
+            <controls:AppHintedCheckBox Text="{Binding RootTexts[Settings.Timer.CustomConfig]}"
+                                         Tip="{DynamicResource TimerCustomConfigTip}"
+                                         IsChecked="{Binding CustomTimerConfig}" />
+          </controls:AdaptiveSpacingStackPanel>
+        </controls:AdaptiveSpacingStackPanel>
 
-      <StackPanel Orientation="Horizontal"
-                  HorizontalAlignment="Center"
-                  IsVisible="{Binding ForceScheduledStart}">
-        <CheckBox Content="{Binding RootTexts[Settings.Timer.ShowWindowBeforeForceScheduledStart]}"
+        <CheckBox Margin="{DynamicResource MAA.Thickness.Settings.BranchIndent}"
+                  Classes="app-checkbox"
+                  Content="{Binding RootTexts[Settings.Timer.ShowWindowBeforeForceScheduledStart]}"
                   IsChecked="{Binding ShowWindowBeforeForceScheduledStart}"
                   IsVisible="{Binding ForceScheduledStart}" />
-      </StackPanel>
-    </StackPanel>
+      </controls:AdaptiveSpacingStackPanel>
 
-    <ItemsControl Grid.Row="2"
-                  HorizontalAlignment="Center"
-                  MaxWidth="{DynamicResource MAA.Size.Settings.FormMaxWidth}"
-                  Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}"
-                  ItemsSource="{Binding Timers}">
-      <ItemsControl.ItemsPanel>
-        <ItemsPanelTemplate>
-          <UniformGrid Columns="2" />
-        </ItemsPanelTemplate>
-      </ItemsControl.ItemsPanel>
-      <ItemsControl.ItemTemplate>
-        <DataTemplate>
-          <StackPanel Classes="settings-centered-column"
-                      Margin="{DynamicResource MAA.Thickness.Settings.ItemMargin}"
-                      Spacing="{DynamicResource MAA.Spacing.Small}">
-            <StackPanel Orientation="Horizontal"
-                        HorizontalAlignment="Center"
-                        Spacing="{DynamicResource MAA.Spacing.Small}">
-              <CheckBox Margin="{DynamicResource MAA.Thickness.Settings.ItemMarginSmall}"
+      <ItemsControl IsVisible="False"
+                    ItemsSource="{Binding Timers}" />
+
+      <Grid Classes="settings-page-matrix"
+            ColumnDefinitions="Auto,24,Auto">
+        <controls:AdaptiveSpacingStackPanel Classes="settings-page-column-stack timer-settings-column">
+          <Border DataContext="{Binding Timers[0]}"
+                  Classes="settings-shadow-card timer-settings-slot">
+            <Grid ColumnDefinitions="Auto,*">
+              <CheckBox Grid.Column="0"
+                        Classes="app-checkbox"
+                        VerticalAlignment="Center"
                         IsChecked="{Binding Enabled}">
                 <CheckBox.Content>
                   <MultiBinding StringFormat="{}{0} {1}">
@@ -67,43 +68,411 @@
                   </MultiBinding>
                 </CheckBox.Content>
               </CheckBox>
-              <StackPanel Orientation="Horizontal"
-                          VerticalAlignment="Center"
-                          Spacing="{DynamicResource MAA.Spacing.Small}">
-                <controls:VerticalSpinNumberBox Width="{DynamicResource MAA.Size.Settings.FieldTinyWidth}"
-                                                Minimum="0"
-                                                Maximum="23"
-                                                FormatString="00"
-                                                Value="{Binding Hour}"
-                                                IsEnabled="{Binding Enabled}" />
-                <TextBlock VerticalAlignment="Center" Text=":" />
-                <controls:VerticalSpinNumberBox Width="{DynamicResource MAA.Size.Settings.FieldTinyWidth}"
-                                                Minimum="0"
-                                                Maximum="59"
-                                                FormatString="00"
-                                                Value="{Binding Minute}"
-                                                IsEnabled="{Binding Enabled}" />
-              </StackPanel>
-            </StackPanel>
 
-            <ComboBox Width="{DynamicResource MAA.Size.Settings.FieldTimerConfigWidth}"
-                      HorizontalAlignment="Center"
-                      ItemsSource="{Binding DataContext.ConfigurationProfiles, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                      SelectedItem="{Binding Profile, Mode=TwoWay}"
-                      IsEnabled="{Binding Enabled}"
-                      IsVisible="{Binding DataContext.CustomTimerConfig, RelativeSource={RelativeSource AncestorType=UserControl}}" />
-          </StackPanel>
-        </DataTemplate>
-      </ItemsControl.ItemTemplate>
-    </ItemsControl>
+              <controls:AdaptiveSpacingStackPanel Grid.Column="1"
+                          Margin="12,0,0,0"
+                          Classes="timer-settings-slot-stack">
+                <controls:AdaptiveSpacingStackPanel Orientation="Horizontal"
+                            Spacing="8">
+                  <controls:AppNumberInput
+                                                  Width="80"
+                                                  Minimum="0"
+                                                  Maximum="23"
+                                                  FormatString="00"
+                                                  Value="{Binding Hour}"
+                                                  IsEnabled="{Binding Enabled}" />
+                  <TextBlock VerticalAlignment="Center"
+                             Classes="app-body"
+                             Text=":" />
+                  <controls:AppNumberInput
+                                                  Width="80"
+                                                  Minimum="0"
+                                                  Maximum="59"
+                                                  FormatString="00"
+                                                  Value="{Binding Minute}"
+                                                  IsEnabled="{Binding Enabled}" />
+                </controls:AdaptiveSpacingStackPanel>
 
-    <StackPanel Grid.Row="3"
-                Classes="settings-form settings-form-narrow"
-                Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}"
-                Spacing="4">
-      <TextBlock Classes="state-warning settings-centered-text"
-                 Text="{Binding TimerValidationMessage}"
-                 IsVisible="{Binding HasTimerValidationMessage}" />
-    </StackPanel>
+                <controls:AppSelect Width="{DynamicResource MAA.Size.Settings.FieldTimerConfigWidth}"
+                          HorizontalAlignment="Left"
+                          Classes="settings-select"
+                          ItemsSource="{Binding DataContext.ConfigurationProfiles, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                          SelectedItem="{Binding Profile, Mode=TwoWay}"
+                          IsEnabled="{Binding Enabled}"
+                          IsVisible="{Binding DataContext.CustomTimerConfig, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+              </controls:AdaptiveSpacingStackPanel>
+            </Grid>
+          </Border>
+
+          <Border DataContext="{Binding Timers[1]}"
+                  Classes="settings-shadow-card timer-settings-slot">
+            <Grid ColumnDefinitions="Auto,*">
+              <CheckBox Grid.Column="0"
+                        Classes="app-checkbox"
+                        VerticalAlignment="Center"
+                        IsChecked="{Binding Enabled}">
+                <CheckBox.Content>
+                  <MultiBinding StringFormat="{}{0} {1}">
+                    <Binding RelativeSource="{RelativeSource AncestorType=UserControl}"
+                             Path="DataContext.RootTexts[Settings.Timer.SlotLabel]" />
+                    <Binding Path="Index" />
+                  </MultiBinding>
+                </CheckBox.Content>
+              </CheckBox>
+
+              <controls:AdaptiveSpacingStackPanel Grid.Column="1"
+                          Margin="12,0,0,0"
+                          Classes="timer-settings-slot-stack">
+                <controls:AdaptiveSpacingStackPanel Orientation="Horizontal"
+                            Spacing="8">
+                  <controls:AppNumberInput
+                                                  Width="80"
+                                                  Minimum="0"
+                                                  Maximum="23"
+                                                  FormatString="00"
+                                                  Value="{Binding Hour}"
+                                                  IsEnabled="{Binding Enabled}" />
+                  <TextBlock VerticalAlignment="Center"
+                             Classes="app-body"
+                             Text=":" />
+                  <controls:AppNumberInput
+                                                  Width="80"
+                                                  Minimum="0"
+                                                  Maximum="59"
+                                                  FormatString="00"
+                                                  Value="{Binding Minute}"
+                                                  IsEnabled="{Binding Enabled}" />
+                </controls:AdaptiveSpacingStackPanel>
+
+                <controls:AppSelect Width="{DynamicResource MAA.Size.Settings.FieldTimerConfigWidth}"
+                          HorizontalAlignment="Left"
+                          Classes="settings-select"
+                          ItemsSource="{Binding DataContext.ConfigurationProfiles, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                          SelectedItem="{Binding Profile, Mode=TwoWay}"
+                          IsEnabled="{Binding Enabled}"
+                          IsVisible="{Binding DataContext.CustomTimerConfig, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+              </controls:AdaptiveSpacingStackPanel>
+            </Grid>
+          </Border>
+
+          <Border DataContext="{Binding Timers[2]}"
+                  Classes="settings-shadow-card timer-settings-slot">
+            <Grid ColumnDefinitions="Auto,*">
+              <CheckBox Grid.Column="0"
+                        Classes="app-checkbox"
+                        VerticalAlignment="Center"
+                        IsChecked="{Binding Enabled}">
+                <CheckBox.Content>
+                  <MultiBinding StringFormat="{}{0} {1}">
+                    <Binding RelativeSource="{RelativeSource AncestorType=UserControl}"
+                             Path="DataContext.RootTexts[Settings.Timer.SlotLabel]" />
+                    <Binding Path="Index" />
+                  </MultiBinding>
+                </CheckBox.Content>
+              </CheckBox>
+
+              <controls:AdaptiveSpacingStackPanel Grid.Column="1"
+                          Margin="12,0,0,0"
+                          Classes="timer-settings-slot-stack">
+                <controls:AdaptiveSpacingStackPanel Orientation="Horizontal"
+                            Spacing="8">
+                  <controls:AppNumberInput
+                                                  Width="80"
+                                                  Minimum="0"
+                                                  Maximum="23"
+                                                  FormatString="00"
+                                                  Value="{Binding Hour}"
+                                                  IsEnabled="{Binding Enabled}" />
+                  <TextBlock VerticalAlignment="Center"
+                             Classes="app-body"
+                             Text=":" />
+                  <controls:AppNumberInput
+                                                  Width="80"
+                                                  Minimum="0"
+                                                  Maximum="59"
+                                                  FormatString="00"
+                                                  Value="{Binding Minute}"
+                                                  IsEnabled="{Binding Enabled}" />
+                </controls:AdaptiveSpacingStackPanel>
+
+                <controls:AppSelect Width="{DynamicResource MAA.Size.Settings.FieldTimerConfigWidth}"
+                          HorizontalAlignment="Left"
+                          Classes="settings-select"
+                          ItemsSource="{Binding DataContext.ConfigurationProfiles, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                          SelectedItem="{Binding Profile, Mode=TwoWay}"
+                          IsEnabled="{Binding Enabled}"
+                          IsVisible="{Binding DataContext.CustomTimerConfig, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+              </controls:AdaptiveSpacingStackPanel>
+            </Grid>
+          </Border>
+
+          <Border DataContext="{Binding Timers[3]}"
+                  Classes="settings-shadow-card timer-settings-slot">
+            <Grid ColumnDefinitions="Auto,*">
+              <CheckBox Grid.Column="0"
+                        Classes="app-checkbox"
+                        VerticalAlignment="Center"
+                        IsChecked="{Binding Enabled}">
+                <CheckBox.Content>
+                  <MultiBinding StringFormat="{}{0} {1}">
+                    <Binding RelativeSource="{RelativeSource AncestorType=UserControl}"
+                             Path="DataContext.RootTexts[Settings.Timer.SlotLabel]" />
+                    <Binding Path="Index" />
+                  </MultiBinding>
+                </CheckBox.Content>
+              </CheckBox>
+
+              <controls:AdaptiveSpacingStackPanel Grid.Column="1"
+                          Margin="12,0,0,0"
+                          Classes="timer-settings-slot-stack">
+                <controls:AdaptiveSpacingStackPanel Orientation="Horizontal"
+                            Spacing="8">
+                  <controls:AppNumberInput
+                                                  Width="80"
+                                                  Minimum="0"
+                                                  Maximum="23"
+                                                  FormatString="00"
+                                                  Value="{Binding Hour}"
+                                                  IsEnabled="{Binding Enabled}" />
+                  <TextBlock VerticalAlignment="Center"
+                             Classes="app-body"
+                             Text=":" />
+                  <controls:AppNumberInput
+                                                  Width="80"
+                                                  Minimum="0"
+                                                  Maximum="59"
+                                                  FormatString="00"
+                                                  Value="{Binding Minute}"
+                                                  IsEnabled="{Binding Enabled}" />
+                </controls:AdaptiveSpacingStackPanel>
+
+                <controls:AppSelect Width="{DynamicResource MAA.Size.Settings.FieldTimerConfigWidth}"
+                          HorizontalAlignment="Left"
+                          Classes="settings-select"
+                          ItemsSource="{Binding DataContext.ConfigurationProfiles, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                          SelectedItem="{Binding Profile, Mode=TwoWay}"
+                          IsEnabled="{Binding Enabled}"
+                          IsVisible="{Binding DataContext.CustomTimerConfig, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+              </controls:AdaptiveSpacingStackPanel>
+            </Grid>
+          </Border>
+        </controls:AdaptiveSpacingStackPanel>
+
+        <controls:AdaptiveSpacingStackPanel Grid.Column="2"
+                    Classes="settings-page-column-stack timer-settings-column">
+          <Border DataContext="{Binding Timers[4]}"
+                  Classes="settings-shadow-card timer-settings-slot">
+            <Grid ColumnDefinitions="Auto,*">
+              <CheckBox Grid.Column="0"
+                        Classes="app-checkbox"
+                        VerticalAlignment="Center"
+                        IsChecked="{Binding Enabled}">
+                <CheckBox.Content>
+                  <MultiBinding StringFormat="{}{0} {1}">
+                    <Binding RelativeSource="{RelativeSource AncestorType=UserControl}"
+                             Path="DataContext.RootTexts[Settings.Timer.SlotLabel]" />
+                    <Binding Path="Index" />
+                  </MultiBinding>
+                </CheckBox.Content>
+              </CheckBox>
+
+              <controls:AdaptiveSpacingStackPanel Grid.Column="1"
+                          Margin="12,0,0,0"
+                          Classes="timer-settings-slot-stack">
+                <controls:AdaptiveSpacingStackPanel Orientation="Horizontal"
+                            Spacing="8">
+                  <controls:AppNumberInput
+                                                  Width="80"
+                                                  Minimum="0"
+                                                  Maximum="23"
+                                                  FormatString="00"
+                                                  Value="{Binding Hour}"
+                                                  IsEnabled="{Binding Enabled}" />
+                  <TextBlock VerticalAlignment="Center"
+                             Classes="app-body"
+                             Text=":" />
+                  <controls:AppNumberInput
+                                                  Width="80"
+                                                  Minimum="0"
+                                                  Maximum="59"
+                                                  FormatString="00"
+                                                  Value="{Binding Minute}"
+                                                  IsEnabled="{Binding Enabled}" />
+                </controls:AdaptiveSpacingStackPanel>
+
+                <controls:AppSelect Width="{DynamicResource MAA.Size.Settings.FieldTimerConfigWidth}"
+                          HorizontalAlignment="Left"
+                          Classes="settings-select"
+                          ItemsSource="{Binding DataContext.ConfigurationProfiles, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                          SelectedItem="{Binding Profile, Mode=TwoWay}"
+                          IsEnabled="{Binding Enabled}"
+                          IsVisible="{Binding DataContext.CustomTimerConfig, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+              </controls:AdaptiveSpacingStackPanel>
+            </Grid>
+          </Border>
+
+          <Border DataContext="{Binding Timers[5]}"
+                  Classes="settings-shadow-card timer-settings-slot">
+            <Grid ColumnDefinitions="Auto,*">
+              <CheckBox Grid.Column="0"
+                        Classes="app-checkbox"
+                        VerticalAlignment="Center"
+                        IsChecked="{Binding Enabled}">
+                <CheckBox.Content>
+                  <MultiBinding StringFormat="{}{0} {1}">
+                    <Binding RelativeSource="{RelativeSource AncestorType=UserControl}"
+                             Path="DataContext.RootTexts[Settings.Timer.SlotLabel]" />
+                    <Binding Path="Index" />
+                  </MultiBinding>
+                </CheckBox.Content>
+              </CheckBox>
+
+              <controls:AdaptiveSpacingStackPanel Grid.Column="1"
+                          Margin="12,0,0,0"
+                          Classes="timer-settings-slot-stack">
+                <controls:AdaptiveSpacingStackPanel Orientation="Horizontal"
+                            Spacing="8">
+                  <controls:AppNumberInput
+                                                  Width="80"
+                                                  Minimum="0"
+                                                  Maximum="23"
+                                                  FormatString="00"
+                                                  Value="{Binding Hour}"
+                                                  IsEnabled="{Binding Enabled}" />
+                  <TextBlock VerticalAlignment="Center"
+                             Classes="app-body"
+                             Text=":" />
+                  <controls:AppNumberInput
+                                                  Width="80"
+                                                  Minimum="0"
+                                                  Maximum="59"
+                                                  FormatString="00"
+                                                  Value="{Binding Minute}"
+                                                  IsEnabled="{Binding Enabled}" />
+                </controls:AdaptiveSpacingStackPanel>
+
+                <controls:AppSelect Width="{DynamicResource MAA.Size.Settings.FieldTimerConfigWidth}"
+                          HorizontalAlignment="Left"
+                          Classes="settings-select"
+                          ItemsSource="{Binding DataContext.ConfigurationProfiles, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                          SelectedItem="{Binding Profile, Mode=TwoWay}"
+                          IsEnabled="{Binding Enabled}"
+                          IsVisible="{Binding DataContext.CustomTimerConfig, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+              </controls:AdaptiveSpacingStackPanel>
+            </Grid>
+          </Border>
+
+          <Border DataContext="{Binding Timers[6]}"
+                  Classes="settings-shadow-card timer-settings-slot">
+            <Grid ColumnDefinitions="Auto,*">
+              <CheckBox Grid.Column="0"
+                        Classes="app-checkbox"
+                        VerticalAlignment="Center"
+                        IsChecked="{Binding Enabled}">
+                <CheckBox.Content>
+                  <MultiBinding StringFormat="{}{0} {1}">
+                    <Binding RelativeSource="{RelativeSource AncestorType=UserControl}"
+                             Path="DataContext.RootTexts[Settings.Timer.SlotLabel]" />
+                    <Binding Path="Index" />
+                  </MultiBinding>
+                </CheckBox.Content>
+              </CheckBox>
+
+              <controls:AdaptiveSpacingStackPanel Grid.Column="1"
+                          Margin="12,0,0,0"
+                          Classes="timer-settings-slot-stack">
+                <controls:AdaptiveSpacingStackPanel Orientation="Horizontal"
+                            Spacing="8">
+                  <controls:AppNumberInput
+                                                  Width="80"
+                                                  Minimum="0"
+                                                  Maximum="23"
+                                                  FormatString="00"
+                                                  Value="{Binding Hour}"
+                                                  IsEnabled="{Binding Enabled}" />
+                  <TextBlock VerticalAlignment="Center"
+                             Classes="app-body"
+                             Text=":" />
+                  <controls:AppNumberInput
+                                                  Width="80"
+                                                  Minimum="0"
+                                                  Maximum="59"
+                                                  FormatString="00"
+                                                  Value="{Binding Minute}"
+                                                  IsEnabled="{Binding Enabled}" />
+                </controls:AdaptiveSpacingStackPanel>
+
+                <controls:AppSelect Width="{DynamicResource MAA.Size.Settings.FieldTimerConfigWidth}"
+                          HorizontalAlignment="Left"
+                          Classes="settings-select"
+                          ItemsSource="{Binding DataContext.ConfigurationProfiles, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                          SelectedItem="{Binding Profile, Mode=TwoWay}"
+                          IsEnabled="{Binding Enabled}"
+                          IsVisible="{Binding DataContext.CustomTimerConfig, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+              </controls:AdaptiveSpacingStackPanel>
+            </Grid>
+          </Border>
+
+          <Border DataContext="{Binding Timers[7]}"
+                  Classes="settings-shadow-card timer-settings-slot">
+            <Grid ColumnDefinitions="Auto,*">
+              <CheckBox Grid.Column="0"
+                        Classes="app-checkbox"
+                        VerticalAlignment="Center"
+                        IsChecked="{Binding Enabled}">
+                <CheckBox.Content>
+                  <MultiBinding StringFormat="{}{0} {1}">
+                    <Binding RelativeSource="{RelativeSource AncestorType=UserControl}"
+                             Path="DataContext.RootTexts[Settings.Timer.SlotLabel]" />
+                    <Binding Path="Index" />
+                  </MultiBinding>
+                </CheckBox.Content>
+              </CheckBox>
+
+              <controls:AdaptiveSpacingStackPanel Grid.Column="1"
+                          Margin="12,0,0,0"
+                          Classes="timer-settings-slot-stack">
+                <controls:AdaptiveSpacingStackPanel Orientation="Horizontal"
+                            Spacing="8">
+                  <controls:AppNumberInput
+                                                  Width="80"
+                                                  Minimum="0"
+                                                  Maximum="23"
+                                                  FormatString="00"
+                                                  Value="{Binding Hour}"
+                                                  IsEnabled="{Binding Enabled}" />
+                  <TextBlock VerticalAlignment="Center"
+                             Classes="app-body"
+                             Text=":" />
+                  <controls:AppNumberInput
+                                                  Width="80"
+                                                  Minimum="0"
+                                                  Maximum="59"
+                                                  FormatString="00"
+                                                  Value="{Binding Minute}"
+                                                  IsEnabled="{Binding Enabled}" />
+                </controls:AdaptiveSpacingStackPanel>
+
+                <controls:AppSelect Width="{DynamicResource MAA.Size.Settings.FieldTimerConfigWidth}"
+                          HorizontalAlignment="Left"
+                          Classes="settings-select"
+                          ItemsSource="{Binding DataContext.ConfigurationProfiles, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                          SelectedItem="{Binding Profile, Mode=TwoWay}"
+                          IsEnabled="{Binding Enabled}"
+                          IsVisible="{Binding DataContext.CustomTimerConfig, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+              </controls:AdaptiveSpacingStackPanel>
+            </Grid>
+          </Border>
+        </controls:AdaptiveSpacingStackPanel>
+      </Grid>
+
+      <Border Classes="settings-page-status-block">
+        <controls:AdaptiveSpacingStackPanel Classes="settings-page-status-list">
+          <TextBlock Classes="state-warning"
+                     Text="{Binding TimerValidationMessage}"
+                     IsVisible="{Binding HasTimerValidationMessage}" />
+        </controls:AdaptiveSpacingStackPanel>
+      </Border>
+    </controls:AdaptiveSpacingStackPanel>
   </Grid>
 </UserControl>

@@ -1,7 +1,10 @@
 using System.Collections.Specialized;
+using System.Net;
+using System.Net.Http;
 using System.Runtime.CompilerServices;
 using System.IO.Compression;
 using System.Text.Json.Nodes;
+using MAAUnified.App.Features.Dialogs;
 using MAAUnified.App.Features.Settings;
 using MAAUnified.App.ViewModels.Settings;
 using MAAUnified.Application.Configuration;
@@ -75,8 +78,8 @@ public sealed class SettingsModuleCM1FeatureTests
                     "prerelease": false,
                     "assets": [
                       {
-                        "name": "MAAUnified-v2.0.0.zip",
-                        "browser_download_url": "https://example.com/MAAUnified-v2.0.0.zip",
+                        "name": "MAAUnified-v2.0.0-linux-x64.tar.gz",
+                        "browser_download_url": "https://example.com/MAAUnified-v2.0.0-linux-x64.tar.gz",
                         "size": 1234
                       }
                     ]
@@ -86,12 +89,71 @@ public sealed class SettingsModuleCM1FeatureTests
 
             vm.VersionUpdateVersionType = "Stable";
             vm.VersionUpdateResourceApi = feedPath;
+            vm.VersionUpdateAutoDownload = false;
 
             await vm.CheckVersionUpdateAsync();
 
-            Assert.Contains("暂未实现软件更新", vm.VersionUpdateStatusMessage, StringComparison.Ordinal);
+            Assert.Contains("v2.0.0", vm.VersionUpdateStatusMessage, StringComparison.Ordinal);
             Assert.False(vm.HasVersionUpdateErrorMessage);
+            Assert.True(vm.HasPendingVersionUpdateAvailability);
             Assert.Equal("core-9.9.9", vm.UpdatePanelCoreVersion);
+        }
+        finally
+        {
+            try
+            {
+                if (File.Exists(feedPath))
+                {
+                    File.Delete(feedPath);
+                }
+            }
+            catch
+            {
+                // Best-effort cleanup.
+            }
+        }
+    }
+
+    [Fact]
+    public async Task VersionUpdate_CheckForUpdates_UsesCoreVersionForCurrentVersion()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync();
+        var vm = new SettingsPageViewModel(
+            fixture.Runtime,
+            new ConnectionGameSharedStateViewModel(),
+            coreVersionResolver: () => "v999.0.0");
+        await vm.InitializeAsync();
+
+        var feedPath = Path.Combine(Path.GetTempPath(), $"maa-unified-settings-core-feed-{Guid.NewGuid():N}.json");
+        try
+        {
+            await File.WriteAllTextAsync(feedPath, """
+                [
+                  {
+                    "tag_name": "v2.0.0",
+                    "name": "Release v2.0.0",
+                    "body": "Line one.\nLine two.",
+                    "prerelease": false,
+                    "assets": [
+                      {
+                        "name": "MAAUnified-v2.0.0-linux-x64.tar.gz",
+                        "browser_download_url": "https://example.com/MAAUnified-v2.0.0-linux-x64.tar.gz",
+                        "size": 1234
+                      }
+                    ]
+                  }
+                ]
+                """);
+
+            vm.VersionUpdateVersionType = "Stable";
+            vm.VersionUpdateResourceApi = feedPath;
+            vm.VersionUpdateAutoDownload = false;
+
+            await vm.CheckVersionUpdateAsync();
+
+            Assert.Equal("v999.0.0", vm.UpdatePanelCoreVersion);
+            Assert.False(vm.HasPendingVersionUpdateAvailability);
+            Assert.DoesNotContain("v2.0.0", vm.VersionUpdateStatusMessage, StringComparison.Ordinal);
         }
         finally
         {
@@ -121,6 +183,35 @@ public sealed class SettingsModuleCM1FeatureTests
     }
 
     [Fact]
+    public async Task CheckAboutAnnouncementWithDialogAsync_WhenRemoteTimesOut_UsesCachedAnnouncement()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync();
+        var cachedAnnouncement = "# Cached announcement";
+        var saveResult = await fixture.Runtime.AnnouncementFeatureService.SaveStateAsync(
+            new AnnouncementState(cachedAnnouncement, false, false));
+        Assert.True(saveResult.Success);
+
+        using var aboutAnnouncementHttpClient = new HttpClient(new TimeoutUntilCanceledMessageHandler())
+        {
+            Timeout = Timeout.InfiniteTimeSpan,
+        };
+        var dialogService = new RecordingAnnouncementDialogService();
+        var vm = new SettingsPageViewModel(
+            fixture.Runtime,
+            new ConnectionGameSharedStateViewModel(),
+            dialogService: dialogService,
+            aboutAnnouncementHttpClient: aboutAnnouncementHttpClient,
+            aboutAnnouncementTimeout: TimeSpan.FromMilliseconds(50));
+        await vm.InitializeAsync();
+
+        await vm.CheckAndDownloadAboutAnnouncementWithDialogAsync();
+
+        Assert.NotNull(dialogService.LastAnnouncementRequest);
+        Assert.Equal(cachedAnnouncement, dialogService.LastAnnouncementRequest!.AnnouncementInfo);
+        Assert.False(vm.HasAboutErrorMessage);
+    }
+
+    [Fact]
     public async Task VersionUpdate_CheckForUpdates_ShouldNotRaiseErrorDialog()
     {
         await using var fixture = await RuntimeFixture.CreateAsync();
@@ -130,11 +221,48 @@ public sealed class SettingsModuleCM1FeatureTests
         var dialogRaised = false;
         fixture.Runtime.DialogFeatureService.ErrorRaised += (_, _) => dialogRaised = true;
 
-        vm.VersionUpdateVersionType = "Preview";
-        await vm.CheckVersionUpdateAsync();
+        var feedPath = Path.Combine(Path.GetTempPath(), $"maa-unified-settings-feed-{Guid.NewGuid():N}.json");
+        try
+        {
+            await File.WriteAllTextAsync(feedPath, """
+                [
+                  {
+                    "tag_name": "v2.0.0",
+                    "name": "Release v2.0.0",
+                    "body": "Line one.\nLine two.",
+                    "prerelease": false,
+                    "assets": [
+                      {
+                        "name": "MAAUnified-v2.0.0-linux-x64.tar.gz",
+                        "browser_download_url": "https://example.com/MAAUnified-v2.0.0-linux-x64.tar.gz",
+                        "size": 1234
+                      }
+                    ]
+                  }
+                ]
+                """);
+
+            vm.VersionUpdateVersionType = "Stable";
+            vm.VersionUpdateResourceApi = feedPath;
+            vm.VersionUpdateAutoDownload = false;
+            await vm.CheckVersionUpdateAsync();
+        }
+        finally
+        {
+            try
+            {
+                if (File.Exists(feedPath))
+                {
+                    File.Delete(feedPath);
+                }
+            }
+            catch
+            {
+            }
+        }
 
         Assert.False(vm.HasVersionUpdateErrorMessage);
-        Assert.Contains("暂未实现软件更新", vm.VersionUpdateStatusMessage, StringComparison.Ordinal);
+        Assert.Contains("v2.0.0", vm.VersionUpdateStatusMessage, StringComparison.Ordinal);
         Assert.False(dialogRaised);
     }
 
@@ -356,7 +484,7 @@ public sealed class SettingsModuleCM1FeatureTests
         fixture.Config.CurrentConfig.Profiles["Default"].Values[ConfigurationKeys.RemoteControlGetTaskEndpointUri] = JsonValue.Create("https://default.example/task");
         fixture.Config.CurrentConfig.Profiles["Default"].Values[ConfigurationKeys.PenguinId] = JsonValue.Create("penguin-default");
         fixture.Config.CurrentConfig.Profiles["Default"].Values[ConfigurationKeys.StartEmulator] = JsonValue.Create("True");
-        fixture.Config.CurrentConfig.Profiles["Default"].Values[ConfigurationKeys.ExternalNotificationEnabled] = JsonValue.Create("True");
+        fixture.Config.CurrentConfig.Profiles["Default"].Values[ConfigurationKeys.ExternalNotificationEnabled] = JsonValue.Create("SMTP");
 
         fixture.Config.CurrentConfig.Profiles["Alt"] = new UnifiedProfile
         {
@@ -365,7 +493,7 @@ public sealed class SettingsModuleCM1FeatureTests
                 [ConfigurationKeys.RemoteControlGetTaskEndpointUri] = JsonValue.Create("https://alt.example/task"),
                 [ConfigurationKeys.PenguinId] = JsonValue.Create("penguin-alt"),
                 [ConfigurationKeys.StartEmulator] = JsonValue.Create("False"),
-                [ConfigurationKeys.ExternalNotificationEnabled] = JsonValue.Create("False"),
+                [ConfigurationKeys.ExternalNotificationEnabled] = JsonValue.Create(string.Empty),
             },
         };
         await fixture.Config.SaveAsync();
@@ -548,6 +676,32 @@ public sealed class SettingsModuleCM1FeatureTests
         Assert.Contains("https://maa.plus/docs/", openedTargets, StringComparer.Ordinal);
         Assert.Contains("issues/new/choose", openedTargets[1], StringComparison.Ordinal);
         Assert.Equal(debugDirectory, openedTargets[2]);
+    }
+
+    [Fact]
+    public async Task IssueReport_DialogEntryAction_ShouldReuseSharedIssueEntryRoute_WithoutMutatingStatus()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync();
+        var openedTargets = new List<string>();
+        var vm = new SettingsPageViewModel(
+            fixture.Runtime,
+            new ConnectionGameSharedStateViewModel(),
+            openExternalTargetAsync: (target, _) =>
+            {
+                openedTargets.Add(target);
+                return Task.FromResult(UiOperationResult.Ok($"opened:{target}"));
+            });
+        await vm.InitializeAsync();
+
+        var result = await vm.OpenIssueReportEntryForDialogAsync();
+
+        Assert.True(result.Success);
+        Assert.Single(openedTargets);
+        Assert.Contains("issues/new/choose", openedTargets[0], StringComparison.Ordinal);
+        Assert.False(vm.HasIssueReportPath);
+        Assert.False(vm.HasIssueReportStatusMessage);
+        Assert.True(string.IsNullOrEmpty(vm.IssueReportStatusMessage));
+        Assert.False(vm.HasIssueReportErrorMessage);
     }
 
     [Fact]
@@ -758,6 +912,80 @@ public sealed class SettingsModuleCM1FeatureTests
                 // ignore cleanup failures in temporary test directories
             }
         }
+    }
+
+    private sealed class TimeoutUntilCanceledMessageHandler : HttpMessageHandler
+    {
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            try
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+
+            return new HttpResponseMessage(HttpStatusCode.OK);
+        }
+    }
+
+    private sealed class RecordingAnnouncementDialogService : IAppDialogService
+    {
+        public AnnouncementDialogRequest? LastAnnouncementRequest { get; private set; }
+
+        public Task<DialogCompletion<AnnouncementDialogPayload>> ShowAnnouncementAsync(
+            AnnouncementDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+        {
+            LastAnnouncementRequest = request;
+            return Task.FromResult(new DialogCompletion<AnnouncementDialogPayload>(DialogReturnSemantic.Close, null, "recorded"));
+        }
+
+        public Task<DialogCompletion<VersionUpdateDialogPayload>> ShowVersionUpdateAsync(
+            VersionUpdateDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<VersionUpdateDialogPayload>(DialogReturnSemantic.Close, null, "recorded"));
+
+        public Task<DialogCompletion<ProcessPickerDialogPayload>> ShowProcessPickerAsync(
+            ProcessPickerDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<ProcessPickerDialogPayload>(DialogReturnSemantic.Close, null, "recorded"));
+
+        public Task<DialogCompletion<EmulatorPathDialogPayload>> ShowEmulatorPathAsync(
+            EmulatorPathDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<EmulatorPathDialogPayload>(DialogReturnSemantic.Close, null, "recorded"));
+
+        public Task<DialogCompletion<ErrorDialogPayload>> ShowErrorAsync(
+            ErrorDialogRequest request,
+            string sourceScope,
+            Func<CancellationToken, Task<UiOperationResult>>? openIssueReportAsync = null,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<ErrorDialogPayload>(DialogReturnSemantic.Close, null, "recorded"));
+
+        public Task<DialogCompletion<AchievementListDialogPayload>> ShowAchievementListAsync(
+            AchievementListDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<AchievementListDialogPayload>(DialogReturnSemantic.Close, null, "recorded"));
+
+        public Task<DialogCompletion<TextDialogPayload>> ShowTextAsync(
+            TextDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<TextDialogPayload>(DialogReturnSemantic.Close, null, "recorded"));
+
+        public Task<DialogCompletion<WarningConfirmDialogPayload>> ShowWarningConfirmAsync(
+            WarningConfirmDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<WarningConfirmDialogPayload>(DialogReturnSemantic.Close, null, "recorded"));
     }
 
     private sealed class FakeBridge : IMaaCoreBridge

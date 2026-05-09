@@ -1,78 +1,81 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:MAAUnified.App.Controls"
              xmlns:vm="clr-namespace:MAAUnified.App.ViewModels.Settings"
+             Classes="settings-page"
              x:Class="MAAUnified.App.Features.Settings.PerformanceSettingsView">
-  <Grid Margin="4" RowDefinitions="Auto,Auto,Auto,Auto">
-    <Grid ColumnDefinitions="Auto,*">
-      <TextBlock Classes="section-title" Text="{Binding RootTexts[Settings.Section.Performance]}" />
-      <TextBlock Grid.Column="1"
-                 HorizontalAlignment="Right"
-                 VerticalAlignment="Center"
-                 Classes="state-warning"
-                 Text="{Binding RootTexts[Settings.State.Saving]}"
-                 IsVisible="{Binding IsStartPerformanceSaveInProgress}" />
-      <TextBlock Grid.Column="1"
-                 HorizontalAlignment="Right"
-                 VerticalAlignment="Center"
-                 Classes="state-success"
-                 Text="{Binding RootTexts[Settings.State.Saved]}"
-                 IsVisible="{Binding HasStartPerformanceSaveSucceeded}" />
-    </Grid>
+  <Grid Margin="4"
+        RowDefinitions="Auto,Auto">
+    <TextBlock Classes="settings-page-title"
+               Text="{Binding RootTexts[Settings.Section.Performance]}" />
 
-    <StackPanel Grid.Row="1"
-                Classes="settings-centered-column"
+    <controls:AdaptiveSpacingStackPanel Grid.Row="1"
                 Margin="{DynamicResource MAA.Thickness.Settings.SectionTopMargin}"
-                Spacing="{DynamicResource MAA.Spacing.Small}">
-      <TextBlock Classes="settings-field-caption"
-                 Text="{Binding RootTexts[Settings.Performance.Gpu.Select]}" />
-      <ComboBox Width="{DynamicResource MAA.Size.Settings.ColumnWidth}"
-                ItemsSource="{Binding AvailableGpuOptions}"
-                SelectedValueBinding="{Binding Descriptor.Id}"
-                SelectedValue="{Binding SelectedGpuOptionId}"
-                IsEnabled="{Binding IsGpuSelectionEnabled}">
-        <ComboBox.ItemTemplate>
-          <DataTemplate x:DataType="vm:GpuOptionDisplayItem">
-            <TextBlock Text="{Binding Display}" />
-          </DataTemplate>
-        </ComboBox.ItemTemplate>
-      </ComboBox>
-    </StackPanel>
-
-    <StackPanel Grid.Row="2"
-                Classes="settings-form settings-form-narrow"
-                Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}"
-                Spacing="{DynamicResource MAA.Spacing.Medium}"
-                IsVisible="{Binding IsGpuCustomSelectionFieldsVisible}">
-      <Grid ColumnDefinitions="132,220">
-        <TextBlock Classes="settings-label" Text="{Binding RootTexts[Settings.Performance.Gpu.CustomDescription]}" />
-        <TextBox Grid.Column="1"
-                 Text="{Binding GpuCustomDescription, UpdateSourceTrigger=LostFocus}"
-                 IsEnabled="{Binding IsGpuSelectionEnabled}" />
+                Classes="settings-page-flow">
+      <Grid Classes="settings-page-labeled-row"
+            controls:SettingsLabelWidthCoordinator.GroupKey="Performance.Main"
+            ColumnDefinitions="Auto,*">
+        <controls:SettingsLabel Text="{Binding RootTexts[Settings.Performance.Gpu.Select]}"
+                                Tip="{DynamicResource UseGpuForInferenceTip}" />
+        <controls:AppSelect Grid.Column="1"
+                  Classes="settings-select"
+                  Width="{DynamicResource MAA.Size.Settings.FieldPathWidth}"
+                  HorizontalAlignment="Left"
+                  ItemsSource="{Binding AvailableGpuOptions}"
+                  SelectedValueBinding="{Binding Descriptor.Id}"
+                  SelectedValue="{Binding SelectedGpuOptionId}"
+                  IsEnabled="{Binding IsGpuSelectionEnabled}">
+          <controls:AppSelect.ItemTemplate>
+            <DataTemplate x:DataType="vm:GpuOptionDisplayItem">
+              <TextBlock Text="{Binding Display}" />
+            </DataTemplate>
+          </controls:AppSelect.ItemTemplate>
+        </controls:AppSelect>
       </Grid>
-      <Grid ColumnDefinitions="132,220">
-        <TextBlock Classes="settings-label" Text="{Binding RootTexts[Settings.Performance.Gpu.CustomInstancePath]}" />
-        <TextBox Grid.Column="1"
-                 Text="{Binding GpuCustomInstancePath, UpdateSourceTrigger=LostFocus}"
-                 IsEnabled="{Binding IsGpuSelectionEnabled}" />
-      </Grid>
-    </StackPanel>
 
-    <StackPanel Grid.Row="3"
-                Classes="settings-form settings-form-narrow"
-                Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}"
-                Spacing="4">
-      <TextBlock Classes="settings-note settings-centered-text"
-                 Text="{Binding GpuSupportMessage}"
-                 IsVisible="{Binding HasGpuSupportMessage}" />
-      <TextBlock Classes="settings-note settings-centered-text"
-                 Text="{Binding RootTexts[Settings.Performance.Gpu.RestartRequired]}"
-                 IsVisible="{Binding ShowGpuRestartRequiredHint}" />
-      <TextBlock Classes="state-warning settings-centered-text"
-                 Text="{Binding GpuWarningMessage}"
-                 IsVisible="{Binding HasGpuWarningMessage}" />
-      <TextBlock Classes="state-warning settings-centered-text"
-                 Text="{Binding StartPerformanceValidationMessage}"
-                 IsVisible="{Binding HasStartPerformanceValidationMessage}" />
-    </StackPanel>
+      <controls:AdaptiveSpacingStackPanel Classes="settings-page-branch-block settings-page-compact-flow"
+                  IsVisible="{Binding IsGpuCustomSelectionFieldsVisible}">
+        <Grid Classes="settings-page-labeled-row"
+              controls:SettingsLabelWidthCoordinator.GroupKey="Performance.Main"
+              ColumnDefinitions="Auto,*">
+          <controls:SettingsLabel Text="{Binding RootTexts[Settings.Performance.Gpu.CustomDescription]}" />
+          <controls:AppTextInput Grid.Column="1"
+                   Classes="settings-input"
+                   Width="{DynamicResource MAA.Size.Settings.FieldPathWidth}"
+                   HorizontalAlignment="Left"
+                   Text="{Binding GpuCustomDescription, UpdateSourceTrigger=LostFocus}"
+                   IsEnabled="{Binding IsGpuSelectionEnabled}" />
+        </Grid>
+
+        <Grid Classes="settings-page-labeled-row"
+              controls:SettingsLabelWidthCoordinator.GroupKey="Performance.Main"
+              ColumnDefinitions="Auto,*">
+          <controls:SettingsLabel Text="{Binding RootTexts[Settings.Performance.Gpu.CustomInstancePath]}" />
+          <controls:AppTextInput Grid.Column="1"
+                   Classes="settings-input"
+                   Width="{DynamicResource MAA.Size.Settings.FieldPathWidth}"
+                   HorizontalAlignment="Left"
+                   Text="{Binding GpuCustomInstancePath, UpdateSourceTrigger=LostFocus}"
+                   IsEnabled="{Binding IsGpuSelectionEnabled}" />
+        </Grid>
+      </controls:AdaptiveSpacingStackPanel>
+
+      <Border Classes="settings-page-status-block">
+        <controls:AdaptiveSpacingStackPanel Classes="settings-page-status-list">
+          <TextBlock Classes="app-body"
+                     Text="{Binding GpuSupportMessage}"
+                     IsVisible="{Binding HasGpuSupportMessage}" />
+          <TextBlock Classes="app-body"
+                     Text="{Binding RootTexts[Settings.Performance.Gpu.RestartRequired]}"
+                     IsVisible="{Binding ShowGpuRestartRequiredHint}" />
+          <TextBlock Classes="state-warning"
+                     Text="{Binding GpuWarningMessage}"
+                     IsVisible="{Binding HasGpuWarningMessage}" />
+          <TextBlock Classes="state-warning"
+                     Text="{Binding StartPerformanceValidationMessage}"
+                     IsVisible="{Binding HasStartPerformanceValidationMessage}" />
+        </controls:AdaptiveSpacingStackPanel>
+      </Border>
+    </controls:AdaptiveSpacingStackPanel>
   </Grid>
 </UserControl>

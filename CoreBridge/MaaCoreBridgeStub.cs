@@ -142,6 +142,11 @@ public sealed class MaaCoreBridgeStub : IMaaCoreBridge
         return Task.FromResult(CoreResult<byte[]>.Fail(new CoreError(CoreErrorCode.GetImageFailed, "Stub has no image source.")));
     }
 
+    public Task<CoreResult<byte[]>> GetImageBgrAsync(bool forceScreencap = false, CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(CoreResult<byte[]>.Fail(new CoreError(CoreErrorCode.NotSupported, "Stub has no raw image source.")));
+    }
+
     public async IAsyncEnumerable<CoreCallbackEvent> CallbackStreamAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         await foreach (var callback in _callbackChannel.Reader.ReadAllAsync(cancellationToken))

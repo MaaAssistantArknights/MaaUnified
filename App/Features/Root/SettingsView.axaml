@@ -1,43 +1,77 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:MAAUnified.App.Controls"
+             xmlns:settingsVm="clr-namespace:MAAUnified.App.ViewModels.Settings"
+             x:Name="RootView"
              x:Class="MAAUnified.App.Features.Root.SettingsView">
-  <Grid ColumnDefinitions="Auto,*">
+  <Grid ColumnDefinitions="Auto,24,*">
     <Border Grid.Column="0"
-            Width="{DynamicResource MAA.Size.Settings.SectionListWidth}"
-            Classes="wpf-panel">
-      <ListBox ItemsSource="{Binding Sections}"
-               SelectedItem="{Binding SelectedSection}"
-               SelectionChanged="OnSectionSelectionChanged">
-        <ListBox.ItemTemplate>
-          <DataTemplate>
-            <TextBlock Classes="long-ellipsis" Text="{Binding DisplayName}" />
+            Classes="settings-rail">
+      <controls:AppSelectionList ItemsSource="{Binding Sections}"
+                                 SelectedItem="{Binding SelectedSection}"
+                                 SelectionChanged="OnSectionSelectionChanged"
+                                 Classes="settings-rail"
+                                 VisualMode="Rail"
+                                 Focusable="False">
+        <controls:AppSelectionList.ItemTemplate>
+          <DataTemplate DataType="settingsVm:SettingsSectionViewModel">
+            <Border Classes="app-selection-list-item-shell settings-rail-item">
+              <TextBlock Classes="settings-rail-item-text long-wrap"
+                         Text="{Binding DisplayName}" />
+            </Border>
           </DataTemplate>
-        </ListBox.ItemTemplate>
-      </ListBox>
+        </controls:AppSelectionList.ItemTemplate>
+      </controls:AppSelectionList>
     </Border>
 
-    <Border Grid.Column="1" Classes="wpf-panel wpf-panel-plain">
+    <Grid Grid.Column="2">
       <ScrollViewer x:Name="SectionScrollViewer"
+                    Margin="0,4,0,0"
+                    Classes="settings-content-scroll"
                     ScrollChanged="OnSectionScrollChanged">
         <StackPanel x:Name="SectionContentPanel"
-                    Spacing="{DynamicResource MAA.Spacing.Large}">
-          <Border x:Name="SectionConfigurationManager" Classes="wpf-panel wpf-panel-strong" />
-          <Border x:Name="SectionTimer" Classes="wpf-panel wpf-panel-strong" />
-          <Border x:Name="SectionPerformance" Classes="wpf-panel wpf-panel-strong" />
-          <Border x:Name="SectionGame" Classes="wpf-panel wpf-panel-strong" />
-          <Border x:Name="SectionConnect" Classes="wpf-panel wpf-panel-strong" />
-          <Border x:Name="SectionStart" Classes="wpf-panel wpf-panel-strong" />
-          <Border x:Name="SectionRemoteControl" Classes="wpf-panel wpf-panel-strong" />
-          <Border x:Name="SectionGui" Classes="wpf-panel wpf-panel-strong" />
-          <Border x:Name="SectionBackground" Classes="wpf-panel wpf-panel-strong" />
-          <Border x:Name="SectionExternalNotification" Classes="wpf-panel wpf-panel-strong" />
-          <Border x:Name="SectionHotKey" Classes="wpf-panel wpf-panel-strong" />
-          <Border x:Name="SectionAchievement" Classes="wpf-panel wpf-panel-strong" />
-          <Border x:Name="SectionVersionUpdate" Classes="wpf-panel wpf-panel-strong" />
-          <Border x:Name="SectionIssueReport" Classes="wpf-panel wpf-panel-strong" />
-          <Border x:Name="SectionAbout" Classes="wpf-panel wpf-panel-strong" />
+                    Classes="settings-content-panel">
+          <Border x:Name="SectionConfigurationManager"
+                  Classes="settings-section-anchor" />
+          <Border x:Name="SectionTimer"
+                  Classes="settings-section-anchor" />
+          <Border x:Name="SectionPerformance"
+                  Classes="settings-section-anchor" />
+          <Border x:Name="SectionGame"
+                  Classes="settings-section-anchor" />
+          <Border x:Name="SectionConnect"
+                  Classes="settings-section-anchor" />
+          <Border x:Name="SectionStart"
+                  Classes="settings-section-anchor" />
+          <Border x:Name="SectionRemoteControl"
+                  Classes="settings-section-anchor" />
+          <Border x:Name="SectionGui"
+                  Classes="settings-section-anchor" />
+          <Border x:Name="SectionBackground"
+                  Classes="settings-section-anchor" />
+          <Border x:Name="SectionExternalNotification"
+                  Classes="settings-section-anchor" />
+          <Border x:Name="SectionHotKey"
+                  Classes="settings-section-anchor" />
+          <Border x:Name="SectionAchievement"
+                  Classes="settings-section-anchor" />
+          <Border x:Name="SectionVersionUpdate"
+                  Classes="settings-section-anchor" />
+          <Border x:Name="SectionIssueReport"
+                  Classes="settings-section-anchor" />
+          <Border x:Name="SectionAbout"
+                  Classes="settings-section-anchor" />
         </StackPanel>
       </ScrollViewer>
-    </Border>
+
+      <controls:AppStickyTitlePresenter x:Name="StickyTitlePresenter"
+                                        Margin="0,4,12,0"
+                                        HorizontalAlignment="Stretch"
+                                        VerticalAlignment="Top"
+                                        IsHitTestVisible="False"
+                                        ZIndex="3"
+                                        Classes="settings-page-sticky-title"
+                                        IsVisible="False" />
+    </Grid>
   </Grid>
 </UserControl>

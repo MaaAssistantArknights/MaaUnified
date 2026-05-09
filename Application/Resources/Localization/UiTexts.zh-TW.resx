@@ -80,7 +80,22 @@
     <value>已新增空白作業。</value>
   </data>
   <data name="Copilot.Status.ClearSuccess" xml:space="preserve">
-    <value>已清空作業列表。</value>
+    <value>已刪除全部作業。</value>
+  </data>
+  <data name="Copilot.Status.ClearCancelled" xml:space="preserve">
+    <value>已取消刪除全部作業。</value>
+  </data>
+  <data name="Copilot.Status.ListItemDisabled" xml:space="preserve">
+    <value>已停用作業。</value>
+  </data>
+  <data name="Copilot.Status.ListItemEnabled" xml:space="preserve">
+    <value>已啟用作業。</value>
+  </data>
+  <data name="Copilot.Status.ListItemRaidDisabled" xml:space="preserve">
+    <value>已切換為普通作業。</value>
+  </data>
+  <data name="Copilot.Status.ListItemRaidEnabled" xml:space="preserve">
+    <value>已切換為突襲作業。</value>
   </data>
   <data name="Copilot.Status.MoveDownSuccess" xml:space="preserve">
     <value>已將選中作業下移。</value>
@@ -90,6 +105,15 @@
   </data>
   <data name="Copilot.Status.RemoveSuccess" xml:space="preserve">
     <value>已刪除選中作業。</value>
+  </data>
+  <data name="Copilot.Status.UpdateListItemFailed" xml:space="preserve">
+    <value>更新作業失敗。</value>
+  </data>
+  <data name="Copilot.Status.UpdateListItemNameFailed" xml:space="preserve">
+    <value>更新作業名稱失敗。</value>
+  </data>
+  <data name="Copilot.Status.UpdateListItemNameSuccess" xml:space="preserve">
+    <value>已更新作業名稱：{0}</value>
   </data>
   <data name="Copilot.Tab.Main" xml:space="preserve">
     <value>主線/故事集/SideStory</value>
@@ -227,6 +251,9 @@
   <data name="Fight.StageSelect" xml:space="preserve">
     <value>關卡選擇</value>
   </data>
+  <data name="Fight.StageSelect2" xml:space="preserve">
+    <value>備選關卡</value>
+  </data>
   <data name="Fight.Stone" xml:space="preserve">
     <value>源石數量</value>
   </data>
@@ -253,6 +280,48 @@
   </data>
   <data name="Fight.UseStoneDisplay" xml:space="preserve">
     <value>剩餘理智</value>
+  </data>
+  <data name="Fight.UseWeeklySchedule" xml:space="preserve">
+    <value>啟用每週計畫</value>
+  </data>
+  <data name="Fight.AddStage" xml:space="preserve">
+    <value>新增備選關卡</value>
+  </data>
+  <data name="Fight.CustomStageCode" xml:space="preserve">
+    <value>手動輸入關卡名</value>
+  </data>
+  <data name="Fight.CustomStageCodeTip" xml:space="preserve">
+    <value>支援大多數主線關卡簡稱與原始清單中的關卡名稱。</value>
+  </data>
+  <data name="Fight.MultiTasksShareTip" xml:space="preserve">
+    <value>以下選項會在多個刷理智任務之間共用。</value>
+  </data>
+  <data name="Fight.AutoRestartOption" xml:space="preserve">
+    <value>遊戲斷線時自動重開</value>
+  </data>
+  <data name="Fight.UseWeeklyScheduleTip" xml:space="preserve">
+    <value>這裡依遊戲內刷新時間計算星期，而不是本地自然日。</value>
+  </data>
+  <data name="Fight.WeeklySchedule.Sunday" xml:space="preserve">
+    <value>週日</value>
+  </data>
+  <data name="Fight.WeeklySchedule.Monday" xml:space="preserve">
+    <value>週一</value>
+  </data>
+  <data name="Fight.WeeklySchedule.Tuesday" xml:space="preserve">
+    <value>週二</value>
+  </data>
+  <data name="Fight.WeeklySchedule.Wednesday" xml:space="preserve">
+    <value>週三</value>
+  </data>
+  <data name="Fight.WeeklySchedule.Thursday" xml:space="preserve">
+    <value>週四</value>
+  </data>
+  <data name="Fight.WeeklySchedule.Friday" xml:space="preserve">
+    <value>週五</value>
+  </data>
+  <data name="Fight.WeeklySchedule.Saturday" xml:space="preserve">
+    <value>週六</value>
   </data>
   <data name="FirstMoveAdvantage" xml:space="preserve">
     <value>先手必勝（先鋒、狙擊、特種）</value>
@@ -307,6 +376,33 @@
   </data>
   <data name="Infrast.Drones" xml:space="preserve">
     <value>無人機策略</value>
+  </data>
+  <data name="Control" xml:space="preserve">
+    <value>控制中樞</value>
+  </data>
+  <data name="Dorm" xml:space="preserve">
+    <value>宿舍</value>
+  </data>
+  <data name="Mfg" xml:space="preserve">
+    <value>製造站</value>
+  </data>
+  <data name="Office" xml:space="preserve">
+    <value>辦公室</value>
+  </data>
+  <data name="Power" xml:space="preserve">
+    <value>發電站</value>
+  </data>
+  <data name="Processing" xml:space="preserve">
+    <value>加工站</value>
+  </data>
+  <data name="Reception" xml:space="preserve">
+    <value>會客室</value>
+  </data>
+  <data name="Trade" xml:space="preserve">
+    <value>貿易站</value>
+  </data>
+  <data name="Training" xml:space="preserve">
+    <value>訓練室</value>
   </data>
   <data name="Infrast.Error.CustomFileNotFound" xml:space="preserve">
     <value>自定義基建配置檔案不存在：{0}</value>
@@ -1004,14 +1100,74 @@
   <data name="Settings.About.Dialog.Confirm" xml:space="preserve">
     <value>確認</value>
   </data>
+  <data name="Settings.About.Dialog.ConfirmLocked" xml:space="preserve">
+    <value>請先閱讀公告</value>
+  </data>
+  <data name="Settings.About.Dialog.ConfirmBlocked1" xml:space="preserve">
+    <value>沒看完點什麼確認？</value>
+  </data>
+  <data name="Settings.About.Dialog.ConfirmBlocked2" xml:space="preserve">
+    <value>就是在說你，還點！</value>
+  </data>
+  <data name="Settings.About.Dialog.ConfirmBlocked3" xml:space="preserve">
+    <value>還點</value>
+  </data>
   <data name="Settings.About.Dialog.DoNotRemindThisAnnouncementAgain" xml:space="preserve">
-    <value>不再提醒此公告</value>
+    <value>下次公告更新前不再顯示</value>
   </data>
   <data name="Settings.About.Dialog.DoNotShowAnnouncement" xml:space="preserve">
     <value>不顯示公告</value>
   </data>
   <data name="Settings.About.Dialog.Title" xml:space="preserve">
     <value>公告</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadProgress.PendingBadge" xml:space="preserve">
+    <value>閱讀門禁</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadProgress.PendingTitle" xml:space="preserve">
+    <value>捲動到底部以解鎖確認</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadProgress.PendingCaption" xml:space="preserve">
+    <value>請繼續往下閱讀所有章節。確認按鈕和「下次公告更新前不再顯示」會在閱讀完成後一起解鎖。</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadProgress.PendingFooterHint" xml:space="preserve">
+    <value>這個選項會在你閱讀完成後解鎖，因此底部操作會始終集中在同一區域。</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadProgress.ReadyBadge" xml:space="preserve">
+    <value>已解鎖</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadProgress.ReadyTitle" xml:space="preserve">
+    <value>現在可以確認</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadProgress.ReadyCaption" xml:space="preserve">
+    <value>現在可以確認，也可以選擇在下次公告內容更新前不再顯示。</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadProgress.ReadyFooterHint" xml:space="preserve">
+    <value>如果你不想在這次公告內容變更前再次看到它，可以先勾選左側選項，再從右側確認。</value>
+  </data>
+  <data name="Settings.About.Dialog.SectionsTitle" xml:space="preserve">
+    <value>公告分欄</value>
+  </data>
+  <data name="Settings.About.Dialog.SectionsCaption" xml:space="preserve">
+    <value>選擇左側分欄以查看完整公告內容。</value>
+  </data>
+  <data name="Settings.About.Dialog.Lead" xml:space="preserve">
+    <value>請仔細閱讀最新公告後再關閉此視窗。</value>
+  </data>
+  <data name="Settings.About.Dialog.BottomHint" xml:space="preserve">
+    <value>尚未讀完公告前，暫時無法直接關閉。</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadHint" xml:space="preserve">
+    <value>捲動到底部後，才可以關閉此公告，或選擇在下次更新前不再顯示。</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadFinishedHint" xml:space="preserve">
+    <value>已完整閱讀公告，現在可以關閉此視窗。</value>
+  </data>
+  <data name="Settings.About.Dialog.MetaCurrentSection" xml:space="preserve">
+    <value>目前查看</value>
+  </data>
+  <data name="Settings.About.Dialog.MetaSectionFormat" xml:space="preserve">
+    <value>第 {0} / {1} 節</value>
   </data>
   <data name="Settings.About.OpenCommunity" xml:space="preserve">
     <value>開啟社群入口</value>
@@ -1067,8 +1223,35 @@
   <data name="Settings.Achievement.Dialog.FilterWatermark" xml:space="preserve">
     <value>搜尋成就</value>
   </data>
+  <data name="Settings.Achievement.Dialog.FilterAll" xml:space="preserve">
+    <value>全部</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.FilterUnlocked" xml:space="preserve">
+    <value>已解鎖</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.FilterInProgress" xml:space="preserve">
+    <value>進行中</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.FilterNew" xml:space="preserve">
+    <value>新解鎖</value>
+  </data>
   <data name="Settings.Achievement.Dialog.ProgressFormat" xml:space="preserve">
     <value>進度：{0}</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.ResultsFormat" xml:space="preserve">
+    <value>顯示 {0} 項</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.ClearFilters" xml:space="preserve">
+    <value>清除篩選</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.EmptyTitle" xml:space="preserve">
+    <value>沒有找到符合的成就</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.EmptyDescription" xml:space="preserve">
+    <value>試著更換關鍵字或篩選條件。</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.OverviewFormat" xml:space="preserve">
+    <value>已解鎖 {0} / {1} · 完成率 {2}%</value>
   </data>
   <data name="Settings.Achievement.Dialog.Snapshot" xml:space="preserve">
     <value>成就對話快照</value>
@@ -1385,6 +1568,27 @@
   <data name="Settings.ConfigurationManager.SaveAsNew" xml:space="preserve">
     <value>另存為新設定檔</value>
   </data>
+  <data name="Settings.ConfigurationManager.SaveAsNewSucceededInline" xml:space="preserve">
+    <value>儲存成功</value>
+  </data>
+  <data name="Settings.ConfigurationManager.SaveAsNewFailedInline" xml:space="preserve">
+    <value>儲存失敗：{0}</value>
+  </data>
+  <data name="Settings.ConfigurationManager.SaveAsNewFailedReason.Generic" xml:space="preserve">
+    <value>請稍後再試。</value>
+  </data>
+  <data name="Settings.ConfigurationManager.SaveAsNewFailedReason.ProfileAlreadyExists" xml:space="preserve">
+    <value>請換一個未使用的設定檔名稱。</value>
+  </data>
+  <data name="Settings.ConfigurationManager.SaveAsNewFailedReason.ProfileNameEmpty" xml:space="preserve">
+    <value>請輸入設定檔名稱。</value>
+  </data>
+  <data name="Settings.ConfigurationManager.SaveAsNewFailedReason.ProfileNameInvalid" xml:space="preserve">
+    <value>設定檔名稱無效。</value>
+  </data>
+  <data name="Settings.ConfigurationManager.SaveAsNewFailedReason.SourceProfileMissing" xml:space="preserve">
+    <value>目前設定檔不存在，請重新整理列表後再試。</value>
+  </data>
   <data name="Settings.ConfigurationManager.Status.AddFailed" xml:space="preserve">
     <value>設定檔新增失敗。</value>
   </data>
@@ -1691,6 +1895,9 @@
   <data name="Settings.GUI.UseTray" xml:space="preserve">
     <value>顯示托盤圖示</value>
   </data>
+  <data name="Settings.GUI.UseNotify" xml:space="preserve">
+    <value>顯示系統通知</value>
+  </data>
   <data name="Settings.GUI.WindowTitleScrollable" xml:space="preserve">
     <value>視窗標題滾動</value>
   </data>
@@ -1840,6 +2047,12 @@
   </data>
   <data name="Settings.IssueReport.OpenRuntimeLogWindow" xml:space="preserve">
     <value>開啟執行日誌視窗</value>
+  </data>
+  <data name="Settings.IssueReport.CheckUpdateBeforeReportingIssue" xml:space="preserve">
+    <value>請先升級並測試新版是否仍有此問題，確認非 ｢{key=Help}｣ 後再進行 ｢{key=Issue}｣</value>
+  </data>
+  <data name="Settings.IssueReport.CheckHelpBeforeReportingIssue" xml:space="preserve">
+    <value>請在確認您的問題不屬於 ｢{key=Help}｣ 後，再進行 ｢{key=Issue}｣</value>
   </data>
   <data name="Settings.IssueReport.PreflightNote" xml:space="preserve">
     <value>提交回報前請先閱讀 FAQ，附上日誌壓縮包可更快定位問題。</value>
@@ -2207,6 +2420,15 @@
   <data name="Settings.VersionUpdate.Status.DialogConfirmed" xml:space="preserve">
     <value>版本更新對話方塊確認完成。</value>
   </data>
+  <data name="Settings.VersionUpdate.Status.PackageDownloadFailed" xml:space="preserve">
+    <value>更新失敗。</value>
+  </data>
+  <data name="Settings.VersionUpdate.Status.PackageUnavailable" xml:space="preserve">
+    <value>更新失敗。</value>
+  </data>
+  <data name="Settings.VersionUpdate.Status.WindowsManualUpdateRequired" xml:space="preserve">
+    <value>Windows 版目前尚未在 release 發佈，請手動更新。</value>
+  </data>
   <data name="Settings.VersionUpdate.Status.MirrorCdkExpired" xml:space="preserve">
     <value>MirrorChyan CDK 已過期。</value>
   </data>
@@ -2409,6 +2631,21 @@
   </data>
   <data name="TaskQueue.Module.Custom" xml:space="preserve">
     <value>自訂任務</value>
+  </data>
+  <data name="TaskQueue.Module.UserDataUpdate" xml:space="preserve">
+    <value>更新使用者資料</value>
+  </data>
+  <data name="TaskQueue.UserDataUpdate.TriggerInterval" xml:space="preserve">
+    <value>更新資料觸發間隔</value>
+  </data>
+  <data name="TaskQueue.UserDataUpdate.Trigger.EveryTime" xml:space="preserve">
+    <value>每次觸發</value>
+  </data>
+  <data name="TaskQueue.UserDataUpdate.Trigger.Daily" xml:space="preserve">
+    <value>每天一次</value>
+  </data>
+  <data name="TaskQueue.UserDataUpdate.Trigger.Weekly" xml:space="preserve">
+    <value>每週一次</value>
   </data>
   <data name="TaskQueue.Module.Fight" xml:space="preserve">
     <value>理智作戰</value>
@@ -2684,7 +2921,7 @@
     <value>托盤整合</value>
   </data>
   <data name="Toolbox.Advanced.Tab.WebApi" xml:space="preserve">
-    <value>WebApi(相容)</value>
+    <value>WebApi</value>
   </data>
   <data name="Toolbox.Advanced.Tray.ApplyVisibility" xml:space="preserve">
     <value>套用可見性</value>
@@ -2750,10 +2987,10 @@
     <value>停止服務</value>
   </data>
   <data name="Toolbox.Advanced.WebApi.Title" xml:space="preserve">
-    <value>WebApi(相容)</value>
+    <value>WebApi</value>
   </data>
   <data name="Toolbox.Advanced.WebApi.Warning" xml:space="preserve">
-    <value>此面板用於相容舊版 WebApi 接入。僅在你明確需要外部呼叫時啟用，並建議配置存取權杖。</value>
+    <value>此高級功能頁保留對舊版 WebApi 接入的相容。僅在你明確需要外部呼叫時啟用，並建議盡量配置存取權杖。</value>
   </data>
   <data name="Toolbox.Depot.ExportArkPlanner" xml:space="preserve">
     <value>匯出至企鵝物流刷圖規劃</value>
@@ -2805,6 +3042,27 @@
   </data>
   <data name="Toolbox.Error.ToolboxBusy" xml:space="preserve">
     <value>Toolbox 目前已有任務執行中，請先停止。</value>
+  </data>
+  <data name="Toolbox.BusyDialog.CloseButton" xml:space="preserve">
+    <value>知道了</value>
+  </data>
+  <data name="Toolbox.BusyDialog.ConfirmButton" xml:space="preserve">
+    <value>確認</value>
+  </data>
+  <data name="Toolbox.BusyDialog.CurrentTask" xml:space="preserve">
+    <value>目前任務</value>
+  </data>
+  <data name="Toolbox.BusyDialog.DetailsButton" xml:space="preserve">
+    <value>詳細報錯</value>
+  </data>
+  <data name="Toolbox.BusyDialog.Message" xml:space="preserve">
+    <value>{0} 仍在執行。請先停止目前任務，再啟動新的小工具任務。</value>
+  </data>
+  <data name="Toolbox.BusyDialog.StopButton" xml:space="preserve">
+    <value>停止目前任務</value>
+  </data>
+  <data name="Toolbox.BusyDialog.Title" xml:space="preserve">
+    <value>小工具正在執行</value>
   </data>
   <data name="Toolbox.ExecutionReview.HistoryLabel" xml:space="preserve">
     <value>歷史記錄</value>
@@ -3161,6 +3419,27 @@
   <data name="Copilot.Error.ValidateTabMismatch" xml:space="preserve">
     <value>目前選擇的作業與標籤頁類型不符</value>
   </data>
+  <data name="Copilot.Error.SelectTaskToUpdate" xml:space="preserve">
+    <value>請選擇要更新的作業。</value>
+  </data>
+  <data name="Copilot.Error.UpdateListItemPersistFail" xml:space="preserve">
+    <value>更新作業列表失敗：列表儲存失敗。</value>
+  </data>
+  <data name="Copilot.RunOwnerBlockedDialog.ConfirmButton" xml:space="preserve">
+    <value>確認</value>
+  </data>
+  <data name="Copilot.RunOwnerBlockedDialog.DetailsButton" xml:space="preserve">
+    <value>詳細報錯</value>
+  </data>
+  <data name="Copilot.RunOwnerBlockedDialog.Message" xml:space="preserve">
+    <value>{0} 正在執行。請先停止目前任務，再啟動 Copilot。</value>
+  </data>
+  <data name="Copilot.RunOwnerBlockedDialog.StopButton" xml:space="preserve">
+    <value>停止任務</value>
+  </data>
+  <data name="Copilot.RunOwnerBlockedDialog.Title" xml:space="preserve">
+    <value>Copilot 啟動被攔截</value>
+  </data>
   <data name="Copilot.FilePicker.SelectTask.Title" xml:space="preserve">
     <value>選擇作業</value>
   </data>
@@ -3208,8 +3487,7 @@
 右鍵加入突襲難度</value>
   </data>
   <data name="Copilot.Tip.ClearList" xml:space="preserve">
-    <value>左鍵清除所有任務
-右鍵清除未啟用任務</value>
+    <value>刪除戰鬥列表中的全部作業。</value>
   </data>
   <data name="Copilot.Tip.File" xml:space="preserve">
     <value>作業檔可以直接用滑鼠拖進來喔 (oﾟvﾟ)ノ</value>
@@ -3253,8 +3531,14 @@
   <data name="Dialog.Error.CloseButton" xml:space="preserve">
     <value>關閉</value>
   </data>
+  <data name="Dialog.Error.ConnectFailedTitle" xml:space="preserve">
+    <value>連線模擬器失敗</value>
+  </data>
   <data name="Dialog.Error.CopyButton" xml:space="preserve">
     <value>複製</value>
+  </data>
+  <data name="Dialog.Error.CopyErrorInfoButton" xml:space="preserve">
+    <value>詳細報錯</value>
   </data>
   <data name="Dialog.Error.IssueReportButton" xml:space="preserve">
     <value>問題回饋</value>
@@ -3264,6 +3548,9 @@
   </data>
   <data name="Dialog.Warning.ConfirmButton" xml:space="preserve">
     <value>確認</value>
+  </data>
+  <data name="Dialog.Warning.DetailsButton" xml:space="preserve">
+    <value>詳細報錯</value>
   </data>
   <data name="Dialog.Warning.Title" xml:space="preserve">
     <value>警告</value>
@@ -3835,6 +4122,30 @@
   <data name="Copilot.List.InlineJsonHint" xml:space="preserve">
     <value>內嵌 JSON</value>
   </data>
+  <data name="Copilot.List.Button.ClearAll" xml:space="preserve">
+    <value>刪除全部</value>
+  </data>
+  <data name="Copilot.List.Button.Disable" xml:space="preserve">
+    <value>停用</value>
+  </data>
+  <data name="Copilot.List.Button.Enable" xml:space="preserve">
+    <value>啟用</value>
+  </data>
+  <data name="Copilot.List.Button.LoadSingle" xml:space="preserve">
+    <value>載入單個</value>
+  </data>
+  <data name="Copilot.List.Button.ToggleRaid" xml:space="preserve">
+    <value>切換突襲</value>
+  </data>
+  <data name="Copilot.List.ClearAllConfirm.Confirm" xml:space="preserve">
+    <value>刪除全部</value>
+  </data>
+  <data name="Copilot.List.ClearAllConfirm.Message" xml:space="preserve">
+    <value>將刪除戰鬥列表中的全部作業，此操作無法復原。</value>
+  </data>
+  <data name="Copilot.List.ClearAllConfirm.Title" xml:space="preserve">
+    <value>刪除戰鬥列表</value>
+  </data>
   <data name="Copilot.List.RaidLabel" xml:space="preserve">
     <value>突襲</value>
   </data>
@@ -3970,6 +4281,9 @@
   <data name="Settings.VersionUpdate.RestartPending" xml:space="preserve">
     <value>更新套件已下載完成，請稍後重新啟動 MAA 以套用更新。</value>
   </data>
+  <data name="Settings.VersionUpdate.RestartPendingWhileRunning" xml:space="preserve">
+    <value>更新套件已下載完成。目前任務仍在執行中，請在空閒時重新啟動 MAA 以套用更新。</value>
+  </data>
   <data name="Settings.VersionUpdate.SoftwarePlaceholder.Cancel" xml:space="preserve">
     <value>關閉</value>
   </data>
@@ -3977,10 +4291,10 @@
     <value>知道了</value>
   </data>
   <data name="Settings.VersionUpdate.SoftwarePlaceholder.Message" xml:space="preserve">
-    <value>MAA Unified 尚未實作軟體更新。請繼續使用 WPF 版本處理軟體更新。</value>
+    <value>軟體更新已接入。請前往「設定 &gt; Version Update」檢查、下載並套用更新。</value>
   </data>
   <data name="Settings.VersionUpdate.SoftwarePlaceholder.Status" xml:space="preserve">
-    <value>MAA Unified 尚未實作軟體更新。</value>
+    <value>軟體更新已可用。</value>
   </data>
   <data name="Settings.VersionUpdate.SoftwarePlaceholder.Title" xml:space="preserve">
     <value>軟體更新</value>

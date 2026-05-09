@@ -1,20 +1,39 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Diagnostics;
+using System.Runtime.CompilerServices;
+using System.Threading;
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Interactivity;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
+using MAAUnified.App.Controls;
 using settingsViews = MAAUnified.App.Features.Settings;
 using MAAUnified.App.ViewModels.Settings;
 
 namespace MAAUnified.App.Features.Root;
 
-public partial class SettingsView : UserControl
+public partial class SettingsView : UserControl, INotifyPropertyChanged
 {
     private readonly record struct SectionScrollPosition(string SectionKey, double OffsetWithinSection);
+    private readonly record struct SectionHeaderLayout(
+        SettingsSectionViewModel Section,
+        string Title,
+        double ContentTop,
+        double ViewportTop,
+        double HeaderHeight);
 
     private const int BackgroundSectionWarmupIntervalMs = 45;
+    private const int LocalizedSectionRefreshInitialDelayMs = 750;
+    private const int LocalizedSectionRefreshIntervalMs = 180;
+    private const int ResizeLayoutSettleDelayMs = 180;
+    private const int ResizeActiveSectionRadius = 1;
+    private const double ResizeFallbackPlaceholderHeight = 96d;
+    private const double SectionActivationPadding = 8d;
+    private const double SectionHeaderTopInset = 6d;
+    private const double SectionHeaderBottomInset = 4d;
+    private const double StickyRevealLineY = 0d;
     private static readonly string[] SectionOrder =
     [
         "ConfigurationManager",
@@ -40,24 +59,37 @@ public partial class SettingsView : UserControl
     private static int _backgroundSectionWarmupIndex;
 
     private readonly Dictionary<string, Border> _sectionAnchors = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, Control> _materializedSectionContent = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, TextBlock> _sectionTitleAnchors = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, double> _sectionPlaceholderHeights = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _materializedSections = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, double> _sectionTopCache = new(StringComparer.OrdinalIgnoreCase);
     private ScrollViewer? _sectionScrollViewer;
     private StackPanel? _sectionContentPanel;
     private bool _suppressSectionSelectionChanged;
     private bool _suppressSectionScrollChanged;
+    private bool _sectionLayoutRefreshQueued;
+    private bool _localizedSectionRefreshQueued;
     private bool _sectionTopCacheDirty = true;
     private double _lastKnownExtentHeight = -1d;
     private double _lastKnownViewportHeight = -1d;
-    private DispatcherTimer? _progressiveMaterializationTimer;
+    private CancellationTokenSource? _progressiveMaterializationCts;
+    private readonly HashSet<string> _pendingProgressiveSections = new(StringComparer.OrdinalIgnoreCase);
     private bool _sectionMaterializationInitialized;
+    private bool _selectedSectionScrollQueued;
     private SettingsPageViewModel? _observedViewModel;
     private bool _viewCompositionActive;
     private SettingsPageViewModel? _viewCompositionOwner;
+    private DispatcherTimer? _resizeLayoutSettleTimer;
+    private bool _isResizeLayoutThrottled;
+    private bool _hasObservedResizeLayoutSize;
+    private Size _lastObservedResizeLayoutSize;
+    private event PropertyChangedEventHandler? ViewPropertyChanged;
 
     public SettingsView()
     {
         InitializeComponent();
+        SizeChanged += OnRootSizeChanged;
         AttachedToVisualTree += (_, _) =>
         {
             BindViewModelNotifications();
@@ -72,6 +104,8 @@ public partial class SettingsView : UserControl
         };
         DetachedFromVisualTree += (_, _) =>
         {
+            EndResizeLayoutThrottle();
+            _hasObservedResizeLayoutSize = false;
             CancelProgressiveSectionMaterialization();
             CompleteViewComposition();
             if (_sectionContentPanel is not null)
@@ -93,6 +127,7 @@ public partial class SettingsView : UserControl
             CompleteViewComposition();
             BindViewModelNotifications();
             _sectionMaterializationInitialized = false;
+            RaiseSectionChromePropertyChanged();
             Dispatcher.UIThread.Post(() =>
             {
                 if (VisualRoot is null)
@@ -106,9 +141,16 @@ public partial class SettingsView : UserControl
                 EnsureSectionMaterializationInitialized(forceReset: true);
                 EnsureCurrentSectionMaterialized();
                 ScrollToSelectedSection();
+                RefreshStickyTitlePresenter();
                 StartProgressiveSectionMaterialization();
             }, DispatcherPriority.Loaded);
         };
+    }
+
+    event PropertyChangedEventHandler? INotifyPropertyChanged.PropertyChanged
+    {
+        add => ViewPropertyChanged += value;
+        remove => ViewPropertyChanged -= value;
     }
 
     private SettingsPageViewModel? VM => DataContext as SettingsPageViewModel;
@@ -130,7 +172,7 @@ public partial class SettingsView : UserControl
         RefreshSectionLayoutReferences();
         BeginViewComposition();
         RebuildSectionAnchors();
-        EnsureSectionMaterializationInitialized();
+        EnsureSectionMaterializationInitialized(forceReset: true);
         EnsureCurrentSectionMaterialized();
         StartProgressiveSectionMaterialization();
     }
@@ -182,37 +224,146 @@ public partial class SettingsView : UserControl
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (string.IsNullOrEmpty(e.PropertyName)
+            || string.Equals(e.PropertyName, nameof(SettingsPageViewModel.SelectedSection), StringComparison.Ordinal)
+            || string.Equals(e.PropertyName, nameof(SettingsPageViewModel.SelectedSectionTitle), StringComparison.Ordinal)
+            || string.Equals(e.PropertyName, nameof(SettingsPageViewModel.RootTexts), StringComparison.Ordinal)
+            || string.Equals(e.PropertyName, nameof(SettingsPageViewModel.Language), StringComparison.Ordinal)
+            || string.Equals(e.PropertyName, nameof(SettingsPageViewModel.RemoteControlStatusMessage), StringComparison.Ordinal)
+            || string.Equals(e.PropertyName, nameof(SettingsPageViewModel.ExternalNotificationStatusMessage), StringComparison.Ordinal)
+            || string.Equals(e.PropertyName, nameof(SettingsPageViewModel.HotkeyStatusMessage), StringComparison.Ordinal)
+            || string.Equals(e.PropertyName, nameof(SettingsPageViewModel.VersionUpdateStatusMessage), StringComparison.Ordinal)
+            || string.Equals(e.PropertyName, nameof(SettingsPageViewModel.ConfigurationManagerStatusMessage), StringComparison.Ordinal)
+            || string.Equals(e.PropertyName, nameof(SettingsPageViewModel.AchievementStatusMessage), StringComparison.Ordinal)
+            || string.Equals(e.PropertyName, nameof(SettingsPageViewModel.IssueReportStatusMessage), StringComparison.Ordinal)
+            || string.Equals(e.PropertyName, nameof(SettingsPageViewModel.AboutStatusMessage), StringComparison.Ordinal))
+        {
+            RaiseSectionChromePropertyChanged();
+        }
+
         if (!string.Equals(e.PropertyName, nameof(SettingsPageViewModel.RootTexts), StringComparison.Ordinal)
             && !string.Equals(e.PropertyName, nameof(SettingsPageViewModel.Language), StringComparison.Ordinal))
         {
             return;
         }
 
-        Dispatcher.UIThread.Post(RefreshLocalizedSections, DispatcherPriority.Loaded);
+        QueueLocalizedSectionsRefresh();
+    }
+
+    private void QueueLocalizedSectionsRefresh()
+    {
+        if (_localizedSectionRefreshQueued)
+        {
+            return;
+        }
+
+        _localizedSectionRefreshQueued = true;
+        var queueDelay = Stopwatch.StartNew();
+        Dispatcher.UIThread.Post(
+            () =>
+            {
+                _ = RecordSettingsViewTimingAsync(
+                    "SettingsView.RefreshLocalizedSections.QueueDelay",
+                    queueDelay,
+                    ("anchorCount", _sectionAnchors.Count),
+                    ("materializedCount", _materializedSections.Count));
+                _localizedSectionRefreshQueued = false;
+                RefreshLocalizedSections();
+            },
+            DispatcherPriority.Loaded);
     }
 
     private void RefreshLocalizedSections()
     {
+        var total = Stopwatch.StartNew();
+        var step = Stopwatch.StartNew();
         if (VM is null || _sectionAnchors.Count == 0)
         {
             return;
         }
 
+        var materializedBefore = _materializedSections.Count;
+        var sectionsToRematerialize = _materializedSections.ToArray();
+        RaiseSectionChromePropertyChanged();
+        _ = RecordSettingsViewTimingAsync(
+            "SettingsView.RefreshLocalizedSections.Chrome",
+            step,
+            ("materializedBefore", materializedBefore));
+
+        step.Restart();
         var scrollPosition = CaptureCurrentSectionScrollPosition();
+        _ = RecordSettingsViewTimingAsync(
+            "SettingsView.RefreshLocalizedSections.CaptureScroll",
+            step,
+            ("hasScrollPosition", scrollPosition.HasValue));
+
+        step.Restart();
         CancelProgressiveSectionMaterialization();
         BeginViewComposition();
+        _ = RecordSettingsViewTimingAsync(
+            "SettingsView.RefreshLocalizedSections.BeginComposition",
+            step,
+            ("pendingProgressive", _pendingProgressiveSections.Count));
+
+        step.Restart();
         EnsureSectionMaterializationInitialized(forceReset: true);
-        EnsureCurrentSectionMaterialized(materializeThroughSelection: true);
+        foreach (var sectionKey in sectionsToRematerialize)
+        {
+            EnsureSectionMaterialized(sectionKey);
+        }
+
+        EnsureCurrentSectionMaterialized();
+        _ = RecordSettingsViewTimingAsync(
+            "SettingsView.RefreshLocalizedSections.MaterializeCurrent",
+            step,
+            ("materializedBefore", materializedBefore),
+            ("materializedAfter", _materializedSections.Count),
+            ("rematerializedCount", sectionsToRematerialize.Length));
+
+        step.Restart();
+        RefreshSectionTopCacheIfNeeded();
+        _ = RecordSettingsViewTimingAsync(
+            "SettingsView.RefreshLocalizedSections.LayoutState",
+            step,
+            ("anchorCount", _sectionAnchors.Count),
+            ("materializedCount", _materializedSections.Count));
+
+        var restoreQueueDelay = Stopwatch.StartNew();
         Dispatcher.UIThread.Post(
             () =>
             {
+                _ = RecordSettingsViewTimingAsync(
+                    "SettingsView.RefreshLocalizedSections.RestoreScroll.QueueDelay",
+                    restoreQueueDelay,
+                    ("hasScrollPosition", scrollPosition.HasValue));
+                var restore = Stopwatch.StartNew();
                 if (!RestoreSectionScrollPosition(scrollPosition))
                 {
                     ScrollToSelectedSection();
                 }
+
+                _ = RecordSettingsViewTimingAsync(
+                    "SettingsView.RefreshLocalizedSections.RestoreScroll",
+                    restore,
+                    ("hasScrollPosition", scrollPosition.HasValue));
             },
             DispatcherPriority.Loaded);
-        StartProgressiveSectionMaterialization();
+
+        step.Restart();
+        StartProgressiveSectionMaterialization(
+            initialDelayMs: LocalizedSectionRefreshInitialDelayMs,
+            intervalMs: LocalizedSectionRefreshIntervalMs,
+            dispatcherPriority: DispatcherPriority.Background);
+        _ = RecordSettingsViewTimingAsync(
+            "SettingsView.RefreshLocalizedSections.StartProgressive",
+            step,
+            ("pendingProgressive", _pendingProgressiveSections.Count));
+        _ = RecordSettingsViewTimingAsync(
+            "SettingsView.RefreshLocalizedSections",
+            total,
+            ("materializedBefore", materializedBefore),
+            ("materializedAfter", _materializedSections.Count),
+            ("pendingProgressive", _pendingProgressiveSections.Count));
     }
 
     private void RefreshSectionLayoutReferences()
@@ -270,6 +421,8 @@ public partial class SettingsView : UserControl
             return;
         }
 
+        RaiseSectionChromePropertyChanged();
+        ApplyResizeSectionScope();
         Dispatcher.UIThread.Post(ScrollToSelectedSection, DispatcherPriority.Background);
     }
 
@@ -283,12 +436,13 @@ public partial class SettingsView : UserControl
         InvalidateSectionTopCacheIfLayoutChanged();
         TryMaterializeNextSectionForScroll();
         UpdateSelectedSectionFromScroll();
+        RefreshStickyTitlePresenter();
     }
 
     private void OnSectionContentPanelSizeChanged(object? sender, SizeChangedEventArgs e)
     {
         InvalidateSectionTopCache();
-        RefreshSectionTopCacheIfNeeded();
+        QueueSectionLayoutRefresh();
     }
 
     private void RebuildSectionAnchors()
@@ -322,11 +476,16 @@ public partial class SettingsView : UserControl
 
     private void ResetSectionMaterialization()
     {
+        EndResizeLayoutThrottle(restoreDeferredSections: false);
         foreach (var anchor in _sectionAnchors.Values)
         {
             anchor.Child = null;
+            ClearSectionPlaceholderHeight(anchor);
         }
 
+        _materializedSectionContent.Clear();
+        _sectionPlaceholderHeights.Clear();
+        _sectionTitleAnchors.Clear();
         _materializedSections.Clear();
         InvalidateSectionTopCache();
     }
@@ -379,6 +538,9 @@ public partial class SettingsView : UserControl
     }
 
     private bool EnsureSectionMaterialized(string key)
+        => EnsureSectionMaterializedCore(key, loadDeferredData: true);
+
+    private bool EnsureSectionMaterializedCore(string key, bool loadDeferredData)
     {
         if (string.IsNullOrWhiteSpace(key)
             || _materializedSections.Contains(key)
@@ -395,10 +557,12 @@ public partial class SettingsView : UserControl
 
         ApplySectionDataContext(key, content);
         MarkSectionWarmupPrepared(key);
-        anchor.Child = content;
+        _materializedSectionContent[key] = content;
+        AttachOrDeferSectionContentForCurrentResizeState(key, anchor, content);
+        UpdateSectionTitleAnchor(key, content);
         _materializedSections.Add(key);
         InvalidateSectionTopCache();
-        if (VM is { } vm)
+        if (loadDeferredData && VM is { } vm)
         {
             _ = vm.EnsureSectionDataLoadedAsync(key);
         }
@@ -451,6 +615,38 @@ public partial class SettingsView : UserControl
             : vm;
     }
 
+    private void UpdateSectionTitleAnchor(string key, Control? content)
+    {
+        _sectionTitleAnchors.Remove(key);
+        if (content is null)
+        {
+            return;
+        }
+
+        if (FindSectionTitleAnchor(content) is { } title)
+        {
+            _sectionTitleAnchors[key] = title;
+        }
+    }
+
+    private static TextBlock? FindSectionTitleAnchor(Control content)
+    {
+        if (content is TextBlock directTitle && directTitle.Classes.Contains("settings-page-title"))
+        {
+            return directTitle;
+        }
+
+        foreach (var title in content.GetVisualDescendants().OfType<TextBlock>())
+        {
+            if (title.Classes.Contains("settings-page-title"))
+            {
+                return title;
+            }
+        }
+
+        return null;
+    }
+
     private void InvalidateSectionTopCache()
     {
         _sectionTopCacheDirty = true;
@@ -485,19 +681,55 @@ public partial class SettingsView : UserControl
         foreach (var section in VM.Sections)
         {
             if (!_materializedSections.Contains(section.Key)
-                || !_sectionAnchors.TryGetValue(section.Key, out var anchor))
+                || !TryResolveSectionTop(section.Key, out var top))
             {
                 continue;
             }
 
-            var point = anchor.TranslatePoint(default, _sectionContentPanel);
-            if (point.HasValue)
-            {
-                _sectionTopCache[section.Key] = point.Value.Y;
-            }
+            _sectionTopCache[section.Key] = top;
         }
 
         _sectionTopCacheDirty = false;
+    }
+
+    private void QueueSectionLayoutRefresh()
+    {
+        if (_sectionLayoutRefreshQueued)
+        {
+            return;
+        }
+
+        _sectionLayoutRefreshQueued = true;
+        Dispatcher.UIThread.Post(
+            () =>
+            {
+                _sectionLayoutRefreshQueued = false;
+                RefreshSectionTopCacheIfNeeded();
+                RefreshStickyTitlePresenter();
+            },
+            DispatcherPriority.Render);
+    }
+
+    private bool TryResolveSectionTop(string key, out double top)
+    {
+        if (_sectionContentPanel is not null
+            && _sectionTitleAnchors.TryGetValue(key, out var titleAnchor)
+            && titleAnchor.TranslatePoint(default, _sectionContentPanel) is { } titlePoint)
+        {
+            top = titlePoint.Y;
+            return true;
+        }
+
+        if (_sectionContentPanel is not null
+            && _sectionAnchors.TryGetValue(key, out var sectionAnchor)
+            && sectionAnchor.TranslatePoint(default, _sectionContentPanel) is { } sectionPoint)
+        {
+            top = sectionPoint.Y;
+            return true;
+        }
+
+        top = 0d;
+        return false;
     }
 
     private void TryMaterializeNextSectionForScroll()
@@ -533,45 +765,158 @@ public partial class SettingsView : UserControl
         return false;
     }
 
-    private void StartProgressiveSectionMaterialization()
+    private void StartProgressiveSectionMaterialization(
+        int initialDelayMs = 0,
+        int intervalMs = BackgroundSectionWarmupIntervalMs,
+        DispatcherPriority? dispatcherPriority = null)
     {
         CancelProgressiveSectionMaterialization();
-        if (!TryMaterializeNextSectionInOrder())
+        if (VM is not { } vm)
         {
             CompleteViewComposition();
             return;
         }
 
-        var timer = new DispatcherTimer
+        var pendingSections = ResolveProgressiveMaterializationTargets()
+            .Where(sectionKey => !_materializedSections.Contains(sectionKey))
+            .ToArray();
+        if (pendingSections.Length == 0)
         {
-            Interval = TimeSpan.FromMilliseconds(45),
-        };
-        timer.Tick += OnProgressiveMaterializationTick;
-        _progressiveMaterializationTimer = timer;
-        timer.Start();
+            CompleteViewComposition();
+            return;
+        }
+
+        _progressiveMaterializationCts = new CancellationTokenSource();
+        foreach (var sectionKey in pendingSections)
+        {
+            _pendingProgressiveSections.Add(sectionKey);
+        }
+
+        _ = MaterializeSectionsSequentiallyAsync(
+            vm,
+            pendingSections,
+            _progressiveMaterializationCts.Token,
+            initialDelayMs,
+            intervalMs,
+            dispatcherPriority ?? DispatcherPriority.Background);
+    }
+
+    private static IEnumerable<string> ResolveProgressiveMaterializationTargets()
+    {
+        return SectionOrder;
     }
 
     private void CancelProgressiveSectionMaterialization()
     {
-        var timer = _progressiveMaterializationTimer;
-        _progressiveMaterializationTimer = null;
-        if (timer is null)
-        {
-            return;
-        }
-
-        timer.Stop();
-        timer.Tick -= OnProgressiveMaterializationTick;
+        _pendingProgressiveSections.Clear();
+        _progressiveMaterializationCts?.Cancel();
+        _progressiveMaterializationCts?.Dispose();
+        _progressiveMaterializationCts = null;
     }
 
-    private void OnProgressiveMaterializationTick(object? sender, EventArgs e)
+    private async Task MaterializeSectionWhenReadyAsync(
+        SettingsPageViewModel owner,
+        string sectionKey,
+        CancellationToken cancellationToken,
+        DispatcherPriority dispatcherPriority)
     {
-        if (TryMaterializeNextSectionInOrder())
+        var dataLoad = Stopwatch.StartNew();
+        try
+        {
+            await owner.EnsureSectionDataLoadedAsync(sectionKey, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+        finally
+        {
+            _ = RecordSettingsViewTimingAsync(
+                "SettingsView.MaterializeSection.DataLoad",
+                dataLoad,
+                ("section", sectionKey));
+        }
+
+        await Dispatcher.UIThread.InvokeAsync(
+            () =>
+            {
+                var attach = Stopwatch.StartNew();
+                if (!cancellationToken.IsCancellationRequested
+                    && ReferenceEquals(VM, owner))
+                {
+                    EnsureSectionMaterializedCore(sectionKey, loadDeferredData: false);
+                }
+
+                CompleteProgressiveSectionMaterialization(owner, sectionKey);
+                _ = RecordSettingsViewTimingAsync(
+                    "SettingsView.MaterializeSection.Attach",
+                    attach,
+                    ("section", sectionKey),
+                    ("materializedCount", _materializedSections.Count),
+                    ("pendingProgressive", _pendingProgressiveSections.Count));
+            },
+            dispatcherPriority);
+    }
+
+    private async Task MaterializeSectionsSequentiallyAsync(
+        SettingsPageViewModel owner,
+        IReadOnlyList<string> sectionKeys,
+        CancellationToken cancellationToken,
+        int initialDelayMs,
+        int intervalMs,
+        DispatcherPriority dispatcherPriority)
+    {
+        try
+        {
+            if (initialDelayMs > 0)
+            {
+                await Task.Delay(initialDelayMs, cancellationToken);
+            }
+
+            for (var i = 0; i < sectionKeys.Count; i++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                await MaterializeSectionWhenReadyAsync(owner, sectionKeys[i], cancellationToken, dispatcherPriority);
+                if (i + 1 < sectionKeys.Count)
+                {
+                    await Task.Delay(Math.Max(intervalMs, 0), cancellationToken);
+                }
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+        catch
+        {
+            await Dispatcher.UIThread.InvokeAsync(
+                () =>
+                {
+                    if (ReferenceEquals(_viewCompositionOwner, owner))
+                    {
+                        _pendingProgressiveSections.Clear();
+                        _progressiveMaterializationCts?.Dispose();
+                        _progressiveMaterializationCts = null;
+                        CompleteViewComposition();
+                    }
+                },
+                DispatcherPriority.Background);
+        }
+    }
+
+    private void CompleteProgressiveSectionMaterialization(SettingsPageViewModel owner, string sectionKey)
+    {
+        if (!ReferenceEquals(_viewCompositionOwner, owner))
         {
             return;
         }
 
-        CancelProgressiveSectionMaterialization();
+        _pendingProgressiveSections.Remove(sectionKey);
+        if (_pendingProgressiveSections.Count > 0)
+        {
+            return;
+        }
+
+        _progressiveMaterializationCts?.Dispose();
+        _progressiveMaterializationCts = null;
         CompleteViewComposition();
     }
 
@@ -648,6 +993,266 @@ public partial class SettingsView : UserControl
         }
     }
 
+    private void OnRootSizeChanged(object? sender, SizeChangedEventArgs e)
+    {
+        if (VisualRoot is null || !_sectionMaterializationInitialized || _sectionAnchors.Count == 0)
+        {
+            return;
+        }
+
+        var currentSize = Bounds.Size;
+        if (currentSize.Width <= 0d || currentSize.Height <= 0d)
+        {
+            return;
+        }
+
+        if (!_hasObservedResizeLayoutSize)
+        {
+            _hasObservedResizeLayoutSize = true;
+            _lastObservedResizeLayoutSize = currentSize;
+            return;
+        }
+
+        if (Math.Abs(currentSize.Width - _lastObservedResizeLayoutSize.Width) < 0.5d
+            && Math.Abs(currentSize.Height - _lastObservedResizeLayoutSize.Height) < 0.5d)
+        {
+            return;
+        }
+
+        _lastObservedResizeLayoutSize = currentSize;
+        BeginResizeLayoutThrottle();
+        RestartResizeLayoutSettleTimer();
+    }
+
+    private void BeginResizeLayoutThrottle()
+    {
+        _isResizeLayoutThrottled = true;
+        RecordMaterializedSectionHeights();
+        ApplyResizeSectionScope();
+    }
+
+    private void RestartResizeLayoutSettleTimer()
+    {
+        _resizeLayoutSettleTimer ??= CreateResizeLayoutSettleTimer();
+        _resizeLayoutSettleTimer.Stop();
+        _resizeLayoutSettleTimer.Start();
+    }
+
+    private DispatcherTimer CreateResizeLayoutSettleTimer()
+    {
+        var timer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(ResizeLayoutSettleDelayMs),
+        };
+        timer.Tick += OnResizeLayoutSettleTimerTick;
+        return timer;
+    }
+
+    private void OnResizeLayoutSettleTimerTick(object? sender, EventArgs e)
+    {
+        _resizeLayoutSettleTimer?.Stop();
+        EndResizeLayoutThrottle();
+    }
+
+    private void EndResizeLayoutThrottle(bool restoreDeferredSections = true)
+    {
+        _resizeLayoutSettleTimer?.Stop();
+        if (!_isResizeLayoutThrottled)
+        {
+            return;
+        }
+
+        var scrollPosition = CaptureCurrentSectionScrollPosition();
+        _isResizeLayoutThrottled = false;
+        if (!restoreDeferredSections)
+        {
+            return;
+        }
+
+        RestoreAllMaterializedSectionContent();
+        InvalidateSectionTopCache();
+        Dispatcher.UIThread.Post(
+            () =>
+            {
+                if (VisualRoot is null)
+                {
+                    return;
+                }
+
+                if (!RestoreSectionScrollPosition(scrollPosition))
+                {
+                    RefreshSectionTopCacheIfNeeded();
+                }
+
+                RefreshStickyTitlePresenter();
+            },
+            DispatcherPriority.Loaded);
+    }
+
+    private void RecordMaterializedSectionHeights()
+    {
+        foreach (var sectionKey in _materializedSections)
+        {
+            if (!_sectionAnchors.TryGetValue(sectionKey, out var anchor))
+            {
+                continue;
+            }
+
+            var height = ResolveSectionPlaceholderHeight(anchor);
+            if (height > 0d)
+            {
+                _sectionPlaceholderHeights[sectionKey] = height;
+            }
+        }
+    }
+
+    private double ResolveSectionPlaceholderHeight(Border anchor)
+    {
+        var height = Math.Max(anchor.Bounds.Height, anchor.DesiredSize.Height);
+        if (height > 0d)
+        {
+            return height;
+        }
+
+        if (anchor.Child is Control child)
+        {
+            return Math.Max(child.Bounds.Height, child.DesiredSize.Height);
+        }
+
+        return 0d;
+    }
+
+    private void ApplyResizeSectionScope()
+    {
+        if (!_isResizeLayoutThrottled)
+        {
+            return;
+        }
+
+        foreach (var sectionKey in _materializedSections)
+        {
+            if (!_sectionAnchors.TryGetValue(sectionKey, out var anchor)
+                || !_materializedSectionContent.TryGetValue(sectionKey, out var content))
+            {
+                continue;
+            }
+
+            if (ShouldKeepSectionAttachedDuringResize(sectionKey))
+            {
+                AttachSectionContent(sectionKey, anchor, content);
+            }
+            else
+            {
+                DeferSectionContentForResize(sectionKey, anchor, content);
+            }
+        }
+
+        InvalidateSectionTopCache();
+        QueueSectionLayoutRefresh();
+    }
+
+    private void AttachOrDeferSectionContentForCurrentResizeState(string key, Border anchor, Control content)
+    {
+        if (!_isResizeLayoutThrottled
+            || ShouldKeepSectionAttachedDuringResize(key))
+        {
+            AttachSectionContent(key, anchor, content);
+            return;
+        }
+
+        DeferSectionContentForResize(key, anchor, content);
+    }
+
+    private void AttachSectionContent(string key, Border anchor, Control content)
+    {
+        ClearSectionPlaceholderHeight(anchor);
+        if (!ReferenceEquals(anchor.Child, content))
+        {
+            anchor.Child = content;
+        }
+
+        UpdateSectionTitleAnchor(key, content);
+    }
+
+    private void DeferSectionContentForResize(string key, Border anchor, Control content)
+    {
+        if (ReferenceEquals(anchor.Child, content))
+        {
+            var measuredHeight = ResolveSectionPlaceholderHeight(anchor);
+            if (measuredHeight > 0d)
+            {
+                _sectionPlaceholderHeights[key] = measuredHeight;
+            }
+
+            anchor.Child = null;
+        }
+
+        var placeholderHeight = _sectionPlaceholderHeights.TryGetValue(key, out var height) && height > 0d
+            ? height
+            : ResizeFallbackPlaceholderHeight;
+        SetSectionPlaceholderHeight(anchor, placeholderHeight);
+    }
+
+    private void RestoreAllMaterializedSectionContent()
+    {
+        foreach (var sectionKey in _materializedSections)
+        {
+            if (!_sectionAnchors.TryGetValue(sectionKey, out var anchor)
+                || !_materializedSectionContent.TryGetValue(sectionKey, out var content))
+            {
+                continue;
+            }
+
+            AttachSectionContent(sectionKey, anchor, content);
+        }
+    }
+
+    private bool ShouldKeepSectionAttachedDuringResize(string key)
+    {
+        var activeIndex = ResolveSelectedSectionIndex();
+        var candidateIndex = ResolveSectionIndex(key);
+        if (activeIndex < 0 || candidateIndex < 0)
+        {
+            return true;
+        }
+
+        return Math.Abs(candidateIndex - activeIndex) <= ResizeActiveSectionRadius;
+    }
+
+    private int ResolveSelectedSectionIndex()
+    {
+        var selectedKey = VM?.SelectedSection?.Key;
+        return string.IsNullOrWhiteSpace(selectedKey)
+            ? -1
+            : ResolveSectionIndex(selectedKey);
+    }
+
+    private static int ResolveSectionIndex(string key)
+    {
+        for (var i = 0; i < SectionOrder.Length; i++)
+        {
+            if (string.Equals(SectionOrder[i], key, StringComparison.OrdinalIgnoreCase))
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    private static void SetSectionPlaceholderHeight(Border anchor, double height)
+    {
+        var resolvedHeight = Math.Max(1d, height);
+        anchor.Height = resolvedHeight;
+        anchor.MinHeight = resolvedHeight;
+    }
+
+    private static void ClearSectionPlaceholderHeight(Border anchor)
+    {
+        anchor.Height = double.NaN;
+        anchor.MinHeight = 0d;
+    }
+
     private void ScrollToSelectedSection()
     {
         var vm = VM;
@@ -658,14 +1263,19 @@ public partial class SettingsView : UserControl
             return;
         }
 
-        EnsureSectionsThrough(vm.SelectedSection.Key);
+        if (EnsureSectionsThrough(vm.SelectedSection.Key))
+        {
+            ApplyResizeSectionScope();
+            QueueScrollToSelectedSectionAfterLayout();
+            return;
+        }
+
         RefreshSectionTopCacheIfNeeded();
 
         if (!_sectionTopCache.TryGetValue(vm.SelectedSection.Key, out var top)
-            && (_sectionAnchors.TryGetValue(vm.SelectedSection.Key, out var anchor)
-                && anchor.TranslatePoint(default, contentPanel) is { } point))
+            && TryResolveSectionTop(vm.SelectedSection.Key, out var resolvedTop))
         {
-            top = point.Y;
+            top = resolvedTop;
             _sectionTopCache[vm.SelectedSection.Key] = top;
         }
 
@@ -674,10 +1284,36 @@ public partial class SettingsView : UserControl
             return;
         }
 
+        var targetOffset = ComputeSectionTargetOffset(top, GetSectionScrollTargetLineY());
         SuppressSectionScrollChangedOnce();
         scrollViewer.Offset = new Vector(
             scrollViewer.Offset.X,
-            Math.Max(top, 0d));
+            Math.Max(targetOffset, 0d));
+        RefreshStickyTitlePresenter();
+        StartProgressiveSectionMaterialization();
+    }
+
+    private void QueueScrollToSelectedSectionAfterLayout()
+    {
+        if (_selectedSectionScrollQueued)
+        {
+            return;
+        }
+
+        _selectedSectionScrollQueued = true;
+        Dispatcher.UIThread.Post(
+            () =>
+            {
+                _selectedSectionScrollQueued = false;
+                if (VisualRoot is null)
+                {
+                    return;
+                }
+
+                RefreshSectionTopCacheIfNeeded();
+                ScrollToSelectedSection();
+            },
+            DispatcherPriority.Background);
     }
 
     private SectionScrollPosition? CaptureCurrentSectionScrollPosition()
@@ -696,9 +1332,10 @@ public partial class SettingsView : UserControl
             return null;
         }
 
+        var sectionOffset = ComputeSectionTargetOffset(top, GetSectionScrollTargetLineY());
         return new SectionScrollPosition(
             vm.SelectedSection.Key,
-            Math.Max(scrollViewer.Offset.Y - top, 0d));
+            Math.Max(scrollViewer.Offset.Y - sectionOffset, 0d));
     }
 
     private bool RestoreSectionScrollPosition(SectionScrollPosition? scrollPosition)
@@ -714,10 +1351,9 @@ public partial class SettingsView : UserControl
         RefreshSectionTopCacheIfNeeded();
 
         if (!_sectionTopCache.TryGetValue(scrollPosition.Value.SectionKey, out var top)
-            && (_sectionAnchors.TryGetValue(scrollPosition.Value.SectionKey, out var anchor)
-                && anchor.TranslatePoint(default, contentPanel) is { } point))
+            && TryResolveSectionTop(scrollPosition.Value.SectionKey, out var resolvedTop))
         {
-            top = point.Y;
+            top = resolvedTop;
             _sectionTopCache[scrollPosition.Value.SectionKey] = top;
         }
 
@@ -727,9 +1363,11 @@ public partial class SettingsView : UserControl
         }
 
         var maxOffset = Math.Max(scrollViewer.Extent.Height - scrollViewer.Viewport.Height, 0d);
-        var targetOffset = Math.Clamp(top + scrollPosition.Value.OffsetWithinSection, 0d, maxOffset);
+        var sectionOffset = ComputeSectionTargetOffset(top, GetSectionScrollTargetLineY());
+        var targetOffset = Math.Clamp(sectionOffset + scrollPosition.Value.OffsetWithinSection, 0d, maxOffset);
         SuppressSectionScrollChangedOnce();
         scrollViewer.Offset = new Vector(scrollViewer.Offset.X, targetOffset);
+        RefreshStickyTitlePresenter();
         return true;
     }
 
@@ -742,31 +1380,19 @@ public partial class SettingsView : UserControl
             return;
         }
 
-        RefreshSectionTopCacheIfNeeded();
-        if (_sectionTopCache.Count == 0)
+        var headerLayouts = MeasureSectionHeaderLayouts();
+        if (headerLayouts.Count == 0)
         {
             return;
         }
 
-        var threshold = scrollViewer.Offset.Y + Math.Max(24d, scrollViewer.Viewport.Height * 0.25d);
-        SettingsSectionViewModel? candidate = null;
-        var candidateTop = double.MinValue;
-
-        foreach (var section in vm.Sections)
-        {
-            if (!_sectionTopCache.TryGetValue(section.Key, out var top))
-            {
-                continue;
-            }
-
-            if (top <= threshold && top >= candidateTop)
-            {
-                candidate = section;
-                candidateTop = top;
-            }
-        }
-
-        candidate ??= vm.Sections.Count > 0 ? vm.Sections[0] : null;
+        var selectedIndex = ResolveActiveSectionIndex(
+            Math.Max(scrollViewer.Offset.Y, 0d),
+            GetSectionActivationLineY(),
+            headerLayouts.Select(static layout => layout.ContentTop).ToArray());
+        SettingsSectionViewModel? candidate = selectedIndex >= 0
+            ? headerLayouts[selectedIndex].Section
+            : (vm.Sections.Count > 0 ? vm.Sections[0] : null);
         if (candidate is null || ReferenceEquals(candidate, vm.SelectedSection))
         {
             return;
@@ -774,6 +1400,7 @@ public partial class SettingsView : UserControl
 
         SuppressSectionSelectionChangedOnce();
         vm.SelectedSection = candidate;
+        ApplyResizeSectionScope();
     }
 
     private void SuppressSectionSelectionChangedOnce()
@@ -790,5 +1417,254 @@ public partial class SettingsView : UserControl
         Dispatcher.UIThread.Post(
             () => _suppressSectionScrollChanged = false,
             DispatcherPriority.Background);
+    }
+
+    private IReadOnlyList<SectionHeaderLayout> MeasureSectionHeaderLayouts()
+    {
+        RefreshSectionTopCacheIfNeeded();
+        if (VM is null || _sectionTopCache.Count == 0)
+        {
+            return [];
+        }
+
+        var layouts = new List<SectionHeaderLayout>(VM.Sections.Count);
+        foreach (var section in VM.Sections)
+        {
+            if (!_sectionTopCache.TryGetValue(section.Key, out var top))
+            {
+                continue;
+            }
+
+            _sectionTitleAnchors.TryGetValue(section.Key, out var titleAnchor);
+            layouts.Add(new SectionHeaderLayout(
+                section,
+                ResolveSectionHeaderTitle(section, titleAnchor),
+                top,
+                top - Math.Max(_sectionScrollViewer?.Offset.Y ?? 0d, 0d),
+                ResolveSectionHeaderHeight(titleAnchor)));
+        }
+
+        return layouts;
+    }
+
+    private static string ResolveSectionHeaderTitle(SettingsSectionViewModel section, TextBlock? titleAnchor)
+    {
+        return string.IsNullOrWhiteSpace(titleAnchor?.Text)
+            ? section.DisplayName
+            : titleAnchor.Text;
+    }
+
+    private static double ResolveSectionHeaderHeight(TextBlock? titleAnchor)
+    {
+        return titleAnchor is null
+            ? 0d
+            : Math.Max(titleAnchor.Bounds.Height, titleAnchor.DesiredSize.Height);
+    }
+
+    private void RefreshStickyTitlePresenter()
+    {
+        if (VisualRoot is null)
+        {
+            return;
+        }
+
+        StickyTitlePresenter.State = ResolveStickyPresentation(MeasureSectionHeaderLayouts());
+    }
+
+    private AppStickyTitleState ResolveStickyPresentation(IReadOnlyList<SectionHeaderLayout> headerLayouts)
+    {
+        if (headerLayouts.Count == 0)
+        {
+            return CreateHiddenStickyState();
+        }
+
+        var currentIndex = StickyTitleMath.ResolvePinnedHeaderIndex(
+            headerLayouts.Select(static layout => layout.ViewportTop).ToArray(),
+            StickyRevealLineY);
+        if (currentIndex < 0)
+        {
+            return CreateHiddenStickyState();
+        }
+
+        var currentLayout = headerLayouts[currentIndex];
+        var nextLayout = currentIndex + 1 < headerLayouts.Count ? headerLayouts[currentIndex + 1] : (SectionHeaderLayout?)null;
+        var stickyHeight = GetStickyPresentationHeight(currentLayout, nextLayout);
+        var pushOffset = CalculatePushOffset(nextLayout, stickyHeight);
+
+        return new AppStickyTitleState(
+            IsVisible: true,
+            Height: stickyHeight,
+            CurrentTitle: currentLayout.Title,
+            CurrentTranslateY: -pushOffset,
+            IncomingTitle: nextLayout is not null && pushOffset > 0d ? nextLayout.Value.Title : null,
+            IncomingTranslateY: stickyHeight - pushOffset,
+            ShowIncomingTitle: nextLayout is not null && pushOffset > 0d);
+    }
+
+    private double GetSectionActivationLineY()
+    {
+        return Math.Max(18d, GetStickyReferenceHeight() + SectionActivationPadding);
+    }
+
+    private double GetSectionScrollTargetLineY()
+    {
+        return StickyRevealLineY;
+    }
+
+    private double GetSectionTitleReferenceHeight()
+    {
+        return _sectionTitleAnchors.Count == 0
+            ? 0d
+            : _sectionTitleAnchors.Values.Max(title => Math.Max(title.Bounds.Height, title.DesiredSize.Height));
+    }
+
+    private double GetStickyReferenceHeight()
+    {
+        return Math.Max(1d, GetSectionHeaderVisualHeight(GetSectionTitleReferenceHeight()));
+    }
+
+    private double GetStickyPresentationHeight(SectionHeaderLayout currentLayout, SectionHeaderLayout? nextLayout)
+    {
+        return Math.Max(
+            1d,
+            Math.Max(
+                GetStickyReferenceHeight(),
+                Math.Max(
+                    GetSectionHeaderVisualHeight(currentLayout.HeaderHeight),
+                    GetSectionHeaderVisualHeight(nextLayout?.HeaderHeight ?? 0d))));
+    }
+
+    private static double GetSectionHeaderVisualHeight(double headerHeight)
+    {
+        return Math.Max(1d, headerHeight + SectionHeaderTopInset + SectionHeaderBottomInset);
+    }
+
+    private static double CalculatePushOffset(SectionHeaderLayout? nextLayout, double stickyHeight)
+    {
+        return nextLayout is null
+            ? 0d
+            : ComputeStickyPushOffset(nextLayout.Value.ViewportTop, stickyHeight);
+    }
+
+    private static AppStickyTitleState CreateHiddenStickyState()
+    {
+        return new AppStickyTitleState(
+            IsVisible: false,
+            Height: 0d,
+            CurrentTitle: string.Empty,
+            CurrentTranslateY: 0d,
+            IncomingTitle: null,
+            IncomingTranslateY: 0d,
+            ShowIncomingTitle: false);
+    }
+
+    private static double ComputeSectionTargetOffset(double headerContentTop, double activationLineY)
+    {
+        return StickyTitleMath.ComputeSectionTargetOffset(headerContentTop, activationLineY);
+    }
+
+    private static int ResolveActiveSectionIndex(double offsetY, double activationLineY, IReadOnlyList<double> headerContentTops)
+    {
+        return StickyTitleMath.ResolveActiveSectionIndex(offsetY, activationLineY, headerContentTops);
+    }
+
+    private static double ComputeStickyPushOffset(double nextViewportTop, double stickyHeight)
+    {
+        return StickyTitleMath.ComputePushOffset(nextViewportTop, stickyHeight);
+    }
+
+    public string CurrentSectionIntroText
+    {
+        get
+        {
+            if (VM?.SelectedSection?.Key is not { Length: > 0 } key || VM.RootTexts is null)
+            {
+                return string.Empty;
+            }
+
+            return VM.RootTexts.GetOrDefault($"Settings.Section.{key}.Intro", string.Empty);
+        }
+    }
+
+    public bool HasCurrentSectionIntroText => !string.IsNullOrWhiteSpace(CurrentSectionIntroText);
+
+    public string CurrentSectionStatusTitle
+    {
+        get
+        {
+            if (VM?.RootTexts is null)
+            {
+                return string.Empty;
+            }
+
+            return VM.RootTexts.GetOrDefault("Settings.Section.Status.Title", "Status");
+        }
+    }
+
+    public string CurrentSectionStatusMessage
+    {
+        get
+        {
+            return string.Empty;
+        }
+    }
+
+    private bool IsTransientSaveStateMessage(string? message)
+    {
+        if (string.IsNullOrWhiteSpace(message) || VM?.RootTexts is null)
+        {
+            return false;
+        }
+
+        var savingText = VM.RootTexts.GetOrDefault("Settings.State.Saving", string.Empty);
+        var savedText = VM.RootTexts.GetOrDefault("Settings.State.Saved", string.Empty);
+        return string.Equals(message, savingText, StringComparison.Ordinal)
+            || string.Equals(message, savedText, StringComparison.Ordinal);
+    }
+
+    public bool HasCurrentSectionStatusMessage => !string.IsNullOrWhiteSpace(CurrentSectionStatusMessage);
+
+    private void RaiseSectionChromePropertyChanged()
+    {
+        OnPropertyChanged(nameof(CurrentSectionIntroText));
+        OnPropertyChanged(nameof(HasCurrentSectionIntroText));
+        OnPropertyChanged(nameof(CurrentSectionStatusTitle));
+        OnPropertyChanged(nameof(CurrentSectionStatusMessage));
+        OnPropertyChanged(nameof(HasCurrentSectionStatusMessage));
+    }
+
+    private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+    {
+        ViewPropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+    }
+
+    private static Task RecordSettingsViewTimingAsync(
+        string scope,
+        Stopwatch stopwatch,
+        params (string Key, object? Value)[] fields)
+    {
+        if (App.Runtime is not { } runtime)
+        {
+            return Task.CompletedTask;
+        }
+
+        var payload = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (key, value) in fields)
+        {
+            if (!string.IsNullOrWhiteSpace(key))
+            {
+                payload[key] = value;
+            }
+        }
+
+        return runtime.DiagnosticsService.RecordTemporaryTimingAsync(
+            scope,
+            stopwatch.Elapsed.TotalMilliseconds,
+            payload);
+    }
+
+    private static string FirstNonEmpty(string primary, string fallback)
+    {
+        return !string.IsNullOrWhiteSpace(primary) ? primary : fallback;
     }
 }

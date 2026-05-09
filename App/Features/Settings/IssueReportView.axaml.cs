@@ -56,7 +56,8 @@ public partial class IssueReportView : UserControl
 
     private void OnOpenRuntimeLogWindowClick(object? sender, RoutedEventArgs e)
     {
-        if (TopLevel.GetTopLevel(this) is MainWindow mainWindow)
+        if (VM?.CanOpenRuntimeLogWindow == true
+            && TopLevel.GetTopLevel(this) is MainWindow mainWindow)
         {
             mainWindow.OpenRuntimeLogWindow();
         }

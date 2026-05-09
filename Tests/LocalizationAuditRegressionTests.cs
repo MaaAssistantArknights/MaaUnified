@@ -21,6 +21,7 @@ public sealed class LocalizationAuditRegressionTests
     {
         "Settings.RemoteControl.GetTaskEndpointWatermark",
         "Settings.RemoteControl.ReportTaskEndpointWatermark",
+        "Settings.VersionUpdate.ProxyAddressWatermark",
     };
 
     private static readonly string[] MainTabKeys =
@@ -64,6 +65,13 @@ public sealed class LocalizationAuditRegressionTests
         "Settings.ConfigurationManager.ProfileName",
         "Settings.ConfigurationManager.NewProfileWatermark",
         "Settings.ConfigurationManager.SaveAsNew",
+        "Settings.ConfigurationManager.SaveAsNewSucceededInline",
+        "Settings.ConfigurationManager.SaveAsNewFailedInline",
+        "Settings.ConfigurationManager.SaveAsNewFailedReason.Generic",
+        "Settings.ConfigurationManager.SaveAsNewFailedReason.ProfileAlreadyExists",
+        "Settings.ConfigurationManager.SaveAsNewFailedReason.ProfileNameEmpty",
+        "Settings.ConfigurationManager.SaveAsNewFailedReason.ProfileNameInvalid",
+        "Settings.ConfigurationManager.SaveAsNewFailedReason.SourceProfileMissing",
         "Settings.ConfigurationManager.DeleteCurrent",
         "Settings.ConfigurationManager.AutoSavedCurrent",
         "Settings.ConfigurationManager.ExportAll",
@@ -321,6 +329,15 @@ public sealed class LocalizationAuditRegressionTests
         "Settings.Achievement.PopupDisabled",
         "Settings.Achievement.PopupAutoClose",
         "Settings.Achievement.Dialog",
+        "Settings.Achievement.Dialog.FilterAll",
+        "Settings.Achievement.Dialog.FilterUnlocked",
+        "Settings.Achievement.Dialog.FilterInProgress",
+        "Settings.Achievement.Dialog.FilterNew",
+        "Settings.Achievement.Dialog.ResultsFormat",
+        "Settings.Achievement.Dialog.ClearFilters",
+        "Settings.Achievement.Dialog.EmptyTitle",
+        "Settings.Achievement.Dialog.EmptyDescription",
+        "Settings.Achievement.Dialog.OverviewFormat",
         "Settings.Achievement.Dialog.Snapshot",
         "Settings.Achievement.Initialize",
         "Settings.Achievement.OpenGuide",
@@ -335,6 +352,13 @@ public sealed class LocalizationAuditRegressionTests
         "Settings.About.Announcement.Dialog",
         "Settings.About.Announcement.Save",
         "Settings.About.CheckAnnouncement",
+        "Settings.About.Dialog.DoNotRemindThisAnnouncementAgain",
+        "Settings.About.Dialog.ReadProgress.PendingBadge",
+        "Settings.About.Dialog.ReadProgress.PendingTitle",
+        "Settings.About.Dialog.ReadProgress.PendingCaption",
+        "Settings.About.Dialog.ReadProgress.ReadyBadge",
+        "Settings.About.Dialog.ReadProgress.ReadyTitle",
+        "Settings.About.Dialog.ReadProgress.ReadyCaption",
         "Settings.About.OpenCommunity",
         "Settings.About.OpenDownload",
         "Settings.About.OpenOfficialWebsite",
@@ -626,6 +650,18 @@ public sealed class LocalizationAuditRegressionTests
                     enUsBaseline[key],
                     localized);
             }
+        }
+    }
+
+    [Fact]
+    public void VersionUpdateProxyAddressWatermark_ShouldMatchWpfAcrossSupportedLanguages()
+    {
+        var map = new RootLocalizationTextMap("Root.Localization.Tests");
+
+        foreach (var language in new[] { "zh-cn", "zh-tw", "en-us", "ja-jp", "ko-kr" })
+        {
+            map.Language = language;
+            Assert.Equal("<IP>:<Port>", map["Settings.VersionUpdate.ProxyAddressWatermark"]);
         }
     }
 

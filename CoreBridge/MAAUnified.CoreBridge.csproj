@@ -5,4 +5,8 @@
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
   </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Compat\MAAUnified.Compat.csproj" />
+  </ItemGroup>
 </Project>

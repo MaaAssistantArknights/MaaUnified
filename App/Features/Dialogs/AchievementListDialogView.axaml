@@ -1,74 +1,191 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:MAAUnified.App.Controls"
+        xmlns:local="clr-namespace:MAAUnified.App.Features.Dialogs"
         x:Class="MAAUnified.App.Features.Dialogs.AchievementListDialogView"
-        Width="760"
-        Height="520"
-        MinWidth="640"
-        MinHeight="420"
+        Width="980"
+        Height="820"
+        MinWidth="840"
+        MinHeight="620"
+        CanResize="True"
+        Background="Transparent"
+        SystemDecorations="None"
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaChromeHints="NoChrome"
         WindowStartupLocation="CenterOwner">
-  <Grid Margin="10" RowDefinitions="Auto,Auto,*,Auto">
-    <TextBlock x:Name="DialogTitleText"
-               Classes="section-title"
-               Text="Achievement List" />
-    <TextBox x:Name="FilterInput"
-             Grid.Row="1"
-             Margin="0,8,0,0"
-             Watermark="Filter"
-             TextChanged="OnFilterChanged" />
-    <ListBox x:Name="AchievementList"
-             Grid.Row="2"
-             Margin="0,8,0,0"
-             SelectionMode="Multiple">
-      <ListBox.ItemTemplate>
-        <DataTemplate>
-          <Border Margin="0,0,0,8"
-                  Padding="10"
-                  CornerRadius="10"
-                  Background="#14000000"
-                  BorderBrush="#22000000"
-                  BorderThickness="1">
-            <Grid ColumnDefinitions="Auto,*">
-              <Border Width="42"
-                      Height="42"
-                      Margin="0,4,10,0"
-                      CornerRadius="21"
-                      Background="{Binding MedalColor}"
-                      VerticalAlignment="Top" />
-              <StackPanel Grid.Column="1" Spacing="4">
-                <StackPanel Orientation="Horizontal" Spacing="6">
-                  <TextBlock FontWeight="SemiBold" Text="{Binding Title}" />
-                  <TextBlock Text="{Binding NewBadgeText}"
-                             FontWeight="Bold"
-                             Foreground="#D96C0D"
-                             IsVisible="{Binding IsNewUnlock}" />
-                </StackPanel>
-                <TextBlock Classes="long-wrap" Opacity="0.9" Text="{Binding Description}" />
-                <TextBlock Classes="long-wrap subtle" Text="{Binding Conditions}" />
-                <ProgressBar Minimum="0"
-                             Maximum="{Binding Target}"
-                             Value="{Binding Progress}"
-                             IsVisible="{Binding ShowProgress}"
-                             Height="10"
-                             Width="220" />
-                <TextBlock Text="{Binding ProgressText}"
-                           IsVisible="{Binding ShowProgress}" />
-                <TextBlock Opacity="0.72" Text="{Binding Status}" />
-                <TextBlock Text="{Binding UnlockedAtText}"
-                           Foreground="{Binding MedalColor}"
-                           IsVisible="{Binding IsUnlocked}" />
-              </StackPanel>
-            </Grid>
+  <controls:AppWindowFrame x:Name="DialogShell"
+                           Mode="ResizableDialog"
+                           CapWindowHeightToOwner="True"
+                           OwnerHeightCapMargin="24"
+                           CloseRequested="OnShellCloseRequested">
+    <controls:AppWindowFrame.HeaderContent>
+      <TextBlock x:Name="OverviewText"
+                 Classes="app-window-subtitle dialog-window-subtitle"
+                 Text="Unlocked 0 / 0" />
+    </controls:AppWindowFrame.HeaderContent>
+    <controls:AppWindowFrame.Content>
+      <Grid RowDefinitions="Auto,*">
+        <Border Classes="app-surface app-section">
+          <Grid ColumnDefinitions="*,20,300"
+                RowDefinitions="Auto">
+            <StackPanel Orientation="Horizontal"
+                        Spacing="10"
+                        VerticalAlignment="Center">
+              <Border Classes="app-slider-strip achievement-dialog-filter-strip">
+                <Grid x:Name="FilterStripTrack">
+                  <Border x:Name="FilterSelectionSlider"
+                          Classes="app-slider-selection"
+                          HorizontalAlignment="Left"
+                          VerticalAlignment="Center"
+                          IsHitTestVisible="False"
+                          IsVisible="False">
+                    <Border.RenderTransform>
+                      <TranslateTransform X="0" />
+                    </Border.RenderTransform>
+                  </Border>
+                  <StackPanel x:Name="FilterChipPanel"
+                              Orientation="Horizontal"
+                              Spacing="6">
+                    <Button x:Name="FilterAllButton"
+                            Classes="app-button app-slider-chip achievement-dialog-filter-chip"
+                            MinWidth="80"
+                            Tag="All"
+                            Click="OnFilterChipClick" />
+                    <Button x:Name="FilterUnlockedButton"
+                            Classes="app-button app-slider-chip achievement-dialog-filter-chip"
+                            MinWidth="80"
+                            Tag="Unlocked"
+                            Click="OnFilterChipClick" />
+                    <Button x:Name="FilterInProgressButton"
+                            Classes="app-button app-slider-chip achievement-dialog-filter-chip"
+                            MinWidth="80"
+                            Tag="InProgress"
+                            Click="OnFilterChipClick" />
+                    <Button x:Name="FilterNewButton"
+                            Classes="app-button app-slider-chip achievement-dialog-filter-chip"
+                            MinWidth="80"
+                            Tag="NewUnlock"
+                            Click="OnFilterChipClick" />
+                  </StackPanel>
+                </Grid>
+              </Border>
+              <TextBlock x:Name="ResultCountText"
+                         VerticalAlignment="Center"
+                         Classes="app-caption"
+                         Text="Showing 0 achievements" />
+              <Button x:Name="ClearFiltersButton"
+                      Classes="app-button app-chip achievement-dialog-clear-chip"
+                      Click="OnClearFiltersClick" />
+            </StackPanel>
+            <controls:AppTextInput x:Name="FilterInput"
+                                   Grid.Column="2"
+                                   Classes="app-input app-search-input"
+                                   Watermark="Filter"
+                                   HorizontalAlignment="Stretch"
+                                   TextChanged="OnFilterChanged" />
+          </Grid>
+        </Border>
+
+        <Grid Grid.Row="1"
+              Margin="0,18,0,0">
+          <controls:AppSelectionList x:Name="AchievementItems"
+                                     VisualMode="None"
+                                     SelectionMode="Single"
+                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+            <controls:AppSelectionList.ItemsPanel>
+              <ItemsPanelTemplate>
+                <VirtualizingStackPanel />
+              </ItemsPanelTemplate>
+            </controls:AppSelectionList.ItemsPanel>
+            <controls:AppSelectionList.ItemTemplate>
+              <DataTemplate x:DataType="local:AchievementListDisplayItem"
+                            x:CompileBindings="True">
+                <Border Classes="app-selection-list-item-shell achievement-dialog-item-card">
+                  <Grid ColumnDefinitions="Auto,*">
+                    <Border Margin="0,2,0,0"
+                            VerticalAlignment="Top"
+                            Background="{Binding MedalColor}"
+                            Classes="achievement-dialog-medal-core">
+                      <TextBlock Classes="achievement-dialog-medal-glyph"
+                                 Text="★" />
+                    </Border>
+                    <StackPanel Grid.Column="1"
+                                Margin="14,0,0,0"
+                                Spacing="8">
+                      <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Classes="achievement-dialog-card-title"
+                                   Text="{Binding Title}" />
+                        <Border Grid.Column="1"
+                                Margin="8,0,0,0"
+                                VerticalAlignment="Top"
+                                Classes="app-badge achievement-dialog-new-badge"
+                                IsVisible="{Binding IsNewUnlock}">
+                          <TextBlock Classes="app-badge-text achievement-dialog-new-badge-text"
+                                     Text="{Binding NewBadgeText}" />
+                        </Border>
+                      </Grid>
+                      <Border Classes="app-badge achievement-dialog-status-badge">
+                        <TextBlock Classes="app-badge-text achievement-dialog-status-badge-text"
+                                   Text="{Binding Status}" />
+                      </Border>
+                      <TextBlock Classes="app-body achievement-dialog-card-description"
+                                 Text="{Binding Description}" />
+                      <Border Classes="app-surface app-card achievement-dialog-conditions-panel"
+                              IsVisible="{Binding HasConditionDetails}">
+                        <StackPanel Spacing="8">
+                          <Grid ColumnDefinitions="4,*"
+                                IsVisible="{Binding HasConditions}">
+                            <Border Background="{Binding MedalColor}"
+                                    CornerRadius="2" />
+                            <TextBlock Grid.Column="1"
+                                       Margin="10,0,0,0"
+                                       Classes="app-body achievement-dialog-card-conditions"
+                                       Text="{Binding Conditions}" />
+                          </Grid>
+                          <StackPanel Classes="achievement-dialog-progress-panel"
+                                      Spacing="4"
+                                      IsVisible="{Binding ShowProgress}">
+                            <ProgressBar Classes="achievement-dialog-progress-bar"
+                                         Minimum="0"
+                                         Maximum="{Binding Target}"
+                                         Value="{Binding ProgressValue}"
+                                         Height="8" />
+                            <TextBlock Classes="app-caption"
+                                       Text="{Binding ProgressText}" />
+                          </StackPanel>
+                        </StackPanel>
+                      </Border>
+                      <TextBlock Classes="app-caption achievement-dialog-unlocked-at"
+                                 Foreground="{Binding MedalColor}"
+                                 Text="{Binding UnlockedAtText}"
+                                 IsVisible="{Binding HasUnlockedAtText}" />
+                    </StackPanel>
+                  </Grid>
+                </Border>
+              </DataTemplate>
+            </controls:AppSelectionList.ItemTemplate>
+          </controls:AppSelectionList>
+
+          <Border x:Name="EmptyStatePanel"
+                  HorizontalAlignment="Stretch"
+                  VerticalAlignment="Center"
+                  Classes="app-surface app-section">
+            <StackPanel HorizontalAlignment="Center"
+                        Spacing="8">
+              <TextBlock x:Name="EmptyStateTitleText"
+                         HorizontalAlignment="Center"
+                         Classes="app-window-title"
+                         Text="No matching achievements" />
+              <TextBlock x:Name="EmptyStateDescriptionText"
+                         MaxWidth="360"
+                         HorizontalAlignment="Center"
+                         TextAlignment="Center"
+                         Classes="app-window-subtitle"
+                         Text="Try a different keyword or filter." />
+            </StackPanel>
           </Border>
-        </DataTemplate>
-      </ListBox.ItemTemplate>
-    </ListBox>
-    <StackPanel Grid.Row="3"
-                Orientation="Horizontal"
-                Spacing="8"
-                HorizontalAlignment="Right"
-                Margin="0,12,0,0">
-      <Button Classes="wpf-button wpf-button-secondary" x:Name="CancelButton" Content="Cancel" Click="OnCancelClick" />
-      <Button x:Name="ConfirmButton" Classes="wpf-button" Content="Confirm" Click="OnConfirmClick" />
-    </StackPanel>
-  </Grid>
+        </Grid>
+      </Grid>
+    </controls:AppWindowFrame.Content>
+  </controls:AppWindowFrame>
 </Window>

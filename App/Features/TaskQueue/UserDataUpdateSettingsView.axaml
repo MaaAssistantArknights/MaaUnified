@@ -1,0 +1,66 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:MAAUnified.App.Controls"
+             xmlns:vm="clr-namespace:MAAUnified.App.ViewModels.TaskQueue"
+             x:Class="MAAUnified.App.Features.TaskQueue.UserDataUpdateSettingsView">
+  <UserControl.Styles>
+    <Style Selector="StackPanel.user-data-update-content">
+      <Setter Property="Spacing" Value="{DynamicResource MAA.App.Settings.PageCompactFlowSpacing}" />
+    </Style>
+
+    <Style Selector="StackPanel.user-data-update-card-content">
+      <Setter Property="Spacing" Value="{DynamicResource MAA.App.Settings.PageToggleStackSpacing}" />
+    </Style>
+
+    <Style Selector="TextBlock.user-data-update-card-title">
+      <Setter Property="FontWeight" Value="Normal" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Secondary}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+  </UserControl.Styles>
+
+  <controls:AdaptiveSpacingStackPanel Margin="4" Classes="user-data-update-content">
+    <controls:AdaptiveSpacingStackPanel Classes="user-data-update-content">
+      <Border Classes="app-surface app-card">
+        <controls:AdaptiveSpacingStackPanel Classes="user-data-update-card-content">
+          <CheckBox Classes="app-checkbox"
+                    Content="{Binding UpdateOperBoxText}"
+                    IsChecked="{Binding UpdateOperBox}" />
+          <TextBlock MaxWidth="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
+                     Classes="app-caption"
+                     Text="{Binding LastOperBoxSyncDisplayText}"
+                     IsVisible="{Binding HasLastOperBoxSyncTime}" />
+        </controls:AdaptiveSpacingStackPanel>
+      </Border>
+
+      <Border Classes="app-surface app-card">
+        <controls:AdaptiveSpacingStackPanel Classes="user-data-update-card-content">
+          <CheckBox Classes="app-checkbox"
+                    Content="{Binding UpdateDepotText}"
+                    IsChecked="{Binding UpdateDepot}" />
+          <TextBlock MaxWidth="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
+                     Classes="app-caption"
+                     Text="{Binding LastDepotSyncDisplayText}"
+                     IsVisible="{Binding HasLastDepotSyncTime}" />
+        </controls:AdaptiveSpacingStackPanel>
+      </Border>
+
+      <Border Classes="app-surface app-card">
+        <controls:SettingsInlineRow Classes="user-data-update-card-content"
+                                    FieldWidth="{DynamicResource MAA.Size.Settings.FieldWideWidth}">
+          <TextBlock Classes="app-body user-data-update-card-title"
+                     Text="{Binding TriggerIntervalText}" />
+          <controls:AppSelect ItemsSource="{Binding TriggerIntervalOptions}"
+                              SelectedValueBinding="{Binding Value}"
+                              SelectedValue="{Binding TriggerInterval}">
+            <controls:AppSelect.ItemTemplate>
+              <DataTemplate x:DataType="vm:UserDataUpdateModuleViewModel+StringOption">
+                <TextBlock Text="{Binding DisplayName}" />
+              </DataTemplate>
+            </controls:AppSelect.ItemTemplate>
+          </controls:AppSelect>
+        </controls:SettingsInlineRow>
+      </Border>
+    </controls:AdaptiveSpacingStackPanel>
+  </controls:AdaptiveSpacingStackPanel>
+</UserControl>

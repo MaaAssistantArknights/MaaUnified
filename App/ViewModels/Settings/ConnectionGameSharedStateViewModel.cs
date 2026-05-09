@@ -14,6 +14,14 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
     private const int MaxConnectAddressHistory = 5;
     private const string DefaultAttachWindowScreencapMethod = "2";
     private const string DefaultAttachWindowInputMethod = "64";
+    private static readonly string[] MuMuExternalRendererCandidates =
+    [
+        Path.Combine("nx_device", "12.0", "shell", "sdk", "external_renderer_ipc.dll"),
+        Path.Combine("shell", "sdk", "external_renderer_ipc.dll"),
+    ];
+
+    private const string LdPlayerOpenGlLibrary = "ldopengl64.dll";
+
     private static readonly IReadOnlyDictionary<string, IReadOnlyList<string>> _defaultAddressByConnectConfig =
         new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
         {
@@ -21,6 +29,7 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
             ["BlueStacks"] = ["127.0.0.1:5555", "127.0.0.1:5556", "127.0.0.1:5565", "127.0.0.1:5575", "127.0.0.1:5585", "127.0.0.1:5595", "127.0.0.1:5554"],
             ["MuMuEmulator12"] = ["127.0.0.1:16384", "127.0.0.1:16416", "127.0.0.1:16448", "127.0.0.1:16480", "127.0.0.1:16512", "127.0.0.1:16544", "127.0.0.1:16576"],
             ["LDPlayer"] = ["emulator-5554", "emulator-5556", "emulator-5558", "emulator-5560", "127.0.0.1:5555", "127.0.0.1:5557", "127.0.0.1:5559", "127.0.0.1:5561"],
+            ["AVD"] = ["emulator-5554", "emulator-5556"],
             ["Nox"] = ["127.0.0.1:62001", "127.0.0.1:59865"],
             ["XYAZ"] = ["127.0.0.1:21503"],
             ["WSA"] = ["127.0.0.1:58526"],
@@ -286,6 +295,16 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
             {
                 StartGameEnabled = false;
             }
+
+            if (ShowMuMuExtrasSection && MuMu12ExtrasEnabled)
+            {
+                AutoDetectMuMu12EmulatorPathIfNeeded();
+            }
+
+            if (ShowLdPlayerExtrasSection && LdPlayerExtrasEnabled)
+            {
+                AutoDetectLdPlayerEmulatorPathIfNeeded();
+            }
         }
     }
 
@@ -309,6 +328,8 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
             {
                 OnPropertyChanged(nameof(SelectedClientTypeOption));
                 OnPropertyChanged(nameof(SelectedClientTypeValue));
+                OnPropertyChanged(nameof(IsYoStarEnClientType));
+                OnPropertyChanged(nameof(ShowOverseasClientHint));
             }
         }
     }
@@ -344,6 +365,13 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
     public bool ShowMuMuExtrasSection => IsAdbConnectionMode && IsMuMuEmulator12Mode;
 
     public bool ShowLdPlayerExtrasSection => IsAdbConnectionMode && IsLdPlayerMode;
+
+    public bool IsYoStarEnClientType => string.Equals(ClientType, "YoStarEN", StringComparison.OrdinalIgnoreCase);
+
+    public bool ShowOverseasClientHint =>
+        !string.IsNullOrWhiteSpace(ClientType)
+        && !string.Equals(ClientType, "Official", StringComparison.OrdinalIgnoreCase)
+        && !string.Equals(ClientType, "Bilibili", StringComparison.OrdinalIgnoreCase);
 
     public string TouchMode
     {
@@ -417,13 +445,43 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
     public bool MuMu12ExtrasEnabled
     {
         get => _muMu12ExtrasEnabled;
-        set => SetProperty(ref _muMu12ExtrasEnabled, value);
+        set
+        {
+            if (!SetProperty(ref _muMu12ExtrasEnabled, value))
+            {
+                return;
+            }
+
+            if (!value)
+            {
+                return;
+            }
+
+            AutoDetectMuMu12EmulatorPathIfNeeded();
+            _ = ValidateMuMu12EmulatorPath(out _);
+        }
     }
 
     public string MuMu12EmulatorPath
     {
         get => _muMu12EmulatorPath;
-        set => SetProperty(ref _muMu12EmulatorPath, (value ?? string.Empty).Trim());
+        set
+        {
+            var normalized = (value ?? string.Empty).Trim();
+            if (MuMu12ExtrasEnabled
+                && !string.IsNullOrWhiteSpace(normalized)
+                && !ValidateMuMu12EmulatorPath(normalized, out var error))
+            {
+                if (!string.IsNullOrWhiteSpace(error))
+                {
+                    TestLinkInfo = error;
+                }
+
+                return;
+            }
+
+            SetProperty(ref _muMu12EmulatorPath, normalized);
+        }
     }
 
     public bool MuMuBridgeConnection
@@ -441,13 +499,43 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
     public bool LdPlayerExtrasEnabled
     {
         get => _ldPlayerExtrasEnabled;
-        set => SetProperty(ref _ldPlayerExtrasEnabled, value);
+        set
+        {
+            if (!SetProperty(ref _ldPlayerExtrasEnabled, value))
+            {
+                return;
+            }
+
+            if (!value)
+            {
+                return;
+            }
+
+            AutoDetectLdPlayerEmulatorPathIfNeeded();
+            _ = ValidateLdPlayerEmulatorPath(out _);
+        }
     }
 
     public string LdPlayerEmulatorPath
     {
         get => _ldPlayerEmulatorPath;
-        set => SetProperty(ref _ldPlayerEmulatorPath, (value ?? string.Empty).Trim());
+        set
+        {
+            var normalized = (value ?? string.Empty).Trim();
+            if (LdPlayerExtrasEnabled
+                && !string.IsNullOrWhiteSpace(normalized)
+                && !ValidateLdPlayerEmulatorPath(normalized, out var error))
+            {
+                if (!string.IsNullOrWhiteSpace(error))
+                {
+                    TestLinkInfo = error;
+                }
+
+                return;
+            }
+
+            SetProperty(ref _ldPlayerEmulatorPath, normalized);
+        }
     }
 
     public bool LdPlayerManualSetIndex
@@ -575,7 +663,18 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
                 "Connection address is empty. Enter \"IP:port\" and try again.");
         }
 
-        return BuildAdbPathHintMessage();
+        var adbHint = BuildAdbPathHintMessage();
+        if (!string.IsNullOrWhiteSpace(adbHint))
+        {
+            return adbHint;
+        }
+
+        if (ValidateMuMu12EmulatorPath(out var muMuHint))
+        {
+            return ValidateLdPlayerEmulatorPath(out var ldHint) ? null : ldHint;
+        }
+
+        return muMuHint;
     }
 
     public string? BuildAdbPathHintMessage()
@@ -686,6 +785,130 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
                 _connectAddressHistory.RemoveAt(index);
             }
         }
+    }
+
+    public bool AutoDetectMuMu12EmulatorPathIfNeeded()
+    {
+        if (!MuMu12ExtrasEnabled || !string.IsNullOrWhiteSpace(MuMu12EmulatorPath))
+        {
+            return false;
+        }
+
+        var detected = DetectFirstExistingDirectory(BuildMuMu12PathCandidates());
+        if (string.IsNullOrWhiteSpace(detected))
+        {
+            return false;
+        }
+
+        MuMu12EmulatorPath = detected;
+        return string.Equals(MuMu12EmulatorPath, detected, StringComparison.Ordinal);
+    }
+
+    public bool AutoDetectLdPlayerEmulatorPathIfNeeded()
+    {
+        if (!LdPlayerExtrasEnabled || !string.IsNullOrWhiteSpace(LdPlayerEmulatorPath))
+        {
+            return false;
+        }
+
+        var detected = DetectFirstExistingDirectory(BuildLdPlayerPathCandidates());
+        if (string.IsNullOrWhiteSpace(detected))
+        {
+            return false;
+        }
+
+        LdPlayerEmulatorPath = detected;
+        return string.Equals(LdPlayerEmulatorPath, detected, StringComparison.Ordinal);
+    }
+
+    public bool ValidateMuMu12EmulatorPath(out string? errorMessage)
+    {
+        if (!ShowMuMuExtrasSection || !MuMu12ExtrasEnabled)
+        {
+            errorMessage = null;
+            return true;
+        }
+
+        return ValidateMuMu12EmulatorPath(MuMu12EmulatorPath, out errorMessage);
+    }
+
+    public bool ValidateLdPlayerEmulatorPath(out string? errorMessage)
+    {
+        if (!ShowLdPlayerExtrasSection || !LdPlayerExtrasEnabled)
+        {
+            errorMessage = null;
+            return true;
+        }
+
+        return ValidateLdPlayerEmulatorPath(LdPlayerEmulatorPath, out errorMessage);
+    }
+
+    private bool ValidateMuMu12EmulatorPath(string path, out string? errorMessage)
+    {
+        var normalized = (path ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(normalized))
+        {
+            errorMessage = null;
+            return true;
+        }
+
+        if (!Directory.Exists(normalized))
+        {
+            errorMessage = BuildLocalizedOrBilingualMessage(
+                "Settings.Connect.Hint.MuMuPathNotFound",
+                "MuMu 模拟器路径不存在：{0}",
+                "MuMu emulator path does not exist: {0}",
+                normalized);
+            return false;
+        }
+
+        var hasRendererIpc = MuMuExternalRendererCandidates.Any(candidate => File.Exists(Path.Combine(normalized, candidate)));
+        if (hasRendererIpc)
+        {
+            errorMessage = null;
+            return true;
+        }
+
+        errorMessage = BuildLocalizedOrBilingualMessage(
+            "Settings.Connect.Hint.MuMuExternalRendererMissing",
+            "MuMu 模拟器路径缺少 external_renderer_ipc.dll：{0}",
+            "MuMu emulator path is missing external_renderer_ipc.dll: {0}",
+            normalized);
+        return false;
+    }
+
+    private bool ValidateLdPlayerEmulatorPath(string path, out string? errorMessage)
+    {
+        var normalized = (path ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(normalized))
+        {
+            errorMessage = null;
+            return true;
+        }
+
+        if (!Directory.Exists(normalized))
+        {
+            errorMessage = BuildLocalizedOrBilingualMessage(
+                "Settings.Connect.Hint.LdPlayerPathNotFound",
+                "LDPlayer 模拟器路径不存在：{0}",
+                "LDPlayer emulator path does not exist: {0}",
+                normalized);
+            return false;
+        }
+
+        var openGlLibraryPath = Path.Combine(normalized, LdPlayerOpenGlLibrary);
+        if (File.Exists(openGlLibraryPath))
+        {
+            errorMessage = null;
+            return true;
+        }
+
+        errorMessage = BuildLocalizedOrBilingualMessage(
+            "Settings.Connect.Hint.LdPlayerOpenGlMissing",
+            "LDPlayer 模拟器路径缺少 ldopengl64.dll：{0}",
+            "LDPlayer emulator path is missing ldopengl64.dll: {0}",
+            normalized);
+        return false;
     }
 
     private void UpdateConnectAddressHistory(string address)
@@ -862,6 +1085,62 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
         candidates.Add(normalized);
     }
 
+    private static string? DetectFirstExistingDirectory(IEnumerable<string> candidates)
+    {
+        foreach (var candidate in candidates
+                     .Where(candidate => !string.IsNullOrWhiteSpace(candidate))
+                     .Select(candidate => candidate.Trim())
+                     .Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            if (Directory.Exists(candidate))
+            {
+                return candidate;
+            }
+        }
+
+        return null;
+    }
+
+    private static IReadOnlyList<string> BuildMuMu12PathCandidates()
+    {
+        return
+        [
+            Path.Combine(GetProgramFiles(), "Netease", "MuMuPlayer-12.0"),
+            Path.Combine(GetProgramFilesX86(), "Netease", "MuMuPlayer-12.0"),
+            Path.Combine(GetProgramFiles(), "Netease", "MuMuPlayerGlobal-12.0"),
+            Path.Combine(GetProgramFilesX86(), "Netease", "MuMuPlayerGlobal-12.0"),
+            Path.Combine(GetProgramFiles(), "Netease", "YXArkNights-12.0"),
+            Path.Combine(GetProgramFilesX86(), "Netease", "YXArkNights-12.0"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Netease", "MuMuPlayer-12.0"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Netease", "MuMuPlayerGlobal-12.0"),
+        ];
+    }
+
+    private static IReadOnlyList<string> BuildLdPlayerPathCandidates()
+    {
+        return
+        [
+            Path.Combine(GetProgramFiles(), "leidian", "LDPlayer9"),
+            Path.Combine(GetProgramFilesX86(), "leidian", "LDPlayer9"),
+            Path.Combine(GetProgramFiles(), "leidian", "LDPlayer4.0"),
+            Path.Combine(GetProgramFilesX86(), "leidian", "LDPlayer4.0"),
+            Path.Combine(GetProgramFiles(), "LDPlayer"),
+            Path.Combine(GetProgramFilesX86(), "LDPlayer"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "leidian", "LDPlayer9"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "leidian", "LDPlayer4.0"),
+        ];
+    }
+
+    private static string GetProgramFiles()
+    {
+        return Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+    }
+
+    private static string GetProgramFilesX86()
+    {
+        return Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
+    }
+
     private static bool LooksLikeWindowsPath(string path)
     {
         return path.Length >= 2 && char.IsLetter(path[0]) && path[1] == ':';
@@ -1003,4 +1282,31 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
     }
 }
 
-public sealed record ConnectionGameOptionItem(string Value, string DisplayName);
+public sealed class ConnectionGameOptionItem : IEquatable<ConnectionGameOptionItem>
+{
+    public ConnectionGameOptionItem(string value, string displayName)
+    {
+        Value = value;
+        DisplayName = displayName;
+    }
+
+    public string Value { get; }
+
+    public string DisplayName { get; }
+
+    public bool Equals(ConnectionGameOptionItem? other)
+    {
+        return other is not null
+               && string.Equals(Value, other.Value, StringComparison.OrdinalIgnoreCase);
+    }
+
+    public override bool Equals(object? obj)
+    {
+        return obj is ConnectionGameOptionItem other && Equals(other);
+    }
+
+    public override int GetHashCode()
+    {
+        return StringComparer.OrdinalIgnoreCase.GetHashCode(Value ?? string.Empty);
+    }
+}

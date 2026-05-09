@@ -5,7 +5,7 @@ namespace MAAUnified.Tests;
 public sealed class BaselineCoverageTests
 {
     [Fact]
-    public void BaselineCoverage_ShouldMatchFeatureManifest36()
+    public void BaselineCoverage_ShouldMatchFeatureManifest38()
     {
         var baseline = BaselineTestSupport.LoadBaseline();
 
@@ -14,7 +14,7 @@ public sealed class BaselineCoverageTests
             .Select(i => i.ItemId)
             .ToList();
 
-        const int expectedFeatureCount = 36;
+        const int expectedFeatureCount = 38;
 
         // This count is intentionally pinned: if it changes, baseline.freeze + FeatureManifest must be reviewed together.
         Assert.Equal(expectedFeatureCount, featureItems.Count);
@@ -33,15 +33,15 @@ public sealed class BaselineCoverageTests
     }
 
     [Fact]
-    public void BaselineConfigKeys_ShouldCoverAll293LegacyKeys()
+    public void BaselineConfigKeys_ShouldCoverAll294LegacyKeys()
     {
         var baseline = BaselineTestSupport.LoadBaseline();
 
         var legacyKeys = BaselineTestSupport.GetLegacyConfigurationKeys();
         var baselineKeys = baseline.ConfigKeyMappings.Select(k => k.Key).ToList();
 
-        Assert.Equal(293, legacyKeys.Count);
-        Assert.Equal(293, baselineKeys.Count);
+        Assert.Equal(294, legacyKeys.Count);
+        Assert.Equal(294, baselineKeys.Count);
 
         var legacySet = legacyKeys.ToHashSet(StringComparer.Ordinal);
         var baselineSet = baselineKeys.ToHashSet(StringComparer.Ordinal);

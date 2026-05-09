@@ -1,0 +1,122 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:MAAUnified.App.Controls"
+             x:Class="MAAUnified.App.Features.Advanced.ToolboxPeepView"
+             SizeChanged="OnPeepLayoutSizeChanged">
+  <UserControl.Styles>
+    <Style Selector="Grid.toolbox-peep-display-area">
+      <Setter Property="MinHeight" Value="220" />
+    </Style>
+
+    <Style Selector="TextBlock.toolbox-peep-empty-text">
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="TextAlignment" Value="Center" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="FontSize" Value="{DynamicResource MAA.FontSize.Toolbox.PeepTip}" />
+      <Setter Property="LineHeight" Value="34" />
+      <Setter Property="Margin" Value="0,0,0,4" />
+    </Style>
+
+    <Style Selector="Border.toolbox-peep-preview-frame">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="CornerRadius" Value="0" />
+      <Setter Property="MinHeight" Value="220" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="VerticalAlignment" Value="Stretch" />
+    </Style>
+
+    <Style Selector="Image.toolbox-peep-preview-image">
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="Border.toolbox-peep-fps-badge">
+      <Setter Property="HorizontalAlignment" Value="Left" />
+      <Setter Property="VerticalAlignment" Value="Top" />
+      <Setter Property="Margin" Value="16" />
+    </Style>
+
+    <Style Selector="StackPanel.toolbox-peep-control-group">
+      <Setter Property="Spacing" Value="8" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="MinWidth" Value="108" />
+    </Style>
+
+    <Style Selector="Button.toolbox-peep-action">
+      <Setter Property="MinWidth" Value="108" />
+      <Setter Property="Height" Value="38" />
+      <Setter Property="Padding" Value="18,0" />
+    </Style>
+
+    <Style Selector="controls|AppNumberInput.toolbox-peep-fps-input">
+      <Setter Property="Width" Value="92" />
+    </Style>
+  </UserControl.Styles>
+
+  <Grid x:Name="PeepRootGrid"
+        Margin="{DynamicResource MAA.Thickness.Toolbox.PageMarginFlat}"
+        RowDefinitions="*,Auto"
+        ColumnDefinitions="*,Auto">
+      <Grid x:Name="PeepDisplayArea"
+            Grid.Row="0"
+            Grid.Column="0"
+            Grid.ColumnSpan="2"
+            Classes="toolbox-peep-display-area">
+        <TextBlock Classes="app-body toolbox-peep-empty-text"
+                   Text="{Binding PeepTip}"
+                   IsVisible="{Binding ShowPeepTip}" />
+
+        <Grid IsVisible="{Binding ShowPeepPreview}">
+          <Border Classes="toolbox-peep-preview-frame">
+            <Image Classes="toolbox-peep-preview-image"
+                   Source="{Binding PeepImage}"
+                   Stretch="Uniform" />
+          </Border>
+
+          <Border Classes="app-badge toolbox-peep-fps-badge">
+            <TextBlock Classes="app-badge-text"
+                       Text="{Binding PeepScreenFps, StringFormat='{}{0:F2} FPS'}" />
+          </Border>
+        </Grid>
+      </Grid>
+
+      <Grid x:Name="PeepControlPanel"
+            Grid.Row="1"
+            Grid.Column="0"
+            Grid.ColumnSpan="2"
+            Margin="0,14,0,0"
+            RowDefinitions="Auto,Auto"
+            ColumnDefinitions="*,Auto,*"
+            HorizontalAlignment="Stretch"
+            VerticalAlignment="Bottom">
+        <StackPanel x:Name="PeepCommandControlGroup"
+                    Grid.Row="0"
+                    Grid.Column="1"
+                    Classes="toolbox-peep-control-group">
+          <Button Classes="app-button app-primary toolbox-peep-action"
+                  Content="{Binding PeepCommandText}"
+                  IsEnabled="{Binding CanTogglePeep}"
+                  Click="OnPeepCommandClick" />
+        </StackPanel>
+
+        <StackPanel x:Name="PeepFpsControlGroup"
+                    Grid.Row="0"
+                    Grid.Column="2"
+                    Classes="toolbox-peep-control-group"
+                    HorizontalAlignment="Left"
+                    Margin="24,0,0,0"
+                    Orientation="Horizontal">
+          <TextBlock Classes="toolbox-section-caption"
+                     HorizontalAlignment="Center"
+                     VerticalAlignment="Center"
+                     Text="{Binding PeepTargetFpsText}" />
+          <controls:AppNumberInput Classes="toolbox-peep-fps-input"
+                                    Minimum="1"
+                                    Maximum="60"
+                                    Value="{Binding PeepTargetFps}" />
+        </StackPanel>
+      </Grid>
+  </Grid>
+</UserControl>

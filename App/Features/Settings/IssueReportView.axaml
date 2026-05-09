@@ -1,68 +1,157 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:MAAUnified.App.Controls"
+             Classes="settings-page"
              x:Class="MAAUnified.App.Features.Settings.IssueReportView">
-  <Grid Margin="4" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto">
-    <TextBlock Classes="section-title" Text="{Binding RootTexts[Settings.Section.IssueReport]}" />
+  <UserControl.Styles>
+    <Style Selector="Border.issue-report-card">
+      <Setter Property="Padding" Value="16" />
+      <Setter Property="HorizontalAlignment" Value="Left" />
+      <Setter Property="MaxWidth" Value="520" />
+    </Style>
 
-    <TextBlock Grid.Row="1"
-               MaxWidth="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
-               Margin="{DynamicResource MAA.Thickness.Settings.SectionTopMargin}"
-               Classes="settings-centered-text"
-               Text="{Binding RootTexts[Settings.IssueReport.PreflightNote]}" />
+    <Style Selector="StackPanel.issue-report-stack">
+      <Setter Property="Spacing" Value="16" />
+    </Style>
 
-    <Grid Grid.Row="2"
-          Classes="settings-form"
-          Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}"
-          ColumnDefinitions="250,250">
-      <StackPanel Grid.Column="0"
-                  Classes="settings-centered-column"
-                  Spacing="{DynamicResource MAA.Spacing.Small}">
-        <Button Classes="wpf-button wpf-button-secondary" Content="{Binding RootTexts[Settings.IssueReport.Faq]}" Click="OnOpenHelpClick" />
-        <Button Classes="wpf-button wpf-button-secondary" Content="{Binding RootTexts[Settings.IssueReport.IssueEntry]}" Click="OnOpenIssueEntryClick" />
-      </StackPanel>
+    <Style Selector="controls|AdaptiveSpacingStackPanel.issue-report-stack">
+      <Setter Property="Spacing" Value="16" />
+    </Style>
 
-      <StackPanel Grid.Column="1"
-                  Classes="settings-centered-column"
-                  Spacing="{DynamicResource MAA.Spacing.Small}">
-        <Button Classes="wpf-button wpf-button-secondary"
-                Content="{Binding RootTexts[Settings.Action.BuildIssueReport]}"
-                Click="OnBuildIssueReportClick" />
-        <Button Classes="wpf-button wpf-button-secondary" Content="{Binding RootTexts[Settings.IssueReport.OpenRuntimeLogWindow]}" Click="OnOpenRuntimeLogWindowClick" />
-        <Button Classes="wpf-button wpf-button-secondary"
-                Content="{Binding RootTexts[Settings.Action.OpenDebugDirectory]}"
-                Click="OnOpenDebugDirectoryClick" />
-        <Button Classes="wpf-button wpf-button-secondary"
-                Content="{Binding RootTexts[Settings.Action.ClearImageCache]}"
-                Click="OnClearImageCacheClick" />
-      </StackPanel>
-    </Grid>
+    <Style Selector="StackPanel.issue-report-action-list">
+      <Setter Property="Spacing" Value="12" />
+    </Style>
 
-    <StackPanel Grid.Row="3"
-                Classes="settings-centered-column"
-                Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}"
-                Spacing="0">
-      <CheckBox HorizontalAlignment="Center"
-                Content="{Binding RootTexts[Settings.IssueReport.DeveloperMode]}"
-                IsChecked="{Binding DeveloperModeEnabled}" />
-      <TextBlock MaxWidth="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
-                 Classes="settings-note settings-centered-text"
-                 Text="{Binding RootTexts[Settings.IssueReport.DeveloperModeNote]}" />
-    </StackPanel>
+    <Style Selector="controls|AdaptiveSpacingStackPanel.issue-report-action-list">
+      <Setter Property="Spacing" Value="12" />
+    </Style>
 
-    <TextBlock Grid.Row="4"
-               MaxWidth="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
-               Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}"
-               Classes="settings-centered-text"
-               Text="{Binding IssueReportPath}" />
+    <Style Selector="Button.issue-report-action">
+      <Setter Property="HorizontalAlignment" Value="Left" />
+    </Style>
 
-    <StackPanel Grid.Row="5"
-                Classes="settings-form settings-form-narrow"
-                Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}"
-                Spacing="4">
-      <TextBlock Classes="settings-centered-text" Text="{Binding IssueReportStatusMessage}" />
-      <TextBlock Classes="state-error settings-centered-text"
-                 Text="{Binding IssueReportErrorMessage}"
-                 IsVisible="{Binding HasIssueReportErrorMessage}" />
-    </StackPanel>
+    <Style Selector="StackPanel.issue-report-action-with-hint">
+      <Setter Property="Orientation" Value="Horizontal" />
+      <Setter Property="Spacing" Value="8" />
+      <Setter Property="HorizontalAlignment" Value="Left" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+  </UserControl.Styles>
+
+  <Grid Margin="4"
+        RowDefinitions="Auto,Auto">
+    <TextBlock Classes="settings-page-title"
+               Text="{Binding RootTexts[Settings.Section.IssueReport]}" />
+
+    <controls:AdaptiveSpacingStackPanel Grid.Row="1"
+                Margin="{DynamicResource MAA.Thickness.Settings.SectionTopMargin}"
+                HorizontalAlignment="Left"
+                Classes="settings-page-flow">
+      <controls:AdaptiveSpacingStackPanel Classes="issue-report-stack settings-page-column-stack">
+        <Border Classes="grouped-card-frame compact issue-report-card"
+                IsVisible="{Binding HasIssueReportUpdateAvailability}">
+          <controls:AdaptiveSpacingStackPanel Classes="settings-page-status-list">
+            <TextBlock MaxWidth="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
+                       TextAlignment="Left"
+                       TextWrapping="Wrap"
+                       Classes="app-window-subtitle"
+                       Text="{Binding IssueReportVersionUpdateSummary}"
+                       IsVisible="{Binding HasPendingVersionUpdateAvailability}" />
+            <TextBlock MaxWidth="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
+                       TextAlignment="Left"
+                       TextWrapping="Wrap"
+                       Classes="app-window-subtitle"
+                       Text="{Binding PendingResourceUpdateSummary}"
+                       IsVisible="{Binding HasPendingResourceUpdateAvailability}" />
+            <TextBlock MaxWidth="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
+                       TextAlignment="Left"
+                       TextWrapping="Wrap"
+                       Classes="app-window-subtitle"
+                       Text="{Binding RootTexts[Settings.IssueReport.CheckUpdateBeforeReportingIssue]}" />
+          </controls:AdaptiveSpacingStackPanel>
+        </Border>
+
+        <Border Classes="grouped-card-frame compact issue-report-card"
+                IsVisible="{Binding ShowIssueReportPreflightNote}">
+          <TextBlock MaxWidth="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
+                     TextAlignment="Left"
+                     TextWrapping="Wrap"
+                     Classes="app-window-subtitle"
+                     Text="{Binding RootTexts[Settings.IssueReport.CheckHelpBeforeReportingIssue]}" />
+        </Border>
+      </controls:AdaptiveSpacingStackPanel>
+
+      <Grid Classes="settings-page-two-column"
+            HorizontalAlignment="Left"
+            ColumnDefinitions="*,24,*">
+        <controls:AdaptiveSpacingStackPanel Classes="issue-report-action-list settings-page-column-stack">
+          <Button Classes="app-button app-secondary issue-report-action"
+                  Content="{Binding RootTexts[Settings.IssueReport.Faq]}"
+                  Click="OnOpenHelpClick" />
+          <Button Classes="app-button app-primary issue-report-action"
+                  Content="{Binding RootTexts[Settings.IssueReport.IssueEntry]}"
+                  Click="OnOpenIssueEntryClick" />
+        </controls:AdaptiveSpacingStackPanel>
+
+        <controls:AdaptiveSpacingStackPanel Grid.Column="2"
+                    Classes="issue-report-action-list settings-page-column-stack">
+          <Button Classes="app-button app-primary issue-report-action"
+                  Content="{Binding RootTexts[Settings.Action.BuildIssueReport]}"
+                  Click="OnBuildIssueReportClick" />
+          <Button Classes="app-button app-secondary issue-report-action"
+                  Content="{Binding RootTexts[Settings.Action.OpenDebugDirectory]}"
+                  Click="OnOpenDebugDirectoryClick"
+                  IsVisible="{Binding CanUseIssueReportMaintenanceTools}" />
+          <StackPanel Classes="issue-report-action-with-hint"
+                      IsVisible="{Binding CanUseIssueReportMaintenanceTools}">
+            <Button Classes="app-button app-secondary issue-report-action"
+                    Content="{Binding RootTexts[Settings.Action.ClearImageCache]}"
+                    Click="OnClearImageCacheClick" />
+            <controls:TooltipHint Tip="{Binding IssueReportClearImageCacheTip}" />
+          </StackPanel>
+          <Button Classes="app-button app-secondary issue-report-action"
+                  Content="{Binding RootTexts[Settings.IssueReport.OpenRuntimeLogWindow]}"
+                  Click="OnOpenRuntimeLogWindowClick"
+                  IsVisible="{Binding CanOpenRuntimeLogWindow}" />
+        </controls:AdaptiveSpacingStackPanel>
+      </Grid>
+
+      <controls:AdaptiveSpacingStackPanel Classes="issue-report-stack settings-page-column-stack"
+                  IsVisible="{Binding CanUseDeveloperMode}">
+        <CheckBox Classes="app-checkbox"
+                  Content="{Binding RootTexts[Settings.IssueReport.DeveloperMode]}"
+                  IsChecked="{Binding DeveloperModeEnabled}" />
+        <TextBlock MaxWidth="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
+                   Classes="app-caption"
+                   Text="{Binding RootTexts[Settings.IssueReport.DeveloperModeNote]}"
+                   TextWrapping="Wrap" />
+      </controls:AdaptiveSpacingStackPanel>
+
+      <Border Classes="grouped-card-frame compact issue-report-card"
+              IsVisible="{Binding HasIssueReportPath}">
+        <TextBlock MaxWidth="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
+                   Classes="app-body"
+                   Text="{Binding IssueReportPath}"
+                   TextWrapping="Wrap" />
+      </Border>
+
+      <Border Classes="settings-page-status-block"
+              IsVisible="{Binding HasIssueReportStatusMessage}">
+        <controls:AdaptiveSpacingStackPanel Classes="settings-page-status-list">
+          <TextBlock Classes="app-body"
+                     Text="{Binding IssueReportStatusMessage}"
+                     TextWrapping="Wrap" />
+        </controls:AdaptiveSpacingStackPanel>
+      </Border>
+
+      <Border Classes="settings-page-status-block"
+              IsVisible="{Binding HasIssueReportErrorMessage}">
+        <controls:AdaptiveSpacingStackPanel Classes="settings-page-status-list">
+          <TextBlock Classes="state-error app-body"
+                     Text="{Binding IssueReportErrorMessage}"
+                     TextWrapping="Wrap" />
+        </controls:AdaptiveSpacingStackPanel>
+      </Border>
+    </controls:AdaptiveSpacingStackPanel>
   </Grid>
 </UserControl>

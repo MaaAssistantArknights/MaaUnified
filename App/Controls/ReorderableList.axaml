@@ -1,0 +1,34 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="MAAUnified.App.Controls.ReorderableList"
+             x:Name="Root">
+  <Grid RowDefinitions="Auto,*"
+        ColumnDefinitions="*,Auto">
+    <TextBlock Grid.ColumnSpan="2"
+               Text="{Binding HeaderText, ElementName=Root}"
+               Margin="0,0,0,8" />
+
+    <Border Grid.Row="1"
+            Margin="0,0,10,0"
+            Classes="app-floating-card app-reorderable-list-surface">
+      <ListBox x:Name="ItemsListBox"
+               ItemsSource="{Binding ItemsSource, ElementName=Root}"
+               SelectedItem="{Binding SelectedItem, ElementName=Root, Mode=TwoWay}"
+               ItemTemplate="{Binding ItemTemplate, ElementName=Root}"
+               SelectionChanged="OnListBoxSelectionChanged" />
+    </Border>
+
+    <StackPanel Grid.Row="1"
+                Grid.Column="1"
+                Spacing="8">
+      <Button x:Name="MoveUpButton"
+              Classes="reorder-button"
+              Content="Up"
+              Click="OnMoveUpClick" />
+      <Button x:Name="MoveDownButton"
+              Classes="reorder-button"
+              Content="Down"
+              Click="OnMoveDownClick" />
+    </StackPanel>
+  </Grid>
+</UserControl>

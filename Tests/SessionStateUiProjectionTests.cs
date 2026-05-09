@@ -1,8 +1,10 @@
 using System.Runtime.CompilerServices;
+using MAAUnified.App.Features.Dialogs;
 using MAAUnified.App.ViewModels.Copilot;
 using MAAUnified.App.ViewModels.Settings;
 using MAAUnified.App.ViewModels.TaskQueue;
 using MAAUnified.Application.Configuration;
+using MAAUnified.Application.Models;
 using MAAUnified.Application.Orchestration;
 using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Features;
@@ -36,7 +38,7 @@ public sealed class SessionStateUiProjectionTests
 
         Assert.True(vm.IsRunning);
         Assert.True(vm.CanToggleRun);
-        Assert.Equal(vm.RootTexts.GetOrDefault("TaskQueue.Root.Stop", "Stop"), vm.RunButtonText);
+        Assert.Equal(vm.RootTexts.GetOrDefault("TaskQueue.Root.LinkStart", "Link Start!"), vm.RunButtonText);
 
         Assert.True((await fixture.Runtime.ConnectFeatureService.StopAsync()).Success);
         await WaitUntilAsync(() => vm.CurrentSessionState == SessionState.Connected);
@@ -59,6 +61,81 @@ public sealed class SessionStateUiProjectionTests
         Assert.True(vm.HasBlockingConfigIssues);
         Assert.True(vm.CanToggleRun);
         Assert.True(vm.BlockingConfigIssueCount > 0);
+    }
+
+    [Fact]
+    public async Task TaskQueuePage_ExternalRunOwner_ShouldKeepStartButtonAndStopFromDialog()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var dialog = new RecordingDialogService(DialogReturnSemantic.Cancel);
+        string? stoppedOwner = null;
+        var vm = new TaskQueuePageViewModel(
+            fixture.Runtime,
+            new ConnectionGameSharedStateViewModel(),
+            dialogService: dialog,
+            stopRunOwnerAsync: async (owner, cancellationToken) =>
+            {
+                stoppedOwner = owner;
+                fixture.Runtime.SessionService.EndRun(owner);
+                _ = await fixture.Runtime.ConnectFeatureService.StopAsync(cancellationToken);
+            });
+
+        Assert.True((await fixture.Runtime.ConnectFeatureService.ConnectAsync("127.0.0.1:5555", "General", null)).Success);
+        Assert.True((await fixture.Runtime.ConnectFeatureService.StartAsync()).Success);
+        Assert.True(fixture.Runtime.SessionService.TryBeginRun("Toolbox", "窥屏", out _));
+        await WaitUntilAsync(() => vm.CurrentSessionState == SessionState.Running);
+
+        Assert.True(vm.IsRunOwnedByAnotherFeature);
+        Assert.True(vm.CanToggleRun);
+        Assert.Equal(vm.RootTexts.GetOrDefault("TaskQueue.Root.LinkStart", "Link Start!"), vm.RunButtonText);
+
+        await vm.ToggleRunAsync();
+
+        Assert.Equal(1, dialog.WarningConfirmCallCount);
+        Assert.Equal("Toolbox", stoppedOwner);
+        Assert.Equal(1, Assert.IsType<FakeBridge>(fixture.Bridge).StopCallCount);
+    }
+
+    [Fact]
+    public async Task TaskQueuePage_LinkStart_WhenOwnerActiveButSessionConnected_ShouldLogAndShowDialog()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var dialog = new RecordingDialogService(DialogReturnSemantic.Confirm);
+        var vm = new TaskQueuePageViewModel(
+            fixture.Runtime,
+            new ConnectionGameSharedStateViewModel(),
+            dialogService: dialog);
+        await vm.InitializeAsync();
+
+        Assert.True((await fixture.Runtime.ConnectFeatureService.ConnectAsync("127.0.0.1:5555", "General", null)).Success);
+        await WaitUntilAsync(() => vm.CurrentSessionState == SessionState.Connected);
+        Assert.True(fixture.Runtime.SessionService.TryBeginRun("Toolbox", "窥屏", out _));
+
+        await vm.ToggleRunAsync();
+
+        Assert.Equal(1, dialog.WarningConfirmCallCount);
+        Assert.True(HasLinkStartFailureLog(vm));
+        Assert.Contains("窥屏", dialog.LastWarningMessage, StringComparison.Ordinal);
+        Assert.DoesNotContain("Toolbox", dialog.LastWarningMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task CopilotPage_Start_WhenToolboxDisplayOwnerActive_ShouldShowSpecificOwnerName()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var dialog = new RecordingDialogService(DialogReturnSemantic.Confirm);
+        var vm = new CopilotPageViewModel(fixture.Runtime, dialogService: dialog);
+
+        Assert.True((await fixture.Runtime.ConnectFeatureService.ConnectAsync("127.0.0.1:5555", "General", null)).Success);
+        Assert.True((await fixture.Runtime.ConnectFeatureService.StartAsync()).Success);
+        Assert.True(fixture.Runtime.SessionService.TryBeginRun("Toolbox", "窥屏", out _));
+        await WaitUntilAsync(() => vm.CurrentSessionState == SessionState.Running);
+
+        await vm.StartAsync();
+
+        Assert.Equal(1, dialog.WarningConfirmCallCount);
+        Assert.Contains("窥屏", dialog.LastWarningMessage, StringComparison.Ordinal);
+        Assert.DoesNotContain("Toolbox", dialog.LastWarningMessage, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -183,7 +260,7 @@ public sealed class SessionStateUiProjectionTests
         Assert.True((await fixture.Runtime.ConnectFeatureService.StartAsync()).Success);
         await WaitUntilAsync(() => vm.CurrentSessionState == SessionState.Running);
 
-        Assert.False(vm.CanStart);
+        Assert.True(vm.CanStart);
         Assert.True(vm.CanStop);
         Assert.True(vm.IsRunning);
     }
@@ -517,6 +594,69 @@ public sealed class SessionStateUiProjectionTests
             {
                 // ignore cleanup failures in temporary test directories
             }
+        }
+    }
+
+    private sealed class RecordingDialogService(DialogReturnSemantic warningConfirmReturn) : IAppDialogService
+    {
+        public int WarningConfirmCallCount { get; private set; }
+
+        public string LastWarningMessage { get; private set; } = string.Empty;
+
+        public Task<DialogCompletion<AnnouncementDialogPayload>> ShowAnnouncementAsync(
+            AnnouncementDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<AnnouncementDialogPayload>(DialogReturnSemantic.Close, null, "recording"));
+
+        public Task<DialogCompletion<VersionUpdateDialogPayload>> ShowVersionUpdateAsync(
+            VersionUpdateDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<VersionUpdateDialogPayload>(DialogReturnSemantic.Close, null, "recording"));
+
+        public Task<DialogCompletion<ProcessPickerDialogPayload>> ShowProcessPickerAsync(
+            ProcessPickerDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<ProcessPickerDialogPayload>(DialogReturnSemantic.Close, null, "recording"));
+
+        public Task<DialogCompletion<EmulatorPathDialogPayload>> ShowEmulatorPathAsync(
+            EmulatorPathDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<EmulatorPathDialogPayload>(DialogReturnSemantic.Close, null, "recording"));
+
+        public Task<DialogCompletion<ErrorDialogPayload>> ShowErrorAsync(
+            ErrorDialogRequest request,
+            string sourceScope,
+            Func<CancellationToken, Task<UiOperationResult>>? openIssueReportAsync = null,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<ErrorDialogPayload>(DialogReturnSemantic.Close, null, "recording"));
+
+        public Task<DialogCompletion<AchievementListDialogPayload>> ShowAchievementListAsync(
+            AchievementListDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<AchievementListDialogPayload>(DialogReturnSemantic.Close, null, "recording"));
+
+        public Task<DialogCompletion<TextDialogPayload>> ShowTextAsync(
+            TextDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<TextDialogPayload>(DialogReturnSemantic.Close, null, "recording"));
+
+        public Task<DialogCompletion<WarningConfirmDialogPayload>> ShowWarningConfirmAsync(
+            WarningConfirmDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+        {
+            WarningConfirmCallCount++;
+            LastWarningMessage = request.Message;
+            return Task.FromResult(new DialogCompletion<WarningConfirmDialogPayload>(
+                warningConfirmReturn,
+                warningConfirmReturn == DialogReturnSemantic.Confirm ? new WarningConfirmDialogPayload(true) : null,
+                "recording"));
         }
     }
 

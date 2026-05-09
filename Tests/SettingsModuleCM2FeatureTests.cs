@@ -18,6 +18,12 @@ public sealed class SettingsModuleCM2FeatureTests
     {
         var root = CreateTempRoot();
         Directory.CreateDirectory(root);
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+        Directory.CreateDirectory(Path.Combine(root, "cache", "images"));
+        Directory.CreateDirectory(Path.Combine(root, "resource"));
+        await File.WriteAllTextAsync(Path.Combine(root, "config", "gui.new.json"), "{}");
+        await File.WriteAllTextAsync(Path.Combine(root, "cache", "images", "sample.png"), "pixel");
+        await File.WriteAllTextAsync(Path.Combine(root, "resource", "foo_custom.json"), "{}");
         var diagnostics = new UiDiagnosticsService(root, new UiLogService());
 
         var bundlePath = await diagnostics.BuildIssueReportBundleAsync(root);
@@ -30,6 +36,9 @@ public sealed class SettingsModuleCM2FeatureTests
         Assert.Contains(archive.Entries, entry => entry.FullName == "debug/avalonia-ui-errors.log");
         Assert.Contains(archive.Entries, entry => entry.FullName == "debug/avalonia-ui-events.log");
         Assert.Contains(archive.Entries, entry => entry.FullName == "debug/avalonia-platform-events.log");
+        Assert.Contains(archive.Entries, entry => entry.FullName == "config/gui.new.json");
+        Assert.Contains(archive.Entries, entry => entry.FullName == "cache/images/sample.png");
+        Assert.Contains(archive.Entries, entry => entry.FullName == "resource/foo_custom.json");
     }
 
     [Fact]
@@ -51,6 +60,8 @@ public sealed class SettingsModuleCM2FeatureTests
             null,
             OpenExternalTargetAsync);
         await vm.InitializeAsync();
+        Assert.False(vm.HasIssueReportPath);
+        Assert.False(vm.HasIssueReportStatusMessage);
 
         var imageCacheRoot = Path.Combine(fixture.Root, "cache", "images");
         var nestedDirectory = Path.Combine(imageCacheRoot, "nested");
@@ -61,6 +72,7 @@ public sealed class SettingsModuleCM2FeatureTests
         await vm.OpenIssueReportDebugDirectoryAsync();
         Assert.NotEmpty(openedTargets);
         Assert.True(Directory.Exists(openedTargets[^1]));
+        Assert.True(vm.HasIssueReportStatusMessage);
         Assert.Contains("已打开目录", vm.IssueReportStatusMessage, StringComparison.Ordinal);
         Assert.False(vm.HasIssueReportErrorMessage);
 
@@ -101,14 +113,26 @@ public sealed class SettingsModuleCM2FeatureTests
 
         await vm.OpenAchievementGuideAsync();
         await vm.OpenAboutOfficialWebsiteAsync();
+        await vm.OpenAboutBilibiliAsync();
+        await vm.OpenAboutGithubAsync();
         await vm.OpenAboutCommunityAsync();
         await vm.OpenAboutDownloadAsync();
+        await vm.OpenAboutQqGroupAsync();
+        await vm.OpenAboutQqChannelAsync();
+        await vm.OpenAboutTelegramAsync();
+        await vm.OpenAboutDiscordAsync();
 
-        Assert.True(openedTargets.Count >= 4);
+        Assert.True(openedTargets.Count >= 10);
         Assert.Contains("https://maa.plus/docs/manual/introduction/", openedTargets, StringComparer.Ordinal);
         Assert.Contains("https://maa.plus/", openedTargets, StringComparer.Ordinal);
+        Assert.Contains("https://space.bilibili.com/3493274731940507", openedTargets, StringComparer.Ordinal);
+        Assert.Contains("https://github.com/MaaAssistantArknights/MaaAssistantArknights", openedTargets, StringComparer.Ordinal);
         Assert.Contains("https://github.com/MaaAssistantArknights/MaaAssistantArknights/discussions", openedTargets, StringComparer.Ordinal);
         Assert.Contains("https://github.com/MaaAssistantArknights/MaaAssistantArknights/releases", openedTargets, StringComparer.Ordinal);
+        Assert.Contains("https://api.maa.plus/MaaAssistantArknights/api/qqgroup/index.html", openedTargets, StringComparer.Ordinal);
+        Assert.Contains("https://pd.qq.com/s/4j1ju9z47", openedTargets, StringComparer.Ordinal);
+        Assert.Contains("https://t.me/+Mgc2Zngr-hs3ZjU1", openedTargets, StringComparer.Ordinal);
+        Assert.Contains("https://discord.gg/23DfZ9uA4V", openedTargets, StringComparer.Ordinal);
         Assert.False(vm.HasAboutErrorMessage);
 
         await vm.CheckAboutAnnouncementAsync();

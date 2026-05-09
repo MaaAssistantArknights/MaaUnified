@@ -449,23 +449,35 @@ public sealed class RemoteControlFeatureService : IRemoteControlFeatureService
             return null;
         }
 
+        if (obj.TryGetPropertyValue("tasks", out var tasksNode) && tasksNode is not null)
+        {
+            var fromTasks = ParseCommandNode(tasksNode, snapshot);
+            if (fromTasks is not null)
+            {
+                return fromTasks;
+            }
+        }
+
+        if (obj.TryGetPropertyValue("task", out var taskNode) && taskNode is not null)
+        {
+            var fromTask = ParseCommandNode(taskNode, snapshot);
+            if (fromTask is not null)
+            {
+                return fromTask;
+            }
+        }
+
         var command = ExtractString(obj, "command", "cmd", "name", "action", "task", "type");
         if (string.IsNullOrWhiteSpace(command))
         {
             return null;
         }
 
-        JsonNode? payload = null;
-        foreach (var key in new[] { "payload", "parameters", "args", "data", "body", "request" })
-        {
-            if (obj.TryGetPropertyValue(key, out var child) && child is not null)
-            {
-                payload = child;
-                break;
-            }
-        }
-
-        return new RemoteControlCommandRequest(command.Trim(), payload, snapshot.UserIdentity, snapshot.DeviceIdentity);
+        return new RemoteControlCommandRequest(
+            command.Trim(),
+            obj.DeepClone(),
+            snapshot.UserIdentity,
+            snapshot.DeviceIdentity);
     }
 
     private static string? ExtractString(JsonObject obj, params string[] keys)

@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Threading;
@@ -13,11 +14,14 @@ namespace MAAUnified.App.Services;
 
 public sealed class AvaloniaPostActionPromptService : IPostActionPromptService
 {
-    private readonly IClassicDesktopStyleApplicationLifetime _desktopLifetime;
+    private readonly IAppDialogService _dialogService;
 
-    public AvaloniaPostActionPromptService(IClassicDesktopStyleApplicationLifetime desktopLifetime)
+    public AvaloniaPostActionPromptService(
+        IClassicDesktopStyleApplicationLifetime desktopLifetime,
+        IAppDialogService? dialogService = null)
     {
-        _desktopLifetime = desktopLifetime;
+        ArgumentNullException.ThrowIfNull(desktopLifetime);
+        _dialogService = dialogService ?? ResolveDialogService(desktopLifetime);
     }
 
     public async Task<UiOperationResult> ConfirmPowerActionAsync(
@@ -42,34 +46,37 @@ public sealed class AvaloniaPostActionPromptService : IPostActionPromptService
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var owner = ResolveOwnerWindow();
-        if (owner is null)
-        {
-            return UiOperationResult.Fail(
-                UiErrorCode.PostActionExecutionFailed,
-                "Unable to show power action confirmation dialog because no desktop window is available.");
-        }
-
-        var dialog = new WarningConfirmDialogView();
         var seconds = Math.Max(1, (int)Math.Ceiling(request.Countdown.TotalSeconds));
-        dialog.ApplyRequest(
-            BuildTitle(request.Action, request.Language),
-            BuildMessage(request.Action, seconds, request.Language),
-            confirmText: BuildConfirmText(request.Language),
-            cancelText: DialogTextCatalog.WarningDialogCancelButton(request.Language),
-            language: request.Language,
-            countdownSeconds: seconds);
+        var dialogResult = await _dialogService.ShowWarningConfirmAsync(
+            new WarningConfirmDialogRequest(
+                Title: BuildTitle(request.Action, request.Language),
+                Message: BuildMessage(request.Action, seconds, request.Language),
+                ConfirmText: BuildConfirmText(request.Language),
+                CancelText: DialogTextCatalog.WarningDialogCancelButton(request.Language),
+                Language: request.Language ?? "en-us",
+                CountdownSeconds: seconds),
+            "App.PostActionPrompt.PowerAction",
+            cancellationToken);
 
-        var confirmed = await dialog.ShowDialog<bool>(owner);
-        return confirmed
-            ? UiOperationResult.Ok($"{request.Action} confirmed.")
-            : UiOperationResult.Cancelled($"{request.Action} cancelled.");
+        return dialogResult.Return switch
+        {
+            DialogReturnSemantic.Confirm => UiOperationResult.Ok($"{request.Action} confirmed."),
+            DialogReturnSemantic.Cancel => UiOperationResult.Cancelled($"{request.Action} cancelled."),
+            _ when string.Equals(dialogResult.Summary, "owner-unavailable", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(dialogResult.Summary, "dialog-service-unavailable", StringComparison.OrdinalIgnoreCase)
+                => UiOperationResult.Fail(
+                    UiErrorCode.PostActionExecutionFailed,
+                    "Unable to show power action confirmation dialog because no desktop window is available."),
+            _ => UiOperationResult.Cancelled($"{request.Action} dismissed."),
+        };
     }
 
-    private Window? ResolveOwnerWindow()
+    private static IAppDialogService ResolveDialogService(IClassicDesktopStyleApplicationLifetime desktopLifetime)
     {
-        return _desktopLifetime.Windows.LastOrDefault(window => window.IsActive)
-               ?? _desktopLifetime.MainWindow;
+        ArgumentNullException.ThrowIfNull(desktopLifetime);
+        return Avalonia.Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime
+            ? new AvaloniaDialogService(App.Runtime)
+            : NoOpAppDialogService.Instance;
     }
 
     private static string BuildTitle(PostActionType action, string? language)

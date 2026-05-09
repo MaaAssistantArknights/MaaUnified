@@ -9,6 +9,8 @@ namespace MAAUnified.App.Features.Dialogs;
 public partial class TextDialogView : Window, IDialogChromeAware
 {
     private string _promptSnapshot = string.Empty;
+    private string _payloadText = string.Empty;
+    private bool _readOnlyContentMode;
 
     public TextDialogView()
     {
@@ -16,6 +18,12 @@ public partial class TextDialogView : Window, IDialogChromeAware
         WindowVisuals.ApplyDefaultIcon(this);
         Opened += (_, _) =>
         {
+            if (_readOnlyContentMode)
+            {
+                ConfirmButton.Focus();
+                return;
+            }
+
             InputBox.Focus();
             InputBox.SelectAll();
         };
@@ -24,18 +32,32 @@ public partial class TextDialogView : Window, IDialogChromeAware
     public void ApplyRequest(TextDialogRequest request)
     {
         Title = request.Title;
-        _promptSnapshot = request.Prompt;
+        _promptSnapshot = request.Prompt ?? string.Empty;
+        _payloadText = request.DefaultText ?? string.Empty;
+        _readOnlyContentMode = request.ReadOnlyContent;
+        var readOnlyBodyText = _payloadText;
+        if (_readOnlyContentMode && string.IsNullOrWhiteSpace(readOnlyBodyText))
+        {
+            readOnlyBodyText = _promptSnapshot;
+            _promptSnapshot = string.Empty;
+        }
+
         PromptText.Text = _promptSnapshot;
-        InputBox.Text = request.DefaultText;
-        InputBox.AcceptsReturn = request.MultiLine;
-        DialogTitleText.Text = Title;
+        PromptText.IsVisible = !string.IsNullOrWhiteSpace(_promptSnapshot);
+        EditableInputPanel.IsVisible = !_readOnlyContentMode;
+        ReadOnlyContentPanel.IsVisible = _readOnlyContentMode;
+        InputBox.Text = _payloadText;
+        ApplyInputMode(request.MultiLine);
+        ReadOnlyContentBox.Text = readOnlyBodyText;
+        ReadOnlyContentBox.CaretIndex = 0;
+        DialogShell.Title = Title;
         ConfirmButton.Content = request.ConfirmText;
         CancelButton.Content = request.CancelText;
     }
 
     public TextDialogPayload BuildPayload()
     {
-        return new TextDialogPayload(InputBox.Text ?? string.Empty);
+        return new TextDialogPayload(_readOnlyContentMode ? _payloadText : InputBox.Text ?? string.Empty);
     }
 
     private void OnConfirmClick(object? sender, RoutedEventArgs e)
@@ -48,11 +70,35 @@ public partial class TextDialogView : Window, IDialogChromeAware
         Close(DialogReturnSemantic.Cancel);
     }
 
+    private void OnShellCloseRequested(object? sender, EventArgs e)
+    {
+        Close();
+    }
+
+    private void ApplyInputMode(bool multiLine)
+    {
+        InputBox.AcceptsReturn = multiLine;
+        InputBox.TextWrapping = multiLine ? Avalonia.Media.TextWrapping.Wrap : Avalonia.Media.TextWrapping.NoWrap;
+
+        if (multiLine)
+        {
+            if (!InputBox.Classes.Contains("app-input-block"))
+            {
+                InputBox.Classes.Add("app-input-block");
+            }
+
+            return;
+        }
+
+        InputBox.Classes.Remove("app-input-block");
+    }
+
     public void ApplyDialogChrome(DialogChromeSnapshot chrome)
     {
         Title = chrome.Title;
-        DialogTitleText.Text = chrome.GetNamedTextOrDefault(DialogTextCatalog.ChromeKeys.SectionTitle, chrome.Title);
+        DialogShell.Title = chrome.GetNamedTextOrDefault(DialogTextCatalog.ChromeKeys.SectionTitle, chrome.Title);
         PromptText.Text = chrome.GetNamedTextOrDefault(DialogTextCatalog.ChromeKeys.Prompt, _promptSnapshot);
+        PromptText.IsVisible = !string.IsNullOrWhiteSpace(PromptText.Text);
         ConfirmButton.Content = chrome.ConfirmText ?? ConfirmButton.Content;
         CancelButton.Content = chrome.CancelText ?? CancelButton.Content;
     }

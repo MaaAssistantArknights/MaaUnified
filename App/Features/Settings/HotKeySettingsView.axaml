@@ -1,144 +1,141 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:MAAUnified.App.Controls"
+             Classes="settings-page"
              x:Class="MAAUnified.App.Features.Settings.HotKeySettingsView">
-  <Grid Margin="4" RowDefinitions="Auto,Auto,Auto,Auto">
-    <TextBlock Classes="section-title" Text="{Binding RootTexts[Settings.Section.HotKey]}" />
+  <UserControl.Styles>
+    <Style Selector="Border.settings-input-group TextBox.hotkey-capture-input">
+      <Setter Property="Padding" Value="12,0,38,0" />
+    </Style>
 
-    <StackPanel Grid.Row="1"
-                Classes="settings-centered-column"
+    <Style Selector="TextBlock.hotkey-capture-guide">
+      <Setter Property="Margin" Value="-7,0,0,0" />
+    </Style>
+
+  </UserControl.Styles>
+
+  <Grid Margin="4"
+        RowDefinitions="Auto,Auto">
+    <TextBlock Classes="settings-page-title"
+               Text="{Binding RootTexts[Settings.Section.HotKey]}" />
+
+    <controls:AdaptiveSpacingStackPanel Grid.Row="1"
                 Margin="{DynamicResource MAA.Thickness.Settings.SectionTopMargin}"
-                Spacing="10">
-      <TextBlock Classes="settings-centered-text"
+                Classes="settings-page-flow">
+      <TextBlock Classes="app-body"
+                 Classes.hotkey-capture-guide="True"
+                 MaxWidth="{DynamicResource MAA.Size.Settings.FormMaxWidth}"
                  Text="{Binding HotkeyCaptureGuideText}"
                  TextWrapping="Wrap" />
 
-      <Border Padding="12"
-              BorderBrush="Gray"
-              BorderThickness="1"
-              CornerRadius="8">
-        <Grid RowDefinitions="Auto,Auto,Auto"
-              ColumnDefinitions="2*,180,Auto,Auto,Auto">
-          <TextBlock Grid.Row="0"
-                     Grid.Column="0"
-                     Margin="0,0,8,0"
-                     VerticalAlignment="Center"
-                     Text="{Binding ShowGuiHotkeyState.Title}" />
-          <TextBox x:Name="ShowGuiCaptureBox"
-                   Grid.Row="0"
+      <Grid Classes="settings-page-labeled-row"
+            controls:SettingsLabelWidthCoordinator.GroupKey="HotKey.Main"
+            ColumnDefinitions="Auto,*"
+            RowDefinitions="Auto,Auto,Auto">
+        <controls:SettingsLabel Text="{Binding ShowGuiHotkeyState.Title}"
+                                Tip="{DynamicResource HotKeyChangingTip}" />
+        <Border Grid.Column="1"
+                Classes="settings-input-group"
+                HorizontalAlignment="Left"
+                VerticalAlignment="Center">
+          <Grid ColumnDefinitions="Auto,Auto">
+            <Grid Width="{DynamicResource MAA.Size.Settings.FieldExtraWideWidth}">
+              <TextBox x:Name="ShowGuiCaptureBox"
+                       Classes="settings-input-group-editor hotkey-capture-input"
+                       IsReadOnly="True"
+                       Tag="ShowGui"
+                       Text="{Binding ShowGuiHotkeyState.InputText}"
+                       KeyDown="OnHotkeyCaptureKeyDown" />
+              <Button Classes="settings-dropdown-delete-button"
+                      Margin="0,0,8,0"
+                      Tag="ShowGui"
+                      Content="×"
+                      Click="OnClearHotkeyClick" />
+            </Grid>
+            <Button Grid.Column="1"
+                    Classes="settings-input-group-action"
+                    Tag="ShowGui"
+                    Content="{Binding ShowGuiHotkeyState.CaptureButtonText}"
+                    Click="OnBeginCaptureClick" />
+          </Grid>
+        </Border>
+        <TextBlock Grid.Row="1"
                    Grid.Column="1"
-                   Margin="0,0,8,0"
-                   IsReadOnly="True"
-                   Tag="ShowGui"
-                   Text="{Binding ShowGuiHotkeyState.InputText}"
-                   KeyDown="OnHotkeyCaptureKeyDown" />
-          <Button Grid.Row="0"
-                  Grid.Column="2"
-                  Margin="0,0,8,0"
-                  Classes="wpf-button wpf-button-secondary"
-                  Tag="ShowGui"
-                  Content="{Binding ShowGuiHotkeyState.CaptureButtonText}"
-                  Click="OnBeginCaptureClick" />
-          <Button Grid.Row="0"
-                  Grid.Column="3"
-                  Margin="0,0,8,0"
-                  Classes="wpf-button wpf-button-secondary"
-                  Tag="ShowGui"
-                  Content="{Binding ShowGuiHotkeyState.ClearButtonText}"
-                  Click="OnClearHotkeyClick" />
-          <TextBlock Grid.Row="0"
-                     Grid.Column="4"
-                     VerticalAlignment="Center"
-                     Text="{Binding ShowGuiHotkeyState.ScopeLabel}" />
-
-          <TextBlock Grid.Row="1"
-                     Grid.Column="0"
-                     Grid.ColumnSpan="5"
-                     Classes="state-warning"
-                     IsVisible="{Binding ShowGuiHotkeyState.HasWarningMessage}"
-                     Text="{Binding ShowGuiHotkeyState.WarningMessage}"
-                     TextWrapping="Wrap" />
-          <TextBlock Grid.Row="2"
-                     Grid.Column="0"
-                     Grid.ColumnSpan="5"
-                     Classes="state-error"
-                     IsVisible="{Binding ShowGuiHotkeyState.HasErrorMessage}"
-                     Text="{Binding ShowGuiHotkeyState.ErrorMessage}"
-                     TextWrapping="Wrap" />
-        </Grid>
-      </Border>
-
-      <Border Padding="12"
-              BorderBrush="Gray"
-              BorderThickness="1"
-              CornerRadius="8">
-        <Grid RowDefinitions="Auto,Auto,Auto"
-              ColumnDefinitions="2*,180,Auto,Auto,Auto">
-          <TextBlock Grid.Row="0"
-                     Grid.Column="0"
-                     Margin="0,0,8,0"
-                     VerticalAlignment="Center"
-                     Text="{Binding LinkStartHotkeyState.Title}" />
-          <TextBox x:Name="LinkStartCaptureBox"
-                   Grid.Row="0"
+                   Margin="0,6,0,0"
+                   Classes="state-warning app-caption"
+                   IsVisible="{Binding ShowGuiHotkeyState.HasWarningMessage}"
+                   Text="{Binding ShowGuiHotkeyState.WarningMessage}"
+                   TextWrapping="Wrap" />
+        <TextBlock Grid.Row="2"
                    Grid.Column="1"
-                   Margin="0,0,8,0"
-                   IsReadOnly="True"
-                   Tag="LinkStart"
-                   Text="{Binding LinkStartHotkeyState.InputText}"
-                   KeyDown="OnHotkeyCaptureKeyDown" />
-          <Button Grid.Row="0"
-                  Grid.Column="2"
-                  Margin="0,0,8,0"
-                  Classes="wpf-button wpf-button-secondary"
-                  Tag="LinkStart"
-                  Content="{Binding LinkStartHotkeyState.CaptureButtonText}"
-                  Click="OnBeginCaptureClick" />
-          <Button Grid.Row="0"
-                  Grid.Column="3"
-                  Margin="0,0,8,0"
-                  Classes="wpf-button wpf-button-secondary"
-                  Tag="LinkStart"
-                  Content="{Binding LinkStartHotkeyState.ClearButtonText}"
-                  Click="OnClearHotkeyClick" />
-          <TextBlock Grid.Row="0"
-                     Grid.Column="4"
-                     VerticalAlignment="Center"
-                     Text="{Binding LinkStartHotkeyState.ScopeLabel}" />
+                   Margin="0,6,0,0"
+                   Classes="state-error app-caption"
+                   IsVisible="{Binding ShowGuiHotkeyState.HasErrorMessage}"
+                   Text="{Binding ShowGuiHotkeyState.ErrorMessage}"
+                   TextWrapping="Wrap" />
+      </Grid>
 
-          <TextBlock Grid.Row="1"
-                     Grid.Column="0"
-                     Grid.ColumnSpan="5"
-                     Classes="state-warning"
-                     IsVisible="{Binding LinkStartHotkeyState.HasWarningMessage}"
-                     Text="{Binding LinkStartHotkeyState.WarningMessage}"
-                     TextWrapping="Wrap" />
-          <TextBlock Grid.Row="2"
-                     Grid.Column="0"
-                     Grid.ColumnSpan="5"
-                     Classes="state-error"
-                     IsVisible="{Binding LinkStartHotkeyState.HasErrorMessage}"
-                     Text="{Binding LinkStartHotkeyState.ErrorMessage}"
-                     TextWrapping="Wrap" />
-        </Grid>
+      <Grid Classes="settings-page-labeled-row"
+            controls:SettingsLabelWidthCoordinator.GroupKey="HotKey.Main"
+            ColumnDefinitions="Auto,*"
+            RowDefinitions="Auto,Auto,Auto">
+        <controls:SettingsLabel Text="{Binding LinkStartHotkeyState.Title}"
+                                Tip="{DynamicResource HotKeyChangingTip}" />
+        <Border Grid.Column="1"
+                Classes="settings-input-group"
+                HorizontalAlignment="Left"
+                VerticalAlignment="Center">
+          <Grid ColumnDefinitions="Auto,Auto">
+            <Grid Width="{DynamicResource MAA.Size.Settings.FieldExtraWideWidth}">
+              <TextBox x:Name="LinkStartCaptureBox"
+                       Classes="settings-input-group-editor hotkey-capture-input"
+                       IsReadOnly="True"
+                       Tag="LinkStart"
+                       Text="{Binding LinkStartHotkeyState.InputText}"
+                       KeyDown="OnHotkeyCaptureKeyDown" />
+              <Button Classes="settings-dropdown-delete-button"
+                      Margin="0,0,8,0"
+                      Tag="LinkStart"
+                      Content="×"
+                      Click="OnClearHotkeyClick" />
+            </Grid>
+            <Button Grid.Column="1"
+                    Classes="settings-input-group-action"
+                    Tag="LinkStart"
+                    Content="{Binding LinkStartHotkeyState.CaptureButtonText}"
+                    Click="OnBeginCaptureClick" />
+          </Grid>
+        </Border>
+        <TextBlock Grid.Row="1"
+                   Grid.Column="1"
+                   Margin="0,6,0,0"
+                   Classes="state-warning app-caption"
+                   IsVisible="{Binding LinkStartHotkeyState.HasWarningMessage}"
+                   Text="{Binding LinkStartHotkeyState.WarningMessage}"
+                   TextWrapping="Wrap" />
+        <TextBlock Grid.Row="2"
+                   Grid.Column="1"
+                   Margin="0,6,0,0"
+                   Classes="state-error app-caption"
+                   IsVisible="{Binding LinkStartHotkeyState.HasErrorMessage}"
+                   Text="{Binding LinkStartHotkeyState.ErrorMessage}"
+                   TextWrapping="Wrap" />
+      </Grid>
+
+      <WrapPanel Classes="settings-section-action-bar">
+        <Button Classes="app-button app-primary"
+                Content="{Binding RootTexts[Settings.Action.RegisterHotkeys]}"
+                Click="OnApplyHotkeysClick" />
+      </WrapPanel>
+
+      <Border Classes="settings-page-status-block">
+        <controls:AdaptiveSpacingStackPanel Classes="settings-page-status-list">
+          <TextBlock Classes="state-warning app-caption"
+                     Text="{Binding HotkeyWarningMessage}"
+                     TextWrapping="Wrap"
+                     IsVisible="{Binding HasHotkeyWarningMessage}" />
+        </controls:AdaptiveSpacingStackPanel>
       </Border>
-
-      <Button Classes="wpf-button wpf-button-secondary"
-              HorizontalAlignment="Center"
-              Content="{Binding RootTexts[Settings.Action.RegisterHotkeys]}"
-              Click="OnApplyHotkeysClick" />
-    </StackPanel>
-
-    <StackPanel Grid.Row="2"
-                Classes="settings-form settings-form-narrow"
-                Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}"
-                Spacing="4">
-      <TextBlock Classes="settings-centered-text" Text="{Binding HotkeyStatusMessage}" />
-      <TextBlock Classes="state-warning settings-centered-text"
-                 Text="{Binding HotkeyWarningMessage}"
-                 IsVisible="{Binding HasHotkeyWarningMessage}" />
-      <TextBlock Classes="state-error settings-centered-text"
-                 Text="{Binding HotkeyErrorMessage}"
-                 IsVisible="{Binding HasHotkeyErrorMessage}" />
-    </StackPanel>
+    </controls:AdaptiveSpacingStackPanel>
   </Grid>
 </UserControl>

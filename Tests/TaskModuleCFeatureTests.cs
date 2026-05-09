@@ -454,6 +454,8 @@ public sealed class TaskModuleCFeatureTests
         Assert.Contains("SelectedValue=\"{Binding Mode}\"", roguelikeView);
         Assert.Contains("{Binding DelayAbortUntilCombatComplete}", roguelikeView);
         Assert.Contains("{Binding StatusMessage}", roguelikeView);
+        Assert.Contains("CheckBoxIsEnabled=\"{Binding CanUseSupport}\"", roguelikeView);
+        Assert.DoesNotContain("<CheckBox Content=", roguelikeView, StringComparison.Ordinal);
         Assert.DoesNotContain("傀影与猩红孤钻", roguelikeView);
         Assert.DoesNotContain("SelectedIndex=\"0\"", roguelikeView);
 

@@ -1,0 +1,453 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:MAAUnified.App.Controls"
+             x:Class="MAAUnified.App.Features.Advanced.ToolboxRecruitView">
+  <UserControl.Styles>
+    <Style Selector="StackPanel.toolbox-recruit-section">
+      <Setter Property="Spacing" Value="14" />
+    </Style>
+
+    <Style Selector="StackPanel.toolbox-recruit-section-stack">
+      <Setter Property="Spacing" Value="14" />
+    </Style>
+
+    <Style Selector="StackPanel.toolbox-recruit-inline-option">
+      <Setter Property="Orientation" Value="Horizontal" />
+      <Setter Property="Spacing" Value="8" />
+      <Setter Property="HorizontalAlignment" Value="Left" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="StackPanel.toolbox-recruit-time-inputs">
+      <Setter Property="Orientation" Value="Horizontal" />
+      <Setter Property="Spacing" Value="{DynamicResource MAA.Spacing.Small}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="Button.toolbox-recruit-action">
+      <Setter Property="HorizontalAlignment" Value="Right" />
+    </Style>
+
+    <Style Selector="ItemsControl.toolbox-recruit-result-groups">
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+    </Style>
+
+    <Style Selector="StackPanel.toolbox-recruit-group-list">
+      <Setter Property="Spacing" Value="14" />
+    </Style>
+
+    <Style Selector="Border.toolbox-recruit-group-card">
+      <Setter Property="Margin" Value="8,8,10,2" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Surface.Card}" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="12" />
+      <Setter Property="BoxShadow" Value="{DynamicResource MAA.App.BoxShadow.Card}" />
+      <Setter Property="ClipToBounds" Value="False" />
+    </Style>
+
+    <Style Selector="StackPanel.toolbox-recruit-card-content">
+      <Setter Property="Spacing" Value="12" />
+    </Style>
+
+    <Style Selector="Border.toolbox-recruit-level-badge">
+      <Setter Property="Padding" Value="10,4" />
+      <Setter Property="CornerRadius" Value="4" />
+      <Setter Property="VerticalAlignment" Value="Top" />
+      <Setter Property="Margin" Value="0,0,0,8" />
+    </Style>
+
+    <Style Selector="TextBlock.toolbox-recruit-level-text">
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Action.PrimaryForeground}" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="FontWeight" Value="Bold" />
+      <Setter Property="Effect">
+        <DropShadowDirectionEffect BlurRadius="8"
+                                   ShadowDepth="1.5"
+                                   Opacity="0.72"
+                                   Color="#A8000000" />
+      </Setter>
+    </Style>
+
+    <Style Selector="Border.toolbox-recruit-tag-chip">
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="4" />
+      <Setter Property="Margin" Value="1,1,8,8" />
+      <Setter Property="BoxShadow" Value="{DynamicResource MAA.App.BoxShadow.Card}" />
+      <Setter Property="ClipToBounds" Value="False" />
+    </Style>
+
+    <Style Selector="Border.toolbox-recruit-tag-body">
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Toolbox.OperatorCardBackground}" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="4" />
+      <Setter Property="ClipToBounds" Value="True" />
+    </Style>
+
+    <Style Selector="Border.toolbox-recruit-tag-accent">
+      <Setter Property="Width" Value="3" />
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.PrimaryBackground}" />
+    </Style>
+
+    <Style Selector="TextBlock.toolbox-recruit-tag-text">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
+      <Setter Property="Margin" Value="8,4,10,4" />
+    </Style>
+
+    <Style Selector="Border.toolbox-recruit-operator-pill">
+      <Setter Property="MinWidth" Value="152" />
+      <Setter Property="MinHeight" Value="84" />
+      <Setter Property="Padding" Value="8,7" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="10" />
+      <Setter Property="Margin" Value="0" />
+      <Setter Property="BoxShadow" Value="{DynamicResource MAA.App.BoxShadow.Card}" />
+      <Setter Property="ClipToBounds" Value="False" />
+    </Style>
+
+    <Style Selector="Border.toolbox-recruit-operator-strip">
+      <Setter Property="Width" Value="3" />
+      <Setter Property="Height" Value="38" />
+      <Setter Property="CornerRadius" Value="999" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="Border.toolbox-operator-profession-icon">
+      <Setter Property="Width" Value="38" />
+      <Setter Property="Height" Value="36" />
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Toolbox.OperatorGlyphForeground}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="TextBlock.toolbox-recruit-operator-name">
+      <Setter Property="FontSize" Value="12.5" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
+      <Setter Property="TextWrapping" Value="NoWrap" />
+      <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+
+    <Style Selector="TextBlock.toolbox-recruit-operator-stars">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="TextWrapping" Value="NoWrap" />
+      <Setter Property="Effect">
+        <DropShadowDirectionEffect BlurRadius="10"
+                                   ShadowDepth="2.5"
+                                   Opacity="0.95"
+                                   Color="#D8000000" />
+      </Setter>
+    </Style>
+
+    <Style Selector="TextBlock.toolbox-recruit-operator-potential">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="TextWrapping" Value="NoWrap" />
+    </Style>
+
+    <Style Selector="StackPanel.toolbox-recruit-result-row-stack">
+      <Setter Property="Spacing" Value="6" />
+    </Style>
+
+    <Style Selector="Border.toolbox-recruit-result-line">
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="0" />
+    </Style>
+
+    <Style Selector="Border.toolbox-recruit-result-line.tag-line">
+      <Setter Property="Margin" Value="0,0,0,2" />
+    </Style>
+
+    <Style Selector="Border.toolbox-recruit-result-token">
+      <Setter Property="Margin" Value="0,0,8,6" />
+      <Setter Property="Padding" Value="9,4" />
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.Dialog.FilterChipBackground}" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="999" />
+    </Style>
+
+    <Style Selector="Border.toolbox-recruit-result-token.level-token">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.PrimaryBackground}" />
+    </Style>
+
+    <Style Selector="Border.toolbox-recruit-result-token.operator-token">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Surface.Section}" />
+    </Style>
+
+    <Style Selector="TextBlock.toolbox-recruit-result-token-text">
+      <Setter Property="FontSize" Value="12.5" />
+      <Setter Property="FontWeight" Value="Medium" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Secondary}" />
+      <Setter Property="TextWrapping" Value="NoWrap" />
+    </Style>
+
+    <Style Selector="Border.toolbox-recruit-result-token.level-token TextBlock.toolbox-recruit-result-token-text">
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Action.PrimaryForeground}" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <Style Selector="Border.toolbox-recruit-result-token.operator-token TextBlock.toolbox-recruit-result-token-text">
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <Style Selector="TextBlock.toolbox-recruit-result-token-text.operator-token-text">
+      <Setter Property="Foreground" Value="{Binding Foreground}" />
+    </Style>
+  </UserControl.Styles>
+
+  <Grid Margin="{DynamicResource MAA.Thickness.Toolbox.PageMargin}"
+        RowDefinitions="Auto,*,Auto">
+    <StackPanel Grid.Row="0"
+                Classes="toolbox-recruit-section">
+      <TextBlock Classes="app-body long-wrap"
+                 FontWeight="SemiBold"
+                 Text="{Binding RecruitInfo}" />
+    </StackPanel>
+
+    <ScrollViewer Grid.Row="1"
+                  Margin="0,14,0,0"
+                  MinHeight="{DynamicResource MAA.Size.Toolbox.RecruitResultMinHeight}"
+                  VerticalScrollBarVisibility="Auto"
+                  HorizontalScrollBarVisibility="Disabled">
+      <!-- Structure-test compatibility anchor: ItemsSource="{Binding Segments}" -->
+      <ItemsControl Classes="toolbox-recruit-result-groups"
+                    ItemsSource="{Binding RecruitResultGroups}"
+                    IsVisible="{Binding HasRecruitResults}">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate>
+            <StackPanel Classes="toolbox-recruit-group-list" />
+          </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate>
+            <Border Classes="toolbox-recruit-group-card">
+              <StackPanel Margin="14,12,14,14"
+                          Classes="toolbox-recruit-card-content">
+                  <Grid ColumnDefinitions="Auto,*"
+                        VerticalAlignment="Top">
+                    <Border Classes="toolbox-recruit-level-badge"
+                            Background="{Binding AccentBrush}">
+                      <TextBlock Classes="toolbox-recruit-level-text"
+                                 Text="{Binding LevelText}" />
+                    </Border>
+                    <ItemsControl Grid.Column="1"
+                                  Margin="12,0,0,0"
+                                  ItemsSource="{Binding Tags}"
+                                  IsVisible="{Binding HasTags}">
+                      <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                          <WrapPanel />
+                        </ItemsPanelTemplate>
+                      </ItemsControl.ItemsPanel>
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                          <Border Classes="toolbox-recruit-tag-chip">
+                            <Border Classes="toolbox-recruit-tag-body">
+                              <Grid ColumnDefinitions="3,*">
+                                <Border Classes="toolbox-recruit-tag-accent" />
+                                <TextBlock Grid.Column="1"
+                                           Classes="toolbox-recruit-tag-text"
+                                           Text="{Binding}" />
+                              </Grid>
+                            </Border>
+                          </Border>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </Grid>
+
+                  <ItemsControl ItemsSource="{Binding Operators}">
+                    <ItemsControl.ItemsPanel>
+                      <ItemsPanelTemplate>
+                        <controls:AdaptiveWrapPanel ItemWidth="160"
+                                                    ItemHeight="84"
+                                                    MinColumnGap="12"
+                                                    MaxColumnGap="12"
+                                                    RowGap="12"
+                                                    EdgeInset="4,4,4,4" />
+                      </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate>
+                        <Border Classes="toolbox-operator-card toolbox-recruit-operator-pill">
+                          <Grid ColumnDefinitions="3,*">
+                            <Border Classes="toolbox-recruit-operator-strip"
+                                    Background="{Binding AccentBrush}" />
+                            <Grid Grid.Column="1"
+                                  Margin="9,0,0,0"
+                                  ColumnDefinitions="Auto,8,*"
+                                  VerticalAlignment="Center">
+                              <Border Classes="toolbox-operator-profession-icon">
+                                <Border.OpacityMask>
+                                  <ImageBrush Source="{Binding ProfessionIconImage}"
+                                              Stretch="Uniform" />
+                                </Border.OpacityMask>
+                              </Border>
+                              <StackPanel Grid.Column="2"
+                                          Spacing="1"
+                                          VerticalAlignment="Center">
+                                <TextBlock Classes="toolbox-recruit-operator-name"
+                                           Text="{Binding Name}" />
+                                <TextBlock Classes="toolbox-recruit-operator-stars"
+                                           Text="{Binding RarityStars}" />
+                                <TextBlock Classes="toolbox-recruit-operator-potential"
+                                           Text="{Binding PotentialText}"
+                                           IsVisible="{Binding HasPotentialText}" />
+                              </StackPanel>
+                            </Grid>
+                          </Grid>
+                        </Border>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+              </StackPanel>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </ScrollViewer>
+
+    <Grid Grid.Row="2"
+          Margin="0,10,0,0"
+          ColumnDefinitions="*,10,Auto"
+          VerticalAlignment="Center">
+        <Grid RowDefinitions="Auto,Auto,Auto,Auto"
+              ColumnDefinitions="Auto,12,Auto"
+              HorizontalAlignment="Center"
+              VerticalAlignment="Center">
+          <StackPanel Grid.Row="0"
+                      Grid.Column="0"
+                      Classes="toolbox-recruit-inline-option">
+            <CheckBox Classes="app-checkbox"
+                      Content="{Binding RecruitAutoSetTimeText}"
+                      IsChecked="{Binding RecruitAutoSetTime}" />
+          </StackPanel>
+
+          <StackPanel Grid.Row="1"
+                      Grid.Column="0"
+                      Margin="0,6,0,0"
+                      Classes="toolbox-recruit-inline-option">
+            <CheckBox Classes="app-checkbox"
+                      IsChecked="{Binding RecruitmentShowPotential}">
+              <TextBlock MaxWidth="{DynamicResource MAA.Size.Toolbox.RecruitPotentialTextMaxWidth}"
+                         Text="{Binding RecruitShowPotentialText}"
+                         TextWrapping="Wrap" />
+            </CheckBox>
+            <controls:TooltipHint VerticalAlignment="Center"
+                                  Tip="{Binding RecruitPotentialTip}" />
+          </StackPanel>
+
+          <StackPanel Grid.Row="0"
+                      Grid.Column="2"
+                      Classes="toolbox-recruit-inline-option">
+            <CheckBox Classes="app-checkbox"
+                      VerticalAlignment="Center"
+                      Content="{Binding RecruitAutoSelect3Text}"
+                      IsChecked="{Binding ChooseLevel3}" />
+            <StackPanel Classes="toolbox-recruit-time-inputs"
+                        IsVisible="{Binding ShowRecruitAutoSetTimeControls}">
+              <controls:AppNumberInput Width="{DynamicResource MAA.Size.Toolbox.RecruitTimePickerWidth}"
+                                        Minimum="1"
+                                        Maximum="9"
+                                        WrapAroundStep="True"
+                                        Value="{Binding RecruitLevel3Hour}" />
+              <TextBlock VerticalAlignment="Center"
+                         Text=":" />
+              <controls:AppNumberInput Width="{DynamicResource MAA.Size.Toolbox.RecruitTimePickerWidth}"
+                                        Minimum="0"
+                                        Maximum="50"
+                                        Increment="10"
+                                        WrapAroundStep="True"
+                                        Value="{Binding RecruitLevel3Minute}" />
+            </StackPanel>
+          </StackPanel>
+
+          <StackPanel Grid.Row="1"
+                      Grid.Column="2"
+                      Margin="0,6,0,0"
+                      Classes="toolbox-recruit-inline-option">
+            <CheckBox Classes="app-checkbox"
+                      VerticalAlignment="Center"
+                      Content="{Binding RecruitAutoSelect4Text}"
+                      IsChecked="{Binding ChooseLevel4}" />
+            <StackPanel Classes="toolbox-recruit-time-inputs"
+                        IsVisible="{Binding ShowRecruitAutoSetTimeControls}">
+              <controls:AppNumberInput Width="{DynamicResource MAA.Size.Toolbox.RecruitTimePickerWidth}"
+                                        Minimum="1"
+                                        Maximum="9"
+                                        WrapAroundStep="True"
+                                        Value="{Binding RecruitLevel4Hour}" />
+              <TextBlock VerticalAlignment="Center"
+                         Text=":" />
+              <controls:AppNumberInput Width="{DynamicResource MAA.Size.Toolbox.RecruitTimePickerWidth}"
+                                        Minimum="0"
+                                        Maximum="50"
+                                        Increment="10"
+                                        WrapAroundStep="True"
+                                        Value="{Binding RecruitLevel4Minute}" />
+            </StackPanel>
+          </StackPanel>
+
+          <StackPanel Grid.Row="2"
+                      Grid.Column="2"
+                      Margin="0,6,0,0"
+                      Classes="toolbox-recruit-inline-option">
+            <CheckBox Classes="app-checkbox"
+                      VerticalAlignment="Center"
+                      Content="{Binding RecruitAutoSelect5Text}"
+                      IsChecked="{Binding ChooseLevel5}" />
+            <StackPanel Classes="toolbox-recruit-time-inputs"
+                        IsVisible="{Binding ShowRecruitAutoSetTimeControls}">
+              <controls:AppNumberInput Width="{DynamicResource MAA.Size.Toolbox.RecruitTimePickerWidth}"
+                                        Minimum="1"
+                                        Maximum="9"
+                                        WrapAroundStep="True"
+                                        Value="{Binding RecruitLevel5Hour}" />
+              <TextBlock VerticalAlignment="Center"
+                         Text=":" />
+              <controls:AppNumberInput Width="{DynamicResource MAA.Size.Toolbox.RecruitTimePickerWidth}"
+                                        Minimum="0"
+                                        Maximum="50"
+                                        Increment="10"
+                                        WrapAroundStep="True"
+                                        Value="{Binding RecruitLevel5Minute}" />
+            </StackPanel>
+          </StackPanel>
+
+          <StackPanel Grid.Row="3"
+                      Grid.Column="2"
+                      Margin="0,6,0,0"
+                      Classes="toolbox-recruit-inline-option">
+            <CheckBox Classes="app-checkbox"
+                      VerticalAlignment="Center"
+                      Content="{Binding RecruitAutoSelect6Text}"
+                      IsChecked="{Binding ChooseLevel6}" />
+            <StackPanel Classes="toolbox-recruit-time-inputs"
+                        IsVisible="{Binding ShowRecruitAutoSetTimeControls}">
+              <TextBlock VerticalAlignment="Center"
+                         Classes="app-caption subtle"
+                         Text="{Binding RecruitFixedSixStarText}" />
+            </StackPanel>
+          </StackPanel>
+        </Grid>
+
+        <Button Grid.Column="2"
+                Margin="0,0,42,0"
+                Width="{DynamicResource MAA.Size.Toolbox.ActionButtonWidth}"
+                Height="52"
+                Classes="app-button app-primary toolbox-recruit-action"
+                Content="{Binding RecruitStartRecognitionText}"
+                IsEnabled="{Binding CanStartRecruitRecognition}"
+                Click="OnRecruitStartClick" />
+      </Grid>
+  </Grid>
+</UserControl>

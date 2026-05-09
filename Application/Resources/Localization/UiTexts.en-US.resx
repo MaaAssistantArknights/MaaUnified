@@ -185,6 +185,30 @@ By pressing ｢Confirm｣, you understand and accept the possible risks.</value>
   <data name="Copilot.List.InlineJsonHint" xml:space="preserve">
     <value>inline JSON</value>
   </data>
+  <data name="Copilot.List.Button.ClearAll" xml:space="preserve">
+    <value>Delete all</value>
+  </data>
+  <data name="Copilot.List.Button.Disable" xml:space="preserve">
+    <value>Disable</value>
+  </data>
+  <data name="Copilot.List.Button.Enable" xml:space="preserve">
+    <value>Enable</value>
+  </data>
+  <data name="Copilot.List.Button.LoadSingle" xml:space="preserve">
+    <value>Load single</value>
+  </data>
+  <data name="Copilot.List.Button.ToggleRaid" xml:space="preserve">
+    <value>Toggle raid</value>
+  </data>
+  <data name="Copilot.List.ClearAllConfirm.Confirm" xml:space="preserve">
+    <value>Delete all</value>
+  </data>
+  <data name="Copilot.List.ClearAllConfirm.Message" xml:space="preserve">
+    <value>All copilot tasks in the battle list will be removed. This cannot be undone.</value>
+  </data>
+  <data name="Copilot.List.ClearAllConfirm.Title" xml:space="preserve">
+    <value>Delete battle list</value>
+  </data>
   <data name="Copilot.List.RaidLabel" xml:space="preserve">
     <value>Raid</value>
   </data>
@@ -198,7 +222,7 @@ By pressing ｢Confirm｣, you understand and accept the possible risks.</value>
     <value>No importable copilot files found.</value>
   </data>
   <data name="Copilot.Error.ClearPersistFail" xml:space="preserve">
-    <value>Clear failed: list save failed.</value>
+    <value>Delete all failed: list save failed.</value>
   </data>
   <data name="Copilot.Error.CurrentPayloadNotObject" xml:space="preserve">
     <value>Current copilot payload must be a single JSON object.</value>
@@ -263,6 +287,9 @@ By pressing ｢Confirm｣, you understand and accept the possible risks.</value>
   <data name="Copilot.Error.SelectTaskToSort" xml:space="preserve">
     <value>Select a copilot item to sort.</value>
   </data>
+  <data name="Copilot.Error.SelectTaskToUpdate" xml:space="preserve">
+    <value>Select a copilot item to update.</value>
+  </data>
   <data name="Copilot.Error.SessionStateNotAllowed" xml:space="preserve">
     <value>会话状态 `{0}` 不允许{1}。
 Session state `{0}` does not allow {2}.</value>
@@ -284,6 +311,24 @@ Session state `{0}` does not allow {2}.</value>
   </data>
   <data name="Copilot.Error.StopRunOwnerBlocked" xml:space="preserve">
     <value>Copilot stop blocked: current run owner is `{0}`.</value>
+  </data>
+  <data name="Copilot.Error.UpdateListItemPersistFail" xml:space="preserve">
+    <value>Update failed: list save failed.</value>
+  </data>
+  <data name="Copilot.RunOwnerBlockedDialog.ConfirmButton" xml:space="preserve">
+    <value>Confirm</value>
+  </data>
+  <data name="Copilot.RunOwnerBlockedDialog.DetailsButton" xml:space="preserve">
+    <value>Error details</value>
+  </data>
+  <data name="Copilot.RunOwnerBlockedDialog.Message" xml:space="preserve">
+    <value>{0} is still running. Stop the current task before starting Copilot.</value>
+  </data>
+  <data name="Copilot.RunOwnerBlockedDialog.StopButton" xml:space="preserve">
+    <value>Stop task</value>
+  </data>
+  <data name="Copilot.RunOwnerBlockedDialog.Title" xml:space="preserve">
+    <value>Copilot start blocked</value>
   </data>
   <data name="Copilot.Error.ValidateTabMismatch" xml:space="preserve">
     <value>Selected copilot does not match current tab.</value>
@@ -316,7 +361,7 @@ Session state `{0}` does not allow {2}.</value>
 8. Battle list:
 ● Verify stage name below (e.g. CV-EX-1).
 ● Add: left=normal, right=raid.
-● Clear: left=all, right=inactive only.
+● Delete all: removes all tasks.
 ● Start from a page where target stage is visible. Cross-chapter navigation is unsupported.
 ● The run stops automatically on sanity shortage, battle failure, or non-3-star result.</value>
   </data>
@@ -325,6 +370,9 @@ Session state `{0}` does not allow {2}.</value>
   </data>
   <data name="Copilot.Hint.ListPanelEnabled" xml:space="preserve">
     <value>Checked items in battle list will be executed.</value>
+  </data>
+  <data name="Copilot.Hint.LoadedFile" xml:space="preserve">
+    <value>Imported copilot file: {0}</value>
   </data>
   <data name="Copilot.Input.OperatorNameWatermark" xml:space="preserve">
     <value>Operator name</value>
@@ -420,7 +468,10 @@ Session state `{0}` does not allow {2}.</value>
     <value>No inactive items to clean.</value>
   </data>
   <data name="Copilot.Status.ClearSuccess" xml:space="preserve">
-    <value>Copilot list cleared.</value>
+    <value>All copilot tasks deleted.</value>
+  </data>
+  <data name="Copilot.Status.ClearCancelled" xml:space="preserve">
+    <value>Deleting all copilot tasks was cancelled.</value>
   </data>
   <data name="Copilot.Status.CorruptedListIgnored" xml:space="preserve">
     <value>Ignored corrupted copilot list configuration.</value>
@@ -470,6 +521,18 @@ Session state `{0}` does not allow {2}.</value>
   <data name="Copilot.Status.LoadedFeedbackLikeSuccess" xml:space="preserve">
     <value>Like submitted.</value>
   </data>
+  <data name="Copilot.Status.ListItemDisabled" xml:space="preserve">
+    <value>Copilot item disabled.</value>
+  </data>
+  <data name="Copilot.Status.ListItemEnabled" xml:space="preserve">
+    <value>Copilot item enabled.</value>
+  </data>
+  <data name="Copilot.Status.ListItemRaidDisabled" xml:space="preserve">
+    <value>Switched to normal difficulty.</value>
+  </data>
+  <data name="Copilot.Status.ListItemRaidEnabled" xml:space="preserve">
+    <value>Switched to raid difficulty.</value>
+  </data>
   <data name="Copilot.Status.MoveDownSuccess" xml:space="preserve">
     <value>Selected item moved down.</value>
   </data>
@@ -496,6 +559,15 @@ Session state `{0}` does not allow {2}.</value>
   </data>
   <data name="Copilot.Status.StopFailed" xml:space="preserve">
     <value>Stop failed.</value>
+  </data>
+  <data name="Copilot.Status.UpdateListItemFailed" xml:space="preserve">
+    <value>Failed to update copilot item.</value>
+  </data>
+  <data name="Copilot.Status.UpdateListItemNameFailed" xml:space="preserve">
+    <value>Failed to update copilot item name.</value>
+  </data>
+  <data name="Copilot.Status.UpdateListItemNameSuccess" xml:space="preserve">
+    <value>Copilot item name updated: {0}</value>
   </data>
   <data name="Copilot.Tab.Display.Main" xml:space="preserve">
     <value>Main / Story / SideStory</value>
@@ -539,8 +611,7 @@ Please start from the correct screen. Cross-chapter navigation is unsupported.
 When enabled, selecting one copilot auto-adds it to battle list.</value>
   </data>
   <data name="Copilot.Tip.ClearList" xml:space="preserve">
-    <value>Left click: clear all
-Right click: clear inactive only</value>
+    <value>Delete all copilot tasks in the battle list.</value>
   </data>
   <data name="Copilot.Tip.File" xml:space="preserve">
     <value>You can also drag a copilot file here.</value>
@@ -624,6 +695,9 @@ Remaining credits: </value>
   <data name="Dialog.Error.CloseButton" xml:space="preserve">
     <value>Close</value>
   </data>
+  <data name="Dialog.Error.ConnectFailedTitle" xml:space="preserve">
+    <value>Failed to connect to emulator</value>
+  </data>
   <data name="Dialog.Error.CodeLabel" xml:space="preserve">
     <value>Code</value>
   </data>
@@ -632,6 +706,9 @@ Remaining credits: </value>
   </data>
   <data name="Dialog.Error.CopyButton" xml:space="preserve">
     <value>Copy</value>
+  </data>
+  <data name="Dialog.Error.CopyErrorInfoButton" xml:space="preserve">
+    <value>Error details</value>
   </data>
   <data name="Dialog.Error.DetailsLabel" xml:space="preserve">
     <value>Details</value>
@@ -665,6 +742,9 @@ Remaining credits: </value>
   </data>
   <data name="Dialog.Warning.ConfirmButton" xml:space="preserve">
     <value>Confirm</value>
+  </data>
+  <data name="Dialog.Warning.DetailsButton" xml:space="preserve">
+    <value>Error details</value>
   </data>
   <data name="Dialog.Warning.Prompt" xml:space="preserve">
     <value>Do you want to continue?</value>
@@ -793,6 +873,9 @@ Do not adjust the proxy multiplier setting in the game</value>
   <data name="Fight.StageSelect" xml:space="preserve">
     <value>Stage</value>
   </data>
+  <data name="Fight.StageSelect2" xml:space="preserve">
+    <value>Candidates</value>
+  </data>
   <data name="Fight.Stone" xml:space="preserve">
     <value>Stone</value>
   </data>
@@ -819,6 +902,48 @@ Do not adjust the proxy multiplier setting in the game</value>
   </data>
   <data name="Fight.UseStoneDisplay" xml:space="preserve">
     <value>Use Originium</value>
+  </data>
+  <data name="Fight.UseWeeklySchedule" xml:space="preserve">
+    <value>Enable weekly schedule</value>
+  </data>
+  <data name="Fight.AddStage" xml:space="preserve">
+    <value>Add candidate</value>
+  </data>
+  <data name="Fight.CustomStageCode" xml:space="preserve">
+    <value>Manual entry of stage names</value>
+  </data>
+  <data name="Fight.CustomStageCodeTip" xml:space="preserve">
+    <value>Support most main stage names and stage names from the original list.</value>
+  </data>
+  <data name="Fight.MultiTasksShareTip" xml:space="preserve">
+    <value>The following options are shared across multiple tasks.</value>
+  </data>
+  <data name="Fight.AutoRestartOption" xml:space="preserve">
+    <value>Restart when game disconnects</value>
+  </data>
+  <data name="Fight.UseWeeklyScheduleTip" xml:space="preserve">
+    <value>The day of week here follows in-game reset time rather than local clock time.</value>
+  </data>
+  <data name="Fight.WeeklySchedule.Sunday" xml:space="preserve">
+    <value>Sun</value>
+  </data>
+  <data name="Fight.WeeklySchedule.Monday" xml:space="preserve">
+    <value>Mon</value>
+  </data>
+  <data name="Fight.WeeklySchedule.Tuesday" xml:space="preserve">
+    <value>Tue</value>
+  </data>
+  <data name="Fight.WeeklySchedule.Wednesday" xml:space="preserve">
+    <value>Wed</value>
+  </data>
+  <data name="Fight.WeeklySchedule.Thursday" xml:space="preserve">
+    <value>Thu</value>
+  </data>
+  <data name="Fight.WeeklySchedule.Friday" xml:space="preserve">
+    <value>Fri</value>
+  </data>
+  <data name="Fight.WeeklySchedule.Saturday" xml:space="preserve">
+    <value>Sat</value>
   </data>
   <data name="FightCompleted" xml:space="preserve">
     <value>Combat completed</value>
@@ -996,6 +1121,33 @@ Do not adjust the proxy multiplier setting in the game</value>
   </data>
   <data name="Infrast.Drones" xml:space="preserve">
     <value>Drones</value>
+  </data>
+  <data name="Control" xml:space="preserve">
+    <value>Control Center</value>
+  </data>
+  <data name="Dorm" xml:space="preserve">
+    <value>Dormitory</value>
+  </data>
+  <data name="Mfg" xml:space="preserve">
+    <value>Factory</value>
+  </data>
+  <data name="Office" xml:space="preserve">
+    <value>Office</value>
+  </data>
+  <data name="Power" xml:space="preserve">
+    <value>Power Plant</value>
+  </data>
+  <data name="Processing" xml:space="preserve">
+    <value>Workshop</value>
+  </data>
+  <data name="Reception" xml:space="preserve">
+    <value>Reception Room</value>
+  </data>
+  <data name="Trade" xml:space="preserve">
+    <value>Trading Post</value>
+  </data>
+  <data name="Training" xml:space="preserve">
+    <value>Training Room</value>
   </data>
   <data name="Infrast.Error.CustomFileNotFound" xml:space="preserve">
     <value>Custom file not found: {0}</value>
@@ -1387,6 +1539,9 @@ Are you sure you want to exit?</value>
   </data>
   <data name="Main.Update.ResourceAvailable" xml:space="preserve">
     <value>Resource update available. Run resource check</value>
+  </data>
+  <data name="Main.Update.ResourceDetected" xml:space="preserve">
+    <value>Resource update detected: {0}</value>
   </data>
   <data name="Main.Update.VersionAvailable" xml:space="preserve">
     <value>Version update available. See Settings &gt; Version Update</value>
@@ -2079,14 +2234,74 @@ With save file: farm points through crafting (advanced).
   <data name="Settings.About.Dialog.Confirm" xml:space="preserve">
     <value>Confirm</value>
   </data>
+  <data name="Settings.About.Dialog.ConfirmLocked" xml:space="preserve">
+    <value>Read announcement first</value>
+  </data>
+  <data name="Settings.About.Dialog.ConfirmBlocked1" xml:space="preserve">
+    <value>You haven't finished reading. Please confirm after you finish.</value>
+  </data>
+  <data name="Settings.About.Dialog.ConfirmBlocked2" xml:space="preserve">
+    <value>Yes, you - still clicking</value>
+  </data>
+  <data name="Settings.About.Dialog.ConfirmBlocked3" xml:space="preserve">
+    <value>Still clicking</value>
+  </data>
   <data name="Settings.About.Dialog.DoNotRemindThisAnnouncementAgain" xml:space="preserve">
-    <value>Do not remind this announcement again</value>
+    <value>Do not show this announcement again</value>
   </data>
   <data name="Settings.About.Dialog.DoNotShowAnnouncement" xml:space="preserve">
     <value>Do not show announcement</value>
   </data>
   <data name="Settings.About.Dialog.Title" xml:space="preserve">
     <value>Announcement</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadProgress.PendingBadge" xml:space="preserve">
+    <value>READ LOCK</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadProgress.PendingTitle" xml:space="preserve">
+    <value>Scroll to the bottom to unlock confirm.</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadProgress.PendingCaption" xml:space="preserve">
+    <value>Keep scrolling through every section. Confirm and do-not-remind will unlock together when you reach the end.</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadProgress.PendingFooterHint" xml:space="preserve">
+    <value>This option unlocks after you finish reading, so the full action area stays together and easy to scan.</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadProgress.ReadyBadge" xml:space="preserve">
+    <value>UNLOCKED</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadProgress.ReadyTitle" xml:space="preserve">
+    <value>Confirm is now available.</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadProgress.ReadyCaption" xml:space="preserve">
+    <value>You can confirm now, and you can choose not to show this announcement again.</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadProgress.ReadyFooterHint" xml:space="preserve">
+    <value>If you do not want to see this announcement again until it changes, tick the option on the left and confirm from the button on the right.</value>
+  </data>
+  <data name="Settings.About.Dialog.SectionsTitle" xml:space="preserve">
+    <value>Announcement Sections</value>
+  </data>
+  <data name="Settings.About.Dialog.SectionsCaption" xml:space="preserve">
+    <value>Choose a section on the left to read the full announcement.</value>
+  </data>
+  <data name="Settings.About.Dialog.Lead" xml:space="preserve">
+    <value>Please read the latest announcement carefully before closing this window.</value>
+  </data>
+  <data name="Settings.About.Dialog.BottomHint" xml:space="preserve">
+    <value>Unread announcements cannot be dismissed yet.</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadHint" xml:space="preserve">
+    <value>Scroll to the bottom before closing, or hide this announcement until the next update.</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadFinishedHint" xml:space="preserve">
+    <value>Announcement fully read. You can close this dialog now.</value>
+  </data>
+  <data name="Settings.About.Dialog.MetaCurrentSection" xml:space="preserve">
+    <value>Current section</value>
+  </data>
+  <data name="Settings.About.Dialog.MetaSectionFormat" xml:space="preserve">
+    <value>Section {0} / {1}</value>
   </data>
   <data name="Settings.About.OpenCommunity" xml:space="preserve">
     <value>Open community portal</value>
@@ -2142,8 +2357,35 @@ With save file: farm points through crafting (advanced).
   <data name="Settings.Achievement.Dialog.FilterWatermark" xml:space="preserve">
     <value>Filter achievements</value>
   </data>
+  <data name="Settings.Achievement.Dialog.FilterAll" xml:space="preserve">
+    <value>All</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.FilterUnlocked" xml:space="preserve">
+    <value>Unlocked</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.FilterInProgress" xml:space="preserve">
+    <value>In Progress</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.FilterNew" xml:space="preserve">
+    <value>New</value>
+  </data>
   <data name="Settings.Achievement.Dialog.ProgressFormat" xml:space="preserve">
     <value>Progress: {0}</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.ResultsFormat" xml:space="preserve">
+    <value>Showing {0} achievements</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.ClearFilters" xml:space="preserve">
+    <value>Clear filters</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.EmptyTitle" xml:space="preserve">
+    <value>No matching achievements</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.EmptyDescription" xml:space="preserve">
+    <value>Try a different keyword or filter.</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.OverviewFormat" xml:space="preserve">
+    <value>Unlocked {0} / {1} · {2}% complete</value>
   </data>
   <data name="Settings.Achievement.Dialog.Snapshot" xml:space="preserve">
     <value>Achievement dialog snapshot</value>
@@ -2523,6 +2765,27 @@ With save file: farm points through crafting (advanced).
   <data name="Settings.ConfigurationManager.SaveAsNew" xml:space="preserve">
     <value>Save As New</value>
   </data>
+  <data name="Settings.ConfigurationManager.SaveAsNewSucceededInline" xml:space="preserve">
+    <value>Saved successfully</value>
+  </data>
+  <data name="Settings.ConfigurationManager.SaveAsNewFailedInline" xml:space="preserve">
+    <value>Save failed: {0}</value>
+  </data>
+  <data name="Settings.ConfigurationManager.SaveAsNewFailedReason.Generic" xml:space="preserve">
+    <value>Please try again later.</value>
+  </data>
+  <data name="Settings.ConfigurationManager.SaveAsNewFailedReason.ProfileAlreadyExists" xml:space="preserve">
+    <value>Choose a profile name that is not in use.</value>
+  </data>
+  <data name="Settings.ConfigurationManager.SaveAsNewFailedReason.ProfileNameEmpty" xml:space="preserve">
+    <value>Enter a profile name.</value>
+  </data>
+  <data name="Settings.ConfigurationManager.SaveAsNewFailedReason.ProfileNameInvalid" xml:space="preserve">
+    <value>The profile name is invalid.</value>
+  </data>
+  <data name="Settings.ConfigurationManager.SaveAsNewFailedReason.SourceProfileMissing" xml:space="preserve">
+    <value>The current profile is missing. Refresh the list and try again.</value>
+  </data>
   <data name="Settings.ConfigurationManager.SaveCurrent" xml:space="preserve">
     <value>Save current profile</value>
   </data>
@@ -2856,6 +3119,9 @@ With save file: farm points through crafting (advanced).
   <data name="Settings.GUI.UseTray" xml:space="preserve">
     <value>Show tray icon</value>
   </data>
+  <data name="Settings.GUI.UseNotify" xml:space="preserve">
+    <value>Show system notifications</value>
+  </data>
   <data name="Settings.GUI.WindowTitleScrollable" xml:space="preserve">
     <value>Scroll window title</value>
   </data>
@@ -3026,6 +3292,12 @@ With save file: farm points through crafting (advanced).
   </data>
   <data name="Settings.IssueReport.OpenRuntimeLogWindow" xml:space="preserve">
     <value>Open runtime log window</value>
+  </data>
+  <data name="Settings.IssueReport.CheckUpdateBeforeReportingIssue" xml:space="preserve">
+    <value>Please upgrade first and test if the issue persists in the new version. Confirm it's not a common issue before reporting.</value>
+  </data>
+  <data name="Settings.IssueReport.CheckHelpBeforeReportingIssue" xml:space="preserve">
+    <value>Please check the ｢{key=Help}｣ before reporting any issues.</value>
   </data>
   <data name="Settings.IssueReport.PreflightNote" xml:space="preserve">
     <value>Read the FAQ before submitting feedback. Attaching the log archive helps with troubleshooting.</value>
@@ -3529,7 +3801,7 @@ With save file: farm points through crafting (advanced).
     <value>Proxy address</value>
   </data>
   <data name="Settings.VersionUpdate.ProxyAddressWatermark" xml:space="preserve">
-    <value>&lt;IP&gt;:&lt;포트&gt;</value>
+    <value>&lt;IP&gt;:&lt;Port&gt;</value>
   </data>
   <data name="Settings.VersionUpdate.ProxyType" xml:space="preserve">
     <value>Proxy type</value>
@@ -3555,6 +3827,36 @@ With save file: farm points through crafting (advanced).
   <data name="Settings.VersionUpdate.StartupCheck" xml:space="preserve">
     <value>Check for updates at startup</value>
   </data>
+  <data name="Settings.VersionUpdate.Activity.CheckingSoftware" xml:space="preserve">
+    <value>Checking for software updates...</value>
+  </data>
+  <data name="Settings.VersionUpdate.Activity.CheckingResource" xml:space="preserve">
+    <value>Checking for resource updates...</value>
+  </data>
+  <data name="Settings.VersionUpdate.Activity.ResourceDownloadingGlobalSource" xml:space="preserve">
+    <value>Downloading from GlobalSource...</value>
+  </data>
+  <data name="Settings.VersionUpdate.Activity.ResourceDownloadingMirrorChyan" xml:space="preserve">
+    <value>Downloading from MirrorChyan...</value>
+  </data>
+  <data name="Settings.VersionUpdate.Activity.ResourcePreparing" xml:space="preserve">
+    <value>Indexing in progress</value>
+  </data>
+  <data name="Settings.VersionUpdate.Activity.ResourceUpdated" xml:space="preserve">
+    <value>Game resources updated.</value>
+  </data>
+  <data name="Settings.VersionUpdate.Activity.ResourceUpdating" xml:space="preserve">
+    <value>Game resources are being updated.</value>
+  </data>
+  <data name="Settings.VersionUpdate.Activity.ResourceUpdatingMirrorChyan" xml:space="preserve">
+    <value>Updating resource {0} from MirrorChyan...</value>
+  </data>
+  <data name="Settings.VersionUpdate.Activity.SoftwarePackageDownloaded" xml:space="preserve">
+    <value>Software update package downloaded.</value>
+  </data>
+  <data name="Settings.VersionUpdate.Activity.SoftwarePackageDownloading" xml:space="preserve">
+    <value>Downloading software update package...</value>
+  </data>
   <data name="Settings.VersionUpdate.Status.CheckFailed" xml:space="preserve">
     <value>Update check failed.</value>
   </data>
@@ -3566,6 +3868,18 @@ With save file: farm points through crafting (advanced).
   </data>
   <data name="Settings.VersionUpdate.Status.DialogConfirmed" xml:space="preserve">
     <value>Version update dialog confirmed.</value>
+  </data>
+  <data name="Settings.VersionUpdate.Status.FirstBootShown" xml:space="preserve">
+    <value>Update notes displayed.</value>
+  </data>
+  <data name="Settings.VersionUpdate.Status.PackageDownloadFailed" xml:space="preserve">
+    <value>Update failed.</value>
+  </data>
+  <data name="Settings.VersionUpdate.Status.PackageUnavailable" xml:space="preserve">
+    <value>Update failed.</value>
+  </data>
+  <data name="Settings.VersionUpdate.Status.WindowsManualUpdateRequired" xml:space="preserve">
+    <value>The Windows release is not published yet. Please update manually.</value>
   </data>
   <data name="Settings.VersionUpdate.Status.MirrorCdkExpired" xml:space="preserve">
     <value>MirrorChyan CDK has expired.</value>
@@ -3602,6 +3916,78 @@ With save file: farm points through crafting (advanced).
   </data>
   <data name="Settings.VersionUpdate.Status.ResourceUpdateFailed" xml:space="preserve">
     <value>Resource update failed.</value>
+  </data>
+  <data name="Settings.VersionUpdate.Status.MirrorChyanCdkRequired" xml:space="preserve">
+    <value>Please go to Settings &gt; Version Update to configure a MirrorChyan CDK or switch the update source.</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.Checking" xml:space="preserve">
+    <value>Checking resource updates. source={0}, client={1}</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.CheckFailedHttp" xml:space="preserve">
+    <value>Resource update check failed with HTTP {0}.</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.CheckFailed" xml:space="preserve">
+    <value>Resource update check failed.</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.CheckFailedWithMessage" xml:space="preserve">
+    <value>Resource update check failed: {0}</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.AlreadyLatest" xml:space="preserve">
+    <value>Resources are already up to date.</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.Available" xml:space="preserve">
+    <value>Resource update available: {0}.</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.AvailableRequiresCdk" xml:space="preserve">
+    <value>Resource update available: {0}. MirrorChyan CDK required for direct download.</value>
+  </data>
+  <data name="VersionUpdate.Log.Software.Checking" xml:space="preserve">
+    <value>Checking software updates. channel={0}, current={1}</value>
+  </data>
+  <data name="VersionUpdate.Log.Software.PreparingPackage" xml:space="preserve">
+    <value>Preparing software update package download.</value>
+  </data>
+  <data name="VersionUpdate.Log.Software.PreparingNamedPackage" xml:space="preserve">
+    <value>Preparing software update package: {0}</value>
+  </data>
+  <data name="VersionUpdate.Log.Software.PackageReady" xml:space="preserve">
+    <value>Software update package is ready to apply after restart.</value>
+  </data>
+  <data name="VersionUpdate.Log.Software.NamedPackageReady" xml:space="preserve">
+    <value>Software update package {0} is ready to apply after restart.</value>
+  </data>
+  <data name="VersionUpdate.Log.Software.PackagePrepareFailed" xml:space="preserve">
+    <value>Software update package preparation failed.</value>
+  </data>
+  <data name="VersionUpdate.Log.Software.PackagePrepareFailedWithMessage" xml:space="preserve">
+    <value>Software update package preparation failed: {0}</value>
+  </data>
+  <data name="VersionUpdate.Log.Software.Available" xml:space="preserve">
+    <value>Version update available: {0}</value>
+  </data>
+  <data name="VersionUpdate.Log.Software.AlreadyLatest" xml:space="preserve">
+    <value>Software is already up to date on {0}.</value>
+  </data>
+  <data name="VersionUpdate.Log.Software.CheckFailedWithMessage" xml:space="preserve">
+    <value>Software update check failed: {0}</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.GithubStart" xml:space="preserve">
+    <value>Starting resource update from Github.</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.GithubCompleted" xml:space="preserve">
+    <value>Resource update completed from Github.</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.GithubFailedWithMessage" xml:space="preserve">
+    <value>Resource update from Github failed: {0}</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.MirrorChyanStart" xml:space="preserve">
+    <value>Starting resource update from MirrorChyan.</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.MirrorChyanCompleted" xml:space="preserve">
+    <value>Resource update completed from MirrorChyan.</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.MirrorChyanFailedWithMessage" xml:space="preserve">
+    <value>Resource update from MirrorChyan failed: {0}</value>
   </data>
   <data name="Settings.VersionUpdate.Status.SaveChannelFailed" xml:space="preserve">
     <value>Failed to save update channel settings.</value>
@@ -3874,6 +4260,21 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
   </data>
   <data name="TaskQueue.Module.Custom" xml:space="preserve">
     <value>Custom</value>
+  </data>
+  <data name="TaskQueue.Module.UserDataUpdate" xml:space="preserve">
+    <value>Update user data</value>
+  </data>
+  <data name="TaskQueue.UserDataUpdate.TriggerInterval" xml:space="preserve">
+    <value>Update trigger interval</value>
+  </data>
+  <data name="TaskQueue.UserDataUpdate.Trigger.EveryTime" xml:space="preserve">
+    <value>Every time</value>
+  </data>
+  <data name="TaskQueue.UserDataUpdate.Trigger.Daily" xml:space="preserve">
+    <value>Daily</value>
+  </data>
+  <data name="TaskQueue.UserDataUpdate.Trigger.Weekly" xml:space="preserve">
+    <value>Weekly</value>
   </data>
   <data name="TaskQueue.Module.Fight" xml:space="preserve">
     <value>Combat</value>
@@ -4251,7 +4652,7 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
     <value>Tray Integration</value>
   </data>
   <data name="Toolbox.Advanced.Tab.WebApi" xml:space="preserve">
-    <value>WebApi (Compat)</value>
+    <value>WebApi</value>
   </data>
   <data name="Toolbox.Advanced.Tray.ApplyVisibility" xml:space="preserve">
     <value>Apply visibility</value>
@@ -4317,10 +4718,10 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
     <value>Stop service</value>
   </data>
   <data name="Toolbox.Advanced.WebApi.Title" xml:space="preserve">
-    <value>WebApi (Compat)</value>
+    <value>WebApi</value>
   </data>
   <data name="Toolbox.Advanced.WebApi.Warning" xml:space="preserve">
-    <value>This panel exists for legacy WebApi compatibility. Enable it only when you explicitly need external access, and configure an access token whenever possible.</value>
+    <value>This Advanced page keeps compatibility with legacy WebApi clients. Enable it only when you explicitly need external access, and configure an access token whenever possible.</value>
   </data>
   <data name="Toolbox.Depot.ExportArkPlanner" xml:space="preserve">
     <value>Export to Penguin Stats planner</value>
@@ -4372,6 +4773,42 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
   </data>
   <data name="Toolbox.Error.ToolboxBusy" xml:space="preserve">
     <value>Toolbox already has a running task. Stop it first.</value>
+  </data>
+  <data name="Toolbox.BusyDialog.CloseButton" xml:space="preserve">
+    <value>Got it</value>
+  </data>
+  <data name="Toolbox.BusyDialog.ConfirmButton" xml:space="preserve">
+    <value>Confirm</value>
+  </data>
+  <data name="Toolbox.BusyDialog.CurrentTask" xml:space="preserve">
+    <value>current task</value>
+  </data>
+  <data name="Toolbox.BusyDialog.DetailsButton" xml:space="preserve">
+    <value>Error details</value>
+  </data>
+  <data name="Toolbox.BusyDialog.Message" xml:space="preserve">
+    <value>{0} is still running. Stop it before starting another toolbox task.</value>
+  </data>
+  <data name="Toolbox.BusyDialog.StopButton" xml:space="preserve">
+    <value>Stop current task</value>
+  </data>
+  <data name="Toolbox.BusyDialog.Title" xml:space="preserve">
+    <value>Toolbox is busy</value>
+  </data>
+  <data name="Toolbox.RetryableDialog.DetailsButton" xml:space="preserve">
+    <value>Error details</value>
+  </data>
+  <data name="Toolbox.RetryableDialog.LaterButton" xml:space="preserve">
+    <value>Try later</value>
+  </data>
+  <data name="Toolbox.RetryableDialog.Message" xml:space="preserve">
+    <value>That was impressively fast, and yes, I saw it coming. The toolbox is still getting ready, so try again in a moment.</value>
+  </data>
+  <data name="Toolbox.RetryableDialog.RetryButton" xml:space="preserve">
+    <value>Retry</value>
+  </data>
+  <data name="Toolbox.RetryableDialog.Title" xml:space="preserve">
+    <value>Toolbox is not ready yet</value>
   </data>
   <data name="Toolbox.ExecutionReview.HistoryLabel" xml:space="preserve">
     <value>History</value>
@@ -4749,6 +5186,9 @@ A backup named avalonia.json.schema-v{0}.bak.&lt;timestamp&gt; will be created b
   <data name="Settings.VersionUpdate.RestartPending" xml:space="preserve">
     <value>The update package is ready. Restart MAA later to apply it.</value>
   </data>
+  <data name="Settings.VersionUpdate.RestartPendingWhileRunning" xml:space="preserve">
+    <value>The update package is ready. Current tasks are still running, so restart MAA when idle to apply it.</value>
+  </data>
   <data name="Settings.VersionUpdate.SoftwarePlaceholder.Cancel" xml:space="preserve">
     <value>Close</value>
   </data>
@@ -4756,10 +5196,10 @@ A backup named avalonia.json.schema-v{0}.bak.&lt;timestamp&gt; will be created b
     <value>OK</value>
   </data>
   <data name="Settings.VersionUpdate.SoftwarePlaceholder.Message" xml:space="preserve">
-    <value>Software update is not available in MAA Unified yet. Please use the WPF version for software updates.</value>
+    <value>Software update is available. Go to Settings &gt; Version Update to check, download, and apply updates.</value>
   </data>
   <data name="Settings.VersionUpdate.SoftwarePlaceholder.Status" xml:space="preserve">
-    <value>Software update is not available in MAA Unified yet.</value>
+    <value>Software update is available.</value>
   </data>
   <data name="Settings.VersionUpdate.SoftwarePlaceholder.Title" xml:space="preserve">
     <value>Software Update</value>

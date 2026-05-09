@@ -4,7 +4,7 @@
 
 本项目的初衷，是为 MAA 提供一套可持续演进的跨平台 GUI。相较于继续在现有实现上局部修补，独立维护一套统一前端更适合承担 macOS 与 Linux 的图形界面，并为后续能力扩展预留清晰边界。
 
-在项目规划上，`MAAUnified` 将长期与 WPF 前端并行演进，优先面向 macOS 与 Linux 使用场景，逐步完善功能与平台能力。代码结构自始即按独立仓库组织，并计划以 `submodule` 形式接入宿主仓库。
+在项目规划上，`MAAUnified` 将长期与 WPF 前端并行演进，优先面向 macOS 与 Linux 使用场景，逐步完善功能与平台能力。代码结构自始即按独立仓库组织，并以 `submodule` 形式接入宿主仓库。
 
 ## 技术栈
 
@@ -48,7 +48,7 @@ Linux 运行前提：
 ### 1. 拉取主仓并初始化 submodule
 
 ```bash
-git clone https://github.com/Halo5082/MaaAssistantArknights.git
+git clone https://github.com/MaaAssistantArknights/MaaAssistantArknights.git
 cd MaaAssistantArknights
 
 git submodule sync --recursive
@@ -60,7 +60,8 @@ git -C src/MAAUnified rev-parse --short HEAD
 ```
 
 补充说明：
-- 当前 `.gitmodules` 中 `src/MAAUnified` 的 URL 是 `git@github.com:Halo5082/MaaUnified.git`，默认走 SSH；如果你的环境没有配置 GitHub SSH，需要先配置 SSH，或改成你可访问的地址后再 `git submodule sync`
+- 当前 `.gitmodules` 中 `src/MAAUnified` 的 URL 是 `https://github.com/MaaAssistantArknights/MaaUnified.git`，因此 GitHub Actions 与公共环境可以直接拉取官方仓
+- 如果你本地开发时更习惯用 SSH push，可以在自己的工作区把 `src/MAAUnified` 的 `origin` 改成对应的 SSH 地址
 - `git submodule update --init` 检出的是主仓当前锁定的 submodule 提交，`src/MAAUnified` 处于 detached HEAD 是正常现象
 - 如果你只是想复现主仓当前状态，到这里即可；如果你要继续开发 `MAAUnified` 并切到 UI 仓最新主线，再执行：
 
@@ -87,14 +88,17 @@ cmake --build --preset linux-publish-x64
 cmake --install build --config RelWithDebInfo
 
 # 4) 发布 Avalonia app（Linux 包内置 .NET runtime）
-dotnet publish src/MAAUnified/App/MAAUnified.App.csproj -c Release -r linux-x64 --self-contained true --no-restore -o publish
+dotnet publish src/MAAUnified/App/MAAUnified.App.csproj -c Release -r linux-x64 --self-contained true --no-restore -o staging/bin
 
-# 5) 合并 runtime 到发布目录
-cp -a install/. publish/
+# 5) 合并 runtime 到发布目录根部
+mkdir -p staging
+cp -a install/. staging/
 
-# 6) 运行
-cd publish
-./MAAUnified
+# 6) 生成根目录启动入口
+bash src/MAAUnified/CI/create-unix-launchers.sh staging linux
+
+# 7) 运行
+./staging/MAAUnified
 ```
 
 ### 3. Windows x64 本地构建
@@ -112,8 +116,10 @@ cmake --preset windows-publish-x64 --fresh -DINSTALL_PYTHON=OFF
 cmake --build --preset windows-publish-x64 --config RelWithDebInfo
 cmake --install build --config RelWithDebInfo
 
-dotnet publish src\MAAUnified\App\MAAUnified.App.csproj -c Release -r win-x64 --self-contained true --no-restore -o publish
-Copy-Item install\* publish\ -Recurse -Force
+dotnet publish src\MAAUnified\App\MAAUnified.App.csproj -c Release -r win-x64 --self-contained true --no-restore -o staging\bin
+New-Item -ItemType Directory -Path staging -Force | Out-Null
+Copy-Item install\* staging\ -Recurse -Force
+pwsh -File src\MAAUnified\CI\create-windows-launcher.ps1 -TargetDir staging
 ```
 
 ### 4. macOS x64 本地构建
@@ -131,13 +137,19 @@ cmake --preset macos-publish-x64 --fresh -DINSTALL_PYTHON=OFF
 cmake --build --preset macos-publish-x64
 cmake --install build --config RelWithDebInfo
 
-dotnet publish src/MAAUnified/App/MAAUnified.App.csproj -c Release -r osx-x64 --self-contained true --no-restore -o publish
-cp -a install/. publish/
+dotnet publish src/MAAUnified/App/MAAUnified.App.csproj -c Release -r osx-x64 --self-contained true --no-restore -o staging/bin
+mkdir -p staging
+cp -a install/. staging/
+bash src/MAAUnified/CI/create-unix-launchers.sh staging macos
 ```
 
 常见问题：
 - 如果你之前在同一个 `build/` 目录切换过不同 generator，CMake 可能会报 generator 不匹配；优先使用 `cmake --preset ... --fresh`
-- `publish/` 目录需要同时包含应用本体、MaaCore 动态库和 `resource/`；因此 `cp -a install/. publish/` 或 `Copy-Item install\* publish\` 这一步不能省
+- 发布目录现在按 `staging/bin/` 与 `staging/` 根目录分层；`staging/bin/` 放托管应用产物，`staging/` 根目录放 MaaCore 动态库与 `resource/`
+- 因此 `cp -a install/. staging/` 或 `Copy-Item install\* staging\` 这一步不能省
+- Linux 根目录入口为 `staging/MAAUnified`
+- macOS 根目录入口为 `staging/MAAUnified.command`，同时保留 `staging/MAAUnified` 供终端启动
+- Windows 根目录入口为 `staging/MAAUnified.cmd`
 - 如果只想做 UI 层快速迭代，不依赖宿主仓打包产物，也可以继续使用上面的独立形态命令：`dotnet run --project App/MAAUnified.App.csproj`
 
 ## 配置约定
@@ -151,7 +163,7 @@ cp -a install/. publish/
 
 - macOS / Linux 显卡能力支持：该部分涉及 MaaCore 边界，当前暂不实现
 - macOS / Linux 关闭模拟器功能：仍需按平台分别适配，暂未完成调试
-- MaaUnified 的软件更新：暂未开发更新相关功能
+- MaaUnified 的软件更新：已接入并可用
 
 ## 目录结构
 

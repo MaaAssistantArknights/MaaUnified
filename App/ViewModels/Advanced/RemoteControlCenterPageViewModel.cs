@@ -59,15 +59,19 @@ public sealed class RemoteControlCenterPageViewModel : PageViewModelBase
     public async Task SaveAsync(CancellationToken cancellationToken = default)
     {
         WarningMessage = string.Empty;
-        var result = await Runtime.SettingsFeatureService.SaveGlobalSettingsAsync(
-            new Dictionary<string, string>(StringComparer.Ordinal)
-            {
-                [ConfigurationKeys.RemoteControlGetTaskEndpointUri] = GetTaskEndpoint,
-                [ConfigurationKeys.RemoteControlReportStatusUri] = ReportEndpoint,
-                [ConfigurationKeys.RemoteControlPollIntervalMs] = PollIntervalMs.ToString(),
-            },
+        _ = await RunTrackedConfigurationSaveAsync(
+            "Advanced.RemoteControlCenter",
+            Texts.GetOrDefault("RemoteControlCenter.Title", "远程控制"),
+            "Advanced.RemoteControlCenter.Save",
+            ct => Runtime.SettingsFeatureService.SaveGlobalSettingsAsync(
+                new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    [ConfigurationKeys.RemoteControlGetTaskEndpointUri] = GetTaskEndpoint,
+                    [ConfigurationKeys.RemoteControlReportStatusUri] = ReportEndpoint,
+                    [ConfigurationKeys.RemoteControlPollIntervalMs] = PollIntervalMs.ToString(),
+                },
+                ct),
             cancellationToken);
-        await ApplyResultAsync(result, "Advanced.RemoteControlCenter.Save", cancellationToken);
     }
 
     public async Task TestConnectivityAsync(CancellationToken cancellationToken = default)

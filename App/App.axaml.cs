@@ -5,10 +5,13 @@ using Avalonia.Threading;
 using System.Diagnostics;
 using MAAUnified.App.Services;
 using MAAUnified.App.ViewModels;
+using MAAUnified.App.ViewModels.Settings;
 using MAAUnified.App.Views;
 using MAAUnified.Application.Models;
 using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Features;
+using MAAUnified.Application.Services.Localization;
+using MAAUnified.Compat.Runtime;
 
 namespace MAAUnified.App;
 
@@ -19,14 +22,58 @@ public partial class App : Avalonia.Application
     private static readonly TimeSpan UiLagProbeInterval = TimeSpan.FromMilliseconds(250);
     private static readonly TimeSpan UiLagLogMinInterval = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan RuntimeDisposeTimeout = TimeSpan.FromSeconds(4);
+    private static readonly string[] LegacyLocalizationResourceKeys =
+    [
+        "AlwaysAutoDetectConnectionTip",
+        "BadModules.UseSoftwareRenderingTip",
+        "ExternalNotificationBarkSendKey",
+        "ExternalNotificationBarkServer",
+        "ExternalNotificationCustomWebhook",
+        "ExternalNotificationCustomWebhookBody",
+        "ExternalNotificationCustomWebhookPlaceholders",
+        "ExternalNotificationCustomWebhookUrl",
+        "ExternalNotificationDingTalkAccessToken",
+        "ExternalNotificationDingTalkSecret",
+        "ExternalNotificationDiscordBotToken",
+        "ExternalNotificationDiscordUserId",
+        "ExternalNotificationDiscordWebhookUrl",
+        "ExternalNotificationGotifyServer",
+        "ExternalNotificationGotifyToken",
+        "ExternalNotificationQmsgBot",
+        "ExternalNotificationQmsgKey",
+        "ExternalNotificationQmsgServer",
+        "ExternalNotificationQmsgUser",
+        "ExternalNotificationServerChanSendKey",
+        "ExternalNotificationSmtpAuth",
+        "ExternalNotificationSmtpFrom",
+        "ExternalNotificationSmtpPassword",
+        "ExternalNotificationSmtpPort",
+        "ExternalNotificationSmtpServer",
+        "ExternalNotificationSmtpSsl",
+        "ExternalNotificationSmtpTo",
+        "ExternalNotificationSmtpUser",
+        "ExternalNotificationTelegramBotToken",
+        "ExternalNotificationTelegramChatId",
+        "ExternalNotificationTelegramTopicId",
+        "ForceGithubGlobalSourceTip",
+        "ForceScheduledStartTip",
+        "HotKeyChangingTip",
+        "ResourceUpdateTip",
+        "SystemNotificationInfo",
+        "TimerCustomConfigTip",
+        "UpdateAutoCheckTip",
+        "UpdateCheckTip",
+        "UpdateSourceTip",
+        "UseGpuForInferenceTip",
+    ];
     private const double UiLagThresholdMs = 120;
     private static bool _globalExceptionHandlersRegistered;
     private static int _shutdownStarted;
     private static AppCrashCaptureService? _crashCaptureService;
     private static DispatcherTimer? _uiLagProbeTimer;
+    private static UiFontFamilyResourceUpdater? _uiFontFamilyResourceUpdater;
     private static DateTimeOffset _uiLagProbeExpectedAtUtc;
     private static DateTimeOffset _lastUiLagLoggedAtUtc = DateTimeOffset.MinValue;
-
     public static MAAUnifiedRuntime Runtime { get; private set; } = null!;
 
     public override void Initialize()
@@ -42,9 +89,14 @@ public partial class App : Avalonia.Application
 
         try
         {
-            Program.RecordStartupStage("FrameworkInit.RuntimeCreate.Begin", $"baseDir={AppContext.BaseDirectory}");
-            Runtime = MAAUnifiedRuntimeFactory.Create(AppContext.BaseDirectory);
+            var runtimeBaseDirectory = RuntimeLayout.ResolveRuntimeBaseDirectory();
+            Program.RecordStartupStage(
+                "FrameworkInit.RuntimeCreate.Begin",
+                $"executableBaseDir={AppContext.BaseDirectory}; runtimeBaseDir={runtimeBaseDirectory}");
+            Runtime = MAAUnifiedRuntimeFactory.Create(runtimeBaseDirectory);
             Program.RecordStartupStage("FrameworkInit.RuntimeCreate.End", "MAAUnified runtime created.");
+            ConfigureUiFontFamilyResource();
+            ConfigureLegacyLocalizationResources();
         }
         catch (Exception ex)
         {
@@ -52,7 +104,7 @@ public partial class App : Avalonia.Application
             throw;
         }
 
-        _crashCaptureService = new AppCrashCaptureService(AppContext.BaseDirectory);
+        _crashCaptureService = new AppCrashCaptureService(RuntimeLayout.ResolveRuntimeBaseDirectory());
         Program.RecordStartupStage("FrameworkInit.CrashCapture.Ready", "Crash capture service created.");
         RegisterGlobalExceptionHandlers();
         Program.RecordStartupStage("FrameworkInit.ExceptionHandlers.Ready", "Global exception handlers registered.");
@@ -215,7 +267,138 @@ public partial class App : Avalonia.Application
     private static void OnDesktopExit(object? sender, ControlledApplicationLifetimeExitEventArgs e)
     {
         StopUiLagProbe();
+        _uiFontFamilyResourceUpdater?.Dispose();
+        _uiFontFamilyResourceUpdater = null;
+        if (Current is App app)
+        {
+            Runtime.UiLanguageCoordinator.LanguageChanged -= app.OnLegacyLocalizationLanguageChanged;
+        }
+
         _ = DisposeRuntimeOnExitAsync();
+    }
+
+    private void ConfigureLegacyLocalizationResources()
+    {
+        ApplyLegacyLocalizationResources(Runtime.UiLanguageCoordinator.CurrentLanguage);
+        Runtime.UiLanguageCoordinator.LanguageChanged += OnLegacyLocalizationLanguageChanged;
+    }
+
+    private void OnLegacyLocalizationLanguageChanged(object? sender, UiLanguageChangedEventArgs e)
+    {
+        var queueDelay = Stopwatch.StartNew();
+        if (!Dispatcher.UIThread.CheckAccess())
+        {
+            Dispatcher.UIThread.Post(
+                () =>
+                {
+                    _ = RecordAppTemporaryTimingAsync(
+                        "App.LegacyLocalization.QueueDelay",
+                        queueDelay.Elapsed.TotalMilliseconds,
+                        ("language", e.CurrentLanguage),
+                        ("postedFromUiThread", false));
+                    ApplyLegacyLocalizationResources(e.CurrentLanguage);
+                },
+                DispatcherPriority.Background);
+            return;
+        }
+
+        Dispatcher.UIThread.Post(
+            () =>
+            {
+                _ = RecordAppTemporaryTimingAsync(
+                    "App.LegacyLocalization.QueueDelay",
+                    queueDelay.Elapsed.TotalMilliseconds,
+                    ("language", e.CurrentLanguage),
+                    ("postedFromUiThread", true));
+                ApplyLegacyLocalizationResources(e.CurrentLanguage);
+            },
+            DispatcherPriority.Background);
+    }
+
+    private void ApplyLegacyLocalizationResources(string? language)
+    {
+        var total = Stopwatch.StartNew();
+        var step = Stopwatch.StartNew();
+        var entries = AchievementTextCatalog.GetAllStrings(language);
+        _ = RecordAppTemporaryTimingAsync(
+            "App.LegacyLocalization.LoadCatalog",
+            step.Elapsed.TotalMilliseconds,
+            ("language", language),
+            ("entryCount", entries.Count));
+
+        step.Restart();
+        var appliedCount = 0;
+        foreach (var key in LegacyLocalizationResourceKeys)
+        {
+            if (!entries.TryGetValue(key, out var value))
+            {
+                continue;
+            }
+
+            Resources[key] = value;
+            appliedCount++;
+        }
+
+        _ = RecordAppTemporaryTimingAsync(
+            "App.LegacyLocalization.ApplyResources",
+            step.Elapsed.TotalMilliseconds,
+            ("language", language),
+            ("entryCount", entries.Count),
+            ("allowlistCount", LegacyLocalizationResourceKeys.Length),
+            ("appliedCount", appliedCount));
+        _ = RecordAppTemporaryTimingAsync(
+            "App.LegacyLocalization.Total",
+            total.Elapsed.TotalMilliseconds,
+            ("language", language),
+            ("entryCount", entries.Count),
+            ("allowlistCount", LegacyLocalizationResourceKeys.Length),
+            ("appliedCount", appliedCount));
+    }
+
+    private static Task RecordAppTemporaryTimingAsync(
+        string scope,
+        double elapsedMs,
+        params (string Key, object? Value)[] fields)
+    {
+        if (Runtime is not { } runtime)
+        {
+            return Task.CompletedTask;
+        }
+
+        var payload = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (key, value) in fields)
+        {
+            if (!string.IsNullOrWhiteSpace(key))
+            {
+                payload[key] = value;
+            }
+        }
+
+        return runtime.DiagnosticsService.RecordTemporaryTimingAsync(scope, elapsedMs, payload);
+    }
+
+    private void ConfigureUiFontFamilyResource()
+    {
+        var startupLanguage = StartupShellSnapshot.FromConfig(Runtime.ConfigurationService.CurrentConfig).Language;
+        _uiFontFamilyResourceUpdater?.Dispose();
+        _uiFontFamilyResourceUpdater = new UiFontFamilyResourceUpdater(
+            Resources,
+            Runtime.UiLanguageCoordinator,
+            new UiFontFamilyResolver(),
+            RecordUiFontFamilyFallback);
+
+        var resolution = _uiFontFamilyResourceUpdater.ApplyLanguage(startupLanguage);
+        Program.RecordStartupStage(
+            "FrameworkInit.UiFontFamily.Ready",
+            $"language={resolution.Language}; actual={resolution.Actual}");
+    }
+
+    private static void RecordUiFontFamilyFallback(UiFontFamilyResolution resolution)
+    {
+        var message =
+            $"UI font fallback: language={resolution.Language}; expected={resolution.Expected}; actual={resolution.Actual}; reason={resolution.Reason}";
+        Runtime.LogService.Warn(message);
+        _ = Runtime.DiagnosticsService.RecordEventAsync("App.UiFontFamily", message);
     }
 
     private static async Task DisposeRuntimeOnExitAsync()
@@ -450,7 +633,8 @@ public partial class App : Avalonia.Application
             $"Context: {context}{Environment.NewLine}" +
             $"Handled: {handled}{Environment.NewLine}" +
             $"IsTerminating: {isTerminating}{Environment.NewLine}" +
-            $"BaseDirectory: {AppContext.BaseDirectory}{Environment.NewLine}" +
+            $"ExecutableBaseDirectory: {AppContext.BaseDirectory}{Environment.NewLine}" +
+            $"RuntimeBaseDirectory: {RuntimeLayout.ResolveRuntimeBaseDirectory()}{Environment.NewLine}" +
             $"ErrorLog: {Runtime.DiagnosticsService.ErrorLogPath}{Environment.NewLine}" +
             $"EventLog: {Runtime.DiagnosticsService.EventLogPath}{Environment.NewLine}" +
             $"PlatformLog: {Runtime.DiagnosticsService.PlatformEventLogPath}{Environment.NewLine}{Environment.NewLine}" +

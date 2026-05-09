@@ -1,28 +1,104 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:MAAUnified.App.Controls"
              x:Class="MAAUnified.App.Features.Advanced.ExternalNotificationProvidersView">
-  <Grid RowDefinitions="Auto,Auto,Auto,Auto,*">
-    <TextBlock Classes="section-title" Text="{Binding Texts[Toolbox.Advanced.ExternalNotification.Title]}" />
-    <Grid Grid.Row="1" ColumnDefinitions="Auto,200,Auto,*">
-      <TextBlock VerticalAlignment="Center" Text="{Binding Texts[Toolbox.Advanced.ExternalNotification.Provider]}" />
-      <ComboBox ItemsSource="{Binding Providers}" SelectedItem="{Binding SelectedProvider}" />
-      <TextBlock Grid.Column="2" VerticalAlignment="Center" Text="{Binding Texts[Toolbox.Advanced.ExternalNotification.Parameters]}" />
-      <TextBox Grid.Column="3" Text="{Binding ParametersText}" Watermark="{Binding Texts[Toolbox.Advanced.ExternalNotification.Parameters.Watermark]}" />
-    </Grid>
-    <Grid Grid.Row="2" ColumnDefinitions="Auto,200,Auto,*">
-      <TextBlock VerticalAlignment="Center" Text="{Binding Texts[Toolbox.Advanced.ExternalNotification.MessageTitle]}" />
-      <TextBox Text="{Binding Title}" />
-      <TextBlock Grid.Column="2" VerticalAlignment="Center" Text="{Binding Texts[Toolbox.Advanced.ExternalNotification.MessageBody]}" />
-      <TextBox Grid.Column="3" Text="{Binding Message}" />
-    </Grid>
-    <StackPanel Grid.Row="3" Orientation="Horizontal" Spacing="{DynamicResource MAA.Spacing.Small}">
-      <Button Classes="wpf-button" Content="{Binding Texts[Toolbox.Advanced.ExternalNotification.RefreshProviders]}" Click="OnRefreshProvidersClick" />
-      <Button Classes="wpf-button" Content="{Binding Texts[Toolbox.Advanced.ExternalNotification.ValidateParameters]}" Click="OnValidateClick" />
-      <Button Classes="wpf-button" Content="{Binding Texts[Toolbox.Advanced.ExternalNotification.SendTest]}" Click="OnSendTestClick" />
-    </StackPanel>
-    <StackPanel Grid.Row="4" Spacing="{DynamicResource MAA.Spacing.Small}">
-      <TextBlock Text="{Binding StatusMessage}" />
-      <TextBlock Classes="state-error long-wrap" Text="{Binding LastErrorMessage}" />
-    </StackPanel>
+  <UserControl.Styles>
+    <Style Selector="Border.external-notification-providers-section">
+      <Setter Property="Margin" Value="0,14,0,0" />
+      <Setter Property="Padding" Value="22" />
+    </Style>
+
+    <Style Selector="Border.external-notification-providers-card">
+      <Setter Property="Padding" Value="16" />
+    </Style>
+
+    <Style Selector="StackPanel.external-notification-providers-stack">
+      <Setter Property="Spacing" Value="16" />
+    </Style>
+
+    <Style Selector="TextBlock.external-notification-providers-card-title">
+      <Setter Property="FontSize" Value="16" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+  </UserControl.Styles>
+
+  <Grid Margin="4"
+        RowDefinitions="Auto,Auto,Auto">
+    <Border Classes="app-surface app-section"
+            Padding="22">
+      <StackPanel Classes="external-notification-providers-stack">
+        <TextBlock Classes="app-window-title"
+                   Text="{Binding Texts[Toolbox.Advanced.ExternalNotification.Title]}" />
+      </StackPanel>
+    </Border>
+
+    <Border Grid.Row="1"
+            Classes="app-surface app-section external-notification-providers-section">
+      <StackPanel Classes="external-notification-providers-stack">
+        <TextBlock Classes="app-body external-notification-providers-card-title"
+                   Text="{Binding Texts[Toolbox.Advanced.ExternalNotification.Title]}" />
+
+        <Border Classes="app-surface app-card external-notification-providers-card">
+          <StackPanel Classes="external-notification-providers-stack">
+            <StackPanel Spacing="8">
+              <TextBlock Classes="app-caption"
+                         Text="{Binding Texts[Toolbox.Advanced.ExternalNotification.Provider]}" />
+              <controls:AppSelect Width="240"
+                                  ItemsSource="{Binding Providers}"
+                                  SelectedItem="{Binding SelectedProvider}" />
+            </StackPanel>
+
+            <StackPanel Spacing="8">
+              <TextBlock Classes="app-caption"
+                         Text="{Binding Texts[Toolbox.Advanced.ExternalNotification.Parameters]}" />
+              <controls:AppTextInput Classes="settings-input-block"
+                                     Text="{Binding ParametersText}"
+                                     Watermark="{Binding Texts[Toolbox.Advanced.ExternalNotification.Parameters.Watermark]}" />
+            </StackPanel>
+
+            <StackPanel Spacing="8">
+              <TextBlock Classes="app-caption"
+                         Text="{Binding Texts[Toolbox.Advanced.ExternalNotification.MessageTitle]}" />
+              <controls:AppTextInput Width="320"
+                                     Text="{Binding Title}" />
+            </StackPanel>
+
+            <StackPanel Spacing="8">
+              <TextBlock Classes="app-caption"
+                         Text="{Binding Texts[Toolbox.Advanced.ExternalNotification.MessageBody]}" />
+              <controls:AppTextInput Classes="settings-input-block"
+                                     Text="{Binding Message}" />
+            </StackPanel>
+          </StackPanel>
+        </Border>
+      </StackPanel>
+    </Border>
+
+    <Border Grid.Row="2"
+            Classes="app-surface app-section external-notification-providers-section">
+      <StackPanel Classes="external-notification-providers-stack">
+        <StackPanel Orientation="Horizontal"
+                    Spacing="{DynamicResource MAA.Spacing.Small}">
+          <Button Classes="app-button app-secondary"
+                  Content="{Binding Texts[Toolbox.Advanced.ExternalNotification.RefreshProviders]}"
+                  Click="OnRefreshProvidersClick" />
+          <Button Classes="app-button app-secondary"
+                  Content="{Binding Texts[Toolbox.Advanced.ExternalNotification.ValidateParameters]}"
+                  Click="OnValidateClick" />
+          <Button Classes="app-button app-primary"
+                  Content="{Binding Texts[Toolbox.Advanced.ExternalNotification.SendTest]}"
+                  Click="OnSendTestClick" />
+        </StackPanel>
+
+        <Border Classes="app-surface app-card external-notification-providers-card">
+          <StackPanel Spacing="8">
+            <TextBlock Classes="app-body long-wrap"
+                       Text="{Binding StatusMessage}" />
+            <TextBlock Classes="state-error long-wrap"
+                       Text="{Binding LastErrorMessage}" />
+          </StackPanel>
+        </Border>
+      </StackPanel>
+    </Border>
   </Grid>
 </UserControl>

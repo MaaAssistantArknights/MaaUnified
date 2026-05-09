@@ -31,6 +31,23 @@ public sealed class NotificationProviderFeatureService : INotificationProviderFe
         "CustomWebhook",
     ];
 
+    private static readonly IReadOnlyDictionary<string, string> ProviderAliases =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["SMTP"] = "Smtp",
+            ["Smtp"] = "Smtp",
+            ["ServerChan"] = "ServerChan",
+            ["Bark"] = "Bark",
+            ["Discord"] = "Discord",
+            ["Discord Webhook"] = "Discord",
+            ["DingTalk"] = "DingTalk",
+            ["Telegram"] = "Telegram",
+            ["Qmsg"] = "Qmsg",
+            ["Gotify"] = "Gotify",
+            ["Custom Webhook"] = "CustomWebhook",
+            ["CustomWebhook"] = "CustomWebhook",
+        };
+
     private static readonly HttpClient _httpClient = new()
     {
         Timeout = TimeSpan.FromSeconds(5),
@@ -340,7 +357,9 @@ public sealed class NotificationProviderFeatureService : INotificationProviderFe
             return null;
         }
 
-        return Providers.FirstOrDefault(p => string.Equals(p, provider.Trim(), StringComparison.OrdinalIgnoreCase));
+        return ProviderAliases.TryGetValue(provider.Trim(), out var canonical)
+            ? canonical
+            : null;
     }
 
     private static bool HasValue(IReadOnlyDictionary<string, string> parameters, string key)

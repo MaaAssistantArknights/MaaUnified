@@ -1,32 +1,61 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:MAAUnified.App.Controls"
         x:Class="MAAUnified.App.Features.Dialogs.TextDialogView"
         Width="620"
         Height="320"
         MinWidth="480"
         MinHeight="260"
+        CanResize="False"
+        Background="Transparent"
+        SystemDecorations="None"
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaChromeHints="NoChrome"
         WindowStartupLocation="CenterOwner">
-  <Grid Margin="10" RowDefinitions="Auto,Auto,*,Auto">
-    <TextBlock x:Name="DialogTitleText"
-               Classes="section-title"
-               Text="Text Dialog" />
-    <TextBlock x:Name="PromptText"
-               Grid.Row="1"
-               Margin="0,8,0,0"
-               Classes="long-wrap"
-               Text="Prompt" />
-    <TextBox x:Name="InputBox"
-             Grid.Row="2"
-             Margin="0,8,0,0"
-             TextWrapping="Wrap"
-             AcceptsReturn="False" />
-    <StackPanel Grid.Row="3"
-                Orientation="Horizontal"
-                Spacing="8"
-                HorizontalAlignment="Right"
-                Margin="0,12,0,0">
-      <Button Classes="wpf-button wpf-button-secondary" x:Name="CancelButton" Content="Cancel" Click="OnCancelClick" />
-      <Button x:Name="ConfirmButton" Classes="wpf-button" Content="Confirm" Click="OnConfirmClick" />
-    </StackPanel>
-  </Grid>
+  <controls:AppWindowFrame x:Name="DialogShell"
+                           Mode="CompactModal"
+                           CloseRequested="OnShellCloseRequested">
+    <controls:AppWindowFrame.Content>
+      <Grid RowDefinitions="Auto,*">
+        <TextBlock x:Name="PromptText"
+                   Classes="app-body long-wrap"
+                   Text="Prompt" />
+        <Grid Grid.Row="1"
+              Margin="0,10,0,0">
+          <Border x:Name="EditableInputPanel"
+                  Classes="app-surface app-section">
+            <controls:AppTextInput x:Name="InputBox"
+                                   AcceptsReturn="False"
+                                   ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                   TextWrapping="NoWrap" />
+          </Border>
+          <Border x:Name="ReadOnlyContentPanel"
+                  Classes="app-surface app-section"
+                  IsVisible="False">
+            <TextBox x:Name="ReadOnlyContentBox"
+                     Classes="settings-input settings-input-block"
+                     AcceptsReturn="True"
+                     IsReadOnly="True"
+                     ScrollViewer.VerticalScrollBarVisibility="Auto"
+                     TextWrapping="Wrap" />
+          </Border>
+        </Grid>
+      </Grid>
+    </controls:AppWindowFrame.Content>
+    <controls:AppWindowFrame.ActionsContent>
+      <StackPanel Orientation="Horizontal"
+                  Spacing="10">
+        <Button x:Name="CancelButton"
+                Classes="app-button app-secondary"
+                Content="Cancel"
+                IsCancel="True"
+                Click="OnCancelClick" />
+        <Button x:Name="ConfirmButton"
+                Classes="app-button app-primary"
+                Content="Confirm"
+                IsDefault="True"
+                Click="OnConfirmClick" />
+      </StackPanel>
+    </controls:AppWindowFrame.ActionsContent>
+  </controls:AppWindowFrame>
 </Window>

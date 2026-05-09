@@ -39,11 +39,21 @@ public interface IMaaCoreBridge : IAsyncDisposable
 
     Task<CoreResult<CoreRuntimeStatus>> GetRuntimeStatusAsync(CancellationToken cancellationToken = default);
 
+    Task<CoreResult<bool>> ReloadResourceAsync(
+        string? clientType = null,
+        CancellationToken cancellationToken = default)
+        => Task.FromResult(CoreResult<bool>.Fail(new CoreError(CoreErrorCode.NotSupported, "Resource reload is unsupported by current bridge.")));
+
     Task<CoreResult<bool>> AttachWindowAsync(
         CoreAttachWindowRequest request,
         CancellationToken cancellationToken = default);
 
     Task<CoreResult<byte[]>> GetImageAsync(CancellationToken cancellationToken = default);
+
+    Task<CoreResult<byte[]>> GetImageBgrAsync(
+        bool forceScreencap = false,
+        CancellationToken cancellationToken = default)
+        => Task.FromResult(CoreResult<byte[]>.Fail(new CoreError(CoreErrorCode.NotSupported, "Raw BGR image is unsupported by current bridge.")));
 
     IAsyncEnumerable<CoreCallbackEvent> CallbackStreamAsync(CancellationToken cancellationToken = default);
 }

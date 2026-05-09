@@ -3,9 +3,12 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Media;
 using Avalonia.Platform;
+using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using MAAUnified.App.Controls;
 using MAAUnified.App.Features.Dialogs;
 using MAAUnified.App.Infrastructure;
 using MAAUnified.App.Services;
@@ -29,6 +32,9 @@ public partial class MainWindow : Window
     private const double ResponsiveMaxLayoutWidth = 1360d;
     private const double ResponsiveMinLayoutWidth = ResponsiveMinWindowWidth - (ResponsiveMinPageMargin * 2d);
     private const double ResponsiveContentStageEndWidth = ResponsiveMarginStageEndWidth + (ResponsiveMaxLayoutWidth - ResponsiveMinLayoutWidth);
+    private const int ResponsiveMarginProgressSteps = 12;
+    private const int ResponsiveWidthProgressSteps = 24;
+    private static readonly TimeSpan ResizeSettleDelay = TimeSpan.FromMilliseconds(120);
     private static readonly KeyValuePair<string, object>[] CompactLayoutResourceOverrides =
     [
         new("MAA.Thickness.SectionPadding", new Thickness(6)),
@@ -38,9 +44,9 @@ public partial class MainWindow : Window
         new("MAA.Thickness.MarginSectionVertical", new Thickness(0, 6, 0, 6)),
         new("MAA.Thickness.MarginRightSection", new Thickness(0, 0, 6, 0)),
         new("MAA.Thickness.TabCompactPadding", new Thickness(8, 4)),
-        new("MAA.Thickness.CopilotNavTabPadding", new Thickness(8, 3, 8, 7)),
-        new("MAA.Thickness.RootNavTabPadding", new Thickness(8, 2, 8, 9)),
-        new("MAA.Thickness.ToolboxNavTabPadding", new Thickness(8, 2, 8, 9)),
+        new("MAA.Thickness.CopilotNavTabPadding", new Thickness(8, 0, 8, 5)),
+        new("MAA.Thickness.RootNavTabPadding", new Thickness(8, 0, 8, 0)),
+        new("MAA.Thickness.ToolboxNavTabPadding", new Thickness(8, 1, 8, 8)),
         new("MAA.FontSize.SectionTitle", 13.5d),
         new("MAA.FontSize.CopilotNavTab", 13.5d),
         new("MAA.Size.Action.Height", 28d),
@@ -51,9 +57,9 @@ public partial class MainWindow : Window
     ];
     private static readonly ResponsiveDoubleResourceRange[] ResponsiveWidthResourceRanges =
     [
-        new("MAA.Size.TaskQueue.ListPanelWidth", 250d, 276d),
-        new("MAA.Size.TaskQueue.ConfigPanelWidth", 252d, 280d),
-        new("MAA.Size.TaskQueue.LogPanelWidth", 342d, 380d),
+        new("MAA.Size.TaskQueue.ListPanelWidth", 236d, 276d),
+        new("MAA.Size.TaskQueue.ConfigPanelWidth", 324d, 450d),
+        new("MAA.Size.TaskQueue.LogPanelWidth", 304d, 440d),
         new("MAA.Size.TaskQueue.PostActionSummaryWidth", 170d, 185d),
         new("MAA.Size.TaskQueue.PostActionDescriptionWidth", 146d, 160d),
         new("MAA.Size.Settings.SectionListWidth", 200d, 224d),
@@ -61,8 +67,8 @@ public partial class MainWindow : Window
         new("MAA.Size.Settings.FormNarrowMaxWidth", 710d, 760d),
         new("MAA.Size.Settings.ContentMaxWidth", 405d, 450d),
         new("MAA.Size.Settings.ColumnWidth", 228d, 250d),
-        new("MAA.Size.Settings.FieldSlimWidth", 136d, 150d),
-        new("MAA.Size.Settings.FieldNarrowWidth", 162d, 180d),
+        new("MAA.Size.Settings.FieldSlimWidth", 130d, 144d),
+        new("MAA.Size.Settings.FieldNarrowWidth", 154d, 170d),
         new("MAA.Size.Settings.FieldCenteredWidth", 180d, 200d),
         new("MAA.Size.Settings.FieldInputWidth", 270d, 300d),
         new("MAA.Size.Settings.FieldPathWidth", 360d, 400d),
@@ -72,12 +78,10 @@ public partial class MainWindow : Window
         new("MAA.Size.Settings.FieldWideWidth", 252d, 280d),
         new("MAA.Size.Settings.FieldExtraWideWidth", 306d, 340d),
         new("MAA.Size.Settings.WrapItemWidth", 198d, 220d),
-        new("MAA.Size.Toolbox.DepotWrapItemWidth", 142d, 158d),
-        new("MAA.Size.Toolbox.OperBoxWrapItemWidth", 133d, 148d),
         new("MAA.Size.Toolbox.ActionButtonWidth", 162d, 180d),
         new("MAA.Size.Toolbox.WarningTextMaxWidth", 504d, 560d),
         new("MAA.Size.Toolbox.FormPanelWidth", 580d, 640d),
-        new("MAA.Size.Copilot.SidePanelWidth", 378d, 420d),
+        new("MAA.Size.Copilot.SidePanelWidth", 491d, 546d),
     ];
 
     private bool _platformBound;
@@ -88,15 +92,24 @@ public partial class MainWindow : Window
     private bool _closeRequestPending;
     private bool _compactLayoutEnabled;
     private ResponsiveLayoutMetrics? _responsiveLayoutMetrics;
+    private bool _adaptiveLayoutUpdateQueued;
+    private bool _pendingAdaptiveLayoutFlushAllHosts;
+    private double _pendingAdaptiveLayoutWidth;
+    private double _pendingAdaptiveLayoutHeight;
+    private DispatcherTimer? _resizeSettleTimer;
     private readonly object _dialogErrorGate = new();
     private readonly Queue<DialogErrorRaisedEvent> _pendingDialogErrors = [];
     private readonly HashSet<string> _pendingDialogErrorKeys = new(StringComparer.Ordinal);
+    private readonly Dictionary<ContentControl, ResponsiveLayoutMetrics> _rootHostResponsiveMetrics = [];
     private readonly IAppDialogService _dialogService;
     private readonly ShellCloseConfirmationService _closeConfirmationService;
     private OverlayHostWindow? _overlayHostWindow;
     private RuntimeLogWindow? _runtimeLogWindow;
     private RootPageHostViewModel? _settingsWarmupRootPage;
     private bool _settingsWarmupStarted;
+    private bool _settingsSectionWarmupStarted;
+    private MainShellViewModel? _shellBackgroundVm;
+    private BlurEffect? _shellBackgroundBlurEffect;
 
     private readonly record struct ResponsiveDoubleResourceRange(string ResourceKey, double Minimum, double Maximum);
 
@@ -120,11 +133,18 @@ public partial class MainWindow : Window
         _closeConfirmationService = new ShellCloseConfirmationService(_dialogService);
         BindDialogErrorEvents();
         Opened += OnWindowOpened;
-        SizeChanged += OnWindowSizeChanged;
+        Resized += OnWindowResized;
         KeyDown += OnWindowKeyDown;
         Closing += OnWindowClosing;
         Closed += OnWindowClosed;
+        DataContextChanged += OnWindowDataContextChanged;
         PropertyChanged += OnWindowPropertyChanged;
+        WindowShellFrame.PropertyChanged += OnWindowShellFramePropertyChanged;
+        TaskQueueRootHost.PropertyChanged += OnRootHostPropertyChanged;
+        CopilotRootHost.PropertyChanged += OnRootHostPropertyChanged;
+        ToolboxRootHost.PropertyChanged += OnRootHostPropertyChanged;
+        SettingsRootHost.PropertyChanged += OnRootHostPropertyChanged;
+        BindShellBackgroundVm(VM);
         App.Runtime.UiLanguageCoordinator.LanguageChanged += OnUiLanguageChanged;
     }
 
@@ -157,6 +177,11 @@ public partial class MainWindow : Window
             await App.Runtime.DiagnosticsService.RecordEventAsync(
                 "App.Shell.Window.Close",
                 "source=window-chrome; confirmed");
+            if (!await CompleteConfigurationSavesBeforeCloseAsync("App.Shell.Window.Close.ConfigSave"))
+            {
+                return;
+            }
+
             _ = await ExitApplicationAsync("App.Shell.Window.Close.Exit");
         }
         finally
@@ -172,12 +197,12 @@ public partial class MainWindow : Window
     {
         Program.RecordStartupStage("MainWindow.Opened", "Main window opened.");
         FitToCurrentScreenWorkingArea();
-        UpdateAdaptiveLayoutMode();
-        UpdateAchievementToastVisibility();
+        UpdateAdaptiveLayoutMode(flushAllHosts: true);
         StartDialogErrorPumpIfNeeded();
         var vm = VM;
         if (vm is null || _platformBound)
         {
+            UpdateAchievementToastVisibility();
             return;
         }
 
@@ -188,6 +213,7 @@ public partial class MainWindow : Window
         vm = VM;
         if (vm is null || _platformBound || !IsVisible)
         {
+            UpdateAchievementToastVisibility();
             return;
         }
 
@@ -225,12 +251,30 @@ public partial class MainWindow : Window
         }
 
         await vm.ExecuteStartupLaunchBehaviorAsync(minimizeWindowAsync: MinimizeFromStartupAsync);
+        vm.MarkAchievementToastStartupCompleted();
+        UpdateAchievementToastVisibility();
         Program.RecordStartupStage("MainWindow.PlatformInit.End", "Platform initialization completed.");
     }
 
     private async void OnWindowClosed(object? sender, EventArgs e)
     {
         UpdateAchievementToastVisibility();
+        BindShellBackgroundVm(null);
+        Resized -= OnWindowResized;
+        WindowShellFrame.PropertyChanged -= OnWindowShellFramePropertyChanged;
+        DataContextChanged -= OnWindowDataContextChanged;
+        TaskQueueRootHost.PropertyChanged -= OnRootHostPropertyChanged;
+        CopilotRootHost.PropertyChanged -= OnRootHostPropertyChanged;
+        ToolboxRootHost.PropertyChanged -= OnRootHostPropertyChanged;
+        SettingsRootHost.PropertyChanged -= OnRootHostPropertyChanged;
+        if (_resizeSettleTimer is not null)
+        {
+            _resizeSettleTimer.Stop();
+            _resizeSettleTimer.Tick -= OnResizeSettleTimerTick;
+            _resizeSettleTimer = null;
+        }
+
+        _rootHostResponsiveMetrics.Clear();
         if (_dialogErrorBound)
         {
             App.Runtime.DialogFeatureService.ErrorRaised -= OnDialogErrorRaised;
@@ -292,20 +336,41 @@ public partial class MainWindow : Window
         VM?.SetAchievementToastWindowVisible(IsVisible && WindowState != WindowState.Minimized);
     }
 
-    private void OnWindowSizeChanged(object? sender, SizeChangedEventArgs e)
+    private void OnWindowResized(object? sender, WindowResizedEventArgs e)
     {
+        ScheduleAdaptiveLayoutUpdate(
+            ResolveResponsiveLayoutWidth(e.ClientSize.Width),
+            e.ClientSize.Height,
+            flushAllHosts: false,
+            immediate: false);
+        RestartResizeSettleTimer();
+    }
+
+    private void OnWindowDataContextChanged(object? sender, EventArgs e)
+    {
+        BindShellBackgroundVm(VM);
+        UpdateAdaptiveLayoutMode(flushAllHosts: true);
+    }
+
+    private void OnRootHostPropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
+    {
+        if (e.Property != IsVisibleProperty || sender is not ContentControl host || !host.IsVisible)
+        {
+            return;
+        }
+
+        if (_responsiveLayoutMetrics is { } metrics)
+        {
+            ApplyResponsiveLayoutMetricsToRootHost(host, metrics);
+            return;
+        }
+
         UpdateAdaptiveLayoutMode();
     }
 
     private void OnUiLanguageChanged(object? sender, UiLanguageChangedEventArgs e)
     {
-        if (!Dispatcher.UIThread.CheckAccess())
-        {
-            Dispatcher.UIThread.Post(RefreshLocalizedLayout, DispatcherPriority.Loaded);
-            return;
-        }
-
-        RefreshLocalizedLayout();
+        Dispatcher.UIThread.Post(RefreshLocalizedLayout, DispatcherPriority.Background);
     }
 
     private void RefreshLocalizedLayout()
@@ -314,33 +379,82 @@ public partial class MainWindow : Window
         Dispatcher.UIThread.Post(InvalidateLocalizedLayoutTree, DispatcherPriority.Render);
     }
 
-    private void UpdateAdaptiveLayoutMode()
+    private void UpdateAdaptiveLayoutMode(bool flushAllHosts = false)
     {
-        var width = Bounds.Width;
-        var height = Bounds.Height;
+        ScheduleAdaptiveLayoutUpdate(
+            ResolveResponsiveLayoutWidth(),
+            ResolveResponsiveLayoutHeight(),
+            flushAllHosts,
+            immediate: true);
+    }
+
+    private void ScheduleAdaptiveLayoutUpdate(double width, double height, bool flushAllHosts, bool immediate)
+    {
         if (width <= 0d || height <= 0d)
         {
             return;
         }
 
-        var responsiveChanged = ApplyResponsiveLayoutMetrics(width);
-        var compactChanged = UpdateCompactLayoutMode(height <= CompactLayoutHeightThreshold);
-        if (!responsiveChanged && !compactChanged)
+        _pendingAdaptiveLayoutWidth = width;
+        _pendingAdaptiveLayoutHeight = height;
+        _pendingAdaptiveLayoutFlushAllHosts |= flushAllHosts;
+        if (immediate)
+        {
+            ApplyPendingAdaptiveLayoutUpdate();
+            return;
+        }
+
+        if (_adaptiveLayoutUpdateQueued)
         {
             return;
         }
 
-        InvalidateMeasure();
-        InvalidateArrange();
+        _adaptiveLayoutUpdateQueued = true;
+        Dispatcher.UIThread.Post(
+            () =>
+            {
+                _adaptiveLayoutUpdateQueued = false;
+                ApplyPendingAdaptiveLayoutUpdate();
+            },
+            DispatcherPriority.Render);
+    }
+
+    private void ApplyPendingAdaptiveLayoutUpdate()
+    {
+        var width = _pendingAdaptiveLayoutWidth;
+        var height = _pendingAdaptiveLayoutHeight;
+        var flushAllHosts = _pendingAdaptiveLayoutFlushAllHosts;
+
+        _pendingAdaptiveLayoutWidth = 0d;
+        _pendingAdaptiveLayoutHeight = 0d;
+        _pendingAdaptiveLayoutFlushAllHosts = false;
+
+        if (width <= 0d || height <= 0d)
+        {
+            return;
+        }
+
+        var metrics = CalculateResponsiveLayoutMetrics(width, maxContentWidth: width);
+        _ = ApplyResponsiveLayoutMetrics(metrics);
+        var compactChanged = UpdateCompactLayoutMode(height <= CompactLayoutHeightThreshold);
+
+        if (flushAllHosts)
+        {
+            ApplyResponsiveLayoutMetricsToAllRootHosts(metrics);
+        }
+        else
+        {
+            ApplyResponsiveLayoutMetricsToActiveRootHost(metrics);
+        }
+
         if (compactChanged)
         {
             RefreshLocalizedLayout();
         }
     }
 
-    private bool ApplyResponsiveLayoutMetrics(double width)
+    private bool ApplyResponsiveLayoutMetrics(ResponsiveLayoutMetrics metrics)
     {
-        var metrics = CalculateResponsiveLayoutMetrics(width);
         if (_responsiveLayoutMetrics is { } current && current.ApproximatelyEquals(metrics))
         {
             return false;
@@ -348,15 +462,7 @@ public partial class MainWindow : Window
 
         _responsiveLayoutMetrics = metrics;
         Resources["MAA.Thickness.PageMargin"] = new Thickness(metrics.PageMargin);
-        Resources["MAA.Thickness.CopilotRootMargin"] = new Thickness(Lerp(2d, 4d, metrics.WidthProgress));
-        ApplyDoubleResource("MAA.Size.MainWindow.LayoutWidth", metrics.LayoutWidth, ResponsiveMaxLayoutWidth);
-
-        foreach (var range in ResponsiveWidthResourceRanges)
-        {
-            var value = Lerp(range.Minimum, range.Maximum, metrics.WidthProgress);
-            ApplyDoubleResource(range.ResourceKey, value, range.Maximum);
-        }
-
+        ApplyDoubleResource(Resources, "MAA.Size.MainWindow.LayoutWidth", metrics.LayoutWidth, ResponsiveMaxLayoutWidth);
         return true;
     }
 
@@ -386,30 +492,128 @@ public partial class MainWindow : Window
         return true;
     }
 
-    private static ResponsiveLayoutMetrics CalculateResponsiveLayoutMetrics(double windowWidth)
+    private static ResponsiveLayoutMetrics CalculateResponsiveLayoutMetrics(double windowWidth, double maxContentWidth)
     {
-        var marginProgress = InverseLerp(ResponsiveMinWindowWidth, ResponsiveMarginStageEndWidth, windowWidth);
+        var marginProgress = QuantizeProgress(
+            InverseLerp(ResponsiveMinWindowWidth, ResponsiveMarginStageEndWidth, windowWidth),
+            ResponsiveMarginProgressSteps);
         var pageMargin = Lerp(ResponsiveMinPageMargin, ResponsiveMaxPageMargin, marginProgress);
+        var maxSafePageMargin = Math.Max(0d, maxContentWidth / 2d);
+        pageMargin = Math.Min(pageMargin, maxSafePageMargin);
+        var maxLayoutWidth = Math.Max(0d, maxContentWidth - (pageMargin * 2d));
 
         if (windowWidth <= ResponsiveMarginStageEndWidth)
         {
-            return new ResponsiveLayoutMetrics(pageMargin, ResponsiveMinLayoutWidth, 0d);
+            return new ResponsiveLayoutMetrics(pageMargin, Math.Min(ResponsiveMinLayoutWidth, maxLayoutWidth), 0d);
         }
 
-        var widthProgress = InverseLerp(ResponsiveMarginStageEndWidth, ResponsiveContentStageEndWidth, windowWidth);
-        var layoutWidth = Lerp(ResponsiveMinLayoutWidth, ResponsiveMaxLayoutWidth, widthProgress);
-        return new ResponsiveLayoutMetrics(ResponsiveMaxPageMargin, layoutWidth, widthProgress);
+        var widthProgress = QuantizeProgress(
+            InverseLerp(ResponsiveMarginStageEndWidth, ResponsiveContentStageEndWidth, windowWidth),
+            ResponsiveWidthProgressSteps);
+        var expandedPageMargin = Math.Min(ResponsiveMaxPageMargin, maxSafePageMargin);
+        var expandedLayoutWidth = Math.Max(0d, maxContentWidth - (expandedPageMargin * 2d));
+        var layoutWidth = Math.Min(Lerp(ResponsiveMinLayoutWidth, ResponsiveMaxLayoutWidth, widthProgress), expandedLayoutWidth);
+        return new ResponsiveLayoutMetrics(expandedPageMargin, layoutWidth, widthProgress);
     }
 
-    private void ApplyDoubleResource(string key, double value, double defaultValue)
+    private void ApplyResponsiveLayoutMetricsToActiveRootHost(ResponsiveLayoutMetrics metrics)
     {
-        if (Math.Abs(value - defaultValue) < 0.01d)
+        if (ResolveActiveRootHost() is not { } host)
         {
-            Resources.Remove(key);
             return;
         }
 
-        Resources[key] = value;
+        ApplyResponsiveLayoutMetricsToRootHost(host, metrics);
+    }
+
+    private void ApplyResponsiveLayoutMetricsToAllRootHosts(ResponsiveLayoutMetrics metrics)
+    {
+        foreach (var host in EnumerateRootHosts())
+        {
+            ApplyResponsiveLayoutMetricsToRootHost(host, metrics);
+        }
+    }
+
+    private void ApplyResponsiveLayoutMetricsToRootHost(ContentControl host, ResponsiveLayoutMetrics metrics)
+    {
+        if (_rootHostResponsiveMetrics.TryGetValue(host, out var current) && current.ApproximatelyEquals(metrics))
+        {
+            return;
+        }
+
+        var resources = EnsureResources(host);
+        var copilotSideMargin = Lerp(2d, 4d, metrics.WidthProgress);
+        resources["MAA.Thickness.CopilotRootMargin"] = new Thickness(copilotSideMargin, 0d, copilotSideMargin, copilotSideMargin);
+        foreach (var range in ResponsiveWidthResourceRanges)
+        {
+            var value = Lerp(range.Minimum, range.Maximum, metrics.WidthProgress);
+            ApplyDoubleResource(resources, range.ResourceKey, value, range.Maximum);
+        }
+
+        _rootHostResponsiveMetrics[host] = metrics;
+    }
+
+    private ContentControl? ResolveActiveRootHost()
+    {
+        foreach (var host in EnumerateRootHosts())
+        {
+            if (host.IsVisible)
+            {
+                return host;
+            }
+        }
+
+        return null;
+    }
+
+    private IEnumerable<ContentControl> EnumerateRootHosts()
+    {
+        yield return TaskQueueRootHost;
+        yield return CopilotRootHost;
+        yield return ToolboxRootHost;
+        yield return SettingsRootHost;
+    }
+
+    private static IResourceDictionary EnsureResources(StyledElement element)
+    {
+        if (element.Resources is null)
+        {
+            element.Resources = new ResourceDictionary();
+        }
+
+        return element.Resources;
+    }
+
+    private static void ApplyDoubleResource(IResourceDictionary resources, string key, double value, double defaultValue)
+    {
+        if (Math.Abs(value - defaultValue) < 0.01d)
+        {
+            resources.Remove(key);
+            return;
+        }
+
+        resources[key] = value;
+    }
+
+    private void RestartResizeSettleTimer()
+    {
+        if (_resizeSettleTimer is null)
+        {
+            _resizeSettleTimer = new DispatcherTimer
+            {
+                Interval = ResizeSettleDelay,
+            };
+            _resizeSettleTimer.Tick += OnResizeSettleTimerTick;
+        }
+
+        _resizeSettleTimer.Stop();
+        _resizeSettleTimer.Start();
+    }
+
+    private void OnResizeSettleTimerTick(object? sender, EventArgs e)
+    {
+        _resizeSettleTimer?.Stop();
+        UpdateAdaptiveLayoutMode(flushAllHosts: true);
     }
 
     private static double InverseLerp(double start, double end, double value)
@@ -425,6 +629,129 @@ public partial class MainWindow : Window
     private static double Lerp(double start, double end, double progress)
     {
         return start + ((end - start) * Math.Clamp(progress, 0d, 1d));
+    }
+
+    private static double QuantizeProgress(double progress, int steps)
+    {
+        if (steps <= 0)
+        {
+            return Math.Clamp(progress, 0d, 1d);
+        }
+
+        var clamped = Math.Clamp(progress, 0d, 1d);
+        return Math.Round(clamped * steps, MidpointRounding.AwayFromZero) / steps;
+    }
+
+    private double ResolveResponsiveLayoutWidth()
+    {
+        var clientWidth = ClientSize.Width > 0d ? ClientSize.Width : Bounds.Width;
+        return ResolveResponsiveLayoutWidth(clientWidth);
+    }
+
+    private double ResolveResponsiveLayoutWidth(double clientWidth)
+    {
+        if (clientWidth <= 0d)
+        {
+            return 0d;
+        }
+
+        return Math.Max(0d, clientWidth - WindowShellFrame.EffectiveHorizontalContentInset.Total);
+    }
+
+    private double ResolveResponsiveLayoutHeight()
+    {
+        return ClientSize.Height > 0d ? ClientSize.Height : Bounds.Height;
+    }
+
+    private void OnWindowShellFramePropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
+    {
+        if (e.Property == AppWindowFrame.EffectiveHorizontalContentInsetProperty)
+        {
+            UpdateAdaptiveLayoutMode();
+        }
+    }
+
+    private void BindShellBackgroundVm(MainShellViewModel? vm)
+    {
+        if (ReferenceEquals(_shellBackgroundVm, vm))
+        {
+            ApplyShellBackgroundEffect();
+            return;
+        }
+
+        if (_shellBackgroundVm is not null)
+        {
+            _shellBackgroundVm.PropertyChanged -= OnShellBackgroundVmPropertyChanged;
+        }
+
+        _shellBackgroundVm = vm;
+        if (_shellBackgroundVm is not null)
+        {
+            _shellBackgroundVm.PropertyChanged += OnShellBackgroundVmPropertyChanged;
+        }
+
+        ApplyShellBackgroundEffect();
+    }
+
+    private void OnShellBackgroundVmPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (string.Equals(e.PropertyName, nameof(MainShellViewModel.SelectedRootTabIndex), StringComparison.Ordinal)
+            || string.Equals(e.PropertyName, nameof(MainShellViewModel.IsTaskQueueRootTabSelected), StringComparison.Ordinal)
+            || string.Equals(e.PropertyName, nameof(MainShellViewModel.IsCopilotRootTabSelected), StringComparison.Ordinal)
+            || string.Equals(e.PropertyName, nameof(MainShellViewModel.IsToolboxRootTabSelected), StringComparison.Ordinal)
+            || string.Equals(e.PropertyName, nameof(MainShellViewModel.IsSettingsRootTabSelected), StringComparison.Ordinal))
+        {
+            if (Dispatcher.UIThread.CheckAccess())
+            {
+                UpdateAdaptiveLayoutMode();
+            }
+            else
+            {
+                Dispatcher.UIThread.Post(() => UpdateAdaptiveLayoutMode(), DispatcherPriority.Render);
+            }
+
+            return;
+        }
+
+        if (!string.Equals(e.PropertyName, nameof(MainShellViewModel.ShellBackgroundBlur), StringComparison.Ordinal)
+            && !string.Equals(e.PropertyName, nameof(MainShellViewModel.ShellBackgroundImage), StringComparison.Ordinal)
+            && !string.Equals(e.PropertyName, nameof(MainShellViewModel.HasShellBackgroundImage), StringComparison.Ordinal)
+            && !string.Equals(e.PropertyName, nameof(MainShellViewModel.ShellBackgroundOpacity), StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            ApplyShellBackgroundEffect();
+            return;
+        }
+
+        Dispatcher.UIThread.Post(ApplyShellBackgroundEffect, DispatcherPriority.Render);
+    }
+
+    private void ApplyShellBackgroundEffect()
+    {
+        var vm = _shellBackgroundVm;
+        if (vm is null
+            || !vm.HasShellBackgroundImage
+            || vm.ShellBackgroundBlur <= 0
+            || vm.ShellBackgroundOpacity <= 0d)
+        {
+            if (ShellBackgroundImageHost.Effect is not null)
+            {
+                ShellBackgroundImageHost.Effect = null;
+            }
+
+            return;
+        }
+
+        _shellBackgroundBlurEffect ??= new BlurEffect();
+        _shellBackgroundBlurEffect.Radius = vm.ShellBackgroundBlur;
+        if (!ReferenceEquals(ShellBackgroundImageHost.Effect, _shellBackgroundBlurEffect))
+        {
+            ShellBackgroundImageHost.Effect = _shellBackgroundBlurEffect;
+        }
     }
 
     private void InvalidateLocalizedLayoutTree()
@@ -462,6 +789,8 @@ public partial class MainWindow : Window
 
         _settingsWarmupRootPage.PropertyChanged -= OnSettingsWarmupRootPagePropertyChanged;
         _settingsWarmupRootPage = null;
+        _settingsWarmupStarted = false;
+        _settingsSectionWarmupStarted = false;
     }
 
     private void OnSettingsWarmupRootPagePropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -481,7 +810,18 @@ public partial class MainWindow : Window
 
     private void TryStartSettingsWarmup(MainShellViewModel vm)
     {
-        if (_settingsWarmupStarted || _settingsWarmupRootPage?.IsLoaded != true)
+        if (!_settingsSectionWarmupStarted)
+        {
+            _settingsSectionWarmupStarted = true;
+            MAAUnified.App.Features.Root.SettingsView.StartBackgroundSectionWarmup();
+        }
+
+        if (_settingsWarmupRootPage?.IsLoaded != true)
+        {
+            return;
+        }
+
+        if (_settingsWarmupStarted)
         {
             return;
         }
@@ -550,9 +890,80 @@ public partial class MainWindow : Window
 
     private void OnDismissAchievementToastClick(object? sender, RoutedEventArgs e)
     {
+        e.Handled = true;
         if (sender is Button button && button.Tag is string toastId)
         {
             VM?.DismissAchievementToast(toastId);
+        }
+    }
+
+    private async void OnManualUpdateClick(object? sender, RoutedEventArgs e)
+    {
+        e.Handled = true;
+        if (VM is not null)
+        {
+            await VM.SettingsPage.CheckVersionUpdateAsync();
+        }
+    }
+
+    private async void OnManualUpdateResourceClick(object? sender, RoutedEventArgs e)
+    {
+        e.Handled = true;
+        if (VM is not null)
+        {
+            await VM.SettingsPage.ManualUpdateResourceAsync();
+        }
+    }
+
+    private void OnDismissWindowUpdateClick(object? sender, RoutedEventArgs e)
+    {
+        e.Handled = true;
+        VM?.DismissWindowUpdateOverlay();
+    }
+
+    private async void OnAchievementToastTapped(object? sender, TappedEventArgs e)
+    {
+        if (e.Handled
+            || sender is not Control { DataContext: AchievementToastItemViewModel toast }
+            || VM is null
+            || IsEventFromButton(e.Source))
+        {
+            return;
+        }
+
+        e.Handled = true;
+        await VM.ShowAchievementListDialogFromToastAsync(toast.Id);
+    }
+
+    private void OnWindowUpdateOverlayTapped(object? sender, TappedEventArgs e)
+    {
+        if (e.Handled || VM is null || IsEventFromButton(e.Source))
+        {
+            return;
+        }
+
+        e.Handled = true;
+        VM.OpenVersionUpdateSectionFromWindowOverlay();
+    }
+
+    private void OnFloatingOverlayCloseButtonTapped(object? sender, TappedEventArgs e)
+    {
+        e.Handled = true;
+    }
+
+    private void OnAchievementToastPointerEntered(object? sender, PointerEventArgs e)
+    {
+        if (sender is Control { DataContext: AchievementToastItemViewModel toast })
+        {
+            toast.PauseCloseCountdown();
+        }
+    }
+
+    private void OnAchievementToastPointerExited(object? sender, PointerEventArgs e)
+    {
+        if (sender is Control { DataContext: AchievementToastItemViewModel toast })
+        {
+            toast.ResumeCloseCountdown();
         }
     }
 
@@ -587,6 +998,45 @@ public partial class MainWindow : Window
         await DispatchTrayCommandAsync(TrayCommandId.ToggleOverlay, "window-shell-menu");
     }
 
+    private async void OnWindowOverlayToggleClick(object? sender, RoutedEventArgs e)
+    {
+        if (VM is null)
+        {
+            return;
+        }
+
+        if (VM.IsCopilotRootTabSelected)
+        {
+            await VM.ToggleOverlayFromCopilotAsync();
+            return;
+        }
+
+        await VM.ToggleOverlayFromTaskQueueAsync();
+    }
+
+    private async void OnWindowOverlayButtonPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (VM is null || sender is not Control control)
+        {
+            return;
+        }
+
+        var point = e.GetCurrentPoint(control);
+        if (!point.Properties.IsRightButtonPressed)
+        {
+            return;
+        }
+
+        e.Handled = true;
+        if (VM.IsCopilotRootTabSelected)
+        {
+            await VM.PickOverlayTargetFromCopilotAsync();
+            return;
+        }
+
+        await VM.PickOverlayTargetFromTaskQueueAsync();
+    }
+
     private async void OnRestartClick(object? sender, RoutedEventArgs e)
     {
         await DispatchTrayCommandAsync(TrayCommandId.Restart, "window-shell-menu");
@@ -595,28 +1045,6 @@ public partial class MainWindow : Window
     private async void OnExitClick(object? sender, RoutedEventArgs e)
     {
         await DispatchTrayCommandAsync(TrayCommandId.Exit, "window-shell-menu");
-    }
-
-    private async void OnManualUpdateClick(object? sender, PointerPressedEventArgs e)
-    {
-        if (VM is null)
-        {
-            return;
-        }
-
-        e.Handled = true;
-        await VM.SettingsPage.ShowSoftwareUpdateNotImplementedAsync();
-    }
-
-    private void OnManualUpdateResourceClick(object? sender, PointerPressedEventArgs e)
-    {
-        if (VM is null)
-        {
-            return;
-        }
-
-        e.Handled = true;
-        _ = VM.SettingsPage.ManualUpdateResourceAsync();
     }
 
     private void OnToggleTopMostClick(object? sender, RoutedEventArgs e)
@@ -631,7 +1059,7 @@ public partial class MainWindow : Window
 
     public void OpenRuntimeLogWindow()
     {
-        if (VM is null)
+        if (!global::MAAUnified.Platform.MaaUnifiedBuildFlavor.ExposesDeveloperTools || VM is null)
         {
             return;
         }
@@ -655,6 +1083,16 @@ public partial class MainWindow : Window
         _runtimeLogWindow.Activate();
     }
 
+    private static bool IsEventFromButton(object? source)
+    {
+        if (source is Button)
+        {
+            return true;
+        }
+
+        return source is Visual visual && visual.FindAncestorOfType<Button>() is not null;
+    }
+
     private void OnRuntimeLogWindowClosed(object? sender, EventArgs e)
     {
         if (_runtimeLogWindow is not null)
@@ -676,11 +1114,13 @@ public partial class MainWindow : Window
             DataContext = VM.OverlayPresentation,
         };
         _overlayHostWindow.Show();
-        var handle = _overlayHostWindow.TryGetPlatformHandle()?.Handle ?? nint.Zero;
+        var platformHandle = _overlayHostWindow.TryGetPlatformHandle();
+        var handle = platformHandle?.Handle ?? nint.Zero;
         if (handle == nint.Zero)
         {
             await Dispatcher.UIThread.InvokeAsync(static () => { }, DispatcherPriority.Loaded);
-            handle = _overlayHostWindow.TryGetPlatformHandle()?.Handle ?? nint.Zero;
+            platformHandle = _overlayHostWindow.TryGetPlatformHandle();
+            handle = platformHandle?.Handle ?? nint.Zero;
         }
 
         if (handle == nint.Zero)
@@ -693,6 +1133,21 @@ public partial class MainWindow : Window
             await App.Runtime.DiagnosticsService.RecordFailedResultAsync(
                 "PlatformCapability.Overlay.BindHost",
                 UiOperationResult.Fail(PlatformErrorCodes.OverlayHostNotBound, "Overlay host handle unavailable."),
+                cancellationToken);
+            return;
+        }
+
+        if (OperatingSystem.IsLinux()
+            && !string.Equals(platformHandle?.HandleDescriptor, "XID", StringComparison.OrdinalIgnoreCase))
+        {
+            var descriptor = string.IsNullOrWhiteSpace(platformHandle?.HandleDescriptor)
+                ? "<empty>"
+                : platformHandle.HandleDescriptor;
+            var message = $"Linux overlay host requires an X11 XID handle, but Avalonia returned '{descriptor}'.";
+            VM.PushGrowl(message);
+            await App.Runtime.DiagnosticsService.RecordFailedResultAsync(
+                "PlatformCapability.Overlay.BindHost",
+                UiOperationResult.Fail(PlatformErrorCodes.OverlayHostNotBound, message),
                 cancellationToken);
             return;
         }
@@ -723,7 +1178,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        _overlayHostWindow.SetOverlayActive(e.Visible);
+        _overlayHostWindow.SetOverlayActive(e.Visible, e.Mode);
         if (!e.Visible || e.Mode != OverlayRuntimeMode.Preview)
         {
             return;
@@ -776,6 +1231,13 @@ public partial class MainWindow : Window
                         confirmScope,
                         $"source={source}; cancelled",
                         cancellationToken);
+                    return;
+                }
+
+                if (!await CompleteConfigurationSavesBeforeCloseAsync(
+                        $"{confirmScope}.ConfigSave",
+                        cancellationToken))
+                {
                     return;
                 }
             }
@@ -976,6 +1438,85 @@ public partial class MainWindow : Window
             cancellationToken);
     }
 
+    private async Task<bool> CompleteConfigurationSavesBeforeCloseAsync(
+        string sourceScope,
+        CancellationToken cancellationToken = default)
+    {
+        var vm = VM;
+        if (vm is null)
+        {
+            return true;
+        }
+
+        var tracker = ConfigurationSaveTracker.Instance;
+        ConfigurationSaveStatusDialogView? waitDialog = null;
+        Task<bool?>? waitDialogTask = null;
+        var waitingNames = tracker.HasActiveSaves
+            ? tracker.ActiveDisplayNames
+            : tracker.PendingOrFailedDisplayNames;
+        if (waitingNames.Count > 0)
+        {
+            var savingText = $"{JoinChineseNames(waitingNames)}正在保存，请稍等";
+            waitDialog = new ConfigurationSaveStatusDialogView();
+            waitDialog.ApplyMessage("正在保存", savingText, showConfirmButton: false);
+            waitDialogTask = waitDialog.ShowDialog<bool?>(this);
+        }
+
+        IReadOnlyList<string> failedNames;
+        try
+        {
+            await tracker.WaitForActiveSavesAsync(cancellationToken);
+            failedNames = await vm.FlushConfigurationSavesForCloseAsync(cancellationToken);
+        }
+        finally
+        {
+            if (waitDialog is not null)
+            {
+                waitDialog.Close(true);
+                if (waitDialogTask is not null)
+                {
+                    try
+                    {
+                        await waitDialogTask;
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        // Ignore late dialog close races while shutting down.
+                    }
+                }
+            }
+        }
+
+        failedNames = ConfigurationSaveTracker.Instance.FailedDisplayNames;
+        if (failedNames.Count == 0)
+        {
+            return true;
+        }
+
+        await App.Runtime.DialogFeatureService.ReportErrorAsync(
+            sourceScope,
+            MAAUnified.Application.Models.UiOperationResult.Fail(
+                MAAUnified.Application.Models.UiErrorCode.SettingsSaveFailed,
+                $"{JoinChineseNames(failedNames)}保存失败"),
+            cancellationToken);
+        return false;
+    }
+
+    private static string JoinChineseNames(IReadOnlyList<string> names)
+    {
+        var cleanNames = names
+            .Where(static name => !string.IsNullOrWhiteSpace(name))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        return cleanNames.Length switch
+        {
+            0 => "配置",
+            1 => cleanNames[0],
+            2 => $"{cleanNames[0]}和{cleanNames[1]}",
+            _ => string.Concat(string.Join("、", cleanNames.Take(cleanNames.Length - 1)), "和", cleanNames[^1]),
+        };
+    }
+
     private async Task<bool> ExitApplicationAsync(string scope, CancellationToken cancellationToken = default)
     {
         var vm = VM;
@@ -1103,15 +1644,25 @@ public partial class MainWindow : Window
         App.Runtime.AchievementTrackerService.SetCurrentLanguage(language);
         _ = App.Runtime.AchievementTrackerService.Unlock("CongratulationError");
         var localizedResult = DialogTextCatalog.LocalizeErrorResult(language, dialogError.Result);
+        var isConnectFailed = dialogError.Result.Error?.Code == UiErrorCode.ConnectFailed;
         var chrome = DialogTextCatalog.CreateCatalog(
             language,
             nextLanguage => new DialogChromeSnapshot(
-                title: DialogTextCatalog.ErrorDialogTitle(nextLanguage),
-                confirmText: DialogTextCatalog.ErrorDialogCloseButton(nextLanguage),
+                title: isConnectFailed
+                    ? DialogTextCatalog.ErrorDialogConnectFailedTitle(nextLanguage)
+                    : DialogTextCatalog.ErrorDialogTitle(nextLanguage),
+                confirmText: isConnectFailed
+                    ? DialogTextCatalog.WarningDialogConfirmButton(nextLanguage)
+                    : DialogTextCatalog.ErrorDialogCloseButton(nextLanguage),
                 cancelText: DialogTextCatalog.ErrorDialogIgnoreButton(nextLanguage),
                 namedTexts: DialogTextCatalog.CreateNamedTexts(
+                    (DialogTextCatalog.ChromeKeys.Prompt, isConnectFailed
+                        ? DialogTextCatalog.BuildErrorSuggestion(nextLanguage, dialogError.Result)
+                        : string.Empty),
                     (DialogTextCatalog.ChromeKeys.SectionTitle, DialogTextCatalog.ErrorDialogSectionTitle(nextLanguage)),
-                    (DialogTextCatalog.ChromeKeys.CopyButton, DialogTextCatalog.ErrorDialogCopyButton(nextLanguage)),
+                    (DialogTextCatalog.ChromeKeys.CopyButton, isConnectFailed
+                        ? DialogTextCatalog.ErrorDialogCopyErrorInfoButton(nextLanguage)
+                        : DialogTextCatalog.ErrorDialogCopyButton(nextLanguage)),
                     (DialogTextCatalog.ChromeKeys.IssueReportButton, DialogTextCatalog.ErrorDialogIssueReportButton(nextLanguage)),
                     (DialogTextCatalog.ChromeKeys.TimestampLabel, DialogTextCatalog.ErrorDialogTimestampLabel(nextLanguage)),
                     (DialogTextCatalog.ChromeKeys.ContextLabel, DialogTextCatalog.ErrorDialogContextLabel(nextLanguage)),

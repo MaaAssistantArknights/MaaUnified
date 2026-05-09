@@ -2,6 +2,7 @@ using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using MAAUnified.Application.Models;
 using MAAUnified.Application.Models.TaskParams;
+using MAAUnified.Application.Services.Features;
 
 namespace MAAUnified.Application.Services.TaskParams;
 
@@ -18,6 +19,12 @@ public sealed class TaskCompileOutput
 
 public static class TaskParamCompiler
 {
+    private const string UiStagePlan = "_ui_stage_plan";
+    private const string UiIsStageManually = "_ui_is_stage_manually";
+    private const string UiUseMedicine = "_ui_use_medicine";
+    private const string UiUseStone = "_ui_use_stone";
+    private const string UiEnableTimesLimit = "_ui_enable_times_limit";
+    private const string UiEnableTargetDrop = "_ui_enable_target_drop";
     private const string UiUseAlternateStage = "_ui_use_alternate_stage";
     private const string UiHideUnavailableStage = "_ui_hide_unavailable_stage";
     private const string UiStageResetMode = "_ui_stage_reset_mode";
@@ -25,8 +32,19 @@ public static class TaskParamCompiler
     private const string UiAnnihilationStage = "_ui_annihilation_stage";
     private const string UiHideSeries = "_ui_hide_series";
     private const string UiAllowUseStoneSave = "_ui_allow_use_stone_save";
+    private const string UiUseWeeklySchedule = "_ui_use_weekly_schedule";
+    private const string UiWeeklyScheduleSunday = "_ui_weekly_schedule_sunday";
+    private const string UiWeeklyScheduleMonday = "_ui_weekly_schedule_monday";
+    private const string UiWeeklyScheduleTuesday = "_ui_weekly_schedule_tuesday";
+    private const string UiWeeklyScheduleWednesday = "_ui_weekly_schedule_wednesday";
+    private const string UiWeeklyScheduleThursday = "_ui_weekly_schedule_thursday";
+    private const string UiWeeklyScheduleFriday = "_ui_weekly_schedule_friday";
+    private const string UiWeeklyScheduleSaturday = "_ui_weekly_schedule_saturday";
     private const string UiMallCreditFightLastTime = "_ui_mall_credit_fight_last_time";
     private const string UiMallVisitFriendsLastTime = "_ui_mall_visit_friends_last_time";
+    private const string UserDataUpdateOperBox = "update_oper_box";
+    private const string UserDataUpdateDepot = "update_depot";
+    private const string UserDataUpdateTriggerInterval = "trigger_interval";
     private static readonly Regex RoguelikeSeedRegex = new("^[0-9A-Za-z]+,rogue_\\d+,\\d+$", RegexOptions.Compiled);
     private static readonly HashSet<int> RoguelikeModes = [0, 1, 4, 5, 6, 7, 20001];
     private static readonly HashSet<string> RoguelikeThemes = new(StringComparer.OrdinalIgnoreCase) { "JieGarden", "Phantom", "Mizuki", "Sami", "Sarkaz" };
@@ -50,6 +68,7 @@ public static class TaskParamCompiler
         "Award",
         "Roguelike",
         "Reclamation",
+        "UserDataUpdate",
         "Custom",
         "PostAction",
     };
@@ -88,6 +107,7 @@ public static class TaskParamCompiler
             "Award" => "Award",
             "Roguelike" => "Roguelike",
             "Reclamation" => "Reclamation",
+            "UserDataUpdate" => "UserDataUpdate",
             "Custom" => "Custom",
             "PostAction" => "PostAction",
             _ => normalized,
@@ -108,6 +128,7 @@ public static class TaskParamCompiler
             "Recruit" => (normalizedType, CompileRecruit(new RecruitTaskParamsDto(), profile, config).Params),
             "Roguelike" => (normalizedType, CompileRoguelike(new RoguelikeTaskParamsDto(), profile, config).Params),
             "Reclamation" => (normalizedType, CompileReclamation(new ReclamationTaskParamsDto(), profile, config).Params),
+            "UserDataUpdate" => (normalizedType, CompileUserDataUpdate(new UserDataUpdateTaskParamsDto()).Params),
             "Custom" => (normalizedType, CompileCustom(new CustomTaskParamsDto(), profile, config).Params),
             _ => (normalizedType, new JsonObject()),
         };
@@ -194,7 +215,7 @@ public static class TaskParamCompiler
         var issues = new List<TaskValidationIssue>();
         var parameters = task.Params ?? new JsonObject();
 
-        var stage = FightStageSelection.NormalizeStoredValue(
+        var storedStage = FightStageSelection.NormalizeStoredValue(
             ReadString(parameters, "stage", strict, issues, "fight.stage", FightStageSelection.CurrentOrLast));
         var medicine = ReadInt(parameters, "medicine", strict, issues, "fight.medicine", 0);
         var stone = ReadInt(parameters, "stone", strict, issues, "fight.stone", 0);
@@ -213,28 +234,44 @@ public static class TaskParamCompiler
             }
         }
 
+        var useCustomAnnihilation = ReadBool(parameters, UiUseCustomAnnihilation, false);
+        var annihilationStage = ReadString(parameters, UiAnnihilationStage, false, issues, "fight.annihilation_stage", "Annihilation");
+        var stagePlan = ReadFightStagePlan(parameters, strict, issues, storedStage);
+        var isStageManually = ReadBool(parameters, UiIsStageManually, false);
+        var stage = ResolveFightDisplayStage(storedStage);
+
         var dto = new FightTaskParamsDto
         {
             Stage = stage,
+            StagePlan = stagePlan,
+            IsStageManually = isStageManually,
             Medicine = Math.Max(0, medicine),
-            UseMedicine = medicine > 0,
+            UseMedicine = ReadNullableBool(parameters, UiUseMedicine, medicine > 0, issues, "fight.use_medicine"),
             Stone = Math.Max(0, stone),
-            UseStone = stone > 0,
+            UseStone = ReadNullableBool(parameters, UiUseStone, stone > 0, issues, "fight.use_stone"),
             Times = times,
-            EnableTimesLimit = times != int.MaxValue,
+            EnableTimesLimit = ReadNullableBool(parameters, UiEnableTimesLimit, times != int.MaxValue, issues, "fight.enable_times_limit"),
             Series = series,
             IsDrGrandet = ReadBool(parameters, "DrGrandet", false),
             UseExpiringMedicine = ReadInt(parameters, "expiring_medicine", false, issues, "fight.expiring_medicine", 0) > 0,
-            EnableTargetDrop = !string.IsNullOrWhiteSpace(dropId),
+            EnableTargetDrop = ReadNullableBool(parameters, UiEnableTargetDrop, !string.IsNullOrWhiteSpace(dropId), issues, "fight.enable_target_drop"),
             DropId = dropId,
             DropCount = Math.Max(1, dropCount),
-            UseCustomAnnihilation = ReadBool(parameters, UiUseCustomAnnihilation, false),
-            AnnihilationStage = ReadString(parameters, UiAnnihilationStage, false, issues, "fight.annihilation_stage", "Annihilation"),
+            UseCustomAnnihilation = useCustomAnnihilation,
+            AnnihilationStage = annihilationStage,
             UseAlternateStage = ReadBool(parameters, UiUseAlternateStage, false),
             HideUnavailableStage = ReadBool(parameters, UiHideUnavailableStage, true),
             StageResetMode = ReadString(parameters, UiStageResetMode, false, issues, "fight.stage_reset_mode", "Current"),
             HideSeries = ReadBool(parameters, UiHideSeries, false),
             AllowUseStoneSave = ReadBool(parameters, UiAllowUseStoneSave, false),
+            UseWeeklySchedule = ReadBool(parameters, UiUseWeeklySchedule, false),
+            WeeklyScheduleSunday = ReadBool(parameters, UiWeeklyScheduleSunday, false, issues, "fight.weekly_schedule.sunday", true),
+            WeeklyScheduleMonday = ReadBool(parameters, UiWeeklyScheduleMonday, false, issues, "fight.weekly_schedule.monday", true),
+            WeeklyScheduleTuesday = ReadBool(parameters, UiWeeklyScheduleTuesday, false, issues, "fight.weekly_schedule.tuesday", true),
+            WeeklyScheduleWednesday = ReadBool(parameters, UiWeeklyScheduleWednesday, false, issues, "fight.weekly_schedule.wednesday", true),
+            WeeklyScheduleThursday = ReadBool(parameters, UiWeeklyScheduleThursday, false, issues, "fight.weekly_schedule.thursday", true),
+            WeeklyScheduleFriday = ReadBool(parameters, UiWeeklyScheduleFriday, false, issues, "fight.weekly_schedule.friday", true),
+            WeeklyScheduleSaturday = ReadBool(parameters, UiWeeklyScheduleSaturday, false, issues, "fight.weekly_schedule.saturday", true),
         };
 
         return (dto, issues);
@@ -268,7 +305,34 @@ public static class TaskParamCompiler
             stageResetMode = "Current";
         }
 
-        var stage = FightStageSelection.NormalizeStoredValue(dto.Stage);
+        var useMedicine = dto.UseMedicine;
+        var useStone = dto.UseStone;
+        var enableTimesLimit = dto.EnableTimesLimit;
+        var enableTargetDrop = dto.EnableTargetDrop;
+        var rawStagePlan = dto.StagePlan.Count > 0 ? dto.StagePlan : [];
+        if (rawStagePlan.Count == 0
+            || (rawStagePlan.Count == 1
+                && FightStageSelection.IsCurrentOrLast(rawStagePlan[0])
+                && !FightStageSelection.IsCurrentOrLast(dto.Stage)))
+        {
+            rawStagePlan = [dto.Stage];
+        }
+
+        var stagePlan = FightStageSelection.NormalizeStagePlan(rawStagePlan);
+
+        if (!useAlternateStage && stagePlan.Count > 1)
+        {
+            stagePlan = [stagePlan[0]];
+        }
+
+        var stage = ResolveFightExecutionStage(
+            stagePlan,
+            dto.IsStageManually,
+            useAlternateStage,
+            stageResetMode,
+            dto.UseCustomAnnihilation,
+            dto.AnnihilationStage,
+            ResolveStringSetting(profile, config, "ClientType") ?? "Official");
 
         if (dto.Series is < -1 or > 6)
         {
@@ -280,12 +344,12 @@ public static class TaskParamCompiler
             issues.Add(new TaskValidationIssue("FightTimesOutOfRange", "fight.times", "Fight times must be greater than or equal to zero."));
         }
 
-        if (dto.EnableTargetDrop && string.IsNullOrWhiteSpace(dto.DropId))
+        if (enableTargetDrop != false && string.IsNullOrWhiteSpace(dto.DropId))
         {
             issues.Add(new TaskValidationIssue("FightDropMissing", "fight.drop_id", "Target drop id cannot be empty when target drop is enabled."));
         }
 
-        if (dto.EnableTimesLimit && dto.Series > 0 && dto.Times > 0 && dto.Times % dto.Series != 0)
+        if (enableTimesLimit != false && dto.Series > 0 && dto.Times > 0 && dto.Times % dto.Series != 0)
         {
             issues.Add(new TaskValidationIssue(
                 "FightTimesMayNotExhausted",
@@ -304,10 +368,10 @@ public static class TaskParamCompiler
         var parameters = new JsonObject
         {
             ["stage"] = stage,
-            ["medicine"] = dto.UseMedicine ? Math.Max(0, dto.Medicine) : 0,
+            ["medicine"] = useMedicine != false ? Math.Max(0, dto.Medicine) : 0,
             ["expiring_medicine"] = dto.UseExpiringMedicine ? 9999 : 0,
-            ["stone"] = dto.UseStone ? Math.Max(0, dto.Stone) : 0,
-            ["times"] = dto.EnableTimesLimit ? Math.Max(0, dto.Times) : int.MaxValue,
+            ["stone"] = useStone != false ? Math.Max(0, dto.Stone) : 0,
+            ["times"] = enableTimesLimit != false ? Math.Max(0, dto.Times) : int.MaxValue,
             ["series"] = dto.Series,
             ["DrGrandet"] = dto.IsDrGrandet,
             ["report_to_penguin"] = ResolveBooleanSetting(profile, config, "EnablePenguin"),
@@ -316,6 +380,12 @@ public static class TaskParamCompiler
             ["yituliu_id"] = ResolveStringSetting(profile, config, "YituliuId") ?? string.Empty,
             ["server"] = ResolveStringSetting(profile, config, "ServerType") ?? "CN",
             ["client_type"] = ResolveStringSetting(profile, config, "ClientType") ?? "Official",
+            [UiStagePlan] = ToJsonArray(stagePlan),
+            [UiIsStageManually] = dto.IsStageManually,
+            [UiUseMedicine] = JsonValue.Create(useMedicine),
+            [UiUseStone] = JsonValue.Create(useStone),
+            [UiEnableTimesLimit] = JsonValue.Create(enableTimesLimit),
+            [UiEnableTargetDrop] = JsonValue.Create(enableTargetDrop),
             [UiUseAlternateStage] = useAlternateStage,
             [UiHideUnavailableStage] = hideUnavailableStage,
             [UiStageResetMode] = stageResetMode,
@@ -323,9 +393,17 @@ public static class TaskParamCompiler
             [UiAnnihilationStage] = dto.AnnihilationStage,
             [UiHideSeries] = dto.HideSeries,
             [UiAllowUseStoneSave] = dto.AllowUseStoneSave,
+            [UiUseWeeklySchedule] = dto.UseWeeklySchedule,
+            [UiWeeklyScheduleSunday] = dto.WeeklyScheduleSunday,
+            [UiWeeklyScheduleMonday] = dto.WeeklyScheduleMonday,
+            [UiWeeklyScheduleTuesday] = dto.WeeklyScheduleTuesday,
+            [UiWeeklyScheduleWednesday] = dto.WeeklyScheduleWednesday,
+            [UiWeeklyScheduleThursday] = dto.WeeklyScheduleThursday,
+            [UiWeeklyScheduleFriday] = dto.WeeklyScheduleFriday,
+            [UiWeeklyScheduleSaturday] = dto.WeeklyScheduleSaturday,
         };
 
-        if (dto.EnableTargetDrop && !string.IsNullOrWhiteSpace(dto.DropId))
+        if (enableTargetDrop != false && !string.IsNullOrWhiteSpace(dto.DropId))
         {
             parameters["drops"] = new JsonObject
             {
@@ -338,6 +416,152 @@ public static class TaskParamCompiler
             NormalizedType = "Fight",
             Params = parameters,
             Issues = issues,
+        };
+    }
+
+    private static List<string> ReadFightStagePlan(
+        JsonObject parameters,
+        bool strict,
+        ICollection<TaskValidationIssue> issues,
+        string fallbackStage)
+    {
+        if (!parameters.TryGetPropertyValue(UiStagePlan, out var stagePlanNode) || stagePlanNode is null)
+        {
+            return FightStageSelection.NormalizeStagePlan([fallbackStage]);
+        }
+
+        if (stagePlanNode is not JsonArray stagePlanArray)
+        {
+            if (strict)
+            {
+                issues.Add(new TaskValidationIssue("TaskFieldTypeInvalid", "fight.stage_plan", $"Task field `{UiStagePlan}` has incompatible type."));
+            }
+
+            return FightStageSelection.NormalizeStagePlan([fallbackStage]);
+        }
+
+        var list = new List<string>(stagePlanArray.Count);
+        foreach (var entry in stagePlanArray)
+        {
+            switch (entry)
+            {
+                case JsonValue value when value.TryGetValue(out string? text):
+                    list.Add(FightStageSelection.NormalizePlanEntry(text));
+                    break;
+                case JsonValue value when value.TryGetValue(out bool _):
+                    issues.Add(new TaskValidationIssue("TaskFieldTypeInvalid", "fight.stage_plan", $"Task field `{UiStagePlan}` contains incompatible values."));
+                    break;
+                case null:
+                    list.Add(FightStageSelection.CurrentOrLast);
+                    break;
+                default:
+                    issues.Add(new TaskValidationIssue("TaskFieldTypeInvalid", "fight.stage_plan", $"Task field `{UiStagePlan}` contains incompatible values."));
+                    break;
+            }
+        }
+
+        return FightStageSelection.NormalizeStagePlan(list);
+    }
+
+    private static string ResolveFightDisplayStage(string storedStage)
+    {
+        return storedStage;
+    }
+
+    private static string ResolveFightExecutionStage(
+        IReadOnlyList<string> stagePlan,
+        bool isStageManually,
+        bool useAlternateStage,
+        string stageResetMode,
+        bool useCustomAnnihilation,
+        string annihilationStage,
+        string clientType)
+    {
+        var normalizedPlan = FightStageSelection.NormalizeStagePlan(stagePlan);
+        var normalizedClientType = NormalizeFightClientType(clientType);
+        var currentDay = MallDailyResetHelper.GetYjDate(DateTime.UtcNow, normalizedClientType).DayOfWeek;
+
+        if (isStageManually)
+        {
+            return FightStageSelection.NormalizeStoredValue(normalizedPlan[0]);
+        }
+
+        var stageManager = new StageManagerFeatureService();
+        var availableStageCodes = stageManager.GetStageCodes(normalizedClientType).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var candidate in normalizedPlan)
+        {
+            if (FightStageSelection.IsCurrentOrLast(candidate))
+            {
+                return FightStageSelection.CurrentOrLast;
+            }
+
+            if (string.Equals(candidate, "Annihilation", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Annihilation";
+            }
+
+            if (!availableStageCodes.Contains(candidate))
+            {
+                if (useAlternateStage)
+                {
+                    continue;
+                }
+
+                return string.Equals(stageResetMode, "Current", StringComparison.OrdinalIgnoreCase)
+                    ? FightStageSelection.CurrentOrLast
+                    : candidate;
+            }
+
+            if (IsFightStageOpenToday(candidate, currentDay))
+            {
+                return candidate;
+            }
+
+            if (!useAlternateStage)
+            {
+                return string.Equals(stageResetMode, "Current", StringComparison.OrdinalIgnoreCase)
+                    ? FightStageSelection.CurrentOrLast
+                    : candidate;
+            }
+        }
+
+        var fallback = normalizedPlan[0];
+        if (string.Equals(fallback, "Annihilation", StringComparison.OrdinalIgnoreCase)
+            && useCustomAnnihilation
+            && !string.IsNullOrWhiteSpace(annihilationStage))
+        {
+            return "Annihilation";
+        }
+
+        return FightStageSelection.NormalizeStoredValue(fallback);
+    }
+
+    private static string NormalizeFightClientType(string? clientType)
+    {
+        if (string.IsNullOrWhiteSpace(clientType)
+            || string.Equals(clientType, "Official", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(clientType, "Bilibili", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Official";
+        }
+
+        return clientType.Trim();
+    }
+
+    private static bool IsFightStageOpenToday(string stageCode, DayOfWeek dayOfWeek)
+    {
+        return stageCode switch
+        {
+            "CE-6" => dayOfWeek is DayOfWeek.Tuesday or DayOfWeek.Thursday or DayOfWeek.Saturday or DayOfWeek.Sunday,
+            "AP-5" => dayOfWeek is DayOfWeek.Monday or DayOfWeek.Thursday or DayOfWeek.Saturday or DayOfWeek.Sunday,
+            "CA-5" => dayOfWeek is DayOfWeek.Tuesday or DayOfWeek.Wednesday or DayOfWeek.Friday or DayOfWeek.Sunday,
+            "SK-5" => dayOfWeek is DayOfWeek.Monday or DayOfWeek.Wednesday or DayOfWeek.Friday or DayOfWeek.Saturday,
+            "PR-A-1" or "PR-A-2" => dayOfWeek is DayOfWeek.Monday or DayOfWeek.Thursday or DayOfWeek.Friday or DayOfWeek.Sunday,
+            "PR-B-1" or "PR-B-2" => dayOfWeek is DayOfWeek.Monday or DayOfWeek.Tuesday or DayOfWeek.Friday or DayOfWeek.Saturday,
+            "PR-C-1" or "PR-C-2" => dayOfWeek is DayOfWeek.Wednesday or DayOfWeek.Thursday or DayOfWeek.Saturday or DayOfWeek.Sunday,
+            "PR-D-1" or "PR-D-2" => dayOfWeek is DayOfWeek.Tuesday or DayOfWeek.Wednesday or DayOfWeek.Saturday or DayOfWeek.Sunday,
+            _ => true,
         };
     }
 
@@ -888,6 +1112,57 @@ public static class TaskParamCompiler
         };
     }
 
+    public static (UserDataUpdateTaskParamsDto Dto, IReadOnlyList<TaskValidationIssue> Issues) ReadUserDataUpdate(
+        UnifiedTaskItem task,
+        bool strict)
+    {
+        var issues = new List<TaskValidationIssue>();
+        var parameters = task.Params ?? TaskModuleParameterDefaults.CreateUserDataUpdateDefaults();
+
+        var dto = new UserDataUpdateTaskParamsDto
+        {
+            UpdateOperBox = ReadBool(parameters, UserDataUpdateOperBox, strict, issues, "user_data_update.update_oper_box", true),
+            UpdateDepot = ReadBool(parameters, UserDataUpdateDepot, strict, issues, "user_data_update.update_depot", true),
+            TriggerInterval = NormalizeUserDataUpdateTriggerInterval(
+                ReadString(
+                    parameters,
+                    UserDataUpdateTriggerInterval,
+                    strict,
+                    issues,
+                    "user_data_update.trigger_interval",
+                    UserDataUpdateTaskParamsDto.TriggerEveryTime)),
+        };
+
+        return (dto, issues);
+    }
+
+    public static TaskCompileOutput CompileUserDataUpdate(UserDataUpdateTaskParamsDto dto)
+    {
+        var issues = new List<TaskValidationIssue>();
+        if (!dto.UpdateOperBox && !dto.UpdateDepot)
+        {
+            issues.Add(new TaskValidationIssue(
+                "UserDataUpdateNoTarget",
+                "user_data_update.target",
+                "User data update has no enabled sync target.",
+                Blocking: false));
+        }
+
+        var parameters = new JsonObject
+        {
+            [UserDataUpdateOperBox] = dto.UpdateOperBox,
+            [UserDataUpdateDepot] = dto.UpdateDepot,
+            [UserDataUpdateTriggerInterval] = NormalizeUserDataUpdateTriggerInterval(dto.TriggerInterval),
+        };
+
+        return new TaskCompileOutput
+        {
+            NormalizedType = TaskModuleTypes.UserDataUpdate,
+            Params = parameters,
+            Issues = issues,
+        };
+    }
+
     public static TaskCompileOutput CompileTask(
         UnifiedTaskItem task,
         UnifiedProfile profile,
@@ -904,6 +1179,7 @@ public static class TaskParamCompiler
             "Recruit" => CompileRecruitFromTask(task, profile, config, strict),
             "Roguelike" => CompileRoguelikeFromTask(task, profile, config, strict),
             "Reclamation" => CompileReclamationFromTask(task, profile, config, strict),
+            "UserDataUpdate" => CompileUserDataUpdateFromTask(task, strict),
             "Custom" => CompileCustomFromTask(task, profile, config, strict),
             _ => new TaskCompileOutput
             {
@@ -962,6 +1238,20 @@ public static class TaskParamCompiler
             NormalizedType = compiled.NormalizedType,
             Params = compiled.Params,
             Issues = allIssues,
+        };
+    }
+
+    private static TaskCompileOutput CompileUserDataUpdateFromTask(
+        UnifiedTaskItem task,
+        bool strict)
+    {
+        var (dto, readIssues) = ReadUserDataUpdate(task, strict);
+        var compiled = CompileUserDataUpdate(dto);
+        return new TaskCompileOutput
+        {
+            NormalizedType = compiled.NormalizedType,
+            Params = compiled.Params,
+            Issues = readIssues.Concat(compiled.Issues).ToList(),
         };
     }
 
@@ -1169,6 +1459,18 @@ public static class TaskParamCompiler
     {
         return value.IndexOfAny(['[', ']', '{', '}', ':', '"', '\r', '\n']) >= 0
                || value.Any(c => char.IsControl(c) && c != '\t');
+    }
+
+    private static string NormalizeUserDataUpdateTriggerInterval(string? value)
+    {
+        return (value ?? string.Empty).Trim() switch
+        {
+            var trigger when string.Equals(trigger, UserDataUpdateTaskParamsDto.TriggerDaily, StringComparison.OrdinalIgnoreCase)
+                => UserDataUpdateTaskParamsDto.TriggerDaily,
+            var trigger when string.Equals(trigger, UserDataUpdateTaskParamsDto.TriggerWeekly, StringComparison.OrdinalIgnoreCase)
+                => UserDataUpdateTaskParamsDto.TriggerWeekly,
+            _ => UserDataUpdateTaskParamsDto.TriggerEveryTime,
+        };
     }
 
     private static IReadOnlyList<string> ResolveMallBlacklistDefaults(string clientType)
@@ -1496,6 +1798,56 @@ public static class TaskParamCompiler
             issues.Add(new TaskValidationIssue("TaskFieldMissing", field, $"Required task field `{key}` is missing."));
         }
 
+        return fallback;
+    }
+
+    private static bool? ReadNullableBool(
+        JsonObject obj,
+        string key,
+        bool? fallback,
+        ICollection<TaskValidationIssue> issues,
+        string field)
+    {
+        if (!obj.TryGetPropertyValue(key, out var value))
+        {
+            return fallback;
+        }
+
+        if (value is null)
+        {
+            return null;
+        }
+
+        if (value is not JsonValue jsonValue)
+        {
+            issues.Add(new TaskValidationIssue("TaskFieldTypeInvalid", field, $"Task field `{key}` has incompatible type."));
+            return fallback;
+        }
+
+        if (jsonValue.TryGetValue(out bool parsed))
+        {
+            return parsed;
+        }
+
+        if (jsonValue.TryGetValue(out int parsedInt))
+        {
+            return parsedInt != 0;
+        }
+
+        if (jsonValue.TryGetValue(out string? text))
+        {
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return null;
+            }
+
+            if (bool.TryParse(text, out var parsedText))
+            {
+                return parsedText;
+            }
+        }
+
+        issues.Add(new TaskValidationIssue("TaskFieldTypeInvalid", field, $"Task field `{key}` has incompatible type."));
         return fallback;
     }
 

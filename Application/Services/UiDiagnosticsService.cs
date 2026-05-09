@@ -9,6 +9,7 @@ namespace MAAUnified.Application.Services;
 public sealed class UiDiagnosticsService
 {
     private const string StartupLogFileName = "avalonia-ui-startup.log";
+    private const long MaxBundleEntrySizeBytes = 20L * 1024L * 1024L;
     private const string PerfEventTypeUiThreadLag = "ui_thread_lag";
     private const string PerfEventTypeNavigationTiming = "navigation_timing";
     private const string PerfEventTypeScreenshotTest = "screenshot_test";
@@ -25,12 +26,14 @@ public sealed class UiDiagnosticsService
         ErrorLogPath = Path.Combine(_debugDirectory, "avalonia-ui-errors.log");
         EventLogPath = Path.Combine(_debugDirectory, "avalonia-ui-events.log");
         PlatformEventLogPath = Path.Combine(_debugDirectory, "avalonia-platform-events.log");
-        Directory.CreateDirectory(_debugDirectory);
 
-        uiLogService.LogReceived += log =>
+        if (global::MAAUnified.Platform.MaaUnifiedBuildFlavor.CapturesVerboseDiagnostics)
         {
-            _ = WriteLineAsync(EventLogPath, $"{log.Timestamp:O} [{log.Level}] {log.Message}");
-        };
+            uiLogService.LogReceived += log =>
+            {
+                _ = WriteLineAsync(EventLogPath, $"{log.Timestamp:O} [{log.Level}] {log.Message}");
+            };
+        }
     }
 
     public string ErrorLogPath { get; }
@@ -90,6 +93,11 @@ public sealed class UiDiagnosticsService
 
     public Task RecordEventAsync(string scope, string message, CancellationToken cancellationToken = default)
     {
+        if (!global::MAAUnified.Platform.MaaUnifiedBuildFlavor.CapturesVerboseDiagnostics)
+        {
+            return Task.CompletedTask;
+        }
+
         return WriteLineAsync(EventLogPath, $"{DateTimeOffset.UtcNow:O} [EVENT] [{scope}] {message}", cancellationToken);
     }
 
@@ -172,6 +180,11 @@ public sealed class UiDiagnosticsService
         TimeSpan? minInterval = null,
         CancellationToken cancellationToken = default)
     {
+        if (!global::MAAUnified.Platform.MaaUnifiedBuildFlavor.CapturesVerboseDiagnostics)
+        {
+            return Task.CompletedTask;
+        }
+
         if (string.IsNullOrWhiteSpace(eventType) || string.IsNullOrWhiteSpace(scope))
         {
             return Task.CompletedTask;
@@ -193,12 +206,38 @@ public sealed class UiDiagnosticsService
         return WriteLineAsync(EventLogPath, line, cancellationToken);
     }
 
+    public Task RecordTemporaryTimingAsync(
+        string scope,
+        double elapsedMs,
+        IReadOnlyDictionary<string, object?>? fields = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(scope))
+        {
+            return Task.CompletedTask;
+        }
+
+        var timestamp = DateTimeOffset.UtcNow;
+        var payload = new UiPerformanceEventLogLine(
+            timestamp,
+            "temporary_timing",
+            scope.Trim(),
+            Math.Max(0, elapsedMs),
+            fields is null || fields.Count == 0 ? null : new Dictionary<string, object?>(fields));
+        return WriteLineAsync(EventLogPath, $"{timestamp:O} [TEMP-PERF] {JsonSerializer.Serialize(payload)}", cancellationToken);
+    }
+
     public Task RecordPlatformEventAsync(
         PlatformCapabilityId capability,
         string action,
         PlatformOperationResult result,
         CancellationToken cancellationToken = default)
     {
+        if (!global::MAAUnified.Platform.MaaUnifiedBuildFlavor.CapturesVerboseDiagnostics)
+        {
+            return Task.CompletedTask;
+        }
+
         var payload = new PlatformEventLogLine(
             DateTimeOffset.UtcNow,
             capability,
@@ -219,6 +258,11 @@ public sealed class UiDiagnosticsService
         PlatformOperationResult<T> result,
         CancellationToken cancellationToken = default)
     {
+        if (!global::MAAUnified.Platform.MaaUnifiedBuildFlavor.CapturesVerboseDiagnostics)
+        {
+            return Task.CompletedTask;
+        }
+
         var payload = new PlatformEventLogLine(
             DateTimeOffset.UtcNow,
             capability,
@@ -243,36 +287,79 @@ public sealed class UiDiagnosticsService
         }
 
         using var archive = ZipFile.Open(outputPath, ZipArchiveMode.Create);
+        var archivedEntryNames = new HashSet<string>(StringComparer.Ordinal);
         AddFileOrPlaceholder(
             archive,
+            archivedEntryNames,
             Path.Combine(baseDirectory, "config", "avalonia.json"),
             "config/avalonia.json",
             "avalonia.json not found when bundle was generated.");
         AddFileOrPlaceholder(
             archive,
+            archivedEntryNames,
             Path.Combine(baseDirectory, "debug", "config-import-report.json"),
             "debug/config-import-report.json",
             "config-import-report.json not found when bundle was generated.");
         AddFileOrPlaceholder(
             archive,
+            archivedEntryNames,
             StartupLogPath,
             "debug/avalonia-ui-startup.log",
             "UI startup log is empty or missing.");
         AddFileOrPlaceholder(
             archive,
+            archivedEntryNames,
             ErrorLogPath,
             "debug/avalonia-ui-errors.log",
             "UI error log is empty or missing.");
-        AddFileOrPlaceholder(
+        if (global::MAAUnified.Platform.MaaUnifiedBuildFlavor.CapturesVerboseDiagnostics)
+        {
+            AddFileOrPlaceholder(
+                archive,
+                archivedEntryNames,
+                EventLogPath,
+                "debug/avalonia-ui-events.log",
+                "UI event log is empty or missing.");
+            AddFileOrPlaceholder(
+                archive,
+                archivedEntryNames,
+                PlatformEventLogPath,
+                "debug/avalonia-platform-events.log",
+                "Platform event log is empty or missing.");
+        }
+
+        AddDirectoryEntries(
             archive,
-            EventLogPath,
-            "debug/avalonia-ui-events.log",
-            "UI event log is empty or missing.");
-        AddFileOrPlaceholder(
+            archivedEntryNames,
+            Path.Combine(baseDirectory, "config"),
+            "config",
+            includeFile: static (_, fileName) => !fileName.EndsWith(".tmp", StringComparison.OrdinalIgnoreCase));
+        AddDirectoryEntries(
             archive,
-            PlatformEventLogPath,
-            "debug/avalonia-platform-events.log",
-            "Platform event log is empty or missing.");
+            archivedEntryNames,
+            Path.Combine(baseDirectory, "debug"),
+            "debug",
+            includeFile: static (fullPath, fileName) =>
+                !fileName.StartsWith("issue-report-", StringComparison.OrdinalIgnoreCase)
+                && !fileName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(Path.GetFileName(fullPath), "avalonia-ui-errors.log", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(Path.GetFileName(fullPath), "avalonia-ui-startup.log", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(Path.GetFileName(fullPath), "avalonia-ui-events.log", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(Path.GetFileName(fullPath), "avalonia-platform-events.log", StringComparison.OrdinalIgnoreCase));
+        AddDirectoryEntries(
+            archive,
+            archivedEntryNames,
+            Path.Combine(baseDirectory, "cache"),
+            "cache",
+            includeFile: static (_, _) => true);
+        AddDirectoryEntries(
+            archive,
+            archivedEntryNames,
+            Path.Combine(baseDirectory, "resource"),
+            "resource",
+            includeFile: static (fullPath, fileName) =>
+                fileName.Contains("_custom.", StringComparison.OrdinalIgnoreCase)
+                || fullPath.Contains($"{Path.DirectorySeparatorChar}custom{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase));
 
         await RecordEventAsync("IssueReport", $"Support bundle generated: {outputPath}", cancellationToken);
         return outputPath;
@@ -299,10 +386,16 @@ public sealed class UiDiagnosticsService
 
     private static void AddFileOrPlaceholder(
         ZipArchive archive,
+        ISet<string> archivedEntryNames,
         string filePath,
         string entryName,
         string placeholderMessage)
     {
+        if (!archivedEntryNames.Add(entryName))
+        {
+            return;
+        }
+
         if (File.Exists(filePath))
         {
             archive.CreateEntryFromFile(filePath, entryName);
@@ -313,6 +406,46 @@ public sealed class UiDiagnosticsService
         using var stream = entry.Open();
         using var writer = new StreamWriter(stream, Encoding.UTF8);
         writer.WriteLine(placeholderMessage);
+    }
+
+    private static void AddDirectoryEntries(
+        ZipArchive archive,
+        ISet<string> archivedEntryNames,
+        string directoryPath,
+        string entryRoot,
+        Func<string, string, bool> includeFile)
+    {
+        if (!Directory.Exists(directoryPath))
+        {
+            return;
+        }
+
+        foreach (var filePath in Directory.EnumerateFiles(directoryPath, "*", SearchOption.AllDirectories))
+        {
+            var fileName = Path.GetFileName(filePath);
+            if (!includeFile(filePath, fileName))
+            {
+                continue;
+            }
+
+            var fileInfo = new FileInfo(filePath);
+            if (!fileInfo.Exists || fileInfo.Length <= 0 || fileInfo.Length > MaxBundleEntrySizeBytes)
+            {
+                continue;
+            }
+
+            var relativePath = Path.GetRelativePath(directoryPath, filePath)
+                .Replace(Path.DirectorySeparatorChar, '/');
+            var entryName = string.IsNullOrWhiteSpace(relativePath)
+                ? $"{entryRoot}/{fileName}"
+                : $"{entryRoot}/{relativePath}";
+            if (!archivedEntryNames.Add(entryName))
+            {
+                continue;
+            }
+
+            archive.CreateEntryFromFile(filePath, entryName);
+        }
     }
 
     private bool ShouldSkipPerformanceEvent(

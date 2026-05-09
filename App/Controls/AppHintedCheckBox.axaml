@@ -1,0 +1,40 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:MAAUnified.App.Controls"
+             x:Class="MAAUnified.App.Controls.AppHintedCheckBox"
+             x:Name="Root"
+             ClipToBounds="False">
+  <UserControl.Styles>
+    <Style Selector="Grid.hinted-checkbox-root">
+      <Setter Property="MinHeight" Value="24" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="CheckBox.hinted-checkbox-check">
+      <Setter Property="Grid.Column" Value="0" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="controls|TooltipHint.hinted-checkbox-tip">
+      <Setter Property="Grid.Column" Value="1" />
+      <Setter Property="Margin" Value="{DynamicResource MAA.App.Settings.HintMargin}" />
+      <Setter Property="HorizontalAlignment" Value="Left" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+  </UserControl.Styles>
+
+  <Grid Classes="hinted-checkbox-root"
+        ColumnDefinitions="Auto,Auto">
+    <CheckBox x:Name="PART_CheckBox"
+              Classes="app-checkbox hinted-checkbox-check"
+              Content="{Binding Text, ElementName=Root}"
+              IsEnabled="{Binding CheckBoxIsEnabled, ElementName=Root}"
+              IsChecked="{Binding IsChecked, ElementName=Root, Mode=TwoWay}"
+              IsThreeState="{Binding IsThreeState, ElementName=Root}" />
+
+    <controls:TooltipHint Classes="hinted-checkbox-tip"
+                          IsVisible="{Binding HasTip, ElementName=Root}"
+                          Tip="{Binding Tip, ElementName=Root}" />
+  </Grid>
+</UserControl>

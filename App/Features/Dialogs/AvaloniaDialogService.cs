@@ -41,7 +41,7 @@ public sealed class AvaloniaDialogService : IAppDialogService
         dialog.ApplyRequest(normalizedRequest);
         using var chromeBinding = AttachChromeLocalization(dialog, normalizedRequest.Title, normalizedRequest.Chrome);
         var semantic = await dialog.ShowDialog<DialogReturnSemantic?>(owner) ?? DialogReturnSemantic.Close;
-        var payload = semantic == DialogReturnSemantic.Confirm ? dialog.BuildPayload() : null;
+        var payload = semantic == DialogReturnSemantic.Cancel ? null : dialog.BuildPayload();
         await _runtime.DialogFeatureService.RecordDialogActionAsync(token, "return", semantic.ToString(), cancellationToken);
         await _runtime.DialogFeatureService.CompleteDialogAsync(token, semantic, "announcement-dialog-complete", cancellationToken);
         return new DialogCompletion<AnnouncementDialogPayload>(semantic, payload, "announcement-dialog-complete");
@@ -253,13 +253,7 @@ public sealed class AvaloniaDialogService : IAppDialogService
             normalizedRequest.Language,
             normalizedRequest.CountdownSeconds);
         using var chromeBinding = AttachChromeLocalization(dialog, normalizedRequest.Title, normalizedRequest.Chrome);
-        var confirmed = await dialog.ShowDialog<bool?>(owner);
-        var semantic = confirmed switch
-        {
-            true => DialogReturnSemantic.Confirm,
-            false => DialogReturnSemantic.Cancel,
-            null => DialogReturnSemantic.Close,
-        };
+        var semantic = await dialog.ShowDialog<DialogReturnSemantic?>(owner) ?? DialogReturnSemantic.Close;
         var payload = semantic == DialogReturnSemantic.Confirm
             ? new WarningConfirmDialogPayload(true)
             : null;
@@ -267,6 +261,7 @@ public sealed class AvaloniaDialogService : IAppDialogService
         {
             DialogReturnSemantic.Confirm => "warning-confirm-dialog-confirmed",
             DialogReturnSemantic.Cancel => "warning-confirm-dialog-cancelled",
+            DialogReturnSemantic.Details => "warning-confirm-dialog-details",
             _ => "warning-confirm-dialog-closed",
         };
 
@@ -373,13 +368,13 @@ public sealed class AvaloniaDialogService : IAppDialogService
                 return;
             }
 
-            if (Dispatcher.UIThread.CheckAccess() || Avalonia.Application.Current is null)
+            if (Avalonia.Application.Current is null)
             {
                 Apply(e.CurrentLanguage);
                 return;
             }
 
-            Dispatcher.UIThread.Post(() => Apply(e.CurrentLanguage));
+            Dispatcher.UIThread.Post(() => Apply(e.CurrentLanguage), DispatcherPriority.Background);
         }
 
         private void Apply(string? language)

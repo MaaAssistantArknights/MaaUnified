@@ -1,54 +1,162 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:MAAUnified.App.Controls"
              x:Class="MAAUnified.App.Features.Advanced.StageManagerView">
-  <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,*" ColumnDefinitions="*">
-    <TextBlock Classes="section-title" Text="{Binding Texts[Toolbox.Advanced.StageManager.Title]}" />
+  <UserControl.Styles>
+    <Style Selector="StackPanel.stage-manager-section-stack">
+      <Setter Property="Spacing" Value="14" />
+    </Style>
 
-    <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto,Auto,Auto" RowDefinitions="Auto">
-      <TextBlock VerticalAlignment="Center" Text="{Binding Texts[Toolbox.Advanced.StageManager.ClientType]}" />
-      <ComboBox Grid.Column="1"
-                ItemsSource="{Binding ClientTypeOptions}"
-                SelectedItem="{Binding ClientType}" />
-      <Button Grid.Column="2" Classes="wpf-button" Content="{Binding Texts[Toolbox.Advanced.StageManager.RefreshLocal]}" Click="OnRefreshLocalClick" />
-      <Button Grid.Column="3" Classes="wpf-button" Content="{Binding Texts[Toolbox.Advanced.StageManager.RefreshWeb]}" Click="OnRefreshWebClick" />
-      <Button Grid.Column="4" Classes="wpf-button" Content="{Binding Texts[Toolbox.Advanced.StageManager.Validate]}" Click="OnValidateClick" />
-    </Grid>
+    <Style Selector="StackPanel.stage-manager-card-stack">
+      <Setter Property="Spacing" Value="10" />
+    </Style>
 
-    <Grid Grid.Row="2" ColumnDefinitions="Auto,*">
-      <TextBlock VerticalAlignment="Top" Text="{Binding Texts[Toolbox.Advanced.StageManager.StageCodes]}" />
-      <TextBox Text="{Binding StageCodesText}"
-               AcceptsReturn="True"
-               Height="120"
-               Watermark="{Binding Texts[Toolbox.Advanced.StageManager.StageCodes.Watermark]}"
-               TextWrapping="Wrap" />
-    </Grid>
+    <Style Selector="StackPanel.stage-manager-actions">
+      <Setter Property="Orientation" Value="Horizontal" />
+      <Setter Property="Spacing" Value="10" />
+    </Style>
 
-    <Grid Grid.Row="3" ColumnDefinitions="Auto,*">
-      <TextBlock VerticalAlignment="Top" Text="{Binding Texts[Toolbox.Advanced.StageManager.LocalResources]}" />
-      <TextBox Text="{Binding LocalStageCodesText}"
-               AcceptsReturn="True"
-               Height="90"
-               IsReadOnly="True"
-               TextWrapping="Wrap" />
-    </Grid>
+    <Style Selector="TextBlock.stage-manager-card-title">
+      <Setter Property="FontSize" Value="16" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
+    </Style>
 
-    <Grid Grid.Row="4" ColumnDefinitions="Auto,*">
-      <TextBlock VerticalAlignment="Top" Text="{Binding Texts[Toolbox.Advanced.StageManager.WebResources]}" />
-      <TextBox Text="{Binding WebStageCodesText}"
-               AcceptsReturn="True"
-               Height="90"
-               IsReadOnly="True"
-               TextWrapping="Wrap" />
-    </Grid>
+    <Style Selector="TextBlock.stage-manager-field-label">
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Secondary}" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
 
-    <Grid Grid.Row="5" ColumnDefinitions="Auto,Auto,Auto,*">
-      <CheckBox Content="{Binding Texts[Toolbox.Advanced.StageManager.AutoIterate]}" IsChecked="{Binding AutoIterate}" />
-      <TextBlock Grid.Column="1" VerticalAlignment="Center" Text="{Binding Texts[Toolbox.Advanced.StageManager.LastSelectedStage]}" />
-      <TextBox Grid.Column="2" Text="{Binding LastSelectedStage}" Width="180" />
-      <Button Grid.Column="3" Classes="wpf-button" Content="{Binding Texts[Toolbox.Advanced.StageManager.Save]}" HorizontalAlignment="Left" Click="OnSaveClick" />
-    </Grid>
+    <Style Selector="Border.stage-manager-card">
+      <Setter Property="Padding" Value="16" />
+    </Style>
 
-    <TextBlock Grid.Row="6" Classes="long-wrap" Text="{Binding StatusMessage}" />
-    <TextBlock Grid.Row="7" Classes="state-error long-wrap" Text="{Binding LastErrorMessage}" />
-  </Grid>
+    <Style Selector="TextBox.stage-manager-editor">
+      <Setter Property="MinHeight" Value="180" />
+    </Style>
+
+    <Style Selector="TextBox.stage-manager-reference">
+      <Setter Property="MinHeight" Value="140" />
+    </Style>
+  </UserControl.Styles>
+
+  <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <StackPanel Margin="4"
+                Classes="settings-form">
+      <Border Classes="app-surface app-section"
+              Margin="{DynamicResource MAA.Thickness.Settings.SectionTopMargin}">
+        <StackPanel Classes="stage-manager-section-stack">
+          <TextBlock Classes="section-title"
+                     Text="{Binding Texts[Toolbox.Advanced.StageManager.Title]}" />
+
+          <StackPanel Spacing="6">
+            <TextBlock Classes="app-caption stage-manager-field-label"
+                       Text="{Binding Texts[Toolbox.Advanced.StageManager.ClientType]}" />
+            <controls:AppSelect MinWidth="220"
+                                HorizontalAlignment="Left"
+                                ItemsSource="{Binding ClientTypeOptions}"
+                                SelectedItem="{Binding ClientType}" />
+          </StackPanel>
+
+          <WrapPanel Classes="tool-action-bar">
+            <Button Classes="app-button app-secondary"
+                    Content="{Binding Texts[Toolbox.Advanced.StageManager.RefreshLocal]}"
+                    Click="OnRefreshLocalClick" />
+            <Button Classes="app-button app-secondary"
+                    Content="{Binding Texts[Toolbox.Advanced.StageManager.RefreshWeb]}"
+                    Click="OnRefreshWebClick" />
+            <Button Classes="app-button app-primary"
+                    Content="{Binding Texts[Toolbox.Advanced.StageManager.Validate]}"
+                    Click="OnValidateClick" />
+          </WrapPanel>
+        </StackPanel>
+      </Border>
+
+      <Border Classes="app-surface app-section"
+              Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}">
+        <Border Classes="app-surface app-card stage-manager-card">
+          <StackPanel Classes="stage-manager-card-stack">
+            <TextBlock Classes="stage-manager-card-title"
+                       Text="{Binding Texts[Toolbox.Advanced.StageManager.StageCodes]}" />
+            <controls:AppTextInput Classes="settings-input-block stage-manager-editor"
+                                   Text="{Binding StageCodesText}"
+                                   AcceptsReturn="True"
+                                   Watermark="{Binding Texts[Toolbox.Advanced.StageManager.StageCodes.Watermark]}"
+                                   TextWrapping="Wrap" />
+          </StackPanel>
+        </Border>
+      </Border>
+
+      <Border Classes="app-surface app-section"
+              Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}">
+        <WrapPanel Classes="settings-wrap">
+          <Border Classes="tool-compare-card">
+            <StackPanel Classes="stage-manager-card-stack">
+              <Border Classes="app-badge"
+                      HorizontalAlignment="Left">
+                <TextBlock Classes="app-badge-text"
+                           Text="{Binding Texts[Toolbox.Advanced.StageManager.LocalResources]}" />
+              </Border>
+              <controls:AppTextInput Classes="settings-input-block stage-manager-reference"
+                                     Text="{Binding LocalStageCodesText}"
+                                     AcceptsReturn="True"
+                                     IsReadOnly="True"
+                                     TextWrapping="Wrap" />
+            </StackPanel>
+          </Border>
+
+          <Border Classes="tool-compare-card">
+            <StackPanel Classes="stage-manager-card-stack">
+              <Border Classes="app-badge"
+                      HorizontalAlignment="Left">
+                <TextBlock Classes="app-badge-text"
+                           Text="{Binding Texts[Toolbox.Advanced.StageManager.WebResources]}" />
+              </Border>
+              <controls:AppTextInput Classes="settings-input-block stage-manager-reference"
+                                     Text="{Binding WebStageCodesText}"
+                                     AcceptsReturn="True"
+                                     IsReadOnly="True"
+                                     TextWrapping="Wrap" />
+            </StackPanel>
+          </Border>
+        </WrapPanel>
+      </Border>
+
+      <Border Classes="app-surface app-section"
+              Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}">
+        <WrapPanel Classes="settings-wrap">
+          <Border Classes="app-surface app-card stage-manager-card">
+            <CheckBox Classes="app-checkbox"
+                      Content="{Binding Texts[Toolbox.Advanced.StageManager.AutoIterate]}"
+                      IsChecked="{Binding AutoIterate}" />
+          </Border>
+
+          <Border Classes="app-surface app-card stage-manager-card">
+            <StackPanel Classes="stage-manager-card-stack">
+              <TextBlock Classes="app-caption stage-manager-field-label"
+                         Text="{Binding Texts[Toolbox.Advanced.StageManager.LastSelectedStage]}" />
+              <StackPanel Orientation="Horizontal"
+                          Spacing="12">
+                <controls:AppTextInput Width="220"
+                                       Text="{Binding LastSelectedStage}" />
+                <Button Classes="app-button app-primary"
+                        Content="{Binding Texts[Toolbox.Advanced.StageManager.Save]}"
+                        Click="OnSaveClick" />
+              </StackPanel>
+            </StackPanel>
+          </Border>
+        </WrapPanel>
+      </Border>
+
+      <Border Classes="app-surface app-section"
+              Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}">
+        <StackPanel Spacing="8">
+          <TextBlock Classes="app-body long-wrap"
+                     Text="{Binding StatusMessage}" />
+          <TextBlock Classes="state-error long-wrap"
+                     Text="{Binding LastErrorMessage}" />
+        </StackPanel>
+      </Border>
+    </StackPanel>
+  </ScrollViewer>
 </UserControl>

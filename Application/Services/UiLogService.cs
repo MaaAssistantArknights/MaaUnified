@@ -67,6 +67,7 @@ public sealed class UiLogService
 
     public void SetVerboseEnabled(bool enabled)
     {
+        enabled = global::MAAUnified.Platform.MaaUnifiedBuildFlavor.ExposesDeveloperTools && enabled;
         if (_verboseEnabled == enabled)
         {
             return;

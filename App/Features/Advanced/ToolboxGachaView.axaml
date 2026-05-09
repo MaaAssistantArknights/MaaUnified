@@ -1,0 +1,196 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="MAAUnified.App.Features.Advanced.ToolboxGachaView">
+  <UserControl.Styles>
+    <Style Selector="StackPanel.toolbox-gacha-section">
+      <Setter Property="Spacing" Value="14" />
+    </Style>
+
+    <Style Selector="StackPanel.toolbox-gacha-section-stack">
+      <Setter Property="Spacing" Value="14" />
+    </Style>
+
+    <Style Selector="TextBlock.toolbox-gacha-summary">
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="TextAlignment" Value="Center" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <Style Selector="Border.toolbox-gacha-preview-frame">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="CornerRadius" Value="0" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="VerticalAlignment" Value="Stretch" />
+    </Style>
+
+    <Style Selector="Image.toolbox-gacha-preview-image">
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="VerticalAlignment" Value="Stretch" />
+    </Style>
+
+    <Style Selector="Border.toolbox-gacha-fps-badge">
+      <Setter Property="HorizontalAlignment" Value="Left" />
+      <Setter Property="VerticalAlignment" Value="Top" />
+      <Setter Property="Margin" Value="16" />
+    </Style>
+
+    <Style Selector="TextBlock.toolbox-gacha-disclaimer-lead">
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="TextAlignment" Value="Center" />
+      <Setter Property="FontSize" Value="26" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <Style Selector="TextBlock.toolbox-gacha-disclaimer-body">
+      <Setter Property="MaxWidth" Value="{DynamicResource MAA.Size.Toolbox.WarningTextMaxWidth}" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="TextAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="Button.toolbox-gacha-disclaimer-action">
+      <Setter Property="Width" Value="{DynamicResource MAA.Size.Toolbox.WarningButtonWidth}" />
+      <Setter Property="Height" Value="{DynamicResource MAA.Size.Toolbox.WarningButtonHeight}" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="CheckBox.toolbox-gacha-disclaimer-toggle">
+      <Setter Property="HorizontalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="StackPanel.toolbox-gacha-actions">
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Spacing" Value="12" />
+    </Style>
+
+    <Style Selector="Grid.toolbox-gacha-idle-control-panel">
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="Button.toolbox-gacha-action">
+      <Setter Property="Width" Value="{DynamicResource MAA.Size.Toolbox.ActionButtonWidth}" />
+      <Setter Property="Height" Value="{DynamicResource MAA.App.Size.ButtonHeight}" />
+    </Style>
+  </UserControl.Styles>
+
+  <Grid x:Name="GachaRootGrid"
+        Margin="{DynamicResource MAA.Thickness.Toolbox.PageMarginFlat}"
+        RowDefinitions="Auto,*,Auto"
+        ColumnDefinitions="*"
+        ClipToBounds="True">
+    <StackPanel Grid.Row="0"
+                Grid.Column="0"
+                Classes="toolbox-gacha-section"
+                IsVisible="{Binding ShowGachaControls}">
+      <TextBlock Classes="app-window-subtitle long-wrap toolbox-gacha-summary"
+                 Text="{Binding GachaInfo}" />
+    </StackPanel>
+
+    <Grid x:Name="GachaPreviewArea"
+          Grid.Row="1"
+          Grid.Column="0"
+          Margin="0,14,0,0"
+          Classes="toolbox-gacha-preview-area"
+          IsVisible="{Binding ShowGachaPreview}">
+        <Border Classes="toolbox-gacha-preview-frame">
+          <Image x:Name="GachaPreviewImage"
+                 Classes="toolbox-gacha-preview-image"
+                 Source="{Binding PeepImage}"
+                 Stretch="Uniform" />
+        </Border>
+
+        <Border x:Name="GachaFpsBadge"
+                Classes="app-badge toolbox-gacha-fps-badge">
+          <TextBlock Classes="app-badge-text"
+                     Text="{Binding PeepScreenFps, StringFormat='{}{0:F2} FPS'}" />
+        </Border>
+    </Grid>
+
+    <Grid Grid.Row="1"
+          Grid.Column="0"
+          Classes="toolbox-gacha-idle-control-panel"
+          IsVisible="{Binding ShowGachaIdleControls}">
+      <StackPanel Classes="toolbox-gacha-actions"
+                  Orientation="Horizontal">
+        <Button Classes="app-button app-secondary toolbox-gacha-action"
+                Content="{Binding GachaDrawOnceText}"
+                Click="OnGachaOnceClick" />
+        <Button Classes="app-button app-secondary toolbox-gacha-action"
+                Content="{Binding GachaDrawTenText}"
+                Click="OnGachaTenTimesClick" />
+        <Button Classes="app-button app-primary toolbox-gacha-action"
+                Content="{Binding PeepCommandText}"
+                IsEnabled="{Binding CanTogglePeep}"
+                Click="OnGachaPeepClick" />
+      </StackPanel>
+    </Grid>
+
+    <ScrollViewer Grid.Row="1"
+                  Grid.Column="0"
+                  Margin="0,14,0,0"
+                  HorizontalScrollBarVisibility="Disabled"
+                  VerticalScrollBarVisibility="Auto"
+                  IsVisible="{Binding GachaShowDisclaimer}">
+      <StackPanel Classes="toolbox-gacha-section toolbox-gacha-section-stack">
+        <TextBlock Classes="toolbox-gacha-disclaimer-lead"
+                   Text="{Binding GachaDisclaimerLeadText}" />
+
+        <TextBlock x:Name="GachaDisclaimerEmphasisText"
+                   Margin="{DynamicResource MAA.Thickness.Toolbox.WarningEmphasisMargin}"
+                   HorizontalAlignment="Center"
+                   TextAlignment="Center"
+                   FontSize="{DynamicResource MAA.FontSize.Toolbox.WarningEmphasis}"
+                   FontWeight="Bold"
+                   Text="{Binding GachaDisclaimerEmphasisText}"
+                   TextWrapping="Wrap">
+          <TextBlock.Foreground>
+            <LinearGradientBrush StartPoint="0%,50%"
+                                 EndPoint="100%,50%"
+                                 SpreadMethod="Repeat">
+              <GradientStop Offset="0.00" Color="#F05A22" />
+              <GradientStop Offset="0.50" Color="#E0A72B" />
+              <GradientStop Offset="1.00" Color="#2C6E91" />
+            </LinearGradientBrush>
+          </TextBlock.Foreground>
+        </TextBlock>
+
+        <TextBlock Classes="app-body long-wrap toolbox-gacha-disclaimer-body"
+                   Text="{Binding GachaDisclaimerBodyText}" />
+
+        <Button Classes="app-button app-primary toolbox-gacha-disclaimer-action"
+                Content="{Binding GachaDisclaimerAcknowledgeText}"
+                Click="OnGachaAgreeDisclaimerClick" />
+
+        <CheckBox Classes="app-checkbox toolbox-gacha-disclaimer-toggle"
+                  Content="{Binding GachaDisclaimerNoMoreText}"
+                  IsChecked="{Binding GachaShowDisclaimerNoMore}" />
+      </StackPanel>
+    </ScrollViewer>
+
+    <Grid x:Name="GachaControlPanel"
+          Grid.Row="2"
+          Grid.Column="0"
+          Margin="0,18,0,0"
+          HorizontalAlignment="Stretch"
+          VerticalAlignment="Bottom"
+          IsVisible="{Binding ShowGachaPreview}">
+      <StackPanel x:Name="GachaActionButtonGroup"
+                  Classes="toolbox-gacha-actions"
+                  Orientation="Horizontal">
+        <Button Classes="app-button app-secondary toolbox-gacha-action"
+                Content="{Binding GachaDrawOnceText}"
+                Click="OnGachaOnceClick" />
+        <Button Classes="app-button app-secondary toolbox-gacha-action"
+                Content="{Binding GachaDrawTenText}"
+                Click="OnGachaTenTimesClick" />
+        <Button Classes="app-button app-primary toolbox-gacha-action"
+                Content="{Binding PeepCommandText}"
+                IsEnabled="{Binding CanTogglePeep}"
+                Click="OnGachaPeepClick" />
+      </StackPanel>
+    </Grid>
+  </Grid>
+</UserControl>

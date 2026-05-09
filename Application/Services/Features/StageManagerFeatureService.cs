@@ -5,6 +5,7 @@ using System.Text.Json.Nodes;
 using MAAUnified.Application.Configuration;
 using MAAUnified.Application.Models;
 using MAAUnified.Application.Services.Localization;
+using MAAUnified.Compat.Runtime;
 
 namespace MAAUnified.Application.Services.Features;
 
@@ -21,7 +22,7 @@ public sealed class StageManagerFeatureService : IStageManagerFeatureService
     private readonly Dictionary<string, ResourceJsonCacheEntry> _resourceJsonCache = new(StringComparer.OrdinalIgnoreCase);
 
     public StageManagerFeatureService()
-        : this(configService: null, baseDirectory: AppContext.BaseDirectory)
+        : this(configService: null, baseDirectory: RuntimeLayout.ResolveRuntimeBaseDirectory())
     {
     }
 
@@ -561,7 +562,7 @@ public sealed class StageManagerFeatureService : IStageManagerFeatureService
             }
         }
 
-        return Path.GetFullPath(AppContext.BaseDirectory);
+        return RuntimeLayout.ResolveRuntimeBaseDirectory();
     }
 
     private IEnumerable<string> EnumerateBaseDirectories()

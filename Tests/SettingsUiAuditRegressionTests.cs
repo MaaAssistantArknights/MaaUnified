@@ -27,22 +27,16 @@ public sealed class SettingsUiAuditRegressionTests
     }
 
     [Fact]
-    public async Task HotKeyEditor_ShouldBeRetiredFromSettingsRoot()
+    public async Task HotKeyEditor_ShouldBeRemovedAndUnreferencedFromSettingsRoot()
     {
         var root = GetMaaUnifiedRoot();
-        var editorXaml = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "HotKeyEditorView.axaml"));
-        var editorCode = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "HotKeyEditorView.axaml.cs"));
+        var editorXamlPath = Path.Combine(root, "App", "Features", "Settings", "HotKeyEditorView.axaml");
+        var editorCodePath = Path.Combine(root, "App", "Features", "Settings", "HotKeyEditorView.axaml.cs");
         var settingsXaml = File.ReadAllText(Path.Combine(root, "App", "Features", "Root", "SettingsView.axaml"));
         var settingsCode = File.ReadAllText(Path.Combine(root, "App", "Features", "Root", "SettingsView.axaml.cs"));
 
-        Assert.Contains("<Grid />", editorXaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("ShowGuiHotkeyState", editorXaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("LinkStartHotkeyState", editorXaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("OnApplyHotkeysClick", editorXaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("OnBeginCaptureClick", editorCode, StringComparison.Ordinal);
-        Assert.DoesNotContain("OnClearHotkeyClick", editorCode, StringComparison.Ordinal);
-        Assert.DoesNotContain("OnHotkeyCaptureKeyDown", editorCode, StringComparison.Ordinal);
-        Assert.DoesNotContain("RegisterHotkeysAsync", editorCode, StringComparison.Ordinal);
+        Assert.False(File.Exists(editorXamlPath));
+        Assert.False(File.Exists(editorCodePath));
 
         Assert.DoesNotContain("SectionHotKeyEditor", settingsXaml, StringComparison.Ordinal);
         Assert.DoesNotContain("settingsViews:HotKeyEditorView", settingsXaml, StringComparison.Ordinal);
@@ -73,6 +67,32 @@ public sealed class SettingsUiAuditRegressionTests
         Assert.DoesNotContain("启动时检查更新", xaml, StringComparison.Ordinal);
         Assert.Contains("IsChecked=\"{Binding VersionUpdateStartupCheck}\"", startupCheckBlock, StringComparison.Ordinal);
         Assert.DoesNotContain("IsEnabled=\"False\"", startupCheckBlock, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SettingsInlineActionRows_ShouldKeepRelatedControlsGroupedTightly()
+    {
+        var root = GetMaaUnifiedRoot();
+        var styles = File.ReadAllText(Path.Combine(root, "App", "Styles", "SettingsShellStyles.axaml"));
+        var connect = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "ConnectSettingsView.axaml"));
+        var background = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "BackgroundSettingsView.axaml"));
+        var start = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "StartSettingsView.axaml"));
+        var remote = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "RemoteControlSettingsView.axaml"));
+        var versionUpdate = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "VersionUpdateSettingsView.axaml"));
+
+        Assert.Contains("StackPanel.settings-page-inline-field-group", styles, StringComparison.Ordinal);
+
+        Assert.Contains("Classes=\"settings-page-inline-field-group\"", connect, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"settings-page-inline-field-group\"", background, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"settings-page-inline-field-group\"", start, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"settings-page-inline-field-group\"", remote, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"settings-page-inline-field-group\"", versionUpdate, StringComparison.Ordinal);
+
+        Assert.DoesNotContain("ColumnDefinitions=\"132,*,Auto\"", connect, StringComparison.Ordinal);
+        Assert.DoesNotContain("ColumnDefinitions=\"132,*,Auto\"", background, StringComparison.Ordinal);
+        Assert.DoesNotContain("ColumnDefinitions=\"132,*,Auto\"", start, StringComparison.Ordinal);
+        Assert.DoesNotContain("ColumnDefinitions=\"Auto,*,Auto\"", remote, StringComparison.Ordinal);
+        Assert.DoesNotContain("ColumnDefinitions=\"132,*,Auto\"", versionUpdate, StringComparison.Ordinal);
     }
 
     private static string GetMaaUnifiedRoot()

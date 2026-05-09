@@ -1,26 +1,68 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:MAAUnified.App.Controls"
              x:Class="MAAUnified.App.Features.TaskQueue.CustomSettingsView">
-  <Grid RowDefinitions="Auto,Auto" Margin="2">
-    <TextBlock Classes="section-title" Text="{Binding Texts[Custom.Title]}" />
+  <UserControl.Styles>
+    <Style Selector="StackPanel.custom-settings-content">
+      <Setter Property="Spacing" Value="12" />
+    </Style>
 
-    <StackPanel Grid.Row="1" Spacing="{DynamicResource MAA.Spacing.Small}">
-      <TextBlock Text="{Binding Texts[Custom.TaskNames]}" />
-      <TextBox AcceptsReturn="True" Height="120" Text="{Binding TaskNamesText, UpdateSourceTrigger=LostFocus}" />
+    <Style Selector="Border.custom-settings-card">
+      <Setter Property="Padding" Value="14" />
+    </Style>
 
-      <TextBlock Text="{Binding Texts[Custom.TaskNamesPreview]}" />
-      <TextBlock Text="{Binding TaskNamesPreview}" TextWrapping="Wrap" />
+    <Style Selector="StackPanel.custom-settings-card-content">
+      <Setter Property="Spacing" Value="8" />
+    </Style>
 
-      <TextBlock Text="{Binding Texts[Common.LoadingTaskHint]}" />
-      <TextBlock Text="{Binding StatusMessage}" />
-      <TextBlock Foreground="{DynamicResource MAA.ErrorBrush}"
-                 Text="{Binding LastErrorMessage}"
-                 TextWrapping="Wrap" />
+    <Style Selector="TextBlock.custom-settings-title">
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
 
-      <StackPanel IsVisible="{Binding HasValidationIssues}">
-        <TextBlock Text="{Binding Texts[Common.ValidationIssues]}" />
-        <ListBox MaxHeight="96" ItemsSource="{Binding ValidationMessages}" />
-      </StackPanel>
-    </StackPanel>
-  </Grid>
+    <Style Selector="StackPanel.custom-settings-validation">
+      <Setter Property="Spacing" Value="6" />
+    </Style>
+  </UserControl.Styles>
+
+  <controls:AdaptiveSpacingStackPanel Margin="4" Spacing="{DynamicResource MAA.Spacing.Medium}">
+    <controls:AdaptiveSpacingStackPanel Classes="custom-settings-content">
+      <Border Classes="app-surface app-card custom-settings-card">
+        <controls:AdaptiveSpacingStackPanel Classes="custom-settings-card-content">
+          <TextBlock Classes="app-caption" Text="{Binding Texts[Custom.TaskNames]}" />
+          <controls:AppTextInput Width="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
+                                 Classes="settings-input-block"
+                                 AcceptsReturn="True"
+                                 Height="120"
+                                 Text="{Binding TaskNamesText, UpdateSourceTrigger=LostFocus}" />
+        </controls:AdaptiveSpacingStackPanel>
+      </Border>
+
+      <Border Classes="app-surface app-card custom-settings-card">
+        <controls:AdaptiveSpacingStackPanel Classes="custom-settings-card-content">
+          <TextBlock Classes="app-caption" Text="{Binding Texts[Custom.TaskNamesPreview]}" />
+          <TextBlock MaxWidth="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
+                     Classes="app-body"
+                     Text="{Binding TaskNamesPreview}" />
+        </controls:AdaptiveSpacingStackPanel>
+      </Border>
+
+      <Border Classes="app-surface app-card custom-settings-card"
+              IsVisible="{Binding HasValidationIssues}">
+        <controls:AdaptiveSpacingStackPanel Classes="custom-settings-card-content">
+          <controls:AdaptiveSpacingStackPanel Classes="custom-settings-validation"
+                      IsVisible="{Binding HasValidationIssues}">
+            <TextBlock Classes="app-body custom-settings-title"
+                       Text="{Binding Texts[Common.ValidationIssues]}" />
+            <ListBox Width="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
+                     MaxHeight="96"
+                     ItemsSource="{Binding ValidationMessages}" />
+          </controls:AdaptiveSpacingStackPanel>
+        </controls:AdaptiveSpacingStackPanel>
+      </Border>
+
+      <TextBlock Classes="settings-note settings-centered-text long-wrap"
+                 MaxWidth="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
+                 Text="{Binding StatusMessage}" />
+    </controls:AdaptiveSpacingStackPanel>
+  </controls:AdaptiveSpacingStackPanel>
 </UserControl>
