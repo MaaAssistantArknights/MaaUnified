@@ -880,8 +880,7 @@ public sealed class TaskQueueG1FeatureTests
             return;
         }
 
-        var app = new MAAUnified.App.App();
-        app.Initialize();
+        AvaloniaTestApplication.Ensure();
     }
 
     private static async Task<(string StableCoreChar, string ZhDisplayText, string EnDisplayText)> ResolveCrossLanguageCoreCharAsync(TaskQueuePageViewModel vm)
