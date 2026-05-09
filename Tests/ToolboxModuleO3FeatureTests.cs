@@ -497,8 +497,7 @@ public sealed class ToolboxModuleO3FeatureTests
             return;
         }
 
-        var app = new MAAUnified.App.App();
-        app.Initialize();
+        AvaloniaTestApplication.Ensure();
     }
 
     private static async Task WaitForSettingAsync(ToolboxTestFixture fixture, string key, string? expectedSubstring = null)
