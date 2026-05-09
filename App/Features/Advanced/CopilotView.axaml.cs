@@ -187,13 +187,24 @@ public partial class CopilotView : UserControl
     {
         if (VM is not null)
         {
-            await VM.ClearAllAsync();
+            await VM.ConfirmAndClearAllAsync();
         }
     }
 
-    private async void OnClearListPointerPressed(object? sender, PointerPressedEventArgs e)
+    private async void OnCopilotListItemBodyTapped(object? sender, TappedEventArgs e)
     {
-        if (VM is null || sender is not Control control)
+        if (VM is null || sender is not Control { Tag: CopilotItemViewModel item })
+        {
+            return;
+        }
+
+        e.Handled = true;
+        await VM.LoadListItemAsync(item, disableListMode: false);
+    }
+
+    private void OnCopilotListItemBodyPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (VM is null || sender is not Control { Tag: CopilotItemViewModel item } control)
         {
             return;
         }
@@ -204,55 +215,119 @@ public partial class CopilotView : UserControl
             return;
         }
 
+        VM.SelectedItem = item;
+        OpenCopilotListActionPopup(control, item);
         e.Handled = true;
-        await VM.CleanInactiveListItemsAsync();
     }
 
-    private async void OnLoadListItemClick(object? sender, RoutedEventArgs e)
+    private async void OnCopilotListItemCheckClick(object? sender, RoutedEventArgs e)
     {
-        if (VM is null || sender is not Button button || button.Tag is not CopilotItemViewModel item)
+        if (VM is null || sender is not CheckBox { DataContext: CopilotItemViewModel item } checkBox)
         {
             return;
         }
 
-        await VM.LoadListItemAsync(item, disableListMode: false);
+        await VM.SetListItemCheckedAsync(item, checkBox.IsChecked == true);
     }
 
-    private async void OnLoadListItemPointerPressed(object? sender, PointerPressedEventArgs e)
+    private async void OnDeleteListItemPointerPressed(object? sender, PointerPressedEventArgs e)
     {
-        if (VM is null || sender is not Button button || button.Tag is not CopilotItemViewModel item)
+        if (VM is null || sender is not Control { Tag: CopilotItemViewModel item } control)
         {
             return;
         }
 
-        var point = e.GetCurrentPoint(button);
-        if (!point.Properties.IsRightButtonPressed)
+        var point = e.GetCurrentPoint(control);
+        if (!point.Properties.IsLeftButtonPressed)
         {
             return;
         }
 
         e.Handled = true;
-        await VM.LoadListItemAsync(item, disableListMode: true);
-    }
-
-    private async void OnDeleteListItemClick(object? sender, RoutedEventArgs e)
-    {
-        if (VM is null || sender is not Button button || button.Tag is not CopilotItemViewModel item)
-        {
-            return;
-        }
-
         await VM.DeleteListItemAsync(item);
     }
 
-    private async void OnCopilotListReordered(object? sender, ReorderableListReorderedEventArgs e)
+    private async void OnCopilotListItemReorderRequested(object? sender, AppSelectionListItemReorderEventArgs e)
     {
-        if (VM is null || e.Item is not CopilotItemViewModel item || !e.Applied)
+        if (VM is null || e.Item is not CopilotItemViewModel item)
         {
             return;
         }
 
-        await VM.PersistReorderedItemsAsync(item, e.OldIndex, e.NewIndex);
+        await VM.MoveListItemToAsync(item, e.TargetIndex);
+    }
+
+    private async void OnCopilotListActionPopupItemPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (VM is null || sender is not Control { Tag: CopilotListPopupMenuItem item } control || !item.IsEnabled)
+        {
+            return;
+        }
+
+        var point = e.GetCurrentPoint(control);
+        if (!point.Properties.IsLeftButtonPressed)
+        {
+            return;
+        }
+
+        e.Handled = true;
+        CloseCopilotListActionPopup();
+
+        switch (item.Action)
+        {
+            case CopilotListPopupAction.Load:
+                await VM.LoadListItemAsync(item.Item, disableListMode: false);
+                break;
+            case CopilotListPopupAction.LoadSingle:
+                await VM.LoadListItemAsync(item.Item, disableListMode: true);
+                break;
+            case CopilotListPopupAction.ToggleRaid:
+                await VM.ToggleListItemRaidAsync(item.Item);
+                break;
+            case CopilotListPopupAction.Delete:
+                await VM.DeleteListItemAsync(item.Item);
+                break;
+        }
+    }
+
+    private void OpenCopilotListActionPopup(Control owner, CopilotItemViewModel item)
+    {
+        CloseCopilotListActionPopup();
+
+        CopilotListActionPopupItems.ItemsSource = BuildCopilotListMenuItems(item).Where(static menuItem => menuItem.IsVisible).ToArray();
+        CopilotListActionPopup.PlacementTarget = owner;
+        CopilotListActionPopup.IsOpen = true;
+    }
+
+    private void CloseCopilotListActionPopup()
+    {
+        if (CopilotListActionPopup.IsOpen)
+        {
+            CopilotListActionPopup.IsOpen = false;
+        }
+
+        CopilotListActionPopupItems.ItemsSource = null;
+    }
+
+    private void OnCopilotListActionPopupClosed(object? sender, EventArgs e)
+    {
+        CopilotListActionPopupItems.ItemsSource = null;
+    }
+
+    private IReadOnlyList<CopilotListPopupMenuItem> BuildCopilotListMenuItems(CopilotItemViewModel item)
+    {
+        if (VM is null)
+        {
+            return [];
+        }
+
+        return
+        [
+            new(VM.LoadButtonText, CopilotListPopupAction.Load, item),
+            new(VM.CopilotListLoadSingleButtonText, CopilotListPopupAction.LoadSingle, item),
+            new(VM.CopilotListToggleRaidButtonText, CopilotListPopupAction.ToggleRaid, item),
+            new(VM.DeleteButtonText, CopilotListPopupAction.Delete, item),
+        ];
     }
 
     private void OnOpenUserAdditionalPopupClick(object? sender, RoutedEventArgs e)
@@ -372,5 +447,20 @@ public partial class CopilotView : UserControl
         {
             // Keep copilot UI responsive even if shell open fails.
         }
+    }
+
+    private sealed record CopilotListPopupMenuItem(
+        string Header,
+        CopilotListPopupAction Action,
+        CopilotItemViewModel Item,
+        bool IsEnabled = true,
+        bool IsVisible = true);
+
+    private enum CopilotListPopupAction
+    {
+        Load,
+        LoadSingle,
+        ToggleRaid,
+        Delete,
     }
 }

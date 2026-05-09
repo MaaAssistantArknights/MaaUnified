@@ -106,8 +106,10 @@ public sealed class RootViewStructureContractTests
         Assert.Contains("Click=\"OnOpenButtonContextMenuClick\"", text, StringComparison.Ordinal);
         Assert.Contains("Click=\"OnBatchActionClick\"", text, StringComparison.Ordinal);
         Assert.Contains("PointerPressed=\"OnBatchActionPointerPressed\"", text, StringComparison.Ordinal);
-        Assert.Contains("Style Selector=\"Border.task-queue-row-action\"", text, StringComparison.Ordinal);
-        Assert.Contains("Style Selector=\"Border.task-queue-row-action:pointerover\"", text, StringComparison.Ordinal);
+        var foundationStyles = File.ReadAllText(Path.Combine(root, "App", "Styles", "AppFoundationStyles.axaml"));
+        Assert.Contains("Style Selector=\"Border.task-queue-row-action\"", foundationStyles, StringComparison.Ordinal);
+        Assert.Contains("Style Selector=\"Border.task-queue-row-action:pointerover\"", foundationStyles, StringComparison.Ordinal);
+        Assert.DoesNotContain("Style Selector=\"Border.task-queue-row-action\"", text, StringComparison.Ordinal);
         Assert.Contains("PointerPressed=\"OnTaskGearPointerPressed\"", text, StringComparison.Ordinal);
         Assert.Contains("<DataTemplate DataType=\"taskVm:StartUpTaskModuleViewModel\">", text, StringComparison.Ordinal);
         Assert.Contains("<DataTemplate DataType=\"taskVm:FightTaskModuleViewModel\">", text, StringComparison.Ordinal);

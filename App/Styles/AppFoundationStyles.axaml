@@ -465,6 +465,41 @@
     <Setter Property="Padding" Value="6" />
   </Style>
 
+  <Style Selector="Border.task-queue-row-action">
+    <Setter Property="Width" Value="28" />
+    <Setter Property="MinWidth" Value="28" />
+    <Setter Property="Height" Value="28" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.CornerRadius.IconButton}" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Focusable" Value="False" />
+  </Style>
+
+  <Style Selector="Border.task-queue-row-action:pointerover">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.SubtleBackgroundHover}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+  </Style>
+
+  <Style Selector="TextBlock.task-queue-row-action-glyph">
+    <Setter Property="Width" Value="28" />
+    <Setter Property="Height" Value="28" />
+    <Setter Property="FontSize" Value="15" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="LineHeight" Value="28" />
+    <Setter Property="TextAlignment" Value="Center" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Action.SubtleForeground}" />
+    <Setter Property="RenderTransform">
+      <TranslateTransform Y="-0.5" />
+    </Setter>
+  </Style>
+
+  <Style Selector="Border.task-queue-row-action:pointerover TextBlock.task-queue-row-action-glyph">
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
+  </Style>
+
   <Style Selector="Border.task-queue-list-actions,
                    Border.infrast-facility-actions">
     <Setter Property="Margin" Value="-6,0,-6,-6" />

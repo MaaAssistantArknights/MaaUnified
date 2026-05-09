@@ -20,14 +20,30 @@ public abstract class PageViewModelBase : ObservableObject
     public string StatusMessage
     {
         get => _statusMessage;
-        protected set => SetProperty(ref _statusMessage, value);
+        protected set
+        {
+            if (SetProperty(ref _statusMessage, value))
+            {
+                OnPropertyChanged(nameof(HasStatusMessage));
+            }
+        }
     }
 
     public string LastErrorMessage
     {
         get => _lastErrorMessage;
-        protected set => SetProperty(ref _lastErrorMessage, value);
+        protected set
+        {
+            if (SetProperty(ref _lastErrorMessage, value))
+            {
+                OnPropertyChanged(nameof(HasLastErrorMessage));
+            }
+        }
     }
+
+    public bool HasStatusMessage => !string.IsNullOrWhiteSpace(StatusMessage);
+
+    public bool HasLastErrorMessage => !string.IsNullOrWhiteSpace(LastErrorMessage);
 
     protected Task RecordEventAsync(string scope, string message, CancellationToken cancellationToken = default)
     {

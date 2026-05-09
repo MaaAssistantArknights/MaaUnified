@@ -82,7 +82,7 @@ public sealed class SessionStateUiProjectionTests
 
         Assert.True((await fixture.Runtime.ConnectFeatureService.ConnectAsync("127.0.0.1:5555", "General", null)).Success);
         Assert.True((await fixture.Runtime.ConnectFeatureService.StartAsync()).Success);
-        Assert.True(fixture.Runtime.SessionService.TryBeginRun("Toolbox", out _));
+        Assert.True(fixture.Runtime.SessionService.TryBeginRun("Toolbox", "窥屏", out _));
         await WaitUntilAsync(() => vm.CurrentSessionState == SessionState.Running);
 
         Assert.True(vm.IsRunOwnedByAnotherFeature);
@@ -94,6 +94,48 @@ public sealed class SessionStateUiProjectionTests
         Assert.Equal(1, dialog.WarningConfirmCallCount);
         Assert.Equal("Toolbox", stoppedOwner);
         Assert.Equal(1, Assert.IsType<FakeBridge>(fixture.Bridge).StopCallCount);
+    }
+
+    [Fact]
+    public async Task TaskQueuePage_LinkStart_WhenOwnerActiveButSessionConnected_ShouldLogAndShowDialog()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var dialog = new RecordingDialogService(DialogReturnSemantic.Confirm);
+        var vm = new TaskQueuePageViewModel(
+            fixture.Runtime,
+            new ConnectionGameSharedStateViewModel(),
+            dialogService: dialog);
+        await vm.InitializeAsync();
+
+        Assert.True((await fixture.Runtime.ConnectFeatureService.ConnectAsync("127.0.0.1:5555", "General", null)).Success);
+        await WaitUntilAsync(() => vm.CurrentSessionState == SessionState.Connected);
+        Assert.True(fixture.Runtime.SessionService.TryBeginRun("Toolbox", "窥屏", out _));
+
+        await vm.ToggleRunAsync();
+
+        Assert.Equal(1, dialog.WarningConfirmCallCount);
+        Assert.True(HasLinkStartFailureLog(vm));
+        Assert.Contains("窥屏", dialog.LastWarningMessage, StringComparison.Ordinal);
+        Assert.DoesNotContain("Toolbox", dialog.LastWarningMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task CopilotPage_Start_WhenToolboxDisplayOwnerActive_ShouldShowSpecificOwnerName()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var dialog = new RecordingDialogService(DialogReturnSemantic.Confirm);
+        var vm = new CopilotPageViewModel(fixture.Runtime, dialogService: dialog);
+
+        Assert.True((await fixture.Runtime.ConnectFeatureService.ConnectAsync("127.0.0.1:5555", "General", null)).Success);
+        Assert.True((await fixture.Runtime.ConnectFeatureService.StartAsync()).Success);
+        Assert.True(fixture.Runtime.SessionService.TryBeginRun("Toolbox", "窥屏", out _));
+        await WaitUntilAsync(() => vm.CurrentSessionState == SessionState.Running);
+
+        await vm.StartAsync();
+
+        Assert.Equal(1, dialog.WarningConfirmCallCount);
+        Assert.Contains("窥屏", dialog.LastWarningMessage, StringComparison.Ordinal);
+        Assert.DoesNotContain("Toolbox", dialog.LastWarningMessage, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -559,6 +601,8 @@ public sealed class SessionStateUiProjectionTests
     {
         public int WarningConfirmCallCount { get; private set; }
 
+        public string LastWarningMessage { get; private set; } = string.Empty;
+
         public Task<DialogCompletion<AnnouncementDialogPayload>> ShowAnnouncementAsync(
             AnnouncementDialogRequest request,
             string sourceScope,
@@ -608,6 +652,7 @@ public sealed class SessionStateUiProjectionTests
             CancellationToken cancellationToken = default)
         {
             WarningConfirmCallCount++;
+            LastWarningMessage = request.Message;
             return Task.FromResult(new DialogCompletion<WarningConfirmDialogPayload>(
                 warningConfirmReturn,
                 warningConfirmReturn == DialogReturnSemantic.Confirm ? new WarningConfirmDialogPayload(true) : null,

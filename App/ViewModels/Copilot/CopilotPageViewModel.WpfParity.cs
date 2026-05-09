@@ -69,6 +69,14 @@ public sealed partial class CopilotPageViewModel
         nameof(AddListButtonTip),
         nameof(ClearButtonText),
         nameof(ClearButtonTip),
+        nameof(CopilotListLoadSingleButtonText),
+        nameof(CopilotListToggleRaidButtonText),
+        nameof(CopilotListEnableButtonText),
+        nameof(CopilotListDisableButtonText),
+        nameof(ClearAllButtonText),
+        nameof(ClearAllConfirmTitleText),
+        nameof(ClearAllConfirmMessageText),
+        nameof(ClearAllConfirmButtonText),
         nameof(RatingPromptText),
         nameof(LikeButtonText),
         nameof(DislikeButtonText),
@@ -108,6 +116,8 @@ public sealed partial class CopilotPageViewModel
     private string _copilotUrl = PrtsPlusUrl;
     private string _mapUrl = MapPrtsUrl;
     private bool _suppressAutoAddLoadedCopilot;
+    private bool _suppressCopilotTaskNameListItemSync;
+    private int _copilotTaskNamePersistVersion;
     private string _lastRenderedHelpText = string.Empty;
     private IReadOnlyList<IntOption> _supportUnitUsageOptions = [];
     private IReadOnlyList<IntOption> _moduleOptions = [];
@@ -224,7 +234,23 @@ public sealed partial class CopilotPageViewModel
 
     public string ClearButtonText => T("Copilot.Button.Clear", "清除");
 
-    public string ClearButtonTip => T("Copilot.Tip.ClearList", "左键清空全部\n右键仅清理未激活项");
+    public string ClearButtonTip => T("Copilot.Tip.ClearList", "删除战斗列表中的全部作业。");
+
+    public string CopilotListLoadSingleButtonText => T("Copilot.List.Button.LoadSingle", "载入单个");
+
+    public string CopilotListToggleRaidButtonText => T("Copilot.List.Button.ToggleRaid", "切换突袭");
+
+    public string CopilotListEnableButtonText => T("Copilot.List.Button.Enable", "启用");
+
+    public string CopilotListDisableButtonText => T("Copilot.List.Button.Disable", "禁用");
+
+    public string ClearAllButtonText => T("Copilot.List.Button.ClearAll", "删除全部");
+
+    public string ClearAllConfirmTitleText => T("Copilot.List.ClearAllConfirm.Title", "删除战斗列表");
+
+    public string ClearAllConfirmMessageText => T("Copilot.List.ClearAllConfirm.Message", "将删除战斗列表中的全部作业，此操作不可撤销。");
+
+    public string ClearAllConfirmButtonText => T("Copilot.List.ClearAllConfirm.Confirm", "删除全部");
 
     public string RatingPromptText => T("Copilot.Rating.Prompt", "作业怎么样？评价下吧！");
 
@@ -435,8 +461,79 @@ public sealed partial class CopilotPageViewModel
         set
         {
             var sanitized = InvalidNavigationStageNameRegex.Replace(value ?? string.Empty, string.Empty).Trim();
-            SetProperty(ref _copilotTaskName, sanitized);
+            if (SetProperty(ref _copilotTaskName, sanitized)
+                && !_suppressCopilotTaskNameListItemSync)
+            {
+                SyncCopilotTaskNameToSelectedItem(sanitized);
+            }
         }
+    }
+
+    private void SyncCopilotTaskNameToSelectedItem(string name)
+    {
+        var item = SelectedItem;
+        if (item is null
+            || string.Equals(item.Name, name, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        var version = ++_copilotTaskNamePersistVersion;
+        item.Name = name;
+        _ = PersistCopilotTaskNameChangeAsync(item, name, version, CancellationToken.None);
+    }
+
+    private async Task PersistCopilotTaskNameChangeAsync(
+        CopilotItemViewModel item,
+        string name,
+        int version,
+        CancellationToken cancellationToken)
+    {
+        UiOperationResult persistResult;
+        try
+        {
+            persistResult = await PersistItemsAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            if (version != _copilotTaskNamePersistVersion || !ReferenceEquals(SelectedItem, item))
+            {
+                return;
+            }
+
+            StatusMessage = T("Copilot.Status.UpdateListItemNameFailed", "更新作业名称失败。");
+            await RecordUnhandledExceptionAsync(
+                "Copilot.List.Rename",
+                ex,
+                UiErrorCode.CopilotListPersistenceFailed,
+                T("Copilot.Error.UpdateListItemPersistFail", "更新作业列表失败：列表保存失败。"),
+                cancellationToken);
+            return;
+        }
+
+        if (version != _copilotTaskNamePersistVersion || !ReferenceEquals(SelectedItem, item))
+        {
+            return;
+        }
+
+        if (!persistResult.Success)
+        {
+            StatusMessage = T("Copilot.Status.UpdateListItemNameFailed", "更新作业名称失败。");
+            LastErrorMessage = persistResult.Message;
+            await RecordFailedResultAsync(
+                "Copilot.List.Rename",
+                BuildPersistFailedResult(
+                    T("Copilot.Error.UpdateListItemPersistFail", "更新作业列表失败：列表保存失败。"),
+                    persistResult),
+                cancellationToken);
+            return;
+        }
+
+        StatusMessage = string.Format(
+            T("Copilot.Status.UpdateListItemNameSuccess", "已更新作业名称：{0}"),
+            name);
+        LastErrorMessage = string.Empty;
+        await RecordEventAsync("Copilot.List.Rename", StatusMessage, cancellationToken);
     }
 
     public bool IsFilePopupOpen
@@ -602,9 +699,94 @@ public sealed partial class CopilotPageViewModel
 
     private void OnSelectedTypeIndexChanged()
     {
+        if (!_suppressSelectedTypeListItemSync)
+        {
+            SyncSelectedTypeIndexToSelectedItem();
+        }
+
         OnPropertyChanged(nameof(CopilotTabIndex));
         OnPropertyChanged(nameof(Form));
         RefreshVisibilityState();
+    }
+
+    private void SyncSelectedTypeIndexToSelectedItem()
+    {
+        var item = SelectedItem;
+        if (item is null)
+        {
+            return;
+        }
+
+        var tabIndex = Math.Clamp(SelectedTypeIndex, 0, Types.Count - 1);
+        var type = ResolveTypeDisplayNameForTab(tabIndex);
+        if (item.TabIndex == tabIndex
+            && string.Equals(item.Type, type, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        var previousTabIndex = item.TabIndex;
+        var previousType = item.Type;
+        var version = ++_selectedTypePersistVersion;
+        item.TabIndex = tabIndex;
+        item.Type = type;
+        _ = PersistSelectedTypeChangeAsync(item, previousType, previousTabIndex, version, CancellationToken.None);
+    }
+
+    private async Task PersistSelectedTypeChangeAsync(
+        CopilotItemViewModel item,
+        string previousType,
+        int? previousTabIndex,
+        int version,
+        CancellationToken cancellationToken)
+    {
+        UiOperationResult persistResult;
+        try
+        {
+            persistResult = await PersistItemsAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            if (version != _selectedTypePersistVersion || !ReferenceEquals(SelectedItem, item))
+            {
+                return;
+            }
+
+            item.Type = previousType;
+            item.TabIndex = previousTabIndex;
+            StatusMessage = T("Copilot.Status.UpdateListItemFailed", "更新作业失败。");
+            await RecordUnhandledExceptionAsync(
+                "Copilot.List.UpdateType",
+                ex,
+                UiErrorCode.CopilotListPersistenceFailed,
+                T("Copilot.Error.UpdateListItemPersistFail", "更新作业列表失败：列表保存失败。"),
+                cancellationToken);
+            return;
+        }
+
+        if (version != _selectedTypePersistVersion || !ReferenceEquals(SelectedItem, item))
+        {
+            return;
+        }
+
+        if (!persistResult.Success)
+        {
+            item.Type = previousType;
+            item.TabIndex = previousTabIndex;
+            StatusMessage = T("Copilot.Status.UpdateListItemFailed", "更新作业失败。");
+            LastErrorMessage = persistResult.Message;
+            await RecordFailedResultAsync(
+                "Copilot.List.UpdateType",
+                BuildPersistFailedResult(
+                    T("Copilot.Error.UpdateListItemPersistFail", "更新作业列表失败：列表保存失败。"),
+                    persistResult),
+                cancellationToken);
+            return;
+        }
+
+        StatusMessage = T("Copilot.Status.UpdateListItemSuccess", "已更新作业。");
+        LastErrorMessage = string.Empty;
+        await RecordEventAsync("Copilot.List.UpdateType", StatusMessage, cancellationToken);
     }
 
     private void RefreshVisibilityState()
@@ -758,19 +940,7 @@ public sealed partial class CopilotPageViewModel
 
     private void OnTrackedCopilotItemPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (sender is not CopilotItemViewModel)
-        {
-            return;
-        }
-
-        if (e.PropertyName is nameof(CopilotItemViewModel.Status)
-            or nameof(CopilotItemViewModel.DisplayName)
-            or nameof(CopilotItemViewModel.ExecutionPathHint))
-        {
-            return;
-        }
-
-        _ = PersistItemsAsync(CancellationToken.None);
+        // Item setters only notify UI. List persistence is triggered by page-level operations.
     }
 
     public void ToggleFilePopup()
@@ -1412,7 +1582,7 @@ public sealed partial class CopilotPageViewModel
         _loadedCopilotId = descriptor.CopilotId;
         FilePath = !string.IsNullOrWhiteSpace(sourcePath) ? sourcePath : inlinePayload;
         DisplayFilename = BuildDisplayFilename(sourcePath, inlinePayload);
-        CopilotTaskName = descriptor.StageName;
+        SetCopilotTaskNameFromLoadedCopilot(descriptor.StageName);
         CopilotUrl = PrtsPlusUrl;
         MapUrl = MapPrtsUrl;
         CouldLikeWebJson = descriptor.CopilotId > 0;
@@ -1430,10 +1600,24 @@ public sealed partial class CopilotPageViewModel
         _loadedCopilotId = 0;
         FilePath = string.Empty;
         DisplayFilename = string.Empty;
-        CopilotTaskName = string.Empty;
+        SetCopilotTaskNameFromLoadedCopilot(string.Empty);
         CouldLikeWebJson = false;
         OnPropertyChanged(nameof(HasLoadedCopilot));
         OnPropertyChanged(nameof(LoadedCopilotInputHint));
+    }
+
+    private void SetCopilotTaskNameFromLoadedCopilot(string name)
+    {
+        var previousSuppress = _suppressCopilotTaskNameListItemSync;
+        _suppressCopilotTaskNameListItemSync = true;
+        try
+        {
+            CopilotTaskName = name;
+        }
+        finally
+        {
+            _suppressCopilotTaskNameListItemSync = previousSuppress;
+        }
     }
 
     private string BuildDisplayFilename(string sourcePath, string inlinePayload)

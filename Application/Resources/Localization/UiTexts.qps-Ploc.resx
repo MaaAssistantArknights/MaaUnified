@@ -12,6 +12,63 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
+  <data name="Copilot.List.Button.ClearAll" xml:space="preserve">
+    <value>[!! Çļéåř åļļ !!]</value>
+  </data>
+  <data name="Copilot.List.Button.Disable" xml:space="preserve">
+    <value>[!! Ďîşåƀļé !!]</value>
+  </data>
+  <data name="Copilot.List.Button.Enable" xml:space="preserve">
+    <value>[!! Éñåƀļé !!]</value>
+  </data>
+  <data name="Copilot.List.Button.LoadSingle" xml:space="preserve">
+    <value>[!! Łöåď şîñĝļé !!]</value>
+  </data>
+  <data name="Copilot.List.Button.ToggleRaid" xml:space="preserve">
+    <value>[!! Ŧöĝĝļé řåîď !!]</value>
+  </data>
+  <data name="Copilot.List.ClearAllConfirm.Confirm" xml:space="preserve">
+    <value>[!! Çļéåř åļļ !!]</value>
+  </data>
+  <data name="Copilot.List.ClearAllConfirm.Message" xml:space="preserve">
+    <value>[!! Åļļ çöþîļöţ ţåşķş îñ ţħé ƀåţţļé ļîşţ ŵîļļ ƀé řéɱöṽéď. Ŧħîş çåññöţ ƀé üñďöñé. !!]</value>
+  </data>
+  <data name="Copilot.List.ClearAllConfirm.Title" xml:space="preserve">
+    <value>[!! Đéļéţé ƀåţţļé ļîşţ !!]</value>
+  </data>
+  <data name="Copilot.Error.SelectTaskToUpdate" xml:space="preserve">
+    <value>[!! Şéļéçţ å çöþîļöţ îţéɱ ţö üþďåţé. !!]</value>
+  </data>
+  <data name="Copilot.Error.UpdateListItemPersistFail" xml:space="preserve">
+    <value>[!! Ûþďåţé ƒåîļéď: ļîşţ şåṽé ƒåîļéď. !!]</value>
+  </data>
+  <data name="Copilot.Status.ClearCancelled" xml:space="preserve">
+    <value>[!! Đéļéţîñĝ åļļ çöþîļöţ ţåşķş ŵåş çåñçéļļéď. !!]</value>
+  </data>
+  <data name="Copilot.Status.ListItemDisabled" xml:space="preserve">
+    <value>[!! Çöþîļöţ îţéɱ ďîşåƀļéď. !!]</value>
+  </data>
+  <data name="Copilot.Status.ListItemEnabled" xml:space="preserve">
+    <value>[!! Çöþîļöţ îţéɱ éñåƀļéď. !!]</value>
+  </data>
+  <data name="Copilot.Status.ListItemRaidDisabled" xml:space="preserve">
+    <value>[!! Şŵîţçħéď ţö ñöřɱåļ ďîƒƒîçüļţý. !!]</value>
+  </data>
+  <data name="Copilot.Status.ListItemRaidEnabled" xml:space="preserve">
+    <value>[!! Şŵîţçħéď ţö řåîď ďîƒƒîçüļţý. !!]</value>
+  </data>
+  <data name="Copilot.Status.UpdateListItemFailed" xml:space="preserve">
+    <value>[!! Ƒåîļéď ţö üþďåţé çöþîļöţ îţéɱ. !!]</value>
+  </data>
+  <data name="Copilot.Status.UpdateListItemNameFailed" xml:space="preserve">
+    <value>[!! Ƒåîļéď ţö üþďåţé çöþîļöţ îţéɱ ñåɱé. !!]</value>
+  </data>
+  <data name="Copilot.Status.UpdateListItemNameSuccess" xml:space="preserve">
+    <value>[!! Çöþîļöţ îţéɱ ñåɱé üþďåţéď: {0} !!]</value>
+  </data>
+  <data name="Copilot.Tip.ClearList" xml:space="preserve">
+    <value>[!! Đéļéţé åļļ çöþîļöţ ţåşķş îñ ţħé ƀåţţļé ļîşţ. !!]</value>
+  </data>
   <data name="TaskQueue.Status.ParamsLoaded" xml:space="preserve">
     <value>[!! Łöåđéď þåřåɱş ƒöř `{0}`. !!]</value>
   </data>

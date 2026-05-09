@@ -112,8 +112,62 @@
   <data name="Copilot.List.InlineJsonHint" xml:space="preserve">
     <value>埋め込み JSON</value>
   </data>
+  <data name="Copilot.List.Button.ClearAll" xml:space="preserve">
+    <value>すべて削除</value>
+  </data>
+  <data name="Copilot.List.Button.Disable" xml:space="preserve">
+    <value>無効化</value>
+  </data>
+  <data name="Copilot.List.Button.Enable" xml:space="preserve">
+    <value>有効化</value>
+  </data>
+  <data name="Copilot.List.Button.LoadSingle" xml:space="preserve">
+    <value>単体読み込み</value>
+  </data>
+  <data name="Copilot.List.Button.ToggleRaid" xml:space="preserve">
+    <value>強襲切替</value>
+  </data>
+  <data name="Copilot.List.ClearAllConfirm.Confirm" xml:space="preserve">
+    <value>すべて削除</value>
+  </data>
+  <data name="Copilot.List.ClearAllConfirm.Message" xml:space="preserve">
+    <value>戦闘リストのすべての作業を削除します。この操作は元に戻せません。</value>
+  </data>
+  <data name="Copilot.List.ClearAllConfirm.Title" xml:space="preserve">
+    <value>戦闘リストを削除</value>
+  </data>
   <data name="Copilot.List.RaidLabel" xml:space="preserve">
     <value>強襲</value>
+  </data>
+  <data name="Copilot.Error.SelectTaskToUpdate" xml:space="preserve">
+    <value>更新する作業を選択してください。</value>
+  </data>
+  <data name="Copilot.Error.UpdateListItemPersistFail" xml:space="preserve">
+    <value>作業リストの更新に失敗しました: リストを保存できませんでした。</value>
+  </data>
+  <data name="Copilot.Status.ClearCancelled" xml:space="preserve">
+    <value>すべての作業の削除をキャンセルしました。</value>
+  </data>
+  <data name="Copilot.Status.ListItemDisabled" xml:space="preserve">
+    <value>作業を無効化しました。</value>
+  </data>
+  <data name="Copilot.Status.ListItemEnabled" xml:space="preserve">
+    <value>作業を有効化しました。</value>
+  </data>
+  <data name="Copilot.Status.ListItemRaidDisabled" xml:space="preserve">
+    <value>通常作業に切り替えました。</value>
+  </data>
+  <data name="Copilot.Status.ListItemRaidEnabled" xml:space="preserve">
+    <value>強襲作業に切り替えました。</value>
+  </data>
+  <data name="Copilot.Status.UpdateListItemFailed" xml:space="preserve">
+    <value>作業の更新に失敗しました。</value>
+  </data>
+  <data name="Copilot.Status.UpdateListItemNameFailed" xml:space="preserve">
+    <value>作業名の更新に失敗しました。</value>
+  </data>
+  <data name="Copilot.Status.UpdateListItemNameSuccess" xml:space="preserve">
+    <value>作業名を更新しました: {0}</value>
   </data>
   <data name="Copilot.FilePicker.ImportBatch.Title" xml:space="preserve">
     <value>作業を一括インポート</value>
@@ -3484,8 +3538,7 @@
 右クリックしてレイドの難易度を追加します</value>
   </data>
   <data name="Copilot.Tip.ClearList" xml:space="preserve">
-    <value>左クリックですべてのタスクをクリア
-右クリックで非アクティブなタスクをクリア</value>
+    <value>戦闘リストのすべての作業を削除します。</value>
   </data>
   <data name="Copilot.Tip.File" xml:space="preserve">
     <value>攻略ファイルはマウスで直接ドラッグして取り込むことがきます(oﾟvﾟ)ノ</value>

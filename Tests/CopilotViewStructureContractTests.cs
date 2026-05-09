@@ -34,6 +34,76 @@ public sealed class CopilotViewStructureContractTests
     }
 
     [Fact]
+    public void CopilotView_BattleList_ShouldUseSelectionListContractWithoutLegacyLoadButton()
+    {
+        var root = GetMaaUnifiedRoot();
+        var xaml = File.ReadAllText(Path.Combine(root, "App", "Features", "Advanced", "CopilotView.axaml"));
+
+        Assert.Contains("<controls:AppSelectionList", xaml, StringComparison.Ordinal);
+        Assert.Contains("ItemsSource=\"{Binding Items}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("SelectedItem=\"{Binding SelectedItem", xaml, StringComparison.Ordinal);
+        Assert.Contains("CanReorderItems=\"{Binding CanEdit}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("ItemReorderRequested=\"OnCopilotListItemReorderRequested\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"copilot-battle-list selection-list-section-cards selection-list-no-indicator\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("<controls:ReorderableList", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("</controls:ReorderableList", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Reordered=\"OnCopilotListReordered\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("controls|ReorderableList", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("OnLoadListItemClick", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("OnLoadListItemPointerPressed", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Content=\"{Binding DataContext.LoadButtonText", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void CopilotView_BattleListItems_ShouldExposeCardActivationContextMenuAndCompactDelete()
+    {
+        var root = GetMaaUnifiedRoot();
+        var xaml = File.ReadAllText(Path.Combine(root, "App", "Features", "Advanced", "CopilotView.axaml"));
+
+        Assert.Contains("Tapped=\"OnCopilotListItemBodyTapped\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("PointerPressed=\"OnCopilotListItemBodyPointerPressed\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("<Popup x:Name=\"CopilotListActionPopup\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Placement=\"Pointer\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("ItemsControl x:Name=\"CopilotListActionPopupItems\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("PointerPressed=\"OnCopilotListActionPopupItemPointerPressed\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Text=\"{Binding Header}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("OnDeleteListItemPointerPressed", xaml, StringComparison.Ordinal);
+        Assert.Contains("IsChecked=\"{Binding IsChecked", xaml, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"task-queue-row-action copilot-list-delete-hotspot\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"task-queue-row-action-glyph\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Text=\"×\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Classes=\"app-button app-secondary copilot-list-delete-hotspot\"", xaml, StringComparison.Ordinal);
+
+        var codeBehind = File.ReadAllText(Path.Combine(root, "App", "Features", "Advanced", "CopilotView.axaml.cs"));
+        Assert.DoesNotContain("CopilotListPopupAction.ToggleChecked", codeBehind, StringComparison.Ordinal);
+        Assert.DoesNotContain("CopilotListDisableButtonText", codeBehind, StringComparison.Ordinal);
+        Assert.DoesNotContain("CopilotListEnableButtonText", codeBehind, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void CopilotView_BattleListFooter_ShouldKeepTwoRowsAndConfirmedClearAllEntry()
+    {
+        var root = GetMaaUnifiedRoot();
+        var xaml = File.ReadAllText(Path.Combine(root, "App", "Features", "Advanced", "CopilotView.axaml"));
+
+        Assert.Contains("Classes=\"task-queue-list-actions\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"task-queue-list-action-stack\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("RowDefinitions=\"Auto,*,Auto,Auto\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Grid.Row=\"2\"\n                        Classes=\"task-queue-list-action-divider\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"grouped-card-footer-action", xaml, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"copilot-list-task-name-display\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Content=\"{Binding ImportBatchButtonText}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Text=\"{Binding CopilotTaskName", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("<controls:AppTextInput Grid.Column=\"0\"\n                                           Text=\"{Binding CopilotTaskName}", xaml, StringComparison.Ordinal);
+        Assert.Contains("Content=\"{Binding AddListButtonText}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Content=\"{Binding ClearAllButtonText}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Click=\"OnClearListClick\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("RowDefinitions=\"Auto,8,Auto\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Margin=\"-8,14,-8,-8\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("PointerPressed=\"OnClearListPointerPressed\"", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void CopilotView_ShouldNotEmbedOverlayButton_WhenWindowHostsSharedOverlayEntry()
     {
         var root = GetMaaUnifiedRoot();

@@ -55,6 +55,8 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
     private bool _isStartRequestActive;
     private CopilotItemViewModel? _selectedItem;
     private bool _suppressSelectionFeedback;
+    private bool _suppressSelectedTypeListItemSync;
+    private int _selectedTypePersistVersion;
     private RootLocalizationTextMap _rootTexts;
     private CopilotLocalizationTextMap _texts;
     private string _currentLanguage = UiLanguageCatalog.DefaultLanguage;
@@ -484,8 +486,8 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
                 SetSelectedItemSilently(null);
             },
             "Copilot.Clear",
-            T("Copilot.Status.ClearSuccess", "已清空作业列表。"),
-            T("Copilot.Error.ClearPersistFail", "清空作业列表失败：列表保存失败。"),
+            T("Copilot.Status.ClearSuccess", "已删除全部作业。"),
+            T("Copilot.Error.ClearPersistFail", "删除全部作业失败：列表保存失败。"),
             cancellationToken);
     }
 
@@ -592,6 +594,142 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
         await RecordEventAsync("Copilot.Sort", StatusMessage, cancellationToken);
     }
 
+    public async Task MoveListItemToAsync(
+        CopilotItemViewModel item,
+        int targetIndex,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var currentIndex = Items.IndexOf(item);
+        if (currentIndex < 0)
+        {
+            StatusMessage = T("Copilot.Status.SortFailed", "排序失败。");
+            LastErrorMessage = T("Copilot.Error.SelectTaskToSort", "请选择要排序的作业。");
+            await RecordFailedResultAsync(
+                "Copilot.List.Move",
+                UiOperationResult.Fail(UiErrorCode.CopilotSelectionMissing, LastErrorMessage),
+                cancellationToken);
+            return;
+        }
+
+        var normalizedTargetIndex = Math.Clamp(targetIndex, 0, Items.Count - 1);
+        if (currentIndex == normalizedTargetIndex)
+        {
+            SetSelectedItemSilently(item);
+            StatusMessage = T("Copilot.Status.ReorderSuccess", "已更新作业顺序。");
+            LastErrorMessage = string.Empty;
+            await RecordEventAsync("Copilot.List.Move", StatusMessage, cancellationToken);
+            return;
+        }
+
+        await MutateListAndPersistAsync(
+            () =>
+            {
+                Items.Move(currentIndex, normalizedTargetIndex);
+                SetSelectedItemSilently(item);
+            },
+            "Copilot.List.Move",
+            T("Copilot.Status.ReorderSuccess", "已更新作业顺序。"),
+            T("Copilot.Error.SortPersistFail", "排序失败：列表保存失败。"),
+            cancellationToken);
+    }
+
+    public async Task SetListItemCheckedAsync(
+        CopilotItemViewModel item,
+        bool isChecked,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!Items.Contains(item))
+        {
+            await ReportListItemUpdateMissingAsync("Copilot.List.Check", cancellationToken);
+            return;
+        }
+
+        var previous = item.IsChecked;
+        item.IsChecked = isChecked;
+        var persistResult = await PersistItemsAsync(cancellationToken);
+        if (!persistResult.Success)
+        {
+            item.IsChecked = previous;
+            StatusMessage = T("Copilot.Status.UpdateListItemFailed", "更新作业失败。");
+            LastErrorMessage = persistResult.Message;
+            await RecordFailedResultAsync(
+                "Copilot.List.Check",
+                BuildPersistFailedResult(
+                    T("Copilot.Error.UpdateListItemPersistFail", "更新作业列表失败：列表保存失败。"),
+                    persistResult),
+                cancellationToken);
+            return;
+        }
+
+        StatusMessage = isChecked
+            ? T("Copilot.Status.ListItemEnabled", "已启用作业。")
+            : T("Copilot.Status.ListItemDisabled", "已禁用作业。");
+        LastErrorMessage = string.Empty;
+        await RecordEventAsync("Copilot.List.Check", StatusMessage, cancellationToken);
+    }
+
+    public async Task ToggleListItemRaidAsync(
+        CopilotItemViewModel item,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!Items.Contains(item))
+        {
+            await ReportListItemUpdateMissingAsync("Copilot.List.ToggleRaid", cancellationToken);
+            return;
+        }
+
+        var previous = item.IsRaid;
+        item.IsRaid = !previous;
+        var persistResult = await PersistItemsAsync(cancellationToken);
+        if (!persistResult.Success)
+        {
+            item.IsRaid = previous;
+            StatusMessage = T("Copilot.Status.UpdateListItemFailed", "更新作业失败。");
+            LastErrorMessage = persistResult.Message;
+            await RecordFailedResultAsync(
+                "Copilot.List.ToggleRaid",
+                BuildPersistFailedResult(
+                    T("Copilot.Error.UpdateListItemPersistFail", "更新作业列表失败：列表保存失败。"),
+                    persistResult),
+                cancellationToken);
+            return;
+        }
+
+        StatusMessage = item.IsRaid
+            ? T("Copilot.Status.ListItemRaidEnabled", "已切换为突袭作业。")
+            : T("Copilot.Status.ListItemRaidDisabled", "已切换为普通作业。");
+        LastErrorMessage = string.Empty;
+        await RecordEventAsync("Copilot.List.ToggleRaid", StatusMessage, cancellationToken);
+    }
+
+    public async Task ConfirmAndClearAllAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var request = new WarningConfirmDialogRequest(
+            Title: ClearAllConfirmTitleText,
+            Message: ClearAllConfirmMessageText,
+            ConfirmText: ClearAllConfirmButtonText,
+            CancelText: CancelButtonText,
+            Language: _currentLanguage);
+        var completion = await _dialogService.ShowWarningConfirmAsync(
+            request,
+            "Copilot.List.ClearAll.Confirm",
+            cancellationToken);
+
+        if (completion.Return != DialogReturnSemantic.Confirm)
+        {
+            StatusMessage = T("Copilot.Status.ClearCancelled", "已取消删除全部作业。");
+            LastErrorMessage = string.Empty;
+            await RecordEventAsync("Copilot.List.ClearAll.Cancel", StatusMessage, cancellationToken);
+            return;
+        }
+
+        await ClearAllAsync(cancellationToken);
+    }
+
     public async Task StartAsync(CancellationToken cancellationToken = default)
     {
         if (!CanStart)
@@ -615,36 +753,48 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
                 owner = CopilotRunOwner;
             }
 
+            var displayOwner = Runtime.SessionService.CurrentRunOwnerDisplayName;
+            if (string.IsNullOrWhiteSpace(displayOwner))
+            {
+                displayOwner = owner;
+            }
+
             StatusMessage = T("Copilot.Status.StartFailed", "启动失败。");
             LastErrorMessage = string.Format(
                 T("Copilot.Error.StartRunOwnerBlocked", "Copilot 启动被拦截：当前运行所有者为 `{0}`。"),
-                owner);
+                displayOwner);
             await RecordFailedResultAsync(
                 "Copilot.Start.RunOwner",
                 UiOperationResult.Fail(
                     UiErrorCode.OperationAlreadyRunning,
                     LastErrorMessage,
-                    BuildRunOwnerBlockedDetails(owner)),
+                    BuildRunOwnerBlockedDetails(owner, displayOwner)),
                 cancellationToken);
-            await ShowRunOwnerBlockedDialogAsync(owner, LastErrorMessage, cancellationToken);
+            await ShowRunOwnerBlockedDialogAsync(owner, displayOwner, LastErrorMessage, cancellationToken);
             return;
         }
 
         if (!Runtime.SessionService.TryBeginRun(CopilotRunOwner, out var currentOwner))
         {
             var owner = string.IsNullOrWhiteSpace(currentOwner) ? "Unknown" : currentOwner;
+            var displayOwner = Runtime.SessionService.CurrentRunOwnerDisplayName;
+            if (string.IsNullOrWhiteSpace(displayOwner))
+            {
+                displayOwner = owner;
+            }
+
             StatusMessage = T("Copilot.Status.StartFailed", "启动失败。");
             LastErrorMessage = string.Format(
                 T("Copilot.Error.StartRunOwnerBlocked", "Copilot 启动被拦截：当前运行所有者为 `{0}`。"),
-                owner);
+                displayOwner);
             await RecordFailedResultAsync(
                 "Copilot.Start.RunOwner",
                 UiOperationResult.Fail(
                     UiErrorCode.OperationAlreadyRunning,
                     LastErrorMessage,
-                    BuildRunOwnerBlockedDetails(owner)),
+                    BuildRunOwnerBlockedDetails(owner, displayOwner)),
                 cancellationToken);
-            await ShowRunOwnerBlockedDialogAsync(owner, LastErrorMessage, cancellationToken);
+            await ShowRunOwnerBlockedDialogAsync(owner, displayOwner, LastErrorMessage, cancellationToken);
             return;
         }
 
@@ -921,6 +1071,7 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
 
     private async Task ShowRunOwnerBlockedDialogAsync(
         string owner,
+        string displayOwner,
         string message,
         CancellationToken cancellationToken)
     {
@@ -928,8 +1079,8 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
         var errorResult = UiOperationResult.Fail(
             UiErrorCode.OperationAlreadyRunning,
             message,
-            BuildRunOwnerBlockedDetails(owner));
-        var chrome = CreateRunOwnerBlockedDialogChrome(language, owner);
+            BuildRunOwnerBlockedDetails(owner, displayOwner));
+        var chrome = CreateRunOwnerBlockedDialogChrome(language, displayOwner);
         var chromeSnapshot = chrome.GetSnapshot(language);
         var prompt = chromeSnapshot.GetNamedTextOrDefault(
             DialogTextCatalog.ChromeKeys.Prompt,
@@ -978,12 +1129,13 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
         await _dialogService.ShowErrorAsync(request, "Copilot.Start.RunOwner.ErrorDetails", cancellationToken: cancellationToken);
     }
 
-    private static string BuildRunOwnerBlockedDetails(string owner)
+    private static string BuildRunOwnerBlockedDetails(string owner, string displayOwner)
     {
         return JsonSerializer.Serialize(new
         {
             requestedOwner = CopilotRunOwner,
             currentOwner = owner,
+            currentOwnerDisplayName = displayOwner,
             occurredAt = DateTimeOffset.Now,
         });
     }
@@ -1685,6 +1837,7 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
     private void OnSelectedItemChanged(CopilotItemViewModel? value)
     {
         NotifySelectionDerivedPropertiesChanged();
+        SyncSelectedTypeIndexFromListItem(value);
         if (_suppressSelectionFeedback)
         {
             return;
@@ -1705,11 +1858,46 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
         _ = RecordEventAsync("Copilot.Select", $"Selected copilot item `{value.Name}`.");
     }
 
+    private void SyncSelectedTypeIndexFromListItem(CopilotItemViewModel? item)
+    {
+        if (item?.TabIndex is not { } tabIndex)
+        {
+            return;
+        }
+
+        var normalizedTabIndex = Math.Clamp(tabIndex, 0, Types.Count - 1);
+        if (SelectedTypeIndex == normalizedTabIndex)
+        {
+            return;
+        }
+
+        var previousSuppress = _suppressSelectedTypeListItemSync;
+        _suppressSelectedTypeListItemSync = true;
+        try
+        {
+            SelectedTypeIndex = normalizedTabIndex;
+        }
+        finally
+        {
+            _suppressSelectedTypeListItemSync = previousSuppress;
+        }
+    }
+
     private void NotifySelectionDerivedPropertiesChanged()
     {
         OnPropertyChanged(nameof(HasSelection));
         OnPropertyChanged(nameof(CanMoveSelectedUp));
         OnPropertyChanged(nameof(CanMoveSelectedDown));
+    }
+
+    private async Task ReportListItemUpdateMissingAsync(string scope, CancellationToken cancellationToken)
+    {
+        StatusMessage = T("Copilot.Status.UpdateListItemFailed", "更新作业失败。");
+        LastErrorMessage = T("Copilot.Error.SelectTaskToUpdate", "请选择要更新的作业。");
+        await RecordFailedResultAsync(
+            scope,
+            UiOperationResult.Fail(UiErrorCode.CopilotSelectionMissing, LastErrorMessage),
+            cancellationToken);
     }
 
     private async Task<bool> MutateListAndPersistAsync(

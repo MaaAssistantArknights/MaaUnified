@@ -154,6 +154,7 @@ public sealed class UnifiedSessionService
     private readonly object _runOwnerGate = new();
     private readonly Dictionary<int, int> _taskIndexByCoreTaskId = new();
     private string? _currentRunOwner;
+    private string? _currentRunOwnerDisplayName;
 
     public UnifiedSessionService(
         IMaaCoreBridge bridge,
@@ -187,7 +188,25 @@ public sealed class UnifiedSessionService
         }
     }
 
+    public string? CurrentRunOwnerDisplayName
+    {
+        get
+        {
+            lock (_runOwnerGate)
+            {
+                return string.IsNullOrWhiteSpace(_currentRunOwnerDisplayName)
+                    ? _currentRunOwner
+                    : _currentRunOwnerDisplayName;
+            }
+        }
+    }
+
     public bool TryBeginRun(string owner, out string? currentOwner)
+    {
+        return TryBeginRun(owner, displayName: null, out currentOwner);
+    }
+
+    public bool TryBeginRun(string owner, string? displayName, out string? currentOwner)
     {
         currentOwner = null;
         if (string.IsNullOrWhiteSpace(owner))
@@ -206,6 +225,9 @@ public sealed class UnifiedSessionService
             }
 
             _currentRunOwner = normalizedOwner;
+            _currentRunOwnerDisplayName = string.IsNullOrWhiteSpace(displayName)
+                ? normalizedOwner
+                : displayName.Trim();
             currentOwner = _currentRunOwner;
             return true;
         }
@@ -236,6 +258,7 @@ public sealed class UnifiedSessionService
             if (string.Equals(_currentRunOwner, owner.Trim(), StringComparison.Ordinal))
             {
                 _currentRunOwner = null;
+                _currentRunOwnerDisplayName = null;
             }
         }
     }

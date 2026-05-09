@@ -2000,17 +2000,23 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             owner = TaskQueueRunOwner;
         }
 
-        LastErrorMessage = string.Format(
+        var displayOwner = Runtime.SessionService.CurrentRunOwnerDisplayName;
+        if (string.IsNullOrWhiteSpace(displayOwner))
+        {
+            displayOwner = owner;
+        }
+
+        var message = string.Format(
             RootTexts.GetOrDefault(
                 "Copilot.RunOwnerBlockedDialog.Message",
                 "{0} is still running. Stop the current task before starting Copilot."),
-            owner);
+            displayOwner);
 
-        var chrome = CreateRunOwnerDialogChrome(RootTexts.Language, owner);
+        var chrome = CreateRunOwnerDialogChrome(RootTexts.Language, displayOwner);
         var snapshot = chrome.GetSnapshot(RootTexts.Language);
         var request = new WarningConfirmDialogRequest(
             Title: snapshot.Title,
-            Message: snapshot.GetNamedTextOrDefault(DialogTextCatalog.ChromeKeys.Prompt, LastErrorMessage),
+            Message: snapshot.GetNamedTextOrDefault(DialogTextCatalog.ChromeKeys.Prompt, message),
             ConfirmText: snapshot.ConfirmText ?? DialogTextCatalog.WarningDialogConfirmButton(RootTexts.Language),
             CancelText: snapshot.CancelText ?? RootTexts.GetOrDefault("Copilot.RunOwnerBlockedDialog.StopButton", "Stop task"),
             Language: RootTexts.Language,
@@ -2080,6 +2086,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                     "TaskQueue.Start.RunOwner",
                     UiOperationResult.Fail(UiErrorCode.TaskQueueEditBlocked, message),
                     cancellationToken);
+                await ShowRunOwnerDialogAsync(cancellationToken);
                 return;
             }
 

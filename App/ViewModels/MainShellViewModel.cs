@@ -1619,6 +1619,16 @@ public sealed class MainShellViewModel : ObservableObject
                     if (!CanStartExecution)
                     {
                         CurrentSessionState = _runtime.SessionService.CurrentState;
+                        if (CurrentSessionState is SessionState.Running or SessionState.Stopping)
+                        {
+                            await TaskQueuePage.ToggleRunAsync(cancellationToken);
+                            await RecordEventAsync(
+                                scope,
+                                $"source={source}; running-dialog",
+                                cancellationToken);
+                            return ShellUiAction.None;
+                        }
+
                         var blockedMessage = CurrentSessionState switch
                         {
                             SessionState.Running or SessionState.Stopping => "任务正在执行中，Start 已禁用。",

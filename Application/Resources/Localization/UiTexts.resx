@@ -185,6 +185,30 @@
   <data name="Copilot.List.InlineJsonHint" xml:space="preserve">
     <value>内嵌 JSON</value>
   </data>
+  <data name="Copilot.List.Button.ClearAll" xml:space="preserve">
+    <value>删除全部</value>
+  </data>
+  <data name="Copilot.List.Button.Disable" xml:space="preserve">
+    <value>禁用</value>
+  </data>
+  <data name="Copilot.List.Button.Enable" xml:space="preserve">
+    <value>启用</value>
+  </data>
+  <data name="Copilot.List.Button.LoadSingle" xml:space="preserve">
+    <value>载入单个</value>
+  </data>
+  <data name="Copilot.List.Button.ToggleRaid" xml:space="preserve">
+    <value>切换突袭</value>
+  </data>
+  <data name="Copilot.List.ClearAllConfirm.Confirm" xml:space="preserve">
+    <value>删除全部</value>
+  </data>
+  <data name="Copilot.List.ClearAllConfirm.Message" xml:space="preserve">
+    <value>将删除战斗列表中的全部作业，此操作不可撤销。</value>
+  </data>
+  <data name="Copilot.List.ClearAllConfirm.Title" xml:space="preserve">
+    <value>删除战斗列表</value>
+  </data>
   <data name="Copilot.List.RaidLabel" xml:space="preserve">
     <value>突袭</value>
   </data>
@@ -198,7 +222,7 @@
     <value>未找到可导入的作业文件。</value>
   </data>
   <data name="Copilot.Error.ClearPersistFail" xml:space="preserve">
-    <value>清空作业列表失败：列表保存失败。</value>
+    <value>删除全部作业失败：列表保存失败。</value>
   </data>
   <data name="Copilot.Error.CurrentPayloadNotObject" xml:space="preserve">
     <value>当前作业必须是单个 JSON 对象。</value>
@@ -263,6 +287,9 @@
   <data name="Copilot.Error.SelectTaskToSort" xml:space="preserve">
     <value>请选择要排序的作业。</value>
   </data>
+  <data name="Copilot.Error.SelectTaskToUpdate" xml:space="preserve">
+    <value>请选择要更新的作业。</value>
+  </data>
   <data name="Copilot.Error.SessionStateNotAllowed" xml:space="preserve">
     <value>会话状态 `{0}` 不允许{1}。
 Session state `{0}` does not allow {2}.</value>
@@ -284,6 +311,9 @@ Session state `{0}` does not allow {2}.</value>
   </data>
   <data name="Copilot.Error.StopRunOwnerBlocked" xml:space="preserve">
     <value>Copilot 停止被拦截：当前运行所有者为 `{0}`。</value>
+  </data>
+  <data name="Copilot.Error.UpdateListItemPersistFail" xml:space="preserve">
+    <value>更新作业列表失败：列表保存失败。</value>
   </data>
   <data name="Copilot.RunOwnerBlockedDialog.ConfirmButton" xml:space="preserve">
     <value>确认</value>
@@ -331,7 +361,7 @@ Session state `{0}` does not allow {2}.</value>
 8. 战斗列表:
 ● 选择作业后，检查下方关卡名是否正确 (例: CV-EX-1)。
 ● 添加: 左键 = 普通难度，右键 = 突袭难度。
-● 清除: 左键 = 全部清空，右键 = 仅移除未激活任务。
+● 删除全部: 删除全部任务。
 ● 请在能看到目标关卡名的界面启动，不支持跨章节导航。
 ● 遇到理智不足、战斗失败、未能三星结算时将自动中止。</value>
   </data>
@@ -438,7 +468,10 @@ Session state `{0}` does not allow {2}.</value>
     <value>没有未激活作业需要清理。</value>
   </data>
   <data name="Copilot.Status.ClearSuccess" xml:space="preserve">
-    <value>已清空作业列表。</value>
+    <value>已删除全部作业。</value>
+  </data>
+  <data name="Copilot.Status.ClearCancelled" xml:space="preserve">
+    <value>已取消删除全部作业。</value>
   </data>
   <data name="Copilot.Status.CorruptedListIgnored" xml:space="preserve">
     <value>已忽略损坏的 Copilot 列表配置。</value>
@@ -488,6 +521,18 @@ Session state `{0}` does not allow {2}.</value>
   <data name="Copilot.Status.LoadedFeedbackLikeSuccess" xml:space="preserve">
     <value>已提交点赞。</value>
   </data>
+  <data name="Copilot.Status.ListItemDisabled" xml:space="preserve">
+    <value>已禁用作业。</value>
+  </data>
+  <data name="Copilot.Status.ListItemEnabled" xml:space="preserve">
+    <value>已启用作业。</value>
+  </data>
+  <data name="Copilot.Status.ListItemRaidDisabled" xml:space="preserve">
+    <value>已切换为普通作业。</value>
+  </data>
+  <data name="Copilot.Status.ListItemRaidEnabled" xml:space="preserve">
+    <value>已切换为突袭作业。</value>
+  </data>
   <data name="Copilot.Status.MoveDownSuccess" xml:space="preserve">
     <value>已将选中作业下移。</value>
   </data>
@@ -514,6 +559,15 @@ Session state `{0}` does not allow {2}.</value>
   </data>
   <data name="Copilot.Status.StopFailed" xml:space="preserve">
     <value>停止失败。</value>
+  </data>
+  <data name="Copilot.Status.UpdateListItemFailed" xml:space="preserve">
+    <value>更新作业失败。</value>
+  </data>
+  <data name="Copilot.Status.UpdateListItemNameFailed" xml:space="preserve">
+    <value>更新作业名称失败。</value>
+  </data>
+  <data name="Copilot.Status.UpdateListItemNameSuccess" xml:space="preserve">
+    <value>已更新作业名称：{0}</value>
   </data>
   <data name="Copilot.Tab.Display.Main" xml:space="preserve">
     <value>主线/故事集/SideStory</value>
@@ -557,8 +611,7 @@ Session state `{0}` does not allow {2}.</value>
 当「战斗列表」启用后，选择单个作业时会自动添加到「战斗列表」</value>
   </data>
   <data name="Copilot.Tip.ClearList" xml:space="preserve">
-    <value>左键清除所有任务
-右键清除未激活任务</value>
+    <value>删除战斗列表中的全部作业。</value>
   </data>
   <data name="Copilot.Tip.File" xml:space="preserve">
     <value>作业文件可以直接用鼠标拖进来哦 (oﾟvﾟ)ノ</value>
@@ -4730,6 +4783,21 @@ Session state `{0}` does not allow {2}.</value>
   </data>
   <data name="Toolbox.BusyDialog.Title" xml:space="preserve">
     <value>小工具正在执行</value>
+  </data>
+  <data name="Toolbox.RetryableDialog.DetailsButton" xml:space="preserve">
+    <value>详细报错</value>
+  </data>
+  <data name="Toolbox.RetryableDialog.LaterButton" xml:space="preserve">
+    <value>稍后再试</value>
+  </data>
+  <data name="Toolbox.RetryableDialog.Message" xml:space="preserve">
+    <value>你的手速怎么这么快，不过被我料到了。小工具还没准备好，稍后再试一下。</value>
+  </data>
+  <data name="Toolbox.RetryableDialog.RetryButton" xml:space="preserve">
+    <value>重试</value>
+  </data>
+  <data name="Toolbox.RetryableDialog.Title" xml:space="preserve">
+    <value>小工具还没准备好</value>
   </data>
   <data name="Toolbox.ExecutionReview.HistoryLabel" xml:space="preserve">
     <value>历史记录</value>

@@ -1355,7 +1355,10 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
                 return;
             }
 
-            if (!Runtime.SessionService.TryBeginRun(ToolboxRunOwner, out var currentOwner))
+            if (!Runtime.SessionService.TryBeginRun(
+                    ToolboxRunOwner,
+                    GetToolDisplayName(ToolboxToolKind.VideoRecognition),
+                    out var currentOwner))
             {
                 await ApplyToolboxBusyAsync(
                     ToolboxToolKind.VideoRecognition,
@@ -1586,7 +1589,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
             return;
         }
 
-        if (!Runtime.SessionService.TryBeginRun(ToolboxRunOwner, out var currentOwner))
+        if (!Runtime.SessionService.TryBeginRun(ToolboxRunOwner, GetToolDisplayName(tool), out var currentOwner))
         {
             await ApplyToolboxBusyAsync(
                 tool,
@@ -2702,7 +2705,15 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
             BuildFailureContextDetails(tool, errorCode, stage),
             result.Error?.Details);
         var normalized = UiOperationResult.Fail(errorCode, formatted, details);
-        _ = await ApplyResultAsync(normalized, ScopeOf(tool), cancellationToken);
+        var showRetryableDialog = ShouldShowRetryableToolboxDialog(errorCode, stage);
+        if (showRetryableDialog)
+        {
+            await RecordFailedResultAsync(ScopeOf(tool), normalized, cancellationToken);
+        }
+        else
+        {
+            _ = await ApplyResultAsync(normalized, ScopeOf(tool), cancellationToken);
+        }
 
         ResultText = formatted;
         LastErrorMessage = formatted;
@@ -2720,6 +2731,10 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
             errorCode));
         TrimExecutionHistory();
         await PersistExecutionHistoryAsync(cancellationToken);
+        if (showRetryableDialog)
+        {
+            await ShowToolboxRetryableErrorDialogAsync(normalized, tool, cancellationToken);
+        }
     }
 
     private async Task ApplyToolboxBusyAsync(
@@ -2736,7 +2751,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
             result.Error?.Details);
         var normalized = UiOperationResult.Fail(errorCode, formatted, details);
 
-        _ = await ApplyResultAsync(normalized, ScopeOf(tool), cancellationToken);
+        await RecordFailedResultAsync(ScopeOf(tool), normalized, cancellationToken);
 
         LastErrorMessage = formatted;
         LastExecutionErrorCode = errorCode;
@@ -2754,6 +2769,73 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         TrimExecutionHistory();
         await PersistExecutionHistoryAsync(cancellationToken);
         await ShowToolboxBusyDialogAsync(normalized, cancellationToken);
+    }
+
+    private static bool ShouldShowRetryableToolboxDialog(string errorCode, string stage)
+    {
+        return string.Equals(errorCode, CoreErrorCode.NotInitialized.ToString(), StringComparison.Ordinal)
+            && string.Equals(stage, "connect", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private async Task ShowToolboxRetryableErrorDialogAsync(
+        UiOperationResult errorResult,
+        ToolboxToolKind? tool,
+        CancellationToken cancellationToken)
+    {
+        var language = DialogLanguage;
+        var chrome = CreateToolboxRetryableErrorDialogChrome(language);
+        var chromeSnapshot = chrome.GetSnapshot(language);
+        var request = new WarningConfirmDialogRequest(
+            Title: chromeSnapshot.Title,
+            Message: chromeSnapshot.GetNamedTextOrDefault(
+                DialogTextCatalog.ChromeKeys.Prompt,
+                T(
+                    "Toolbox.RetryableDialog.Message",
+                    "你的手速怎么这么快，不过被我料到了。小工具还没准备好，稍后再试一下。")),
+            ConfirmText: chromeSnapshot.ConfirmText ?? T("Toolbox.RetryableDialog.RetryButton", "重试"),
+            CancelText: chromeSnapshot.CancelText ?? T("Toolbox.RetryableDialog.LaterButton", "稍后再试"),
+            Language: language,
+            Chrome: chrome);
+
+        var dialogResult = await _dialogService.ShowWarningConfirmAsync(
+            request,
+            "Toolbox.RetryableError",
+            cancellationToken);
+        if (dialogResult.Return == DialogReturnSemantic.Details)
+        {
+            await ShowToolboxErrorDetailsAsync(errorResult, tool, cancellationToken);
+            return;
+        }
+
+        if (dialogResult.Return == DialogReturnSemantic.Confirm && tool is not null)
+        {
+            await RetryToolAsync(tool.Value, cancellationToken);
+        }
+    }
+
+    private async Task RetryToolAsync(ToolboxToolKind tool, CancellationToken cancellationToken)
+    {
+        switch (tool)
+        {
+            case ToolboxToolKind.Recruit:
+                await StartRecruitAsync(cancellationToken);
+                break;
+            case ToolboxToolKind.OperBox:
+                await StartOperBoxAsync(cancellationToken);
+                break;
+            case ToolboxToolKind.Depot:
+                await StartDepotAsync(cancellationToken);
+                break;
+            case ToolboxToolKind.Gacha:
+                await StartGachaAsync(string.Equals(NormalizeToken(GachaDrawCountInput), "1", StringComparison.Ordinal), cancellationToken);
+                break;
+            case ToolboxToolKind.VideoRecognition:
+                await TogglePeepAsync(cancellationToken);
+                break;
+            case ToolboxToolKind.MiniGame:
+                await StartMiniGameAsync(cancellationToken);
+                break;
+        }
     }
 
     private async Task ShowToolboxBusyDialogAsync(UiOperationResult errorResult, CancellationToken cancellationToken)
@@ -2812,6 +2894,29 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
                             "Toolbox.BusyDialog.DetailsButton",
                             DialogTextCatalog.WarningDialogDetailsButton(nextLanguage))),
                         (DialogTextCatalog.ChromeKeys.Prompt, BuildToolboxBusyDialogMessage(nextLanguage, activeTool))));
+            });
+    }
+
+    private static DialogChromeCatalog CreateToolboxRetryableErrorDialogChrome(string language)
+    {
+        return DialogTextCatalog.CreateCatalog(
+            language,
+            nextLanguage =>
+            {
+                var texts = CreateTexts(nextLanguage);
+                var title = texts.GetOrDefault("Toolbox.RetryableDialog.Title", "Toolbox is not ready yet");
+                return new DialogChromeSnapshot(
+                    title: title,
+                    confirmText: texts.GetOrDefault("Toolbox.RetryableDialog.RetryButton", "Retry"),
+                    cancelText: texts.GetOrDefault("Toolbox.RetryableDialog.LaterButton", "Try later"),
+                    namedTexts: DialogTextCatalog.CreateNamedTexts(
+                        (DialogTextCatalog.ChromeKeys.SectionTitle, title),
+                        (DialogTextCatalog.ChromeKeys.DetailsButton, texts.GetOrDefault(
+                            "Toolbox.RetryableDialog.DetailsButton",
+                            DialogTextCatalog.WarningDialogDetailsButton(nextLanguage))),
+                        (DialogTextCatalog.ChromeKeys.Prompt, texts.GetOrDefault(
+                            "Toolbox.RetryableDialog.Message",
+                            "The toolbox is still getting ready. Try again in a moment."))));
             });
     }
 

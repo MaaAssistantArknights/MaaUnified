@@ -185,6 +185,30 @@ By pressing ｢Confirm｣, you understand and accept the possible risks.</value>
   <data name="Copilot.List.InlineJsonHint" xml:space="preserve">
     <value>inline JSON</value>
   </data>
+  <data name="Copilot.List.Button.ClearAll" xml:space="preserve">
+    <value>Delete all</value>
+  </data>
+  <data name="Copilot.List.Button.Disable" xml:space="preserve">
+    <value>Disable</value>
+  </data>
+  <data name="Copilot.List.Button.Enable" xml:space="preserve">
+    <value>Enable</value>
+  </data>
+  <data name="Copilot.List.Button.LoadSingle" xml:space="preserve">
+    <value>Load single</value>
+  </data>
+  <data name="Copilot.List.Button.ToggleRaid" xml:space="preserve">
+    <value>Toggle raid</value>
+  </data>
+  <data name="Copilot.List.ClearAllConfirm.Confirm" xml:space="preserve">
+    <value>Delete all</value>
+  </data>
+  <data name="Copilot.List.ClearAllConfirm.Message" xml:space="preserve">
+    <value>All copilot tasks in the battle list will be removed. This cannot be undone.</value>
+  </data>
+  <data name="Copilot.List.ClearAllConfirm.Title" xml:space="preserve">
+    <value>Delete battle list</value>
+  </data>
   <data name="Copilot.List.RaidLabel" xml:space="preserve">
     <value>Raid</value>
   </data>
@@ -198,7 +222,7 @@ By pressing ｢Confirm｣, you understand and accept the possible risks.</value>
     <value>No importable copilot files found.</value>
   </data>
   <data name="Copilot.Error.ClearPersistFail" xml:space="preserve">
-    <value>Clear failed: list save failed.</value>
+    <value>Delete all failed: list save failed.</value>
   </data>
   <data name="Copilot.Error.CurrentPayloadNotObject" xml:space="preserve">
     <value>Current copilot payload must be a single JSON object.</value>
@@ -263,6 +287,9 @@ By pressing ｢Confirm｣, you understand and accept the possible risks.</value>
   <data name="Copilot.Error.SelectTaskToSort" xml:space="preserve">
     <value>Select a copilot item to sort.</value>
   </data>
+  <data name="Copilot.Error.SelectTaskToUpdate" xml:space="preserve">
+    <value>Select a copilot item to update.</value>
+  </data>
   <data name="Copilot.Error.SessionStateNotAllowed" xml:space="preserve">
     <value>会话状态 `{0}` 不允许{1}。
 Session state `{0}` does not allow {2}.</value>
@@ -284,6 +311,9 @@ Session state `{0}` does not allow {2}.</value>
   </data>
   <data name="Copilot.Error.StopRunOwnerBlocked" xml:space="preserve">
     <value>Copilot stop blocked: current run owner is `{0}`.</value>
+  </data>
+  <data name="Copilot.Error.UpdateListItemPersistFail" xml:space="preserve">
+    <value>Update failed: list save failed.</value>
   </data>
   <data name="Copilot.RunOwnerBlockedDialog.ConfirmButton" xml:space="preserve">
     <value>Confirm</value>
@@ -331,7 +361,7 @@ Session state `{0}` does not allow {2}.</value>
 8. Battle list:
 ● Verify stage name below (e.g. CV-EX-1).
 ● Add: left=normal, right=raid.
-● Clear: left=all, right=inactive only.
+● Delete all: removes all tasks.
 ● Start from a page where target stage is visible. Cross-chapter navigation is unsupported.
 ● The run stops automatically on sanity shortage, battle failure, or non-3-star result.</value>
   </data>
@@ -438,7 +468,10 @@ Session state `{0}` does not allow {2}.</value>
     <value>No inactive items to clean.</value>
   </data>
   <data name="Copilot.Status.ClearSuccess" xml:space="preserve">
-    <value>Copilot list cleared.</value>
+    <value>All copilot tasks deleted.</value>
+  </data>
+  <data name="Copilot.Status.ClearCancelled" xml:space="preserve">
+    <value>Deleting all copilot tasks was cancelled.</value>
   </data>
   <data name="Copilot.Status.CorruptedListIgnored" xml:space="preserve">
     <value>Ignored corrupted copilot list configuration.</value>
@@ -488,6 +521,18 @@ Session state `{0}` does not allow {2}.</value>
   <data name="Copilot.Status.LoadedFeedbackLikeSuccess" xml:space="preserve">
     <value>Like submitted.</value>
   </data>
+  <data name="Copilot.Status.ListItemDisabled" xml:space="preserve">
+    <value>Copilot item disabled.</value>
+  </data>
+  <data name="Copilot.Status.ListItemEnabled" xml:space="preserve">
+    <value>Copilot item enabled.</value>
+  </data>
+  <data name="Copilot.Status.ListItemRaidDisabled" xml:space="preserve">
+    <value>Switched to normal difficulty.</value>
+  </data>
+  <data name="Copilot.Status.ListItemRaidEnabled" xml:space="preserve">
+    <value>Switched to raid difficulty.</value>
+  </data>
   <data name="Copilot.Status.MoveDownSuccess" xml:space="preserve">
     <value>Selected item moved down.</value>
   </data>
@@ -514,6 +559,15 @@ Session state `{0}` does not allow {2}.</value>
   </data>
   <data name="Copilot.Status.StopFailed" xml:space="preserve">
     <value>Stop failed.</value>
+  </data>
+  <data name="Copilot.Status.UpdateListItemFailed" xml:space="preserve">
+    <value>Failed to update copilot item.</value>
+  </data>
+  <data name="Copilot.Status.UpdateListItemNameFailed" xml:space="preserve">
+    <value>Failed to update copilot item name.</value>
+  </data>
+  <data name="Copilot.Status.UpdateListItemNameSuccess" xml:space="preserve">
+    <value>Copilot item name updated: {0}</value>
   </data>
   <data name="Copilot.Tab.Display.Main" xml:space="preserve">
     <value>Main / Story / SideStory</value>
@@ -557,8 +611,7 @@ Please start from the correct screen. Cross-chapter navigation is unsupported.
 When enabled, selecting one copilot auto-adds it to battle list.</value>
   </data>
   <data name="Copilot.Tip.ClearList" xml:space="preserve">
-    <value>Left click: clear all
-Right click: clear inactive only</value>
+    <value>Delete all copilot tasks in the battle list.</value>
   </data>
   <data name="Copilot.Tip.File" xml:space="preserve">
     <value>You can also drag a copilot file here.</value>
@@ -4741,6 +4794,21 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
   </data>
   <data name="Toolbox.BusyDialog.Title" xml:space="preserve">
     <value>Toolbox is busy</value>
+  </data>
+  <data name="Toolbox.RetryableDialog.DetailsButton" xml:space="preserve">
+    <value>Error details</value>
+  </data>
+  <data name="Toolbox.RetryableDialog.LaterButton" xml:space="preserve">
+    <value>Try later</value>
+  </data>
+  <data name="Toolbox.RetryableDialog.Message" xml:space="preserve">
+    <value>That was impressively fast, and yes, I saw it coming. The toolbox is still getting ready, so try again in a moment.</value>
+  </data>
+  <data name="Toolbox.RetryableDialog.RetryButton" xml:space="preserve">
+    <value>Retry</value>
+  </data>
+  <data name="Toolbox.RetryableDialog.Title" xml:space="preserve">
+    <value>Toolbox is not ready yet</value>
   </data>
   <data name="Toolbox.ExecutionReview.HistoryLabel" xml:space="preserve">
     <value>History</value>

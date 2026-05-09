@@ -45,13 +45,16 @@
       <Setter Property="ClipToBounds" Value="False" />
     </Style>
     <Style Selector="Border.copilot-list-panel">
-      <Setter Property="Padding" Value="14" />
-      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Surface.Card}" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Background" Value="Transparent" />
       <Setter Property="BorderBrush" Value="Transparent" />
       <Setter Property="BorderThickness" Value="0" />
-      <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.CornerRadius.Card}" />
-      <Setter Property="BoxShadow" Value="{DynamicResource MAA.App.BoxShadow.Card}" />
+      <Setter Property="CornerRadius" Value="0" />
+      <Setter Property="BoxShadow" Value="0 0 0 0 #00000000" />
       <Setter Property="ClipToBounds" Value="False" />
+    </Style>
+    <Style Selector="Border.copilot-list-inner-frame">
+      <Setter Property="Padding" Value="6" />
     </Style>
     <Style Selector="Border.copilot-status-card">
       <Setter Property="Padding" Value="0,0,0,12" />
@@ -176,6 +179,15 @@
       <Setter Property="HorizontalAlignment" Value="Stretch" />
       <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
+    <Style Selector="StackPanel.copilot-start-status">
+      <Setter Property="Margin" Value="0,10,0,0" />
+      <Setter Property="MaxWidth" Value="320" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="Spacing" Value="4" />
+    </Style>
+    <Style Selector="StackPanel.copilot-start-status TextBlock.copilot-status-text">
+      <Setter Property="TextAlignment" Value="Center" />
+    </Style>
     <Style Selector="CheckBox.copilot-list-item-check">
       <Setter Property="HorizontalAlignment" Value="Stretch" />
       <Setter Property="HorizontalContentAlignment" Value="Stretch" />
@@ -184,39 +196,16 @@
       <Setter Property="HorizontalAlignment" Value="Stretch" />
       <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
-    <Style Selector="controls|ReorderableList ListBox">
-      <Setter Property="Background" Value="Transparent" />
-      <Setter Property="BorderThickness" Value="0" />
+    <Style Selector="controls|AppSelectionList.copilot-battle-list">
+      <Setter Property="MinWidth" Value="320" />
+      <Setter Property="MinHeight" Value="180" />
     </Style>
-    <Style Selector="controls|ReorderableList ListBoxItem">
-      <Setter Property="Background" Value="Transparent" />
-      <Setter Property="BorderBrush" Value="Transparent" />
-      <Setter Property="BorderThickness" Value="0" />
-      <Setter Property="Padding" Value="0" />
-      <Setter Property="Margin" Value="0,0,0,10" />
-      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-    </Style>
-    <Style Selector="Border.copilot-list-item-shell">
-      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Surface.Section}" />
-      <Setter Property="BorderBrush" Value="Transparent" />
-      <Setter Property="BorderThickness" Value="0" />
-      <Setter Property="CornerRadius" Value="6" />
+    <Style Selector="controls|AppSelectionList.copilot-battle-list Border.copilot-list-item-shell">
       <Setter Property="Padding" Value="10,10,12,10" />
-      <Setter Property="Transitions">
-        <Transitions>
-          <BrushTransition Property="Background"
-                           Duration="0:0:0.18" />
-        </Transitions>
-      </Setter>
     </Style>
-    <Style Selector="controls|ReorderableList ListBoxItem:pointerover Border.copilot-list-item-shell">
-      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Surface.Card}" />
-    </Style>
-    <Style Selector="controls|ReorderableList ListBoxItem:selected Border.copilot-list-item-shell">
-      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Selection.Background}" />
-    </Style>
-    <Style Selector="controls|ReorderableList ListBoxItem:selected:pointerover Border.copilot-list-item-shell">
-      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Selection.Background}" />
+    <Style Selector="Border.copilot-list-item-body">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Cursor" Value="Hand" />
     </Style>
     <Style Selector="Border.copilot-list-item-accent">
       <Setter Property="Width" Value="3" />
@@ -229,8 +218,93 @@
         </Transitions>
       </Setter>
     </Style>
-    <Style Selector="controls|ReorderableList ListBoxItem:selected Border.copilot-list-item-accent">
+    <Style Selector="controls|AppSelectionList.copilot-battle-list ListBoxItem:selected Border.copilot-list-item-accent">
       <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.PrimaryBackground}" />
+    </Style>
+    <Style Selector="Border.copilot-list-task-name-display">
+      <Setter Property="MinHeight" Value="36" />
+      <Setter Property="Padding" Value="12,0" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+    <Style Selector="TextBlock.copilot-list-task-name-display-text">
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Secondary}" />
+      <Setter Property="FontSize" Value="13.5" />
+    </Style>
+    <Style Selector="Button.grouped-card-footer-action.copilot-list-footer-action">
+      <Setter Property="MinWidth" Value="84" />
+    </Style>
+    <Style Selector="Popup.copilot-list-action-popup">
+      <Setter Property="WindowManagerAddShadowHint" Value="False" />
+    </Style>
+    <Style Selector="Border.copilot-list-action-popup-panel">
+      <Setter Property="MinWidth" Value="{DynamicResource MAA.App.Interaction.FloatingMenuMinWidth}" />
+      <Setter Property="Padding" Value="{DynamicResource MAA.App.Interaction.FloatingMenuPadding}" />
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Surface.Card}" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.Interaction.FloatingMenuCornerRadius}" />
+      <Setter Property="BoxShadow" Value="{DynamicResource MAA.App.BoxShadow.Card}" />
+      <Setter Property="ClipToBounds" Value="False" />
+    </Style>
+    <Style Selector="ItemsControl.copilot-list-action-popup-list">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="ItemsControl.copilot-list-action-popup-list ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="0" />
+    </Style>
+    <Style Selector="ItemsControl.copilot-list-action-popup-list ContentPresenter /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="0" />
+    </Style>
+    <Style Selector="ItemsControl.copilot-list-action-popup-list ContentPresenter:pointerover">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+    <Style Selector="ItemsControl.copilot-list-action-popup-list ContentPresenter:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+    <Style Selector="Border.copilot-list-action-popup-item-shell">
+      <Setter Property="MinHeight" Value="{DynamicResource MAA.App.Interaction.FloatingMenuItemMinHeight}" />
+      <Setter Property="Padding" Value="{DynamicResource MAA.App.Interaction.FloatingMenuItemPadding}" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.Interaction.FloatingMenuItemCornerRadius}" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="Border.copilot-list-action-popup-item-shell:pointerover">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.SettingsInput.ItemBackgroundHover}" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+    </Style>
+    <Style Selector="Border.copilot-list-action-popup-item-shell:disabled">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="Cursor" Value="Arrow" />
+      <Setter Property="Opacity" Value="0.64" />
+    </Style>
+    <Style Selector="TextBlock.copilot-list-action-popup-item-text">
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Secondary}" />
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="LineHeight" Value="18" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Border.copilot-list-action-popup-item-shell:pointerover TextBlock.copilot-list-action-popup-item-text">
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ItemForegroundHover}" />
+    </Style>
+    <Style Selector="Border.copilot-list-action-popup-item-shell:disabled TextBlock.copilot-list-action-popup-item-text">
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Action.DisabledForeground}" />
     </Style>
   </UserControl.Styles>
   <UserControl.DataTemplates>
@@ -321,7 +395,7 @@
               ColumnDefinitions="*,18,Auto">
           <Border Grid.Column="0"
                   Classes="app-surface app-card copilot-config-card">
-            <Grid RowDefinitions="Auto,*">
+            <Grid RowDefinitions="Auto,Auto,*">
               <Grid HorizontalAlignment="Center">
                 <Button Width="120"
                         Height="46"
@@ -339,7 +413,17 @@
                         IsEnabled="{Binding CanStop}" />
               </Grid>
 
-              <ScrollViewer Grid.Row="1"
+              <StackPanel Grid.Row="1"
+                          Classes="copilot-start-status"
+                          IsVisible="{Binding HasStatusMessage}">
+                <TextBlock Classes="app-body copilot-status-text"
+                           Text="{Binding StatusMessage}" />
+                <TextBlock Classes="state-error long-wrap copilot-status-text"
+                           Text="{Binding LastErrorMessage}"
+                           IsVisible="{Binding HasLastErrorMessage}" />
+              </StackPanel>
+
+              <ScrollViewer Grid.Row="2"
                             Margin="0,16,0,0"
                             HorizontalScrollBarVisibility="Disabled"
                             VerticalScrollBarVisibility="Auto">
@@ -527,76 +611,118 @@
           <Border Grid.Column="2"
                   Classes="app-surface app-card copilot-list-panel"
                   IsVisible="{Binding ShowCopilotListPanel}">
-            <Grid RowDefinitions="*,Auto">
-              <controls:ReorderableList HeaderText="{Binding BattleListText}"
-                                        ItemsSource="{Binding Items}"
-                                        SelectedItem="{Binding SelectedItem}"
-                                        CanReorder="{Binding CanEdit}"
-                                        Reordered="OnCopilotListReordered">
-                <controls:ReorderableList.ItemTemplate>
-                  <DataTemplate>
-                    <Border Classes="copilot-list-item-shell">
-                      <Grid ColumnDefinitions="3,*,Auto,Auto">
-                        <Border Classes="copilot-list-item-accent" />
-                        <CheckBox Grid.Column="1"
-                                  Margin="10,0,0,0"
-                                  Classes="app-checkbox copilot-list-item-check"
-                                  IsChecked="{Binding IsChecked}"
-                                  ToolTip.Tip="{Binding ExecutionPathHint}">
-                          <TextBlock Classes="copilot-list-item-title"
-                                     Text="{Binding DisplayName}" />
-                        </CheckBox>
-                        <Button Grid.Column="2"
-                                Classes="app-button app-secondary copilot-list-action"
-                                Margin="8,0,0,0"
-                                Content="{Binding DataContext.LoadButtonText, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                Tag="{Binding}"
-                                Click="OnLoadListItemClick"
-                                PointerPressed="OnLoadListItemPointerPressed" />
-                        <Button Grid.Column="3"
-                                Classes="app-button app-secondary copilot-list-action"
-                                Margin="8,0,0,0"
-                                Content="{Binding DataContext.DeleteButtonText, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                Tag="{Binding}"
-                                Click="OnDeleteListItemClick" />
-                      </Grid>
-                    </Border>
-                  </DataTemplate>
-                </controls:ReorderableList.ItemTemplate>
-              </controls:ReorderableList>
+            <Border Classes="grouped-card-frame compact copilot-list-inner-frame">
+              <Grid RowDefinitions="Auto,*,Auto,Auto">
+                <TextBlock Grid.Row="0"
+                           Margin="8,6,8,8"
+                           Text="{Binding BattleListText}" />
 
-              <Grid Grid.Row="1"
-                    Margin="0,14,0,0"
-                    ColumnDefinitions="Auto,*,Auto,Auto">
-                <Button Grid.Column="0"
-                        Classes="app-button app-secondary copilot-list-action"
-                        Content="{Binding ImportBatchButtonText}"
-                        ToolTip.Tip="{Binding ImportBatchButtonTip}"
-                        Click="OnImportFilesClick"
-                        IsEnabled="{Binding CanEdit}" />
-                <controls:AppTextInput Grid.Column="1"
-                                       Margin="8,0,0,0"
-                                       Text="{Binding CopilotTaskName}"
-                                       Watermark="{Binding StageNameWatermark}"
-                                       ToolTip.Tip="{Binding StageNameTip}" />
-                <Button Grid.Column="2"
-                        Classes="app-button app-secondary copilot-list-action"
-                        Margin="8,0,0,0"
-                        Content="{Binding AddListButtonText}"
-                        ToolTip.Tip="{Binding AddListButtonTip}"
-                        Click="OnAddCurrentToListClick"
-                        PointerPressed="OnAddCurrentToListPointerPressed"
-                        IsEnabled="{Binding CanEdit}" />
-                <Button Grid.Column="3"
-                        Classes="app-button app-secondary copilot-list-action"
-                        Margin="8,0,0,0"
-                        Content="{Binding ClearButtonText}"
-                        ToolTip.Tip="{Binding ClearButtonTip}"
-                        Click="OnClearListClick"
-                        PointerPressed="OnClearListPointerPressed"
-                        IsEnabled="{Binding CanEdit}" />
+                <controls:AppSelectionList Grid.Row="1"
+                                           Classes="copilot-battle-list selection-list-section-cards selection-list-no-indicator"
+                                           ItemsSource="{Binding Items}"
+                                           SelectedItem="{Binding SelectedItem}"
+                                           CanReorderItems="{Binding CanEdit}"
+                                           ItemReorderRequested="OnCopilotListItemReorderRequested">
+                  <controls:AppSelectionList.ItemTemplate>
+                    <DataTemplate>
+                      <Border Classes="app-selection-list-item-shell copilot-list-item-shell">
+                        <Grid ColumnDefinitions="3,Auto,*,Auto">
+                          <Border Classes="copilot-list-item-accent" />
+                          <CheckBox Grid.Column="1"
+                                    Margin="10,0,0,0"
+                                    Classes="app-checkbox copilot-list-item-check"
+                                    IsChecked="{Binding IsChecked, Mode=OneWay}"
+                                    Click="OnCopilotListItemCheckClick">
+                            <ToolTip.Tip>
+                              <Grid Margin="14"
+                                    Background="Transparent"
+                                    ClipToBounds="False">
+                                <Border Classes="app-tooltip-card">
+                                  <TextBlock Classes="app-tooltip-card-text"
+                                             Text="{Binding ExecutionPathHint}" />
+                                </Border>
+                              </Grid>
+                            </ToolTip.Tip>
+                          </CheckBox>
+                          <Border Grid.Column="2"
+                                  Margin="8,0,0,0"
+                                  Classes="copilot-list-item-body"
+                                  Tag="{Binding}"
+                                  Tapped="OnCopilotListItemBodyTapped"
+                                  PointerPressed="OnCopilotListItemBodyPointerPressed">
+                            <ToolTip.Tip>
+                              <Grid Margin="14"
+                                    Background="Transparent"
+                                    ClipToBounds="False">
+                                <Border Classes="app-tooltip-card">
+                                  <TextBlock Classes="app-tooltip-card-text"
+                                             Text="{Binding ExecutionPathHint}" />
+                                </Border>
+                              </Grid>
+                            </ToolTip.Tip>
+                            <TextBlock Classes="copilot-list-item-title"
+                                       VerticalAlignment="Center"
+                                       Text="{Binding DisplayName}" />
+                          </Border>
+                          <Border Grid.Column="3"
+                                  Classes="task-queue-row-action copilot-list-delete-hotspot"
+                                  Margin="8,0,0,0"
+                                  ToolTip.Tip="{Binding DataContext.DeleteButtonText, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                  Tag="{Binding}"
+                                  PointerPressed="OnDeleteListItemPointerPressed">
+                            <TextBlock Classes="task-queue-row-action-glyph"
+                                       Text="×" />
+                          </Border>
+                        </Grid>
+                      </Border>
+                    </DataTemplate>
+                  </controls:AppSelectionList.ItemTemplate>
+                </controls:AppSelectionList>
+
+                <Border Grid.Row="2"
+                        Classes="task-queue-list-action-divider" />
+                <Border Grid.Row="3"
+                        Classes="task-queue-list-actions"
+                        IsEnabled="{Binding CanEdit}">
+                  <StackPanel Classes="task-queue-list-action-stack">
+                    <Grid Classes="task-queue-list-action-row"
+                          ColumnDefinitions="*,Auto,Auto">
+                      <Border Grid.Column="0"
+                              Classes="copilot-list-task-name-display"
+                              ToolTip.Tip="{Binding StageNameTip}">
+                        <TextBlock Classes="copilot-list-task-name-display-text"
+                                   Text="{Binding CopilotTaskName}"
+                                   ToolTip.Tip="{Binding StageNameTip}" />
+                      </Border>
+                      <Border Grid.Column="1"
+                              Classes="task-queue-list-action-separator" />
+                      <Button Grid.Column="2"
+                              Classes="grouped-card-footer-action copilot-list-footer-action"
+                              Content="{Binding AddListButtonText}"
+                              ToolTip.Tip="{Binding AddListButtonTip}"
+                              Click="OnAddCurrentToListClick"
+                              PointerPressed="OnAddCurrentToListPointerPressed" />
+                    </Grid>
+                    <Border Classes="task-queue-list-action-row-divider" />
+                    <Grid Classes="task-queue-list-action-row"
+                          ColumnDefinitions="*,Auto,*">
+                      <Button Grid.Column="0"
+                              Classes="grouped-card-footer-action"
+                              Content="{Binding ImportBatchButtonText}"
+                              ToolTip.Tip="{Binding ImportBatchButtonTip}"
+                              Click="OnImportFilesClick" />
+                      <Border Grid.Column="1"
+                              Classes="task-queue-list-action-separator" />
+                      <Button Grid.Column="2"
+                              Classes="grouped-card-footer-action"
+                              Content="{Binding ClearAllButtonText}"
+                              ToolTip.Tip="{Binding ClearButtonTip}"
+                              Click="OnClearListClick" />
+                    </Grid>
+                  </StackPanel>
+                </Border>
               </Grid>
-            </Grid>
+            </Border>
           </Border>
         </Grid>
 
@@ -612,24 +738,43 @@
       </Grid>
     </Border>
 
+    <Popup x:Name="CopilotListActionPopup"
+           Classes="copilot-list-action-popup"
+           IsLightDismissEnabled="True"
+           Placement="Pointer"
+           Closed="OnCopilotListActionPopupClosed">
+      <Border Classes="copilot-list-action-popup-panel">
+        <ItemsControl x:Name="CopilotListActionPopupItems"
+                      Classes="copilot-list-action-popup-list">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <StackPanel />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <Border Classes="copilot-list-action-popup-item-shell"
+                      IsEnabled="{Binding IsEnabled}"
+                      IsVisible="{Binding IsVisible}"
+                      Tag="{Binding}"
+                      PointerPressed="OnCopilotListActionPopupItemPointerPressed">
+                <TextBlock Classes="copilot-list-action-popup-item-text"
+                           Text="{Binding Header}" />
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </Border>
+    </Popup>
+
     <Border Grid.Column="2"
             Width="{DynamicResource MAA.Size.Copilot.SidePanelWidth}"
             Classes="app-surface app-section copilot-side-section">
       <Grid RowDefinitions="*,Auto,Auto">
         <Border Grid.Row="0"
                 Classes="app-surface app-card copilot-log-panel">
-          <Grid RowDefinitions="Auto,*">
-            <Border Grid.Row="0"
-                    Classes="tool-status-panel copilot-status-card">
-              <StackPanel Spacing="6">
-                <TextBlock Classes="app-body copilot-status-text"
-                           Text="{Binding StatusMessage}" />
-                <TextBlock Classes="state-error long-wrap copilot-status-text"
-                           Text="{Binding LastErrorMessage}" />
-              </StackPanel>
-            </Border>
-
-            <ScrollViewer Grid.Row="1"
+          <Grid>
+            <ScrollViewer
                           HorizontalScrollBarVisibility="Disabled"
                           VerticalScrollBarVisibility="Auto">
               <StackPanel Classes="copilot-log-panel-content">

@@ -80,7 +80,22 @@
     <value>已新增空白作業。</value>
   </data>
   <data name="Copilot.Status.ClearSuccess" xml:space="preserve">
-    <value>已清空作業列表。</value>
+    <value>已刪除全部作業。</value>
+  </data>
+  <data name="Copilot.Status.ClearCancelled" xml:space="preserve">
+    <value>已取消刪除全部作業。</value>
+  </data>
+  <data name="Copilot.Status.ListItemDisabled" xml:space="preserve">
+    <value>已停用作業。</value>
+  </data>
+  <data name="Copilot.Status.ListItemEnabled" xml:space="preserve">
+    <value>已啟用作業。</value>
+  </data>
+  <data name="Copilot.Status.ListItemRaidDisabled" xml:space="preserve">
+    <value>已切換為普通作業。</value>
+  </data>
+  <data name="Copilot.Status.ListItemRaidEnabled" xml:space="preserve">
+    <value>已切換為突襲作業。</value>
   </data>
   <data name="Copilot.Status.MoveDownSuccess" xml:space="preserve">
     <value>已將選中作業下移。</value>
@@ -90,6 +105,15 @@
   </data>
   <data name="Copilot.Status.RemoveSuccess" xml:space="preserve">
     <value>已刪除選中作業。</value>
+  </data>
+  <data name="Copilot.Status.UpdateListItemFailed" xml:space="preserve">
+    <value>更新作業失敗。</value>
+  </data>
+  <data name="Copilot.Status.UpdateListItemNameFailed" xml:space="preserve">
+    <value>更新作業名稱失敗。</value>
+  </data>
+  <data name="Copilot.Status.UpdateListItemNameSuccess" xml:space="preserve">
+    <value>已更新作業名稱：{0}</value>
   </data>
   <data name="Copilot.Tab.Main" xml:space="preserve">
     <value>主線/故事集/SideStory</value>
@@ -3395,6 +3419,12 @@
   <data name="Copilot.Error.ValidateTabMismatch" xml:space="preserve">
     <value>目前選擇的作業與標籤頁類型不符</value>
   </data>
+  <data name="Copilot.Error.SelectTaskToUpdate" xml:space="preserve">
+    <value>請選擇要更新的作業。</value>
+  </data>
+  <data name="Copilot.Error.UpdateListItemPersistFail" xml:space="preserve">
+    <value>更新作業列表失敗：列表儲存失敗。</value>
+  </data>
   <data name="Copilot.RunOwnerBlockedDialog.ConfirmButton" xml:space="preserve">
     <value>確認</value>
   </data>
@@ -3457,8 +3487,7 @@
 右鍵加入突襲難度</value>
   </data>
   <data name="Copilot.Tip.ClearList" xml:space="preserve">
-    <value>左鍵清除所有任務
-右鍵清除未啟用任務</value>
+    <value>刪除戰鬥列表中的全部作業。</value>
   </data>
   <data name="Copilot.Tip.File" xml:space="preserve">
     <value>作業檔可以直接用滑鼠拖進來喔 (oﾟvﾟ)ノ</value>
@@ -4092,6 +4121,30 @@
   </data>
   <data name="Copilot.List.InlineJsonHint" xml:space="preserve">
     <value>內嵌 JSON</value>
+  </data>
+  <data name="Copilot.List.Button.ClearAll" xml:space="preserve">
+    <value>刪除全部</value>
+  </data>
+  <data name="Copilot.List.Button.Disable" xml:space="preserve">
+    <value>停用</value>
+  </data>
+  <data name="Copilot.List.Button.Enable" xml:space="preserve">
+    <value>啟用</value>
+  </data>
+  <data name="Copilot.List.Button.LoadSingle" xml:space="preserve">
+    <value>載入單個</value>
+  </data>
+  <data name="Copilot.List.Button.ToggleRaid" xml:space="preserve">
+    <value>切換突襲</value>
+  </data>
+  <data name="Copilot.List.ClearAllConfirm.Confirm" xml:space="preserve">
+    <value>刪除全部</value>
+  </data>
+  <data name="Copilot.List.ClearAllConfirm.Message" xml:space="preserve">
+    <value>將刪除戰鬥列表中的全部作業，此操作無法復原。</value>
+  </data>
+  <data name="Copilot.List.ClearAllConfirm.Title" xml:space="preserve">
+    <value>刪除戰鬥列表</value>
   </data>
   <data name="Copilot.List.RaidLabel" xml:space="preserve">
     <value>突襲</value>

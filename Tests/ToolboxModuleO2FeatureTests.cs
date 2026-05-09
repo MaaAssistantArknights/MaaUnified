@@ -6,6 +6,7 @@ using MAAUnified.App.Features.Dialogs;
 using MAAUnified.App.ViewModels.Infrastructure;
 using MAAUnified.App.ViewModels.Toolbox;
 using MAAUnified.Application.Models;
+using MAAUnified.CoreBridge;
 using LegacyConfigurationKeys = MAAUnified.Compat.Constants.ConfigurationKeys;
 
 namespace MAAUnified.Tests;
@@ -259,6 +260,9 @@ public sealed class ToolboxModuleO2FeatureTests
         var vm = new ToolboxPageViewModel(fixture.Runtime, fixture.ConnectionState, dialogService);
         await vm.InitializeAsync();
 
+        DialogErrorRaisedEvent? raised = null;
+        fixture.Runtime.DialogFeatureService.ErrorRaised += (_, e) => raised = e;
+
         await vm.StartRecruitAsync();
         await vm.StartDepotAsync();
 
@@ -272,6 +276,56 @@ public sealed class ToolboxModuleO2FeatureTests
         Assert.Equal("Toolbox", fixture.Runtime.SessionService.CurrentRunOwner);
         Assert.Equal(ToolboxExecutionState.Executing, vm.ExecutionState);
         Assert.Equal(UiErrorCode.ToolboxExecutionFailed, vm.LastExecutionErrorCode);
+        Assert.Null(raised);
+        Assert.Equal(0, dialogService.ErrorCallCount);
+    }
+
+    [Fact]
+    public async Task StartToolAsync_WhenBridgeNotInitialized_ShouldShowRetryableDialogWithoutGlobalErrorPopup()
+    {
+        await using var fixture = await ToolboxTestFixture.CreateAsync();
+        fixture.Bridge.ForceConnectFailure = true;
+        fixture.Bridge.ConnectFailureCode = CoreErrorCode.NotInitialized;
+        fixture.Bridge.ConnectFailureMessage = "Bridge is not initialized.";
+        var dialogService = new RecordingDialogService(DialogReturnSemantic.Close);
+        DialogErrorRaisedEvent? raised = null;
+        fixture.Runtime.DialogFeatureService.ErrorRaised += (_, e) => raised = e;
+        var vm = new ToolboxPageViewModel(fixture.Runtime, fixture.ConnectionState, dialogService);
+        await vm.InitializeAsync();
+
+        await vm.StartRecruitAsync();
+
+        Assert.Equal(1, dialogService.WarningConfirmCallCount);
+        Assert.Equal("Toolbox.RetryableError", dialogService.LastScope);
+        Assert.NotNull(dialogService.LastRequest);
+        Assert.Contains("手速", dialogService.LastRequest!.Message, StringComparison.Ordinal);
+        Assert.Equal("重试", dialogService.LastRequest.ConfirmText);
+        Assert.Equal("稍后再试", dialogService.LastRequest.CancelText);
+        Assert.Equal(ToolboxExecutionState.Failed, vm.ExecutionState);
+        Assert.Equal(CoreErrorCode.NotInitialized.ToString(), vm.LastExecutionErrorCode);
+        Assert.Null(raised);
+        Assert.Equal(0, dialogService.ErrorCallCount);
+    }
+
+    [Fact]
+    public async Task StartToolAsync_WhenBridgeNotInitializedAndDetailsClicked_ShouldOpenErrorDetails()
+    {
+        await using var fixture = await ToolboxTestFixture.CreateAsync();
+        fixture.Bridge.ForceConnectFailure = true;
+        fixture.Bridge.ConnectFailureCode = CoreErrorCode.NotInitialized;
+        fixture.Bridge.ConnectFailureMessage = "Bridge is not initialized.";
+        var dialogService = new RecordingDialogService(DialogReturnSemantic.Details);
+        var vm = new ToolboxPageViewModel(fixture.Runtime, fixture.ConnectionState, dialogService);
+        await vm.InitializeAsync();
+
+        await vm.StartRecruitAsync();
+
+        Assert.Equal(1, dialogService.WarningConfirmCallCount);
+        Assert.Equal(1, dialogService.ErrorCallCount);
+        Assert.Equal("Toolbox.Busy.ErrorDetails", dialogService.LastErrorScope);
+        Assert.NotNull(dialogService.LastErrorRequest);
+        Assert.Equal("Toolbox.Recruit", dialogService.LastErrorRequest!.Context);
+        Assert.Equal(CoreErrorCode.NotInitialized.ToString(), dialogService.LastErrorRequest.Result.Error?.Code);
     }
 
     [Fact]
@@ -500,6 +554,12 @@ public sealed class ToolboxModuleO2FeatureTests
 
         public WarningConfirmDialogRequest? LastRequest { get; private set; }
 
+        public int ErrorCallCount { get; private set; }
+
+        public string? LastErrorScope { get; private set; }
+
+        public ErrorDialogRequest? LastErrorRequest { get; private set; }
+
         public Task<DialogCompletion<AnnouncementDialogPayload>> ShowAnnouncementAsync(
             AnnouncementDialogRequest request,
             string sourceScope,
@@ -529,7 +589,12 @@ public sealed class ToolboxModuleO2FeatureTests
             string sourceScope,
             Func<CancellationToken, Task<UiOperationResult>>? openIssueReportAsync = null,
             CancellationToken cancellationToken = default)
-            => Task.FromResult(new DialogCompletion<ErrorDialogPayload>(DialogReturnSemantic.Close, null, "recording"));
+        {
+            ErrorCallCount++;
+            LastErrorScope = sourceScope;
+            LastErrorRequest = request;
+            return Task.FromResult(new DialogCompletion<ErrorDialogPayload>(DialogReturnSemantic.Close, null, "recording"));
+        }
 
         public Task<DialogCompletion<AchievementListDialogPayload>> ShowAchievementListAsync(
             AchievementListDialogRequest request,

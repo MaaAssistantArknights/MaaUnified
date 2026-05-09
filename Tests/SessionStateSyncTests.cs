@@ -386,18 +386,22 @@ public sealed class SessionStateSyncTests
         Assert.True(session.TryBeginRun("TaskQueue", out var owner1));
         Assert.Equal("TaskQueue", owner1);
         Assert.True(session.IsRunOwner("TaskQueue"));
+        Assert.Equal("TaskQueue", session.CurrentRunOwnerDisplayName);
 
         Assert.False(session.TryBeginRun("Copilot", out var currentOwner));
         Assert.Equal("TaskQueue", currentOwner);
         Assert.True(session.IsRunOwner("TaskQueue"));
+        Assert.Equal("TaskQueue", session.CurrentRunOwnerDisplayName);
 
         session.EndRun("Copilot");
         Assert.True(session.IsRunOwner("TaskQueue"));
 
         session.EndRun("TaskQueue");
         Assert.False(session.IsRunOwner("TaskQueue"));
-        Assert.True(session.TryBeginRun("Copilot", out var owner2));
+        Assert.Null(session.CurrentRunOwnerDisplayName);
+        Assert.True(session.TryBeginRun("Copilot", "作业站", out var owner2));
         Assert.Equal("Copilot", owner2);
+        Assert.Equal("作业站", session.CurrentRunOwnerDisplayName);
     }
 
     [Fact]
