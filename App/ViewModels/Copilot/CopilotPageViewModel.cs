@@ -1,9 +1,11 @@
 using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Avalonia.Threading;
+using MAAUnified.App.Features.Dialogs;
 using MAAUnified.App.ViewModels.Infrastructure;
 using MAAUnified.App.ViewModels.TaskQueue;
 using MAAUnified.Application.Models;
@@ -50,18 +52,29 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
     private int? _activeItemCoreTaskId;
     private string? _activeTaskChain;
     private bool _hasActiveRun;
+    private bool _isStartRequestActive;
     private CopilotItemViewModel? _selectedItem;
     private bool _suppressSelectionFeedback;
     private RootLocalizationTextMap _rootTexts;
     private CopilotLocalizationTextMap _texts;
     private string _currentLanguage = UiLanguageCatalog.DefaultLanguage;
     private readonly IUiLanguageCoordinator _uiLanguageCoordinator;
+    private readonly IAppDialogService _dialogService;
+    private readonly Func<string, CancellationToken, Task>? _stopRunOwnerAsync;
+    private readonly Func<CancellationToken, Task<UiOperationResult>>? _ensureConnectedAsync;
     private readonly ConcurrentQueue<SessionCallbackEnvelope> _pendingSessionCallbacks = new();
     private int _callbackDrainScheduled;
 
-    public CopilotPageViewModel(MAAUnifiedRuntime runtime)
+    public CopilotPageViewModel(
+        MAAUnifiedRuntime runtime,
+        IAppDialogService? dialogService = null,
+        Func<string, CancellationToken, Task>? stopRunOwnerAsync = null,
+        Func<CancellationToken, Task<UiOperationResult>>? ensureConnectedAsync = null)
         : base(runtime)
     {
+        _dialogService = dialogService ?? NoOpAppDialogService.Instance;
+        _stopRunOwnerAsync = stopRunOwnerAsync;
+        _ensureConnectedAsync = ensureConnectedAsync;
         Types =
         [
             MainStageStoryCollectionSideStoryType,
@@ -174,15 +187,60 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
                 OnPropertyChanged(nameof(CanStart));
                 OnPropertyChanged(nameof(CanStop));
                 OnPropertyChanged(nameof(CanEdit));
+                OnPropertyChanged(nameof(IsOwnRunActive));
+                OnPropertyChanged(nameof(IsExternalRunActive));
+                OnPropertyChanged(nameof(ShowStartButton));
+                OnPropertyChanged(nameof(StartButtonText));
             }
         }
     }
 
     public bool IsRunning => CurrentSessionState is SessionState.Running or SessionState.Stopping;
 
-    public bool CanStart => CurrentSessionState == SessionState.Connected;
+    public bool IsOwnRunActive
+    {
+        get
+        {
+            if (!IsRunning)
+            {
+                return false;
+            }
 
-    public bool CanStop => CurrentSessionState == SessionState.Running;
+            var currentOwner = Runtime.SessionService.CurrentRunOwner;
+            return string.IsNullOrWhiteSpace(currentOwner)
+                || Runtime.SessionService.IsRunOwner(CopilotRunOwner);
+        }
+    }
+
+    public bool IsExternalRunActive
+    {
+        get
+        {
+            if (!IsRunning)
+            {
+                return false;
+            }
+
+            var currentOwner = Runtime.SessionService.CurrentRunOwner;
+            return !string.IsNullOrWhiteSpace(currentOwner)
+                && !Runtime.SessionService.IsRunOwner(CopilotRunOwner);
+        }
+    }
+
+    public bool ShowStartButton => true;
+
+    public bool ShowStopButton => false;
+
+    public bool CanStart =>
+        !_isStartRequestActive
+        && (CurrentSessionState == SessionState.Connected
+            || (CurrentSessionState == SessionState.Idle && _ensureConnectedAsync is not null)
+            || CurrentSessionState is SessionState.Running or SessionState.Stopping
+            || IsExternalRunActive);
+
+    public bool CanStop => CurrentSessionState == SessionState.Running && IsOwnRunActive;
+
+    public bool IsStartRequestActive => _isStartRequestActive;
 
     public bool HasSelection => SelectedItem is not null;
 
@@ -549,6 +607,29 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
             return;
         }
 
+        if (CurrentSessionState is SessionState.Running or SessionState.Stopping)
+        {
+            var owner = Runtime.SessionService.CurrentRunOwner;
+            if (string.IsNullOrWhiteSpace(owner))
+            {
+                owner = CopilotRunOwner;
+            }
+
+            StatusMessage = T("Copilot.Status.StartFailed", "启动失败。");
+            LastErrorMessage = string.Format(
+                T("Copilot.Error.StartRunOwnerBlocked", "Copilot 启动被拦截：当前运行所有者为 `{0}`。"),
+                owner);
+            await RecordFailedResultAsync(
+                "Copilot.Start.RunOwner",
+                UiOperationResult.Fail(
+                    UiErrorCode.OperationAlreadyRunning,
+                    LastErrorMessage,
+                    BuildRunOwnerBlockedDetails(owner)),
+                cancellationToken);
+            await ShowRunOwnerBlockedDialogAsync(owner, LastErrorMessage, cancellationToken);
+            return;
+        }
+
         if (!Runtime.SessionService.TryBeginRun(CopilotRunOwner, out var currentOwner))
         {
             var owner = string.IsNullOrWhiteSpace(currentOwner) ? "Unknown" : currentOwner;
@@ -558,14 +639,33 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
                 owner);
             await RecordFailedResultAsync(
                 "Copilot.Start.RunOwner",
-                UiOperationResult.Fail(UiErrorCode.TaskQueueEditBlocked, LastErrorMessage),
+                UiOperationResult.Fail(
+                    UiErrorCode.OperationAlreadyRunning,
+                    LastErrorMessage,
+                    BuildRunOwnerBlockedDetails(owner)),
                 cancellationToken);
+            await ShowRunOwnerBlockedDialogAsync(owner, LastErrorMessage, cancellationToken);
             return;
         }
 
         var keepRunOwner = false;
+        SetStartRequestActive(true);
         try
         {
+            if (CurrentSessionState != SessionState.Connected)
+            {
+                var connectResult = await EnsureConnectedForStartAsync(cancellationToken);
+                if (!connectResult.Success)
+                {
+                    StatusMessage = T("Copilot.Status.StartFailed", "启动失败。");
+                    LastErrorMessage = connectResult.Message;
+                    await RecordFailedResultAsync("Copilot.Start.Connect", connectResult, cancellationToken);
+                    return;
+                }
+
+                CurrentSessionState = Runtime.SessionService.CurrentState;
+            }
+
             var appendPlan = await AppendConfiguredCopilotAsync(cancellationToken);
             if (appendPlan is null)
             {
@@ -597,6 +697,7 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
 
             AddLog(GetRootText("Running", "Running……"));
             CurrentSessionState = Runtime.SessionService.CurrentState;
+            SetStartRequestActive(false);
             keepRunOwner = true;
         }
         finally
@@ -604,8 +705,64 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
             if (!keepRunOwner)
             {
                 Runtime.SessionService.EndRun(CopilotRunOwner);
+                SetStartRequestActive(false);
             }
         }
+    }
+
+    private void SetStartRequestActive(bool value)
+    {
+        if (_isStartRequestActive == value)
+        {
+            return;
+        }
+
+        _isStartRequestActive = value;
+        OnPropertyChanged(nameof(IsStartRequestActive));
+        OnPropertyChanged(nameof(CanStart));
+        OnPropertyChanged(nameof(ShowStartButton));
+        OnPropertyChanged(nameof(StartButtonText));
+    }
+
+    private async Task<UiOperationResult> EnsureConnectedForStartAsync(CancellationToken cancellationToken)
+    {
+        CurrentSessionState = Runtime.SessionService.CurrentState;
+        if (CurrentSessionState == SessionState.Connected)
+        {
+            return UiOperationResult.Ok("Session already connected.");
+        }
+
+        if (CurrentSessionState is SessionState.Running or SessionState.Stopping)
+        {
+            return UiOperationResult.Fail(
+                UiErrorCode.SessionStateNotAllowed,
+                BuildSessionStateNotAllowedMessage(
+                    CurrentSessionState,
+                    T("Copilot.Action.Start", "启动"),
+                    "start"));
+        }
+
+        if (_ensureConnectedAsync is null)
+        {
+            return UiOperationResult.Fail(
+                UiErrorCode.SessionStateNotAllowed,
+                BuildSessionStateNotAllowedMessage(
+                    CurrentSessionState,
+                    T("Copilot.Action.Start", "启动"),
+                    "start"));
+        }
+
+        var connectResult = await _ensureConnectedAsync(cancellationToken);
+        CurrentSessionState = Runtime.SessionService.CurrentState;
+        if (connectResult.Success && CurrentSessionState == SessionState.Connected)
+        {
+            return connectResult;
+        }
+
+        return UiOperationResult.Fail(
+            connectResult.Error?.Code ?? UiErrorCode.SessionStateNotAllowed,
+            connectResult.Message,
+            connectResult.Error?.Details);
     }
 
     public async Task StopAsync(CancellationToken cancellationToken = default)
@@ -760,6 +917,121 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
             state,
             actionZh,
             actionEn);
+    }
+
+    private async Task ShowRunOwnerBlockedDialogAsync(
+        string owner,
+        string message,
+        CancellationToken cancellationToken)
+    {
+        var language = _currentLanguage;
+        var errorResult = UiOperationResult.Fail(
+            UiErrorCode.OperationAlreadyRunning,
+            message,
+            BuildRunOwnerBlockedDetails(owner));
+        var chrome = CreateRunOwnerBlockedDialogChrome(language, owner);
+        var chromeSnapshot = chrome.GetSnapshot(language);
+        var prompt = chromeSnapshot.GetNamedTextOrDefault(
+            DialogTextCatalog.ChromeKeys.Prompt,
+            message);
+        var request = new WarningConfirmDialogRequest(
+            Title: chromeSnapshot.Title,
+            Message: prompt,
+            ConfirmText: chromeSnapshot.ConfirmText ?? DialogTextCatalog.WarningDialogConfirmButton(language),
+            CancelText: chromeSnapshot.CancelText ?? T("Copilot.RunOwnerBlockedDialog.StopButton", "停止任务"),
+            Language: language,
+            Chrome: chrome);
+
+        var completion = await _dialogService.ShowWarningConfirmAsync(
+            request,
+            "Copilot.Start.RunOwner.Dialog",
+            cancellationToken);
+        if (completion.Return == DialogReturnSemantic.Cancel && _stopRunOwnerAsync is not null)
+        {
+            await _stopRunOwnerAsync(owner, cancellationToken);
+            return;
+        }
+
+        if (completion.Return == DialogReturnSemantic.Details)
+        {
+            await ShowRunOwnerBlockedDetailsAsync(errorResult, cancellationToken);
+        }
+    }
+
+    private async Task ShowRunOwnerBlockedDetailsAsync(
+        UiOperationResult errorResult,
+        CancellationToken cancellationToken)
+    {
+        var language = _currentLanguage;
+        var localizedResult = DialogTextCatalog.LocalizeErrorResult(language, errorResult);
+        var chrome = CreateErrorDetailsDialogChrome(language);
+        var chromeSnapshot = chrome.GetSnapshot(language);
+        var request = new ErrorDialogRequest(
+            Title: chromeSnapshot.Title,
+            Context: "Copilot.Start.RunOwner",
+            Result: localizedResult,
+            Suggestion: DialogTextCatalog.BuildErrorSuggestion(language, errorResult),
+            ConfirmText: chromeSnapshot.ConfirmText ?? DialogTextCatalog.ErrorDialogCloseButton(language),
+            CancelText: chromeSnapshot.CancelText ?? DialogTextCatalog.ErrorDialogIgnoreButton(language),
+            Language: language,
+            Chrome: chrome);
+        await _dialogService.ShowErrorAsync(request, "Copilot.Start.RunOwner.ErrorDetails", cancellationToken: cancellationToken);
+    }
+
+    private static string BuildRunOwnerBlockedDetails(string owner)
+    {
+        return JsonSerializer.Serialize(new
+        {
+            requestedOwner = CopilotRunOwner,
+            currentOwner = owner,
+            occurredAt = DateTimeOffset.Now,
+        });
+    }
+
+    private static DialogChromeCatalog CreateRunOwnerBlockedDialogChrome(string language, string owner)
+    {
+        return DialogTextCatalog.CreateCatalog(
+            language,
+            nextLanguage =>
+            {
+                var texts = CreateTexts(nextLanguage);
+                var title = texts.GetOrDefault("Copilot.RunOwnerBlockedDialog.Title", "Copilot start blocked");
+                return new DialogChromeSnapshot(
+                    title: title,
+                    confirmText: texts.GetOrDefault("Copilot.RunOwnerBlockedDialog.ConfirmButton", "Confirm"),
+                    cancelText: texts.GetOrDefault("Copilot.RunOwnerBlockedDialog.StopButton", "Stop task"),
+                    namedTexts: DialogTextCatalog.CreateNamedTexts(
+                        (DialogTextCatalog.ChromeKeys.SectionTitle, title),
+                        (DialogTextCatalog.ChromeKeys.DetailsButton, texts.GetOrDefault(
+                            "Copilot.RunOwnerBlockedDialog.DetailsButton",
+                            DialogTextCatalog.WarningDialogDetailsButton(nextLanguage))),
+                        (DialogTextCatalog.ChromeKeys.Prompt, string.Format(
+                            CultureInfo.InvariantCulture,
+                            texts.GetOrDefault(
+                                "Copilot.RunOwnerBlockedDialog.Message",
+                                "{0} is still running. Stop the current task before starting Copilot."),
+                            owner))));
+            });
+    }
+
+    private static DialogChromeCatalog CreateErrorDetailsDialogChrome(string language)
+    {
+        return DialogTextCatalog.CreateCatalog(
+            language,
+            nextLanguage => new DialogChromeSnapshot(
+                title: DialogTextCatalog.ErrorDialogTitle(nextLanguage),
+                confirmText: DialogTextCatalog.ErrorDialogCloseButton(nextLanguage),
+                cancelText: DialogTextCatalog.ErrorDialogIgnoreButton(nextLanguage),
+                namedTexts: DialogTextCatalog.CreateNamedTexts(
+                    (DialogTextCatalog.ChromeKeys.SectionTitle, DialogTextCatalog.ErrorDialogSectionTitle(nextLanguage)),
+                    (DialogTextCatalog.ChromeKeys.CopyButton, DialogTextCatalog.ErrorDialogCopyButton(nextLanguage)),
+                    (DialogTextCatalog.ChromeKeys.IssueReportButton, DialogTextCatalog.ErrorDialogIssueReportButton(nextLanguage)),
+                    (DialogTextCatalog.ChromeKeys.TimestampLabel, DialogTextCatalog.ErrorDialogTimestampLabel(nextLanguage)),
+                    (DialogTextCatalog.ChromeKeys.ContextLabel, DialogTextCatalog.ErrorDialogContextLabel(nextLanguage)),
+                    (DialogTextCatalog.ChromeKeys.CodeLabel, DialogTextCatalog.ErrorDialogCodeLabel(nextLanguage)),
+                    (DialogTextCatalog.ChromeKeys.MessageLabel, DialogTextCatalog.ErrorDialogMessageLabel(nextLanguage)),
+                    (DialogTextCatalog.ChromeKeys.DetailsLabel, DialogTextCatalog.ErrorDialogDetailsLabel(nextLanguage)),
+                    (DialogTextCatalog.ChromeKeys.SuggestionLabel, DialogTextCatalog.ErrorDialogSuggestionLabel(nextLanguage)))));
     }
 
     public async Task SendLikeAsync(bool like, CancellationToken cancellationToken = default)

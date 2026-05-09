@@ -18,7 +18,8 @@ public sealed class CopilotViewStructureContractTests
         Assert.DoesNotContain("Header=\"{Binding MainTabTitle}\"", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("Texts[Copilot.", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("Content=\"开始\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("IsVisible=\"{Binding CanEdit}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("IsVisible=\"{Binding ShowStartButton}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Text=\"{Binding LoadedCopilotInputHint}\"", xaml, StringComparison.Ordinal);
         Assert.Contains("<controls:AppCopilotPathDropdown", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("<controls:AppTreeSelectDropdown", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("<controls:CheckComboBox", xaml, StringComparison.Ordinal);
@@ -60,13 +61,14 @@ public sealed class CopilotViewStructureContractTests
         Assert.Contains("EditorCommitted=\"OnConnectAddressEditorCommitted\"", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("HeaderText=\"{Binding SelectedConnectConfigOption.DisplayName}\"", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("<controls:CheckComboBox", xaml, StringComparison.Ordinal);
+        Assert.Contains("<controls:AppSelect", xaml, StringComparison.Ordinal);
 
         var connectConfigBindingIndex = xaml.IndexOf("ItemsSource=\"{Binding ConnectConfigOptions}\"", StringComparison.Ordinal);
         Assert.True(connectConfigBindingIndex >= 0, "Connect settings should bind the connect config selector to ConnectConfigOptions.");
         Assert.True(
-            xaml.LastIndexOf("<ComboBox", connectConfigBindingIndex, StringComparison.Ordinal) >
+            xaml.LastIndexOf("<controls:AppSelect", connectConfigBindingIndex, StringComparison.Ordinal) >
             xaml.LastIndexOf("<controls:CheckComboBox", connectConfigBindingIndex, StringComparison.Ordinal),
-            "Connect config selection should use the standard ComboBox rather than the custom CheckComboBox.");
+            "Connect config selection should use AppSelect, the shared standard ComboBox wrapper, rather than the custom CheckComboBox.");
     }
 
     [Fact]
@@ -74,6 +76,7 @@ public sealed class CopilotViewStructureContractTests
     {
         var root = GetMaaUnifiedRoot();
         var multiSelectXaml = File.ReadAllText(Path.Combine(root, "App", "Controls", "AppMultiSelect.axaml"));
+        var multiSelectDropdownXaml = File.ReadAllText(Path.Combine(root, "App", "Controls", "AppMultiSelectDropdown.axaml"));
         var copilotPathXaml = File.ReadAllText(Path.Combine(root, "App", "Controls", "AppCopilotPathDropdown.axaml"));
 
         Assert.False(File.Exists(Path.Combine(root, "App", "Controls", "AppTreeSelectDropdown.axaml")));
@@ -94,6 +97,11 @@ public sealed class CopilotViewStructureContractTests
         Assert.Contains("<Setter Property=\"BorderBrush\" Value=\"Transparent\" />", multiSelectXaml, StringComparison.Ordinal);
         Assert.Contains("<Setter Property=\"BoxShadow\" Value=\"{DynamicResource MAA.App.BoxShadow.Card}\" />", multiSelectXaml, StringComparison.Ordinal);
         Assert.Contains("Style Selector=\"ToggleButton.app-multi-select-option:checked\"", multiSelectXaml, StringComparison.Ordinal);
+        Assert.Contains("<Setter Property=\"Template\">", multiSelectXaml, StringComparison.Ordinal);
+        Assert.Contains("Content=\"{TemplateBinding Content}\"", multiSelectXaml, StringComparison.Ordinal);
+        Assert.Contains("Style Selector=\"Button.app-dropdown-arrow\"", multiSelectDropdownXaml, StringComparison.Ordinal);
+        Assert.Contains("<Setter Property=\"Template\">", multiSelectDropdownXaml, StringComparison.Ordinal);
+        Assert.Contains("Content=\"{TemplateBinding Content}\"", multiSelectDropdownXaml, StringComparison.Ordinal);
 
         Assert.Contains("Classes=\"app-copilot-path-popup-panel\"", copilotPathXaml, StringComparison.Ordinal);
         Assert.Contains("Style Selector=\"Button.app-copilot-path-toggle:pointerover\"", copilotPathXaml, StringComparison.Ordinal);

@@ -3022,8 +3022,14 @@
   <data name="Toolbox.BusyDialog.CloseButton" xml:space="preserve">
     <value>知道了</value>
   </data>
+  <data name="Toolbox.BusyDialog.ConfirmButton" xml:space="preserve">
+    <value>確認</value>
+  </data>
   <data name="Toolbox.BusyDialog.CurrentTask" xml:space="preserve">
     <value>目前任務</value>
+  </data>
+  <data name="Toolbox.BusyDialog.DetailsButton" xml:space="preserve">
+    <value>詳細報錯</value>
   </data>
   <data name="Toolbox.BusyDialog.Message" xml:space="preserve">
     <value>{0} 仍在執行。請先停止目前任務，再啟動新的小工具任務。</value>
@@ -3389,6 +3395,21 @@
   <data name="Copilot.Error.ValidateTabMismatch" xml:space="preserve">
     <value>目前選擇的作業與標籤頁類型不符</value>
   </data>
+  <data name="Copilot.RunOwnerBlockedDialog.ConfirmButton" xml:space="preserve">
+    <value>確認</value>
+  </data>
+  <data name="Copilot.RunOwnerBlockedDialog.DetailsButton" xml:space="preserve">
+    <value>詳細報錯</value>
+  </data>
+  <data name="Copilot.RunOwnerBlockedDialog.Message" xml:space="preserve">
+    <value>{0} 正在執行。請先停止目前任務，再啟動 Copilot。</value>
+  </data>
+  <data name="Copilot.RunOwnerBlockedDialog.StopButton" xml:space="preserve">
+    <value>停止任務</value>
+  </data>
+  <data name="Copilot.RunOwnerBlockedDialog.Title" xml:space="preserve">
+    <value>Copilot 啟動被攔截</value>
+  </data>
   <data name="Copilot.FilePicker.SelectTask.Title" xml:space="preserve">
     <value>選擇作業</value>
   </data>
@@ -3488,7 +3509,7 @@
     <value>複製</value>
   </data>
   <data name="Dialog.Error.CopyErrorInfoButton" xml:space="preserve">
-    <value>複製錯誤資訊</value>
+    <value>詳細報錯</value>
   </data>
   <data name="Dialog.Error.IssueReportButton" xml:space="preserve">
     <value>問題回饋</value>
@@ -3498,6 +3519,9 @@
   </data>
   <data name="Dialog.Warning.ConfirmButton" xml:space="preserve">
     <value>確認</value>
+  </data>
+  <data name="Dialog.Warning.DetailsButton" xml:space="preserve">
+    <value>詳細報錯</value>
   </data>
   <data name="Dialog.Warning.Title" xml:space="preserve">
     <value>警告</value>

@@ -255,7 +255,7 @@ public sealed class ToolboxModuleO2FeatureTests
     public async Task StartToolAsync_WhenToolboxBusy_ShouldShowDedicatedBusyDialogWithoutAppending()
     {
         await using var fixture = await ToolboxTestFixture.CreateAsync();
-        var dialogService = new RecordingDialogService(DialogReturnSemantic.Cancel);
+        var dialogService = new RecordingDialogService(DialogReturnSemantic.Confirm);
         var vm = new ToolboxPageViewModel(fixture.Runtime, fixture.ConnectionState, dialogService);
         await vm.InitializeAsync();
 

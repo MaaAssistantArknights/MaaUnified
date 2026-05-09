@@ -334,6 +334,20 @@
       <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.SecondaryBackgroundHover}" />
       <Setter Property="BorderBrush" Value="Transparent" />
     </Style>
+    <Style Selector="Button.app-button.window-overlay-toggle /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="18" />
+    </Style>
+    <Style Selector="Button.app-button.window-overlay-toggle:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.SecondaryBackgroundHover}" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+    </Style>
+    <Style Selector="Button.app-button.window-overlay-toggle:pressed /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.SecondaryBackgroundPressed}" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+    </Style>
     <Style Selector="TextBlock.window-overlay-toggle-label">
       <Setter Property="Margin" Value="0" />
       <Setter Property="MaxWidth" Value="0" />

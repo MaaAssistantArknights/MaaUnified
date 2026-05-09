@@ -3100,8 +3100,14 @@
   <data name="Toolbox.BusyDialog.CloseButton" xml:space="preserve">
     <value>了解</value>
   </data>
+  <data name="Toolbox.BusyDialog.ConfirmButton" xml:space="preserve">
+    <value>確認</value>
+  </data>
   <data name="Toolbox.BusyDialog.CurrentTask" xml:space="preserve">
     <value>現在のタスク</value>
+  </data>
+  <data name="Toolbox.BusyDialog.DetailsButton" xml:space="preserve">
+    <value>エラー詳細</value>
   </data>
   <data name="Toolbox.BusyDialog.Message" xml:space="preserve">
     <value>{0} はまだ実行中です。新しいツールタスクを開始する前に停止してください。</value>
@@ -3446,6 +3452,21 @@
   <data name="Copilot.Error.ValidateTabMismatch" xml:space="preserve">
     <value>選択した作業が現在のタブと一致しません</value>
   </data>
+  <data name="Copilot.RunOwnerBlockedDialog.ConfirmButton" xml:space="preserve">
+    <value>確認</value>
+  </data>
+  <data name="Copilot.RunOwnerBlockedDialog.DetailsButton" xml:space="preserve">
+    <value>エラー詳細</value>
+  </data>
+  <data name="Copilot.RunOwnerBlockedDialog.Message" xml:space="preserve">
+    <value>{0} が実行中です。Copilot を開始する前に現在のタスクを停止してください。</value>
+  </data>
+  <data name="Copilot.RunOwnerBlockedDialog.StopButton" xml:space="preserve">
+    <value>タスクを停止</value>
+  </data>
+  <data name="Copilot.RunOwnerBlockedDialog.Title" xml:space="preserve">
+    <value>Copilot の開始がブロックされました</value>
+  </data>
   <data name="Copilot.Option.Module.None" xml:space="preserve">
     <value>モジュールなし</value>
   </data>
@@ -3515,13 +3536,16 @@
     <value>コピー</value>
   </data>
   <data name="Dialog.Error.CopyErrorInfoButton" xml:space="preserve">
-    <value>エラー情報をコピー</value>
+    <value>エラー詳細</value>
   </data>
   <data name="Dialog.Warning.CancelButton" xml:space="preserve">
     <value>キャンセル</value>
   </data>
   <data name="Dialog.Warning.ConfirmButton" xml:space="preserve">
     <value>認識する</value>
+  </data>
+  <data name="Dialog.Warning.DetailsButton" xml:space="preserve">
+    <value>エラー詳細</value>
   </data>
   <data name="Dialog.Warning.Title" xml:space="preserve">
     <value>警告</value>

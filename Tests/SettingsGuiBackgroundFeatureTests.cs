@@ -500,7 +500,11 @@ public sealed class SettingsGuiBackgroundFeatureTests
 
         await vm.ManualUpdateResourceAsync();
 
-        await Dispatcher.UIThread.InvokeAsync(() => { });
+        await WaitUntilAsync(() =>
+        {
+            Dispatcher.UIThread.RunJobs(null);
+            return vm.VersionUpdateActivityMessage.Contains("游戏资源已更新", StringComparison.Ordinal);
+        });
         Assert.Contains("游戏资源已更新", vm.VersionUpdateActivityMessage, StringComparison.Ordinal);
         Assert.Contains("资源更新完成", vm.VersionUpdateStatusMessage, StringComparison.Ordinal);
         var bridge = Assert.IsType<FakeBridge>(fixture.Runtime.CoreBridge);
@@ -535,7 +539,11 @@ public sealed class SettingsGuiBackgroundFeatureTests
 
         await vm.CheckVersionUpdateAsync();
 
-        await Dispatcher.UIThread.InvokeAsync(() => { });
+        await WaitUntilAsync(() =>
+        {
+            Dispatcher.UIThread.RunJobs(null);
+            return vm.VersionUpdateActivityMessage.Contains("下载完成", StringComparison.Ordinal);
+        });
         Assert.Contains("下载完成", vm.VersionUpdateActivityMessage, StringComparison.Ordinal);
         Assert.True(vm.HasPendingVersionUpdateAvailability);
     }

@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Text;
 using System.Text.Json;
@@ -184,6 +185,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     private readonly IAppDialogService _dialogService;
     private readonly Action<string>? _navigateToSettingsSection;
     private readonly Func<CancellationToken, Task<bool>>? _ensureCoreReadyForExecutionAsync;
+    private readonly Func<string, CancellationToken, Task>? _stopRunOwnerAsync;
     private Task _pendingBindingTask = Task.CompletedTask;
     private CancellationTokenSource? _pendingBindingCts;
     private CancellationTokenSource? _moduleAutoSaveCts;
@@ -246,7 +248,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         Action<LocalizationFallbackInfo>? localizationFallbackReporter = null,
         IAppDialogService? dialogService = null,
         Action<string>? navigateToSettingsSection = null,
-        Func<CancellationToken, Task<bool>>? ensureCoreReadyForExecutionAsync = null)
+        Func<CancellationToken, Task<bool>>? ensureCoreReadyForExecutionAsync = null,
+        Func<string, CancellationToken, Task>? stopRunOwnerAsync = null)
         : base(runtime)
     {
         _connectionGameSharedState = connectionGameSharedState;
@@ -254,6 +257,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         _dialogService = dialogService ?? NoOpAppDialogService.Instance;
         _navigateToSettingsSection = navigateToSettingsSection;
         _ensureCoreReadyForExecutionAsync = ensureCoreReadyForExecutionAsync;
+        _stopRunOwnerAsync = stopRunOwnerAsync;
         _uiLanguageCoordinator = runtime.UiLanguageCoordinator;
         _uiLanguageCoordinator.LanguageChanged += OnUnifiedLanguageChanged;
         TaskModules = new ObservableCollection<TaskModuleOption>();
@@ -578,6 +582,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 OnPropertyChanged(nameof(IsRunning));
                 OnPropertyChanged(nameof(CanEdit));
                 OnPropertyChanged(nameof(RunButtonText));
+                OnPropertyChanged(nameof(IsRunOwnedByAnotherFeature));
                 OnPropertyChanged(nameof(CanToggleRun));
                 OnPropertyChanged(nameof(CanWaitAndStop));
             }
@@ -588,9 +593,24 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
     public bool CanEdit => !IsRunning;
 
-    public string RunButtonText => IsRunning
-        ? RootTexts.GetOrDefault("TaskQueue.Root.Stop", "Stop")
+    public string RunButtonText => _isStartRequestActive
+        ? RootTexts.GetOrDefault("TaskQueue.Root.Waiting", "Waiting...")
         : RootTexts.GetOrDefault("TaskQueue.Root.LinkStart", "Link Start!");
+
+    public bool IsRunOwnedByAnotherFeature
+    {
+        get
+        {
+            if (CurrentSessionState is not (SessionState.Running or SessionState.Stopping))
+            {
+                return false;
+            }
+
+            var currentOwner = Runtime.SessionService.CurrentRunOwner;
+            return !string.IsNullOrWhiteSpace(currentOwner)
+                && !Runtime.SessionService.IsRunOwner(TaskQueueRunOwner);
+        }
+    }
 
     public bool HasBlockingConfigIssues
     {
@@ -624,8 +644,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
     public bool CanToggleRun =>
         !IsWaitingForStop
-        && !_isStartRequestActive
-        && CurrentSessionState != SessionState.Stopping;
+        && !_isStartRequestActive;
 
     public bool CanWaitAndStop =>
         !IsWaitingForStop
@@ -639,11 +658,15 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         }
 
         _isStartRequestActive = value;
+        OnPropertyChanged(nameof(IsStartRequestActive));
         OnPropertyChanged(nameof(IsRunning));
         OnPropertyChanged(nameof(CanEdit));
         OnPropertyChanged(nameof(RunButtonText));
+        OnPropertyChanged(nameof(IsRunOwnedByAnotherFeature));
         OnPropertyChanged(nameof(CanToggleRun));
     }
+
+    public bool IsStartRequestActive => _isStartRequestActive;
 
     public bool IsWaitingForStop
     {
@@ -1960,13 +1983,85 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     public async Task ToggleRunAsync(CancellationToken cancellationToken = default)
     {
         CurrentSessionState = Runtime.SessionService.CurrentState;
-        if (CurrentSessionState == SessionState.Running)
+        if (CurrentSessionState is SessionState.Running or SessionState.Stopping)
         {
-            await StopAsync(cancellationToken);
+            await ShowRunOwnerDialogAsync(cancellationToken);
             return;
         }
 
         await StartAsync(cancellationToken);
+    }
+
+    private async Task ShowRunOwnerDialogAsync(CancellationToken cancellationToken)
+    {
+        var owner = Runtime.SessionService.CurrentRunOwner;
+        if (string.IsNullOrWhiteSpace(owner))
+        {
+            owner = TaskQueueRunOwner;
+        }
+
+        LastErrorMessage = string.Format(
+            RootTexts.GetOrDefault(
+                "Copilot.RunOwnerBlockedDialog.Message",
+                "{0} is still running. Stop the current task before starting Copilot."),
+            owner);
+
+        var chrome = CreateRunOwnerDialogChrome(RootTexts.Language, owner);
+        var snapshot = chrome.GetSnapshot(RootTexts.Language);
+        var request = new WarningConfirmDialogRequest(
+            Title: snapshot.Title,
+            Message: snapshot.GetNamedTextOrDefault(DialogTextCatalog.ChromeKeys.Prompt, LastErrorMessage),
+            ConfirmText: snapshot.ConfirmText ?? DialogTextCatalog.WarningDialogConfirmButton(RootTexts.Language),
+            CancelText: snapshot.CancelText ?? RootTexts.GetOrDefault("Copilot.RunOwnerBlockedDialog.StopButton", "Stop task"),
+            Language: RootTexts.Language,
+            Chrome: chrome);
+
+        var result = await _dialogService.ShowWarningConfirmAsync(request, "TaskQueue.RunOwnerBlocked.Dialog", cancellationToken);
+        if (result.Return != DialogReturnSemantic.Cancel)
+        {
+            return;
+        }
+
+        if (_stopRunOwnerAsync is not null)
+        {
+            await _stopRunOwnerAsync(owner, cancellationToken);
+            CurrentSessionState = Runtime.SessionService.CurrentState;
+            return;
+        }
+
+        if (Runtime.SessionService.IsRunOwner(TaskQueueRunOwner))
+        {
+            await StopAsync(cancellationToken);
+        }
+    }
+
+    private static DialogChromeCatalog CreateRunOwnerDialogChrome(string language, string owner)
+    {
+        return DialogTextCatalog.CreateCatalog(
+            language,
+            nextLanguage =>
+            {
+                var texts = new RootLocalizationTextMap("Root.Localization.TaskQueue")
+                {
+                    Language = nextLanguage,
+                };
+                var title = texts.GetOrDefault("Toolbox.BusyDialog.Title", "Task is running");
+                return new DialogChromeSnapshot(
+                    title: title,
+                    confirmText: texts.GetOrDefault("Toolbox.BusyDialog.ConfirmButton", "Confirm"),
+                    cancelText: texts.GetOrDefault("Toolbox.BusyDialog.StopButton", "Stop current task"),
+                    namedTexts: DialogTextCatalog.CreateNamedTexts(
+                        (DialogTextCatalog.ChromeKeys.SectionTitle, title),
+                        (DialogTextCatalog.ChromeKeys.DetailsButton, texts.GetOrDefault(
+                            "Toolbox.BusyDialog.DetailsButton",
+                            DialogTextCatalog.WarningDialogDetailsButton(nextLanguage))),
+                        (DialogTextCatalog.ChromeKeys.Prompt, string.Format(
+                            CultureInfo.InvariantCulture,
+                            texts.GetOrDefault(
+                                "Copilot.RunOwnerBlockedDialog.Message",
+                                "{0} is still running. Stop the current task before starting."),
+                            owner))));
+            });
     }
 
     public async Task StartAsync(CancellationToken cancellationToken = default)
@@ -6499,6 +6594,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         void Apply(SessionState changedState)
         {
             CurrentSessionState = changedState;
+            OnPropertyChanged(nameof(IsRunOwnedByAnotherFeature));
             if (changedState is SessionState.Running or SessionState.Stopping)
             {
                 return;

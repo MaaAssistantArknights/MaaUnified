@@ -48,6 +48,11 @@
     <controls:AppWindowFrame.ActionsContent>
       <StackPanel Orientation="Horizontal"
                   Spacing="10">
+        <Button x:Name="DetailsButton"
+                Classes="app-button app-secondary"
+                Content=""
+                IsVisible="False"
+                Click="OnDetailsClick" />
         <Button x:Name="CancelButton"
                 Classes="app-button app-secondary"
                 Content=""

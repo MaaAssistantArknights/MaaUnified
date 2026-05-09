@@ -19,13 +19,14 @@
     <Style Selector="Border.toolbox-gacha-preview-frame">
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="CornerRadius" Value="0" />
-      <Setter Property="MinHeight" Value="240" />
       <Setter Property="Padding" Value="0" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="VerticalAlignment" Value="Stretch" />
     </Style>
 
     <Style Selector="Image.toolbox-gacha-preview-image">
-      <Setter Property="HorizontalAlignment" Value="Center" />
-      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="VerticalAlignment" Value="Stretch" />
     </Style>
 
     <Style Selector="Border.toolbox-gacha-fps-badge">
@@ -58,48 +59,77 @@
       <Setter Property="HorizontalAlignment" Value="Center" />
     </Style>
 
-    <Style Selector="WrapPanel.toolbox-gacha-actions">
+    <Style Selector="StackPanel.toolbox-gacha-actions">
       <Setter Property="HorizontalAlignment" Value="Center" />
-      <Setter Property="VerticalAlignment" Value="Bottom" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Spacing" Value="12" />
+    </Style>
+
+    <Style Selector="Grid.toolbox-gacha-idle-control-panel">
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
     <Style Selector="Button.toolbox-gacha-action">
       <Setter Property="Width" Value="{DynamicResource MAA.Size.Toolbox.ActionButtonWidth}" />
       <Setter Property="Height" Value="{DynamicResource MAA.App.Size.ButtonHeight}" />
-      <Setter Property="Margin" Value="6,0" />
     </Style>
   </UserControl.Styles>
 
-  <Grid Margin="{DynamicResource MAA.Thickness.Toolbox.PageMarginFlat}"
-        RowDefinitions="Auto,Auto,*,Auto">
+  <Grid x:Name="GachaRootGrid"
+        Margin="{DynamicResource MAA.Thickness.Toolbox.PageMarginFlat}"
+        RowDefinitions="Auto,*,Auto"
+        ColumnDefinitions="*"
+        ClipToBounds="True">
     <StackPanel Grid.Row="0"
+                Grid.Column="0"
                 Classes="toolbox-gacha-section"
                 IsVisible="{Binding ShowGachaControls}">
       <TextBlock Classes="app-window-subtitle long-wrap toolbox-gacha-summary"
                  Text="{Binding GachaInfo}" />
     </StackPanel>
 
-    <StackPanel Grid.Row="1"
-                Margin="0,14,0,0"
-                Classes="toolbox-gacha-section"
-                IsVisible="{Binding ShowGachaControls}">
-      <Grid>
+    <Grid x:Name="GachaPreviewArea"
+          Grid.Row="1"
+          Grid.Column="0"
+          Margin="0,14,0,0"
+          Classes="toolbox-gacha-preview-area"
+          IsVisible="{Binding ShowGachaPreview}">
         <Border Classes="toolbox-gacha-preview-frame">
-          <Image Classes="toolbox-gacha-preview-image"
+          <Image x:Name="GachaPreviewImage"
+                 Classes="toolbox-gacha-preview-image"
                  Source="{Binding PeepImage}"
-                 Stretch="Uniform"
-                 MaxHeight="{DynamicResource MAA.Size.Toolbox.GachaPreviewMaxHeight}" />
+                 Stretch="Uniform" />
         </Border>
 
-        <Border Classes="app-badge toolbox-gacha-fps-badge"
-                IsVisible="{Binding ShowGachaPreview}">
+        <Border x:Name="GachaFpsBadge"
+                Classes="app-badge toolbox-gacha-fps-badge">
           <TextBlock Classes="app-badge-text"
                      Text="{Binding PeepScreenFps, StringFormat='{}{0:F2} FPS'}" />
         </Border>
-      </Grid>
-    </StackPanel>
+    </Grid>
 
-    <ScrollViewer Grid.Row="2"
+    <Grid Grid.Row="1"
+          Grid.Column="0"
+          Classes="toolbox-gacha-idle-control-panel"
+          IsVisible="{Binding ShowGachaIdleControls}">
+      <StackPanel Classes="toolbox-gacha-actions"
+                  Orientation="Horizontal">
+        <Button Classes="app-button app-secondary toolbox-gacha-action"
+                Content="{Binding GachaDrawOnceText}"
+                Click="OnGachaOnceClick" />
+        <Button Classes="app-button app-secondary toolbox-gacha-action"
+                Content="{Binding GachaDrawTenText}"
+                Click="OnGachaTenTimesClick" />
+        <Button Classes="app-button app-primary toolbox-gacha-action"
+                Content="{Binding PeepCommandText}"
+                IsEnabled="{Binding CanTogglePeep}"
+                Click="OnGachaPeepClick" />
+      </StackPanel>
+    </Grid>
+
+    <ScrollViewer Grid.Row="1"
+                  Grid.Column="0"
                   Margin="0,14,0,0"
                   HorizontalScrollBarVisibility="Disabled"
                   VerticalScrollBarVisibility="Auto"
@@ -140,12 +170,16 @@
       </StackPanel>
     </ScrollViewer>
 
-    <StackPanel Grid.Row="3"
-                Margin="0,18,0,0"
-                VerticalAlignment="Bottom"
-                Classes="toolbox-gacha-section"
-                IsVisible="{Binding ShowGachaControls}">
-      <WrapPanel Classes="toolbox-gacha-actions">
+    <Grid x:Name="GachaControlPanel"
+          Grid.Row="2"
+          Grid.Column="0"
+          Margin="0,18,0,0"
+          HorizontalAlignment="Stretch"
+          VerticalAlignment="Bottom"
+          IsVisible="{Binding ShowGachaPreview}">
+      <StackPanel x:Name="GachaActionButtonGroup"
+                  Classes="toolbox-gacha-actions"
+                  Orientation="Horizontal">
         <Button Classes="app-button app-secondary toolbox-gacha-action"
                 Content="{Binding GachaDrawOnceText}"
                 Click="OnGachaOnceClick" />
@@ -154,8 +188,9 @@
                 Click="OnGachaTenTimesClick" />
         <Button Classes="app-button app-primary toolbox-gacha-action"
                 Content="{Binding PeepCommandText}"
+                IsEnabled="{Binding CanTogglePeep}"
                 Click="OnGachaPeepClick" />
-      </WrapPanel>
-    </StackPanel>
+      </StackPanel>
+    </Grid>
   </Grid>
 </UserControl>

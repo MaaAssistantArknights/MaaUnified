@@ -31,10 +31,10 @@
             <StackPanel Orientation="Horizontal"
                         Spacing="10"
                         VerticalAlignment="Center">
-              <Border Classes="app-surface app-card achievement-dialog-filter-strip">
+              <Border Classes="app-slider-strip achievement-dialog-filter-strip">
                 <Grid x:Name="FilterStripTrack">
                   <Border x:Name="FilterSelectionSlider"
-                          Classes="achievement-dialog-filter-selection-slider"
+                          Classes="app-slider-selection"
                           HorizontalAlignment="Left"
                           VerticalAlignment="Center"
                           IsHitTestVisible="False"
@@ -48,18 +48,22 @@
                               Spacing="6">
                     <Button x:Name="FilterAllButton"
                             Classes="app-button app-slider-chip achievement-dialog-filter-chip"
+                            MinWidth="80"
                             Tag="All"
                             Click="OnFilterChipClick" />
                     <Button x:Name="FilterUnlockedButton"
                             Classes="app-button app-slider-chip achievement-dialog-filter-chip"
+                            MinWidth="80"
                             Tag="Unlocked"
                             Click="OnFilterChipClick" />
                     <Button x:Name="FilterInProgressButton"
                             Classes="app-button app-slider-chip achievement-dialog-filter-chip"
+                            MinWidth="80"
                             Tag="InProgress"
                             Click="OnFilterChipClick" />
                     <Button x:Name="FilterNewButton"
                             Classes="app-button app-slider-chip achievement-dialog-filter-chip"
+                            MinWidth="80"
                             Tag="NewUnlock"
                             Click="OnFilterChipClick" />
                   </StackPanel>

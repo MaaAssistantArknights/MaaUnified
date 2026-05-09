@@ -50,6 +50,10 @@
     <Setter Property="HorizontalAlignment" Value="Left" />
   </Style>
 
+  <Style Selector="Border.toolbox-operator-card">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Toolbox.OperatorCardBackground}" />
+  </Style>
+
   <Style Selector="TextBlock.toolbox-chip-text">
     <Setter Property="FontSize" Value="11.5" />
     <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Text.Secondary}" />

@@ -405,11 +405,13 @@ public sealed class ToolboxModuleO3FeatureTests
         Assert.Contains("ItemsSource=\"{Binding Segments}\"", recruitXaml, StringComparison.Ordinal);
         Assert.DoesNotContain("ExecutionReviewResultLabelText", recruitXaml, StringComparison.Ordinal);
         Assert.Contains("Text=\"{Binding RecruitFixedSixStarText}\"", recruitXaml, StringComparison.Ordinal);
-        Assert.Contains("Content=\"{Binding StartRecognitionText}\"", recruitXaml, StringComparison.Ordinal);
+        Assert.Contains("Content=\"{Binding RecruitStartRecognitionText}\"", recruitXaml, StringComparison.Ordinal);
+        Assert.Contains("IsEnabled=\"{Binding CanStartRecruitRecognition}\"", recruitXaml, StringComparison.Ordinal);
 
         Assert.DoesNotContain("ExecutionReviewResultLabelText", operBoxXaml, StringComparison.Ordinal);
         Assert.Contains("Text=\"{Binding OperBoxCopyToClipboardText}\"", operBoxXaml, StringComparison.Ordinal);
-        Assert.Contains("Content=\"{Binding StartRecognitionText}\"", operBoxXaml, StringComparison.Ordinal);
+        Assert.Contains("Content=\"{Binding OperBoxStartRecognitionText}\"", operBoxXaml, StringComparison.Ordinal);
+        Assert.Contains("IsEnabled=\"{Binding CanStartOperBoxRecognition}\"", operBoxXaml, StringComparison.Ordinal);
         Assert.Contains("Source=\"{Binding EliteIconImage}\"", operBoxXaml, StringComparison.Ordinal);
         Assert.Contains("Source=\"{Binding PotentialIconImage}\"", operBoxXaml, StringComparison.Ordinal);
         Assert.Contains("<Border Classes=\"toolbox-operbox-profession-icon\">", operBoxXaml, StringComparison.Ordinal);
@@ -423,7 +425,8 @@ public sealed class ToolboxModuleO3FeatureTests
         Assert.DoesNotContain("ExecutionReviewResultLabelText", depotXaml, StringComparison.Ordinal);
         Assert.Contains("Text=\"{Binding DepotExportArkPlannerText}\"", depotXaml, StringComparison.Ordinal);
         Assert.Contains("Text=\"{Binding DepotExportLoliconText}\"", depotXaml, StringComparison.Ordinal);
-        Assert.Contains("Content=\"{Binding StartRecognitionText}\"", depotXaml, StringComparison.Ordinal);
+        Assert.Contains("Content=\"{Binding DepotStartRecognitionText}\"", depotXaml, StringComparison.Ordinal);
+        Assert.Contains("IsEnabled=\"{Binding CanStartDepotRecognition}\"", depotXaml, StringComparison.Ordinal);
         Assert.Contains("Source=\"{Binding ItemImage}\"", depotXaml, StringComparison.Ordinal);
 
         Assert.Contains("Content=\"{Binding GachaDrawOnceText}\"", gachaXaml, StringComparison.Ordinal);
@@ -432,7 +435,15 @@ public sealed class ToolboxModuleO3FeatureTests
         Assert.Contains("Content=\"{Binding GachaDisclaimerNoMoreText}\"", gachaXaml, StringComparison.Ordinal);
         Assert.Contains("IsChecked=\"{Binding GachaShowDisclaimerNoMore}\"", gachaXaml, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"GachaDisclaimerEmphasisText\"", gachaXaml, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"GachaPreviewArea\"", gachaXaml, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"GachaControlPanel\"", gachaXaml, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"GachaActionButtonGroup\"", gachaXaml, StringComparison.Ordinal);
+        Assert.Contains("RowDefinitions=\"Auto,*,Auto\"", gachaXaml, StringComparison.Ordinal);
+        Assert.Contains("Orientation=\"Horizontal\"", gachaXaml, StringComparison.Ordinal);
+        Assert.Contains("Stretch=\"Uniform\"", gachaXaml, StringComparison.Ordinal);
         Assert.Contains("SpreadMethod=\"Repeat\"", gachaXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("OnGachaLayoutSizeChanged", gachaXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("GachaPreviewAspectRatio", ReadAdvancedView(root, "ToolboxGachaView.axaml.cs"), StringComparison.Ordinal);
 
         Assert.Contains("Content=\"{Binding PeepCommandText}\"", peepXaml, StringComparison.Ordinal);
         Assert.DoesNotContain("Text=\"{Binding PeepCommandText}\"", peepXaml, StringComparison.Ordinal);

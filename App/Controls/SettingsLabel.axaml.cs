@@ -61,10 +61,22 @@ public partial class SettingsLabel : UserControl
         }
 
         var previousMaxWidth = PART_LabelText.MaxWidth;
-        PART_LabelText.MaxWidth = double.PositiveInfinity;
-        PART_LabelText.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-        var textWidth = PART_LabelText.DesiredSize.Width;
-        PART_LabelText.MaxWidth = previousMaxWidth;
+        double textWidth;
+        try
+        {
+            PART_LabelText.MaxWidth = double.PositiveInfinity;
+            PART_LabelText.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            textWidth = PART_LabelText.DesiredSize.Width;
+        }
+        catch (InvalidOperationException)
+        {
+            textWidth = EstimateTextWidth(Text, PART_LabelText.FontSize);
+        }
+        finally
+        {
+            PART_LabelText.MaxWidth = previousMaxWidth;
+        }
+
         return Math.Ceiling(textWidth + (HasTip ? MeasureHintReserveWidth() : 0d));
     }
 
@@ -120,9 +132,16 @@ public partial class SettingsLabel : UserControl
         var tipWidth = 0d;
         if (PART_Tip is not null)
         {
-            PART_Tip.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-            tipWidth = PART_Tip.DesiredSize.Width;
-            if (tipWidth <= 0d || double.IsNaN(tipWidth))
+            try
+            {
+                PART_Tip.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                tipWidth = PART_Tip.DesiredSize.Width;
+                if (tipWidth <= 0d || double.IsNaN(tipWidth))
+                {
+                    tipWidth = PART_Tip.Bounds.Width;
+                }
+            }
+            catch (InvalidOperationException)
             {
                 tipWidth = PART_Tip.Bounds.Width;
             }
@@ -134,6 +153,18 @@ public partial class SettingsLabel : UserControl
         }
 
         return Math.Ceiling(gapWidth + tipWidth);
+    }
+
+    private static double EstimateTextWidth(string? text, double fontSize)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return 0d;
+        }
+
+        var safeFontSize = fontSize > 0d && !double.IsNaN(fontSize) ? fontSize : 13.5d;
+        var units = text.Sum(static ch => ch <= 0x007F ? 0.56d : 1d);
+        return Math.Ceiling(units * safeFontSize);
     }
 
     private void UpdateHasTip()

@@ -35,7 +35,7 @@
 
     <Style Selector="Border.spin-root:disabled">
       <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.SettingsInput.BackgroundDisabled}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Action.DisabledBorder}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.SettingsInput.BorderDisabled}" />
     </Style>
 
     <Style Selector="Border.spin-stepper">

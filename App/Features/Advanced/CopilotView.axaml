@@ -114,25 +114,75 @@
     <Style Selector="Button.app-button.copilot-link">
       <Setter Property="MinWidth" Value="0" />
       <Setter Property="Height" Value="NaN" />
-      <Setter Property="Padding" Value="0" />
+      <Setter Property="Padding" Value="4,2" />
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="BorderBrush" Value="Transparent" />
       <Setter Property="BorderThickness" Value="0" />
       <Setter Property="HorizontalAlignment" Value="Center" />
       <Setter Property="HorizontalContentAlignment" Value="Center" />
-      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Accent}" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Action.PrimaryBackground}" />
       <Setter Property="Cursor" Value="Hand" />
     </Style>
     <Style Selector="Button.app-button.copilot-link:pointerover">
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Action.PrimaryBackgroundHover}" />
     </Style>
     <Style Selector="Button.app-button.copilot-link:pressed">
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Action.PrimaryBackgroundPressed}" />
+    </Style>
+    <Style Selector="TextBlock.copilot-link-text">
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Action.PrimaryBackground}" />
+      <Setter Property="FontSize" Value="12.5" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="TextDecorations" Value="Underline" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="TextAlignment" Value="Center" />
+      <Setter Property="LineHeight" Value="18" />
+      <Setter Property="Transitions">
+        <Transitions>
+          <BrushTransition Property="Foreground"
+                           Duration="0:0:0.11" />
+        </Transitions>
+      </Setter>
+    </Style>
+    <Style Selector="Button.app-button.copilot-link:pointerover TextBlock.copilot-link-text">
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Action.PrimaryBackgroundHover}" />
+    </Style>
+    <Style Selector="Button.app-button.copilot-link:pressed TextBlock.copilot-link-text">
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Action.PrimaryBackgroundPressed}" />
     </Style>
     <Style Selector="ComboBox.copilot-combo">
       <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="TextBlock.copilot-list-selection-hint">
+      <Setter Property="MaxWidth" Value="520" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="TextAlignment" Value="Center" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <Style Selector="TextBlock.copilot-loaded-file-hint">
+      <Setter Property="Margin" Value="2,0,0,0" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="TextAlignment" Value="Left" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="FontSize" Value="12.5" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
+    </Style>
+    <Style Selector="TextBlock.copilot-status-text">
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <Style Selector="CheckBox.copilot-list-item-check">
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    </Style>
+    <Style Selector="TextBlock.copilot-list-item-title">
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
     <Style Selector="controls|ReorderableList ListBox">
       <Setter Property="Background" Value="Transparent" />
@@ -180,7 +230,7 @@
       </Setter>
     </Style>
     <Style Selector="controls|ReorderableList ListBoxItem:selected Border.copilot-list-item-accent">
-      <Setter Property="Background" Value="{DynamicResource MAA.Brush.Accent}" />
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.PrimaryBackground}" />
     </Style>
   </UserControl.Styles>
   <UserControl.DataTemplates>
@@ -257,6 +307,13 @@
                       IsEnabled="{Binding CanEdit}" />
             </Grid>
           </Border>
+
+          <TextBlock Classes="copilot-loaded-file-hint"
+                     Text="{Binding LoadedCopilotInputHint}"
+                     IsVisible="{Binding HasLoadedCopilot}" />
+
+          <TextBlock Classes="app-caption copilot-list-selection-hint"
+                     Text="{Binding ListSelectionHint}" />
         </StackPanel>
 
         <Grid Grid.Row="1"
@@ -271,14 +328,14 @@
                         Classes="app-button app-primary"
                         Content="{Binding StartButtonText}"
                         Click="OnStartClick"
-                        IsVisible="{Binding CanEdit}"
+                        IsVisible="{Binding ShowStartButton}"
                         IsEnabled="{Binding CanStart}" />
                 <Button Width="120"
                         Height="46"
                         Classes="app-button app-secondary"
                         Content="{Binding StopButtonText}"
                         Click="OnStopClick"
-                        IsVisible="{Binding CanStop}"
+                        IsVisible="{Binding ShowStopButton}"
                         IsEnabled="{Binding CanStop}" />
               </Grid>
 
@@ -483,10 +540,12 @@
                         <Border Classes="copilot-list-item-accent" />
                         <CheckBox Grid.Column="1"
                                   Margin="10,0,0,0"
-                                  Classes="app-checkbox"
-                                  Content="{Binding DisplayName}"
+                                  Classes="app-checkbox copilot-list-item-check"
                                   IsChecked="{Binding IsChecked}"
-                                  ToolTip.Tip="{Binding ExecutionPathHint}" />
+                                  ToolTip.Tip="{Binding ExecutionPathHint}">
+                          <TextBlock Classes="copilot-list-item-title"
+                                     Text="{Binding DisplayName}" />
+                        </CheckBox>
                         <Button Grid.Column="2"
                                 Classes="app-button app-secondary copilot-list-action"
                                 Margin="8,0,0,0"
@@ -541,11 +600,15 @@
           </Border>
         </Grid>
 
-        <Button Grid.Row="2"
-                Classes="app-button app-subtle copilot-link"
-                Margin="0,12,0,0"
-                Content="{Binding CopilotUrl}"
-                Click="OnOpenCopilotUrlClick" />
+        <StackPanel Grid.Row="2"
+                    Margin="0,12,0,0"
+                    Spacing="8">
+          <Button Classes="app-button app-subtle copilot-link"
+                  Click="OnOpenCopilotUrlClick">
+            <TextBlock Classes="copilot-link-text"
+                       Text="{Binding CopilotUrl}" />
+          </Button>
+        </StackPanel>
       </Grid>
     </Border>
 
@@ -559,12 +622,10 @@
             <Border Grid.Row="0"
                     Classes="tool-status-panel copilot-status-card">
               <StackPanel Spacing="6">
-                <TextBlock Classes="app-body"
+                <TextBlock Classes="app-body copilot-status-text"
                            Text="{Binding StatusMessage}" />
-                <TextBlock Classes="state-error long-wrap"
+                <TextBlock Classes="state-error long-wrap copilot-status-text"
                            Text="{Binding LastErrorMessage}" />
-                <TextBlock Classes="app-caption"
-                           Text="{Binding ListSelectionHint}" />
               </StackPanel>
             </Border>
 
@@ -603,8 +664,10 @@
         <Button Grid.Row="2"
                 Classes="app-button app-subtle copilot-link"
                 Margin="0,12,0,0"
-                Content="{Binding MapUrl}"
-                Click="OnOpenMapUrlClick" />
+                Click="OnOpenMapUrlClick">
+          <TextBlock Classes="copilot-link-text"
+                     Text="{Binding MapUrl}" />
+        </Button>
       </Grid>
     </Border>
   </Grid>

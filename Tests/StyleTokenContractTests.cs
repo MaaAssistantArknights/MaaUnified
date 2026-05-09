@@ -179,6 +179,11 @@ public sealed class StyleTokenContractTests
         Assert.Contains("<Setter Property=\"VerticalContentAlignment\" Value=\"Top\" />", text, StringComparison.Ordinal);
         Assert.Contains("Style Selector=\"ComboBox.app-input /template/ ToggleButton#PART_DropDownButton\"", text, StringComparison.Ordinal);
         Assert.Contains("Style Selector=\"ComboBox.app-input /template/ Border#DropDownOverlay\"", text, StringComparison.Ordinal);
+        Assert.Contains("Style Selector=\"Button.app-button /template/ ContentPresenter#PART_ContentPresenter\"", text, StringComparison.Ordinal);
+        Assert.Contains("Style Selector=\"Button.app-button:pointerover /template/ ContentPresenter#PART_ContentPresenter\"", text, StringComparison.Ordinal);
+        Assert.Contains("Style Selector=\"Button.app-button.app-subtle /template/ ContentPresenter#PART_ContentPresenter\"", text, StringComparison.Ordinal);
+        Assert.Contains("Style Selector=\"Button.app-button.app-subtle:pointerover /template/ ContentPresenter#PART_ContentPresenter\"", text, StringComparison.Ordinal);
+        Assert.Contains("Style Selector=\"Button.app-button.app-icon-only /template/ ContentPresenter#PART_ContentPresenter\"", text, StringComparison.Ordinal);
         Assert.Contains("<Setter Property=\"HorizontalAlignment\" Value=\"Right\" />", text, StringComparison.Ordinal);
         Assert.Contains("<Setter Property=\"IsHitTestVisible\" Value=\"True\" />", text, StringComparison.Ordinal);
         Assert.Contains("Style Selector=\"Border.grouped-card-frame\"", text, StringComparison.Ordinal);
@@ -188,6 +193,19 @@ public sealed class StyleTokenContractTests
         Assert.Contains("<Setter Property=\"BorderThickness\" Value=\"0\" />", text, StringComparison.Ordinal);
         Assert.Contains("<Setter Property=\"BoxShadow\" Value=\"{DynamicResource MAA.App.BoxShadow.Card}\" />", text, StringComparison.Ordinal);
         Assert.Contains("<Setter Property=\"ClipToBounds\" Value=\"False\" />", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AppStyles_ShouldNotClearBoxShadowWithNull()
+    {
+        var root = GetMaaUnifiedRoot();
+        var styleFiles = Directory.EnumerateFiles(Path.Combine(root, "App"), "*.axaml", SearchOption.AllDirectories);
+
+        foreach (var file in styleFiles)
+        {
+            var text = File.ReadAllText(file);
+            Assert.DoesNotContain("Property=\"BoxShadow\" Value=\"{x:Null}\"", text, StringComparison.Ordinal);
+        }
     }
 
     [Fact]
@@ -320,7 +338,7 @@ public sealed class StyleTokenContractTests
         Assert.Contains("<x:Double x:Key=\"MAA.Size.TaskQueue.ListPanelWidth\">276</x:Double>", text, StringComparison.Ordinal);
         Assert.Contains("<x:Double x:Key=\"MAA.Size.TaskQueue.LogPanelWidth\">440</x:Double>", text, StringComparison.Ordinal);
         Assert.Contains("<x:Double x:Key=\"MAA.Size.Settings.SectionListWidth\">224</x:Double>", text, StringComparison.Ordinal);
-        Assert.Contains("<x:Double x:Key=\"MAA.Size.Copilot.SidePanelWidth\">420</x:Double>", text, StringComparison.Ordinal);
+        Assert.Contains("<x:Double x:Key=\"MAA.Size.Copilot.SidePanelWidth\">546</x:Double>", text, StringComparison.Ordinal);
         Assert.Contains("Style Selector=\"Button.queue-run\"", text, StringComparison.Ordinal);
         Assert.Contains("<Setter Property=\"Height\" Value=\"{DynamicResource MAA.Size.Action.RunPrimaryHeight}\" />", text, StringComparison.Ordinal);
         Assert.Contains("<Setter Property=\"MinHeight\" Value=\"{DynamicResource MAA.Size.Tab.MinHeight}\" />", text, StringComparison.Ordinal);

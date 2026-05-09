@@ -10,14 +10,13 @@
     <Style Selector="Border.toolbox-operbox-operator-card">
       <Setter Property="Padding" Value="{DynamicResource MAA.Thickness.Toolbox.OperBoxCardPadding}" />
       <Setter Property="BorderThickness" Value="0" />
-      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Surface.Card}" />
       <Setter Property="CornerRadius" Value="12" />
       <Setter Property="BoxShadow" Value="{DynamicResource MAA.App.BoxShadow.CardStrong}" />
       <Setter Property="ClipToBounds" Value="False" />
     </Style>
 
-    <Style Selector="Border.toolbox-operbox-scroll-head-spacer">
-      <Setter Property="Height" Value="56" />
+    <Style Selector="Border.toolbox-operbox-scroll-foot-spacer">
+      <Setter Property="Height" Value="64" />
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="BorderThickness" Value="0" />
       <Setter Property="IsHitTestVisible" Value="False" />
@@ -25,13 +24,8 @@
 
     <Style Selector="Border.toolbox-operbox-mode-switch">
       <Setter Property="HorizontalAlignment" Value="Center" />
-      <Setter Property="Background" Value="{DynamicResource MAA.Brush.Dialog.CardSurface}" />
-      <Setter Property="BorderBrush" Value="Transparent" />
-      <Setter Property="BorderThickness" Value="0" />
-      <Setter Property="CornerRadius" Value="22" />
-      <Setter Property="Padding" Value="4" />
-      <Setter Property="BoxShadow" Value="{DynamicResource MAA.App.BoxShadow.CardStrong}" />
-      <Setter Property="ClipToBounds" Value="False" />
+      <Setter Property="VerticalAlignment" Value="Bottom" />
+      <Setter Property="Margin" Value="0,0,0,10" />
       <Setter Property="ZIndex" Value="5" />
     </Style>
 
@@ -39,36 +33,8 @@
       <Setter Property="HorizontalAlignment" Value="Center" />
     </Style>
 
-    <Style Selector="Border.toolbox-operbox-mode-selection-slider">
-      <Setter Property="Height" Value="36" />
-      <Setter Property="CornerRadius" Value="18" />
-      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.ButtonPrimaryBackground}" />
-      <Setter Property="BorderBrush" Value="Transparent" />
-      <Setter Property="BorderThickness" Value="0" />
-    </Style>
-
     <Style Selector="Button.app-button.toolbox-operbox-mode-chip">
-      <Setter Property="Height" Value="36" />
       <Setter Property="MinWidth" Value="112" />
-      <Setter Property="Padding" Value="16,0" />
-      <Setter Property="CornerRadius" Value="18" />
-      <Setter Property="Background" Value="Transparent" />
-      <Setter Property="BorderBrush" Value="Transparent" />
-      <Setter Property="BorderThickness" Value="0" />
-      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Secondary}" />
-      <Setter Property="FontSize" Value="12.5" />
-      <Setter Property="FontWeight" Value="SemiBold" />
-    </Style>
-
-    <Style Selector="Button.app-button.toolbox-operbox-mode-chip:pointerover">
-      <Setter Property="Background" Value="Transparent" />
-      <Setter Property="BorderBrush" Value="Transparent" />
-      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
-    </Style>
-
-    <Style Selector="Button.app-button.toolbox-operbox-mode-chip.selected">
-      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Action.PrimaryForeground}" />
-      <Setter Property="FontWeight" Value="SemiBold" />
     </Style>
 
     <Style Selector="StackPanel.toolbox-operbox-group-stack">
@@ -172,14 +138,13 @@
     </Style>
   </UserControl.Styles>
 
-  <Grid Margin="20,0,20,4"
+  <Grid Margin="4,0,4,4"
         RowDefinitions="*,Auto">
     <Grid Grid.Row="0">
       <ScrollViewer HorizontalScrollBarVisibility="Disabled"
                     VerticalScrollBarVisibility="Auto"
                     IsVisible="{Binding IsOperBoxNotHaveSelected}">
         <StackPanel Classes="toolbox-operbox-group-stack">
-          <Border Classes="toolbox-operbox-scroll-head-spacer" />
           <Border Classes="toolbox-chip toolbox-operbox-sync-badge"
                   IsVisible="{Binding HasLastOperBoxSyncTime}">
             <TextBlock Classes="toolbox-chip-text"
@@ -217,14 +182,14 @@
                                                     MinColumnGap="16"
                                                     MaxColumnGap="16"
                                                     RowGap="16"
-                                                    EdgeInset="16,16,16,24" />
+                                                    EdgeInset="8,16,8,24" />
                       </ItemsPanelTemplate>
                     </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
                       <DataTemplate>
                         <Border MinWidth="{DynamicResource MAA.Size.Toolbox.OperBoxCardMinWidth}"
                                 MinHeight="{DynamicResource MAA.Size.Toolbox.OperBoxCardMinHeight}"
-                                Classes="toolbox-operbox-operator-card">
+                                Classes="toolbox-operator-card toolbox-operbox-operator-card">
                           <Grid ColumnDefinitions="4,*">
                             <Border Classes="toolbox-operbox-card-strip"
                                     Background="{Binding RarityBrush}" />
@@ -257,6 +222,7 @@
               </DataTemplate>
             </ItemsControl.ItemTemplate>
           </ItemsControl>
+          <Border Classes="toolbox-operbox-scroll-foot-spacer" />
         </StackPanel>
       </ScrollViewer>
 
@@ -264,7 +230,6 @@
                     VerticalScrollBarVisibility="Auto"
                     IsVisible="{Binding IsOperBoxHaveSelected}">
         <StackPanel Classes="toolbox-operbox-group-stack">
-          <Border Classes="toolbox-operbox-scroll-head-spacer" />
           <Border Classes="toolbox-chip toolbox-operbox-sync-badge"
                   IsVisible="{Binding HasLastOperBoxSyncTime}">
             <TextBlock Classes="toolbox-chip-text"
@@ -302,14 +267,14 @@
                                                     MinColumnGap="16"
                                                     MaxColumnGap="16"
                                                     RowGap="16"
-                                                    EdgeInset="16,16,16,24" />
+                                                    EdgeInset="8,16,8,24" />
                       </ItemsPanelTemplate>
                     </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
                       <DataTemplate>
                         <Border MinWidth="{DynamicResource MAA.Size.Toolbox.OperBoxCardMinWidth}"
                                 MinHeight="{DynamicResource MAA.Size.Toolbox.OperBoxCardMinHeight}"
-                                Classes="toolbox-operbox-operator-card">
+                                Classes="toolbox-operator-card toolbox-operbox-operator-card">
                           <Grid ColumnDefinitions="4,*">
                             <Border Classes="toolbox-operbox-card-strip"
                                     Background="{Binding RarityBrush}" />
@@ -357,23 +322,32 @@
               </DataTemplate>
             </ItemsControl.ItemTemplate>
           </ItemsControl>
+          <Border Classes="toolbox-operbox-scroll-foot-spacer" />
         </StackPanel>
       </ScrollViewer>
 
-      <Border Classes="toolbox-operbox-mode-switch"
-              VerticalAlignment="Top">
-        <Grid ColumnDefinitions="*,*">
-          <Border Grid.Column="{Binding OperBoxSelectedIndex}"
-                  Classes="toolbox-operbox-mode-selection-slider"
-                  IsHitTestVisible="False" />
+      <Border Classes="app-slider-strip toolbox-operbox-mode-switch">
+        <Grid x:Name="OperBoxModeTrack">
+          <Border x:Name="OperBoxModeSelectionSlider"
+                  Classes="app-slider-selection"
+                  HorizontalAlignment="Left"
+                  VerticalAlignment="Center"
+                  IsHitTestVisible="False"
+                  IsVisible="False">
+            <Border.RenderTransform>
+              <TranslateTransform X="0" />
+            </Border.RenderTransform>
+          </Border>
           <StackPanel Grid.ColumnSpan="2"
                       Orientation="Horizontal"
                       Spacing="{DynamicResource MAA.App.Settings.FieldHeaderGap}">
-            <Button Classes="app-button app-slider-chip toolbox-operbox-mode-chip"
+            <Button x:Name="OperBoxNotHaveButton"
+                    Classes="app-button app-slider-chip toolbox-operbox-mode-chip"
                     Classes.selected="{Binding IsOperBoxNotHaveSelected}"
                     Content="{Binding OperBoxNotHaveHeader}"
                     Click="OnSelectOperBoxNotHaveClick" />
-            <Button Classes="app-button app-slider-chip toolbox-operbox-mode-chip"
+            <Button x:Name="OperBoxHaveButton"
+                    Classes="app-button app-slider-chip toolbox-operbox-mode-chip"
                     Classes.selected="{Binding IsOperBoxHaveSelected}"
                     Content="{Binding OperBoxHaveHeader}"
                     Click="OnSelectOperBoxHaveClick" />
@@ -395,7 +369,8 @@
                      TextWrapping="Wrap" />
         </Button>
         <Button Classes="app-button app-primary toolbox-operbox-action"
-                Content="{Binding StartRecognitionText}"
+                Content="{Binding OperBoxStartRecognitionText}"
+                IsEnabled="{Binding CanStartOperBoxRecognition}"
                 Click="OnOperBoxStartClick" />
       </StackPanel>
       <TextBlock Grid.Column="2"

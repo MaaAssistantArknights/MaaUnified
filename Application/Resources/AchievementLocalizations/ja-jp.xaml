@@ -1087,7 +1087,7 @@ C:\\leidian\\LDPlayer9
     <system:String x:Key="ErrorCrashMessageGenerateReport">「{key=Settings} - {key=IssueReport} - {key=GenerateSupportPayload}」を使用してエラーレポートを生成し、青色の ｢{key=Issue}｣ リンクをクリックしてフィードバックを送信してください。</system:String>
     <system:String x:Key="ErrorCrashMessageHelpTip">他人に助けを求める場合は、このウィンドウのスクリーンショット、画面録画、写真、撮影した動画、手描きの図、写し書きした内容ではなく、生成されたエラーレポートファイルを送信してください。</system:String>
     <system:String x:Key="ErrorCrashDialogTitle">前回のクラッシュ原因</system:String>
-    <system:String x:Key="CopyErrorMessage">エラー情報をコピーする</system:String>
+    <system:String x:Key="CopyErrorMessage">エラー詳細</system:String>
     <!--  !ErrorView  -->
     <!--  AsstProxy  -->
     <system:String x:Key="ResourceBroken">リソースファイルが破損しています。完全なパッケージを再度ダウンロードしてください。\n\n{key=FullPackageUpgradeTips}</system:String>

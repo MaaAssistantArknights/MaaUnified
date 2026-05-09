@@ -191,7 +191,8 @@
                      TextWrapping="Wrap" />
         </Button>
         <Button Classes="app-button app-primary toolbox-depot-action"
-                Content="{Binding StartRecognitionText}"
+                Content="{Binding DepotStartRecognitionText}"
+                IsEnabled="{Binding CanStartDepotRecognition}"
                 Click="OnDepotStartClick" />
       </WrapPanel>
       <TextBlock Grid.Column="2"

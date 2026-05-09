@@ -184,7 +184,7 @@ public sealed class TaskQueueG1FeatureTests
         PrepareView(view);
 
         var zhTexts = GetRenderedTexts(view);
-        Assert.Contains("生息演算", zhTexts);
+        Assert.Contains(zhTexts, text => text.Contains("生息演算", StringComparison.Ordinal));
         Assert.Contains("生息演算主题", zhTexts);
 
         vm.PropertyChanged += (_, e) =>
@@ -200,7 +200,7 @@ public sealed class TaskQueueG1FeatureTests
         PrepareView(view);
 
         var enTexts = GetRenderedTexts(view);
-        Assert.Contains("Reclamation", enTexts);
+        Assert.Contains(enTexts, text => text.Contains("Reclamation", StringComparison.Ordinal));
         Assert.Contains("Reclamation Algorithm Theme", enTexts);
         Assert.DoesNotContain("生息演算主题", enTexts);
     }

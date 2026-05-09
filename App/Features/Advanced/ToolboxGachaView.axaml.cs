@@ -1,3 +1,5 @@
+using System.ComponentModel;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Media;
@@ -8,9 +10,12 @@ namespace MAAUnified.App.Features.Advanced;
 
 public partial class ToolboxGachaView : UserControl
 {
+    private const double GachaFpsBadgeInset = 16d;
+
     private readonly DispatcherTimer _gachaEmphasisTimer;
     private double _gachaEmphasisPhase;
     private TranslateTransform? _gachaGradientTransform;
+    private ToolboxPageViewModel? _observedViewModel;
 
     public ToolboxGachaView()
     {
@@ -22,8 +27,25 @@ public partial class ToolboxGachaView : UserControl
         };
         _gachaEmphasisTimer.Tick += (_, _) => AnimateGachaDisclaimerText();
 
-        AttachedToVisualTree += (_, _) => _gachaEmphasisTimer.Start();
-        DetachedFromVisualTree += (_, _) => _gachaEmphasisTimer.Stop();
+        AttachedToVisualTree += (_, _) =>
+        {
+            _gachaEmphasisTimer.Start();
+            BindViewModelNotifications();
+            QueueGachaFpsBadgePlacement();
+        };
+        DetachedFromVisualTree += (_, _) =>
+        {
+            _gachaEmphasisTimer.Stop();
+            UnbindViewModelNotifications();
+        };
+        DataContextChanged += (_, _) =>
+        {
+            BindViewModelNotifications();
+            QueueGachaFpsBadgePlacement();
+        };
+        GachaPreviewArea.SizeChanged += (_, _) => QueueGachaFpsBadgePlacement();
+        GachaPreviewImage.SizeChanged += (_, _) => QueueGachaFpsBadgePlacement();
+        GachaFpsBadge.SizeChanged += (_, _) => QueueGachaFpsBadgePlacement();
     }
 
     private ToolboxPageViewModel? VM => DataContext as ToolboxPageViewModel;
@@ -68,6 +90,72 @@ public partial class ToolboxGachaView : UserControl
         }
 
         await VM.TogglePeepAsync();
+    }
+
+    private void BindViewModelNotifications()
+    {
+        if (ReferenceEquals(_observedViewModel, VM))
+        {
+            return;
+        }
+
+        UnbindViewModelNotifications();
+        _observedViewModel = VM;
+        if (_observedViewModel is not null)
+        {
+            _observedViewModel.PropertyChanged += OnViewModelPropertyChanged;
+        }
+    }
+
+    private void UnbindViewModelNotifications()
+    {
+        if (_observedViewModel is null)
+        {
+            return;
+        }
+
+        _observedViewModel.PropertyChanged -= OnViewModelPropertyChanged;
+        _observedViewModel = null;
+    }
+
+    private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (string.IsNullOrEmpty(e.PropertyName)
+            || string.Equals(e.PropertyName, nameof(ToolboxPageViewModel.PeepImage), StringComparison.Ordinal)
+            || string.Equals(e.PropertyName, nameof(ToolboxPageViewModel.ShowGachaPreview), StringComparison.Ordinal))
+        {
+            QueueGachaFpsBadgePlacement();
+        }
+    }
+
+    private void QueueGachaFpsBadgePlacement()
+    {
+        Dispatcher.UIThread.Post(UpdateGachaFpsBadgePlacement, DispatcherPriority.Loaded);
+    }
+
+    private void UpdateGachaFpsBadgePlacement()
+    {
+        var image = VM?.PeepImage;
+        var sourceWidth = image?.PixelSize.Width ?? 0;
+        var sourceHeight = image?.PixelSize.Height ?? 0;
+        var slot = GachaPreviewImage.Bounds.Size;
+        if (sourceWidth <= 0 || sourceHeight <= 0 || slot.Width <= 0 || slot.Height <= 0)
+        {
+            GachaFpsBadge.Margin = new Thickness(GachaFpsBadgeInset);
+            return;
+        }
+
+        var scale = Math.Min(slot.Width / sourceWidth, slot.Height / sourceHeight);
+        var renderedWidth = sourceWidth * scale;
+        var renderedHeight = sourceHeight * scale;
+        var renderedLeft = Math.Max(0d, (slot.Width - renderedWidth) / 2d);
+        var renderedTop = Math.Max(0d, (slot.Height - renderedHeight) / 2d);
+
+        GachaFpsBadge.Margin = new Thickness(
+            renderedLeft + GachaFpsBadgeInset,
+            renderedTop + GachaFpsBadgeInset,
+            0,
+            0);
     }
 
     private void AnimateGachaDisclaimerText()

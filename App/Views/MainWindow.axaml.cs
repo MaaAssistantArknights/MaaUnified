@@ -81,7 +81,7 @@ public partial class MainWindow : Window
         new("MAA.Size.Toolbox.ActionButtonWidth", 162d, 180d),
         new("MAA.Size.Toolbox.WarningTextMaxWidth", 504d, 560d),
         new("MAA.Size.Toolbox.FormPanelWidth", 580d, 640d),
-        new("MAA.Size.Copilot.SidePanelWidth", 378d, 420d),
+        new("MAA.Size.Copilot.SidePanelWidth", 491d, 546d),
     ];
 
     private bool _platformBound;

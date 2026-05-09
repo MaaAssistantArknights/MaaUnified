@@ -355,6 +355,7 @@ public sealed class RecruitTaskModuleViewModel : TypedTaskModuleViewModelBase<Re
     private void RebuildRecruitTagOptions()
     {
         var selected = FirstTagOptions
+            .Where(option => option is not null)
             .Where(option => option.IsSelected)
             .Select(option => option.Value)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);

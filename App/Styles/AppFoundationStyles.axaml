@@ -56,6 +56,7 @@
     <SolidColorBrush x:Key="MAA.Brush.App.Text.Primary" Color="{DynamicResource MAA.Color.Text.Primary}" />
     <SolidColorBrush x:Key="MAA.Brush.App.Text.Secondary" Color="{DynamicResource MAA.Color.Text.Secondary}" />
     <SolidColorBrush x:Key="MAA.Brush.App.Text.Muted" Color="{DynamicResource MAA.Color.Text.Muted}" />
+    <SolidColorBrush x:Key="MAA.Brush.App.Toolbox.OperatorCardBackground" Color="{DynamicResource MAA.Color.Toolbox.OperatorCardBackground}" />
     <SolidColorBrush x:Key="MAA.Brush.App.Toolbox.OperatorGlyphForeground" Color="{DynamicResource MAA.Color.Toolbox.OperatorGlyphForeground}" />
     <SolidColorBrush x:Key="MAA.Brush.App.State.Warning" Color="{DynamicResource MAA.Color.State.Warning}" />
     <SolidColorBrush x:Key="MAA.Brush.App.Surface.Warning" Color="{DynamicResource MAA.Color.Surface.Warning}" />
@@ -95,8 +96,9 @@
     <SolidColorBrush x:Key="MAA.Brush.App.Input.Border" Color="{DynamicResource MAA.Color.Dialog.FilterChipBorder}" />
     <SolidColorBrush x:Key="MAA.Brush.App.Input.BorderHover" Color="{DynamicResource MAA.Color.Action.SecondaryBorder}" />
     <SolidColorBrush x:Key="MAA.Brush.App.Input.BorderFocus" Color="{DynamicResource MAA.Color.Dialog.FilterChipSelectedBorder}" />
-    <SolidColorBrush x:Key="MAA.Brush.App.Input.BackgroundDisabled" Color="{DynamicResource MAA.Color.Action.BackgroundDisabled}" />
-    <SolidColorBrush x:Key="MAA.Brush.App.Input.ForegroundDisabled" Color="{DynamicResource MAA.Color.Action.ForegroundDisabled}" />
+    <SolidColorBrush x:Key="MAA.Brush.App.Input.BackgroundDisabled" Color="{DynamicResource MAA.Color.Input.BackgroundDisabled}" />
+    <SolidColorBrush x:Key="MAA.Brush.App.Input.BorderDisabled" Color="{DynamicResource MAA.Color.Input.BorderDisabled}" />
+    <SolidColorBrush x:Key="MAA.Brush.App.Input.ForegroundDisabled" Color="{DynamicResource MAA.Color.Input.ForegroundDisabled}" />
     <SolidColorBrush x:Key="MAA.Brush.App.Input.PopupBackground" Color="{DynamicResource MAA.Color.Dialog.Section}" />
     <SolidColorBrush x:Key="MAA.Brush.App.Input.PopupBorder" Color="{DynamicResource MAA.Color.Dialog.SectionBorder}" />
     <SolidColorBrush x:Key="MAA.Brush.App.Input.ItemBackgroundHover" Color="{DynamicResource MAA.Color.Input.ItemBackgroundHover}" />
@@ -121,19 +123,20 @@
     <SolidColorBrush x:Key="MAA.Brush.App.SettingsInput.Border" Color="{DynamicResource MAA.Color.Dialog.SectionBorder}" />
     <SolidColorBrush x:Key="MAA.Brush.App.SettingsInput.BorderHover" Color="{DynamicResource MAA.Color.Action.SecondaryBorder}" />
     <SolidColorBrush x:Key="MAA.Brush.App.SettingsInput.BorderFocus" Color="{DynamicResource MAA.Color.Dialog.FilterChipSelectedBorder}" />
-    <SolidColorBrush x:Key="MAA.Brush.App.SettingsInput.BackgroundDisabled" Color="{DynamicResource MAA.Color.Action.BackgroundDisabled}" />
+    <SolidColorBrush x:Key="MAA.Brush.App.SettingsInput.BackgroundDisabled" Color="{DynamicResource MAA.Color.SettingsInput.BackgroundDisabled}" />
+    <SolidColorBrush x:Key="MAA.Brush.App.SettingsInput.BorderDisabled" Color="{DynamicResource MAA.Color.SettingsInput.BorderDisabled}" />
     <SolidColorBrush x:Key="MAA.Brush.App.SettingsInput.Foreground" Color="{DynamicResource MAA.Color.Text.Primary}" />
-    <SolidColorBrush x:Key="MAA.Brush.App.SettingsInput.ForegroundDisabled" Color="{DynamicResource MAA.Color.Action.ForegroundDisabled}" />
+    <SolidColorBrush x:Key="MAA.Brush.App.SettingsInput.ForegroundDisabled" Color="{DynamicResource MAA.Color.SettingsInput.ForegroundDisabled}" />
     <SolidColorBrush x:Key="MAA.Brush.App.SettingsInput.Chevron" Color="{DynamicResource MAA.Color.Text.Muted}" />
     <SolidColorBrush x:Key="MAA.Brush.App.SettingsInput.ChevronHover" Color="{DynamicResource MAA.Color.Text.Secondary}" />
-    <SolidColorBrush x:Key="MAA.Brush.App.SettingsInput.ChevronDisabled" Color="{DynamicResource MAA.Color.Action.ForegroundDisabled}" />
+    <SolidColorBrush x:Key="MAA.Brush.App.SettingsInput.ChevronDisabled" Color="{DynamicResource MAA.Color.SettingsInput.ForegroundDisabled}" />
     <SolidColorBrush x:Key="MAA.Brush.App.SettingsInput.PopupBackground" Color="{DynamicResource MAA.Color.Dialog.Surface}" />
     <SolidColorBrush x:Key="MAA.Brush.App.SettingsInput.PopupBorder" Color="{DynamicResource MAA.Color.Dialog.SectionBorder}" />
     <SolidColorBrush x:Key="MAA.Brush.App.SettingsInput.PopupScrollViewerBackground" Color="{DynamicResource MAA.Color.Dialog.Surface}" />
     <SolidColorBrush x:Key="MAA.Brush.App.SettingsInput.ItemForeground" Color="{DynamicResource MAA.Color.Text.Secondary}" />
     <SolidColorBrush x:Key="MAA.Brush.App.SettingsInput.ItemForegroundHover" Color="{DynamicResource MAA.Color.Text.Primary}" />
     <SolidColorBrush x:Key="MAA.Brush.App.SettingsInput.ItemForegroundSelected" Color="{DynamicResource MAA.Color.Dialog.FilterChipSelectedForeground}" />
-    <SolidColorBrush x:Key="MAA.Brush.App.SettingsInput.ItemForegroundDisabled" Color="{DynamicResource MAA.Color.Action.ForegroundDisabled}" />
+    <SolidColorBrush x:Key="MAA.Brush.App.SettingsInput.ItemForegroundDisabled" Color="{DynamicResource MAA.Color.SettingsInput.ForegroundDisabled}" />
     <SolidColorBrush x:Key="MAA.Brush.App.SettingsInput.ItemBackgroundHover" Color="{DynamicResource MAA.Color.SettingsInput.ItemBackgroundHover}" />
     <SolidColorBrush x:Key="MAA.Brush.App.SettingsInput.ItemBackgroundSelected" Color="{DynamicResource MAA.Color.Dialog.FilterChipSelectedBackground}" />
     <SolidColorBrush x:Key="MAA.Brush.App.SettingsInput.ItemBorderSelected" Color="{DynamicResource MAA.Color.Dialog.FilterChipSelectedBorder}" />
@@ -749,6 +752,30 @@
     <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.SecondaryBackgroundPressed}" />
   </Style>
 
+  <Style Selector="Button.app-button /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.SecondaryBackground}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Action.SecondaryBorder}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource MAA.BorderThickness.Thin}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.CornerRadius.Button}" />
+    <Setter Property="TextBlock.Foreground" Value="{DynamicResource MAA.Brush.App.Action.SecondaryForeground}" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="0:0:0.11" />
+        <BrushTransition Property="BorderBrush" Duration="0:0:0.11" />
+        <BrushTransition Property="TextBlock.Foreground" Duration="0:0:0.11" />
+      </Transitions>
+    </Setter>
+  </Style>
+
+  <Style Selector="Button.app-button:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.SecondaryBackgroundHover}" />
+    <Setter Property="TextBlock.Foreground" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
+  </Style>
+
+  <Style Selector="Button.app-button:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.SecondaryBackgroundPressed}" />
+  </Style>
+
   <Style Selector="Button.app-button.app-primary">
     <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.ButtonPrimaryBackground}" />
     <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Action.ButtonPrimaryBorder}" />
@@ -765,6 +792,24 @@
     <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.ButtonPrimaryBackgroundPressed}" />
     <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Action.ButtonPrimaryBorder}" />
     <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Action.PrimaryForeground}" />
+  </Style>
+
+  <Style Selector="Button.app-button.app-primary /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.ButtonPrimaryBackground}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Action.ButtonPrimaryBorder}" />
+    <Setter Property="TextBlock.Foreground" Value="{DynamicResource MAA.Brush.App.Action.PrimaryForeground}" />
+  </Style>
+
+  <Style Selector="Button.app-button.app-primary:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.ButtonPrimaryBackgroundHover}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Action.ButtonPrimaryBorder}" />
+    <Setter Property="TextBlock.Foreground" Value="{DynamicResource MAA.Brush.App.Action.PrimaryForeground}" />
+  </Style>
+
+  <Style Selector="Button.app-button.app-primary:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.ButtonPrimaryBackgroundPressed}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Action.ButtonPrimaryBorder}" />
+    <Setter Property="TextBlock.Foreground" Value="{DynamicResource MAA.Brush.App.Action.PrimaryForeground}" />
   </Style>
 
   <Style Selector="Button.app-button.app-secondary">
@@ -784,6 +829,23 @@
     <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Action.SecondaryBorder}" />
   </Style>
 
+  <Style Selector="Button.app-button.app-secondary /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.SecondaryBackground}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Action.SecondaryBorder}" />
+    <Setter Property="TextBlock.Foreground" Value="{DynamicResource MAA.Brush.App.Action.SecondaryForeground}" />
+  </Style>
+
+  <Style Selector="Button.app-button.app-secondary:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.SecondaryBackgroundHover}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Action.SecondaryBorder}" />
+    <Setter Property="TextBlock.Foreground" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
+  </Style>
+
+  <Style Selector="Button.app-button.app-secondary:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.SecondaryBackgroundPressed}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Action.SecondaryBorder}" />
+  </Style>
+
   <Style Selector="Button.app-button.app-subtle">
     <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.SubtleBackground}" />
     <Setter Property="BorderBrush" Value="Transparent" />
@@ -797,6 +859,23 @@
   </Style>
 
   <Style Selector="Button.app-button.app-subtle:pressed">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.SubtleBackgroundPressed}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+  </Style>
+
+  <Style Selector="Button.app-button.app-subtle /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.SubtleBackground}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="TextBlock.Foreground" Value="{DynamicResource MAA.Brush.App.Action.SubtleForeground}" />
+  </Style>
+
+  <Style Selector="Button.app-button.app-subtle:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.SubtleBackgroundHover}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="TextBlock.Foreground" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
+  </Style>
+
+  <Style Selector="Button.app-button.app-subtle:pressed /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.SubtleBackgroundPressed}" />
     <Setter Property="BorderBrush" Value="Transparent" />
   </Style>
@@ -824,10 +903,10 @@
   </Style>
 
   <Style Selector="Button.app-button.app-slider-chip">
-    <Setter Property="Height" Value="{DynamicResource MAA.App.Size.ChipHeight}" />
+    <Setter Property="Height" Value="36" />
     <Setter Property="MinWidth" Value="{DynamicResource MAA.App.Size.ChipMinWidth}" />
-    <Setter Property="Padding" Value="{DynamicResource MAA.App.Thickness.ChipPadding}" />
-    <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.CornerRadius.Chip}" />
+    <Setter Property="Padding" Value="16,0" />
+    <Setter Property="CornerRadius" Value="18" />
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderBrush" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
@@ -838,21 +917,46 @@
     <Setter Property="VerticalContentAlignment" Value="Center" />
     <Setter Property="Template">
       <ControlTemplate>
-        <Border Background="{TemplateBinding Background}"
-                BorderBrush="{TemplateBinding BorderBrush}"
-                BorderThickness="{TemplateBinding BorderThickness}"
-                CornerRadius="{TemplateBinding CornerRadius}">
-          <TextBlock Margin="{TemplateBinding Padding}"
+        <Panel Background="Transparent">
+          <TextBlock x:Name="PART_SliderChipText"
+                     Margin="{TemplateBinding Padding}"
                      HorizontalAlignment="Stretch"
                      VerticalAlignment="Center"
                      FontSize="{TemplateBinding FontSize}"
                      FontWeight="{TemplateBinding FontWeight}"
-                     Foreground="{TemplateBinding Foreground}"
                      Text="{TemplateBinding Content}"
                      TextAlignment="Center"
                      TextWrapping="NoWrap" />
-        </Border>
+        </Panel>
       </ControlTemplate>
+    </Setter>
+  </Style>
+
+  <Style Selector="Border.app-slider-strip">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.Dialog.CardSurface}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="22" />
+    <Setter Property="Padding" Value="4" />
+    <Setter Property="BoxShadow" Value="{DynamicResource MAA.App.BoxShadow.Card}" />
+    <Setter Property="ClipToBounds" Value="False" />
+  </Style>
+
+  <Style Selector="Border.app-slider-selection">
+    <Setter Property="Height" Value="36" />
+    <Setter Property="CornerRadius" Value="18" />
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.ButtonPrimaryBackground}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+
+  <Style Selector="Border.app-slider-selection.animate">
+    <Setter Property="Transitions">
+      <Transitions>
+        <DoubleTransition Property="Width"
+                          Duration="0:0:0.15"
+                          Easing="CubicEaseOut" />
+      </Transitions>
     </Setter>
   </Style>
 
@@ -870,6 +974,18 @@
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Muted}" />
     <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+
+  <Style Selector="Button.app-button.app-slider-chip /template/ TextBlock#PART_SliderChipText">
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Secondary}" />
+  </Style>
+
+  <Style Selector="Button.app-button.app-slider-chip:pointerover /template/ TextBlock#PART_SliderChipText">
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
+  </Style>
+
+  <Style Selector="Button.app-button.app-slider-chip:pressed /template/ TextBlock#PART_SliderChipText">
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Muted}" />
   </Style>
 
   <Style Selector="Button.app-button.app-slider-chip.selected">
@@ -896,10 +1012,54 @@
     <Setter Property="FontWeight" Value="SemiBold" />
   </Style>
 
+  <Style Selector="Button.app-button.app-slider-chip.selected /template/ TextBlock#PART_SliderChipText,
+                   Button.app-button.app-slider-chip.selected:pointerover /template/ TextBlock#PART_SliderChipText">
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Action.PrimaryForeground}" />
+  </Style>
+
+  <Style Selector="Button.app-button.app-slider-chip.selected:pressed /template/ TextBlock#PART_SliderChipText">
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Muted}" />
+  </Style>
+
+  <Style Selector="Button.app-button.app-slider-chip:disabled,
+                   Button.app-button.app-slider-chip:disabled:pointerover,
+                   Button.app-button.app-slider-chip:disabled:pressed">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Action.DisabledForeground}" />
+  </Style>
+
+  <Style Selector="Button.app-button.app-slider-chip:disabled /template/ TextBlock#PART_SliderChipText,
+                   Button.app-button.app-slider-chip:disabled:pointerover /template/ TextBlock#PART_SliderChipText,
+                   Button.app-button.app-slider-chip:disabled:pressed /template/ TextBlock#PART_SliderChipText">
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Action.DisabledForeground}" />
+  </Style>
+
+  <Style Selector="Button.app-button.app-slider-chip.selected:disabled,
+                   Button.app-button.app-slider-chip.selected:disabled:pointerover,
+                   Button.app-button.app-slider-chip.selected:disabled:pressed">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Action.PrimaryForeground}" />
+  </Style>
+
+  <Style Selector="Button.app-button.app-slider-chip.selected:disabled /template/ TextBlock#PART_SliderChipText,
+                   Button.app-button.app-slider-chip.selected:disabled:pointerover /template/ TextBlock#PART_SliderChipText,
+                   Button.app-button.app-slider-chip.selected:disabled:pressed /template/ TextBlock#PART_SliderChipText">
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Action.PrimaryForeground}" />
+  </Style>
+
   <Style Selector="Button.app-button.app-icon-only">
     <Setter Property="Width" Value="{DynamicResource MAA.App.Size.IconButton}" />
     <Setter Property="MinWidth" Value="{DynamicResource MAA.App.Size.IconButton}" />
     <Setter Property="Height" Value="{DynamicResource MAA.App.Size.IconButton}" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.CornerRadius.IconButton}" />
+  </Style>
+
+  <Style Selector="Button.app-button.app-icon-only /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Padding" Value="0" />
     <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.CornerRadius.IconButton}" />
   </Style>
@@ -920,6 +1080,14 @@
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderBrush" Value="Transparent" />
     <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Secondary}" />
+  </Style>
+
+  <Style Selector="Button.app-button.main-shell-floating-card-close.app-hoverless /template/ ContentPresenter#PART_ContentPresenter,
+                   Button.app-button.main-shell-floating-card-close.app-hoverless:pointerover /template/ ContentPresenter#PART_ContentPresenter,
+                   Button.app-button.main-shell-floating-card-close.app-hoverless:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="TextBlock.Foreground" Value="{DynamicResource MAA.Brush.App.Text.Secondary}" />
   </Style>
 
   <Style Selector="Button.app-button.selected">
@@ -944,6 +1112,31 @@
     <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.DisabledBackground}" />
     <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Action.DisabledBorder}" />
     <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Action.DisabledForeground}" />
+  </Style>
+
+  <Style Selector="Button.app-button.app-primary:disabled">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.PrimaryBackgroundDisabled}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Action.PrimaryBackgroundDisabled}" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Action.DisabledForeground}" />
+  </Style>
+
+  <Style Selector="Button.app-button.app-primary:disabled /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.PrimaryBackgroundDisabled}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Action.PrimaryBackgroundDisabled}" />
+    <Setter Property="TextBlock.Foreground" Value="{DynamicResource MAA.Brush.App.Action.DisabledForeground}" />
+  </Style>
+
+  <Style Selector="Button.app-button.app-secondary:disabled /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.DisabledBackground}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Action.DisabledBorder}" />
+    <Setter Property="TextBlock.Foreground" Value="{DynamicResource MAA.Brush.App.Action.DisabledForeground}" />
+  </Style>
+
+  <Style Selector="Button.app-button.app-subtle:disabled /template/ ContentPresenter#PART_ContentPresenter,
+                   Button.app-button.app-chip:disabled /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.DisabledBackground}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Action.DisabledBorder}" />
+    <Setter Property="TextBlock.Foreground" Value="{DynamicResource MAA.Brush.App.Action.DisabledForeground}" />
   </Style>
 
   <Style Selector="Button.app-button.locked">
@@ -1213,8 +1406,17 @@
 
   <Style Selector="TextBox.app-input:disabled">
     <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Input.BackgroundDisabled}" />
-    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Action.DisabledBorder}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Input.BorderDisabled}" />
     <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Input.ForegroundDisabled}" />
+    <Setter Property="Opacity" Value="1" />
+  </Style>
+
+  <Style Selector="TextBox.app-input:disabled /template/ Border#PART_BorderElement,
+                   TextBox.app-input:disabled /template/ Border#PART_Border">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Input.BackgroundDisabled}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Input.BorderDisabled}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource MAA.BorderThickness.Thin}" />
+    <Setter Property="BoxShadow" Value="0 0 0 0 #00000000" />
   </Style>
 
   <Style Selector="TextBox.app-input.app-input-block">
@@ -1291,9 +1493,18 @@
 
   <Style Selector="ComboBox.app-input:disabled">
     <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Input.BackgroundDisabled}" />
-    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Action.DisabledBorder}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Input.BorderDisabled}" />
     <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Input.ForegroundDisabled}" />
     <Setter Property="Opacity" Value="1" />
+  </Style>
+
+  <Style Selector="ComboBox.app-input:disabled /template/ Border#Background,
+                   ComboBox.app-input:disabled /template/ Border#PART_BorderElement,
+                   ComboBox.app-input:disabled /template/ Border#PART_Border">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Input.BackgroundDisabled}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Input.BorderDisabled}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource MAA.BorderThickness.Thin}" />
+    <Setter Property="BoxShadow" Value="0 0 0 0 #00000000" />
   </Style>
 
   <Style Selector="ComboBox.app-input /template/ ContentPresenter#PART_ContentPresenter">
@@ -1301,6 +1512,12 @@
     <Setter Property="HorizontalAlignment" Value="Stretch" />
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
+  </Style>
+
+  <Style Selector="ComboBox.app-input:disabled /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Input.ForegroundDisabled}" />
+    <Setter Property="TextBlock.Foreground" Value="{DynamicResource MAA.Brush.App.Input.ForegroundDisabled}" />
+    <Setter Property="Opacity" Value="1" />
   </Style>
 
   <Style Selector="ComboBox.app-input /template/ ToggleButton#PART_DropDownButton">
@@ -1326,7 +1543,10 @@
   </Style>
 
   <Style Selector="ComboBox.app-input:disabled /template/ ToggleButton#PART_DropDownButton">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
     <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Input.ForegroundDisabled}" />
+    <Setter Property="Opacity" Value="1" />
   </Style>
 
   <Style Selector="ComboBox.app-input /template/ Popup#PART_Popup">
@@ -1429,9 +1649,18 @@
 
   <Style Selector="AutoCompleteBox.app-input:disabled">
     <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Input.BackgroundDisabled}" />
-    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Action.DisabledBorder}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Input.BorderDisabled}" />
     <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Input.ForegroundDisabled}" />
     <Setter Property="Opacity" Value="1" />
+  </Style>
+
+  <Style Selector="AutoCompleteBox.app-input:disabled /template/ Border#Background,
+                   AutoCompleteBox.app-input:disabled /template/ Border#PART_BorderElement,
+                   AutoCompleteBox.app-input:disabled /template/ Border#PART_Border">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Input.BackgroundDisabled}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Input.BorderDisabled}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource MAA.BorderThickness.Thin}" />
+    <Setter Property="BoxShadow" Value="0 0 0 0 #00000000" />
   </Style>
 
   <Style Selector="AutoCompleteBox.app-input /template/ TextBox#PART_TextBox">

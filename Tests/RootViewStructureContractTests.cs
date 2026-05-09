@@ -103,9 +103,12 @@ public sealed class RootViewStructureContractTests
         Assert.Contains("IsVisible=\"{Binding ShowTimeOnlyLayout}\"", text, StringComparison.Ordinal);
         Assert.Contains("VerticalAlignment=\"Center\"", text, StringComparison.Ordinal);
         Assert.Contains("Click=\"OnOpenPostActionClick\"", text, StringComparison.Ordinal);
-        Assert.Contains("Click=\"OnAddTaskModuleClick\"", text, StringComparison.Ordinal);
+        Assert.Contains("Click=\"OnOpenButtonContextMenuClick\"", text, StringComparison.Ordinal);
         Assert.Contains("Click=\"OnBatchActionClick\"", text, StringComparison.Ordinal);
-        Assert.Contains("Click=\"OnToggleBatchModeClick\"", text, StringComparison.Ordinal);
+        Assert.Contains("PointerPressed=\"OnBatchActionPointerPressed\"", text, StringComparison.Ordinal);
+        Assert.Contains("Style Selector=\"Border.task-queue-row-action\"", text, StringComparison.Ordinal);
+        Assert.Contains("Style Selector=\"Border.task-queue-row-action:pointerover\"", text, StringComparison.Ordinal);
+        Assert.Contains("PointerPressed=\"OnTaskGearPointerPressed\"", text, StringComparison.Ordinal);
         Assert.Contains("<DataTemplate DataType=\"taskVm:StartUpTaskModuleViewModel\">", text, StringComparison.Ordinal);
         Assert.Contains("<DataTemplate DataType=\"taskVm:FightTaskModuleViewModel\">", text, StringComparison.Ordinal);
         Assert.DoesNotContain("TaskQueue.Root.AutoReload", text, StringComparison.Ordinal);
@@ -256,12 +259,12 @@ public sealed class RootViewStructureContractTests
         Assert.Contains("x:Name=\"SectionScrollViewer\"", text, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"SectionContentPanel\"", text, StringComparison.Ordinal);
         Assert.DoesNotContain("Spacing=\"28\"", text, StringComparison.Ordinal);
-        Assert.Contains("x:Name=\"StickyTitlePanel\"", text, StringComparison.Ordinal);
-        Assert.Contains("x:Name=\"StickyCurrentHost\"", text, StringComparison.Ordinal);
-        Assert.Contains("x:Name=\"StickyTransitionHost\"", text, StringComparison.Ordinal);
-        Assert.Contains("x:Name=\"StickyTitleText\"", text, StringComparison.Ordinal);
-        Assert.Contains("x:Name=\"StickyTransitionText\"", text, StringComparison.Ordinal);
-        Assert.Contains("Classes=\"settings-sticky-title\"", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("StickyTitlePanel", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("StickyCurrentHost", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("StickyTransitionHost", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("StickyTitleText", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("StickyTransitionText", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("settings-sticky-title", text, StringComparison.Ordinal);
         Assert.Contains("ScrollChanged=\"OnSectionScrollChanged\"", text, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"SectionConfigurationManager\"", text, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"SectionAbout\"", text, StringComparison.Ordinal);
@@ -295,10 +298,10 @@ public sealed class RootViewStructureContractTests
         Assert.DoesNotContain("OnProgressiveMaterializationTick", codeBehind, StringComparison.Ordinal);
         Assert.Contains("GetSectionActivationLineY()", codeBehind, StringComparison.Ordinal);
         Assert.Contains("ResolveActiveSectionIndex(", codeBehind, StringComparison.Ordinal);
-        Assert.Contains("StickyTitlePresentationState", codeBehind, StringComparison.Ordinal);
-        Assert.Contains("UpdateStickyTitlePresentation()", codeBehind, StringComparison.Ordinal);
-        Assert.Contains("ApplyStickyTitlePresentation(", codeBehind, StringComparison.Ordinal);
-        Assert.Contains("_stickyCurrentTitleTransform", codeBehind, StringComparison.Ordinal);
+        Assert.DoesNotContain("StickyTitlePresentationState", codeBehind, StringComparison.Ordinal);
+        Assert.DoesNotContain("UpdateStickyTitlePresentation()", codeBehind, StringComparison.Ordinal);
+        Assert.DoesNotContain("ApplyStickyTitlePresentation(", codeBehind, StringComparison.Ordinal);
+        Assert.DoesNotContain("_stickyCurrentTitleTransform", codeBehind, StringComparison.Ordinal);
         Assert.DoesNotContain("scrollViewer.Viewport.Height * 0.25d", codeBehind, StringComparison.Ordinal);
         Assert.Contains("nameof(SettingsPageViewModel.RootTexts)", codeBehind, StringComparison.Ordinal);
         Assert.Contains("new settingsViews.ConfigurationManagerView()", codeBehind, StringComparison.Ordinal);
@@ -353,8 +356,37 @@ public sealed class RootViewStructureContractTests
         Assert.Contains("string.Format", codeBehind, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void TaskQueueView_ContextMenus_ShouldUseCustomPopupMenuWithoutDefaultMenuChrome()
+    {
+        var root = GetMaaUnifiedRoot();
+        var taskQueue = File.ReadAllText(Path.Combine(root, "App", "Features", "Root", "TaskQueueView.axaml"));
+        var codeBehind = File.ReadAllText(Path.Combine(root, "App", "Features", "Root", "TaskQueueView.axaml.cs"));
+        var interactionStyles = File.ReadAllText(Path.Combine(root, "App", "Styles", "AppInteractionStyles.axaml"));
+
+        Assert.DoesNotContain("<ContextMenu", taskQueue, StringComparison.Ordinal);
+        Assert.DoesNotContain("app-context-menu", interactionStyles, StringComparison.Ordinal);
+        Assert.DoesNotContain("ContextMenu.app-context-menu", interactionStyles, StringComparison.Ordinal);
+        Assert.DoesNotContain("PART_ContextMenuChrome", interactionStyles, StringComparison.Ordinal);
+        Assert.DoesNotContain("PART_MenuItemChrome", interactionStyles, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"TaskQueueActionPopup\"", taskQueue, StringComparison.Ordinal);
+        Assert.Contains("IsLightDismissEnabled=\"True\"", taskQueue, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"TaskQueueActionPopupItems\"", taskQueue, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"task-queue-action-popup-item-shell\"", taskQueue, StringComparison.Ordinal);
+        Assert.Contains("PointerPressed=\"OnTaskQueueActionPopupItemPointerPressed\"", taskQueue, StringComparison.Ordinal);
+        Assert.Contains("Style Selector=\"ItemsControl.task-queue-action-popup-list ContentPresenter /template/ ContentPresenter\"", taskQueue, StringComparison.Ordinal);
+        Assert.Contains("Style Selector=\"ItemsControl.task-queue-action-popup-list ContentPresenter:pointerover /template/ ContentPresenter\"", taskQueue, StringComparison.Ordinal);
+        Assert.Contains("OpenTaskQueueActionPopup", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("BuildTaskMenuItems", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("CloseTaskQueueActionPopup()", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("TaskQueuePopupMenuItem", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("MAA.App.Interaction.FloatingMenuPadding", interactionStyles, StringComparison.Ordinal);
+        Assert.Contains("MAA.App.Interaction.FloatingMenuItemMinHeight", interactionStyles, StringComparison.Ordinal);
+    }
+
     private static string GetMaaUnifiedRoot()
     {
         return TestRepoLayout.GetMaaUnifiedRoot();
     }
+
 }

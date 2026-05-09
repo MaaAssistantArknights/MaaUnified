@@ -45,6 +45,7 @@ public sealed class DialogModuleP1FeatureTests
             DialogReturnSemantic.Confirm,
             DialogReturnSemantic.Cancel,
             DialogReturnSemantic.Close,
+            DialogReturnSemantic.Details,
         };
 
         Assert.Equal(expected.Length, values.Length);
@@ -125,7 +126,7 @@ public sealed class DialogModuleP1FeatureTests
         Assert.Equal("连接模拟器失败。", localized.Message);
         Assert.Equal("连接模拟器失败。", localized.Error?.Message);
         Assert.Equal("连接模拟器失败", DialogTextCatalog.ErrorDialogConnectFailedTitle("zh-cn"));
-        Assert.Equal("复制报错信息", DialogTextCatalog.ErrorDialogCopyErrorInfoButton("zh-cn"));
+        Assert.Equal("详细报错", DialogTextCatalog.ErrorDialogCopyErrorInfoButton("zh-cn"));
         Assert.Contains("原始消息", localized.Error?.Details ?? string.Empty, StringComparison.Ordinal);
         Assert.Contains("ADB", DialogTextCatalog.BuildErrorSuggestion("zh-cn", result), StringComparison.Ordinal);
     }
@@ -299,9 +300,6 @@ public sealed class DialogModuleP1FeatureTests
         var foundationStyles = File.ReadAllText(Path.Combine(root, "App", "Styles", "AppFoundationStyles.axaml"));
         var selectionListStyles = File.ReadAllText(Path.Combine(root, "App", "Styles", "AppSelectionListStyles.axaml"));
         var controlStyles = File.ReadAllText(Path.Combine(root, "App", "Styles", "ControlStyles.axaml"));
-        var filterSliderAnimateStyleStart = controlStyles.IndexOf("  <Style Selector=\"Border.achievement-dialog-filter-selection-slider.animate\">", StringComparison.Ordinal);
-        var filterSliderAnimateStyleEnd = controlStyles.IndexOf("  <Style Selector=\"Button.app-button.app-slider-chip.achievement-dialog-filter-chip\">", filterSliderAnimateStyleStart, StringComparison.Ordinal);
-        var filterSliderAnimateStyle = controlStyles.Substring(filterSliderAnimateStyleStart, filterSliderAnimateStyleEnd - filterSliderAnimateStyleStart);
 
         Assert.Contains("<controls:AppWindowFrame", xaml, StringComparison.Ordinal);
         Assert.Contains("Mode=\"ResizableDialog\"", xaml, StringComparison.Ordinal);
@@ -352,9 +350,9 @@ public sealed class DialogModuleP1FeatureTests
         var foundationStyles = File.ReadAllText(Path.Combine(root, "App", "Styles", "AppFoundationStyles.axaml"));
         var selectionListStyles = File.ReadAllText(Path.Combine(root, "App", "Styles", "AppSelectionListStyles.axaml"));
         var controlStyles = File.ReadAllText(Path.Combine(root, "App", "Styles", "ControlStyles.axaml"));
-        var filterSliderAnimateStyleStart = controlStyles.IndexOf("  <Style Selector=\"Border.achievement-dialog-filter-selection-slider.animate\">", StringComparison.Ordinal);
-        var filterSliderAnimateStyleEnd = controlStyles.IndexOf("  <Style Selector=\"Button.app-button.app-slider-chip.achievement-dialog-filter-chip\">", filterSliderAnimateStyleStart, StringComparison.Ordinal);
-        var filterSliderAnimateStyle = controlStyles.Substring(filterSliderAnimateStyleStart, filterSliderAnimateStyleEnd - filterSliderAnimateStyleStart);
+        var sharedSliderAnimateStyleStart = foundationStyles.IndexOf("  <Style Selector=\"Border.app-slider-selection.animate\">", StringComparison.Ordinal);
+        var sharedSliderAnimateStyleEnd = foundationStyles.IndexOf("  <Style Selector=\"Button.app-button.app-slider-chip:pointerover\">", sharedSliderAnimateStyleStart, StringComparison.Ordinal);
+        var sharedSliderAnimateStyle = foundationStyles.Substring(sharedSliderAnimateStyleStart, sharedSliderAnimateStyleEnd - sharedSliderAnimateStyleStart);
 
         Assert.Contains("<controls:AppWindowFrame", xaml, StringComparison.Ordinal);
         Assert.Contains("Mode=\"ResizableDialog\"", xaml, StringComparison.Ordinal);
@@ -362,7 +360,8 @@ public sealed class DialogModuleP1FeatureTests
         Assert.Contains("VisualMode=\"None\"", xaml, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"FilterStripTrack\"", xaml, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"FilterSelectionSlider\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Classes=\"achievement-dialog-filter-selection-slider\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"app-slider-strip achievement-dialog-filter-strip\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"app-slider-selection\"", xaml, StringComparison.Ordinal);
         Assert.Contains("app-button app-slider-chip achievement-dialog-filter-chip", xaml, StringComparison.Ordinal);
         Assert.Contains("app-input app-search-input", xaml, StringComparison.Ordinal);
         Assert.Contains("app-selection-list-item-shell achievement-dialog-item-card", xaml, StringComparison.Ordinal);
@@ -374,21 +373,19 @@ public sealed class DialogModuleP1FeatureTests
         Assert.DoesNotContain("ApplyOwnerHeightThreshold", code, StringComparison.Ordinal);
         Assert.Contains("FilterStripTrack.SizeChanged += OnFilterSliderLayoutMetricChanged;", code, StringComparison.Ordinal);
         Assert.Contains("FilterAllButton.SizeChanged += OnFilterSliderLayoutMetricChanged;", code, StringComparison.Ordinal);
-        Assert.Contains("private void SyncActiveFilterSlider(bool animate)", code, StringComparison.Ordinal);
-        Assert.Contains("_filterSelectionSliderTransform = FilterSelectionSlider.RenderTransform as TranslateTransform ?? new TranslateTransform();", code, StringComparison.Ordinal);
-        Assert.Contains("_filterSelectionSliderTransform.Transitions = animate ? AnimatedFilterSliderTransformTransitions : null;", code, StringComparison.Ordinal);
-        Assert.Contains("_filterSelectionSliderTransform.X = targetX;", code, StringComparison.Ordinal);
-        Assert.Contains("private void RequestSilentFilterSliderSync()", code, StringComparison.Ordinal);
-        Assert.Contains("Dispatcher.UIThread.Post(() =>", code, StringComparison.Ordinal);
-        Assert.Contains("FilterSelectionSlider.Classes.Set(FilterSliderAnimatedClass, animate);", code, StringComparison.Ordinal);
+        Assert.Contains("new AppSlidingSegmentController(FilterStripTrack, FilterSelectionSlider, GetActiveFilterButton)", code, StringComparison.Ordinal);
+        Assert.Contains("_filterSlider.QueueSync(animateFilterSlider);", code, StringComparison.Ordinal);
+        Assert.Contains("_filterSlider.QueueSync(resetMetrics: false);", code, StringComparison.Ordinal);
         Assert.Contains("RefreshView(animateFilterSlider: true);", code, StringComparison.Ordinal);
         Assert.Contains("controls|AppSelectionList.selection-list-none Border.app-selection-list-item-shell", selectionListStyles, StringComparison.Ordinal);
         Assert.DoesNotContain("ListBox.achievement-dialog-list", controlStyles + selectionListStyles, StringComparison.Ordinal);
-        Assert.Contains("Button.app-button.app-slider-chip.achievement-dialog-filter-chip", controlStyles, StringComparison.Ordinal);
-        Assert.Contains("Border.achievement-dialog-filter-selection-slider", controlStyles, StringComparison.Ordinal);
-        Assert.Contains("Border.achievement-dialog-filter-selection-slider.animate", controlStyles, StringComparison.Ordinal);
-        Assert.Contains("<DoubleTransition Property=\"Width\"", filterSliderAnimateStyle, StringComparison.Ordinal);
-        Assert.DoesNotContain("<TransformOperationsTransition Property=\"RenderTransform\"", filterSliderAnimateStyle, StringComparison.Ordinal);
+        Assert.DoesNotContain("achievement-dialog-filter-selection-slider", controlStyles, StringComparison.Ordinal);
+        Assert.DoesNotContain("Button.app-button.app-slider-chip.achievement-dialog-filter-chip", controlStyles, StringComparison.Ordinal);
+        Assert.Contains("Border.app-slider-strip", foundationStyles, StringComparison.Ordinal);
+        Assert.Contains("Border.app-slider-selection", foundationStyles, StringComparison.Ordinal);
+        Assert.Contains("Border.app-slider-selection.animate", foundationStyles, StringComparison.Ordinal);
+        Assert.Contains("<DoubleTransition Property=\"Width\"", sharedSliderAnimateStyle, StringComparison.Ordinal);
+        Assert.DoesNotContain("<TransformOperationsTransition Property=\"RenderTransform\"", sharedSliderAnimateStyle, StringComparison.Ordinal);
         Assert.Contains("Border.app-surface.app-card", foundationStyles, StringComparison.Ordinal);
         Assert.Contains("Button.app-button.app-chip", foundationStyles, StringComparison.Ordinal);
         Assert.Contains("TextBox.app-input.app-search-input", foundationStyles, StringComparison.Ordinal);

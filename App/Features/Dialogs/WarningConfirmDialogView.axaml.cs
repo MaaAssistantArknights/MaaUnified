@@ -17,6 +17,7 @@ public partial class WarningConfirmDialogView : Window, IDialogChromeAware
     private string _leadSnapshot = string.Empty;
     private string _emphasisSnapshot = string.Empty;
     private string _detailSnapshot = string.Empty;
+    private string _detailsButtonSnapshot = string.Empty;
     private int _countdownSeconds;
     private int _remainingCountdownSeconds;
 
@@ -49,11 +50,13 @@ public partial class WarningConfirmDialogView : Window, IDialogChromeAware
         _leadSnapshot = string.Empty;
         _emphasisSnapshot = string.Empty;
         _detailSnapshot = _messageSnapshot;
+        _detailsButtonSnapshot = string.Empty;
         _countdownSeconds = Math.Max(0, countdownSeconds);
         _remainingCountdownSeconds = _countdownSeconds;
         Title = _titleSnapshot;
         DialogShell.Title = _titleSnapshot;
         ApplyContent(_leadSnapshot, _emphasisSnapshot, _detailSnapshot);
+        ApplyDetailsButton(_detailsButtonSnapshot);
         CancelButton.Content = _cancelSnapshot;
         UpdateConfirmButtonText(_remainingCountdownSeconds);
     }
@@ -61,13 +64,19 @@ public partial class WarningConfirmDialogView : Window, IDialogChromeAware
     private void OnConfirmClick(object? sender, RoutedEventArgs e)
     {
         StopCountdown();
-        Close(true);
+        Close(DialogReturnSemantic.Confirm);
     }
 
     private void OnCancelClick(object? sender, RoutedEventArgs e)
     {
         StopCountdown();
-        Close(false);
+        Close(DialogReturnSemantic.Cancel);
+    }
+
+    private void OnDetailsClick(object? sender, RoutedEventArgs e)
+    {
+        StopCountdown();
+        Close(DialogReturnSemantic.Details);
     }
 
     private void OnShellCloseRequested(object? sender, EventArgs e)
@@ -111,7 +120,7 @@ public partial class WarningConfirmDialogView : Window, IDialogChromeAware
 
             _remainingCountdownSeconds = 0;
             UpdateConfirmButtonText(0);
-            Close(true);
+            Close(DialogReturnSemantic.Confirm);
         }
         catch (OperationCanceledException)
         {
@@ -159,10 +168,12 @@ public partial class WarningConfirmDialogView : Window, IDialogChromeAware
         _leadSnapshot = lead;
         _emphasisSnapshot = emphasis;
         _detailSnapshot = detail;
+        _detailsButtonSnapshot = chrome.GetNamedTextOrDefault(DialogTextCatalog.ChromeKeys.DetailsButton, _detailsButtonSnapshot);
 
         Title = chromeTitle;
         DialogShell.Title = chrome.GetNamedTextOrDefault(DialogTextCatalog.ChromeKeys.SectionTitle, chromeTitle);
         ApplyContent(_leadSnapshot, _emphasisSnapshot, _detailSnapshot);
+        ApplyDetailsButton(_detailsButtonSnapshot);
         _confirmSnapshot = chrome.ConfirmText ?? _confirmSnapshot;
         _cancelSnapshot = chrome.CancelText ?? _cancelSnapshot;
         CancelButton.Content = _cancelSnapshot;
@@ -179,5 +190,11 @@ public partial class WarningConfirmDialogView : Window, IDialogChromeAware
 
         DetailTextBlock.Text = detail;
         DetailTextBlock.IsVisible = !string.IsNullOrWhiteSpace(detail);
+    }
+
+    private void ApplyDetailsButton(string text)
+    {
+        DetailsButton.Content = text;
+        DetailsButton.IsVisible = !string.IsNullOrWhiteSpace(text);
     }
 }

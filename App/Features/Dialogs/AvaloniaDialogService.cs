@@ -253,13 +253,7 @@ public sealed class AvaloniaDialogService : IAppDialogService
             normalizedRequest.Language,
             normalizedRequest.CountdownSeconds);
         using var chromeBinding = AttachChromeLocalization(dialog, normalizedRequest.Title, normalizedRequest.Chrome);
-        var confirmed = await dialog.ShowDialog<bool?>(owner);
-        var semantic = confirmed switch
-        {
-            true => DialogReturnSemantic.Confirm,
-            false => DialogReturnSemantic.Cancel,
-            null => DialogReturnSemantic.Close,
-        };
+        var semantic = await dialog.ShowDialog<DialogReturnSemantic?>(owner) ?? DialogReturnSemantic.Close;
         var payload = semantic == DialogReturnSemantic.Confirm
             ? new WarningConfirmDialogPayload(true)
             : null;
@@ -267,6 +261,7 @@ public sealed class AvaloniaDialogService : IAppDialogService
         {
             DialogReturnSemantic.Confirm => "warning-confirm-dialog-confirmed",
             DialogReturnSemantic.Cancel => "warning-confirm-dialog-cancelled",
+            DialogReturnSemantic.Details => "warning-confirm-dialog-details",
             _ => "warning-confirm-dialog-closed",
         };
 

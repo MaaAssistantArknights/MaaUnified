@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Globalization;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Avalonia.Threading;
@@ -75,6 +76,7 @@ public sealed partial class CopilotPageViewModel
         nameof(ImportBatchFilePickerTitle),
         nameof(HelpText),
         nameof(ListSelectionHint),
+        nameof(LoadedCopilotInputHint),
         nameof(RaidLabelText),
         nameof(InlineJsonHintText),
     ];
@@ -158,7 +160,9 @@ public sealed partial class CopilotPageViewModel
 
     public string PasteSetButtonTip => T("Copilot.Tip.PasteSet", "读取剪贴板并添加为作业集");
 
-    public string StartButtonText => T("Copilot.Action.Start", "开始");
+    public string StartButtonText => IsStartRequestActive
+        ? T("Copilot.Status.Starting", "启动中...")
+        : T("Copilot.Action.Start", "开始");
 
     public string StopButtonText => T("Copilot.Action.Stop", "停止");
 
@@ -450,11 +454,38 @@ public sealed partial class CopilotPageViewModel
     public string DisplayFilename
     {
         get => _displayFilename;
-        set => SetProperty(ref _displayFilename, value ?? string.Empty);
+        set
+        {
+            if (SetProperty(ref _displayFilename, value ?? string.Empty))
+            {
+                OnPropertyChanged(nameof(LoadedCopilotInputHint));
+            }
+        }
     }
 
     public bool HasLoadedCopilot
         => !string.IsNullOrWhiteSpace(_loadedSourcePath) || !string.IsNullOrWhiteSpace(_loadedInlinePayload);
+
+    public string LoadedCopilotInputHint
+    {
+        get
+        {
+            if (!HasLoadedCopilot)
+            {
+                return string.Empty;
+            }
+
+            var display = !string.IsNullOrWhiteSpace(_loadedSourcePath)
+                ? BuildDisplayFilename(_loadedSourcePath, string.Empty)
+                : !string.IsNullOrWhiteSpace(_loadedDisplayName)
+                    ? _loadedDisplayName
+                    : T("Copilot.List.InlineJsonHint", "inline-json");
+            return string.Format(
+                CultureInfo.InvariantCulture,
+                T("Copilot.Hint.LoadedFile", "已导入作业文件：{0}"),
+                display);
+        }
+    }
 
     public bool CouldLikeWebJson
     {
@@ -923,9 +954,9 @@ public sealed partial class CopilotPageViewModel
         }
 
         ApplyLoadedCopilot(normalizedPath, string.Empty, descriptor);
-        StatusMessage = result.Message;
+        StatusMessage = string.Empty;
         LastErrorMessage = string.Empty;
-        await RecordEventAsync("Copilot.LoadCurrent.File", StatusMessage, cancellationToken);
+        await RecordEventAsync("Copilot.LoadCurrent.File", result.Message, cancellationToken);
         await TryAutoAddLoadedCopilotAsync(cancellationToken);
     }
 
@@ -1386,6 +1417,7 @@ public sealed partial class CopilotPageViewModel
         MapUrl = MapPrtsUrl;
         CouldLikeWebJson = descriptor.CopilotId > 0;
         OnPropertyChanged(nameof(HasLoadedCopilot));
+        OnPropertyChanged(nameof(LoadedCopilotInputHint));
     }
 
     private void ClearLoadedCopilot()
@@ -1401,6 +1433,7 @@ public sealed partial class CopilotPageViewModel
         CopilotTaskName = string.Empty;
         CouldLikeWebJson = false;
         OnPropertyChanged(nameof(HasLoadedCopilot));
+        OnPropertyChanged(nameof(LoadedCopilotInputHint));
     }
 
     private string BuildDisplayFilename(string sourcePath, string inlinePayload)

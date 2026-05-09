@@ -17,6 +17,10 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge
     private const int AsstInstanceOptionDeploymentWithPause = 3;
     private const int AsstInstanceOptionAdbLiteEnabled = 4;
     private const int AsstInstanceOptionKillAdbOnExit = 5;
+    private const int DefaultScreencapWidth = 1280;
+    private const int DefaultScreencapHeight = 720;
+    private const int DefaultScreencapChannels = 3;
+    private const ulong DefaultBgrFrameBufferSize = (ulong)DefaultScreencapWidth * DefaultScreencapHeight * DefaultScreencapChannels;
     private static readonly HashSet<string> DefaultClientTypes = new(StringComparer.OrdinalIgnoreCase)
     {
         string.Empty,
@@ -563,6 +567,52 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge
         return Task.FromResult(Fail<byte[]>(CoreErrorCode.GetImageFailed, "AsstGetImage did not fit buffer after retries."));
     }
 
+    public Task<CoreResult<byte[]>> GetImageBgrAsync(bool forceScreencap = false, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var status = EnsureReady();
+        if (!status.Success)
+        {
+            return Task.FromResult(CoreResult<byte[]>.Fail(status.Error!));
+        }
+
+        var exports = _exports!;
+        if (exports.AsstGetImageBgr is null)
+        {
+            return Task.FromResult(Fail<byte[]>(CoreErrorCode.NotSupported, "AsstGetImageBgr is unavailable in current MaaCore."));
+        }
+
+        if (forceScreencap && exports.AsstAsyncScreencap is not null)
+        {
+            _ = exports.AsstAsyncScreencap(_instance, 1);
+        }
+
+        var nullSize = exports.AsstGetNullSize();
+        var bufferSize = DefaultBgrFrameBufferSize;
+        var buffer = Marshal.AllocHGlobal((nint)bufferSize);
+        try
+        {
+            var imageSize = exports.AsstGetImageBgr(_instance, buffer, bufferSize);
+            if (imageSize == nullSize || imageSize == 0)
+            {
+                return Task.FromResult(Fail<byte[]>(CoreErrorCode.GetImageFailed, "AsstGetImageBgr returned null image."));
+            }
+
+            if (imageSize > bufferSize || imageSize > int.MaxValue)
+            {
+                return Task.FromResult(Fail<byte[]>(CoreErrorCode.GetImageFailed, $"Unexpected raw image size `{imageSize}`."));
+            }
+
+            var data = new byte[(int)imageSize];
+            Marshal.Copy(buffer, data, 0, data.Length);
+            return Task.FromResult(CoreResult<byte[]>.Ok(data));
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(buffer);
+        }
+    }
+
     public async IAsyncEnumerable<CoreCallbackEvent> CallbackStreamAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         await foreach (var callback in _callbackChannel.Reader.ReadAllAsync(cancellationToken))
@@ -991,6 +1041,9 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge
             return false;
         }
 
+        _ = TryLoadExport<AsstAsyncScreencapDelegate>(library, "AsstAsyncScreencap", out var asstAsyncScreencap);
+        _ = TryLoadExport<AsstGetImageBgrDelegate>(library, "AsstGetImageBgr", out var asstGetImageBgr);
+
         if (!TryLoadExport<AsstGetNullSizeDelegate>(library, "AsstGetNullSize", out var asstGetNullSize))
         {
             missingSymbol = "AsstGetNullSize";
@@ -1019,7 +1072,9 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge
             asstStop!,
             asstRunning!,
             asstConnected!,
+            asstAsyncScreencap,
             asstGetImage!,
+            asstGetImageBgr,
             asstGetNullSize!,
             asstGetVersion!);
 
@@ -1251,7 +1306,9 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge
         AsstStopDelegate AsstStop,
         AsstRunningDelegate AsstRunning,
         AsstConnectedDelegate AsstConnected,
+        AsstAsyncScreencapDelegate? AsstAsyncScreencap,
         AsstGetImageDelegate AsstGetImage,
+        AsstGetImageBgrDelegate? AsstGetImageBgr,
         AsstGetNullSizeDelegate AsstGetNullSize,
         AsstGetVersionDelegate AsstGetVersion);
 
@@ -1306,7 +1363,13 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge
     private delegate byte AsstConnectedDelegate(nint handle);
 
     [UnmanagedFunctionPointer(CallingConvention.Winapi)]
+    private delegate int AsstAsyncScreencapDelegate(nint handle, byte block);
+
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     private delegate ulong AsstGetImageDelegate(nint handle, nint buffer, ulong bufferSize);
+
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
+    private delegate ulong AsstGetImageBgrDelegate(nint handle, nint buffer, ulong bufferSize);
 
     [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     private delegate ulong AsstGetNullSizeDelegate();

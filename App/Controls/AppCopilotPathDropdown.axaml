@@ -41,7 +41,7 @@
 
     <Style Selector="Border.app-copilot-path-shell:disabled">
       <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.SettingsInput.BackgroundDisabled}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Action.DisabledBorder}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.SettingsInput.BorderDisabled}" />
       <Setter Property="Opacity" Value="1" />
     </Style>
 
@@ -74,6 +74,12 @@
     </Style>
 
     <Style Selector="TextBox.app-copilot-path-editor:focus-visible /template/ Border">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+
+    <Style Selector="TextBox.app-copilot-path-editor:disabled /template/ Border">
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="BorderBrush" Value="Transparent" />
       <Setter Property="BorderThickness" Value="0" />
@@ -120,7 +126,10 @@
     </Style>
 
     <Style Selector="Button.app-copilot-path-toggle:disabled">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
       <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ChevronDisabled}" />
+      <Setter Property="Opacity" Value="1" />
     </Style>
 
     <Style Selector="Path.app-copilot-path-chevron">

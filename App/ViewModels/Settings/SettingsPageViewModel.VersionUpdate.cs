@@ -1027,16 +1027,22 @@ public sealed partial class SettingsPageViewModel
 
     private IProgress<VersionUpdateProgressInfo> CreateVersionUpdateProgressReporter()
     {
-        return new Progress<VersionUpdateProgressInfo>(progress =>
+        return new VersionUpdateProgressReporter(ApplyVersionUpdateProgress);
+    }
+
+    private sealed class VersionUpdateProgressReporter(Action<VersionUpdateProgressInfo> applyProgress)
+        : IProgress<VersionUpdateProgressInfo>
+    {
+        public void Report(VersionUpdateProgressInfo value)
         {
             if (Dispatcher.UIThread.CheckAccess())
             {
-                ApplyVersionUpdateProgress(progress);
+                applyProgress(value);
                 return;
             }
 
-            Dispatcher.UIThread.Post(() => ApplyVersionUpdateProgress(progress));
-        });
+            Dispatcher.UIThread.Post(() => applyProgress(value));
+        }
     }
 
     private void ApplyVersionUpdateProgress(VersionUpdateProgressInfo progress)

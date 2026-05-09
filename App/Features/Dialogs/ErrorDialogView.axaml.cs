@@ -20,7 +20,9 @@ public partial class ErrorDialogView : Window, IDialogChromeAware
     private bool _copied;
     private bool _issueOpened;
     private bool _simpleConnectFailureMode;
+    private string _language = "en-us";
     private string _formattedText = string.Empty;
+    private ErrorDialogRequest? _request;
 
     public ErrorDialogView()
     {
@@ -34,6 +36,8 @@ public partial class ErrorDialogView : Window, IDialogChromeAware
     {
         _copied = false;
         _issueOpened = false;
+        _request = request;
+        _language = request.Language;
         _simpleConnectFailureMode = request.Result.Error?.Code == UiErrorCode.ConnectFailed;
         Title = request.Title;
         _openIssueReportAsync = openIssueReportAsync;
@@ -114,6 +118,12 @@ public partial class ErrorDialogView : Window, IDialogChromeAware
 
     private async void OnCopyClick(object? sender, RoutedEventArgs e)
     {
+        if (_simpleConnectFailureMode && _request is not null)
+        {
+            ExpandSimpleErrorDetails(_request);
+            return;
+        }
+
         var topLevel = TopLevel.GetTopLevel(this);
         if (topLevel?.Clipboard is null)
         {
@@ -161,11 +171,37 @@ public partial class ErrorDialogView : Window, IDialogChromeAware
         Close();
     }
 
+    private void ExpandSimpleErrorDetails(ErrorDialogRequest request)
+    {
+        _simpleConnectFailureMode = false;
+        ApplyWindowSizeMode();
+
+        CopyButton.Content = DialogTextCatalog.ErrorDialogCopyButton(_language);
+        ConfirmButton.Content = request.ConfirmText;
+        CancelButton.Content = request.CancelText;
+        ContextLine.IsVisible = true;
+        SummaryHero.IsVisible = true;
+        DetailHost.IsVisible = true;
+        IssueReportButton.IsVisible = _openIssueReportAsync is not null;
+        IssueReportButton.IsEnabled = _openIssueReportAsync is not null;
+        CancelButton.IsVisible = true;
+
+        FriendlyMessageText.Text = request.Result.Message;
+        FriendlyMessageText.Classes.Set("error-dialog-simple-message", false);
+        SuggestionText.Text = request.Suggestion ?? string.Empty;
+        SuggestionPanel.IsVisible = !string.IsNullOrWhiteSpace(request.Suggestion);
+        Grid.SetColumn(SummaryContentPanel, 1);
+        Grid.SetColumnSpan(SummaryContentPanel, 1);
+        SummaryContentPanel.Margin = new Thickness(18, 2, 0, 0);
+    }
+
     public void ApplyDialogChrome(DialogChromeSnapshot chrome)
     {
         Title = chrome.Title;
         DialogShell.Title = chrome.Title;
-        CopyButton.Content = chrome.GetNamedTextOrDefault(DialogTextCatalog.ChromeKeys.CopyButton, CopyButton.Content?.ToString() ?? "Copy");
+        CopyButton.Content = _simpleConnectFailureMode
+            ? chrome.GetNamedTextOrDefault(DialogTextCatalog.ChromeKeys.CopyButton, DialogTextCatalog.ErrorDialogCopyErrorInfoButton(_language))
+            : DialogTextCatalog.ErrorDialogCopyButton(_language);
         if (_simpleConnectFailureMode)
         {
             FriendlyMessageText.Text = chrome.GetNamedTextOrDefault(

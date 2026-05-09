@@ -35,7 +35,7 @@
     <Style Selector="Border.tooltip-hint-card">
       <Setter Property="MaxWidth" Value="340" />
       <Setter Property="Padding" Value="12,9" />
-      <Setter Property="Background" Value="#FFFFFFFF" />
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.Dialog.CardSurface}" />
       <Setter Property="BorderBrush" Value="Transparent" />
       <Setter Property="BorderThickness" Value="0" />
       <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.CornerRadius.Badge}" />
@@ -64,7 +64,7 @@
       <Border Classes="tooltip-hint-card">
         <TextBlock Classes="long-wrap"
                    MaxWidth="316"
-                   Foreground="#2F343A"
+                   Foreground="{DynamicResource MAA.Brush.Text.Primary}"
                    Text="{Binding Tip, ElementName=Root}"
                    TextWrapping="Wrap" />
       </Border>

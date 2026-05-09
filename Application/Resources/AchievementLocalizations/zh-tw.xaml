@@ -1087,7 +1087,7 @@ C:\\leidian\\LDPlayer9\n
     <system:String x:Key="ErrorCrashMessageGenerateReport">請使用「{key=Settings} - {key=IssueReport} - {key=GenerateSupportPayload}」產生錯誤報告，並點擊藍色的 ｢{key=Issue}｣ 連結提交回報。</system:String>
     <system:String x:Key="ErrorCrashMessageHelpTip">若要尋求協助，請直接傳送產生的 「錯誤報告檔案」；請勿傳送此視窗的截圖、錄影、螢幕照片、翻拍影片、手繪圖片或抄寫的內容。</system:String>
     <system:String x:Key="ErrorCrashDialogTitle">上次程式崩潰原因</system:String>
-    <system:String x:Key="CopyErrorMessage">複製錯誤資訊</system:String>
+    <system:String x:Key="CopyErrorMessage">詳細報錯</system:String>
     <!--  !ErrorView  -->
     <!--  AsstProxy  -->
     <system:String x:Key="ResourceBroken">檔案損毀，請重新下載完整安裝檔案。\n\n{key=FullPackageUpgradeTips}</system:String>

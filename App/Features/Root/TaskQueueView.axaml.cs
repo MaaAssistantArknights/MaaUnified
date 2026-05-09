@@ -1,14 +1,12 @@
 using Avalonia;
-using Avalonia.Animation;
-using Avalonia.Animation.Easings;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
-using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using System.ComponentModel;
+using MAAUnified.App.Controls;
 using MAAUnified.App.ViewModels;
 using MAAUnified.App.ViewModels.TaskQueue;
 
@@ -22,21 +20,11 @@ public partial class TaskQueueView : UserControl
     private const double TaskSelectionIndicatorHeight = 22d;
     private const double TaskDropIndicatorHeight = 3d;
     private const string TaskRowDraggingClass = "dragging";
-    private const string SettingsModeSliderAnimatedClass = "animate";
     private static readonly TimeSpan LogThumbnailPreviewShowDelay = TimeSpan.FromSeconds(0.5);
     private static readonly TimeSpan LogThumbnailPreviewFadeDuration = TimeSpan.FromSeconds(0.5);
-    private static readonly Transitions AnimatedSettingsModeSliderTransformTransitions = new()
-    {
-        new DoubleTransition
-        {
-            Property = TranslateTransform.XProperty,
-            Duration = TimeSpan.FromSeconds(0.15),
-            Easing = new CubicEaseOut(),
-        },
-    };
 
     private readonly Dictionary<Control, LogThumbnailPreviewState> _logThumbnailPreviewStates = [];
-    private readonly TranslateTransform _settingsModeSelectionSliderTransform;
+    private readonly AppSlidingSegmentController _settingsModeSlider;
     private TaskQueuePageViewModel? _observedVm;
     private Point? _taskRowDragStart;
     private TaskQueueItemViewModel? _taskRowDragSource;
@@ -46,16 +34,16 @@ public partial class TaskQueueView : UserControl
     private int _taskRowInsertionIndex = -1;
     private bool _taskRowDragInProgress;
     private bool _taskSelectionIndicatorUpdateQueued;
-    private bool _settingsModeSliderSyncQueued;
-    private bool _pendingSettingsModeSliderAnimate;
-    private double _settingsModeSliderX = double.NaN;
-    private double _settingsModeSliderWidth = double.NaN;
+    private Control? _openTaskQueuePopupOwner;
+    private Control? _suppressNextTaskQueuePopupOpenOwner;
 
     public TaskQueueView()
     {
         InitializeComponent();
-        _settingsModeSelectionSliderTransform = SettingsModeSelectionSlider.RenderTransform as TranslateTransform ?? new TranslateTransform();
-        SettingsModeSelectionSlider.RenderTransform = _settingsModeSelectionSliderTransform;
+        _settingsModeSlider = new AppSlidingSegmentController(
+            SettingsModeTrack,
+            SettingsModeSelectionSlider,
+            () => VM?.IsAdvancedSettingsSelected == true ? AdvancedSettingsModeButton : GeneralSettingsModeButton);
         AttachedToVisualTree += OnAttachedToVisualTree;
         DataContextChanged += OnDataContextChanged;
         LayoutUpdated += OnLayoutUpdated;
@@ -100,6 +88,7 @@ public partial class TaskQueueView : UserControl
     private void OnDetachedFromVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
     {
         ResetTaskRowDragState();
+        CloseTaskQueueActionPopup();
         CloseLogThumbnailPreviewsImmediately();
         HideTaskSelectionIndicator();
         HideSettingsModeSlider();
@@ -307,93 +296,49 @@ public partial class TaskQueueView : UserControl
 
     private void OnOpenButtonContextMenuClick(object? sender, RoutedEventArgs e)
     {
-        if (sender is not Control control || control.ContextMenu is null)
+        if (VM is null || sender is not Control control)
         {
             return;
         }
 
-        if (VM is not null)
+        if (ReferenceEquals(_suppressNextTaskQueuePopupOpenOwner, control))
         {
-            control.ContextMenu.DataContext = null;
-            control.ContextMenu.DataContext = VM;
+            _suppressNextTaskQueuePopupOpenOwner = null;
+            e.Handled = true;
+            return;
         }
 
-        control.ContextMenu.Open(control);
+        if (ReferenceEquals(_openTaskQueuePopupOwner, control) && TaskQueueActionPopup.IsOpen)
+        {
+            CloseTaskQueueActionPopup();
+            e.Handled = true;
+            return;
+        }
+
+        OpenTaskQueueActionPopup(control, BuildAddTaskMenuItems(), PlacementMode.BottomEdgeAlignedLeft);
+        e.Handled = true;
     }
 
-    private async void OnAddTaskModuleClick(object? sender, RoutedEventArgs e)
+    private void OnTaskGearPointerPressed(object? sender, PointerPressedEventArgs e)
     {
-        if (VM is null || sender is not MenuItem { Tag: string taskType })
+        if (sender is not Control control)
         {
             return;
         }
 
-        await VM.AddTaskAsync(taskType);
-    }
-
-    private async void OnTaskMenuMoveUpClick(object? sender, RoutedEventArgs e)
-    {
-        if (VM is null || !TryGetTaskParameter(sender, out var task))
+        var point = e.GetCurrentPoint(control);
+        if (!point.Properties.IsLeftButtonPressed)
         {
             return;
         }
 
-        VM.SelectedTask = task;
-        await VM.MoveSelectedTaskAsync(-1);
-    }
-
-    private async void OnTaskMenuMoveDownClick(object? sender, RoutedEventArgs e)
-    {
-        if (VM is null || !TryGetTaskParameter(sender, out var task))
-        {
-            return;
-        }
-
-        VM.SelectedTask = task;
-        await VM.MoveSelectedTaskAsync(1);
-    }
-
-    private async void OnTaskMenuRenameClick(object? sender, RoutedEventArgs e)
-    {
-        if (VM is null || !TryGetTaskParameter(sender, out var task))
-        {
-            return;
-        }
-
-        VM.SelectedTask = task;
-        await VM.RenameSelectedTaskWithDialogAsync();
-    }
-
-    private async void OnTaskMenuRunOnceClick(object? sender, RoutedEventArgs e)
-    {
-        if (VM is null || !TryGetTaskParameter(sender, out var task))
-        {
-            return;
-        }
-
-        VM.SelectedTask = task;
-        await VM.RunSelectedTaskOnceAsync();
-    }
-
-    private async void OnTaskMenuRemoveClick(object? sender, RoutedEventArgs e)
-    {
-        if (VM is null || !TryGetTaskParameter(sender, out var task))
-        {
-            return;
-        }
-
-        VM.SelectedTask = task;
-        await VM.RemoveSelectedTaskAsync();
-    }
-
-    private void OnTaskGearClick(object? sender, RoutedEventArgs e)
-    {
         if (VM is null || sender is not Control { DataContext: TaskQueueItemViewModel task })
         {
             return;
         }
 
         VM.SelectedTask = task;
+        e.Handled = true;
     }
 
     private async void OnSelectAllClick(object? sender, RoutedEventArgs e)
@@ -406,17 +351,188 @@ public partial class TaskQueueView : UserControl
 
     private async void OnBatchActionClick(object? sender, RoutedEventArgs e)
     {
+        if (sender is Control control && ReferenceEquals(_suppressNextTaskQueuePopupOpenOwner, control))
+        {
+            _suppressNextTaskQueuePopupOpenOwner = null;
+            e.Handled = true;
+            return;
+        }
+
         if (VM is not null)
         {
             await VM.ExecuteBatchActionAsync();
         }
     }
 
-    private async void OnToggleBatchModeClick(object? sender, RoutedEventArgs e)
+    private void OnBatchActionPointerPressed(object? sender, PointerPressedEventArgs e)
     {
-        if (VM is not null)
+        if (VM is null || sender is not Control control)
         {
-            await VM.ToggleSelectionBatchModeAsync();
+            return;
+        }
+
+        var point = e.GetCurrentPoint(control);
+        if (!point.Properties.IsRightButtonPressed || !VM.ShowBatchModeToggle)
+        {
+            return;
+        }
+
+        OpenTaskQueueActionPopup(control, BuildBatchMenuItems(), PlacementMode.Pointer);
+        e.Handled = true;
+    }
+
+    private async void OnTaskQueueActionPopupItemPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (VM is null || sender is not Control { Tag: TaskQueuePopupMenuItem item } control || !item.IsEnabled)
+        {
+            return;
+        }
+
+        var point = e.GetCurrentPoint(control);
+        if (!point.Properties.IsLeftButtonPressed)
+        {
+            return;
+        }
+
+        e.Handled = true;
+        CloseTaskQueueActionPopup();
+
+        switch (item.Action)
+        {
+            case TaskQueuePopupAction.AddTask:
+                if (!string.IsNullOrWhiteSpace(item.TaskType))
+                {
+                    await VM.AddTaskAsync(item.TaskType);
+                }
+                break;
+            case TaskQueuePopupAction.ToggleBatchMode:
+                await VM.ToggleSelectionBatchModeAsync();
+                break;
+            case TaskQueuePopupAction.RunTaskOnce:
+                await ExecuteTaskItemActionAsync(item.Task, static vm => vm.RunSelectedTaskOnceAsync());
+                break;
+            case TaskQueuePopupAction.MoveTaskUp:
+                await ExecuteTaskItemActionAsync(item.Task, static vm => vm.MoveSelectedTaskAsync(-1));
+                break;
+            case TaskQueuePopupAction.MoveTaskDown:
+                await ExecuteTaskItemActionAsync(item.Task, static vm => vm.MoveSelectedTaskAsync(1));
+                break;
+            case TaskQueuePopupAction.RenameTask:
+                await ExecuteTaskItemActionAsync(item.Task, static vm => vm.RenameSelectedTaskWithDialogAsync());
+                break;
+            case TaskQueuePopupAction.RemoveTask:
+                await ExecuteTaskItemActionAsync(item.Task, static vm => vm.RemoveSelectedTaskAsync());
+                break;
+        }
+    }
+
+    private async Task ExecuteTaskItemActionAsync(
+        TaskQueueItemViewModel? task,
+        Func<TaskQueuePageViewModel, Task> action)
+    {
+        if (VM is null || task is null)
+        {
+            return;
+        }
+
+        VM.SelectedTask = task;
+        await action(VM);
+    }
+
+    private IReadOnlyList<TaskQueuePopupMenuItem> BuildAddTaskMenuItems()
+    {
+        if (VM is null)
+        {
+            return [];
+        }
+
+        return
+        [
+            new(VM.AddTaskMenuStartUpText, TaskQueuePopupAction.AddTask, TaskType: "StartUp"),
+            new(VM.AddTaskMenuFightText, TaskQueuePopupAction.AddTask, TaskType: "Fight"),
+            new(VM.AddTaskMenuInfrastText, TaskQueuePopupAction.AddTask, TaskType: "Infrast"),
+            new(VM.AddTaskMenuRecruitText, TaskQueuePopupAction.AddTask, TaskType: "Recruit"),
+            new(VM.AddTaskMenuMallText, TaskQueuePopupAction.AddTask, TaskType: "Mall"),
+            new(VM.AddTaskMenuAwardText, TaskQueuePopupAction.AddTask, TaskType: "Award"),
+            new(VM.AddTaskMenuRoguelikeText, TaskQueuePopupAction.AddTask, TaskType: "Roguelike"),
+            new(VM.AddTaskMenuReclamationText, TaskQueuePopupAction.AddTask, TaskType: "Reclamation"),
+            new(VM.AddTaskMenuUserDataUpdateText, TaskQueuePopupAction.AddTask, TaskType: "UserDataUpdate"),
+            new(VM.AddTaskMenuCustomText, TaskQueuePopupAction.AddTask, TaskType: "Custom"),
+        ];
+    }
+
+    private IReadOnlyList<TaskQueuePopupMenuItem> BuildBatchMenuItems()
+    {
+        if (VM is null)
+        {
+            return [];
+        }
+
+        return
+        [
+            new(VM.BatchToggleMenuText, TaskQueuePopupAction.ToggleBatchMode, IsVisible: VM.ShowBatchModeToggle),
+        ];
+    }
+
+    private IReadOnlyList<TaskQueuePopupMenuItem> BuildTaskMenuItems(TaskQueueItemViewModel task)
+    {
+        if (VM is null)
+        {
+            return [];
+        }
+
+        return
+        [
+            new(VM.TaskMenuRunOnceText, TaskQueuePopupAction.RunTaskOnce, Task: task, IsEnabled: VM.CanEdit),
+            new(VM.TaskMenuMoveUpText, TaskQueuePopupAction.MoveTaskUp, Task: task, IsEnabled: VM.CanEdit),
+            new(VM.TaskMenuMoveDownText, TaskQueuePopupAction.MoveTaskDown, Task: task, IsEnabled: VM.CanEdit),
+            new(VM.TaskMenuRenameText, TaskQueuePopupAction.RenameTask, Task: task, IsEnabled: VM.CanEdit),
+            new(VM.TaskMenuDeleteText, TaskQueuePopupAction.RemoveTask, Task: task, IsEnabled: VM.CanEdit),
+        ];
+    }
+
+    private void OpenTaskQueueActionPopup(
+        Control owner,
+        IReadOnlyList<TaskQueuePopupMenuItem> items,
+        PlacementMode placement)
+    {
+        CloseTaskQueueActionPopup();
+
+        TaskQueueActionPopupItems.ItemsSource = items.Where(static item => item.IsVisible).ToArray();
+        TaskQueueActionPopup.PlacementTarget = owner;
+        TaskQueueActionPopup.Placement = placement;
+        TaskQueueActionPopup.VerticalOffset = placement == PlacementMode.Pointer ? 0d : 4d;
+        TaskQueueActionPopup.IsOpen = true;
+        _openTaskQueuePopupOwner = owner;
+    }
+
+    private void CloseTaskQueueActionPopup()
+    {
+        if (TaskQueueActionPopup.IsOpen)
+        {
+            TaskQueueActionPopup.IsOpen = false;
+        }
+
+        TaskQueueActionPopupItems.ItemsSource = null;
+        _openTaskQueuePopupOwner = null;
+    }
+
+    private void OnTaskQueueActionPopupClosed(object? sender, EventArgs e)
+    {
+        var closedOwner = _openTaskQueuePopupOwner;
+        TaskQueueActionPopupItems.ItemsSource = null;
+        _openTaskQueuePopupOwner = null;
+
+        if (closedOwner is not null)
+        {
+            _suppressNextTaskQueuePopupOpenOwner = closedOwner;
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (ReferenceEquals(_suppressNextTaskQueuePopupOpenOwner, closedOwner))
+                {
+                    _suppressNextTaskQueuePopupOpenOwner = null;
+                }
+            }, DispatcherPriority.Background);
         }
     }
 
@@ -450,78 +566,12 @@ public partial class TaskQueueView : UserControl
 
     private void QueueSettingsModeSliderSync(bool animate = false, bool resetMetrics = true)
     {
-        if (resetMetrics)
-        {
-            _settingsModeSliderX = double.NaN;
-            _settingsModeSliderWidth = double.NaN;
-        }
-
-        _pendingSettingsModeSliderAnimate |= animate;
-        if (_settingsModeSliderSyncQueued)
-        {
-            return;
-        }
-
-        _settingsModeSliderSyncQueued = true;
-        Dispatcher.UIThread.Post(
-            () =>
-            {
-                _settingsModeSliderSyncQueued = false;
-                var shouldAnimate = _pendingSettingsModeSliderAnimate;
-                _pendingSettingsModeSliderAnimate = false;
-                SyncSettingsModeSlider(shouldAnimate);
-            },
-            DispatcherPriority.Loaded);
-    }
-
-    private void SyncSettingsModeSlider(bool animate)
-    {
-        if (!SettingsModeSwitch.IsVisible)
-        {
-            HideSettingsModeSlider();
-            return;
-        }
-
-        var activeButton = VM?.IsAdvancedSettingsSelected == true
-            ? AdvancedSettingsModeButton
-            : GeneralSettingsModeButton;
-        if (activeButton.Bounds.Width <= 0 || SettingsModeTrack.Bounds.Width <= 0)
-        {
-            return;
-        }
-
-        var origin = activeButton.TranslatePoint(new Point(0, 0), SettingsModeTrack);
-        if (origin is null)
-        {
-            return;
-        }
-
-        var targetX = origin.Value.X;
-        var targetWidth = activeButton.Bounds.Width;
-        if (SettingsModeSelectionSlider.IsVisible
-            && Math.Abs(_settingsModeSliderX - targetX) < 0.5
-            && Math.Abs(_settingsModeSliderWidth - targetWidth) < 0.5)
-        {
-            return;
-        }
-
-        SettingsModeSelectionSlider.Classes.Set(SettingsModeSliderAnimatedClass, animate);
-        _settingsModeSelectionSliderTransform.Transitions = animate ? AnimatedSettingsModeSliderTransformTransitions : null;
-        SettingsModeSelectionSlider.Width = targetWidth;
-        _settingsModeSelectionSliderTransform.X = targetX;
-        SettingsModeSelectionSlider.IsVisible = true;
-        _settingsModeSliderX = targetX;
-        _settingsModeSliderWidth = targetWidth;
+        _settingsModeSlider.QueueSync(animate, resetMetrics);
     }
 
     private void HideSettingsModeSlider()
     {
-        SettingsModeSelectionSlider.IsVisible = false;
-        SettingsModeSelectionSlider.Classes.Set(SettingsModeSliderAnimatedClass, false);
-        _settingsModeSelectionSliderTransform.Transitions = null;
-        _settingsModeSliderX = double.NaN;
-        _settingsModeSliderWidth = double.NaN;
-        _pendingSettingsModeSliderAnimate = false;
+        _settingsModeSlider.Hide();
     }
 
     private void OnOpenPostActionClick(object? sender, RoutedEventArgs e)
@@ -742,53 +792,6 @@ public partial class TaskQueueView : UserControl
 
         _taskRowInsertionIndex = insertionIndex;
         UpdateTaskDropIndicator(indicatorLeft, indicatorTop, indicatorWidth);
-    }
-
-    private static bool TryGetTaskParameter(object? sender, out TaskQueueItemViewModel task)
-    {
-        if (sender is not MenuItem menuItem)
-        {
-            task = null!;
-            return false;
-        }
-
-        if (menuItem.CommandParameter is TaskQueueItemViewModel parameter)
-        {
-            task = parameter;
-            return true;
-        }
-
-        var contextMenu = FindContextMenu(menuItem);
-        if (contextMenu?.PlacementTarget is Control { Tag: TaskQueueItemViewModel tagged })
-        {
-            task = tagged;
-            return true;
-        }
-
-        if (contextMenu?.PlacementTarget is Control { DataContext: TaskQueueItemViewModel fromDataContext })
-        {
-            task = fromDataContext;
-            return true;
-        }
-
-        task = null!;
-        return false;
-    }
-
-    private static ContextMenu? FindContextMenu(StyledElement element)
-    {
-        StyledElement? current = element;
-        while (current is not null)
-        {
-            if (current is ContextMenu contextMenu)
-            {
-                return contextMenu;
-            }
-
-            current = current.Parent as StyledElement;
-        }
-
-        return null;
     }
 
     private bool TryResolveTaskInsertion(
@@ -1021,7 +1024,12 @@ public partial class TaskQueueView : UserControl
                 return false;
             }
 
-            if (current is Button or CheckBox or MenuItem)
+            if (current is Button or CheckBox)
+            {
+                return true;
+            }
+
+            if (current is Control control && control.Classes.Contains("task-queue-row-action"))
             {
                 return true;
             }
@@ -1136,25 +1144,12 @@ public partial class TaskQueueView : UserControl
 
     private void OpenTaskRowContextMenu(Control rowControl)
     {
-        if (VM is null || !VM.CanEdit || rowControl.ContextMenu is null)
+        if (VM is null || !VM.CanEdit || rowControl.Tag is not TaskQueueItemViewModel task)
         {
             return;
         }
 
-        if (rowControl.Tag is TaskQueueItemViewModel task)
-        {
-            foreach (var item in rowControl.ContextMenu.Items)
-            {
-                if (item is MenuItem menuItem)
-                {
-                    menuItem.CommandParameter = task;
-                }
-            }
-        }
-
-        rowControl.ContextMenu.DataContext = null;
-        rowControl.ContextMenu.DataContext = VM;
-        rowControl.ContextMenu.Open(rowControl);
+        OpenTaskQueueActionPopup(rowControl, BuildTaskMenuItems(task), PlacementMode.Pointer);
     }
 
     private bool TryGetShellViewModel(out MainShellViewModel shell)
@@ -1176,5 +1171,24 @@ public partial class TaskQueueView : UserControl
         public int OpenVersion { get; set; }
 
         public int CloseVersion { get; set; }
+    }
+
+    private sealed record TaskQueuePopupMenuItem(
+        string Header,
+        TaskQueuePopupAction Action,
+        TaskQueueItemViewModel? Task = null,
+        string? TaskType = null,
+        bool IsEnabled = true,
+        bool IsVisible = true);
+
+    private enum TaskQueuePopupAction
+    {
+        AddTask,
+        ToggleBatchMode,
+        RunTaskOnce,
+        MoveTaskUp,
+        MoveTaskDown,
+        RenameTask,
+        RemoveTask,
     }
 }

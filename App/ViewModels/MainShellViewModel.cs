@@ -135,7 +135,8 @@ public sealed class MainShellViewModel : ObservableObject
             ReportLocalizationFallback,
             _dialogService,
             NavigateToSettingsSection,
-            EnsureCoreReadyForExecutionAsync);
+            EnsureCoreReadyForExecutionAsync,
+            StopRunOwnerFromDialogAsync);
         Program.RecordStartupStage("FrameworkInit.ViewModel.MainShell.TaskQueue.End", "TaskQueuePageViewModel created.");
         Program.RecordStartupStage("FrameworkInit.ViewModel.MainShell.Pages.Deferred", "Secondary page view models deferred for lazy creation.");
         var (taskQueuePendingTitle, taskQueuePendingMessage) = GetRootPagePendingText(RootPageStatusKind.TaskQueue);
@@ -1183,14 +1184,75 @@ public sealed class MainShellViewModel : ObservableObject
 
     private CopilotPageViewModel CreateCopilotPage()
     {
-        var page = new CopilotPageViewModel(_runtime);
+        var page = new CopilotPageViewModel(
+            _runtime,
+            _dialogService,
+            StopRunOwnerFromDialogAsync,
+            EnsureConnectedForSecondaryRunAsync);
         page.SetLanguage(CurrentShellLanguage);
         return page;
     }
 
+    private async Task<UiOperationResult> EnsureConnectedForSecondaryRunAsync(CancellationToken cancellationToken)
+    {
+        CurrentSessionState = _runtime.SessionService.CurrentState;
+        if (CurrentSessionState == SessionState.Connected)
+        {
+            return UiOperationResult.Ok("Session already connected.");
+        }
+
+        if (CurrentSessionState is SessionState.Running or SessionState.Stopping)
+        {
+            return UiOperationResult.Fail(
+                UiErrorCode.OperationAlreadyRunning,
+                "Execution is already running.");
+        }
+
+        if (!await EnsureCoreReadyForExecutionAsync(cancellationToken))
+        {
+            return UiOperationResult.Fail(
+                UiErrorCode.SessionStateNotAllowed,
+                GetCoreUnavailableMessage());
+        }
+
+        var connectResult = await ConnectWithCurrentSettingsAsync(cancellationToken);
+        CurrentSessionState = _runtime.SessionService.CurrentState;
+        if (connectResult.Success && CurrentSessionState == SessionState.Connected)
+        {
+            GlobalStatus = connectResult.Message;
+            PushGrowl(connectResult.Message);
+            return connectResult;
+        }
+
+        return UiOperationResult.Fail(
+            connectResult.Error?.Code ?? UiErrorCode.SessionStateNotAllowed,
+            BuildConnectionFailureMessage(connectResult),
+            connectResult.Error?.Details);
+    }
+
+    private async Task StopRunOwnerFromDialogAsync(string owner, CancellationToken cancellationToken)
+    {
+        var normalizedOwner = string.IsNullOrWhiteSpace(owner) ? string.Empty : owner.Trim();
+        if (string.Equals(normalizedOwner, "Toolbox", StringComparison.Ordinal))
+        {
+            await EnsureToolboxPage().StopActiveToolAsync(cancellationToken);
+        }
+        else if (string.Equals(normalizedOwner, "TaskQueue", StringComparison.Ordinal))
+        {
+            await TaskQueuePage.StopAsync(cancellationToken);
+        }
+        else if (string.Equals(normalizedOwner, "Copilot", StringComparison.Ordinal) && TryGetCopilotPage(out var copilotPage))
+        {
+            await copilotPage.StopAsync(cancellationToken);
+        }
+
+        CurrentSessionState = _runtime.SessionService.CurrentState;
+        await SyncTrayMenuStateAsync(cancellationToken);
+    }
+
     private ToolboxPageViewModel CreateToolboxPage()
     {
-        var page = new ToolboxPageViewModel(_runtime, _connectionGameSharedState, _dialogService);
+        var page = new ToolboxPageViewModel(_runtime, _connectionGameSharedState, _dialogService, StopRunOwnerFromDialogAsync);
         page.SetLanguage(CurrentShellLanguage);
         return page;
     }

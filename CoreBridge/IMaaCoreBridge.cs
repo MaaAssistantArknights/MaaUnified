@@ -50,5 +50,10 @@ public interface IMaaCoreBridge : IAsyncDisposable
 
     Task<CoreResult<byte[]>> GetImageAsync(CancellationToken cancellationToken = default);
 
+    Task<CoreResult<byte[]>> GetImageBgrAsync(
+        bool forceScreencap = false,
+        CancellationToken cancellationToken = default)
+        => Task.FromResult(CoreResult<byte[]>.Fail(new CoreError(CoreErrorCode.NotSupported, "Raw BGR image is unsupported by current bridge.")));
+
     IAsyncEnumerable<CoreCallbackEvent> CallbackStreamAsync(CancellationToken cancellationToken = default);
 }

@@ -285,6 +285,21 @@ Session state `{0}` does not allow {2}.</value>
   <data name="Copilot.Error.StopRunOwnerBlocked" xml:space="preserve">
     <value>Copilot stop blocked: current run owner is `{0}`.</value>
   </data>
+  <data name="Copilot.RunOwnerBlockedDialog.ConfirmButton" xml:space="preserve">
+    <value>Confirm</value>
+  </data>
+  <data name="Copilot.RunOwnerBlockedDialog.DetailsButton" xml:space="preserve">
+    <value>Error details</value>
+  </data>
+  <data name="Copilot.RunOwnerBlockedDialog.Message" xml:space="preserve">
+    <value>{0} is still running. Stop the current task before starting Copilot.</value>
+  </data>
+  <data name="Copilot.RunOwnerBlockedDialog.StopButton" xml:space="preserve">
+    <value>Stop task</value>
+  </data>
+  <data name="Copilot.RunOwnerBlockedDialog.Title" xml:space="preserve">
+    <value>Copilot start blocked</value>
+  </data>
   <data name="Copilot.Error.ValidateTabMismatch" xml:space="preserve">
     <value>Selected copilot does not match current tab.</value>
   </data>
@@ -325,6 +340,9 @@ Session state `{0}` does not allow {2}.</value>
   </data>
   <data name="Copilot.Hint.ListPanelEnabled" xml:space="preserve">
     <value>Checked items in battle list will be executed.</value>
+  </data>
+  <data name="Copilot.Hint.LoadedFile" xml:space="preserve">
+    <value>Imported copilot file: {0}</value>
   </data>
   <data name="Copilot.Input.OperatorNameWatermark" xml:space="preserve">
     <value>Operator name</value>
@@ -637,7 +655,7 @@ Remaining credits: </value>
     <value>Copy</value>
   </data>
   <data name="Dialog.Error.CopyErrorInfoButton" xml:space="preserve">
-    <value>Copy error info</value>
+    <value>Error details</value>
   </data>
   <data name="Dialog.Error.DetailsLabel" xml:space="preserve">
     <value>Details</value>
@@ -671,6 +689,9 @@ Remaining credits: </value>
   </data>
   <data name="Dialog.Warning.ConfirmButton" xml:space="preserve">
     <value>Confirm</value>
+  </data>
+  <data name="Dialog.Warning.DetailsButton" xml:space="preserve">
+    <value>Error details</value>
   </data>
   <data name="Dialog.Warning.Prompt" xml:space="preserve">
     <value>Do you want to continue?</value>
@@ -4703,8 +4724,14 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
   <data name="Toolbox.BusyDialog.CloseButton" xml:space="preserve">
     <value>Got it</value>
   </data>
+  <data name="Toolbox.BusyDialog.ConfirmButton" xml:space="preserve">
+    <value>Confirm</value>
+  </data>
   <data name="Toolbox.BusyDialog.CurrentTask" xml:space="preserve">
     <value>current task</value>
+  </data>
+  <data name="Toolbox.BusyDialog.DetailsButton" xml:space="preserve">
+    <value>Error details</value>
   </data>
   <data name="Toolbox.BusyDialog.Message" xml:space="preserve">
     <value>{0} is still running. Stop it before starting another toolbox task.</value>

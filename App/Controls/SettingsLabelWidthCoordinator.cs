@@ -280,18 +280,46 @@ public sealed class SettingsLabelWidthCoordinator
             return MeasureTextBlockNaturalWidth(textBlock);
         }
 
-        label.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-        return Math.Ceiling(label.DesiredSize.Width);
+        try
+        {
+            label.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            return Math.Ceiling(label.DesiredSize.Width);
+        }
+        catch (InvalidOperationException)
+        {
+            return 0d;
+        }
     }
 
     private static double MeasureTextBlockNaturalWidth(TextBlock textBlock)
     {
         var previousMaxWidth = textBlock.MaxWidth;
-        textBlock.MaxWidth = double.PositiveInfinity;
-        textBlock.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-        var width = textBlock.DesiredSize.Width;
-        textBlock.MaxWidth = previousMaxWidth;
-        return Math.Ceiling(width);
+        try
+        {
+            textBlock.MaxWidth = double.PositiveInfinity;
+            textBlock.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            return Math.Ceiling(textBlock.DesiredSize.Width);
+        }
+        catch (InvalidOperationException)
+        {
+            return EstimateTextWidth(textBlock.Text, textBlock.FontSize);
+        }
+        finally
+        {
+            textBlock.MaxWidth = previousMaxWidth;
+        }
+    }
+
+    private static double EstimateTextWidth(string? text, double fontSize)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return 0d;
+        }
+
+        var safeFontSize = fontSize > 0d && !double.IsNaN(fontSize) ? fontSize : 13.5d;
+        var units = text.Sum(static ch => ch <= 0x007F ? 0.56d : 1d);
+        return Math.Ceiling(units * safeFontSize);
     }
 
     private static Grid? FindGroupedRow(Control control)

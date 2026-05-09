@@ -17,6 +17,7 @@ public enum DialogReturnSemantic
     Confirm = 0,
     Cancel = 1,
     Close = 2,
+    Details = 3,
 }
 
 public sealed record DialogTraceToken(

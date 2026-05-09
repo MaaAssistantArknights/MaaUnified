@@ -30,7 +30,7 @@
     </Style>
     <Style Selector="Border.app-dropdown-shell:disabled">
       <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.SettingsInput.BackgroundDisabled}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Action.DisabledBorder}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.SettingsInput.BorderDisabled}" />
       <Setter Property="Opacity" Value="1" />
     </Style>
     <Style Selector="TextBlock.app-dropdown-display">
@@ -57,6 +57,20 @@
       <Setter Property="Focusable" Value="False" />
       <Setter Property="HorizontalContentAlignment" Value="Center" />
       <Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Border Background="{TemplateBinding Background}"
+                  BorderBrush="{TemplateBinding BorderBrush}"
+                  BorderThickness="{TemplateBinding BorderThickness}"
+                  CornerRadius="{TemplateBinding CornerRadius}">
+            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                              Content="{TemplateBinding Content}"
+                              ContentTemplate="{TemplateBinding ContentTemplate}"
+                              Margin="{TemplateBinding Padding}" />
+          </Border>
+        </ControlTemplate>
+      </Setter>
     </Style>
     <Style Selector="Button.app-dropdown-arrow:pointerover">
       <Setter Property="Background" Value="Transparent" />
@@ -66,7 +80,10 @@
       <Setter Property="Background" Value="Transparent" />
     </Style>
     <Style Selector="Button.app-dropdown-arrow:disabled">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
       <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ChevronDisabled}" />
+      <Setter Property="Opacity" Value="1" />
     </Style>
     <Style Selector="Path.app-dropdown-arrow-icon">
       <Setter Property="Width" Value="{DynamicResource MAA.App.Size.SettingsInputChevronWidth}" />

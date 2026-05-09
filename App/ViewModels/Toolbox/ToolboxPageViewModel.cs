@@ -4,11 +4,13 @@ using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Avalonia;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
+using Avalonia.Platform;
 using Avalonia.Threading;
 using MAAUnified.App.Features.Dialogs;
 using MAAUnified.App.ViewModels.Infrastructure;
@@ -37,6 +39,10 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
     private const string DepotTaskChain = "Depot";
     private const string OperBoxTaskChain = "OperBox";
     private const int PeepPreviewDecodeWidth = 1280;
+    private const int PeepPreviewPixelWidth = 1280;
+    private const int PeepPreviewPixelHeight = 720;
+    private const int PeepPreviewPixelChannels = 3;
+    private const int PeepBitmapCacheSize = 3;
     private static readonly Random GachaTipRandom = new();
     private static readonly JsonSerializerOptions PersistedPayloadJsonOptions = new()
     {
@@ -92,6 +98,9 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         nameof(RecruitAutoSelect6Text),
         nameof(RecruitFixedSixStarText),
         nameof(StartRecognitionText),
+        nameof(RecruitStartRecognitionText),
+        nameof(OperBoxStartRecognitionText),
+        nameof(DepotStartRecognitionText),
         nameof(RecruitPotentialTip),
         nameof(OperBoxCopyToClipboardText),
         nameof(OperBoxTipText),
@@ -135,6 +144,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
 
     private readonly ConnectionGameSharedStateViewModel? _connectionState;
     private readonly IAppDialogService _dialogService;
+    private readonly Func<string, CancellationToken, Task>? _stopRunOwnerAsync;
     private readonly DispatcherTimer _gachaTipTimer;
     private ToolboxLocalizationTextMap _texts;
     private RootLocalizationTextMap _rootTexts;
@@ -150,7 +160,9 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
     private CancellationTokenSource? _peepPollingCts;
     private Task? _peepPollingTask;
     private bool _peepWasAutoStarted;
+    private readonly WriteableBitmap?[] _peepBitmapCache = new WriteableBitmap?[PeepBitmapCacheSize];
     private int _callbackDrainScheduled;
+    private int _peepBitmapSequence;
     private DateTimeOffset _lastPeepFpsWindowStartedAt = DateTimeOffset.MinValue;
     private int _peepFramesInWindow;
     private int _selectedTabIndex;
@@ -203,11 +215,13 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
     public ToolboxPageViewModel(
         MAAUnifiedRuntime runtime,
         ConnectionGameSharedStateViewModel? connectionState = null,
-        IAppDialogService? dialogService = null)
+        IAppDialogService? dialogService = null,
+        Func<string, CancellationToken, Task>? stopRunOwnerAsync = null)
         : base(runtime)
     {
         _connectionState = connectionState;
         _dialogService = dialogService ?? NoOpAppDialogService.Instance;
+        _stopRunOwnerAsync = stopRunOwnerAsync;
         if (_connectionState is not null)
         {
             _connectionState.PropertyChanged += OnConnectionStatePropertyChanged;
@@ -281,6 +295,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         };
 
         runtime.SessionService.CallbackProjected += OnSessionCallbackProjected;
+        runtime.SessionService.SessionStateChanged += OnSessionStateChanged;
         RefreshCurrentToolParametersPreview();
     }
 
@@ -319,6 +334,12 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
     public string RecruitFixedSixStarText => T("Toolbox.Recruit.FixedSixStar", "Fixed 09:00 (guaranteed 6★)");
 
     public string StartRecognitionText => T("Toolbox.Action.StartRecognition", "Start recognition");
+
+    public string RecruitStartRecognitionText => StartRecognitionText;
+
+    public string OperBoxStartRecognitionText => StartRecognitionText;
+
+    public string DepotStartRecognitionText => StartRecognitionText;
 
     public string OperBoxCopyToClipboardText => T("Toolbox.OperBox.CopyToClipboard", "Copy to clipboard");
 
@@ -419,6 +440,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
             if (SetProperty(ref _executionState, value))
             {
                 OnPropertyChanged(nameof(IsExecuting));
+                NotifyToolboxExecutionStateChanged();
             }
         }
     }
@@ -431,9 +453,31 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
 
     public bool IsExecuting => ExecutionState == ToolboxExecutionState.Executing;
 
+    public bool IsRecruitExecuting => _activeTool == ToolboxToolKind.Recruit && IsExecuting;
+
+    public bool IsOperBoxExecuting => _activeTool == ToolboxToolKind.OperBox && IsExecuting;
+
+    public bool IsDepotExecuting => _activeTool == ToolboxToolKind.Depot && IsExecuting;
+
+    public bool CanStartRecruitRecognition => true;
+
+    public bool CanStartOperBoxRecognition => true;
+
+    public bool CanStartDepotRecognition => true;
+
     public bool HasExecutionHistory => ExecutionHistory.Count > 0;
 
     public bool IsToolboxBusy => _activeTool is not null || Peeping || IsPeepTransitioning || IsGachaInProgress;
+
+    private bool IsAnotherRunOwnerActive
+    {
+        get
+        {
+            var owner = Runtime.SessionService.CurrentRunOwner;
+            return !string.IsNullOrWhiteSpace(owner)
+                && !Runtime.SessionService.IsRunOwner(ToolboxRunOwner);
+        }
+    }
 
     public string LastExecutionErrorCode
     {
@@ -790,6 +834,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
             {
                 OnPropertyChanged(nameof(ShowGachaControls));
                 OnPropertyChanged(nameof(ShowGachaPreview));
+                OnPropertyChanged(nameof(ShowGachaIdleControls));
             }
         }
     }
@@ -812,6 +857,8 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
 
             OnPropertyChanged(nameof(PeepCommandText));
             OnPropertyChanged(nameof(ShowGachaPreview));
+            OnPropertyChanged(nameof(ShowGachaIdleControls));
+            NotifyToolboxBusyStateChanged();
             if (!value)
             {
                 GachaInfo = T("Toolbox.Tip.GachaInit", "Gacha hint.");
@@ -826,6 +873,8 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
     public string DialogLanguage => _currentLanguage;
 
     public bool ShowGachaPreview => ShowGachaControls && Peeping && PeepImage is not null;
+
+    public bool ShowGachaIdleControls => ShowGachaControls && !ShowGachaPreview;
 
     public string GachaDrawCountInput
     {
@@ -849,6 +898,8 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
             OnPropertyChanged(nameof(ShowPeepTip));
             OnPropertyChanged(nameof(ShowPeepPreview));
             OnPropertyChanged(nameof(ShowGachaPreview));
+            OnPropertyChanged(nameof(ShowGachaIdleControls));
+            NotifyToolboxBusyStateChanged();
         }
     }
 
@@ -860,6 +911,8 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
             if (SetProperty(ref _isPeepTransitioning, value))
             {
                 OnPropertyChanged(nameof(CanTogglePeep));
+                OnPropertyChanged(nameof(PeepCommandText));
+                NotifyToolboxBusyStateChanged();
             }
         }
     }
@@ -879,7 +932,13 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
             {
                 OnPropertyChanged(nameof(ShowPeepPreview));
                 OnPropertyChanged(nameof(ShowGachaPreview));
-                previous?.Dispose();
+                OnPropertyChanged(nameof(ShowGachaIdleControls));
+                if (previous is not null
+                    && !ReferenceEquals(previous, value)
+                    && !IsCachedPeepBitmap(previous))
+                {
+                    previous.Dispose();
+                }
             }
         }
     }
@@ -926,7 +985,11 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
 
     public bool CanTogglePeep => !IsPeepTransitioning;
 
-    public string PeepCommandText => !Peeping
+    public string PeepCommandText => IsPeepTransitioning
+        ? Peeping || IsGachaInProgress
+            ? T("Toolbox.Action.PeepStopping", "停止中...")
+            : T("Toolbox.Action.PeepStarting", "启动中...")
+        : !Peeping
         ? T("Toolbox.Action.PeepStart", "Peep!")
         : IsGachaInProgress
             ? T("Toolbox.Action.PeepStopStrong", "Stop!!!!!")
@@ -1163,7 +1226,12 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
     public async Task StartRecruitAsync(CancellationToken cancellationToken = default)
     {
         var request = BuildRecruitRequest();
-        await DispatchToolAsync(ToolboxToolKind.Recruit, request, PrepareRecruitForStart, cancellationToken);
+        await DispatchToolAsync(
+            ToolboxToolKind.Recruit,
+            request,
+            PrepareRecruitForStart,
+            cancellationToken,
+            transitionBeforeConnect: true);
     }
 
     public async Task StartOperBoxAsync(CancellationToken cancellationToken = default)
@@ -1171,17 +1239,25 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         var request = new ToolboxDispatchRequest(
             ToolboxToolKind.OperBox,
             ParameterSummary: BuildCurrentParameterText(ToolboxToolKind.OperBox));
-        await DispatchToolAsync(ToolboxToolKind.OperBox, request, PrepareOperBoxForStart, cancellationToken);
+        await DispatchToolAsync(
+            ToolboxToolKind.OperBox,
+            request,
+            PrepareOperBoxForStart,
+            cancellationToken,
+            transitionBeforeConnect: true);
     }
 
     public async Task StartDepotAsync(CancellationToken cancellationToken = default)
     {
-        ClearDepotRecognitionResults();
-        DepotInfo = T("Toolbox.Status.ConnectingEmulator", "Connecting to emulator...");
         var request = new ToolboxDispatchRequest(
             ToolboxToolKind.Depot,
             ParameterSummary: BuildCurrentParameterText(ToolboxToolKind.Depot));
-        await DispatchToolAsync(ToolboxToolKind.Depot, request, PrepareDepotForStart, cancellationToken);
+        await DispatchToolAsync(
+            ToolboxToolKind.Depot,
+            request,
+            PrepareDepotForStart,
+            cancellationToken,
+            transitionBeforeConnect: true);
     }
 
     public async Task StartGachaAsync(bool once = true, CancellationToken cancellationToken = default)
@@ -1267,7 +1343,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
 
             if (_activeTool is not null && _activeTool != ToolboxToolKind.Gacha)
             {
-                await ApplyFailureAsync(
+                await ApplyToolboxBusyAsync(
                     ToolboxToolKind.VideoRecognition,
                     UiOperationResult.Fail(
                         UiErrorCode.ToolboxExecutionFailed,
@@ -1275,22 +1351,20 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
                             CultureInfo.InvariantCulture,
                             T("Toolbox.Error.BusyWithTool", "`{0}` is running. Stop it first before peep."),
                             _activeTool)),
-                    "peep-busy",
                     cancellationToken);
                 return;
             }
 
             if (!Runtime.SessionService.TryBeginRun(ToolboxRunOwner, out var currentOwner))
             {
-                await ApplyFailureAsync(
+                await ApplyToolboxBusyAsync(
                     ToolboxToolKind.VideoRecognition,
                     UiOperationResult.Fail(
                         UiErrorCode.ToolboxExecutionFailed,
                         string.Format(
-                            CultureInfo.InvariantCulture,
-                            T("Toolbox.Error.OwnerRunning", "`{0}` is already running."),
-                            currentOwner)),
-                    "peep-owner",
+                        CultureInfo.InvariantCulture,
+                        T("Toolbox.Error.OwnerRunning", "`{0}` is already running."),
+                        currentOwner)),
                     cancellationToken);
                 return;
             }
@@ -1490,7 +1564,8 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         ToolboxDispatchRequest request,
         Action prepareUiAction,
         CancellationToken cancellationToken,
-        bool startPeepAfterDispatch = false)
+        bool startPeepAfterDispatch = false,
+        bool transitionBeforeConnect = false)
     {
         CurrentToolParameters = BuildCurrentParameterText(tool);
         var validation = ValidateCurrentToolParameters(tool);
@@ -1513,7 +1588,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
 
         if (!Runtime.SessionService.TryBeginRun(ToolboxRunOwner, out var currentOwner))
         {
-            await ApplyFailureAsync(
+            await ApplyToolboxBusyAsync(
                 tool,
                 UiOperationResult.Fail(
                     UiErrorCode.ToolboxExecutionFailed,
@@ -1521,23 +1596,32 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
                         CultureInfo.InvariantCulture,
                         T("Toolbox.Error.OwnerRunning", "`{0}` is already running."),
                         currentOwner)),
-                "owner",
                 cancellationToken);
             return;
+        }
+
+        if (transitionBeforeConnect)
+        {
+            prepareUiAction();
+            TransitionToExecuting(tool, request.ParameterSummary ?? CurrentToolParameters);
         }
 
         var connectResult = await EnsureConnectedAsync(cancellationToken);
         if (!connectResult.Success)
         {
             Runtime.SessionService.EndRun(ToolboxRunOwner);
+            ClearActiveToolState(tool);
             await ApplyFailureAsync(tool, connectResult, "connect", cancellationToken);
             return;
         }
 
         await PersistBridgeSettingsForToolAsync(tool, cancellationToken);
 
-        prepareUiAction();
-        TransitionToExecuting(tool, request.ParameterSummary ?? CurrentToolParameters);
+        if (!transitionBeforeConnect)
+        {
+            prepareUiAction();
+            TransitionToExecuting(tool, request.ParameterSummary ?? CurrentToolParameters);
+        }
 
         UiOperationResult<ToolboxDispatchResult> dispatchResult;
         try
@@ -1547,6 +1631,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             Runtime.SessionService.EndRun(ToolboxRunOwner);
+            ClearActiveToolState(tool);
             await ApplyFailureAsync(
                 tool,
                 UiOperationResult.Fail(
@@ -1559,6 +1644,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         catch (Exception ex)
         {
             Runtime.SessionService.EndRun(ToolboxRunOwner);
+            ClearActiveToolState(tool);
             await ApplyFailureAsync(
                 tool,
                 UiOperationResult.Fail(UiErrorCode.ToolboxExecutionFailed, ex.Message, ex.ToString()),
@@ -1570,6 +1656,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         if (!dispatchResult.Success || dispatchResult.Value is null)
         {
             Runtime.SessionService.EndRun(ToolboxRunOwner);
+            ClearActiveToolState(tool);
             await ApplyFailureAsync(tool, dispatchResult.ToUntyped(), "dispatch", cancellationToken);
             return;
         }
@@ -1678,6 +1765,54 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         LastExecutionAt = null;
         OnPropertyChanged(nameof(IsMiniGameRunning));
         OnPropertyChanged(nameof(MiniGameCommandText));
+        NotifyToolboxBusyStateChanged();
+    }
+
+    private void ClearActiveToolState(ToolboxToolKind expectedTool)
+    {
+        if (_activeTool != expectedTool)
+        {
+            return;
+        }
+
+        _activeTool = null;
+        _lastDispatchedParameterSummary = string.Empty;
+        OnPropertyChanged(nameof(IsMiniGameRunning));
+        OnPropertyChanged(nameof(MiniGameCommandText));
+        NotifyToolboxBusyStateChanged();
+    }
+
+    private void NotifyToolboxBusyStateChanged()
+    {
+        OnPropertyChanged(nameof(IsToolboxBusy));
+        OnPropertyChanged(nameof(CanStartRecruitRecognition));
+        OnPropertyChanged(nameof(CanStartOperBoxRecognition));
+        OnPropertyChanged(nameof(CanStartDepotRecognition));
+        NotifyToolboxExecutionStateChanged();
+    }
+
+    private void NotifyToolboxExecutionStateChanged()
+    {
+        OnPropertyChanged(nameof(IsRecruitExecuting));
+        OnPropertyChanged(nameof(IsOperBoxExecuting));
+        OnPropertyChanged(nameof(IsDepotExecuting));
+        OnPropertyChanged(nameof(CanStartRecruitRecognition));
+        OnPropertyChanged(nameof(CanStartOperBoxRecognition));
+        OnPropertyChanged(nameof(CanStartDepotRecognition));
+        OnPropertyChanged(nameof(RecruitStartRecognitionText));
+        OnPropertyChanged(nameof(OperBoxStartRecognitionText));
+        OnPropertyChanged(nameof(DepotStartRecognitionText));
+    }
+
+    private void OnSessionStateChanged(SessionState _)
+    {
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            NotifyToolboxExecutionStateChanged();
+            return;
+        }
+
+        Dispatcher.UIThread.Post(NotifyToolboxExecutionStateChanged, DispatcherPriority.Background);
     }
 
     private async Task<UiOperationResult> EnsureConnectedAsync(CancellationToken cancellationToken)
@@ -2186,14 +2321,18 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
                     $"{tagLevel}★",
                     tags,
                     ResolveRarityAccentBrush(tagLevel),
-                    GroupRecruitOperatorCards(recruitCards)));
+                    SortRecruitOperatorCards(recruitCards)));
             }
 
             lines.Add(RecruitResultLineViewModel.CreateSpacer());
         }
 
         ReplaceCollectionItems(RecruitResultLines, lines);
-        ReplaceCollectionItems(RecruitResultGroups, groups);
+        ReplaceCollectionItems(
+            RecruitResultGroups,
+            groups
+                .OrderBy(group => ResolveRecruitTagSortRank(group.TagLevel))
+                .ThenByDescending(group => group.TagLevel));
     }
 
     private void ApplyOperBoxRecognition(JsonObject details)
@@ -2546,10 +2685,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         _ = PersistExecutionHistoryAsync(CancellationToken.None);
 
         Runtime.SessionService.EndRun(ToolboxRunOwner);
-        _activeTool = null;
-        _lastDispatchedParameterSummary = string.Empty;
-        OnPropertyChanged(nameof(IsMiniGameRunning));
-        OnPropertyChanged(nameof(MiniGameCommandText));
+        ClearActiveToolState(tool);
     }
 
     private async Task ApplyFailureAsync(
@@ -2572,7 +2708,10 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         LastErrorMessage = formatted;
         LastExecutionErrorCode = errorCode;
         LastExecutionAt = DateTimeOffset.Now;
-        ExecutionState = ToolboxExecutionState.Failed;
+        if (!IsToolboxBusy)
+        {
+            ExecutionState = ToolboxExecutionState.Failed;
+        }
 
         ExecutionHistory.Insert(0, ToolExecutionRecord.Failed(
             ToolNameOf(tool),
@@ -2597,11 +2736,15 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
             result.Error?.Details);
         var normalized = UiOperationResult.Fail(errorCode, formatted, details);
 
-        await RecordFailedResultAsync(ScopeOf(tool), normalized, cancellationToken);
+        _ = await ApplyResultAsync(normalized, ScopeOf(tool), cancellationToken);
 
         LastErrorMessage = formatted;
         LastExecutionErrorCode = errorCode;
         LastExecutionAt = DateTimeOffset.Now;
+        if (!IsToolboxBusy)
+        {
+            ExecutionState = ToolboxExecutionState.Failed;
+        }
 
         ExecutionHistory.Insert(0, ToolExecutionRecord.Failed(
             ToolNameOf(tool),
@@ -2610,10 +2753,10 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
             errorCode));
         TrimExecutionHistory();
         await PersistExecutionHistoryAsync(cancellationToken);
-        await ShowToolboxBusyDialogAsync(cancellationToken);
+        await ShowToolboxBusyDialogAsync(normalized, cancellationToken);
     }
 
-    private async Task ShowToolboxBusyDialogAsync(CancellationToken cancellationToken)
+    private async Task ShowToolboxBusyDialogAsync(UiOperationResult errorResult, CancellationToken cancellationToken)
     {
         var language = DialogLanguage;
         var activeTool = _activeTool ?? (Peeping ? ToolboxToolKind.VideoRecognition : null);
@@ -2630,9 +2773,24 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
             Language: language,
             Chrome: chrome);
         var dialogResult = await _dialogService.ShowWarningConfirmAsync(request, ToolboxBusyDialogScope, cancellationToken);
-        if (dialogResult.Return == DialogReturnSemantic.Confirm)
+        if (dialogResult.Return == DialogReturnSemantic.Cancel)
         {
+            var owner = Runtime.SessionService.CurrentRunOwner;
+            if (!string.IsNullOrWhiteSpace(owner)
+                && !Runtime.SessionService.IsRunOwner(ToolboxRunOwner)
+                && _stopRunOwnerAsync is not null)
+            {
+                await _stopRunOwnerAsync(owner, cancellationToken);
+                return;
+            }
+
             await StopActiveToolAsync(cancellationToken);
+            return;
+        }
+
+        if (dialogResult.Return == DialogReturnSemantic.Details)
+        {
+            await ShowToolboxErrorDetailsAsync(errorResult, activeTool, cancellationToken);
         }
     }
 
@@ -2646,12 +2804,56 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
                 var title = texts.GetOrDefault("Toolbox.BusyDialog.Title", "Toolbox is busy");
                 return new DialogChromeSnapshot(
                     title: title,
-                    confirmText: texts.GetOrDefault("Toolbox.BusyDialog.StopButton", "Stop current task"),
-                    cancelText: texts.GetOrDefault("Toolbox.BusyDialog.CloseButton", "Got it"),
+                    confirmText: texts.GetOrDefault("Toolbox.BusyDialog.ConfirmButton", "Confirm"),
+                    cancelText: texts.GetOrDefault("Toolbox.BusyDialog.StopButton", "Stop current task"),
                     namedTexts: DialogTextCatalog.CreateNamedTexts(
                         (DialogTextCatalog.ChromeKeys.SectionTitle, title),
+                        (DialogTextCatalog.ChromeKeys.DetailsButton, texts.GetOrDefault(
+                            "Toolbox.BusyDialog.DetailsButton",
+                            DialogTextCatalog.WarningDialogDetailsButton(nextLanguage))),
                         (DialogTextCatalog.ChromeKeys.Prompt, BuildToolboxBusyDialogMessage(nextLanguage, activeTool))));
             });
+    }
+
+    private async Task ShowToolboxErrorDetailsAsync(
+        UiOperationResult errorResult,
+        ToolboxToolKind? activeTool,
+        CancellationToken cancellationToken)
+    {
+        var language = DialogLanguage;
+        var localizedResult = DialogTextCatalog.LocalizeErrorResult(language, errorResult);
+        var chrome = CreateErrorDetailsDialogChrome(language);
+        var chromeSnapshot = chrome.GetSnapshot(language);
+        var request = new ErrorDialogRequest(
+            Title: chromeSnapshot.Title,
+            Context: ScopeOf(activeTool),
+            Result: localizedResult,
+            Suggestion: DialogTextCatalog.BuildErrorSuggestion(language, errorResult),
+            ConfirmText: chromeSnapshot.ConfirmText ?? DialogTextCatalog.ErrorDialogCloseButton(language),
+            CancelText: chromeSnapshot.CancelText ?? DialogTextCatalog.ErrorDialogIgnoreButton(language),
+            Language: language,
+            Chrome: chrome);
+        await _dialogService.ShowErrorAsync(request, "Toolbox.Busy.ErrorDetails", cancellationToken: cancellationToken);
+    }
+
+    private static DialogChromeCatalog CreateErrorDetailsDialogChrome(string language)
+    {
+        return DialogTextCatalog.CreateCatalog(
+            language,
+            nextLanguage => new DialogChromeSnapshot(
+                title: DialogTextCatalog.ErrorDialogTitle(nextLanguage),
+                confirmText: DialogTextCatalog.ErrorDialogCloseButton(nextLanguage),
+                cancelText: DialogTextCatalog.ErrorDialogIgnoreButton(nextLanguage),
+                namedTexts: DialogTextCatalog.CreateNamedTexts(
+                    (DialogTextCatalog.ChromeKeys.SectionTitle, DialogTextCatalog.ErrorDialogSectionTitle(nextLanguage)),
+                    (DialogTextCatalog.ChromeKeys.CopyButton, DialogTextCatalog.ErrorDialogCopyButton(nextLanguage)),
+                    (DialogTextCatalog.ChromeKeys.IssueReportButton, DialogTextCatalog.ErrorDialogIssueReportButton(nextLanguage)),
+                    (DialogTextCatalog.ChromeKeys.TimestampLabel, DialogTextCatalog.ErrorDialogTimestampLabel(nextLanguage)),
+                    (DialogTextCatalog.ChromeKeys.ContextLabel, DialogTextCatalog.ErrorDialogContextLabel(nextLanguage)),
+                    (DialogTextCatalog.ChromeKeys.CodeLabel, DialogTextCatalog.ErrorDialogCodeLabel(nextLanguage)),
+                    (DialogTextCatalog.ChromeKeys.MessageLabel, DialogTextCatalog.ErrorDialogMessageLabel(nextLanguage)),
+                    (DialogTextCatalog.ChromeKeys.DetailsLabel, DialogTextCatalog.ErrorDialogDetailsLabel(nextLanguage)),
+                    (DialogTextCatalog.ChromeKeys.SuggestionLabel, DialogTextCatalog.ErrorDialogSuggestionLabel(nextLanguage)))));
     }
 
     private static string BuildToolboxBusyDialogMessage(string language, ToolboxToolKind? activeTool)
@@ -2687,6 +2889,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         if (clearImage)
         {
             PeepImage = null;
+            DisposePeepBitmapCache();
         }
 
         if (releaseRunOwner && _activeTool is null)
@@ -2760,6 +2963,11 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
 
         try
         {
+            if (await TryRefreshPeepRawFrameAsync(cancellationToken).ConfigureAwait(false))
+            {
+                return;
+            }
+
             var screenshotStopwatch = Stopwatch.StartNew();
             var imageResult = await Runtime.CoreBridge.GetImageAsync(cancellationToken).ConfigureAwait(false);
             screenshotStopwatch.Stop();
@@ -2809,6 +3017,57 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         }
     }
 
+    private async Task<bool> TryRefreshPeepRawFrameAsync(CancellationToken cancellationToken)
+    {
+        var screenshotStopwatch = Stopwatch.StartNew();
+        var imageResult = await Runtime.CoreBridge.GetImageBgrAsync(forceScreencap: true, cancellationToken).ConfigureAwait(false);
+        screenshotStopwatch.Stop();
+        if (!imageResult.Success || imageResult.Value is null || imageResult.Value.Length == 0)
+        {
+            _ = Runtime.DiagnosticsService.RecordScreenshotTestAsync(
+                "Toolbox.Peep.RefreshRaw",
+                success: false,
+                elapsedMs: screenshotStopwatch.Elapsed.TotalMilliseconds,
+                provider: "CoreBridge.GetImageBgrAsync",
+                details: imageResult.Error?.Message,
+                minInterval: TimeSpan.FromSeconds(10));
+            return imageResult.Error?.Code != CoreErrorCode.NotSupported;
+        }
+
+        _ = Runtime.DiagnosticsService.RecordScreenshotTestAsync(
+            "Toolbox.Peep.RefreshRaw",
+            success: true,
+            elapsedMs: screenshotStopwatch.Elapsed.TotalMilliseconds,
+            provider: "CoreBridge.GetImageBgrAsync",
+            width: PeepPreviewPixelWidth,
+            height: PeepPreviewPixelHeight,
+            minInterval: TimeSpan.FromSeconds(30));
+
+        try
+        {
+            await Dispatcher.UIThread.InvokeAsync(
+                () => ApplyPeepRawFrame(imageResult.Value),
+                DispatcherPriority.Render,
+                cancellationToken);
+            return true;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _ = Runtime.DiagnosticsService.RecordScreenshotTestAsync(
+                "Toolbox.Peep.RefreshRaw",
+                success: false,
+                elapsedMs: screenshotStopwatch.Elapsed.TotalMilliseconds,
+                provider: "CoreBridge.GetImageBgrAsync",
+                details: ex.Message,
+                minInterval: TimeSpan.FromSeconds(10));
+            return false;
+        }
+    }
+
     private static Bitmap DecodePeepBitmap(Stream stream)
     {
         return Bitmap.DecodeToWidth(stream, PeepPreviewDecodeWidth, BitmapInterpolationMode.LowQuality);
@@ -2823,7 +3082,31 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         }
 
         PeepImage = bitmap;
+        AdvancePeepFpsWindow();
+    }
 
+    private void ApplyPeepRawFrame(byte[] bgrData)
+    {
+        if (!Peeping)
+        {
+            return;
+        }
+
+        var bytesPerFrame = PeepPreviewPixelWidth * PeepPreviewPixelHeight * PeepPreviewPixelChannels;
+        if (bgrData.Length < bytesPerFrame)
+        {
+            return;
+        }
+
+        var sequence = _peepBitmapSequence++;
+        var bitmap = GetOrCreatePeepBitmap(sequence % _peepBitmapCache.Length);
+        WriteBgrFrame(bitmap, bgrData);
+        PeepImage = bitmap;
+        AdvancePeepFpsWindow();
+    }
+
+    private void AdvancePeepFpsWindow()
+    {
         _peepFramesInWindow += 1;
         var now = DateTimeOffset.UtcNow;
         var elapsed = now - _lastPeepFpsWindowStartedAt;
@@ -2833,6 +3116,58 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
             _lastPeepFpsWindowStartedAt = now;
             _peepFramesInWindow = 0;
         }
+    }
+
+    private WriteableBitmap GetOrCreatePeepBitmap(int index)
+    {
+        return _peepBitmapCache[index] ??= new WriteableBitmap(
+            new PixelSize(PeepPreviewPixelWidth, PeepPreviewPixelHeight),
+            new Vector(96, 96),
+            PixelFormats.Bgr24,
+            AlphaFormat.Opaque);
+    }
+
+    private static void WriteBgrFrame(WriteableBitmap bitmap, byte[] bgrData)
+    {
+        var frameStride = PeepPreviewPixelWidth * PeepPreviewPixelChannels;
+        var frameBytes = PeepPreviewPixelHeight * frameStride;
+        using var framebuffer = bitmap.Lock();
+        if (framebuffer.RowBytes == frameStride)
+        {
+            Marshal.Copy(bgrData, 0, framebuffer.Address, frameBytes);
+            return;
+        }
+
+        for (var row = 0; row < PeepPreviewPixelHeight; row++)
+        {
+            var sourceOffset = row * frameStride;
+            var destination = IntPtr.Add(framebuffer.Address, row * framebuffer.RowBytes);
+            Marshal.Copy(bgrData, sourceOffset, destination, frameStride);
+        }
+    }
+
+    private bool IsCachedPeepBitmap(Bitmap bitmap)
+    {
+        foreach (var cached in _peepBitmapCache)
+        {
+            if (ReferenceEquals(cached, bitmap))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private void DisposePeepBitmapCache()
+    {
+        for (var i = 0; i < _peepBitmapCache.Length; i++)
+        {
+            _peepBitmapCache[i]?.Dispose();
+            _peepBitmapCache[i] = null;
+        }
+
+        _peepBitmapSequence = 0;
     }
 
     private void RefreshGachaTip()
@@ -3868,19 +4203,26 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         ReplaceCollectionItems(DepotGroups, groups);
     }
 
-    private IReadOnlyList<RecruitOperatorRarityGroupViewModel> GroupRecruitOperatorCards(IEnumerable<RecruitOperatorCardViewModel> items)
+    private IReadOnlyList<RecruitOperatorCardViewModel> SortRecruitOperatorCards(IEnumerable<RecruitOperatorCardViewModel> items)
     {
         return items
-            .GroupBy(item => item.Rarity)
-            .OrderByDescending(group => group.Key)
-            .Select(group => new RecruitOperatorRarityGroupViewModel(
-                $"{group.Key}★",
-                ResolveRarityAccentBrush(group.Key),
-                group
-                    .OrderBy(item => ResolveProfessionSort(item.ProfessionText))
-                    .ThenBy(item => item.Name, StringComparer.CurrentCulture)
-                    .ToArray()))
+            .OrderByDescending(item => item.Rarity)
+            .ThenBy(item => ResolveProfessionSort(item.ProfessionText))
+            .ThenBy(item => item.Name, StringComparer.CurrentCulture)
             .ToArray();
+    }
+
+    private static int ResolveRecruitTagSortRank(int tagLevel)
+    {
+        return tagLevel switch
+        {
+            >= 6 => 0,
+            5 => 1,
+            4 => 2,
+            1 => 3,
+            3 => 4,
+            _ => 9,
+        };
     }
 
     private IReadOnlyList<OperBoxOperatorGroupViewModel> GroupOperBoxOperators(IEnumerable<OperBoxOperatorItemViewModel> items)
@@ -4222,15 +4564,10 @@ public sealed record RecruitResultGroupViewModel(
     string LevelText,
     IReadOnlyList<string> Tags,
     IBrush AccentBrush,
-    IReadOnlyList<RecruitOperatorRarityGroupViewModel> OperatorGroups)
+    IReadOnlyList<RecruitOperatorCardViewModel> Operators)
 {
     public bool HasTags => Tags.Count > 0;
 }
-
-public sealed record RecruitOperatorRarityGroupViewModel(
-    string Title,
-    IBrush AccentBrush,
-    IReadOnlyList<RecruitOperatorCardViewModel> Operators);
 
 public sealed record RecruitOperatorCardViewModel(
     string Name,

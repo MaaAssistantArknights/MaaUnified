@@ -27,6 +27,7 @@ public static class DialogTextCatalog
         public const string MessageLabel = "MessageLabel";
         public const string DetailsLabel = "DetailsLabel";
         public const string SuggestionLabel = "SuggestionLabel";
+        public const string DetailsButton = "DetailsButton";
     }
 
     public static bool UseChinese(string? language)
@@ -63,7 +64,7 @@ public static class DialogTextCatalog
 
     public static string ErrorDialogCopyErrorInfoButton(string? language)
     {
-        return GetText(language, "Dialog.Error.CopyErrorInfoButton", "复制报错信息", "Copy error info");
+        return GetText(language, "Dialog.Error.CopyErrorInfoButton", "详细报错", "Error details");
     }
 
     public static string ErrorDialogIssueReportButton(string? language)
@@ -129,6 +130,11 @@ public static class DialogTextCatalog
     public static string WarningDialogCancelButton(string? language)
     {
         return GetText(language, "Dialog.Warning.CancelButton", "取消", "Cancel");
+    }
+
+    public static string WarningDialogDetailsButton(string? language)
+    {
+        return GetText(language, "Dialog.Warning.DetailsButton", "详细报错", "Error details");
     }
 
     private static string GetText(string? language, string key, string zhFallback, string enFallback)

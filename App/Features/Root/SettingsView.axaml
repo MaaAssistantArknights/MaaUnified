@@ -64,19 +64,13 @@
         </StackPanel>
       </ScrollViewer>
 
-      <!-- Legacy sticky shell names are kept here for structure-contract tests:
-           x:Name="StickyTitlePanel"
-           x:Name="StickyCurrentHost"
-           x:Name="StickyTransitionHost"
-           x:Name="StickyTitleText"
-           x:Name="StickyTransitionText" -->
       <controls:AppStickyTitlePresenter x:Name="StickyTitlePresenter"
                                         Margin="0,4,12,0"
                                         HorizontalAlignment="Stretch"
                                         VerticalAlignment="Top"
                                         IsHitTestVisible="False"
                                         ZIndex="3"
-                                        Classes="settings-sticky-title"
+                                        Classes="settings-page-sticky-title"
                                         IsVisible="False" />
     </Grid>
   </Grid>
