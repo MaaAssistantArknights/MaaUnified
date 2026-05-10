@@ -13,7 +13,7 @@ public sealed class ParityMatrixSyncTests
     public void ParityMatrix_ShouldDeclareBaselineFreezeAsSyncSource()
     {
         var doc = BaselineTestSupport.ReadDoc("avalonia-parity-matrix.md");
-        Assert.Contains("Docs/baseline.freeze.v1.md", doc, StringComparison.Ordinal);
+        Assert.Contains("Docs/testing/baseline.freeze.v1.md", doc, StringComparison.Ordinal);
     }
 
     [Fact]

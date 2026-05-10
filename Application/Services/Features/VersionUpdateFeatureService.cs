@@ -23,6 +23,7 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
 {
     private const string WindowsManualUpdateMessageKey = "Settings.VersionUpdate.Status.WindowsManualUpdateRequired";
     private const string MacOSManualInstallMessageKey = "Settings.VersionUpdate.Status.MacOSManualInstallRequired";
+    private const string AppImageManualInstallMessageKey = "Settings.VersionUpdate.Status.AppImageManualInstallRequired";
     private const string PackageUnavailableMessageKey = "Settings.VersionUpdate.Status.PackageUnavailable";
     private const string PackageDownloadFailedMessageKey = "Settings.VersionUpdate.Status.PackageDownloadFailed";
     private const string GithubResourceArchiveUrl = "https://github.com/MaaAssistantArknights/MaaResource/archive/refs/heads/main.zip";
@@ -417,6 +418,14 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
                             PackageFailureMessageKey = MacOSManualInstallMessageKey,
                         };
                     }
+                    else if (IsAppImagePackage(effectiveResult))
+                    {
+                        effectiveResult = effectiveResult with
+                        {
+                            PackageResolutionStatus = PackageResolutionStatus.AppImageManualInstallRequired,
+                            PackageFailureMessageKey = AppImageManualInstallMessageKey,
+                        };
+                    }
 
                     progress?.Report(new VersionUpdateProgressInfo(
                         VersionUpdateProgressOperation.SoftwarePackage,
@@ -426,6 +435,13 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
                         PublishUpdateLog(FormatUpdateLogText(
                             "VersionUpdate.Log.Software.MacOSDmgReady",
                             "macOS 安装镜像已下载：{0}。请打开 dmg 手动安装。",
+                            downloadResult.Value));
+                    }
+                    else if (IsAppImagePackage(effectiveResult))
+                    {
+                        PublishUpdateLog(FormatUpdateLogText(
+                            "VersionUpdate.Log.Software.AppImageReady",
+                            "Linux AppImage 已下载：{0}。请手动替换或启动新的 AppImage。",
                             downloadResult.Value));
                     }
                     else
@@ -538,6 +554,12 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
         return packageName.EndsWith(".dmg", StringComparison.OrdinalIgnoreCase);
     }
 
+    private static bool IsAppImagePackage(VersionUpdateCheckResult workflowResult)
+    {
+        var packageName = workflowResult.PackageName ?? workflowResult.PreparedPackagePath ?? string.Empty;
+        return packageName.EndsWith(".AppImage", StringComparison.OrdinalIgnoreCase);
+    }
+
     private static string BuildVersionUpdateMessage(VersionUpdateCheckResult result)
     {
         if (!result.IsNewVersion)
@@ -548,6 +570,11 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
         if (result.PackageResolutionStatus == PackageResolutionStatus.MacOSManualInstallRequired)
         {
             return $"发现新版本：{result.TargetVersion}。macOS 安装镜像已下载，请打开 dmg 手动安装。";
+        }
+
+        if (result.PackageResolutionStatus == PackageResolutionStatus.AppImageManualInstallRequired)
+        {
+            return $"发现新版本：{result.TargetVersion}。Linux AppImage 已下载，请手动替换或启动新的 AppImage。";
         }
 
         if (!string.IsNullOrWhiteSpace(result.PreparedPackagePath))
@@ -561,6 +588,8 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
                 => $"发现新版本：{result.TargetVersion}。Windows 版目前暂未在 release 发布，请手动更新。",
             PackageResolutionStatus.MacOSManualInstallRequired
                 => $"发现新版本：{result.TargetVersion}。macOS 安装镜像已下载，请打开 dmg 手动安装。",
+            PackageResolutionStatus.AppImageManualInstallRequired
+                => $"发现新版本：{result.TargetVersion}。Linux AppImage 已下载，请手动替换或启动新的 AppImage。",
             PackageResolutionStatus.Unavailable
                 => $"发现新版本：{result.TargetVersion}。更新失败。",
             PackageResolutionStatus.DownloadFailed

@@ -10,6 +10,7 @@ public enum PackageResolutionStatus
     WindowsManualUpdateRequired = 3,
     DownloadFailed = 4,
     MacOSManualInstallRequired = 5,
+    AppImageManualInstallRequired = 6,
 }
 
 public enum PackageSourceKind

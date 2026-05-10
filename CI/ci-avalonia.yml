@@ -176,7 +176,24 @@ jobs:
           cmake --build --preset ${{ matrix.cmake_preset }}
           cmake --install build --config RelWithDebInfo
 
-      - name: Publish MAAUnified app
+      - name: Publish MAAUnified app (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: >
+          dotnet publish src/MAAUnified/App/MAAUnified.App.csproj -c Release -r ${{ matrix.rid }}
+          --self-contained ${{ matrix.self_contained }} -o staging
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:VersionPrefix=1.0.0
+          -p:VersionSuffix=${{ needs.meta.outputs.version_suffix }}
+          -p:AssemblyVersion=1.0.0.0
+          -p:FileVersion=1.0.0.0
+          -p:InformationalVersion="${{ needs.meta.outputs.informational_version }}"
+          -p:MaaUnifiedReleaseChannel=debug
+          -p:MaaUnifiedDiagnosticsProfile=full
+
+      - name: Publish MAAUnified app (Unix)
+        if: runner.os != 'Windows'
         shell: bash
         run: >
           dotnet publish src/MAAUnified/App/MAAUnified.App.csproj -c Release -r ${{ matrix.rid }}
@@ -211,11 +228,6 @@ jobs:
           fi
           test -d staging/resource
 
-      - name: Create root launcher scripts (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: pwsh -File src/MAAUnified/CI/create-windows-launcher.ps1 -TargetDir staging
-
       - name: Create root launcher scripts (Linux)
         if: runner.os == 'Linux'
         shell: bash
@@ -225,9 +237,9 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          if (!(Test-Path "staging\bin\MAAUnified.exe")) { throw "Managed app executable not found under staging/bin." }
+          if (!(Test-Path "staging\MAAUnified.exe")) { throw "Windows GUI executable not found at staging root." }
           if (!(Test-Path "staging\resource")) { throw "resource directory not found under staging root." }
-          if (!(Test-Path "staging\MAAUnified.cmd")) { throw "Root launcher script not found." }
+          if (Test-Path "staging\MAAUnified.cmd") { throw "Legacy cmd launcher should not be included in Windows package." }
           $rootManaged = @(Get-ChildItem staging -File | Where-Object { $_.Name -like 'System.*.dll' -or $_.Name -like 'Avalonia.*.dll' })
           if ($rootManaged.Count -gt 0) { throw "Managed DLLs should not be placed at staging root." }
 

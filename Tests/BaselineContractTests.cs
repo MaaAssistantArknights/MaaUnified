@@ -193,7 +193,7 @@ internal static class BaselineTestSupport
 
     public static string ReadDoc(string relativeDocPath)
     {
-        var path = Path.Combine(GetMaaUnifiedRoot(), "Docs", relativeDocPath);
+        var path = Path.Combine(GetMaaUnifiedRoot(), "Docs", "testing", relativeDocPath);
         return NormalizeLineEndings(File.ReadAllText(path));
     }
 
