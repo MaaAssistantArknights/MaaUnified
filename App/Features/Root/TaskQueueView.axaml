@@ -730,8 +730,13 @@
                             </Border>
                           </Grid>
                         </ToolTip.Tip>
-                        <TextBlock Classes="task-queue-row-action-glyph"
-                                   Text="{Binding DataContext.TaskMenuIconText, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                        <Viewbox Width="15"
+                                 Height="15"
+                                 HorizontalAlignment="Center"
+                                 VerticalAlignment="Center">
+                          <Path Classes="task-queue-row-action-icon"
+                                Data="{StaticResource MAA.App.Geometry.TaskQueueMenuGear}" />
+                        </Viewbox>
                       </Border>
                     </Grid>
                   </Border>
@@ -774,8 +779,13 @@
                   <Border Grid.Column="3"
                           Classes="task-queue-row-action"
                           Margin="{DynamicResource MAA.Thickness.MarginActionButtonLeft}">
-                    <TextBlock Classes="task-queue-row-action-glyph"
-                               Text="{Binding DataContext.TaskMenuIconText, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                    <Viewbox Width="15"
+                             Height="15"
+                             HorizontalAlignment="Center"
+                             VerticalAlignment="Center">
+                      <Path Classes="task-queue-row-action-icon"
+                            Data="{StaticResource MAA.App.Geometry.TaskQueueMenuGear}" />
+                    </Viewbox>
                   </Border>
                 </Grid>
               </Border>
