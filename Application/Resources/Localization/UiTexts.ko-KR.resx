@@ -2744,6 +2744,18 @@ OF-1 스테이지가 개방되지 않은 경우에는 선택하지 마세요.</v
   <data name="StartUp.Option.ConnectConfig.General" xml:space="preserve">
     <value>일반 모드</value>
   </data>
+  <data name="StartUp.Option.ConnectConfig.MacPlayTools" xml:space="preserve">
+    <value>PlayCover(macOS)</value>
+  </data>
+  <data name="Settings.Connect.PlayCover.Mode.Compatible" xml:space="preserve">
+    <value>기본 호환 모드</value>
+  </data>
+  <data name="Settings.Connect.PlayCover.Mode.BGR" xml:space="preserve">
+    <value>최적화 가속 모드</value>
+  </data>
+  <data name="Settings.Connect.PlayCover.Mode.SCK" xml:space="preserve">
+    <value>시스템 화면 캡처</value>
+  </data>
   <data name="StartUp.Option.ConnectConfig.GeneralWithoutScreencapErr" xml:space="preserve">
     <value>일반 모드 (예외 출력 차단)</value>
   </data>

@@ -23,6 +23,7 @@ public sealed class StartUpTaskModuleViewModel : TypedTaskModuleViewModelBase<St
     private static readonly (string Value, string TextKey, string Fallback)[] ConnectConfigOptionSpecs =
     [
         ("General", "StartUp.Option.ConnectConfig.General", "General Mode"),
+        ("MacPlayTools", "StartUp.Option.ConnectConfig.MacPlayTools", "PlayCover (macOS)"),
         ("BlueStacks", "StartUp.Option.ConnectConfig.BlueStacks", "BlueStacks"),
         ("MuMuEmulator12", "StartUp.Option.ConnectConfig.MuMuEmulator12", "MuMu Emulator 12"),
         ("LDPlayer", "StartUp.Option.ConnectConfig.LDPlayer", "LD Player"),
@@ -89,6 +90,8 @@ public sealed class StartUpTaskModuleViewModel : TypedTaskModuleViewModelBase<St
 
     public IReadOnlyList<TaskModuleOption> TouchModeOptions => _touchModeOptions;
 
+    public IReadOnlyList<ConnectionGameOptionItem> PlayCoverScreencapModeOptions => _sharedState.PlayCoverScreencapModeOptions;
+
     public IReadOnlyList<TaskModuleOption> AttachWindowScreencapOptions => _attachWindowScreencapOptions;
 
     public IReadOnlyList<TaskModuleOption> AttachWindowInputOptions => _attachWindowInputOptions;
@@ -149,6 +152,26 @@ public sealed class StartUpTaskModuleViewModel : TypedTaskModuleViewModelBase<St
     {
         get => TouchMode;
         set => TouchMode = value ?? string.Empty;
+    }
+
+    public ConnectionGameOptionItem? SelectedPlayCoverScreencapModeOption
+    {
+        get => _sharedState.SelectedPlayCoverScreencapModeOption;
+        set
+        {
+            var previous = _sharedState.PlayCoverScreencapMode;
+            _sharedState.SelectedPlayCoverScreencapModeOption = value;
+            if (!string.Equals(previous, _sharedState.PlayCoverScreencapMode, StringComparison.Ordinal))
+            {
+                MarkDirty();
+            }
+        }
+    }
+
+    public string SelectedPlayCoverScreencapModeValue
+    {
+        get => _sharedState.SelectedPlayCoverScreencapModeValue;
+        set => PlayCoverScreencapMode = value;
     }
 
     public TaskModuleOption? SelectedAttachWindowScreencapOption
@@ -242,6 +265,8 @@ public sealed class StartUpTaskModuleViewModel : TypedTaskModuleViewModelBase<St
             OnPropertyChanged();
             OnPropertyChanged(nameof(SelectedConnectConfigOption));
             OnPropertyChanged(nameof(SelectedConnectConfigValue));
+            OnPropertyChanged(nameof(ShowPlayCoverScreencapMode));
+            OnPropertyChanged(nameof(IsAdbConnectionMode));
         }
     }
 
@@ -294,6 +319,29 @@ public sealed class StartUpTaskModuleViewModel : TypedTaskModuleViewModelBase<St
             OnPropertyChanged(nameof(SelectedTouchModeValue));
         }
     }
+
+    public string PlayCoverScreencapMode
+    {
+        get => _sharedState.PlayCoverScreencapMode;
+        set
+        {
+            var normalized = value?.Trim() ?? string.Empty;
+            if (string.Equals(_sharedState.PlayCoverScreencapMode, normalized, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            _sharedState.PlayCoverScreencapMode = normalized;
+            MarkDirty();
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(SelectedPlayCoverScreencapModeOption));
+            OnPropertyChanged(nameof(SelectedPlayCoverScreencapModeValue));
+        }
+    }
+
+    public bool ShowPlayCoverScreencapMode => _sharedState.ShowPlayCoverScreencapMode;
+
+    public bool IsAdbConnectionMode => _sharedState.IsAdbConnectionMode;
 
     public bool AutoDetectConnection
     {
@@ -433,6 +481,7 @@ public sealed class StartUpTaskModuleViewModel : TypedTaskModuleViewModelBase<St
             ConnectAddress = ConnectAddress.Trim(),
             AdbPath = AdbPath.Trim(),
             TouchMode = TouchMode.Trim(),
+            PlayCoverScreencapMode = PlayCoverScreencapMode.Trim(),
             AutoDetectConnection = AutoDetectConnection,
             AttachWindowScreencapMethod = AttachWindowScreencapMethod.Trim(),
             AttachWindowMouseMethod = AttachWindowMouseMethod.Trim(),
@@ -454,6 +503,8 @@ public sealed class StartUpTaskModuleViewModel : TypedTaskModuleViewModelBase<St
                 OnPropertyChanged(nameof(SelectedConnectConfigOption));
                 OnPropertyChanged(nameof(SelectedConnectConfigValue));
                 OnPropertyChanged(nameof(CanEditStartGameEnabled));
+                OnPropertyChanged(nameof(ShowPlayCoverScreencapMode));
+                OnPropertyChanged(nameof(IsAdbConnectionMode));
                 break;
             case nameof(ConnectionGameSharedStateViewModel.ConnectAddress):
                 OnPropertyChanged(nameof(ConnectAddress));
@@ -475,6 +526,11 @@ public sealed class StartUpTaskModuleViewModel : TypedTaskModuleViewModelBase<St
                 OnPropertyChanged(nameof(TouchMode));
                 OnPropertyChanged(nameof(SelectedTouchModeOption));
                 OnPropertyChanged(nameof(SelectedTouchModeValue));
+                break;
+            case nameof(ConnectionGameSharedStateViewModel.PlayCoverScreencapMode):
+                OnPropertyChanged(nameof(PlayCoverScreencapMode));
+                OnPropertyChanged(nameof(SelectedPlayCoverScreencapModeOption));
+                OnPropertyChanged(nameof(SelectedPlayCoverScreencapModeValue));
                 break;
             case nameof(ConnectionGameSharedStateViewModel.AutoDetect):
                 OnPropertyChanged(nameof(AutoDetectConnection));
@@ -525,6 +581,7 @@ public sealed class StartUpTaskModuleViewModel : TypedTaskModuleViewModelBase<St
         OnPropertyChanged(nameof(ClientTypeOptions));
         OnPropertyChanged(nameof(ConnectConfigOptions));
         OnPropertyChanged(nameof(TouchModeOptions));
+        OnPropertyChanged(nameof(PlayCoverScreencapModeOptions));
         OnPropertyChanged(nameof(AttachWindowScreencapOptions));
         OnPropertyChanged(nameof(AttachWindowInputOptions));
         OnPropertyChanged(nameof(SelectedClientTypeOption));
@@ -533,6 +590,8 @@ public sealed class StartUpTaskModuleViewModel : TypedTaskModuleViewModelBase<St
         OnPropertyChanged(nameof(SelectedConnectConfigValue));
         OnPropertyChanged(nameof(SelectedTouchModeOption));
         OnPropertyChanged(nameof(SelectedTouchModeValue));
+        OnPropertyChanged(nameof(SelectedPlayCoverScreencapModeOption));
+        OnPropertyChanged(nameof(SelectedPlayCoverScreencapModeValue));
         OnPropertyChanged(nameof(SelectedAttachWindowScreencapOption));
         OnPropertyChanged(nameof(SelectedAttachWindowMouseOption));
         OnPropertyChanged(nameof(SelectedAttachWindowKeyboardOption));
