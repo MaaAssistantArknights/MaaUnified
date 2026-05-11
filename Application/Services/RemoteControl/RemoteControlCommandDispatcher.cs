@@ -526,8 +526,10 @@ internal sealed class RemoteControlCommandDispatcher
         var config = _configService.CurrentConfig;
         var address = ReadConfigString(profile, config, "ConnectAddress", LegacyConfigurationKeys.ConnectAddress) ?? "127.0.0.1:5555";
         var connectConfig = ReadConfigString(profile, config, "ConnectConfig", LegacyConfigurationKeys.ConnectConfig) ?? "General";
+        var playCoverScreencapMode = ReadConfigString(profile, config, "PlayCoverScreencapMode", "PlayCoverScreencapMode");
+        var effectiveConnectConfig = PlayCoverConnectConfigResolver.ResolveEffectiveConnectConfig(connectConfig, playCoverScreencapMode);
         var adbPath = ReadConfigString(profile, config, "AdbPath", LegacyConfigurationKeys.AdbPath);
-        return await _connectFeatureService.ConnectAsync(address, connectConfig, adbPath, cancellationToken);
+        return await _connectFeatureService.ConnectAsync(address, effectiveConnectConfig, adbPath, cancellationToken);
     }
 
     private static string? ReadConfigString(UnifiedProfile profile, UnifiedConfig config, string profileKey, string globalKey)

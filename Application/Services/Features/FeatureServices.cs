@@ -47,7 +47,7 @@ public sealed class ConnectFeatureService : IConnectFeatureService
             return CoreResult<bool>.Fail(new CoreError(CoreErrorCode.InvalidRequest, "Address cannot be empty."));
         }
 
-        var apply = await ApplyResolvedInstanceOptionsAsync(instanceOptions, cancellationToken);
+        var apply = await ApplyResolvedInstanceOptionsAsync(config, instanceOptions, cancellationToken);
         if (!apply.Success)
         {
             return apply;
@@ -74,7 +74,7 @@ public sealed class ConnectFeatureService : IConnectFeatureService
         CoreInstanceOptions? instanceOptions = null,
         CancellationToken cancellationToken = default)
     {
-        var resolved = ResolveEffectiveInstanceOptions(instanceOptions);
+        var resolved = ResolveEffectiveInstanceOptions(connectConfig: null, instanceOptions);
         if (resolved.IsEmpty)
         {
             return Task.FromResult(CoreResult<bool>.Ok(true));
@@ -85,7 +85,7 @@ public sealed class ConnectFeatureService : IConnectFeatureService
 
     public async Task<UiOperationResult> StartAsync(CancellationToken cancellationToken = default)
     {
-        var apply = await ApplyResolvedInstanceOptionsAsync(instanceOptions: null, cancellationToken);
+        var apply = await ApplyResolvedInstanceOptionsAsync(connectConfig: null, instanceOptions: null, cancellationToken);
         if (!apply.Success)
         {
             return UiOperationResult.FromCore(apply, "Core instance options updated.");
@@ -159,10 +159,14 @@ public sealed class ConnectFeatureService : IConnectFeatureService
     }
 
     private async Task<CoreResult<bool>> ApplyResolvedInstanceOptionsAsync(
+        string? connectConfig,
         CoreInstanceOptions? instanceOptions,
         CancellationToken cancellationToken)
     {
-        var apply = await ApplyInstanceOptionsAsync(instanceOptions, cancellationToken);
+        var resolved = ResolveEffectiveInstanceOptions(connectConfig, instanceOptions);
+        var apply = resolved.IsEmpty
+            ? CoreResult<bool>.Ok(true)
+            : await _sessionService.ApplyInstanceOptionsAsync(resolved, cancellationToken);
         if (apply.Success || apply.Error?.Code is CoreErrorCode.NotSupported)
         {
             return CoreResult<bool>.Ok(true);
@@ -171,31 +175,66 @@ public sealed class ConnectFeatureService : IConnectFeatureService
         return apply;
     }
 
-    private CoreInstanceOptions ResolveEffectiveInstanceOptions(CoreInstanceOptions? instanceOptions)
+    private CoreInstanceOptions ResolveEffectiveInstanceOptions(string? connectConfig, CoreInstanceOptions? instanceOptions)
     {
-        var resolvedFromConfig = ResolveInstanceOptionsFromConfig();
-        return instanceOptions is null
+        var resolvedFromConfig = ResolveInstanceOptionsFromConfig(connectConfig);
+        var resolved = instanceOptions is null
             ? resolvedFromConfig
             : instanceOptions.MergeWith(resolvedFromConfig);
+        var effectiveConnectConfig = ResolveEffectiveConnectConfigFromCurrentProfile(connectConfig);
+        return NormalizeInstanceOptionsForConnectConfig(effectiveConnectConfig, resolved);
     }
 
-    private CoreInstanceOptions ResolveInstanceOptionsFromConfig()
+    private CoreInstanceOptions ResolveInstanceOptionsFromConfig(string? connectConfig)
     {
         if (!_configService.TryGetCurrentProfile(out var profile))
         {
             return new CoreInstanceOptions(
-                TouchMode: DefaultTouchMode,
+                TouchMode: ResolveTouchModeFromConnectConfig(connectConfig, DefaultTouchMode),
                 DeploymentWithPause: false,
                 AdbLiteEnabled: false,
                 KillAdbOnExit: false);
         }
 
+        var effectiveConnectConfig = ResolveEffectiveConnectConfigFromProfile(profile, connectConfig);
+        var configuredTouchMode = ReadProfileString(profile, "TouchMode", ConfigurationKeys.TouchMode) ?? DefaultTouchMode;
         return new CoreInstanceOptions(
-            TouchMode: ReadProfileString(profile, "TouchMode", ConfigurationKeys.TouchMode) ?? DefaultTouchMode,
+            TouchMode: ResolveTouchModeFromConnectConfig(effectiveConnectConfig, configuredTouchMode),
             DeploymentWithPause: ReadProfileBoolFlexible(profile, ConfigurationKeys.RoguelikeDeploymentWithPause),
             AdbLiteEnabled: ReadProfileBool(profile, "AdbLiteEnabled", ConfigurationKeys.AdbLiteEnabled),
             KillAdbOnExit: ReadProfileBool(profile, "KillAdbOnExit", ConfigurationKeys.KillAdbOnExit));
     }
+
+    private CoreInstanceOptions NormalizeInstanceOptionsForConnectConfig(string? connectConfig, CoreInstanceOptions options)
+        => options with
+        {
+            TouchMode = PlayCoverConnectConfigResolver.ResolveTouchMode(connectConfig, options.TouchMode),
+        };
+
+    private string? ResolveEffectiveConnectConfigFromCurrentProfile(string? connectConfig)
+    {
+        if (!_configService.TryGetCurrentProfile(out var profile))
+        {
+            return connectConfig;
+        }
+
+        return ResolveEffectiveConnectConfigFromProfile(profile, connectConfig);
+    }
+
+    private string? ResolveEffectiveConnectConfigFromProfile(UnifiedProfile profile, string? connectConfig)
+    {
+        if (!string.IsNullOrWhiteSpace(connectConfig))
+        {
+            return connectConfig;
+        }
+
+        var profileConnectConfig = ReadProfileString(profile, "ConnectConfig", ConfigurationKeys.ConnectConfig);
+        var playCoverScreencapMode = ReadProfileString(profile, "PlayCoverScreencapMode", "PlayCoverScreencapMode");
+        return PlayCoverConnectConfigResolver.ResolveEffectiveConnectConfig(profileConnectConfig, playCoverScreencapMode);
+    }
+
+    private static string ResolveTouchModeFromConnectConfig(string? connectConfig, string configuredTouchMode)
+        => PlayCoverConnectConfigResolver.ResolveTouchMode(connectConfig, configuredTouchMode);
 
     private bool ReadProfileBoolFlexible(UnifiedProfile profile, string key)
     {
@@ -810,6 +849,7 @@ public sealed class TaskQueueFeatureService : ITaskQueueFeatureService
             ConnectAddress = dto.ConnectAddress,
             AdbPath = dto.AdbPath,
             TouchMode = dto.TouchMode,
+            PlayCoverScreencapMode = dto.PlayCoverScreencapMode,
             AutoDetectConnection = dto.AutoDetectConnection,
             AttachWindowScreencapMethod = dto.AttachWindowScreencapMethod,
             AttachWindowMouseMethod = dto.AttachWindowMouseMethod,

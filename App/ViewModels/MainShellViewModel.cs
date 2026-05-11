@@ -1521,8 +1521,9 @@ public sealed class MainShellViewModel : ObservableObject
         var adbPath = string.IsNullOrWhiteSpace(effectiveAdbPath) ? null : effectiveAdbPath;
         var instanceOptions = _connectionGameSharedState.BuildCoreInstanceOptions();
         var candidates = _connectionGameSharedState.BuildConnectAddressCandidates(includeConfiguredAddress: true);
+        var effectiveConnectConfig = _connectionGameSharedState.EffectiveConnectConfig;
         _runtime.LogService.Debug(
-            $"Connect candidates prepared: count={candidates.Count}, config={_connectionGameSharedState.ConnectConfig}, adb={adbPath ?? "<null>"}");
+            $"Connect candidates prepared: count={candidates.Count}, config={effectiveConnectConfig}, adb={adbPath ?? "<null>"}");
         UiOperationResult? lastFailure = null;
 
         foreach (var candidate in candidates)
@@ -1530,7 +1531,7 @@ public sealed class MainShellViewModel : ObservableObject
             _runtime.LogService.Debug($"Trying connect candidate: {candidate}");
             var result = await _runtime.ShellFeatureService.ConnectAsync(
                 candidate,
-                _connectionGameSharedState.ConnectConfig,
+                effectiveConnectConfig,
                 adbPath,
                 instanceOptions,
                 cancellationToken);
@@ -1553,9 +1554,13 @@ public sealed class MainShellViewModel : ObservableObject
     {
         var segments = new List<string>
         {
-            BuildBilingualMessage(
-                "连接失败。请“检查连接设置” -> “尝试重启模拟器与 ADB” -> “重启电脑”。",
-                "Connection failed. Check connection settings -> try restarting the emulator and ADB -> reboot the computer."),
+            _connectionGameSharedState.IsPlayCoverConnection
+                ? BuildBilingualMessage(
+                    "PlayCover 连接失败。请确认游戏标题栏中的 PlayTools 地址正确，且已开启 MaaTools；如果使用 MacSCK，请允许屏幕录制权限。",
+                    "PlayCover connection failed. Check the PlayTools address from the game title bar and ensure MaaTools is enabled. If using MacSCK, allow Screen Recording permission.")
+                : BuildBilingualMessage(
+                    "连接失败。请“检查连接设置” -> “尝试重启模拟器与 ADB” -> “重启电脑”。",
+                    "Connection failed. Check connection settings -> try restarting the emulator and ADB -> reboot the computer."),
         };
 
         var settingsHint = _connectionGameSharedState.BuildConnectionSettingsHintMessage();

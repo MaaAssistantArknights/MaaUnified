@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -2099,6 +2100,11 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                     return;
                 }
 
+                if (!await TryStartPlayCoverGameOnStartupAsync(cancellationToken))
+                {
+                    return;
+                }
+
                 if (!await EnsureConnectedForLinkStartAsync("TaskQueue.Start", cancellationToken))
                 {
                     return;
@@ -2299,6 +2305,11 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             return connectResult;
         }
 
+        if (_connectionGameSharedState.IsPlayCoverConnection)
+        {
+            return connectResult;
+        }
+
         var address = (_connectionGameSharedState.ConnectAddress ?? string.Empty).Trim();
         var adbExecutable = _connectionGameSharedState.ResolveEffectiveAdbPath(updateStateWhenResolved: true) ?? "adb";
 
@@ -2351,8 +2362,9 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         var adbPath = string.IsNullOrWhiteSpace(effectiveAdbPath) ? null : effectiveAdbPath;
         var instanceOptions = _connectionGameSharedState.BuildCoreInstanceOptions();
         var candidates = _connectionGameSharedState.BuildConnectAddressCandidates(includeConfiguredAddress: true);
+        var effectiveConnectConfig = _connectionGameSharedState.EffectiveConnectConfig;
         Runtime.LogService.Debug(
-            $"TaskQueue connect candidates prepared: count={candidates.Count}, config={_connectionGameSharedState.ConnectConfig}, adb={adbPath ?? "<null>"}");
+            $"TaskQueue connect candidates prepared: count={candidates.Count}, config={effectiveConnectConfig}, adb={adbPath ?? "<null>"}");
         UiOperationResult? lastFailure = null;
 
         foreach (var candidate in candidates)
@@ -2360,7 +2372,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             Runtime.LogService.Debug($"TaskQueue trying connect candidate: {candidate}");
             var result = await Runtime.ConnectFeatureService.ConnectAsync(
                 candidate,
-                _connectionGameSharedState.ConnectConfig,
+                effectiveConnectConfig,
                 adbPath,
                 instanceOptions,
                 cancellationToken);
@@ -2383,9 +2395,13 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     {
         var segments = new List<string>
         {
-            BuildBilingualMessage(
-                "连接失败。请“检查连接设置” -> “尝试重启模拟器与 ADB” -> “重启电脑”。",
-                "Connection failed. Check connection settings -> try restarting the emulator and ADB -> reboot the computer."),
+            _connectionGameSharedState.IsPlayCoverConnection
+                ? BuildBilingualMessage(
+                    "PlayCover 连接失败。请确认游戏标题栏中的 PlayTools 地址正确，且已开启 MaaTools；如果使用 MacSCK，请允许屏幕录制权限。",
+                    "PlayCover connection failed. Check the PlayTools address from the game title bar and ensure MaaTools is enabled. If using MacSCK, allow Screen Recording permission.")
+                : BuildBilingualMessage(
+                    "连接失败。请“检查连接设置” -> “尝试重启模拟器与 ADB” -> “重启电脑”。",
+                    "Connection failed. Check connection settings -> try restarting the emulator and ADB -> reboot the computer."),
         };
 
         var settingsHint = _connectionGameSharedState.BuildConnectionSettingsHintMessage();
@@ -2441,6 +2457,154 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
     private Task<bool> TryStartEmulatorForReconnectAsync(CancellationToken cancellationToken)
         => TryStartEmulatorAsync("reconnect", cancellationToken);
+
+    private async Task<bool> TryStartPlayCoverGameOnStartupAsync(CancellationToken cancellationToken)
+    {
+        if (!ShouldStartPlayCoverGameOnStartup())
+        {
+            return true;
+        }
+
+        if (!OperatingSystem.IsMacOS())
+        {
+            LastErrorMessage = BuildBilingualMessage(
+                "PlayCover 自动启动仅支持 macOS。",
+                "PlayCover auto-start is only supported on macOS.");
+            AppendStartPrecheckWarningMessage(LastErrorMessage);
+            AppendStartFailureLog(LastErrorMessage);
+            await RecordFailedResultAsync(
+                "TaskQueue.Start.PlayCoverStartGame",
+                UiOperationResult.Fail(UiErrorCode.SessionStateNotAllowed, LastErrorMessage),
+                cancellationToken);
+            return false;
+        }
+
+        var appBundlePath = ResolvePlayCoverAppBundlePath(_connectionGameSharedState.ClientType);
+        if (!Directory.Exists(appBundlePath))
+        {
+            LastErrorMessage = BuildBilingualMessage(
+                $"无法找到 PlayCover 游戏文件：{appBundlePath}",
+                $"PlayCover game app was not found: {appBundlePath}");
+            AppendStartPrecheckWarningMessage(LastErrorMessage);
+            AppendStartFailureLog(LastErrorMessage);
+            await RecordFailedResultAsync(
+                "TaskQueue.Start.PlayCoverStartGame",
+                UiOperationResult.Fail(UiErrorCode.SessionStateNotAllowed, LastErrorMessage),
+                cancellationToken);
+            return false;
+        }
+
+        try
+        {
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = "/usr/bin/open",
+                UseShellExecute = false,
+            };
+            startInfo.ArgumentList.Add(appBundlePath);
+
+            Runtime.LogService.Debug($"Auto start PlayCover client: `{appBundlePath}`");
+            _ = Process.Start(startInfo);
+
+            var address = (_connectionGameSharedState.ConnectAddress ?? string.Empty).Trim();
+            if (!await WaitForPlayCoverMaaToolsAsync(address, cancellationToken))
+            {
+                Runtime.LogService.Warn($"PlayCover client started but MaaTools did not become reachable at `{address}`.");
+            }
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            LastErrorMessage = BuildBilingualMessage(
+                $"启动 PlayCover 客户端失败：{ex.Message}",
+                $"Failed to start PlayCover client: {ex.Message}");
+            AppendStartPrecheckWarningMessage(LastErrorMessage);
+            AppendStartFailureLog(LastErrorMessage);
+            await RecordFailedResultAsync(
+                "TaskQueue.Start.PlayCoverStartGame",
+                UiOperationResult.Fail(UiErrorCode.SessionStateNotAllowed, LastErrorMessage),
+                cancellationToken);
+            return false;
+        }
+    }
+
+    private bool ShouldStartPlayCoverGameOnStartup()
+    {
+        return _connectionGameSharedState.IsPlayCoverConnection
+            && _connectionGameSharedState.StartGameEnabled
+            && CurrentSessionState != SessionState.Connected
+            && Tasks.Any(static task => task.IsEnabled
+                && string.Equals(task.Type, TaskModuleTypes.StartUp, StringComparison.OrdinalIgnoreCase));
+    }
+
+    internal static string ResolvePlayCoverAppBundlePath(string? clientType)
+    {
+        var bundleId = ResolvePlayCoverAppBundleId(clientType);
+        return Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            "Library",
+            "Containers",
+            "io.playcover.PlayCover",
+            "Applications",
+            $"{bundleId}.app");
+    }
+
+    internal static string ResolvePlayCoverAppBundleId(string? clientType)
+    {
+        return (clientType ?? string.Empty).Trim().ToLowerInvariant() switch
+        {
+            "yostaren" => "com.YoStarEN.Arknights",
+            "yostarjp" => "com.YoStarJP.Arknights",
+            "yostarkr" => "com.YoStarKR.Arknights",
+            "txwy" => "tw.txwy.ios.arknights",
+            _ => "com.hypergryph.arknights",
+        };
+    }
+
+    private static async Task<bool> WaitForPlayCoverMaaToolsAsync(string address, CancellationToken cancellationToken)
+    {
+        if (!TryParseTcpAddress(address, out var host, out var port))
+        {
+            return true;
+        }
+
+        for (var attempt = 0; attempt < 20; attempt++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                using var client = new TcpClient();
+                await client.ConnectAsync(host, port, cancellationToken);
+                return true;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(500), cancellationToken);
+            }
+        }
+
+        return false;
+    }
+
+    private static bool TryParseTcpAddress(string address, out string host, out int port)
+    {
+        host = string.Empty;
+        port = 0;
+
+        var parts = address.Split(':', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length < 2 || !int.TryParse(parts[^1], out port) || port is <= 0 or > 65535)
+        {
+            return false;
+        }
+
+        host = string.Join(':', parts.Take(parts.Length - 1));
+        return !string.IsNullOrWhiteSpace(host);
+    }
 
     private async Task<bool> TryStartEmulatorAsync(string source, CancellationToken cancellationToken)
     {

@@ -1942,10 +1942,12 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
     {
         if (_connectionState is not null)
         {
-            return string.IsNullOrWhiteSpace(_connectionState.ConnectConfig) ? "General" : _connectionState.ConnectConfig.Trim();
+            return _connectionState.EffectiveConnectConfig;
         }
 
-        return ResolveProfileString("ConnectConfig", LegacyConfigurationKeys.ConnectConfig) ?? "General";
+        var connectConfig = ResolveProfileString("ConnectConfig", LegacyConfigurationKeys.ConnectConfig) ?? "General";
+        var playCoverScreencapMode = ResolveProfileString("PlayCoverScreencapMode", "PlayCoverScreencapMode");
+        return PlayCoverConnectConfigResolver.ResolveEffectiveConnectConfig(connectConfig, playCoverScreencapMode);
     }
 
     private string? ResolveEffectiveAdbPath()
