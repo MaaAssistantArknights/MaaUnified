@@ -122,7 +122,7 @@ Copy-Item install\* staging\ -Recurse -Force
 pwsh -File src\MAAUnified\CI\create-windows-launcher.ps1 -TargetDir staging
 ```
 
-### 4. macOS x64 本地构建
+### 4. macOS 本地构建与打包
 
 ```bash
 cd /path/to/MaaAssistantArknights
@@ -131,6 +131,9 @@ git submodule sync --recursive
 git submodule update --init --depth 1 src/MAAUnified src/MaaUtils
 
 dotnet restore src/MAAUnified/App/MAAUnified.App.csproj
+
+# x64 包使用 x64-osx / osx-x64 / macos-publish-x64
+# arm64 包使用 arm64-osx / osx-arm64 / macos-publish-arm64
 python3 tools/maadeps-download.py x64-osx
 
 cmake --preset macos-publish-x64 --fresh -DINSTALL_PYTHON=OFF
@@ -140,7 +143,11 @@ cmake --install build --config RelWithDebInfo
 dotnet publish src/MAAUnified/App/MAAUnified.App.csproj -c Release -r osx-x64 --self-contained true --no-restore -o staging/bin
 mkdir -p staging
 cp -a install/. staging/
-bash src/MAAUnified/CI/create-unix-launchers.sh staging macos
+mkdir -p release
+bash src/MAAUnified/CI/create-macos-app-dmg.sh staging release MAAUnified-local-macos-x64 1.0.0 local
+
+# 未签名本地调试包如被 Gatekeeper quarantine 拦截，可临时执行：
+xattr -dr com.apple.quarantine release/MAAUnified.app
 ```
 
 常见问题：
@@ -148,7 +155,7 @@ bash src/MAAUnified/CI/create-unix-launchers.sh staging macos
 - 发布目录现在按 `staging/bin/` 与 `staging/` 根目录分层；`staging/bin/` 放托管应用产物，`staging/` 根目录放 MaaCore 动态库与 `resource/`
 - 因此 `cp -a install/. staging/` 或 `Copy-Item install\* staging\` 这一步不能省
 - Linux 根目录入口为 `staging/MAAUnified`
-- macOS 根目录入口为 `staging/MAAUnified.command`，同时保留 `staging/MAAUnified` 供终端启动
+- macOS 发布入口为 `release/MAAUnified.app` 和 `release/*.dmg`，不再发布 `MAAUnified.command`
 - Windows 根目录入口为 `staging/MAAUnified.cmd`
 - 如果只想做 UI 层快速迭代，不依赖宿主仓打包产物，也可以继续使用上面的独立形态命令：`dotnet run --project App/MAAUnified.App.csproj`
 

@@ -4,6 +4,7 @@ using Avalonia.Controls.Metadata;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Media;
 using Avalonia.VisualTree;
 
 namespace MAAUnified.App.Controls;
@@ -22,6 +23,14 @@ public class AppWindowFrame : ContentControl
 
     public static readonly StyledProperty<Thickness> ShellMarginProperty =
         AvaloniaProperty.Register<AppWindowFrame, Thickness>(nameof(ShellMargin), new Thickness(12));
+
+    public static readonly StyledProperty<double> ChromeScaleFactorProperty =
+        AvaloniaProperty.Register<AppWindowFrame, double>(nameof(ChromeScaleFactor), 1d);
+
+    public static readonly StyledProperty<ITransform?> ChromeLayoutTransformProperty =
+        AvaloniaProperty.Register<AppWindowFrame, ITransform?>(
+            nameof(ChromeLayoutTransform),
+            new ScaleTransform(1d, 1d));
 
     public static readonly StyledProperty<bool> ShowCloseButtonProperty =
         AvaloniaProperty.Register<AppWindowFrame, bool>(nameof(ShowCloseButton), true);
@@ -100,6 +109,11 @@ public class AppWindowFrame : ContentControl
     private bool _hasCapturedHostMaxHeight;
     private double _initialHostMaxHeight = double.PositiveInfinity;
     private AppWindowFrameHorizontalInset _effectiveHorizontalContentInset;
+
+    static AppWindowFrame()
+    {
+        ChromeScaleFactorProperty.Changed.AddClassHandler<AppWindowFrame>((frame, _) => frame.UpdateChromeLayoutTransform());
+    }
 
     public event EventHandler? CloseRequested;
 
@@ -197,6 +211,18 @@ public class AppWindowFrame : ContentControl
     {
         get => GetValue(ShellMarginProperty);
         set => SetValue(ShellMarginProperty, value);
+    }
+
+    public double ChromeScaleFactor
+    {
+        get => GetValue(ChromeScaleFactorProperty);
+        set => SetValue(ChromeScaleFactorProperty, value);
+    }
+
+    public ITransform? ChromeLayoutTransform
+    {
+        get => GetValue(ChromeLayoutTransformProperty);
+        set => SetValue(ChromeLayoutTransformProperty, value);
     }
 
     public bool ShowCloseButton
@@ -698,6 +724,17 @@ public class AppWindowFrame : ContentControl
     private void UpdateEffectiveHorizontalContentInset()
     {
         EffectiveHorizontalContentInset = CalculateEffectiveHorizontalContentInset();
+    }
+
+    private void UpdateChromeLayoutTransform()
+    {
+        var scale = ChromeScaleFactor;
+        if (!double.IsFinite(scale) || scale <= 0d)
+        {
+            scale = 1d;
+        }
+
+        SetCurrentValue(ChromeLayoutTransformProperty, new ScaleTransform(scale, scale));
     }
 
     private AppWindowFrameHorizontalInset CalculateEffectiveHorizontalContentInset()

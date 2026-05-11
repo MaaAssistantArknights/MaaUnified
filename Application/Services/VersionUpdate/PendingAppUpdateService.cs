@@ -82,6 +82,16 @@ public static class PendingAppUpdateService
                 pendingUpdate.PackagePath);
         }
 
+        if (pendingUpdate.PackagePath.EndsWith(".dmg", StringComparison.OrdinalIgnoreCase))
+        {
+            ClearPendingPackageState(config);
+            SaveConfig(baseDirectory, config);
+            return new PendingAppUpdateApplyResult(
+                PendingAppUpdateStatus.Failed,
+                $"Pending macOS dmg packages cannot be applied automatically: {pendingUpdate.PackagePath}",
+                pendingUpdate.PackagePath);
+        }
+
         var extractDirectory = Path.Combine(baseDirectory, "NewVersionExtract");
         var backupDirectory = Path.Combine(baseDirectory, ".old");
 

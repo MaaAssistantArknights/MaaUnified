@@ -81,6 +81,7 @@
             <controls:AppTextInput Classes="settings-input-block stage-manager-editor"
                                    Text="{Binding StageCodesText}"
                                    AcceptsReturn="True"
+                                   DismissFocusOnEnter="False"
                                    Watermark="{Binding Texts[Toolbox.Advanced.StageManager.StageCodes.Watermark]}"
                                    TextWrapping="Wrap" />
           </StackPanel>
@@ -100,6 +101,7 @@
               <controls:AppTextInput Classes="settings-input-block stage-manager-reference"
                                      Text="{Binding LocalStageCodesText}"
                                      AcceptsReturn="True"
+                                     DismissFocusOnEnter="False"
                                      IsReadOnly="True"
                                      TextWrapping="Wrap" />
             </StackPanel>
@@ -115,6 +117,7 @@
               <controls:AppTextInput Classes="settings-input-block stage-manager-reference"
                                      Text="{Binding WebStageCodesText}"
                                      AcceptsReturn="True"
+                                     DismissFocusOnEnter="False"
                                      IsReadOnly="True"
                                      TextWrapping="Wrap" />
             </StackPanel>

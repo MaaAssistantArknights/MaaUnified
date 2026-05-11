@@ -69,6 +69,12 @@ jobs:
             self_contained: true
             cmake_preset: macos-publish-x64
             maadeps_triplet: x64-osx
+          - name: macos-arm64
+            os: macos-latest
+            rid: osx-arm64
+            self_contained: true
+            cmake_preset: macos-publish-arm64
+            maadeps_triplet: arm64-osx
 
     steps:
       - uses: actions/checkout@v6
@@ -91,7 +97,7 @@ jobs:
         run: dotnet restore src/MAAUnified/App/MAAUnified.App.csproj
 
       - name: Restore tests
-        if: matrix.name != 'macos-x64'
+        if: runner.os != 'macOS'
         run: dotnet restore src/MAAUnified/Tests/MAAUnified.Tests.csproj
 
       - name: Run Linux baseline consistency gate
@@ -126,12 +132,38 @@ jobs:
           --filter "FullyQualifiedName~PlatformWindowsNativeSmokeTests"
 
       - name: Upload test result artifacts on failure
-        if: failure() && matrix.name != 'macos-x64'
+        if: failure() && runner.os != 'macOS'
         uses: actions/upload-artifact@v6
         with:
           name: MAAUnified-TestResults-${{ matrix.name }}
           path: TestResults/${{ matrix.name }}/*.trx
           if-no-files-found: ignore
+
+      - name: Resolve macOS signing availability
+        if: runner.os == 'macOS'
+        id: macos_signing
+        shell: bash
+        env:
+          SIGN_CERT_P12: ${{ secrets.HGUANDL_SIGN_CERT_P12 }}
+          SIGN_CERT_PASSWORD: ${{ secrets.HGUANDL_SIGN_CERT_PASSWD }}
+          APPSTORE_KEYID: ${{ secrets.HGUANDL_APPSTORE_KEYID }}
+          APPSTORE_KEY: ${{ secrets.HGUANDL_APPSTORE_KEY }}
+          APPSTORE_ISSUER: ${{ secrets.HGUANDL_APPSTORE_ISSUER }}
+        run: |
+          if [[ -n "$SIGN_CERT_P12" && -n "$SIGN_CERT_PASSWORD" && -n "$APPSTORE_KEYID" && -n "$APPSTORE_KEY" && -n "$APPSTORE_ISSUER" ]]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+            echo "macOS signing and notarization secrets are available."
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "macOS signing and notarization secrets are incomplete; unsigned dmg will be produced."
+          fi
+
+      - name: Install Developer ID certificate
+        if: runner.os == 'macOS' && steps.macos_signing.outputs.available == 'true'
+        uses: apple-actions/import-codesign-certs@v7
+        with:
+          p12-file-base64: ${{ secrets.HGUANDL_SIGN_CERT_P12 }}
+          p12-password: ${{ secrets.HGUANDL_SIGN_CERT_PASSWD }}
 
       - name: Bootstrap MaaDeps
         run: python tools/maadeps-download.py ${{ matrix.maadeps_triplet }}
@@ -184,15 +216,10 @@ jobs:
         shell: pwsh
         run: pwsh -File src/MAAUnified/CI/create-windows-launcher.ps1 -TargetDir staging
 
-      - name: Create root launcher scripts (Unix)
-        if: runner.os != 'Windows'
+      - name: Create root launcher scripts (Linux)
+        if: runner.os == 'Linux'
         shell: bash
-        run: |
-          if [[ "$RUNNER_OS" == "macOS" ]]; then
-            bash src/MAAUnified/CI/create-unix-launchers.sh staging macos
-          else
-            bash src/MAAUnified/CI/create-unix-launchers.sh staging linux
-          fi
+        run: bash src/MAAUnified/CI/create-unix-launchers.sh staging linux
 
       - name: Validate staging layout (Windows)
         if: runner.os == 'Windows'
@@ -204,19 +231,24 @@ jobs:
           $rootManaged = @(Get-ChildItem staging -File | Where-Object { $_.Name -like 'System.*.dll' -or $_.Name -like 'Avalonia.*.dll' })
           if ($rootManaged.Count -gt 0) { throw "Managed DLLs should not be placed at staging root." }
 
-      - name: Validate staging layout (Unix)
-        if: runner.os != 'Windows'
+      - name: Validate staging layout (Linux)
+        if: runner.os == 'Linux'
         shell: bash
         run: |
           test -x staging/bin/MAAUnified
           test -d staging/resource
-          if [[ "$RUNNER_OS" == "macOS" ]]; then
-            test -x staging/MAAUnified
-            test -x staging/MAAUnified.command
-          else
-            test -x staging/MAAUnified
-            test -x staging/MAAUnified.sh
-          fi
+          test -x staging/MAAUnified
+          test -x staging/MAAUnified.sh
+          ! find staging -maxdepth 1 -type f \( -name 'System.*.dll' -o -name 'Avalonia.*.dll' \) | grep -q .
+
+      - name: Validate staging layout (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          test -x staging/bin/MAAUnified
+          test -f staging/libMaaCore.dylib
+          test -d staging/resource
+          ! test -e staging/MAAUnified.command
           ! find staging -maxdepth 1 -type f \( -name 'System.*.dll' -o -name 'Avalonia.*.dll' \) | grep -q .
 
       - name: Package (Windows)
@@ -227,16 +259,54 @@ jobs:
           $name = "MAAUnified-${{ needs.meta.outputs.tag }}-${{ matrix.name }}"
           Compress-Archive -Path staging\* -DestinationPath "release\$name.zip"
 
-      - name: Package (Unix)
-        if: runner.os != 'Windows'
+      - name: Package (Linux)
+        if: runner.os == 'Linux'
         shell: bash
         run: |
           mkdir -p release
           name="MAAUnified-${{ needs.meta.outputs.tag }}-${{ matrix.name }}"
           tar -czf "release/${name}.tar.gz" -C staging .
 
+      - name: Package (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          MACOS_CODESIGN_ENABLED: ${{ steps.macos_signing.outputs.available }}
+        run: |
+          mkdir -p release
+          name="MAAUnified-${{ needs.meta.outputs.tag }}-${{ matrix.name }}"
+          bash src/MAAUnified/CI/create-macos-app-dmg.sh \
+            staging \
+            release \
+            "$name" \
+            "1.0.0" \
+            "${{ needs.meta.outputs.informational_version }}"
+          test -f "release/${name}.dmg"
+          ! find release -type f -name '*macos*.tar.gz' | grep -q .
+          ! find release -name 'MAAUnified.command' | grep -q .
+          rm -rf release/MAAUnified.app
+
+      - name: Notarize macOS dmg
+        if: runner.os == 'macOS' && steps.macos_signing.outputs.available == 'true'
+        shell: bash
+        env:
+          APPSTORE_KEYID: ${{ secrets.HGUANDL_APPSTORE_KEYID }}
+          APPSTORE_KEY: ${{ secrets.HGUANDL_APPSTORE_KEY }}
+          ISSUER_ID: ${{ secrets.HGUANDL_APPSTORE_ISSUER }}
+        run: |
+          cd release
+          echo "$APPSTORE_KEY" > "AuthKey_${APPSTORE_KEYID}.p8"
+          dmg="MAAUnified-${{ needs.meta.outputs.tag }}-${{ matrix.name }}.dmg"
+          xcrun notarytool submit -k "AuthKey_${APPSTORE_KEYID}.p8" -d "$APPSTORE_KEYID" -i "$ISSUER_ID" --wait "$dmg"
+          rm -f "AuthKey_${APPSTORE_KEYID}.p8"
+          xcrun stapler staple "$dmg"
+          spctl -a -t open --context context:primary-signature -v "$dmg"
+
       - name: Upload artifact
         uses: actions/upload-artifact@v6
         with:
           name: MAAUnified-${{ needs.meta.outputs.tag }}-${{ matrix.name }}
-          path: release/*
+          path: |
+            release/*.zip
+            release/*.tar.gz
+            release/*.dmg

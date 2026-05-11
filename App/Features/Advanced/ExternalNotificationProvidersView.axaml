@@ -52,6 +52,7 @@
               <TextBlock Classes="app-caption"
                          Text="{Binding Texts[Toolbox.Advanced.ExternalNotification.Parameters]}" />
               <controls:AppTextInput Classes="settings-input-block"
+                                     DismissFocusOnEnter="False"
                                      Text="{Binding ParametersText}"
                                      Watermark="{Binding Texts[Toolbox.Advanced.ExternalNotification.Parameters.Watermark]}" />
             </StackPanel>
@@ -67,6 +68,7 @@
               <TextBlock Classes="app-caption"
                          Text="{Binding Texts[Toolbox.Advanced.ExternalNotification.MessageBody]}" />
               <controls:AppTextInput Classes="settings-input-block"
+                                     DismissFocusOnEnter="False"
                                      Text="{Binding Message}" />
             </StackPanel>
           </StackPanel>

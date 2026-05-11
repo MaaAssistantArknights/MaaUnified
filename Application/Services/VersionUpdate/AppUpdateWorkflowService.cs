@@ -722,7 +722,9 @@ public sealed class AppUpdateWorkflowService
         var normalized = packageName.Trim().ToLowerInvariant();
         var extensionScore = _platform.IsWindows
             ? normalized.EndsWith(".zip", StringComparison.Ordinal) ? 10 : 0
-            : normalized.EndsWith(".tar.gz", StringComparison.Ordinal) || normalized.EndsWith(".tgz", StringComparison.Ordinal) ? 10 : 0;
+            : _platform.IsMacOS
+                ? normalized.EndsWith(".dmg", StringComparison.Ordinal) ? 10 : 0
+                : normalized.EndsWith(".tar.gz", StringComparison.Ordinal) || normalized.EndsWith(".tgz", StringComparison.Ordinal) ? 10 : 0;
         if (extensionScore == 0)
         {
             return 0;
@@ -1373,6 +1375,7 @@ public sealed class AppUpdateWorkflowService
                 OperatingSystem: os,
                 Architecture: arch,
                 IsWindows: true,
+                IsMacOS: false,
                 ExactTokens: BuildExactTokens(os, "win", arch),
                 OsTokens: ["windows", "win"],
                 ArchitectureTokens: BuildArchitectureTokens(arch)),
@@ -1380,6 +1383,7 @@ public sealed class AppUpdateWorkflowService
                 OperatingSystem: os,
                 Architecture: arch,
                 IsWindows: false,
+                IsMacOS: false,
                 ExactTokens: BuildExactTokens(os, os, arch),
                 OsTokens: ["linux"],
                 ArchitectureTokens: BuildArchitectureTokens(arch)),
@@ -1387,6 +1391,7 @@ public sealed class AppUpdateWorkflowService
                 OperatingSystem: os,
                 Architecture: arch,
                 IsWindows: false,
+                IsMacOS: true,
                 ExactTokens: BuildExactTokens("macos", "osx", arch, "darwin", "mac"),
                 OsTokens: ["macos", "osx", "darwin", "mac"],
                 ArchitectureTokens: BuildArchitectureTokens(arch)),
@@ -1394,6 +1399,7 @@ public sealed class AppUpdateWorkflowService
                 OperatingSystem: os,
                 Architecture: arch,
                 IsWindows: false,
+                IsMacOS: false,
                 ExactTokens: [],
                 OsTokens: [os],
                 ArchitectureTokens: BuildArchitectureTokens(arch)),
@@ -1491,7 +1497,7 @@ public sealed class AppUpdateWorkflowService
 
     private string BuildFallbackPackageName(string targetVersion)
     {
-        var extension = _platform.IsWindows ? ".zip" : ".tar.gz";
+        var extension = _platform.IsWindows ? ".zip" : _platform.IsMacOS ? ".dmg" : ".tar.gz";
         return $"MAAUnified-{targetVersion}-{_platform.OperatingSystem}-{_platform.Architecture}{extension}";
     }
 
@@ -1590,6 +1596,7 @@ public sealed class AppUpdateWorkflowService
         string OperatingSystem,
         string Architecture,
         bool IsWindows,
+        bool IsMacOS,
         IReadOnlyList<string> ExactTokens,
         IReadOnlyList<string> OsTokens,
         IReadOnlyList<string> ArchitectureTokens);

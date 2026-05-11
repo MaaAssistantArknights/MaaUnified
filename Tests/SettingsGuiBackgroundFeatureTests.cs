@@ -39,6 +39,7 @@ public sealed class SettingsGuiBackgroundFeatureTests
         vm.UseNotify = false;
         vm.MinimizeToTray = true;
         vm.WindowTitleScrollable = false;
+        vm.UiScalePercent = 123;
         vm.BackgroundImagePath = path;
         vm.BackgroundOpacity = 61;
         vm.BackgroundBlur = 27;
@@ -59,6 +60,7 @@ public sealed class SettingsGuiBackgroundFeatureTests
         Assert.Equal("False", ReadGlobalString(fixture.Config, ConfigurationKeys.UseNotify));
         Assert.Equal("False", ReadGlobalString(fixture.Config, ConfigurationKeys.MinimizeToTray));
         Assert.Equal("False", ReadGlobalString(fixture.Config, ConfigurationKeys.WindowTitleScrollable));
+        Assert.Equal("123", ReadGlobalString(fixture.Config, ConfigurationKeys.UiScalePercent));
         Assert.Equal(path, ReadGlobalString(fixture.Config, ConfigurationKeys.BackgroundImagePath));
         Assert.Equal("61", ReadGlobalString(fixture.Config, ConfigurationKeys.BackgroundOpacity));
         Assert.Equal("27", ReadGlobalString(fixture.Config, ConfigurationKeys.BackgroundBlurEffectRadius));
@@ -88,6 +90,25 @@ public sealed class SettingsGuiBackgroundFeatureTests
         Assert.Equal("en-us", vm.Language);
         Assert.Equal("en-us", vm.SelectedLanguageValue);
         Assert.Equal("en-us", vm.SelectedLanguageOption?.Value);
+    }
+
+    [Theory]
+    [InlineData(null, 100)]
+    [InlineData("80", 80)]
+    [InlineData("40", 70)]
+    [InlineData("200", 140)]
+    [InlineData("not-a-number", 100)]
+    public void StartupShellSnapshot_FromConfig_NormalizesUiScalePercent(string? rawValue, int expected)
+    {
+        var config = new UnifiedConfig();
+        if (rawValue is not null)
+        {
+            config.GlobalValues[ConfigurationKeys.UiScalePercent] = JsonValue.Create(rawValue);
+        }
+
+        var snapshot = StartupShellSnapshot.FromConfig(config);
+
+        Assert.Equal(expected, snapshot.UiScalePercent);
     }
 
     [Fact]
@@ -839,6 +860,7 @@ public sealed class SettingsGuiBackgroundFeatureTests
             [ConfigurationKeys.UseTray] = ReadGlobalString(config, ConfigurationKeys.UseTray),
             [ConfigurationKeys.MinimizeToTray] = ReadGlobalString(config, ConfigurationKeys.MinimizeToTray),
             [ConfigurationKeys.WindowTitleScrollable] = ReadGlobalString(config, ConfigurationKeys.WindowTitleScrollable),
+            [ConfigurationKeys.UiScalePercent] = ReadGlobalString(config, ConfigurationKeys.UiScalePercent),
             [ConfigurationKeys.BackgroundImagePath] = ReadGlobalString(config, ConfigurationKeys.BackgroundImagePath),
             [ConfigurationKeys.BackgroundOpacity] = ReadGlobalString(config, ConfigurationKeys.BackgroundOpacity),
             [ConfigurationKeys.BackgroundBlurEffectRadius] = ReadGlobalString(config, ConfigurationKeys.BackgroundBlurEffectRadius),

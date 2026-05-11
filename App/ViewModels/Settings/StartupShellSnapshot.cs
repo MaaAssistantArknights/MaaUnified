@@ -13,6 +13,7 @@ public sealed record StartupShellSnapshot(
     bool MinimizeToTray,
     bool DeveloperModeEnabled,
     bool WindowTitleScrollable,
+    int UiScalePercent,
     bool UseSoftwareRendering,
     string LogItemDateFormatString,
     string BackgroundImagePath,
@@ -34,6 +35,9 @@ public sealed record StartupShellSnapshot(
     private const int BackgroundOpacityMax = 100;
     private const int BackgroundBlurMin = 0;
     private const int BackgroundBlurMax = 80;
+    private const int DefaultUiScalePercent = 100;
+    private const int UiScalePercentMin = 70;
+    private const int UiScalePercentMax = 140;
 
     public static StartupShellSnapshot Default { get; } = new(
         Theme: DefaultTheme,
@@ -42,6 +46,7 @@ public sealed record StartupShellSnapshot(
         MinimizeToTray: false,
         DeveloperModeEnabled: false,
         WindowTitleScrollable: false,
+        UiScalePercent: DefaultUiScalePercent,
         UseSoftwareRendering: false,
         LogItemDateFormatString: DefaultLogItemDateFormat,
         BackgroundImagePath: string.Empty,
@@ -66,6 +71,10 @@ public sealed record StartupShellSnapshot(
             MinimizeToTray: useTray && ReadGlobalBool(config, ConfigurationKeys.MinimizeToTray, false),
             DeveloperModeEnabled: ReadGlobalBool(config, DeveloperModeConfigKey, false),
             WindowTitleScrollable: ReadGlobalBool(config, ConfigurationKeys.WindowTitleScrollable, false),
+            UiScalePercent: Math.Clamp(
+                ReadGlobalInt(config, ConfigurationKeys.UiScalePercent, DefaultUiScalePercent),
+                UiScalePercentMin,
+                UiScalePercentMax),
             UseSoftwareRendering: ReadGlobalBool(config, ConfigurationKeys.IgnoreBadModulesAndUseSoftwareRendering, false),
             LogItemDateFormatString: NormalizeLogItemDateFormat(
                 ReadGlobalString(config, ConfigurationKeys.LogItemDateFormat, DefaultLogItemDateFormat)),

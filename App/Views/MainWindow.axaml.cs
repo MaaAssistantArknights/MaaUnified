@@ -32,6 +32,10 @@ public partial class MainWindow : Window
     private const double ResponsiveMaxLayoutWidth = 1360d;
     private const double ResponsiveMinLayoutWidth = ResponsiveMinWindowWidth - (ResponsiveMinPageMargin * 2d);
     private const double ResponsiveContentStageEndWidth = ResponsiveMarginStageEndWidth + (ResponsiveMaxLayoutWidth - ResponsiveMinLayoutWidth);
+    private const double BaseWindowWidth = 1380d;
+    private const double BaseWindowHeight = 900d;
+    private const double BaseWindowMinWidth = 1080d;
+    private const double BaseWindowMinHeight = 620d;
     private const int ResponsiveMarginProgressSteps = 12;
     private const int ResponsiveWidthProgressSteps = 24;
     private static readonly TimeSpan ResizeSettleDelay = TimeSpan.FromMilliseconds(120);
@@ -96,6 +100,8 @@ public partial class MainWindow : Window
     private bool _pendingAdaptiveLayoutFlushAllHosts;
     private double _pendingAdaptiveLayoutWidth;
     private double _pendingAdaptiveLayoutHeight;
+    private bool _hasAppliedUiScaleToWindowBounds;
+    private double _lastAppliedUiScaleFactor = 1d;
     private DispatcherTimer? _resizeSettleTimer;
     private readonly object _dialogErrorGate = new();
     private readonly Queue<DialogErrorRaisedEvent> _pendingDialogErrors = [];
@@ -196,8 +202,14 @@ public partial class MainWindow : Window
     private async void OnWindowOpened(object? sender, EventArgs e)
     {
         Program.RecordStartupStage("MainWindow.Opened", "Main window opened.");
+        if (VM is not null)
+        {
+            ApplyUiScaleToWindowBounds(preserveLogicalSize: _hasAppliedUiScaleToWindowBounds);
+        }
+
         FitToCurrentScreenWorkingArea();
         UpdateAdaptiveLayoutMode(flushAllHosts: true);
+        RecordUiScaleDiagnostics("opened");
         StartDialogErrorPumpIfNeeded();
         var vm = VM;
         if (vm is null || _platformBound)
@@ -348,7 +360,13 @@ public partial class MainWindow : Window
 
     private void OnWindowDataContextChanged(object? sender, EventArgs e)
     {
-        BindShellBackgroundVm(VM);
+        var vm = VM;
+        BindShellBackgroundVm(vm);
+        if (vm is not null)
+        {
+            ApplyUiScaleToWindowBounds(preserveLogicalSize: _hasAppliedUiScaleToWindowBounds);
+        }
+
         UpdateAdaptiveLayoutMode(flushAllHosts: true);
     }
 
@@ -655,12 +673,78 @@ public partial class MainWindow : Window
             return 0d;
         }
 
-        return Math.Max(0d, clientWidth - WindowShellFrame.EffectiveHorizontalContentInset.Total);
+        return Math.Max(0d, (clientWidth - WindowShellFrame.EffectiveHorizontalContentInset.Total) / GetEffectiveUiScaleFactor());
     }
 
     private double ResolveResponsiveLayoutHeight()
     {
-        return ClientSize.Height > 0d ? ClientSize.Height : Bounds.Height;
+        var height = ClientSize.Height > 0d ? ClientSize.Height : Bounds.Height;
+        return height <= 0d ? 0d : height / GetEffectiveUiScaleFactor();
+    }
+
+    private double GetEffectiveUiScaleFactor()
+    {
+        var scale = VM?.EffectiveUiScaleFactor ?? 1d;
+        return double.IsFinite(scale) && scale > 0d ? scale : 1d;
+    }
+
+    private void ApplyUiScaleToWindowBounds(bool preserveLogicalSize)
+    {
+        try
+        {
+            var scale = GetEffectiveUiScaleFactor();
+            if (_hasAppliedUiScaleToWindowBounds && Math.Abs(_lastAppliedUiScaleFactor - scale) < 0.001d)
+            {
+                return;
+            }
+
+            var previousScale = _hasAppliedUiScaleToWindowBounds ? _lastAppliedUiScaleFactor : 1d;
+            var logicalWidth = preserveLogicalSize ? ResolveLogicalWindowSize(Width, previousScale, BaseWindowWidth) : BaseWindowWidth;
+            var logicalHeight = preserveLogicalSize ? ResolveLogicalWindowSize(Height, previousScale, BaseWindowHeight) : BaseWindowHeight;
+
+            MinWidth = BaseWindowMinWidth * scale;
+            MinHeight = BaseWindowMinHeight * scale;
+            if (WindowState == WindowState.Normal)
+            {
+                Width = Math.Max(MinWidth, logicalWidth * scale);
+                Height = Math.Max(MinHeight, logicalHeight * scale);
+            }
+
+            _lastAppliedUiScaleFactor = scale;
+            _hasAppliedUiScaleToWindowBounds = true;
+            FitToCurrentScreenWorkingArea();
+        }
+        catch (ObjectDisposedException)
+        {
+            // Ignore late size adjustments while the shell is shutting down.
+        }
+    }
+
+    private static double ResolveLogicalWindowSize(double scaledValue, double scale, double fallback)
+    {
+        if (!double.IsFinite(scaledValue) || scaledValue <= 0d || scale <= 0d)
+        {
+            return fallback;
+        }
+
+        return scaledValue / scale;
+    }
+
+    private void RecordUiScaleDiagnostics(string stage)
+    {
+        try
+        {
+            var screen = Screens.ScreenFromWindow(this) ?? Screens.Primary;
+            var workingArea = screen?.WorkingArea;
+            var message = FormattableString.Invariant(
+                $"stage={stage}; platform={(OperatingSystem.IsWindows() ? "Windows" : "Other")}; effectiveUiScale={VM?.EffectiveUiScaleFactor ?? 1d:0.###}; renderScaling={RenderScaling:0.###}; screenScaling={screen?.Scaling ?? 0d:0.###}; clientDip={ClientSize.Width:0.#}x{ClientSize.Height:0.#}; boundsDip={Bounds.Width:0.#}x{Bounds.Height:0.#}; workingAreaPx={workingArea?.Width ?? 0}x{workingArea?.Height ?? 0}");
+            Program.RecordStartupStage("MainWindow.UiScaleDiagnostics", message);
+            _ = App.Runtime.DiagnosticsService.RecordEventAsync("App.Window.UiScaleDiagnostics", message);
+        }
+        catch (ObjectDisposedException)
+        {
+            // Ignore late diagnostics while the shell is shutting down.
+        }
     }
 
     private void OnWindowShellFramePropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
@@ -710,6 +794,14 @@ public partial class MainWindow : Window
                 Dispatcher.UIThread.Post(() => UpdateAdaptiveLayoutMode(), DispatcherPriority.Render);
             }
 
+            return;
+        }
+
+        if (string.Equals(e.PropertyName, nameof(MainShellViewModel.EffectiveUiScaleFactor), StringComparison.Ordinal))
+        {
+            ApplyUiScaleToWindowBounds(preserveLogicalSize: true);
+            UpdateAdaptiveLayoutMode(flushAllHosts: true);
+            RecordUiScaleDiagnostics("settings-applied");
             return;
         }
 

@@ -3113,6 +3113,12 @@ With save file: farm points through crafting (advanced).
   <data name="Settings.GUI.Theme" xml:space="preserve">
     <value>Theme</value>
   </data>
+  <data name="Settings.GUI.UiScalePercent" xml:space="preserve">
+    <value>UI scale (%)</value>
+  </data>
+  <data name="Settings.GUI.UiScalePercentTip" xml:space="preserve">
+    <value>Allowed range: 70% to 140%.</value>
+  </data>
   <data name="Settings.GUI.UseSoftwareRendering" xml:space="preserve">
     <value>Use software rendering</value>
   </data>

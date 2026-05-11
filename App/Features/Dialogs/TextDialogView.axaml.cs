@@ -78,6 +78,7 @@ public partial class TextDialogView : Window, IDialogChromeAware
     private void ApplyInputMode(bool multiLine)
     {
         InputBox.AcceptsReturn = multiLine;
+        InputBox.DismissFocusOnEnter = !multiLine;
         InputBox.TextWrapping = multiLine ? Avalonia.Media.TextWrapping.Wrap : Avalonia.Media.TextWrapping.NoWrap;
 
         if (multiLine)

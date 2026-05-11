@@ -551,6 +551,161 @@ public sealed class VersionUpdateFeatureServiceTests
     }
 
     [Fact]
+    public async Task CheckForUpdatesAsync_OnMacOSReleaseAssets_SelectsCurrentArchitectureDmg()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"maa-unified-macos-release-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(root);
+        var feedPath = Path.Combine(root, "release-feed.json");
+
+        try
+        {
+            await File.WriteAllTextAsync(feedPath, JsonSerializer.Serialize(new[]
+            {
+                new
+                {
+                    tag_name = "v2.0.0",
+                    name = "Release v2.0.0",
+                    body = "Body",
+                    prerelease = false,
+                    assets = new[]
+                    {
+                        new
+                        {
+                            name = "MAAUnified-v2.0.0-macos-x64.dmg",
+                            browser_download_url = "https://example.com/MAAUnified-v2.0.0-macos-x64.dmg",
+                            size = 100,
+                        },
+                        new
+                        {
+                            name = "MAAUnified-v2.0.0-macos-arm64.dmg",
+                            browser_download_url = "https://example.com/MAAUnified-v2.0.0-macos-arm64.dmg",
+                            size = 200,
+                        },
+                        new
+                        {
+                            name = "MAAUnified-v2.0.0-macos-arm64.tar.gz",
+                            browser_download_url = "https://example.com/MAAUnified-v2.0.0-macos-arm64.tar.gz",
+                            size = 300,
+                        },
+                    },
+                },
+            }));
+
+            var workflow = new AppUpdateWorkflowService(
+                new NoOpAppLifecycleService(),
+                operatingSystem: OSPlatform.OSX,
+                architecture: Architecture.Arm64);
+
+            var result = await workflow.CheckForUpdatesAsync(
+                VersionUpdatePolicy.Default with
+                {
+                    ResourceApi = feedPath,
+                    AutoDownloadUpdatePackage = false,
+                },
+                "v1.0.0",
+                CancellationToken.None);
+
+            Assert.True(result.HasPackage);
+            Assert.Equal("MAAUnified-v2.0.0-macos-arm64.dmg", result.PackageName);
+            Assert.Equal(new Uri("https://example.com/MAAUnified-v2.0.0-macos-arm64.dmg"), result.PackageDownloadUrl);
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    [Fact]
+    public async Task CheckForUpdatesAsync_OnMacOSAutoDownload_DownloadsDmgButRequiresManualInstall()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"maa-unified-macos-dmg-download-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(root);
+        var feedPath = Path.Combine(root, "release-feed.json");
+
+        try
+        {
+            await File.WriteAllTextAsync(feedPath, JsonSerializer.Serialize(new[]
+            {
+                new
+                {
+                    tag_name = "v2.0.0",
+                    name = "Release v2.0.0",
+                    body = "Body",
+                    prerelease = false,
+                    assets = new[]
+                    {
+                        new
+                        {
+                            name = "MAAUnified-v2.0.0-macos-x64.dmg",
+                            browser_download_url = "https://example.com/MAAUnified-v2.0.0-macos-x64.dmg",
+                            size = 3,
+                        },
+                    },
+                },
+            }));
+
+            using var httpClient = new HttpClient(new StubHttpMessageHandler(static request =>
+            {
+                if (request.RequestUri?.AbsoluteUri == "https://example.com/MAAUnified-v2.0.0-macos-x64.dmg")
+                {
+                    return new HttpResponseMessage(HttpStatusCode.OK)
+                    {
+                        Content = new ByteArrayContent([1, 2, 3]),
+                    };
+                }
+
+                return new HttpResponseMessage(HttpStatusCode.NotFound);
+            }));
+            var workflow = new AppUpdateWorkflowService(
+                new NoOpAppLifecycleService(),
+                httpClient,
+                OSPlatform.OSX,
+                Architecture.X64);
+            var service = new VersionUpdateFeatureService(
+                CreateConfigurationService(root),
+                appUpdateWorkflowService: workflow,
+                runtimeBaseDirectory: root);
+
+            var result = await service.CheckForUpdatesAsync(
+                VersionUpdatePolicy.Default with
+                {
+                    ResourceApi = feedPath,
+                    AutoDownloadUpdatePackage = true,
+                },
+                "v1.0.0");
+
+            Assert.True(result.Success);
+            Assert.NotNull(result.Value);
+            Assert.Equal(PackageResolutionStatus.MacOSManualInstallRequired, result.Value!.PackageResolutionStatus);
+            Assert.EndsWith(".dmg", result.Value.PreparedPackagePath, StringComparison.OrdinalIgnoreCase);
+            Assert.True(File.Exists(result.Value.PreparedPackagePath));
+            Assert.Equal([1, 2, 3], await File.ReadAllBytesAsync(result.Value.PreparedPackagePath!));
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    [Fact]
     public async Task CheckForUpdatesAsync_WhenCurrentVersionIsNewer_DoesNotReportUpdate()
     {
         var root = Path.Combine(Path.GetTempPath(), $"maa-unified-version-compare-{Guid.NewGuid():N}");
@@ -935,6 +1090,41 @@ public sealed class VersionUpdateFeatureServiceTests
         Assert.NotNull(reloaded);
         Assert.Equal(string.Empty, ReadGlobalString(reloaded!, ConfigurationKeys.VersionUpdatePackage));
         Assert.Equal(bool.TrueString, ReadGlobalString(reloaded!, ConfigurationKeys.VersionUpdateIsFirstBoot));
+
+        try
+        {
+            Directory.Delete(root, recursive: true);
+        }
+        catch
+        {
+        }
+    }
+
+    [Fact]
+    public async Task TryApplyPendingUpdatePackage_WhenPackageIsDmg_ClearsPendingStateWithoutDeletingPackage()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"maa-unified-pending-update-dmg-{Guid.NewGuid():N}");
+        var configDir = Path.Combine(root, "config");
+        var packageDir = Path.Combine(root, "update-packages");
+        Directory.CreateDirectory(configDir);
+        Directory.CreateDirectory(packageDir);
+
+        var packagePath = Path.Combine(packageDir, "update.dmg");
+        await File.WriteAllBytesAsync(packagePath, [1, 2, 3]);
+
+        var config = new UnifiedConfig();
+        config.GlobalValues[ConfigurationKeys.VersionName] = JsonValue.Create("v2.0.0");
+        config.GlobalValues[ConfigurationKeys.VersionUpdatePackage] = JsonValue.Create(Path.Combine("update-packages", "update.dmg"));
+        var store = new AvaloniaJsonConfigStore(root);
+        await store.SaveAsync(config);
+
+        var result = PendingAppUpdateService.TryApplyPendingUpdatePackage(root);
+        var reloaded = await store.LoadAsync();
+
+        Assert.Equal(PendingAppUpdateStatus.Failed, result.Status);
+        Assert.True(File.Exists(packagePath));
+        Assert.NotNull(reloaded);
+        Assert.Equal(string.Empty, ReadGlobalString(reloaded!, ConfigurationKeys.VersionUpdatePackage));
 
         try
         {

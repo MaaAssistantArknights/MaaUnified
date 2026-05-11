@@ -1889,6 +1889,12 @@
   <data name="Settings.GUI.Theme" xml:space="preserve">
     <value>介面主題</value>
   </data>
+  <data name="Settings.GUI.UiScalePercent" xml:space="preserve">
+    <value>UI 比例 (%)</value>
+  </data>
+  <data name="Settings.GUI.UiScalePercentTip" xml:space="preserve">
+    <value>允許範圍：70% 到 140%。</value>
+  </data>
   <data name="Settings.GUI.UseSoftwareRendering" xml:space="preserve">
     <value>使用軟體渲染</value>
   </data>

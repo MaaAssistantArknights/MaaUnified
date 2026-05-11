@@ -91,6 +91,7 @@
               <TextBlock Classes="app-caption"
                          Text="{Binding Texts[Toolbox.Advanced.Tray.MessageBody]}" />
               <controls:AppTextInput Classes="settings-input-block tray-body-input"
+                                     DismissFocusOnEnter="False"
                                      Text="{Binding TrayMessageBody}" />
             </StackPanel>
 

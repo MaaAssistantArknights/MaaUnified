@@ -33,6 +33,14 @@ internal static class Program
     {
         var runtimeBaseDirectory = RuntimeLayout.ResolveRuntimeBaseDirectory();
         RecordStartupStage("Main.Entry", BuildStartupEnvironmentSnapshot(args));
+        var macSeedResult = MacAppRuntimeSeed.EnsureSeeded(AppContext.BaseDirectory, runtimeBaseDirectory);
+        if (macSeedResult.Status == MacAppRuntimeSeedStatus.Ready)
+        {
+            RecordStartupStage(
+                "Main.MacAppRuntimeSeed.Ready",
+                $"runtimeBaseDir={macSeedResult.RuntimeBaseDirectory}; resourceSeeded={macSeedResult.ResourceSeeded}; resourceSeedReason={macSeedResult.ResourceSeedReason}; nativeLibraries={macSeedResult.NativeLibraryCount}; bundleResourceDir={macSeedResult.BundleResourceDirectory}");
+        }
+
         var pendingUpdateResult = PendingAppUpdateService.TryApplyPendingUpdatePackage(runtimeBaseDirectory);
         if (pendingUpdateResult.Status == PendingAppUpdateStatus.Applied)
         {

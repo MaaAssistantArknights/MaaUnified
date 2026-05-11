@@ -122,6 +122,20 @@
           <Grid Classes="settings-page-labeled-row"
                 controls:SettingsLabelWidthCoordinator.GroupKey="Gui.Main"
                 ColumnDefinitions="Auto,*">
+            <controls:SettingsLabel Text="{Binding RootTexts[Settings.GUI.UiScalePercent]}"
+                                    Tip="{Binding RootTexts[Settings.GUI.UiScalePercentTip]}" />
+            <controls:AppNumberInput Grid.Column="1"
+                                     Width="{DynamicResource MAA.Size.Settings.FieldNarrowWidth}"
+                                     HorizontalAlignment="Left"
+                                     Minimum="70"
+                                     Maximum="140"
+                                     CommitValueOnLostFocus="True"
+                                     Value="{Binding UiScalePercent}" />
+          </Grid>
+
+          <Grid Classes="settings-page-labeled-row"
+                controls:SettingsLabelWidthCoordinator.GroupKey="Gui.Main"
+                ColumnDefinitions="Auto,*">
             <controls:SettingsLabel Text="{Binding RootTexts[Settings.GUI.InverseClearMode]}" />
             <controls:AppSelect Grid.Column="1"
                       Classes="settings-select"
