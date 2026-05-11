@@ -153,6 +153,8 @@ internal sealed class ToolboxTestFixture : IAsyncDisposable
 
         public int ConnectCallCount { get; private set; }
 
+        public CoreConnectionInfo? LastConnectionInfo { get; private set; }
+
         public int StartCallCount { get; private set; }
 
         public int StopCallCount { get; private set; }
@@ -171,11 +173,11 @@ internal sealed class ToolboxTestFixture : IAsyncDisposable
         public Task<CoreResult<bool>> ConnectAsync(CoreConnectionInfo connectionInfo, CancellationToken cancellationToken = default)
         {
             ConnectCallCount++;
+            LastConnectionInfo = connectionInfo;
             if (ForceConnectFailure)
             {
                 return Task.FromResult(CoreResult<bool>.Fail(new CoreError(ConnectFailureCode, ConnectFailureMessage)));
             }
-
             return Task.FromResult(CoreResult<bool>.Ok(true));
         }
 
