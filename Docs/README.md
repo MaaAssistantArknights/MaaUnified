@@ -13,7 +13,7 @@
 - [`zh-cn/README.md`](./zh-cn/README.md)：中文文档入口。
 - [`zh-cn/platform-capabilities.md`](./zh-cn/platform-capabilities.md)：平台能力与降级说明。
 - [`zh-cn/develop/README.md`](./zh-cn/develop/README.md)：开发文档索引。
-- [`zh-cn/develop/install-and-run.md`](./zh-cn/develop/install-and-run.md)：位于中文开发文档 `develop/` 下的本地构建、联调与运行目录说明。
+- [`zh-cn/develop/development.md`](./zh-cn/develop/development.md)：位于中文开发文档 `develop/` 下的本地构建、联调与运行说明。
 - [`zh-cn/protocol/README.md`](./zh-cn/protocol/README.md)：协议与数据约定索引。
 - [`testing/README.md`](./testing/README.md)：测试专用文档入口。
 
