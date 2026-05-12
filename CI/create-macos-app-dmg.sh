@@ -21,6 +21,7 @@ resources_dir="$contents_dir/Resources"
 entitlements_path="$contents_dir/entitlements.plist"
 dmg_root="$release_dir/dmg-root"
 dmg_path="$release_dir/$package_name.dmg"
+dmg_tmp_path="$release_dir/.$package_name.dmg.tmp"
 
 if [[ ! -x "$staging_dir/bin/MAAUnified" ]]; then
   echo "Managed app executable not found: $staging_dir/bin/MAAUnified" >&2
@@ -37,7 +38,40 @@ if [[ ! -d "$staging_dir/resource" ]]; then
   exit 1
 fi
 
-rm -rf "$app_dir" "$dmg_root" "$dmg_path"
+create_verified_dmg() {
+  local max_attempts=5
+  local attempt
+  local delay
+  local status
+
+  for ((attempt = 1; attempt <= max_attempts; attempt++)); do
+    rm -f "$dmg_tmp_path" "$dmg_path"
+    status=0
+
+    if hdiutil create -volname "$app_name" -srcfolder "$dmg_root" -ov -format UDZO "$dmg_tmp_path"; then
+      sync
+      if mv -f "$dmg_tmp_path" "$dmg_path" && hdiutil verify "$dmg_path"; then
+        return 0
+      else
+        status=$?
+      fi
+    else
+      status=$?
+    fi
+
+    rm -f "$dmg_tmp_path" "$dmg_path"
+    if ((attempt == max_attempts)); then
+      echo "hdiutil create/verify failed after $max_attempts attempts." >&2
+      return "$status"
+    fi
+
+    delay=$((attempt * 5))
+    echo "hdiutil create/verify failed (attempt $attempt/$max_attempts, exit $status); retrying in ${delay}s." >&2
+    sleep "$delay"
+  done
+}
+
+rm -rf "$app_dir" "$dmg_root" "$dmg_path" "$dmg_tmp_path"
 mkdir -p "$macos_dir" "$resources_dir" "$dmg_root"
 
 cp -a "$staging_dir/bin/." "$macos_dir/"
@@ -134,7 +168,6 @@ fi
 
 cp -a "$app_dir" "$dmg_root/$app_name.app"
 ln -s /Applications "$dmg_root/Applications"
-hdiutil create -volname "$app_name" -srcfolder "$dmg_root" -ov -format UDZO "$dmg_path"
-hdiutil verify "$dmg_path"
+create_verified_dmg
 
 rm -rf "$dmg_root"

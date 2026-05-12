@@ -466,6 +466,11 @@ public sealed class SettingsViewStructureContractTests
         Assert.Contains("com.apple.security.cs.disable-executable-page-protection", script, StringComparison.Ordinal);
         Assert.Contains("--entitlements \"$entitlements_path\"", script, StringComparison.Ordinal);
         Assert.Contains("grep -Eq 'Mach-O.*executable'", script, StringComparison.Ordinal);
+        Assert.Contains("dmg_tmp_path=", script, StringComparison.Ordinal);
+        Assert.Contains("create_verified_dmg()", script, StringComparison.Ordinal);
+        Assert.Contains("hdiutil create -volname \"$app_name\"", script, StringComparison.Ordinal);
+        Assert.Contains("hdiutil verify \"$dmg_path\"", script, StringComparison.Ordinal);
+        Assert.Contains("retrying in ${delay}s", script, StringComparison.Ordinal);
     }
 
     [Fact]
