@@ -89,13 +89,11 @@ Copy-Item install\* publish\ -Recurse -Force
 .\publish\MAAUnified.exe
 ```
 
-### macOS
-
-x64 和 arm64 分别使用对应的 triplet、RID 和 CMake preset。
+### macOS Intel (x64)
 
 ```bash
-# 1) 还原 Avalonia app 依赖，并下载 macOS 运行时依赖
-dotnet restore src/MAAUnified/App/MAAUnified.App.csproj
+# 1) 还原 Avalonia app 依赖，并下载 macOS Intel x64 运行时依赖
+dotnet restore src/MAAUnified/App/MAAUnified.App.csproj -r osx-x64
 python3 tools/maadeps-download.py x64-osx
 
 # 2) 构建并安装 MaaCore runtime（产物在 install/，含 resource/）
@@ -106,6 +104,31 @@ cmake --install build --config RelWithDebInfo
 # 3) 发布 Avalonia app 到 publish/bin
 mkdir -p publish
 dotnet publish src/MAAUnified/App/MAAUnified.App.csproj -c Release -r osx-x64 --self-contained true --no-restore -o publish/bin
+
+# 4) 合并 runtime 到发布目录根部，并生成启动入口
+cp -a install/. publish/
+bash src/MAAUnified/CI/create-unix-launchers.sh publish macos
+
+# 5) 启动本地打包产物
+cd publish
+./MAAUnified
+```
+
+### macOS Apple Silicon (arm64)
+
+```bash
+# 1) 还原 Avalonia app 依赖，并下载 macOS Apple Silicon arm64 运行时依赖
+dotnet restore src/MAAUnified/App/MAAUnified.App.csproj -r osx-arm64
+python3 tools/maadeps-download.py arm64-osx
+
+# 2) 构建并安装 MaaCore runtime（产物在 install/，含 resource/）
+cmake --preset macos-publish-arm64 --fresh -DINSTALL_PYTHON=OFF
+cmake --build --preset macos-publish-arm64
+cmake --install build --config RelWithDebInfo
+
+# 3) 发布 Avalonia app 到 publish/bin
+mkdir -p publish
+dotnet publish src/MAAUnified/App/MAAUnified.App.csproj -c Release -r osx-arm64 --self-contained true --no-restore -o publish/bin
 
 # 4) 合并 runtime 到发布目录根部，并生成启动入口
 cp -a install/. publish/
