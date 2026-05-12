@@ -43,7 +43,7 @@ mkdir -p "$payload_dir" "$app_dir/usr/share/icons/hicolor/512x512/apps" "$app_di
 
 cp -a "$staging_dir/." "$payload_dir/"
 
-wget -c https://raw.githubusercontent.com/MaaAssistantArknights/design/main/logo/maa-logo_512x512.png -O "$app_dir/MAAUnified.png"
+wget -c https://raw.githubusercontent.com/MaaAssistantArknights/design/main/v2/icons/maa-logo_512x512.png -O "$app_dir/MAAUnified.png"
 cp -v "$app_dir/MAAUnified.png" "$app_dir/usr/share/icons/hicolor/512x512/apps/MAAUnified.png"
 
 cat > "$app_dir/MAAUnified.desktop" <<'EOF'
