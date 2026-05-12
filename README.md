@@ -13,50 +13,34 @@
 
 ## 界面预览
 
-截图文件建议放在 `Docs/zh-cn/assets/screenshots/` 下。当前先保留位置，后续补图时直接替换对应文件并取消注释即可。
+![MAAUnified 任务列表界面](./Docs/zh-cn/assets/screenshots/task-list.png)
 
-<!-- ![MAAUnified 主界面](./Docs/zh-cn/assets/screenshots/main-window.png) -->
-
-> 截图占位：主窗口与任务队列。
-
-<!-- ![MAAUnified 设置页](./Docs/zh-cn/assets/screenshots/settings.png) -->
-
-> 截图占位：设置页与平台能力配置。
-
-<!-- ![MAAUnified 工具页](./Docs/zh-cn/assets/screenshots/toolbox.png) -->
-
-> 截图占位：工具页或高级功能页。
-
-## 构建与运行
-
-`MAAUnified` 的完整运行依赖 MaaCore 原生库和 `resource/` 资源目录。建议从 `MaaAssistantArknights` 主仓根目录构建完整运行目录，而不是只对 `App/MAAUnified.App.csproj` 执行 `dotnet run`。
-
-三平台构建指南请阅读：
-
-- [安装、构建与运行](./Docs/zh-cn/develop/install-and-run.md)：位于中文开发文档 `develop/` 下，说明 Windows、Linux、macOS 本地构建与运行步骤。
-- [CI 与发布流程](./Docs/zh-cn/develop/ci-and-release.md)：GitHub Actions、调试包、正式包与维护者发布流程。
-
-Debug 包按平台产出一个完整可运行包，包含应用、MaaCore runtime、`resource/`、诊断日志目录和适合排障的符号信息。正式发布包面向用户分发：Windows 为 `.zip`，解压后根目录直接提供 `MAAUnified.exe`；Linux 为单个 `.AppImage`；macOS 发布形态保持既有 `.dmg`。
-
-完整运行目录或从包中展开后的内容需要同时包含：
-
-- `bin/` 下的 Avalonia 应用与 .NET 托管依赖。
-- 运行目录根部的 MaaCore 原生库及其依赖。
-- 运行目录根部的 `resource/` 资源目录。
-- 平台启动入口，例如 Linux/macOS 的 `MAAUnified` 或 Windows 的 `MAAUnified.exe`。
+![MAAUnified 设置页](./Docs/zh-cn/assets/screenshots/settings.png)
 
 ## 从现有 Windows 版迁移配置
 
-如果你已经在旧版 Windows GUI 中使用过 MAA，迁移时主要关注 `config/` 下这两个文件：
+优先推荐在 `MAAUnified` 设置页使用“导入配置”按钮迁移旧版 Windows GUI 配置。
+
+完整导入旧配置时，需要选择这两个文件：
 
 - `config/gui.new.json`
 - `config/gui.json`
 
-建议直接把这两个文件复制到 `MAAUnified` 运行目录的 `config/` 下。
+也可以把这两个文件复制到 `MAAUnified` 运行目录的 `config/` 下；首次启动且尚未生成 `config/avalonia.json` 时，会按 `gui.new.json -> gui.json` 的顺序自动导入。
 
-`MAAUnified` 首次启动时，如果还没有 `config/avalonia.json`，会按 `gui.new.json -> gui.json` 的顺序自动导入旧配置。如果已经生成过 `avalonia.json`，可以在设置里的配置导入入口手动选择这两个旧文件重新导入。
+导入结果可查看 `debug/config-import-report.json`。
 
-日常迁移一般不需要手动处理更多文件；旧文件会作为导入来源保留，新的统一配置会写入 `config/avalonia.json`。如果想确认导入结果，可以查看 `debug/config-import-report.json`。
+## 开发上手
+
+`MAAUnified` 的完整运行依赖 MaaCore runtime、`resource/` 和主仓打包布局。日常开发建议始终在 `MaaAssistantArknights` 主仓环境里联调，不要只在 `src/MAAUnified` 里单独看托管前端。
+
+### 本地构建、运行与测试
+
+看 [本地开发](./Docs/zh-cn/develop/development.md)；CI、打包和发布看 [CI、发布与验收](./Docs/zh-cn/develop/ci-and-release.md)。
+
+### 代码修改与提交
+
+看 [贡献说明](./Docs/zh-cn/develop/contributing.md)。
 
 ## 技术栈
 
@@ -82,7 +66,9 @@ SDK 版本沿用本目录 [`global.json`](./global.json) 中指定的版本。
 
 - [`Docs/README.md`](./Docs/README.md)：文档总索引。
 - [`Docs/zh-cn/README.md`](./Docs/zh-cn/README.md)：中文文档入口。
-- [`Docs/zh-cn/develop/install-and-run.md`](./Docs/zh-cn/develop/install-and-run.md)：中文开发文档下的安装、构建与运行说明。
+- [`Docs/zh-cn/develop/development.md`](./Docs/zh-cn/develop/development.md)：本地环境、构建、运行、测试与诊断说明。
+- [`Docs/zh-cn/develop/contributing.md`](./Docs/zh-cn/develop/contributing.md)：fork、分支、push、PR 与 submodule 协作流程。
+- [`Docs/zh-cn/develop/ci-and-release.md`](./Docs/zh-cn/develop/ci-and-release.md)：CI、打包矩阵、调试包与发布链路说明。
 - [`Docs/zh-cn/platform-capabilities.md`](./Docs/zh-cn/platform-capabilities.md)：平台能力与降级说明。
 - [`Docs/zh-cn/develop/README.md`](./Docs/zh-cn/develop/README.md)：开发文档索引。
 - [`Docs/zh-cn/protocol/README.md`](./Docs/zh-cn/protocol/README.md)：协议与数据约定索引。
