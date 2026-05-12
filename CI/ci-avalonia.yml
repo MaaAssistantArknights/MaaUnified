@@ -55,7 +55,7 @@ jobs:
             os: windows-latest
             rid: win-x64
             self_contained: true
-            cmake_preset: windows-publish-x64
+            cmake_preset: windows-unified-publish-x64
             maadeps_triplet: x64-windows
           - name: linux-x64
             os: ubuntu-latest
@@ -170,9 +170,31 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build MaaCore runtime
+      - name: Configure MaaCore runtime
         run: |
           cmake --preset ${{ matrix.cmake_preset }} -DINSTALL_PYTHON=OFF -DMAA_HASH_VERSION='${{ needs.meta.outputs.tag }}'
+
+      - name: Validate Windows Unified preset isolation
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $cachePath = "build/CMakeCache.txt"
+          if (!(Test-Path $cachePath)) { throw "CMake cache not found at $cachePath." }
+
+          $cache = Get-Content $cachePath -Raw
+          if ($cache -notmatch 'BUILD_WPF_GUI:BOOL=OFF') {
+            throw "Unified Windows preset must keep BUILD_WPF_GUI=OFF."
+          }
+
+          $solution = Get-ChildItem build -Filter *.sln | Select-Object -First 1
+          if ($null -eq $solution) { throw "Generated Visual Studio solution not found under build/." }
+
+          if (Select-String -Path $solution.FullName -Pattern 'MaaWpfGui(\.csproj)?' -Quiet) {
+            throw "Unified Windows solution unexpectedly includes MaaWpfGui."
+          }
+
+      - name: Build MaaCore runtime
+        run: |
           cmake --build --preset ${{ matrix.cmake_preset }}
           cmake --install build --config RelWithDebInfo
 

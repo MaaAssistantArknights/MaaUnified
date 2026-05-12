@@ -17,7 +17,7 @@
 
 | 名称 | Runner | RID | MaaDeps triplet | CMake preset | Debug | Release |
 | --- | --- | --- | --- | --- | --- | --- |
-| `windows-x64` | `windows-latest` | `win-x64` | `x64-windows` | `windows-publish-x64` | 完整调试包 | `.zip` |
+| `windows-x64` | `windows-latest` | `win-x64` | `x64-windows` | `windows-unified-publish-x64` | 完整调试包 | `.zip` |
 | `linux-x64` | `ubuntu-latest` | `linux-x64` | `x64-linux` | `linux-publish-x64` | 完整调试包 | `.AppImage` |
 | `macos-x64` | `macos-latest` | `osx-x64` | `x64-osx` | `macos-publish-x64` | 完整调试包 | `.dmg` |
 | `macos-arm64` | `macos-latest` | `osx-arm64` | `arm64-osx` | `macos-publish-arm64` | 完整调试包 | `.dmg` |
