@@ -2699,6 +2699,20 @@
 	      "mapping_target": "SettingsPageViewModel.UseNotify"
 	    },
 	    {
+	      "key": "GUI.UiScalePercent",
+	      "owner_item_id": "Settings.Gui",
+	      "parity_status": "Aligned",
+	      "priority": "P0",
+	      "notes": "Mapped to SettingsPageViewModel.UiScalePercent and applied to main window layout scale.",
+	      "evidence": {
+	        "ui_path": "App/Features/Settings/GuiSettingsView.axaml",
+	        "log_path": "debug/avalonia-ui-startup.log",
+	        "scope": "Config.GUI.UiScalePercent",
+	        "case_id": "CFG-010B"
+	      },
+	      "mapping_target": "SettingsPageViewModel.UiScalePercent"
+	    },
+	    {
 	      "key": "GUI.HideCloseButton",
 	      "owner_item_id": "Settings.Gui",
 	      "parity_status": "Aligned",
@@ -6891,7 +6905,7 @@
 	  "metadata": {
 	    "feature_item_count": 38,
 	    "system_item_count": 13,
-	    "config_key_count": 294,
+	    "config_key_count": 295,
 	    "fallback_record_count": 15
 	  }
 	}

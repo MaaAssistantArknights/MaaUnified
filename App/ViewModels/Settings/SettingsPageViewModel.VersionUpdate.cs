@@ -572,7 +572,11 @@ public sealed partial class SettingsPageViewModel
             : checkResult.ReleaseName;
         VersionUpdateName = resolvedName;
         VersionUpdateBody = checkResult.Body;
-        VersionUpdatePackage = checkResult.PreparedPackagePath ?? string.Empty;
+        VersionUpdatePackage = checkResult.PackageResolutionStatus is
+                PackageResolutionStatus.MacOSManualInstallRequired
+                or PackageResolutionStatus.AppImageManualInstallRequired
+            ? string.Empty
+            : checkResult.PreparedPackagePath ?? string.Empty;
         VersionUpdateDoNotShow = !checkResult.IsNewVersion;
         VersionUpdateIsFirstBoot = false;
         SetPendingVersionUpdateAvailability(checkResult.IsNewVersion);
@@ -653,6 +657,8 @@ public sealed partial class SettingsPageViewModel
     {
         return checkResult.PackageResolutionStatus is
             PackageResolutionStatus.WindowsManualUpdateRequired
+            or PackageResolutionStatus.MacOSManualInstallRequired
+            or PackageResolutionStatus.AppImageManualInstallRequired
             or PackageResolutionStatus.Unavailable
             or PackageResolutionStatus.DownloadFailed;
     }
@@ -660,6 +666,14 @@ public sealed partial class SettingsPageViewModel
     private string ResolveVersionUpdatePackageFailureMessage(VersionUpdateCheckResult checkResult)
     {
         var fallback = ResolveVersionUpdatePackageFailureFallback(checkResult.PackageResolutionStatus);
+        if (checkResult.PackageResolutionStatus is
+                PackageResolutionStatus.MacOSManualInstallRequired
+                or PackageResolutionStatus.AppImageManualInstallRequired
+            && !string.IsNullOrWhiteSpace(checkResult.PreparedPackagePath))
+        {
+            fallback = $"{fallback} {checkResult.PreparedPackagePath}";
+        }
+
         return string.IsNullOrWhiteSpace(checkResult.PackageFailureMessageKey)
             ? fallback
             : LocalizeSettingsText(checkResult.PackageFailureMessageKey, fallback);
@@ -670,6 +684,8 @@ public sealed partial class SettingsPageViewModel
         return status switch
         {
             PackageResolutionStatus.WindowsManualUpdateRequired => "Windows 版目前暂未在 release 发布，请手动更新。",
+            PackageResolutionStatus.MacOSManualInstallRequired => "macOS 安装镜像已下载，请打开 dmg 手动安装。",
+            PackageResolutionStatus.AppImageManualInstallRequired => "Linux AppImage 已下载，请手动替换或启动新的 AppImage。",
             PackageResolutionStatus.Unavailable => "更新失败。",
             PackageResolutionStatus.DownloadFailed => "更新失败。",
             _ => string.Empty,

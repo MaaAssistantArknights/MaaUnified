@@ -264,6 +264,9 @@ public sealed class StyleTokenContractTests
         Assert.Contains("public class AppTextInput : TextBox", textInput, StringComparison.Ordinal);
         Assert.Contains("StyleKeyOverride => typeof(TextBox)", textInput, StringComparison.Ordinal);
         Assert.Contains("Classes.Set(\"settings-input\", true)", textInput, StringComparison.Ordinal);
+        Assert.Contains("DismissFocusOnEnterProperty", textInput, StringComparison.Ordinal);
+        Assert.Contains("Key.Enter", textInput, StringComparison.Ordinal);
+        Assert.Contains("ClearFocus()", textInput, StringComparison.Ordinal);
         Assert.Contains("public class AppSelect : ComboBox", select, StringComparison.Ordinal);
         Assert.Contains("StyleKeyOverride => typeof(ComboBox)", select, StringComparison.Ordinal);
         Assert.Contains("Classes.Set(\"settings-select\", true)", select, StringComparison.Ordinal);
@@ -293,6 +296,10 @@ public sealed class StyleTokenContractTests
         Assert.Contains("x:Class=\"MAAUnified.App.Controls.VerticalSpinNumberBox\"", number, StringComparison.Ordinal);
         Assert.Contains("{DynamicResource MAA.Brush.App.SettingsInput.Border}", number, StringComparison.Ordinal);
         Assert.Contains("{DynamicResource MAA.App.CornerRadius.SettingsInput}", number, StringComparison.Ordinal);
+        Assert.Contains("KeyDown=\"OnEditorKeyDown\"", number, StringComparison.Ordinal);
+        Assert.Contains("DismissFocusOnEnterProperty", numberCode, StringComparison.Ordinal);
+        Assert.Contains("Key.Enter", numberCode, StringComparison.Ordinal);
+        Assert.Contains("ClearFocus()", numberCode, StringComparison.Ordinal);
         Assert.DoesNotContain("settings-spin", number, StringComparison.Ordinal);
         Assert.DoesNotContain("settings-spin", numberCode, StringComparison.Ordinal);
         Assert.DoesNotContain("settings-spin", appNumberCode, StringComparison.Ordinal);

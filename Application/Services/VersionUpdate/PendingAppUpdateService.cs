@@ -82,6 +82,16 @@ public static class PendingAppUpdateService
                 pendingUpdate.PackagePath);
         }
 
+        if (IsManualInstallPackage(pendingUpdate.PackagePath))
+        {
+            ClearPendingPackageState(config);
+            SaveConfig(baseDirectory, config);
+            return new PendingAppUpdateApplyResult(
+                PendingAppUpdateStatus.Failed,
+                $"Pending manual install packages cannot be applied automatically: {pendingUpdate.PackagePath}",
+                pendingUpdate.PackagePath);
+        }
+
         var extractDirectory = Path.Combine(baseDirectory, "NewVersionExtract");
         var backupDirectory = Path.Combine(baseDirectory, ".old");
 
@@ -242,6 +252,12 @@ public static class PendingAppUpdateService
     private static void ClearPendingPackageState(UnifiedConfig config)
     {
         config.GlobalValues[ConfigurationKeys.VersionUpdatePackage] = JsonValue.Create(string.Empty);
+    }
+
+    private static bool IsManualInstallPackage(string packagePath)
+    {
+        return packagePath.EndsWith(".dmg", StringComparison.OrdinalIgnoreCase)
+            || packagePath.EndsWith(".AppImage", StringComparison.OrdinalIgnoreCase);
     }
 
     private static void PrepareExtractionDirectory(string extractDirectory)

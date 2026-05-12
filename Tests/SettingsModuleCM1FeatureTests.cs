@@ -78,8 +78,8 @@ public sealed class SettingsModuleCM1FeatureTests
                     "prerelease": false,
                     "assets": [
                       {
-                        "name": "MAAUnified-v2.0.0-linux-x64.tar.gz",
-                        "browser_download_url": "https://example.com/MAAUnified-v2.0.0-linux-x64.tar.gz",
+                        "name": "MAAUnified-v2.0.0-linux-x64.AppImage",
+                        "browser_download_url": "https://example.com/MAAUnified-v2.0.0-linux-x64.AppImage",
                         "size": 1234
                       }
                     ]
@@ -136,8 +136,8 @@ public sealed class SettingsModuleCM1FeatureTests
                     "prerelease": false,
                     "assets": [
                       {
-                        "name": "MAAUnified-v2.0.0-linux-x64.tar.gz",
-                        "browser_download_url": "https://example.com/MAAUnified-v2.0.0-linux-x64.tar.gz",
+                        "name": "MAAUnified-v2.0.0-linux-x64.AppImage",
+                        "browser_download_url": "https://example.com/MAAUnified-v2.0.0-linux-x64.AppImage",
                         "size": 1234
                       }
                     ]
@@ -233,8 +233,8 @@ public sealed class SettingsModuleCM1FeatureTests
                     "prerelease": false,
                     "assets": [
                       {
-                        "name": "MAAUnified-v2.0.0-linux-x64.tar.gz",
-                        "browser_download_url": "https://example.com/MAAUnified-v2.0.0-linux-x64.tar.gz",
+                        "name": "MAAUnified-v2.0.0-linux-x64.AppImage",
+                        "browser_download_url": "https://example.com/MAAUnified-v2.0.0-linux-x64.AppImage",
                         "size": 1234
                       }
                     ]

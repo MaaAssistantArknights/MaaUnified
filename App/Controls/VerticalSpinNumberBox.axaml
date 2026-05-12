@@ -328,8 +328,9 @@
                      Minimum="{Binding Minimum, ElementName=Root}"
                      Maximum="{Binding Maximum, ElementName=Root}"
                      Increment="{Binding Increment, ElementName=Root}"
-                     Value="{Binding Value, ElementName=Root, Mode=TwoWay}"
-                     IsEnabled="{Binding IsEnabled, ElementName=Root}" />
+                     Value="{Binding EditorValue, ElementName=Root, Mode=TwoWay}"
+                     IsEnabled="{Binding IsEnabled, ElementName=Root}"
+                     KeyDown="OnEditorKeyDown" />
 
       <Border x:Name="SpinButtonsPanel"
               Classes="spin-stepper"

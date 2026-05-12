@@ -47,6 +47,8 @@
     <x:Double x:Key="MAA.App.Size.SearchInputMinWidth">220</x:Double>
     <x:Double x:Key="MAA.App.Size.CompactEmptyTextMaxWidth">340</x:Double>
 
+    <StreamGeometry x:Key="MAA.App.Geometry.TaskQueueMenuGear">M19.43,12.98c0.04,-0.32 0.07,-0.65 0.07,-0.98s-0.02,-0.66 -0.07,-0.98l2.11,-1.65c0.19,-0.15 0.24,-0.42 0.12,-0.64l-2,-3.46c-0.12,-0.22 -0.37,-0.31 -0.6,-0.22l-2.49,1c-0.52,-0.4 -1.08,-0.73 -1.69,-0.98L14.5,2.42C14.47,2.18 14.25,2 14,2h-4c-0.25,0 -0.46,0.18 -0.5,0.42L9.12,5.07c-0.61,0.25 -1.18,0.59 -1.69,0.98l-2.49,-1c-0.23,-0.08 -0.48,0 -0.6,0.22l-2,3.46c-0.13,0.22 -0.07,0.49 0.12,0.64l2.11,1.65c-0.04,0.32 -0.08,0.65 -0.08,0.98s0.03,0.66 0.08,0.98l-2.11,1.65c-0.19,0.15 -0.24,0.42 -0.12,0.64l2,3.46c0.12,0.22 0.37,0.31 0.6,0.22l2.49,-1c0.52,0.4 1.08,0.73 1.69,0.98l0.38,2.65c0.04,0.24 0.25,0.42 0.5,0.42h4c0.25,0 0.46,-0.18 0.5,-0.42l0.38,-2.65c0.61,-0.25 1.18,-0.59 1.69,-0.98l2.49,1c0.23,0.08 0.48,0 0.6,-0.22l2,-3.46c0.12,-0.22 0.07,-0.49 -0.12,-0.64l-2.11,-1.65z M12,15.5A3.5,3.5 0,1 1,12,8a3.5,3.5 0,0 1,0,7z</StreamGeometry>
+
     <SolidColorBrush x:Key="MAA.Brush.App.Surface.Window" Color="{DynamicResource MAA.Color.Dialog.Surface}" />
     <SolidColorBrush x:Key="MAA.Brush.App.Surface.Section" Color="{DynamicResource MAA.Color.Dialog.Section}" />
     <SolidColorBrush x:Key="MAA.Brush.App.Surface.Card" Color="{DynamicResource MAA.Color.Dialog.CardSurface}" />
@@ -168,114 +170,116 @@
                   UseLayoutRounding="True"
                   Classes="app-surface app-window">
             <Grid RowDefinitions="Auto,Auto,*,Auto">
-              <Grid ColumnDefinitions="Auto,*,Auto">
-                <StackPanel x:Name="PART_LeftWindowControls"
-                            Orientation="Horizontal"
-                            Spacing="4"
-                            HorizontalAlignment="Left"
-                            VerticalAlignment="Top">
-                  <Button x:Name="PART_LeftCloseButton"
-                          Classes="app-button app-subtle app-icon-only app-window-control app-window-close"
-                          VerticalAlignment="Top"
-                          IsVisible="{TemplateBinding ShowCloseButton}">
-                    <Button.Content>
-                      <Grid Width="12"
-                            Height="12">
-                        <Path Classes="app-window-control-glyph"
-                              Data="M1.9 1.9 L10.1 10.1 M10.1 1.9 L1.9 10.1"
-                              Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
-                      </Grid>
-                    </Button.Content>
-                  </Button>
-                  <Button x:Name="PART_LeftMinimizeButton"
-                          Classes="app-button app-subtle app-icon-only app-window-control app-window-minimize"
-                          VerticalAlignment="Top"
-                          IsVisible="{TemplateBinding ShowMinimizeButton}">
-                    <Button.Content>
-                      <Grid Width="12"
-                            Height="12">
-                        <Path Classes="app-window-control-glyph"
-                              Data="M1.9 6 H10.1"
-                              Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
-                      </Grid>
-                    </Button.Content>
-                  </Button>
-                  <Button x:Name="PART_LeftMaximizeButton"
-                          Classes="app-button app-subtle app-icon-only app-window-control app-window-maximize"
-                          VerticalAlignment="Top"
-                          IsVisible="{TemplateBinding ShowMaximizeButton}">
-                    <Button.Content>
-                      <Grid Width="12"
-                            Height="12">
-                        <Path Classes="app-window-control-glyph app-window-maximize-icon-normal"
-                              Data="M1.9 1.9 H10.1 V10.1 H1.9 Z"
-                              Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
-                        <Path Classes="app-window-control-glyph app-window-maximize-icon-restore"
-                              Data="M3.792 1.9 H10.1 V7.508 M1.9 3.792 H7.508 V10.1 H1.9 Z"
-                              Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
-                      </Grid>
-                    </Button.Content>
-                  </Button>
-                </StackPanel>
+              <LayoutTransformControl LayoutTransform="{Binding ChromeLayoutTransform, RelativeSource={RelativeSource TemplatedParent}}">
+                <Grid ColumnDefinitions="Auto,*,Auto">
+                  <StackPanel x:Name="PART_LeftWindowControls"
+                              Orientation="Horizontal"
+                              Spacing="4"
+                              HorizontalAlignment="Left"
+                              VerticalAlignment="Top">
+                    <Button x:Name="PART_LeftCloseButton"
+                            Classes="app-button app-subtle app-icon-only app-window-control app-window-close"
+                            VerticalAlignment="Top"
+                            IsVisible="{TemplateBinding ShowCloseButton}">
+                      <Button.Content>
+                        <Grid Width="12"
+                              Height="12">
+                          <Path Classes="app-window-control-glyph"
+                                Data="M1.9 1.9 L10.1 10.1 M10.1 1.9 L1.9 10.1"
+                                Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                        </Grid>
+                      </Button.Content>
+                    </Button>
+                    <Button x:Name="PART_LeftMinimizeButton"
+                            Classes="app-button app-subtle app-icon-only app-window-control app-window-minimize"
+                            VerticalAlignment="Top"
+                            IsVisible="{TemplateBinding ShowMinimizeButton}">
+                      <Button.Content>
+                        <Grid Width="12"
+                              Height="12">
+                          <Path Classes="app-window-control-glyph"
+                                Data="M1.9 6 H10.1"
+                                Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                        </Grid>
+                      </Button.Content>
+                    </Button>
+                    <Button x:Name="PART_LeftMaximizeButton"
+                            Classes="app-button app-subtle app-icon-only app-window-control app-window-maximize"
+                            VerticalAlignment="Top"
+                            IsVisible="{TemplateBinding ShowMaximizeButton}">
+                      <Button.Content>
+                        <Grid Width="12"
+                              Height="12">
+                          <Path Classes="app-window-control-glyph app-window-maximize-icon-normal"
+                                Data="M1.9 1.9 H10.1 V10.1 H1.9 Z"
+                                Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                          <Path Classes="app-window-control-glyph app-window-maximize-icon-restore"
+                                Data="M3.792 1.9 H10.1 V7.508 M1.9 3.792 H7.508 V10.1 H1.9 Z"
+                                Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                        </Grid>
+                      </Button.Content>
+                    </Button>
+                  </StackPanel>
 
-                <Border x:Name="PART_HeaderDragArea"
-                        Grid.Column="1"
-                        IsHitTestVisible="{TemplateBinding AllowsHeaderDrag}"
-                        Background="Transparent">
-                  <TextBlock Classes="app-window-title dialog-window-title"
-                             Text="{TemplateBinding Title}" />
-                </Border>
+                  <Border x:Name="PART_HeaderDragArea"
+                          Grid.Column="1"
+                          IsHitTestVisible="{TemplateBinding AllowsHeaderDrag}"
+                          Background="Transparent">
+                    <TextBlock Classes="app-window-title dialog-window-title"
+                               Text="{TemplateBinding Title}" />
+                  </Border>
 
-                <StackPanel x:Name="PART_RightWindowControls"
-                            Grid.Column="2"
-                            Orientation="Horizontal"
-                            Spacing="4"
-                            HorizontalAlignment="Right"
-                            VerticalAlignment="Top">
-                  <Button x:Name="PART_RightMinimizeButton"
-                          Classes="app-button app-subtle app-icon-only app-window-control app-window-minimize"
-                          VerticalAlignment="Top"
-                          IsVisible="{TemplateBinding ShowMinimizeButton}">
-                    <Button.Content>
-                      <Grid Width="12"
-                            Height="12">
-                        <Path Classes="app-window-control-glyph"
-                              Data="M1.9 6 H10.1"
-                              Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
-                      </Grid>
-                    </Button.Content>
-                  </Button>
-                  <Button x:Name="PART_RightMaximizeButton"
-                          Classes="app-button app-subtle app-icon-only app-window-control app-window-maximize"
-                          VerticalAlignment="Top"
-                          IsVisible="{TemplateBinding ShowMaximizeButton}">
-                    <Button.Content>
-                      <Grid Width="12"
-                            Height="12">
-                        <Path Classes="app-window-control-glyph app-window-maximize-icon-normal"
-                              Data="M1.9 1.9 H10.1 V10.1 H1.9 Z"
-                              Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
-                        <Path Classes="app-window-control-glyph app-window-maximize-icon-restore"
-                              Data="M3.792 1.9 H10.1 V7.508 M1.9 3.792 H7.508 V10.1 H1.9 Z"
-                              Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
-                      </Grid>
-                    </Button.Content>
-                  </Button>
-                  <Button x:Name="PART_RightCloseButton"
-                          Classes="app-button app-subtle app-icon-only app-window-control app-window-close"
-                          VerticalAlignment="Top"
-                          IsVisible="{TemplateBinding ShowCloseButton}">
-                    <Button.Content>
-                      <Grid Width="12"
-                            Height="12">
-                        <Path Classes="app-window-control-glyph"
-                              Data="M1.9 1.9 L10.1 10.1 M10.1 1.9 L1.9 10.1"
-                              Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
-                      </Grid>
-                    </Button.Content>
-                  </Button>
-                </StackPanel>
-              </Grid>
+                  <StackPanel x:Name="PART_RightWindowControls"
+                              Grid.Column="2"
+                              Orientation="Horizontal"
+                              Spacing="4"
+                              HorizontalAlignment="Right"
+                              VerticalAlignment="Top">
+                    <Button x:Name="PART_RightMinimizeButton"
+                            Classes="app-button app-subtle app-icon-only app-window-control app-window-minimize"
+                            VerticalAlignment="Top"
+                            IsVisible="{TemplateBinding ShowMinimizeButton}">
+                      <Button.Content>
+                        <Grid Width="12"
+                              Height="12">
+                          <Path Classes="app-window-control-glyph"
+                                Data="M1.9 6 H10.1"
+                                Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                        </Grid>
+                      </Button.Content>
+                    </Button>
+                    <Button x:Name="PART_RightMaximizeButton"
+                            Classes="app-button app-subtle app-icon-only app-window-control app-window-maximize"
+                            VerticalAlignment="Top"
+                            IsVisible="{TemplateBinding ShowMaximizeButton}">
+                      <Button.Content>
+                        <Grid Width="12"
+                              Height="12">
+                          <Path Classes="app-window-control-glyph app-window-maximize-icon-normal"
+                                Data="M1.9 1.9 H10.1 V10.1 H1.9 Z"
+                                Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                          <Path Classes="app-window-control-glyph app-window-maximize-icon-restore"
+                                Data="M3.792 1.9 H10.1 V7.508 M1.9 3.792 H7.508 V10.1 H1.9 Z"
+                                Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                        </Grid>
+                      </Button.Content>
+                    </Button>
+                    <Button x:Name="PART_RightCloseButton"
+                            Classes="app-button app-subtle app-icon-only app-window-control app-window-close"
+                            VerticalAlignment="Top"
+                            IsVisible="{TemplateBinding ShowCloseButton}">
+                      <Button.Content>
+                        <Grid Width="12"
+                              Height="12">
+                          <Path Classes="app-window-control-glyph"
+                                Data="M1.9 1.9 L10.1 10.1 M10.1 1.9 L1.9 10.1"
+                                Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                        </Grid>
+                      </Button.Content>
+                    </Button>
+                  </StackPanel>
+                </Grid>
+              </LayoutTransformControl>
 
               <ContentPresenter Grid.Row="1"
                                 Margin="0,6,0,0"
@@ -496,8 +500,21 @@
     </Setter>
   </Style>
 
+  <Style Selector="Path.task-queue-row-action-icon">
+    <Setter Property="Width" Value="24" />
+    <Setter Property="Height" Value="24" />
+    <Setter Property="Stretch" Value="Uniform" />
+    <Setter Property="Fill" Value="{DynamicResource MAA.Brush.App.Action.SubtleForeground}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="HorizontalAlignment" Value="Center" />
+  </Style>
+
   <Style Selector="Border.task-queue-row-action:pointerover TextBlock.task-queue-row-action-glyph">
     <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
+  </Style>
+
+  <Style Selector="Border.task-queue-row-action:pointerover Path.task-queue-row-action-icon">
+    <Setter Property="Fill" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
   </Style>
 
   <Style Selector="Border.task-queue-list-actions,

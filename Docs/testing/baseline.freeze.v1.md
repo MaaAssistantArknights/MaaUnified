@@ -9,7 +9,7 @@
 - Locales: `zh-cn, zh-tw, en-us, ja-jp, ko-kr, pallas`
 - Feature items: `38`
 - System items: `13`
-- Config keys: `294`
+- Config keys: `295`
 - Fallback records: `15`
 
 ## Feature Parity
@@ -76,7 +76,7 @@
 | `System.PageErrorChannel` | Aligned | `App/ViewModels/Infrastructure/PageViewModelBase.cs` |
 
 ## Config Key Mapping Summary
-- Aligned: `294`
+- Aligned: `295`
 - Gap: `0`
 - Waived: `0`
 
@@ -108,6 +108,7 @@
 - `GUI.IgnoreBadModulesAndUseSoftwareRendering` -> `SettingsPageViewModel.UseSoftwareRendering`
 - `GUI.Localization` -> `SettingsPageViewModel.Language`
 - `GUI.MinimizeToTray` -> `SettingsPageViewModel.MinimizeToTray`
+- `GUI.UiScalePercent` -> `SettingsPageViewModel.UiScalePercent`
 - `GUI.UseNotify` -> `SettingsPageViewModel.UseNotify`
 - `GUI.UseTray` -> `SettingsPageViewModel.UseTray`
 - `GUI.WindowTitleScrollable` -> `SettingsPageViewModel.WindowTitleScrollable`

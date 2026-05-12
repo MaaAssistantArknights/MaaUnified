@@ -48,6 +48,9 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
     private const int BackgroundOpacityMax = 100;
     private const int BackgroundBlurMin = 0;
     private const int BackgroundBlurMax = 80;
+    private const int DefaultUiScalePercent = 100;
+    private const int UiScalePercentMin = 70;
+    private const int UiScalePercentMax = 140;
     private const int AutostartFeedbackDelayMs = 1000;
     private const int TimerSlotCount = 8;
     private const int TimerHourMin = 0;
@@ -261,6 +264,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
     private bool _useNotify = true;
     private bool _minimizeToTray;
     private bool _windowTitleScrollable;
+    private int _uiScalePercent = DefaultUiScalePercent;
     private bool _useSoftwareRendering;
     private bool _developerModeEnabled;
     private bool _startSelf;
@@ -927,6 +931,20 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         set
         {
             if (SetProperty(ref _windowTitleScrollable, value))
+            {
+                MarkGuiSettingsDirty();
+                NotifyGuiSettingsPreviewChanged();
+            }
+        }
+    }
+
+    public int UiScalePercent
+    {
+        get => _uiScalePercent;
+        set
+        {
+            var clamped = Math.Clamp(value, UiScalePercentMin, UiScalePercentMax);
+            if (SetProperty(ref _uiScalePercent, clamped))
             {
                 MarkGuiSettingsDirty();
                 NotifyGuiSettingsPreviewChanged();
@@ -3185,6 +3203,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
             UseTray = snapshot.UseTray;
             MinimizeToTray = snapshot.MinimizeToTray;
             WindowTitleScrollable = snapshot.WindowTitleScrollable;
+            UiScalePercent = snapshot.UiScalePercent;
             UseSoftwareRendering = snapshot.UseSoftwareRendering;
             LogItemDateFormatString = snapshot.LogItemDateFormatString;
             DeveloperModeEnabled = snapshot.DeveloperModeEnabled;
@@ -6415,6 +6434,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
             UseNotify: UseNotify,
             MinimizeToTray: UseTray && MinimizeToTray,
             WindowTitleScrollable: WindowTitleScrollable,
+            UiScalePercent: Math.Clamp(UiScalePercent, UiScalePercentMin, UiScalePercentMax),
             UseSoftwareRendering: UseSoftwareRendering,
             DeveloperModeEnabled: DeveloperModeEnabled,
             LogItemDateFormatString: NormalizeLogItemDateFormat(LogItemDateFormatString),
@@ -6437,6 +6457,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
             UseNotify = snapshot.UseNotify;
             MinimizeToTray = snapshot.MinimizeToTray;
             WindowTitleScrollable = snapshot.WindowTitleScrollable;
+            UiScalePercent = snapshot.UiScalePercent;
             UseSoftwareRendering = snapshot.UseSoftwareRendering;
             DeveloperModeEnabled = snapshot.DeveloperModeEnabled;
             LogItemDateFormatString = snapshot.LogItemDateFormatString;
@@ -7011,6 +7032,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
             UseNotify = ReadGlobalBool(config, ConfigurationKeys.UseNotify, true);
             MinimizeToTray = ReadGlobalBool(config, ConfigurationKeys.MinimizeToTray, false);
             WindowTitleScrollable = ReadGlobalBool(config, ConfigurationKeys.WindowTitleScrollable, false);
+            UiScalePercent = ReadGlobalInt(config, ConfigurationKeys.UiScalePercent, DefaultUiScalePercent);
             UseSoftwareRendering = rawUseSoftwareRendering;
             DeveloperModeEnabled = ReadGlobalBool(config, DeveloperModeConfigKey, false);
             LogItemDateFormatString = logItemDateFormat;
@@ -7678,6 +7700,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
                 UseTray = ReadGlobalBool(config, ConfigurationKeys.UseTray, true);
                 MinimizeToTray = ReadGlobalBool(config, ConfigurationKeys.MinimizeToTray, false);
                 WindowTitleScrollable = ReadGlobalBool(config, ConfigurationKeys.WindowTitleScrollable, false);
+                UiScalePercent = ReadGlobalInt(config, ConfigurationKeys.UiScalePercent, DefaultUiScalePercent);
                 UseSoftwareRendering = rawUseSoftwareRendering;
                 DeveloperModeEnabled = ReadGlobalBool(config, DeveloperModeConfigKey, false);
                 LogItemDateFormatString = logItemDateFormat;
@@ -9307,6 +9330,7 @@ public sealed record GuiSettingsSnapshot(
     bool UseNotify,
     bool MinimizeToTray,
     bool WindowTitleScrollable,
+    int UiScalePercent,
     bool UseSoftwareRendering,
     string LogItemDateFormatString,
     string OperNameLanguage,
@@ -9326,6 +9350,7 @@ public sealed record GuiSettingsSnapshot(
             [ConfigurationKeys.UseNotify] = UseNotify.ToString(),
             [ConfigurationKeys.MinimizeToTray] = MinimizeToTray.ToString(),
             [ConfigurationKeys.WindowTitleScrollable] = WindowTitleScrollable.ToString(),
+            [ConfigurationKeys.UiScalePercent] = UiScalePercent.ToString(CultureInfo.InvariantCulture),
             [ConfigurationKeys.IgnoreBadModulesAndUseSoftwareRendering] = UseSoftwareRendering.ToString(),
             ["GUI.DeveloperMode"] = DeveloperModeEnabled.ToString(),
             [ConfigurationKeys.LogItemDateFormat] = LogItemDateFormatString,

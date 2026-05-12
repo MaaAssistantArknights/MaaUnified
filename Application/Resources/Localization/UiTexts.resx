@@ -3114,6 +3114,12 @@ Session state `{0}` does not allow {2}.</value>
   <data name="Settings.GUI.Theme" xml:space="preserve">
     <value>界面主题</value>
   </data>
+  <data name="Settings.GUI.UiScalePercent" xml:space="preserve">
+    <value>UI 比例 (%)</value>
+  </data>
+  <data name="Settings.GUI.UiScalePercentTip" xml:space="preserve">
+    <value>允许范围：70% 到 140%。</value>
+  </data>
   <data name="Settings.GUI.UseSoftwareRendering" xml:space="preserve">
     <value>使用软件渲染</value>
   </data>

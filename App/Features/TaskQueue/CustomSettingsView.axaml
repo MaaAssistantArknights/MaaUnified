@@ -32,6 +32,7 @@
           <controls:AppTextInput Width="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
                                  Classes="settings-input-block"
                                  AcceptsReturn="True"
+                                 DismissFocusOnEnter="False"
                                  Height="120"
                                  Text="{Binding TaskNamesText, UpdateSourceTrigger=LostFocus}" />
         </controls:AdaptiveSpacingStackPanel>

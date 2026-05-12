@@ -354,6 +354,7 @@
                                     Tip="{DynamicResource ExternalNotificationCustomWebhookPlaceholders}" />
             <controls:AppTextInput Height="120"
                      AcceptsReturn="True"
+                     DismissFocusOnEnter="False"
                      TextWrapping="Wrap"
                      Watermark="{DynamicResource ExternalNotificationCustomWebhookPlaceholders}"
                      Classes="settings-input settings-input-block"

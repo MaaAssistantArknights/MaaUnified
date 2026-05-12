@@ -5,7 +5,7 @@
 - 基线：`src/MaaWpfGui` 现有功能。
 - 目标：`src/MAAUnified` 全量复刻。
 - 状态：`Implemented` / `InProgress` / `Pending`。
-- 本表需与 `Docs/baseline.freeze.v1.md` 保持同步；若冲突，以冻结基线为准。
+- 本表需与 `Docs/testing/baseline.freeze.v1.md` 保持同步；若冲突，以冻结基线为准。
 
 ## A. 主框架与主流程
 

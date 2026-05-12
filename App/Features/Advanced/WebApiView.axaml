@@ -45,6 +45,7 @@
                 <TextBlock Classes="app-caption"
                            Text="{Binding Texts[Toolbox.Advanced.WebApi.Host]}" />
                 <controls:AppTextInput Classes="settings-input-block"
+                                       DismissFocusOnEnter="False"
                                        Text="{Binding Host}" />
               </StackPanel>
             </StackPanel>
@@ -66,6 +67,7 @@
                 <TextBlock Classes="app-caption"
                            Text="{Binding Texts[Toolbox.Advanced.WebApi.AccessToken]}" />
                 <controls:AppTextInput Classes="settings-input-block"
+                                       DismissFocusOnEnter="False"
                                        Text="{Binding AccessToken}" />
               </StackPanel>
             </StackPanel>

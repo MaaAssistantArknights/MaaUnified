@@ -35,6 +35,7 @@ public static class ConfigurationKeys
     public const string UseNotify = "GUI.UseNotify";
     public const string HideCloseButton = "GUI.HideCloseButton";
     public const string WindowTitleScrollable = "GUI.WindowTitleScrollable";
+    public const string UiScalePercent = "GUI.UiScalePercent";
     public const string IgnoreBadModulesAndUseSoftwareRendering = "GUI.IgnoreBadModulesAndUseSoftwareRendering";
 
     // public const string UseLogItemDateFormat = "GUI.UseLogItemDateFormat"; 是否使用自定义的时间格式

@@ -149,6 +149,7 @@
               <controls:SettingsLabel Text="{Binding Texts[Mall.BuyFirst]}"
                                       Tip="{Binding Texts[Mall.Drink]}" />
               <controls:AppTextInput Classes="settings-input-block"
+                                     DismissFocusOnEnter="False"
                                      IsEnabled="{Binding IsShoppingSettingsEnabled}"
                                      Text="{Binding BuyFirstText, UpdateSourceTrigger=LostFocus}" />
             </controls:AdaptiveSpacingStackPanel>
@@ -159,6 +160,7 @@
               <TextBlock Classes="app-caption"
                          Text="{Binding Texts[Mall.Blacklist]}" />
               <controls:AppTextInput Classes="settings-input-block"
+                                     DismissFocusOnEnter="False"
                                      IsEnabled="{Binding IsShoppingSettingsEnabled}"
                                      Text="{Binding BlacklistText, UpdateSourceTrigger=LostFocus}" />
             </controls:AdaptiveSpacingStackPanel>

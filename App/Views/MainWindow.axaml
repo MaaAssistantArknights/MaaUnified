@@ -463,12 +463,18 @@
   </Window.Styles>
   <controls:AppWindowFrame x:Name="WindowShellFrame"
                            Title="{Binding WindowTitle}"
+                           ChromeScaleFactor="{Binding EffectiveUiScaleFactor}"
                            Mode="ResizableDialog"
                            ShowMinimizeButton="True"
                            ShowMaximizeButton="True"
                            ShowCloseButton="True">
     <controls:AppWindowFrame.Content>
-      <Grid>
+      <LayoutTransformControl>
+        <LayoutTransformControl.LayoutTransform>
+          <ScaleTransform ScaleX="{Binding EffectiveUiScaleFactor}"
+                          ScaleY="{Binding EffectiveUiScaleFactor}" />
+        </LayoutTransformControl.LayoutTransform>
+        <Grid>
         <Grid x:Name="ShellRoot"
               Margin="{DynamicResource MAA.Thickness.PageMargin}">
           <Image
@@ -643,7 +649,8 @@
             </ItemsControl.ItemsPanel>
           </ItemsControl>
         </StackPanel>
-      </Grid>
+        </Grid>
+      </LayoutTransformControl>
     </controls:AppWindowFrame.Content>
   </controls:AppWindowFrame>
 </Window>

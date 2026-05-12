@@ -1997,6 +1997,12 @@
   <data name="Settings.GUI.Theme" xml:space="preserve">
     <value>テーマ</value>
   </data>
+  <data name="Settings.GUI.UiScalePercent" xml:space="preserve">
+    <value>UI スケール (%)</value>
+  </data>
+  <data name="Settings.GUI.UiScalePercentTip" xml:space="preserve">
+    <value>設定範囲：70%〜140%。</value>
+  </data>
   <data name="Settings.GUI.UseSoftwareRendering" xml:space="preserve">
     <value>ソフトウェアレンダリングを使用</value>
   </data>

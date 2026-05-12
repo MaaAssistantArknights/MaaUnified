@@ -1,191 +1,74 @@
 # MAAUnified
 
-`MAAUnified` 是 MAA 的跨平台图形前端，基于 Avalonia 构建。
+`MAAUnified` 是 MAA 的跨平台图形前端，基于 Avalonia 与 .NET 构建。项目按独立仓库形态组织，并以 `submodule` 方式接入 `MaaAssistantArknights` 主仓，主仓路径为 `src/MAAUnified`。
 
-本项目的初衷，是为 MAA 提供一套可持续演进的跨平台 GUI。相较于继续在现有实现上局部修补，独立维护一套统一前端更适合承担 macOS 与 Linux 的图形界面，并为后续能力扩展预留清晰边界。
+本项目面向 macOS、Linux 与 Windows 的统一 GUI 演进，以现有 WPF 前端行为为主要参考，逐步收口配置语义、交互逻辑与平台能力。涉及 MaaCore、资源、协议与发布链路的内容，应优先保持与主仓既有约定一致。
 
-在项目规划上，`MAAUnified` 将长期与 WPF 前端并行演进，优先面向 macOS 与 Linux 使用场景，逐步完善功能与平台能力。代码结构自始即按独立仓库组织，并以 `submodule` 形式接入宿主仓库。
+## 项目定位
+
+- 作为 `MaaAssistantArknights` 的跨平台 GUI 子项目维护。
+- 以 Avalonia 实现主窗口、任务配置、平台能力封装与多语言资源。
+- 通过 `CoreBridge` 调用 MaaCore，不在前端层重新定义核心协议。
+- 在主仓构建链路中参与完整构建、发布与回归验证。
+
+## 界面预览
+
+![MAAUnified 任务列表界面](./Docs/zh-cn/assets/screenshots/task-list.png)
+
+![MAAUnified 设置页](./Docs/zh-cn/assets/screenshots/settings.png)
+
+## 从现有 Windows 版迁移配置
+
+优先推荐在 `MAAUnified` 设置页使用“导入配置”按钮迁移旧版 Windows GUI 配置。
+
+完整导入旧配置时，需要选择这两个文件：
+
+- `config/gui.new.json`
+- `config/gui.json`
+
+也可以把这两个文件复制到 `MAAUnified` 运行目录的 `config/` 下；首次启动且尚未生成 `config/avalonia.json` 时，会按 `gui.new.json -> gui.json` 的顺序自动导入。
+
+导入结果可查看 `debug/config-import-report.json`。
+
+## 开发上手
+
+`MAAUnified` 的完整运行依赖 MaaCore runtime、`resource/` 和主仓打包布局。日常开发建议始终在 `MaaAssistantArknights` 主仓环境里联调，不要只在 `src/MAAUnified` 里单独看托管前端。
+
+### 本地构建、运行与测试
+
+看 [本地开发](./Docs/zh-cn/develop/development.md)；CI、打包和发布看 [CI、发布与验收](./Docs/zh-cn/develop/ci-and-release.md)。
+
+### 代码修改与提交
+
+看 [贡献说明](./Docs/zh-cn/develop/contributing.md)。
 
 ## 技术栈
 
 - .NET `10.0`
-- Avalonia `11.2.8`
+- Avalonia
 - C#
 - xUnit
 
-SDK 版本沿用主仓库在 [`global.json`](./global.json) 中指定的版本，当前为 `10.0.201`。
-
-## 构建与运行
-
-独立仓库形态下：
-
-```bash
-dotnet restore App/MAAUnified.App.csproj
-dotnet run --project App/MAAUnified.App.csproj
-dotnet test Tests/MAAUnified.Tests.csproj -c Release
-```
-
-在 `MaaAssistantArknights` 宿主仓库中联调时，请先进入 `src/MAAUnified/` 后再执行上述命令。
-
-## 本地构建（主仓库 + submodule）
-
-适用场景：
-- 你是从 `MaaAssistantArknights` 主仓开始 clone，并通过 `git submodule` 拉取了 `src/MAAUnified`
-- 你希望在宿主仓内本地构建完整可运行目录，而不只是单独 `dotnet run` 前端
-
-通用依赖：
-- .NET `10` SDK
-- `git`
-- `python3` 或 `python`
-- `cmake`
-- `ninja`
-- C/C++ 工具链
-
-Linux 运行前提：
-- 必须有可用图形会话（`DISPLAY` 或 `WAYLAND_DISPLAY`）
-- 如果在纯 SSH TTY 等无图形环境启动，应用会直接退出
-
-### 1. 拉取主仓并初始化 submodule
-
-```bash
-git clone https://github.com/MaaAssistantArknights/MaaAssistantArknights.git
-cd MaaAssistantArknights
-
-git submodule sync --recursive
-git submodule update --init --depth 1 src/MAAUnified src/MaaUtils
-
-git submodule status
-git -C src/MAAUnified remote -v
-git -C src/MAAUnified rev-parse --short HEAD
-```
-
-补充说明：
-- 当前 `.gitmodules` 中 `src/MAAUnified` 的 URL 是 `https://github.com/MaaAssistantArknights/MaaUnified.git`，因此 GitHub Actions 与公共环境可以直接拉取官方仓
-- 如果你本地开发时更习惯用 SSH push，可以在自己的工作区把 `src/MAAUnified` 的 `origin` 改成对应的 SSH 地址
-- `git submodule update --init` 检出的是主仓当前锁定的 submodule 提交，`src/MAAUnified` 处于 detached HEAD 是正常现象
-- 如果你只是想复现主仓当前状态，到这里即可；如果你要继续开发 `MAAUnified` 并切到 UI 仓最新主线，再执行：
-
-```bash
-git -C src/MAAUnified fetch origin
-git -C src/MAAUnified switch main || git -C src/MAAUnified switch -c main --track origin/main
-git -C src/MAAUnified pull --ff-only origin main
-```
-
-### 2. Linux x64 本地构建
-
-```bash
-cd /path/to/MaaAssistantArknights
-
-# 1) 还原 C# 依赖
-dotnet restore src/MAAUnified/App/MAAUnified.App.csproj
-
-# 2) 下载 MaaDeps（原生依赖）
-python3 tools/maadeps-download.py x64-linux
-
-# 3) 构建并安装 MaaCore runtime（产物在 install/，含 resource/）
-cmake --preset linux-publish-x64 --fresh -DINSTALL_PYTHON=OFF
-cmake --build --preset linux-publish-x64
-cmake --install build --config RelWithDebInfo
-
-# 4) 发布 Avalonia app（Linux 包内置 .NET runtime）
-dotnet publish src/MAAUnified/App/MAAUnified.App.csproj -c Release -r linux-x64 --self-contained true --no-restore -o staging/bin
-
-# 5) 合并 runtime 到发布目录根部
-mkdir -p staging
-cp -a install/. staging/
-
-# 6) 生成根目录启动入口
-bash src/MAAUnified/CI/create-unix-launchers.sh staging linux
-
-# 7) 运行
-./staging/MAAUnified
-```
-
-### 3. Windows x64 本地构建
-
-```powershell
-cd C:\path\to\MaaAssistantArknights
-
-git submodule sync --recursive
-git submodule update --init --depth 1 src\MAAUnified src\MaaUtils
-
-dotnet restore src\MAAUnified\App\MAAUnified.App.csproj
-python tools\maadeps-download.py x64-windows
-
-cmake --preset windows-publish-x64 --fresh -DINSTALL_PYTHON=OFF
-cmake --build --preset windows-publish-x64 --config RelWithDebInfo
-cmake --install build --config RelWithDebInfo
-
-dotnet publish src\MAAUnified\App\MAAUnified.App.csproj -c Release -r win-x64 --self-contained true --no-restore -o staging\bin
-New-Item -ItemType Directory -Path staging -Force | Out-Null
-Copy-Item install\* staging\ -Recurse -Force
-pwsh -File src\MAAUnified\CI\create-windows-launcher.ps1 -TargetDir staging
-```
-
-### 4. macOS x64 本地构建
-
-```bash
-cd /path/to/MaaAssistantArknights
-
-git submodule sync --recursive
-git submodule update --init --depth 1 src/MAAUnified src/MaaUtils
-
-dotnet restore src/MAAUnified/App/MAAUnified.App.csproj
-python3 tools/maadeps-download.py x64-osx
-
-cmake --preset macos-publish-x64 --fresh -DINSTALL_PYTHON=OFF
-cmake --build --preset macos-publish-x64
-cmake --install build --config RelWithDebInfo
-
-dotnet publish src/MAAUnified/App/MAAUnified.App.csproj -c Release -r osx-x64 --self-contained true --no-restore -o staging/bin
-mkdir -p staging
-cp -a install/. staging/
-bash src/MAAUnified/CI/create-unix-launchers.sh staging macos
-```
-
-常见问题：
-- 如果你之前在同一个 `build/` 目录切换过不同 generator，CMake 可能会报 generator 不匹配；优先使用 `cmake --preset ... --fresh`
-- 发布目录现在按 `staging/bin/` 与 `staging/` 根目录分层；`staging/bin/` 放托管应用产物，`staging/` 根目录放 MaaCore 动态库与 `resource/`
-- 因此 `cp -a install/. staging/` 或 `Copy-Item install\* staging\` 这一步不能省
-- Linux 根目录入口为 `staging/MAAUnified`
-- macOS 根目录入口为 `staging/MAAUnified.command`，同时保留 `staging/MAAUnified` 供终端启动
-- Windows 根目录入口为 `staging/MAAUnified.cmd`
-- 如果只想做 UI 层快速迭代，不依赖宿主仓打包产物，也可以继续使用上面的独立形态命令：`dotnet run --project App/MAAUnified.App.csproj`
-
-## 配置约定
-
-- 主配置文件：`config/avalonia.json`
-- 自动导入条件：`avalonia.json` 不存在
-- 导入顺序：`gui.new.json` -> `gui.json` -> 默认值
-- 旧配置文件仅作为读取来源，不会被回写覆盖
-
-## 暂未支持
-
-- macOS / Linux 显卡能力支持：该部分涉及 MaaCore 边界，当前暂不实现
-- macOS / Linux 关闭模拟器功能：仍需按平台分别适配，暂未完成调试
-- MaaUnified 的软件更新：已接入并可用
+SDK 版本沿用本目录 [`global.json`](./global.json) 中指定的版本。
 
 ## 目录结构
 
-- [`App/`](./App/)：应用入口、视图、样式、ViewModel 与 UI 服务
-- [`Application/`](./Application/)：配置、运行时编排、功能服务、诊断与多语言资源
-- [`Platform/`](./Platform/)：托盘、通知、热键、自启动、Overlay 等平台能力封装
-- [`CoreBridge/`](./CoreBridge/)：MaaCore 桥接层与调试替身
-- [`Compat/`](./Compat/)：兼容映射、历史字段与默认值适配
-- [`Tests/`](./Tests/)：单元测试、契约测试与回归测试
-- [`Docs/`](./Docs/)：迁移文档、基线说明、平台策略与映射说明
-- [`CI/`](./CI/)：独立仓库与宿主仓库的 CI 模板
+- [`App/`](./App/)：应用入口、视图、样式、ViewModel 与 UI 服务。
+- [`Application/`](./Application/)：配置、运行时编排、功能服务、诊断与多语言资源。
+- [`Platform/`](./Platform/)：托盘、通知、热键、自启动、Overlay 等平台能力封装。
+- [`CoreBridge/`](./CoreBridge/)：MaaCore 桥接层与调试替身。
+- [`Compat/`](./Compat/)：兼容映射、历史字段与默认值适配。
+- [`Tests/`](./Tests/)：单元测试、契约测试与回归测试。
+- [`Docs/`](./Docs/)：项目文档索引、迁移说明、开发规范与基线材料。
+- [`CI/`](./CI/)：CI 模板与发布辅助脚本。
 
-## 开发原则
+## 文档入口
 
-- 以现有 WPF 行为为主要参考，逐步完成配置语义、交互逻辑与平台能力收口
-- 变更范围尽量限定在 `src/MAAUnified/**` 内
-- 涉及 MaaCore 边界的能力调整单独处理，不在前端层强行扩展
-
-## 相关文档
-
-- [`Docs/README.md`](./Docs/README.md)
-- [`Docs/avalonia-migration.md`](./Docs/avalonia-migration.md)
-- [`Docs/avalonia-parity-matrix.md`](./Docs/avalonia-parity-matrix.md)
-- [`Docs/avalonia-platform-degrade-strategy.md`](./Docs/avalonia-platform-degrade-strategy.md)
-- [`Docs/wpf-avalonia-field-mapping.md`](./Docs/wpf-avalonia-field-mapping.md)
+- [`Docs/README.md`](./Docs/README.md)：文档总索引。
+- [`Docs/zh-cn/README.md`](./Docs/zh-cn/README.md)：中文文档入口。
+- [`Docs/zh-cn/develop/development.md`](./Docs/zh-cn/develop/development.md)：本地环境、构建、运行、测试与诊断说明。
+- [`Docs/zh-cn/develop/contributing.md`](./Docs/zh-cn/develop/contributing.md)：fork、分支、push、PR 与 submodule 协作流程。
+- [`Docs/zh-cn/develop/ci-and-release.md`](./Docs/zh-cn/develop/ci-and-release.md)：CI、打包矩阵、调试包与发布链路说明。
+- [`Docs/zh-cn/platform-capabilities.md`](./Docs/zh-cn/platform-capabilities.md)：平台能力与降级说明。
+- [`Docs/zh-cn/develop/README.md`](./Docs/zh-cn/develop/README.md)：开发文档索引。
+- [`Docs/zh-cn/protocol/README.md`](./Docs/zh-cn/protocol/README.md)：协议与数据约定索引。

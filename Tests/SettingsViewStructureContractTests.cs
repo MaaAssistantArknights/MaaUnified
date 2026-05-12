@@ -1,4 +1,6 @@
 using System.Text.RegularExpressions;
+using Avalonia.Media;
+using MAAUnified.App.Controls;
 using MAAUnified.App.ViewModels.Infrastructure;
 
 namespace MAAUnified.Tests;
@@ -46,6 +48,12 @@ public sealed class SettingsViewStructureContractTests
         var gui = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "GuiSettingsView.axaml"));
         Assert.Contains("IsVisible=\"{Binding CanMinimizeToTray}\"", gui, StringComparison.Ordinal);
         Assert.Contains("RootTexts[Settings.GUI.UseNotify]", gui, StringComparison.Ordinal);
+        Assert.Contains("RootTexts[Settings.GUI.UiScalePercent]", gui, StringComparison.Ordinal);
+        Assert.Contains("RootTexts[Settings.GUI.UiScalePercentTip]", gui, StringComparison.Ordinal);
+        Assert.Contains("Value=\"{Binding UiScalePercent}\"", gui, StringComparison.Ordinal);
+        Assert.Contains("Minimum=\"70\"", gui, StringComparison.Ordinal);
+        Assert.Contains("Maximum=\"140\"", gui, StringComparison.Ordinal);
+        Assert.Contains("CommitValueOnLostFocus=\"True\"", gui, StringComparison.Ordinal);
 
         var start = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "StartSettingsView.axaml"));
         Assert.Contains("IsVisible=\"{Binding CanEditEmulatorLaunchSettings}\"", start, StringComparison.Ordinal);
@@ -416,6 +424,48 @@ public sealed class SettingsViewStructureContractTests
         Assert.Contains("return SectionOrder;", settingsView, StringComparison.Ordinal);
         Assert.Contains("MaterializeSectionsSequentiallyAsync(", settingsView, StringComparison.Ordinal);
         Assert.Contains("QueueScrollToSelectedSectionAfterLayout()", settingsView, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void MainWindow_ShouldApplyUiScaleThroughLayoutTransformControl()
+    {
+        var root = GetMaaUnifiedRoot();
+        var mainWindow = File.ReadAllText(Path.Combine(root, "App", "Views", "MainWindow.axaml"));
+
+        Assert.Contains("<LayoutTransformControl>", mainWindow, StringComparison.Ordinal);
+        Assert.Contains("<LayoutTransformControl.LayoutTransform>", mainWindow, StringComparison.Ordinal);
+        Assert.Contains("ScaleX=\"{Binding EffectiveUiScaleFactor}\"", mainWindow, StringComparison.Ordinal);
+        Assert.Contains("ScaleY=\"{Binding EffectiveUiScaleFactor}\"", mainWindow, StringComparison.Ordinal);
+        Assert.Contains("ChromeScaleFactor=\"{Binding EffectiveUiScaleFactor}\"", mainWindow, StringComparison.Ordinal);
+
+        var appFoundationStyles = File.ReadAllText(Path.Combine(root, "App", "Styles", "AppFoundationStyles.axaml"));
+        Assert.Contains("LayoutTransform=\"{Binding ChromeLayoutTransform, RelativeSource={RelativeSource TemplatedParent}}\"", appFoundationStyles, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AppWindowFrame_ChromeScaleFactor_ShouldUpdateChromeLayoutTransform()
+    {
+        var frame = new AppWindowFrame
+        {
+            ChromeScaleFactor = 1.6,
+        };
+
+        var transform = Assert.IsType<ScaleTransform>(frame.ChromeLayoutTransform);
+        Assert.Equal(1.6, transform.ScaleX, precision: 6);
+        Assert.Equal(1.6, transform.ScaleY, precision: 6);
+    }
+
+    [Fact]
+    public void MacOSPackageScript_ShouldSignDotnetHostWithEntitlements()
+    {
+        var root = GetMaaUnifiedRoot();
+        var script = File.ReadAllText(Path.Combine(root, "CI", "create-macos-app-dmg.sh"));
+
+        Assert.Contains("com.apple.security.cs.allow-jit", script, StringComparison.Ordinal);
+        Assert.Contains("com.apple.security.cs.allow-unsigned-executable-memory", script, StringComparison.Ordinal);
+        Assert.Contains("com.apple.security.cs.disable-executable-page-protection", script, StringComparison.Ordinal);
+        Assert.Contains("--entitlements \"$entitlements_path\"", script, StringComparison.Ordinal);
+        Assert.Contains("grep -Eq 'Mach-O.*executable'", script, StringComparison.Ordinal);
     }
 
     [Fact]
