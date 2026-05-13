@@ -82,6 +82,14 @@ public static class PlatformServicesFactory
                     waylandPortalHotkey,
                     new WindowScopedHotkeyService());
             }
+            else if (!forceFallback
+                     && OperatingSystem.IsMacOS()
+                     && MacCarbonGlobalHotkeyService.TryCreate(out var macCarbonHotkey))
+            {
+                hotkeyService = new CompositeGlobalHotkeyService(
+                    macCarbonHotkey,
+                    new WindowScopedHotkeyService());
+            }
             else if (!forceFallback && SharpHookGlobalHotkeyService.TryCreate(out var nativeHotkey))
             {
                 hotkeyService = new CompositeGlobalHotkeyService(

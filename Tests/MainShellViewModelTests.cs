@@ -387,6 +387,56 @@ public sealed class MainShellViewModelTests
     }
 
     [Fact]
+    public async Task AchievementToast_StartupRelease_ShouldWaitForAnnouncementCompletion()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var announcementGate = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        fixture.ViewModel.PrepareStartupAchievementToastAnnouncementGate(announcementGate.Task);
+        fixture.ViewModel.BeginAchievementToastStartupRelease();
+
+        var unlockResult = fixture.Runtime.AchievementTrackerService.Unlock("Linguist");
+        Assert.True(unlockResult.Success);
+        Dispatcher.UIThread.RunJobs();
+
+        await Task.Delay(150);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Empty(fixture.ViewModel.AchievementToasts);
+
+        announcementGate.TrySetResult(true);
+
+        Assert.True(await WaitUntilAsync(
+            () =>
+            {
+                Dispatcher.UIThread.RunJobs();
+                return fixture.ViewModel.AchievementToasts.Count == 1;
+            },
+            retry: 80,
+            delayMs: 25));
+    }
+
+    [Fact]
+    public async Task AchievementToast_StartupRelease_ShouldProceedImmediatelyWhenAnnouncementNotNeeded()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+
+        fixture.ViewModel.PrepareStartupAchievementToastAnnouncementGate(Task.CompletedTask);
+        fixture.ViewModel.BeginAchievementToastStartupRelease();
+
+        var unlockResult = fixture.Runtime.AchievementTrackerService.Unlock("Linguist");
+        Assert.True(unlockResult.Success);
+
+        Assert.True(await WaitUntilAsync(
+            () =>
+            {
+                Dispatcher.UIThread.RunJobs();
+                return fixture.ViewModel.AchievementToasts.Count == 1;
+            },
+            retry: 40,
+            delayMs: 25));
+    }
+
+    [Fact]
     public async Task InitializeAsync_CoreInitFailure_ShouldRaiseDialogError()
     {
         await using var fixture = await TestFixture.CreateAsync(
@@ -983,20 +1033,25 @@ public sealed class MainShellViewModelTests
     }
 
     [Theory]
-    [InlineData(100, true, 0.9)]
-    [InlineData(80, true, 0.72)]
-    [InlineData(130, true, 1.17)]
-    [InlineData(200, true, 1.26)]
-    [InlineData(100, false, 1.0)]
-    [InlineData(80, false, 0.8)]
-    [InlineData(40, false, 0.7)]
-    [InlineData(200, false, 1.4)]
+    [InlineData(100, true, false, 0.9)]
+    [InlineData(80, true, false, 0.72)]
+    [InlineData(130, true, false, 1.17)]
+    [InlineData(200, true, false, 1.26)]
+    [InlineData(100, false, true, 0.9)]
+    [InlineData(80, false, true, 0.72)]
+    [InlineData(130, false, true, 1.17)]
+    [InlineData(200, false, true, 1.26)]
+    [InlineData(100, false, false, 1.0)]
+    [InlineData(80, false, false, 0.8)]
+    [InlineData(40, false, false, 0.7)]
+    [InlineData(200, false, false, 1.4)]
     public void ComputeEffectiveUiScaleFactor_AppliesPlatformBaseAndClamp(
         int uiScalePercent,
         bool isWindows,
+        bool isMacOS,
         double expected)
     {
-        var actual = MainShellViewModel.ComputeEffectiveUiScaleFactor(uiScalePercent, isWindows);
+        var actual = MainShellViewModel.ComputeEffectiveUiScaleFactor(uiScalePercent, isWindows, isMacOS);
 
         Assert.Equal(expected, actual, precision: 6);
     }

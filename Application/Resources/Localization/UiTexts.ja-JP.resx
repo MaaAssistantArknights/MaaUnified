@@ -1637,6 +1637,15 @@
   <data name="Settings.ConfigurationManager.Import.LegacyFilenameInvalid" xml:space="preserve">
     <value>旧版プロファイルのファイル名が正しくありません。gui.json または gui.new.json を選択してください。</value>
   </data>
+  <data name="Settings.ConfigurationManager.Import.LegacyDirectoryMissingBoth" xml:space="preserve">
+    <value>選択したフォルダーに gui.new.json と gui.json が見つかりません。</value>
+  </data>
+  <data name="Settings.ConfigurationManager.Import.LegacyDirectoryMissingGui" xml:space="preserve">
+    <value>選択したフォルダーに gui.json が見つかりません。</value>
+  </data>
+  <data name="Settings.ConfigurationManager.Import.LegacyDirectoryMissingGuiNew" xml:space="preserve">
+    <value>選択したフォルダーに gui.new.json が見つかりません。</value>
+  </data>
   <data name="Settings.ConfigurationManager.Import.LegacyInvalidFilesOnly" xml:space="preserve">
     <value>選択内にファイル名が不正な旧版プロファイルがあります。</value>
   </data>
@@ -1678,6 +1687,9 @@
   </data>
   <data name="Settings.ConfigurationManager.SaveAsNewSucceededInline" xml:space="preserve">
     <value>保存しました</value>
+  </data>
+  <data name="Settings.ConfigurationManager.ImportSucceededInline" xml:space="preserve">
+    <value>インポートしました</value>
   </data>
   <data name="Settings.ConfigurationManager.SaveAsNewFailedInline" xml:space="preserve">
     <value>保存に失敗しました: {0}</value>

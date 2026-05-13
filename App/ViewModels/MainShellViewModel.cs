@@ -52,6 +52,7 @@ public sealed class MainShellViewModel : ObservableObject
     private readonly OverlaySharedState _overlaySharedState;
     private readonly Dictionary<int, string> _timerSlotMinuteDedup = [];
     private readonly Queue<AchievementUnlockedEvent> _pendingAchievementToasts = [];
+    private readonly TaskCompletionSource<bool> _startupAchievementToastAnnouncementGate = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private Task _pendingLanguageApplyTask = Task.CompletedTask;
     private readonly CancellationTokenSource _startupCts = new();
     private readonly TaskCompletionSource<bool> _startupSnapshotReadyTcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -83,6 +84,8 @@ public sealed class MainShellViewModel : ObservableObject
     private ImportSourceOptionItem? _selectedImportSourceOption;
     private bool _achievementToastWindowVisible = true;
     private bool _achievementToastStartupCompleted;
+    private bool _startupAchievementToastReleaseStarted;
+    private bool _startupAchievementToastAnnouncementGatePrepared;
     private bool _isWindowUpdateOverlayPresented;
     private bool _isWindowUpdateOverlayAnimationHidden = true;
     private bool _isShellBlockingOperationOverlayVisible;
@@ -95,7 +98,10 @@ public sealed class MainShellViewModel : ObservableObject
     private bool _windowTitleScrollable;
     private int _windowTitleScrollOffset;
     private CancellationTokenSource? _windowUpdateOverlayAnimationCts;
-    private double _effectiveUiScaleFactor = ComputeEffectiveUiScaleFactor(StartupShellSnapshot.Default.UiScalePercent, OperatingSystem.IsWindows());
+    private double _effectiveUiScaleFactor = ComputeEffectiveUiScaleFactor(
+        StartupShellSnapshot.Default.UiScalePercent,
+        OperatingSystem.IsWindows(),
+        OperatingSystem.IsMacOS());
     private Bitmap? _shellBackgroundImage;
     private double _shellBackgroundOpacity = 0.45;
     private int _shellBackgroundBlur = 12;
@@ -443,10 +449,10 @@ public sealed class MainShellViewModel : ObservableObject
 
     public bool HasMultipleWindowUpdates => HasWindowVersionUpdateInfo && HasWindowResourceUpdateInfo;
 
-    public static double ComputeEffectiveUiScaleFactor(int uiScalePercent, bool isWindows)
+    public static double ComputeEffectiveUiScaleFactor(int uiScalePercent, bool isWindows, bool isMacOS = false)
     {
         var userScale = Math.Clamp(uiScalePercent, 70, 140) / 100d;
-        var platformScale = isWindows ? 0.9d : 1d;
+        var platformScale = (isWindows || isMacOS) ? 0.9d : 1d;
         return userScale * platformScale;
     }
 
@@ -697,6 +703,7 @@ public sealed class MainShellViewModel : ObservableObject
                     loadResult.ValidationIssues,
                     "Config.LoadValidation",
                     cancellationToken);
+                await PersistPlatformHotkeyDefaultsMigrationIfNeededAsync(cancellationToken);
 
                 ApplyDeveloperModeFromConfig();
                 _runtime.AchievementTrackerService.RecordStartup(
@@ -759,6 +766,23 @@ public sealed class MainShellViewModel : ObservableObject
         }
     }
 
+    private async Task PersistPlatformHotkeyDefaultsMigrationIfNeededAsync(CancellationToken cancellationToken)
+    {
+        if (!HotkeyConfigurationCodec.ApplyPlatformDefaultsMigration(_runtime.ConfigurationService.CurrentConfig))
+        {
+            return;
+        }
+
+        try
+        {
+            await _runtime.ConfigurationService.SaveAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _runtime.LogService.Warn($"Failed to persist platform hotkey defaults migration during startup: {ex.Message}");
+        }
+    }
+
     private async Task RunDeferredStartupAfterFirstScreenAsync(
         ConfigLoadResult loadResult,
         CancellationToken cancellationToken)
@@ -772,13 +796,22 @@ public sealed class MainShellViewModel : ObservableObject
             await ApplyGuiSettingsAsync(settingsPage.CurrentGuiSnapshot, cancellationToken);
         }
 
+        SettingsPageViewModel? startupAnnouncementSettingsPage = null;
+        if (settingsLoaded && TryGetSettingsPage(out var loadedSettingsPage))
+        {
+            startupAnnouncementSettingsPage = loadedSettingsPage;
+        }
+
+        PrepareStartupAchievementToastAnnouncementGate(
+            startupAnnouncementSettingsPage?.PrepareStartupAnnouncementCompletionTask() ?? Task.CompletedTask);
+
         StartBackgroundStartupDialog(
             ct => ShowSchemaMigrationNoticeIfNeededAsync(loadResult, ct),
             cancellationToken);
-        if (settingsLoaded && TryGetSettingsPage(out var startupSettingsPage))
+        if (startupAnnouncementSettingsPage is not null)
         {
             StartBackgroundStartupDialog(
-                ct => RunStartupAnnouncementWorkflowAsync(startupSettingsPage, ct),
+                ct => RunStartupAnnouncementWorkflowAsync(startupAnnouncementSettingsPage, ct),
                 cancellationToken);
         }
 
@@ -1084,7 +1117,10 @@ public sealed class MainShellViewModel : ObservableObject
         _rootLogTimeFormat = snapshot.LogItemDateFormatString;
         RootTexts.Language = language;
         RefreshRootTextState();
-        EffectiveUiScaleFactor = ComputeEffectiveUiScaleFactor(snapshot.UiScalePercent, OperatingSystem.IsWindows());
+        EffectiveUiScaleFactor = ComputeEffectiveUiScaleFactor(
+            snapshot.UiScalePercent,
+            OperatingSystem.IsWindows(),
+            OperatingSystem.IsMacOS());
 
         if (Avalonia.Application.Current is not null)
         {
@@ -1855,6 +1891,17 @@ public sealed class MainShellViewModel : ObservableObject
         PresentAchievementToast(notification);
     }
 
+    internal void BeginAchievementToastStartupRelease()
+    {
+        if (_startupAchievementToastReleaseStarted)
+        {
+            return;
+        }
+
+        _startupAchievementToastReleaseStarted = true;
+        _ = ReleaseAchievementToastsAfterStartupAnnouncementAsync();
+    }
+
     internal void MarkAchievementToastStartupCompleted()
     {
         if (_achievementToastStartupCompleted)
@@ -1867,6 +1914,17 @@ public sealed class MainShellViewModel : ObservableObject
         TryFlushPendingAchievementToasts();
     }
 
+    internal void PrepareStartupAchievementToastAnnouncementGate(Task startupAnnouncementCompletionTask)
+    {
+        if (_startupAchievementToastAnnouncementGatePrepared)
+        {
+            return;
+        }
+
+        _startupAchievementToastAnnouncementGatePrepared = true;
+        _ = ObserveStartupAchievementToastAnnouncementGateAsync(startupAnnouncementCompletionTask);
+    }
+
     private void TryFlushPendingAchievementToasts()
     {
         if (!_achievementToastWindowVisible || !_achievementToastStartupCompleted)
@@ -1875,6 +1933,34 @@ public sealed class MainShellViewModel : ObservableObject
         }
 
         FlushPendingAchievementToasts();
+    }
+
+    private async Task ReleaseAchievementToastsAfterStartupAnnouncementAsync()
+    {
+        try
+        {
+            await _startupAchievementToastAnnouncementGate.Task;
+        }
+        finally
+        {
+            Dispatcher.UIThread.Post(MarkAchievementToastStartupCompleted, DispatcherPriority.Send);
+        }
+    }
+
+    private async Task ObserveStartupAchievementToastAnnouncementGateAsync(Task startupAnnouncementCompletionTask)
+    {
+        try
+        {
+            await startupAnnouncementCompletionTask;
+        }
+        catch
+        {
+            // Announcement failures are handled by the startup workflow; toast startup should not remain blocked.
+        }
+        finally
+        {
+            _startupAchievementToastAnnouncementGate.TrySetResult(true);
+        }
     }
 
     private void FlushPendingAchievementToasts()
@@ -2742,7 +2828,10 @@ public sealed class MainShellViewModel : ObservableObject
             lockAcquired = true;
 
             AppliedTheme = snapshot.Theme;
-            EffectiveUiScaleFactor = ComputeEffectiveUiScaleFactor(snapshot.UiScalePercent, OperatingSystem.IsWindows());
+            EffectiveUiScaleFactor = ComputeEffectiveUiScaleFactor(
+                snapshot.UiScalePercent,
+                OperatingSystem.IsWindows(),
+                OperatingSystem.IsMacOS());
             _rootLogTimeFormat = snapshot.LogItemDateFormatString;
             RootTexts.Language = CurrentShellLanguage;
             RefreshRootTextState();
@@ -2769,7 +2858,7 @@ public sealed class MainShellViewModel : ObservableObject
             ApplyShellBackgroundImage(snapshot.BackgroundImagePath);
             await RecordEventAsync(
                 "App.Gui.Apply.UiScale",
-                $"platform={(OperatingSystem.IsWindows() ? "Windows" : "Other")}; uiScalePercent={snapshot.UiScalePercent}; platformBase={(OperatingSystem.IsWindows() ? "0.9" : "1.0")}; effectiveUiScale={EffectiveUiScaleFactor.ToString("0.###", CultureInfo.InvariantCulture)}",
+                $"platform={(OperatingSystem.IsWindows() ? "Windows" : OperatingSystem.IsMacOS() ? "MacOS" : "Other")}; uiScalePercent={snapshot.UiScalePercent}; platformBase={((OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()) ? "0.9" : "1.0")}; effectiveUiScale={EffectiveUiScaleFactor.ToString("0.###", CultureInfo.InvariantCulture)}",
                 cancellationToken);
 
             await RefreshCapabilitySummaryAsync(cancellationToken);

@@ -19,6 +19,7 @@ public static class PlatformErrorCodes
     public const string HotkeyConflict = "HotkeyConflict";
     public const string HotkeyNotFound = "HotkeyNotFound";
     public const string HotkeyPermissionDenied = "HotkeyPermissionDenied";
+    public const string HotkeyNativeRegistrationFailed = "HotkeyNativeRegistrationFailed";
     public const string HotkeyHookStartFailed = "HotkeyHookStartFailed";
     public const string HotkeyTriggerDispatchFailed = "HotkeyTriggerDispatchFailed";
     public const string HotkeyPortalUnavailable = "HotkeyPortalUnavailable";

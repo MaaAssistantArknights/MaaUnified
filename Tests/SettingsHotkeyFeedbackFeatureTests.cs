@@ -229,6 +229,45 @@ public sealed class SettingsHotkeyFeedbackFeatureTests
     }
 
     [Fact]
+    public void ApplyPlatformDefaultsMigration_OnMac_ResetsHotkeysAndWritesVersion()
+    {
+        var config = new UnifiedConfig();
+        config.GlobalValues[ConfigurationKeys.HotKeys] = JsonValue.Create("ShowGui=Ctrl+1;LinkStart=Ctrl+2");
+
+        var changed = HotkeyConfigurationCodec.ApplyPlatformDefaultsMigration(config, isMacOS: true);
+
+        Assert.True(changed);
+        Assert.Equal("ShowGui=Meta+Shift+M;LinkStart=Meta+Shift+L", ReadGlobalString(config, ConfigurationKeys.HotKeys));
+        Assert.Equal("1", ReadGlobalString(config, HotkeyConfigurationCodec.MacDefaultsVersionKey));
+    }
+
+    [Fact]
+    public void ApplyPlatformDefaultsMigration_WhenAlreadyVersioned_DoesNotOverwriteCustomBindings()
+    {
+        var config = new UnifiedConfig();
+        config.GlobalValues[ConfigurationKeys.HotKeys] = JsonValue.Create("ShowGui=Meta+Alt+G;LinkStart=Meta+Alt+R");
+        config.GlobalValues[HotkeyConfigurationCodec.MacDefaultsVersionKey] = JsonValue.Create("1");
+
+        var changed = HotkeyConfigurationCodec.ApplyPlatformDefaultsMigration(config, isMacOS: true);
+
+        Assert.False(changed);
+        Assert.Equal("ShowGui=Meta+Alt+G;LinkStart=Meta+Alt+R", ReadGlobalString(config, ConfigurationKeys.HotKeys));
+    }
+
+    [Fact]
+    public void ApplyPlatformDefaultsMigration_OnNonMac_DoesNothing()
+    {
+        var config = new UnifiedConfig();
+        config.GlobalValues[ConfigurationKeys.HotKeys] = JsonValue.Create("ShowGui=Ctrl+1;LinkStart=Ctrl+2");
+
+        var changed = HotkeyConfigurationCodec.ApplyPlatformDefaultsMigration(config, isMacOS: false);
+
+        Assert.False(changed);
+        Assert.Equal("ShowGui=Ctrl+1;LinkStart=Ctrl+2", ReadGlobalString(config, ConfigurationKeys.HotKeys));
+        Assert.Equal(string.Empty, ReadGlobalString(config, HotkeyConfigurationCodec.MacDefaultsVersionKey));
+    }
+
+    [Fact]
     public async Task HotkeyCaptureTexts_ShouldRefreshWithLanguageSwitch_AndUseLocalizedCaptureErrors()
     {
         await using var fixture = await RuntimeFixture.CreateAsync();
@@ -302,8 +341,11 @@ public sealed class SettingsHotkeyFeedbackFeatureTests
     }
 
     private static string ReadGlobalString(UnifiedConfigurationService config, string key)
+        => ReadGlobalString(config.CurrentConfig, key);
+
+    private static string ReadGlobalString(UnifiedConfig config, string key)
     {
-        if (!config.CurrentConfig.GlobalValues.TryGetValue(key, out var node) || node is null)
+        if (!config.GlobalValues.TryGetValue(key, out var node) || node is null)
         {
             return string.Empty;
         }

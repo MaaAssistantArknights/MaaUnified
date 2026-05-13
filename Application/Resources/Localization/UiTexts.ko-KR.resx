@@ -1638,6 +1638,15 @@ OF-1 스테이지가 개방되지 않은 경우에는 선택하지 마세요.</v
   <data name="Settings.ConfigurationManager.Import.LegacyFilenameInvalid" xml:space="preserve">
     <value>레거시 프로필 파일 이름이 올바르지 않습니다. gui.json 또는 gui.new.json을 선택해 주세요.</value>
   </data>
+  <data name="Settings.ConfigurationManager.Import.LegacyDirectoryMissingBoth" xml:space="preserve">
+    <value>선택한 폴더에서 gui.new.json 및 gui.json을 찾지 못했습니다.</value>
+  </data>
+  <data name="Settings.ConfigurationManager.Import.LegacyDirectoryMissingGui" xml:space="preserve">
+    <value>선택한 폴더에서 gui.json을 찾지 못했습니다.</value>
+  </data>
+  <data name="Settings.ConfigurationManager.Import.LegacyDirectoryMissingGuiNew" xml:space="preserve">
+    <value>선택한 폴더에서 gui.new.json을 찾지 못했습니다.</value>
+  </data>
   <data name="Settings.ConfigurationManager.Import.LegacyInvalidFilesOnly" xml:space="preserve">
     <value>선택 항목에 파일 이름이 잘못된 레거시 프로필 파일이 포함되어 있습니다.</value>
   </data>
@@ -1679,6 +1688,9 @@ OF-1 스테이지가 개방되지 않은 경우에는 선택하지 마세요.</v
   </data>
   <data name="Settings.ConfigurationManager.SaveAsNewSucceededInline" xml:space="preserve">
     <value>저장되었습니다</value>
+  </data>
+  <data name="Settings.ConfigurationManager.ImportSucceededInline" xml:space="preserve">
+    <value>가져오기에 성공했습니다</value>
   </data>
   <data name="Settings.ConfigurationManager.SaveAsNewFailedInline" xml:space="preserve">
     <value>저장 실패: {0}</value>

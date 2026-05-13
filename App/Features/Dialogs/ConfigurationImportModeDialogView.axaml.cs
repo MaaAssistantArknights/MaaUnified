@@ -1,3 +1,4 @@
+using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using MAAUnified.App.Infrastructure;
@@ -6,6 +7,10 @@ namespace MAAUnified.App.Features.Dialogs;
 
 public partial class ConfigurationImportModeDialogView : Window
 {
+    private readonly TaskCompletionSource<ConfigurationImportMode> _selectionCompletion = new();
+    private bool _selectionStarted;
+    private bool _allowCloseAfterSelection;
+
     public ConfigurationImportModeDialogView()
     {
         InitializeComponent();
@@ -24,17 +29,59 @@ public partial class ConfigurationImportModeDialogView : Window
         ManualDescriptionTextBlock.Text = request.ManualDescription;
     }
 
+    public Task<ConfigurationImportMode> WaitForSelectionAsync() => _selectionCompletion.Task;
+
+    public void CloseIfOpen()
+    {
+        if (_selectionStarted && !_allowCloseAfterSelection)
+        {
+            return;
+        }
+
+        if (!_selectionCompletion.Task.IsCompleted)
+        {
+            _selectionCompletion.TrySetResult(ConfigurationImportMode.Cancel);
+        }
+
+        if (!IsVisible)
+        {
+            return;
+        }
+
+        Close();
+    }
+
+    public void CompleteSelectionFlowAndClose()
+    {
+        _allowCloseAfterSelection = true;
+        CloseIfOpen();
+    }
+
     private void OnLegacyWindowsClick(object? sender, RoutedEventArgs e)
-        => Close(ConfigurationImportMode.LegacyWindows);
+        => TryStartSelection(ConfigurationImportMode.LegacyWindows);
 
     private void OnUnifiedClick(object? sender, RoutedEventArgs e)
-        => Close(ConfigurationImportMode.Unified);
+        => TryStartSelection(ConfigurationImportMode.Unified);
 
     private void OnManualClick(object? sender, RoutedEventArgs e)
-        => Close(ConfigurationImportMode.Manual);
+        => TryStartSelection(ConfigurationImportMode.Manual);
 
     private void OnShellCloseRequested(object? sender, EventArgs e)
-        => Close(ConfigurationImportMode.Cancel);
+        => CloseIfOpen();
+
+    private void TryStartSelection(ConfigurationImportMode mode)
+    {
+        if (_selectionStarted)
+        {
+            return;
+        }
+
+        _selectionStarted = true;
+        LegacyWindowsButton.IsEnabled = false;
+        UnifiedButton.IsEnabled = false;
+        ManualButton.IsEnabled = false;
+        _selectionCompletion.TrySetResult(mode);
+    }
 }
 
 public sealed record ConfigurationImportModeDialogRequest(

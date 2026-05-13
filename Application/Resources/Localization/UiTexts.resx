@@ -2721,6 +2721,15 @@ Session state `{0}` does not allow {2}.</value>
   <data name="Settings.ConfigurationManager.Import.LegacyFilenameInvalid" xml:space="preserve">
     <value>旧配置文件名不正确，请选择 gui.json 或 gui.new.json。</value>
   </data>
+  <data name="Settings.ConfigurationManager.Import.LegacyDirectoryMissingBoth" xml:space="preserve">
+    <value>所选文件夹中未能找到 gui.new.json 和 gui.json。</value>
+  </data>
+  <data name="Settings.ConfigurationManager.Import.LegacyDirectoryMissingGui" xml:space="preserve">
+    <value>所选文件夹中未能找到 gui.json。</value>
+  </data>
+  <data name="Settings.ConfigurationManager.Import.LegacyDirectoryMissingGuiNew" xml:space="preserve">
+    <value>所选文件夹中未能找到 gui.new.json。</value>
+  </data>
   <data name="Settings.ConfigurationManager.Import.LegacyInvalidFilesOnly" xml:space="preserve">
     <value>选择中存在文件名不正确的旧配置文件。</value>
   </data>
@@ -2801,6 +2810,9 @@ Session state `{0}` does not allow {2}.</value>
   </data>
   <data name="Settings.ConfigurationManager.SaveAsNewSucceededInline" xml:space="preserve">
     <value>保存成功</value>
+  </data>
+  <data name="Settings.ConfigurationManager.ImportSucceededInline" xml:space="preserve">
+    <value>导入成功</value>
   </data>
   <data name="Settings.ConfigurationManager.SaveAsNewFailedInline" xml:space="preserve">
     <value>保存失败：{0}</value>

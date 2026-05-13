@@ -173,14 +173,7 @@ public partial class ConfigurationManagerView : UserControl
 
         while (true)
         {
-            var mode = await ShowImportModeDialogAsync(text);
-            var analysis = mode switch
-            {
-                ConfigurationImportMode.LegacyWindows => await PickLegacyWindowsImportAsync(text),
-                ConfigurationImportMode.Unified => await PickUnifiedImportAsync(text),
-                ConfigurationImportMode.Manual => await PickManualImportAsync(text),
-                _ => null,
-            };
+            var analysis = await ShowImportModeDialogAsync(text);
             if (analysis is null)
             {
                 return;
@@ -259,39 +252,51 @@ public partial class ConfigurationManagerView : UserControl
                 ShowOverwritePrompt = true,
                 FileTypeChoices =
                 [
-                    CreateJsonFileType(),
+                    CreateJsonFileType(T("Settings.ConfigurationManager.FileType.Json")),
                 ],
             });
         return file?.TryGetLocalPath();
     }
 
-    private async Task<ConfigurationImportSelectionAnalysis?> PickLegacyWindowsImportAsync(Func<string, string> text)
+    private async Task<ConfigurationImportSelectionAnalysis?> PickLegacyWindowsImportAsync(
+        TopLevel topLevel,
+        Func<string, string> text)
     {
-        var directory = await PickImportFolderAsync(text("Settings.ConfigurationManager.Dialog.ImportLegacyWindowsFolderTitle"));
+        var directory = await PickImportFolderAsync(
+            topLevel,
+            text("Settings.ConfigurationManager.Dialog.ImportLegacyWindowsFolderTitle"));
         return string.IsNullOrWhiteSpace(directory)
             ? null
             : ConfigurationImportSelectionAnalyzer.AnalyzeLegacyDirectory(directory, text);
     }
 
-    private async Task<ConfigurationImportSelectionAnalysis?> PickUnifiedImportAsync(Func<string, string> text)
+    private async Task<ConfigurationImportSelectionAnalysis?> PickUnifiedImportAsync(
+        TopLevel topLevel,
+        Func<string, string> text)
     {
-        var directory = await PickImportFolderAsync(text("Settings.ConfigurationManager.Dialog.ImportUnifiedFolderTitle"));
+        var directory = await PickImportFolderAsync(
+            topLevel,
+            text("Settings.ConfigurationManager.Dialog.ImportUnifiedFolderTitle"));
         return string.IsNullOrWhiteSpace(directory)
             ? null
             : ConfigurationImportSelectionAnalyzer.AnalyzeUnifiedDirectory(directory, text);
     }
 
-    private async Task<ConfigurationImportSelectionAnalysis?> PickManualImportAsync(Func<string, string> text)
+    private async Task<ConfigurationImportSelectionAnalysis?> PickManualImportAsync(
+        TopLevel topLevel,
+        Func<string, string> text)
     {
-        var importPaths = await PickImportPathsAsync(text("Settings.ConfigurationManager.Dialog.ImportTitle"));
+        var importPaths = await PickImportPathsAsync(
+            topLevel,
+            text("Settings.ConfigurationManager.Dialog.ImportTitle"),
+            text("Settings.ConfigurationManager.FileType.Json"));
         return importPaths.Count == 0
             ? null
             : ConfigurationImportSelectionAnalyzer.Analyze(importPaths, text);
     }
 
-    private async Task<string?> PickImportFolderAsync(string title)
+    private static async Task<string?> PickImportFolderAsync(TopLevel topLevel, string title)
     {
-        var topLevel = TopLevel.GetTopLevel(this);
         if (topLevel?.StorageProvider is not { CanOpen: true } storageProvider)
         {
             return null;
@@ -308,9 +313,8 @@ public partial class ConfigurationManagerView : UserControl
             .FirstOrDefault(path => !string.IsNullOrWhiteSpace(path));
     }
 
-    private async Task<IReadOnlyList<string>> PickImportPathsAsync(string title)
+    private static async Task<IReadOnlyList<string>> PickImportPathsAsync(TopLevel topLevel, string title, string jsonTypeDisplayName)
     {
-        var topLevel = TopLevel.GetTopLevel(this);
         if (topLevel?.StorageProvider is not { CanOpen: true } storageProvider)
         {
             return [];
@@ -323,7 +327,7 @@ public partial class ConfigurationManagerView : UserControl
                 AllowMultiple = true,
                 FileTypeFilter =
                 [
-                    CreateJsonFileType(),
+                    CreateJsonFileType(jsonTypeDisplayName),
                 ],
             });
         return files
@@ -411,11 +415,11 @@ public partial class ConfigurationManagerView : UserControl
         return true;
     }
 
-    private async Task<ConfigurationImportMode> ShowImportModeDialogAsync(Func<string, string> text)
+    private async Task<ConfigurationImportSelectionAnalysis?> ShowImportModeDialogAsync(Func<string, string> text)
     {
         if (TopLevel.GetTopLevel(this) is not Window owner)
         {
-            return ConfigurationImportMode.Manual;
+            return await PickManualImportAsync(TopLevel.GetTopLevel(this)!, text);
         }
 
         var dialog = new ConfigurationImportModeDialogView();
@@ -427,7 +431,23 @@ public partial class ConfigurationManagerView : UserControl
             UnifiedDescription: text("Settings.ConfigurationManager.ImportMode.UnifiedDescription"),
             ManualTitle: text("Settings.ConfigurationManager.ImportMode.Manual"),
             ManualDescription: text("Settings.ConfigurationManager.ImportMode.ManualDescription")));
-        return await dialog.ShowDialog<ConfigurationImportMode?>(owner) ?? ConfigurationImportMode.Cancel;
+        dialog.Show(owner);
+
+        try
+        {
+            var mode = await dialog.WaitForSelectionAsync();
+            return mode switch
+            {
+                ConfigurationImportMode.LegacyWindows => await PickLegacyWindowsImportAsync(dialog, text),
+                ConfigurationImportMode.Unified => await PickUnifiedImportAsync(dialog, text),
+                ConfigurationImportMode.Manual => await PickManualImportAsync(dialog, text),
+                _ => null,
+            };
+        }
+        finally
+        {
+            dialog.CompleteSelectionFlowAndClose();
+        }
     }
 
     private static IReadOnlyDictionary<string, JsonNode?> BuildLegacyImportFallbackGlobalValues(SettingsPageViewModel vm)
@@ -488,7 +508,7 @@ public partial class ConfigurationManagerView : UserControl
         }
     }
 
-    private FilePickerFileType CreateJsonFileType() => new(T("Settings.ConfigurationManager.FileType.Json"))
+    private static FilePickerFileType CreateJsonFileType(string displayName) => new(displayName)
     {
         Patterns = ["*.json"],
         MimeTypes = ["application/json"],

@@ -40,12 +40,12 @@ internal static class ConfigurationImportSelectionAnalyzer
             var fileName = Path.GetFileName(singlePath);
             if (IsGuiNewFile(fileName))
             {
-                return ConfigurationImportSelectionAnalysis.Legacy(singlePath, null, hasInvalidFiles: false);
+                return ConfigurationImportSelectionAnalysis.Legacy(singlePath, null, hasInvalidFiles: false, textResolver);
             }
 
             if (IsGuiFile(fileName))
             {
-                return ConfigurationImportSelectionAnalysis.Legacy(null, singlePath, hasInvalidFiles: false);
+                return ConfigurationImportSelectionAnalysis.Legacy(null, singlePath, hasInvalidFiles: false, textResolver);
             }
 
             return InspectSingleFile(singlePath, textResolver);
@@ -82,10 +82,9 @@ internal static class ConfigurationImportSelectionAnalyzer
         var configDirectory = ResolveConfigDirectory(directory);
         var guiNewPath = Path.Combine(configDirectory, GuiNewConfigFileName);
         var guiPath = Path.Combine(configDirectory, GuiConfigFileName);
-        return ConfigurationImportSelectionAnalysis.Legacy(
+        return ConfigurationImportSelectionAnalysis.LegacyFromDirectory(
             File.Exists(guiNewPath) ? guiNewPath : null,
             File.Exists(guiPath) ? guiPath : null,
-            hasInvalidFiles: false,
             textResolver);
     }
 
@@ -233,6 +232,20 @@ internal sealed record ConfigurationImportSelectionAnalysis(
         string? guiPath,
         bool hasInvalidFiles,
         Func<string, string>? textResolver = null)
+        => LegacyCore(guiNewPath, guiPath, hasInvalidFiles, LegacySelectionMessageMode.ManualSelection, textResolver);
+
+    public static ConfigurationImportSelectionAnalysis LegacyFromDirectory(
+        string? guiNewPath,
+        string? guiPath,
+        Func<string, string>? textResolver = null)
+        => LegacyCore(guiNewPath, guiPath, hasInvalidFiles: false, LegacySelectionMessageMode.DirectorySelection, textResolver);
+
+    private static ConfigurationImportSelectionAnalysis LegacyCore(
+        string? guiNewPath,
+        string? guiPath,
+        bool hasInvalidFiles,
+        LegacySelectionMessageMode messageMode,
+        Func<string, string>? textResolver = null)
     {
         textResolver ??= ConfigurationImportSelectionAnalyzer.ResolveDefaultText;
         var missingParts = new List<string>();
@@ -246,12 +259,7 @@ internal sealed record ConfigurationImportSelectionAnalysis(
             missingParts.Add("gui.json");
         }
 
-        var message = missingParts.Count > 0
-            ? string.Format(
-                CultureInfo.CurrentCulture,
-                textResolver("Settings.ConfigurationManager.Import.MissingLegacyParts"),
-                string.Join(textResolver("Settings.Common.JoinAnd"), missingParts))
-            : string.Empty;
+        var message = BuildMissingLegacyMessage(missingParts, messageMode, textResolver);
         if (hasInvalidFiles)
         {
             message = string.IsNullOrWhiteSpace(message)
@@ -265,12 +273,41 @@ internal sealed record ConfigurationImportSelectionAnalysis(
         return new ConfigurationImportSelectionAnalysis(
             missingParts.Count == 0 && !hasInvalidFiles
                 ? ConfigurationImportSelectionKind.LegacyReady
+                : messageMode == LegacySelectionMessageMode.DirectorySelection && missingParts.Count > 1 && !hasInvalidFiles
+                    ? ConfigurationImportSelectionKind.Invalid
                 : ConfigurationImportSelectionKind.LegacyPartial,
             null,
             guiNewPath,
             guiPath,
             hasInvalidFiles,
             message);
+    }
+
+    private static string BuildMissingLegacyMessage(
+        IReadOnlyList<string> missingParts,
+        LegacySelectionMessageMode messageMode,
+        Func<string, string> textResolver)
+    {
+        if (missingParts.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        var joinedParts = string.Join(textResolver("Settings.Common.JoinAnd"), missingParts);
+        if (messageMode == LegacySelectionMessageMode.DirectorySelection)
+        {
+            var key = missingParts.Count > 1
+                ? "Settings.ConfigurationManager.Import.LegacyDirectoryMissingBoth"
+                : string.Equals(missingParts[0], "gui.new.json", StringComparison.OrdinalIgnoreCase)
+                    ? "Settings.ConfigurationManager.Import.LegacyDirectoryMissingGuiNew"
+                    : "Settings.ConfigurationManager.Import.LegacyDirectoryMissingGui";
+            return string.Format(CultureInfo.CurrentCulture, textResolver(key), joinedParts);
+        }
+
+        return string.Format(
+            CultureInfo.CurrentCulture,
+            textResolver("Settings.ConfigurationManager.Import.MissingLegacyParts"),
+            joinedParts);
     }
 
     public static ConfigurationImportSelectionAnalysis Invalid(string message)
@@ -296,4 +333,10 @@ internal enum ConfigurationImportJsonShape
     Unknown = 0,
     UnifiedConfig = 1,
     LegacyConfig = 2,
+}
+
+internal enum LegacySelectionMessageMode
+{
+    ManualSelection = 0,
+    DirectorySelection = 1,
 }

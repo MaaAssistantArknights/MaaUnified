@@ -5,7 +5,7 @@ namespace MAAUnified.App.ViewModels;
 
 public sealed class AchievementToastItemViewModel : ObservableObject, IDisposable
 {
-    private const double CloseCountdownSeconds = 5d;
+    private const double CloseCountdownSeconds = 7d;
     private readonly Action<string>? _dismissCallback;
     private readonly DispatcherTimer? _closeCountdownTimer;
     private DateTimeOffset _lastCloseCountdownTickUtc;

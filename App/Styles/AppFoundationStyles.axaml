@@ -298,7 +298,7 @@
             </Grid>
           </Border>
 
-          <Grid Margin="{TemplateBinding ShellMargin}"
+          <Grid Margin="{TemplateBinding EffectiveResizeGripMargin}"
                 UseLayoutRounding="True"
                 IsVisible="{TemplateBinding ShowsResizeGrips}"
                 ZIndex="10">

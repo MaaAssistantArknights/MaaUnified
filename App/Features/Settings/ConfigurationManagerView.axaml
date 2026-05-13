@@ -103,10 +103,20 @@
                 Classes="app-button app-secondary configuration-manager-action-button"
                 Content="{Binding RootTexts[Settings.ConfigurationManager.ExportAll]}"
                 Click="OnExportAllProfilesClick" />
-        <Button Grid.Column="2"
-                Classes="app-button app-secondary configuration-manager-action-button"
-                Content="{Binding RootTexts[Settings.ConfigurationManager.Import]}"
-                Click="OnImportProfilesClick" />
+        <Grid Grid.Column="2"
+              HorizontalAlignment="Left"
+              ColumnDefinitions="Auto,Auto">
+          <Button Classes="app-button app-secondary configuration-manager-action-button"
+                  Content="{Binding RootTexts[Settings.ConfigurationManager.Import]}"
+                  Click="OnImportProfilesClick" />
+          <TextBlock Grid.Column="1"
+                     Margin="8,0,0,0"
+                     VerticalAlignment="Center"
+                     Classes="app-caption state-success"
+                     Text="{Binding ConfigurationManagerImportSucceededText}"
+                     IsVisible="{Binding HasConfigurationManagerImportSucceeded}"
+                     TextWrapping="NoWrap" />
+        </Grid>
       </Grid>
     </controls:AdaptiveSpacingStackPanel>
   </Grid>

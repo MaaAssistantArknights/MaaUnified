@@ -29,8 +29,6 @@ public sealed record StartupShellSnapshot(
     private const string DefaultBackgroundStretchMode = "Fill";
     private const string DefaultLogItemDateFormat = "HH:mm:ss";
     private const string DeveloperModeConfigKey = "GUI.DeveloperMode";
-    private const string DefaultHotkeyShowGui = HotkeyConfigurationCodec.DefaultHotkeyShowGui;
-    private const string DefaultHotkeyLinkStart = HotkeyConfigurationCodec.DefaultHotkeyLinkStart;
     private const int BackgroundOpacityMin = 0;
     private const int BackgroundOpacityMax = 100;
     private const int BackgroundBlurMin = 0;
@@ -53,12 +51,13 @@ public sealed record StartupShellSnapshot(
         BackgroundOpacity: 45,
         BackgroundBlur: 12,
         BackgroundStretchMode: DefaultBackgroundStretchMode,
-        HotkeyShowGui: DefaultHotkeyShowGui,
-        HotkeyLinkStart: DefaultHotkeyLinkStart);
+        HotkeyShowGui: HotkeyConfigurationCodec.DefaultHotkeyShowGui,
+        HotkeyLinkStart: HotkeyConfigurationCodec.DefaultHotkeyLinkStart);
 
     public static StartupShellSnapshot FromConfig(UnifiedConfig config)
     {
         ArgumentNullException.ThrowIfNull(config);
+        HotkeyConfigurationCodec.ApplyPlatformDefaultsMigration(config);
 
         var rawHotkeys = ReadGlobalString(config, ConfigurationKeys.HotKeys, string.Empty);
         var parsedHotkeys = HotkeyConfigurationCodec.Parse(rawHotkeys);

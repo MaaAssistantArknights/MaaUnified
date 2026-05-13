@@ -181,6 +181,7 @@ public static class PlatformCapabilityTextMap
             PlatformErrorCodes.HotkeyConflict => ("PlatformCapability.Error.HotkeyConflict", "Hotkey gesture conflicts with an existing registration"),
             PlatformErrorCodes.HotkeyNotFound => ("PlatformCapability.Error.HotkeyNotFound", "Hotkey registration was not found"),
             PlatformErrorCodes.HotkeyPermissionDenied => ("PlatformCapability.Error.HotkeyPermissionDenied", "Hotkey permission was denied"),
+            PlatformErrorCodes.HotkeyNativeRegistrationFailed => ("PlatformCapability.Error.HotkeyNativeRegistrationFailed", "Failed to register the native global hotkey"),
             PlatformErrorCodes.HotkeyHookStartFailed => ("PlatformCapability.Error.HotkeyHookStartFailed", "Failed to start the global hotkey hook"),
             PlatformErrorCodes.HotkeyTriggerDispatchFailed => ("PlatformCapability.Error.HotkeyTriggerDispatchFailed", "Failed to dispatch the hotkey trigger"),
             PlatformErrorCodes.HotkeyPortalUnavailable => ("PlatformCapability.Error.HotkeyPortalUnavailable", "Desktop portal hotkey support is unavailable"),
