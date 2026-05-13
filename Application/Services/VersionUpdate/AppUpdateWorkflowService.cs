@@ -17,7 +17,7 @@ public sealed class AppUpdateWorkflowService
     private const string MaaApiBaseUrl = "https://api.maa.plus/MaaAssistantArknights/api/";
     private const string MaaApiFallbackBaseUrl = "https://api2.maa.plus/MaaAssistantArknights/api/";
     private const string GitHubReleasesUrl = "https://api.github.com/repos/MaaAssistantArknights/MaaAssistantArknights/releases";
-    private const string MirrorChyanAppUpdateUrl = "https://mirrorchyan.com/api/resources/MAA/latest";
+    private const string MirrorChyanAppUpdateUrl = "https://mirrorchyan.com/api/resources/MAAUnified/latest";
     private const string WindowsRelayManifestFileName = "windows-relay.json";
     private const string WindowsManualUpdateMessageKey = "Settings.VersionUpdate.Status.WindowsManualUpdateRequired";
     private const string PackageUnavailableMessageKey = "Settings.VersionUpdate.Status.PackageUnavailable";
@@ -102,6 +102,10 @@ public sealed class AppUpdateWorkflowService
                     cancellationToken).ConfigureAwait(false);
             }
 
+            var hasUsablePackage = resolvedPackage?.Status == PackageResolutionStatus.Available
+                && resolvedPackage.DownloadUrl is not null;
+            var effectiveIsNew = isNew && hasUsablePackage;
+
             return new VersionUpdateCheckResult(
                 Channel: policy.VersionType,
                 CurrentVersion: currentVersion,
@@ -112,8 +116,8 @@ public sealed class AppUpdateWorkflowService
                 PackageName: resolvedPackage?.Name,
                 PackageDownloadUrl: resolvedPackage?.DownloadUrl,
                 PackageSize: resolvedPackage?.Size,
-                IsNewVersion: isNew,
-                HasPackage: resolvedPackage?.Status == PackageResolutionStatus.Available && resolvedPackage.DownloadUrl is not null,
+                IsNewVersion: effectiveIsNew,
+                HasPackage: hasUsablePackage,
                 PreparedPackagePath: null,
                 PackageResolutionStatus: resolvedPackage?.Status ?? PackageResolutionStatus.NotChecked,
                 PackageSourceKind: resolvedPackage?.SourceKind ?? PackageSourceKind.None,
@@ -640,6 +644,11 @@ public sealed class AppUpdateWorkflowService
         string channel,
         string targetVersion)
     {
+        if (!IsMaaUnifiedPackageReference(entry.Name, entry.Url))
+        {
+            return false;
+        }
+
         var entryVersion = entry.Version ?? manifest.Version ?? string.Empty;
         if (!string.IsNullOrWhiteSpace(entryVersion)
             && !string.Equals(entryVersion.Trim(), targetVersion, StringComparison.OrdinalIgnoreCase))
@@ -683,6 +692,11 @@ public sealed class AppUpdateWorkflowService
             var name = asset.TryGetProperty("name", out var nameNode) && nameNode.ValueKind == JsonValueKind.String
                 ? nameNode.GetString() ?? Path.GetFileName(downloadUrl.AbsolutePath)
                 : Path.GetFileName(downloadUrl.AbsolutePath);
+            if (!IsMaaUnifiedPackageName(name))
+            {
+                continue;
+            }
+
             var score = ScorePackageName(name);
             if (score <= 0)
             {
@@ -746,6 +760,20 @@ public sealed class AppUpdateWorkflowService
         }
 
         return 50 + extensionScore;
+    }
+
+    private static bool IsMaaUnifiedPackageReference(string? packageName, string packageUrl)
+    {
+        return IsMaaUnifiedPackageName(packageName)
+            || (Uri.TryCreate(packageUrl, UriKind.Absolute, out var uri)
+                && IsMaaUnifiedPackageName(Path.GetFileName(uri.AbsolutePath)))
+            || packageUrl.Contains("MAAUnified", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsMaaUnifiedPackageName(string? packageName)
+    {
+        return !string.IsNullOrWhiteSpace(packageName)
+            && packageName.Trim().StartsWith("MAAUnified-", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool LooksLikeDirectReleaseFeedUri(Uri uri)
@@ -1101,6 +1129,11 @@ public sealed class AppUpdateWorkflowService
             if (string.IsNullOrWhiteSpace(packageName))
             {
                 packageName = BuildFallbackPackageName(targetVersion);
+            }
+
+            if (!IsMaaUnifiedPackageName(packageName))
+            {
+                return null;
             }
 
             return new VersionUpdateCheckResult(

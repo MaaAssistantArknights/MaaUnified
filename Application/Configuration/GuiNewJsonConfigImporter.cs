@@ -83,7 +83,7 @@ public sealed class GuiNewJsonConfigImporter : IConfigImporter
             MergeObjectAsGlobal(root, "GUI", target, fillMissingOnly, report);
             MergeObjectAsGlobal(root, "VersionUpdate", target, fillMissingOnly, report);
             MergeObjectAsGlobal(root, "AnnouncementInfo", target, fillMissingOnly, report);
-            MergeObjectAsGlobal(root, "Timers", target, fillMissingOnly, report);
+            MergeTimersAsGlobal(root, target, fillMissingOnly, report);
 
             report.ImportedGuiNew = true;
             AppendUnique(report.ImportedFiles, FileName);
@@ -93,6 +93,272 @@ public sealed class GuiNewJsonConfigImporter : IConfigImporter
             AppendUnique(report.DamagedFiles, FileName);
             report.Errors.Add($"Failed to import gui.new.json: {ex.Message}");
         }
+    }
+
+    private static void MergeTimersAsGlobal(
+        JsonElement root,
+        UnifiedConfig target,
+        bool fillMissingOnly,
+        ImportReport report)
+    {
+        if (root.TryGetProperty("Timers", out var timers) && timers.ValueKind == JsonValueKind.Object)
+        {
+            MergeTimerDictionary(timers, target, fillMissingOnly, report);
+        }
+        else if (root.TryGetProperty("Timers", out timers) && timers.ValueKind == JsonValueKind.Array)
+        {
+            MergeTimerArray(timers, target, fillMissingOnly, report);
+        }
+
+        if (root.TryGetProperty("Timer", out var timer) && timer.ValueKind == JsonValueKind.Object)
+        {
+            MergeTimerFlatObject(timer, target, fillMissingOnly, report);
+        }
+    }
+
+    private static void MergeTimerDictionary(
+        JsonElement timers,
+        UnifiedConfig target,
+        bool fillMissingOnly,
+        ImportReport report)
+    {
+        var properties = timers.EnumerateObject().ToArray();
+        var zeroBased = properties.Any(static prop => string.Equals(prop.Name, "0", StringComparison.Ordinal));
+        foreach (var prop in properties)
+        {
+            if (TryMergeTimerEntry(prop, zeroBased, target, fillMissingOnly, report))
+            {
+                continue;
+            }
+
+            var normalizedKey = NormalizeTimerKey(prop.Name);
+            if (normalizedKey is null)
+            {
+                report.Warnings.Add($"Timer entry `{prop.Name}` was not recognized and was skipped.");
+                continue;
+            }
+
+            JsonImportMergeHelper.MergeGlobalValue(
+                target,
+                normalizedKey,
+                JsonImportMergeHelper.ToJsonNode(prop.Value),
+                fillMissingOnly,
+                report);
+        }
+    }
+
+    private static void MergeTimerArray(
+        JsonElement timers,
+        UnifiedConfig target,
+        bool fillMissingOnly,
+        ImportReport report)
+    {
+        var entries = timers
+            .EnumerateArray()
+            .Where(static entry => entry.ValueKind == JsonValueKind.Object)
+            .ToArray();
+        var zeroBased = entries.Any(static entry => TryReadTimerIndex(entry, out var index) && index == 0);
+
+        foreach (var entry in entries)
+        {
+            if (!TryReadTimerIndex(entry, out var rawIndex))
+            {
+                report.Warnings.Add("Timer entry without index was skipped.");
+                continue;
+            }
+
+            var timer = TryGetPropertyIgnoreCase(entry, "Value", out var value) && value.ValueKind == JsonValueKind.Object
+                ? value
+                : entry;
+            MergeTimerEntry(rawIndex, zeroBased, timer, target, fillMissingOnly, report);
+        }
+    }
+
+    private static bool TryMergeTimerEntry(
+        JsonProperty prop,
+        bool zeroBased,
+        UnifiedConfig target,
+        bool fillMissingOnly,
+        ImportReport report)
+    {
+        if (prop.Value.ValueKind != JsonValueKind.Object || !int.TryParse(prop.Name, out var rawIndex))
+        {
+            return false;
+        }
+
+        var timer = TryGetPropertyIgnoreCase(prop.Value, "Value", out var value) && value.ValueKind == JsonValueKind.Object
+            ? value
+            : prop.Value;
+        MergeTimerEntry(rawIndex, zeroBased, timer, target, fillMissingOnly, report);
+        return true;
+    }
+
+    private static void MergeTimerEntry(
+        int rawIndex,
+        bool zeroBased,
+        JsonElement timer,
+        UnifiedConfig target,
+        bool fillMissingOnly,
+        ImportReport report)
+    {
+        var index = zeroBased ? rawIndex + 1 : rawIndex;
+        if (index is < 1 or > 8)
+        {
+            report.Warnings.Add($"Timer entry `{rawIndex}` is outside the supported 1-8 range and was skipped.");
+            return;
+        }
+
+        MergeTimerProperty(timer, "Enable", $"Timer.Timer{index}", target, fillMissingOnly, report);
+        MergeTimerProperty(timer, "Hour", $"Timer.Timer{index}Hour", target, fillMissingOnly, report);
+        MergeTimerProperty(timer, ["Minute", "Min"], $"Timer.Timer{index}Min", target, fillMissingOnly, report);
+        MergeTimerProperty(timer, "Config", $"Timer.Timer{index}.Config", target, fillMissingOnly, report);
+    }
+
+    private static void MergeTimerProperty(
+        JsonElement timer,
+        string[] sourceProperties,
+        string targetKey,
+        UnifiedConfig target,
+        bool fillMissingOnly,
+        ImportReport report)
+    {
+        foreach (var sourceProperty in sourceProperties)
+        {
+            if (!TryGetPropertyIgnoreCase(timer, sourceProperty, out _))
+            {
+                continue;
+            }
+
+            MergeTimerProperty(timer, sourceProperty, targetKey, target, fillMissingOnly, report);
+            return;
+        }
+    }
+
+    private static void MergeTimerProperty(
+        JsonElement timer,
+        string sourceProperty,
+        string targetKey,
+        UnifiedConfig target,
+        bool fillMissingOnly,
+        ImportReport report)
+    {
+        if (!TryGetPropertyIgnoreCase(timer, sourceProperty, out var value))
+        {
+            return;
+        }
+
+        JsonImportMergeHelper.MergeGlobalValue(
+            target,
+            targetKey,
+            JsonImportMergeHelper.ToJsonNode(value),
+            fillMissingOnly,
+            report);
+    }
+
+    private static void MergeTimerFlatObject(
+        JsonElement timer,
+        UnifiedConfig target,
+        bool fillMissingOnly,
+        ImportReport report)
+    {
+        foreach (var prop in timer.EnumerateObject())
+        {
+            var normalizedKey = NormalizeTimerKey(prop.Name);
+            if (normalizedKey is null)
+            {
+                continue;
+            }
+
+            JsonImportMergeHelper.MergeGlobalValue(
+                target,
+                normalizedKey,
+                JsonImportMergeHelper.ToJsonNode(prop.Value),
+                fillMissingOnly,
+                report);
+        }
+    }
+
+    private static string? NormalizeTimerKey(string key)
+    {
+        var trimmed = key.Trim();
+        if (string.IsNullOrWhiteSpace(trimmed))
+        {
+            return null;
+        }
+
+        if (trimmed.StartsWith("Timer.", StringComparison.OrdinalIgnoreCase))
+        {
+            return trimmed;
+        }
+
+        if (trimmed.StartsWith("Timer", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(trimmed, "ForceScheduledStart", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(trimmed, "ShowWindowBeforeForceScheduledStart", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(trimmed, "CustomConfig", StringComparison.OrdinalIgnoreCase))
+        {
+            return $"Timer.{trimmed}";
+        }
+
+        return null;
+    }
+
+    private static bool TryReadTimerIndex(JsonElement entry, out int index)
+    {
+        if (TryGetPropertyIgnoreCase(entry, "Key", out var key))
+        {
+            if (key.ValueKind == JsonValueKind.Number && key.TryGetInt32(out index))
+            {
+                return true;
+            }
+
+            if (key.ValueKind == JsonValueKind.String
+                && int.TryParse(key.GetString(), out index))
+            {
+                return true;
+            }
+        }
+
+        if (TryGetPropertyIgnoreCase(entry, "Index", out var indexProperty))
+        {
+            if (indexProperty.ValueKind == JsonValueKind.Number && indexProperty.TryGetInt32(out index))
+            {
+                return true;
+            }
+
+            if (indexProperty.ValueKind == JsonValueKind.String
+                && int.TryParse(indexProperty.GetString(), out index))
+            {
+                return true;
+            }
+        }
+
+        index = 0;
+        return false;
+    }
+
+    private static bool TryGetPropertyIgnoreCase(JsonElement element, string propertyName, out JsonElement value)
+    {
+        if (element.TryGetProperty(propertyName, out value))
+        {
+            return true;
+        }
+
+        if (element.ValueKind != JsonValueKind.Object)
+        {
+            return false;
+        }
+
+        foreach (var prop in element.EnumerateObject())
+        {
+            if (string.Equals(prop.Name, propertyName, StringComparison.OrdinalIgnoreCase))
+            {
+                value = prop.Value;
+                return true;
+            }
+        }
+
+        value = default;
+        return false;
     }
 
     private static void MergeObjectAsGlobal(

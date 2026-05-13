@@ -501,7 +501,11 @@ public sealed partial class SettingsPageViewModel
         if (emulatorWaitSeconds != rawWaitSeconds)
         {
             warnings.Add(
-                $"Start.EmulatorWaitSeconds clamped to {emulatorWaitSeconds} from {rawWaitSeconds}.");
+                FormatSettingsText(
+                    "Settings.StartPerformance.Warning.EmulatorWaitSecondsClamped",
+                    "模拟器等待秒数已从 {0} 限制为 {1}。",
+                    rawWaitSeconds,
+                    emulatorWaitSeconds));
         }
 
         return new StartPerformanceSettingsSnapshot(
@@ -591,15 +595,9 @@ public sealed partial class SettingsPageViewModel
 
         if (normalized)
         {
-            var fallbackMessage = "Unsupported GPU settings were removed on this platform. CPU OCR fallback will be used.";
             var message = RootTexts.GetOrDefault(
                 "Settings.StartPerformance.Validation.GpuFallbackApplied",
-                fallbackMessage);
-            if (!message.Contains("CPU OCR fallback", StringComparison.OrdinalIgnoreCase))
-            {
-                message = $"{message} CPU OCR fallback will be used.";
-            }
-
+                "当前平台不支持 GPU OCR，已移除不兼容 GPU 设置并回退为 CPU OCR。");
             warnings.Add(message);
         }
     }

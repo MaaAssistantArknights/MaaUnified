@@ -105,6 +105,7 @@ public sealed class SettingsModuleAK3FeatureTests
         Assert.Equal(oldHour, ReadGlobalString(fixture.Config, TimerHourKey(1)));
         Assert.Equal(oldMinute, ReadGlobalString(fixture.Config, TimerMinuteKey(1)));
         Assert.True(vm.HasPendingTimerChanges);
+        Assert.Contains("定时任务 1", vm.TimerValidationMessage, StringComparison.Ordinal);
         Assert.Contains("HH:mm", vm.TimerValidationMessage, StringComparison.Ordinal);
     }
 
@@ -127,7 +128,8 @@ public sealed class SettingsModuleAK3FeatureTests
 
         Assert.Equal(oldProfile, ReadGlobalString(fixture.Config, TimerProfileKey(1)));
         Assert.True(vm.HasPendingTimerChanges);
-        Assert.Contains("does not exist", vm.TimerValidationMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("定时任务 1", vm.TimerValidationMessage, StringComparison.Ordinal);
+        Assert.Contains("不存在", vm.TimerValidationMessage, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -236,8 +238,8 @@ public sealed class SettingsModuleAK3FeatureTests
         Assert.True(vm.Timers[0].Enabled);
         Assert.Equal("23:00", vm.Timers[0].Time);
         Assert.Equal("Default", vm.Timers[0].Profile);
-        Assert.Contains("clamped", vm.TimerValidationMessage, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("fell back", vm.TimerValidationMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("限制为", vm.TimerValidationMessage, StringComparison.Ordinal);
+        Assert.Contains("回退", vm.TimerValidationMessage, StringComparison.Ordinal);
     }
 
     private static string TimerEnabledKey(int index) => $"Timer.Timer{index}";

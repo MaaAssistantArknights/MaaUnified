@@ -1,6 +1,7 @@
 using System.IO;
 using System.Globalization;
 using System.Linq;
+using System.Text.Json.Nodes;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -11,6 +12,7 @@ using Avalonia.VisualTree;
 using MAAUnified.App.Features.Dialogs;
 using MAAUnified.App.ViewModels.Settings;
 using MAAUnified.Application.Models;
+using MAAUnified.Compat.Constants;
 
 namespace MAAUnified.App.Features.Settings;
 
@@ -171,13 +173,19 @@ public partial class ConfigurationManagerView : UserControl
 
         while (true)
         {
-            var importPaths = await PickImportPathsAsync(T("Settings.ConfigurationManager.Dialog.ImportTitle"));
-            if (importPaths.Count == 0)
+            var mode = await ShowImportModeDialogAsync(text);
+            var analysis = mode switch
+            {
+                ConfigurationImportMode.LegacyWindows => await PickLegacyWindowsImportAsync(text),
+                ConfigurationImportMode.Unified => await PickUnifiedImportAsync(text),
+                ConfigurationImportMode.Manual => await PickManualImportAsync(text),
+                _ => null,
+            };
+            if (analysis is null)
             {
                 return;
             }
 
-            var analysis = ConfigurationImportSelectionAnalyzer.Analyze(importPaths, text);
             switch (analysis.Kind)
             {
                 case ConfigurationImportSelectionKind.UnifiedConfig:
@@ -257,6 +265,49 @@ public partial class ConfigurationManagerView : UserControl
         return file?.TryGetLocalPath();
     }
 
+    private async Task<ConfigurationImportSelectionAnalysis?> PickLegacyWindowsImportAsync(Func<string, string> text)
+    {
+        var directory = await PickImportFolderAsync(text("Settings.ConfigurationManager.Dialog.ImportLegacyWindowsFolderTitle"));
+        return string.IsNullOrWhiteSpace(directory)
+            ? null
+            : ConfigurationImportSelectionAnalyzer.AnalyzeLegacyDirectory(directory, text);
+    }
+
+    private async Task<ConfigurationImportSelectionAnalysis?> PickUnifiedImportAsync(Func<string, string> text)
+    {
+        var directory = await PickImportFolderAsync(text("Settings.ConfigurationManager.Dialog.ImportUnifiedFolderTitle"));
+        return string.IsNullOrWhiteSpace(directory)
+            ? null
+            : ConfigurationImportSelectionAnalyzer.AnalyzeUnifiedDirectory(directory, text);
+    }
+
+    private async Task<ConfigurationImportSelectionAnalysis?> PickManualImportAsync(Func<string, string> text)
+    {
+        var importPaths = await PickImportPathsAsync(text("Settings.ConfigurationManager.Dialog.ImportTitle"));
+        return importPaths.Count == 0
+            ? null
+            : ConfigurationImportSelectionAnalyzer.Analyze(importPaths, text);
+    }
+
+    private async Task<string?> PickImportFolderAsync(string title)
+    {
+        var topLevel = TopLevel.GetTopLevel(this);
+        if (topLevel?.StorageProvider is not { CanOpen: true } storageProvider)
+        {
+            return null;
+        }
+
+        var folders = await storageProvider.OpenFolderPickerAsync(
+            new FolderPickerOpenOptions
+            {
+                Title = title,
+                AllowMultiple = false,
+            });
+        return folders
+            .Select(folder => folder.TryGetLocalPath())
+            .FirstOrDefault(path => !string.IsNullOrWhiteSpace(path));
+    }
+
     private async Task<IReadOnlyList<string>> PickImportPathsAsync(string title)
     {
         var topLevel = TopLevel.GetTopLevel(this);
@@ -293,7 +344,8 @@ public partial class ConfigurationManagerView : UserControl
             LegacyConfigSnapshot.FromPaths(analysis.GuiNewPath, analysis.GuiPath),
             analysis.LegacyImportSource,
             ManualImport: true,
-            AllowPartialImport: allowPartialImport);
+            AllowPartialImport: allowPartialImport,
+            FallbackGlobalValues: BuildLegacyImportFallbackGlobalValues(vm));
         var report = await vm.ImportLegacyConfigurationsAsync(request);
         if (report.AppliedConfig)
         {
@@ -357,6 +409,33 @@ public partial class ConfigurationManagerView : UserControl
         }
 
         return true;
+    }
+
+    private async Task<ConfigurationImportMode> ShowImportModeDialogAsync(Func<string, string> text)
+    {
+        if (TopLevel.GetTopLevel(this) is not Window owner)
+        {
+            return ConfigurationImportMode.Manual;
+        }
+
+        var dialog = new ConfigurationImportModeDialogView();
+        dialog.ApplyRequest(new ConfigurationImportModeDialogRequest(
+            Title: text("Settings.ConfigurationManager.ImportMode.Title"),
+            LegacyWindowsTitle: text("Settings.ConfigurationManager.ImportMode.LegacyWindows"),
+            LegacyWindowsDescription: text("Settings.ConfigurationManager.ImportMode.LegacyWindowsDescription"),
+            UnifiedTitle: text("Settings.ConfigurationManager.ImportMode.Unified"),
+            UnifiedDescription: text("Settings.ConfigurationManager.ImportMode.UnifiedDescription"),
+            ManualTitle: text("Settings.ConfigurationManager.ImportMode.Manual"),
+            ManualDescription: text("Settings.ConfigurationManager.ImportMode.ManualDescription")));
+        return await dialog.ShowDialog<ConfigurationImportMode?>(owner) ?? ConfigurationImportMode.Cancel;
+    }
+
+    private static IReadOnlyDictionary<string, JsonNode?> BuildLegacyImportFallbackGlobalValues(SettingsPageViewModel vm)
+    {
+        return new Dictionary<string, JsonNode?>(StringComparer.OrdinalIgnoreCase)
+        {
+            [ConfigurationKeys.UiScalePercent] = JsonValue.Create(vm.UiScalePercent),
+        };
     }
 
     private static async Task<bool> ShowWarningDialogAsync(

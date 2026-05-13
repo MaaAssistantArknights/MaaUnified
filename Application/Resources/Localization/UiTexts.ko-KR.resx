@@ -2445,6 +2445,45 @@ OF-1 스테이지가 개방되지 않은 경우에는 선택하지 마세요.</v
   <data name="Settings.Timer.SlotLabel" xml:space="preserve">
     <value>예약 작업</value>
   </data>
+  <data name="Settings.Timer.Validation.Passed" xml:space="preserve">
+    <value>타이머 설정 검증을 통과했습니다.</value>
+  </data>
+  <data name="Settings.Timer.Validation.ProfileNotFound" xml:space="preserve">
+    <value>타이머 {0}에서 선택한 구성 "{1}"이(가) 존재하지 않습니다.</value>
+  </data>
+  <data name="Settings.Timer.Validation.ProfileRequired" xml:space="preserve">
+    <value>커스텀 구성을 사용할 때는 타이머 {0}에서 구성을 선택해야 합니다.</value>
+  </data>
+  <data name="Settings.Timer.Validation.SlotCountMismatch" xml:space="preserve">
+    <value>타이머 슬롯 수가 올바르지 않습니다. 예상값은 {0}개, 실제값은 {1}개입니다.</value>
+  </data>
+  <data name="Settings.Timer.Validation.SlotIndexOutOfRange" xml:space="preserve">
+    <value>타이머 슬롯 번호는 1-{0} 범위여야 합니다. 현재 값은 {1}입니다.</value>
+  </data>
+  <data name="Settings.Timer.Validation.TimeInvalid" xml:space="preserve">
+    <value>타이머 {0} 시간은 HH:mm(00:00-23:59) 형식이어야 합니다.</value>
+  </data>
+  <data name="Settings.Timer.Warning.CurrentProfileFallback" xml:space="preserve">
+    <value>현재 구성을 사용할 수 없어 타이머 설정이 "{0}"(으)로 폴백되었습니다.</value>
+  </data>
+  <data name="Settings.Timer.Warning.HourClamped" xml:space="preserve">
+    <value>타이머 {0}의 시간 값이 {1}에서 {2}(으)로 보정되었습니다.</value>
+  </data>
+  <data name="Settings.Timer.Warning.HourParseFallback" xml:space="preserve">
+    <value>타이머 {0}의 시간 값을 해석할 수 없어 {1}(으)로 폴백되었습니다.</value>
+  </data>
+  <data name="Settings.Timer.Warning.MinuteClamped" xml:space="preserve">
+    <value>타이머 {0}의 분 값이 {1}에서 {2}(으)로 보정되었습니다.</value>
+  </data>
+  <data name="Settings.Timer.Warning.MinuteParseFallback" xml:space="preserve">
+    <value>타이머 {0}의 분 값을 해석할 수 없어 {1}(으)로 폴백되었습니다.</value>
+  </data>
+  <data name="Settings.Timer.Warning.ProfileFallback" xml:space="preserve">
+    <value>타이머 {0}에서 선택한 구성 "{1}"을(를) 찾을 수 없어 "{2}"(으)로 폴백되었습니다.</value>
+  </data>
+  <data name="Settings.StartPerformance.Warning.EmulatorWaitSecondsClamped" xml:space="preserve">
+    <value>에뮬레이터 대기 시간이 {0}에서 {1}(으)로 보정되었습니다.</value>
+  </data>
   <data name="Settings.VersionUpdate.AutoDownload" xml:space="preserve">
     <value>업데이트 패키지 자동 다운로드</value>
   </data>

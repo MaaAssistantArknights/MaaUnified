@@ -1,0 +1,109 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:MAAUnified.App.Controls"
+        x:Class="MAAUnified.App.Features.Dialogs.ConfigurationImportModeDialogView"
+        Width="560"
+        MinWidth="500"
+        SizeToContent="Height"
+        CanResize="False"
+        Background="Transparent"
+        SystemDecorations="None"
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaChromeHints="NoChrome"
+        WindowStartupLocation="CenterOwner">
+  <Window.Styles>
+    <Style Selector="StackPanel.configuration-import-options">
+      <Setter Property="Spacing" Value="8" />
+    </Style>
+
+    <Style Selector="Button.configuration-import-option">
+      <Setter Property="MinHeight" Value="76" />
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="Padding" Value="16,11" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Surface.Section}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Card.Border}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="8" />
+    </Style>
+
+    <Style Selector="Button.configuration-import-option:pointerover">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.SubtleBackgroundHover}" />
+    </Style>
+
+    <Style Selector="Button.configuration-import-option TextBlock.configuration-import-option-title">
+      <Setter Property="FontSize" Value="14" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <Style Selector="TextBlock.configuration-import-option-arrow">
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="HorizontalAlignment" Value="Right" />
+      <Setter Property="Text" Value=">" />
+    </Style>
+  </Window.Styles>
+
+  <controls:AppWindowFrame x:Name="DialogShell"
+                           Mode="CompactModal"
+                           CloseRequested="OnShellCloseRequested">
+    <controls:AppWindowFrame.Content>
+      <StackPanel Classes="configuration-import-options">
+        <Button x:Name="LegacyWindowsButton"
+                Classes="configuration-import-option"
+                Click="OnLegacyWindowsClick">
+          <Grid ColumnDefinitions="*,Auto">
+            <StackPanel Spacing="6">
+              <TextBlock x:Name="LegacyWindowsTitleTextBlock"
+                         Classes="configuration-import-option-title long-wrap"
+                         Text="" />
+              <TextBlock x:Name="LegacyWindowsDescriptionTextBlock"
+                         Classes="app-caption long-wrap"
+                         Text="" />
+            </StackPanel>
+            <TextBlock Grid.Column="1"
+                       Margin="14,0,0,0"
+                       Classes="app-caption configuration-import-option-arrow" />
+          </Grid>
+        </Button>
+
+        <Button x:Name="UnifiedButton"
+                Classes="configuration-import-option"
+                Click="OnUnifiedClick">
+          <Grid ColumnDefinitions="*,Auto">
+            <StackPanel Spacing="6">
+              <TextBlock x:Name="UnifiedTitleTextBlock"
+                         Classes="configuration-import-option-title long-wrap"
+                         Text="" />
+              <TextBlock x:Name="UnifiedDescriptionTextBlock"
+                         Classes="app-caption long-wrap"
+                         Text="" />
+            </StackPanel>
+            <TextBlock Grid.Column="1"
+                       Margin="14,0,0,0"
+                       Classes="app-caption configuration-import-option-arrow" />
+          </Grid>
+        </Button>
+
+        <Button x:Name="ManualButton"
+                Classes="configuration-import-option"
+                Click="OnManualClick">
+          <Grid ColumnDefinitions="*,Auto">
+            <StackPanel Spacing="6">
+              <TextBlock x:Name="ManualTitleTextBlock"
+                         Classes="configuration-import-option-title long-wrap"
+                         Text="" />
+              <TextBlock x:Name="ManualDescriptionTextBlock"
+                         Classes="app-caption long-wrap"
+                         Text="" />
+            </StackPanel>
+            <TextBlock Grid.Column="1"
+                       Margin="14,0,0,0"
+                       Classes="app-caption configuration-import-option-arrow" />
+          </Grid>
+        </Button>
+      </StackPanel>
+    </controls:AppWindowFrame.Content>
+  </controls:AppWindowFrame>
+</Window>

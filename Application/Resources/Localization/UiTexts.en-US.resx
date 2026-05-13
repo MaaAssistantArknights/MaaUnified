@@ -2669,8 +2669,14 @@ With save file: farm points through crafting (advanced).
   <data name="Settings.ConfigurationManager.Dialog.ImportLegacyTitle" xml:space="preserve">
     <value>Import Legacy Profile</value>
   </data>
+  <data name="Settings.ConfigurationManager.Dialog.ImportLegacyWindowsFolderTitle" xml:space="preserve">
+    <value>Select Legacy MAA Folder</value>
+  </data>
   <data name="Settings.ConfigurationManager.Dialog.ImportTitle" xml:space="preserve">
     <value>Import Profile</value>
+  </data>
+  <data name="Settings.ConfigurationManager.Dialog.ImportUnifiedFolderTitle" xml:space="preserve">
+    <value>Select Unified Folder</value>
   </data>
   <data name="Settings.ConfigurationManager.Error.ExportPathEmpty" xml:space="preserve">
     <value>Export path is empty.</value>
@@ -2708,6 +2714,9 @@ With save file: farm points through crafting (advanced).
   <data name="Settings.ConfigurationManager.Import.ContextRefresh" xml:space="preserve">
     <value>Refresh after import</value>
   </data>
+  <data name="Settings.ConfigurationManager.Import.DirectoryInvalid" xml:space="preserve">
+    <value>No valid folder was selected.</value>
+  </data>
   <data name="Settings.ConfigurationManager.Import.LegacyFilenameInvalid" xml:space="preserve">
     <value>The legacy profile file name is invalid. Please choose gui.json or gui.new.json.</value>
   </data>
@@ -2729,8 +2738,32 @@ With save file: farm points through crafting (advanced).
   <data name="Settings.ConfigurationManager.Import.UnifiedSingleFileOnly" xml:space="preserve">
     <value>Unified config JSON supports only one file.</value>
   </data>
+  <data name="Settings.ConfigurationManager.Import.UnifiedDirectoryMissing" xml:space="preserve">
+    <value>No config/avalonia.json or avalonia.json was found in the selected folder.</value>
+  </data>
   <data name="Settings.ConfigurationManager.Import.UnrecognizedFiles" xml:space="preserve">
     <value>The selected import files are not recognized. Please choose an exported profile JSON, gui.json, or gui.new.json.</value>
+  </data>
+  <data name="Settings.ConfigurationManager.ImportMode.LegacyWindows" xml:space="preserve">
+    <value>Legacy MAA</value>
+  </data>
+  <data name="Settings.ConfigurationManager.ImportMode.LegacyWindowsDescription" xml:space="preserve">
+    <value>Select the legacy MAA folder.</value>
+  </data>
+  <data name="Settings.ConfigurationManager.ImportMode.Manual" xml:space="preserve">
+    <value>Choose Configuration Files Manually</value>
+  </data>
+  <data name="Settings.ConfigurationManager.ImportMode.ManualDescription" xml:space="preserve">
+    <value>Supports new and legacy configs. For legacy configs, select both gui.new.json and gui.json.</value>
+  </data>
+  <data name="Settings.ConfigurationManager.ImportMode.Title" xml:space="preserve">
+    <value>Choose Import Method</value>
+  </data>
+  <data name="Settings.ConfigurationManager.ImportMode.Unified" xml:space="preserve">
+    <value>MAAUnified</value>
+  </data>
+  <data name="Settings.ConfigurationManager.ImportMode.UnifiedDescription" xml:space="preserve">
+    <value>Select the MAAUnified folder.</value>
   </data>
   <data name="Settings.ConfigurationManager.ImportLegacy" xml:space="preserve">
     <value>Import legacy profile</value>
@@ -3754,6 +3787,45 @@ With save file: farm points through crafting (advanced).
   </data>
   <data name="Settings.Timer.SlotLabel" xml:space="preserve">
     <value>Scheduled task</value>
+  </data>
+  <data name="Settings.Timer.Validation.Passed" xml:space="preserve">
+    <value>Timer settings validation passed.</value>
+  </data>
+  <data name="Settings.Timer.Validation.ProfileNotFound" xml:space="preserve">
+    <value>Selected profile "{1}" for timer {0} does not exist.</value>
+  </data>
+  <data name="Settings.Timer.Validation.ProfileRequired" xml:space="preserve">
+    <value>Timer {0} must select a profile when custom configuration is enabled.</value>
+  </data>
+  <data name="Settings.Timer.Validation.SlotCountMismatch" xml:space="preserve">
+    <value>Timer slot count is invalid. Expected {0}, got {1}.</value>
+  </data>
+  <data name="Settings.Timer.Validation.SlotIndexOutOfRange" xml:space="preserve">
+    <value>Timer slot index must be within 1-{0}, got {1}.</value>
+  </data>
+  <data name="Settings.Timer.Validation.TimeInvalid" xml:space="preserve">
+    <value>Timer {0} time must use HH:mm (00:00-23:59).</value>
+  </data>
+  <data name="Settings.Timer.Warning.CurrentProfileFallback" xml:space="preserve">
+    <value>Current profile is unavailable. Timer settings fell back to "{0}".</value>
+  </data>
+  <data name="Settings.Timer.Warning.HourClamped" xml:space="preserve">
+    <value>Timer {0} hour was clamped from {1} to {2}.</value>
+  </data>
+  <data name="Settings.Timer.Warning.HourParseFallback" xml:space="preserve">
+    <value>Timer {0} hour could not be parsed and fell back to {1}.</value>
+  </data>
+  <data name="Settings.Timer.Warning.MinuteClamped" xml:space="preserve">
+    <value>Timer {0} minute was clamped from {1} to {2}.</value>
+  </data>
+  <data name="Settings.Timer.Warning.MinuteParseFallback" xml:space="preserve">
+    <value>Timer {0} minute could not be parsed and fell back to {1}.</value>
+  </data>
+  <data name="Settings.Timer.Warning.ProfileFallback" xml:space="preserve">
+    <value>Selected profile "{1}" for timer {0} was not found and fell back to "{2}".</value>
+  </data>
+  <data name="Settings.StartPerformance.Warning.EmulatorWaitSecondsClamped" xml:space="preserve">
+    <value>Emulator wait seconds were clamped from {0} to {1}.</value>
   </data>
   <data name="Settings.VersionUpdate.AutoDownload" xml:space="preserve">
     <value>Automatically download update packages</value>

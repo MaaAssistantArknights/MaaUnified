@@ -327,6 +327,136 @@ public sealed class VersionUpdateFeatureServiceTests
     }
 
     [Fact]
+    public async Task CheckForUpdatesAsync_ReleaseAssets_SkipsLegacyMaaPackages()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"maa-unified-release-asset-filter-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(root);
+        var feedPath = Path.Combine(root, "release-feed.json");
+
+        try
+        {
+            await File.WriteAllTextAsync(feedPath, JsonSerializer.Serialize(new[]
+            {
+                new
+                {
+                    tag_name = "v2.0.0",
+                    name = "Release v2.0.0",
+                    body = "Body",
+                    prerelease = false,
+                    assets = new[]
+                    {
+                        new
+                        {
+                            name = "MAA-v2.0.0-linux-x64.AppImage",
+                            browser_download_url = "https://example.com/MAA-v2.0.0-linux-x64.AppImage",
+                            size = 100,
+                        },
+                        new
+                        {
+                            name = "MAAUnified-v2.0.0-linux-x64.AppImage",
+                            browser_download_url = "https://example.com/MAAUnified-v2.0.0-linux-x64.AppImage",
+                            size = 200,
+                        },
+                    },
+                },
+            }));
+
+            var workflow = new AppUpdateWorkflowService(
+                new NoOpAppLifecycleService(),
+                operatingSystem: OSPlatform.Linux,
+                architecture: Architecture.X64);
+
+            var result = await workflow.CheckForUpdatesAsync(
+                VersionUpdatePolicy.Default with
+                {
+                    ResourceApi = feedPath,
+                    AutoDownloadUpdatePackage = false,
+                },
+                "v1.0.0",
+                CancellationToken.None);
+
+            Assert.True(result.HasPackage);
+            Assert.Equal("MAAUnified-v2.0.0-linux-x64.AppImage", result.PackageName);
+            Assert.Equal(new Uri("https://example.com/MAAUnified-v2.0.0-linux-x64.AppImage"), result.PackageDownloadUrl);
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    [Fact]
+    public async Task CheckForUpdatesAsync_ReleaseAssets_WithOnlyLegacyMaaPackage_DoesNotReportUpdate()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"maa-unified-release-asset-legacy-only-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(root);
+        var feedPath = Path.Combine(root, "release-feed.json");
+
+        try
+        {
+            await File.WriteAllTextAsync(feedPath, JsonSerializer.Serialize(new[]
+            {
+                new
+                {
+                    tag_name = "v2.0.0",
+                    name = "Release v2.0.0",
+                    body = "Body",
+                    prerelease = false,
+                    assets = new[]
+                    {
+                        new
+                        {
+                            name = "MAA-v2.0.0-linux-x64.AppImage",
+                            browser_download_url = "https://example.com/MAA-v2.0.0-linux-x64.AppImage",
+                            size = 100,
+                        },
+                    },
+                },
+            }));
+
+            var workflow = new AppUpdateWorkflowService(
+                new NoOpAppLifecycleService(),
+                operatingSystem: OSPlatform.Linux,
+                architecture: Architecture.X64);
+
+            var result = await workflow.CheckForUpdatesAsync(
+                VersionUpdatePolicy.Default with
+                {
+                    ResourceApi = feedPath,
+                    AutoDownloadUpdatePackage = false,
+                },
+                "v1.0.0",
+                CancellationToken.None);
+
+            Assert.False(result.IsNewVersion);
+            Assert.False(result.HasPackage);
+            Assert.Equal(PackageResolutionStatus.Unavailable, result.PackageResolutionStatus);
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    [Fact]
     public async Task CheckForUpdatesAsync_OnWindowsRelayManifest_UsesExactArchitecturePackage()
     {
         var root = Path.Combine(Path.GetTempPath(), $"maa-unified-windows-relay-{Guid.NewGuid():N}");
@@ -404,7 +534,88 @@ public sealed class VersionUpdateFeatureServiceTests
     }
 
     [Fact]
-    public async Task CheckForUpdatesAsync_OnWindowsRelayManifestMiss_ReturnsManualUpdateRequired()
+    public async Task CheckForUpdatesAsync_OnWindowsRelayManifest_SkipsLegacyMaaPackage()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"maa-unified-windows-relay-filter-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(root);
+        var feedPath = Path.Combine(root, "release-feed.json");
+        var relayManifestPath = Path.Combine(root, "windows-relay.json");
+
+        try
+        {
+            await File.WriteAllTextAsync(feedPath, JsonSerializer.Serialize(new[]
+            {
+                new
+                {
+                    tag_name = "v2.0.0",
+                    name = "Release v2.0.0",
+                    body = "Body",
+                    prerelease = false,
+                    assets = Array.Empty<object>(),
+                },
+            }));
+            await File.WriteAllTextAsync(relayManifestPath, """
+                {
+                  "version": "v2.0.0",
+                  "channel": "Stable",
+                  "packages": [
+                    {
+                      "os": "windows",
+                      "arch": "x64",
+                      "url": "https://example.com/MAA-v2.0.0-win-x64.zip",
+                      "name": "MAA-v2.0.0-win-x64.zip"
+                    },
+                    {
+                      "os": "windows",
+                      "arch": "x64",
+                      "url": "https://example.com/MAAUnified-v2.0.0-win-x64.zip",
+                      "name": "MAAUnified-v2.0.0-win-x64.zip"
+                    }
+                  ]
+                }
+                """);
+
+            var workflow = new AppUpdateWorkflowService(
+                new NoOpAppLifecycleService(),
+                operatingSystem: OSPlatform.Windows,
+                architecture: Architecture.X64);
+            var service = new VersionUpdateFeatureService(
+                CreateConfigurationService(root),
+                appUpdateWorkflowService: workflow,
+                runtimeBaseDirectory: root);
+
+            var result = await service.CheckForUpdatesAsync(
+                VersionUpdatePolicy.Default with
+                {
+                    ResourceApi = feedPath,
+                    AutoDownloadUpdatePackage = false,
+                },
+                "v1.0.0");
+
+            Assert.True(result.Success);
+            Assert.NotNull(result.Value);
+            Assert.True(result.Value!.HasPackage);
+            Assert.Equal(PackageSourceKind.WindowsRelayManifest, result.Value.PackageSourceKind);
+            Assert.Equal("MAAUnified-v2.0.0-win-x64.zip", result.Value.PackageName);
+            Assert.Equal(new Uri("https://example.com/MAAUnified-v2.0.0-win-x64.zip"), result.Value.PackageDownloadUrl);
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    [Fact]
+    public async Task CheckForUpdatesAsync_OnWindowsRelayManifestMiss_DoesNotReportUpdate()
     {
         var root = Path.Combine(Path.GetTempPath(), $"maa-unified-windows-relay-miss-{Guid.NewGuid():N}");
         Directory.CreateDirectory(root);
@@ -457,9 +668,10 @@ public sealed class VersionUpdateFeatureServiceTests
 
             Assert.True(result.Success);
             Assert.NotNull(result.Value);
+            Assert.False(result.Value!.IsNewVersion);
             Assert.False(result.Value!.HasPackage);
             Assert.Equal(PackageResolutionStatus.WindowsManualUpdateRequired, result.Value.PackageResolutionStatus);
-            Assert.Contains("手动更新", result.Message, StringComparison.Ordinal);
+            Assert.Contains("当前已是最新", result.Message, StringComparison.Ordinal);
         }
         finally
         {
@@ -553,7 +765,7 @@ public sealed class VersionUpdateFeatureServiceTests
     }
 
     [Fact]
-    public async Task CheckForUpdatesAsync_OnLinuxWithoutMatchingPackage_ReturnsUnavailable()
+    public async Task CheckForUpdatesAsync_OnLinuxWithoutMatchingPackage_DoesNotReportUpdate()
     {
         var root = Path.Combine(Path.GetTempPath(), $"maa-unified-linux-unavailable-{Guid.NewGuid():N}");
         Directory.CreateDirectory(root);
@@ -600,8 +812,10 @@ public sealed class VersionUpdateFeatureServiceTests
 
             Assert.True(result.Success);
             Assert.NotNull(result.Value);
+            Assert.False(result.Value!.IsNewVersion);
+            Assert.False(result.Value.HasPackage);
             Assert.Equal(PackageResolutionStatus.Unavailable, result.Value!.PackageResolutionStatus);
-            Assert.Contains("更新失败", result.Message, StringComparison.Ordinal);
+            Assert.Contains("当前已是最新", result.Message, StringComparison.Ordinal);
         }
         finally
         {
@@ -919,7 +1133,7 @@ public sealed class VersionUpdateFeatureServiceTests
             using var httpClient = new HttpClient(new StubHttpMessageHandler(static request =>
             {
                 var url = request.RequestUri?.AbsoluteUri ?? string.Empty;
-                if (url.StartsWith("https://mirrorchyan.com/api/resources/MAA/latest", StringComparison.OrdinalIgnoreCase))
+                if (url.StartsWith("https://mirrorchyan.com/api/resources/MAAUnified/latest", StringComparison.OrdinalIgnoreCase))
                 {
                     return new HttpResponseMessage(HttpStatusCode.OK)
                     {

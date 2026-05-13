@@ -235,6 +235,8 @@ public sealed class UnifiedConfigurationService
                 return report;
             }
 
+            ApplyFallbackGlobalValues(config, request, report);
+
             config.SchemaVersion = UnifiedConfig.LatestSchemaVersion;
             NormalizeFightStageSelections(config);
             config.Migration = new UnifiedMigrationMetadata {
@@ -446,6 +448,28 @@ public sealed class UnifiedConfigurationService
             ImportSource.GuiOnly => [(_guiImporter, false)],
             _ => [(_guiNewImporter, false), (_guiImporter, true)],
         };
+    }
+
+    private static void ApplyFallbackGlobalValues(
+        UnifiedConfig config,
+        LegacyImportRequest request,
+        ImportReport report)
+    {
+        if (request.FallbackGlobalValues is null || request.FallbackGlobalValues.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var (key, value) in request.FallbackGlobalValues)
+        {
+            if (string.IsNullOrWhiteSpace(key) || config.GlobalValues.ContainsKey(key))
+            {
+                continue;
+            }
+
+            config.GlobalValues[key] = value?.DeepClone();
+            report.MappedFieldCount += 1;
+        }
     }
 
     private async Task WriteReportAsync(ImportReport report, CancellationToken cancellationToken)

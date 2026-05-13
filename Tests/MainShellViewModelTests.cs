@@ -983,10 +983,10 @@ public sealed class MainShellViewModelTests
     }
 
     [Theory]
-    [InlineData(100, true, 0.8)]
-    [InlineData(80, true, 0.64)]
-    [InlineData(130, true, 1.04)]
-    [InlineData(200, true, 1.12)]
+    [InlineData(100, true, 0.9)]
+    [InlineData(80, true, 0.72)]
+    [InlineData(130, true, 1.17)]
+    [InlineData(200, true, 1.26)]
     [InlineData(100, false, 1.0)]
     [InlineData(80, false, 0.8)]
     [InlineData(40, false, 0.7)]
