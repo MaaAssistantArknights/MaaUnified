@@ -5681,7 +5681,11 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
             HasPendingTimerChanges = false;
             if (string.IsNullOrWhiteSpace(TimerValidationMessage)
                 || TimerValidationMessage.Contains(UiErrorCode.TimerProfileMissing, StringComparison.Ordinal)
-                || TimerValidationMessage.Contains("profile cannot be empty", StringComparison.OrdinalIgnoreCase))
+                || TimerValidationMessage.Contains("profile cannot be empty", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(
+                    TimerValidationMessage,
+                    BuildTimerProfileRequiredMessage(slot.Index),
+                    StringComparison.Ordinal))
             {
                 TimerValidationMessage = string.Empty;
             }
@@ -5999,8 +6003,8 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         ImportReport? report,
         CancellationToken cancellationToken)
     {
-        await LoadFromConfigAsync(Runtime.ConfigurationService.CurrentConfig, cancellationToken);
         await LoadConfigurationProfilesAsync(scope, cancellationToken, updateStatus: false);
+        await LoadFromConfigAsync(Runtime.ConfigurationService.CurrentConfig, cancellationToken);
         LoadConnectionSharedStateFromConfig();
         RaiseConfigurationContextChanged(reason, message, report);
     }
@@ -8980,7 +8984,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         {
             return UiOperationResult.Fail(
                 UiErrorCode.TimerSlotCountMismatch,
-                $"Expected {TimerSlotCount} timer slots but got {snapshot.Slots.Count}.");
+                BuildTimerSlotCountMismatchMessage(snapshot.Slots.Count));
         }
 
         foreach (var slot in snapshot.Slots.OrderBy(static s => s.Index))
@@ -8989,14 +8993,14 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
             {
                 return UiOperationResult.Fail(
                     UiErrorCode.TimerSlotIndexOutOfRange,
-                    $"Timer slot index must be within 1-{TimerSlotCount}, got {slot.Index}.");
+                    BuildTimerSlotIndexOutOfRangeMessage(slot.Index));
             }
 
             if (slot.Enabled && !TryParseTimerTime(slot.Time, out _, out _))
             {
                 return UiOperationResult.Fail(
                     UiErrorCode.TimerTimeInvalid,
-                    $"Timer {slot.Index} time must be HH:mm (00:00-23:59).");
+                    BuildTimerTimeInvalidMessage(slot.Index));
             }
 
             if (!snapshot.CustomTimerConfig || !slot.Enabled)
@@ -9008,18 +9012,20 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
             {
                 return UiOperationResult.Fail(
                     UiErrorCode.TimerProfileMissing,
-                    $"Timer {slot.Index} profile cannot be empty when CustomConfig is enabled.");
+                    BuildTimerProfileRequiredMessage(slot.Index));
             }
 
             if (!Runtime.ConfigurationService.CurrentConfig.Profiles.ContainsKey(slot.Profile))
             {
                 return UiOperationResult.Fail(
                     UiErrorCode.TimerProfileNotFound,
-                    $"Timer {slot.Index} profile `{slot.Profile}` does not exist.");
+                    BuildTimerProfileNotFoundMessage(slot.Index, slot.Profile));
             }
         }
 
-        return UiOperationResult.Ok("Timer settings validation passed.");
+        return UiOperationResult.Ok(LocalizeSettingsText(
+            "Settings.Timer.Validation.Passed",
+            "定时设置校验通过。"));
     }
 
     private TimerSettingsSnapshot ReadTimerSnapshot(UnifiedConfig config, ICollection<string> warnings)
@@ -9028,7 +9034,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         if (string.IsNullOrWhiteSpace(currentProfile) || !config.Profiles.ContainsKey(currentProfile))
         {
             currentProfile = config.Profiles.Keys.FirstOrDefault() ?? "Default";
-            warnings.Add($"Timer profile fallback applied to `{currentProfile}`.");
+            warnings.Add(BuildTimerCurrentProfileFallbackWarning(currentProfile));
         }
 
         var slots = new List<TimerSlotSettingsSnapshot>(TimerSlotCount);
@@ -9044,31 +9050,31 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
             var rawHour = ReadGlobalIntFlexible(config, hourKey, DefaultTimerHour, out var parsedHour);
             if (!parsedHour && HasConfigKey(config, hourKey, ConfigValuePreference.GlobalFirst))
             {
-                warnings.Add($"Timer {index} hour parse failed and fell back to {DefaultTimerHour}.");
+                warnings.Add(BuildTimerHourParseFallbackWarning(index, DefaultTimerHour));
             }
 
             var hour = Math.Clamp(rawHour, TimerHourMin, TimerHourMax);
             if (hour != rawHour)
             {
-                warnings.Add($"Timer {index} hour clamped to {hour} from {rawHour}.");
+                warnings.Add(BuildTimerHourClampedWarning(index, hour, rawHour));
             }
 
             var rawMinute = ReadGlobalIntFlexible(config, minuteKey, DefaultTimerMinute, out var parsedMinute);
             if (!parsedMinute && HasConfigKey(config, minuteKey, ConfigValuePreference.GlobalFirst))
             {
-                warnings.Add($"Timer {index} minute parse failed and fell back to {DefaultTimerMinute}.");
+                warnings.Add(BuildTimerMinuteParseFallbackWarning(index, DefaultTimerMinute));
             }
 
             var minute = Math.Clamp(rawMinute, TimerMinuteMin, TimerMinuteMax);
             if (minute != rawMinute)
             {
-                warnings.Add($"Timer {index} minute clamped to {minute} from {rawMinute}.");
+                warnings.Add(BuildTimerMinuteClampedWarning(index, minute, rawMinute));
             }
 
             var profile = NormalizeTimerProfile(ReadGlobalString(config, profileKey, currentProfile), currentProfile);
             if (!config.Profiles.ContainsKey(profile))
             {
-                warnings.Add($"Timer {index} profile `{profile}` not found and fell back to `{currentProfile}`.");
+                warnings.Add(BuildTimerProfileFallbackWarning(index, profile, currentProfile));
                 profile = currentProfile;
             }
 
@@ -9084,6 +9090,105 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
             ShowWindowBeforeForceScheduledStart: ReadGlobalBoolFlexible(config, LegacyConfigurationKeys.ShowWindowBeforeForceScheduledStart, false),
             CustomTimerConfig: ReadGlobalBoolFlexible(config, LegacyConfigurationKeys.CustomConfig, false),
             Slots: slots);
+    }
+
+    private string BuildTimerSlotCountMismatchMessage(int actualCount)
+    {
+        return FormatSettingsText(
+            "Settings.Timer.Validation.SlotCountMismatch",
+            "定时任务槽数量不正确，预期 {0} 个，实际为 {1} 个。",
+            TimerSlotCount,
+            actualCount);
+    }
+
+    private string BuildTimerSlotIndexOutOfRangeMessage(int slotIndex)
+    {
+        return FormatSettingsText(
+            "Settings.Timer.Validation.SlotIndexOutOfRange",
+            "定时任务槽编号必须在 1-{0} 范围内，当前为 {1}。",
+            TimerSlotCount,
+            slotIndex);
+    }
+
+    private string BuildTimerTimeInvalidMessage(int slotIndex)
+    {
+        return FormatSettingsText(
+            "Settings.Timer.Validation.TimeInvalid",
+            "定时任务 {0} 的时间必须为 HH:mm（00:00-23:59）。",
+            slotIndex);
+    }
+
+    private string BuildTimerProfileRequiredMessage(int slotIndex)
+    {
+        return FormatSettingsText(
+            "Settings.Timer.Validation.ProfileRequired",
+            "启用自定义配置时，定时任务 {0} 必须选择配置。",
+            slotIndex);
+    }
+
+    private string BuildTimerProfileNotFoundMessage(int slotIndex, string profile)
+    {
+        return FormatSettingsText(
+            "Settings.Timer.Validation.ProfileNotFound",
+            "定时任务 {0} 选择的配置“{1}”不存在。",
+            slotIndex,
+            profile);
+    }
+
+    private string BuildTimerCurrentProfileFallbackWarning(string currentProfile)
+    {
+        return FormatSettingsText(
+            "Settings.Timer.Warning.CurrentProfileFallback",
+            "当前配置不可用，定时设置已回退到“{0}”。",
+            currentProfile);
+    }
+
+    private string BuildTimerHourParseFallbackWarning(int slotIndex, int fallbackHour)
+    {
+        return FormatSettingsText(
+            "Settings.Timer.Warning.HourParseFallback",
+            "定时任务 {0} 的小时解析失败，已回退为 {1}。",
+            slotIndex,
+            fallbackHour);
+    }
+
+    private string BuildTimerHourClampedWarning(int slotIndex, int clampedHour, int rawHour)
+    {
+        return FormatSettingsText(
+            "Settings.Timer.Warning.HourClamped",
+            "定时任务 {0} 的小时值已从 {1} 限制为 {2}。",
+            slotIndex,
+            rawHour,
+            clampedHour);
+    }
+
+    private string BuildTimerMinuteParseFallbackWarning(int slotIndex, int fallbackMinute)
+    {
+        return FormatSettingsText(
+            "Settings.Timer.Warning.MinuteParseFallback",
+            "定时任务 {0} 的分钟解析失败，已回退为 {1}。",
+            slotIndex,
+            fallbackMinute);
+    }
+
+    private string BuildTimerMinuteClampedWarning(int slotIndex, int clampedMinute, int rawMinute)
+    {
+        return FormatSettingsText(
+            "Settings.Timer.Warning.MinuteClamped",
+            "定时任务 {0} 的分钟值已从 {1} 限制为 {2}。",
+            slotIndex,
+            rawMinute,
+            clampedMinute);
+    }
+
+    private string BuildTimerProfileFallbackWarning(int slotIndex, string missingProfile, string fallbackProfile)
+    {
+        return FormatSettingsText(
+            "Settings.Timer.Warning.ProfileFallback",
+            "定时任务 {0} 选择的配置“{1}”不存在，已回退到“{2}”。",
+            slotIndex,
+            missingProfile,
+            fallbackProfile);
     }
 
     private void ApplyTimerSnapshot(TimerSettingsSnapshot snapshot)

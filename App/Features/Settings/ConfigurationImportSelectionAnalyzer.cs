@@ -9,6 +9,9 @@ namespace MAAUnified.App.Features.Settings;
 internal static class ConfigurationImportSelectionAnalyzer
 {
     private static readonly RootLocalizationTextMap Texts = new("Root.Localization.Settings.ConfigurationImportSelectionAnalyzer");
+    private const string AvaloniaConfigFileName = "avalonia.json";
+    private const string GuiNewConfigFileName = "gui.new.json";
+    private const string GuiConfigFileName = "gui.json";
 
     public static ConfigurationImportSelectionAnalysis Analyze(
         IEnumerable<string> filePaths,
@@ -64,6 +67,47 @@ internal static class ConfigurationImportSelectionAnalyzer
         }
 
         return ConfigurationImportSelectionAnalysis.Invalid(textResolver("Settings.ConfigurationManager.Import.UnrecognizedFiles"));
+    }
+
+    public static ConfigurationImportSelectionAnalysis AnalyzeLegacyDirectory(
+        string directoryPath,
+        Func<string, string>? textResolver = null)
+    {
+        textResolver ??= ResolveDefaultText;
+        if (!TryResolveDirectory(directoryPath, out var directory))
+        {
+            return ConfigurationImportSelectionAnalysis.Invalid(textResolver("Settings.ConfigurationManager.Import.DirectoryInvalid"));
+        }
+
+        var configDirectory = ResolveConfigDirectory(directory);
+        var guiNewPath = Path.Combine(configDirectory, GuiNewConfigFileName);
+        var guiPath = Path.Combine(configDirectory, GuiConfigFileName);
+        return ConfigurationImportSelectionAnalysis.Legacy(
+            File.Exists(guiNewPath) ? guiNewPath : null,
+            File.Exists(guiPath) ? guiPath : null,
+            hasInvalidFiles: false,
+            textResolver);
+    }
+
+    public static ConfigurationImportSelectionAnalysis AnalyzeUnifiedDirectory(
+        string directoryPath,
+        Func<string, string>? textResolver = null)
+    {
+        textResolver ??= ResolveDefaultText;
+        if (!TryResolveDirectory(directoryPath, out var directory))
+        {
+            return ConfigurationImportSelectionAnalysis.Invalid(textResolver("Settings.ConfigurationManager.Import.DirectoryInvalid"));
+        }
+
+        var candidates = new[]
+        {
+            Path.Combine(directory, AvaloniaConfigFileName),
+            Path.Combine(directory, "config", AvaloniaConfigFileName),
+        };
+        var configPath = candidates.FirstOrDefault(File.Exists);
+        return string.IsNullOrWhiteSpace(configPath)
+            ? ConfigurationImportSelectionAnalysis.Invalid(textResolver("Settings.ConfigurationManager.Import.UnifiedDirectoryMissing"))
+            : ConfigurationImportSelectionAnalysis.Unified(configPath);
     }
 
     private static ConfigurationImportSelectionAnalysis InspectSingleFile(
@@ -122,10 +166,39 @@ internal static class ConfigurationImportSelectionAnalyzer
     }
 
     private static bool IsGuiNewFile(string? fileName)
-        => string.Equals(fileName, "gui.new.json", StringComparison.OrdinalIgnoreCase);
+        => string.Equals(fileName, GuiNewConfigFileName, StringComparison.OrdinalIgnoreCase);
 
     private static bool IsGuiFile(string? fileName)
-        => string.Equals(fileName, "gui.json", StringComparison.OrdinalIgnoreCase);
+        => string.Equals(fileName, GuiConfigFileName, StringComparison.OrdinalIgnoreCase);
+
+    private static bool TryResolveDirectory(string directoryPath, out string directory)
+    {
+        directory = string.Empty;
+        if (string.IsNullOrWhiteSpace(directoryPath))
+        {
+            return false;
+        }
+
+        var normalized = Path.GetFullPath(directoryPath.Trim());
+        if (!Directory.Exists(normalized))
+        {
+            return false;
+        }
+
+        directory = normalized;
+        return true;
+    }
+
+    private static string ResolveConfigDirectory(string directory)
+    {
+        if (string.Equals(Path.GetFileName(directory), "config", StringComparison.OrdinalIgnoreCase))
+        {
+            return directory;
+        }
+
+        var childConfigDirectory = Path.Combine(directory, "config");
+        return Directory.Exists(childConfigDirectory) ? childConfigDirectory : directory;
+    }
 }
 
 internal sealed record ConfigurationImportSelectionAnalysis(

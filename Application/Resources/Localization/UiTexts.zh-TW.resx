@@ -2336,6 +2336,45 @@
   <data name="Settings.Timer.SlotLabel" xml:space="preserve">
     <value>定時任務</value>
   </data>
+  <data name="Settings.Timer.Validation.Passed" xml:space="preserve">
+    <value>定時設定驗證通過。</value>
+  </data>
+  <data name="Settings.Timer.Validation.ProfileNotFound" xml:space="preserve">
+    <value>定時任務 {0} 選擇的設定「{1}」不存在。</value>
+  </data>
+  <data name="Settings.Timer.Validation.ProfileRequired" xml:space="preserve">
+    <value>啟用自訂設定時，定時任務 {0} 必須選擇設定。</value>
+  </data>
+  <data name="Settings.Timer.Validation.SlotCountMismatch" xml:space="preserve">
+    <value>定時任務槽數量不正確，預期 {0} 個，實際為 {1} 個。</value>
+  </data>
+  <data name="Settings.Timer.Validation.SlotIndexOutOfRange" xml:space="preserve">
+    <value>定時任務槽編號必須在 1-{0} 範圍內，目前為 {1}。</value>
+  </data>
+  <data name="Settings.Timer.Validation.TimeInvalid" xml:space="preserve">
+    <value>定時任務 {0} 的時間必須為 HH:mm（00:00-23:59）。</value>
+  </data>
+  <data name="Settings.Timer.Warning.CurrentProfileFallback" xml:space="preserve">
+    <value>目前設定不可用，定時設定已回退到「{0}」。</value>
+  </data>
+  <data name="Settings.Timer.Warning.HourClamped" xml:space="preserve">
+    <value>定時任務 {0} 的小時值已從 {1} 限制為 {2}。</value>
+  </data>
+  <data name="Settings.Timer.Warning.HourParseFallback" xml:space="preserve">
+    <value>定時任務 {0} 的小時解析失敗，已回退為 {1}。</value>
+  </data>
+  <data name="Settings.Timer.Warning.MinuteClamped" xml:space="preserve">
+    <value>定時任務 {0} 的分鐘值已從 {1} 限制為 {2}。</value>
+  </data>
+  <data name="Settings.Timer.Warning.MinuteParseFallback" xml:space="preserve">
+    <value>定時任務 {0} 的分鐘解析失敗，已回退為 {1}。</value>
+  </data>
+  <data name="Settings.Timer.Warning.ProfileFallback" xml:space="preserve">
+    <value>定時任務 {0} 選擇的設定「{1}」不存在，已回退到「{2}」。</value>
+  </data>
+  <data name="Settings.StartPerformance.Warning.EmulatorWaitSecondsClamped" xml:space="preserve">
+    <value>模擬器等待秒數已從 {0} 限制為 {1}。</value>
+  </data>
   <data name="Settings.VersionUpdate.AutoDownload" xml:space="preserve">
     <value>自動下載更新包</value>
   </data>

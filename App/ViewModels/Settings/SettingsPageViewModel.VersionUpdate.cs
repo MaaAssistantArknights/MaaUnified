@@ -480,7 +480,7 @@ public sealed partial class SettingsPageViewModel
                     $"{scope}.Dialog",
                     cancellationToken);
             }
-            else if (!showDialog && HasPackageResolutionFailure(checkResult))
+            else if (!showDialog && checkResult.IsNewVersion && HasPackageResolutionFailure(checkResult))
             {
                 VersionUpdateStatusMessage = ResolveVersionUpdatePackageFailureMessage(checkResult);
                 VersionUpdateErrorMessage = string.Empty;
@@ -548,14 +548,6 @@ public sealed partial class SettingsPageViewModel
         if (!string.IsNullOrWhiteSpace(currentCoreVersion))
         {
             UpdatePanelCoreVersion = currentCoreVersion;
-            return currentCoreVersion;
-        }
-
-        var panelCoreVersion = UpdatePanelCoreVersion?.Trim();
-        if (!string.IsNullOrWhiteSpace(panelCoreVersion)
-            && !string.Equals(panelCoreVersion, "unknown", StringComparison.OrdinalIgnoreCase))
-        {
-            return panelCoreVersion;
         }
 
         return string.IsNullOrWhiteSpace(UpdatePanelUiVersion)

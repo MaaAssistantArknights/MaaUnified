@@ -860,19 +860,40 @@
     <Setter Property="Padding" Value="20,0" />
   </Style>
 
-  <Style Selector="Button.announcement-dialog-confirm-button.locked">
-    <Setter Property="Background" Value="{DynamicResource MAA.Brush.Action.PrimaryBackgroundDisabled}" />
-    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Action.ForegroundDisabled}" />
+  <Style Selector="Button.app-button.app-primary.announcement-dialog-confirm-button.locked">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.DisabledBackground}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Action.DisabledBorder}" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Action.DisabledForeground}" />
   </Style>
 
-  <Style Selector="Button.announcement-dialog-confirm-button.locked:pointerover">
-    <Setter Property="Background" Value="{DynamicResource MAA.Brush.Action.PrimaryBackgroundDisabled}" />
-    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Action.ForegroundDisabled}" />
+  <Style Selector="Button.app-button.app-primary.announcement-dialog-confirm-button.locked:pointerover">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.DisabledBackground}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Action.DisabledBorder}" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Action.DisabledForeground}" />
   </Style>
 
-  <Style Selector="Button.announcement-dialog-confirm-button.locked:pressed">
-    <Setter Property="Background" Value="{DynamicResource MAA.Brush.Action.PrimaryBackgroundDisabled}" />
-    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Action.ForegroundDisabled}" />
+  <Style Selector="Button.app-button.app-primary.announcement-dialog-confirm-button.locked:pressed">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.DisabledBackground}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Action.DisabledBorder}" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Action.DisabledForeground}" />
+  </Style>
+
+  <Style Selector="Button.app-button.app-primary.announcement-dialog-confirm-button.locked /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.DisabledBackground}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Action.DisabledBorder}" />
+    <Setter Property="TextBlock.Foreground" Value="{DynamicResource MAA.Brush.App.Action.DisabledForeground}" />
+  </Style>
+
+  <Style Selector="Button.app-button.app-primary.announcement-dialog-confirm-button.locked:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.DisabledBackground}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Action.DisabledBorder}" />
+    <Setter Property="TextBlock.Foreground" Value="{DynamicResource MAA.Brush.App.Action.DisabledForeground}" />
+  </Style>
+
+  <Style Selector="Button.app-button.app-primary.announcement-dialog-confirm-button.locked:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.DisabledBackground}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Action.DisabledBorder}" />
+    <Setter Property="TextBlock.Foreground" Value="{DynamicResource MAA.Brush.App.Action.DisabledForeground}" />
   </Style>
 
   <Style Selector="Grid.settings-form">

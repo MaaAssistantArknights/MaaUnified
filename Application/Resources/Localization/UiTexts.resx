@@ -2670,8 +2670,14 @@ Session state `{0}` does not allow {2}.</value>
   <data name="Settings.ConfigurationManager.Dialog.ImportLegacyTitle" xml:space="preserve">
     <value>导入旧配置</value>
   </data>
+  <data name="Settings.ConfigurationManager.Dialog.ImportLegacyWindowsFolderTitle" xml:space="preserve">
+    <value>选择旧版 MAA 文件夹</value>
+  </data>
   <data name="Settings.ConfigurationManager.Dialog.ImportTitle" xml:space="preserve">
     <value>导入配置</value>
+  </data>
+  <data name="Settings.ConfigurationManager.Dialog.ImportUnifiedFolderTitle" xml:space="preserve">
+    <value>选择 Unified 文件夹</value>
   </data>
   <data name="Settings.ConfigurationManager.Error.ExportPathEmpty" xml:space="preserve">
     <value>导出路径为空。</value>
@@ -2709,6 +2715,9 @@ Session state `{0}` does not allow {2}.</value>
   <data name="Settings.ConfigurationManager.Import.ContextRefresh" xml:space="preserve">
     <value>导入后刷新列表</value>
   </data>
+  <data name="Settings.ConfigurationManager.Import.DirectoryInvalid" xml:space="preserve">
+    <value>未选择有效文件夹。</value>
+  </data>
   <data name="Settings.ConfigurationManager.Import.LegacyFilenameInvalid" xml:space="preserve">
     <value>旧配置文件名不正确，请选择 gui.json 或 gui.new.json。</value>
   </data>
@@ -2730,8 +2739,32 @@ Session state `{0}` does not allow {2}.</value>
   <data name="Settings.ConfigurationManager.Import.UnifiedSingleFileOnly" xml:space="preserve">
     <value>统一配置 json 只支持单文件导入。</value>
   </data>
+  <data name="Settings.ConfigurationManager.Import.UnifiedDirectoryMissing" xml:space="preserve">
+    <value>所选文件夹中未找到 config/avalonia.json 或 avalonia.json。</value>
+  </data>
   <data name="Settings.ConfigurationManager.Import.UnrecognizedFiles" xml:space="preserve">
     <value>无法识别导入文件，请选择导出的配置 json，或 gui.json / gui.new.json。</value>
+  </data>
+  <data name="Settings.ConfigurationManager.ImportMode.LegacyWindows" xml:space="preserve">
+    <value>旧版 MAA</value>
+  </data>
+  <data name="Settings.ConfigurationManager.ImportMode.LegacyWindowsDescription" xml:space="preserve">
+    <value>选择旧版 MAA 的文件夹。</value>
+  </data>
+  <data name="Settings.ConfigurationManager.ImportMode.Manual" xml:space="preserve">
+    <value>手动选择配置文件</value>
+  </data>
+  <data name="Settings.ConfigurationManager.ImportMode.ManualDescription" xml:space="preserve">
+    <value>支持新旧版配置；旧版需要同时选择 gui.new.json 和 gui.json。</value>
+  </data>
+  <data name="Settings.ConfigurationManager.ImportMode.Title" xml:space="preserve">
+    <value>选择导入方式</value>
+  </data>
+  <data name="Settings.ConfigurationManager.ImportMode.Unified" xml:space="preserve">
+    <value>MAAUnified</value>
+  </data>
+  <data name="Settings.ConfigurationManager.ImportMode.UnifiedDescription" xml:space="preserve">
+    <value>选择 MAAUnified 的文件夹。</value>
   </data>
   <data name="Settings.ConfigurationManager.ImportLegacy" xml:space="preserve">
     <value>导入旧配置</value>
@@ -3755,6 +3788,45 @@ Session state `{0}` does not allow {2}.</value>
   </data>
   <data name="Settings.Timer.SlotLabel" xml:space="preserve">
     <value>定时任务</value>
+  </data>
+  <data name="Settings.Timer.Validation.Passed" xml:space="preserve">
+    <value>定时设置校验通过。</value>
+  </data>
+  <data name="Settings.Timer.Validation.ProfileNotFound" xml:space="preserve">
+    <value>定时任务 {0} 选择的配置“{1}”不存在。</value>
+  </data>
+  <data name="Settings.Timer.Validation.ProfileRequired" xml:space="preserve">
+    <value>启用自定义配置时，定时任务 {0} 必须选择配置。</value>
+  </data>
+  <data name="Settings.Timer.Validation.SlotCountMismatch" xml:space="preserve">
+    <value>定时任务槽数量不正确，预期 {0} 个，实际为 {1} 个。</value>
+  </data>
+  <data name="Settings.Timer.Validation.SlotIndexOutOfRange" xml:space="preserve">
+    <value>定时任务槽编号必须在 1-{0} 范围内，当前为 {1}。</value>
+  </data>
+  <data name="Settings.Timer.Validation.TimeInvalid" xml:space="preserve">
+    <value>定时任务 {0} 的时间必须为 HH:mm（00:00-23:59）。</value>
+  </data>
+  <data name="Settings.Timer.Warning.CurrentProfileFallback" xml:space="preserve">
+    <value>当前配置不可用，定时设置已回退到“{0}”。</value>
+  </data>
+  <data name="Settings.Timer.Warning.HourClamped" xml:space="preserve">
+    <value>定时任务 {0} 的小时值已从 {1} 限制为 {2}。</value>
+  </data>
+  <data name="Settings.Timer.Warning.HourParseFallback" xml:space="preserve">
+    <value>定时任务 {0} 的小时解析失败，已回退为 {1}。</value>
+  </data>
+  <data name="Settings.Timer.Warning.MinuteClamped" xml:space="preserve">
+    <value>定时任务 {0} 的分钟值已从 {1} 限制为 {2}。</value>
+  </data>
+  <data name="Settings.Timer.Warning.MinuteParseFallback" xml:space="preserve">
+    <value>定时任务 {0} 的分钟解析失败，已回退为 {1}。</value>
+  </data>
+  <data name="Settings.Timer.Warning.ProfileFallback" xml:space="preserve">
+    <value>定时任务 {0} 选择的配置“{1}”不存在，已回退到“{2}”。</value>
+  </data>
+  <data name="Settings.StartPerformance.Warning.EmulatorWaitSecondsClamped" xml:space="preserve">
+    <value>模拟器等待秒数已从 {0} 限制为 {1}。</value>
   </data>
   <data name="Settings.VersionUpdate.AutoDownload" xml:space="preserve">
     <value>自动下载更新包</value>

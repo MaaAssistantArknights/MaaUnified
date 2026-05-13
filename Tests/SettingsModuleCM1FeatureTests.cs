@@ -115,7 +115,7 @@ public sealed class SettingsModuleCM1FeatureTests
     }
 
     [Fact]
-    public async Task VersionUpdate_CheckForUpdates_UsesCoreVersionForCurrentVersion()
+    public async Task VersionUpdate_CheckForUpdates_UsesUiVersionForSoftwareUpdate()
     {
         await using var fixture = await RuntimeFixture.CreateAsync();
         var vm = new SettingsPageViewModel(
@@ -152,8 +152,66 @@ public sealed class SettingsModuleCM1FeatureTests
             await vm.CheckVersionUpdateAsync();
 
             Assert.Equal("v999.0.0", vm.UpdatePanelCoreVersion);
+            Assert.True(vm.HasPendingVersionUpdateAvailability);
+            Assert.Contains("v2.0.0", vm.VersionUpdateStatusMessage, StringComparison.Ordinal);
+        }
+        finally
+        {
+            try
+            {
+                if (File.Exists(feedPath))
+                {
+                    File.Delete(feedPath);
+                }
+            }
+            catch
+            {
+                // Best-effort cleanup.
+            }
+        }
+    }
+
+    [Fact]
+    public async Task VersionUpdate_CheckForUpdates_WithOnlyLegacyMaaPackage_DoesNotShowAvailability()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync();
+        var vm = new SettingsPageViewModel(
+            fixture.Runtime,
+            new ConnectionGameSharedStateViewModel(),
+            coreVersionResolver: () => "v1.0.0");
+        await vm.InitializeAsync();
+
+        var feedPath = Path.Combine(Path.GetTempPath(), $"maa-unified-settings-legacy-feed-{Guid.NewGuid():N}.json");
+        try
+        {
+            await File.WriteAllTextAsync(feedPath, """
+                [
+                  {
+                    "tag_name": "v2.0.0",
+                    "name": "Release v2.0.0",
+                    "body": "Line one.\nLine two.",
+                    "prerelease": false,
+                    "assets": [
+                      {
+                        "name": "MAA-v2.0.0-linux-x64.AppImage",
+                        "browser_download_url": "https://example.com/MAA-v2.0.0-linux-x64.AppImage",
+                        "size": 1234
+                      }
+                    ]
+                  }
+                ]
+                """);
+
+            vm.VersionUpdateVersionType = "Stable";
+            vm.VersionUpdateResourceApi = feedPath;
+            vm.VersionUpdateAutoDownload = false;
+
+            await vm.CheckVersionUpdateAsync();
+
             Assert.False(vm.HasPendingVersionUpdateAvailability);
-            Assert.DoesNotContain("v2.0.0", vm.VersionUpdateStatusMessage, StringComparison.Ordinal);
+            Assert.False(vm.HasVersionUpdateErrorMessage);
+            Assert.Contains("当前已是最新", vm.VersionUpdateStatusMessage, StringComparison.Ordinal);
+            Assert.Equal("v1.0.0", vm.UpdatePanelCoreVersion);
         }
         finally
         {
@@ -478,6 +536,49 @@ public sealed class SettingsModuleCM1FeatureTests
     }
 
     [Fact]
+    public async Task ImportLegacyConfigurations_ShouldRefreshTimerProfileSelection()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync();
+        var legacyGuiPath = Path.Combine(fixture.Root, "config", "gui.json");
+        await File.WriteAllTextAsync(
+            legacyGuiPath,
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": {
+                  "Timer.Timer1": true,
+                  "Timer.Timer1Hour": 8,
+                  "Timer.Timer1Min": 15,
+                  "Timer.Timer1.Config": "Night"
+                },
+                "Night": {}
+              },
+              "Global": {
+                "Timer.CustomConfig": true
+              }
+            }
+            """);
+
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        var report = await vm.ImportLegacyConfigurationsAsync(
+            new LegacyImportRequest(
+                LegacyConfigSnapshot.FromPaths(null, legacyGuiPath),
+                ImportSource.GuiOnly,
+                ManualImport: true,
+                AllowPartialImport: true));
+
+        Assert.True(report.AppliedConfig);
+        Assert.Contains("Night", vm.ConfigurationProfiles, StringComparer.OrdinalIgnoreCase);
+        Assert.True(vm.CustomTimerConfig);
+        Assert.True(vm.Timers[0].Enabled);
+        Assert.Equal("08:15", vm.Timers[0].Time);
+        Assert.Equal("Night", vm.Timers[0].Profile);
+    }
+
+    [Fact]
     public async Task SettingsPage_ShouldLoadProfileScopedLegacyValues_AndRefreshThemOnProfileSwitch()
     {
         await using var fixture = await RuntimeFixture.CreateAsync();
@@ -584,6 +685,74 @@ public sealed class SettingsModuleCM1FeatureTests
 
             Assert.Equal(ConfigurationImportSelectionKind.UnifiedConfig, analysis.Kind);
             Assert.Equal(filePath, analysis.UnifiedConfigPath);
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(root, recursive: true);
+            }
+            catch
+            {
+                // ignore cleanup failures
+            }
+        }
+    }
+
+    [Fact]
+    public void ConfigurationImportSelectionAnalyzer_LegacyDirectory_ShouldAcceptRootOrConfigFolder()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "maa-unified-tests", Guid.NewGuid().ToString("N"));
+        var config = Path.Combine(root, "config");
+        Directory.CreateDirectory(config);
+        try
+        {
+            var guiNewPath = Path.Combine(config, "gui.new.json");
+            var guiPath = Path.Combine(config, "gui.json");
+            File.WriteAllText(guiNewPath, "{}");
+            File.WriteAllText(guiPath, "{}");
+
+            var rootAnalysis = ConfigurationImportSelectionAnalyzer.AnalyzeLegacyDirectory(root, static key => key);
+            var configAnalysis = ConfigurationImportSelectionAnalyzer.AnalyzeLegacyDirectory(config, static key => key);
+
+            Assert.Equal(ConfigurationImportSelectionKind.LegacyReady, rootAnalysis.Kind);
+            Assert.Equal(guiNewPath, rootAnalysis.GuiNewPath);
+            Assert.Equal(guiPath, rootAnalysis.GuiPath);
+            Assert.Equal(ConfigurationImportSelectionKind.LegacyReady, configAnalysis.Kind);
+            Assert.Equal(guiNewPath, configAnalysis.GuiNewPath);
+            Assert.Equal(guiPath, configAnalysis.GuiPath);
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(root, recursive: true);
+            }
+            catch
+            {
+                // ignore cleanup failures
+            }
+        }
+    }
+
+    [Fact]
+    public void ConfigurationImportSelectionAnalyzer_UnifiedDirectory_ShouldAcceptRootOrConfigFolder()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "maa-unified-tests", Guid.NewGuid().ToString("N"));
+        var config = Path.Combine(root, "config");
+        Directory.CreateDirectory(config);
+        try
+        {
+            var avaloniaPath = Path.Combine(config, "avalonia.json");
+            File.WriteAllText(avaloniaPath, "{}");
+
+            var rootAnalysis = ConfigurationImportSelectionAnalyzer.AnalyzeUnifiedDirectory(root, static key => key);
+            var configAnalysis = ConfigurationImportSelectionAnalyzer.AnalyzeUnifiedDirectory(config, static key => key);
+
+            Assert.Equal(ConfigurationImportSelectionKind.UnifiedConfig, rootAnalysis.Kind);
+            Assert.Equal(avaloniaPath, rootAnalysis.UnifiedConfigPath);
+            Assert.Equal(ConfigurationImportSelectionKind.UnifiedConfig, configAnalysis.Kind);
+            Assert.Equal(avaloniaPath, configAnalysis.UnifiedConfigPath);
         }
         finally
         {

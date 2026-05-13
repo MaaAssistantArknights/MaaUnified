@@ -2444,6 +2444,45 @@
   <data name="Settings.Timer.SlotLabel" xml:space="preserve">
     <value>定時タスク</value>
   </data>
+  <data name="Settings.Timer.Validation.Passed" xml:space="preserve">
+    <value>タイマー設定の検証に合格しました。</value>
+  </data>
+  <data name="Settings.Timer.Validation.ProfileNotFound" xml:space="preserve">
+    <value>タイマー {0} で選択された構成「{1}」は存在しません。</value>
+  </data>
+  <data name="Settings.Timer.Validation.ProfileRequired" xml:space="preserve">
+    <value>カスタム構成を有効にする場合、タイマー {0} では構成を選択する必要があります。</value>
+  </data>
+  <data name="Settings.Timer.Validation.SlotCountMismatch" xml:space="preserve">
+    <value>タイマースロット数が正しくありません。想定 {0} 件、実際は {1} 件です。</value>
+  </data>
+  <data name="Settings.Timer.Validation.SlotIndexOutOfRange" xml:space="preserve">
+    <value>タイマースロット番号は 1-{0} の範囲である必要があります。現在は {1} です。</value>
+  </data>
+  <data name="Settings.Timer.Validation.TimeInvalid" xml:space="preserve">
+    <value>タイマー {0} の時刻は HH:mm（00:00-23:59）形式で指定してください。</value>
+  </data>
+  <data name="Settings.Timer.Warning.CurrentProfileFallback" xml:space="preserve">
+    <value>現在の構成が利用できないため、タイマー設定は「{0}」にフォールバックしました。</value>
+  </data>
+  <data name="Settings.Timer.Warning.HourClamped" xml:space="preserve">
+    <value>タイマー {0} の時は {1} から {2} に補正されました。</value>
+  </data>
+  <data name="Settings.Timer.Warning.HourParseFallback" xml:space="preserve">
+    <value>タイマー {0} の時を解析できなかったため、{1} にフォールバックしました。</value>
+  </data>
+  <data name="Settings.Timer.Warning.MinuteClamped" xml:space="preserve">
+    <value>タイマー {0} の分は {1} から {2} に補正されました。</value>
+  </data>
+  <data name="Settings.Timer.Warning.MinuteParseFallback" xml:space="preserve">
+    <value>タイマー {0} の分を解析できなかったため、{1} にフォールバックしました。</value>
+  </data>
+  <data name="Settings.Timer.Warning.ProfileFallback" xml:space="preserve">
+    <value>タイマー {0} で選択された構成「{1}」が見つからないため、「{2}」にフォールバックしました。</value>
+  </data>
+  <data name="Settings.StartPerformance.Warning.EmulatorWaitSecondsClamped" xml:space="preserve">
+    <value>エミュレータ待機秒数は {0} から {1} に補正されました。</value>
+  </data>
   <data name="Settings.VersionUpdate.AutoDownload" xml:space="preserve">
     <value>更新パッケージを自動ダウンロード</value>
   </data>

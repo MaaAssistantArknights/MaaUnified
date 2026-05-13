@@ -143,6 +143,140 @@ public sealed class ConfigurationImportTests
     }
 
     [Fact]
+    public async Task GuiNewImport_RootTimers_ShouldMapCustomProfileSelection()
+    {
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.new.json"),
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": {},
+                "Night": {}
+              },
+              "Timers": {
+                "0": { "Enable": true, "Config": "Night", "Hour": 23, "Minute": 45 }
+              },
+              "Timer": {
+                "CustomConfig": true
+              }
+            }
+            """);
+
+        var service = CreateService(root);
+        var report = await service.ImportLegacyAsync(ImportSource.GuiNewOnly, manualImport: false);
+
+        Assert.True(report.Success);
+        Assert.True(service.CurrentConfig.GlobalValues["Timer.CustomConfig"]?.GetValue<bool>());
+        Assert.True(service.CurrentConfig.GlobalValues["Timer.Timer1"]?.GetValue<bool>());
+        Assert.Equal(23, service.CurrentConfig.GlobalValues["Timer.Timer1Hour"]?.GetValue<int>());
+        Assert.Equal(45, service.CurrentConfig.GlobalValues["Timer.Timer1Min"]?.GetValue<int>());
+        Assert.Equal("Night", service.CurrentConfig.GlobalValues["Timer.Timer1.Config"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task GuiNewImport_RootTimersArray_ShouldMapCustomProfileSelection()
+    {
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.new.json"),
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": {},
+                "Night": {}
+              },
+              "Timers": [
+                { "Key": 0, "Value": { "Enable": true, "Config": "Night", "Hour": 22, "Min": 30 } }
+              ],
+              "Timer": {
+                "CustomConfig": true
+              }
+            }
+            """);
+
+        var service = CreateService(root);
+        var report = await service.ImportLegacyAsync(ImportSource.GuiNewOnly, manualImport: false);
+
+        Assert.True(report.Success);
+        Assert.Equal("Night", service.CurrentConfig.GlobalValues["Timer.Timer1.Config"]?.GetValue<string>());
+        Assert.Equal(22, service.CurrentConfig.GlobalValues["Timer.Timer1Hour"]?.GetValue<int>());
+        Assert.Equal(30, service.CurrentConfig.GlobalValues["Timer.Timer1Min"]?.GetValue<int>());
+    }
+
+    [Fact]
+    public async Task ManualLegacyImport_FallbackGlobalValues_ShouldFillMissingUiScale()
+    {
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.json"),
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": {}
+              },
+              "Global": {}
+            }
+            """);
+
+        var service = CreateService(root);
+        var report = await service.ImportLegacyAsync(
+            new LegacyImportRequest(
+                LegacyConfigSnapshot.FromPaths(null, Path.Combine(root, "config", "gui.json")),
+                ImportSource.GuiOnly,
+                ManualImport: true,
+                AllowPartialImport: true,
+                FallbackGlobalValues: new Dictionary<string, JsonNode?>
+                {
+                    [MAAUnified.Compat.Constants.ConfigurationKeys.UiScalePercent] = JsonValue.Create(125),
+                }));
+
+        Assert.True(report.Success);
+        Assert.Equal(125, service.CurrentConfig.GlobalValues[MAAUnified.Compat.Constants.ConfigurationKeys.UiScalePercent]?.GetValue<int>());
+    }
+
+    [Fact]
+    public async Task LegacyGuiImport_ShouldPreserveTimerConfigSelection()
+    {
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.json"),
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": {
+                  "Timer.Timer1": true,
+                  "Timer.Timer1Hour": 8,
+                  "Timer.Timer1Min": 15,
+                  "Timer.Timer1.Config": "Night"
+                },
+                "Night": {}
+              },
+              "Global": {
+                "Timer.CustomConfig": true
+              }
+            }
+            """);
+
+        var service = CreateService(root);
+        var report = await service.ImportLegacyAsync(ImportSource.GuiOnly, manualImport: true);
+
+        Assert.True(report.AppliedConfig);
+        Assert.True(service.CurrentConfig.GlobalValues["Timer.CustomConfig"]?.GetValue<bool>());
+        Assert.Equal("Night", service.CurrentConfig.Profiles["Default"].Values["Timer.Timer1.Config"]?.GetValue<string>());
+    }
+
+    [Fact]
     public async Task ExistingAvaloniaConfig_SkipsLegacyRead()
     {
         var root = CreateTempRoot();
