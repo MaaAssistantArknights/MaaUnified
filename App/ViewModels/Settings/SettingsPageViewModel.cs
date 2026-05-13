@@ -36,8 +36,8 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
     private const string SoftwareRenderingConfigKey = ConfigurationKeys.IgnoreBadModulesAndUseSoftwareRendering;
     private const string ShowGuiHotkeyName = HotkeyConfigurationCodec.ShowGuiHotkeyName;
     private const string LinkStartHotkeyName = HotkeyConfigurationCodec.LinkStartHotkeyName;
-    private const string DefaultHotkeyShowGui = HotkeyConfigurationCodec.DefaultHotkeyShowGui;
-    private const string DefaultHotkeyLinkStart = HotkeyConfigurationCodec.DefaultHotkeyLinkStart;
+    private static readonly string DefaultHotkeyShowGui = HotkeyConfigurationCodec.DefaultHotkeyShowGui;
+    private static readonly string DefaultHotkeyLinkStart = HotkeyConfigurationCodec.DefaultHotkeyLinkStart;
     private const int EmulatorWaitSecondsMin = 0;
     private const int EmulatorWaitSecondsMax = 600;
     private const int DefaultEmulatorWaitSeconds = 60;
@@ -407,6 +407,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
     private bool _suppressConfigurationManagerSaveAsNewSuccessReset;
     private string _configurationManagerSaveAsNewSucceededText = string.Empty;
     private string _configurationManagerSaveAsNewFailedText = string.Empty;
+    private string _configurationManagerImportSucceededText = string.Empty;
     private string _configurationManagerStatusMessage = string.Empty;
     private string _configurationManagerErrorMessage = string.Empty;
     private bool _achievementPopupDisabled;
@@ -707,6 +708,12 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
     public Task WaitForStartupAnnouncementCompletionAsync(CancellationToken cancellationToken = default)
         => _startupAnnouncementCompletionSource.Task.WaitAsync(cancellationToken);
 
+    internal Task PrepareStartupAnnouncementCompletionTask()
+    {
+        EnsureStartupAnnouncementCompletionPending();
+        return _startupAnnouncementCompletionSource.Task;
+    }
+
     public SettingsSectionViewModel? SelectedSection
     {
         get => _selectedSection;
@@ -748,6 +755,16 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         var source = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         source.TrySetResult(true);
         return source;
+    }
+
+    private void EnsureStartupAnnouncementCompletionPending()
+    {
+        if (!_startupAnnouncementCompletionSource.Task.IsCompleted)
+        {
+            return;
+        }
+
+        ResetStartupAnnouncementCompletion();
     }
 
     private void ResetStartupAnnouncementCompletion()
@@ -1950,6 +1967,18 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         }
     }
 
+    public string ConfigurationManagerImportSucceededText
+    {
+        get => _configurationManagerImportSucceededText;
+        private set
+        {
+            if (SetProperty(ref _configurationManagerImportSucceededText, value))
+            {
+                OnPropertyChanged(nameof(HasConfigurationManagerImportSucceeded));
+            }
+        }
+    }
+
     public string ConfigurationManagerStatusMessage
     {
         get => _configurationManagerStatusMessage;
@@ -1975,6 +2004,9 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
 
     public bool HasConfigurationManagerSaveAsNewFailed =>
         !string.IsNullOrWhiteSpace(ConfigurationManagerSaveAsNewFailedText);
+
+    public bool HasConfigurationManagerImportSucceeded =>
+        !string.IsNullOrWhiteSpace(ConfigurationManagerImportSucceededText);
 
     public string VersionUpdateProxy
     {
@@ -3371,6 +3403,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         var initialized = false;
         try
         {
+            await PersistPlatformHotkeyDefaultsMigrationIfNeededAsync(cancellationToken);
             await LoadInitialSettingsAsync(cancellationToken);
             await RefreshConfigurationProfilesAsync(cancellationToken);
             _deferredSectionDataLoadEnabled = _deferredSectionDataLoadRequested;
@@ -3391,6 +3424,23 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         {
             _autoSaveReady = initialized;
             ResumeAutoSave();
+        }
+    }
+
+    private async Task PersistPlatformHotkeyDefaultsMigrationIfNeededAsync(CancellationToken cancellationToken)
+    {
+        if (!HotkeyConfigurationCodec.ApplyPlatformDefaultsMigration(Runtime.ConfigurationService.CurrentConfig))
+        {
+            return;
+        }
+
+        try
+        {
+            await Runtime.ConfigurationService.SaveAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            Runtime.LogService.Warn($"Failed to persist platform hotkey defaults migration: {ex.Message}");
         }
     }
 
@@ -3952,6 +4002,9 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
                     "Settings.ConfigurationManager.Status.ImportSucceeded",
                     "已导入 {0} 个配置。",
                     importedCount);
+            ConfigurationManagerImportSucceededText = LocalizeSettingsText(
+                "Settings.ConfigurationManager.ImportSucceededInline",
+                "导入成功");
             ConfigurationManagerStatusMessage = importSuccessMessage;
             ConfigurationManagerErrorMessage = string.Empty;
             StatusMessage = ConfigurationManagerStatusMessage;
@@ -3996,6 +4049,11 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
 
         ConfigurationManagerStatusMessage = statusMessage;
         ConfigurationManagerErrorMessage = errorMessage;
+        ConfigurationManagerImportSucceededText = report.AppliedConfig
+            ? LocalizeSettingsText(
+                "Settings.ConfigurationManager.ImportSucceededInline",
+                "导入成功")
+            : string.Empty;
         StatusMessage = statusMessage;
         LastErrorMessage = report.AppliedConfig ? errorMessage : (errorMessage.Length == 0 ? statusMessage : errorMessage);
 
@@ -5751,6 +5809,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
     {
         ConfigurationManagerSaveAsNewSucceededText = string.Empty;
         ConfigurationManagerSaveAsNewFailedText = string.Empty;
+        ConfigurationManagerImportSucceededText = string.Empty;
         ConfigurationManagerStatusMessage = string.Empty;
         ConfigurationManagerErrorMessage = string.Empty;
     }

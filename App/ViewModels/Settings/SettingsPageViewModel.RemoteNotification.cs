@@ -919,7 +919,7 @@ public sealed partial class SettingsPageViewModel
 
     public async Task ShowStartupAnnouncementAsync(CancellationToken cancellationToken = default)
     {
-        ResetStartupAnnouncementCompletion();
+        EnsureStartupAnnouncementCompletionPending();
         try
         {
             var latestStateResult = await LoadLatestAnnouncementStateAsync(cancellationToken);

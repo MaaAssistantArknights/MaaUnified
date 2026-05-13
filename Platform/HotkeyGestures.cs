@@ -63,6 +63,33 @@ public sealed record HotkeyGesture(
 
     public string ToDisplayString(HotkeyDisplayPlatform platform)
     {
+        if (platform == HotkeyDisplayPlatform.MacOS)
+        {
+            var macParts = new List<string>(5);
+            if (Meta)
+            {
+                macParts.Add("Cmd");
+            }
+
+            if (Ctrl)
+            {
+                macParts.Add("Ctrl");
+            }
+
+            if (Shift)
+            {
+                macParts.Add("Shift");
+            }
+
+            if (Alt)
+            {
+                macParts.Add("Alt");
+            }
+
+            macParts.Add(Key);
+            return string.Join(" + ", macParts);
+        }
+
         var parts = new List<string>(5);
         if (Ctrl)
         {
@@ -81,12 +108,7 @@ public sealed record HotkeyGesture(
 
         if (Meta)
         {
-            parts.Add(platform switch
-            {
-                HotkeyDisplayPlatform.Windows => "Win",
-                HotkeyDisplayPlatform.MacOS => "Cmd",
-                _ => "Meta",
-            });
+            parts.Add(platform == HotkeyDisplayPlatform.Windows ? "Win" : "Meta");
         }
 
         parts.Add(Key);

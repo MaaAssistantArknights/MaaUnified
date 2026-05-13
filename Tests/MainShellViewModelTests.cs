@@ -387,6 +387,56 @@ public sealed class MainShellViewModelTests
     }
 
     [Fact]
+    public async Task AchievementToast_StartupRelease_ShouldWaitForAnnouncementCompletion()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var announcementGate = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        fixture.ViewModel.PrepareStartupAchievementToastAnnouncementGate(announcementGate.Task);
+        fixture.ViewModel.BeginAchievementToastStartupRelease();
+
+        var unlockResult = fixture.Runtime.AchievementTrackerService.Unlock("Linguist");
+        Assert.True(unlockResult.Success);
+        Dispatcher.UIThread.RunJobs();
+
+        await Task.Delay(150);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Empty(fixture.ViewModel.AchievementToasts);
+
+        announcementGate.TrySetResult(true);
+
+        Assert.True(await WaitUntilAsync(
+            () =>
+            {
+                Dispatcher.UIThread.RunJobs();
+                return fixture.ViewModel.AchievementToasts.Count == 1;
+            },
+            retry: 80,
+            delayMs: 25));
+    }
+
+    [Fact]
+    public async Task AchievementToast_StartupRelease_ShouldProceedImmediatelyWhenAnnouncementNotNeeded()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+
+        fixture.ViewModel.PrepareStartupAchievementToastAnnouncementGate(Task.CompletedTask);
+        fixture.ViewModel.BeginAchievementToastStartupRelease();
+
+        var unlockResult = fixture.Runtime.AchievementTrackerService.Unlock("Linguist");
+        Assert.True(unlockResult.Success);
+
+        Assert.True(await WaitUntilAsync(
+            () =>
+            {
+                Dispatcher.UIThread.RunJobs();
+                return fixture.ViewModel.AchievementToasts.Count == 1;
+            },
+            retry: 40,
+            delayMs: 25));
+    }
+
+    [Fact]
     public async Task InitializeAsync_CoreInitFailure_ShouldRaiseDialogError()
     {
         await using var fixture = await TestFixture.CreateAsync(

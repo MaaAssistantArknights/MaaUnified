@@ -1,6 +1,8 @@
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using MAAUnified.Application.Models;
+using MAAUnified.Compat.Constants;
 using MAAUnified.Platform;
 
 namespace MAAUnified.App.ViewModels.Settings;
@@ -14,10 +16,18 @@ public static class HotkeyConfigurationCodec
 {
     public const string ShowGuiHotkeyName = "ShowGui";
     public const string LinkStartHotkeyName = "LinkStart";
-    public const string DefaultHotkeyShowGui = "Ctrl+Shift+Alt+M";
-    public const string DefaultHotkeyLinkStart = "Ctrl+Shift+Alt+L";
+    public const string MacDefaultsVersionKey = "GUI.HotKeys.MacDefaultsVersion";
+    private const int CurrentMacDefaultsVersion = 1;
+    private const string LegacyDefaultHotkeyShowGui = "Ctrl+Shift+Alt+M";
+    private const string LegacyDefaultHotkeyLinkStart = "Ctrl+Shift+Alt+L";
+    private const string MacDefaultHotkeyShowGui = "Meta+Shift+M";
+    private const string MacDefaultHotkeyLinkStart = "Meta+Shift+L";
 
     private static readonly IReadOnlyDictionary<int, string> LegacyWpfKeyMap = BuildLegacyWpfKeyMap();
+
+    public static string DefaultHotkeyShowGui => GetDefaultHotkeyShowGui();
+
+    public static string DefaultHotkeyLinkStart => GetDefaultHotkeyLinkStart();
 
     public static HotkeyConfigurationSnapshot Parse(string? raw)
     {
@@ -61,6 +71,41 @@ public static class HotkeyConfigurationCodec
             ? normalized
             : trimmed;
     }
+
+    public static bool ApplyPlatformDefaultsMigration(UnifiedConfig config)
+        => ApplyPlatformDefaultsMigration(config, OperatingSystem.IsMacOS());
+
+    internal static bool ApplyPlatformDefaultsMigration(UnifiedConfig config, bool isMacOS)
+    {
+        ArgumentNullException.ThrowIfNull(config);
+        if (!isMacOS)
+        {
+            return false;
+        }
+
+        var currentVersion = ReadInt(config, MacDefaultsVersionKey);
+        if (currentVersion >= CurrentMacDefaultsVersion)
+        {
+            return false;
+        }
+
+        config.GlobalValues[ConfigurationKeys.HotKeys] = JsonValue.Create(
+            $"{ShowGuiHotkeyName}={MacDefaultHotkeyShowGui};{LinkStartHotkeyName}={MacDefaultHotkeyLinkStart}");
+        config.GlobalValues[MacDefaultsVersionKey] = JsonValue.Create(CurrentMacDefaultsVersion.ToString(CultureInfo.InvariantCulture));
+        return true;
+    }
+
+    internal static string GetDefaultHotkeyShowGui(bool isMacOS)
+        => isMacOS ? MacDefaultHotkeyShowGui : LegacyDefaultHotkeyShowGui;
+
+    internal static string GetDefaultHotkeyLinkStart(bool isMacOS)
+        => isMacOS ? MacDefaultHotkeyLinkStart : LegacyDefaultHotkeyLinkStart;
+
+    private static string GetDefaultHotkeyShowGui()
+        => GetDefaultHotkeyShowGui(OperatingSystem.IsMacOS());
+
+    private static string GetDefaultHotkeyLinkStart()
+        => GetDefaultHotkeyLinkStart(OperatingSystem.IsMacOS());
 
     private static void ParseSemicolon(
         string raw,
@@ -239,6 +284,32 @@ public static class HotkeyConfigurationCodec
         }
 
         return false;
+    }
+
+    private static int ReadInt(UnifiedConfig config, string key)
+    {
+        if (!config.GlobalValues.TryGetValue(key, out var node) || node is null)
+        {
+            return 0;
+        }
+
+        if (node is JsonValue value)
+        {
+            if (value.TryGetValue<int>(out var intValue))
+            {
+                return intValue;
+            }
+
+            if (value.TryGetValue<string>(out var textValue)
+                && int.TryParse(textValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed))
+            {
+                return parsed;
+            }
+        }
+
+        return int.TryParse(node.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var fallback)
+            ? fallback
+            : 0;
     }
 
     private static bool TryReadLegacyInt(JsonNode? node, out int value)

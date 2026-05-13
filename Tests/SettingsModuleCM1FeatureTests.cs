@@ -736,6 +736,59 @@ public sealed class SettingsModuleCM1FeatureTests
     }
 
     [Fact]
+    public void ConfigurationImportSelectionAnalyzer_LegacyDirectory_WhenBothFilesMissing_ShouldReturnInvalidWithDirectoryMessage()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "maa-unified-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var analysis = ConfigurationImportSelectionAnalyzer.AnalyzeLegacyDirectory(root, ResolveImportSelectionText);
+
+            Assert.Equal(ConfigurationImportSelectionKind.Invalid, analysis.Kind);
+            Assert.Equal("所选文件夹中未能找到 gui.new.json 和 gui.json。", analysis.Message);
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(root, recursive: true);
+            }
+            catch
+            {
+                // ignore cleanup failures
+            }
+        }
+    }
+
+    [Fact]
+    public void ConfigurationImportSelectionAnalyzer_LegacyDirectory_WhenGuiMissing_ShouldReturnPartialWithDirectoryMessage()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "maa-unified-tests", Guid.NewGuid().ToString("N"));
+        var config = Path.Combine(root, "config");
+        Directory.CreateDirectory(config);
+        try
+        {
+            File.WriteAllText(Path.Combine(config, "gui.new.json"), "{}");
+
+            var analysis = ConfigurationImportSelectionAnalyzer.AnalyzeLegacyDirectory(root, ResolveImportSelectionText);
+
+            Assert.Equal(ConfigurationImportSelectionKind.LegacyPartial, analysis.Kind);
+            Assert.Equal("所选文件夹中未能找到 gui.json。", analysis.Message);
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(root, recursive: true);
+            }
+            catch
+            {
+                // ignore cleanup failures
+            }
+        }
+    }
+
+    [Fact]
     public void ConfigurationImportSelectionAnalyzer_UnifiedDirectory_ShouldAcceptRootOrConfigFolder()
     {
         var root = Path.Combine(Path.GetTempPath(), "maa-unified-tests", Guid.NewGuid().ToString("N"));
@@ -753,6 +806,34 @@ public sealed class SettingsModuleCM1FeatureTests
             Assert.Equal(avaloniaPath, rootAnalysis.UnifiedConfigPath);
             Assert.Equal(ConfigurationImportSelectionKind.UnifiedConfig, configAnalysis.Kind);
             Assert.Equal(avaloniaPath, configAnalysis.UnifiedConfigPath);
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(root, recursive: true);
+            }
+            catch
+            {
+                // ignore cleanup failures
+            }
+        }
+    }
+
+    [Fact]
+    public void ConfigurationImportSelectionAnalyzer_SingleLegacyFile_ShouldKeepManualMissingMessage()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "maa-unified-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var filePath = Path.Combine(root, "gui.new.json");
+            File.WriteAllText(filePath, "{}");
+
+            var analysis = ConfigurationImportSelectionAnalyzer.Analyze([filePath], ResolveImportSelectionText);
+
+            Assert.Equal(ConfigurationImportSelectionKind.LegacyPartial, analysis.Kind);
+            Assert.Equal("请同时选择 gui.json。", analysis.Message);
         }
         finally
         {
@@ -955,6 +1036,19 @@ public sealed class SettingsModuleCM1FeatureTests
 
         return node.ToString();
     }
+
+    private static string ResolveImportSelectionText(string key)
+        => key switch
+        {
+            "Settings.Common.JoinAnd" => " 和 ",
+            "Settings.ConfigurationManager.Import.MissingLegacyParts" => "请同时选择 {0}。",
+            "Settings.ConfigurationManager.Import.LegacyDirectoryMissingBoth" => "所选文件夹中未能找到 gui.new.json 和 gui.json。",
+            "Settings.ConfigurationManager.Import.LegacyDirectoryMissingGui" => "所选文件夹中未能找到 gui.json。",
+            "Settings.ConfigurationManager.Import.LegacyDirectoryMissingGuiNew" => "所选文件夹中未能找到 gui.new.json。",
+            "Settings.ConfigurationManager.Import.LegacyInvalidFilesOnly" => "选择中存在文件名不正确的旧配置文件。",
+            "Settings.ConfigurationManager.Import.LegacyInvalidFilesWithMissing" => "{0} 另外存在文件名不正确的旧配置文件。",
+            _ => key,
+        };
 
     private sealed class ThrowOnSaveStore : IUnifiedConfigStore
     {

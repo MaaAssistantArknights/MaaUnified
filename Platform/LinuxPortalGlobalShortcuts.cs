@@ -1538,6 +1538,7 @@ public sealed class CompositeGlobalHotkeyService : IGlobalHotkeyService
             !result.Result.Success
             && result.Result.ErrorCode is PlatformErrorCodes.HotkeyUnsupported
                 or PlatformErrorCodes.HotkeyPermissionDenied
+                or PlatformErrorCodes.HotkeyNativeRegistrationFailed
                 or PlatformErrorCodes.HotkeyHookStartFailed
                 or PlatformErrorCodes.HotkeyTriggerDispatchFailed
                 or PlatformErrorCodes.HotkeyPortalUnavailable

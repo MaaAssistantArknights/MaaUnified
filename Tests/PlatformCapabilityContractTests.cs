@@ -245,6 +245,96 @@ public sealed class PlatformCapabilityContractTests
     }
 
     [Fact]
+    public async Task MacCarbonGlobalHotkeyService_RegisterAndUnregister_Succeeds_AndReportsDisplayGesture()
+    {
+        var interop = new FakeMacCarbonHotkeyInterop();
+        var service = new MacCarbonGlobalHotkeyService(interop);
+
+        var register = await service.RegisterAsync("ShowGui", "Meta+Shift+M");
+
+        Assert.True(register.Success);
+        Assert.Equal("mac-carbon", register.Provider);
+        Assert.True(service.TryGetRegisteredHotkey("ShowGui", out var registered));
+        Assert.Equal("Cmd + Shift + M", registered.DisplayGesture);
+        Assert.Equal(PlatformExecutionMode.Native, registered.ExecutionMode);
+        Assert.Single(interop.RegisterCalls);
+
+        var unregister = await service.UnregisterAsync("ShowGui");
+
+        Assert.True(unregister.Success);
+        Assert.Single(interop.UnregisterCalls);
+        Assert.False(service.TryGetRegisteredHotkey("ShowGui", out _));
+    }
+
+    [Fact]
+    public async Task MacCarbonGlobalHotkeyService_WhenHandlerInstallFails_ReturnsNativeRegistrationFailed()
+    {
+        var interop = new FakeMacCarbonHotkeyInterop
+        {
+            InstallStatus = -1,
+            InstalledHandlerRef = nint.Zero,
+        };
+        var service = new MacCarbonGlobalHotkeyService(interop);
+
+        var result = await service.RegisterAsync("ShowGui", "Meta+Shift+M");
+
+        Assert.False(result.Success);
+        Assert.Equal(PlatformErrorCodes.HotkeyNativeRegistrationFailed, result.ErrorCode);
+    }
+
+    [Fact]
+    public async Task MacCarbonGlobalHotkeyService_WhenNativeRegistrationFails_ReturnsNativeRegistrationFailed()
+    {
+        var interop = new FakeMacCarbonHotkeyInterop
+        {
+            RegisterStatus = -2,
+        };
+        var service = new MacCarbonGlobalHotkeyService(interop);
+
+        var result = await service.RegisterAsync("ShowGui", "Meta+Shift+M");
+
+        Assert.False(result.Success);
+        Assert.Equal(PlatformErrorCodes.HotkeyNativeRegistrationFailed, result.ErrorCode);
+    }
+
+    [Fact]
+    public async Task MacCarbonGlobalHotkeyService_WhenPressed_RaisesTriggeredEvent()
+    {
+        var interop = new FakeMacCarbonHotkeyInterop();
+        var service = new MacCarbonGlobalHotkeyService(interop);
+        GlobalHotkeyTriggeredEvent? triggered = null;
+        service.Triggered += (_, e) => triggered = e;
+
+        var register = await service.RegisterAsync("ShowGui", "Meta+Shift+M");
+        Assert.True(register.Success);
+
+        interop.EmitLastRegisteredHotKey();
+
+        Assert.NotNull(triggered);
+        Assert.Equal("ShowGui", triggered!.Name);
+        Assert.Equal("Shift+Meta+M", triggered.Gesture);
+    }
+
+    [Fact]
+    public async Task CompositeGlobalHotkeyService_WhenMacCarbonFails_UsesWindowScopedFallback()
+    {
+        var primary = new MacCarbonGlobalHotkeyService(new FakeMacCarbonHotkeyInterop
+        {
+            RegisterStatus = -5,
+        });
+        var fallback = new WindowScopedHotkeyService();
+        var service = new CompositeGlobalHotkeyService(primary, fallback);
+
+        var result = await service.RegisterAsync("ShowGui", "Meta+Shift+M");
+
+        Assert.True(result.Success);
+        Assert.True(result.UsedFallback);
+        Assert.Equal("window-scoped", result.Provider);
+        Assert.True(service.TryGetRegisteredHotkey("ShowGui", out var registered));
+        Assert.Equal(PlatformExecutionMode.Fallback, registered.ExecutionMode);
+    }
+
+    [Fact]
     public async Task SharpHookGlobalHotkeyService_WhenHookFaultsAfterStartup_StopsAndDisposesHook()
     {
         var hookTaskSource = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -294,7 +384,7 @@ public sealed class PlatformCapabilityContractTests
         var bundle = PlatformServicesFactory.CreateDefaults();
         Assert.True(bundle.TrayService is WindowsNotifyIconTrayService or AvaloniaTrayIconTrayService or WindowMenuTrayService or NoOpTrayService);
         Assert.True(bundle.NotificationService is DesktopNotificationService or CommandNotificationService or NoOpNotificationService);
-        Assert.True(bundle.HotkeyService is SharpHookGlobalHotkeyService or LinuxPortalGlobalHotkeyService or CompositeGlobalHotkeyService or WindowScopedHotkeyService or NoOpGlobalHotkeyService);
+        Assert.True(bundle.HotkeyService is SharpHookGlobalHotkeyService or MacCarbonGlobalHotkeyService or LinuxPortalGlobalHotkeyService or CompositeGlobalHotkeyService or WindowScopedHotkeyService or NoOpGlobalHotkeyService);
         Assert.True(bundle.AutostartService is CrossPlatformAutostartService or NoOpAutostartService);
         Assert.True(bundle.OverlayService is WindowsOverlayCapabilityService or LinuxOverlayCapabilityService or NoOpOverlayCapabilityService);
     }
@@ -890,6 +980,86 @@ public sealed class PlatformCapabilityContractTests
         public void Dispose()
         {
             DisposeCallCount += 1;
+        }
+    }
+
+    private sealed class FakeMacCarbonHotkeyInterop : IMacCarbonHotkeyInterop
+    {
+        private readonly Dictionary<nint, uint> _hotKeyIdsByEventRef = new();
+        private uint _lastRegisteredHotKeyId;
+        private nint _nextHotKeyRef = 1;
+        private nint _nextEventRef = 100;
+
+        public int InstallStatus { get; init; }
+
+        public int RegisterStatus { get; init; }
+
+        public int UnregisterStatus { get; init; }
+
+        public nint InstalledHandlerRef { get; init; } = (nint)42;
+
+        public MacCarbonEventHandler? Handler { get; private set; }
+
+        public List<(uint KeyCode, uint Modifiers, uint HotKeyId)> RegisterCalls { get; } = [];
+
+        public List<nint> UnregisterCalls { get; } = [];
+
+        public nint GetApplicationEventTarget() => (nint)7;
+
+        public int InstallEventHandler(
+            nint target,
+            MacCarbonEventHandler handler,
+            CarbonEventTypeSpec[] eventTypes,
+            nint userData,
+            out nint handlerRef)
+        {
+            Handler = handler;
+            handlerRef = InstalledHandlerRef;
+            return InstallStatus;
+        }
+
+        public int RemoveEventHandler(nint handlerRef) => 0;
+
+        public int RegisterEventHotKey(
+            uint keyCode,
+            uint modifiers,
+            CarbonEventHotKeyId hotKeyId,
+            nint target,
+            out nint hotKeyRef)
+        {
+            hotKeyRef = nint.Zero;
+            if (RegisterStatus != 0)
+            {
+                return RegisterStatus;
+            }
+
+            hotKeyRef = _nextHotKeyRef++;
+            _lastRegisteredHotKeyId = hotKeyId.Id;
+            RegisterCalls.Add((keyCode, modifiers, hotKeyId.Id));
+            return 0;
+        }
+
+        public int UnregisterEventHotKey(nint hotKeyRef)
+        {
+            UnregisterCalls.Add(hotKeyRef);
+            return UnregisterStatus;
+        }
+
+        public int GetEventHotKeyId(nint eventRef, out uint hotKeyId)
+        {
+            return _hotKeyIdsByEventRef.TryGetValue(eventRef, out hotKeyId) ? 0 : -1;
+        }
+
+        public void EmitLastRegisteredHotKey()
+        {
+            if (Handler is null || _lastRegisteredHotKeyId == 0)
+            {
+                return;
+            }
+
+            var eventRef = _nextEventRef++;
+            _hotKeyIdsByEventRef[eventRef] = _lastRegisteredHotKeyId;
+            Handler(nint.Zero, eventRef, nint.Zero);
         }
     }
 }

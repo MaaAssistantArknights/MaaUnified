@@ -1529,6 +1529,15 @@
   <data name="Settings.ConfigurationManager.Import.LegacyFilenameInvalid" xml:space="preserve">
     <value>舊版設定檔檔名不正確，請選擇 gui.json 或 gui.new.json。</value>
   </data>
+  <data name="Settings.ConfigurationManager.Import.LegacyDirectoryMissingBoth" xml:space="preserve">
+    <value>所選資料夾中未能找到 gui.new.json 和 gui.json。</value>
+  </data>
+  <data name="Settings.ConfigurationManager.Import.LegacyDirectoryMissingGui" xml:space="preserve">
+    <value>所選資料夾中未能找到 gui.json。</value>
+  </data>
+  <data name="Settings.ConfigurationManager.Import.LegacyDirectoryMissingGuiNew" xml:space="preserve">
+    <value>所選資料夾中未能找到 gui.new.json。</value>
+  </data>
   <data name="Settings.ConfigurationManager.Import.LegacyInvalidFilesOnly" xml:space="preserve">
     <value>所選檔案中包含檔名不正確的舊版設定檔。</value>
   </data>
@@ -1570,6 +1579,9 @@
   </data>
   <data name="Settings.ConfigurationManager.SaveAsNewSucceededInline" xml:space="preserve">
     <value>儲存成功</value>
+  </data>
+  <data name="Settings.ConfigurationManager.ImportSucceededInline" xml:space="preserve">
+    <value>匯入成功</value>
   </data>
   <data name="Settings.ConfigurationManager.SaveAsNewFailedInline" xml:space="preserve">
     <value>儲存失敗：{0}</value>

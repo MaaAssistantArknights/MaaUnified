@@ -80,7 +80,7 @@ public partial class MainWindow : Window
         new("MAA.Size.Settings.FieldPathWidth", 360d, 400d),
         new("MAA.Size.Settings.FieldPathWideWidth", 378d, 420d),
         new("MAA.Size.Settings.FieldWidth", 198d, 220d),
-        new("MAA.Size.Settings.FieldTimerConfigWidth", 136d, 150d),
+        new("MAA.Size.Settings.FieldTimerConfigWidth", 198d, 220d),
         new("MAA.Size.Settings.FieldWideWidth", 252d, 280d),
         new("MAA.Size.Settings.FieldExtraWideWidth", 306d, 340d),
         new("MAA.Size.Settings.WrapItemWidth", 198d, 220d),
@@ -290,7 +290,7 @@ public partial class MainWindow : Window
                 await vm.ExecuteStartupLaunchBehaviorAsync(minimizeWindowAsync: MinimizeFromStartupAsync);
             });
 
-        vm.MarkAchievementToastStartupCompleted();
+        vm.BeginAchievementToastStartupRelease();
         UpdateAchievementToastVisibility();
         Program.RecordStartupStage("MainWindow.PlatformInit.End", "Platform initialization completed.");
     });

@@ -52,6 +52,7 @@ public sealed class MainShellViewModel : ObservableObject
     private readonly OverlaySharedState _overlaySharedState;
     private readonly Dictionary<int, string> _timerSlotMinuteDedup = [];
     private readonly Queue<AchievementUnlockedEvent> _pendingAchievementToasts = [];
+    private readonly TaskCompletionSource<bool> _startupAchievementToastAnnouncementGate = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private Task _pendingLanguageApplyTask = Task.CompletedTask;
     private readonly CancellationTokenSource _startupCts = new();
     private readonly TaskCompletionSource<bool> _startupSnapshotReadyTcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -83,6 +84,8 @@ public sealed class MainShellViewModel : ObservableObject
     private ImportSourceOptionItem? _selectedImportSourceOption;
     private bool _achievementToastWindowVisible = true;
     private bool _achievementToastStartupCompleted;
+    private bool _startupAchievementToastReleaseStarted;
+    private bool _startupAchievementToastAnnouncementGatePrepared;
     private bool _isWindowUpdateOverlayPresented;
     private bool _isWindowUpdateOverlayAnimationHidden = true;
     private bool _isShellBlockingOperationOverlayVisible;
@@ -700,6 +703,7 @@ public sealed class MainShellViewModel : ObservableObject
                     loadResult.ValidationIssues,
                     "Config.LoadValidation",
                     cancellationToken);
+                await PersistPlatformHotkeyDefaultsMigrationIfNeededAsync(cancellationToken);
 
                 ApplyDeveloperModeFromConfig();
                 _runtime.AchievementTrackerService.RecordStartup(
@@ -762,6 +766,23 @@ public sealed class MainShellViewModel : ObservableObject
         }
     }
 
+    private async Task PersistPlatformHotkeyDefaultsMigrationIfNeededAsync(CancellationToken cancellationToken)
+    {
+        if (!HotkeyConfigurationCodec.ApplyPlatformDefaultsMigration(_runtime.ConfigurationService.CurrentConfig))
+        {
+            return;
+        }
+
+        try
+        {
+            await _runtime.ConfigurationService.SaveAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _runtime.LogService.Warn($"Failed to persist platform hotkey defaults migration during startup: {ex.Message}");
+        }
+    }
+
     private async Task RunDeferredStartupAfterFirstScreenAsync(
         ConfigLoadResult loadResult,
         CancellationToken cancellationToken)
@@ -775,13 +796,22 @@ public sealed class MainShellViewModel : ObservableObject
             await ApplyGuiSettingsAsync(settingsPage.CurrentGuiSnapshot, cancellationToken);
         }
 
+        SettingsPageViewModel? startupAnnouncementSettingsPage = null;
+        if (settingsLoaded && TryGetSettingsPage(out var loadedSettingsPage))
+        {
+            startupAnnouncementSettingsPage = loadedSettingsPage;
+        }
+
+        PrepareStartupAchievementToastAnnouncementGate(
+            startupAnnouncementSettingsPage?.PrepareStartupAnnouncementCompletionTask() ?? Task.CompletedTask);
+
         StartBackgroundStartupDialog(
             ct => ShowSchemaMigrationNoticeIfNeededAsync(loadResult, ct),
             cancellationToken);
-        if (settingsLoaded && TryGetSettingsPage(out var startupSettingsPage))
+        if (startupAnnouncementSettingsPage is not null)
         {
             StartBackgroundStartupDialog(
-                ct => RunStartupAnnouncementWorkflowAsync(startupSettingsPage, ct),
+                ct => RunStartupAnnouncementWorkflowAsync(startupAnnouncementSettingsPage, ct),
                 cancellationToken);
         }
 
@@ -1861,6 +1891,17 @@ public sealed class MainShellViewModel : ObservableObject
         PresentAchievementToast(notification);
     }
 
+    internal void BeginAchievementToastStartupRelease()
+    {
+        if (_startupAchievementToastReleaseStarted)
+        {
+            return;
+        }
+
+        _startupAchievementToastReleaseStarted = true;
+        _ = ReleaseAchievementToastsAfterStartupAnnouncementAsync();
+    }
+
     internal void MarkAchievementToastStartupCompleted()
     {
         if (_achievementToastStartupCompleted)
@@ -1873,6 +1914,17 @@ public sealed class MainShellViewModel : ObservableObject
         TryFlushPendingAchievementToasts();
     }
 
+    internal void PrepareStartupAchievementToastAnnouncementGate(Task startupAnnouncementCompletionTask)
+    {
+        if (_startupAchievementToastAnnouncementGatePrepared)
+        {
+            return;
+        }
+
+        _startupAchievementToastAnnouncementGatePrepared = true;
+        _ = ObserveStartupAchievementToastAnnouncementGateAsync(startupAnnouncementCompletionTask);
+    }
+
     private void TryFlushPendingAchievementToasts()
     {
         if (!_achievementToastWindowVisible || !_achievementToastStartupCompleted)
@@ -1881,6 +1933,34 @@ public sealed class MainShellViewModel : ObservableObject
         }
 
         FlushPendingAchievementToasts();
+    }
+
+    private async Task ReleaseAchievementToastsAfterStartupAnnouncementAsync()
+    {
+        try
+        {
+            await _startupAchievementToastAnnouncementGate.Task;
+        }
+        finally
+        {
+            Dispatcher.UIThread.Post(MarkAchievementToastStartupCompleted, DispatcherPriority.Send);
+        }
+    }
+
+    private async Task ObserveStartupAchievementToastAnnouncementGateAsync(Task startupAnnouncementCompletionTask)
+    {
+        try
+        {
+            await startupAnnouncementCompletionTask;
+        }
+        catch
+        {
+            // Announcement failures are handled by the startup workflow; toast startup should not remain blocked.
+        }
+        finally
+        {
+            _startupAchievementToastAnnouncementGate.TrySetResult(true);
+        }
     }
 
     private void FlushPendingAchievementToasts()
