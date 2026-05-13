@@ -30,6 +30,10 @@
 
 导入结果可查看 `debug/config-import-report.json`。
 
+## macOS 发布包打开提示
+
+macOS 包优先使用 Developer ID 签名和 Apple notarization。CI 缺少签名材料时会降级生成 ad-hoc signed `.dmg`，首次打开需要在“隐私与安全性”中手动允许，或确认来源后执行 `xattr -dr com.apple.quarantine /Applications/MAAUnified.app`。
+
 ## 开发上手
 
 `MAAUnified` 的完整运行依赖 MaaCore runtime、`resource/` 和主仓打包布局。日常开发建议始终在 `MaaAssistantArknights` 主仓环境里联调，不要只在 `src/MAAUnified` 里单独看托管前端。

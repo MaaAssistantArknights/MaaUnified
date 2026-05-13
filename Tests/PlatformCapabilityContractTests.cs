@@ -132,6 +132,18 @@ public sealed class PlatformCapabilityContractTests
     }
 
     [Fact]
+    public async Task AvaloniaTrayIconTrayService_WhenApplicationUnavailable_DowngradesToFallback()
+    {
+        var service = new AvaloniaTrayIconTrayService();
+        var init = await service.InitializeAsync("MAAUnified", TrayMenuText.Default);
+
+        Assert.True(init.Success);
+        Assert.True(init.UsedFallback);
+        Assert.Equal(PlatformExecutionMode.Fallback, init.ExecutionMode);
+        Assert.Equal(PlatformErrorCodes.TrayFallback, init.ErrorCode);
+    }
+
+    [Fact]
     public async Task NoOpOverlayService_ReturnsPreviewAndFallbackResult()
     {
         var service = new NoOpOverlayCapabilityService();
@@ -152,6 +164,49 @@ public sealed class PlatformCapabilityContractTests
         Assert.True(result.Success);
         Assert.True(result.UsedFallback);
         Assert.Equal(PlatformExecutionMode.Fallback, result.ExecutionMode);
+    }
+
+    [Fact]
+    public async Task NoOpOverlayService_WhenSubscriberThrows_DoesNotEscapeFallbackOperation()
+    {
+        var service = new NoOpOverlayCapabilityService();
+        service.OverlayStateChanged += (_, _) => throw new InvalidOperationException("subscriber failed");
+
+        var result = await service.SetVisibleAsync(true);
+
+        Assert.True(result.Success);
+        Assert.True(result.UsedFallback);
+        Assert.Equal(PlatformErrorCodes.OverlayUnsupported, result.ErrorCode);
+    }
+
+    [Fact]
+    public async Task WindowScopedHotkeyService_WhenSubscriberThrows_DoesNotEscapeDispatch()
+    {
+        var service = new WindowScopedHotkeyService();
+        service.Triggered += (_, _) => throw new InvalidOperationException("subscriber failed");
+        var registered = await service.RegisterAsync("ShowGui", "Ctrl+Shift+Alt+M");
+
+        var dispatched = service.TryDispatchWindowScopedHotkey(new HotkeyGesture(
+            Ctrl: true,
+            Shift: true,
+            Alt: true,
+            Meta: false,
+            Key: "M"));
+
+        Assert.True(registered.Success);
+        Assert.False(dispatched);
+    }
+
+    [Fact]
+    public void CompositeGlobalHotkeyService_WhenSubscriberThrows_DoesNotEscapeProviderCallback()
+    {
+        var primary = new TriggerableHotkeyService();
+        var fallback = new TriggerableHotkeyService();
+        var service = new CompositeGlobalHotkeyService(primary, fallback);
+        service.Triggered += (_, _) => throw new InvalidOperationException("subscriber failed");
+
+        primary.Emit("ShowGui", "Ctrl+Shift+Alt+M");
+        fallback.Emit("LinkStart", "Ctrl+Shift+Alt+L");
     }
 
     [Fact]

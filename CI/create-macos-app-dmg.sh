@@ -22,6 +22,8 @@ entitlements_path="$contents_dir/entitlements.plist"
 dmg_root="$release_dir/dmg-root"
 dmg_path="$release_dir/$package_name.dmg"
 dmg_tmp_path="$release_dir/.$package_name.tmp.dmg"
+app_icon_name="MAAUnified.icns"
+brand_icon_path="src/MAAUnified/App/Assets/Brand/newlogo.ico"
 
 if [[ ! -x "$staging_dir/bin/MAAUnified" ]]; then
   echo "Managed app executable not found: $staging_dir/bin/MAAUnified" >&2
@@ -71,6 +73,75 @@ create_verified_dmg() {
   done
 }
 
+create_app_icon() {
+  local icon_work_dir="$release_dir/icon-work"
+  local icon_png="$icon_work_dir/source.png"
+  local iconset_dir="$icon_work_dir/$app_name.iconset"
+
+  if [[ ! -f "$brand_icon_path" ]]; then
+    echo "App icon source not found: $brand_icon_path" >&2
+    exit 1
+  fi
+
+  rm -rf "$icon_work_dir"
+  mkdir -p "$iconset_dir"
+
+  python3 - "$brand_icon_path" "$icon_png" <<'PY'
+import struct
+import sys
+
+source_path, output_path = sys.argv[1], sys.argv[2]
+data = open(source_path, "rb").read()
+
+if len(data) < 6:
+    raise SystemExit("ICO source is too small.")
+
+reserved, icon_type, count = struct.unpack_from("<HHH", data, 0)
+if reserved != 0 or icon_type != 1 or count == 0:
+    raise SystemExit("Icon source is not a valid ICO file.")
+
+best_entry = None
+for index in range(count):
+    entry_offset = 6 + index * 16
+    if entry_offset + 16 > len(data):
+        raise SystemExit("ICO directory is truncated.")
+
+    width, height, _, _, _, bit_count, image_size, image_offset = struct.unpack_from("<BBBBHHII", data, entry_offset)
+    width = 256 if width == 0 else width
+    height = 256 if height == 0 else height
+    image_end = image_offset + image_size
+    if image_offset >= len(data) or image_end > len(data):
+        raise SystemExit("ICO image payload is out of range.")
+
+    payload = data[image_offset:image_end]
+    if not payload.startswith(b"\x89PNG\r\n\x1a\n"):
+        continue
+
+    score = (width * height, bit_count)
+    if best_entry is None or score > best_entry[0]:
+        best_entry = (score, payload)
+
+if best_entry is None:
+    raise SystemExit("ICO source does not contain a PNG icon payload.")
+
+with open(output_path, "wb") as output:
+    output.write(best_entry[1])
+PY
+
+  sips -z 16 16 "$icon_png" --out "$iconset_dir/icon_16x16.png" >/dev/null
+  sips -z 32 32 "$icon_png" --out "$iconset_dir/icon_16x16@2x.png" >/dev/null
+  sips -z 32 32 "$icon_png" --out "$iconset_dir/icon_32x32.png" >/dev/null
+  sips -z 64 64 "$icon_png" --out "$iconset_dir/icon_32x32@2x.png" >/dev/null
+  sips -z 128 128 "$icon_png" --out "$iconset_dir/icon_128x128.png" >/dev/null
+  sips -z 256 256 "$icon_png" --out "$iconset_dir/icon_128x128@2x.png" >/dev/null
+  sips -z 256 256 "$icon_png" --out "$iconset_dir/icon_256x256.png" >/dev/null
+  sips -z 512 512 "$icon_png" --out "$iconset_dir/icon_256x256@2x.png" >/dev/null
+  sips -z 512 512 "$icon_png" --out "$iconset_dir/icon_512x512.png" >/dev/null
+  sips -z 1024 1024 "$icon_png" --out "$iconset_dir/icon_512x512@2x.png" >/dev/null
+  iconutil -c icns "$iconset_dir" -o "$resources_dir/$app_icon_name"
+  rm -rf "$icon_work_dir"
+}
+
 rm -rf "$app_dir" "$dmg_root" "$dmg_path" "$dmg_tmp_path"
 mkdir -p "$macos_dir" "$resources_dir" "$dmg_root"
 
@@ -79,10 +150,7 @@ shopt -s nullglob
 cp -a "$staging_dir"/*.dylib "$macos_dir/"
 shopt -u nullglob
 cp -a "$staging_dir/resource" "$resources_dir/resource"
-
-if [[ -f "src/MAAUnified/App/Assets/Brand/newlogo.ico" ]]; then
-  cp -a "src/MAAUnified/App/Assets/Brand/newlogo.ico" "$resources_dir/newlogo.ico"
-fi
+create_app_icon
 
 cat > "$contents_dir/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -101,6 +169,8 @@ cat > "$contents_dir/Info.plist" <<PLIST
   <string>MAAUnified</string>
   <key>CFBundleDisplayName</key>
   <string>MAAUnified</string>
+  <key>CFBundleIconFile</key>
+  <string>${app_icon_name}</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
@@ -137,6 +207,7 @@ plutil -lint "$entitlements_path"
 test -x "$macos_dir/MAAUnified"
 test -f "$macos_dir/libMaaCore.dylib"
 test -d "$resources_dir/resource"
+test -f "$resources_dir/$app_icon_name"
 
 if [[ "${MACOS_CODESIGN_ENABLED:-false}" == "true" ]]; then
   identity="${MACOS_CODESIGN_IDENTITY:-}"
@@ -162,6 +233,23 @@ if [[ "${MACOS_CODESIGN_ENABLED:-false}" == "true" ]]; then
   done < <(find "$macos_dir" -type f)
   codesign --force --options runtime --timestamp --entitlements "$entitlements_path" --sign "$identity" "$app_dir"
   codesign --verify --deep --strict --verbose=2 "$app_dir"
+elif [[ "${MACOS_ADHOC_CODESIGN_ENABLED:-false}" == "true" ]]; then
+  echo "::warning title=macOS ad-hoc signing::Developer ID signing is unavailable; creating an ad-hoc signed app that will not pass Gatekeeper notarization."
+  while IFS= read -r file; do
+    file_type="$(file "$file")"
+    if grep -Eq 'Mach-O|dynamically linked shared library' <<< "$file_type"; then
+      if grep -Eq 'Mach-O.*executable' <<< "$file_type"; then
+        codesign --force --options runtime --entitlements "$entitlements_path" --sign - "$file"
+      else
+        codesign --force --options runtime --sign - "$file"
+      fi
+    fi
+  done < <(find "$macos_dir" -type f)
+  codesign --force --options runtime --entitlements "$entitlements_path" --sign - "$app_dir"
+  codesign --verify --deep --strict --verbose=2 "$app_dir"
+elif [[ "${MACOS_CODESIGN_REQUIRED:-false}" == "true" ]]; then
+  echo "MACOS_CODESIGN_REQUIRED=true but MACOS_CODESIGN_ENABLED is not true; refusing to create unsigned macOS package." >&2
+  exit 1
 else
   echo "macOS codesigning skipped because MACOS_CODESIGN_ENABLED is not true."
 fi

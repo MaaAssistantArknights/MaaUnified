@@ -409,7 +409,7 @@ public sealed class SettingsViewStructureContractTests
         Assert.Contains("if (_settingsWarmupRootPage?.IsLoaded != true)", mainWindow, StringComparison.Ordinal);
         Assert.Contains("if (!_settingsSectionWarmupStarted)", mainWindow, StringComparison.Ordinal);
         Assert.Contains("MAAUnified.App.Features.Root.SettingsView.StartBackgroundSectionWarmup();", mainWindow, StringComparison.Ordinal);
-        Assert.Contains("_ = WarmupSettingsPageAsync(vm);", mainWindow, StringComparison.Ordinal);
+        Assert.Contains("App.ForgetTask(WarmupSettingsPageAsync(vm), \"MainWindow.Settings.Warmup\");", mainWindow, StringComparison.Ordinal);
         Assert.Contains("await vm.SettingsPage.WarmupDeferredSectionDataAsync();", mainWindow, StringComparison.Ordinal);
         Assert.True(
             mainWindow.IndexOf("MAAUnified.App.Features.Root.SettingsView.StartBackgroundSectionWarmup();", StringComparison.Ordinal)

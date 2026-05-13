@@ -129,8 +129,7 @@ public sealed class NoOpOverlayCapabilityService : IOverlayCapabilityService
     {
         if (_visible)
         {
-            OverlayStateChanged?.Invoke(
-                this,
+            EmitStateChanged(
                 new OverlayStateChangedEvent(
                     OverlayRuntimeMode.Preview,
                     Visible: true,
@@ -149,8 +148,7 @@ public sealed class NoOpOverlayCapabilityService : IOverlayCapabilityService
     public Task<PlatformOperationResult> SetVisibleAsync(bool visible, CancellationToken cancellationToken = default)
     {
         _visible = visible;
-        OverlayStateChanged?.Invoke(
-            this,
+        EmitStateChanged(
             new OverlayStateChangedEvent(
                 visible ? OverlayRuntimeMode.Preview : OverlayRuntimeMode.Hidden,
                 Visible: visible,
@@ -163,6 +161,18 @@ public sealed class NoOpOverlayCapabilityService : IOverlayCapabilityService
                 ErrorCode: visible ? PlatformErrorCodes.OverlayUnsupported : null));
 
         return Task.FromResult(PlatformOperation.FallbackSuccess(Capability.Provider, Capability.Message, "overlay.setVisible", PlatformErrorCodes.OverlayUnsupported));
+    }
+
+    private void EmitStateChanged(OverlayStateChangedEvent e)
+    {
+        try
+        {
+            OverlayStateChanged?.Invoke(this, e);
+        }
+        catch
+        {
+            // Fallback overlay event consumers should not break fallback operations.
+        }
     }
 }
 
