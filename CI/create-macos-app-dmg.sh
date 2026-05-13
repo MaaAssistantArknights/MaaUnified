@@ -21,7 +21,7 @@ resources_dir="$contents_dir/Resources"
 entitlements_path="$contents_dir/entitlements.plist"
 dmg_root="$release_dir/dmg-root"
 dmg_path="$release_dir/$package_name.dmg"
-dmg_tmp_path="$release_dir/.$package_name.dmg.tmp"
+dmg_tmp_path="$release_dir/.$package_name.tmp.dmg"
 
 if [[ ! -x "$staging_dir/bin/MAAUnified" ]]; then
   echo "Managed app executable not found: $staging_dir/bin/MAAUnified" >&2
