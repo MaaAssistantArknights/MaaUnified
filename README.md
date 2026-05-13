@@ -32,7 +32,7 @@
 
 ## macOS 发布包打开提示
 
-macOS 包优先使用 Developer ID 签名和 Apple notarization。CI 缺少签名材料时会降级生成 ad-hoc signed `.dmg`，首次打开需要在“隐私与安全性”中手动允许，或确认来源后执行 `xattr -dr com.apple.quarantine /Applications/MAAUnified.app`。
+macOS 包优先使用 Developer ID 签名和 Apple notarization。CI 缺少签名材料或签名失败时，会 warning 并降级生成 ad-hoc/unsigned `.dmg`；这类包未公证，首次打开可能需要在“隐私与安全性”中手动允许，或确认来源后执行 `xattr -dr com.apple.quarantine /Applications/MAAUnified.app`。
 
 ## 开发上手
 

@@ -15,7 +15,7 @@
   </UserControl.Styles>
 
   <Grid Margin="4"
-        RowDefinitions="Auto,Auto,Auto">
+        RowDefinitions="Auto,Auto">
     <TextBlock Classes="settings-page-title"
                Text="{Binding RootTexts[Settings.Section.VersionUpdate]}" />
 
@@ -252,19 +252,16 @@
                   Content="{Binding RootTexts[Settings.VersionUpdate.ResourceRepository]}"
                   Click="OnOpenResourceRepositoryClick" />
         </Grid>
+
+        <Border HorizontalAlignment="Left"
+                MaxWidth="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
+                Classes="settings-page-status-block"
+                IsVisible="{Binding HasVersionUpdateInlineMessage}">
+          <TextBlock Classes="app-window-subtitle subtle long-wrap"
+                     Text="{Binding VersionUpdateInlineMessage}"
+                     TextWrapping="Wrap" />
+        </Border>
       </controls:AdaptiveSpacingStackPanel>
     </Grid>
-
-    <Border Grid.Row="2"
-            Margin="{DynamicResource MAA.Thickness.Settings.RowMargin}"
-            Classes="settings-page-status-block">
-      <controls:AdaptiveSpacingStackPanel MaxWidth="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
-                  Classes="settings-page-status-list">
-        <TextBlock Classes="app-window-subtitle subtle long-wrap"
-                   Text="{Binding VersionUpdateActivityMessage}"
-                   IsVisible="{Binding HasVersionUpdateActivityMessage}"
-                   TextWrapping="Wrap" />
-      </controls:AdaptiveSpacingStackPanel>
-    </Border>
   </Grid>
 </UserControl>

@@ -2142,7 +2142,14 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
     public string VersionUpdateStatusMessage
     {
         get => _versionUpdateStatusMessage;
-        private set => SetProperty(ref _versionUpdateStatusMessage, value);
+        private set
+        {
+            if (SetProperty(ref _versionUpdateStatusMessage, value))
+            {
+                OnPropertyChanged(nameof(VersionUpdateInlineMessage));
+                OnPropertyChanged(nameof(HasVersionUpdateInlineMessage));
+            }
+        }
     }
 
     public string VersionUpdateActivityMessage
@@ -2153,11 +2160,33 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
             if (SetProperty(ref _versionUpdateActivityMessage, value))
             {
                 OnPropertyChanged(nameof(HasVersionUpdateActivityMessage));
+                OnPropertyChanged(nameof(VersionUpdateInlineMessage));
+                OnPropertyChanged(nameof(HasVersionUpdateInlineMessage));
             }
         }
     }
 
     public bool HasVersionUpdateActivityMessage => !string.IsNullOrWhiteSpace(VersionUpdateActivityMessage);
+
+    public string VersionUpdateInlineMessage
+    {
+        get
+        {
+            if (!string.IsNullOrWhiteSpace(VersionUpdateActivityMessage))
+            {
+                return VersionUpdateActivityMessage;
+            }
+
+            if (!string.IsNullOrWhiteSpace(VersionUpdateStatusMessage))
+            {
+                return VersionUpdateStatusMessage;
+            }
+
+            return VersionUpdateErrorMessage;
+        }
+    }
+
+    public bool HasVersionUpdateInlineMessage => !string.IsNullOrWhiteSpace(VersionUpdateInlineMessage);
 
     public string VersionUpdateErrorMessage
     {
@@ -2167,6 +2196,8 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
             if (SetProperty(ref _versionUpdateErrorMessage, value))
             {
                 OnPropertyChanged(nameof(HasVersionUpdateErrorMessage));
+                OnPropertyChanged(nameof(VersionUpdateInlineMessage));
+                OnPropertyChanged(nameof(HasVersionUpdateInlineMessage));
             }
         }
     }
@@ -7333,6 +7364,8 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         OnPropertyChanged(nameof(GuiValidationMessage));
         OnPropertyChanged(nameof(HasGuiValidationMessage));
         OnPropertyChanged(nameof(VersionUpdateStatusMessage));
+        OnPropertyChanged(nameof(VersionUpdateInlineMessage));
+        OnPropertyChanged(nameof(HasVersionUpdateInlineMessage));
         OnPropertyChanged(nameof(RemoteControlStatusMessage));
         OnPropertyChanged(nameof(ConfigurationManagerStatusMessage));
         OnPropertyChanged(nameof(HotkeyStatusMessage));

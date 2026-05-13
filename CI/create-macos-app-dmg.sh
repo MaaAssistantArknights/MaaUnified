@@ -24,6 +24,7 @@ dmg_path="$release_dir/$package_name.dmg"
 dmg_tmp_path="$release_dir/.$package_name.tmp.dmg"
 app_icon_name="MAAUnified.icns"
 brand_icon_path="src/MAAUnified/App/Assets/Brand/newlogo.ico"
+signing_status_path="$release_dir/.$package_name.signing-status"
 
 if [[ ! -x "$staging_dir/bin/MAAUnified" ]]; then
   echo "Managed app executable not found: $staging_dir/bin/MAAUnified" >&2
@@ -142,6 +143,69 @@ PY
   rm -rf "$icon_work_dir"
 }
 
+write_signing_status() {
+  printf '%s\n' "$1" > "$signing_status_path"
+}
+
+sign_macho_with_identity() {
+  local identity="$1"
+  local use_timestamp="$2"
+  local file
+  local file_type
+  local codesign_args=(--force --options runtime)
+
+  if [[ "$use_timestamp" == "true" ]]; then
+    codesign_args+=(--timestamp)
+  fi
+
+  while IFS= read -r file; do
+    file_type="$(file "$file")"
+    if grep -Eq 'Mach-O|dynamically linked shared library' <<< "$file_type"; then
+      if grep -Eq 'Mach-O.*executable' <<< "$file_type"; then
+        codesign "${codesign_args[@]}" --entitlements "$entitlements_path" --sign "$identity" "$file" || return
+      else
+        codesign "${codesign_args[@]}" --sign "$identity" "$file" || return
+      fi
+    fi
+  done < <(find "$macos_dir" -type f)
+}
+
+sign_developer_id() {
+  local identity="${MACOS_CODESIGN_IDENTITY:-}"
+
+  if [[ -z "$identity" ]]; then
+    identity="$(security find-identity -v -p codesigning | sed -n 's/.*"\(Developer ID Application:.*\)"/\1/p' | head -n 1)"
+  fi
+
+  if [[ -z "$identity" ]]; then
+    echo "MACOS_CODESIGN_ENABLED=true but no Developer ID Application identity was found." >&2
+    return 1
+  fi
+
+  echo "Signing $app_name.app with identity: $identity"
+  sign_macho_with_identity "$identity" true || return
+  codesign --force --options runtime --timestamp --entitlements "$entitlements_path" --sign "$identity" "$app_dir" || return
+  codesign --verify --deep --strict --verbose=2 "$app_dir" || return
+}
+
+sign_adhoc() {
+  sign_macho_with_identity "-" false || return
+  codesign --force --options runtime --entitlements "$entitlements_path" --sign - "$app_dir" || return
+  if ! codesign --verify --deep --strict --verbose=2 "$app_dir"; then
+    echo "::warning title=macOS ad-hoc verification failed::Ad-hoc signing completed, but strict app verification failed; keeping fallback dmg without notarization."
+  fi
+}
+
+fallback_to_adhoc() {
+  echo "::warning title=macOS ad-hoc signing::$1; creating an ad-hoc signed app that will not pass Gatekeeper notarization."
+  if sign_adhoc; then
+    write_signing_status "ad-hoc"
+  else
+    echo "::warning title=macOS signing failed::Ad-hoc signing also failed; continuing with an unsigned fallback dmg."
+    write_signing_status "unsigned"
+  fi
+}
+
 rm -rf "$app_dir" "$dmg_root" "$dmg_path" "$dmg_tmp_path"
 mkdir -p "$macos_dir" "$resources_dir" "$dmg_root"
 
@@ -210,48 +274,19 @@ test -d "$resources_dir/resource"
 test -f "$resources_dir/$app_icon_name"
 
 if [[ "${MACOS_CODESIGN_ENABLED:-false}" == "true" ]]; then
-  identity="${MACOS_CODESIGN_IDENTITY:-}"
-  if [[ -z "$identity" ]]; then
-    identity="$(security find-identity -v -p codesigning | sed -n 's/.*"\(Developer ID Application:.*\)"/\1/p' | head -n 1)"
+  if sign_developer_id; then
+    write_signing_status "developer-id"
+  else
+    fallback_to_adhoc "Developer ID signing or verification failed"
   fi
-
-  if [[ -z "$identity" ]]; then
-    echo "MACOS_CODESIGN_ENABLED=true but no Developer ID Application identity was found." >&2
-    exit 1
-  fi
-
-  echo "Signing $app_name.app with identity: $identity"
-  while IFS= read -r file; do
-    file_type="$(file "$file")"
-    if grep -Eq 'Mach-O|dynamically linked shared library' <<< "$file_type"; then
-      if grep -Eq 'Mach-O.*executable' <<< "$file_type"; then
-        codesign --force --options runtime --timestamp --entitlements "$entitlements_path" --sign "$identity" "$file"
-      else
-        codesign --force --options runtime --timestamp --sign "$identity" "$file"
-      fi
-    fi
-  done < <(find "$macos_dir" -type f)
-  codesign --force --options runtime --timestamp --entitlements "$entitlements_path" --sign "$identity" "$app_dir"
-  codesign --verify --deep --strict --verbose=2 "$app_dir"
 elif [[ "${MACOS_ADHOC_CODESIGN_ENABLED:-false}" == "true" ]]; then
-  echo "::warning title=macOS ad-hoc signing::Developer ID signing is unavailable; creating an ad-hoc signed app that will not pass Gatekeeper notarization."
-  while IFS= read -r file; do
-    file_type="$(file "$file")"
-    if grep -Eq 'Mach-O|dynamically linked shared library' <<< "$file_type"; then
-      if grep -Eq 'Mach-O.*executable' <<< "$file_type"; then
-        codesign --force --options runtime --entitlements "$entitlements_path" --sign - "$file"
-      else
-        codesign --force --options runtime --sign - "$file"
-      fi
-    fi
-  done < <(find "$macos_dir" -type f)
-  codesign --force --options runtime --entitlements "$entitlements_path" --sign - "$app_dir"
-  codesign --verify --deep --strict --verbose=2 "$app_dir"
+  fallback_to_adhoc "Developer ID signing is unavailable"
 elif [[ "${MACOS_CODESIGN_REQUIRED:-false}" == "true" ]]; then
   echo "MACOS_CODESIGN_REQUIRED=true but MACOS_CODESIGN_ENABLED is not true; refusing to create unsigned macOS package." >&2
   exit 1
 else
   echo "macOS codesigning skipped because MACOS_CODESIGN_ENABLED is not true."
+  write_signing_status "unsigned"
 fi
 
 cp -a "$app_dir" "$dmg_root/$app_name.app"

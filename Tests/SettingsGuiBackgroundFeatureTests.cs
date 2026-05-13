@@ -496,6 +496,8 @@ public sealed class SettingsGuiBackgroundFeatureTests
         Assert.Equal(1, versionUpdate.CheckResourceCallCount);
         Assert.Equal(0, versionUpdate.UpdateResourceCallCount);
         Assert.Contains("最新", vm.VersionUpdateStatusMessage, StringComparison.Ordinal);
+        Assert.Contains("最新", vm.VersionUpdateInlineMessage, StringComparison.Ordinal);
+        Assert.True(vm.HasVersionUpdateInlineMessage);
         Assert.False(vm.HasPendingResourceUpdateAvailability);
     }
 
@@ -527,6 +529,7 @@ public sealed class SettingsGuiBackgroundFeatureTests
             return vm.VersionUpdateActivityMessage.Contains("游戏资源已更新", StringComparison.Ordinal);
         });
         Assert.Contains("游戏资源已更新", vm.VersionUpdateActivityMessage, StringComparison.Ordinal);
+        Assert.Contains("游戏资源已更新", vm.VersionUpdateInlineMessage, StringComparison.Ordinal);
         Assert.Contains("资源更新完成", vm.VersionUpdateStatusMessage, StringComparison.Ordinal);
         var bridge = Assert.IsType<FakeBridge>(fixture.Runtime.CoreBridge);
         Assert.Equal(1, bridge.ReloadResourceCallCount);

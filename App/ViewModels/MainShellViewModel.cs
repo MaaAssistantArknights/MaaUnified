@@ -446,7 +446,7 @@ public sealed class MainShellViewModel : ObservableObject
     public static double ComputeEffectiveUiScaleFactor(int uiScalePercent, bool isWindows)
     {
         var userScale = Math.Clamp(uiScalePercent, 70, 140) / 100d;
-        var platformScale = isWindows ? 0.8d : 1d;
+        var platformScale = isWindows ? 0.9d : 1d;
         return userScale * platformScale;
     }
 
@@ -2769,7 +2769,7 @@ public sealed class MainShellViewModel : ObservableObject
             ApplyShellBackgroundImage(snapshot.BackgroundImagePath);
             await RecordEventAsync(
                 "App.Gui.Apply.UiScale",
-                $"platform={(OperatingSystem.IsWindows() ? "Windows" : "Other")}; uiScalePercent={snapshot.UiScalePercent}; platformBase={(OperatingSystem.IsWindows() ? "0.8" : "1.0")}; effectiveUiScale={EffectiveUiScaleFactor.ToString("0.###", CultureInfo.InvariantCulture)}",
+                $"platform={(OperatingSystem.IsWindows() ? "Windows" : "Other")}; uiScalePercent={snapshot.UiScalePercent}; platformBase={(OperatingSystem.IsWindows() ? "0.9" : "1.0")}; effectiveUiScale={EffectiveUiScaleFactor.ToString("0.###", CultureInfo.InvariantCulture)}",
                 cancellationToken);
 
             await RefreshCapabilitySummaryAsync(cancellationToken);

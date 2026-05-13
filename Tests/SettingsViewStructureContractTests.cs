@@ -398,6 +398,13 @@ public sealed class SettingsViewStructureContractTests
         Assert.Contains("ColumnDefinitions=\"Auto,12,Auto,24,Auto\"", versionUpdate, StringComparison.Ordinal);
         Assert.Contains("Grid.Column=\"2\"", versionUpdate, StringComparison.Ordinal);
         Assert.Contains("Tip=\"{DynamicResource ResourceUpdateTip}\"", versionUpdate, StringComparison.Ordinal);
+        Assert.Contains("Text=\"{Binding VersionUpdateInlineMessage}\"", versionUpdate, StringComparison.Ordinal);
+        Assert.Contains("IsVisible=\"{Binding HasVersionUpdateInlineMessage}\"", versionUpdate, StringComparison.Ordinal);
+        Assert.DoesNotContain("Text=\"{Binding VersionUpdateActivityMessage}\"", versionUpdate, StringComparison.Ordinal);
+        Assert.True(
+            versionUpdate.IndexOf("Settings.VersionUpdate.ResourceRepository", StringComparison.Ordinal)
+            < versionUpdate.IndexOf("VersionUpdateInlineMessage", StringComparison.Ordinal),
+            "Version update status should remain in the same right-side column below the action buttons.");
     }
 
     [Fact]
