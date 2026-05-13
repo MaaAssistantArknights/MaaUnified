@@ -5,7 +5,7 @@ namespace MAAUnified.App.Infrastructure;
 
 internal static class WindowVisuals
 {
-    private static readonly Uri AppIconUri = new("avares://MAAUnified/Assets/newlogo.ico");
+    private static readonly Uri AppIconUri = new("avares://MAAUnified/Assets/Brand/newlogo.ico");
 
     public static void ApplyDefaultIcon(Window window)
     {

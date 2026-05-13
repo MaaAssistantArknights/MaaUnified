@@ -5,6 +5,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Platform;
 using H.NotifyIcon.Core;
 using Microsoft.Win32;
 using SharpHook;
@@ -97,13 +98,20 @@ public sealed class WindowsNotifyIconTrayService : ITrayService
 
         if (_initialized)
         {
-            RebuildMenu();
-            ApplyMenuState();
-            _trayIcon?.UpdateToolTip(string.IsNullOrWhiteSpace(appTitle) ? "MAAUnified" : appTitle.Trim());
-            return PlatformOperation.NativeSuccess(
-                Capability.Provider,
-                "Tray service already initialized.",
-                "tray.initialize");
+            try
+            {
+                RebuildMenu();
+                ApplyMenuState();
+                _trayIcon?.UpdateToolTip(string.IsNullOrWhiteSpace(appTitle) ? "MAAUnified" : appTitle.Trim());
+                return PlatformOperation.NativeSuccess(
+                    Capability.Provider,
+                    "Tray service already initialized.",
+                    "tray.initialize");
+            }
+            catch (Exception ex)
+            {
+                return await SwitchToFallbackTrayAsync(appTitle, ex, cancellationToken);
+            }
         }
 
         try
@@ -125,26 +133,7 @@ public sealed class WindowsNotifyIconTrayService : ITrayService
         }
         catch (Exception ex)
         {
-            _trayIcon?.Dispose();
-            _trayIcon = null;
-            ReleaseIconHandle();
-            _initialized = false;
-            _fallbackMode = true;
-            var fallbackResult = await _fallbackService.InitializeAsync(appTitle, _menuText, cancellationToken);
-            if (fallbackResult.Success)
-            {
-                return PlatformOperation.FallbackSuccess(
-                    Capability.Provider,
-                    $"Native tray initialization failed and switched to fallback menu: {ex.Message}",
-                    "tray.initialize",
-                    PlatformErrorCodes.TrayFallback);
-            }
-
-            return PlatformOperation.Failed(
-                Capability.Provider,
-                $"Failed to initialize tray service: {ex.Message}",
-                PlatformErrorCodes.TrayInitFailed,
-                "tray.initialize");
+            return await SwitchToFallbackTrayAsync(appTitle, ex, cancellationToken);
         }
     }
 
@@ -242,7 +231,18 @@ public sealed class WindowsNotifyIconTrayService : ITrayService
         _menuState = state;
         if (_initialized)
         {
-            ApplyMenuState();
+            try
+            {
+                ApplyMenuState();
+            }
+            catch (Exception ex)
+            {
+                return Task.FromResult(PlatformOperation.Failed(
+                    Capability.Provider,
+                    $"Tray menu state update failed: {ex.Message}",
+                    PlatformErrorCodes.TrayMenuDispatchFailed,
+                    "tray.setMenuState"));
+            }
         }
 
         return Task.FromResult(PlatformOperation.NativeSuccess(
@@ -360,6 +360,41 @@ public sealed class WindowsNotifyIconTrayService : ITrayService
         }
     }
 
+    private async Task<PlatformOperationResult> SwitchToFallbackTrayAsync(
+        string appTitle,
+        Exception exception,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            _trayIcon?.Dispose();
+        }
+        catch
+        {
+            // Best-effort cleanup before switching providers.
+        }
+
+        _trayIcon = null;
+        ReleaseIconHandle();
+        _initialized = false;
+        _fallbackMode = true;
+        var fallbackResult = await _fallbackService.InitializeAsync(appTitle, _menuText, cancellationToken);
+        if (fallbackResult.Success)
+        {
+            return PlatformOperation.FallbackSuccess(
+                Capability.Provider,
+                $"Native tray initialization failed and switched to fallback menu: {exception.Message}",
+                "tray.initialize",
+                PlatformErrorCodes.TrayFallback);
+        }
+
+        return PlatformOperation.Failed(
+            Capability.Provider,
+            $"Failed to initialize tray service: {exception.Message}",
+            PlatformErrorCodes.TrayInitFailed,
+            "tray.initialize");
+    }
+
     [DllImport("user32.dll")]
     private static extern nint LoadIcon(nint hInstance, nint lpIconName);
 
@@ -411,6 +446,7 @@ public sealed class AvaloniaTrayIconTrayService : ITrayService, IDisposable
 {
     // 1x1 transparent PNG used when no app icon is available.
     private const string DefaultPngBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO7+N3EAAAAASUVORK5CYII=";
+    private static readonly Uri AppIconUri = new("avares://MAAUnified/Assets/Brand/newlogo.ico");
 
     private readonly CommandNotificationService _notificationFallback = new();
     private readonly WindowMenuTrayService _fallbackService = new();
@@ -440,7 +476,7 @@ public sealed class AvaloniaTrayIconTrayService : ITrayService, IDisposable
     public static bool TryCreate([NotNullWhen(true)] out AvaloniaTrayIconTrayService? service)
     {
         service = null;
-        if (!(OperatingSystem.IsLinux() || OperatingSystem.IsMacOS()))
+        if (!(OperatingSystem.IsWindows() || OperatingSystem.IsLinux() || OperatingSystem.IsMacOS()))
         {
             return false;
         }
@@ -469,14 +505,21 @@ public sealed class AvaloniaTrayIconTrayService : ITrayService, IDisposable
 
         if (_initialized && _trayIcon is not null)
         {
-            _trayIcon.ToolTipText = string.IsNullOrWhiteSpace(appTitle) ? "MAAUnified" : appTitle.Trim();
-            RebuildMenu();
-            ApplyMenuState();
-            _trayIcon.IsVisible = _visible;
-            return PlatformOperation.NativeSuccess(
-                Capability.Provider,
-                "Tray service already initialized.",
-                "tray.initialize");
+            try
+            {
+                _trayIcon.ToolTipText = string.IsNullOrWhiteSpace(appTitle) ? "MAAUnified" : appTitle.Trim();
+                RebuildMenu();
+                ApplyMenuState();
+                _trayIcon.IsVisible = _visible;
+                return PlatformOperation.NativeSuccess(
+                    Capability.Provider,
+                    "Tray service already initialized.",
+                    "tray.initialize");
+            }
+            catch (Exception ex)
+            {
+                return await SwitchToFallbackTrayAsync(appTitle, ex, cancellationToken);
+            }
         }
 
         try
@@ -509,24 +552,7 @@ public sealed class AvaloniaTrayIconTrayService : ITrayService, IDisposable
         }
         catch (Exception ex)
         {
-            DisposeNative();
-            _initialized = false;
-            _fallbackMode = true;
-            var fallbackResult = await _fallbackService.InitializeAsync(appTitle, _menuText, cancellationToken);
-            if (fallbackResult.Success)
-            {
-                return PlatformOperation.FallbackSuccess(
-                    Capability.Provider,
-                    $"Native tray initialization failed and switched to fallback menu: {ex.Message}",
-                    "tray.initialize",
-                    PlatformErrorCodes.TrayFallback);
-            }
-
-            return PlatformOperation.Failed(
-                Capability.Provider,
-                $"Failed to initialize tray service: {ex.Message}",
-                PlatformErrorCodes.TrayInitFailed,
-                "tray.initialize");
+            return await SwitchToFallbackTrayAsync(appTitle, ex, cancellationToken);
         }
     }
 
@@ -595,7 +621,18 @@ public sealed class AvaloniaTrayIconTrayService : ITrayService, IDisposable
         _menuState = state;
         if (_initialized)
         {
-            ApplyMenuState();
+            try
+            {
+                ApplyMenuState();
+            }
+            catch (Exception ex)
+            {
+                return Task.FromResult(PlatformOperation.Failed(
+                    Capability.Provider,
+                    $"Tray menu state update failed: {ex.Message}",
+                    PlatformErrorCodes.TrayMenuDispatchFailed,
+                    "tray.setMenuState"));
+            }
         }
 
         return Task.FromResult(PlatformOperation.NativeSuccess(
@@ -707,20 +744,75 @@ public sealed class AvaloniaTrayIconTrayService : ITrayService, IDisposable
         }
     }
 
+    private async Task<PlatformOperationResult> SwitchToFallbackTrayAsync(
+        string appTitle,
+        Exception exception,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            DisposeNative();
+        }
+        catch
+        {
+            // Best-effort cleanup before switching providers.
+        }
+
+        _initialized = false;
+        _fallbackMode = true;
+        var fallbackResult = await _fallbackService.InitializeAsync(appTitle, _menuText, cancellationToken);
+        if (fallbackResult.Success)
+        {
+            return PlatformOperation.FallbackSuccess(
+                Capability.Provider,
+                $"Native tray initialization failed and switched to fallback menu: {exception.Message}",
+                "tray.initialize",
+                PlatformErrorCodes.TrayFallback);
+        }
+
+        return PlatformOperation.Failed(
+            Capability.Provider,
+            $"Failed to initialize tray service: {exception.Message}",
+            PlatformErrorCodes.TrayInitFailed,
+            "tray.initialize");
+    }
+
     private static WindowIcon BuildDefaultIcon()
     {
-        var stream = new MemoryStream(Convert.FromBase64String(DefaultPngBase64));
-        return new WindowIcon(stream);
+        try
+        {
+            using var stream = AssetLoader.Open(AppIconUri);
+            return new WindowIcon(stream);
+        }
+        catch
+        {
+            var stream = new MemoryStream(Convert.FromBase64String(DefaultPngBase64));
+            return new WindowIcon(stream);
+        }
     }
 
     private void DisposeNative()
     {
-        if (Application.Current is not null)
+        try
         {
-            Application.Current.SetValue(Avalonia.Controls.TrayIcon.IconsProperty, null);
+            if (Application.Current is not null)
+            {
+                Application.Current.SetValue(Avalonia.Controls.TrayIcon.IconsProperty, null);
+            }
+        }
+        catch
+        {
+            // Tray cleanup is best-effort.
         }
 
-        _trayIcon?.Dispose();
+        try
+        {
+            _trayIcon?.Dispose();
+        }
+        catch
+        {
+            // Tray cleanup is best-effort.
+        }
         _trayIcon = null;
         _trayIcons?.Clear();
         _trayIcons = null;
@@ -1230,7 +1322,7 @@ public sealed class SharpHookGlobalHotkeyService : IGlobalHotkeyService, IDispos
                 _hookTask.ContinueWith(OnHookCompleted, TaskScheduler.Default);
                 return PlatformOperation.NativeSuccess(Capability.Provider, "Global hook started.", "hotkey.hook");
             }
-            catch (Exception ex) when (ex is HookException || ex is DllNotFoundException || ex is PlatformNotSupportedException)
+            catch (Exception ex)
             {
                 StopHookUnsafe();
                 var errorCode = ex.Message.Contains("permission", StringComparison.OrdinalIgnoreCase)
@@ -2215,32 +2307,43 @@ public sealed class WindowsOverlayCapabilityService : IOverlayCapabilityService,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (hostWindowHandle == nint.Zero || !_api.IsWindow(hostWindowHandle))
+        try
         {
-            return Task.FromResult(PlatformOperation.Failed(
+            if (hostWindowHandle == nint.Zero || !_api.IsWindow(hostWindowHandle))
+            {
+                return Task.FromResult(PlatformOperation.Failed(
+                    Capability.Provider,
+                    "Overlay host window handle is invalid.",
+                    PlatformErrorCodes.OverlayHostNotBound,
+                    "overlay.bindHost"));
+            }
+
+            _hostWindow = hostWindowHandle;
+            _clickThrough = clickThrough;
+            _opacity = Math.Clamp(opacity, 0.05d, 1.0d);
+
+            if (!ConfigureHostWindow())
+            {
+                return Task.FromResult(PlatformOperation.Failed(
+                    Capability.Provider,
+                    "Failed to configure overlay host window styles.",
+                    PlatformErrorCodes.OverlayAttachFailed,
+                    "overlay.bindHost"));
+            }
+
+            return Task.FromResult(PlatformOperation.NativeSuccess(
                 Capability.Provider,
-                "Overlay host window handle is invalid.",
-                PlatformErrorCodes.OverlayHostNotBound,
+                "Overlay host window bound.",
                 "overlay.bindHost"));
         }
-
-        _hostWindow = hostWindowHandle;
-        _clickThrough = clickThrough;
-        _opacity = Math.Clamp(opacity, 0.05d, 1.0d);
-
-        if (!ConfigureHostWindow())
+        catch (Exception ex)
         {
             return Task.FromResult(PlatformOperation.Failed(
                 Capability.Provider,
-                "Failed to configure overlay host window styles.",
+                $"Overlay host bind failed: {ex.Message}",
                 PlatformErrorCodes.OverlayAttachFailed,
                 "overlay.bindHost"));
         }
-
-        return Task.FromResult(PlatformOperation.NativeSuccess(
-            Capability.Provider,
-            "Overlay host window bound.",
-            "overlay.bindHost"));
     }
 
     public Task<PlatformOperationResult<IReadOnlyList<OverlayTarget>>> QueryTargetsAsync(CancellationToken cancellationToken = default)
@@ -2341,7 +2444,26 @@ public sealed class WindowsOverlayCapabilityService : IOverlayCapabilityService,
     public Task<PlatformOperationResult> SelectTargetAsync(string targetId, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        try
+        {
+            return SelectTargetCore(targetId);
+        }
+        catch (Exception ex)
+        {
+            EnterPreviewMode(
+                "Overlay target selection failed; switched to Preview + Logs mode.",
+                "fallback-enter",
+                PlatformErrorCodes.OverlayAttachFailed);
+            return Task.FromResult(PlatformOperation.Failed(
+                Capability.Provider,
+                $"Overlay target selection failed: {ex.Message}",
+                PlatformErrorCodes.OverlayAttachFailed,
+                operationId: "overlay.selectTarget"));
+        }
+    }
 
+    private Task<PlatformOperationResult> SelectTargetCore(string targetId)
+    {
         if (string.Equals(targetId, "preview", StringComparison.OrdinalIgnoreCase))
         {
             _selectedTarget = nint.Zero;
@@ -2443,6 +2565,26 @@ public sealed class WindowsOverlayCapabilityService : IOverlayCapabilityService,
     public Task<PlatformOperationResult> SetVisibleAsync(bool visible, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        try
+        {
+            return SetVisibleCore(visible);
+        }
+        catch (Exception ex)
+        {
+            EnterPreviewMode(
+                "Overlay visibility update failed; switched to Preview + Logs mode.",
+                "fallback-enter",
+                PlatformErrorCodes.OverlayAttachFailed);
+            return Task.FromResult(PlatformOperation.Failed(
+                Capability.Provider,
+                $"Overlay visibility update failed: {ex.Message}",
+                PlatformErrorCodes.OverlayAttachFailed,
+                operationId: "overlay.setVisible"));
+        }
+    }
+
+    private Task<PlatformOperationResult> SetVisibleCore(bool visible)
+    {
         _visible = visible;
 
         if (!visible)
@@ -2554,7 +2696,7 @@ public sealed class WindowsOverlayCapabilityService : IOverlayCapabilityService,
     {
         lock (_syncRoot)
         {
-            _attachSyncTimer ??= new Timer(_ => SyncSelectedTarget(), null, TimeSpan.Zero, TimeSpan.FromMilliseconds(300));
+            _attachSyncTimer ??= new Timer(_ => SyncSelectedTargetSafe(), null, TimeSpan.Zero, TimeSpan.FromMilliseconds(300));
         }
     }
 
@@ -2597,6 +2739,21 @@ public sealed class WindowsOverlayCapabilityService : IOverlayCapabilityService,
                 "Overlay sync failed repeatedly; switched to Preview + Logs mode.",
                 "fallback-enter",
                 failureCode);
+        }
+    }
+
+    private void SyncSelectedTargetSafe()
+    {
+        try
+        {
+            SyncSelectedTarget();
+        }
+        catch
+        {
+            EnterPreviewMode(
+                "Overlay sync failed unexpectedly; switched to Preview + Logs mode.",
+                "fallback-enter",
+                PlatformErrorCodes.OverlayAttachFailed);
         }
     }
 
@@ -2694,18 +2851,25 @@ public sealed class WindowsOverlayCapabilityService : IOverlayCapabilityService,
         bool usedFallback,
         string? errorCode)
     {
-        OverlayStateChanged?.Invoke(
-            this,
-            new OverlayStateChangedEvent(
-                mode,
-                visible,
-                targetId,
-                action,
-                message,
-                DateTimeOffset.UtcNow,
-                Capability.Provider,
-                usedFallback,
-                errorCode));
+        try
+        {
+            OverlayStateChanged?.Invoke(
+                this,
+                new OverlayStateChangedEvent(
+                    mode,
+                    visible,
+                    targetId,
+                    action,
+                    message,
+                    DateTimeOffset.UtcNow,
+                    Capability.Provider,
+                    usedFallback,
+                    errorCode));
+        }
+        catch
+        {
+            // Overlay state consumers must not destabilize native callbacks.
+        }
     }
 
     private string GetSelectedTargetId()
@@ -2771,24 +2935,38 @@ public sealed class WindowsOverlayCapabilityService : IOverlayCapabilityService,
 
     private void ShowPreviewHostBestEffort()
     {
-        if (_hostWindow == nint.Zero || !_api.IsWindow(_hostWindow))
+        try
         {
-            return;
-        }
+            if (_hostWindow == nint.Zero || !_api.IsWindow(_hostWindow))
+            {
+                return;
+            }
 
-        if (!ConfigureHostWindow())
+            if (!ConfigureHostWindow())
+            {
+                return;
+            }
+
+            _ = _api.ShowWindow(_hostWindow, SwShowNoActivate);
+        }
+        catch
         {
-            return;
+            // Preview fallback is best-effort when native handles are unhealthy.
         }
-
-        _ = _api.ShowWindow(_hostWindow, SwShowNoActivate);
     }
 
     private void HideHostWindow()
     {
-        if (_hostWindow != nint.Zero && _api.IsWindow(_hostWindow))
+        try
         {
-            _ = _api.ShowWindow(_hostWindow, SwHide);
+            if (_hostWindow != nint.Zero && _api.IsWindow(_hostWindow))
+            {
+                _ = _api.ShowWindow(_hostWindow, SwHide);
+            }
+        }
+        catch
+        {
+            // Hide is best-effort during fallback/shutdown.
         }
     }
 
@@ -3423,7 +3601,7 @@ public sealed class LinuxOverlayCapabilityService : IOverlayCapabilityService
     {
         lock (_syncRoot)
         {
-            _attachSyncTimer ??= new Timer(_ => SyncSelectedTarget(), null, TimeSpan.Zero, TimeSpan.FromMilliseconds(300));
+            _attachSyncTimer ??= new Timer(_ => SyncSelectedTargetSafe(), null, TimeSpan.Zero, TimeSpan.FromMilliseconds(300));
         }
     }
 
@@ -3466,6 +3644,21 @@ public sealed class LinuxOverlayCapabilityService : IOverlayCapabilityService
                 "Overlay sync failed repeatedly; switched to Preview + Logs mode.",
                 "fallback-enter",
                 failureCode);
+        }
+    }
+
+    private void SyncSelectedTargetSafe()
+    {
+        try
+        {
+            SyncSelectedTarget();
+        }
+        catch
+        {
+            EnterPreviewMode(
+                "Overlay sync failed unexpectedly; switched to Preview + Logs mode.",
+                "fallback-enter",
+                PlatformErrorCodes.OverlayAttachFailed);
         }
     }
 
@@ -3591,18 +3784,25 @@ public sealed class LinuxOverlayCapabilityService : IOverlayCapabilityService
         bool usedFallback,
         string? errorCode)
     {
-        OverlayStateChanged?.Invoke(
-            this,
-            new OverlayStateChangedEvent(
-                mode,
-                visible,
-                targetId,
-                action,
-                message,
-                DateTimeOffset.UtcNow,
-                Capability.Provider,
-                usedFallback,
-                errorCode));
+        try
+        {
+            OverlayStateChanged?.Invoke(
+                this,
+                new OverlayStateChangedEvent(
+                    mode,
+                    visible,
+                    targetId,
+                    action,
+                    message,
+                    DateTimeOffset.UtcNow,
+                    Capability.Provider,
+                    usedFallback,
+                    errorCode));
+        }
+        catch
+        {
+            // Overlay state consumers must not destabilize native callbacks.
+        }
     }
 
     private static bool TryParseX11TargetId(string targetId, out nint target)

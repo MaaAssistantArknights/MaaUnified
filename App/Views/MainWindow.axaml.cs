@@ -157,6 +157,7 @@ public partial class MainWindow : Window
     private MainShellViewModel? VM => DataContext as MainShellViewModel;
 
     private async void OnWindowClosing(object? sender, CancelEventArgs e)
+        => await App.RunUiTaskAsync("MainWindow.Closing", async () =>
     {
         if (_allowLifecycleClose || VM is null)
         {
@@ -197,9 +198,10 @@ public partial class MainWindow : Window
                 _closeRequestPending = false;
             }
         }
-    }
+    });
 
     private async void OnWindowOpened(object? sender, EventArgs e)
+        => await App.RunUiTaskAsync("MainWindow.Opened", async () =>
     {
         Program.RecordStartupStage("MainWindow.Opened", "Main window opened.");
         if (VM is not null)
@@ -237,38 +239,80 @@ public partial class MainWindow : Window
         vm.PlatformCapabilityService.OverlayStateChanged += OnPlatformOverlayStateChanged;
         _platformBound = true;
 
-        var hotkeyHostContext = await vm.PlatformCapabilityService.ConfigureHotkeyHostContextAsync(
-            BuildHotkeyHostContext());
-        await HandlePlatformResultAsync("PlatformCapability.Hotkey.ConfigureHost", hotkeyHostContext);
+        await RunPlatformStartupStepAsync(
+            "PlatformCapability.Hotkey.ConfigureHost",
+            async () =>
+            {
+                var hotkeyHostContext = await vm.PlatformCapabilityService.ConfigureHotkeyHostContextAsync(
+                    BuildHotkeyHostContext());
+                await HandlePlatformResultAsync("PlatformCapability.Hotkey.ConfigureHost", hotkeyHostContext);
+            });
 
-        var trayInit = await vm.PlatformCapabilityService.InitializeTrayAsync(
-            "MaaAssistantArknights",
-            PlatformCapabilityTextMap.CreateTrayMenuText(vm.CurrentShellLanguage, vm.ReportLocalizationFallback));
-        await HandlePlatformResultAsync("PlatformCapability.Tray.Initialize", trayInit);
+        await RunPlatformStartupStepAsync(
+            "PlatformCapability.Tray.Initialize",
+            async () =>
+            {
+                var trayInit = await vm.PlatformCapabilityService.InitializeTrayAsync(
+                    "MaaAssistantArknights",
+                    PlatformCapabilityTextMap.CreateTrayMenuText(vm.CurrentShellLanguage, vm.ReportLocalizationFallback));
+                await HandlePlatformResultAsync("PlatformCapability.Tray.Initialize", trayInit);
+            });
 
-        var trayVisible = await vm.PlatformCapabilityService.SetTrayVisibleAsync(vm.SettingsPage.UseTray);
-        await HandlePlatformResultAsync("PlatformCapability.Tray.InitialVisibility", trayVisible);
+        await RunPlatformStartupStepAsync(
+            "PlatformCapability.Tray.InitialVisibility",
+            async () =>
+            {
+                var trayVisible = await vm.PlatformCapabilityService.SetTrayVisibleAsync(vm.SettingsPage.UseTray);
+                await HandlePlatformResultAsync("PlatformCapability.Tray.InitialVisibility", trayVisible);
+            });
 
-        await vm.RegisterHotkeysAtStartupAsync();
-        try
-        {
-            await EnsureOverlayHostBoundAsync();
-        }
-        catch (Exception ex)
-        {
-            await App.Runtime.DiagnosticsService.RecordErrorAsync(
-                "PlatformCapability.Overlay.BindHost",
-                "Overlay host initialization failed during window startup.",
-                ex);
-        }
+        await RunPlatformStartupStepAsync(
+            "PlatformCapability.Hotkey.RegisterStartup",
+            async () =>
+            {
+                await vm.RegisterHotkeysAtStartupAsync();
+            });
 
-        await vm.ExecuteStartupLaunchBehaviorAsync(minimizeWindowAsync: MinimizeFromStartupAsync);
+        await RunPlatformStartupStepAsync(
+            "PlatformCapability.Overlay.BindHost",
+            async () =>
+            {
+                await EnsureOverlayHostBoundAsync();
+            });
+
+        await RunPlatformStartupStepAsync(
+            "App.Startup.LaunchBehavior",
+            async () =>
+            {
+                await vm.ExecuteStartupLaunchBehaviorAsync(minimizeWindowAsync: MinimizeFromStartupAsync);
+            });
+
         vm.MarkAchievementToastStartupCompleted();
         UpdateAchievementToastVisibility();
         Program.RecordStartupStage("MainWindow.PlatformInit.End", "Platform initialization completed.");
+    });
+
+    private async Task RunPlatformStartupStepAsync(string scope, Func<Task> action)
+    {
+        try
+        {
+            await action();
+        }
+        catch (Exception ex) when (App.ShouldIgnoreUnhandledException(ex))
+        {
+        }
+        catch (Exception ex)
+        {
+            Program.RecordStartupStage($"{scope}.Fail", $"{scope} failed during window startup.", ex);
+            await App.Runtime.DiagnosticsService.RecordErrorAsync(
+                scope,
+                $"{scope} failed during window startup.",
+                ex);
+        }
     }
 
     private async void OnWindowClosed(object? sender, EventArgs e)
+        => await App.RunUiTaskAsync("MainWindow.Closed", async () =>
     {
         UpdateAchievementToastVisibility();
         BindShellBackgroundVm(null);
@@ -303,34 +347,108 @@ public partial class MainWindow : Window
         VM?.CancelStartupInitialization();
         UnbindSettingsWarmup();
 
-        if (VM is not null && _platformBound)
+        var vm = VM;
+        if (vm is not null && _platformBound)
         {
-            VM.PlatformCapabilityService.TrayCommandInvoked -= OnTrayCommandInvoked;
-            VM.PlatformCapabilityService.GlobalHotkeyTriggered -= OnGlobalHotkeyTriggered;
-            VM.PlatformCapabilityService.OverlayStateChanged -= OnPlatformOverlayStateChanged;
+            vm.PlatformCapabilityService.TrayCommandInvoked -= OnTrayCommandInvoked;
+            vm.PlatformCapabilityService.GlobalHotkeyTriggered -= OnGlobalHotkeyTriggered;
+            vm.PlatformCapabilityService.OverlayStateChanged -= OnPlatformOverlayStateChanged;
             _platformBound = false;
-            _ = await VM.PlatformCapabilityService.UnregisterGlobalHotkeyAsync("ShowGui");
-            _ = await VM.PlatformCapabilityService.UnregisterGlobalHotkeyAsync("LinkStart");
-            _ = await VM.PlatformCapabilityService.ShutdownTrayAsync();
+            await RunPlatformShutdownStepAsync(
+                "PlatformCapability.Hotkey.Unregister.ShowGui",
+                () => vm.PlatformCapabilityService.UnregisterGlobalHotkeyAsync("ShowGui"));
+            await RunPlatformShutdownStepAsync(
+                "PlatformCapability.Hotkey.Unregister.LinkStart",
+                () => vm.PlatformCapabilityService.UnregisterGlobalHotkeyAsync("LinkStart"));
+            await RunPlatformShutdownStepAsync(
+                "PlatformCapability.Tray.Shutdown",
+                () => vm.PlatformCapabilityService.ShutdownTrayAsync());
         }
 
         if (_overlayHostWindow is not null)
         {
-            _overlayHostWindow.Close();
-            _overlayHostWindow = null;
+            await RunWindowCleanupStepAsync(
+                "MainWindow.OverlayHost.Close",
+                () =>
+                {
+                    try
+                    {
+                        _overlayHostWindow.Close();
+                    }
+                    finally
+                    {
+                        _overlayHostWindow = null;
+                    }
+
+                    return Task.CompletedTask;
+                });
         }
 
         if (_runtimeLogWindow is not null)
         {
-            _runtimeLogWindow.Closed -= OnRuntimeLogWindowClosed;
-            _runtimeLogWindow.Close();
-            _runtimeLogWindow = null;
+            await RunWindowCleanupStepAsync(
+                "MainWindow.RuntimeLogWindow.Close",
+                () =>
+                {
+                    try
+                    {
+                        _runtimeLogWindow.Closed -= OnRuntimeLogWindowClosed;
+                        _runtimeLogWindow.Close();
+                    }
+                    finally
+                    {
+                        _runtimeLogWindow = null;
+                    }
+
+                    return Task.CompletedTask;
+                });
         }
 
         App.Runtime.UiLanguageCoordinator.LanguageChanged -= OnUiLanguageChanged;
+    });
+
+    private async Task RunPlatformShutdownStepAsync(string scope, Func<Task<UiOperationResult>> action)
+    {
+        try
+        {
+            var result = await action();
+            if (!result.Success)
+            {
+                await App.Runtime.DiagnosticsService.RecordFailedResultAsync(scope, result);
+            }
+        }
+        catch (Exception ex) when (App.ShouldIgnoreUnhandledException(ex))
+        {
+        }
+        catch (Exception ex)
+        {
+            await App.Runtime.DiagnosticsService.RecordErrorAsync(
+                scope,
+                $"{scope} failed during window shutdown.",
+                ex);
+        }
+    }
+
+    private async Task RunWindowCleanupStepAsync(string scope, Func<Task> action)
+    {
+        try
+        {
+            await action();
+        }
+        catch (Exception ex) when (App.ShouldIgnoreUnhandledException(ex))
+        {
+        }
+        catch (Exception ex)
+        {
+            await App.Runtime.DiagnosticsService.RecordErrorAsync(
+                scope,
+                $"{scope} failed during window shutdown.",
+                ex);
+        }
     }
 
     private async void OnWindowPropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
+        => await App.RunUiTaskAsync("MainWindow.PropertyChanged", async () =>
     {
         if (e.Property == IsVisibleProperty || e.Property == WindowStateProperty)
         {
@@ -341,7 +459,7 @@ public partial class MainWindow : Window
         {
             await HandleMinimizeToTrayAsync();
         }
-    }
+    });
 
     private void UpdateAchievementToastVisibility()
     {
@@ -388,13 +506,16 @@ public partial class MainWindow : Window
 
     private void OnUiLanguageChanged(object? sender, UiLanguageChangedEventArgs e)
     {
-        Dispatcher.UIThread.Post(RefreshLocalizedLayout, DispatcherPriority.Background);
+        App.PostUiCallback("MainWindow.LanguageChanged.RefreshLayout", RefreshLocalizedLayout, DispatcherPriority.Background);
     }
 
     private void RefreshLocalizedLayout()
     {
         InvalidateLocalizedLayoutTree();
-        Dispatcher.UIThread.Post(InvalidateLocalizedLayoutTree, DispatcherPriority.Render);
+        App.PostUiCallback(
+            "MainWindow.LanguageChanged.InvalidateLayout",
+            InvalidateLocalizedLayoutTree,
+            DispatcherPriority.Render);
     }
 
     private void UpdateAdaptiveLayoutMode(bool flushAllHosts = false)
@@ -428,7 +549,8 @@ public partial class MainWindow : Window
         }
 
         _adaptiveLayoutUpdateQueued = true;
-        Dispatcher.UIThread.Post(
+        App.PostUiCallback(
+            "MainWindow.AdaptiveLayout.ApplyPending",
             () =>
             {
                 _adaptiveLayoutUpdateQueued = false;
@@ -739,7 +861,9 @@ public partial class MainWindow : Window
             var message = FormattableString.Invariant(
                 $"stage={stage}; platform={(OperatingSystem.IsWindows() ? "Windows" : "Other")}; effectiveUiScale={VM?.EffectiveUiScaleFactor ?? 1d:0.###}; renderScaling={RenderScaling:0.###}; screenScaling={screen?.Scaling ?? 0d:0.###}; clientDip={ClientSize.Width:0.#}x{ClientSize.Height:0.#}; boundsDip={Bounds.Width:0.#}x{Bounds.Height:0.#}; workingAreaPx={workingArea?.Width ?? 0}x{workingArea?.Height ?? 0}");
             Program.RecordStartupStage("MainWindow.UiScaleDiagnostics", message);
-            _ = App.Runtime.DiagnosticsService.RecordEventAsync("App.Window.UiScaleDiagnostics", message);
+            App.ForgetTask(
+                App.Runtime.DiagnosticsService.RecordEventAsync("App.Window.UiScaleDiagnostics", message),
+                "App.Window.UiScaleDiagnostics");
         }
         catch (ObjectDisposedException)
         {
@@ -791,7 +915,7 @@ public partial class MainWindow : Window
             }
             else
             {
-                Dispatcher.UIThread.Post(() => UpdateAdaptiveLayoutMode(), DispatcherPriority.Render);
+                App.PostUiCallback("MainWindow.AdaptiveLayout.Update", () => UpdateAdaptiveLayoutMode(), DispatcherPriority.Render);
             }
 
             return;
@@ -819,7 +943,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        Dispatcher.UIThread.Post(ApplyShellBackgroundEffect, DispatcherPriority.Render);
+        App.PostUiCallback("MainWindow.ShellBackground.ApplyEffect", ApplyShellBackgroundEffect, DispatcherPriority.Render);
     }
 
     private void ApplyShellBackgroundEffect()
@@ -919,7 +1043,7 @@ public partial class MainWindow : Window
         }
 
         _settingsWarmupStarted = true;
-        _ = WarmupSettingsPageAsync(vm);
+        App.ForgetTask(WarmupSettingsPageAsync(vm), "MainWindow.Settings.Warmup");
     }
 
     private static async Task WarmupSettingsPageAsync(MainShellViewModel vm)
@@ -955,30 +1079,32 @@ public partial class MainWindow : Window
     }
 
     private async void OnConnectClick(object? sender, RoutedEventArgs e)
+        => await App.RunUiTaskAsync("MainWindow.ConnectClick", async () =>
     {
         if (VM is not null)
         {
             await VM.ExecuteConnectAsync();
         }
-    }
+    });
 
     private async void OnImportClick(object? sender, RoutedEventArgs e)
+        => await App.RunUiTaskAsync("MainWindow.ImportClick", async () =>
     {
         if (VM is not null)
         {
             await VM.ExecuteManualImportAsync();
         }
-    }
+    });
 
     private async void OnStartClick(object? sender, RoutedEventArgs e)
-    {
-        await DispatchTrayCommandAsync(TrayCommandId.Start, "window-shell-menu");
-    }
+        => await App.RunUiTaskAsync(
+            "MainWindow.StartClick",
+            () => DispatchTrayCommandAsync(TrayCommandId.Start, "window-shell-menu"));
 
     private async void OnStopClick(object? sender, RoutedEventArgs e)
-    {
-        await DispatchTrayCommandAsync(TrayCommandId.Stop, "window-shell-menu");
-    }
+        => await App.RunUiTaskAsync(
+            "MainWindow.StopClick",
+            () => DispatchTrayCommandAsync(TrayCommandId.Stop, "window-shell-menu"));
 
     private void OnDismissAchievementToastClick(object? sender, RoutedEventArgs e)
     {
@@ -990,22 +1116,24 @@ public partial class MainWindow : Window
     }
 
     private async void OnManualUpdateClick(object? sender, RoutedEventArgs e)
+        => await App.RunUiTaskAsync("MainWindow.ManualUpdateClick", async () =>
     {
         e.Handled = true;
         if (VM is not null)
         {
             await VM.SettingsPage.CheckVersionUpdateAsync();
         }
-    }
+    });
 
     private async void OnManualUpdateResourceClick(object? sender, RoutedEventArgs e)
+        => await App.RunUiTaskAsync("MainWindow.ManualUpdateResourceClick", async () =>
     {
         e.Handled = true;
         if (VM is not null)
         {
             await VM.SettingsPage.ManualUpdateResourceAsync();
         }
-    }
+    });
 
     private void OnDismissWindowUpdateClick(object? sender, RoutedEventArgs e)
     {
@@ -1014,6 +1142,7 @@ public partial class MainWindow : Window
     }
 
     private async void OnAchievementToastTapped(object? sender, TappedEventArgs e)
+        => await App.RunUiTaskAsync("MainWindow.AchievementToastTapped", async () =>
     {
         if (e.Handled
             || sender is not Control { DataContext: AchievementToastItemViewModel toast }
@@ -1025,7 +1154,7 @@ public partial class MainWindow : Window
 
         e.Handled = true;
         await VM.ShowAchievementListDialogFromToastAsync(toast.Id);
-    }
+    });
 
     private void OnWindowUpdateOverlayTapped(object? sender, TappedEventArgs e)
     {
@@ -1060,6 +1189,7 @@ public partial class MainWindow : Window
     }
 
     private async void OnSwitchLanguageToClick(object? sender, RoutedEventArgs e)
+        => await App.RunUiTaskAsync("MainWindow.SwitchLanguageClick", async () =>
     {
         if (VM is null)
         {
@@ -1073,24 +1203,25 @@ public partial class MainWindow : Window
         }
 
         await VM.ExecuteTrayLanguageSwitchAsync(targetLanguage, "window-shell-menu");
-    }
+    });
 
     private async void OnForceShowClick(object? sender, RoutedEventArgs e)
-    {
-        await DispatchTrayCommandAsync(TrayCommandId.ForceShow, "window-shell-menu");
-    }
+        => await App.RunUiTaskAsync(
+            "MainWindow.ForceShowClick",
+            () => DispatchTrayCommandAsync(TrayCommandId.ForceShow, "window-shell-menu"));
 
     private async void OnHideTrayClick(object? sender, RoutedEventArgs e)
-    {
-        await DispatchTrayCommandAsync(TrayCommandId.HideTray, "window-shell-menu");
-    }
+        => await App.RunUiTaskAsync(
+            "MainWindow.HideTrayClick",
+            () => DispatchTrayCommandAsync(TrayCommandId.HideTray, "window-shell-menu"));
 
     private async void OnToggleOverlayClick(object? sender, RoutedEventArgs e)
-    {
-        await DispatchTrayCommandAsync(TrayCommandId.ToggleOverlay, "window-shell-menu");
-    }
+        => await App.RunUiTaskAsync(
+            "MainWindow.ToggleOverlayClick",
+            () => DispatchTrayCommandAsync(TrayCommandId.ToggleOverlay, "window-shell-menu"));
 
     private async void OnWindowOverlayToggleClick(object? sender, RoutedEventArgs e)
+        => await App.RunUiTaskAsync("MainWindow.WindowOverlayToggleClick", async () =>
     {
         if (VM is null)
         {
@@ -1104,9 +1235,10 @@ public partial class MainWindow : Window
         }
 
         await VM.ToggleOverlayFromTaskQueueAsync();
-    }
+    });
 
     private async void OnWindowOverlayButtonPointerPressed(object? sender, PointerPressedEventArgs e)
+        => await App.RunUiTaskAsync("MainWindow.WindowOverlayButtonPointerPressed", async () =>
     {
         if (VM is null || sender is not Control control)
         {
@@ -1127,17 +1259,17 @@ public partial class MainWindow : Window
         }
 
         await VM.PickOverlayTargetFromTaskQueueAsync();
-    }
+    });
 
     private async void OnRestartClick(object? sender, RoutedEventArgs e)
-    {
-        await DispatchTrayCommandAsync(TrayCommandId.Restart, "window-shell-menu");
-    }
+        => await App.RunUiTaskAsync(
+            "MainWindow.RestartClick",
+            () => DispatchTrayCommandAsync(TrayCommandId.Restart, "window-shell-menu"));
 
     private async void OnExitClick(object? sender, RoutedEventArgs e)
-    {
-        await DispatchTrayCommandAsync(TrayCommandId.Exit, "window-shell-menu");
-    }
+        => await App.RunUiTaskAsync(
+            "MainWindow.ExitClick",
+            () => DispatchTrayCommandAsync(TrayCommandId.Exit, "window-shell-menu"));
 
     private void OnToggleTopMostClick(object? sender, RoutedEventArgs e)
     {
@@ -1201,17 +1333,18 @@ public partial class MainWindow : Window
             return;
         }
 
-        _overlayHostWindow = new OverlayHostWindow
+        var overlayHostWindow = new OverlayHostWindow
         {
             DataContext = VM.OverlayPresentation,
         };
-        _overlayHostWindow.Show();
-        var platformHandle = _overlayHostWindow.TryGetPlatformHandle();
+        overlayHostWindow.Show();
+        _overlayHostWindow = overlayHostWindow;
+        var platformHandle = overlayHostWindow.TryGetPlatformHandle();
         var handle = platformHandle?.Handle ?? nint.Zero;
         if (handle == nint.Zero)
         {
             await Dispatcher.UIThread.InvokeAsync(static () => { }, DispatcherPriority.Loaded);
-            platformHandle = _overlayHostWindow.TryGetPlatformHandle();
+            platformHandle = overlayHostWindow.TryGetPlatformHandle();
             handle = platformHandle?.Handle ?? nint.Zero;
         }
 
@@ -1260,7 +1393,9 @@ public partial class MainWindow : Window
             return;
         }
 
-        Dispatcher.UIThread.Post(() => ApplyOverlayHostState(e));
+        App.PostUiCallback(
+            "MainWindow.OverlayStateChanged.Apply",
+            () => ApplyOverlayHostState(e));
     }
 
     private void ApplyOverlayHostState(OverlayStateChangedEvent e)
@@ -1296,9 +1431,9 @@ public partial class MainWindow : Window
     }
 
     private async void OnTrayCommandInvoked(object? sender, TrayCommandEvent e)
-    {
-        await DispatchTrayCommandAsync(e.Command, e.Source);
-    }
+        => await App.RunUiTaskAsync(
+            "MainWindow.TrayCommandInvoked",
+            () => DispatchTrayCommandAsync(e.Command, e.Source));
 
     private async Task DispatchTrayCommandAsync(
         TrayCommandId command,
@@ -1362,6 +1497,7 @@ public partial class MainWindow : Window
     }
 
     private async void OnGlobalHotkeyTriggered(object? sender, GlobalHotkeyTriggeredEvent e)
+        => await App.RunUiTaskAsync("MainWindow.GlobalHotkeyTriggered", async () =>
     {
         if (VM is null)
         {
@@ -1388,7 +1524,7 @@ public partial class MainWindow : Window
                 "Global hotkey execution failed.",
                 ex);
         }
-    }
+    });
 
     private async Task HandleMinimizeToTrayAsync(CancellationToken cancellationToken = default)
     {
@@ -1632,7 +1768,9 @@ public partial class MainWindow : Window
 
     private void OnDialogErrorRaised(object? sender, DialogErrorRaisedEvent e)
     {
-        Dispatcher.UIThread.Post(() => EnqueueDialogError(e));
+        App.PostUiCallback(
+            "MainWindow.DialogError.Enqueue",
+            () => EnqueueDialogError(e));
     }
 
     private void EnqueueDialogError(DialogErrorRaisedEvent dialogError)
@@ -1656,7 +1794,9 @@ public partial class MainWindow : Window
 
         if (shouldPump)
         {
-            _ = ProcessDialogErrorQueueAsync();
+            App.ForgetTask(
+                ProcessDialogErrorQueueAsync(),
+                "MainWindow.DialogError.ProcessQueue");
         }
     }
 
@@ -1687,7 +1827,9 @@ public partial class MainWindow : Window
 
         if (shouldPump)
         {
-            _ = ProcessDialogErrorQueueAsync();
+            App.ForgetTask(
+                ProcessDialogErrorQueueAsync(),
+                "MainWindow.DialogError.ProcessQueue");
         }
     }
 
@@ -1734,7 +1876,27 @@ public partial class MainWindow : Window
     {
         var language = VM?.CurrentShellLanguage ?? UiLanguageCatalog.FallbackLanguage;
         App.Runtime.AchievementTrackerService.SetCurrentLanguage(language);
-        _ = App.Runtime.AchievementTrackerService.Unlock("CongratulationError");
+        try
+        {
+            var achievementResult = App.Runtime.AchievementTrackerService.Unlock("CongratulationError");
+            if (!achievementResult.Success)
+            {
+                await App.Runtime.DiagnosticsService.RecordFailedResultAsync(
+                    "MainWindow.DialogError.UnlockAchievement",
+                    achievementResult);
+            }
+        }
+        catch (Exception ex) when (App.ShouldIgnoreUnhandledException(ex))
+        {
+        }
+        catch (Exception ex)
+        {
+            await App.Runtime.DiagnosticsService.RecordErrorAsync(
+                "MainWindow.DialogError.UnlockAchievement",
+                "Failed to unlock error dialog achievement.",
+                ex);
+        }
+
         var localizedResult = DialogTextCatalog.LocalizeErrorResult(language, dialogError.Result);
         var isConnectFailed = dialogError.Result.Error?.Code == UiErrorCode.ConnectFailed;
         var chrome = DialogTextCatalog.CreateCatalog(

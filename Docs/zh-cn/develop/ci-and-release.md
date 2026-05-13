@@ -30,6 +30,20 @@
 - Linux Release：单个 `.AppImage`
 - macOS Release：`.dmg`
 
+### macOS 签名与 ad-hoc fallback
+
+macOS 正式包优先使用 Developer ID 签名和 Apple notarization。签名材料由这些 GitHub Secrets 提供：
+
+- `HGUANDL_SIGN_CERT_P12`
+- `HGUANDL_SIGN_CERT_PASSWD`
+- `HGUANDL_APPSTORE_KEYID`
+- `HGUANDL_APPSTORE_KEY`
+- `HGUANDL_APPSTORE_ISSUER`
+
+材料齐全时，workflow 导入证书、正式 `codesign` app bundle，随后执行 `notarytool`、`stapler` 和 `spctl`。材料不齐全时，workflow 输出 warning，并设置 `MACOS_ADHOC_CODESIGN_ENABLED=true`，由 `create-macos-app-dmg.sh` 使用 `codesign --sign -` 生成 ad-hoc signed `.dmg`。
+
+ad-hoc 包未公证，发布说明必须标注该状态。用户可能需要在“隐私与安全性”中手动允许，或确认来源后执行 `xattr -dr com.apple.quarantine /Applications/MAAUnified.app`。
+
 ## 布局要求
 
 CI 产物需要满足这些约定：
@@ -44,7 +58,7 @@ CI 产物需要满足这些约定：
 
 - Linux：baseline consistency gate 和完整 `MAAUnified.Tests`
 - Windows：平台能力契约和 native smoke gate
-- macOS：打包、签名可用性判断和 dmg 验证
+- macOS：打包、签名可用性判断、正式签名或 ad-hoc fallback 路径 warning、dmg 验证
 
 Linux 负责整体功能和 baseline 相关门禁；Windows、macOS 只补各自平台侧验证，不重复跑整套功能测试。
 
@@ -110,6 +124,7 @@ Windows GPU 探测遇到 `Indirect`、`Virtual`、`IDD` 一类 adapter 时，应
 4. 确认目标平台启动、布局和日志都正常。
 5. 创建或确认 GitHub Release。
 6. 跑正式发布 workflow，生成 Windows `.zip`、Linux `.AppImage`、macOS `.dmg`。
+7. 检查 macOS job 日志：若出现 ad-hoc fallback warning，发布说明中必须提醒用户该包未经过 Apple notarization。
 
 Windows GUI 启动或 GPU 问题，优先看发布目录下的 `debug/windows-gpu-probe.log` 和 `debug/avalonia-ui-startup.log`。
 

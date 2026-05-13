@@ -146,7 +146,9 @@ public partial class App : Avalonia.Application
             Program.RecordStartupStage("FrameworkInit.UiLagProbe.Started", "UI thread lag probe started.");
             desktop.Exit += OnDesktopExit;
 
-            _ = InitializeShellAsync(vm, mainWindow);
+            ForgetTask(
+                InitializeShellAsync(vm, mainWindow),
+                "App.InitializeShell.FireAndForget");
             Program.RecordStartupStage("FrameworkInit.InitializeShell.Scheduled", "Shell initialization scheduled.");
         }
         else
@@ -179,11 +181,13 @@ public partial class App : Avalonia.Application
             await vm.WaitForFirstScreenReadyAsync();
             firstScreenStopwatch.Stop();
             Program.RecordStartupStage("InitializeShell.FirstScreen.Ready", "First screen is interactive.");
-            _ = Runtime.DiagnosticsService.RecordNavigationTimingAsync(
-                "App.Startup.FirstScreen",
-                "FrameworkInit",
-                "FirstScreenReady",
-                firstScreenStopwatch.Elapsed.TotalMilliseconds);
+            ForgetTask(
+                Runtime.DiagnosticsService.RecordNavigationTimingAsync(
+                    "App.Startup.FirstScreen",
+                    "FrameworkInit",
+                    "FirstScreenReady",
+                    firstScreenStopwatch.Elapsed.TotalMilliseconds),
+                "App.Startup.FirstScreen.Timing");
             await startupTask;
             Program.RecordStartupStage(
                 "InitializeShell.End",
@@ -256,12 +260,14 @@ public partial class App : Avalonia.Application
         }
 
         _lastUiLagLoggedAtUtc = now;
-        _ = Runtime.DiagnosticsService.RecordUiLagAsync(
-            "App.UiThreadLagProbe",
-            lagMs,
-            thresholdMs: (int)UiLagThresholdMs,
-            probeIntervalMs: (int)UiLagProbeInterval.TotalMilliseconds,
-            minInterval: UiLagLogMinInterval);
+        ForgetTask(
+            Runtime.DiagnosticsService.RecordUiLagAsync(
+                "App.UiThreadLagProbe",
+                lagMs,
+                thresholdMs: (int)UiLagThresholdMs,
+                probeIntervalMs: (int)UiLagProbeInterval.TotalMilliseconds,
+                minInterval: UiLagLogMinInterval),
+            "App.UiThreadLagProbe.Record");
     }
 
     private static void OnDesktopExit(object? sender, ControlledApplicationLifetimeExitEventArgs e)
@@ -274,7 +280,84 @@ public partial class App : Avalonia.Application
             Runtime.UiLanguageCoordinator.LanguageChanged -= app.OnLegacyLocalizationLanguageChanged;
         }
 
-        _ = DisposeRuntimeOnExitAsync();
+        ForgetTask(DisposeRuntimeOnExitAsync(), "App.Exit.DisposeRuntime");
+    }
+
+    internal static void ForgetTask(Task task, string context)
+    {
+        ArgumentNullException.ThrowIfNull(task);
+        if (task.IsCompletedSuccessfully)
+        {
+            return;
+        }
+
+        _ = ObserveTaskAsync(task, context);
+    }
+
+    internal static async Task RunUiTaskAsync(string context, Func<Task> action)
+    {
+        ArgumentNullException.ThrowIfNull(action);
+        try
+        {
+            await action();
+        }
+        catch (Exception ex) when (ShouldIgnoreUnhandledException(ex))
+        {
+        }
+        catch (Exception ex)
+        {
+            await ReportGlobalExceptionAsync(context, ex, handled: true);
+        }
+    }
+
+    internal static void PostUiCallback(string context, Action action, DispatcherPriority? priority = null)
+    {
+        ArgumentNullException.ThrowIfNull(action);
+        try
+        {
+            Dispatcher.UIThread.Post(
+                () =>
+                {
+                    try
+                    {
+                        action();
+                    }
+                    catch (Exception ex) when (ShouldIgnoreUnhandledException(ex))
+                    {
+                    }
+                    catch (Exception ex)
+                    {
+                        ForgetTask(
+                            ReportGlobalExceptionAsync(context, ex, handled: true),
+                            $"{context}.Report");
+                    }
+                },
+                priority ?? DispatcherPriority.Normal);
+        }
+        catch (Exception ex) when (ShouldIgnoreUnhandledException(ex))
+        {
+        }
+        catch (Exception ex)
+        {
+            ForgetTask(
+                ReportGlobalExceptionAsync($"{context}.Post", ex, handled: true),
+                $"{context}.Post.Report");
+        }
+    }
+
+    private static async Task ObserveTaskAsync(Task task, string context)
+    {
+        try
+        {
+            await task;
+        }
+        catch (Exception ex) when (ShouldIgnoreUnhandledException(ex))
+        {
+        }
+        catch (Exception ex)
+        {
+            await ReportGlobalExceptionAsync(context, ex, handled: true);
+        }
     }
 
     private void ConfigureLegacyLocalizationResources()
@@ -288,28 +371,34 @@ public partial class App : Avalonia.Application
         var queueDelay = Stopwatch.StartNew();
         if (!Dispatcher.UIThread.CheckAccess())
         {
-            Dispatcher.UIThread.Post(
+            PostUiCallback(
+                "App.LegacyLocalization.LanguageChanged",
                 () =>
                 {
-                    _ = RecordAppTemporaryTimingAsync(
-                        "App.LegacyLocalization.QueueDelay",
-                        queueDelay.Elapsed.TotalMilliseconds,
-                        ("language", e.CurrentLanguage),
-                        ("postedFromUiThread", false));
+                    ForgetTask(
+                        RecordAppTemporaryTimingAsync(
+                            "App.LegacyLocalization.QueueDelay",
+                            queueDelay.Elapsed.TotalMilliseconds,
+                            ("language", e.CurrentLanguage),
+                            ("postedFromUiThread", false)),
+                        "App.LegacyLocalization.QueueDelay");
                     ApplyLegacyLocalizationResources(e.CurrentLanguage);
                 },
                 DispatcherPriority.Background);
             return;
         }
 
-        Dispatcher.UIThread.Post(
+        PostUiCallback(
+            "App.LegacyLocalization.LanguageChanged",
             () =>
             {
-                _ = RecordAppTemporaryTimingAsync(
-                    "App.LegacyLocalization.QueueDelay",
-                    queueDelay.Elapsed.TotalMilliseconds,
-                    ("language", e.CurrentLanguage),
-                    ("postedFromUiThread", true));
+                ForgetTask(
+                    RecordAppTemporaryTimingAsync(
+                        "App.LegacyLocalization.QueueDelay",
+                        queueDelay.Elapsed.TotalMilliseconds,
+                        ("language", e.CurrentLanguage),
+                        ("postedFromUiThread", true)),
+                    "App.LegacyLocalization.QueueDelay");
                 ApplyLegacyLocalizationResources(e.CurrentLanguage);
             },
             DispatcherPriority.Background);
@@ -320,11 +409,13 @@ public partial class App : Avalonia.Application
         var total = Stopwatch.StartNew();
         var step = Stopwatch.StartNew();
         var entries = AchievementTextCatalog.GetAllStrings(language);
-        _ = RecordAppTemporaryTimingAsync(
-            "App.LegacyLocalization.LoadCatalog",
-            step.Elapsed.TotalMilliseconds,
-            ("language", language),
-            ("entryCount", entries.Count));
+        ForgetTask(
+            RecordAppTemporaryTimingAsync(
+                "App.LegacyLocalization.LoadCatalog",
+                step.Elapsed.TotalMilliseconds,
+                ("language", language),
+                ("entryCount", entries.Count)),
+            "App.LegacyLocalization.LoadCatalog");
 
         step.Restart();
         var appliedCount = 0;
@@ -339,20 +430,24 @@ public partial class App : Avalonia.Application
             appliedCount++;
         }
 
-        _ = RecordAppTemporaryTimingAsync(
-            "App.LegacyLocalization.ApplyResources",
-            step.Elapsed.TotalMilliseconds,
-            ("language", language),
-            ("entryCount", entries.Count),
-            ("allowlistCount", LegacyLocalizationResourceKeys.Length),
-            ("appliedCount", appliedCount));
-        _ = RecordAppTemporaryTimingAsync(
-            "App.LegacyLocalization.Total",
-            total.Elapsed.TotalMilliseconds,
-            ("language", language),
-            ("entryCount", entries.Count),
-            ("allowlistCount", LegacyLocalizationResourceKeys.Length),
-            ("appliedCount", appliedCount));
+        ForgetTask(
+            RecordAppTemporaryTimingAsync(
+                "App.LegacyLocalization.ApplyResources",
+                step.Elapsed.TotalMilliseconds,
+                ("language", language),
+                ("entryCount", entries.Count),
+                ("allowlistCount", LegacyLocalizationResourceKeys.Length),
+                ("appliedCount", appliedCount)),
+            "App.LegacyLocalization.ApplyResources");
+        ForgetTask(
+            RecordAppTemporaryTimingAsync(
+                "App.LegacyLocalization.Total",
+                total.Elapsed.TotalMilliseconds,
+                ("language", language),
+                ("entryCount", entries.Count),
+                ("allowlistCount", LegacyLocalizationResourceKeys.Length),
+                ("appliedCount", appliedCount)),
+            "App.LegacyLocalization.Total");
     }
 
     private static Task RecordAppTemporaryTimingAsync(
@@ -398,7 +493,9 @@ public partial class App : Avalonia.Application
         var message =
             $"UI font fallback: language={resolution.Language}; expected={resolution.Expected}; actual={resolution.Actual}; reason={resolution.Reason}";
         Runtime.LogService.Warn(message);
-        _ = Runtime.DiagnosticsService.RecordEventAsync("App.UiFontFamily", message);
+        ForgetTask(
+            Runtime.DiagnosticsService.RecordEventAsync("App.UiFontFamily", message),
+            "App.UiFontFamily.RecordFallback");
     }
 
     private static async Task DisposeRuntimeOnExitAsync()
@@ -456,7 +553,9 @@ public partial class App : Avalonia.Application
         }
 
         e.Handled = true;
-        _ = ReportGlobalExceptionAsync("App.DispatcherUnhandledException", e.Exception, handled: true);
+        ForgetTask(
+            ReportGlobalExceptionAsync("App.DispatcherUnhandledException", e.Exception, handled: true),
+            "App.DispatcherUnhandledException.Report");
     }
 
     private static void OnTaskSchedulerUnobservedTaskException(object? sender, UnobservedTaskExceptionEventArgs e)
@@ -469,7 +568,9 @@ public partial class App : Avalonia.Application
         }
 
         e.SetObserved();
-        _ = ReportGlobalExceptionAsync("App.UnobservedTaskException", exception, handled: true);
+        ForgetTask(
+            ReportGlobalExceptionAsync("App.UnobservedTaskException", exception, handled: true),
+            "App.UnobservedTaskException.Report");
     }
 
     private static void OnCurrentDomainUnhandledException(object? sender, UnhandledExceptionEventArgs e)
@@ -481,7 +582,9 @@ public partial class App : Avalonia.Application
             return;
         }
 
-        _ = ReportGlobalExceptionAsync("AppDomain.CurrentDomain.UnhandledException", exception, handled: false, isTerminating: e.IsTerminating);
+        ForgetTask(
+            ReportGlobalExceptionAsync("AppDomain.CurrentDomain.UnhandledException", exception, handled: false, isTerminating: e.IsTerminating),
+            "AppDomain.CurrentDomain.UnhandledException.Report");
     }
 
     internal static bool ShouldIgnoreUnhandledException(Exception exception)

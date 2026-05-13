@@ -612,7 +612,14 @@ internal sealed class TmdsDbusLinuxPortalGlobalShortcutsClient : ILinuxPortalGlo
         }
 
         var client = (TmdsDbusLinuxPortalGlobalShortcutsClient)handlerState!;
-        client.Activated?.Invoke(client, signal);
+        try
+        {
+            client.Activated?.Invoke(client, signal);
+        }
+        catch
+        {
+            // Keep the DBus signal handler alive even if a subscriber fails.
+        }
     }
 
     private static void OnShortcutsChangedSignal(
@@ -627,7 +634,14 @@ internal sealed class TmdsDbusLinuxPortalGlobalShortcutsClient : ILinuxPortalGlo
         }
 
         var client = (TmdsDbusLinuxPortalGlobalShortcutsClient)handlerState!;
-        client.ShortcutsChanged?.Invoke(client, signal);
+        try
+        {
+            client.ShortcutsChanged?.Invoke(client, signal);
+        }
+        catch
+        {
+            // Keep the DBus signal handler alive even if a subscriber fails.
+        }
     }
 
     private sealed class RequestResponseAwaiter : IAsyncDisposable
@@ -1039,7 +1053,18 @@ public sealed class LinuxPortalGlobalHotkeyService : IGlobalHotkeyService
 
         if (!string.IsNullOrWhiteSpace(sessionHandle))
         {
-            await _client.CloseSessionAsync(sessionHandle, cancellationToken);
+            try
+            {
+                await _client.CloseSessionAsync(sessionHandle, cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch
+            {
+                // Closing stale portal sessions is best-effort; rebind/unregister should still return a platform result.
+            }
         }
     }
 
@@ -1293,11 +1318,23 @@ public sealed class CompositeGlobalHotkeyService : IGlobalHotkeyService
         _primary = primary;
         _fallback = fallback;
         _fallbackMessage = _fallback.Capability.Message;
-        _primary.Triggered += (_, e) => Triggered?.Invoke(this, e);
-        _fallback.Triggered += (_, e) => Triggered?.Invoke(this, e);
+        _primary.Triggered += (_, e) => RaiseTriggered(e);
+        _fallback.Triggered += (_, e) => RaiseTriggered(e);
     }
 
     public event EventHandler<GlobalHotkeyTriggeredEvent>? Triggered;
+
+    private void RaiseTriggered(GlobalHotkeyTriggeredEvent e)
+    {
+        try
+        {
+            Triggered?.Invoke(this, e);
+        }
+        catch
+        {
+            // Keep the underlying hotkey provider callback alive.
+        }
+    }
 
     public PlatformCapabilityStatus Capability
     {

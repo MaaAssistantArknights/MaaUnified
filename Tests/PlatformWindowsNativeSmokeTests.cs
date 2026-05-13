@@ -18,7 +18,7 @@ public sealed class PlatformWindowsNativeSmokeTests
             Environment.SetEnvironmentVariable("MAA_PLATFORM_FORCE_FALLBACK", null);
             var bundle = PlatformServicesFactory.CreateDefaults();
 
-            Assert.IsType<WindowsNotifyIconTrayService>(bundle.TrayService);
+            Assert.IsType<AvaloniaTrayIconTrayService>(bundle.TrayService);
             Assert.IsType<DesktopNotificationService>(bundle.NotificationService);
             Assert.True(bundle.HotkeyService is SharpHookGlobalHotkeyService or CompositeGlobalHotkeyService);
             Assert.IsType<CrossPlatformAutostartService>(bundle.AutostartService);
