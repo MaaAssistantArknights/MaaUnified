@@ -338,10 +338,9 @@ public sealed class SettingsModuleAK2FeatureTests
         Assert.False(vm.IsGpuCustomSelectionFieldsVisible);
         Assert.Single(vm.AvailableGpuOptions);
         Assert.Equal(GpuOptionKind.Disabled, vm.SelectedGpuOption?.Descriptor.Kind);
-        Assert.Contains(
-            "CPU OCR fallback",
-            vm.StartPerformanceValidationMessage,
-            StringComparison.Ordinal);
+        Assert.Equal(
+            vm.RootTexts["Settings.StartPerformance.Validation.GpuFallbackApplied"],
+            vm.StartPerformanceValidationMessage);
         Assert.False(fixture.Config.CurrentConfig.Profiles[fixture.Config.CurrentConfig.CurrentProfile].Values.ContainsKey(ConfigurationKeys.PerformanceUseGpu));
         Assert.False(fixture.Config.CurrentConfig.Profiles[fixture.Config.CurrentConfig.CurrentProfile].Values.ContainsKey(ConfigurationKeys.PerformancePreferredGpuDescription));
         Assert.False(fixture.Config.CurrentConfig.Profiles[fixture.Config.CurrentConfig.CurrentProfile].Values.ContainsKey(ConfigurationKeys.PerformancePreferredGpuInstancePath));
@@ -448,7 +447,12 @@ public sealed class SettingsModuleAK2FeatureTests
         Assert.Equal("pid", vm.PenguinId);
         Assert.Equal(90, vm.TaskTimeoutMinutes);
         Assert.Equal(1, vm.ReminderIntervalMinutes);
-        Assert.Contains("clamped", vm.StartPerformanceValidationMessage, StringComparison.OrdinalIgnoreCase);
+        var expectedWarning = string.Format(
+            CultureInfo.InvariantCulture,
+            vm.RootTexts["Settings.StartPerformance.Warning.EmulatorWaitSecondsClamped"],
+            9999,
+            600);
+        Assert.Equal(expectedWarning, vm.StartPerformanceValidationMessage);
     }
 
     [Fact]
