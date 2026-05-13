@@ -218,7 +218,7 @@ public sealed partial class SettingsPageViewModel
         var persistedWarnings = new List<string>();
         var persistedSnapshot = ReadStartPerformanceSnapshot(Runtime.ConfigurationService.CurrentConfig, persistedWarnings);
         var snapshot = BuildNormalizedStartPerformanceSnapshot();
-        ApplyStartPerformanceSnapshotWithoutDirtyTracking(snapshot);
+        ApplyStartPerformanceSnapshotWithoutDirtyTracking(snapshot, refreshGpuUi: false);
 
         var validation = ValidateStartPerformanceSnapshot(snapshot);
         if (!validation.Success)
@@ -256,7 +256,8 @@ public sealed partial class SettingsPageViewModel
 
         var readBackWarnings = new List<string>();
         var readBackSnapshot = ReadStartPerformanceSnapshot(Runtime.ConfigurationService.CurrentConfig, readBackWarnings);
-        ApplyStartPerformanceSnapshotWithoutDirtyTracking(readBackSnapshot);
+        ApplyStartPerformanceSnapshotWithoutDirtyTracking(readBackSnapshot, refreshGpuUi: false);
+        await RefreshGpuUiStateAsync(cancellationToken);
 
         HasPendingStartPerformanceChanges = false;
         StartPerformanceValidationMessage = readBackWarnings.Count > 0
