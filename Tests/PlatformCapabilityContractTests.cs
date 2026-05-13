@@ -210,6 +210,58 @@ public sealed class PlatformCapabilityContractTests
     }
 
     [Fact]
+    public async Task SharpHookGlobalHotkeyService_WhenAccessibilityApiDisabled_ReturnsPermissionDenied()
+    {
+        var hook = new ControlledKeyboardHook(Task.FromException(new InvalidOperationException(
+            "Failed running the global hook: ErrorAxApiDisabled (40)")));
+        var service = new SharpHookGlobalHotkeyService(() => hook, TimeSpan.Zero);
+
+        var result = await service.RegisterAsync("ShowGui", "Ctrl+Shift+Alt+M");
+
+        Assert.False(result.Success);
+        Assert.Equal(PlatformErrorCodes.HotkeyPermissionDenied, result.ErrorCode);
+        Assert.Contains("Accessibility API", result.Message, StringComparison.Ordinal);
+        Assert.False(service.TryGetRegisteredHotkey("ShowGui", out _));
+        Assert.True(hook.StopCallCount >= 1);
+    }
+
+    [Fact]
+    public async Task CompositeGlobalHotkeyService_WhenSharpHookFailsImmediately_UsesWindowScopedFallback()
+    {
+        var primary = new SharpHookGlobalHotkeyService(
+            () => new ControlledKeyboardHook(Task.FromException(new InvalidOperationException(
+                "Failed running the global hook: ErrorAxApiDisabled (40)"))),
+            TimeSpan.Zero);
+        var fallback = new WindowScopedHotkeyService();
+        var service = new CompositeGlobalHotkeyService(primary, fallback);
+
+        var result = await service.RegisterAsync("ShowGui", "Ctrl+Shift+Alt+M");
+
+        Assert.True(result.Success);
+        Assert.True(result.UsedFallback);
+        Assert.Equal("window-scoped", result.Provider);
+        Assert.True(service.TryGetRegisteredHotkey("ShowGui", out var registered));
+        Assert.Equal(PlatformExecutionMode.Fallback, registered.ExecutionMode);
+    }
+
+    [Fact]
+    public async Task SharpHookGlobalHotkeyService_WhenHookFaultsAfterStartup_StopsAndDisposesHook()
+    {
+        var hookTaskSource = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var hook = new ControlledKeyboardHook(hookTaskSource.Task);
+        var service = new SharpHookGlobalHotkeyService(() => hook, TimeSpan.FromMilliseconds(10));
+
+        var result = await service.RegisterAsync("ShowGui", "Ctrl+Shift+Alt+M");
+        Assert.True(result.Success);
+
+        hookTaskSource.SetException(new InvalidOperationException("background hook failure"));
+        await Task.Delay(50);
+
+        Assert.True(hook.StopCallCount >= 1);
+        Assert.True(hook.DisposeCallCount >= 1);
+    }
+
+    [Fact]
     public void PlatformServicesFactory_CreateDefaults_SelectsOverlayProviderByCurrentOs()
     {
         var bundle = PlatformServicesFactory.CreateDefaults();
@@ -811,5 +863,33 @@ public sealed class PlatformCapabilityContractTests
 
         public void Emit(string name, string gesture)
             => Triggered?.Invoke(this, new GlobalHotkeyTriggeredEvent(name, gesture, DateTimeOffset.UtcNow));
+    }
+
+    private sealed class ControlledKeyboardHook : IGlobalKeyboardHook
+    {
+        private readonly Task _runTask;
+
+        public ControlledKeyboardHook(Task runTask)
+        {
+            _runTask = runTask;
+        }
+
+        public event EventHandler<SharpHook.KeyboardHookEventArgs>? KeyPressed;
+
+        public int StopCallCount { get; private set; }
+
+        public int DisposeCallCount { get; private set; }
+
+        public Task RunAsync() => _runTask;
+
+        public void Stop()
+        {
+            StopCallCount += 1;
+        }
+
+        public void Dispose()
+        {
+            DisposeCallCount += 1;
+        }
     }
 }

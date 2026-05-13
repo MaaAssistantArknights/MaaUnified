@@ -36,6 +36,8 @@ public partial class MainWindow : Window
     private const double BaseWindowHeight = 900d;
     private const double BaseWindowMinWidth = 1080d;
     private const double BaseWindowMinHeight = 620d;
+    private const double MacOsHiDpiHeightBoostPerScaleStep = 0.12d;
+    private const double MacOsHiDpiHeightBoostMax = 1.18d;
     private const int ResponsiveMarginProgressSteps = 12;
     private const int ResponsiveWidthProgressSteps = 24;
     private static readonly TimeSpan ResizeSettleDelay = TimeSpan.FromMilliseconds(120);
@@ -101,7 +103,8 @@ public partial class MainWindow : Window
     private double _pendingAdaptiveLayoutWidth;
     private double _pendingAdaptiveLayoutHeight;
     private bool _hasAppliedUiScaleToWindowBounds;
-    private double _lastAppliedUiScaleFactor = 1d;
+    private double _lastAppliedWindowWidthScale = 1d;
+    private double _lastAppliedWindowHeightScale = 1d;
     private DispatcherTimer? _resizeSettleTimer;
     private readonly object _dialogErrorGate = new();
     private readonly Queue<DialogErrorRaisedEvent> _pendingDialogErrors = [];
@@ -453,6 +456,14 @@ public partial class MainWindow : Window
         if (e.Property == IsVisibleProperty || e.Property == WindowStateProperty)
         {
             UpdateAchievementToastVisibility();
+        }
+
+        if (string.Equals(e.Property.Name, nameof(RenderScaling), StringComparison.Ordinal))
+        {
+            ApplyUiScaleToWindowBounds(preserveLogicalSize: true);
+            UpdateAdaptiveLayoutMode(flushAllHosts: true);
+            RecordUiScaleDiagnostics("render-scaling-changed");
+            return;
         }
 
         if (e.Property == WindowStateProperty)
@@ -814,25 +825,30 @@ public partial class MainWindow : Window
     {
         try
         {
-            var scale = GetEffectiveUiScaleFactor();
-            if (_hasAppliedUiScaleToWindowBounds && Math.Abs(_lastAppliedUiScaleFactor - scale) < 0.001d)
+            var widthScale = ComputeWindowWidthScale(GetEffectiveUiScaleFactor());
+            var heightScale = ComputeWindowHeightScale(GetEffectiveUiScaleFactor(), RenderScaling, OperatingSystem.IsMacOS());
+            if (_hasAppliedUiScaleToWindowBounds
+                && Math.Abs(_lastAppliedWindowWidthScale - widthScale) < 0.001d
+                && Math.Abs(_lastAppliedWindowHeightScale - heightScale) < 0.001d)
             {
                 return;
             }
 
-            var previousScale = _hasAppliedUiScaleToWindowBounds ? _lastAppliedUiScaleFactor : 1d;
-            var logicalWidth = preserveLogicalSize ? ResolveLogicalWindowSize(Width, previousScale, BaseWindowWidth) : BaseWindowWidth;
-            var logicalHeight = preserveLogicalSize ? ResolveLogicalWindowSize(Height, previousScale, BaseWindowHeight) : BaseWindowHeight;
+            var previousWidthScale = _hasAppliedUiScaleToWindowBounds ? _lastAppliedWindowWidthScale : 1d;
+            var previousHeightScale = _hasAppliedUiScaleToWindowBounds ? _lastAppliedWindowHeightScale : 1d;
+            var logicalWidth = preserveLogicalSize ? ResolveLogicalWindowSize(Width, previousWidthScale, BaseWindowWidth) : BaseWindowWidth;
+            var logicalHeight = preserveLogicalSize ? ResolveLogicalWindowSize(Height, previousHeightScale, BaseWindowHeight) : BaseWindowHeight;
 
-            MinWidth = BaseWindowMinWidth * scale;
-            MinHeight = BaseWindowMinHeight * scale;
+            MinWidth = BaseWindowMinWidth * widthScale;
+            MinHeight = BaseWindowMinHeight * heightScale;
             if (WindowState == WindowState.Normal)
             {
-                Width = Math.Max(MinWidth, logicalWidth * scale);
-                Height = Math.Max(MinHeight, logicalHeight * scale);
+                Width = Math.Max(MinWidth, logicalWidth * widthScale);
+                Height = Math.Max(MinHeight, logicalHeight * heightScale);
             }
 
-            _lastAppliedUiScaleFactor = scale;
+            _lastAppliedWindowWidthScale = widthScale;
+            _lastAppliedWindowHeightScale = heightScale;
             _hasAppliedUiScaleToWindowBounds = true;
             FitToCurrentScreenWorkingArea();
         }
@@ -852,6 +868,32 @@ public partial class MainWindow : Window
         return scaledValue / scale;
     }
 
+    internal static double ComputeWindowWidthScale(double effectiveUiScaleFactor)
+    {
+        return NormalizeScaleFactor(effectiveUiScaleFactor);
+    }
+
+    internal static double ComputeWindowHeightScale(double effectiveUiScaleFactor, double renderScaling, bool isMacOS)
+    {
+        var uiScale = NormalizeScaleFactor(effectiveUiScaleFactor);
+        if (!isMacOS)
+        {
+            return uiScale;
+        }
+
+        var normalizedRenderScaling = NormalizeScaleFactor(renderScaling);
+        var hiDpiHeightBoost = Math.Clamp(
+            1d + Math.Max(0d, normalizedRenderScaling - 1d) * MacOsHiDpiHeightBoostPerScaleStep,
+            1d,
+            MacOsHiDpiHeightBoostMax);
+        return uiScale * hiDpiHeightBoost;
+    }
+
+    private static double NormalizeScaleFactor(double scale)
+    {
+        return double.IsFinite(scale) && scale > 0d ? scale : 1d;
+    }
+
     private void RecordUiScaleDiagnostics(string stage)
     {
         try
@@ -859,7 +901,7 @@ public partial class MainWindow : Window
             var screen = Screens.ScreenFromWindow(this) ?? Screens.Primary;
             var workingArea = screen?.WorkingArea;
             var message = FormattableString.Invariant(
-                $"stage={stage}; platform={(OperatingSystem.IsWindows() ? "Windows" : "Other")}; effectiveUiScale={VM?.EffectiveUiScaleFactor ?? 1d:0.###}; renderScaling={RenderScaling:0.###}; screenScaling={screen?.Scaling ?? 0d:0.###}; clientDip={ClientSize.Width:0.#}x{ClientSize.Height:0.#}; boundsDip={Bounds.Width:0.#}x{Bounds.Height:0.#}; workingAreaPx={workingArea?.Width ?? 0}x{workingArea?.Height ?? 0}");
+                $"stage={stage}; platform={(OperatingSystem.IsWindows() ? "Windows" : OperatingSystem.IsMacOS() ? "MacOS" : "Other")}; effectiveUiScale={VM?.EffectiveUiScaleFactor ?? 1d:0.###}; renderScaling={RenderScaling:0.###}; screenScaling={screen?.Scaling ?? 0d:0.###}; clientDip={ClientSize.Width:0.#}x{ClientSize.Height:0.#}; boundsDip={Bounds.Width:0.#}x{Bounds.Height:0.#}; workingAreaPx={workingArea?.Width ?? 0}x{workingArea?.Height ?? 0}");
             Program.RecordStartupStage("MainWindow.UiScaleDiagnostics", message);
             App.ForgetTask(
                 App.Runtime.DiagnosticsService.RecordEventAsync("App.Window.UiScaleDiagnostics", message),

@@ -95,7 +95,10 @@ public sealed class MainShellViewModel : ObservableObject
     private bool _windowTitleScrollable;
     private int _windowTitleScrollOffset;
     private CancellationTokenSource? _windowUpdateOverlayAnimationCts;
-    private double _effectiveUiScaleFactor = ComputeEffectiveUiScaleFactor(StartupShellSnapshot.Default.UiScalePercent, OperatingSystem.IsWindows());
+    private double _effectiveUiScaleFactor = ComputeEffectiveUiScaleFactor(
+        StartupShellSnapshot.Default.UiScalePercent,
+        OperatingSystem.IsWindows(),
+        OperatingSystem.IsMacOS());
     private Bitmap? _shellBackgroundImage;
     private double _shellBackgroundOpacity = 0.45;
     private int _shellBackgroundBlur = 12;
@@ -443,10 +446,10 @@ public sealed class MainShellViewModel : ObservableObject
 
     public bool HasMultipleWindowUpdates => HasWindowVersionUpdateInfo && HasWindowResourceUpdateInfo;
 
-    public static double ComputeEffectiveUiScaleFactor(int uiScalePercent, bool isWindows)
+    public static double ComputeEffectiveUiScaleFactor(int uiScalePercent, bool isWindows, bool isMacOS = false)
     {
         var userScale = Math.Clamp(uiScalePercent, 70, 140) / 100d;
-        var platformScale = isWindows ? 0.9d : 1d;
+        var platformScale = (isWindows || isMacOS) ? 0.9d : 1d;
         return userScale * platformScale;
     }
 
@@ -1084,7 +1087,10 @@ public sealed class MainShellViewModel : ObservableObject
         _rootLogTimeFormat = snapshot.LogItemDateFormatString;
         RootTexts.Language = language;
         RefreshRootTextState();
-        EffectiveUiScaleFactor = ComputeEffectiveUiScaleFactor(snapshot.UiScalePercent, OperatingSystem.IsWindows());
+        EffectiveUiScaleFactor = ComputeEffectiveUiScaleFactor(
+            snapshot.UiScalePercent,
+            OperatingSystem.IsWindows(),
+            OperatingSystem.IsMacOS());
 
         if (Avalonia.Application.Current is not null)
         {
@@ -2742,7 +2748,10 @@ public sealed class MainShellViewModel : ObservableObject
             lockAcquired = true;
 
             AppliedTheme = snapshot.Theme;
-            EffectiveUiScaleFactor = ComputeEffectiveUiScaleFactor(snapshot.UiScalePercent, OperatingSystem.IsWindows());
+            EffectiveUiScaleFactor = ComputeEffectiveUiScaleFactor(
+                snapshot.UiScalePercent,
+                OperatingSystem.IsWindows(),
+                OperatingSystem.IsMacOS());
             _rootLogTimeFormat = snapshot.LogItemDateFormatString;
             RootTexts.Language = CurrentShellLanguage;
             RefreshRootTextState();
@@ -2769,7 +2778,7 @@ public sealed class MainShellViewModel : ObservableObject
             ApplyShellBackgroundImage(snapshot.BackgroundImagePath);
             await RecordEventAsync(
                 "App.Gui.Apply.UiScale",
-                $"platform={(OperatingSystem.IsWindows() ? "Windows" : "Other")}; uiScalePercent={snapshot.UiScalePercent}; platformBase={(OperatingSystem.IsWindows() ? "0.9" : "1.0")}; effectiveUiScale={EffectiveUiScaleFactor.ToString("0.###", CultureInfo.InvariantCulture)}",
+                $"platform={(OperatingSystem.IsWindows() ? "Windows" : OperatingSystem.IsMacOS() ? "MacOS" : "Other")}; uiScalePercent={snapshot.UiScalePercent}; platformBase={((OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()) ? "0.9" : "1.0")}; effectiveUiScale={EffectiveUiScaleFactor.ToString("0.###", CultureInfo.InvariantCulture)}",
                 cancellationToken);
 
             await RefreshCapabilitySummaryAsync(cancellationToken);

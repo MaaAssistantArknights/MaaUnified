@@ -983,20 +983,25 @@ public sealed class MainShellViewModelTests
     }
 
     [Theory]
-    [InlineData(100, true, 0.9)]
-    [InlineData(80, true, 0.72)]
-    [InlineData(130, true, 1.17)]
-    [InlineData(200, true, 1.26)]
-    [InlineData(100, false, 1.0)]
-    [InlineData(80, false, 0.8)]
-    [InlineData(40, false, 0.7)]
-    [InlineData(200, false, 1.4)]
+    [InlineData(100, true, false, 0.9)]
+    [InlineData(80, true, false, 0.72)]
+    [InlineData(130, true, false, 1.17)]
+    [InlineData(200, true, false, 1.26)]
+    [InlineData(100, false, true, 0.9)]
+    [InlineData(80, false, true, 0.72)]
+    [InlineData(130, false, true, 1.17)]
+    [InlineData(200, false, true, 1.26)]
+    [InlineData(100, false, false, 1.0)]
+    [InlineData(80, false, false, 0.8)]
+    [InlineData(40, false, false, 0.7)]
+    [InlineData(200, false, false, 1.4)]
     public void ComputeEffectiveUiScaleFactor_AppliesPlatformBaseAndClamp(
         int uiScalePercent,
         bool isWindows,
+        bool isMacOS,
         double expected)
     {
-        var actual = MainShellViewModel.ComputeEffectiveUiScaleFactor(uiScalePercent, isWindows);
+        var actual = MainShellViewModel.ComputeEffectiveUiScaleFactor(uiScalePercent, isWindows, isMacOS);
 
         Assert.Equal(expected, actual, precision: 6);
     }

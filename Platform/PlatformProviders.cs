@@ -37,6 +37,32 @@ internal static class HotkeyGestureNormalizer
     }
 }
 
+internal interface IGlobalKeyboardHook : IDisposable
+{
+    event EventHandler<KeyboardHookEventArgs>? KeyPressed;
+
+    Task RunAsync();
+
+    void Stop();
+}
+
+internal sealed class SharpHookEventLoopKeyboardHook : IGlobalKeyboardHook
+{
+    private readonly EventLoopGlobalHook _inner = new(GlobalHookType.Keyboard);
+
+    public event EventHandler<KeyboardHookEventArgs>? KeyPressed
+    {
+        add => _inner.KeyPressed += value;
+        remove => _inner.KeyPressed -= value;
+    }
+
+    public Task RunAsync() => _inner.RunAsync();
+
+    public void Stop() => _inner.Stop();
+
+    public void Dispose() => _inner.Dispose();
+}
+
 public sealed class WindowsNotifyIconTrayService : ITrayService
 {
     private const nint DefaultAppIconId = 32512; // IDI_APPLICATION
@@ -1162,10 +1188,13 @@ public sealed class DesktopNotificationService : INotificationService
 
 public sealed class SharpHookGlobalHotkeyService : IGlobalHotkeyService, IDisposable
 {
+    private static readonly TimeSpan DefaultStartupProbeWindow = TimeSpan.FromMilliseconds(250);
     private readonly object _syncRoot = new();
     private readonly Dictionary<string, RegisteredHotkey> _registeredByName = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, string> _registeredByChord = new(StringComparer.OrdinalIgnoreCase);
-    private EventLoopGlobalHook? _hook;
+    private readonly Func<IGlobalKeyboardHook> _hookFactory;
+    private readonly TimeSpan _startupProbeWindow;
+    private IGlobalKeyboardHook? _hook;
     private Task? _hookTask;
 
     public PlatformCapabilityStatus Capability => new(
@@ -1176,6 +1205,14 @@ public sealed class SharpHookGlobalHotkeyService : IGlobalHotkeyService, IDispos
         FallbackMode: "window-scoped");
 
     public event EventHandler<GlobalHotkeyTriggeredEvent>? Triggered;
+
+    internal SharpHookGlobalHotkeyService(
+        Func<IGlobalKeyboardHook>? hookFactory = null,
+        TimeSpan? startupProbeWindow = null)
+    {
+        _hookFactory = hookFactory ?? (() => new SharpHookEventLoopKeyboardHook());
+        _startupProbeWindow = startupProbeWindow ?? DefaultStartupProbeWindow;
+    }
 
     public static bool TryCreate([NotNullWhen(true)] out SharpHookGlobalHotkeyService? service)
     {
@@ -1194,25 +1231,25 @@ public sealed class SharpHookGlobalHotkeyService : IGlobalHotkeyService, IDispos
         return true;
     }
 
-    public Task<PlatformOperationResult> RegisterAsync(string name, string gesture, CancellationToken cancellationToken = default)
+    public async Task<PlatformOperationResult> RegisterAsync(string name, string gesture, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         if (string.IsNullOrWhiteSpace(name))
         {
-            return Task.FromResult(PlatformOperation.Failed(
+            return PlatformOperation.Failed(
                 Capability.Provider,
                 "Hotkey name cannot be empty.",
                 PlatformErrorCodes.HotkeyNameMissing,
-                "hotkey.register"));
+                "hotkey.register");
         }
 
         if (!TryParseGesture(gesture, out var binding))
         {
-            return Task.FromResult(PlatformOperation.Failed(
+            return PlatformOperation.Failed(
                 Capability.Provider,
                 "Invalid hotkey gesture format.",
                 PlatformErrorCodes.HotkeyInvalidGesture,
-                "hotkey.register"));
+                "hotkey.register");
         }
 
         lock (_syncRoot)
@@ -1225,18 +1262,18 @@ public sealed class SharpHookGlobalHotkeyService : IGlobalHotkeyService, IDispos
             if (_registeredByChord.TryGetValue(binding.ChordKey, out var existingName)
                 && !string.Equals(existingName, name, StringComparison.OrdinalIgnoreCase))
             {
-                return Task.FromResult(PlatformOperation.Failed(
+                return PlatformOperation.Failed(
                     Capability.Provider,
                     "Hotkey gesture already in use.",
                     PlatformErrorCodes.HotkeyConflict,
-                    "hotkey.register"));
+                    "hotkey.register");
             }
 
             _registeredByName[name] = binding with { Name = name };
             _registeredByChord[binding.ChordKey] = name;
         }
 
-        var hookResult = EnsureHookStarted();
+        var hookResult = await EnsureHookStartedAsync(cancellationToken);
         if (!hookResult.Success)
         {
             lock (_syncRoot)
@@ -1248,13 +1285,13 @@ public sealed class SharpHookGlobalHotkeyService : IGlobalHotkeyService, IDispos
                 }
             }
 
-            return Task.FromResult(hookResult);
+            return hookResult;
         }
 
-        return Task.FromResult(PlatformOperation.NativeSuccess(
+        return PlatformOperation.NativeSuccess(
             Capability.Provider,
             $"Global hotkey registered: {name} => {binding.NormalizedGesture}",
-            "hotkey.register"));
+            "hotkey.register");
     }
 
     public Task<PlatformOperationResult> UnregisterAsync(string name, CancellationToken cancellationToken = default)
@@ -1305,8 +1342,11 @@ public sealed class SharpHookGlobalHotkeyService : IGlobalHotkeyService, IDispos
         }
     }
 
-    private PlatformOperationResult EnsureHookStarted()
+    private async Task<PlatformOperationResult> EnsureHookStartedAsync(CancellationToken cancellationToken)
     {
+        IGlobalKeyboardHook? createdHook = null;
+        Task? createdHookTask = null;
+
         lock (_syncRoot)
         {
             if (_hook is not null)
@@ -1316,26 +1356,39 @@ public sealed class SharpHookGlobalHotkeyService : IGlobalHotkeyService, IDispos
 
             try
             {
-                _hook = new EventLoopGlobalHook(GlobalHookType.Keyboard);
-                _hook.KeyPressed += OnHookKeyPressed;
-                _hookTask = _hook.RunAsync();
-                _hookTask.ContinueWith(OnHookCompleted, TaskScheduler.Default);
-                return PlatformOperation.NativeSuccess(Capability.Provider, "Global hook started.", "hotkey.hook");
+                createdHook = _hookFactory();
+                createdHook.KeyPressed += OnHookKeyPressed;
+                createdHookTask = createdHook.RunAsync();
+                _hook = createdHook;
+                _hookTask = createdHookTask;
+                _hookTask.ContinueWith(
+                    ObserveHookCompletion,
+                    CancellationToken.None,
+                    TaskContinuationOptions.ExecuteSynchronously,
+                    TaskScheduler.Default);
             }
             catch (Exception ex)
             {
                 StopHookUnsafe();
-                var errorCode = ex.Message.Contains("permission", StringComparison.OrdinalIgnoreCase)
-                                || ex.Message.Contains("access", StringComparison.OrdinalIgnoreCase)
-                    ? PlatformErrorCodes.HotkeyPermissionDenied
-                    : PlatformErrorCodes.HotkeyHookStartFailed;
-                return PlatformOperation.Failed(
-                    Capability.Provider,
-                    $"Failed to start global hotkey hook: {ex.Message}",
-                    errorCode,
-                    "hotkey.hook");
+                return CreateHookFailureResult(ex);
             }
         }
+
+        var startupFailure = await WaitForImmediateHookFailureAsync(createdHookTask!, cancellationToken);
+        if (startupFailure is null)
+        {
+            return PlatformOperation.NativeSuccess(Capability.Provider, "Global hook started.", "hotkey.hook");
+        }
+
+        lock (_syncRoot)
+        {
+            if (ReferenceEquals(_hook, createdHook) || ReferenceEquals(_hookTask, createdHookTask))
+            {
+                StopHookUnsafe();
+            }
+        }
+
+        return CreateHookFailureResult(startupFailure);
     }
 
     private void StopHookIfIdle()
@@ -1371,15 +1424,94 @@ public sealed class SharpHookGlobalHotkeyService : IGlobalHotkeyService, IDispos
         }
     }
 
-    private void OnHookCompleted(Task hookTask)
+    private async Task<Exception?> WaitForImmediateHookFailureAsync(Task hookTask, CancellationToken cancellationToken)
     {
-        if (hookTask.IsFaulted)
+        if (_startupProbeWindow <= TimeSpan.Zero)
         {
-            lock (_syncRoot)
+            return ExtractHookFailure(hookTask);
+        }
+
+        if (!hookTask.IsCompleted)
+        {
+            var delayTask = Task.Delay(_startupProbeWindow, cancellationToken);
+            var completedTask = await Task.WhenAny(hookTask, delayTask);
+            if (ReferenceEquals(completedTask, delayTask))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                return null;
+            }
+        }
+
+        return ExtractHookFailure(hookTask);
+    }
+
+    private void ObserveHookCompletion(Task hookTask)
+    {
+        var failure = ExtractHookFailure(hookTask);
+        if (failure is null)
+        {
+            return;
+        }
+
+        lock (_syncRoot)
+        {
+            if (ReferenceEquals(_hookTask, hookTask))
             {
                 StopHookUnsafe();
             }
         }
+    }
+
+    private static Exception? ExtractHookFailure(Task hookTask)
+    {
+        if (hookTask.IsFaulted)
+        {
+            var aggregate = hookTask.Exception;
+            return aggregate?.InnerExceptions.Count == 1
+                ? aggregate.InnerExceptions[0]
+                : aggregate;
+        }
+
+        return hookTask.IsCanceled
+            ? new OperationCanceledException("Global hotkey hook task was canceled.")
+            : null;
+    }
+
+    private PlatformOperationResult CreateHookFailureResult(Exception ex)
+    {
+        return PlatformOperation.Failed(
+            Capability.Provider,
+            $"Failed to start global hotkey hook: {DescribeHookFailure(ex)}",
+            GetHookFailureErrorCode(ex),
+            "hotkey.hook");
+    }
+
+    private static string DescribeHookFailure(Exception ex)
+    {
+        return IsAccessibilityApiDisabled(ex)
+            ? "macOS Accessibility API is disabled for global keyboard hooks."
+            : ex.Message;
+    }
+
+    private static string GetHookFailureErrorCode(Exception ex)
+    {
+        return IsPermissionDenied(ex)
+            ? PlatformErrorCodes.HotkeyPermissionDenied
+            : PlatformErrorCodes.HotkeyHookStartFailed;
+    }
+
+    private static bool IsPermissionDenied(Exception ex)
+    {
+        return IsAccessibilityApiDisabled(ex)
+               || ex.Message.Contains("permission", StringComparison.OrdinalIgnoreCase)
+               || ex.Message.Contains("access", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsAccessibilityApiDisabled(Exception ex)
+    {
+        return ex.Message.Contains("ErrorAxApiDisabled", StringComparison.OrdinalIgnoreCase)
+               || ex.Message.Contains("ax api", StringComparison.OrdinalIgnoreCase)
+               || ex.Message.Contains("accessibility", StringComparison.OrdinalIgnoreCase);
     }
 
     private void OnHookKeyPressed(object? sender, KeyboardHookEventArgs e)

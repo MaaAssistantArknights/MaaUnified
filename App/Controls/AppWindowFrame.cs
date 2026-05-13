@@ -82,6 +82,11 @@ public class AppWindowFrame : ContentControl
             nameof(EffectiveHorizontalContentInset),
             frame => frame.EffectiveHorizontalContentInset);
 
+    public static readonly DirectProperty<AppWindowFrame, Thickness> EffectiveResizeGripMarginProperty =
+        AvaloniaProperty.RegisterDirect<AppWindowFrame, Thickness>(
+            nameof(EffectiveResizeGripMargin),
+            frame => frame.EffectiveResizeGripMargin);
+
     private static readonly (string PartName, WindowEdge Edge)[] ResizeGripParts =
     [
         ("PART_ResizeNorth", WindowEdge.North),
@@ -109,6 +114,8 @@ public class AppWindowFrame : ContentControl
     private bool _hasCapturedHostMaxHeight;
     private double _initialHostMaxHeight = double.PositiveInfinity;
     private AppWindowFrameHorizontalInset _effectiveHorizontalContentInset;
+    private readonly bool _preferOuterResizeGrips;
+    private Thickness _effectiveResizeGripMargin;
 
     static AppWindowFrame()
     {
@@ -119,12 +126,14 @@ public class AppWindowFrame : ContentControl
 
     public AppWindowFrame()
     {
+        _preferOuterResizeGrips = OperatingSystem.IsMacOS();
         HasHeaderContent = HeaderContent is not null;
         HasActions = ActionsContent is not null;
         AddHandler(PointerReleasedEvent, OnPointerReleasedForInputFocusDismiss, RoutingStrategies.Bubble, handledEventsToo: true);
         UpdateWindowControlsPlacementState();
         UpdateModeState();
         UpdateEffectiveHorizontalContentInset();
+        UpdateEffectiveResizeGripMargin();
     }
 
     public string Title
@@ -300,6 +309,15 @@ public class AppWindowFrame : ContentControl
             value);
     }
 
+    public Thickness EffectiveResizeGripMargin
+    {
+        get => _effectiveResizeGripMargin;
+        private set => SetAndRaise(
+            EffectiveResizeGripMarginProperty,
+            ref _effectiveResizeGripMargin,
+            value);
+    }
+
     protected override void OnApplyTemplate(TemplateAppliedEventArgs e)
     {
         DetachTemplateEvents();
@@ -422,6 +440,7 @@ public class AppWindowFrame : ContentControl
         if (change.Property == ShellMarginProperty)
         {
             UpdateEffectiveHorizontalContentInset();
+            UpdateEffectiveResizeGripMargin();
             return;
         }
 
@@ -726,6 +745,11 @@ public class AppWindowFrame : ContentControl
         EffectiveHorizontalContentInset = CalculateEffectiveHorizontalContentInset();
     }
 
+    private void UpdateEffectiveResizeGripMargin()
+    {
+        EffectiveResizeGripMargin = ResolveResizeGripMargin(ShellMargin, _preferOuterResizeGrips);
+    }
+
     private void UpdateChromeLayoutTransform()
     {
         var scale = ChromeScaleFactor;
@@ -746,6 +770,15 @@ public class AppWindowFrame : ContentControl
         return new AppWindowFrameHorizontalInset(
             shellMargin.Left + frameBorder.Left + framePadding.Left,
             shellMargin.Right + frameBorder.Right + framePadding.Right);
+    }
+
+    internal static Thickness ResolveResizeGripMargin(Thickness shellMargin, bool preferOuterResizeGrips)
+    {
+        // macOS borderless windows rely on client-area hit targets for resize,
+        // so the grips need to stay on the true outer edge instead of the inset shadow gutter.
+        return preferOuterResizeGrips
+            ? default
+            : shellMargin;
     }
 
     private void DetachTemplateEvents()
