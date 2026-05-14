@@ -6,8 +6,10 @@ namespace MAAUnified.App.ViewModels;
 public sealed class AchievementToastItemViewModel : ObservableObject, IDisposable
 {
     private const double CloseCountdownSeconds = 7d;
+    private static readonly TimeSpan InitialPointerPauseSuppressionWindow = TimeSpan.FromMilliseconds(500);
     private readonly Action<string>? _dismissCallback;
     private readonly DispatcherTimer? _closeCountdownTimer;
+    private readonly DateTimeOffset _createdAtUtc;
     private DateTimeOffset _lastCloseCountdownTickUtc;
     private double _remainingCloseCountdownSeconds = CloseCountdownSeconds;
     private double _closeCountdownProgress;
@@ -26,6 +28,8 @@ public sealed class AchievementToastItemViewModel : ObservableObject, IDisposabl
         DateTimeOffset unlockedAtUtc,
         Action<string>? dismissCallback = null)
     {
+        var now = DateTimeOffset.UtcNow;
+        _createdAtUtc = now;
         Id = id;
         CelebrateText = celebrateText;
         Title = title;
@@ -43,7 +47,7 @@ public sealed class AchievementToastItemViewModel : ObservableObject, IDisposabl
                 Interval = TimeSpan.FromMilliseconds(50),
             };
             _closeCountdownTimer.Tick += OnCloseCountdownTick;
-            _lastCloseCountdownTickUtc = DateTimeOffset.UtcNow;
+            _lastCloseCountdownTickUtc = now;
             _closeCountdownTimer.Start();
         }
 
@@ -66,6 +70,8 @@ public sealed class AchievementToastItemViewModel : ObservableObject, IDisposabl
 
     public bool IsCloseCountdownVisible => AutoClose;
 
+    internal bool IsCloseCountdownPaused => _isCloseCountdownPaused;
+
     public bool IsAnimationHidden
     {
         get => _isAnimationHidden;
@@ -87,6 +93,11 @@ public sealed class AchievementToastItemViewModel : ObservableObject, IDisposabl
     public void PauseCloseCountdown()
     {
         if (!AutoClose || _isDisposed)
+        {
+            return;
+        }
+
+        if (DateTimeOffset.UtcNow - _createdAtUtc < InitialPointerPauseSuppressionWindow)
         {
             return;
         }

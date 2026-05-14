@@ -1001,6 +1001,7 @@
                              IsVisible="{Binding ShowThumbnail}" />
                       <Popup Grid.Row="1"
                              Classes="task-queue-log-image-popup"
+                             controls:PopupUiScale.UseTopLevelUiScale="True"
                              PlacementTarget="{Binding ElementName=LogThumbnail}"
                              Placement="Left"
                              HorizontalOffset="-8"
@@ -1061,6 +1062,7 @@
 
     <Popup x:Name="TaskQueueActionPopup"
            Classes="task-queue-action-popup"
+           controls:PopupUiScale.UseTopLevelUiScale="True"
            IsLightDismissEnabled="True"
            Placement="BottomEdgeAlignedLeft"
            VerticalOffset="4"

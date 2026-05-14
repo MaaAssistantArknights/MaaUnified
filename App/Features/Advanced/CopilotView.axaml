@@ -511,6 +511,7 @@
                   <controls:TooltipHint Margin="{DynamicResource MAA.Thickness.MarginLeftTooltip}"
                                         Tip="{Binding UserAdditionalFormatTip}" />
                   <Popup IsOpen="{Binding IsUserAdditionalPopupOpen}"
+                         controls:PopupUiScale.UseTopLevelUiScale="True"
                          Placement="Bottom"
                          PlacementTarget="{Binding ElementName=UserAdditionalButton}"
                          IsLightDismissEnabled="True">
@@ -740,6 +741,7 @@
 
     <Popup x:Name="CopilotListActionPopup"
            Classes="copilot-list-action-popup"
+           controls:PopupUiScale.UseTopLevelUiScale="True"
            IsLightDismissEnabled="True"
            Placement="Pointer"
            Closed="OnCopilotListActionPopupClosed">

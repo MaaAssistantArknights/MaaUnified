@@ -410,6 +410,66 @@ public sealed class DialogModuleP1FeatureTests
     }
 
     [Fact]
+    public void DialogLaunchers_ShouldApplyOwnerUiScaleBeforeShowingWindows()
+    {
+        var root = BaselineTestSupport.GetMaaUnifiedRoot();
+        var scaling = File.ReadAllText(Path.Combine(root, "App", "Features", "Dialogs", "DialogWindowScaling.cs"));
+        var service = File.ReadAllText(Path.Combine(root, "App", "Features", "Dialogs", "AvaloniaDialogService.cs"));
+        var mainWindow = File.ReadAllText(Path.Combine(root, "App", "Views", "MainWindow.axaml.cs"));
+        var configurationManager = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "ConfigurationManagerView.axaml.cs"));
+        var connectSettings = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "ConnectSettingsView.axaml.cs"));
+
+        Assert.Contains("shell.EffectiveUiScaleFactor", scaling, StringComparison.Ordinal);
+        Assert.Contains("ScaleWindowBounds(dialog, scale);", scaling, StringComparison.Ordinal);
+        Assert.Contains("new LayoutTransformControl", scaling, StringComparison.Ordinal);
+        Assert.Contains("new ScaleTransform(scale, scale)", scaling, StringComparison.Ordinal);
+
+        Assert.Contains("DialogWindowScaling.ApplyOwnerUiScale(dialog, owner);", service, StringComparison.Ordinal);
+        Assert.Equal(
+            8,
+            service.Split("ShowDialogWithOwnerScaleAsync<DialogReturnSemantic?>", StringSplitOptions.None).Length - 1);
+
+        Assert.Contains("DialogWindowScaling.ApplyOwnerUiScale(_runtimeLogWindow, this);", mainWindow, StringComparison.Ordinal);
+        Assert.Contains("DialogWindowScaling.ApplyOwnerUiScale(waitDialog, this);", mainWindow, StringComparison.Ordinal);
+        Assert.Contains("DialogWindowScaling.ApplyOwnerUiScale(dialog, owner);", configurationManager, StringComparison.Ordinal);
+        Assert.Contains("DialogWindowScaling.ApplyOwnerUiScale(_screenshotPreviewWindow, owner);", connectSettings, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void FloatingPopups_ShouldApplyTopLevelUiScale()
+    {
+        var root = BaselineTestSupport.GetMaaUnifiedRoot();
+        var files = new[]
+        {
+            "App/Controls/AppHistoryInput.axaml",
+            "App/Controls/AppSuggestInput.axaml",
+            "App/Controls/AppCopilotPathDropdown.axaml",
+            "App/Controls/AppMultiSelect.axaml",
+            "App/Controls/AppMultiSelectDropdown.axaml",
+            "App/Controls/AppSplitButton.axaml",
+            "App/Features/Advanced/CopilotView.axaml",
+            "App/Features/Root/TaskQueueView.axaml",
+        };
+
+        var popupScale = File.ReadAllText(Path.Combine(root, "App", "Controls", "PopupUiScale.cs"));
+        var controlStyles = File.ReadAllText(Path.Combine(root, "App", "Styles", "ControlStyles.axaml"));
+        Assert.Contains("shell.EffectiveUiScaleFactor", popupScale, StringComparison.Ordinal);
+        Assert.Contains("new LayoutTransformControl", popupScale, StringComparison.Ordinal);
+        Assert.Contains("Property=\"controls:PopupUiScale.UseTopLevelUiScale\" Value=\"True\"", controlStyles, StringComparison.Ordinal);
+
+        foreach (var relativePath in files)
+        {
+            var xaml = File.ReadAllText(Path.Combine(root, relativePath.Replace('/', Path.DirectorySeparatorChar)));
+            var popupCount = xaml.Split("<Popup", StringSplitOptions.None).Length - 1;
+            var scaledPopupCount = xaml.Split("controls:PopupUiScale.UseTopLevelUiScale=\"True\"", StringSplitOptions.None).Length - 1;
+
+            Assert.True(
+                popupCount == scaledPopupCount,
+                $"{relativePath} should opt every custom Popup into top-level UI scaling.");
+        }
+    }
+
+    [Fact]
     public void RuntimeLogAndScreenshotPreviewWindows_ShouldSplitResponsibilities_AndDropLegacyShell()
     {
         var root = BaselineTestSupport.GetMaaUnifiedRoot();

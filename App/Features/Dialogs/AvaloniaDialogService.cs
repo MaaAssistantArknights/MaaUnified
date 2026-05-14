@@ -40,7 +40,7 @@ public sealed class AvaloniaDialogService : IAppDialogService
         var dialog = new AnnouncementDialogView();
         dialog.ApplyRequest(normalizedRequest);
         using var chromeBinding = AttachChromeLocalization(dialog, normalizedRequest.Title, normalizedRequest.Chrome);
-        var semantic = await dialog.ShowDialog<DialogReturnSemantic?>(owner) ?? DialogReturnSemantic.Close;
+        var semantic = await ShowDialogWithOwnerScaleAsync<DialogReturnSemantic?>(dialog, owner) ?? DialogReturnSemantic.Close;
         var payload = semantic == DialogReturnSemantic.Cancel ? null : dialog.BuildPayload();
         await _runtime.DialogFeatureService.RecordDialogActionAsync(token, "return", semantic.ToString(), cancellationToken);
         await _runtime.DialogFeatureService.CompleteDialogAsync(token, semantic, "announcement-dialog-complete", cancellationToken);
@@ -68,7 +68,7 @@ public sealed class AvaloniaDialogService : IAppDialogService
         var dialog = new VersionUpdateDialogView();
         dialog.ApplyRequest(normalizedRequest);
         using var chromeBinding = AttachChromeLocalization(dialog, normalizedRequest.Title, normalizedRequest.Chrome);
-        var semantic = await dialog.ShowDialog<DialogReturnSemantic?>(owner) ?? DialogReturnSemantic.Close;
+        var semantic = await ShowDialogWithOwnerScaleAsync<DialogReturnSemantic?>(dialog, owner) ?? DialogReturnSemantic.Close;
         var payload = semantic == DialogReturnSemantic.Confirm ? dialog.BuildPayload() : null;
         await _runtime.DialogFeatureService.RecordDialogActionAsync(token, "return", semantic.ToString(), cancellationToken);
         await _runtime.DialogFeatureService.CompleteDialogAsync(token, semantic, "version-update-dialog-complete", cancellationToken);
@@ -96,7 +96,7 @@ public sealed class AvaloniaDialogService : IAppDialogService
         var dialog = new ProcessPickerDialogView();
         dialog.ApplyRequest(normalizedRequest);
         using var chromeBinding = AttachChromeLocalization(dialog, normalizedRequest.Title, normalizedRequest.Chrome);
-        var semantic = await dialog.ShowDialog<DialogReturnSemantic?>(owner) ?? DialogReturnSemantic.Close;
+        var semantic = await ShowDialogWithOwnerScaleAsync<DialogReturnSemantic?>(dialog, owner) ?? DialogReturnSemantic.Close;
         var payload = semantic == DialogReturnSemantic.Confirm ? dialog.BuildPayload() : null;
         await _runtime.DialogFeatureService.RecordDialogActionAsync(token, "return", semantic.ToString(), cancellationToken);
         await _runtime.DialogFeatureService.CompleteDialogAsync(token, semantic, "process-picker-dialog-complete", cancellationToken);
@@ -124,7 +124,7 @@ public sealed class AvaloniaDialogService : IAppDialogService
         var dialog = new EmulatorPathSelectionDialogView();
         dialog.ApplyRequest(normalizedRequest);
         using var chromeBinding = AttachChromeLocalization(dialog, normalizedRequest.Title, normalizedRequest.Chrome);
-        var semantic = await dialog.ShowDialog<DialogReturnSemantic?>(owner) ?? DialogReturnSemantic.Close;
+        var semantic = await ShowDialogWithOwnerScaleAsync<DialogReturnSemantic?>(dialog, owner) ?? DialogReturnSemantic.Close;
         var payload = semantic == DialogReturnSemantic.Confirm ? dialog.BuildPayload() : null;
         await _runtime.DialogFeatureService.RecordDialogActionAsync(token, "return", semantic.ToString(), cancellationToken);
         await _runtime.DialogFeatureService.CompleteDialogAsync(token, semantic, "emulator-path-dialog-complete", cancellationToken);
@@ -153,7 +153,7 @@ public sealed class AvaloniaDialogService : IAppDialogService
         var dialog = new ErrorDialogView();
         dialog.ApplyRequest(normalizedRequest, openIssueReportAsync ?? OpenIssueReportAsync);
         using var chromeBinding = AttachChromeLocalization(dialog, normalizedRequest.Title, normalizedRequest.Chrome);
-        var semantic = await dialog.ShowDialog<DialogReturnSemantic?>(owner) ?? DialogReturnSemantic.Close;
+        var semantic = await ShowDialogWithOwnerScaleAsync<DialogReturnSemantic?>(dialog, owner) ?? DialogReturnSemantic.Close;
         var payload = dialog.BuildPayload();
         if (payload.Copied)
         {
@@ -191,7 +191,7 @@ public sealed class AvaloniaDialogService : IAppDialogService
         var dialog = new AchievementListDialogView();
         dialog.ApplyRequest(normalizedRequest);
         using var chromeBinding = AttachChromeLocalization(dialog, normalizedRequest.Title, normalizedRequest.Chrome);
-        var semantic = await dialog.ShowDialog<DialogReturnSemantic?>(owner) ?? DialogReturnSemantic.Close;
+        var semantic = await ShowDialogWithOwnerScaleAsync<DialogReturnSemantic?>(dialog, owner) ?? DialogReturnSemantic.Close;
         var payload = dialog.BuildPayload();
         await _runtime.DialogFeatureService.RecordDialogActionAsync(token, "return", semantic.ToString(), cancellationToken);
         await _runtime.DialogFeatureService.CompleteDialogAsync(token, semantic, "achievement-list-dialog-complete", cancellationToken);
@@ -219,7 +219,7 @@ public sealed class AvaloniaDialogService : IAppDialogService
         var dialog = new TextDialogView();
         dialog.ApplyRequest(normalizedRequest);
         using var chromeBinding = AttachChromeLocalization(dialog, normalizedRequest.Title, normalizedRequest.Chrome);
-        var semantic = await dialog.ShowDialog<DialogReturnSemantic?>(owner) ?? DialogReturnSemantic.Close;
+        var semantic = await ShowDialogWithOwnerScaleAsync<DialogReturnSemantic?>(dialog, owner) ?? DialogReturnSemantic.Close;
         var payload = semantic == DialogReturnSemantic.Confirm ? dialog.BuildPayload() : null;
         await _runtime.DialogFeatureService.RecordDialogActionAsync(token, "return", semantic.ToString(), cancellationToken);
         await _runtime.DialogFeatureService.CompleteDialogAsync(token, semantic, "text-dialog-complete", cancellationToken);
@@ -253,7 +253,7 @@ public sealed class AvaloniaDialogService : IAppDialogService
             normalizedRequest.Language,
             normalizedRequest.CountdownSeconds);
         using var chromeBinding = AttachChromeLocalization(dialog, normalizedRequest.Title, normalizedRequest.Chrome);
-        var semantic = await dialog.ShowDialog<DialogReturnSemantic?>(owner) ?? DialogReturnSemantic.Close;
+        var semantic = await ShowDialogWithOwnerScaleAsync<DialogReturnSemantic?>(dialog, owner) ?? DialogReturnSemantic.Close;
         var payload = semantic == DialogReturnSemantic.Confirm
             ? new WarningConfirmDialogPayload(true)
             : null;
@@ -278,6 +278,12 @@ public sealed class AvaloniaDialogService : IAppDialogService
         }
 
         return desktop.MainWindow;
+    }
+
+    private static Task<TResult> ShowDialogWithOwnerScaleAsync<TResult>(Window dialog, Window owner)
+    {
+        DialogWindowScaling.ApplyOwnerUiScale(dialog, owner);
+        return dialog.ShowDialog<TResult>(owner);
     }
 
     private static Task<UiOperationResult> OpenIssueReportAsync(CancellationToken cancellationToken = default)
