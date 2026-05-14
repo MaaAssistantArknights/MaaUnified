@@ -20,9 +20,11 @@ public sealed class SettingsUiAuditRegressionTests
         var codeBehind = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "BackgroundSettingsView.axaml.cs"));
 
         Assert.Contains("Click=\"OnSelectBackgroundImageClick\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("SecondaryActionClick=\"OnClearBackgroundImageClick\"", xaml, StringComparison.Ordinal);
         Assert.Contains("OpenFilePickerAsync(", codeBehind, StringComparison.Ordinal);
         Assert.Contains("TryGetLocalPath()", codeBehind, StringComparison.Ordinal);
         Assert.Contains("vm.BackgroundImagePath = path;", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("vm.BackgroundImagePath = string.Empty;", codeBehind, StringComparison.Ordinal);
         Assert.Contains("await vm.SaveGuiSettingsAsync();", codeBehind, StringComparison.Ordinal);
     }
 

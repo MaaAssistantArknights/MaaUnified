@@ -2054,7 +2054,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 var title = texts.GetOrDefault("Toolbox.BusyDialog.Title", "Task is running");
                 return new DialogChromeSnapshot(
                     title: title,
-                    confirmText: texts.GetOrDefault("Toolbox.BusyDialog.ConfirmButton", "Confirm"),
+                    confirmText: texts.GetOrDefault("Toolbox.BusyDialog.ConfirmButton", "Cancel"),
                     cancelText: texts.GetOrDefault("Toolbox.BusyDialog.StopButton", "Stop current task"),
                     namedTexts: DialogTextCatalog.CreateNamedTexts(
                         (DialogTextCatalog.ChromeKeys.SectionTitle, title),

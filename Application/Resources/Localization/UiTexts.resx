@@ -4592,6 +4592,15 @@ Session state `{0}` does not allow {2}.</value>
   <data name="Toolbox.Action.StartRecognition" xml:space="preserve">
     <value>开始识别</value>
   </data>
+  <data name="Toolbox.Action.Recognizing" xml:space="preserve">
+    <value>识别中...</value>
+  </data>
+  <data name="Toolbox.Action.Running" xml:space="preserve">
+    <value>执行中...</value>
+  </data>
+  <data name="Toolbox.Action.Stop" xml:space="preserve">
+    <value>停止</value>
+  </data>
   <data name="Toolbox.Advanced.Capability.Fallback.None" xml:space="preserve">
     <value>无</value>
   </data>
@@ -4857,7 +4866,7 @@ Session state `{0}` does not allow {2}.</value>
     <value>知道了</value>
   </data>
   <data name="Toolbox.BusyDialog.ConfirmButton" xml:space="preserve">
-    <value>确认</value>
+    <value>取消</value>
   </data>
   <data name="Toolbox.BusyDialog.CurrentTask" xml:space="preserve">
     <value>当前任务</value>
@@ -5020,6 +5029,9 @@ Session state `{0}` does not allow {2}.</value>
   </data>
   <data name="Toolbox.Status.CurrentToolStopped" xml:space="preserve">
     <value>已停止当前工具。</value>
+  </data>
+  <data name="Toolbox.Status.ManuallyStopped" xml:space="preserve">
+    <value>已手动停止。</value>
   </data>
   <data name="Toolbox.Status.MiniGameStarting" xml:space="preserve">
     <value>小游戏任务启动中...</value>

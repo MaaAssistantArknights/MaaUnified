@@ -38,9 +38,14 @@ public static class PlatformServicesFactory
 
         try
         {
-            // Prefer Avalonia's tray backend so tray creation failures stay inside our fallback path.
             if (!forceFallback
-                && (OperatingSystem.IsWindows() || OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
+                && OperatingSystem.IsWindows()
+                && WindowsNotifyIconTrayService.TryCreate(out var windowsTray))
+            {
+                trayService = windowsTray;
+            }
+            else if (!forceFallback
+                     && (OperatingSystem.IsWindows() || OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
                 && AvaloniaTrayIconTrayService.TryCreate(out var nativeAvaloniaTray))
             {
                 trayService = nativeAvaloniaTray;

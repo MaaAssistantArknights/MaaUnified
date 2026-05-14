@@ -79,15 +79,40 @@ public sealed class MAAUnifiedRuntime : IAsyncDisposable
 
     public IAppLifecycleService AppLifecycleService { get; set; } = new NoOpAppLifecycleService();
 
-    public ValueTask DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         try
         {
-            if (Platform.TrayService is IDisposable trayDisposable)
-            {
-                trayDisposable.Dispose();
-            }
+            await WebApiFeatureService.StopAsync(CancellationToken.None).ConfigureAwait(false);
+        }
+        catch
+        {
+            // Best-effort disposal.
+        }
 
+        try
+        {
+            if (RemoteControlFeatureService is IAsyncDisposable remoteControlDisposable)
+            {
+                await remoteControlDisposable.DisposeAsync().ConfigureAwait(false);
+            }
+        }
+        catch
+        {
+            // Best-effort disposal.
+        }
+
+        try
+        {
+            await Platform.TrayService.ShutdownAsync(CancellationToken.None).ConfigureAwait(false);
+        }
+        catch
+        {
+            // Best-effort disposal.
+        }
+
+        try
+        {
             if (Platform.HotkeyService is IDisposable hotkeyDisposable)
             {
                 hotkeyDisposable.Dispose();
@@ -103,7 +128,7 @@ public sealed class MAAUnifiedRuntime : IAsyncDisposable
             // Best-effort disposal.
         }
 
-        return CoreBridge.DisposeAsync();
+        await CoreBridge.DisposeAsync().ConfigureAwait(false);
     }
 }
 

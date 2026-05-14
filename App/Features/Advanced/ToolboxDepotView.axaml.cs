@@ -1,6 +1,8 @@
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using MAAUnified.App.ViewModels.Toolbox;
+using MAAUnified.Application.Models;
 
 namespace MAAUnified.App.Features.Advanced;
 
@@ -17,8 +19,24 @@ public partial class ToolboxDepotView : UserControl
     {
         if (VM is not null)
         {
+            if (VM.IsDepotExecuting)
+            {
+                await VM.StopActiveToolAsync();
+                return;
+            }
+
             await VM.StartDepotAsync();
         }
+    }
+
+    private void OnDepotStartPointerEntered(object? sender, PointerEventArgs e)
+    {
+        VM?.SetToolActionHover(ToolboxToolKind.Depot, hovering: true);
+    }
+
+    private void OnDepotStartPointerExited(object? sender, PointerEventArgs e)
+    {
+        VM?.SetToolActionHover(ToolboxToolKind.Depot, hovering: false);
     }
 
     private async void OnDepotExportArkPlannerClick(object? sender, RoutedEventArgs e)

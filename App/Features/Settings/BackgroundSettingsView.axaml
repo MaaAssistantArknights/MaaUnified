@@ -22,9 +22,11 @@
                                    HorizontalAlignment="Left"
                                    Text="{Binding BackgroundImagePath, UpdateSourceTrigger=LostFocus}"
                                    ActionContent="{Binding RootTexts[Settings.Start.SelectButton]}"
+                                   SecondaryActionContent="{Binding RootTexts[Settings.Hotkey.Capture.Clear]}"
                                    EditorLostFocus="OnBackgroundPathLostFocus"
                                    EditorKeyDown="OnBackgroundPathKeyDown"
-                                   ActionClick="OnSelectBackgroundImageClick" />
+                                   ActionClick="OnSelectBackgroundImageClick"
+                                   SecondaryActionClick="OnClearBackgroundImageClick" />
         </controls:AdaptiveSpacingStackPanel>
       </Grid>
 

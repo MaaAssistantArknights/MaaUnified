@@ -1,9 +1,11 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.VisualTree;
 using MAAUnified.App.Controls;
 using MAAUnified.App.ViewModels.Toolbox;
+using MAAUnified.Application.Models;
 
 namespace MAAUnified.App.Features.Advanced;
 
@@ -70,8 +72,24 @@ public partial class ToolboxOperBoxView : UserControl
     {
         if (VM is not null)
         {
+            if (VM.IsOperBoxExecuting)
+            {
+                await VM.StopActiveToolAsync();
+                return;
+            }
+
             await VM.StartOperBoxAsync();
         }
+    }
+
+    private void OnOperBoxStartPointerEntered(object? sender, PointerEventArgs e)
+    {
+        VM?.SetToolActionHover(ToolboxToolKind.OperBox, hovering: true);
+    }
+
+    private void OnOperBoxStartPointerExited(object? sender, PointerEventArgs e)
+    {
+        VM?.SetToolActionHover(ToolboxToolKind.OperBox, hovering: false);
     }
 
     private async void OnOperBoxExportClick(object? sender, RoutedEventArgs e)

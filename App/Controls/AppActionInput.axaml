@@ -4,7 +4,7 @@
              x:Name="Root">
   <Border x:Name="ShellBorder"
           Classes="settings-input-group">
-    <Grid ColumnDefinitions="*,Auto">
+    <Grid ColumnDefinitions="*,Auto,Auto">
       <TextBox x:Name="EditorTextBox"
                Classes="settings-input-group-editor"
                Text="{Binding Text, ElementName=Root, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
@@ -20,6 +20,14 @@
               Content="{Binding ActionContent, ElementName=Root}"
               Command="{Binding ActionCommand, ElementName=Root}"
               Click="OnActionButtonClick" />
+
+      <Button x:Name="SecondaryActionButton"
+              Grid.Column="2"
+              Classes="settings-input-group-action"
+              Content="{Binding SecondaryActionContent, ElementName=Root}"
+              Command="{Binding SecondaryActionCommand, ElementName=Root}"
+              IsVisible="False"
+              Click="OnSecondaryActionButtonClick" />
     </Grid>
   </Border>
 </UserControl>

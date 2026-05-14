@@ -103,8 +103,11 @@
                  Text="{Binding MiniGameTip}" />
 
       <Button Classes="app-button app-primary toolbox-minigame-action"
+              Classes.locked="{Binding IsMiniGameRunning}"
               Content="{Binding MiniGameCommandText}"
               IsEnabled="{Binding Inited}"
+              PointerEntered="OnMiniGameCommandPointerEntered"
+              PointerExited="OnMiniGameCommandPointerExited"
               Click="OnMiniGameCommandClick" />
     </StackPanel>
   </ScrollViewer>

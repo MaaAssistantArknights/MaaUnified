@@ -467,6 +467,7 @@ public sealed class SettingsViewStructureContractTests
     {
         var root = GetMaaUnifiedRoot();
         var script = File.ReadAllText(Path.Combine(root, "CI", "create-macos-app-dmg.sh"));
+        var backgroundScript = File.ReadAllText(Path.Combine(root, "CI", "create-dmg-background.py"));
 
         Assert.Contains("com.apple.security.cs.allow-jit", script, StringComparison.Ordinal);
         Assert.Contains("com.apple.security.cs.allow-unsigned-executable-memory", script, StringComparison.Ordinal);
@@ -479,6 +480,14 @@ public sealed class SettingsViewStructureContractTests
         Assert.Contains("hdiutil create -volname \"$app_name\"", script, StringComparison.Ordinal);
         Assert.Contains("hdiutil verify \"$dmg_path\"", script, StringComparison.Ordinal);
         Assert.Contains("retrying in ${delay}s", script, StringComparison.Ordinal);
+        Assert.Contains("write_dmg_installation_note()", script, StringComparison.Ordinal);
+        Assert.Contains("customize_mounted_dmg()", script, StringComparison.Ordinal);
+        Assert.Contains("prepare_dmg_layout()", script, StringComparison.Ordinal);
+        Assert.Contains("Install Help.txt", script, StringComparison.Ordinal);
+        Assert.Contains("xattr -dr com.apple.quarantine \"/Applications/MAAUnified.app\"", script, StringComparison.Ordinal);
+        Assert.Contains("DRAG TO APPLICATIONS", backgroundScript, StringComparison.Ordinal);
+        Assert.Contains("XATTR -DR COM.APPLE.QUARANTINE", backgroundScript, StringComparison.Ordinal);
+        Assert.Contains("/APPLICATIONS/MAAUNIFIED.APP", backgroundScript, StringComparison.Ordinal);
     }
 
     [Fact]

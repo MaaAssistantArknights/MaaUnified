@@ -1218,6 +1218,24 @@
     <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Action.DisabledForeground}" />
   </Style>
 
+  <Style Selector="Button.app-button.locked /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.DisabledBackground}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Action.DisabledBorder}" />
+    <Setter Property="TextBlock.Foreground" Value="{DynamicResource MAA.Brush.App.Action.DisabledForeground}" />
+  </Style>
+
+  <Style Selector="Button.app-button.locked:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.DisabledBackground}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Action.DisabledBorder}" />
+    <Setter Property="TextBlock.Foreground" Value="{DynamicResource MAA.Brush.App.Action.DisabledForeground}" />
+  </Style>
+
+  <Style Selector="Button.app-button.locked:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.DisabledBackground}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Action.DisabledBorder}" />
+    <Setter Property="TextBlock.Foreground" Value="{DynamicResource MAA.Brush.App.Action.DisabledForeground}" />
+  </Style>
+
   <Style Selector="Button.app-button.app-subtle.app-icon-only.app-window-control">
     <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Secondary}" />
     <Setter Property="Width" Value="32" />

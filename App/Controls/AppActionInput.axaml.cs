@@ -30,13 +30,27 @@ public partial class AppActionInput : UserControl
     public static readonly StyledProperty<bool> IsPrimaryActionProperty =
         AvaloniaProperty.Register<AppActionInput, bool>(nameof(IsPrimaryAction));
 
+    public static readonly StyledProperty<object?> SecondaryActionContentProperty =
+        AvaloniaProperty.Register<AppActionInput, object?>(nameof(SecondaryActionContent));
+
+    public static readonly StyledProperty<ICommand?> SecondaryActionCommandProperty =
+        AvaloniaProperty.Register<AppActionInput, ICommand?>(nameof(SecondaryActionCommand));
+
     public AppActionInput()
     {
         InitializeComponent();
         this.GetObservable(IsPrimaryActionProperty).Subscribe(value => ActionButton.Classes.Set("primary", value));
+        this.GetObservable(SecondaryActionContentProperty).Subscribe(value =>
+        {
+            var hasSecondaryAction = value is not null;
+            SecondaryActionButton.IsVisible = hasSecondaryAction;
+            ActionButton.Classes.Set("has-secondary-action", hasSecondaryAction);
+        });
     }
 
     public event EventHandler<RoutedEventArgs>? ActionClick;
+
+    public event EventHandler<RoutedEventArgs>? SecondaryActionClick;
 
     public event EventHandler<RoutedEventArgs>? EditorLostFocus;
 
@@ -78,6 +92,18 @@ public partial class AppActionInput : UserControl
         set => SetValue(IsPrimaryActionProperty, value);
     }
 
+    public object? SecondaryActionContent
+    {
+        get => GetValue(SecondaryActionContentProperty);
+        set => SetValue(SecondaryActionContentProperty, value);
+    }
+
+    public ICommand? SecondaryActionCommand
+    {
+        get => GetValue(SecondaryActionCommandProperty);
+        set => SetValue(SecondaryActionCommandProperty, value);
+    }
+
     private void OnEditorGotFocus(object? sender, GotFocusEventArgs e)
     {
         ShellBorder.Classes.Set("focused", true);
@@ -97,5 +123,10 @@ public partial class AppActionInput : UserControl
     private void OnActionButtonClick(object? sender, RoutedEventArgs e)
     {
         ActionClick?.Invoke(this, e);
+    }
+
+    private void OnSecondaryActionButtonClick(object? sender, RoutedEventArgs e)
+    {
+        SecondaryActionClick?.Invoke(this, e);
     }
 }

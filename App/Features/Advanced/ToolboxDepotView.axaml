@@ -34,16 +34,17 @@
       <Setter Property="ClipToBounds" Value="False" />
     </Style>
 
-    <Style Selector="StackPanel.toolbox-depot-group-stack">
-      <Setter Property="Spacing" Value="14" />
+    <Style Selector="WrapPanel.toolbox-depot-group-flow">
+      <Setter Property="HorizontalAlignment" Value="Center" />
     </Style>
 
     <Style Selector="StackPanel.toolbox-depot-item-group">
       <Setter Property="Spacing" Value="8" />
+      <Setter Property="Margin" Value="18,0,18,14" />
     </Style>
 
     <Style Selector="TextBlock.toolbox-depot-group-title">
-      <Setter Property="FontSize" Value="13" />
+      <Setter Property="FontSize" Value="15" />
       <Setter Property="FontWeight" Value="SemiBold" />
       <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
     </Style>
@@ -56,7 +57,8 @@
 
     <Style Selector="Border.toolbox-depot-group-rule">
       <Setter Property="Height" Value="1" />
-      <Setter Property="Background" Value="{DynamicResource MAA.Brush.Dialog.SectionBorder}" />
+      <Setter Property="Margin" Value="16,0" />
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Border.Card}" />
       <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
@@ -122,16 +124,20 @@
                         ItemsSource="{Binding DepotGroups}">
             <ItemsControl.ItemsPanel>
               <ItemsPanelTemplate>
-                <StackPanel Classes="toolbox-depot-group-stack" />
+                <WrapPanel Classes="toolbox-depot-group-flow" />
               </ItemsPanelTemplate>
             </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
               <DataTemplate>
-                <StackPanel Classes="toolbox-depot-item-group">
-                  <Grid ColumnDefinitions="Auto,16,*">
-                    <TextBlock Classes="toolbox-depot-group-title"
+                <StackPanel Classes="toolbox-depot-item-group"
+                            Width="{Binding PanelWidth}"
+                            MaxWidth="{Binding Bounds.Width, RelativeSource={RelativeSource AncestorType=ItemsControl}}">
+                  <Grid ColumnDefinitions="*,16,Auto,16,*">
+                    <Border Classes="toolbox-depot-group-rule" />
+                    <TextBlock Grid.Column="2"
+                               Classes="toolbox-depot-group-title"
                                Text="{Binding Title}" />
-                    <Border Grid.Column="2"
+                    <Border Grid.Column="4"
                             Classes="toolbox-depot-group-rule" />
                   </Grid>
                   <ItemsControl ItemsSource="{Binding Items}">
@@ -142,7 +148,8 @@
                                                     MinColumnGap="16"
                                                     MaxColumnGap="16"
                                                     RowGap="16"
-                                                    EdgeInset="16,16,16,24" />
+                                                    RowHorizontalAlignment="Center"
+                                                    EdgeInset="8,16,8,24" />
                       </ItemsPanelTemplate>
                     </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
@@ -191,8 +198,11 @@
                      TextWrapping="Wrap" />
         </Button>
         <Button Classes="app-button app-primary toolbox-depot-action"
+                Classes.locked="{Binding IsDepotExecuting}"
                 Content="{Binding DepotStartRecognitionText}"
                 IsEnabled="{Binding CanStartDepotRecognition}"
+                PointerEntered="OnDepotStartPointerEntered"
+                PointerExited="OnDepotStartPointerExited"
                 Click="OnDepotStartClick" />
       </WrapPanel>
       <TextBlock Grid.Column="2"

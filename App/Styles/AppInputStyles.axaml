@@ -531,6 +531,10 @@
     <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ChevronHover}" />
   </Style>
 
+  <Style Selector="Button.settings-input-group-action.has-secondary-action">
+    <Setter Property="CornerRadius" Value="0" />
+  </Style>
+
   <Style Selector="Button.settings-input-group-action:pressed">
     <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.SettingsInput.GroupActionBackgroundPressed}" />
     <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.SettingsInput.Border}" />

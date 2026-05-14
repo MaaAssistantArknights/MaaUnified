@@ -283,6 +283,79 @@ public sealed class ToolboxModuleO3FeatureTests
     }
 
     [Fact]
+    public async Task ApplyRuntimeCallback_DepotDone_ShouldGroupDepotItemsByMaterialFamilies()
+    {
+        await using var fixture = await ToolboxTestFixture.CreateAsync();
+        var vm = new ToolboxPageViewModel(fixture.Runtime, fixture.ConnectionState);
+        await vm.InitializeAsync();
+
+        await vm.StartDepotAsync();
+
+        vm.ApplyRuntimeCallback(CreateCallback(
+            "SubTaskExtraInfo",
+            new JsonObject
+            {
+                ["taskchain"] = "Depot",
+                ["what"] = "DepotResult",
+                ["details"] = new JsonObject
+                {
+                    ["done"] = true,
+                    ["data"] = "{\"30011\":7,\"30012\":8,\"30021\":9,\"30041\":3,\"30042\":4,\"30115\":1,\"30125\":2}",
+                },
+            }));
+
+        var sourceRockGroup = Assert.Single(vm.DepotGroups, group => group.Title == "源岩");
+        Assert.Equal(new[] { "30011", "30012" }, sourceRockGroup.Items.Select(item => item.Id).OrderBy(id => id, StringComparer.Ordinal));
+        Assert.Equal(420d, sourceRockGroup.PanelWidth);
+        Assert.Equal("糖", Assert.Single(vm.DepotGroups, group => group.Items.Any(item => item.Id == "30021")).Title);
+
+        var advancedGroup = Assert.Single(vm.DepotGroups, group => group.Title == "高级材料");
+        Assert.Equal(new[] { "30115", "30125" }, advancedGroup.Items.Select(item => item.Id).OrderBy(id => id, StringComparer.Ordinal));
+        Assert.Equal(420d, advancedGroup.PanelWidth);
+
+        var orironGroup = Assert.Single(vm.DepotGroups, group => group.Title == "异铁");
+        Assert.Equal(new[] { "30041", "30042" }, orironGroup.Items.Select(item => item.Id).OrderBy(id => id, StringComparer.Ordinal));
+        Assert.Equal(420d, orironGroup.PanelWidth);
+    }
+
+    [Fact]
+    public async Task ApplyRuntimeCallback_DepotDone_ShouldGroupDepotItemsBySemanticType()
+    {
+        await using var fixture = await ToolboxTestFixture.CreateAsync();
+        var vm = new ToolboxPageViewModel(fixture.Runtime, fixture.ConnectionState);
+        await vm.InitializeAsync();
+
+        await vm.StartDepotAsync();
+
+        vm.ApplyRuntimeCallback(CreateCallback(
+            "SubTaskExtraInfo",
+            new JsonObject
+            {
+                ["taskchain"] = "Depot",
+                ["what"] = "DepotResult",
+                ["details"] = new JsonObject
+                {
+                    ["done"] = true,
+                    ["data"] = "{\"advanced_material_issue_voucher\":1,\"advanced_material_voucher_perm\":2,\"randomMaterial_1\":3,\"randomMaterialRune_12\":4,\"itempack_mod_7\":5,\"itempack_mod_8\":6,\"LMTGS_COIN_1401\":7,\"LMTGS_COIN_7301\":8}",
+                },
+            }));
+
+        var materialVoucherGroup = Assert.Single(vm.DepotGroups, group => group.Title == "材料提货券");
+        Assert.Equal(
+            new[] { "advanced_material_issue_voucher", "advanced_material_voucher_perm" },
+            materialVoucherGroup.Items.Select(item => item.Id).OrderBy(id => id, StringComparer.Ordinal));
+
+        var supplyGroup = Assert.Single(vm.DepotGroups, group => group.Title == "物资补给");
+        Assert.Equal(new[] { "randomMaterialRune_12", "randomMaterial_1" }, supplyGroup.Items.Select(item => item.Id).OrderBy(id => id, StringComparer.Ordinal));
+
+        var chipInstrumentGroup = Assert.Single(vm.DepotGroups, group => group.Title == "芯片组印刻仪");
+        Assert.Equal(new[] { "itempack_mod_7", "itempack_mod_8" }, chipInstrumentGroup.Items.Select(item => item.Id).OrderBy(id => id, StringComparer.Ordinal));
+
+        var contractGroup = Assert.Single(vm.DepotGroups, group => group.Title == "寻访数据契约");
+        Assert.Equal(new[] { "LMTGS_COIN_1401", "LMTGS_COIN_7301" }, contractGroup.Items.Select(item => item.Id).OrderBy(id => id, StringComparer.Ordinal));
+    }
+
+    [Fact]
     public async Task ApplyRuntimeCallback_StageDrops_ShouldUpdateDepotAndPersistLegacyResult()
     {
         await using var fixture = await ToolboxTestFixture.CreateAsync();
@@ -428,6 +501,10 @@ public sealed class ToolboxModuleO3FeatureTests
         Assert.Contains("Content=\"{Binding DepotStartRecognitionText}\"", depotXaml, StringComparison.Ordinal);
         Assert.Contains("IsEnabled=\"{Binding CanStartDepotRecognition}\"", depotXaml, StringComparison.Ordinal);
         Assert.Contains("Source=\"{Binding ItemImage}\"", depotXaml, StringComparison.Ordinal);
+        Assert.Contains("<WrapPanel Classes=\"toolbox-depot-group-flow\" />", depotXaml, StringComparison.Ordinal);
+        Assert.Contains("<Grid ColumnDefinitions=\"*,16,Auto,16,*\">", depotXaml, StringComparison.Ordinal);
+        Assert.Contains("Width=\"{Binding PanelWidth}\"", depotXaml, StringComparison.Ordinal);
+        Assert.Contains("MaxWidth=\"{Binding Bounds.Width, RelativeSource={RelativeSource AncestorType=ItemsControl}}\"", depotXaml, StringComparison.Ordinal);
 
         Assert.Contains("Content=\"{Binding GachaDrawOnceText}\"", gachaXaml, StringComparison.Ordinal);
         Assert.Contains("Content=\"{Binding GachaDrawTenText}\"", gachaXaml, StringComparison.Ordinal);
