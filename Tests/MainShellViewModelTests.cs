@@ -387,6 +387,36 @@ public sealed class MainShellViewModelTests
     }
 
     [Fact]
+    public async Task AchievementToast_ImmediatePointerPause_ShouldNotFreezeCountdown()
+    {
+        var dismissedIds = new List<string>();
+        var toast = new AchievementToastItemViewModel(
+            "ToastImmediateHover",
+            "Achievement Unlocked",
+            "Immediate hover",
+            "Countdown should keep moving.",
+            "#42A5F5",
+            autoClose: true,
+            DateTimeOffset.UtcNow,
+            dismissedIds.Add);
+
+        try
+        {
+            toast.PauseCloseCountdown();
+            Assert.False(toast.IsCloseCountdownPaused);
+
+            await Task.Delay(550);
+            toast.PauseCloseCountdown();
+            Assert.True(toast.IsCloseCountdownPaused);
+            Assert.Empty(dismissedIds);
+        }
+        finally
+        {
+            toast.Dispose();
+        }
+    }
+
+    [Fact]
     public async Task AchievementToast_StartupRelease_ShouldWaitForAnnouncementCompletion()
     {
         await using var fixture = await TestFixture.CreateAsync();

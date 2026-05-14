@@ -10,6 +10,8 @@ internal static class WindowVisuals
 
     public static void ApplyDefaultIcon(Window window)
     {
+        ApplyMacResizableCustomChrome(window);
+
         if (window.Icon is not null)
         {
             ApplyMacTransparentCustomChromeHint(window);
@@ -42,7 +44,9 @@ internal static class WindowVisuals
             return false;
         }
 
-        if (systemDecorations != SystemDecorations.None || !extendClientAreaToDecorationsHint)
+        if ((systemDecorations != SystemDecorations.None
+                && systemDecorations != SystemDecorations.BorderOnly)
+            || !extendClientAreaToDecorationsHint)
         {
             return false;
         }
@@ -71,5 +75,30 @@ internal static class WindowVisuals
         // Avalonia custom-chrome windows default to a white transparency fallback
         // unless we explicitly request an alpha-capable top-level.
         window.TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
+    }
+
+    public static void ApplyMacResizableCustomChrome(Window window)
+    {
+        if (!ShouldApplyMacResizableCustomChrome(
+                window.SystemDecorations,
+                window.CanResize,
+                OperatingSystem.IsMacOS()))
+        {
+            return;
+        }
+
+        // BorderOnly keeps the app-drawn title row while letting macOS expose
+        // native resize behavior around borderless, extended-client windows.
+        window.SystemDecorations = SystemDecorations.BorderOnly;
+    }
+
+    internal static bool ShouldApplyMacResizableCustomChrome(
+        SystemDecorations systemDecorations,
+        bool canResize,
+        bool isMacOS)
+    {
+        return isMacOS
+            && canResize
+            && systemDecorations == SystemDecorations.None;
     }
 }

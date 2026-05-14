@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:MAAUnified.App.Controls"
              x:Class="MAAUnified.App.Controls.AppMultiSelect"
              x:Name="Root">
   <UserControl.Styles>
@@ -197,6 +198,7 @@
 
     <Popup x:Name="DropDownPopup"
            Classes="app-multi-select-popup"
+           controls:PopupUiScale.UseTopLevelUiScale="True"
            IsOpen="{Binding IsDropDownOpen, ElementName=Root, Mode=TwoWay}"
            Placement="BottomEdgeAlignedLeft"
            VerticalOffset="4"

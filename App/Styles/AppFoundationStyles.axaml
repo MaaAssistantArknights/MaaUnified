@@ -42,6 +42,7 @@
     <x:Double x:Key="MAA.App.Size.ChipMinWidth">72</x:Double>
     <x:Double x:Key="MAA.App.Size.ChipHeight">34</x:Double>
     <x:Double x:Key="MAA.App.Size.IconButton">38</x:Double>
+    <x:Double x:Key="MAA.App.Size.WindowChromeHeight">32</x:Double>
     <x:Double x:Key="MAA.App.Size.InputHeight">38</x:Double>
     <x:Double x:Key="MAA.App.Size.InputBlockMinHeight">120</x:Double>
     <x:Double x:Key="MAA.App.Size.SearchInputMinWidth">220</x:Double>
@@ -171,15 +172,16 @@
                   Classes="app-surface app-window">
             <Grid RowDefinitions="Auto,Auto,*,Auto">
               <LayoutTransformControl LayoutTransform="{Binding ChromeLayoutTransform, RelativeSource={RelativeSource TemplatedParent}}">
-                <Grid ColumnDefinitions="Auto,*,Auto">
+                <Grid ColumnDefinitions="Auto,*,Auto"
+                      Height="{DynamicResource MAA.App.Size.WindowChromeHeight}">
                   <StackPanel x:Name="PART_LeftWindowControls"
                               Orientation="Horizontal"
                               Spacing="4"
                               HorizontalAlignment="Left"
-                              VerticalAlignment="Top">
+                              VerticalAlignment="Center">
                     <Button x:Name="PART_LeftCloseButton"
                             Classes="app-button app-subtle app-icon-only app-window-control app-window-close"
-                            VerticalAlignment="Top"
+                            VerticalAlignment="Center"
                             IsVisible="{TemplateBinding ShowCloseButton}">
                       <Button.Content>
                         <Grid Width="12"
@@ -192,7 +194,7 @@
                     </Button>
                     <Button x:Name="PART_LeftMinimizeButton"
                             Classes="app-button app-subtle app-icon-only app-window-control app-window-minimize"
-                            VerticalAlignment="Top"
+                            VerticalAlignment="Center"
                             IsVisible="{TemplateBinding ShowMinimizeButton}">
                       <Button.Content>
                         <Grid Width="12"
@@ -205,7 +207,7 @@
                     </Button>
                     <Button x:Name="PART_LeftMaximizeButton"
                             Classes="app-button app-subtle app-icon-only app-window-control app-window-maximize"
-                            VerticalAlignment="Top"
+                            VerticalAlignment="Center"
                             IsVisible="{TemplateBinding ShowMaximizeButton}">
                       <Button.Content>
                         <Grid Width="12"
@@ -223,6 +225,7 @@
 
                   <Border x:Name="PART_HeaderDragArea"
                           Grid.Column="1"
+                          VerticalAlignment="Stretch"
                           IsHitTestVisible="{TemplateBinding AllowsHeaderDrag}"
                           Background="Transparent">
                     <TextBlock Classes="app-window-title dialog-window-title"
@@ -234,10 +237,10 @@
                               Orientation="Horizontal"
                               Spacing="4"
                               HorizontalAlignment="Right"
-                              VerticalAlignment="Top">
+                              VerticalAlignment="Center">
                     <Button x:Name="PART_RightMinimizeButton"
                             Classes="app-button app-subtle app-icon-only app-window-control app-window-minimize"
-                            VerticalAlignment="Top"
+                            VerticalAlignment="Center"
                             IsVisible="{TemplateBinding ShowMinimizeButton}">
                       <Button.Content>
                         <Grid Width="12"
@@ -250,7 +253,7 @@
                     </Button>
                     <Button x:Name="PART_RightMaximizeButton"
                             Classes="app-button app-subtle app-icon-only app-window-control app-window-maximize"
-                            VerticalAlignment="Top"
+                            VerticalAlignment="Center"
                             IsVisible="{TemplateBinding ShowMaximizeButton}">
                       <Button.Content>
                         <Grid Width="12"
@@ -266,7 +269,7 @@
                     </Button>
                     <Button x:Name="PART_RightCloseButton"
                             Classes="app-button app-subtle app-icon-only app-window-control app-window-close"
-                            VerticalAlignment="Top"
+                            VerticalAlignment="Center"
                             IsVisible="{TemplateBinding ShowCloseButton}">
                       <Button.Content>
                         <Grid Width="12"
@@ -385,6 +388,12 @@
     <Setter Property="Fill" Value="Transparent" />
     <Setter Property="StrokeThickness" Value="1.35" />
     <Setter Property="StrokeLineCap" Value="Round" />
+  </Style>
+
+  <Style Selector="controls|AppWindowFrame /template/ TextBlock.dialog-window-title">
+    <Setter Property="Margin" Value="8,0,0,0" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="LineHeight" Value="24" />
   </Style>
 
   <Style Selector="controls|AppWindowFrame /template/ Border#PART_FrameSurface">

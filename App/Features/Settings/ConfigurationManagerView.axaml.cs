@@ -431,6 +431,7 @@ public partial class ConfigurationManagerView : UserControl
             UnifiedDescription: text("Settings.ConfigurationManager.ImportMode.UnifiedDescription"),
             ManualTitle: text("Settings.ConfigurationManager.ImportMode.Manual"),
             ManualDescription: text("Settings.ConfigurationManager.ImportMode.ManualDescription")));
+        DialogWindowScaling.ApplyOwnerUiScale(dialog, owner);
         dialog.Show(owner);
 
         try

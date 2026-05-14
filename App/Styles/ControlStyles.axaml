@@ -290,6 +290,10 @@
     <Setter Property="FontFamily" Value="{DynamicResource MAA.FontFamily.UI}" />
   </Style>
 
+  <Style Selector="Popup">
+    <Setter Property="controls:PopupUiScale.UseTopLevelUiScale" Value="True" />
+  </Style>
+
   <Style Selector="TextBlock.subtle">
     <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Text.Secondary}" />
   </Style>

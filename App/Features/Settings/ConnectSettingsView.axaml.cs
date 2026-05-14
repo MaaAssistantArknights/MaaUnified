@@ -468,6 +468,7 @@ public partial class ConnectSettingsView : UserControl
 
         if (TopLevel.GetTopLevel(this) is Window owner)
         {
+            MAAUnified.App.Features.Dialogs.DialogWindowScaling.ApplyOwnerUiScale(_screenshotPreviewWindow, owner);
             _screenshotPreviewWindow.Show(owner);
             return;
         }

@@ -36,6 +36,7 @@ public partial class MainWindow : Window
     private const double BaseWindowHeight = 900d;
     private const double BaseWindowMinWidth = 1080d;
     private const double BaseWindowMinHeight = 620d;
+    private const double MacOsDefaultWindowSizeScale = 1.3d;
     private const double MacOsHiDpiHeightBoostPerScaleStep = 0.12d;
     private const double MacOsHiDpiHeightBoostMax = 1.18d;
     private const int ResponsiveMarginProgressSteps = 12;
@@ -135,7 +136,9 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        WindowVisuals.ApplyMacResizableCustomChrome(this);
         WindowVisuals.ApplyDefaultIcon(this);
+        ApplyPlatformDefaultWindowSize(OperatingSystem.IsMacOS());
         _dialogService = Avalonia.Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime
             ? new AvaloniaDialogService(App.Runtime)
             : NoOpAppDialogService.Instance;
@@ -836,8 +839,10 @@ public partial class MainWindow : Window
 
             var previousWidthScale = _hasAppliedUiScaleToWindowBounds ? _lastAppliedWindowWidthScale : 1d;
             var previousHeightScale = _hasAppliedUiScaleToWindowBounds ? _lastAppliedWindowHeightScale : 1d;
-            var logicalWidth = preserveLogicalSize ? ResolveLogicalWindowSize(Width, previousWidthScale, BaseWindowWidth) : BaseWindowWidth;
-            var logicalHeight = preserveLogicalSize ? ResolveLogicalWindowSize(Height, previousHeightScale, BaseWindowHeight) : BaseWindowHeight;
+            var defaultLogicalWidth = ComputeDefaultWindowWidth(OperatingSystem.IsMacOS());
+            var defaultLogicalHeight = ComputeDefaultWindowHeight(OperatingSystem.IsMacOS());
+            var logicalWidth = preserveLogicalSize ? ResolveLogicalWindowSize(Width, previousWidthScale, defaultLogicalWidth) : defaultLogicalWidth;
+            var logicalHeight = preserveLogicalSize ? ResolveLogicalWindowSize(Height, previousHeightScale, defaultLogicalHeight) : defaultLogicalHeight;
 
             MinWidth = BaseWindowMinWidth * widthScale;
             MinHeight = BaseWindowMinHeight * heightScale;
@@ -856,6 +861,27 @@ public partial class MainWindow : Window
         {
             // Ignore late size adjustments while the shell is shutting down.
         }
+    }
+
+    private void ApplyPlatformDefaultWindowSize(bool isMacOS)
+    {
+        if (!isMacOS)
+        {
+            return;
+        }
+
+        Width = ComputeDefaultWindowWidth(isMacOS);
+        Height = ComputeDefaultWindowHeight(isMacOS);
+    }
+
+    internal static double ComputeDefaultWindowWidth(bool isMacOS)
+    {
+        return BaseWindowWidth * (isMacOS ? MacOsDefaultWindowSizeScale : 1d);
+    }
+
+    internal static double ComputeDefaultWindowHeight(bool isMacOS)
+    {
+        return BaseWindowHeight * (isMacOS ? MacOsDefaultWindowSizeScale : 1d);
     }
 
     private static double ResolveLogicalWindowSize(double scaledValue, double scale, double fallback)
@@ -1337,6 +1363,7 @@ public partial class MainWindow : Window
                 DataContext = VM,
             };
             _runtimeLogWindow.Closed += OnRuntimeLogWindowClosed;
+            DialogWindowScaling.ApplyOwnerUiScale(_runtimeLogWindow, this);
             _runtimeLogWindow.Show(this);
             return;
         }
@@ -1729,6 +1756,7 @@ public partial class MainWindow : Window
             var savingText = $"{JoinChineseNames(waitingNames)}正在保存，请稍等";
             waitDialog = new ConfigurationSaveStatusDialogView();
             waitDialog.ApplyMessage("正在保存", savingText, showConfirmButton: false);
+            DialogWindowScaling.ApplyOwnerUiScale(waitDialog, this);
             waitDialogTask = waitDialog.ShowDialog<bool?>(this);
         }
 
