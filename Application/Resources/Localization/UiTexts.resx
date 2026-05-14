@@ -4463,6 +4463,12 @@ Session state `{0}` does not allow {2}.</value>
   <data name="TaskQueue.Root.OverlayTargetPickerConfirm" xml:space="preserve">
     <value>确定</value>
   </data>
+  <data name="TaskQueue.Root.OverlayTargetPickerEmptyBody" xml:space="preserve">
+    <value>请刷新扫描，或先启动目标应用。</value>
+  </data>
+  <data name="TaskQueue.Root.OverlayTargetPickerEmptyTitle" xml:space="preserve">
+    <value>未找到正在运行的进程</value>
+  </data>
   <data name="TaskQueue.Root.OverlayTargetPickerRefresh" xml:space="preserve">
     <value>刷新</value>
   </data>

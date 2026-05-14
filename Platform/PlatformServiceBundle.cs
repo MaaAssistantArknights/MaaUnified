@@ -126,6 +126,10 @@ public static class PlatformServicesFactory
             {
                 overlayService = new WindowsOverlayCapabilityService();
             }
+            else if (!forceFallback && MacOverlayCapabilityService.TryCreate(out var macOverlay))
+            {
+                overlayService = macOverlay;
+            }
             else if (!forceFallback && LinuxOverlayCapabilityService.TryCreate(out var linuxOverlay))
             {
                 overlayService = linuxOverlay;

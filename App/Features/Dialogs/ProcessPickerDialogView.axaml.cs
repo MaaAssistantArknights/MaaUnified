@@ -15,6 +15,8 @@ public partial class ProcessPickerDialogView : Window, IDialogChromeAware
     private bool _isRefreshing;
     private string _refreshButtonText = "Refresh";
     private string _refreshingButtonText = "Refreshing...";
+    private string _emptyStateTitleText = "No running process found";
+    private string _emptyStateBodyText = "Refresh to scan again, or start the target app first.";
 
     public ProcessPickerDialogView()
     {
@@ -33,6 +35,8 @@ public partial class ProcessPickerDialogView : Window, IDialogChromeAware
         CancelButton.Content = request.CancelText;
         _refreshButtonText = RefreshButton.Content?.ToString() ?? "Refresh";
         _refreshingButtonText = _refreshButtonText;
+        _emptyStateTitleText = EmptyStateTitleText?.Text ?? _emptyStateTitleText;
+        _emptyStateBodyText = EmptyStateBodyText?.Text ?? _emptyStateBodyText;
         ApplyItems(request.Items, request.SelectedId);
         RefreshButton.IsVisible = request.RefreshItemsAsync is not null;
         RefreshButton.IsEnabled = request.RefreshItemsAsync is not null;
@@ -126,7 +130,20 @@ public partial class ProcessPickerDialogView : Window, IDialogChromeAware
         CancelButton.Content = chrome.CancelText ?? CancelButton.Content;
         _refreshButtonText = chrome.GetNamedTextOrDefault(DialogTextCatalog.ChromeKeys.RefreshButton, _refreshButtonText);
         _refreshingButtonText = chrome.GetNamedTextOrDefault(DialogTextCatalog.ChromeKeys.RefreshingButton, _refreshButtonText);
+        _emptyStateTitleText = chrome.GetNamedTextOrDefault(DialogTextCatalog.ChromeKeys.EmptyStateTitle, _emptyStateTitleText);
+        _emptyStateBodyText = chrome.GetNamedTextOrDefault(DialogTextCatalog.ChromeKeys.EmptyStateBody, _emptyStateBodyText);
         RefreshButton.Content = _isRefreshing ? _refreshingButtonText : _refreshButtonText;
+        if (EmptyStateTitleText is not null)
+        {
+            EmptyStateTitleText.Text = _emptyStateTitleText;
+        }
+
+        if (EmptyStateBodyText is not null)
+        {
+            EmptyStateBodyText.Text = _emptyStateBodyText;
+        }
+
+        UpdateSelectionState();
     }
 
     private void OnProcessSelectionChanged(object? sender, SelectionChangedEventArgs e)
@@ -179,19 +196,12 @@ public partial class ProcessPickerDialogView : Window, IDialogChromeAware
             EmptyStatePanel.IsVisible = !hasItems;
         }
 
-        if (SelectionSummaryText is not null)
-        {
-            SelectionSummaryText.Text = hasItems
-                ? $"{_items.Count} process{(_items.Count == 1 ? string.Empty : "es")} available"
-                : "No running process found";
-        }
-
         if (HintText is not null)
         {
             HintText.Text = selected?.DisplayName
                 ?? (hasItems
                     ? "Choose the process that should receive the connection."
-                    : "Refresh to scan again, or start the target app first.");
+                    : string.Empty);
         }
     }
 }

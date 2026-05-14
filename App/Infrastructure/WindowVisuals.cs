@@ -7,10 +7,11 @@ namespace MAAUnified.App.Infrastructure;
 internal static class WindowVisuals
 {
     private static readonly Uri AppIconUri = new("avares://MAAUnified/Assets/Brand/newlogo.ico");
+    private const double MacCustomChromeTitleBarHeight = 32d;
 
     public static void ApplyDefaultIcon(Window window)
     {
-        ApplyMacResizableCustomChrome(window);
+        ApplyMacCustomChromeHints(window);
 
         if (window.Icon is not null)
         {
@@ -77,6 +78,22 @@ internal static class WindowVisuals
         window.TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
     }
 
+    private static void ApplyMacCustomChromeHints(Window window)
+    {
+        ApplyMacResizableCustomChrome(window);
+
+        if (!ShouldApplyMacCustomChromeHints(
+                window.SystemDecorations,
+                window.ExtendClientAreaToDecorationsHint,
+                window.ExtendClientAreaChromeHints,
+                OperatingSystem.IsMacOS()))
+        {
+            return;
+        }
+
+        window.ExtendClientAreaTitleBarHeightHint = MacCustomChromeTitleBarHeight;
+    }
+
     public static void ApplyMacResizableCustomChrome(Window window)
     {
         if (!ShouldApplyMacResizableCustomChrome(
@@ -90,6 +107,19 @@ internal static class WindowVisuals
         // BorderOnly keeps the app-drawn title row while letting macOS expose
         // native resize behavior around borderless, extended-client windows.
         window.SystemDecorations = SystemDecorations.BorderOnly;
+    }
+
+    internal static bool ShouldApplyMacCustomChromeHints(
+        SystemDecorations systemDecorations,
+        bool extendClientAreaToDecorationsHint,
+        ExtendClientAreaChromeHints extendClientAreaChromeHints,
+        bool isMacOS)
+    {
+        return isMacOS
+            && extendClientAreaToDecorationsHint
+            && extendClientAreaChromeHints == ExtendClientAreaChromeHints.NoChrome
+            && (systemDecorations == SystemDecorations.None
+                || systemDecorations == SystemDecorations.BorderOnly);
     }
 
     internal static bool ShouldApplyMacResizableCustomChrome(

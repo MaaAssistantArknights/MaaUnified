@@ -8,6 +8,29 @@ namespace MAAUnified.Tests;
 public sealed class WindowVisualsTests
 {
     [Theory]
+    [InlineData(SystemDecorations.None, true, ExtendClientAreaChromeHints.NoChrome, true, true)]
+    [InlineData(SystemDecorations.BorderOnly, true, ExtendClientAreaChromeHints.NoChrome, true, true)]
+    [InlineData(SystemDecorations.Full, true, ExtendClientAreaChromeHints.NoChrome, true, false)]
+    [InlineData(SystemDecorations.None, false, ExtendClientAreaChromeHints.NoChrome, true, false)]
+    [InlineData(SystemDecorations.None, true, ExtendClientAreaChromeHints.Default, true, false)]
+    [InlineData(SystemDecorations.None, true, ExtendClientAreaChromeHints.NoChrome, false, false)]
+    public void ShouldApplyMacCustomChromeHints_ShouldMatchExtendedNoChromeMacWindows(
+        SystemDecorations systemDecorations,
+        bool extendClientAreaToDecorationsHint,
+        ExtendClientAreaChromeHints extendClientAreaChromeHints,
+        bool isMacOS,
+        bool expected)
+    {
+        var actual = WindowVisuals.ShouldApplyMacCustomChromeHints(
+            systemDecorations,
+            extendClientAreaToDecorationsHint,
+            extendClientAreaChromeHints,
+            isMacOS);
+
+        Assert.Equal(expected, actual);
+    }
+
+    [Theory]
     [InlineData(SystemDecorations.None, true, true, true)]
     [InlineData(SystemDecorations.None, false, true, false)]
     [InlineData(SystemDecorations.BorderOnly, true, true, false)]

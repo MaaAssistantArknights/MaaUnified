@@ -64,11 +64,6 @@
   <controls:AppWindowFrame x:Name="DialogShell"
                            Mode="CompactModal"
                            CloseRequested="OnShellCloseRequested">
-    <controls:AppWindowFrame.HeaderContent>
-      <TextBlock x:Name="SelectionSummaryText"
-                 Classes="app-window-subtitle long-wrap"
-                 Text="No running process found" />
-    </controls:AppWindowFrame.HeaderContent>
     <controls:AppWindowFrame.Content>
       <Grid RowDefinitions="Auto,*">
         <StackPanel Classes="app-compact-selection-intro process-picker-intro">
@@ -116,9 +111,11 @@
                   Classes="process-picker-empty"
                   IsVisible="False">
             <StackPanel Classes="app-compact-empty-state-content">
-              <TextBlock Classes="app-window-title app-compact-empty-title"
+              <TextBlock x:Name="EmptyStateTitleText"
+                         Classes="app-window-title app-compact-empty-title"
                          Text="No running process found" />
-              <TextBlock Classes="app-window-subtitle app-compact-empty-body"
+              <TextBlock x:Name="EmptyStateBodyText"
+                         Classes="app-window-subtitle app-compact-empty-body"
                          Text="Refresh to scan again, or check whether the target app is already open." />
             </StackPanel>
           </Border>

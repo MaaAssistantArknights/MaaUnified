@@ -480,14 +480,21 @@ public sealed class SettingsViewStructureContractTests
         Assert.Contains("hdiutil create -volname \"$app_name\"", script, StringComparison.Ordinal);
         Assert.Contains("hdiutil verify \"$dmg_path\"", script, StringComparison.Ordinal);
         Assert.Contains("retrying in ${delay}s", script, StringComparison.Ordinal);
-        Assert.Contains("write_dmg_installation_note()", script, StringComparison.Ordinal);
+        Assert.Contains("write_dmg_quarantine_fix_script()", script, StringComparison.Ordinal);
         Assert.Contains("customize_mounted_dmg()", script, StringComparison.Ordinal);
         Assert.Contains("prepare_dmg_layout()", script, StringComparison.Ordinal);
-        Assert.Contains("Install Help.txt", script, StringComparison.Ordinal);
-        Assert.Contains("xattr -dr com.apple.quarantine \"/Applications/MAAUnified.app\"", script, StringComparison.Ordinal);
-        Assert.Contains("DRAG TO APPLICATIONS", backgroundScript, StringComparison.Ordinal);
-        Assert.Contains("XATTR -DR COM.APPLE.QUARANTINE", backgroundScript, StringComparison.Ordinal);
-        Assert.Contains("/APPLICATIONS/MAAUNIFIED.APP", backgroundScript, StringComparison.Ordinal);
+        Assert.Contains("Fix Damaged.command", script, StringComparison.Ordinal);
+        Assert.Contains("AppleLocale", script, StringComparison.Ordinal);
+        Assert.Contains("zh_Hant*", script, StringComparison.Ordinal);
+        Assert.Contains("ja*", script, StringComparison.Ordinal);
+        Assert.Contains("ko*", script, StringComparison.Ordinal);
+        Assert.Contains("quarantine_command='xattr -dr com.apple.quarantine", script, StringComparison.Ordinal);
+        Assert.Contains("/Applications/MAAUnified.app", script, StringComparison.Ordinal);
+        Assert.Contains("拖到 Applications / Drag to Applications / Applications へドラッグ / Applications로 드래그", backgroundScript, StringComparison.Ordinal);
+        Assert.Contains("拖到「應用程式」/ Applications へドラッグ / Applications로 드래그", backgroundScript, StringComparison.Ordinal);
+        Assert.Contains("如果提示“已损坏” / “damaged” /「破損」/ 손상됨", backgroundScript, StringComparison.Ordinal);
+        Assert.Contains("双击 Fix Damaged.command，或在终端运行：", backgroundScript, StringComparison.Ordinal);
+        Assert.Contains("xattr -dr com.apple.quarantine \"/Applications/MAAUnified.app\"", backgroundScript, StringComparison.Ordinal);
     }
 
     [Fact]

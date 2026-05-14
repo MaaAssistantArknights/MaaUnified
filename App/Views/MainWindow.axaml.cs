@@ -104,6 +104,7 @@ public partial class MainWindow : Window
     private double _pendingAdaptiveLayoutWidth;
     private double _pendingAdaptiveLayoutHeight;
     private bool _hasAppliedUiScaleToWindowBounds;
+    private bool _hasAppliedOpenedWindowBounds;
     private double _lastAppliedWindowWidthScale = 1d;
     private double _lastAppliedWindowHeightScale = 1d;
     private DispatcherTimer? _resizeSettleTimer;
@@ -136,7 +137,6 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
-        WindowVisuals.ApplyMacResizableCustomChrome(this);
         WindowVisuals.ApplyDefaultIcon(this);
         ApplyPlatformDefaultWindowSize(OperatingSystem.IsMacOS());
         _dialogService = Avalonia.Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime
@@ -212,7 +212,11 @@ public partial class MainWindow : Window
         Program.RecordStartupStage("MainWindow.Opened", "Main window opened.");
         if (VM is not null)
         {
-            ApplyUiScaleToWindowBounds(preserveLogicalSize: _hasAppliedUiScaleToWindowBounds);
+            var forcePlatformDefaultSize = OperatingSystem.IsMacOS() && !_hasAppliedOpenedWindowBounds;
+            ApplyUiScaleToWindowBounds(
+                preserveLogicalSize: _hasAppliedUiScaleToWindowBounds && !forcePlatformDefaultSize,
+                force: forcePlatformDefaultSize);
+            _hasAppliedOpenedWindowBounds = true;
         }
 
         FitToCurrentScreenWorkingArea();
@@ -824,13 +828,14 @@ public partial class MainWindow : Window
         return double.IsFinite(scale) && scale > 0d ? scale : 1d;
     }
 
-    private void ApplyUiScaleToWindowBounds(bool preserveLogicalSize)
+    private void ApplyUiScaleToWindowBounds(bool preserveLogicalSize, bool force = false)
     {
         try
         {
             var widthScale = ComputeWindowWidthScale(GetEffectiveUiScaleFactor());
             var heightScale = ComputeWindowHeightScale(GetEffectiveUiScaleFactor(), RenderScaling, OperatingSystem.IsMacOS());
-            if (_hasAppliedUiScaleToWindowBounds
+            if (!force
+                && _hasAppliedUiScaleToWindowBounds
                 && Math.Abs(_lastAppliedWindowWidthScale - widthScale) < 0.001d
                 && Math.Abs(_lastAppliedWindowHeightScale - heightScale) < 0.001d)
             {

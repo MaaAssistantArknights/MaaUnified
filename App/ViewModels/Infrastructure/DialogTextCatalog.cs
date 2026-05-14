@@ -19,6 +19,8 @@ public static class DialogTextCatalog
         public const string RefreshButton = "RefreshButton";
         public const string RefreshingButton = "RefreshingButton";
         public const string SectionTitle = "SectionTitle";
+        public const string EmptyStateTitle = "EmptyStateTitle";
+        public const string EmptyStateBody = "EmptyStateBody";
         public const string CopyButton = "CopyButton";
         public const string IssueReportButton = "IssueReportButton";
         public const string TimestampLabel = "TimestampLabel";

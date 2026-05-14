@@ -4462,6 +4462,12 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
   <data name="TaskQueue.Root.OverlayTargetPickerConfirm" xml:space="preserve">
     <value>OK</value>
   </data>
+  <data name="TaskQueue.Root.OverlayTargetPickerEmptyBody" xml:space="preserve">
+    <value>Refresh to scan again, or start the target app first.</value>
+  </data>
+  <data name="TaskQueue.Root.OverlayTargetPickerEmptyTitle" xml:space="preserve">
+    <value>No running process found</value>
+  </data>
   <data name="TaskQueue.Root.OverlayTargetPickerRefresh" xml:space="preserve">
     <value>Refresh</value>
   </data>
