@@ -2767,6 +2767,12 @@
   <data name="TaskQueue.Root.OverlayTargetPickerConfirm" xml:space="preserve">
     <value>確定</value>
   </data>
+  <data name="TaskQueue.Root.OverlayTargetPickerEmptyBody" xml:space="preserve">
+    <value>請重新整理掃描，或先啟動目標應用程式。</value>
+  </data>
+  <data name="TaskQueue.Root.OverlayTargetPickerEmptyTitle" xml:space="preserve">
+    <value>找不到正在執行的行程</value>
+  </data>
   <data name="TaskQueue.Root.OverlayTargetPickerRefresh" xml:space="preserve">
     <value>重新整理</value>
   </data>

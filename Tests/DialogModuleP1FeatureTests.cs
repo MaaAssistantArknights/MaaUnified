@@ -561,6 +561,8 @@ public sealed class DialogModuleP1FeatureTests
         Assert.Contains("Classes=\"app-button app-secondary\"", processPickerXaml, StringComparison.Ordinal);
         Assert.Contains("app-compact-selection-intro", processPickerXaml, StringComparison.Ordinal);
         Assert.DoesNotContain("Running processes", processPickerXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("SelectionSummaryText", processPickerXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("<controls:AppWindowFrame.HeaderContent>", processPickerXaml, StringComparison.Ordinal);
         Assert.Contains("app-compact-selection-list", processPickerXaml, StringComparison.Ordinal);
         Assert.Contains("app-compact-empty-state-content", processPickerXaml, StringComparison.Ordinal);
         Assert.Contains("<controls:AppSelectionList", emulatorPathXaml, StringComparison.Ordinal);
@@ -798,6 +800,21 @@ public sealed class DialogModuleP1FeatureTests
             view.ProcessList.Items.Cast<ProcessPickerItem>().Select(static item => item.Id).ToArray());
     }
 
+    [Fact]
+    public void ProcessPickerDialogView_ShouldBindEmptyStateTextToDialogChrome()
+    {
+        var root = BaselineTestSupport.GetMaaUnifiedRoot();
+        var viewCode = File.ReadAllText(Path.Combine(root, "App", "Features", "Dialogs", "ProcessPickerDialogView.axaml.cs"));
+        var taskQueueCode = File.ReadAllText(Path.Combine(root, "App", "ViewModels", "TaskQueue", "TaskQueuePageViewModel.cs"));
+
+        Assert.Contains("DialogTextCatalog.ChromeKeys.EmptyStateTitle", viewCode, StringComparison.Ordinal);
+        Assert.Contains("DialogTextCatalog.ChromeKeys.EmptyStateBody", viewCode, StringComparison.Ordinal);
+        Assert.Contains("EmptyStateTitleText.Text = _emptyStateTitleText;", viewCode, StringComparison.Ordinal);
+        Assert.Contains("EmptyStateBodyText.Text = _emptyStateBodyText;", viewCode, StringComparison.Ordinal);
+        Assert.Contains("TaskQueue.Root.OverlayTargetPickerEmptyTitle", taskQueueCode, StringComparison.Ordinal);
+        Assert.Contains("TaskQueue.Root.OverlayTargetPickerEmptyBody", taskQueueCode, StringComparison.Ordinal);
+    }
+
     private static AchievementListDialogRequest CreateAchievementListRequest(string language)
     {
         var chrome = DialogTextCatalog.CreateCatalog(
@@ -863,6 +880,15 @@ public sealed class DialogModuleP1FeatureTests
         SetProcessPickerDialogField(view, "RefreshButton", new Button());
         SetProcessPickerDialogField(view, "CancelButton", new Button());
         SetProcessPickerDialogField(view, "ConfirmButton", new Button());
+        SetProcessPickerDialogField(view, "DialogShell", new AppWindowFrame());
+        SetProcessPickerDialogField(view, "HintText", new TextBlock());
+        SetProcessPickerDialogField(view, "EmptyStatePanel", new Border());
+        SetProcessPickerDialogField(view, "EmptyStateTitleText", new TextBlock());
+        SetProcessPickerDialogField(view, "EmptyStateBodyText", new TextBlock());
+        SetProcessPickerDialogField(view, "_refreshButtonText", "Refresh");
+        SetProcessPickerDialogField(view, "_refreshingButtonText", "Refreshing...");
+        SetProcessPickerDialogField(view, "_emptyStateTitleText", "No running process found");
+        SetProcessPickerDialogField(view, "_emptyStateBodyText", "Refresh to scan again, or start the target app first.");
         return view;
     }
 

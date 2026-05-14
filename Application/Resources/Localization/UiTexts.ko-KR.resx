@@ -2876,6 +2876,12 @@ OF-1 스테이지가 개방되지 않은 경우에는 선택하지 마세요.</v
   <data name="TaskQueue.Root.OverlayTargetPickerConfirm" xml:space="preserve">
     <value>확인</value>
   </data>
+  <data name="TaskQueue.Root.OverlayTargetPickerEmptyBody" xml:space="preserve">
+    <value>다시 스캔하려면 새로고침하거나 먼저 대상 앱을 시작하세요.</value>
+  </data>
+  <data name="TaskQueue.Root.OverlayTargetPickerEmptyTitle" xml:space="preserve">
+    <value>실행 중인 프로세스를 찾을 수 없습니다</value>
+  </data>
   <data name="TaskQueue.Root.OverlayTargetPickerRefresh" xml:space="preserve">
     <value>새로고침</value>
   </data>

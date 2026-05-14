@@ -55,6 +55,8 @@ public sealed class LocalizationAuditRegressionTests
         "TaskQueue.Root.OverlayTargetPickerTitle",
         "TaskQueue.Root.OverlayTargetPickerConfirm",
         "TaskQueue.Root.OverlayTargetPickerCancel",
+        "TaskQueue.Root.OverlayTargetPickerEmptyTitle",
+        "TaskQueue.Root.OverlayTargetPickerEmptyBody",
         "TaskQueue.Root.OverlayTargetPickerCancelStatus",
         "TaskQueue.Root.OverlayTargetPickerClosedStatus",
         "Settings.Section.Performance",

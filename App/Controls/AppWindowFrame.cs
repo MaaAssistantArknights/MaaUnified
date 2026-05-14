@@ -774,8 +774,8 @@ public class AppWindowFrame : ContentControl
 
     internal static Thickness ResolveResizeGripMargin(Thickness shellMargin, bool preferOuterResizeGrips)
     {
-        // macOS borderless windows rely on client-area hit targets for resize,
-        // so the grips need to stay on the true outer edge instead of the inset shadow gutter.
+        // macOS keeps resize hit targets on the true window edge so they do not
+        // cover the traffic-light/title row; Linux keeps the existing visible-frame path.
         return preferOuterResizeGrips
             ? default
             : shellMargin;

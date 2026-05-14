@@ -3131,8 +3131,10 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 confirmText: texts.GetOrDefault("TaskQueue.Root.OverlayTargetPickerConfirm", "Select"),
                 cancelText: texts.GetOrDefault("TaskQueue.Root.OverlayTargetPickerCancel", "Cancel"),
                 namedTexts: DialogTextCatalog.CreateNamedTexts(
-                    (DialogTextCatalog.ChromeKeys.RefreshButton, texts.GetOrDefault("TaskQueue.Root.ReloadTargets", "Refresh")),
-                    (DialogTextCatalog.ChromeKeys.RefreshingButton, texts.GetOrDefault("TaskQueue.Root.ReloadTargets", "Refresh")))));
+                    (DialogTextCatalog.ChromeKeys.RefreshButton, texts.GetOrDefault("TaskQueue.Root.OverlayTargetPickerRefresh", "Refresh")),
+                    (DialogTextCatalog.ChromeKeys.RefreshingButton, texts.GetOrDefault("TaskQueue.Root.OverlayTargetPickerRefresh", "Refresh")),
+                    (DialogTextCatalog.ChromeKeys.EmptyStateTitle, texts.GetOrDefault("TaskQueue.Root.OverlayTargetPickerEmptyTitle", "No running process found")),
+                    (DialogTextCatalog.ChromeKeys.EmptyStateBody, texts.GetOrDefault("TaskQueue.Root.OverlayTargetPickerEmptyBody", "Refresh to scan again, or start the target app first.")))));
         var chromeSnapshot = chrome.GetSnapshot();
         var pickerItems = BuildOverlayPickerItems(OverlayTargets);
         var selectedPickerId = ResolveOverlayPickerSelectedId(SelectedOverlayTarget);

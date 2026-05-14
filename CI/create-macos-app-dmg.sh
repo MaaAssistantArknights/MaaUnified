@@ -25,7 +25,7 @@ dmg_tmp_path="$release_dir/.$package_name.tmp.dmg"
 dmg_mount_dir="$release_dir/.$package_name.mount"
 dmg_background_dir="$dmg_root/.background"
 dmg_background_path="$dmg_background_dir/installer-background.png"
-dmg_install_note_name="Install Help.txt"
+dmg_fix_script_name="Fix Damaged.command"
 app_icon_name="MAAUnified.icns"
 brand_icon_path="src/MAAUnified/App/Assets/Brand/newlogo.ico"
 signing_status_path="$release_dir/.$package_name.signing-status"
@@ -45,18 +45,109 @@ if [[ ! -d "$staging_dir/resource" ]]; then
   exit 1
 fi
 
-write_dmg_installation_note() {
-  local note_path="$1"
+write_dmg_quarantine_fix_script() {
+  local script_path="$1"
 
-  cat > "$note_path" <<'TXT'
-MAAUnified macOS 安装说明
+  cat > "$script_path" <<'SCRIPT'
+#!/usr/bin/env bash
+set -euo pipefail
 
-1. 将 MAAUnified.app 拖到 Applications 文件夹完成安装。
-2. 如果 macOS 提示 “MAAUnified.app 已损坏，无法打开”，通常不是应用本体损坏，而是未公证包被 Gatekeeper quarantine 隔离属性拦截。
-3. 确认下载来源可信后，可以在终端运行下面的命令忽略隔离属性，然后重新打开：
+app_path="/Applications/MAAUnified.app"
+quarantine_command='xattr -dr com.apple.quarantine "/Applications/MAAUnified.app"'
+locale_name="$(defaults read -g AppleLocale 2>/dev/null || printf '%s' "${LANG:-en_US}")"
 
-xattr -dr com.apple.quarantine "/Applications/MAAUnified.app"
-TXT
+case "$locale_name" in
+  zh_Hant*|zh_TW*|zh_HK*|zh_MO*)
+    title="MAAUnified macOS 修復腳本"
+    missing="找不到 $app_path"
+    install_first="請先把 MAAUnified.app 拖到 Applications 資料夾，再執行本腳本。"
+    damaged="如果 macOS 提示「MAAUnified.app 已損壞，無法打開」，通常是 Gatekeeper quarantine 隔離屬性攔截。"
+    removing="正在移除 quarantine 屬性：$app_path"
+    removed="quarantine 屬性已移除。"
+    already_clean="未發現 quarantine 屬性，或該屬性已被移除。"
+    done_message="處理完成，正在打開 MAAUnified。"
+    command_hint="也可以在終端執行：$quarantine_command"
+    press_enter="按 Return 鍵退出..."
+    ;;
+  zh*|zh_CN*)
+    title="MAAUnified macOS 修复脚本"
+    missing="未找到 $app_path"
+    install_first="请先把 MAAUnified.app 拖到 Applications 文件夹，再运行本脚本。"
+    damaged="如果 macOS 提示“MAAUnified.app 已损坏，无法打开”，通常是 Gatekeeper quarantine 隔离属性拦截。"
+    removing="正在移除 quarantine 属性：$app_path"
+    removed="quarantine 属性已移除。"
+    already_clean="未发现 quarantine 属性，或该属性已被移除。"
+    done_message="处理完成，正在打开 MAAUnified。"
+    command_hint="也可以在终端运行：$quarantine_command"
+    press_enter="按回车退出..."
+    ;;
+  ja*)
+    title="MAAUnified macOS 修復スクリプト"
+    missing="$app_path が見つかりません"
+    install_first="先に MAAUnified.app を Applications フォルダへドラッグしてから、このスクリプトを実行してください。"
+    damaged="macOS に「MAAUnified.app は壊れているため開けません」と表示される場合、通常は Gatekeeper の quarantine 属性によるブロックです。"
+    removing="quarantine 属性を削除しています：$app_path"
+    removed="quarantine 属性を削除しました。"
+    already_clean="quarantine 属性は見つからないか、すでに削除されています。"
+    done_message="処理が完了しました。MAAUnified を開きます。"
+    command_hint="Terminal で次のコマンドを実行することもできます：$quarantine_command"
+    press_enter="Return キーを押して終了..."
+    ;;
+  ko*)
+    title="MAAUnified macOS 복구 스크립트"
+    missing="$app_path 를 찾을 수 없습니다"
+    install_first="먼저 MAAUnified.app을 Applications 폴더로 드래그한 뒤 이 스크립트를 실행하세요."
+    damaged="macOS에서 'MAAUnified.app이 손상되어 열 수 없습니다'라고 표시되면 보통 Gatekeeper quarantine 속성 때문에 차단된 것입니다."
+    removing="quarantine 속성을 제거하는 중: $app_path"
+    removed="quarantine 속성을 제거했습니다."
+    already_clean="quarantine 속성이 없거나 이미 제거되었습니다."
+    done_message="처리가 완료되었습니다. MAAUnified를 엽니다."
+    command_hint="터미널에서 다음 명령을 실행할 수도 있습니다: $quarantine_command"
+    press_enter="Return 키를 눌러 종료..."
+    ;;
+  *)
+    title="MAAUnified macOS repair script"
+    missing="Could not find $app_path"
+    install_first="Drag MAAUnified.app to the Applications folder first, then run this script again."
+    damaged="If macOS says \"MAAUnified.app is damaged and can't be opened\", it is usually blocked by the Gatekeeper quarantine attribute."
+    removing="Removing the quarantine attribute from: $app_path"
+    removed="The quarantine attribute was removed."
+    already_clean="The quarantine attribute was not found, or it was already removed."
+    done_message="Done. Opening MAAUnified."
+    command_hint="You can also run this in Terminal: $quarantine_command"
+    press_enter="Press Return to exit..."
+    ;;
+esac
+
+echo "$title"
+echo
+
+if [[ ! -d "$app_path" ]]; then
+  echo "$missing"
+  echo "$install_first"
+  echo "$command_hint"
+  echo
+  read -r -p "$press_enter" _
+  exit 1
+fi
+
+echo "$damaged"
+echo "$command_hint"
+echo "$removing"
+if xattr -dr com.apple.quarantine "$app_path" 2>/dev/null; then
+  echo "$removed"
+else
+  echo "$already_clean"
+fi
+
+echo
+echo "$done_message"
+open "$app_path"
+echo
+read -r -p "$press_enter" _
+SCRIPT
+
+  chmod +x "$script_path"
 }
 
 customize_mounted_dmg() {
@@ -81,7 +172,7 @@ tell application "Finder"
     set background picture of viewOptions to POSIX file "$mount_dir/.background/installer-background.png"
     set position of item "$app_name.app" of container window to {150, 205}
     set position of item "Applications" of container window to {490, 205}
-    set position of item "$dmg_install_note_name" of container window to {88, 330}
+    set position of item "$dmg_fix_script_name" of container window to {88, 330}
     update without registering applications
     delay 1
     close
@@ -371,7 +462,7 @@ cp -a "$app_dir" "$dmg_root/$app_name.app"
 ln -s /Applications "$dmg_root/Applications"
 mkdir -p "$dmg_background_dir"
 python3 src/MAAUnified/CI/create-dmg-background.py "$dmg_background_path"
-write_dmg_installation_note "$dmg_root/$dmg_install_note_name"
+write_dmg_quarantine_fix_script "$dmg_root/$dmg_fix_script_name"
 create_verified_dmg
 
 rm -rf "$dmg_root" "$dmg_mount_dir"

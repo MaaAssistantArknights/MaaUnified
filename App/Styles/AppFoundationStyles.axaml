@@ -306,52 +306,52 @@
                 IsVisible="{TemplateBinding ShowsResizeGrips}"
                 ZIndex="10">
             <Border x:Name="PART_ResizeNorth"
-                    Height="14"
+                    Height="18"
                     HorizontalAlignment="Stretch"
                     VerticalAlignment="Top"
-                    Background="Transparent" />
+                    Background="#01000000" />
             <Border x:Name="PART_ResizeSouth"
-                    Height="14"
+                    Height="18"
                     HorizontalAlignment="Stretch"
                     VerticalAlignment="Bottom"
-                    Background="Transparent" />
+                    Background="#01000000" />
             <Border x:Name="PART_ResizeWest"
-                    Width="14"
+                    Width="18"
                     HorizontalAlignment="Left"
                     VerticalAlignment="Stretch"
-                    Background="Transparent" />
+                    Background="#01000000" />
             <Border x:Name="PART_ResizeEast"
-                    Width="14"
+                    Width="18"
                     HorizontalAlignment="Right"
                     VerticalAlignment="Stretch"
-                    Background="Transparent" />
+                    Background="#01000000" />
             <Border x:Name="PART_ResizeNorthWest"
-                    Width="24"
-                    Height="24"
+                    Width="28"
+                    Height="28"
                     HorizontalAlignment="Left"
                     VerticalAlignment="Top"
-                    Background="Transparent"
+                    Background="#01000000"
                     ZIndex="1" />
             <Border x:Name="PART_ResizeNorthEast"
-                    Width="24"
-                    Height="24"
+                    Width="28"
+                    Height="28"
                     HorizontalAlignment="Right"
                     VerticalAlignment="Top"
-                    Background="Transparent"
+                    Background="#01000000"
                     ZIndex="1" />
             <Border x:Name="PART_ResizeSouthWest"
-                    Width="24"
-                    Height="24"
+                    Width="28"
+                    Height="28"
                     HorizontalAlignment="Left"
                     VerticalAlignment="Bottom"
-                    Background="Transparent"
+                    Background="#01000000"
                     ZIndex="1" />
             <Border x:Name="PART_ResizeSouthEast"
-                    Width="24"
-                    Height="24"
+                    Width="28"
+                    Height="28"
                     HorizontalAlignment="Right"
                     VerticalAlignment="Bottom"
-                    Background="Transparent"
+                    Background="#01000000"
                     ZIndex="1" />
           </Grid>
         </Grid>
@@ -392,8 +392,9 @@
 
   <Style Selector="controls|AppWindowFrame /template/ TextBlock.dialog-window-title">
     <Setter Property="Margin" Value="8,0,0,0" />
+    <Setter Property="FontSize" Value="13.5" />
     <Setter Property="VerticalAlignment" Value="Center" />
-    <Setter Property="LineHeight" Value="24" />
+    <Setter Property="LineHeight" Value="18" />
   </Style>
 
   <Style Selector="controls|AppWindowFrame /template/ Border#PART_FrameSurface">
