@@ -2948,6 +2948,15 @@ OF-1 스테이지가 개방되지 않은 경우에는 선택하지 마세요.</v
   <data name="Toolbox.Action.StartRecognition" xml:space="preserve">
     <value>인식 시작</value>
   </data>
+  <data name="Toolbox.Action.Recognizing" xml:space="preserve">
+    <value>인식 중...</value>
+  </data>
+  <data name="Toolbox.Action.Running" xml:space="preserve">
+    <value>실행 중...</value>
+  </data>
+  <data name="Toolbox.Action.Stop" xml:space="preserve">
+    <value>중지</value>
+  </data>
   <data name="Toolbox.Advanced.Capability.Fallback.None" xml:space="preserve">
     <value>없음</value>
   </data>
@@ -3370,6 +3379,9 @@ OF-1 스테이지가 개방되지 않은 경우에는 선택하지 마세요.</v
   </data>
   <data name="Toolbox.Status.CurrentToolStopped" xml:space="preserve">
     <value>현재 도구를 중지했습니다.</value>
+  </data>
+  <data name="Toolbox.Status.ManuallyStopped" xml:space="preserve">
+    <value>수동으로 중지했습니다.</value>
   </data>
   <data name="Toolbox.Status.MiniGameStarting" xml:space="preserve">
     <value>미니게임 작업 시작 중...</value>

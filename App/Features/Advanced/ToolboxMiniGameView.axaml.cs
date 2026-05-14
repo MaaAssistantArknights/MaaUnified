@@ -1,6 +1,8 @@
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using MAAUnified.App.ViewModels.Toolbox;
+using MAAUnified.Application.Models;
 
 namespace MAAUnified.App.Features.Advanced;
 
@@ -27,5 +29,15 @@ public partial class ToolboxMiniGameView : UserControl
         }
 
         await VM.StartMiniGameAsync();
+    }
+
+    private void OnMiniGameCommandPointerEntered(object? sender, PointerEventArgs e)
+    {
+        VM?.SetToolActionHover(ToolboxToolKind.MiniGame, hovering: true);
+    }
+
+    private void OnMiniGameCommandPointerExited(object? sender, PointerEventArgs e)
+    {
+        VM?.SetToolActionHover(ToolboxToolKind.MiniGame, hovering: false);
     }
 }

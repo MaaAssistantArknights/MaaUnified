@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Layout;
 
 namespace MAAUnified.App.Controls;
 
@@ -24,6 +25,9 @@ public sealed class AdaptiveWrapPanel : Panel
 
     public static readonly StyledProperty<Thickness> EdgeInsetProperty =
         AvaloniaProperty.Register<AdaptiveWrapPanel, Thickness>(nameof(EdgeInset), new Thickness(8, 4, 8, 12));
+
+    public static readonly StyledProperty<HorizontalAlignment> RowHorizontalAlignmentProperty =
+        AvaloniaProperty.Register<AdaptiveWrapPanel, HorizontalAlignment>(nameof(RowHorizontalAlignment), HorizontalAlignment.Left);
 
     public double ItemWidth
     {
@@ -61,6 +65,12 @@ public sealed class AdaptiveWrapPanel : Panel
         set => SetValue(EdgeInsetProperty, value);
     }
 
+    public HorizontalAlignment RowHorizontalAlignment
+    {
+        get => GetValue(RowHorizontalAlignmentProperty);
+        set => SetValue(RowHorizontalAlignmentProperty, value);
+    }
+
     private double _measuredItemWidth = 1d;
 
     static AdaptiveWrapPanel()
@@ -72,6 +82,7 @@ public sealed class AdaptiveWrapPanel : Panel
             MaxColumnGapProperty,
             RowGapProperty,
             EdgeInsetProperty);
+        AffectsArrange<AdaptiveWrapPanel>(RowHorizontalAlignmentProperty);
     }
 
     protected override Size MeasureOverride(Size availableSize)
@@ -158,7 +169,7 @@ public sealed class AdaptiveWrapPanel : Panel
                 }
             }
 
-            var x = EdgeInset.Left;
+            var x = ResolveRowStartX(finalSize.Width, itemWidth, columnGap, count);
 
             for (var i = 0; i < count; i++)
             {
@@ -171,6 +182,19 @@ public sealed class AdaptiveWrapPanel : Panel
         }
 
         return finalSize;
+    }
+
+    private double ResolveRowStartX(double availableWidth, double itemWidth, double columnGap, int count)
+    {
+        var contentWidth = Math.Max(1, availableWidth - EdgeInset.Left - EdgeInset.Right);
+        var rowWidth = (count * itemWidth) + (Math.Max(0, count - 1) * columnGap);
+        var extraWidth = Math.Max(0, contentWidth - rowWidth);
+        return RowHorizontalAlignment switch
+        {
+            HorizontalAlignment.Center => EdgeInset.Left + (extraWidth / 2d),
+            HorizontalAlignment.Right => EdgeInset.Left + extraWidth,
+            _ => EdgeInset.Left,
+        };
     }
 
     private double ResolveBaseItemWidth()

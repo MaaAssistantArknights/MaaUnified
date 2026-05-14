@@ -2947,6 +2947,15 @@
   <data name="Toolbox.Action.StartRecognition" xml:space="preserve">
     <value>認識開始</value>
   </data>
+  <data name="Toolbox.Action.Recognizing" xml:space="preserve">
+    <value>認識中...</value>
+  </data>
+  <data name="Toolbox.Action.Running" xml:space="preserve">
+    <value>実行中...</value>
+  </data>
+  <data name="Toolbox.Action.Stop" xml:space="preserve">
+    <value>停止</value>
+  </data>
   <data name="Toolbox.Advanced.Capability.Fallback.None" xml:space="preserve">
     <value>なし</value>
   </data>
@@ -3369,6 +3378,9 @@
   </data>
   <data name="Toolbox.Status.CurrentToolStopped" xml:space="preserve">
     <value>現在のツールを停止しました。</value>
+  </data>
+  <data name="Toolbox.Status.ManuallyStopped" xml:space="preserve">
+    <value>手動で停止しました。</value>
   </data>
   <data name="Toolbox.Status.MiniGameStarting" xml:space="preserve">
     <value>ミニゲームタスクを起動中...</value>

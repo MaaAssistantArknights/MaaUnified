@@ -112,7 +112,9 @@ public partial class App : Avalonia.Application
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             Program.RecordStartupStage("FrameworkInit.DesktopLifetime.Begin", "Configuring classic desktop lifetime.");
-            var appLifecycleService = new AvaloniaDesktopAppLifecycleService(desktop);
+            var appLifecycleService = new AvaloniaDesktopAppLifecycleService(
+                desktop,
+                DisposeRuntimeOnExitAsync);
             Runtime.AppLifecycleService = appLifecycleService;
             Runtime.PostActionFeatureService = new PostActionFeatureService(
                 Runtime.ConfigurationService,
@@ -280,7 +282,16 @@ public partial class App : Avalonia.Application
             Runtime.UiLanguageCoordinator.LanguageChanged -= app.OnLegacyLocalizationLanguageChanged;
         }
 
-        ForgetTask(DisposeRuntimeOnExitAsync(), "App.Exit.DisposeRuntime");
+        try
+        {
+            DisposeRuntimeOnExitAsync(CancellationToken.None).GetAwaiter().GetResult();
+        }
+        catch (Exception ex)
+        {
+            ForgetTask(
+                SafeRecordExceptionAsync("App.Exit.Dispose", "Failed to synchronously dispose runtime during app exit.", ex),
+                "App.Exit.DisposeRuntime.Report");
+        }
     }
 
     internal static void ForgetTask(Task task, string context)
@@ -498,7 +509,7 @@ public partial class App : Avalonia.Application
             "App.UiFontFamily.RecordFallback");
     }
 
-    private static async Task DisposeRuntimeOnExitAsync()
+    private static async Task DisposeRuntimeOnExitAsync(CancellationToken cancellationToken = default)
     {
         if (Interlocked.Exchange(ref _shutdownStarted, 1) != 0)
         {
@@ -508,7 +519,7 @@ public partial class App : Avalonia.Application
         try
         {
             var disposeTask = Runtime.DisposeAsync().AsTask();
-            var completed = await Task.WhenAny(disposeTask, Task.Delay(RuntimeDisposeTimeout));
+            var completed = await Task.WhenAny(disposeTask, Task.Delay(RuntimeDisposeTimeout, cancellationToken));
             if (ReferenceEquals(completed, disposeTask))
             {
                 await disposeTask;

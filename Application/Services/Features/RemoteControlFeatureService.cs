@@ -12,7 +12,7 @@ using MAAUnified.CoreBridge;
 
 namespace MAAUnified.Application.Services.Features;
 
-public sealed class RemoteControlFeatureService : IRemoteControlFeatureService
+public sealed class RemoteControlFeatureService : IRemoteControlFeatureService, IAsyncDisposable
 {
     private static readonly HttpClient HttpClient = new()
     {
@@ -76,6 +76,41 @@ public sealed class RemoteControlFeatureService : IRemoteControlFeatureService
         }
 
         return Task.FromResult(CoreResult<bool>.Ok(true));
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        CancellationTokenSource? pollingCts;
+        Task? pollingTask;
+        lock (_pollingGate)
+        {
+            pollingCts = _pollingCts;
+            pollingTask = _pollingTask;
+            _pollingCts = null;
+            _pollingTask = null;
+        }
+
+        if (pollingCts is null)
+        {
+            return;
+        }
+
+        try
+        {
+            pollingCts.Cancel();
+            if (pollingTask is not null)
+            {
+                await pollingTask.ConfigureAwait(false);
+            }
+        }
+        catch
+        {
+            // Polling cleanup is best-effort.
+        }
+        finally
+        {
+            pollingCts.Dispose();
+        }
     }
 
     public async Task<UiOperationResult<RemoteControlConnectivityResult>> TestConnectivityAsync(

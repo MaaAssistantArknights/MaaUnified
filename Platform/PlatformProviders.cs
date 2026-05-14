@@ -63,7 +63,7 @@ internal sealed class SharpHookEventLoopKeyboardHook : IGlobalKeyboardHook
     public void Dispose() => _inner.Dispose();
 }
 
-public sealed class WindowsNotifyIconTrayService : ITrayService
+public sealed class WindowsNotifyIconTrayService : ITrayService, IDisposable
 {
     private const nint DefaultAppIconId = 32512; // IDI_APPLICATION
     private readonly CommandNotificationService _notificationFallback = new();
@@ -191,6 +191,18 @@ public sealed class WindowsNotifyIconTrayService : ITrayService
                 $"Tray shutdown failed: {ex.Message}",
                 PlatformErrorCodes.TrayInitFailed,
                 "tray.shutdown"));
+        }
+    }
+
+    public void Dispose()
+    {
+        try
+        {
+            _ = ShutdownAsync(CancellationToken.None).GetAwaiter().GetResult();
+        }
+        catch
+        {
+            // Tray cleanup is best-effort.
         }
     }
 

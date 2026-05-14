@@ -221,6 +221,7 @@
 - 简介：基础表面、卡片、边框、按钮热区和通用视觉语义的共享样式入口。
 - 推荐场景：新增共享卡片、分组容器、轻量操作热区；想让多个页面共用同一基础表面语气。
 - 不推荐场景：只修单个页面一处 margin；在页面里复制一套“看起来像卡片”的局部样式；绕过全局卡片语义自行发明一套基础表面。
+- 备注：`Button.app-button.locked` 是全局软禁用态，适合“视觉上置灰，但仍保留点击以执行停止/提示等次级动作”的场景；需要灰态时优先复用这个通用语义，不要在单页重复 patch 模板。
 - 示例：
   - `App/Features/Dialogs/AnnouncementDialogView.axaml`：`app-surface`、`app-card` 组合。
   - `App/Features/Settings/AchievementSettingsView.axaml`：`grouped-card-frame` 风格的轻卡片。

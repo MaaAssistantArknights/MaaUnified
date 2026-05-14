@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Layout;
 using MAAUnified.App.Controls;
 
 namespace MAAUnified.Tests;
@@ -97,6 +98,28 @@ public sealed class AdaptiveWrapPanelTests
         Layout(panel, 360);
 
         Assert.Equal(10, panel.Children[0].Bounds.Left);
+    }
+
+    [Fact]
+    public void Arrange_ShouldCenterRowsWhenRequested()
+    {
+        var panel = new AdaptiveWrapPanel
+        {
+            ItemWidth = 100,
+            MinColumnGap = 12,
+            MaxColumnGap = 12,
+            RowGap = 16,
+            EdgeInset = new Thickness(10, 4, 10, 12),
+            RowHorizontalAlignment = HorizontalAlignment.Center,
+        };
+
+        panel.Children.Add(new FixedBorder(100, 40));
+        panel.Children.Add(new FixedBorder(100, 40));
+
+        Layout(panel, 360);
+
+        Assert.Equal(74, panel.Children[0].Bounds.Left);
+        Assert.Equal(12, panel.Children[1].Bounds.Left - panel.Children[0].Bounds.Right);
     }
 
     [Fact]

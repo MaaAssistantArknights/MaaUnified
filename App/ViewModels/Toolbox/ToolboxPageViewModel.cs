@@ -141,6 +141,9 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
 
     private const double OperBoxPanelItemWidth = 148d;
     private const double DepotPanelItemWidth = 166d;
+    private const double DepotGroupPanelItemWidth = 194d;
+    private const double DepotGroupPanelColumnGap = 16d;
+    private const double DepotGroupPanelHorizontalInset = 16d;
 
     private readonly ConnectionGameSharedStateViewModel? _connectionState;
     private readonly IAppDialogService _dialogService;
@@ -172,6 +175,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
     private ToolboxExecutionState _executionState;
     private string _lastExecutionErrorCode = string.Empty;
     private DateTimeOffset? _lastExecutionAt;
+    private ToolboxToolKind? _hoveredStopTool;
 
     private string _recruitInfo = string.Empty;
     private bool _chooseLevel3 = true;
@@ -335,11 +339,11 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
 
     public string StartRecognitionText => T("Toolbox.Action.StartRecognition", "Start recognition");
 
-    public string RecruitStartRecognitionText => StartRecognitionText;
+    public string RecruitStartRecognitionText => ResolveRecognitionActionText(ToolboxToolKind.Recruit);
 
-    public string OperBoxStartRecognitionText => StartRecognitionText;
+    public string OperBoxStartRecognitionText => ResolveRecognitionActionText(ToolboxToolKind.OperBox);
 
-    public string DepotStartRecognitionText => StartRecognitionText;
+    public string DepotStartRecognitionText => ResolveRecognitionActionText(ToolboxToolKind.Depot);
 
     public string OperBoxCopyToClipboardText => T("Toolbox.OperBox.CopyToClipboard", "Copy to clipboard");
 
@@ -1077,10 +1081,12 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
 
     public bool IsMiniGameSecretFront => string.Equals(MiniGameTaskName, MiniGameSecretFrontTaskName, StringComparison.Ordinal);
 
-    public bool IsMiniGameRunning => _activeTool == ToolboxToolKind.MiniGame;
+    public bool IsMiniGameRunning => _activeTool == ToolboxToolKind.MiniGame && IsExecuting;
 
     public string MiniGameCommandText => IsMiniGameRunning
-        ? T("Toolbox.Action.PeepStop", "Stop!")
+        ? IsToolActionStopHovered(ToolboxToolKind.MiniGame)
+            ? StopActionText
+            : T("Toolbox.Action.Running", "Running...")
         : T("Toolbox.Action.LinkStart", "Link Start!");
 
     public string OperBoxExportText => BuildOperBoxExportText();
@@ -1221,6 +1227,35 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
                 await StartMiniGameAsync(cancellationToken);
                 break;
         }
+    }
+
+    public void SetToolActionHover(ToolboxToolKind tool, bool hovering)
+    {
+        if (hovering)
+        {
+            if (_activeTool != tool || !IsExecuting)
+            {
+                return;
+            }
+
+            if (_hoveredStopTool == tool)
+            {
+                return;
+            }
+
+            _hoveredStopTool = tool;
+        }
+        else
+        {
+            if (_hoveredStopTool != tool)
+            {
+                return;
+            }
+
+            _hoveredStopTool = null;
+        }
+
+        NotifyToolActionTextChanged(tool);
     }
 
     public async Task StartRecruitAsync(CancellationToken cancellationToken = default)
@@ -1422,7 +1457,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         CompleteActiveToolRun(
             activeTool,
             success: false,
-            T("Toolbox.Status.CurrentToolStopped", "Current tool stopped."),
+            ManualStoppedText,
             UiErrorCode.ToolboxExecutionCancelled);
     }
 
@@ -1496,7 +1531,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
                 CompleteActiveToolRun(
                     _activeTool.Value,
                     success: false,
-                    T("Toolbox.Status.ToolStopped", "Tool stopped."),
+                    ManualStoppedText,
                     UiErrorCode.ToolboxExecutionCancelled);
                 break;
             case "TaskChainError":
@@ -1768,6 +1803,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         LastExecutionAt = null;
         OnPropertyChanged(nameof(IsMiniGameRunning));
         OnPropertyChanged(nameof(MiniGameCommandText));
+        NotifyToolActionTextChanged(tool);
         NotifyToolboxBusyStateChanged();
     }
 
@@ -1779,9 +1815,15 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         }
 
         _activeTool = null;
+        if (_hoveredStopTool == expectedTool)
+        {
+            _hoveredStopTool = null;
+        }
+
         _lastDispatchedParameterSummary = string.Empty;
         OnPropertyChanged(nameof(IsMiniGameRunning));
         OnPropertyChanged(nameof(MiniGameCommandText));
+        NotifyToolActionTextChanged(expectedTool);
         NotifyToolboxBusyStateChanged();
     }
 
@@ -1805,6 +1847,26 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         OnPropertyChanged(nameof(RecruitStartRecognitionText));
         OnPropertyChanged(nameof(OperBoxStartRecognitionText));
         OnPropertyChanged(nameof(DepotStartRecognitionText));
+        OnPropertyChanged(nameof(MiniGameCommandText));
+    }
+
+    private void NotifyToolActionTextChanged(ToolboxToolKind tool)
+    {
+        switch (tool)
+        {
+            case ToolboxToolKind.Recruit:
+                OnPropertyChanged(nameof(RecruitStartRecognitionText));
+                break;
+            case ToolboxToolKind.OperBox:
+                OnPropertyChanged(nameof(OperBoxStartRecognitionText));
+                break;
+            case ToolboxToolKind.Depot:
+                OnPropertyChanged(nameof(DepotStartRecognitionText));
+                break;
+            case ToolboxToolKind.MiniGame:
+                OnPropertyChanged(nameof(MiniGameCommandText));
+                break;
+        }
     }
 
     private void OnSessionStateChanged(SessionState _)
@@ -2680,6 +2742,10 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         ResultText = message;
         LastExecutionErrorCode = errorCode;
         LastExecutionAt = DateTimeOffset.Now;
+        if (!success && string.Equals(errorCode, UiErrorCode.ToolboxExecutionCancelled, StringComparison.Ordinal))
+        {
+            ApplyStoppedStatusToTool(tool, message);
+        }
 
         ExecutionHistory.Insert(0, success
             ? ToolExecutionRecord.Succeeded(GetToolDisplayName(tool), _lastDispatchedParameterSummary, BuildResultSummary(message))
@@ -2689,6 +2755,49 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
 
         Runtime.SessionService.EndRun(ToolboxRunOwner);
         ClearActiveToolState(tool);
+    }
+
+    private string StopActionText => T("Toolbox.Action.Stop", "Stop");
+
+    private string ManualStoppedText => T("Toolbox.Status.ManuallyStopped", "Manually stopped.");
+
+    private string ResolveRecognitionActionText(ToolboxToolKind tool)
+    {
+        if (_activeTool != tool || !IsExecuting)
+        {
+            return StartRecognitionText;
+        }
+
+        return IsToolActionStopHovered(tool)
+            ? StopActionText
+            : T("Toolbox.Action.Recognizing", "Recognizing...");
+    }
+
+    private bool IsToolActionStopHovered(ToolboxToolKind tool)
+    {
+        return _hoveredStopTool == tool && _activeTool == tool && IsExecuting;
+    }
+
+    private void ApplyStoppedStatusToTool(ToolboxToolKind tool, string message)
+    {
+        switch (tool)
+        {
+            case ToolboxToolKind.Recruit:
+                RecruitInfo = message;
+                break;
+            case ToolboxToolKind.OperBox:
+                OperBoxInfo = message;
+                break;
+            case ToolboxToolKind.Depot:
+                DepotInfo = message;
+                break;
+            case ToolboxToolKind.Gacha:
+                GachaInfo = message;
+                break;
+            case ToolboxToolKind.MiniGame:
+                MiniGameTip = message;
+                break;
+        }
     }
 
     private async Task ApplyFailureAsync(
@@ -2886,7 +2995,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
                 var title = texts.GetOrDefault("Toolbox.BusyDialog.Title", "Toolbox is busy");
                 return new DialogChromeSnapshot(
                     title: title,
-                    confirmText: texts.GetOrDefault("Toolbox.BusyDialog.ConfirmButton", "Confirm"),
+                    confirmText: texts.GetOrDefault("Toolbox.BusyDialog.ConfirmButton", "Cancel"),
                     cancelText: texts.GetOrDefault("Toolbox.BusyDialog.StopButton", "Stop current task"),
                     namedTexts: DialogTextCatalog.CreateNamedTexts(
                         (DialogTextCatalog.ChromeKeys.SectionTitle, title),
@@ -4298,10 +4407,12 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
             .Select(group =>
             {
                 var first = group.First();
+                var items = group.ToArray();
                 return new DepotItemGroupViewModel(
                     ResolveDepotGroupTitle(first),
                     ResolveDepotCategoryTitle(first.ClassifyType),
-                    group.ToArray());
+                    ResolveDepotGroupPanelWidth(items.Length),
+                    items);
             })
             .ToArray();
 
@@ -4406,6 +4517,9 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
 
     private static string ResolveDepotGroupKey(DepotItemViewModel item)
     {
+        var id = item.Id;
+        var normalizedId = NormalizeDepotItemId(id);
+
         if (item.Id is "2001" or "2002" or "2003" or "2004")
         {
             return "battle-record";
@@ -4414,6 +4528,114 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         if (item.Id.StartsWith("32", StringComparison.Ordinal) && item.Id.Length >= 3)
         {
             return $"chip-{item.Id[..3]}";
+        }
+
+        if (TryResolveDepotMaterialFamilyKey(item, out var materialFamilyKey))
+        {
+            return materialFamilyKey;
+        }
+
+        if (IsDepotBaseMaterial(item))
+        {
+            return "base-materials";
+        }
+
+        if (IsDepotHeadhuntingPermit(item))
+        {
+            return "headhunting-permits";
+        }
+
+        if (IsDepotRecruitmentPermit(id))
+        {
+            return "recruitment-permits";
+        }
+
+        if (IsDepotMaterialVoucher(normalizedId))
+        {
+            return "material-vouchers";
+        }
+
+        if (IsDepotMaterialSupply(normalizedId))
+        {
+            return "material-supplies";
+        }
+
+        if (IsDepotSanitySupply(normalizedId))
+        {
+            return "sanity-supplies";
+        }
+
+        if (normalizedId.StartsWith("ITEMPACK_MOD_", StringComparison.Ordinal))
+        {
+            return int.TryParse(id["itempack_mod_".Length..], NumberStyles.None, CultureInfo.InvariantCulture, out var modPackIndex)
+                && modPackIndex is >= 7 and <= 14
+                    ? "chip-pack-instruments"
+                    : "module-item-packs";
+        }
+
+        if (normalizedId.StartsWith("ITEMPACK_STICKERS_", StringComparison.Ordinal))
+        {
+            return "sticker-packs";
+        }
+
+        if (normalizedId.StartsWith("ITEMPACK_", StringComparison.Ordinal))
+        {
+            return "item-packs";
+        }
+
+        if (normalizedId.StartsWith("LMTGS_", StringComparison.Ordinal))
+        {
+            return "limited-gacha-contracts";
+        }
+
+        if (normalizedId.StartsWith("GIFTPACKAGETICKET_", StringComparison.Ordinal))
+        {
+            return "closure-tickets";
+        }
+
+        if (IsDepotCoreCurrency(item))
+        {
+            return "core-currency";
+        }
+
+        if (IsDepotEventShopCurrency(normalizedId))
+        {
+            return "event-shop-currency";
+        }
+
+        if (normalizedId.StartsWith("MAIN", StringComparison.Ordinal) && normalizedId.Contains("_SPITEM_", StringComparison.Ordinal))
+        {
+            return "plot-items";
+        }
+
+        if (normalizedId.StartsWith("EMOTICON_", StringComparison.Ordinal))
+        {
+            return "emoticon-sets";
+        }
+
+        if (normalizedId.StartsWith("ROGUE_", StringComparison.Ordinal))
+        {
+            return "roguelike-items";
+        }
+
+        if (normalizedId.StartsWith("SANDBOX_", StringComparison.Ordinal))
+        {
+            return "reclamation-items";
+        }
+
+        if (normalizedId.StartsWith("RETURN_CREDIT_", StringComparison.Ordinal))
+        {
+            return "return-credit-items";
+        }
+
+        if (IsDepotActivityItem(normalizedId))
+        {
+            return "activity-items";
+        }
+
+        if (IsDepotSystemResource(normalizedId))
+        {
+            return "system-resources";
         }
 
         if (item.SortId > 0)
@@ -4434,6 +4656,8 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         }
 
         var useChinese = _currentLanguage.StartsWith("zh", StringComparison.OrdinalIgnoreCase);
+        var normalizedId = NormalizeDepotItemId(first.Id);
+
         var sortBand = first.SortId / 1000;
         if (sortBand == 80)
         {
@@ -4448,6 +4672,116 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         if (first.Id.StartsWith("32", StringComparison.Ordinal))
         {
             return ResolveDepotChipGroupTitle(first.Name, useChinese);
+        }
+
+        if (TryResolveDepotMaterialFamilyKey(first, out _))
+        {
+            return IsDepotTierFiveMaterial(first.Id)
+                ? useChinese ? "高级材料" : "Advanced Materials"
+                : ResolveDepotMaterialFamilyTitle(first, useChinese);
+        }
+
+        if (IsDepotBaseMaterial(first))
+        {
+            return useChinese ? "基建材料" : "Base Materials";
+        }
+
+        if (IsDepotHeadhuntingPermit(first))
+        {
+            return useChinese ? "寻访凭证" : "Headhunting Permits";
+        }
+
+        if (IsDepotRecruitmentPermit(first.Id))
+        {
+            return useChinese ? "公开招募许可" : "Recruitment Permits";
+        }
+
+        if (IsDepotMaterialVoucher(normalizedId))
+        {
+            return useChinese ? "材料提货券" : "Material Vouchers";
+        }
+
+        if (IsDepotMaterialSupply(normalizedId))
+        {
+            return useChinese ? "物资补给" : "Material Supplies";
+        }
+
+        if (IsDepotSanitySupply(normalizedId))
+        {
+            return useChinese ? "理智补给" : "Sanity Supplies";
+        }
+
+        if (normalizedId.StartsWith("ITEMPACK_MOD_", StringComparison.Ordinal))
+        {
+            return int.TryParse(first.Id["itempack_mod_".Length..], NumberStyles.None, CultureInfo.InvariantCulture, out var modPackIndex)
+                && modPackIndex is >= 7 and <= 14
+                    ? useChinese ? "芯片组印刻仪" : "Chip Pack Instruments"
+                    : useChinese ? "模组数据整合" : "Module Data Packs";
+        }
+
+        if (normalizedId.StartsWith("ITEMPACK_STICKERS_", StringComparison.Ordinal))
+        {
+            return useChinese ? "贴纸包" : "Sticker Packs";
+        }
+
+        if (normalizedId.StartsWith("ITEMPACK_", StringComparison.Ordinal))
+        {
+            return useChinese ? "补给包" : "Item Packs";
+        }
+
+        if (normalizedId.StartsWith("LMTGS_", StringComparison.Ordinal))
+        {
+            return useChinese ? "寻访数据契约" : "Headhunting Data Contracts";
+        }
+
+        if (normalizedId.StartsWith("GIFTPACKAGETICKET_", StringComparison.Ordinal))
+        {
+            return useChinese ? "可露希尔券" : "Closure Tickets";
+        }
+
+        if (IsDepotCoreCurrency(first))
+        {
+            return useChinese ? "货币与凭证" : "Currencies and Certificates";
+        }
+
+        if (IsDepotEventShopCurrency(normalizedId))
+        {
+            return useChinese ? "活动商店货币" : "Event Shop Currencies";
+        }
+
+        if (normalizedId.StartsWith("MAIN", StringComparison.Ordinal) && normalizedId.Contains("_SPITEM_", StringComparison.Ordinal))
+        {
+            return useChinese ? "剧情道具" : "Story Items";
+        }
+
+        if (normalizedId.StartsWith("EMOTICON_", StringComparison.Ordinal))
+        {
+            return useChinese ? "表情套组" : "Emoticon Sets";
+        }
+
+        if (normalizedId.StartsWith("ROGUE_", StringComparison.Ordinal))
+        {
+            return useChinese ? "集成战略" : "Integrated Strategies";
+        }
+
+        if (normalizedId.StartsWith("SANDBOX_", StringComparison.Ordinal))
+        {
+            return useChinese ? "生息演算" : "Reclamation Algorithm";
+        }
+
+        if (normalizedId.StartsWith("RETURN_CREDIT_", StringComparison.Ordinal))
+        {
+            return useChinese ? "回归奖励" : "Returnee Rewards";
+        }
+
+        if (IsDepotActivityItem(normalizedId))
+        {
+            return useChinese ? "活动道具" : "Event Items";
+        }
+
+        if (IsDepotSystemResource(normalizedId))
+        {
+            return useChinese ? "系统资源" : "System Resources";
         }
 
         if (first.ClassifyType.Equals("MATERIAL", StringComparison.OrdinalIgnoreCase))
@@ -4478,6 +4812,150 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         }
 
         return name;
+    }
+
+    private static bool TryResolveDepotMaterialFamilyKey(DepotItemViewModel item, out string key)
+    {
+        key = string.Empty;
+        if (!item.ClassifyType.Equals("MATERIAL", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (IsDepotTierFiveMaterial(item.Id))
+        {
+            key = "tier-five-materials";
+            return true;
+        }
+
+        if (item.Id.Length == 5
+            && (item.Id.StartsWith("30", StringComparison.Ordinal) || item.Id.StartsWith("31", StringComparison.Ordinal))
+            && item.Id.All(char.IsDigit))
+        {
+            key = $"material-family-{item.Id[..4]}";
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool IsDepotTierFiveMaterial(string id)
+    {
+        return id is "30115" or "30125" or "30135" or "30145" or "30155" or "30165";
+    }
+
+    private static string ResolveDepotMaterialFamilyTitle(DepotItemViewModel item, bool useChinese)
+    {
+        if (item.Id.Length < 4)
+        {
+            return item.Name;
+        }
+
+        return item.Id[..4] switch
+        {
+            "3001" => useChinese ? "源岩" : "Orirock",
+            "3002" => useChinese ? "糖" : "Sugar",
+            "3003" => useChinese ? "聚酸酯" : "Polyester",
+            "3004" => useChinese ? "异铁" : "Oriron",
+            "3005" => useChinese ? "酮凝集" : "Ketone",
+            "3006" => useChinese ? "装置" : "Device",
+            "3007" => useChinese ? "扭转醇" : "Loxic Kohl",
+            "3008" => useChinese ? "轻锰矿" : "Manganese Ore",
+            "3009" => useChinese ? "研磨石" : "Grindstone",
+            "3010" => "RMA70",
+            "3101" => useChinese ? "凝胶" : "Gel",
+            "3102" => useChinese ? "炽合金" : "Incandescent Alloy",
+            "3103" => useChinese ? "晶体元件" : "Crystalline Component",
+            "3104" => useChinese ? "半自然溶剂" : "Semi-Synthetic Solvent",
+            "3105" => useChinese ? "化合切削液" : "Cutting Fluid",
+            "3106" => useChinese ? "转质盐" : "Transmuted Salt",
+            "3107" => useChinese ? "褐素纤维" : "Fuscous Fiber",
+            "3108" => useChinese ? "环烃聚质" : "Cyclicene",
+            "3109" => useChinese ? "类凝结核" : "Coagulative Nodule",
+            "3110" => useChinese ? "液化高能气体" : "Liquefied Energy Gas",
+            "3111" => useChinese ? "电极单元" : "Electrode Unit",
+            _ => item.Name,
+        };
+    }
+
+    private static bool IsDepotBaseMaterial(DepotItemViewModel item)
+    {
+        return item.ClassifyType.Equals("NORMAL", StringComparison.OrdinalIgnoreCase)
+            && item.Id is "3105" or "3112" or "3113" or "3114" or "3131" or "3132" or "3133" or "3401";
+    }
+
+    private static bool IsDepotHeadhuntingPermit(DepotItemViewModel item)
+    {
+        var normalizedId = NormalizeDepotItemId(item.Id);
+        return item.Id is "7003" or "7004" or "classic_gacha" or "classic_gacha_10"
+            || normalizedId.StartsWith("LINKAGE_TKT_GACHA_", StringComparison.Ordinal)
+            || normalizedId.StartsWith("SINGLE_", StringComparison.Ordinal) && normalizedId.Contains("_GACHA", StringComparison.Ordinal)
+            || normalizedId.StartsWith("2026RECRUITMENT10_", StringComparison.Ordinal)
+            || item.Name.Contains("寻访凭证", StringComparison.Ordinal)
+            || item.Name.Contains("Headhunting Permit", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsDepotRecruitmentPermit(string id)
+    {
+        return id is "7001" or "7002";
+    }
+
+    private static bool IsDepotMaterialVoucher(string normalizedId)
+    {
+        return normalizedId.Contains("MATERIAL_ISSUE_VOUCHER", StringComparison.Ordinal)
+            || normalizedId.EndsWith("_MATERIAL_VOUCHER_PERM", StringComparison.Ordinal);
+    }
+
+    private static bool IsDepotMaterialSupply(string normalizedId)
+    {
+        return normalizedId.StartsWith("RANDOMMATERIAL", StringComparison.Ordinal)
+            || normalizedId.StartsWith("RANDOMDIAMONDSHD_", StringComparison.Ordinal);
+    }
+
+    private static bool IsDepotSanitySupply(string normalizedId)
+    {
+        return normalizedId.StartsWith("AP_SUPPLY_", StringComparison.Ordinal);
+    }
+
+    private static bool IsDepotCoreCurrency(DepotItemViewModel item)
+    {
+        return item.Id is "4001" or "4002" or "4003" or "4004" or "4005" or "4006" or "3003" or "3141" or "classic_normal_ticket";
+    }
+
+    private static bool IsDepotEventShopCurrency(string normalizedId)
+    {
+        return normalizedId is "STORY_REVIEW_COIN"
+            or "CRISIS_SHOP_COIN"
+            or "CRISIS_SHOP_COIN_V2"
+            or "REP_COIN"
+            or "EPGS_COIN"
+            or "RETRO_COIN";
+    }
+
+    private static bool IsDepotActivityItem(string normalizedId)
+    {
+        return normalizedId.StartsWith("ACT", StringComparison.Ordinal)
+            || normalizedId.StartsWith("TOKEN_", StringComparison.Ordinal)
+            || normalizedId.StartsWith("ET_", StringComparison.Ordinal)
+            || normalizedId is "1STACT" or "CRISIS_RUNE_COIN" or "FAVOR_ADD_ULIKA";
+    }
+
+    private static bool IsDepotSystemResource(string normalizedId)
+    {
+        return normalizedId is "AP_GAMEPLAY"
+            or "BASE_AP"
+            or "SOCIAL_PT"
+            or "5001"
+            or "6001"
+            or "MCARDVOUCHER"
+            or "BILIBILI001"
+            or "LOGISTICS_SPECIAL_PERMIT"
+            or "SO_CHAR_EXP_1";
+    }
+
+    private static string NormalizeDepotItemId(string id)
+    {
+        return id.Trim().ToUpperInvariant();
     }
 
     private static IBrush ResolveStarBrush(int star)
@@ -4528,6 +5006,14 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
     {
         var columns = Math.Clamp(count, 1, 5);
         return columns * itemWidth;
+    }
+
+    private static double ResolveDepotGroupPanelWidth(int count)
+    {
+        var columns = Math.Clamp(count, 1, 5);
+        return DepotGroupPanelHorizontalInset
+            + (columns * DepotGroupPanelItemWidth)
+            + (Math.Max(0, columns - 1) * DepotGroupPanelColumnGap);
     }
 
     private static void ReplaceCollectionItems<T>(ObservableCollection<T> collection, IEnumerable<T> items)
@@ -4888,6 +5374,7 @@ public sealed class DepotItemViewModel : ObservableObject
 public sealed record DepotItemGroupViewModel(
     string Title,
     string Category,
+    double PanelWidth,
     IReadOnlyList<DepotItemViewModel> Items);
 
 file sealed record RecruitOperatorProjection(

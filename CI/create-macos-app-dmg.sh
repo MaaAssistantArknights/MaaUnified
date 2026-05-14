@@ -22,6 +22,10 @@ entitlements_path="$contents_dir/entitlements.plist"
 dmg_root="$release_dir/dmg-root"
 dmg_path="$release_dir/$package_name.dmg"
 dmg_tmp_path="$release_dir/.$package_name.tmp.dmg"
+dmg_mount_dir="$release_dir/.$package_name.mount"
+dmg_background_dir="$dmg_root/.background"
+dmg_background_path="$dmg_background_dir/installer-background.png"
+dmg_install_note_name="Install Help.txt"
 app_icon_name="MAAUnified.icns"
 brand_icon_path="src/MAAUnified/App/Assets/Brand/newlogo.ico"
 signing_status_path="$release_dir/.$package_name.signing-status"
@@ -41,6 +45,75 @@ if [[ ! -d "$staging_dir/resource" ]]; then
   exit 1
 fi
 
+write_dmg_installation_note() {
+  local note_path="$1"
+
+  cat > "$note_path" <<'TXT'
+MAAUnified macOS 安装说明
+
+1. 将 MAAUnified.app 拖到 Applications 文件夹完成安装。
+2. 如果 macOS 提示 “MAAUnified.app 已损坏，无法打开”，通常不是应用本体损坏，而是未公证包被 Gatekeeper quarantine 隔离属性拦截。
+3. 确认下载来源可信后，可以在终端运行下面的命令忽略隔离属性，然后重新打开：
+
+xattr -dr com.apple.quarantine "/Applications/MAAUnified.app"
+TXT
+}
+
+customize_mounted_dmg() {
+  local mount_dir="$1"
+
+  if ! command -v osascript >/dev/null 2>&1; then
+    echo "::warning title=macOS dmg layout skipped::osascript is unavailable; dmg will keep the default Finder layout."
+    return 0
+  fi
+
+  osascript <<APPLESCRIPT || {
+tell application "Finder"
+  tell disk "$app_name"
+    open
+    set current view of container window to icon view
+    set toolbar visible of container window to false
+    set statusbar visible of container window to false
+    set the bounds of container window to {100, 100, 740, 520}
+    set viewOptions to the icon view options of container window
+    set arrangement of viewOptions to not arranged
+    set icon size of viewOptions to 96
+    set background picture of viewOptions to POSIX file "$mount_dir/.background/installer-background.png"
+    set position of item "$app_name.app" of container window to {150, 205}
+    set position of item "Applications" of container window to {490, 205}
+    set position of item "$dmg_install_note_name" of container window to {88, 330}
+    update without registering applications
+    delay 1
+    close
+  end tell
+end tell
+APPLESCRIPT
+    echo "::warning title=macOS dmg layout skipped::Finder did not apply the custom dmg layout; dmg will still include the installation note."
+    return 0
+  }
+}
+
+prepare_dmg_layout() {
+  local image_path="$1"
+  local device
+
+  rm -rf "$dmg_mount_dir"
+  mkdir -p "$dmg_mount_dir"
+
+  device="$(hdiutil attach "$image_path" -readwrite -noverify -noautoopen -mountpoint "$dmg_mount_dir" | awk '/Apple_HFS|Apple_APFS/ {print $1; exit}')"
+  if [[ -z "$device" ]]; then
+    echo "Failed to mount temporary dmg image: $image_path" >&2
+    hdiutil detach "$dmg_mount_dir" >/dev/null 2>&1 || true
+    rm -rf "$dmg_mount_dir"
+    return 1
+  fi
+
+  customize_mounted_dmg "$dmg_mount_dir"
+  sync
+  hdiutil detach "$device"
+  rm -rf "$dmg_mount_dir"
+}
+
 create_verified_dmg() {
   local max_attempts=5
   local attempt
@@ -48,12 +121,16 @@ create_verified_dmg() {
   local status
 
   for ((attempt = 1; attempt <= max_attempts; attempt++)); do
+    rm -rf "$dmg_mount_dir"
     rm -f "$dmg_tmp_path" "$dmg_path"
     status=0
 
-    if hdiutil create -volname "$app_name" -srcfolder "$dmg_root" -ov -format UDZO "$dmg_tmp_path"; then
+    if hdiutil create -volname "$app_name" -srcfolder "$dmg_root" -ov -format UDRW "$dmg_tmp_path" &&
+      prepare_dmg_layout "$dmg_tmp_path" &&
+      hdiutil convert "$dmg_tmp_path" -format UDZO -imagekey zlib-level=9 -o "$dmg_path"; then
       sync
-      if mv -f "$dmg_tmp_path" "$dmg_path" && hdiutil verify "$dmg_path"; then
+      rm -f "$dmg_tmp_path"
+      if hdiutil verify "$dmg_path"; then
         return 0
       else
         status=$?
@@ -62,6 +139,7 @@ create_verified_dmg() {
       status=$?
     fi
 
+    rm -rf "$dmg_mount_dir"
     rm -f "$dmg_tmp_path" "$dmg_path"
     if ((attempt == max_attempts)); then
       echo "hdiutil create/verify failed after $max_attempts attempts." >&2
@@ -206,7 +284,7 @@ fallback_to_adhoc() {
   fi
 }
 
-rm -rf "$app_dir" "$dmg_root" "$dmg_path" "$dmg_tmp_path"
+rm -rf "$app_dir" "$dmg_root" "$dmg_mount_dir" "$dmg_path" "$dmg_tmp_path"
 mkdir -p "$macos_dir" "$resources_dir" "$dmg_root"
 
 cp -a "$staging_dir/bin/." "$macos_dir/"
@@ -291,6 +369,9 @@ fi
 
 cp -a "$app_dir" "$dmg_root/$app_name.app"
 ln -s /Applications "$dmg_root/Applications"
+mkdir -p "$dmg_background_dir"
+python3 src/MAAUnified/CI/create-dmg-background.py "$dmg_background_path"
+write_dmg_installation_note "$dmg_root/$dmg_install_note_name"
 create_verified_dmg
 
-rm -rf "$dmg_root"
+rm -rf "$dmg_root" "$dmg_mount_dir"

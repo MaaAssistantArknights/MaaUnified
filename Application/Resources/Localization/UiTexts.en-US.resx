@@ -4603,6 +4603,15 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
   <data name="Toolbox.Action.StartRecognition" xml:space="preserve">
     <value>Start recognition</value>
   </data>
+  <data name="Toolbox.Action.Recognizing" xml:space="preserve">
+    <value>Recognizing...</value>
+  </data>
+  <data name="Toolbox.Action.Running" xml:space="preserve">
+    <value>Running...</value>
+  </data>
+  <data name="Toolbox.Action.Stop" xml:space="preserve">
+    <value>Stop</value>
+  </data>
   <data name="Toolbox.Advanced.Capability.Fallback.None" xml:space="preserve">
     <value>None</value>
   </data>
@@ -4868,7 +4877,7 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
     <value>Got it</value>
   </data>
   <data name="Toolbox.BusyDialog.ConfirmButton" xml:space="preserve">
-    <value>Confirm</value>
+    <value>Cancel</value>
   </data>
   <data name="Toolbox.BusyDialog.CurrentTask" xml:space="preserve">
     <value>current task</value>
@@ -5040,6 +5049,9 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
   </data>
   <data name="Toolbox.Status.CurrentToolStopped" xml:space="preserve">
     <value>Current tool stopped.</value>
+  </data>
+  <data name="Toolbox.Status.ManuallyStopped" xml:space="preserve">
+    <value>Manually stopped.</value>
   </data>
   <data name="Toolbox.Status.MiniGameStarting" xml:space="preserve">
     <value>Starting mini-game task...</value>

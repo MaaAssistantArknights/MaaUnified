@@ -71,4 +71,16 @@ public partial class BackgroundSettingsView : UserControl
         vm.BackgroundImagePath = path;
         await vm.SaveGuiSettingsAsync();
     }
+
+    private async void OnClearBackgroundImageClick(object? sender, RoutedEventArgs e)
+    {
+        var vm = VM;
+        if (vm is null)
+        {
+            return;
+        }
+
+        vm.BackgroundImagePath = string.Empty;
+        await vm.SaveGuiSettingsAsync();
+    }
 }

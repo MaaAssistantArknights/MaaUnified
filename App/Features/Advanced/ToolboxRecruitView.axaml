@@ -273,6 +273,7 @@
                                                     MinColumnGap="12"
                                                     MaxColumnGap="12"
                                                     RowGap="12"
+                                                    RowHorizontalAlignment="Center"
                                                     EdgeInset="4,4,4,4" />
                       </ItemsPanelTemplate>
                     </ItemsControl.ItemsPanel>
@@ -445,8 +446,11 @@
                 Width="{DynamicResource MAA.Size.Toolbox.ActionButtonWidth}"
                 Height="52"
                 Classes="app-button app-primary toolbox-recruit-action"
+                Classes.locked="{Binding IsRecruitExecuting}"
                 Content="{Binding RecruitStartRecognitionText}"
                 IsEnabled="{Binding CanStartRecruitRecognition}"
+                PointerEntered="OnRecruitStartPointerEntered"
+                PointerExited="OnRecruitStartPointerExited"
                 Click="OnRecruitStartClick" />
       </Grid>
   </Grid>

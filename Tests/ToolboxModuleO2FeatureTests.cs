@@ -271,6 +271,8 @@ public sealed class ToolboxModuleO2FeatureTests
         Assert.NotNull(dialogService.LastRequest);
         Assert.Contains("正在执行", dialogService.LastRequest!.Title, StringComparison.Ordinal);
         Assert.Contains("招募识别", dialogService.LastRequest.Message, StringComparison.Ordinal);
+        Assert.Equal("取消", dialogService.LastRequest.ConfirmText);
+        Assert.Equal("停止当前任务", dialogService.LastRequest.CancelText);
         var appendedTask = Assert.Single(fixture.Bridge.AppendedTasks);
         Assert.Equal("Recruit", appendedTask.Type);
         Assert.Equal("Toolbox", fixture.Runtime.SessionService.CurrentRunOwner);
@@ -443,12 +445,20 @@ public sealed class ToolboxModuleO2FeatureTests
         await vm.InitializeAsync();
 
         await vm.StartRecruitAsync();
+        Assert.True(vm.IsRecruitExecuting);
+        Assert.Equal(vm.Texts["Toolbox.Action.Recognizing"], vm.RecruitStartRecognitionText);
+
+        vm.SetToolActionHover(ToolboxToolKind.Recruit, hovering: true);
+        Assert.Equal(vm.Texts["Toolbox.Action.Stop"], vm.RecruitStartRecognitionText);
+
         await vm.StopActiveToolAsync();
 
         Assert.Equal(1, fixture.Bridge.StopCallCount);
         Assert.Null(fixture.Runtime.SessionService.CurrentRunOwner);
         Assert.Equal(ToolboxExecutionState.Failed, vm.ExecutionState);
         Assert.Equal(UiErrorCode.ToolboxExecutionCancelled, vm.LastExecutionErrorCode);
+        Assert.Equal(vm.Texts["Toolbox.Status.ManuallyStopped"], vm.RecruitInfo);
+        Assert.Equal(vm.Texts["Toolbox.Action.StartRecognition"], vm.RecruitStartRecognitionText);
     }
 
     [Fact]

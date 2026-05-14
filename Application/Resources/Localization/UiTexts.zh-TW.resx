@@ -2839,6 +2839,15 @@
   <data name="Toolbox.Action.StartRecognition" xml:space="preserve">
     <value>開始辨識</value>
   </data>
+  <data name="Toolbox.Action.Recognizing" xml:space="preserve">
+    <value>辨識中...</value>
+  </data>
+  <data name="Toolbox.Action.Running" xml:space="preserve">
+    <value>執行中...</value>
+  </data>
+  <data name="Toolbox.Action.Stop" xml:space="preserve">
+    <value>停止</value>
+  </data>
   <data name="Toolbox.Advanced.Capability.Fallback.None" xml:space="preserve">
     <value>無</value>
   </data>
@@ -3104,7 +3113,7 @@
     <value>知道了</value>
   </data>
   <data name="Toolbox.BusyDialog.ConfirmButton" xml:space="preserve">
-    <value>確認</value>
+    <value>取消</value>
   </data>
   <data name="Toolbox.BusyDialog.CurrentTask" xml:space="preserve">
     <value>目前任務</value>
@@ -3261,6 +3270,9 @@
   </data>
   <data name="Toolbox.Status.CurrentToolStopped" xml:space="preserve">
     <value>已停止目前工具。</value>
+  </data>
+  <data name="Toolbox.Status.ManuallyStopped" xml:space="preserve">
+    <value>已手動停止。</value>
   </data>
   <data name="Toolbox.Status.MiniGameStarting" xml:space="preserve">
     <value>小遊戲任務啟動中...</value>
