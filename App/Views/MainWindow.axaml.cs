@@ -36,7 +36,7 @@ public partial class MainWindow : Window
     private const double BaseWindowHeight = 900d;
     private const double BaseWindowMinWidth = 1080d;
     private const double BaseWindowMinHeight = 620d;
-    private const double MacOsDefaultWindowSizeScale = 1.3d;
+    private const double MacOsDefaultWindowSizeScale = 2.2d;
     private const double MacOsHiDpiHeightBoostPerScaleStep = 0.12d;
     private const double MacOsHiDpiHeightBoostMax = 1.18d;
     private const int ResponsiveMarginProgressSteps = 12;
@@ -1318,8 +1318,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        var point = e.GetCurrentPoint(control);
-        if (!point.Properties.IsRightButtonPressed)
+        if (!PointerPressedGestures.IsSecondaryClick(control, e))
         {
             return;
         }
@@ -1488,6 +1487,14 @@ public partial class MainWindow : Window
         try
         {
             var screens = _overlayHostWindow.Screens;
+            PixelRect? anchorBounds = null;
+            if (OperatingSystem.IsMacOS()
+                && !string.Equals(e.TargetId, "preview", StringComparison.OrdinalIgnoreCase)
+                && MacOverlayCapabilityService.TryGetTargetBounds(e.TargetId, out var targetBounds))
+            {
+                anchorBounds = targetBounds;
+            }
+
             var screen = screens.ScreenFromWindow(this)
                 ?? screens.ScreenFromWindow(_overlayHostWindow)
                 ?? screens.Primary;
@@ -1496,7 +1503,7 @@ public partial class MainWindow : Window
                 return;
             }
 
-            _overlayHostWindow.ApplyPreviewBounds(screen.WorkingArea);
+            _overlayHostWindow.ApplyPreviewBounds(screen.WorkingArea, anchorBounds);
         }
         catch (ObjectDisposedException)
         {

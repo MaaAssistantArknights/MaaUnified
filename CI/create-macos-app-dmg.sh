@@ -21,14 +21,14 @@ resources_dir="$contents_dir/Resources"
 entitlements_path="$contents_dir/entitlements.plist"
 dmg_root="$release_dir/dmg-root"
 dmg_path="$release_dir/$package_name.dmg"
-dmg_tmp_path="$release_dir/.$package_name.tmp.dmg"
-dmg_mount_dir="$release_dir/.$package_name.mount"
 dmg_background_dir="$dmg_root/.background"
 dmg_background_path="$dmg_background_dir/installer-background.png"
-dmg_fix_script_name="Fix Damaged.command"
+dmg_note_name="Install MAAUnified.txt"
 app_icon_name="MAAUnified.icns"
 brand_icon_path="src/MAAUnified/App/Assets/Brand/newlogo.ico"
 signing_status_path="$release_dir/.$package_name.signing-status"
+dmg_settings_path="$release_dir/.$package_name.dmg-settings.py"
+dmgbuild_log_path="$release_dir/.$package_name.dmgbuild.log"
 
 if [[ ! -x "$staging_dir/bin/MAAUnified" ]]; then
   echo "Managed app executable not found: $staging_dir/bin/MAAUnified" >&2
@@ -45,202 +45,120 @@ if [[ ! -d "$staging_dir/resource" ]]; then
   exit 1
 fi
 
-write_dmg_quarantine_fix_script() {
-  local script_path="$1"
+write_dmg_install_note() {
+  local note_path="$1"
 
-  cat > "$script_path" <<'SCRIPT'
-#!/usr/bin/env bash
-set -euo pipefail
+  cat > "$note_path" <<'NOTE'
+MAAUnified macOS 安装说明
 
-app_path="/Applications/MAAUnified.app"
-quarantine_command='xattr -dr com.apple.quarantine "/Applications/MAAUnified.app"'
-locale_name="$(defaults read -g AppleLocale 2>/dev/null || printf '%s' "${LANG:-en_US}")"
+1. 把 MAAUnified.app 拖到 Applications 文件夹。
+2. 如果打开时提示“MAAUnified.app 已损坏，无法打开”，通常并不是真的文件损坏，而是 Gatekeeper 的 quarantine 隔离属性在拦截。
+3. 打开“终端”，运行下面这条命令：
 
-case "$locale_name" in
-  zh_Hant*|zh_TW*|zh_HK*|zh_MO*)
-    title="MAAUnified macOS 修復腳本"
-    missing="找不到 $app_path"
-    install_first="請先把 MAAUnified.app 拖到 Applications 資料夾，再執行本腳本。"
-    damaged="如果 macOS 提示「MAAUnified.app 已損壞，無法打開」，通常是 Gatekeeper quarantine 隔離屬性攔截。"
-    removing="正在移除 quarantine 屬性：$app_path"
-    removed="quarantine 屬性已移除。"
-    already_clean="未發現 quarantine 屬性，或該屬性已被移除。"
-    done_message="處理完成，正在打開 MAAUnified。"
-    command_hint="也可以在終端執行：$quarantine_command"
-    press_enter="按 Return 鍵退出..."
-    ;;
-  zh*|zh_CN*)
-    title="MAAUnified macOS 修复脚本"
-    missing="未找到 $app_path"
-    install_first="请先把 MAAUnified.app 拖到 Applications 文件夹，再运行本脚本。"
-    damaged="如果 macOS 提示“MAAUnified.app 已损坏，无法打开”，通常是 Gatekeeper quarantine 隔离属性拦截。"
-    removing="正在移除 quarantine 属性：$app_path"
-    removed="quarantine 属性已移除。"
-    already_clean="未发现 quarantine 属性，或该属性已被移除。"
-    done_message="处理完成，正在打开 MAAUnified。"
-    command_hint="也可以在终端运行：$quarantine_command"
-    press_enter="按回车退出..."
-    ;;
-  ja*)
-    title="MAAUnified macOS 修復スクリプト"
-    missing="$app_path が見つかりません"
-    install_first="先に MAAUnified.app を Applications フォルダへドラッグしてから、このスクリプトを実行してください。"
-    damaged="macOS に「MAAUnified.app は壊れているため開けません」と表示される場合、通常は Gatekeeper の quarantine 属性によるブロックです。"
-    removing="quarantine 属性を削除しています：$app_path"
-    removed="quarantine 属性を削除しました。"
-    already_clean="quarantine 属性は見つからないか、すでに削除されています。"
-    done_message="処理が完了しました。MAAUnified を開きます。"
-    command_hint="Terminal で次のコマンドを実行することもできます：$quarantine_command"
-    press_enter="Return キーを押して終了..."
-    ;;
-  ko*)
-    title="MAAUnified macOS 복구 스크립트"
-    missing="$app_path 를 찾을 수 없습니다"
-    install_first="먼저 MAAUnified.app을 Applications 폴더로 드래그한 뒤 이 스크립트를 실행하세요."
-    damaged="macOS에서 'MAAUnified.app이 손상되어 열 수 없습니다'라고 표시되면 보통 Gatekeeper quarantine 속성 때문에 차단된 것입니다."
-    removing="quarantine 속성을 제거하는 중: $app_path"
-    removed="quarantine 속성을 제거했습니다."
-    already_clean="quarantine 속성이 없거나 이미 제거되었습니다."
-    done_message="처리가 완료되었습니다. MAAUnified를 엽니다."
-    command_hint="터미널에서 다음 명령을 실행할 수도 있습니다: $quarantine_command"
-    press_enter="Return 키를 눌러 종료..."
-    ;;
-  *)
-    title="MAAUnified macOS repair script"
-    missing="Could not find $app_path"
-    install_first="Drag MAAUnified.app to the Applications folder first, then run this script again."
-    damaged="If macOS says \"MAAUnified.app is damaged and can't be opened\", it is usually blocked by the Gatekeeper quarantine attribute."
-    removing="Removing the quarantine attribute from: $app_path"
-    removed="The quarantine attribute was removed."
-    already_clean="The quarantine attribute was not found, or it was already removed."
-    done_message="Done. Opening MAAUnified."
-    command_hint="You can also run this in Terminal: $quarantine_command"
-    press_enter="Press Return to exit..."
-    ;;
-esac
+xattr -dr com.apple.quarantine "/Applications/MAAUnified.app"
 
-echo "$title"
-echo
+4. 再重新打开 /Applications/MAAUnified.app。
 
-if [[ ! -d "$app_path" ]]; then
-  echo "$missing"
-  echo "$install_first"
-  echo "$command_hint"
-  echo
-  read -r -p "$press_enter" _
-  exit 1
-fi
+MAAUnified macOS Install Notes
 
-echo "$damaged"
-echo "$command_hint"
-echo "$removing"
-if xattr -dr com.apple.quarantine "$app_path" 2>/dev/null; then
-  echo "$removed"
-else
-  echo "$already_clean"
-fi
+1. Drag MAAUnified.app to the Applications folder.
+2. If macOS says "MAAUnified.app is damaged and can't be opened", the app is usually being blocked by the Gatekeeper quarantine attribute rather than being actually damaged.
+3. Open Terminal and run:
 
-echo
-echo "$done_message"
-open "$app_path"
-echo
-read -r -p "$press_enter" _
-SCRIPT
+xattr -dr com.apple.quarantine "/Applications/MAAUnified.app"
 
-  chmod +x "$script_path"
+4. Reopen /Applications/MAAUnified.app.
+NOTE
 }
 
-customize_mounted_dmg() {
-  local mount_dir="$1"
-
-  if ! command -v osascript >/dev/null 2>&1; then
-    echo "::warning title=macOS dmg layout skipped::osascript is unavailable; dmg will keep the default Finder layout."
+resolve_dmgbuild_python() {
+  if [[ -n "${DMGBUILD_PYTHON:-}" && -x "${DMGBUILD_PYTHON}" ]]; then
+    printf '%s\n' "${DMGBUILD_PYTHON}"
     return 0
   fi
 
-  osascript <<APPLESCRIPT || {
-tell application "Finder"
-  tell disk "$app_name"
-    open
-    set current view of container window to icon view
-    set toolbar visible of container window to false
-    set statusbar visible of container window to false
-    set the bounds of container window to {100, 100, 740, 520}
-    set viewOptions to the icon view options of container window
-    set arrangement of viewOptions to not arranged
-    set icon size of viewOptions to 96
-    set background picture of viewOptions to POSIX file "$mount_dir/.background/installer-background.png"
-    set position of item "$app_name.app" of container window to {150, 205}
-    set position of item "Applications" of container window to {490, 205}
-    set position of item "$dmg_fix_script_name" of container window to {88, 330}
-    update without registering applications
-    delay 1
-    close
-  end tell
-end tell
-APPLESCRIPT
-    echo "::warning title=macOS dmg layout skipped::Finder did not apply the custom dmg layout; dmg will still include the installation note."
+  if python3 -m dmgbuild -h >/dev/null 2>&1; then
+    printf '%s\n' "python3"
     return 0
-  }
+  fi
+
+  if [[ -x "/private/tmp/maaunified-dmgbuild-venv/bin/python" ]] &&
+    /private/tmp/maaunified-dmgbuild-venv/bin/python -m dmgbuild -h >/dev/null 2>&1; then
+    printf '%s\n' "/private/tmp/maaunified-dmgbuild-venv/bin/python"
+    return 0
+  fi
+
+  return 1
 }
 
-prepare_dmg_layout() {
-  local image_path="$1"
-  local device
+write_dmgbuild_settings() {
+  cat > "$dmg_settings_path" <<'PY'
+import os
 
-  rm -rf "$dmg_mount_dir"
-  mkdir -p "$dmg_mount_dir"
+app_path = os.environ["MAA_DMG_APP_PATH"]
+note_path = os.environ["MAA_DMG_NOTE_PATH"]
+background = os.environ["MAA_DMG_BACKGROUND_PATH"]
+volume_icon = os.environ["MAA_DMG_VOLUME_ICON_PATH"]
 
-  device="$(hdiutil attach "$image_path" -readwrite -noverify -noautoopen -mountpoint "$dmg_mount_dir" | awk '/Apple_HFS|Apple_APFS/ {print $1; exit}')"
-  if [[ -z "$device" ]]; then
-    echo "Failed to mount temporary dmg image: $image_path" >&2
-    hdiutil detach "$dmg_mount_dir" >/dev/null 2>&1 || true
-    rm -rf "$dmg_mount_dir"
+files = [
+    (app_path, "MAAUnified.app"),
+    (note_path, "Install MAAUnified.txt"),
+]
+
+symlinks = {
+    "Applications": "/Applications",
+}
+
+badge_icon = None
+icon = volume_icon if volume_icon and os.path.exists(volume_icon) else None
+format = "UDZO"
+filesystem = "HFS+"
+compression_level = 9
+window_rect = ((100, 100), (640, 420))
+default_view = "icon-view"
+show_toolbar = False
+show_status_bar = False
+show_tab_view = False
+show_pathbar = False
+show_sidebar = False
+icon_size = 96
+text_size = 13
+background = background
+
+icon_locations = {
+    "MAAUnified.app": (150, 205),
+    "Applications": (490, 205),
+    "Install MAAUnified.txt": (318, 338),
+}
+PY
+}
+
+create_dmg_with_dmgbuild() {
+  local dmgbuild_python
+
+  if ! dmgbuild_python="$(resolve_dmgbuild_python)"; then
+    echo "dmgbuild is required to create the macOS installer image. Install it with 'python3 -m pip install dmgbuild' or set DMGBUILD_PYTHON." >&2
     return 1
   fi
 
-  customize_mounted_dmg "$dmg_mount_dir"
-  sync
-  hdiutil detach "$device"
-  rm -rf "$dmg_mount_dir"
-}
+  write_dmgbuild_settings
+  rm -f "$dmg_path" "$dmgbuild_log_path"
 
-create_verified_dmg() {
-  local max_attempts=5
-  local attempt
-  local delay
-  local status
+  if ! MAA_DMG_APP_PATH="$app_dir" \
+    MAA_DMG_NOTE_PATH="$dmg_root/$dmg_note_name" \
+    MAA_DMG_BACKGROUND_PATH="$dmg_background_path" \
+    MAA_DMG_VOLUME_ICON_PATH="$resources_dir/$app_icon_name" \
+    "$dmgbuild_python" -m dmgbuild \
+    -s "$dmg_settings_path" \
+    --no-hidpi \
+    "$app_name" \
+    "$dmg_path" >"$dmgbuild_log_path" 2>&1; then
+    echo "dmgbuild failed. See $dmgbuild_log_path for details." >&2
+    sed -n '1,120p' "$dmgbuild_log_path" >&2 || true
+    return 1
+  fi
 
-  for ((attempt = 1; attempt <= max_attempts; attempt++)); do
-    rm -rf "$dmg_mount_dir"
-    rm -f "$dmg_tmp_path" "$dmg_path"
-    status=0
-
-    if hdiutil create -volname "$app_name" -srcfolder "$dmg_root" -ov -format UDRW "$dmg_tmp_path" &&
-      prepare_dmg_layout "$dmg_tmp_path" &&
-      hdiutil convert "$dmg_tmp_path" -format UDZO -imagekey zlib-level=9 -o "$dmg_path"; then
-      sync
-      rm -f "$dmg_tmp_path"
-      if hdiutil verify "$dmg_path"; then
-        return 0
-      else
-        status=$?
-      fi
-    else
-      status=$?
-    fi
-
-    rm -rf "$dmg_mount_dir"
-    rm -f "$dmg_tmp_path" "$dmg_path"
-    if ((attempt == max_attempts)); then
-      echo "hdiutil create/verify failed after $max_attempts attempts." >&2
-      return "$status"
-    fi
-
-    delay=$((attempt * 5))
-    echo "hdiutil create/verify failed (attempt $attempt/$max_attempts, exit $status); retrying in ${delay}s." >&2
-    sleep "$delay"
-  done
+  hdiutil verify "$dmg_path" >/dev/null
 }
 
 create_app_icon() {
@@ -308,7 +226,10 @@ PY
   sips -z 512 512 "$icon_png" --out "$iconset_dir/icon_256x256@2x.png" >/dev/null
   sips -z 512 512 "$icon_png" --out "$iconset_dir/icon_512x512.png" >/dev/null
   sips -z 1024 1024 "$icon_png" --out "$iconset_dir/icon_512x512@2x.png" >/dev/null
-  iconutil -c icns "$iconset_dir" -o "$resources_dir/$app_icon_name"
+  if ! iconutil -c icns "$iconset_dir" -o "$resources_dir/$app_icon_name"; then
+    echo "::warning title=macOS icon skipped::iconutil could not build $app_icon_name from $iconset_dir; continuing without a bundled app/volume icon."
+    rm -f "$resources_dir/$app_icon_name"
+  fi
   rm -rf "$icon_work_dir"
 }
 
@@ -375,7 +296,7 @@ fallback_to_adhoc() {
   fi
 }
 
-rm -rf "$app_dir" "$dmg_root" "$dmg_mount_dir" "$dmg_path" "$dmg_tmp_path"
+rm -rf "$app_dir" "$dmg_root" "$dmg_path" "$dmg_settings_path" "$dmgbuild_log_path"
 mkdir -p "$macos_dir" "$resources_dir" "$dmg_root"
 
 cp -a "$staging_dir/bin/." "$macos_dir/"
@@ -384,6 +305,13 @@ cp -a "$staging_dir"/*.dylib "$macos_dir/"
 shopt -u nullglob
 cp -a "$staging_dir/resource" "$resources_dir/resource"
 create_app_icon
+
+if [[ -f "$resources_dir/$app_icon_name" ]]; then
+  icon_plist_block="  <key>CFBundleIconFile</key>
+  <string>${app_icon_name}</string>"
+else
+  icon_plist_block=""
+fi
 
 cat > "$contents_dir/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -402,8 +330,7 @@ cat > "$contents_dir/Info.plist" <<PLIST
   <string>MAAUnified</string>
   <key>CFBundleDisplayName</key>
   <string>MAAUnified</string>
-  <key>CFBundleIconFile</key>
-  <string>${app_icon_name}</string>
+${icon_plist_block}
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
@@ -440,7 +367,6 @@ plutil -lint "$entitlements_path"
 test -x "$macos_dir/MAAUnified"
 test -f "$macos_dir/libMaaCore.dylib"
 test -d "$resources_dir/resource"
-test -f "$resources_dir/$app_icon_name"
 
 if [[ "${MACOS_CODESIGN_ENABLED:-false}" == "true" ]]; then
   if sign_developer_id; then
@@ -458,11 +384,9 @@ else
   write_signing_status "unsigned"
 fi
 
-cp -a "$app_dir" "$dmg_root/$app_name.app"
-ln -s /Applications "$dmg_root/Applications"
 mkdir -p "$dmg_background_dir"
 python3 src/MAAUnified/CI/create-dmg-background.py "$dmg_background_path"
-write_dmg_quarantine_fix_script "$dmg_root/$dmg_fix_script_name"
-create_verified_dmg
+write_dmg_install_note "$dmg_root/$dmg_note_name"
+create_dmg_with_dmgbuild
 
-rm -rf "$dmg_root" "$dmg_mount_dir"
+rm -rf "$dmg_root" "$dmg_settings_path"

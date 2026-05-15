@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -277,13 +278,34 @@ public sealed class AvaloniaDialogService : IAppDialogService
             return null;
         }
 
-        return desktop.MainWindow;
+        if (desktop.MainWindow is { IsVisible: true } mainWindow)
+        {
+            return mainWindow;
+        }
+
+        return desktop.Windows.LastOrDefault(static window => window.IsVisible);
     }
 
     private static Task<TResult> ShowDialogWithOwnerScaleAsync<TResult>(Window dialog, Window owner)
     {
+        dialog.Topmost = ResolveTopmost(dialog, owner);
         DialogWindowScaling.ApplyOwnerUiScale(dialog, owner);
         return dialog.ShowDialog<TResult>(owner);
+    }
+
+    private static bool ResolveTopmost(Window dialog, Window owner)
+    {
+        if (dialog.Topmost || owner.Topmost)
+        {
+            return true;
+        }
+
+        if (Avalonia.Application.Current?.ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime desktop)
+        {
+            return false;
+        }
+
+        return desktop.Windows.Any(window => !ReferenceEquals(window, dialog) && window.IsVisible && window.Topmost);
     }
 
     private static Task<UiOperationResult> OpenIssueReportAsync(CancellationToken cancellationToken = default)

@@ -5,6 +5,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using MAAUnified.App.Controls;
+using MAAUnified.App.Infrastructure;
 using MAAUnified.App.ViewModels;
 using MAAUnified.App.ViewModels.Copilot;
 
@@ -173,8 +174,7 @@ public partial class CopilotView : UserControl
             return;
         }
 
-        var point = e.GetCurrentPoint(control);
-        if (!point.Properties.IsRightButtonPressed)
+        if (!PointerPressedGestures.IsSecondaryClick(control, e))
         {
             return;
         }
@@ -209,8 +209,7 @@ public partial class CopilotView : UserControl
             return;
         }
 
-        var point = e.GetCurrentPoint(control);
-        if (!point.Properties.IsRightButtonPressed)
+        if (!PointerPressedGestures.IsSecondaryClick(control, e))
         {
             return;
         }
@@ -392,8 +391,7 @@ public partial class CopilotView : UserControl
             return;
         }
 
-        var point = e.GetCurrentPoint(control);
-        if (!point.Properties.IsRightButtonPressed)
+        if (!PointerPressedGestures.IsSecondaryClick(control, e))
         {
             return;
         }

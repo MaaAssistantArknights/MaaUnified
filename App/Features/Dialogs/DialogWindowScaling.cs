@@ -7,6 +7,8 @@ namespace MAAUnified.App.Features.Dialogs;
 
 internal static class DialogWindowScaling
 {
+    private const string WrapperMarker = "MAAUnified.DialogWindowScaling.Wrapper";
+
     public static void ApplyOwnerUiScale(Window dialog, Window owner)
     {
         ArgumentNullException.ThrowIfNull(dialog);
@@ -46,15 +48,28 @@ internal static class DialogWindowScaling
 
     private static void ScaleRootContent(Window dialog, double scale)
     {
+        if (dialog.Content is LayoutTransformControl { Tag: WrapperMarker } wrapper)
+        {
+            wrapper.LayoutTransform = CreateTransform(scale);
+            return;
+        }
+
         if (Math.Abs(scale - 1d) < 0.001d || dialog.Content is not Control root)
         {
             return;
         }
 
+        dialog.Content = null;
         dialog.Content = new LayoutTransformControl
         {
-            LayoutTransform = new ScaleTransform(scale, scale),
+            Tag = WrapperMarker,
+            LayoutTransform = CreateTransform(scale),
             Child = root,
         };
+    }
+
+    private static ITransform CreateTransform(double scale)
+    {
+        return new ScaleTransform(scale, scale);
     }
 }

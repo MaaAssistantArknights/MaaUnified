@@ -87,7 +87,7 @@ public partial class OverlayHostWindow : Window
         ScheduleScrollToEnd();
     }
 
-    public void ApplyPreviewBounds(PixelRect workingArea)
+    public void ApplyPreviewBounds(PixelRect workingArea, PixelRect? anchorBounds = null)
     {
         var scale = Math.Max(0.01d, RenderScaling);
         var usableWidth = Math.Max(1, workingArea.Width - (PreviewWindowMargin * 2));
@@ -96,15 +96,32 @@ public partial class OverlayHostWindow : Window
         var height = Math.Min(PreviewWindowHeight, usableHeight);
         var maxX = workingArea.X + workingArea.Width - width - PreviewWindowMargin;
         var minX = workingArea.X + PreviewWindowMargin;
-        var x = Math.Max(minX, maxX);
         var minY = workingArea.Y + PreviewWindowMargin;
+        var maxY = workingArea.Y + workingArea.Height - height - PreviewWindowMargin;
+
+        var x = Math.Max(minX, maxX);
         var y = minY;
+        if (anchorBounds is { Width: > 0, Height: > 0 } anchor)
+        {
+            x = Clamp(anchor.X + anchor.Width - width - PreviewWindowMargin, minX, maxX);
+            y = Clamp(anchor.Y + PreviewWindowMargin, minY, maxY);
+        }
 
         Width = width / scale;
         Height = height / scale;
         Position = new PixelPoint(x, y);
         UpdatePanelConstraints();
         ScheduleScrollToEnd();
+    }
+
+    private static int Clamp(int value, int min, int max)
+    {
+        if (max < min)
+        {
+            return min;
+        }
+
+        return Math.Min(Math.Max(value, min), max);
     }
 
     private void OnOverlayDataContextChanged(object? sender, EventArgs e)

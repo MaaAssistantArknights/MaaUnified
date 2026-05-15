@@ -1,3 +1,4 @@
+using Avalonia;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -43,6 +44,17 @@ public sealed class MacOverlayCapabilityService : IOverlayCapabilityService
 
         service = new MacOverlayCapabilityService();
         return true;
+    }
+
+    public static bool TryGetTargetBounds(string targetId, out PixelRect bounds)
+    {
+        bounds = default;
+        if (!OperatingSystem.IsMacOS() || !TryParseMacTargetId(targetId, out var target))
+        {
+            return false;
+        }
+
+        return NativeMacWindowEnumerator.TryGetTargetBounds(target, out bounds);
     }
 
     public Task<PlatformOperationResult> BindHostWindowAsync(
@@ -286,12 +298,69 @@ public sealed class MacOverlayCapabilityService : IOverlayCapabilityService
 
     private sealed class NativeMacWindowEnumerator : IMacWindowEnumerator
     {
+        public static bool TryGetTargetBounds(nint target, out PixelRect bounds)
+        {
+            bounds = default;
+            if (target == nint.Zero)
+            {
+                return false;
+            }
+
+            var windowInfoArray = MacCoreGraphicsInterop.CGWindowListCopyWindowInfo(
+                MacCoreGraphicsInterop.CGWindowListExcludeDesktopElements,
+                0);
+            if (windowInfoArray == nint.Zero)
+            {
+                return false;
+            }
+
+            using var keys = new WindowInfoKeys();
+            try
+            {
+                var count = MacCoreFoundationInterop.CFArrayGetCount(windowInfoArray);
+                for (var i = 0L; i < count; i++)
+                {
+                    var windowInfo = MacCoreFoundationInterop.CFArrayGetValueAtIndex(windowInfoArray, i);
+                    if (windowInfo == nint.Zero
+                        || !TryReadInt64(windowInfo, keys.WindowNumber, out var windowId)
+                        || windowId != (long)target
+                        || !TryReadPixelRect(windowInfo, keys, out bounds))
+                    {
+                        continue;
+                    }
+
+                    return bounds.Width > 0 && bounds.Height > 0;
+                }
+            }
+            finally
+            {
+                MacCoreFoundationInterop.CFRelease(windowInfoArray);
+            }
+
+            bounds = default;
+            return false;
+        }
+
         public IReadOnlyList<OverlayTarget> EnumerateTargets(int currentProcessId)
         {
-            var windowInfoArray = MacCoreGraphicsInterop.CGWindowListCopyWindowInfo(
+            var onScreenTargets = EnumerateTargets(
+                currentProcessId,
                 MacCoreGraphicsInterop.CGWindowListOptionOnScreenOnly
-                | MacCoreGraphicsInterop.CGWindowListExcludeDesktopElements,
-                0);
+                | MacCoreGraphicsInterop.CGWindowListExcludeDesktopElements);
+            if (onScreenTargets.Count > 1)
+            {
+                return onScreenTargets;
+            }
+
+            var relaxedTargets = EnumerateTargets(
+                currentProcessId,
+                MacCoreGraphicsInterop.CGWindowListExcludeDesktopElements);
+            return MergeTargets(onScreenTargets, relaxedTargets);
+        }
+
+        private static IReadOnlyList<OverlayTarget> EnumerateTargets(int currentProcessId, uint options)
+        {
+            var windowInfoArray = MacCoreGraphicsInterop.CGWindowListCopyWindowInfo(options, 0);
             if (windowInfoArray == nint.Zero)
             {
                 return [CreatePreviewTarget()];
@@ -349,6 +418,29 @@ public sealed class MacOverlayCapabilityService : IOverlayCapabilityService
             return targets;
         }
 
+        private static IReadOnlyList<OverlayTarget> MergeTargets(
+            IReadOnlyList<OverlayTarget> primary,
+            IReadOnlyList<OverlayTarget> fallback)
+        {
+            if (fallback.Count <= 1)
+            {
+                return primary;
+            }
+
+            var merged = new List<OverlayTarget>(Math.Max(primary.Count, fallback.Count));
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var target in primary.Concat(fallback))
+            {
+                if (seen.Add(target.Id))
+                {
+                    merged.Add(target);
+                }
+            }
+
+            return merged;
+        }
+
         private static bool TryReadInt64(nint dictionary, nint key, out long value)
         {
             value = 0;
@@ -364,6 +456,43 @@ public sealed class MacOverlayCapabilityService : IOverlayCapabilityService
         {
             var value = MacCoreFoundationInterop.CFDictionaryGetValue(dictionary, key);
             return value == nint.Zero ? null : MacCoreFoundationInterop.ReadString(value);
+        }
+
+        private static bool TryReadPixelRect(nint dictionary, WindowInfoKeys keys, out PixelRect bounds)
+        {
+            bounds = default;
+            var value = MacCoreFoundationInterop.CFDictionaryGetValue(dictionary, keys.Bounds);
+            if (value == nint.Zero
+                || !TryReadDouble(value, keys.BoundsX, out var x)
+                || !TryReadDouble(value, keys.BoundsY, out var y)
+                || !TryReadDouble(value, keys.BoundsWidth, out var width)
+                || !TryReadDouble(value, keys.BoundsHeight, out var height))
+            {
+                return false;
+            }
+
+            var roundedX = (int)Math.Round(x);
+            var roundedY = (int)Math.Round(y);
+            var roundedWidth = Math.Max(0, (int)Math.Round(width));
+            var roundedHeight = Math.Max(0, (int)Math.Round(height));
+            if (roundedWidth <= 0 || roundedHeight <= 0)
+            {
+                return false;
+            }
+
+            bounds = new PixelRect(roundedX, roundedY, roundedWidth, roundedHeight);
+            return true;
+        }
+
+        private static bool TryReadDouble(nint dictionary, nint key, out double value)
+        {
+            value = 0d;
+            var cfValue = MacCoreFoundationInterop.CFDictionaryGetValue(dictionary, key);
+            return cfValue != nint.Zero
+                   && MacCoreFoundationInterop.CFNumberGetValue(
+                       cfValue,
+                       MacCoreFoundationInterop.KCFNumberFloat64Type,
+                       out value);
         }
 
         private static string? ResolveProcessName(int pid, string? fallback)
@@ -393,6 +522,11 @@ public sealed class MacOverlayCapabilityService : IOverlayCapabilityService
             OwnerPid = MacCoreFoundationInterop.CreateString("kCGWindowOwnerPID");
             OwnerName = MacCoreFoundationInterop.CreateString("kCGWindowOwnerName");
             Layer = MacCoreFoundationInterop.CreateString("kCGWindowLayer");
+            Bounds = MacCoreFoundationInterop.CreateString("kCGWindowBounds");
+            BoundsX = MacCoreFoundationInterop.CreateString("X");
+            BoundsY = MacCoreFoundationInterop.CreateString("Y");
+            BoundsWidth = MacCoreFoundationInterop.CreateString("Width");
+            BoundsHeight = MacCoreFoundationInterop.CreateString("Height");
         }
 
         public nint WindowNumber { get; }
@@ -405,6 +539,16 @@ public sealed class MacOverlayCapabilityService : IOverlayCapabilityService
 
         public nint Layer { get; }
 
+        public nint Bounds { get; }
+
+        public nint BoundsX { get; }
+
+        public nint BoundsY { get; }
+
+        public nint BoundsWidth { get; }
+
+        public nint BoundsHeight { get; }
+
         public void Dispose()
         {
             Release(WindowNumber);
@@ -412,6 +556,11 @@ public sealed class MacOverlayCapabilityService : IOverlayCapabilityService
             Release(OwnerPid);
             Release(OwnerName);
             Release(Layer);
+            Release(Bounds);
+            Release(BoundsX);
+            Release(BoundsY);
+            Release(BoundsWidth);
+            Release(BoundsHeight);
         }
 
         private static void Release(nint value)
@@ -436,6 +585,7 @@ public sealed class MacOverlayCapabilityService : IOverlayCapabilityService
     private static class MacCoreFoundationInterop
     {
         public const int KCFNumberSInt64Type = 4;
+        public const int KCFNumberFloat64Type = 6;
         private const uint KCFStringEncodingUtf8 = 0x08000100;
         private const string CoreFoundationLibrary = "/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation";
 
@@ -451,6 +601,10 @@ public sealed class MacOverlayCapabilityService : IOverlayCapabilityService
         [DllImport(CoreFoundationLibrary)]
         [return: MarshalAs(UnmanagedType.Bool)]
         public static extern bool CFNumberGetValue(nint number, int type, out long value);
+
+        [DllImport(CoreFoundationLibrary, EntryPoint = "CFNumberGetValue")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool CFNumberGetValue(nint number, int type, out double value);
 
         [DllImport(CoreFoundationLibrary)]
         public static extern long CFStringGetLength(nint theString);

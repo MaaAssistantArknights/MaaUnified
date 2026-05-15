@@ -1,6 +1,11 @@
 # MAAUnified 本地开发
 
-命令默认从 `MaaAssistantArknights` 主仓根目录执行。
+命令默认从 `MaaAssistantArknights` 主仓根目录执行，不要在 `src/MAAUnified` 子目录里直接跑。
+
+`zsh` 里整段粘贴带 `# 1)` 这类注释的代码块，可能报 `parse error near ')'`：
+
+- 只复制可执行命令；或
+- 先执行 `setopt interactivecomments`
 
 ## 适用范围
 
@@ -66,6 +71,21 @@ git submodule status
 
 子模块处于 detached HEAD 是正常状态；那表示它正停在主仓记录的提交上。
 
+如果只是本地 build、运行或联调，停在这里即可。
+
+如果还需要查看或同步 `MAAUnified` 子仓的日常集成分支 `dev`，要注意一个额外约定：主仓初始化出来的 `src/MAAUnified` 默认通常只抓取 `main`。先把 `dev` 加进 fetch 配置，再切本地跟踪分支：
+
+```bash
+git -C src/MAAUnified remote set-branches --add origin dev
+git -C src/MAAUnified fetch origin
+git -C src/MAAUnified switch dev || git -C src/MAAUnified switch -c dev refs/remotes/origin/dev
+git -C src/MAAUnified config branch.dev.remote origin
+git -C src/MAAUnified config branch.dev.merge refs/heads/dev
+git -C src/MAAUnified status --short --branch
+```
+
+预期输出类似 `## dev...origin/dev`。如果你是按 [贡献说明](./contributing.md) 把官方 `MaaUnified` 配成了 `upstream`、自己的 fork 配成了 `origin`，把上面的 `origin` 替换成对应远端即可。
+
 ## 环境要求
 
 - .NET 10 SDK
@@ -82,6 +102,11 @@ Linux 运行图形界面时需要 `DISPLAY` 或 `WAYLAND_DISPLAY`。没有图形
 ## 本地构建与运行
 
 本地运行目录必须同时包含 Avalonia 应用、MaaCore runtime 和 `resource/`。
+
+如果 `tools/maadeps-download.py` 提示 GitHub API rate limit：
+
+- 先设置 `GH_TOKEN` 或 `GITHUB_TOKEN` 后重试；或
+- 手动下载对应 triplet 的 `devel` / `runtime` 压缩包到 `src/MaaUtils/MaaDeps/tarball/`，再执行 `python3 src/MaaUtils/tools/maadeps-extract.py <triplet>`
 
 ### Linux x64
 
@@ -162,7 +187,7 @@ dotnet restore src/MAAUnified/App/MAAUnified.App.csproj -r osx-arm64
 python3 tools/maadeps-download.py arm64-osx
 
 # 2) 构建并安装 MaaCore runtime（产物在 install/，含 resource/）
-cmake --preset macos-publish-arm64 --fresh -DINSTALL_PYTHON=OFF
+cmake --preset macos-publish-arm64 -DINSTALL_PYTHON=OFF
 cmake --build --preset macos-publish-arm64
 cmake --install build --config RelWithDebInfo
 

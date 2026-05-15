@@ -423,6 +423,8 @@ public sealed class DialogModuleP1FeatureTests
         Assert.Contains("ScaleWindowBounds(dialog, scale);", scaling, StringComparison.Ordinal);
         Assert.Contains("new LayoutTransformControl", scaling, StringComparison.Ordinal);
         Assert.Contains("new ScaleTransform(scale, scale)", scaling, StringComparison.Ordinal);
+        Assert.Contains("dialog.Content = null;", scaling, StringComparison.Ordinal);
+        Assert.Contains("WrapperMarker", scaling, StringComparison.Ordinal);
 
         Assert.Contains("DialogWindowScaling.ApplyOwnerUiScale(dialog, owner);", service, StringComparison.Ordinal);
         Assert.Equal(
