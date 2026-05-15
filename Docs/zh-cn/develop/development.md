@@ -16,6 +16,46 @@
 
 日常联调建议始终从主仓跑，不要只在 `src/MAAUnified` 里单独看托管前端。
 
+按用途分两种情况：
+
+1. 只需要本地 build、运行、联调：直接 clone 官方 `MaaAssistantArknights` 即可。
+2. 还需要提交改动、发 PR：先 fork `MaaAssistantArknights`，再从自己的 fork clone，并保留 `origin` / `upstream` 两个远端。
+
+只需要本地 build 时，可直接使用官方仓库：
+
+```bash
+git clone --recurse-submodules -b dev-v2 --single-branch https://github.com/MaaAssistantArknights/MaaAssistantArknights.git
+cd MaaAssistantArknights
+```
+
+准备贡献时，推荐从自己的 fork clone。下面的用户名和仓库名请按你自己的 GitHub 信息替换：
+
+```bash
+git clone --recurse-submodules -b dev-v2 --single-branch https://github.com/<GitHub 用户名>/<fork 仓库名>.git
+cd MaaAssistantArknights
+git remote add upstream https://github.com/MaaAssistantArknights/MaaAssistantArknights.git
+git remote -v
+```
+
+预期主仓远端为：
+
+```text
+origin    https://github.com/<你的 GitHub 用户名>/<你的 MaaAssistantArknights fork 仓库名>.git (fetch)
+origin    https://github.com/<你的 GitHub 用户名>/<你的 MaaAssistantArknights fork 仓库名>.git (push)
+upstream  https://github.com/MaaAssistantArknights/MaaAssistantArknights.git (fetch)
+upstream  https://github.com/MaaAssistantArknights/MaaAssistantArknights.git (push)
+```
+
+如果你已经 clone 了仓库，也可以直接补齐远端：
+
+```bash
+git remote set-url origin https://github.com/<你的 GitHub 用户名>/<你的 MaaAssistantArknights fork 仓库名>.git
+git remote add upstream https://github.com/MaaAssistantArknights/MaaAssistantArknights.git
+git remote -v
+```
+
+如果 `upstream` 已经存在，就不用重复添加。
+
 首次同步子模块：
 
 ```bash
