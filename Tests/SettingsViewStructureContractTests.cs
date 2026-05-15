@@ -474,27 +474,23 @@ public sealed class SettingsViewStructureContractTests
         Assert.Contains("com.apple.security.cs.disable-executable-page-protection", script, StringComparison.Ordinal);
         Assert.Contains("--entitlements \"$entitlements_path\"", script, StringComparison.Ordinal);
         Assert.Contains("grep -Eq 'Mach-O.*executable'", script, StringComparison.Ordinal);
-        Assert.Contains("dmg_tmp_path=\"$release_dir/.$package_name.tmp.dmg\"", script, StringComparison.Ordinal);
+        Assert.Contains("dmg_rw_path=\"$release_dir/.$package_name.rw.dmg\"", script, StringComparison.Ordinal);
         Assert.DoesNotContain(".$package_name.dmg.tmp", script, StringComparison.Ordinal);
-        Assert.Contains("create_verified_dmg()", script, StringComparison.Ordinal);
-        Assert.Contains("hdiutil create -volname \"$app_name\"", script, StringComparison.Ordinal);
+        Assert.Contains("create_dmg_with_dmgbuild()", script, StringComparison.Ordinal);
+        Assert.Contains("resolve_dmgbuild_python()", script, StringComparison.Ordinal);
+        Assert.Contains("format = \"UDRW\"", script, StringComparison.Ordinal);
+        Assert.Contains("patch_dmg_background \"$dmgbuild_python\"", script, StringComparison.Ordinal);
+        Assert.Contains("hdiutil convert \"$dmg_rw_path\" -format UDZO", script, StringComparison.Ordinal);
         Assert.Contains("hdiutil verify \"$dmg_path\"", script, StringComparison.Ordinal);
-        Assert.Contains("retrying in ${delay}s", script, StringComparison.Ordinal);
-        Assert.Contains("write_dmg_quarantine_fix_script()", script, StringComparison.Ordinal);
-        Assert.Contains("customize_mounted_dmg()", script, StringComparison.Ordinal);
-        Assert.Contains("prepare_dmg_layout()", script, StringComparison.Ordinal);
-        Assert.Contains("Fix Damaged.command", script, StringComparison.Ordinal);
-        Assert.Contains("AppleLocale", script, StringComparison.Ordinal);
-        Assert.Contains("zh_Hant*", script, StringComparison.Ordinal);
-        Assert.Contains("ja*", script, StringComparison.Ordinal);
-        Assert.Contains("ko*", script, StringComparison.Ordinal);
-        Assert.Contains("quarantine_command='xattr -dr com.apple.quarantine", script, StringComparison.Ordinal);
+        Assert.Contains("write_dmg_install_note()", script, StringComparison.Ordinal);
+        Assert.Contains("Install MAAUnified.txt", script, StringComparison.Ordinal);
         Assert.Contains("/Applications/MAAUnified.app", script, StringComparison.Ordinal);
-        Assert.Contains("拖到 Applications / Drag to Applications / Applications へドラッグ / Applications로 드래그", backgroundScript, StringComparison.Ordinal);
-        Assert.Contains("拖到「應用程式」/ Applications へドラッグ / Applications로 드래그", backgroundScript, StringComparison.Ordinal);
-        Assert.Contains("如果提示“已损坏” / “damaged” /「破損」/ 손상됨", backgroundScript, StringComparison.Ordinal);
-        Assert.Contains("双击 Fix Damaged.command，或在终端运行：", backgroundScript, StringComparison.Ordinal);
-        Assert.Contains("xattr -dr com.apple.quarantine \"/Applications/MAAUnified.app\"", backgroundScript, StringComparison.Ordinal);
+        Assert.Contains("xattr -dr com.apple.quarantine", script, StringComparison.Ordinal);
+        Assert.Contains("拖到 Applications / Drag to Applications", backgroundScript, StringComparison.Ordinal);
+        Assert.Contains("MAAUnified.app を Applications フォルダへドラッグ", backgroundScript, StringComparison.Ordinal);
+        Assert.Contains("MAAUnified.app을 Applications 폴더로 드래그", backgroundScript, StringComparison.Ordinal);
+        Assert.Contains("If macOS says “damaged”, run in Terminal:", backgroundScript, StringComparison.Ordinal);
+        Assert.Contains("xattr -dr com.apple.quarantine \\\"/Applications/MAAUnified.app\\\"", backgroundScript, StringComparison.Ordinal);
     }
 
     [Fact]
