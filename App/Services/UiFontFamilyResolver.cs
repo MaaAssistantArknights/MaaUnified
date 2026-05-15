@@ -11,6 +11,7 @@ public sealed class UiFontFamilyResolver
 
     private static readonly string[] ZhCnFamilies =
     [
+        "PingFang SC",
         "Microsoft YaHei UI",
         "Microsoft YaHei",
         "Noto Sans CJK SC",
@@ -22,6 +23,7 @@ public sealed class UiFontFamilyResolver
 
     private static readonly string[] ZhTwFamilies =
     [
+        "PingFang TC",
         "Microsoft JhengHei UI",
         "Microsoft JhengHei",
         "Noto Sans CJK TC",

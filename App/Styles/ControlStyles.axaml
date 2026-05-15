@@ -86,7 +86,7 @@
     <x:Double x:Key="MAA.Spacing.XLarge">12</x:Double>
 
     <x:Double x:Key="MAA.FontSize.SectionTitle">14</x:Double>
-    <x:Double x:Key="MAA.FontSize.WindowTitle">18</x:Double>
+    <x:Double x:Key="MAA.FontSize.WindowTitle">20</x:Double>
     <x:Double x:Key="MAA.FontSize.ActionCompact">12</x:Double>
     <x:Double x:Key="MAA.FontSize.TabCompact">12.5</x:Double>
     <x:Double x:Key="MAA.FontSize.CopilotNavTab">14</x:Double>
@@ -379,7 +379,7 @@
     <Setter Property="Margin" Value="{DynamicResource MAA.Thickness.SectionTitleMargin}" />
   </Style>
 
-  <Style Selector="TextBlock.dialog-window-title">
+  <Style Selector="controls|AppWindowTitleText.dialog-window-title">
     <Setter Property="Margin" Value="8,0,0,0" />
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="LineHeight" Value="20" />

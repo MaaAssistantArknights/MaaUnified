@@ -8,6 +8,8 @@ using Avalonia.Platform;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using System.Globalization;
+using System.Text.Json.Nodes;
 using MAAUnified.App.Controls;
 using MAAUnified.App.Features.Dialogs;
 using MAAUnified.App.Infrastructure;
@@ -19,6 +21,7 @@ using MAAUnified.Application.Services.Localization;
 using MAAUnified.Platform;
 using System.ComponentModel;
 using System.Linq;
+using LegacyConfigurationKeys = MAAUnified.Compat.Constants.ConfigurationKeys;
 
 namespace MAAUnified.App.Views;
 
@@ -37,9 +40,19 @@ public partial class MainWindow : Window
     private const double BaseWindowHeight = 900d;
     private const double BaseWindowMinWidth = 1080d;
     private const double BaseWindowMinHeight = 620d;
+    private const double MacOsDefaultWindowWidth = 1104d;
+    private const double MacOsDefaultWindowHeight = 720d;
     private const double MacOsDefaultWindowSizeScale = 1d;
+    private const double NativeWindowShadowShellMarginCompensation = 24d;
     private const double MacOsHiDpiHeightBoostPerScaleStep = 0.12d;
     private const double MacOsHiDpiHeightBoostMax = 1.18d;
+    private const int WindowPlacementSchemaVersion = 1;
+    private const string WindowPlacementSchemaKey = "Schema";
+    private const string WindowPlacementPlatformsKey = "Platforms";
+    private const string WindowPlacementWidthKey = "Width";
+    private const string WindowPlacementHeightKey = "Height";
+    private const double MinimumPersistedWindowWidth = 320d;
+    private const double MinimumPersistedWindowHeight = 240d;
     private const int ResponsiveMarginProgressSteps = 12;
     private const int ResponsiveWidthProgressSteps = 24;
     private static readonly TimeSpan ResizeSettleDelay = TimeSpan.FromMilliseconds(120);
@@ -108,6 +121,7 @@ public partial class MainWindow : Window
     private bool _hasAppliedOpenedWindowBounds;
     private double _lastAppliedWindowWidthScale = 1d;
     private double _lastAppliedWindowHeightScale = 1d;
+    private Size? _lastNormalWindowSize;
     private DispatcherTimer? _resizeSettleTimer;
     private bool _isLiveResizing;
     private readonly object _dialogErrorGate = new();
@@ -214,11 +228,7 @@ public partial class MainWindow : Window
         Program.RecordStartupStage("MainWindow.Opened", "Main window opened.");
         if (VM is not null)
         {
-            var forcePlatformDefaultSize = OperatingSystem.IsMacOS() && !_hasAppliedOpenedWindowBounds;
-            ApplyUiScaleToWindowBounds(
-                preserveLogicalSize: _hasAppliedUiScaleToWindowBounds && !forcePlatformDefaultSize,
-                force: forcePlatformDefaultSize);
-            _hasAppliedOpenedWindowBounds = true;
+            await ApplyOpenedWindowBoundsAsync(VM);
         }
 
         FitToCurrentScreenWorkingArea();
@@ -479,6 +489,7 @@ public partial class MainWindow : Window
         if (e.Property == WindowStateProperty)
         {
             EndLiveResizeVisualThrottle();
+            CaptureLastNormalWindowSize();
             await HandleMinimizeToTrayAsync();
         }
     });
@@ -500,6 +511,7 @@ public partial class MainWindow : Window
             e.ClientSize.Height,
             flushAllHosts: false,
             immediate: false);
+        CaptureLastNormalWindowSize();
         RestartResizeSettleTimer();
     }
 
@@ -864,6 +876,30 @@ public partial class MainWindow : Window
         return double.IsFinite(scale) && scale > 0d ? scale : 1d;
     }
 
+    private async Task ApplyOpenedWindowBoundsAsync(MainShellViewModel vm)
+    {
+        try
+        {
+            await vm.WaitForStartupSnapshotReadyAsync();
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        var restored = TryApplyPersistedWindowSize();
+        if (!restored)
+        {
+            var forcePlatformDefaultSize = OperatingSystem.IsMacOS() && !_hasAppliedOpenedWindowBounds;
+            ApplyUiScaleToWindowBounds(
+                preserveLogicalSize: _hasAppliedUiScaleToWindowBounds && !forcePlatformDefaultSize,
+                force: forcePlatformDefaultSize);
+        }
+
+        _hasAppliedOpenedWindowBounds = true;
+        CaptureLastNormalWindowSize();
+    }
+
     private void ApplyUiScaleToWindowBounds(bool preserveLogicalSize, bool force = false)
     {
         try
@@ -884,8 +920,8 @@ public partial class MainWindow : Window
             var defaultWidth = ComputeDefaultWindowWidth(isMacOS);
             var defaultHeight = ComputeDefaultWindowHeight(isMacOS);
 
-            MinWidth = BaseWindowMinWidth * widthScale;
-            MinHeight = BaseWindowMinHeight * heightScale;
+            MinWidth = ComputeMinimumWindowWidth(isMacOS) * widthScale;
+            MinHeight = ComputeMinimumWindowHeight(isMacOS) * heightScale;
             if (WindowState == WindowState.Normal)
             {
                 Width = ResolveWindowSizeTarget(
@@ -917,6 +953,54 @@ public partial class MainWindow : Window
         }
     }
 
+    private bool TryApplyPersistedWindowSize()
+    {
+        try
+        {
+            var globalValues = App.Runtime.ConfigurationService.CurrentConfig.GlobalValues;
+            if (!ShouldLoadPersistedWindowSize(globalValues)
+                || !TryReadPersistedWindowSize(
+                    globalValues,
+                    ResolveCurrentWindowPlacementPlatformKey(),
+                    out var persistedSize))
+            {
+                return false;
+            }
+
+            var isMacOS = OperatingSystem.IsMacOS();
+            var widthScale = ComputeWindowWidthScale(GetEffectiveUiScaleFactor());
+            var heightScale = ComputeWindowHeightScale(GetEffectiveUiScaleFactor(), RenderScaling, isMacOS);
+            MinWidth = ComputeMinimumWindowWidth(isMacOS) * widthScale;
+            MinHeight = ComputeMinimumWindowHeight(isMacOS) * heightScale;
+            if (WindowState == WindowState.Normal)
+            {
+                Width = Math.Max(MinWidth, persistedSize.Width);
+                Height = Math.Max(MinHeight, persistedSize.Height);
+            }
+
+            _lastAppliedWindowWidthScale = widthScale;
+            _lastAppliedWindowHeightScale = heightScale;
+            _hasAppliedUiScaleToWindowBounds = true;
+            FitToCurrentScreenWorkingArea();
+            Program.RecordStartupStage(
+                "MainWindow.WindowPlacement.Restore",
+                FormattableString.Invariant($"size={Width:0.#}x{Height:0.#}; platform={ResolveCurrentWindowPlacementPlatformKey()}"));
+            return true;
+        }
+        catch (Exception ex) when (App.ShouldIgnoreUnhandledException(ex))
+        {
+            return false;
+        }
+        catch (Exception ex)
+        {
+            Program.RecordStartupStage(
+                "MainWindow.WindowPlacement.Restore.Fail",
+                "Failed to restore persisted main window size.",
+                ex);
+            return false;
+        }
+    }
+
     private void ApplyPlatformDefaultWindowSize(bool isMacOS)
     {
         if (!isMacOS)
@@ -926,16 +1010,37 @@ public partial class MainWindow : Window
 
         Width = ComputeDefaultWindowWidth(isMacOS);
         Height = ComputeDefaultWindowHeight(isMacOS);
+        MinWidth = ComputeMinimumWindowWidth(isMacOS);
+        MinHeight = ComputeMinimumWindowHeight(isMacOS);
     }
 
     internal static double ComputeDefaultWindowWidth(bool isMacOS)
     {
-        return BaseWindowWidth * (isMacOS ? MacOsDefaultWindowSizeScale : 1d);
+        return (isMacOS ? MacOsDefaultWindowWidth : BaseWindowWidth)
+            * (isMacOS ? MacOsDefaultWindowSizeScale : 1d);
     }
 
     internal static double ComputeDefaultWindowHeight(bool isMacOS)
     {
-        return BaseWindowHeight * (isMacOS ? MacOsDefaultWindowSizeScale : 1d);
+        return (isMacOS ? MacOsDefaultWindowHeight : BaseWindowHeight)
+            * (isMacOS ? MacOsDefaultWindowSizeScale : 1d);
+    }
+
+    internal static double ComputeMinimumWindowWidth(bool isMacOS)
+    {
+        return ComputeNativeShadowCompensatedWindowSize(BaseWindowMinWidth, isMacOS);
+    }
+
+    internal static double ComputeMinimumWindowHeight(bool isMacOS)
+    {
+        return ComputeNativeShadowCompensatedWindowSize(BaseWindowMinHeight, isMacOS);
+    }
+
+    private static double ComputeNativeShadowCompensatedWindowSize(double baseSize, bool isMacOS)
+    {
+        return isMacOS
+            ? Math.Max(0d, baseSize - NativeWindowShadowShellMarginCompensation)
+            : baseSize;
     }
 
     private static double ResolveLogicalWindowSize(double scaledValue, double scale, double fallback)
@@ -973,6 +1078,96 @@ public partial class MainWindow : Window
         return Math.Max(minSize, logicalSize * nextScale);
     }
 
+    internal static bool ShouldLoadPersistedWindowSize(IReadOnlyDictionary<string, JsonNode?> globalValues)
+        => ReadBooleanSetting(globalValues, LegacyConfigurationKeys.LoadWindowPlacement, defaultValue: true);
+
+    internal static bool ShouldSavePersistedWindowSize(IReadOnlyDictionary<string, JsonNode?> globalValues)
+        => ReadBooleanSetting(globalValues, LegacyConfigurationKeys.SaveWindowPlacement, defaultValue: true);
+
+    internal static bool TryReadPersistedWindowSize(
+        IReadOnlyDictionary<string, JsonNode?> globalValues,
+        string platformKey,
+        out Size size)
+    {
+        size = default;
+        if (string.IsNullOrWhiteSpace(platformKey)
+            || !globalValues.TryGetValue(LegacyConfigurationKeys.WindowPlacement, out var node)
+            || node is not JsonObject placement)
+        {
+            return false;
+        }
+
+        var sizeNode = placement;
+        if (placement[WindowPlacementPlatformsKey] is JsonObject platforms
+            && platforms[platformKey] is JsonObject platformPlacement)
+        {
+            sizeNode = platformPlacement;
+        }
+
+        if (!TryReadFiniteDouble(sizeNode, WindowPlacementWidthKey, out var width)
+            || !TryReadFiniteDouble(sizeNode, WindowPlacementHeightKey, out var height)
+            || !TryCreatePersistedWindowSize(width, height, 0d, 0d, out size))
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    internal static void WritePersistedWindowSize(
+        IDictionary<string, JsonNode?> globalValues,
+        string platformKey,
+        Size size)
+    {
+        if (string.IsNullOrWhiteSpace(platformKey)
+            || !TryCreatePersistedWindowSize(size.Width, size.Height, 0d, 0d, out var normalizedSize))
+        {
+            return;
+        }
+
+        if (!globalValues.TryGetValue(LegacyConfigurationKeys.WindowPlacement, out var node)
+            || node is not JsonObject placement)
+        {
+            placement = [];
+            globalValues[LegacyConfigurationKeys.WindowPlacement] = placement;
+        }
+
+        placement[WindowPlacementSchemaKey] = JsonValue.Create(WindowPlacementSchemaVersion);
+        if (placement[WindowPlacementPlatformsKey] is not JsonObject platforms)
+        {
+            platforms = [];
+            placement[WindowPlacementPlatformsKey] = platforms;
+        }
+
+        platforms[platformKey] = new JsonObject
+        {
+            [WindowPlacementWidthKey] = JsonValue.Create(Math.Round(normalizedSize.Width, 2)),
+            [WindowPlacementHeightKey] = JsonValue.Create(Math.Round(normalizedSize.Height, 2)),
+        };
+    }
+
+    internal static bool TryCreatePersistedWindowSize(
+        double width,
+        double height,
+        double minWidth,
+        double minHeight,
+        out Size size)
+    {
+        size = default;
+        if (!double.IsFinite(width)
+            || !double.IsFinite(height)
+            || width <= 0d
+            || height <= 0d)
+        {
+            return false;
+        }
+
+        size = new Size(
+            Math.Max(width, Math.Max(minWidth, MinimumPersistedWindowWidth)),
+            Math.Max(height, Math.Max(minHeight, MinimumPersistedWindowHeight)));
+        return true;
+    }
+
     internal static double ComputeWindowWidthScale(double effectiveUiScaleFactor)
     {
         return NormalizeScaleFactor(effectiveUiScaleFactor);
@@ -1002,6 +1197,78 @@ public partial class MainWindow : Window
     private static double NormalizeScaleFactor(double scale)
     {
         return double.IsFinite(scale) && scale > 0d ? scale : 1d;
+    }
+
+    private static bool ReadBooleanSetting(
+        IReadOnlyDictionary<string, JsonNode?> globalValues,
+        string key,
+        bool defaultValue)
+    {
+        if (!globalValues.TryGetValue(key, out var node) || node is not JsonValue value)
+        {
+            return defaultValue;
+        }
+
+        if (value.TryGetValue<bool>(out var boolValue))
+        {
+            return boolValue;
+        }
+
+        if (value.TryGetValue<string>(out var stringValue)
+            && bool.TryParse(stringValue, out var parsedValue))
+        {
+            return parsedValue;
+        }
+
+        if (value.TryGetValue<int>(out var intValue))
+        {
+            return intValue != 0;
+        }
+
+        return defaultValue;
+    }
+
+    private static bool TryReadFiniteDouble(JsonObject source, string key, out double value)
+    {
+        value = 0d;
+        if (source[key] is not JsonValue jsonValue)
+        {
+            return false;
+        }
+
+        if (jsonValue.TryGetValue<double>(out var doubleValue))
+        {
+            value = doubleValue;
+            return double.IsFinite(value);
+        }
+
+        if (jsonValue.TryGetValue<string>(out var stringValue)
+            && double.TryParse(
+                stringValue,
+                NumberStyles.Float,
+                CultureInfo.InvariantCulture,
+                out var parsedValue))
+        {
+            value = parsedValue;
+            return double.IsFinite(value);
+        }
+
+        return false;
+    }
+
+    private static string ResolveCurrentWindowPlacementPlatformKey()
+    {
+        if (OperatingSystem.IsMacOS())
+        {
+            return "macOS";
+        }
+
+        if (OperatingSystem.IsWindows())
+        {
+            return "Windows";
+        }
+
+        return OperatingSystem.IsLinux() ? "Linux" : "Other";
     }
 
     private void RecordUiScaleDiagnostics(string stage)
@@ -1837,6 +2104,8 @@ public partial class MainWindow : Window
             return true;
         }
 
+        await PersistWindowSizeBeforeCloseAsync($"{sourceScope}.WindowPlacement", cancellationToken);
+
         var tracker = ConfigurationSaveTracker.Instance;
         ConfigurationSaveStatusDialogView? waitDialog = null;
         Task<bool?>? waitDialogTask = null;
@@ -1890,6 +2159,73 @@ public partial class MainWindow : Window
                 $"{JoinChineseNames(failedNames)}保存失败"),
             cancellationToken);
         return false;
+    }
+
+    private void CaptureLastNormalWindowSize()
+    {
+        if (WindowState != WindowState.Normal)
+        {
+            return;
+        }
+
+        if (TryCaptureCurrentWindowSize(out var size))
+        {
+            _lastNormalWindowSize = size;
+        }
+    }
+
+    private bool TryCaptureCurrentWindowSize(out Size size)
+    {
+        var width = Bounds.Width > 0d ? Bounds.Width : Width;
+        var height = Bounds.Height > 0d ? Bounds.Height : Height;
+        return TryCreatePersistedWindowSize(width, height, MinWidth, MinHeight, out size);
+    }
+
+    private async Task PersistWindowSizeBeforeCloseAsync(
+        string sourceScope,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (!_hasAppliedOpenedWindowBounds)
+            {
+                return;
+            }
+
+            var config = App.Runtime.ConfigurationService.CurrentConfig;
+            if (!ShouldSavePersistedWindowSize(config.GlobalValues))
+            {
+                return;
+            }
+
+            var size = WindowState == WindowState.Normal && TryCaptureCurrentWindowSize(out var currentSize)
+                ? currentSize
+                : _lastNormalWindowSize;
+            if (size is null)
+            {
+                return;
+            }
+
+            WritePersistedWindowSize(
+                config.GlobalValues,
+                ResolveCurrentWindowPlacementPlatformKey(),
+                size.Value);
+            await App.Runtime.ConfigurationService.SaveAsync(cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex) when (App.ShouldIgnoreUnhandledException(ex))
+        {
+        }
+        catch (Exception ex)
+        {
+            await App.Runtime.DiagnosticsService.RecordErrorAsync(
+                sourceScope,
+                "Failed to persist main window size before close.",
+                ex,
+                CancellationToken.None);
+        }
     }
 
     private static string JoinChineseNames(IReadOnlyList<string> names)

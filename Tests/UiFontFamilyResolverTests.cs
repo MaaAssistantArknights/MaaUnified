@@ -16,7 +16,7 @@ public sealed class UiFontFamilyResolverTests
         var resolution = resolver.Resolve("zh-cn");
 
         Assert.Equal("zh-cn", resolution.Language);
-        Assert.Equal("Microsoft YaHei UI, Microsoft YaHei, Noto Sans CJK SC, Noto Sans SC, Source Han Sans SC, WenQuanYi Micro Hei, sans-serif", resolution.Actual);
+        Assert.Equal("PingFang SC, Microsoft YaHei UI, Microsoft YaHei, Noto Sans CJK SC, Noto Sans SC, Source Han Sans SC, WenQuanYi Micro Hei, sans-serif", resolution.Actual);
         Assert.False(resolution.RequiresDiagnostics);
     }
 
@@ -29,7 +29,7 @@ public sealed class UiFontFamilyResolverTests
         var traditional = traditionalResolver.Resolve("zh-cn");
         var japanese = japaneseResolver.Resolve("zh-cn");
 
-        Assert.Equal("Microsoft JhengHei UI, Microsoft JhengHei, Noto Sans CJK TC, Noto Sans TC, Source Han Sans TC, sans-serif", traditional.Actual);
+        Assert.Equal("PingFang TC, Microsoft JhengHei UI, Microsoft JhengHei, Noto Sans CJK TC, Noto Sans TC, Source Han Sans TC, sans-serif", traditional.Actual);
         Assert.Equal("target-language-font-missing; fallback=zh-tw", traditional.Reason);
         Assert.True(traditional.RequiresDiagnostics);
 
@@ -47,7 +47,7 @@ public sealed class UiFontFamilyResolverTests
         var simplified = simplifiedResolver.Resolve("zh-tw");
         var japanese = japaneseResolver.Resolve("zh-tw");
 
-        Assert.Equal("Microsoft YaHei UI, Microsoft YaHei, Noto Sans CJK SC, Noto Sans SC, Source Han Sans SC, WenQuanYi Micro Hei, sans-serif", simplified.Actual);
+        Assert.Equal("PingFang SC, Microsoft YaHei UI, Microsoft YaHei, Noto Sans CJK SC, Noto Sans SC, Source Han Sans SC, WenQuanYi Micro Hei, sans-serif", simplified.Actual);
         Assert.Equal("target-language-font-missing; fallback=zh-cn", simplified.Reason);
 
         Assert.Equal("Yu Gothic UI, Yu Gothic, Meiryo, Noto Sans CJK JP, Noto Sans JP, Source Han Sans JP, sans-serif", japanese.Actual);
@@ -102,7 +102,7 @@ public sealed class UiFontFamilyResolverTests
         var switchedFont = Assert.IsType<FontFamily>(resources[UiFontFamilyResolver.ResourceKey]);
 
         Assert.EndsWith(
-            "Microsoft YaHei UI, Microsoft YaHei, Noto Sans CJK SC, Noto Sans SC, Source Han Sans SC, WenQuanYi Micro Hei, sans-serif",
+            "PingFang SC, Microsoft YaHei UI, Microsoft YaHei, Noto Sans CJK SC, Noto Sans SC, Source Han Sans SC, WenQuanYi Micro Hei, sans-serif",
             startupFont.ToString(),
             StringComparison.Ordinal);
         Assert.EndsWith(
@@ -127,7 +127,7 @@ public sealed class UiFontFamilyResolverTests
 
         var diagnostic = Assert.Single(diagnostics);
         Assert.Equal("zh-cn", diagnostic.Language);
-        Assert.Contains("Microsoft YaHei UI", diagnostic.Expected, StringComparison.Ordinal);
+        Assert.Contains("PingFang SC", diagnostic.Expected, StringComparison.Ordinal);
         Assert.Equal("sans-serif", diagnostic.Actual);
         Assert.Equal("target-language-font-missing; fallback=sans-serif", diagnostic.Reason);
     }

@@ -6,10 +6,11 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.VisualTree;
+using MAAUnified.App.Infrastructure;
 
 namespace MAAUnified.App.Controls;
 
-[PseudoClasses(":resizable-dialog", ":compact-modal", ":controls-left", ":window-maximized")]
+[PseudoClasses(":resizable-dialog", ":compact-modal", ":controls-left", ":window-maximized", ":native-window-shadow")]
 public class AppWindowFrame : ContentControl
 {
     public static readonly StyledProperty<string> TitleProperty =
@@ -77,6 +78,11 @@ public class AppWindowFrame : ContentControl
             nameof(ShowsResizeGrips),
             frame => frame.ShowsResizeGrips);
 
+    public static readonly DirectProperty<AppWindowFrame, bool> UsesNativeWindowShadowProperty =
+        AvaloniaProperty.RegisterDirect<AppWindowFrame, bool>(
+            nameof(UsesNativeWindowShadow),
+            frame => frame.UsesNativeWindowShadow);
+
     public static readonly DirectProperty<AppWindowFrame, AppWindowFrameHorizontalInset> EffectiveHorizontalContentInsetProperty =
         AvaloniaProperty.RegisterDirect<AppWindowFrame, AppWindowFrameHorizontalInset>(
             nameof(EffectiveHorizontalContentInset),
@@ -105,17 +111,16 @@ public class AppWindowFrame : ContentControl
     private readonly List<Button> _minimizeButtons = [];
     private readonly List<Button> _maximizeButtons = [];
     private readonly List<Control> _resizeGrips = [];
-    private const double MacOSResizeGripOutwardBand = 4d;
     private Window? _hostWindow;
     private WindowBase? _ownerWindow;
     private bool _hasHeaderContent;
     private bool _hasActions;
     private bool _allowsHeaderDrag;
     private bool _showsResizeGrips;
+    private bool _usesNativeWindowShadow;
     private bool _hasCapturedHostMaxHeight;
     private double _initialHostMaxHeight = double.PositiveInfinity;
     private AppWindowFrameHorizontalInset _effectiveHorizontalContentInset;
-    private readonly bool _isMacOS;
     private Thickness _effectiveResizeGripMargin;
 
     static AppWindowFrame()
@@ -127,7 +132,6 @@ public class AppWindowFrame : ContentControl
 
     public AppWindowFrame()
     {
-        _isMacOS = OperatingSystem.IsMacOS();
         HasHeaderContent = HeaderContent is not null;
         HasActions = ActionsContent is not null;
         AddHandler(PointerReleasedEvent, OnPointerReleasedForInputFocusDismiss, RoutingStrategies.Bubble, handledEventsToo: true);
@@ -299,6 +303,12 @@ public class AppWindowFrame : ContentControl
     {
         get => _showsResizeGrips;
         private set => SetAndRaise(ShowsResizeGripsProperty, ref _showsResizeGrips, value);
+    }
+
+    public bool UsesNativeWindowShadow
+    {
+        get => _usesNativeWindowShadow;
+        private set => SetAndRaise(UsesNativeWindowShadowProperty, ref _usesNativeWindowShadow, value);
     }
 
     public AppWindowFrameHorizontalInset EffectiveHorizontalContentInset
@@ -728,7 +738,27 @@ public class AppWindowFrame : ContentControl
         PseudoClasses.Set(":resizable-dialog", isResizableDialog);
         PseudoClasses.Set(":compact-modal", !isResizableDialog);
         PseudoClasses.Set(":window-maximized", isHostMaximizedState);
+        UsesNativeWindowShadow = ShouldUseNativeWindowShadow(
+            OperatingSystem.IsMacOS(),
+            isResizableDialog,
+            isHostNormalState,
+            hostWindow?.CanResize == true)
+            && hostWindow is not null
+            && WindowVisuals.ShouldApplyMacNativeWindowShadow(
+                hostWindow.Background,
+                hostWindow.SystemDecorations,
+                hostWindow.ExtendClientAreaToDecorationsHint,
+                hostWindow.ExtendClientAreaChromeHints,
+                hostWindow.CanResize,
+                OperatingSystem.IsMacOS());
+        PseudoClasses.Set(":native-window-shadow", UsesNativeWindowShadow);
+        if (UsesNativeWindowShadow && hostWindow is not null)
+        {
+            WindowVisuals.TryApplyMacNativeWindowShadow(hostWindow);
+        }
+
         UpdateEffectiveHorizontalContentInset();
+        UpdateEffectiveResizeGripMargin();
     }
 
     private void OnFrameSurfacePropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
@@ -748,7 +778,7 @@ public class AppWindowFrame : ContentControl
 
     private void UpdateEffectiveResizeGripMargin()
     {
-        EffectiveResizeGripMargin = ResolveResizeGripMargin(ShellMargin, _isMacOS);
+        EffectiveResizeGripMargin = ResolveResizeGripMargin(ShellMargin, UsesNativeWindowShadow);
     }
 
     private void UpdateChromeLayoutTransform()
@@ -773,23 +803,21 @@ public class AppWindowFrame : ContentControl
             shellMargin.Right + frameBorder.Right + framePadding.Right);
     }
 
-    internal static Thickness ResolveResizeGripMargin(Thickness shellMargin, bool isMacOS)
+    internal static bool ShouldUseNativeWindowShadow(
+        bool isMacOS,
+        bool isResizableDialog,
+        bool isHostNormalState,
+        bool canResize)
     {
-        if (!isMacOS)
-        {
-            return shellMargin;
-        }
-
-        return new Thickness(
-            ResolveResizeGripMarginComponent(shellMargin.Left),
-            ResolveResizeGripMarginComponent(shellMargin.Top),
-            ResolveResizeGripMarginComponent(shellMargin.Right),
-            ResolveResizeGripMarginComponent(shellMargin.Bottom));
+        return isMacOS
+            && isResizableDialog
+            && isHostNormalState
+            && canResize;
     }
 
-    private static double ResolveResizeGripMarginComponent(double shellMargin)
+    internal static Thickness ResolveResizeGripMargin(Thickness shellMargin, bool usesNativeWindowShadow)
     {
-        return Math.Max(shellMargin - MacOSResizeGripOutwardBand, 0d);
+        return usesNativeWindowShadow ? new Thickness(0) : shellMargin;
     }
 
     private void DetachTemplateEvents()

@@ -228,8 +228,8 @@
                           VerticalAlignment="Stretch"
                           IsHitTestVisible="{TemplateBinding AllowsHeaderDrag}"
                           Background="Transparent">
-                    <TextBlock Classes="dialog-window-title"
-                               Text="{TemplateBinding Title}" />
+                    <controls:AppWindowTitleText Classes="dialog-window-title"
+                                                 TitleText="{TemplateBinding Title}" />
                   </Border>
 
                   <StackPanel x:Name="PART_RightWindowControls"
@@ -390,18 +390,33 @@
     <Setter Property="StrokeLineCap" Value="Round" />
   </Style>
 
-  <Style Selector="controls|AppWindowFrame /template/ TextBlock.dialog-window-title">
+  <Style Selector="controls|AppWindowFrame /template/ controls|AppWindowTitleText.dialog-window-title">
     <Setter Property="Margin" Value="8,0,0,0" />
-    <Setter Property="FontSize" Value="13.5" />
-    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Height" Value="24" />
+    <Setter Property="MinHeight" Value="24" />
+    <Setter Property="MaxHeight" Value="24" />
+    <Setter Property="FontSize" Value="{DynamicResource MAA.FontSize.WindowTitle}" />
+    <Setter Property="FontWeight" Value="Bold" />
     <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="TextWrapping" Value="NoWrap" />
-    <Setter Property="LineHeight" Value="20" />
+    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    <Setter Property="MaxLines" Value="1" />
+    <Setter Property="LineHeight" Value="24" />
+    <Setter Property="ClipToBounds" Value="False" />
   </Style>
 
   <Style Selector="controls|AppWindowFrame /template/ Border#PART_FrameSurface">
     <Setter Property="BoxShadow" Value="0 0 24 0 #29000000" />
+  </Style>
+
+  <Style Selector="controls|AppWindowFrame:native-window-shadow">
+    <Setter Property="ShellMargin" Value="0" />
+  </Style>
+
+  <Style Selector="controls|AppWindowFrame:native-window-shadow /template/ Border#PART_FrameSurface">
+    <Setter Property="BoxShadow" Value="0 0 0 0 #00000000" />
   </Style>
 
   <Style Selector="controls|AppWindowFrame:window-maximized /template/ Path.app-window-maximize-icon-normal">

@@ -347,11 +347,25 @@ write_signing_status() {
   printf '%s\n' "$1" > "$signing_status_path"
 }
 
-sign_macho_with_identity() {
+should_codesign_file() {
+  local file="$1"
+  local file_name="${file##*/}"
+  local file_type
+
+  case "$file_name" in
+    *.dylib | *.dll | *.exe)
+      return 0
+      ;;
+  esac
+
+  file_type="$(file "$file")"
+  grep -Eq 'Mach-O|dynamically linked shared library' <<< "$file_type"
+}
+
+sign_bundle_components_with_identity() {
   local identity="$1"
   local use_timestamp="$2"
   local file
-  local file_type
   local codesign_args=(--force --options runtime)
 
   if [[ "$use_timestamp" == "true" ]]; then
@@ -359,9 +373,8 @@ sign_macho_with_identity() {
   fi
 
   while IFS= read -r file; do
-    file_type="$(file "$file")"
-    if grep -Eq 'Mach-O|dynamically linked shared library' <<< "$file_type"; then
-      if grep -Eq 'Mach-O.*executable' <<< "$file_type"; then
+    if should_codesign_file "$file"; then
+      if [[ "$file" == "$macos_dir/MAAUnified" ]]; then
         codesign "${codesign_args[@]}" --entitlements "$entitlements_path" --sign "$identity" "$file" || return
       else
         codesign "${codesign_args[@]}" --sign "$identity" "$file" || return
@@ -383,13 +396,13 @@ sign_developer_id() {
   fi
 
   echo "Signing $app_name.app with identity: $identity"
-  sign_macho_with_identity "$identity" true || return
+  sign_bundle_components_with_identity "$identity" true || return
   codesign --force --options runtime --timestamp --entitlements "$entitlements_path" --sign "$identity" "$app_dir" || return
   codesign --verify --deep --strict --verbose=2 "$app_dir" || return
 }
 
 sign_adhoc() {
-  sign_macho_with_identity "-" false || return
+  sign_bundle_components_with_identity "-" false || return
   codesign --force --options runtime --entitlements "$entitlements_path" --sign - "$app_dir" || return
   if ! codesign --verify --deep --strict --verbose=2 "$app_dir"; then
     echo "::warning title=macOS ad-hoc verification failed::Ad-hoc signing completed, but strict app verification failed; keeping fallback dmg without notarization."

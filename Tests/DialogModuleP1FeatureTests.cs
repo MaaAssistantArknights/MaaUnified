@@ -460,16 +460,25 @@ public sealed class DialogModuleP1FeatureTests
         Assert.Contains("new LayoutTransformControl", popupScale, StringComparison.Ordinal);
         Assert.Contains("popup.Child = null;", popupScale, StringComparison.Ordinal);
         Assert.Contains("Property=\"controls:PopupUiScale.UseTopLevelUiScale\" Value=\"True\"", controlStyles, StringComparison.Ordinal);
-        Assert.Contains("TextBlock.dialog-window-title", controlStyles, StringComparison.Ordinal);
+        var titleTextCode = File.ReadAllText(Path.Combine(root, "App", "Controls", "AppWindowTitleText.cs"));
+        Assert.Contains("controls|AppWindowTitleText.dialog-window-title", controlStyles, StringComparison.Ordinal);
         Assert.Contains("Property=\"Margin\" Value=\"8,0,0,0\"", controlStyles, StringComparison.Ordinal);
+        Assert.Contains("<x:Double x:Key=\"MAA.FontSize.WindowTitle\">20</x:Double>", controlStyles, StringComparison.Ordinal);
         Assert.Contains("Property=\"TextWrapping\" Value=\"NoWrap\"", controlStyles, StringComparison.Ordinal);
         Assert.Contains("Property=\"TextTrimming\" Value=\"CharacterEllipsis\"", controlStyles, StringComparison.Ordinal);
         Assert.Contains("Property=\"MaxLines\" Value=\"1\"", controlStyles, StringComparison.Ordinal);
-        Assert.Contains("Classes=\"dialog-window-title\"", foundationStyles, StringComparison.Ordinal);
+        Assert.Contains("<controls:AppWindowTitleText Classes=\"dialog-window-title\"", foundationStyles, StringComparison.Ordinal);
+        Assert.Contains("TitleText=\"{TemplateBinding Title}\"", foundationStyles, StringComparison.Ordinal);
         Assert.DoesNotContain("Classes=\"app-window-title dialog-window-title\"", foundationStyles, StringComparison.Ordinal);
-        Assert.Contains("Property=\"FontSize\" Value=\"13.5\"", foundationStyles, StringComparison.Ordinal);
-        Assert.Contains("Property=\"FontWeight\" Value=\"SemiBold\"", foundationStyles, StringComparison.Ordinal);
-        Assert.Contains("Property=\"LineHeight\" Value=\"20\"", foundationStyles, StringComparison.Ordinal);
+        Assert.Contains("Property=\"Height\" Value=\"24\"", foundationStyles, StringComparison.Ordinal);
+        Assert.Contains("Property=\"MinHeight\" Value=\"24\"", foundationStyles, StringComparison.Ordinal);
+        Assert.Contains("Property=\"MaxHeight\" Value=\"24\"", foundationStyles, StringComparison.Ordinal);
+        Assert.Contains("Property=\"FontSize\" Value=\"{DynamicResource MAA.FontSize.WindowTitle}\"", foundationStyles, StringComparison.Ordinal);
+        Assert.Contains("Property=\"FontWeight\" Value=\"Bold\"", foundationStyles, StringComparison.Ordinal);
+        Assert.Contains("Property=\"LineHeight\" Value=\"24\"", foundationStyles, StringComparison.Ordinal);
+        Assert.Contains("title.IndexOf(\" - \", StringComparison.Ordinal)", titleTextCode, StringComparison.Ordinal);
+        Assert.Contains("FontWeight.Bold", titleTextCode, StringComparison.Ordinal);
+        Assert.Contains("FontWeight.Medium", titleTextCode, StringComparison.Ordinal);
 
         foreach (var relativePath in files)
         {
