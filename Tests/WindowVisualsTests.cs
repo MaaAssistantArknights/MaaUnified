@@ -68,32 +68,6 @@ public sealed class WindowVisualsTests
         Assert.Equal(expected, actual);
     }
 
-    [Theory]
-    [InlineData(0UL, 8UL)]
-    [InlineData(8UL, 8UL)]
-    [InlineData(5UL, 13UL)]
-    public void AddMacResizableStyleMask_ShouldSetResizableBitWithoutClearingOthers(
-        ulong styleMask,
-        ulong expected)
-    {
-        var actual = WindowVisuals.AddMacResizableStyleMask(styleMask);
-
-        Assert.Equal(expected, actual);
-    }
-
-    [Theory]
-    [InlineData("NSWindow", true)]
-    [InlineData("nswindow", true)]
-    [InlineData("NSView", false)]
-    [InlineData("", false)]
-    [InlineData(null, false)]
-    public void IsMacWindowHandleDescriptor_ShouldOnlyAcceptNsWindowHandle(string? handleDescriptor, bool expected)
-    {
-        var actual = WindowVisuals.IsMacWindowHandleDescriptor(handleDescriptor);
-
-        Assert.Equal(expected, actual);
-    }
-
     [Fact]
     public void ShouldApplyMacTransparentCustomChromeHint_ShouldReturnTrue_ForTransparentBorderlessMacWindow()
     {

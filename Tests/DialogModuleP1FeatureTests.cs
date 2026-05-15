@@ -455,9 +455,21 @@ public sealed class DialogModuleP1FeatureTests
 
         var popupScale = File.ReadAllText(Path.Combine(root, "App", "Controls", "PopupUiScale.cs"));
         var controlStyles = File.ReadAllText(Path.Combine(root, "App", "Styles", "ControlStyles.axaml"));
+        var foundationStyles = File.ReadAllText(Path.Combine(root, "App", "Styles", "AppFoundationStyles.axaml"));
         Assert.Contains("shell.EffectiveUiScaleFactor", popupScale, StringComparison.Ordinal);
         Assert.Contains("new LayoutTransformControl", popupScale, StringComparison.Ordinal);
+        Assert.Contains("popup.Child = null;", popupScale, StringComparison.Ordinal);
         Assert.Contains("Property=\"controls:PopupUiScale.UseTopLevelUiScale\" Value=\"True\"", controlStyles, StringComparison.Ordinal);
+        Assert.Contains("TextBlock.dialog-window-title", controlStyles, StringComparison.Ordinal);
+        Assert.Contains("Property=\"Margin\" Value=\"8,0,0,0\"", controlStyles, StringComparison.Ordinal);
+        Assert.Contains("Property=\"TextWrapping\" Value=\"NoWrap\"", controlStyles, StringComparison.Ordinal);
+        Assert.Contains("Property=\"TextTrimming\" Value=\"CharacterEllipsis\"", controlStyles, StringComparison.Ordinal);
+        Assert.Contains("Property=\"MaxLines\" Value=\"1\"", controlStyles, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"dialog-window-title\"", foundationStyles, StringComparison.Ordinal);
+        Assert.DoesNotContain("Classes=\"app-window-title dialog-window-title\"", foundationStyles, StringComparison.Ordinal);
+        Assert.Contains("Property=\"FontSize\" Value=\"13.5\"", foundationStyles, StringComparison.Ordinal);
+        Assert.Contains("Property=\"FontWeight\" Value=\"SemiBold\"", foundationStyles, StringComparison.Ordinal);
+        Assert.Contains("Property=\"LineHeight\" Value=\"20\"", foundationStyles, StringComparison.Ordinal);
 
         foreach (var relativePath in files)
         {

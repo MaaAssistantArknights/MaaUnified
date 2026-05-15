@@ -20,99 +20,26 @@ public sealed class AppWindowFrameTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void ResolveResizeGripMargin_ShouldMatchPlatformResizeStrategy(bool preferOuterResizeGrips)
+    [InlineData(false, 12, 10, 8, 6, 12, 10, 8, 6)]
+    [InlineData(true, 12, 10, 8, 6, 8, 6, 4, 2)]
+    [InlineData(true, 3, 2, 1, 0, 0, 0, 0, 0)]
+    public void ResolveResizeGripMargin_ShouldMatchPlatformResizeStrategy(
+        bool isMacOS,
+        double left,
+        double top,
+        double right,
+        double bottom,
+        double expectedLeft,
+        double expectedTop,
+        double expectedRight,
+        double expectedBottom)
     {
-        var shellMargin = new Thickness(12, 10, 8, 6);
+        var shellMargin = new Thickness(left, top, right, bottom);
 
-        var actual = AppWindowFrame.ResolveResizeGripMargin(shellMargin, preferOuterResizeGrips);
+        var actual = AppWindowFrame.ResolveResizeGripMargin(shellMargin, isMacOS);
 
-        var expected = preferOuterResizeGrips
-            ? default(Thickness)
-            : shellMargin;
+        var expected = new Thickness(expectedLeft, expectedTop, expectedRight, expectedBottom);
         Assert.Equal(expected, actual);
     }
 
-    [Fact]
-    public void ComputeManualResizeDrag_ShouldResizeFromSouthEastWithoutMovingOrigin()
-    {
-        var state = new AppWindowFrame.ManualResizeDragState(
-            WindowEdge.SouthEast,
-            new PixelPoint(1000, 500),
-            new PixelPoint(320, 240),
-            new PixelSize(2000, 1400),
-            MinWidth: 1200,
-            MinHeight: 800,
-            MaxWidth: 0,
-            MaxHeight: 0,
-            RenderScaling: 2d);
-
-        var actual = AppWindowFrame.ComputeManualResizeDrag(state, new PixelPoint(1160, 600));
-
-        Assert.Equal(new Size(1080, 750), actual.Size);
-        Assert.Equal(new PixelPoint(320, 240), actual.Position);
-    }
-
-    [Fact]
-    public void ComputeManualResizeDrag_ShouldClampWestResizeAndMoveWindowOriginByAppliedDelta()
-    {
-        var state = new AppWindowFrame.ManualResizeDragState(
-            WindowEdge.West,
-            new PixelPoint(1000, 500),
-            new PixelPoint(300, 120),
-            new PixelSize(1800, 1400),
-            MinWidth: 1680,
-            MinHeight: 800,
-            MaxWidth: 0,
-            MaxHeight: 0,
-            RenderScaling: 2d);
-
-        var actual = AppWindowFrame.ComputeManualResizeDrag(state, new PixelPoint(1240, 500));
-
-        Assert.Equal(new Size(840, 700), actual.Size);
-        Assert.Equal(new PixelPoint(420, 120), actual.Position);
-    }
-
-    [Fact]
-    public void ComputeManualResizeDrag_ShouldClampNorthWestResizeToMinSizeAndMoveBothAxes()
-    {
-        var state = new AppWindowFrame.ManualResizeDragState(
-            WindowEdge.NorthWest,
-            new PixelPoint(1000, 500),
-            new PixelPoint(500, 400),
-            new PixelSize(1800, 1400),
-            MinWidth: 1720,
-            MinHeight: 1320,
-            MaxWidth: 0,
-            MaxHeight: 0,
-            RenderScaling: 2d);
-
-        var actual = AppWindowFrame.ComputeManualResizeDrag(state, new PixelPoint(1160, 640));
-
-        Assert.Equal(new Size(860, 660), actual.Size);
-        Assert.Equal(new PixelPoint(580, 480), actual.Position);
-    }
-
-    [Fact]
-    public void ResolveManualResizeAnchoredPosition_ShouldKeepOppositeEdgesFixedUsingActualWindowSize()
-    {
-        var state = new AppWindowFrame.ManualResizeDragState(
-            WindowEdge.NorthWest,
-            new PixelPoint(1000, 500),
-            new PixelPoint(500, 400),
-            new PixelSize(1800, 1400),
-            MinWidth: 1720,
-            MinHeight: 1320,
-            MaxWidth: 0,
-            MaxHeight: 0,
-            RenderScaling: 2d);
-
-        var actual = AppWindowFrame.ResolveManualResizeAnchoredPosition(
-            state,
-            new PixelSize(1760, 1360),
-            new PixelPoint(999, 999));
-
-        Assert.Equal(new PixelPoint(540, 440), actual);
-    }
 }

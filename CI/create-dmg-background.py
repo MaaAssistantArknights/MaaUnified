@@ -214,25 +214,31 @@ def render_with_appkit(path: str) -> bool:
         image.lockFocus()
 
         rect(0, 0, width, height, background)
-        rect(0, 0, width, 96, accentSoft)
-        drawText("拖到 Applications / Drag to Applications", x: 20, y: 20, width: 600, size: 22, weight: .semibold)
-        drawText("拖到「應用程式」/ Applications へドラッグ / Applications로 드래그", x: 20, y: 55, width: 600, size: 14, color: muted)
-        drawText("把 MAAUnified.app 拖到右侧 Applications 文件夹", x: 20, y: 76, width: 600, size: 12, color: muted)
+        rect(0, 0, width, 106, accentSoft)
+        drawText("拖到 Applications / Drag to Applications", x: 20, y: 12, width: 600, size: 20, weight: .semibold)
+        drawText("将 MAAUnified.app 拖到右侧 Applications 文件夹", x: 20, y: 42, width: 600, size: 11, color: muted)
+        drawText("Drag MAAUnified.app to the Applications folder", x: 20, y: 57, width: 600, size: 11, color: muted)
+        drawText("MAAUnified.app を Applications フォルダへドラッグ", x: 20, y: 72, width: 600, size: 11, color: muted)
+        drawText("MAAUnified.app을 Applications 폴더로 드래그", x: 20, y: 87, width: 600, size: 11, color: muted)
 
-        rect(252, 196, 136, 12, accent)
+        rect(250, 182, 140, 12, accent)
         let arrow = NSBezierPath()
-        arrow.move(to: NSPoint(x: 430, y: height - 202))
-        arrow.line(to: NSPoint(x: 388, y: height - 178))
-        arrow.line(to: NSPoint(x: 388, y: height - 226))
+        arrow.move(to: NSPoint(x: 430, y: height - 188))
+        arrow.line(to: NSPoint(x: 390, y: height - 164))
+        arrow.line(to: NSPoint(x: 390, y: height - 212))
         arrow.close()
         accent.setFill()
         arrow.fill()
 
-        rect(142, 294, 470, 108, commandBackground)
-        strokeRect(142, 294, 470, 108, commandBorder)
-        drawText("如果提示“已损坏” / “damaged” /「破損」/ 손상됨", x: 154, y: 306, width: 446, size: 13, weight: .medium, color: muted)
-        drawText("打开终端运行 / Run in Terminal:", x: 154, y: 334, width: 446, size: 13, color: text)
-        drawText("xattr -dr com.apple.quarantine \"/Applications/MAAUnified.app\"", x: 154, y: 362, width: 446, size: 11, weight: .medium, color: accent)
+        let commandBoxWidth: CGFloat = 560
+        let commandBoxX = (width - commandBoxWidth) / 2
+        rect(commandBoxX, 276, commandBoxWidth, 106, commandBackground)
+        strokeRect(commandBoxX, 276, commandBoxWidth, 106, commandBorder)
+        drawText("如果提示“已损坏”，打开终端运行：", x: commandBoxX + 14, y: 286, width: commandBoxWidth - 28, size: 10.8, color: muted)
+        drawText("If macOS says “damaged”, run in Terminal:", x: commandBoxX + 14, y: 305, width: commandBoxWidth - 28, size: 10.8, color: muted)
+        drawText("「壊れている」と表示されたら、ターミナルで実行：", x: commandBoxX + 14, y: 324, width: commandBoxWidth - 28, size: 10.8, color: muted)
+        drawText("“손상됨” 경고가 나오면 터미널에서 실행:", x: commandBoxX + 14, y: 343, width: commandBoxWidth - 28, size: 10.8, color: muted)
+        drawText("xattr -dr com.apple.quarantine \"/Applications/MAAUnified.app\"", x: commandBoxX + 14, y: 364, width: commandBoxWidth - 28, size: 10, weight: .medium, color: accent)
 
         image.unlockFocus()
 
@@ -282,8 +288,8 @@ def main() -> int:
     centered_text(canvas, 28, "DRAG MAAUNIFIED.APP TO APPLICATIONS", TEXT, 2)
     centered_text(canvas, 66, "IF MACOS SHOWS A DAMAGED WARNING, RUN THE TERMINAL COMMAND BELOW", MUTED, 1)
 
-    rect(canvas, 252, 196, 136, 12, ARROW)
-    triangle(canvas, [(388, 178), (388, 226), (430, 202)], ARROW)
+    rect(canvas, 250, 182, 140, 12, ARROW)
+    triangle(canvas, [(390, 164), (390, 212), (430, 188)], ARROW)
 
     rect(canvas, 142, 320, 470, 74, COMMAND_BG)
     border(canvas, 142, 320, 470, 74, COMMAND_BORDER)

@@ -75,6 +75,7 @@ public static class PopupUiScale
         }
 
         var child = popup.Child;
+        popup.Child = null;
         popup.Child = new LayoutTransformControl
         {
             Tag = WrapperMarker,

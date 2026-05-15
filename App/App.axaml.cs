@@ -2,6 +2,8 @@ using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
+using System.Runtime.InteropServices;
+using System.Text;
 using System.Diagnostics;
 using MAAUnified.App.Services;
 using MAAUnified.App.ViewModels;
@@ -67,8 +69,10 @@ public partial class App : Avalonia.Application
         "UseGpuForInferenceTip",
     ];
     private const double UiLagThresholdMs = 120;
+    private const uint FatalMessageBoxFlags = 0x00000010 | 0x00002000 | 0x00010000 | 0x00040000;
     private static bool _globalExceptionHandlersRegistered;
     private static int _shutdownStarted;
+    private static int _fatalErrorDialogShown;
     private static AppCrashCaptureService? _crashCaptureService;
     private static DispatcherTimer? _uiLagProbeTimer;
     private static UiFontFamilyResourceUpdater? _uiFontFamilyResourceUpdater;
@@ -593,8 +597,30 @@ public partial class App : Avalonia.Application
             return;
         }
 
+        var summary = BuildUnhandledExceptionSummary(
+            "AppDomain.CurrentDomain.UnhandledException",
+            exception,
+            handled: false,
+            isTerminating: e.IsTerminating);
+        var details = BuildUnhandledExceptionDetails(
+            "AppDomain.CurrentDomain.UnhandledException",
+            exception,
+            handled: false,
+            isTerminating: e.IsTerminating);
+        if (e.IsTerminating)
+        {
+            TryShowFatalErrorDialog(summary);
+        }
+
         ForgetTask(
-            ReportGlobalExceptionAsync("AppDomain.CurrentDomain.UnhandledException", exception, handled: false, isTerminating: e.IsTerminating),
+            ReportGlobalExceptionAsync(
+                "AppDomain.CurrentDomain.UnhandledException",
+                exception,
+                handled: false,
+                isTerminating: e.IsTerminating,
+                precomputedSummary: summary,
+                precomputedDetails: details,
+                reportToDialogFeature: !e.IsTerminating),
             "AppDomain.CurrentDomain.UnhandledException.Report");
     }
 
@@ -680,15 +706,18 @@ public partial class App : Avalonia.Application
         string context,
         Exception exception,
         bool handled,
-        bool isTerminating = false)
+        bool isTerminating = false,
+        string? precomputedSummary = null,
+        string? precomputedDetails = null,
+        bool reportToDialogFeature = true)
     {
         if (!TryMarkGlobalExceptionAsReported(context, exception))
         {
             return;
         }
 
-        var summary = BuildUnhandledExceptionSummary(context, exception, handled, isTerminating);
-        var details = BuildUnhandledExceptionDetails(context, exception, handled, isTerminating);
+        var summary = precomputedSummary ?? BuildUnhandledExceptionSummary(context, exception, handled, isTerminating);
+        var details = precomputedDetails ?? BuildUnhandledExceptionDetails(context, exception, handled, isTerminating);
 
         try
         {
@@ -705,7 +734,10 @@ public partial class App : Avalonia.Application
             Runtime.LogService.Error(summary);
             var result = UiOperationResult.Fail(UiErrorCode.UiError, summary, details);
             await Runtime.DiagnosticsService.RecordErrorAsync(context, summary, exception);
-            await Runtime.DialogFeatureService.ReportErrorAsync(context, result);
+            if (reportToDialogFeature)
+            {
+                await Runtime.DialogFeatureService.ReportErrorAsync(context, result);
+            }
         }
         catch
         {
@@ -767,4 +799,60 @@ public partial class App : Avalonia.Application
             // Ignore logging failures during crash reporting.
         }
     }
+
+    private static void TryShowFatalErrorDialog(string summary)
+    {
+        if (!OperatingSystem.IsWindows()
+            || Interlocked.Exchange(ref _fatalErrorDialogShown, 1) != 0)
+        {
+            return;
+        }
+
+        try
+        {
+            _ = MessageBox(
+                nint.Zero,
+                BuildFatalErrorDialogMessage(summary),
+                "MAAUnified Fatal Error",
+                FatalMessageBoxFlags);
+        }
+        catch
+        {
+            // Best effort only. The process is already terminating.
+        }
+    }
+
+    private static string BuildFatalErrorDialogMessage(string summary)
+    {
+        var builder = new StringBuilder()
+            .AppendLine("MAAUnified encountered a fatal error and must close.")
+            .AppendLine()
+            .AppendLine(summary);
+
+        var diagnostics = Runtime?.DiagnosticsService;
+        if (!string.IsNullOrWhiteSpace(diagnostics?.ErrorLogPath))
+        {
+            builder
+                .AppendLine()
+                .AppendLine($"Error log: {diagnostics.ErrorLogPath}");
+
+            if (!string.IsNullOrWhiteSpace(diagnostics.EventLogPath))
+            {
+                builder.AppendLine($"Event log: {diagnostics.EventLogPath}");
+            }
+
+            if (!string.IsNullOrWhiteSpace(diagnostics.PlatformEventLogPath))
+            {
+                builder.AppendLine($"Platform log: {diagnostics.PlatformEventLogPath}");
+            }
+        }
+
+        builder
+            .AppendLine()
+            .AppendLine("Please reopen the app after this dialog closes.");
+        return builder.ToString();
+    }
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern int MessageBox(nint hWnd, string text, string caption, uint type);
 }

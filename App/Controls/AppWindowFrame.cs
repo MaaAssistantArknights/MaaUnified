@@ -105,10 +105,9 @@ public class AppWindowFrame : ContentControl
     private readonly List<Button> _minimizeButtons = [];
     private readonly List<Button> _maximizeButtons = [];
     private readonly List<Control> _resizeGrips = [];
+    private const double MacOSResizeGripOutwardBand = 4d;
     private Window? _hostWindow;
     private WindowBase? _ownerWindow;
-    private IPointer? _manualResizePointer;
-    private Control? _manualResizeGrip;
     private bool _hasHeaderContent;
     private bool _hasActions;
     private bool _allowsHeaderDrag;
@@ -116,9 +115,8 @@ public class AppWindowFrame : ContentControl
     private bool _hasCapturedHostMaxHeight;
     private double _initialHostMaxHeight = double.PositiveInfinity;
     private AppWindowFrameHorizontalInset _effectiveHorizontalContentInset;
-    private readonly bool _preferOuterResizeGrips;
+    private readonly bool _isMacOS;
     private Thickness _effectiveResizeGripMargin;
-    private ManualResizeDragState? _manualResizeDragState;
 
     static AppWindowFrame()
     {
@@ -129,7 +127,7 @@ public class AppWindowFrame : ContentControl
 
     public AppWindowFrame()
     {
-        _preferOuterResizeGrips = OperatingSystem.IsMacOS();
+        _isMacOS = OperatingSystem.IsMacOS();
         HasHeaderContent = HeaderContent is not null;
         HasActions = ActionsContent is not null;
         AddHandler(PointerReleasedEvent, OnPointerReleasedForInputFocusDismiss, RoutingStrategies.Bubble, handledEventsToo: true);
@@ -392,9 +390,6 @@ public class AppWindowFrame : ContentControl
 
             grip.Tag = edge;
             grip.PointerPressed += OnResizeGripPointerPressed;
-            grip.PointerMoved += OnResizeGripPointerMoved;
-            grip.PointerReleased += OnResizeGripPointerReleased;
-            grip.PointerCaptureLost += OnResizeGripPointerCaptureLost;
             _resizeGrips.Add(grip);
         }
 
@@ -539,47 +534,8 @@ public class AppWindowFrame : ContentControl
             return;
         }
 
-        if (TryBeginManualResizeDrag(sender, e, window, edge))
-        {
-            e.Handled = true;
-            return;
-        }
-
         window.BeginResizeDrag(edge, e);
         e.Handled = true;
-    }
-
-    private void OnResizeGripPointerMoved(object? sender, PointerEventArgs e)
-    {
-        if (!TryUpdateManualResizeDrag(sender, e))
-        {
-            return;
-        }
-
-        e.Handled = true;
-    }
-
-    private void OnResizeGripPointerReleased(object? sender, PointerReleasedEventArgs e)
-    {
-        if (!ReferenceEquals(sender, _manualResizeGrip)
-            || !ReferenceEquals(e.Pointer, _manualResizePointer))
-        {
-            return;
-        }
-
-        EndManualResizeDrag();
-        e.Handled = true;
-    }
-
-    private void OnResizeGripPointerCaptureLost(object? sender, PointerCaptureLostEventArgs e)
-    {
-        if (!ReferenceEquals(sender, _manualResizeGrip)
-            || !ReferenceEquals(e.Pointer, _manualResizePointer))
-        {
-            return;
-        }
-
-        EndManualResizeDrag(releasePointer: false);
     }
 
     private void OnHostWindowOpened(object? sender, EventArgs e)
@@ -792,87 +748,7 @@ public class AppWindowFrame : ContentControl
 
     private void UpdateEffectiveResizeGripMargin()
     {
-        EffectiveResizeGripMargin = ResolveResizeGripMargin(ShellMargin, _preferOuterResizeGrips);
-    }
-
-    private bool TryBeginManualResizeDrag(object? sender, PointerPressedEventArgs e, Window window, WindowEdge edge)
-    {
-        if (!OperatingSystem.IsMacOS()
-            || sender is not Control grip
-            || window.WindowState != WindowState.Normal)
-        {
-            return false;
-        }
-
-        EndManualResizeDrag();
-
-        _manualResizePointer = e.Pointer;
-        _manualResizeGrip = grip;
-        var renderScaling = Math.Max(0.01d, window.RenderScaling);
-        _manualResizeDragState = new ManualResizeDragState(
-            edge,
-            window.PointToScreen(e.GetPosition(window)),
-            window.Position,
-            new PixelSize(
-                LogicalLengthToPixelSize(window.Bounds.Width, renderScaling),
-                LogicalLengthToPixelSize(window.Bounds.Height, renderScaling)),
-            LogicalLengthToPixelSize(window.MinWidth, renderScaling),
-            LogicalLengthToPixelSize(window.MinHeight, renderScaling),
-            LogicalLengthToPixelSize(window.MaxWidth, renderScaling, allowInfinity: true),
-            LogicalLengthToPixelSize(window.MaxHeight, renderScaling, allowInfinity: true),
-            renderScaling);
-
-        e.Pointer.Capture(grip);
-        return true;
-    }
-
-    private bool TryUpdateManualResizeDrag(object? sender, PointerEventArgs e)
-    {
-        if (!ReferenceEquals(sender, _manualResizeGrip)
-            || !ReferenceEquals(e.Pointer, _manualResizePointer)
-            || _manualResizeDragState is not { } state
-            || ResolveHostWindow() is not Window window)
-        {
-            return false;
-        }
-
-        var result = ComputeManualResizeDrag(
-            state,
-            window.PointToScreen(e.GetPosition(window)));
-
-        if (Math.Abs(window.Width - result.Size.Width) > 0.01d)
-        {
-            window.Width = result.Size.Width;
-        }
-
-        if (Math.Abs(window.Height - result.Size.Height) > 0.01d)
-        {
-            window.Height = result.Size.Height;
-        }
-
-        var actualWindowSize = new PixelSize(
-            LogicalLengthToPixelSize(window.Bounds.Width, state.RenderScaling),
-            LogicalLengthToPixelSize(window.Bounds.Height, state.RenderScaling));
-        var anchoredPosition = ResolveManualResizeAnchoredPosition(state, actualWindowSize, result.Position);
-        if (window.Position != anchoredPosition)
-        {
-            window.Position = anchoredPosition;
-        }
-
-        return true;
-    }
-
-    private void EndManualResizeDrag(bool releasePointer = true)
-    {
-        var pointer = _manualResizePointer;
-        _manualResizePointer = null;
-        _manualResizeGrip = null;
-        _manualResizeDragState = null;
-
-        if (releasePointer)
-        {
-            pointer?.Capture(null);
-        }
+        EffectiveResizeGripMargin = ResolveResizeGripMargin(ShellMargin, _isMacOS);
     }
 
     private void UpdateChromeLayoutTransform()
@@ -897,96 +773,23 @@ public class AppWindowFrame : ContentControl
             shellMargin.Right + frameBorder.Right + framePadding.Right);
     }
 
-    internal static Thickness ResolveResizeGripMargin(Thickness shellMargin, bool preferOuterResizeGrips)
+    internal static Thickness ResolveResizeGripMargin(Thickness shellMargin, bool isMacOS)
     {
-        // macOS keeps resize hit targets on the true window edge so they do not
-        // cover the traffic-light/title row; Linux keeps the existing visible-frame path.
-        return preferOuterResizeGrips
-            ? default
-            : shellMargin;
+        if (!isMacOS)
+        {
+            return shellMargin;
+        }
+
+        return new Thickness(
+            ResolveResizeGripMarginComponent(shellMargin.Left),
+            ResolveResizeGripMarginComponent(shellMargin.Top),
+            ResolveResizeGripMarginComponent(shellMargin.Right),
+            ResolveResizeGripMarginComponent(shellMargin.Bottom));
     }
 
-    internal static ManualResizeDragResult ComputeManualResizeDrag(ManualResizeDragState state, PixelPoint currentPointerScreenPosition)
+    private static double ResolveResizeGripMarginComponent(double shellMargin)
     {
-        var deltaX = currentPointerScreenPosition.X - state.StartPointerScreenPosition.X;
-        var deltaY = currentPointerScreenPosition.Y - state.StartPointerScreenPosition.Y;
-
-        var width = state.StartWindowSize.Width;
-        var height = state.StartWindowSize.Height;
-        var left = state.StartWindowPosition.X;
-        var top = state.StartWindowPosition.Y;
-
-        if (state.Edge is WindowEdge.West or WindowEdge.NorthWest or WindowEdge.SouthWest)
-        {
-            width = ClampResizePixels(state.StartWindowSize.Width - deltaX, state.MinWidth, state.MaxWidth);
-            left = state.StartWindowPosition.X + (state.StartWindowSize.Width - width);
-        }
-        else if (state.Edge is WindowEdge.East or WindowEdge.NorthEast or WindowEdge.SouthEast)
-        {
-            width = ClampResizePixels(state.StartWindowSize.Width + deltaX, state.MinWidth, state.MaxWidth);
-        }
-
-        if (state.Edge is WindowEdge.North or WindowEdge.NorthWest or WindowEdge.NorthEast)
-        {
-            height = ClampResizePixels(state.StartWindowSize.Height - deltaY, state.MinHeight, state.MaxHeight);
-            top = state.StartWindowPosition.Y + (state.StartWindowSize.Height - height);
-        }
-        else if (state.Edge is WindowEdge.South or WindowEdge.SouthWest or WindowEdge.SouthEast)
-        {
-            height = ClampResizePixels(state.StartWindowSize.Height + deltaY, state.MinHeight, state.MaxHeight);
-        }
-
-        return new ManualResizeDragResult(
-            new Size(
-                PixelLengthToLogicalSize(width, state.RenderScaling),
-                PixelLengthToLogicalSize(height, state.RenderScaling)),
-            new PixelPoint(left, top));
-    }
-
-    internal static PixelPoint ResolveManualResizeAnchoredPosition(
-        ManualResizeDragState state,
-        PixelSize actualWindowSize,
-        PixelPoint fallbackPosition)
-    {
-        var x = fallbackPosition.X;
-        var y = fallbackPosition.Y;
-
-        if (state.Edge is WindowEdge.West or WindowEdge.NorthWest or WindowEdge.SouthWest)
-        {
-            x = state.StartWindowPosition.X + (state.StartWindowSize.Width - actualWindowSize.Width);
-        }
-
-        if (state.Edge is WindowEdge.North or WindowEdge.NorthWest or WindowEdge.NorthEast)
-        {
-            y = state.StartWindowPosition.Y + (state.StartWindowSize.Height - actualWindowSize.Height);
-        }
-
-        return new PixelPoint(x, y);
-    }
-
-    private static int ClampResizePixels(int value, int minValue, int maxValue)
-    {
-        var effectiveMin = Math.Max(1, minValue);
-        var effectiveMax = maxValue > 0
-            ? Math.Max(effectiveMin, maxValue)
-            : int.MaxValue;
-
-        return Math.Min(Math.Max(value, effectiveMin), effectiveMax);
-    }
-
-    private static int LogicalLengthToPixelSize(double logicalLength, double renderScaling, bool allowInfinity = false)
-    {
-        if (allowInfinity && !double.IsFinite(logicalLength))
-        {
-            return 0;
-        }
-
-        return (int)Math.Round(logicalLength * Math.Max(0.01d, renderScaling), MidpointRounding.AwayFromZero);
-    }
-
-    private static double PixelLengthToLogicalSize(int pixelLength, double renderScaling)
-    {
-        return pixelLength / Math.Max(0.01d, renderScaling);
+        return Math.Max(shellMargin - MacOSResizeGripOutwardBand, 0d);
     }
 
     private void DetachTemplateEvents()
@@ -1027,25 +830,8 @@ public class AppWindowFrame : ContentControl
         foreach (var grip in _resizeGrips)
         {
             grip.PointerPressed -= OnResizeGripPointerPressed;
-            grip.PointerMoved -= OnResizeGripPointerMoved;
-            grip.PointerReleased -= OnResizeGripPointerReleased;
-            grip.PointerCaptureLost -= OnResizeGripPointerCaptureLost;
         }
 
         _resizeGrips.Clear();
-        EndManualResizeDrag();
     }
-
-    internal readonly record struct ManualResizeDragState(
-        WindowEdge Edge,
-        PixelPoint StartPointerScreenPosition,
-        PixelPoint StartWindowPosition,
-        PixelSize StartWindowSize,
-        int MinWidth,
-        int MinHeight,
-        int MaxWidth,
-        int MaxHeight,
-        double RenderScaling);
-
-    internal readonly record struct ManualResizeDragResult(Size Size, PixelPoint Position);
 }

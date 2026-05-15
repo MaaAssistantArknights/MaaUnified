@@ -21,14 +21,19 @@ resources_dir="$contents_dir/Resources"
 entitlements_path="$contents_dir/entitlements.plist"
 dmg_root="$release_dir/dmg-root"
 dmg_path="$release_dir/$package_name.dmg"
+dmg_rw_path="$release_dir/.$package_name.rw.dmg"
+dmg_mount_dir="$release_dir/.$package_name.mount"
 dmg_background_dir="$dmg_root/.background"
-dmg_background_path="$dmg_background_dir/installer-background.png"
+dmg_background_png_path="$dmg_background_dir/installer-background.png"
+dmg_background_jpeg_path="$dmg_background_dir/installer-background.jpg"
+dmg_background_tiff_path="$dmg_background_dir/installer-background.tiff"
 dmg_note_name="Install MAAUnified.txt"
 app_icon_name="MAAUnified.icns"
 brand_icon_path="src/MAAUnified/App/Assets/Brand/newlogo.ico"
 signing_status_path="$release_dir/.$package_name.signing-status"
 dmg_settings_path="$release_dir/.$package_name.dmg-settings.py"
 dmgbuild_log_path="$release_dir/.$package_name.dmgbuild.log"
+dmg_volume_name="$package_name"
 
 if [[ ! -x "$staging_dir/bin/MAAUnified" ]]; then
   echo "Managed app executable not found: $staging_dir/bin/MAAUnified" >&2
@@ -97,7 +102,6 @@ import os
 
 app_path = os.environ["MAA_DMG_APP_PATH"]
 note_path = os.environ["MAA_DMG_NOTE_PATH"]
-background = os.environ["MAA_DMG_BACKGROUND_PATH"]
 volume_icon = os.environ["MAA_DMG_VOLUME_ICON_PATH"]
 
 files = [
@@ -109,9 +113,13 @@ symlinks = {
     "Applications": "/Applications",
 }
 
+hide = [
+    "Install MAAUnified.txt",
+]
+
 badge_icon = None
 icon = volume_icon if volume_icon and os.path.exists(volume_icon) else None
-format = "UDZO"
+format = "UDRW"
 filesystem = "HFS+"
 compression_level = 9
 window_rect = ((100, 100), (640, 420))
@@ -123,12 +131,11 @@ show_pathbar = False
 show_sidebar = False
 icon_size = 96
 text_size = 13
-background = background
+background = "#ffffff"
 
 icon_locations = {
-    "MAAUnified.app": (150, 205),
-    "Applications": (490, 205),
-    "Install MAAUnified.txt": (318, 338),
+    "MAAUnified.app": (150, 188),
+    "Applications": (490, 188),
 }
 PY
 }
@@ -142,7 +149,8 @@ create_dmg_with_dmgbuild() {
   fi
 
   write_dmgbuild_settings
-  rm -f "$dmg_path" "$dmgbuild_log_path"
+  rm -rf "$dmg_mount_dir"
+  rm -f "$dmg_path" "$dmg_rw_path" "$dmgbuild_log_path"
 
   if ! MAA_DMG_APP_PATH="$app_dir" \
     MAA_DMG_NOTE_PATH="$dmg_root/$dmg_note_name" \
@@ -151,14 +159,116 @@ create_dmg_with_dmgbuild() {
     "$dmgbuild_python" -m dmgbuild \
     -s "$dmg_settings_path" \
     --no-hidpi \
-    "$app_name" \
-    "$dmg_path" >"$dmgbuild_log_path" 2>&1; then
+    "$dmg_volume_name" \
+    "$dmg_rw_path" >"$dmgbuild_log_path" 2>&1; then
     echo "dmgbuild failed. See $dmgbuild_log_path for details." >&2
     sed -n '1,120p' "$dmgbuild_log_path" >&2 || true
     return 1
   fi
 
+  patch_dmg_background "$dmgbuild_python"
+  hdiutil convert "$dmg_rw_path" -format UDZO -imagekey zlib-level=9 -o "$dmg_path" >/dev/null
+  rm -f "$dmg_rw_path"
   hdiutil verify "$dmg_path" >/dev/null
+}
+
+assert_volume_not_mounted() {
+  local mounts
+
+  mounts="$(hdiutil info | awk -v path="/Volumes/$dmg_volume_name" '
+    $1 ~ /^\/dev\/disk/ && index($0, path) {
+      device = $1
+      sub(/^\/dev\//, "", device)
+      sub(/s[0-9]+$/, "", device)
+      mount = $0
+      sub(/^([^\t]*\t){2}/, "", mount)
+      printf "/dev/%s\t%s\n", device, mount
+    }
+  ')"
+
+  if [[ -z "$mounts" ]]; then
+    return 0
+  fi
+
+  echo "The DMG volume '$dmg_volume_name' is already mounted. Please eject it before rebuilding." >&2
+  echo "在重新构建前，请先在 Finder 侧边栏推出已打开的 '$dmg_volume_name' 磁盘。" >&2
+  echo "Or run one of these commands, then retry:" >&2
+  while IFS=$'\t' read -r device mount_point; do
+    [[ -n "$device" ]] || continue
+    echo "  hdiutil detach \"$device\"  # $mount_point" >&2
+  done <<< "$mounts"
+  return 1
+}
+
+patch_dmg_background() {
+  local dmgbuild_python="$1"
+  local attach_output
+  local device
+  local mount_point
+  local mounted_background_dir
+  local mounted_background_path
+
+  hdiutil resize -size 512m "$dmg_rw_path" >/dev/null
+  attach_output="$(hdiutil attach "$dmg_rw_path" -readwrite -noverify -noautoopen)"
+  device="$(awk '/Apple_HFS|Apple_APFS/ {print $1; exit}' <<< "$attach_output")"
+  mount_point="$(awk -F '\t' '/Apple_HFS|Apple_APFS/ {print $3; exit}' <<< "$attach_output")"
+  if [[ -z "$device" || -z "$mount_point" ]]; then
+    echo "Failed to mount temporary dmg image: $dmg_rw_path" >&2
+    return 1
+  fi
+  if [[ ! -w "$mount_point" ]]; then
+    echo "Temporary dmg mounted read-only at $mount_point; expected writable image $dmg_rw_path." >&2
+    hdiutil detach "$device" >/dev/null 2>&1 || true
+    return 1
+  fi
+
+  mounted_background_dir="$mount_point/.background"
+  mounted_background_path="$mounted_background_dir/installer-background.jpg"
+  mkdir -p "$mounted_background_dir"
+  cp "$dmg_background_path" "$mounted_background_path"
+
+  "$dmgbuild_python" - "$mount_point/.DS_Store" "$mounted_background_path" <<'PY'
+import sys
+
+from ds_store import DSStore
+from mac_alias import Alias, Bookmark
+
+ds_store_path, background_path = sys.argv[1], sys.argv[2]
+
+with DSStore.open(ds_store_path, "r+") as store:
+    icvp = store["."]["icvp"]
+    icvp["backgroundType"] = 2
+    icvp["backgroundImageAlias"] = Alias.for_file(background_path).to_bytes()
+    store["."]["icvp"] = icvp
+    store["."]["pBBk"] = Bookmark.for_file(background_path)
+PY
+
+  if command -v osascript >/dev/null 2>&1; then
+    osascript >/dev/null 2>&1 <<APPLESCRIPT || true
+tell application "Finder"
+  tell disk "$dmg_volume_name"
+    open
+    set current view of container window to icon view
+    set toolbar visible of container window to false
+    set statusbar visible of container window to false
+    set the bounds of container window to {100, 100, 740, 520}
+    set opts to the icon view options of container window
+    set arrangement of opts to not arranged
+    set icon size of opts to 96
+    set text size of opts to 13
+    set background picture of opts to file ".background:installer-background.jpg"
+    set position of item "$app_name.app" of container window to {150, 188}
+    set position of item "Applications" of container window to {490, 188}
+    update without registering applications
+    delay 1
+    close
+  end tell
+end tell
+APPLESCRIPT
+  fi
+
+  sync
+  hdiutil detach "$device" >/dev/null
 }
 
 create_app_icon() {
@@ -296,7 +406,8 @@ fallback_to_adhoc() {
   fi
 }
 
-rm -rf "$app_dir" "$dmg_root" "$dmg_path" "$dmg_settings_path" "$dmgbuild_log_path"
+assert_volume_not_mounted
+rm -rf "$app_dir" "$dmg_root" "$dmg_mount_dir" "$dmg_path" "$dmg_rw_path" "$dmg_settings_path" "$dmgbuild_log_path"
 mkdir -p "$macos_dir" "$resources_dir" "$dmg_root"
 
 cp -a "$staging_dir/bin/." "$macos_dir/"
@@ -385,8 +496,21 @@ else
 fi
 
 mkdir -p "$dmg_background_dir"
-python3 src/MAAUnified/CI/create-dmg-background.py "$dmg_background_path"
+python3 src/MAAUnified/CI/create-dmg-background.py "$dmg_background_png_path"
+if command -v sips >/dev/null 2>&1; then
+  sips -s format jpeg "$dmg_background_png_path" --out "$dmg_background_jpeg_path" >/dev/null 2>&1 || true
+fi
+if command -v sips >/dev/null 2>&1; then
+  sips -s format tiff "$dmg_background_png_path" --out "$dmg_background_tiff_path" >/dev/null 2>&1 || true
+fi
+if [[ -f "$dmg_background_jpeg_path" ]]; then
+  dmg_background_path="$dmg_background_jpeg_path"
+elif [[ -f "$dmg_background_tiff_path" ]]; then
+  dmg_background_path="$dmg_background_tiff_path"
+else
+  dmg_background_path="$dmg_background_png_path"
+fi
 write_dmg_install_note "$dmg_root/$dmg_note_name"
 create_dmg_with_dmgbuild
 
-rm -rf "$dmg_root" "$dmg_settings_path"
+rm -rf "$dmg_root" "$dmg_mount_dir" "$dmg_settings_path"
