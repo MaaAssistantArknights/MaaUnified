@@ -359,7 +359,11 @@ should_codesign_file() {
   esac
 
   file_type="$(file "$file")"
-  grep -Eq 'Mach-O|dynamically linked shared library' <<< "$file_type"
+  if grep -Eq 'Mach-O.*executable' <<< "$file_type"; then
+    return 0
+  fi
+
+  grep -Eq 'dynamically linked shared library' <<< "$file_type"
 }
 
 sign_bundle_components_with_identity() {

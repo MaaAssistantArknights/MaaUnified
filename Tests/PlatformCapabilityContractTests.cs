@@ -394,7 +394,7 @@ public sealed class PlatformCapabilityContractTests
     }
 
     [Fact]
-    public void PlatformServicesFactory_CreateDefaults_PrefersAvaloniaTrayOnWindows()
+    public void PlatformServicesFactory_CreateDefaults_PrefersWindowsNotifyIconTrayOnWindows()
     {
         if (!OperatingSystem.IsWindows())
         {
@@ -402,7 +402,7 @@ public sealed class PlatformCapabilityContractTests
         }
 
         var bundle = PlatformServicesFactory.CreateDefaults();
-        Assert.IsType<AvaloniaTrayIconTrayService>(bundle.TrayService);
+        Assert.IsType<WindowsNotifyIconTrayService>(bundle.TrayService);
     }
 
     [Fact]
