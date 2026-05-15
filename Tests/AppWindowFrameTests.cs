@@ -21,10 +21,9 @@ public sealed class AppWindowFrameTests
 
     [Theory]
     [InlineData(false, 12, 10, 8, 6, 12, 10, 8, 6)]
-    [InlineData(true, 12, 10, 8, 6, 8, 6, 4, 2)]
-    [InlineData(true, 3, 2, 1, 0, 0, 0, 0, 0)]
-    public void ResolveResizeGripMargin_ShouldMatchPlatformResizeStrategy(
-        bool isMacOS,
+    [InlineData(true, 12, 10, 8, 6, 0, 0, 0, 0)]
+    public void ResolveResizeGripMargin_ShouldMatchNativeShadowStrategy(
+        bool usesNativeWindowShadow,
         double left,
         double top,
         double right,
@@ -36,10 +35,47 @@ public sealed class AppWindowFrameTests
     {
         var shellMargin = new Thickness(left, top, right, bottom);
 
-        var actual = AppWindowFrame.ResolveResizeGripMargin(shellMargin, isMacOS);
+        var actual = AppWindowFrame.ResolveResizeGripMargin(shellMargin, usesNativeWindowShadow);
 
         var expected = new Thickness(expectedLeft, expectedTop, expectedRight, expectedBottom);
         Assert.Equal(expected, actual);
     }
 
+    [Theory]
+    [InlineData(true, true, true, true, true)]
+    [InlineData(false, true, true, true, false)]
+    [InlineData(true, false, true, true, false)]
+    [InlineData(true, true, false, true, false)]
+    [InlineData(true, true, true, false, false)]
+    public void ShouldUseNativeWindowShadow_ShouldOnlyUseNormalResizableMacWindows(
+        bool isMacOS,
+        bool isResizableDialog,
+        bool isHostNormalState,
+        bool canResize,
+        bool expected)
+    {
+        var actual = AppWindowFrame.ShouldUseNativeWindowShadow(
+            isMacOS,
+            isResizableDialog,
+            isHostNormalState,
+            canResize);
+
+        Assert.Equal(expected, actual);
+    }
+
+    [Fact]
+    public void AppWindowFrameStyles_ShouldExposeNativeWindowShadowState()
+    {
+        var root = BaselineTestSupport.GetMaaUnifiedRoot();
+        var control = File.ReadAllText(Path.Combine(root, "App", "Controls", "AppWindowFrame.cs"));
+        var styles = File.ReadAllText(Path.Combine(root, "App", "Styles", "AppFoundationStyles.axaml"));
+
+        Assert.Contains("\":native-window-shadow\"", control, StringComparison.Ordinal);
+        Assert.Contains("Style Selector=\"controls|AppWindowFrame:native-window-shadow\"", styles, StringComparison.Ordinal);
+        Assert.Contains("<Setter Property=\"ShellMargin\" Value=\"0\" />", styles, StringComparison.Ordinal);
+        Assert.Contains("Style Selector=\"controls|AppWindowFrame:native-window-shadow /template/ Border#PART_FrameSurface\"", styles, StringComparison.Ordinal);
+        Assert.Contains("<Setter Property=\"BoxShadow\" Value=\"0 0 0 0 #00000000\" />", styles, StringComparison.Ordinal);
+        Assert.Contains("Style Selector=\"controls|AppWindowFrame /template/ Border#PART_FrameSurface\"", styles, StringComparison.Ordinal);
+        Assert.Contains("<Setter Property=\"BoxShadow\" Value=\"0 0 24 0 #29000000\" />", styles, StringComparison.Ordinal);
+    }
 }

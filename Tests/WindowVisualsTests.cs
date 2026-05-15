@@ -68,6 +68,47 @@ public sealed class WindowVisualsTests
         Assert.Equal(expected, actual);
     }
 
+    [Theory]
+    [InlineData(SystemDecorations.None, true, ExtendClientAreaChromeHints.NoChrome, true, true, true)]
+    [InlineData(SystemDecorations.BorderOnly, true, ExtendClientAreaChromeHints.NoChrome, true, true, true)]
+    [InlineData(SystemDecorations.Full, true, ExtendClientAreaChromeHints.NoChrome, true, true, false)]
+    [InlineData(SystemDecorations.None, false, ExtendClientAreaChromeHints.NoChrome, true, true, false)]
+    [InlineData(SystemDecorations.None, true, ExtendClientAreaChromeHints.Default, true, true, false)]
+    [InlineData(SystemDecorations.None, true, ExtendClientAreaChromeHints.NoChrome, false, true, false)]
+    [InlineData(SystemDecorations.None, true, ExtendClientAreaChromeHints.NoChrome, true, false, false)]
+    public void ShouldApplyMacNativeWindowShadow_ShouldMatchTransparentResizableCustomChrome(
+        SystemDecorations systemDecorations,
+        bool extendClientAreaToDecorationsHint,
+        ExtendClientAreaChromeHints extendClientAreaChromeHints,
+        bool canResize,
+        bool isMacOS,
+        bool expected)
+    {
+        var actual = WindowVisuals.ShouldApplyMacNativeWindowShadow(
+            Brushes.Transparent,
+            systemDecorations,
+            extendClientAreaToDecorationsHint,
+            extendClientAreaChromeHints,
+            canResize,
+            isMacOS);
+
+        Assert.Equal(expected, actual);
+    }
+
+    [Fact]
+    public void ShouldApplyMacNativeWindowShadow_ShouldReturnFalse_ForOpaqueWindowBackground()
+    {
+        var actual = WindowVisuals.ShouldApplyMacNativeWindowShadow(
+            Brushes.White,
+            SystemDecorations.BorderOnly,
+            extendClientAreaToDecorationsHint: true,
+            ExtendClientAreaChromeHints.NoChrome,
+            canResize: true,
+            isMacOS: true);
+
+        Assert.False(actual);
+    }
+
     [Fact]
     public void ShouldApplyMacTransparentCustomChromeHint_ShouldReturnTrue_ForTransparentBorderlessMacWindow()
     {

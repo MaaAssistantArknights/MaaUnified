@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Platform;
+using System.Runtime.InteropServices;
 
 namespace MAAUnified.App.Infrastructure;
 
@@ -58,6 +59,67 @@ internal static class WindowVisuals
         }
 
         return background is ISolidColorBrush solidColorBrush && solidColorBrush.Color.A == 0;
+    }
+
+    internal static bool ShouldApplyMacNativeWindowShadow(
+        IBrush? background,
+        SystemDecorations systemDecorations,
+        bool extendClientAreaToDecorationsHint,
+        ExtendClientAreaChromeHints extendClientAreaChromeHints,
+        bool canResize,
+        bool isMacOS)
+    {
+        if (!isMacOS || !canResize)
+        {
+            return false;
+        }
+
+        if ((systemDecorations != SystemDecorations.None
+                && systemDecorations != SystemDecorations.BorderOnly)
+            || !extendClientAreaToDecorationsHint)
+        {
+            return false;
+        }
+
+        if (extendClientAreaChromeHints != ExtendClientAreaChromeHints.NoChrome)
+        {
+            return false;
+        }
+
+        return background is ISolidColorBrush solidColorBrush && solidColorBrush.Color.A == 0;
+    }
+
+    public static bool TryApplyMacNativeWindowShadow(Window window)
+    {
+        if (!ShouldApplyMacNativeWindowShadow(
+                window.Background,
+                window.SystemDecorations,
+                window.ExtendClientAreaToDecorationsHint,
+                window.ExtendClientAreaChromeHints,
+                window.CanResize,
+                OperatingSystem.IsMacOS()))
+        {
+            return false;
+        }
+
+        if (window.TryGetPlatformHandle() is not { Handle: not 0 } platformHandle)
+        {
+            return false;
+        }
+
+        try
+        {
+            MacNativeWindowShadowInterop.Apply(platformHandle.Handle);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Program.RecordStartupStage(
+                "WindowVisuals.MacNativeWindowShadow.Fail",
+                $"Failed to apply native macOS window shadow; descriptor={platformHandle.HandleDescriptor ?? string.Empty}.",
+                ex);
+            return false;
+        }
     }
 
     private static void ApplyMacTransparentCustomChromeHint(Window window)
@@ -140,5 +202,35 @@ internal static class WindowVisuals
         return isMacOS
             && canResize
             && systemDecorations == SystemDecorations.BorderOnly;
+    }
+
+    private static class MacNativeWindowShadowInterop
+    {
+        private const string ObjectiveCLibrary = "/usr/lib/libobjc.A.dylib";
+        private static readonly nint SetHasShadowSelector = sel_registerName("setHasShadow:");
+        private static readonly nint InvalidateShadowSelector = sel_registerName("invalidateShadow");
+
+        public static void Apply(nint nsWindow)
+        {
+            if (nsWindow == 0)
+            {
+                return;
+            }
+
+            objc_msgSend(nsWindow, SetHasShadowSelector, true);
+            objc_msgSend(nsWindow, InvalidateShadowSelector);
+        }
+
+        [DllImport(ObjectiveCLibrary, EntryPoint = "sel_registerName")]
+        private static extern nint sel_registerName(string selectorName);
+
+        [DllImport(ObjectiveCLibrary, EntryPoint = "objc_msgSend")]
+        private static extern void objc_msgSend(nint receiver, nint selector);
+
+        [DllImport(ObjectiveCLibrary, EntryPoint = "objc_msgSend")]
+        private static extern void objc_msgSend(
+            nint receiver,
+            nint selector,
+            [MarshalAs(UnmanagedType.I1)] bool value);
     }
 }
