@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Controls;
 using MAAUnified.App.Controls;
 
 namespace MAAUnified.Tests;
@@ -19,17 +20,26 @@ public sealed class AppWindowFrameTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void ResolveResizeGripMargin_ShouldMatchPlatformResizeStrategy(bool preferOuterResizeGrips)
+    [InlineData(false, 12, 10, 8, 6, 12, 10, 8, 6)]
+    [InlineData(true, 12, 10, 8, 6, 8, 6, 4, 2)]
+    [InlineData(true, 3, 2, 1, 0, 0, 0, 0, 0)]
+    public void ResolveResizeGripMargin_ShouldMatchPlatformResizeStrategy(
+        bool isMacOS,
+        double left,
+        double top,
+        double right,
+        double bottom,
+        double expectedLeft,
+        double expectedTop,
+        double expectedRight,
+        double expectedBottom)
     {
-        var shellMargin = new Thickness(12, 10, 8, 6);
+        var shellMargin = new Thickness(left, top, right, bottom);
 
-        var actual = AppWindowFrame.ResolveResizeGripMargin(shellMargin, preferOuterResizeGrips);
+        var actual = AppWindowFrame.ResolveResizeGripMargin(shellMargin, isMacOS);
 
-        var expected = preferOuterResizeGrips
-            ? default(Thickness)
-            : shellMargin;
+        var expected = new Thickness(expectedLeft, expectedTop, expectedRight, expectedBottom);
         Assert.Equal(expected, actual);
     }
+
 }

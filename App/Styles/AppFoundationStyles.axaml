@@ -228,7 +228,7 @@
                           VerticalAlignment="Stretch"
                           IsHitTestVisible="{TemplateBinding AllowsHeaderDrag}"
                           Background="Transparent">
-                    <TextBlock Classes="app-window-title dialog-window-title"
+                    <TextBlock Classes="dialog-window-title"
                                Text="{TemplateBinding Title}" />
                   </Border>
 
@@ -393,8 +393,11 @@
   <Style Selector="controls|AppWindowFrame /template/ TextBlock.dialog-window-title">
     <Setter Property="Margin" Value="8,0,0,0" />
     <Setter Property="FontSize" Value="13.5" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
     <Setter Property="VerticalAlignment" Value="Center" />
-    <Setter Property="LineHeight" Value="18" />
+    <Setter Property="TextWrapping" Value="NoWrap" />
+    <Setter Property="LineHeight" Value="20" />
   </Style>
 
   <Style Selector="controls|AppWindowFrame /template/ Border#PART_FrameSurface">

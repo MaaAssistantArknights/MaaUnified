@@ -49,6 +49,25 @@ public sealed class WindowVisualsTests
         Assert.Equal(expected, actual);
     }
 
+    [Theory]
+    [InlineData(SystemDecorations.BorderOnly, true, true, true)]
+    [InlineData(SystemDecorations.None, true, true, false)]
+    [InlineData(SystemDecorations.BorderOnly, false, true, false)]
+    [InlineData(SystemDecorations.BorderOnly, true, false, false)]
+    public void ShouldApplyMacNativeResizableStyleMask_ShouldOnlyApplyToResizableMacBorderOnlyWindows(
+        SystemDecorations systemDecorations,
+        bool canResize,
+        bool isMacOS,
+        bool expected)
+    {
+        var actual = WindowVisuals.ShouldApplyMacNativeResizableStyleMask(
+            systemDecorations,
+            canResize,
+            isMacOS);
+
+        Assert.Equal(expected, actual);
+    }
+
     [Fact]
     public void ShouldApplyMacTransparentCustomChromeHint_ShouldReturnTrue_ForTransparentBorderlessMacWindow()
     {

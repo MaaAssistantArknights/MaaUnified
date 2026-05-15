@@ -24,6 +24,7 @@ namespace MAAUnified.App.Views;
 
 public partial class MainWindow : Window
 {
+    private const string LiveResizingClassName = "live-resizing";
     private const double CompactLayoutHeightThreshold = 720d;
     private const double ResponsiveMinWindowWidth = 1080d;
     private const double ResponsiveMarginStageEndWidth = 1160d;
@@ -36,7 +37,7 @@ public partial class MainWindow : Window
     private const double BaseWindowHeight = 900d;
     private const double BaseWindowMinWidth = 1080d;
     private const double BaseWindowMinHeight = 620d;
-    private const double MacOsDefaultWindowSizeScale = 1.3d;
+    private const double MacOsDefaultWindowSizeScale = 1d;
     private const double MacOsHiDpiHeightBoostPerScaleStep = 0.12d;
     private const double MacOsHiDpiHeightBoostMax = 1.18d;
     private const int ResponsiveMarginProgressSteps = 12;
@@ -108,6 +109,7 @@ public partial class MainWindow : Window
     private double _lastAppliedWindowWidthScale = 1d;
     private double _lastAppliedWindowHeightScale = 1d;
     private DispatcherTimer? _resizeSettleTimer;
+    private bool _isLiveResizing;
     private readonly object _dialogErrorGate = new();
     private readonly Queue<DialogErrorRaisedEvent> _pendingDialogErrors = [];
     private readonly HashSet<string> _pendingDialogErrorKeys = new(StringComparer.Ordinal);
@@ -326,6 +328,7 @@ public partial class MainWindow : Window
     {
         UpdateAchievementToastVisibility();
         BindShellBackgroundVm(null);
+        EndLiveResizeVisualThrottle();
         Resized -= OnWindowResized;
         WindowShellFrame.PropertyChanged -= OnWindowShellFramePropertyChanged;
         DataContextChanged -= OnWindowDataContextChanged;
@@ -475,6 +478,7 @@ public partial class MainWindow : Window
 
         if (e.Property == WindowStateProperty)
         {
+            EndLiveResizeVisualThrottle();
             await HandleMinimizeToTrayAsync();
         }
     });
@@ -486,6 +490,11 @@ public partial class MainWindow : Window
 
     private void OnWindowResized(object? sender, WindowResizedEventArgs e)
     {
+        if (ShouldTreatResizeAsLiveInteraction(e.Reason))
+        {
+            BeginLiveResizeVisualThrottle();
+        }
+
         ScheduleAdaptiveLayoutUpdate(
             ResolveResponsiveLayoutWidth(e.ClientSize.Width),
             e.ClientSize.Height,
@@ -772,6 +781,33 @@ public partial class MainWindow : Window
     {
         _resizeSettleTimer?.Stop();
         UpdateAdaptiveLayoutMode(flushAllHosts: true);
+        EndLiveResizeVisualThrottle();
+    }
+
+    private void BeginLiveResizeVisualThrottle()
+    {
+        if (_isLiveResizing)
+        {
+            return;
+        }
+
+        _isLiveResizing = true;
+        Classes.Set(LiveResizingClassName, true);
+        WindowShellFrame.Classes.Set(LiveResizingClassName, true);
+        ApplyShellBackgroundEffect();
+    }
+
+    private void EndLiveResizeVisualThrottle()
+    {
+        if (!_isLiveResizing)
+        {
+            return;
+        }
+
+        _isLiveResizing = false;
+        Classes.Set(LiveResizingClassName, false);
+        WindowShellFrame.Classes.Set(LiveResizingClassName, false);
+        ApplyShellBackgroundEffect();
     }
 
     private static double InverseLerp(double start, double end, double value)
@@ -832,8 +868,9 @@ public partial class MainWindow : Window
     {
         try
         {
+            var isMacOS = OperatingSystem.IsMacOS();
             var widthScale = ComputeWindowWidthScale(GetEffectiveUiScaleFactor());
-            var heightScale = ComputeWindowHeightScale(GetEffectiveUiScaleFactor(), RenderScaling, OperatingSystem.IsMacOS());
+            var heightScale = ComputeWindowHeightScale(GetEffectiveUiScaleFactor(), RenderScaling, isMacOS);
             if (!force
                 && _hasAppliedUiScaleToWindowBounds
                 && Math.Abs(_lastAppliedWindowWidthScale - widthScale) < 0.001d
@@ -844,17 +881,29 @@ public partial class MainWindow : Window
 
             var previousWidthScale = _hasAppliedUiScaleToWindowBounds ? _lastAppliedWindowWidthScale : 1d;
             var previousHeightScale = _hasAppliedUiScaleToWindowBounds ? _lastAppliedWindowHeightScale : 1d;
-            var defaultLogicalWidth = ComputeDefaultWindowWidth(OperatingSystem.IsMacOS());
-            var defaultLogicalHeight = ComputeDefaultWindowHeight(OperatingSystem.IsMacOS());
-            var logicalWidth = preserveLogicalSize ? ResolveLogicalWindowSize(Width, previousWidthScale, defaultLogicalWidth) : defaultLogicalWidth;
-            var logicalHeight = preserveLogicalSize ? ResolveLogicalWindowSize(Height, previousHeightScale, defaultLogicalHeight) : defaultLogicalHeight;
+            var defaultWidth = ComputeDefaultWindowWidth(isMacOS);
+            var defaultHeight = ComputeDefaultWindowHeight(isMacOS);
 
             MinWidth = BaseWindowMinWidth * widthScale;
             MinHeight = BaseWindowMinHeight * heightScale;
             if (WindowState == WindowState.Normal)
             {
-                Width = Math.Max(MinWidth, logicalWidth * widthScale);
-                Height = Math.Max(MinHeight, logicalHeight * heightScale);
+                Width = ResolveWindowSizeTarget(
+                    Width,
+                    previousWidthScale,
+                    widthScale,
+                    defaultWidth,
+                    MinWidth,
+                    preserveLogicalSize,
+                    keepMacPlatformDefaultSize: isMacOS && !preserveLogicalSize);
+                Height = ResolveWindowSizeTarget(
+                    Height,
+                    previousHeightScale,
+                    heightScale,
+                    defaultHeight,
+                    MinHeight,
+                    preserveLogicalSize,
+                    keepMacPlatformDefaultSize: isMacOS && !preserveLogicalSize);
             }
 
             _lastAppliedWindowWidthScale = widthScale;
@@ -899,6 +948,31 @@ public partial class MainWindow : Window
         return scaledValue / scale;
     }
 
+    internal static double ConvertScreenPixelsToWindowUnits(double pixelLength, double desktopScaling)
+    {
+        return Math.Max(320d, pixelLength / NormalizeScaleFactor(desktopScaling));
+    }
+
+    internal static double ResolveWindowSizeTarget(
+        double currentSize,
+        double previousScale,
+        double nextScale,
+        double defaultSize,
+        double minSize,
+        bool preserveLogicalSize,
+        bool keepMacPlatformDefaultSize)
+    {
+        if (keepMacPlatformDefaultSize && !preserveLogicalSize)
+        {
+            return Math.Max(minSize, defaultSize);
+        }
+
+        var logicalSize = preserveLogicalSize
+            ? ResolveLogicalWindowSize(currentSize, previousScale, defaultSize)
+            : defaultSize;
+        return Math.Max(minSize, logicalSize * nextScale);
+    }
+
     internal static double ComputeWindowWidthScale(double effectiveUiScaleFactor)
     {
         return NormalizeScaleFactor(effectiveUiScaleFactor);
@@ -918,6 +992,11 @@ public partial class MainWindow : Window
             1d,
             MacOsHiDpiHeightBoostMax);
         return uiScale * hiDpiHeightBoost;
+    }
+
+    internal static bool ShouldTreatResizeAsLiveInteraction(WindowResizeReason reason)
+    {
+        return reason == WindowResizeReason.User;
     }
 
     private static double NormalizeScaleFactor(double scale)
@@ -1024,6 +1103,7 @@ public partial class MainWindow : Window
         var vm = _shellBackgroundVm;
         if (vm is null
             || !vm.HasShellBackgroundImage
+            || _isLiveResizing
             || vm.ShellBackgroundBlur <= 0
             || vm.ShellBackgroundOpacity <= 0d)
         {
@@ -1318,8 +1398,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        var point = e.GetCurrentPoint(control);
-        if (!point.Properties.IsRightButtonPressed)
+        if (!PointerPressedGestures.IsSecondaryClick(control, e))
         {
             return;
         }
@@ -1488,6 +1567,14 @@ public partial class MainWindow : Window
         try
         {
             var screens = _overlayHostWindow.Screens;
+            PixelRect? anchorBounds = null;
+            if (OperatingSystem.IsMacOS()
+                && !string.Equals(e.TargetId, "preview", StringComparison.OrdinalIgnoreCase)
+                && MacOverlayCapabilityService.TryGetTargetBounds(e.TargetId, out var targetBounds))
+            {
+                anchorBounds = targetBounds;
+            }
+
             var screen = screens.ScreenFromWindow(this)
                 ?? screens.ScreenFromWindow(_overlayHostWindow)
                 ?? screens.Primary;
@@ -1496,7 +1583,7 @@ public partial class MainWindow : Window
                 return;
             }
 
-            _overlayHostWindow.ApplyPreviewBounds(screen.WorkingArea);
+            _overlayHostWindow.ApplyPreviewBounds(screen.WorkingArea, anchorBounds);
         }
         catch (ObjectDisposedException)
         {
@@ -1654,10 +1741,10 @@ public partial class MainWindow : Window
                 return;
             }
 
-            var scale = Math.Max(0.01d, RenderScaling);
+            var scale = NormalizeScaleFactor(DesktopScaling);
             var workingArea = screen.WorkingArea;
-            var availableWidth = Math.Max(320d, workingArea.Width / scale);
-            var availableHeight = Math.Max(320d, workingArea.Height / scale);
+            var availableWidth = ConvertScreenPixelsToWindowUnits(workingArea.Width, scale);
+            var availableHeight = ConvertScreenPixelsToWindowUnits(workingArea.Height, scale);
 
             MinWidth = Math.Min(MinWidth, availableWidth);
             MinHeight = Math.Min(MinHeight, availableHeight);

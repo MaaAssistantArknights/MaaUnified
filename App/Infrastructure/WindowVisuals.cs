@@ -131,4 +131,14 @@ internal static class WindowVisuals
             && canResize
             && systemDecorations == SystemDecorations.None;
     }
+
+    internal static bool ShouldApplyMacNativeResizableStyleMask(
+        SystemDecorations systemDecorations,
+        bool canResize,
+        bool isMacOS)
+    {
+        return isMacOS
+            && canResize
+            && systemDecorations == SystemDecorations.BorderOnly;
+    }
 }

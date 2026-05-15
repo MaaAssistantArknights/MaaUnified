@@ -25,13 +25,6 @@ COMMAND_BG = (255, 255, 255)
 COMMAND_BORDER = (201, 211, 224)
 ARROW = (72, 127, 203)
 
-MULTILINGUAL_TITLE = "拖到 Applications / Drag to Applications / Applications へドラッグ / Applications로 드래그"
-MULTILINGUAL_SUBTITLE = "把 MAAUnified.app 拖到右侧 Applications 文件夹"
-MULTILINGUAL_DAMAGED = "如果提示“已损坏” / “damaged” /「破損」/ 손상됨"
-MULTILINGUAL_FIX = "双击 Fix Damaged.command，或在终端运行："
-QUARANTINE_COMMAND = 'xattr -dr com.apple.quarantine "/Applications/MAAUnified.app"'
-
-
 FONT = {
     "A": ["01110", "10001", "10001", "11111", "10001", "10001", "10001"],
     "B": ["11110", "10001", "10001", "11110", "10001", "10001", "11110"],
@@ -221,26 +214,31 @@ def render_with_appkit(path: str) -> bool:
         image.lockFocus()
 
         rect(0, 0, width, height, background)
-        rect(0, 0, width, 96, accentSoft)
-        drawText("拖到 Applications / Drag to Applications", x: 20, y: 20, width: 600, size: 22, weight: .semibold)
-        drawText("拖到「應用程式」/ Applications へドラッグ / Applications로 드래그", x: 20, y: 55, width: 600, size: 14, color: muted)
-        drawText("把 MAAUnified.app 拖到右侧 Applications 文件夹", x: 20, y: 76, width: 600, size: 12, color: muted)
+        rect(0, 0, width, 106, accentSoft)
+        drawText("拖到 Applications / Drag to Applications", x: 20, y: 12, width: 600, size: 20, weight: .semibold)
+        drawText("将 MAAUnified.app 拖到右侧 Applications 文件夹", x: 20, y: 42, width: 600, size: 11, color: muted)
+        drawText("Drag MAAUnified.app to the Applications folder", x: 20, y: 57, width: 600, size: 11, color: muted)
+        drawText("MAAUnified.app を Applications フォルダへドラッグ", x: 20, y: 72, width: 600, size: 11, color: muted)
+        drawText("MAAUnified.app을 Applications 폴더로 드래그", x: 20, y: 87, width: 600, size: 11, color: muted)
 
-        rect(252, 196, 136, 12, accent)
+        rect(250, 182, 140, 12, accent)
         let arrow = NSBezierPath()
-        arrow.move(to: NSPoint(x: 430, y: height - 202))
-        arrow.line(to: NSPoint(x: 388, y: height - 178))
-        arrow.line(to: NSPoint(x: 388, y: height - 226))
+        arrow.move(to: NSPoint(x: 430, y: height - 188))
+        arrow.line(to: NSPoint(x: 390, y: height - 164))
+        arrow.line(to: NSPoint(x: 390, y: height - 212))
         arrow.close()
         accent.setFill()
         arrow.fill()
 
-        rect(142, 294, 470, 108, commandBackground)
-        strokeRect(142, 294, 470, 108, commandBorder)
-        drawText("如果提示“已损坏” / “damaged” /「破損」/ 손상됨", x: 154, y: 306, width: 446, size: 13, weight: .medium, color: muted)
-        drawText("双击 Fix Damaged.command，或在终端运行：", x: 154, y: 330, width: 446, size: 13, color: text)
-        drawText("Double-click Fix Damaged.command, or run:", x: 154, y: 352, width: 446, size: 12, color: text)
-        drawText("xattr -dr com.apple.quarantine \"/Applications/MAAUnified.app\"", x: 154, y: 376, width: 446, size: 11, weight: .medium, color: accent)
+        let commandBoxWidth: CGFloat = 560
+        let commandBoxX = (width - commandBoxWidth) / 2
+        rect(commandBoxX, 276, commandBoxWidth, 106, commandBackground)
+        strokeRect(commandBoxX, 276, commandBoxWidth, 106, commandBorder)
+        drawText("如果提示“已损坏”，打开终端运行：", x: commandBoxX + 14, y: 286, width: commandBoxWidth - 28, size: 10.8, color: muted)
+        drawText("If macOS says “damaged”, run in Terminal:", x: commandBoxX + 14, y: 305, width: commandBoxWidth - 28, size: 10.8, color: muted)
+        drawText("「壊れている」と表示されたら、ターミナルで実行：", x: commandBoxX + 14, y: 324, width: commandBoxWidth - 28, size: 10.8, color: muted)
+        drawText("“손상됨” 경고가 나오면 터미널에서 실행:", x: commandBoxX + 14, y: 343, width: commandBoxWidth - 28, size: 10.8, color: muted)
+        drawText("xattr -dr com.apple.quarantine \"/Applications/MAAUnified.app\"", x: commandBoxX + 14, y: 364, width: commandBoxWidth - 28, size: 10, weight: .medium, color: accent)
 
         image.unlockFocus()
 
@@ -257,12 +255,23 @@ def render_with_appkit(path: str) -> bool:
     with tempfile.NamedTemporaryFile("w", suffix=".swift", delete=False, encoding="utf-8") as temp_file:
         temp_file.write(swift_source)
         temp_path = temp_file.name
+    module_cache_dir = tempfile.mkdtemp(prefix="maaunified-swift-cache-")
 
     try:
-        result = subprocess.run(["swift", temp_path, path], check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        env = os.environ.copy()
+        env["CLANG_MODULE_CACHE_PATH"] = module_cache_dir
+        env["SWIFT_MODULECACHE_PATH"] = module_cache_dir
+        result = subprocess.run(
+            ["swift", temp_path, path],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=env,
+        )
         return result.returncode == 0
     finally:
         os.unlink(temp_path)
+        shutil.rmtree(module_cache_dir, ignore_errors=True)
 
 
 def main() -> int:
@@ -277,16 +286,16 @@ def main() -> int:
 
     rect(canvas, 0, 0, WIDTH, 92, ACCENT_SOFT)
     centered_text(canvas, 28, "DRAG MAAUNIFIED.APP TO APPLICATIONS", TEXT, 2)
-    centered_text(canvas, 66, "ZH/EN/JA/KO HELP IS IN FIX DAMAGED.COMMAND", MUTED, 1)
+    centered_text(canvas, 66, "IF MACOS SHOWS A DAMAGED WARNING, RUN THE TERMINAL COMMAND BELOW", MUTED, 1)
 
-    rect(canvas, 252, 196, 136, 12, ARROW)
-    triangle(canvas, [(388, 178), (388, 226), (430, 202)], ARROW)
+    rect(canvas, 250, 182, 140, 12, ARROW)
+    triangle(canvas, [(390, 164), (390, 212), (430, 188)], ARROW)
 
-    rect(canvas, 142, 330, 470, 64, COMMAND_BG)
-    border(canvas, 142, 330, 470, 64, COMMAND_BORDER)
-    centered_text(canvas, 304, "IF MACOS SAYS \"DAMAGED\"", MUTED, 1)
-    centered_text(canvas, 324, "DOUBLE-CLICK FIX DAMAGED.COMMAND", TEXT, 1)
-    centered_text(canvas, 358, "OR RUN: XATTR -DR COM.APPLE.QUARANTINE \"/APPLICATIONS/MAAUNIFIED.APP\"", ACCENT, 1)
+    rect(canvas, 142, 320, 470, 74, COMMAND_BG)
+    border(canvas, 142, 320, 470, 74, COMMAND_BORDER)
+    centered_text(canvas, 296, "IF MACOS SAYS \"DAMAGED\"", MUTED, 1)
+    centered_text(canvas, 318, "RUN THIS IN TERMINAL:", TEXT, 1)
+    centered_text(canvas, 352, "XATTR -DR COM.APPLE.QUARANTINE \"/APPLICATIONS/MAAUNIFIED.APP\"", ACCENT, 1)
 
     write_png(sys.argv[1], canvas)
     return 0

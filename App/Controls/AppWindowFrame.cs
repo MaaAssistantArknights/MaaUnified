@@ -105,6 +105,7 @@ public class AppWindowFrame : ContentControl
     private readonly List<Button> _minimizeButtons = [];
     private readonly List<Button> _maximizeButtons = [];
     private readonly List<Control> _resizeGrips = [];
+    private const double MacOSResizeGripOutwardBand = 4d;
     private Window? _hostWindow;
     private WindowBase? _ownerWindow;
     private bool _hasHeaderContent;
@@ -114,7 +115,7 @@ public class AppWindowFrame : ContentControl
     private bool _hasCapturedHostMaxHeight;
     private double _initialHostMaxHeight = double.PositiveInfinity;
     private AppWindowFrameHorizontalInset _effectiveHorizontalContentInset;
-    private readonly bool _preferOuterResizeGrips;
+    private readonly bool _isMacOS;
     private Thickness _effectiveResizeGripMargin;
 
     static AppWindowFrame()
@@ -126,7 +127,7 @@ public class AppWindowFrame : ContentControl
 
     public AppWindowFrame()
     {
-        _preferOuterResizeGrips = OperatingSystem.IsMacOS();
+        _isMacOS = OperatingSystem.IsMacOS();
         HasHeaderContent = HeaderContent is not null;
         HasActions = ActionsContent is not null;
         AddHandler(PointerReleasedEvent, OnPointerReleasedForInputFocusDismiss, RoutingStrategies.Bubble, handledEventsToo: true);
@@ -747,7 +748,7 @@ public class AppWindowFrame : ContentControl
 
     private void UpdateEffectiveResizeGripMargin()
     {
-        EffectiveResizeGripMargin = ResolveResizeGripMargin(ShellMargin, _preferOuterResizeGrips);
+        EffectiveResizeGripMargin = ResolveResizeGripMargin(ShellMargin, _isMacOS);
     }
 
     private void UpdateChromeLayoutTransform()
@@ -772,13 +773,23 @@ public class AppWindowFrame : ContentControl
             shellMargin.Right + frameBorder.Right + framePadding.Right);
     }
 
-    internal static Thickness ResolveResizeGripMargin(Thickness shellMargin, bool preferOuterResizeGrips)
+    internal static Thickness ResolveResizeGripMargin(Thickness shellMargin, bool isMacOS)
     {
-        // macOS keeps resize hit targets on the true window edge so they do not
-        // cover the traffic-light/title row; Linux keeps the existing visible-frame path.
-        return preferOuterResizeGrips
-            ? default
-            : shellMargin;
+        if (!isMacOS)
+        {
+            return shellMargin;
+        }
+
+        return new Thickness(
+            ResolveResizeGripMarginComponent(shellMargin.Left),
+            ResolveResizeGripMarginComponent(shellMargin.Top),
+            ResolveResizeGripMarginComponent(shellMargin.Right),
+            ResolveResizeGripMarginComponent(shellMargin.Bottom));
+    }
+
+    private static double ResolveResizeGripMarginComponent(double shellMargin)
+    {
+        return Math.Max(shellMargin - MacOSResizeGripOutwardBand, 0d);
     }
 
     private void DetachTemplateEvents()

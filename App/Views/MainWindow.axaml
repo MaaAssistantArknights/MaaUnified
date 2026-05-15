@@ -460,6 +460,12 @@
       <Setter Property="BoxShadow" Value="{DynamicResource MAA.App.BoxShadow.Card}" />
       <Setter Property="ClipToBounds" Value="False" />
     </Style>
+    <Style Selector="Window.live-resizing Border.app-surface.app-window">
+      <Setter Property="BoxShadow" Value="0 0 0 0 #00000000" />
+    </Style>
+    <Style Selector="Window.live-resizing Border.app-surface.app-card">
+      <Setter Property="BoxShadow" Value="0 0 0 0 #00000000" />
+    </Style>
   </Window.Styles>
   <controls:AppWindowFrame x:Name="WindowShellFrame"
                            Title="{Binding WindowTitle}"

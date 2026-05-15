@@ -380,7 +380,12 @@
   </Style>
 
   <Style Selector="TextBlock.dialog-window-title">
-    <Setter Property="Margin" Value="8,4,0,0" />
+    <Setter Property="Margin" Value="8,0,0,0" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="LineHeight" Value="20" />
+    <Setter Property="TextWrapping" Value="NoWrap" />
+    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    <Setter Property="MaxLines" Value="1" />
   </Style>
 
   <Style Selector="TextBlock.dialog-window-subtitle">

@@ -394,6 +394,18 @@ public sealed class PlatformCapabilityContractTests
     }
 
     [Fact]
+    public void PlatformServicesFactory_CreateDefaults_PrefersAvaloniaTrayOnWindows()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var bundle = PlatformServicesFactory.CreateDefaults();
+        Assert.IsType<AvaloniaTrayIconTrayService>(bundle.TrayService);
+    }
+
+    [Fact]
     public void PlatformServicesFactory_WhenForcedFallback_UsesFallbackProviders()
     {
         var original = Environment.GetEnvironmentVariable("MAA_PLATFORM_FORCE_FALLBACK");
