@@ -142,11 +142,11 @@ public static class TaskParamCompiler
     {
         var issues = new List<TaskValidationIssue>();
         var parameters = task.Params ?? new JsonObject();
-        var profileClientType = ResolveStringSetting(profile, config, "ClientType");
+        var profileClientType = ResolveStringSetting(profile, config, "ClientType", "Start.ClientType");
         var clientType = !string.IsNullOrWhiteSpace(profileClientType)
             ? profileClientType
             : ReadString(parameters, "client_type", strict, issues, "start_up.client_type", "Official");
-        var startGameEnabled = TryResolveBooleanSetting(profile, config, "StartGame", out var profileStartGame)
+        var startGameEnabled = TryResolveBooleanSetting(profile, config, out var profileStartGame, "StartGame", "Start.StartGame")
             ? profileStartGame
             : ReadBool(parameters, "start_game_enabled", strict, issues, "start_up.start_game_enabled", true);
 
@@ -155,14 +155,14 @@ public static class TaskParamCompiler
             ClientType = clientType,
             StartGameEnabled = startGameEnabled,
             AccountName = ReadString(parameters, "account_name", strict, issues, "start_up.account_name", string.Empty),
-            ConnectConfig = ResolveStringSetting(profile, config, "ConnectConfig") ?? "General",
-            ConnectAddress = ResolveStringSetting(profile, config, "ConnectAddress") ?? "127.0.0.1:5555",
-            AdbPath = ResolveStringSetting(profile, config, "AdbPath") ?? string.Empty,
-            TouchMode = ResolveStringSetting(profile, config, "TouchMode") ?? "minitouch",
-            AutoDetectConnection = ResolveBooleanSetting(profile, config, "AutoDetect", true),
-            AttachWindowScreencapMethod = ResolveStringSetting(profile, config, "AttachWindowScreencapMethod") ?? "2",
-            AttachWindowMouseMethod = ResolveStringSetting(profile, config, "AttachWindowMouseMethod") ?? "64",
-            AttachWindowKeyboardMethod = ResolveStringSetting(profile, config, "AttachWindowKeyboardMethod") ?? "64",
+            ConnectConfig = ResolveStringSetting(profile, config, "ConnectConfig", "Connect.ConnectConfig") ?? "General",
+            ConnectAddress = ResolveStringSetting(profile, config, "ConnectAddress", "Connect.Address") ?? "127.0.0.1:5555",
+            AdbPath = ResolveStringSetting(profile, config, "AdbPath", "Connect.AdbPath") ?? string.Empty,
+            TouchMode = ResolveStringSetting(profile, config, "TouchMode", "Connect.TouchMode") ?? "minitouch",
+            AutoDetectConnection = ResolveBooleanSetting(profile, config, true, "AutoDetect", "Connect.AutoDetect"),
+            AttachWindowScreencapMethod = ResolveStringSetting(profile, config, "AttachWindowScreencapMethod", "Connect.AttachWindow.ScreencapMethod") ?? "2",
+            AttachWindowMouseMethod = ResolveStringSetting(profile, config, "AttachWindowMouseMethod", "Connect.AttachWindow.MouseMethod") ?? "64",
+            AttachWindowKeyboardMethod = ResolveStringSetting(profile, config, "AttachWindowKeyboardMethod", "Connect.AttachWindow.KeyboardMethod") ?? "64",
         };
 
         return (dto, issues);
@@ -332,7 +332,7 @@ public static class TaskParamCompiler
             stageResetMode,
             dto.UseCustomAnnihilation,
             dto.AnnihilationStage,
-            ResolveStringSetting(profile, config, "ClientType") ?? "Official");
+            ResolveStringSetting(profile, config, "ClientType", "Start.ClientType") ?? "Official");
 
         if (dto.Series is < -1 or > 6)
         {
@@ -379,7 +379,7 @@ public static class TaskParamCompiler
             ["penguin_id"] = ResolveStringSetting(profile, config, "PenguinId") ?? string.Empty,
             ["yituliu_id"] = ResolveStringSetting(profile, config, "YituliuId") ?? string.Empty,
             ["server"] = ResolveStringSetting(profile, config, "ServerType") ?? "CN",
-            ["client_type"] = ResolveStringSetting(profile, config, "ClientType") ?? "Official",
+            ["client_type"] = ResolveStringSetting(profile, config, "ClientType", "Start.ClientType") ?? "Official",
             [UiStagePlan] = ToJsonArray(stagePlan),
             [UiIsStageManually] = dto.IsStageManually,
             [UiUseMedicine] = JsonValue.Create(useMedicine),
@@ -1266,7 +1266,7 @@ public static class TaskParamCompiler
         var nowUtc = DateTime.UtcNow;
         var parameters = task.Params ?? TaskModuleParameterDefaults.CreateMallDefaults("zh-cn");
         var model = MallParams.FromJson(parameters);
-        var clientType = ResolveStringSetting(profile, config, "ClientType") ?? "Official";
+        var clientType = ResolveStringSetting(profile, config, "ClientType", "Start.ClientType") ?? "Official";
         var defaultLastTime = MallDailyResetHelper.GetPreviousYjDateString(nowUtc, clientType);
         var creditFightLastTime = ReadString(
             parameters,
@@ -1851,38 +1851,41 @@ public static class TaskParamCompiler
         return fallback;
     }
 
-    private static string? ResolveStringSetting(UnifiedProfile profile, UnifiedConfig config, string key)
+    private static string? ResolveStringSetting(UnifiedProfile profile, UnifiedConfig config, params string[] keys)
     {
-        if (profile.Values.TryGetValue(key, out var profileValue)
-            && profileValue is JsonValue value
-            && value.TryGetValue(out string? text)
-            && !string.IsNullOrWhiteSpace(text))
+        foreach (var key in keys)
         {
-            return text;
-        }
+            if (profile.Values.TryGetValue(key, out var profileValue)
+                && profileValue is JsonValue value
+                && value.TryGetValue(out string? text)
+                && !string.IsNullOrWhiteSpace(text))
+            {
+                return text;
+            }
 
-        if (config.GlobalValues.TryGetValue(key, out var globalValue)
-            && globalValue is JsonValue global
-            && global.TryGetValue(out string? globalText)
-            && !string.IsNullOrWhiteSpace(globalText))
-        {
-            return globalText;
-        }
+            if (config.GlobalValues.TryGetValue(key, out var globalValue)
+                && globalValue is JsonValue global
+                && global.TryGetValue(out string? globalText)
+                && !string.IsNullOrWhiteSpace(globalText))
+            {
+                return globalText;
+            }
 
-        if (config.GlobalValues.TryGetValue($"GUI.{key}", out var guiValue)
-            && guiValue is JsonValue gui
-            && gui.TryGetValue(out string? guiText)
-            && !string.IsNullOrWhiteSpace(guiText))
-        {
-            return guiText;
+            if (config.GlobalValues.TryGetValue($"GUI.{key}", out var guiValue)
+                && guiValue is JsonValue gui
+                && gui.TryGetValue(out string? guiText)
+                && !string.IsNullOrWhiteSpace(guiText))
+            {
+                return guiText;
+            }
         }
 
         return null;
     }
 
-    private static bool ResolveBooleanSetting(UnifiedProfile profile, UnifiedConfig config, string key, bool fallback = false)
+    private static bool ResolveBooleanSetting(UnifiedProfile profile, UnifiedConfig config, bool fallback = false, params string[] keys)
     {
-        if (TryResolveBooleanSetting(profile, config, key, out var value))
+        if (TryResolveBooleanSetting(profile, config, out var value, keys))
         {
             return value;
         }
@@ -1890,21 +1893,27 @@ public static class TaskParamCompiler
         return fallback;
     }
 
-    private static bool TryResolveBooleanSetting(UnifiedProfile profile, UnifiedConfig config, string key, out bool value)
+    private static bool ResolveBooleanSetting(UnifiedProfile profile, UnifiedConfig config, string key)
+        => ResolveBooleanSetting(profile, config, false, key);
+
+    private static bool TryResolveBooleanSetting(UnifiedProfile profile, UnifiedConfig config, out bool value, params string[] keys)
     {
-        if (profile.Values.TryGetValue(key, out var profileValue) && TryReadBooleanNode(profileValue, out value))
+        foreach (var key in keys)
         {
-            return true;
-        }
+            if (profile.Values.TryGetValue(key, out var profileValue) && TryReadBooleanNode(profileValue, out value))
+            {
+                return true;
+            }
 
-        if (config.GlobalValues.TryGetValue(key, out var globalValue) && TryReadBooleanNode(globalValue, out value))
-        {
-            return true;
-        }
+            if (config.GlobalValues.TryGetValue(key, out var globalValue) && TryReadBooleanNode(globalValue, out value))
+            {
+                return true;
+            }
 
-        if (config.GlobalValues.TryGetValue($"GUI.{key}", out var guiValue) && TryReadBooleanNode(guiValue, out value))
-        {
-            return true;
+            if (config.GlobalValues.TryGetValue($"GUI.{key}", out var guiValue) && TryReadBooleanNode(guiValue, out value))
+            {
+                return true;
+            }
         }
 
         value = default;

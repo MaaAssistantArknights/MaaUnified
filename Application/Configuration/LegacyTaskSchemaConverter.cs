@@ -178,7 +178,7 @@ internal static class LegacyTaskSchemaConverter
     {
         var clientType = ResolveClientType(profile, config);
         var accountName = GetString(task, "AccountName") ?? string.Empty;
-        var startGameEnabled = ResolveBooleanSetting(profile, config, "StartGame");
+        var startGameEnabled = ResolveBooleanSetting(profile, config, "StartGame", "Start.StartGame");
         return new JsonObject
         {
             ["client_type"] = clientType,
@@ -727,7 +727,7 @@ internal static class LegacyTaskSchemaConverter
 
     private static string ResolveClientType(UnifiedProfile profile, UnifiedConfig config)
     {
-        return ResolveStringSetting(profile, config, "ClientType")
+        return ResolveStringSetting(profile, config, "ClientType", "Start.ClientType")
             ?? ResolveStringSetting(profile, config, "GameSettings.ClientType")
             ?? "Official";
     }
@@ -739,50 +739,56 @@ internal static class LegacyTaskSchemaConverter
             ?? "CN";
     }
 
-    private static string? ResolveStringSetting(UnifiedProfile profile, UnifiedConfig config, string key)
+    private static string? ResolveStringSetting(UnifiedProfile profile, UnifiedConfig config, params string[] keys)
     {
-        if (profile.Values.TryGetValue(key, out var profileValue))
+        foreach (var key in keys)
         {
-            if (profileValue is JsonValue value && value.TryGetValue(out string? text))
+            if (profile.Values.TryGetValue(key, out var profileValue))
             {
-                return text;
+                if (profileValue is JsonValue value && value.TryGetValue(out string? text) && !string.IsNullOrWhiteSpace(text))
+                {
+                    return text;
+                }
             }
-        }
 
-        if (config.GlobalValues.TryGetValue(key, out var globalValue))
-        {
-            if (globalValue is JsonValue value && value.TryGetValue(out string? text))
+            if (config.GlobalValues.TryGetValue(key, out var globalValue))
             {
-                return text;
+                if (globalValue is JsonValue value && value.TryGetValue(out string? text) && !string.IsNullOrWhiteSpace(text))
+                {
+                    return text;
+                }
             }
-        }
 
-        if (config.GlobalValues.TryGetValue($"GUI.{key}", out var guiGlobal))
-        {
-            if (guiGlobal is JsonValue value && value.TryGetValue(out string? text))
+            if (config.GlobalValues.TryGetValue($"GUI.{key}", out var guiGlobal))
             {
-                return text;
+                if (guiGlobal is JsonValue value && value.TryGetValue(out string? text) && !string.IsNullOrWhiteSpace(text))
+                {
+                    return text;
+                }
             }
         }
 
         return null;
     }
 
-    private static bool ResolveBooleanSetting(UnifiedProfile profile, UnifiedConfig config, string key)
+    private static bool ResolveBooleanSetting(UnifiedProfile profile, UnifiedConfig config, params string[] keys)
     {
-        if (profile.Values.TryGetValue(key, out var profileValue))
+        foreach (var key in keys)
         {
-            return ToBoolean(profileValue, false);
-        }
+            if (profile.Values.TryGetValue(key, out var profileValue))
+            {
+                return ToBoolean(profileValue, false);
+            }
 
-        if (config.GlobalValues.TryGetValue(key, out var globalValue))
-        {
-            return ToBoolean(globalValue, false);
-        }
+            if (config.GlobalValues.TryGetValue(key, out var globalValue))
+            {
+                return ToBoolean(globalValue, false);
+            }
 
-        if (config.GlobalValues.TryGetValue($"GUI.{key}", out var guiGlobal))
-        {
-            return ToBoolean(guiGlobal, false);
+            if (config.GlobalValues.TryGetValue($"GUI.{key}", out var guiGlobal))
+            {
+                return ToBoolean(guiGlobal, false);
+            }
         }
 
         return false;

@@ -8,15 +8,11 @@ namespace MAAUnified.App.Services;
 public sealed class AvaloniaDesktopAppLifecycleService : IAppLifecycleService
 {
     private readonly IClassicDesktopStyleApplicationLifetime _desktopLifetime;
-    private readonly Func<CancellationToken, Task>? _prepareShutdownAsync;
     private readonly ProcessAppLifecycleService _restartService = new();
 
-    public AvaloniaDesktopAppLifecycleService(
-        IClassicDesktopStyleApplicationLifetime desktopLifetime,
-        Func<CancellationToken, Task>? prepareShutdownAsync = null)
+    public AvaloniaDesktopAppLifecycleService(IClassicDesktopStyleApplicationLifetime desktopLifetime)
     {
         _desktopLifetime = desktopLifetime;
-        _prepareShutdownAsync = prepareShutdownAsync;
     }
 
     public bool SupportsExit => true;
@@ -29,11 +25,6 @@ public sealed class AvaloniaDesktopAppLifecycleService : IAppLifecycleService
         cancellationToken.ThrowIfCancellationRequested();
         try
         {
-            if (_prepareShutdownAsync is not null)
-            {
-                await _prepareShutdownAsync(cancellationToken);
-            }
-
             if (Dispatcher.UIThread.CheckAccess())
             {
                 _desktopLifetime.Shutdown();

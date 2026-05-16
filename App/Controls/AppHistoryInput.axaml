@@ -324,7 +324,7 @@
            IsLightDismissEnabled="True"
            Closed="OnPopupClosed">
       <Border Classes="app-history-input-popup-panel"
-              MinWidth="{Binding Bounds.Width, ElementName=ShellBorder}"
+              Width="{Binding Bounds.Width, ElementName=ShellBorder}"
               HorizontalAlignment="Left">
         <ScrollViewer Classes="app-history-input-scroll"
                       MaxHeight="{Binding MaxDropDownHeight, ElementName=Root}"

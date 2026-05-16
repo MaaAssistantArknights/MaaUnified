@@ -14,6 +14,8 @@ internal static class ConnectionGameProfileSync
     private const string AdbPathLegacyKey = "Connect.AdbPath";
     private const string ClientTypeKey = "ClientType";
     private const string StartGameKey = "StartGame";
+    private const string ClientTypeLegacyKey = "Start.ClientType";
+    private const string StartGameLegacyKey = "Start.StartGame";
     private const string TouchModeKey = "TouchMode";
     private const string AutoDetectKey = "AutoDetect";
     private const string AlwaysAutoDetectKey = "AlwaysAutoDetect";
@@ -34,6 +36,8 @@ internal static class ConnectionGameProfileSync
     private const string AttachWindowScreencapMethodKey = "AttachWindowScreencapMethod";
     private const string AttachWindowMouseMethodKey = "AttachWindowMouseMethod";
     private const string AttachWindowKeyboardMethodKey = "AttachWindowKeyboardMethod";
+    private const string TouchModeLegacyKey = "Connect.TouchMode";
+    private const string AutoDetectLegacyKey = "Connect.AutoDetect";
     private const string AlwaysAutoDetectLegacyKey = "Connect.AlwaysAutoDetect";
     private const string RetryOnDisconnectedLegacyKey = "Connect.RetryOnDisconnected";
     private const string AllowAdbRestartLegacyKey = "Connect.AllowADBRestart";
@@ -276,10 +280,26 @@ internal static class ConnectionGameProfileSync
             fallbackAdbPath,
             AdbPathKey,
             AdbPathLegacyKey);
-        state.ClientType = ReadProfileString(profile, ClientTypeKey, fallbackClientType);
-        state.StartGameEnabled = ReadProfileBool(profile, StartGameKey, fallbackStartGame);
-        state.TouchMode = ReadProfileString(profile, TouchModeKey, fallbackTouchMode);
-        state.AutoDetect = ReadProfileBool(profile, AutoDetectKey, fallbackAutoDetect);
+        state.ClientType = ReadProfileStringWithAliases(
+            profile,
+            fallbackClientType,
+            ClientTypeKey,
+            ClientTypeLegacyKey);
+        state.StartGameEnabled = ReadProfileBoolWithAliases(
+            profile,
+            fallbackStartGame,
+            StartGameKey,
+            StartGameLegacyKey);
+        state.TouchMode = ReadProfileStringWithAliases(
+            profile,
+            fallbackTouchMode,
+            TouchModeKey,
+            TouchModeLegacyKey);
+        state.AutoDetect = ReadProfileBoolWithAliases(
+            profile,
+            fallbackAutoDetect,
+            AutoDetectKey,
+            AutoDetectLegacyKey);
         state.AlwaysAutoDetect = ReadProfileBoolWithAliases(
             profile,
             fallbackAlwaysAutoDetect,

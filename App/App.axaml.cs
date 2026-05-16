@@ -116,9 +116,7 @@ public partial class App : Avalonia.Application
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             Program.RecordStartupStage("FrameworkInit.DesktopLifetime.Begin", "Configuring classic desktop lifetime.");
-            var appLifecycleService = new AvaloniaDesktopAppLifecycleService(
-                desktop,
-                DisposeRuntimeOnExitAsync);
+            var appLifecycleService = new AvaloniaDesktopAppLifecycleService(desktop);
             Runtime.AppLifecycleService = appLifecycleService;
             Runtime.PostActionFeatureService = new PostActionFeatureService(
                 Runtime.ConfigurationService,
@@ -288,13 +286,22 @@ public partial class App : Avalonia.Application
 
         try
         {
-            DisposeRuntimeOnExitAsync(CancellationToken.None).GetAwaiter().GetResult();
+            _ = DisposeRuntimeOnExitAsync(CancellationToken.None).GetAwaiter().GetResult();
+            if (OperatingSystem.IsWindows())
+            {
+                // Some Windows native integrations can leave foreground threads alive after Avalonia shutdown.
+                Environment.Exit(0);
+            }
         }
         catch (Exception ex)
         {
             ForgetTask(
                 SafeRecordExceptionAsync("App.Exit.Dispose", "Failed to synchronously dispose runtime during app exit.", ex),
                 "App.Exit.DisposeRuntime.Report");
+            if (OperatingSystem.IsWindows())
+            {
+                Environment.Exit(0);
+            }
         }
     }
 
@@ -513,11 +520,11 @@ public partial class App : Avalonia.Application
             "App.UiFontFamily.RecordFallback");
     }
 
-    private static async Task DisposeRuntimeOnExitAsync(CancellationToken cancellationToken = default)
+    private static async Task<bool> DisposeRuntimeOnExitAsync(CancellationToken cancellationToken = default)
     {
         if (Interlocked.Exchange(ref _shutdownStarted, 1) != 0)
         {
-            return;
+            return true;
         }
 
         try
@@ -527,7 +534,7 @@ public partial class App : Avalonia.Application
             if (ReferenceEquals(completed, disposeTask))
             {
                 await disposeTask;
-                return;
+                return true;
             }
 
             _ = disposeTask.ContinueWith(
@@ -543,10 +550,12 @@ public partial class App : Avalonia.Application
                 {
                     ["timeoutMs"] = (int)RuntimeDisposeTimeout.TotalMilliseconds,
                 });
+            return false;
         }
         catch (Exception ex)
         {
             await SafeRecordExceptionAsync("App.Exit.Dispose", "Failed to dispose runtime during app exit.", ex);
+            return false;
         }
     }
 
