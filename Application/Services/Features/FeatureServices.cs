@@ -3536,32 +3536,52 @@ public sealed class PlatformCapabilityFeatureService : IPlatformCapabilityServic
         TrayMenuText? menuText,
         CancellationToken cancellationToken = default)
     {
-        var result = await _platform.TrayService.InitializeAsync(appTitle, menuText, cancellationToken);
-        return await ToUiResultAsync(PlatformCapabilityId.Tray, "initialize", result, cancellationToken);
+        return await ExecuteTrayOperationAsync(
+            "initialize",
+            "tray.initialize",
+            PlatformErrorCodes.TrayInitFailed,
+            cancellationToken,
+            ct => _platform.TrayService.InitializeAsync(appTitle, menuText, ct));
     }
 
     public async Task<UiOperationResult> ShutdownTrayAsync(CancellationToken cancellationToken = default)
     {
-        var result = await _platform.TrayService.ShutdownAsync(cancellationToken);
-        return await ToUiResultAsync(PlatformCapabilityId.Tray, "shutdown", result, cancellationToken);
+        return await ExecuteTrayOperationAsync(
+            "shutdown",
+            "tray.shutdown",
+            PlatformErrorCodes.TrayInitFailed,
+            cancellationToken,
+            ct => _platform.TrayService.ShutdownAsync(ct));
     }
 
     public async Task<UiOperationResult> ShowTrayMessageAsync(string title, string message, CancellationToken cancellationToken = default)
     {
-        var result = await _platform.TrayService.ShowAsync(title, message, cancellationToken);
-        return await ToUiResultAsync(PlatformCapabilityId.Tray, "show", result, cancellationToken);
+        return await ExecuteTrayOperationAsync(
+            "show",
+            "tray.show",
+            PlatformErrorCodes.TrayMenuDispatchFailed,
+            cancellationToken,
+            ct => _platform.TrayService.ShowAsync(title, message, ct));
     }
 
     public async Task<UiOperationResult> SetTrayVisibleAsync(bool visible, CancellationToken cancellationToken = default)
     {
-        var result = await _platform.TrayService.SetVisibleAsync(visible, cancellationToken);
-        return await ToUiResultAsync(PlatformCapabilityId.Tray, "set-visible", result, cancellationToken);
+        return await ExecuteTrayOperationAsync(
+            "set-visible",
+            "tray.setVisible",
+            PlatformErrorCodes.TrayMenuDispatchFailed,
+            cancellationToken,
+            ct => _platform.TrayService.SetVisibleAsync(visible, ct));
     }
 
     public async Task<UiOperationResult> SetTrayMenuStateAsync(TrayMenuState state, CancellationToken cancellationToken = default)
     {
-        var result = await _platform.TrayService.SetMenuStateAsync(state, cancellationToken);
-        return await ToUiResultAsync(PlatformCapabilityId.Tray, "set-menu", result, cancellationToken);
+        return await ExecuteTrayOperationAsync(
+            "set-menu",
+            "tray.setMenuState",
+            PlatformErrorCodes.TrayMenuDispatchFailed,
+            cancellationToken,
+            ct => _platform.TrayService.SetMenuStateAsync(state, ct));
     }
 
     public async Task<UiOperationResult> SendSystemNotificationAsync(string title, string message, CancellationToken cancellationToken = default)
@@ -3685,6 +3705,38 @@ public sealed class PlatformCapabilityFeatureService : IPlatformCapabilityServic
     {
         var result = await _platform.AutostartService.SetEnabledAsync(enabled, cancellationToken);
         return await ToUiResultAsync(PlatformCapabilityId.Autostart, "set-enabled", result, cancellationToken);
+    }
+
+    private async Task<UiOperationResult> ExecuteTrayOperationAsync(
+        string action,
+        string operationId,
+        string errorCode,
+        CancellationToken cancellationToken,
+        Func<CancellationToken, Task<PlatformOperationResult>> operation)
+    {
+        try
+        {
+            var result = await operation(cancellationToken);
+            return await ToUiResultAsync(PlatformCapabilityId.Tray, action, result, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            var failure = PlatformOperation.Failed(
+                _platform.TrayService.Capability.Provider,
+                $"Tray {action} failed unexpectedly: {ex.Message}",
+                errorCode,
+                operationId);
+            await _diagnostics.RecordErrorAsync(
+                $"PlatformCapability.Tray.{action}",
+                failure.Message,
+                ex,
+                cancellationToken);
+            return await ToUiResultAsync(PlatformCapabilityId.Tray, action, failure, cancellationToken);
+        }
     }
 
     public async Task<UiOperationResult> BindOverlayHostAsync(

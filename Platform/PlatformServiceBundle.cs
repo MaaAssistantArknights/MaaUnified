@@ -39,16 +39,15 @@ public static class PlatformServicesFactory
         try
         {
             if (!forceFallback
-                && OperatingSystem.IsWindows()
-                && WindowsNotifyIconTrayService.TryCreate(out var windowsTray))
-            {
-                trayService = windowsTray;
-            }
-            else if (!forceFallback
-                     && (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
                 && AvaloniaTrayIconTrayService.TryCreate(out var nativeAvaloniaTray))
             {
                 trayService = nativeAvaloniaTray;
+            }
+            else if (!forceFallback
+                     && OperatingSystem.IsWindows()
+                     && WindowsNotifyIconTrayService.TryCreate(out var windowsTray))
+            {
+                trayService = windowsTray;
             }
             else
             {

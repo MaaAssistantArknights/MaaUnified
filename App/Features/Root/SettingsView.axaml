@@ -63,15 +63,6 @@
                   Classes="settings-section-anchor" />
         </StackPanel>
       </ScrollViewer>
-
-      <controls:AppStickyTitlePresenter x:Name="StickyTitlePresenter"
-                                        Margin="0,4,12,0"
-                                        HorizontalAlignment="Stretch"
-                                        VerticalAlignment="Top"
-                                        IsHitTestVisible="False"
-                                        ZIndex="3"
-                                        Classes="settings-page-sticky-title"
-                                        IsVisible="False" />
     </Grid>
   </Grid>
 </UserControl>

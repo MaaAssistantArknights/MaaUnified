@@ -394,7 +394,7 @@ public sealed class PlatformCapabilityContractTests
     }
 
     [Fact]
-    public void PlatformServicesFactory_CreateDefaults_PrefersWindowsNotifyIconTrayOnWindows()
+    public void PlatformServicesFactory_CreateDefaults_PrefersAvaloniaTrayOnWindows()
     {
         if (!OperatingSystem.IsWindows())
         {
@@ -402,7 +402,7 @@ public sealed class PlatformCapabilityContractTests
         }
 
         var bundle = PlatformServicesFactory.CreateDefaults();
-        Assert.IsType<WindowsNotifyIconTrayService>(bundle.TrayService);
+        Assert.IsType<AvaloniaTrayIconTrayService>(bundle.TrayService);
     }
 
     [Fact]
@@ -526,6 +526,39 @@ public sealed class PlatformCapabilityContractTests
         var content = await File.ReadAllTextAsync(diagnostics.ErrorLogPath);
         Assert.Contains("PlatformCapability.Tray.set-visible", content, StringComparison.Ordinal);
         Assert.Contains(PlatformErrorCodes.TrayInitFailed, content, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task PlatformCapabilityFeatureService_TrayProviderThrows_ReturnsFailedResultAndWritesLogs()
+    {
+        var root = CreateTempRoot();
+        var diagnostics = new UiDiagnosticsService(root, new UiLogService());
+        var bundle = new PlatformServiceBundle
+        {
+            TrayService = new ThrowingTrayService(),
+            NotificationService = new NoOpNotificationService(),
+            HotkeyService = new NoOpGlobalHotkeyService(),
+            AutostartService = new NoOpAutostartService(),
+            FileDialogService = new NoOpFileDialogService(),
+            OverlayService = new NoOpOverlayCapabilityService(),
+            PostActionExecutorService = new NoOpPostActionExecutorService(),
+        };
+
+        var service = new PlatformCapabilityFeatureService(bundle, diagnostics);
+        var result = await service.InitializeTrayAsync("MAAUnified", TrayMenuText.Default);
+
+        Assert.False(result.Success);
+        Assert.Equal(PlatformErrorCodes.TrayInitFailed, result.Error?.Code);
+        Assert.True(File.Exists(diagnostics.ErrorLogPath));
+        Assert.True(File.Exists(diagnostics.PlatformEventLogPath));
+
+        var errorContent = await File.ReadAllTextAsync(diagnostics.ErrorLogPath);
+        Assert.Contains("PlatformCapability.Tray.initialize", errorContent, StringComparison.Ordinal);
+        Assert.Contains("TryCreate failed", errorContent, StringComparison.Ordinal);
+
+        var platformContent = await File.ReadAllTextAsync(diagnostics.PlatformEventLogPath);
+        Assert.Contains("\"Provider\":\"throwing-tray\"", platformContent, StringComparison.Ordinal);
+        Assert.Contains("\"OperationId\":\"tray.initialize\"", platformContent, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -829,6 +862,33 @@ public sealed class PlatformCapabilityContractTests
 
         public Task<PlatformOperationResult> SetVisibleAsync(bool visible, CancellationToken cancellationToken = default)
             => Task.FromResult(PlatformOperation.Failed(Capability.Provider, "visible failed", PlatformErrorCodes.TrayInitFailed, "tray.setVisible"));
+    }
+
+    private sealed class ThrowingTrayService : ITrayService
+    {
+        public PlatformCapabilityStatus Capability { get; } = new(
+            Supported: true,
+            Message: "throwing tray",
+            Provider: "throwing-tray",
+            HasFallback: true,
+            FallbackMode: "window-menu");
+
+        public event EventHandler<TrayCommandEvent>? CommandInvoked;
+
+        public Task<PlatformOperationResult> InitializeAsync(string appTitle, TrayMenuText? menuText, CancellationToken cancellationToken = default)
+            => throw new InvalidOperationException("TryCreate failed.");
+
+        public Task<PlatformOperationResult> ShutdownAsync(CancellationToken cancellationToken = default)
+            => throw new InvalidOperationException("TryCreate failed.");
+
+        public Task<PlatformOperationResult> ShowAsync(string title, string message, CancellationToken cancellationToken = default)
+            => throw new InvalidOperationException("TryCreate failed.");
+
+        public Task<PlatformOperationResult> SetMenuStateAsync(TrayMenuState state, CancellationToken cancellationToken = default)
+            => throw new InvalidOperationException("TryCreate failed.");
+
+        public Task<PlatformOperationResult> SetVisibleAsync(bool visible, CancellationToken cancellationToken = default)
+            => throw new InvalidOperationException("TryCreate failed.");
     }
 
     private sealed class FailingAutostartService : IAutostartService

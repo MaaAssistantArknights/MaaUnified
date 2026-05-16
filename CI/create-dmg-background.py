@@ -221,24 +221,23 @@ def render_with_appkit(path: str) -> bool:
         drawText("MAAUnified.app を Applications フォルダへドラッグ", x: 20, y: 72, width: 600, size: 11, color: muted)
         drawText("MAAUnified.app을 Applications 폴더로 드래그", x: 20, y: 87, width: 600, size: 11, color: muted)
 
-        rect(250, 182, 140, 12, accent)
+        rect(230, 162, 140, 12, accent)
         let arrow = NSBezierPath()
-        arrow.move(to: NSPoint(x: 430, y: height - 188))
-        arrow.line(to: NSPoint(x: 390, y: height - 164))
-        arrow.line(to: NSPoint(x: 390, y: height - 212))
+        arrow.move(to: NSPoint(x: 410, y: height - 168))
+        arrow.line(to: NSPoint(x: 370, y: height - 144))
+        arrow.line(to: NSPoint(x: 370, y: height - 192))
         arrow.close()
         accent.setFill()
         arrow.fill()
 
-        let commandBoxWidth: CGFloat = 560
-        let commandBoxX = (width - commandBoxWidth) / 2
-        rect(commandBoxX, 276, commandBoxWidth, 106, commandBackground)
-        strokeRect(commandBoxX, 276, commandBoxWidth, 106, commandBorder)
-        drawText("如果提示“已损坏”，打开终端运行：", x: commandBoxX + 14, y: 286, width: commandBoxWidth - 28, size: 10.8, color: muted)
-        drawText("If macOS says “damaged”, run in Terminal:", x: commandBoxX + 14, y: 305, width: commandBoxWidth - 28, size: 10.8, color: muted)
-        drawText("「壊れている」と表示されたら、ターミナルで実行：", x: commandBoxX + 14, y: 324, width: commandBoxWidth - 28, size: 10.8, color: muted)
-        drawText("“손상됨” 경고가 나오면 터미널에서 실행:", x: commandBoxX + 14, y: 343, width: commandBoxWidth - 28, size: 10.8, color: muted)
-        drawText("xattr -dr com.apple.quarantine \"/Applications/MAAUnified.app\"", x: commandBoxX + 14, y: 364, width: commandBoxWidth - 28, size: 10, weight: .medium, color: accent)
+        let commandBoxWidth: CGFloat = 430
+        let commandBoxX: CGFloat = 24
+        rect(commandBoxX, 260, commandBoxWidth, 106, commandBackground)
+        strokeRect(commandBoxX, 260, commandBoxWidth, 106, commandBorder)
+        drawText("如果打开时提示“已损坏”，双击右侧说明文件图标复制命令", x: commandBoxX + 14, y: 270, width: commandBoxWidth - 28, size: 10.8, color: muted, alignment: .right)
+        drawText("If macOS says “damaged”, double-click the note icon to copy the command", x: commandBoxX + 14, y: 289, width: commandBoxWidth - 28, size: 10.8, color: muted, alignment: .right)
+        drawText("「壊れている」と表示されたら、右のメモアイコンからコピー", x: commandBoxX + 14, y: 308, width: commandBoxWidth - 28, size: 10.8, color: muted, alignment: .right)
+        drawText("“손상됨” 경고가 나오면 오른쪽 안내 아이콘에서 명령을 복사", x: commandBoxX + 14, y: 327, width: commandBoxWidth - 28, size: 10.8, color: muted, alignment: .right)
 
         image.unlockFocus()
 
