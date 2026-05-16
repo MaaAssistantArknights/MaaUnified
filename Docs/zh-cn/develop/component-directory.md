@@ -256,10 +256,9 @@
 #### `AppStickyTitleStyles`
 
 - 简介：`AppStickyTitlePresenter` 的过渡动画、标题间距和不同宿主场景 variant 的样式入口。
-- 推荐场景：设置页和公告弹窗这类标准吸顶标题；需要补充新的吸顶标题 variant；统一滚动顶替动画节奏。
+- 推荐场景：公告弹窗这类标准吸顶标题；需要补充新的吸顶标题 variant；统一滚动顶替动画节奏。
 - 不推荐场景：不使用 `AppStickyTitlePresenter` 却想直接复用局部 selector；只想做普通固定标题；为单个页面局部动画问题直接复制一份吸顶样式。
 - 示例：
-  - `App/Features/Root/SettingsView.axaml`：`settings-page-sticky-title` variant。
   - `App/Features/Dialogs/AnnouncementDialogView.axaml`：`announcement-dialog-sticky-title` variant。
 
 ## 复用决策规则

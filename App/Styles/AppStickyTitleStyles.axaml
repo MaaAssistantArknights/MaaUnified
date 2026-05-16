@@ -84,23 +84,4 @@
     <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
     <Setter Property="TextWrapping" Value="Wrap" />
   </Style>
-
-  <Style Selector="controls|AppStickyTitlePresenter.settings-page-sticky-title Border.app-sticky-title-current-shell">
-    <Setter Property="Padding" Value="0,6,0,4" />
-    <Setter Property="Background" Value="{DynamicResource MAA.Brush.Announcement.StickyTitleBackground}" />
-  </Style>
-
-  <Style Selector="controls|AppStickyTitlePresenter.settings-page-sticky-title Border.app-sticky-title-transition-shell">
-    <Setter Property="Padding" Value="0,6,0,4" />
-    <Setter Property="Background" Value="{DynamicResource MAA.Brush.Announcement.StickyTitleBackground}" />
-  </Style>
-
-  <Style Selector="controls|AppStickyTitlePresenter.settings-page-sticky-title TextBlock.app-sticky-title-text">
-    <Setter Property="Margin" Value="0,0,12,0" />
-    <Setter Property="FontSize" Value="28" />
-    <Setter Property="FontWeight" Value="SemiBold" />
-    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
-    <Setter Property="TextWrapping" Value="Wrap" />
-    <Setter Property="LineHeight" Value="34" />
-  </Style>
 </Styles>

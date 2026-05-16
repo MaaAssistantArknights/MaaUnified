@@ -483,14 +483,29 @@ public sealed class SettingsViewStructureContractTests
         Assert.Contains("hdiutil convert \"$dmg_rw_path\" -format UDZO", script, StringComparison.Ordinal);
         Assert.Contains("hdiutil verify \"$dmg_path\"", script, StringComparison.Ordinal);
         Assert.Contains("write_dmg_install_note()", script, StringComparison.Ordinal);
-        Assert.Contains("Install MAAUnified.txt", script, StringComparison.Ordinal);
+        Assert.Contains("Installation Notes.txt", script, StringComparison.Ordinal);
+        Assert.Contains("MAAUnified macOS インストールメモ", script, StringComparison.Ordinal);
+        Assert.Contains("MAAUnified macOS 설치 안내", script, StringComparison.Ordinal);
+        Assert.Contains("hide = []", script, StringComparison.Ordinal);
+        Assert.Contains("icon_size = 80", script, StringComparison.Ordinal);
+        Assert.Contains("text_size = 12", script, StringComparison.Ordinal);
+        Assert.Contains("\"MAAUnified.app\": (150, 168)", script, StringComparison.Ordinal);
+        Assert.Contains("\"Applications\": (490, 168)", script, StringComparison.Ordinal);
+        Assert.Contains("\"Installation Notes.txt\": (535, 295)", script, StringComparison.Ordinal);
         Assert.Contains("/Applications/MAAUnified.app", script, StringComparison.Ordinal);
         Assert.Contains("xattr -dr com.apple.quarantine", script, StringComparison.Ordinal);
         Assert.Contains("拖到 Applications / Drag to Applications", backgroundScript, StringComparison.Ordinal);
         Assert.Contains("MAAUnified.app を Applications フォルダへドラッグ", backgroundScript, StringComparison.Ordinal);
         Assert.Contains("MAAUnified.app을 Applications 폴더로 드래그", backgroundScript, StringComparison.Ordinal);
-        Assert.Contains("If macOS says “damaged”, run in Terminal:", backgroundScript, StringComparison.Ordinal);
-        Assert.Contains("xattr -dr com.apple.quarantine \\\"/Applications/MAAUnified.app\\\"", backgroundScript, StringComparison.Ordinal);
+        Assert.Contains("如果打开时提示“已损坏”，双击右侧说明文件图标复制命令", backgroundScript, StringComparison.Ordinal);
+        Assert.Contains("alignment: .right", backgroundScript, StringComparison.Ordinal);
+        Assert.Contains("If macOS says “damaged”, double-click the note icon to copy the command", backgroundScript, StringComparison.Ordinal);
+        Assert.Contains("「壊れている」と表示されたら、右のメモアイコンからコピー", backgroundScript, StringComparison.Ordinal);
+        Assert.Contains("“손상됨” 경고가 나오면 오른쪽 안내 아이콘에서 명령을 복사", backgroundScript, StringComparison.Ordinal);
+        Assert.Contains("rect(230, 162, 140, 12, accent)", backgroundScript, StringComparison.Ordinal);
+        Assert.Contains("rect(commandBoxX, 260, commandBoxWidth, 106, commandBackground)", backgroundScript, StringComparison.Ordinal);
+        Assert.Contains("let commandBoxWidth: CGFloat = 430", backgroundScript, StringComparison.Ordinal);
+        Assert.Contains("let commandBoxX: CGFloat = 24", backgroundScript, StringComparison.Ordinal);
     }
 
     [Fact]

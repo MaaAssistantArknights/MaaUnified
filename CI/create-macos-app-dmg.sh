@@ -27,7 +27,7 @@ dmg_background_dir="$dmg_root/.background"
 dmg_background_png_path="$dmg_background_dir/installer-background.png"
 dmg_background_jpeg_path="$dmg_background_dir/installer-background.jpg"
 dmg_background_tiff_path="$dmg_background_dir/installer-background.tiff"
-dmg_note_name="Install MAAUnified.txt"
+dmg_note_name="Installation Notes.txt"
 app_icon_name="MAAUnified.icns"
 brand_icon_path="src/MAAUnified/App/Assets/Brand/newlogo.ico"
 signing_status_path="$release_dir/.$package_name.signing-status"
@@ -58,7 +58,7 @@ MAAUnified macOS 安装说明
 
 1. 把 MAAUnified.app 拖到 Applications 文件夹。
 2. 如果打开时提示“MAAUnified.app 已损坏，无法打开”，通常并不是真的文件损坏，而是 Gatekeeper 的 quarantine 隔离属性在拦截。
-3. 打开“终端”，运行下面这条命令：
+3. 打开“终端”，复制并运行下面这条命令：
 
 xattr -dr com.apple.quarantine "/Applications/MAAUnified.app"
 
@@ -68,11 +68,31 @@ MAAUnified macOS Install Notes
 
 1. Drag MAAUnified.app to the Applications folder.
 2. If macOS says "MAAUnified.app is damaged and can't be opened", the app is usually being blocked by the Gatekeeper quarantine attribute rather than being actually damaged.
-3. Open Terminal and run:
+3. Open Terminal, then copy and run:
 
 xattr -dr com.apple.quarantine "/Applications/MAAUnified.app"
 
 4. Reopen /Applications/MAAUnified.app.
+
+MAAUnified macOS インストールメモ
+
+1. MAAUnified.app を Applications フォルダへドラッグします。
+2. macOS で「MAAUnified.app は壊れているため開けません」と表示される場合、通常はファイルの破損ではなく、Gatekeeper の quarantine 属性によってブロックされています。
+3. ターミナルを開き、次のコマンドをコピーして実行します：
+
+xattr -dr com.apple.quarantine "/Applications/MAAUnified.app"
+
+4. /Applications/MAAUnified.app をもう一度開きます。
+
+MAAUnified macOS 설치 안내
+
+1. MAAUnified.app을 Applications 폴더로 드래그합니다.
+2. macOS에서 "MAAUnified.app이 손상되어 열 수 없습니다"라고 표시되면 실제 파일 손상이 아니라 Gatekeeper의 quarantine 속성 때문에 차단된 경우가 많습니다.
+3. 터미널을 열고 아래 명령을 복사해 실행합니다:
+
+xattr -dr com.apple.quarantine "/Applications/MAAUnified.app"
+
+4. /Applications/MAAUnified.app을 다시 엽니다.
 NOTE
 }
 
@@ -106,16 +126,14 @@ volume_icon = os.environ["MAA_DMG_VOLUME_ICON_PATH"]
 
 files = [
     (app_path, "MAAUnified.app"),
-    (note_path, "Install MAAUnified.txt"),
+    (note_path, "Installation Notes.txt"),
 ]
 
 symlinks = {
     "Applications": "/Applications",
 }
 
-hide = [
-    "Install MAAUnified.txt",
-]
+hide = []
 
 badge_icon = None
 icon = volume_icon if volume_icon and os.path.exists(volume_icon) else None
@@ -129,13 +147,14 @@ show_status_bar = False
 show_tab_view = False
 show_pathbar = False
 show_sidebar = False
-icon_size = 96
-text_size = 13
+icon_size = 80
+text_size = 12
 background = "#ffffff"
 
 icon_locations = {
-    "MAAUnified.app": (150, 188),
-    "Applications": (490, 188),
+    "MAAUnified.app": (150, 168),
+    "Applications": (490, 168),
+    "Installation Notes.txt": (535, 295),
 }
 PY
 }
@@ -254,11 +273,12 @@ tell application "Finder"
     set the bounds of container window to {100, 100, 740, 520}
     set opts to the icon view options of container window
     set arrangement of opts to not arranged
-    set icon size of opts to 96
-    set text size of opts to 13
+    set icon size of opts to 80
+    set text size of opts to 12
     set background picture of opts to file ".background:installer-background.jpg"
-    set position of item "$app_name.app" of container window to {150, 188}
-    set position of item "Applications" of container window to {490, 188}
+    set position of item "$app_name.app" of container window to {150, 168}
+    set position of item "Applications" of container window to {490, 168}
+    set position of item "$dmg_note_name" of container window to {535, 295}
     update without registering applications
     delay 1
     close

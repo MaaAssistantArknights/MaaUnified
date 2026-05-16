@@ -19,10 +19,7 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
     private readonly record struct SectionScrollPosition(string SectionKey, double OffsetWithinSection);
     private readonly record struct SectionHeaderLayout(
         SettingsSectionViewModel Section,
-        string Title,
-        double ContentTop,
-        double ViewportTop,
-        double HeaderHeight);
+        double ContentTop);
 
     private const int BackgroundSectionWarmupIntervalMs = 45;
     private const int LocalizedSectionRefreshInitialDelayMs = 750;
@@ -31,9 +28,6 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
     private const int ResizeActiveSectionRadius = 1;
     private const double ResizeFallbackPlaceholderHeight = 96d;
     private const double SectionActivationPadding = 8d;
-    private const double SectionHeaderTopInset = 6d;
-    private const double SectionHeaderBottomInset = 4d;
-    private const double StickyRevealLineY = 0d;
     private static readonly string[] SectionOrder =
     [
         "ConfigurationManager",
@@ -141,7 +135,6 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
                 EnsureSectionMaterializationInitialized(forceReset: true);
                 EnsureCurrentSectionMaterialized();
                 ScrollToSelectedSection();
-                RefreshStickyTitlePresenter();
                 StartProgressiveSectionMaterialization();
             }, DispatcherPriority.Loaded);
         };
@@ -436,7 +429,6 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
         InvalidateSectionTopCacheIfLayoutChanged();
         TryMaterializeNextSectionForScroll();
         UpdateSelectedSectionFromScroll();
-        RefreshStickyTitlePresenter();
     }
 
     private void OnSectionContentPanelSizeChanged(object? sender, SizeChangedEventArgs e)
@@ -705,7 +697,6 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
             {
                 _sectionLayoutRefreshQueued = false;
                 RefreshSectionTopCacheIfNeeded();
-                RefreshStickyTitlePresenter();
             },
             DispatcherPriority.Render);
     }
@@ -1083,8 +1074,6 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
                 {
                     RefreshSectionTopCacheIfNeeded();
                 }
-
-                RefreshStickyTitlePresenter();
             },
             DispatcherPriority.Loaded);
     }
@@ -1289,7 +1278,6 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
         scrollViewer.Offset = new Vector(
             scrollViewer.Offset.X,
             Math.Max(targetOffset, 0d));
-        RefreshStickyTitlePresenter();
         StartProgressiveSectionMaterialization();
     }
 
@@ -1367,7 +1355,6 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
         var targetOffset = Math.Clamp(sectionOffset + scrollPosition.Value.OffsetWithinSection, 0d, maxOffset);
         SuppressSectionScrollChangedOnce();
         scrollViewer.Offset = new Vector(scrollViewer.Offset.X, targetOffset);
-        RefreshStickyTitlePresenter();
         return true;
     }
 
@@ -1438,77 +1425,20 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
             _sectionTitleAnchors.TryGetValue(section.Key, out var titleAnchor);
             layouts.Add(new SectionHeaderLayout(
                 section,
-                ResolveSectionHeaderTitle(section, titleAnchor),
-                top,
-                top - Math.Max(_sectionScrollViewer?.Offset.Y ?? 0d, 0d),
-                ResolveSectionHeaderHeight(titleAnchor)));
+                top));
         }
 
         return layouts;
     }
 
-    private static string ResolveSectionHeaderTitle(SettingsSectionViewModel section, TextBlock? titleAnchor)
-    {
-        return string.IsNullOrWhiteSpace(titleAnchor?.Text)
-            ? section.DisplayName
-            : titleAnchor.Text;
-    }
-
-    private static double ResolveSectionHeaderHeight(TextBlock? titleAnchor)
-    {
-        return titleAnchor is null
-            ? 0d
-            : Math.Max(titleAnchor.Bounds.Height, titleAnchor.DesiredSize.Height);
-    }
-
-    private void RefreshStickyTitlePresenter()
-    {
-        if (VisualRoot is null)
-        {
-            return;
-        }
-
-        StickyTitlePresenter.State = ResolveStickyPresentation(MeasureSectionHeaderLayouts());
-    }
-
-    private AppStickyTitleState ResolveStickyPresentation(IReadOnlyList<SectionHeaderLayout> headerLayouts)
-    {
-        if (headerLayouts.Count == 0)
-        {
-            return CreateHiddenStickyState();
-        }
-
-        var currentIndex = StickyTitleMath.ResolvePinnedHeaderIndex(
-            headerLayouts.Select(static layout => layout.ViewportTop).ToArray(),
-            StickyRevealLineY);
-        if (currentIndex < 0)
-        {
-            return CreateHiddenStickyState();
-        }
-
-        var currentLayout = headerLayouts[currentIndex];
-        var nextLayout = currentIndex + 1 < headerLayouts.Count ? headerLayouts[currentIndex + 1] : (SectionHeaderLayout?)null;
-        var stickyHeight = GetStickyPresentationHeight(currentLayout, nextLayout);
-        var pushOffset = CalculatePushOffset(nextLayout, stickyHeight);
-
-        return new AppStickyTitleState(
-            IsVisible: true,
-            Height: stickyHeight,
-            CurrentTitle: currentLayout.Title,
-            CurrentTranslateY: -pushOffset,
-            IncomingTitle: nextLayout is not null && pushOffset > 0d ? nextLayout.Value.Title : null,
-            IncomingTranslateY: stickyHeight - pushOffset,
-            ShowIncomingTitle: nextLayout is not null && pushOffset > 0d);
-    }
-
     private double GetSectionActivationLineY()
     {
-        return Math.Max(18d, GetStickyReferenceHeight() + SectionActivationPadding);
+        return Math.Max(18d, GetSectionTitleReferenceHeight() + SectionActivationPadding);
     }
 
-    private double GetSectionScrollTargetLineY()
+    private static double GetSectionScrollTargetLineY()
     {
-        return StickyRevealLineY;
+        return 0d;
     }
 
     private double GetSectionTitleReferenceHeight()
@@ -1516,46 +1446,6 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
         return _sectionTitleAnchors.Count == 0
             ? 0d
             : _sectionTitleAnchors.Values.Max(title => Math.Max(title.Bounds.Height, title.DesiredSize.Height));
-    }
-
-    private double GetStickyReferenceHeight()
-    {
-        return Math.Max(1d, GetSectionHeaderVisualHeight(GetSectionTitleReferenceHeight()));
-    }
-
-    private double GetStickyPresentationHeight(SectionHeaderLayout currentLayout, SectionHeaderLayout? nextLayout)
-    {
-        return Math.Max(
-            1d,
-            Math.Max(
-                GetStickyReferenceHeight(),
-                Math.Max(
-                    GetSectionHeaderVisualHeight(currentLayout.HeaderHeight),
-                    GetSectionHeaderVisualHeight(nextLayout?.HeaderHeight ?? 0d))));
-    }
-
-    private static double GetSectionHeaderVisualHeight(double headerHeight)
-    {
-        return Math.Max(1d, headerHeight + SectionHeaderTopInset + SectionHeaderBottomInset);
-    }
-
-    private static double CalculatePushOffset(SectionHeaderLayout? nextLayout, double stickyHeight)
-    {
-        return nextLayout is null
-            ? 0d
-            : ComputeStickyPushOffset(nextLayout.Value.ViewportTop, stickyHeight);
-    }
-
-    private static AppStickyTitleState CreateHiddenStickyState()
-    {
-        return new AppStickyTitleState(
-            IsVisible: false,
-            Height: 0d,
-            CurrentTitle: string.Empty,
-            CurrentTranslateY: 0d,
-            IncomingTitle: null,
-            IncomingTranslateY: 0d,
-            ShowIncomingTitle: false);
     }
 
     private static double ComputeSectionTargetOffset(double headerContentTop, double activationLineY)
@@ -1566,11 +1456,6 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
     private static int ResolveActiveSectionIndex(double offsetY, double activationLineY, IReadOnlyList<double> headerContentTops)
     {
         return StickyTitleMath.ResolveActiveSectionIndex(offsetY, activationLineY, headerContentTops);
-    }
-
-    private static double ComputeStickyPushOffset(double nextViewportTop, double stickyHeight)
-    {
-        return StickyTitleMath.ComputePushOffset(nextViewportTop, stickyHeight);
     }
 
     public string CurrentSectionIntroText

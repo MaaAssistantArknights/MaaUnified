@@ -267,6 +267,8 @@ public sealed class RootViewStructureContractTests
         Assert.DoesNotContain("StickyTitleText", text, StringComparison.Ordinal);
         Assert.DoesNotContain("StickyTransitionText", text, StringComparison.Ordinal);
         Assert.DoesNotContain("settings-sticky-title", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("AppStickyTitlePresenter", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("settings-page-sticky-title", text, StringComparison.Ordinal);
         Assert.Contains("ScrollChanged=\"OnSectionScrollChanged\"", text, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"SectionConfigurationManager\"", text, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"SectionAbout\"", text, StringComparison.Ordinal);
@@ -303,6 +305,7 @@ public sealed class RootViewStructureContractTests
         Assert.DoesNotContain("StickyTitlePresentationState", codeBehind, StringComparison.Ordinal);
         Assert.DoesNotContain("UpdateStickyTitlePresentation()", codeBehind, StringComparison.Ordinal);
         Assert.DoesNotContain("ApplyStickyTitlePresentation(", codeBehind, StringComparison.Ordinal);
+        Assert.DoesNotContain("RefreshStickyTitlePresenter", codeBehind, StringComparison.Ordinal);
         Assert.DoesNotContain("_stickyCurrentTitleTransform", codeBehind, StringComparison.Ordinal);
         Assert.DoesNotContain("scrollViewer.Viewport.Height * 0.25d", codeBehind, StringComparison.Ordinal);
         Assert.Contains("nameof(SettingsPageViewModel.RootTexts)", codeBehind, StringComparison.Ordinal);
