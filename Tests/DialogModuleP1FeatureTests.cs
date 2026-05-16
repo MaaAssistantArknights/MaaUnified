@@ -459,6 +459,8 @@ public sealed class DialogModuleP1FeatureTests
         Assert.Contains("shell.EffectiveUiScaleFactor", popupScale, StringComparison.Ordinal);
         Assert.Contains("new LayoutTransformControl", popupScale, StringComparison.Ordinal);
         Assert.Contains("popup.Child = null;", popupScale, StringComparison.Ordinal);
+        Assert.Contains("Popup.ChildProperty.Changed.AddClassHandler<Popup>", popupScale, StringComparison.Ordinal);
+        Assert.Contains("child.GetVisualParent() is not null", popupScale, StringComparison.Ordinal);
         Assert.Contains("Property=\"controls:PopupUiScale.UseTopLevelUiScale\" Value=\"True\"", controlStyles, StringComparison.Ordinal);
         var titleTextCode = File.ReadAllText(Path.Combine(root, "App", "Controls", "AppWindowTitleText.cs"));
         Assert.Contains("controls|AppWindowTitleText.dialog-window-title", controlStyles, StringComparison.Ordinal);

@@ -275,7 +275,7 @@ public partial class MainWindow : Window
             async () =>
             {
                 var trayInit = await vm.PlatformCapabilityService.InitializeTrayAsync(
-                    "MaaAssistantArknights",
+                    MainShellViewModel.AppDisplayName,
                     PlatformCapabilityTextMap.CreateTrayMenuText(vm.CurrentShellLanguage, vm.ReportLocalizationFallback));
                 await HandlePlatformResultAsync("PlatformCapability.Tray.Initialize", trayInit);
             });

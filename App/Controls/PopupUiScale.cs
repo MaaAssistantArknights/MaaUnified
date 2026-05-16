@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Media;
+using Avalonia.VisualTree;
 using MAAUnified.App.ViewModels;
 
 namespace MAAUnified.App.Controls;
@@ -18,6 +19,7 @@ public static class PopupUiScale
     static PopupUiScale()
     {
         UseTopLevelUiScaleProperty.Changed.AddClassHandler<Popup>(OnUseTopLevelUiScaleChanged);
+        Popup.ChildProperty.Changed.AddClassHandler<Popup>(OnPopupChildChanged);
     }
 
     public static bool GetUseTopLevelUiScale(Popup popup)
@@ -50,14 +52,28 @@ public static class PopupUiScale
         }
     }
 
+    private static void OnPopupChildChanged(Popup popup, AvaloniaPropertyChangedEventArgs e)
+    {
+        if (!GetUseTopLevelUiScale(popup))
+        {
+            return;
+        }
+
+        ApplyScale(popup);
+    }
+
     private static void ApplyScale(Popup popup)
+    {
+        ApplyScale(popup, ResolveTopLevelUiScale(popup));
+    }
+
+    internal static void ApplyScale(Popup popup, double scale)
     {
         if (popup.Child is null)
         {
             return;
         }
 
-        var scale = ResolveTopLevelUiScale(popup);
         if (!double.IsFinite(scale) || scale <= 0d)
         {
             scale = 1d;
@@ -69,12 +85,12 @@ public static class PopupUiScale
             return;
         }
 
-        if (Math.Abs(scale - 1d) < 0.001d)
+        var child = popup.Child;
+        if (child.GetVisualParent() is not null)
         {
             return;
         }
 
-        var child = popup.Child;
         popup.Child = null;
         popup.Child = new LayoutTransformControl
         {

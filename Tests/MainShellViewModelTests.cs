@@ -529,6 +529,7 @@ public sealed class MainShellViewModelTests
         Assert.Equal("ja-jp", shellSpy.LastTargetLanguage);
         Assert.Equal("ja-jp", fixture.ViewModel.SettingsPage.Language);
         Assert.True(fixture.TrayService.InitializeCallCount > 0);
+        Assert.Equal(MainShellViewModel.AppDisplayName, fixture.TrayService.LastAppTitle);
     }
 
     [Fact]
@@ -2427,12 +2428,15 @@ public sealed class MainShellViewModelTests
 
         public TrayMenuText? LastMenuText { get; private set; }
 
+        public string? LastAppTitle { get; private set; }
+
         public Task<PlatformOperationResult> InitializeAsync(
             string appTitle,
             TrayMenuText? menuText,
             CancellationToken cancellationToken = default)
         {
             InitializeCallCount++;
+            LastAppTitle = appTitle;
             LastMenuText = menuText;
             return Task.FromResult(PlatformOperation.NativeSuccess(Capability.Provider, "initialized", "tray.initialize"));
         }

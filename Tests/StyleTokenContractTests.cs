@@ -274,6 +274,8 @@ public sealed class StyleTokenContractTests
         Assert.Contains("Classes=\"app-history-input-toggle\"", history, StringComparison.Ordinal);
         Assert.Contains("<Setter Property=\"Width\" Value=\"{DynamicResource MAA.App.Size.InputHeight}\" />", history, StringComparison.Ordinal);
         Assert.Contains("<Setter Property=\"Height\" Value=\"{DynamicResource MAA.App.Size.InputHeight}\" />", history, StringComparison.Ordinal);
+        Assert.Contains("Width=\"{Binding Bounds.Width, ElementName=ShellBorder}\"", history, StringComparison.Ordinal);
+        Assert.DoesNotContain("MinWidth=\"{Binding Bounds.Width, ElementName=ShellBorder}\"", history, StringComparison.Ordinal);
 
         Assert.Contains("x:Class=\"MAAUnified.App.Controls.AppSuggestInput\"", suggest, StringComparison.Ordinal);
         Assert.Contains("Classes=\"app-suggest-input-shell\"", suggest, StringComparison.Ordinal);

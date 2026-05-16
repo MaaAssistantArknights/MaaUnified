@@ -30,7 +30,7 @@ namespace MAAUnified.App.ViewModels;
 
 public sealed class MainShellViewModel : ObservableObject
 {
-    private const string AppDisplayName = "MaaAssistantArknights Unified";
+    public const string AppDisplayName = "MaaAssistantArknights Unified";
     private const string DeveloperModeConfigKey = "GUI.DeveloperMode";
     private const string DefaultLogItemDateFormat = "HH:mm:ss";
     private const int WindowTitleScrollThreshold = 24;
@@ -2868,7 +2868,7 @@ public sealed class MainShellViewModel : ObservableObject
             await RefreshCapabilitySummaryAsync(cancellationToken);
 
             var trayRefresh = await _runtime.PlatformCapabilityService.InitializeTrayAsync(
-                "MaaAssistantArknights",
+                AppDisplayName,
                 PlatformCapabilityTextMap.CreateTrayMenuText(CurrentShellLanguage, ReportLocalizationFallback),
                 cancellationToken);
             if (!trayRefresh.Success)
@@ -3302,7 +3302,7 @@ public sealed class MainShellViewModel : ObservableObject
 
             step.Restart();
             var trayRefresh = await _runtime.PlatformCapabilityService.InitializeTrayAsync(
-                "MaaAssistantArknights",
+                AppDisplayName,
                 PlatformCapabilityTextMap.CreateTrayMenuText(nextLanguage, ReportLocalizationFallback),
                 cancellationToken);
             _ = RecordLanguageTimingAsync(

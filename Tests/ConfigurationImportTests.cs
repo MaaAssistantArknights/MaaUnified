@@ -4,6 +4,7 @@ using MAAUnified.Application.Models;
 using MAAUnified.Application.Models.TaskParams;
 using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Features;
+using MAAUnified.Application.Services.TaskParams;
 using MAAUnified.Platform;
 
 namespace MAAUnified.Tests;
@@ -274,6 +275,93 @@ public sealed class ConfigurationImportTests
         Assert.True(report.AppliedConfig);
         Assert.True(service.CurrentConfig.GlobalValues["Timer.CustomConfig"]?.GetValue<bool>());
         Assert.Equal("Night", service.CurrentConfig.Profiles["Default"].Values["Timer.Timer1.Config"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task LegacyGuiImport_ShouldCanonicalizeStartAndConnectionKeys()
+    {
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.json"),
+            """
+            {
+              "Current": "BAccount",
+              "Configurations": {
+                "BAccount": {
+                  "Start.ClientType": "Bilibili",
+                  "Start.StartGame": "True",
+                  "Connect.TouchMode": "maatouch",
+                  "Connect.AutoDetect": "False",
+                  "Connect.AttachWindow.ScreencapMethod": "16",
+                  "Connect.AttachWindow.MouseMethod": "32",
+                  "Connect.AttachWindow.KeyboardMethod": "128"
+                }
+              }
+            }
+            """);
+
+        var service = CreateService(root);
+        var report = await service.ImportLegacyAsync(ImportSource.GuiOnly, manualImport: false);
+
+        Assert.True(report.Success);
+        var profile = service.CurrentConfig.Profiles["BAccount"];
+        Assert.Equal("Bilibili", profile.Values["ClientType"]?.GetValue<string>());
+        Assert.Equal("True", profile.Values["StartGame"]?.GetValue<string>());
+        Assert.Equal("maatouch", profile.Values["TouchMode"]?.GetValue<string>());
+        Assert.Equal("False", profile.Values["AutoDetect"]?.GetValue<string>());
+        Assert.Equal("16", profile.Values["AttachWindowScreencapMethod"]?.GetValue<string>());
+        Assert.Equal("32", profile.Values["AttachWindowMouseMethod"]?.GetValue<string>());
+        Assert.Equal("128", profile.Values["AttachWindowKeyboardMethod"]?.GetValue<string>());
+        Assert.False(profile.Values.ContainsKey("Start.ClientType"));
+        Assert.False(profile.Values.ContainsKey("Start.StartGame"));
+    }
+
+    [Fact]
+    public async Task AutoImport_StartUpRead_ShouldUseGuiLegacyClientTypeWhenTaskParamsAreStale()
+    {
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.new.json"),
+            """
+            {
+              "Current": "BAccount",
+              "Configurations": {
+                "BAccount": {
+                  "TaskQueue": [
+                    { "$type": "StartUpTask", "Name": "StartUp", "IsEnable": true }
+                  ]
+                }
+              }
+            }
+            """);
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.json"),
+            """
+            {
+              "Current": "BAccount",
+              "Configurations": {
+                "BAccount": {
+                  "Start.ClientType": "Bilibili",
+                  "Start.StartGame": "True"
+                }
+              }
+            }
+            """);
+
+        var service = CreateService(root);
+        var report = await service.ImportLegacyAsync(ImportSource.Auto, manualImport: false);
+
+        Assert.True(report.Success);
+        var profile = service.CurrentConfig.Profiles["BAccount"];
+        var task = Assert.Single(profile.TaskQueue);
+        var (dto, issues) = TaskParamCompiler.ReadStartUp(task, profile, service.CurrentConfig, strict: true);
+        Assert.Empty(issues);
+        Assert.Equal("Bilibili", dto.ClientType);
+        Assert.True(dto.StartGameEnabled);
     }
 
     [Fact]
