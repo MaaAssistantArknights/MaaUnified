@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:controls="clr-namespace:MAAUnified.App.Controls"
+             xmlns:settings="clr-namespace:MAAUnified.App.ViewModels.Settings"
              xmlns:vm="clr-namespace:MAAUnified.App.ViewModels.TaskQueue"
              x:Class="MAAUnified.App.Features.TaskQueue.StartUpTaskView">
   <UserControl.Styles>
@@ -87,6 +88,23 @@
           </controls:SettingsInlineRow>
         </Border>
 
+        <Border Classes="app-surface app-card"
+                IsVisible="{Binding ShowPlayCoverScreencapMode}">
+          <controls:SettingsInlineRow Classes="startup-card-content"
+                                      controls:SettingsLabelWidthCoordinator.GroupKey="TaskQueue.Fields">
+            <controls:SettingsLabel Text="{Binding Texts[Settings.Connect.ScreencapMethod]}" />
+            <controls:AppSelect ItemsSource="{Binding PlayCoverScreencapModeOptions}"
+                                SelectedValueBinding="{Binding Value}"
+                                SelectedValue="{Binding SelectedPlayCoverScreencapModeValue}">
+              <controls:AppSelect.ItemTemplate>
+                <DataTemplate x:DataType="settings:ConnectionGameOptionItem">
+                  <TextBlock Text="{Binding DisplayName}" />
+                </DataTemplate>
+              </controls:AppSelect.ItemTemplate>
+            </controls:AppSelect>
+          </controls:SettingsInlineRow>
+        </Border>
+
         <Border Classes="app-surface app-card">
           <controls:SettingsInlineRow Classes="startup-card-content"
                                       FieldWidth="{DynamicResource MAA.Size.Settings.FieldInputWidth}"
@@ -104,7 +122,8 @@
       </controls:AdaptiveSpacingStackPanel>
 
     <controls:AdaptiveSpacingStackPanel Classes="startup-section-content">
-        <Border Classes="app-surface app-card">
+        <Border Classes="app-surface app-card"
+                IsVisible="{Binding IsAdbConnectionMode}">
           <controls:SettingsInlineRow Classes="startup-card-content"
                                       FieldWidth="{DynamicResource MAA.Size.Settings.FieldInputWidth}"
                                       controls:SettingsLabelWidthCoordinator.GroupKey="TaskQueue.Fields">
@@ -116,7 +135,8 @@
           </controls:SettingsInlineRow>
         </Border>
 
-        <Border Classes="app-surface app-card">
+        <Border Classes="app-surface app-card"
+                IsVisible="{Binding IsAdbConnectionMode}">
           <controls:SettingsInlineRow Classes="startup-card-content"
                                       controls:SettingsLabelWidthCoordinator.GroupKey="TaskQueue.Fields">
             <controls:SettingsLabel Text="{Binding Texts[StartUp.TouchMode]}" />
@@ -132,7 +152,8 @@
           </controls:SettingsInlineRow>
         </Border>
 
-        <Border Classes="app-surface app-card">
+        <Border Classes="app-surface app-card"
+                IsVisible="{Binding IsAdbConnectionMode}">
           <controls:AppHintedCheckBox Text="{Binding Texts[StartUp.AutoDetect]}"
                                        Tip="{Binding Texts[StartUp.AutoDetectConnectionTip]}"
                                        IsChecked="{Binding AutoDetectConnection}" />

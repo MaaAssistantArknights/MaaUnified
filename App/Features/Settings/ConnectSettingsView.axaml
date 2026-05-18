@@ -87,27 +87,47 @@
                        Text="{Binding RootTexts[Settings.Connect.AttachWindowWarning]}" />
           </Border>
 
+          <Grid Classes="settings-page-labeled-row"
+                controls:SettingsLabelWidthCoordinator.GroupKey="Connect.AdbCore"
+                ColumnDefinitions="Auto,*"
+                IsVisible="{Binding ShowPlayCoverScreencapMode}">
+            <controls:SettingsLabel Text="{Binding RootTexts[Settings.Connect.ScreencapMethod]}" />
+            <controls:AppSelect Grid.Column="1"
+                                Classes="settings-select"
+                                Width="{DynamicResource MAA.Size.Settings.FieldInputWidth}"
+                                HorizontalAlignment="Left"
+                                ItemsSource="{Binding PlayCoverScreencapModeOptions}"
+                                SelectedItem="{Binding SelectedPlayCoverScreencapModeOption, Mode=TwoWay}">
+              <controls:AppSelect.ItemTemplate>
+                <DataTemplate x:DataType="vm:ConnectionGameOptionItem">
+                  <TextBlock Text="{Binding DisplayName}" />
+                </DataTemplate>
+              </controls:AppSelect.ItemTemplate>
+            </controls:AppSelect>
+          </Grid>
+
+          <Grid Classes="settings-page-labeled-row"
+                controls:SettingsLabelWidthCoordinator.GroupKey="Connect.AdbCore"
+                ColumnDefinitions="Auto,*"
+                IsVisible="{Binding ShowConnectAddressField}">
+            <controls:SettingsLabel Text="{Binding RootTexts[Settings.Connect.Address]}"
+                                    Tip="{Binding RootTexts[Settings.Connect.AddressTip]}" />
+            <controls:AdaptiveSpacingStackPanel Grid.Column="1"
+                        Classes="settings-page-inline-field-group">
+              <controls:AppHistoryInput Classes="settings-input"
+                                        Width="{DynamicResource MAA.Size.Settings.FieldInputWidth}"
+                                        HorizontalAlignment="Left"
+                                        IsEnabled="{Binding CanEditConnectAddressField}"
+                                        ItemsSource="{Binding ConnectAddressHistory}"
+                                        Text="{Binding ConnectAddress, Mode=TwoWay}"
+                                        ItemDeleted="OnConnectAddressItemDeleted"
+                                        EditorCommitted="OnConnectAddressEditorCommitted"
+                                        SelectionCommitted="OnConnectAddressSelectionCommitted" />
+            </controls:AdaptiveSpacingStackPanel>
+          </Grid>
+
           <controls:AdaptiveSpacingStackPanel Classes="settings-page-compact-flow settings-page-column-stack"
                       IsVisible="{Binding IsAdbConnectionMode}">
-            <Grid Classes="settings-page-labeled-row"
-                  controls:SettingsLabelWidthCoordinator.GroupKey="Connect.AdbCore"
-                  ColumnDefinitions="Auto,*">
-              <controls:SettingsLabel Text="{Binding RootTexts[Settings.Connect.Address]}"
-                                      Tip="{Binding RootTexts[Settings.Connect.AddressTip]}" />
-              <controls:AdaptiveSpacingStackPanel Grid.Column="1"
-                          Classes="settings-page-inline-field-group">
-                <controls:AppHistoryInput Classes="settings-input"
-                                          Width="{DynamicResource MAA.Size.Settings.FieldInputWidth}"
-                                          HorizontalAlignment="Left"
-                                          IsEnabled="{Binding CanEditAdbConnectionFields}"
-                                          ItemsSource="{Binding ConnectAddressHistory}"
-                                          Text="{Binding ConnectAddress, Mode=TwoWay}"
-                                          ItemDeleted="OnConnectAddressItemDeleted"
-                                          EditorCommitted="OnConnectAddressEditorCommitted"
-                                          SelectionCommitted="OnConnectAddressSelectionCommitted" />
-              </controls:AdaptiveSpacingStackPanel>
-            </Grid>
-
             <Grid Classes="settings-page-labeled-action-row"
                   controls:SettingsLabelWidthCoordinator.GroupKey="Connect.AdbCore"
                   ColumnDefinitions="Auto,*">

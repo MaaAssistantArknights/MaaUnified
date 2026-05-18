@@ -459,6 +459,20 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge
         return Task.FromResult(CoreResult<CoreRuntimeStatus>.Ok(new CoreRuntimeStatus(true, connected, running)));
     }
 
+    private bool IsNativeRuntimeConnected()
+    {
+        try
+        {
+            return _exports is not null
+                && _instance != nint.Zero
+                && AsBool(_exports.AsstConnected(_instance));
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     public async Task<CoreResult<bool>> ReloadResourceAsync(
         string? clientType = null,
         CancellationToken cancellationToken = default)
@@ -734,6 +748,11 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge
                 return;
             }
 
+            if (IsNativeRuntimeConnected())
+            {
+                pending.MarkConnected();
+            }
+
             if (pending.CanCompleteSuccess)
             {
                 pending.TryComplete(CoreResult<bool>.Ok(true));
@@ -746,7 +765,8 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge
         {
             var what = GetString(root, "what");
             if (string.Equals(what, "Connected", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(what, "Reconnected", StringComparison.OrdinalIgnoreCase))
+                || string.Equals(what, "Reconnected", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(what, "ResolutionInfo", StringComparison.OrdinalIgnoreCase))
             {
                 pending.MarkConnected();
                 if (pending.CanCompleteSuccess)

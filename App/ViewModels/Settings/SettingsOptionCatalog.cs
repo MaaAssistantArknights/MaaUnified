@@ -50,6 +50,7 @@ internal static class SettingsOptionCatalog
     private static readonly IReadOnlyList<LocalizedOptionSpec<string>> ConnectConfigOptionSpecs =
     [
         new("General", "StartUp.Option.ConnectConfig.General", "General Mode"),
+        new("MacPlayTools", "StartUp.Option.ConnectConfig.MacPlayTools", "PlayCover (macOS)"),
         new("BlueStacks", "StartUp.Option.ConnectConfig.BlueStacks", "BlueStacks"),
         new("MuMuEmulator12", "StartUp.Option.ConnectConfig.MuMuEmulator12", "MuMu Emulator 12"),
         new("LDPlayer", "StartUp.Option.ConnectConfig.LDPlayer", "LD Player"),
@@ -79,6 +80,13 @@ internal static class SettingsOptionCatalog
         new("maatouch", "StartUp.Option.TouchMode.MaaTouch", "MaaTouch"),
         new("adb", "StartUp.Option.TouchMode.AdbTouch", "ADB Input"),
         new("MaaFwAdb", "StartUp.Option.TouchMode.MaaFwAdbTouch", "MaaFwAdb"),
+    ];
+
+    private static readonly IReadOnlyList<LocalizedOptionSpec<string>> PlayCoverScreencapModeOptionSpecs =
+    [
+        new("RGBA", "Settings.Connect.PlayCover.Mode.Compatible", "Compatible"),
+        new("BGR", "Settings.Connect.PlayCover.Mode.BGR", "Accelerated"),
+        new("MacSCK", "Settings.Connect.PlayCover.Mode.SCK", "System Screen Capture"),
     ];
 
     private static readonly IReadOnlyList<LocalizedOptionSpec<string>> AttachWindowScreencapOptionSpecs =
@@ -133,6 +141,9 @@ internal static class SettingsOptionCatalog
 
     public static IReadOnlyList<ConnectionGameOptionItem> BuildTouchModeOptions(string language)
         => BuildConnectionOptions(language, TouchModeOptionSpecs);
+
+    public static IReadOnlyList<ConnectionGameOptionItem> BuildPlayCoverScreencapModeOptions(string language)
+        => BuildConnectionOptions(language, PlayCoverScreencapModeOptionSpecs);
 
     public static IReadOnlyList<ConnectionGameOptionItem> BuildAttachWindowScreencapOptions(string language)
         => BuildConnectionOptions(language, AttachWindowScreencapOptionSpecs);

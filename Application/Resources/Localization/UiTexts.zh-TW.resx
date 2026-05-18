@@ -2635,6 +2635,18 @@
   <data name="StartUp.Option.ConnectConfig.General" xml:space="preserve">
     <value>通用模式</value>
   </data>
+  <data name="StartUp.Option.ConnectConfig.MacPlayTools" xml:space="preserve">
+    <value>PlayCover（macOS）</value>
+  </data>
+  <data name="Settings.Connect.PlayCover.Mode.Compatible" xml:space="preserve">
+    <value>預設相容模式</value>
+  </data>
+  <data name="Settings.Connect.PlayCover.Mode.BGR" xml:space="preserve">
+    <value>最佳化加速模式</value>
+  </data>
+  <data name="Settings.Connect.PlayCover.Mode.SCK" xml:space="preserve">
+    <value>系統螢幕擷取</value>
+  </data>
   <data name="StartUp.Option.ConnectConfig.GeneralWithoutScreencapErr" xml:space="preserve">
     <value>通用模式（阻擋異常輸出）</value>
   </data>

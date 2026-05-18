@@ -18,6 +18,7 @@ using MAAUnified.App.Controls;
 using MAAUnified.App.Views;
 using MAAUnified.App.ViewModels.Settings;
 using MAAUnified.Application.Services.Localization;
+using MAAUnified.CoreBridge;
 using MAAUnified.Compat.Runtime;
 
 namespace MAAUnified.App.Features.Settings;
@@ -180,14 +181,26 @@ public partial class ConnectSettingsView : UserControl
             var connectResult = await ConnectWithCurrentSettingsAsync(vm);
             if (!connectResult.Success)
             {
-                LogScreenshotTestEvent(
-                    "connect",
-                    vm,
-                    "failed",
-                    message: connectResult.Message,
-                    errorCode: connectResult.Error?.Code);
-                vm.TestLinkInfo = BuildConnectFailureMessage(vm, connectResult);
-                return;
+                if (await CanContinueAfterPlayCoverConnectTimeoutAsync(vm, connectResult))
+                {
+                    LogScreenshotTestEvent(
+                        "connect",
+                        vm,
+                        "fallback_connected",
+                        message: connectResult.Message,
+                        errorCode: connectResult.Error?.Code);
+                }
+                else
+                {
+                    LogScreenshotTestEvent(
+                        "connect",
+                        vm,
+                        "failed",
+                        message: connectResult.Message,
+                        errorCode: connectResult.Error?.Code);
+                    vm.TestLinkInfo = BuildConnectFailureMessage(vm, connectResult);
+                    return;
+                }
             }
 
             LogScreenshotTestEvent("connect", vm, "succeeded", message: "starting 3x GetImage probes");
@@ -229,7 +242,7 @@ public partial class ConnectSettingsView : UserControl
             var max = elapsedSamples.Max();
             var avg = (long)Math.Round(elapsedSamples.Average(), MidpointRounding.AwayFromZero);
             vm.UpdateScreencapCost(min, avg, max, DateTimeOffset.Now);
-            vm.TestLinkInfo = vm.ScreencapCost;
+            vm.TestLinkInfo = string.Empty;
             LogScreenshotTestEvent(
                 "summary",
                 vm,
@@ -321,7 +334,7 @@ public partial class ConnectSettingsView : UserControl
         foreach (var candidate in candidates)
         {
             LogScreenshotTestEvent("connect_attempt", vm, "trying", candidate: candidate);
-            var result = await App.Runtime.ShellFeatureService.ConnectAsync(candidate, vm.ConnectConfig, adbPath, instanceOptions);
+            var result = await App.Runtime.ShellFeatureService.ConnectAsync(candidate, vm.EffectiveConnectConfig, adbPath, instanceOptions);
             if (result.Success)
             {
                 LogScreenshotTestEvent("connect_attempt", vm, "succeeded", candidate: candidate);
@@ -340,6 +353,20 @@ public partial class ConnectSettingsView : UserControl
         }
 
         return lastFailure ?? UiOperationResult.Fail(UiErrorCode.UiOperationFailed, T("Settings.Connect.Error.ConnectionFailedShort"));
+    }
+
+    private static async Task<bool> CanContinueAfterPlayCoverConnectTimeoutAsync(
+        ConnectionGameSharedStateViewModel vm,
+        UiOperationResult connectResult)
+    {
+        if (!vm.IsPlayCoverConnection
+            || !string.Equals(connectResult.Error?.Code, CoreErrorCode.ConnectTimeout.ToString(), StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var runtimeStatus = await App.Runtime.CoreBridge.GetRuntimeStatusAsync();
+        return runtimeStatus.Success && runtimeStatus.Value is { Connected: true };
     }
 
     private static async Task DownloadFileAsync(string url, string targetPath)

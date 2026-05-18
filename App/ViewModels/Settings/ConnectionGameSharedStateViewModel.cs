@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using MAAUnified.App.ViewModels.Infrastructure;
+using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Localization;
 using MAAUnified.CoreBridge;
 
@@ -42,6 +43,7 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
     private string _clientType = "Official";
     private bool _startGameEnabled = true;
     private string _touchMode = "minitouch";
+    private string _playCoverScreencapMode = "RGBA";
     private bool _autoDetect = true;
     private bool _alwaysAutoDetect;
     private bool _retryOnDisconnected;
@@ -70,6 +72,7 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
     private IReadOnlyList<ConnectionGameOptionItem> _connectConfigOptions = [];
     private IReadOnlyList<ConnectionGameOptionItem> _clientTypeOptions = [];
     private IReadOnlyList<ConnectionGameOptionItem> _touchModeOptions = [];
+    private IReadOnlyList<ConnectionGameOptionItem> _playCoverScreencapModeOptions = [];
     private IReadOnlyList<ConnectionGameOptionItem> _attachWindowScreencapOptions = [];
     private IReadOnlyList<ConnectionGameOptionItem> _attachWindowInputOptions = [];
     private readonly ObservableCollection<string> _connectAddressHistory = [];
@@ -100,6 +103,12 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
     {
         get => _touchModeOptions;
         private set => SetProperty(ref _touchModeOptions, value);
+    }
+
+    public IReadOnlyList<ConnectionGameOptionItem> PlayCoverScreencapModeOptions
+    {
+        get => _playCoverScreencapModeOptions;
+        private set => SetProperty(ref _playCoverScreencapModeOptions, value);
     }
 
     public IReadOnlyList<ConnectionGameOptionItem> AttachWindowScreencapOptions
@@ -174,6 +183,26 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
     {
         get => NormalizeTouchModeAlias(TouchMode);
         set => TouchMode = value ?? string.Empty;
+    }
+
+    public ConnectionGameOptionItem? SelectedPlayCoverScreencapModeOption
+    {
+        get => ResolveSelectedOption(PlayCoverScreencapModeOptions, PlayCoverScreencapMode, NormalizePlayCoverScreencapModeAlias);
+        set
+        {
+            if (value is null)
+            {
+                return;
+            }
+
+            PlayCoverScreencapMode = value.Value;
+        }
+    }
+
+    public string SelectedPlayCoverScreencapModeValue
+    {
+        get => NormalizePlayCoverScreencapModeAlias(PlayCoverScreencapMode);
+        set => PlayCoverScreencapMode = value ?? string.Empty;
     }
 
     public ConnectionGameOptionItem? SelectedAttachWindowScreencapOption
@@ -286,11 +315,22 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
             OnPropertyChanged(nameof(SelectedConnectConfigValue));
             OnPropertyChanged(nameof(IsAttachWindowMode));
             OnPropertyChanged(nameof(IsAdbConnectionMode));
+            OnPropertyChanged(nameof(IsPlayCoverConnection));
+            OnPropertyChanged(nameof(ShowConnectAddressField));
+            OnPropertyChanged(nameof(ShowPlayCoverScreencapMode));
+            OnPropertyChanged(nameof(EffectiveConnectConfig));
             OnPropertyChanged(nameof(IsMuMuEmulator12Mode));
             OnPropertyChanged(nameof(IsLdPlayerMode));
             OnPropertyChanged(nameof(ShowMuMuExtrasSection));
             OnPropertyChanged(nameof(ShowLdPlayerExtrasSection));
+            OnPropertyChanged(nameof(CanEditConnectAddressField));
             OnPropertyChanged(nameof(CanEditAdbConnectionFields));
+            var resolvedTouchMode = PlayCoverConnectConfigResolver.ResolveTouchMode(_connectConfig, TouchMode);
+            if (!string.Equals(TouchMode, resolvedTouchMode, StringComparison.OrdinalIgnoreCase))
+            {
+                TouchMode = resolvedTouchMode;
+            }
+
             if (string.Equals(_connectConfig, "PC", StringComparison.OrdinalIgnoreCase))
             {
                 StartGameEnabled = false;
@@ -352,11 +392,26 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
 
     public bool CanEditConnectionFields => !AutoDetect;
 
-    public bool CanEditAdbConnectionFields => !AutoDetect && !IsAttachWindowMode;
+    public bool CanEditConnectAddressField => IsPlayCoverConnection || (!AutoDetect && IsAdbConnectionMode);
+
+    public bool CanEditAdbConnectionFields => !AutoDetect && IsAdbConnectionMode;
 
     public bool IsAttachWindowMode => string.Equals(ConnectConfig, "PC", StringComparison.OrdinalIgnoreCase);
 
-    public bool IsAdbConnectionMode => !IsAttachWindowMode;
+    public bool IsAdbConnectionMode => !IsAttachWindowMode && !IsPlayCoverConnection;
+
+    public bool IsPlayCoverConnection =>
+        string.Equals(ConnectConfig, "MacPlayTools", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(ConnectConfig, "CompatMac", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(ConnectConfig, "MacSCK", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(ConnectConfig, "MacBGR", StringComparison.OrdinalIgnoreCase);
+
+    public bool ShowConnectAddressField => IsAdbConnectionMode || IsPlayCoverConnection;
+
+    public bool ShowPlayCoverScreencapMode => IsPlayCoverConnection;
+
+    public string EffectiveConnectConfig =>
+        PlayCoverConnectConfigResolver.ResolveEffectiveConnectConfig(ConnectConfig, PlayCoverScreencapMode);
 
     public bool IsMuMuEmulator12Mode => string.Equals(ConnectConfig, "MuMuEmulator12", StringComparison.OrdinalIgnoreCase);
 
@@ -378,11 +433,26 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
         get => _touchMode;
         set
         {
-            var normalized = (value ?? string.Empty).Trim();
+            var normalized = PlayCoverConnectConfigResolver.ResolveTouchMode(_connectConfig, value);
             if (SetProperty(ref _touchMode, normalized))
             {
                 OnPropertyChanged(nameof(SelectedTouchModeOption));
                 OnPropertyChanged(nameof(SelectedTouchModeValue));
+            }
+        }
+    }
+
+    public string PlayCoverScreencapMode
+    {
+        get => _playCoverScreencapMode;
+        set
+        {
+            var normalized = NormalizePlayCoverScreencapModeAlias((value ?? string.Empty).Trim());
+            if (SetProperty(ref _playCoverScreencapMode, normalized))
+            {
+                OnPropertyChanged(nameof(SelectedPlayCoverScreencapModeOption));
+                OnPropertyChanged(nameof(SelectedPlayCoverScreencapModeValue));
+                OnPropertyChanged(nameof(EffectiveConnectConfig));
             }
         }
     }
@@ -395,6 +465,7 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
             if (SetProperty(ref _autoDetect, value))
             {
                 OnPropertyChanged(nameof(CanEditConnectionFields));
+                OnPropertyChanged(nameof(CanEditConnectAddressField));
                 OnPropertyChanged(nameof(CanEditAdbConnectionFields));
             }
         }
@@ -655,12 +726,18 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
 
     public string? BuildConnectionSettingsHintMessage()
     {
-        if (string.IsNullOrWhiteSpace(ConnectAddress) && !AutoDetect && !AlwaysAutoDetect)
+        var isConnectAddressEmpty = string.IsNullOrWhiteSpace(ConnectAddress);
+        if (isConnectAddressEmpty && (IsPlayCoverConnection || (!AutoDetect && !AlwaysAutoDetect)))
         {
             return BuildLocalizedOrBilingualMessage(
                 "Settings.Connect.Hint.ConnectionAddressEmpty",
                 "连接地址为空，请填写“IP:端口”后再连接。",
                 "Connection address is empty. Enter \"IP:port\" and try again.");
+        }
+
+        if (IsPlayCoverConnection)
+        {
+            return null;
         }
 
         var adbHint = BuildAdbPathHintMessage();
@@ -940,6 +1017,13 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
             return "MuMuEmulator12";
         }
 
+        if (string.Equals(normalized, "MacSCK", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(normalized, "MacBGR", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(normalized, "CompatMac", StringComparison.OrdinalIgnoreCase))
+        {
+            return "MacPlayTools";
+        }
+
         return normalized;
     }
 
@@ -953,9 +1037,20 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
         return normalized;
     }
 
-    private static string NormalizeTouchModeAlias(string normalized)
+    private static string NormalizeTouchModeAlias(string normalized) => normalized;
+
+    private static string NormalizePlayCoverScreencapModeAlias(string normalized)
     {
-        return normalized;
+        return normalized switch
+        {
+            "RGBA" => "RGBA",
+            "Compatible" => "RGBA",
+            "CompatMac" => "RGBA",
+            "MacSCK" => "MacSCK",
+            "BGR" => "BGR",
+            "MacBGR" => "BGR",
+            _ => normalized,
+        };
     }
 
     private void RebuildOptions()
@@ -963,15 +1058,21 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
         ConnectConfigOptions = SettingsOptionCatalog.BuildConnectConfigOptions(_language);
         ClientTypeOptions = SettingsOptionCatalog.BuildClientTypeOptions(_language);
         TouchModeOptions = SettingsOptionCatalog.BuildTouchModeOptions(_language);
+        PlayCoverScreencapModeOptions = SettingsOptionCatalog.BuildPlayCoverScreencapModeOptions(_language);
         AttachWindowScreencapOptions = SettingsOptionCatalog.BuildAttachWindowScreencapOptions(_language);
         AttachWindowInputOptions = SettingsOptionCatalog.BuildAttachWindowInputOptions(_language);
 
         OnPropertyChanged(nameof(SelectedConnectConfigOption));
         OnPropertyChanged(nameof(SelectedConnectConfigValue));
+        OnPropertyChanged(nameof(ShowConnectAddressField));
+        OnPropertyChanged(nameof(ShowPlayCoverScreencapMode));
+        OnPropertyChanged(nameof(EffectiveConnectConfig));
         OnPropertyChanged(nameof(SelectedClientTypeOption));
         OnPropertyChanged(nameof(SelectedClientTypeValue));
         OnPropertyChanged(nameof(SelectedTouchModeOption));
         OnPropertyChanged(nameof(SelectedTouchModeValue));
+        OnPropertyChanged(nameof(SelectedPlayCoverScreencapModeOption));
+        OnPropertyChanged(nameof(SelectedPlayCoverScreencapModeValue));
         OnPropertyChanged(nameof(SelectedAttachWindowScreencapOption));
         OnPropertyChanged(nameof(SelectedAttachWindowScreencapValue));
         OnPropertyChanged(nameof(SelectedAttachWindowMouseOption));

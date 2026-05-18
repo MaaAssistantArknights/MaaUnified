@@ -4214,6 +4214,18 @@ Session state `{0}` does not allow {2}.</value>
   <data name="StartUp.Option.ConnectConfig.General" xml:space="preserve">
     <value>通用模式</value>
   </data>
+  <data name="StartUp.Option.ConnectConfig.MacPlayTools" xml:space="preserve">
+    <value>PlayCover（macOS）</value>
+  </data>
+  <data name="Settings.Connect.PlayCover.Mode.Compatible" xml:space="preserve">
+    <value>默认兼容模式</value>
+  </data>
+  <data name="Settings.Connect.PlayCover.Mode.BGR" xml:space="preserve">
+    <value>优化加速模式</value>
+  </data>
+  <data name="Settings.Connect.PlayCover.Mode.SCK" xml:space="preserve">
+    <value>系统屏幕捕捉</value>
+  </data>
   <data name="StartUp.Option.ConnectConfig.GeneralWithoutScreencapErr" xml:space="preserve">
     <value>通用模式（屏蔽异常输出）</value>
   </data>
