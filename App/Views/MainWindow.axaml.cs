@@ -56,6 +56,7 @@ public partial class MainWindow : Window
     private const int ResponsiveMarginProgressSteps = 12;
     private const int ResponsiveWidthProgressSteps = 24;
     private static readonly TimeSpan ResizeSettleDelay = TimeSpan.FromMilliseconds(120);
+    private static readonly TimeSpan CloseCompletionWatchdogDelay = TimeSpan.FromSeconds(15);
     private static readonly KeyValuePair<string, object>[] CompactLayoutResourceOverrides =
     [
         new("MAA.Thickness.SectionPadding", new Thickness(6)),
@@ -123,15 +124,18 @@ public partial class MainWindow : Window
     private double _lastAppliedWindowHeightScale = 1d;
     private Size? _lastNormalWindowSize;
     private DispatcherTimer? _resizeSettleTimer;
+    private CancellationTokenSource? _closeCompletionWatchdogCts;
     private bool _isLiveResizing;
     private readonly object _dialogErrorGate = new();
     private readonly Queue<DialogErrorRaisedEvent> _pendingDialogErrors = [];
     private readonly HashSet<string> _pendingDialogErrorKeys = new(StringComparer.Ordinal);
+    private readonly HashSet<Control> _pendingAchievementToastPresentationControls = [];
     private readonly Dictionary<ContentControl, ResponsiveLayoutMetrics> _rootHostResponsiveMetrics = [];
     private readonly IAppDialogService _dialogService;
     private readonly ShellCloseConfirmationService _closeConfirmationService;
     private OverlayHostWindow? _overlayHostWindow;
     private RuntimeLogWindow? _runtimeLogWindow;
+    private TrayContextMenuWindow? _trayContextMenuWindow;
     private RootPageHostViewModel? _settingsWarmupRootPage;
     private bool _settingsWarmupStarted;
     private bool _settingsSectionWarmupStarted;
@@ -172,6 +176,7 @@ public partial class MainWindow : Window
         CopilotRootHost.PropertyChanged += OnRootHostPropertyChanged;
         ToolboxRootHost.PropertyChanged += OnRootHostPropertyChanged;
         SettingsRootHost.PropertyChanged += OnRootHostPropertyChanged;
+        AvaloniaDialogService.OwnerModalStateChanged += OnOwnerModalStateChanged;
         BindShellBackgroundVm(VM);
         App.Runtime.UiLanguageCoordinator.LanguageChanged += OnUiLanguageChanged;
     }
@@ -206,8 +211,10 @@ public partial class MainWindow : Window
             await App.Runtime.DiagnosticsService.RecordEventAsync(
                 "App.Shell.Window.Close",
                 "source=window-chrome; confirmed");
+            ArmCloseCompletionWatchdog("App.Shell.Window.Close.Watchdog");
             if (!await CompleteConfigurationSavesBeforeCloseAsync("App.Shell.Window.Close.ConfigSave"))
             {
+                DisarmCloseCompletionWatchdog();
                 return;
             }
 
@@ -217,6 +224,7 @@ public partial class MainWindow : Window
         {
             if (!_allowLifecycleClose)
             {
+                DisarmCloseCompletionWatchdog();
                 _closeRequestPending = false;
             }
         }
@@ -257,6 +265,7 @@ public partial class MainWindow : Window
 
         Program.RecordStartupStage("MainWindow.PlatformInit.Begin", "Initializing tray, hotkeys, and overlay host.");
         vm.PlatformCapabilityService.TrayCommandInvoked += OnTrayCommandInvoked;
+        vm.PlatformCapabilityService.TrayMenuRequested += OnTrayMenuRequested;
         vm.PlatformCapabilityService.GlobalHotkeyTriggered += OnGlobalHotkeyTriggered;
         vm.PlatformCapabilityService.OverlayStateChanged += OnPlatformOverlayStateChanged;
         _platformBound = true;
@@ -374,6 +383,7 @@ public partial class MainWindow : Window
         if (vm is not null && _platformBound)
         {
             vm.PlatformCapabilityService.TrayCommandInvoked -= OnTrayCommandInvoked;
+            vm.PlatformCapabilityService.TrayMenuRequested -= OnTrayMenuRequested;
             vm.PlatformCapabilityService.GlobalHotkeyTriggered -= OnGlobalHotkeyTriggered;
             vm.PlatformCapabilityService.OverlayStateChanged -= OnPlatformOverlayStateChanged;
             _platformBound = false;
@@ -427,6 +437,9 @@ public partial class MainWindow : Window
                 });
         }
 
+        CloseTrayContextMenu();
+
+        AvaloniaDialogService.OwnerModalStateChanged -= OnOwnerModalStateChanged;
         App.Runtime.UiLanguageCoordinator.LanguageChanged -= OnUiLanguageChanged;
     });
 
@@ -497,6 +510,14 @@ public partial class MainWindow : Window
     private void UpdateAchievementToastVisibility()
     {
         VM?.SetAchievementToastWindowVisible(IsVisible && WindowState != WindowState.Minimized);
+        TryStartPendingAchievementToastPresentations();
+    }
+
+    private void OnOwnerModalStateChanged(object? sender, EventArgs e)
+    {
+        App.PostUiCallback(
+            "MainWindow.AchievementToast.OwnerModalStateChanged",
+            TryStartPendingAchievementToastPresentations);
     }
 
     private void OnWindowResized(object? sender, WindowResizedEventArgs e)
@@ -1608,6 +1629,60 @@ public partial class MainWindow : Window
         }
     }
 
+    private void OnAchievementToastAttachedToVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
+    {
+        QueueAchievementToastPresentation(sender as Control);
+    }
+
+    private void OnAchievementToastDataContextChanged(object? sender, EventArgs e)
+    {
+        QueueAchievementToastPresentation(sender as Control);
+    }
+
+    private void OnAchievementToastDetachedFromVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
+    {
+        if (sender is Control control)
+        {
+            _pendingAchievementToastPresentationControls.Remove(control);
+        }
+    }
+
+    private void QueueAchievementToastPresentation(Control? control)
+    {
+        if (control is null)
+        {
+            return;
+        }
+
+        _pendingAchievementToastPresentationControls.Add(control);
+        TryStartPendingAchievementToastPresentations();
+    }
+
+    private void TryStartPendingAchievementToastPresentations()
+    {
+        if (AvaloniaDialogService.HasActiveOwnerModal)
+        {
+            return;
+        }
+
+        foreach (var control in _pendingAchievementToastPresentationControls.ToArray())
+        {
+            if (control.GetVisualRoot() is null)
+            {
+                _pendingAchievementToastPresentationControls.Remove(control);
+                continue;
+            }
+
+            if (control.DataContext is not AchievementToastItemViewModel toast)
+            {
+                continue;
+            }
+
+            toast.StartPresentation();
+            _pendingAchievementToastPresentationControls.Remove(control);
+        }
+    }
+
     private async void OnSwitchLanguageToClick(object? sender, RoutedEventArgs e)
         => await App.RunUiTaskAsync("MainWindow.SwitchLanguageClick", async () =>
     {
@@ -1863,6 +1938,13 @@ public partial class MainWindow : Window
             "MainWindow.TrayCommandInvoked",
             () => DispatchTrayCommandAsync(e.Command, e.Source));
 
+    private void OnTrayMenuRequested(object? sender, TrayMenuRequestEvent e)
+    {
+        App.PostUiCallback(
+            "MainWindow.TrayMenuRequested",
+            () => ShowTrayContextMenu(e));
+    }
+
     private async Task DispatchTrayCommandAsync(
         TrayCommandId command,
         string source,
@@ -1889,10 +1971,12 @@ public partial class MainWindow : Window
                     return;
                 }
 
+                ArmCloseCompletionWatchdog($"{confirmScope}.Watchdog");
                 if (!await CompleteConfigurationSavesBeforeCloseAsync(
                         $"{confirmScope}.ConfigSave",
                         cancellationToken))
                 {
+                    DisarmCloseCompletionWatchdog();
                     return;
                 }
             }
@@ -1909,6 +1993,7 @@ public partial class MainWindow : Window
                     var exitScope = command == TrayCommandId.Restart
                         ? "App.Shell.Tray.Restart.Exit"
                         : "App.Shell.Tray.Exit";
+                    ArmCloseCompletionWatchdog($"{exitScope}.Watchdog");
                     _ = await ExitApplicationAsync(exitScope, cancellationToken);
                     break;
                 default:
@@ -1922,6 +2007,86 @@ public partial class MainWindow : Window
                 $"Tray command execution failed. command={command} source={source}",
                 ex);
         }
+    }
+
+    private void ShowTrayContextMenu(TrayMenuRequestEvent e)
+    {
+        if (VM is null)
+        {
+            return;
+        }
+
+        CloseTrayContextMenu();
+
+        var popup = new TrayContextMenuWindow
+        {
+            CommandSource = e.Source,
+        };
+        popup.SetEntries(BuildTrayContextMenuEntries());
+        popup.CommandInvoked += OnTrayContextMenuCommandInvoked;
+        popup.Closed += OnTrayContextMenuClosed;
+        DialogWindowScaling.ApplyOwnerUiScale(popup, this);
+        popup.OpenAt(new PixelPoint(e.ScreenX, e.ScreenY));
+        _trayContextMenuWindow = popup;
+    }
+
+    private IReadOnlyList<TrayContextMenuEntry> BuildTrayContextMenuEntries()
+    {
+        var vm = VM;
+        if (vm is null)
+        {
+            return Array.Empty<TrayContextMenuEntry>();
+        }
+
+        var text = PlatformCapabilityTextMap.CreateTrayMenuText(vm.CurrentShellLanguage, vm.ReportLocalizationFallback);
+        return
+        [
+            new TrayContextMenuItemEntry(text.Start, TrayCommandId.Start, vm.CanStartExecution),
+            new TrayContextMenuItemEntry(text.Stop, TrayCommandId.Stop, vm.CanStopExecution),
+            new TrayContextMenuSeparatorEntry(),
+            new TrayContextMenuItemEntry(text.ForceShow, TrayCommandId.ForceShow, true),
+            new TrayContextMenuItemEntry(text.HideTray, TrayCommandId.HideTray, true),
+            new TrayContextMenuItemEntry(text.ToggleOverlay, TrayCommandId.ToggleOverlay, true),
+            new TrayContextMenuItemEntry(text.SwitchLanguage, TrayCommandId.SwitchLanguage, true),
+            new TrayContextMenuItemEntry(text.Restart, TrayCommandId.Restart, true),
+            new TrayContextMenuSeparatorEntry(),
+            new TrayContextMenuItemEntry(text.Exit, TrayCommandId.Exit, true),
+        ];
+    }
+
+    private async void OnTrayContextMenuCommandInvoked(object? sender, TrayContextMenuCommandInvokedEventArgs e)
+        => await App.RunUiTaskAsync("MainWindow.TrayPopupCommand", async () =>
+    {
+        var source = _trayContextMenuWindow?.CommandSource ?? "tray-popup";
+        CloseTrayContextMenu();
+        await DispatchTrayCommandAsync(e.Command, source);
+    });
+
+    private void OnTrayContextMenuClosed(object? sender, EventArgs e)
+    {
+        var popup = _trayContextMenuWindow;
+        if (!ReferenceEquals(sender, popup) || popup is null)
+        {
+            return;
+        }
+
+        popup.CommandInvoked -= OnTrayContextMenuCommandInvoked;
+        popup.Closed -= OnTrayContextMenuClosed;
+        _trayContextMenuWindow = null;
+    }
+
+    private void CloseTrayContextMenu()
+    {
+        if (_trayContextMenuWindow is null)
+        {
+            return;
+        }
+
+        var popup = _trayContextMenuWindow;
+        _trayContextMenuWindow = null;
+        popup.CommandInvoked -= OnTrayContextMenuCommandInvoked;
+        popup.Closed -= OnTrayContextMenuClosed;
+        popup.Close();
     }
 
     private async void OnGlobalHotkeyTriggered(object? sender, GlobalHotkeyTriggeredEvent e)
@@ -2104,54 +2269,41 @@ public partial class MainWindow : Window
             return true;
         }
 
+        Program.RecordStartupStage($"{sourceScope}.Begin", "Starting close-time configuration flush.");
         await PersistWindowSizeBeforeCloseAsync($"{sourceScope}.WindowPlacement", cancellationToken);
+        Program.RecordStartupStage($"{sourceScope}.WindowPlacement.End", "Close-time window placement persistence completed.");
 
         var tracker = ConfigurationSaveTracker.Instance;
-        ConfigurationSaveStatusDialogView? waitDialog = null;
-        Task<bool?>? waitDialogTask = null;
         var waitingNames = tracker.HasActiveSaves
             ? tracker.ActiveDisplayNames
             : tracker.PendingOrFailedDisplayNames;
         if (waitingNames.Count > 0)
         {
-            var savingText = $"{JoinChineseNames(waitingNames)}正在保存，请稍等";
-            waitDialog = new ConfigurationSaveStatusDialogView();
-            waitDialog.ApplyMessage("正在保存", savingText, showConfirmButton: false);
-            DialogWindowScaling.ApplyOwnerUiScale(waitDialog, this);
-            waitDialogTask = waitDialog.ShowDialog<bool?>(this);
+            Program.RecordStartupStage(
+                $"{sourceScope}.PendingBeforeWait",
+                $"Close-time save tracker has pending entries: {string.Join(", ", waitingNames)}");
         }
 
         IReadOnlyList<string> failedNames;
-        try
-        {
-            await tracker.WaitForActiveSavesAsync(cancellationToken);
-            failedNames = await vm.FlushConfigurationSavesForCloseAsync(cancellationToken);
-        }
-        finally
-        {
-            if (waitDialog is not null)
-            {
-                waitDialog.Close(true);
-                if (waitDialogTask is not null)
-                {
-                    try
-                    {
-                        await waitDialogTask;
-                    }
-                    catch (InvalidOperationException)
-                    {
-                        // Ignore late dialog close races while shutting down.
-                    }
-                }
-            }
-        }
+        Program.RecordStartupStage($"{sourceScope}.WaitForActive.Begin", "Waiting for close-time active saves to finish.");
+        await tracker.WaitForActiveSavesAsync(cancellationToken);
+        Program.RecordStartupStage($"{sourceScope}.WaitForActive.End", "Close-time active saves finished.");
+        Program.RecordStartupStage($"{sourceScope}.Flush.Begin", "Flushing close-time configuration saves.");
+        failedNames = await vm.FlushConfigurationSavesForCloseAsync(cancellationToken);
+        Program.RecordStartupStage(
+            $"{sourceScope}.Flush.End",
+            $"Close-time configuration flush returned failedCount={failedNames.Count}.");
 
         failedNames = ConfigurationSaveTracker.Instance.FailedDisplayNames;
         if (failedNames.Count == 0)
         {
+            Program.RecordStartupStage($"{sourceScope}.Complete", "Close-time configuration save gate completed successfully.");
             return true;
         }
 
+        Program.RecordStartupStage(
+            $"{sourceScope}.Failed",
+            $"Close-time configuration save gate completed with failedCount={failedNames.Count}.");
         await App.Runtime.DialogFeatureService.ReportErrorAsync(
             sourceScope,
             MAAUnified.Application.Models.UiOperationResult.Fail(
@@ -2247,7 +2399,9 @@ public partial class MainWindow : Window
     {
         var vm = VM;
         _allowLifecycleClose = true;
+        Program.RecordStartupStage(scope, "Invoking AppLifecycleService.ExitAsync.");
         var result = await App.Runtime.AppLifecycleService.ExitAsync(cancellationToken);
+        Program.RecordStartupStage(scope, $"AppLifecycleService.ExitAsync returned success={result.Success}.");
         if (result.Success)
         {
             return true;
@@ -2255,6 +2409,7 @@ public partial class MainWindow : Window
 
         _allowLifecycleClose = false;
         _closeRequestPending = false;
+        DisarmCloseCompletionWatchdog();
         if (vm is not null)
         {
             vm.PushGrowl(result.Message);
@@ -2262,6 +2417,74 @@ public partial class MainWindow : Window
 
         await App.Runtime.DiagnosticsService.RecordFailedResultAsync(scope, result, cancellationToken);
         return false;
+    }
+
+    private void ArmCloseCompletionWatchdog(string scope)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        if (_closeCompletionWatchdogCts is not null)
+        {
+            return;
+        }
+
+        var watchdogCts = new CancellationTokenSource();
+        _closeCompletionWatchdogCts = watchdogCts;
+        Program.RecordStartupStage(
+            scope,
+            $"Close completion watchdog armed for {CloseCompletionWatchdogDelay.TotalSeconds:0} seconds.");
+        App.ForgetTask(
+            RunCloseCompletionWatchdogAsync(scope, watchdogCts.Token),
+            $"{scope}.Task");
+    }
+
+    private void DisarmCloseCompletionWatchdog()
+    {
+        var watchdogCts = Interlocked.Exchange(ref _closeCompletionWatchdogCts, null);
+        if (watchdogCts is null)
+        {
+            return;
+        }
+
+        try
+        {
+            watchdogCts.Cancel();
+            Program.RecordStartupStage("App.Shell.Close.Watchdog", "Close completion watchdog disarmed.");
+        }
+        catch
+        {
+            // Ignore watchdog cancellation errors during shutdown.
+        }
+        finally
+        {
+            watchdogCts.Dispose();
+        }
+    }
+
+    private async Task RunCloseCompletionWatchdogAsync(string scope, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(CloseCompletionWatchdogDelay, cancellationToken);
+            Program.RecordStartupStage(
+                scope,
+                $"Close completion watchdog fired after {CloseCompletionWatchdogDelay.TotalSeconds:0} seconds.");
+            Environment.Exit(0);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            await App.Runtime.DiagnosticsService.RecordErrorAsync(
+                scope,
+                "Close completion watchdog failed.",
+                ex,
+                CancellationToken.None);
+        }
     }
 
     private void OnDialogErrorRaised(object? sender, DialogErrorRaisedEvent e)

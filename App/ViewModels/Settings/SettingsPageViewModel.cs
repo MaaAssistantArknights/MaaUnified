@@ -510,6 +510,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
     public event EventHandler? ResourceVersionUpdated;
     public event EventHandler? UpdateAvailabilityChanged;
     public event EventHandler<ConfigurationContextChangedEventArgs>? ConfigurationContextChanged;
+    public Func<CancellationToken, Task<UiOperationResult>>? BeforeConfigurationProfileSwitchAsync { private get; set; }
 
     public ObservableCollection<SettingsSectionViewModel> Sections { get; }
 
@@ -3740,6 +3741,38 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
                 || string.Equals(target, current, StringComparison.OrdinalIgnoreCase))
             {
                 return;
+            }
+
+            if (!await FlushConfigurationSavesForCloseAsync(cancellationToken))
+            {
+                ConfigurationManagerErrorMessage = string.IsNullOrWhiteSpace(LastErrorMessage)
+                    ? "Failed to save pending settings before switching profiles."
+                    : LastErrorMessage;
+                ConfigurationManagerStatusMessage = LocalizeSettingsText(
+                    "Settings.ConfigurationManager.Status.SwitchFailed",
+                    "配置切换失败。");
+                await LoadConfigurationProfilesAsync(
+                    "Settings.ConfigurationManager.ReloadAfterFlushFailure",
+                    cancellationToken,
+                    updateStatus: false);
+                return;
+            }
+
+            if (BeforeConfigurationProfileSwitchAsync is not null)
+            {
+                var flushResult = await BeforeConfigurationProfileSwitchAsync(cancellationToken);
+                if (!flushResult.Success)
+                {
+                    ConfigurationManagerErrorMessage = flushResult.Message;
+                    ConfigurationManagerStatusMessage = LocalizeSettingsText(
+                        "Settings.ConfigurationManager.Status.SwitchFailed",
+                        "配置切换失败。");
+                    await LoadConfigurationProfilesAsync(
+                        "Settings.ConfigurationManager.ReloadAfterFlushFailure",
+                        cancellationToken,
+                        updateStatus: false);
+                    return;
+                }
             }
 
             var result = await Runtime.ConfigurationProfileFeatureService.SwitchProfileAsync(target, cancellationToken);

@@ -141,8 +141,9 @@ dotnet restore src\MAAUnified\App\MAAUnified.App.csproj
 python tools\maadeps-download.py x64-windows
 
 # 2) 构建并安装 MaaCore runtime（产物在 install\，含 resource\）
-cmake --preset windows-publish-x64 --fresh -DINSTALL_PYTHON=OFF
-cmake --build --preset windows-publish-x64 --config RelWithDebInfo
+#    与主仓 CI 保持一致时，可额外传入 -DMAA_HASH_VERSION=debug-local
+cmake --preset windows-unified-publish-x64 --fresh -DINSTALL_PYTHON=OFF
+cmake --build --preset windows-unified-publish-x64 --config RelWithDebInfo
 cmake --install build --config RelWithDebInfo
 
 # 3) 发布 Avalonia app，并把 runtime 合并到运行目录

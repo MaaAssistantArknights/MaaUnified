@@ -343,6 +343,7 @@ public sealed class PostActionModuleViewModel : ObservableObject
 
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
+        CancelPendingPersistDebounce();
         _suppressPersist = true;
         var result = await _runtime.PostActionFeatureService.LoadAsync(cancellationToken);
         if (!result.Success || result.Value is null)
@@ -358,17 +359,20 @@ public sealed class PostActionModuleViewModel : ObservableObject
         OnPropertyChanged(nameof(Once));
 
         _suppressPersist = false;
+        LastErrorMessage = string.Empty;
         await ValidateAndUpdateWarningAsync(cancellationToken);
     }
 
     public async Task ReloadPersistentConfigAsync(CancellationToken cancellationToken = default)
     {
+        CancelPendingPersistDebounce();
         _suppressPersist = true;
         ApplyPersistentConfigSnapshot(_persistentConfig);
         _hasPendingCommandPersist = false;
         _once = false;
         OnPropertyChanged(nameof(Once));
         _suppressPersist = false;
+        LastErrorMessage = string.Empty;
         await ValidateAndUpdateWarningAsync(cancellationToken);
     }
 
@@ -433,18 +437,19 @@ public sealed class PostActionModuleViewModel : ObservableObject
             return;
         }
 
+        var targetProfile = CaptureCurrentProfileName();
         ConfigurationSaveTracker.Instance.MarkPending(
             "TaskQueue.PostAction",
             Texts.GetOrDefault("PostAction.Title", "完成后动作"),
             "PostAction.Persist",
             _runtime.DiagnosticsService,
-            PersistCoreAsync);
+            ct => PersistCoreAsync(targetProfile, ct));
         _persistDebounceCts?.Cancel();
         _persistDebounceCts?.Dispose();
         _persistDebounceCts = new CancellationTokenSource();
         var token = _persistDebounceCts.Token;
 
-        _ = PersistDebouncedAsync(token);
+        _ = PersistDebouncedAsync(targetProfile, token);
     }
 
     public async Task<bool> FlushPendingChangesAsync(CancellationToken cancellationToken = default)
@@ -456,15 +461,15 @@ public sealed class PostActionModuleViewModel : ObservableObject
             return true;
         }
 
-        return await PersistNowAsync(cancellationToken);
+        return await PersistNowAsync(CaptureCurrentProfileName(), cancellationToken);
     }
 
-    private async Task PersistDebouncedAsync(CancellationToken cancellationToken)
+    private async Task PersistDebouncedAsync(string targetProfile, CancellationToken cancellationToken)
     {
         try
         {
             await Task.Delay(180, cancellationToken);
-            await PersistNowAsync(cancellationToken);
+            await PersistNowAsync(targetProfile, cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -472,21 +477,26 @@ public sealed class PostActionModuleViewModel : ObservableObject
         }
     }
 
-    private async Task<bool> PersistNowAsync(CancellationToken cancellationToken)
+    private async Task<bool> PersistNowAsync(string targetProfile, CancellationToken cancellationToken)
     {
         return await ConfigurationSaveTracker.Instance.RunTrackedAsync(
             "TaskQueue.PostAction",
             Texts.GetOrDefault("PostAction.Title", "完成后动作"),
             "PostAction.Persist",
             _runtime.DiagnosticsService,
-            PersistCoreAsync,
+            ct => PersistCoreAsync(targetProfile, ct),
             cancellationToken);
     }
 
-    private async Task<bool> PersistCoreAsync(CancellationToken cancellationToken)
+    private async Task<bool> PersistCoreAsync(string targetProfile, CancellationToken cancellationToken)
     {
         try
         {
+            if (!IsCurrentProfile(targetProfile))
+            {
+                return true;
+            }
+
             var persistent = BuildPersistentConfigForSave();
 
             var save = await _runtime.PostActionFeatureService.SaveAsync(persistent, cancellationToken);
@@ -523,6 +533,7 @@ public sealed class PostActionModuleViewModel : ObservableObject
         if (previewResult.Value.Warnings.Count == 0)
         {
             StatusMessage = string.Empty;
+            LastErrorMessage = string.Empty;
             return;
         }
 
@@ -539,6 +550,7 @@ public sealed class PostActionModuleViewModel : ObservableObject
         }
 
         StatusMessage = warningText;
+        LastErrorMessage = string.Empty;
     }
 
     private PostActionConfig BuildPersistentConfigForSave()
@@ -602,5 +614,25 @@ public sealed class PostActionModuleViewModel : ObservableObject
         BackToAndroidHomeCommand = _persistentConfig.Commands.BackToAndroidHome;
         ExitEmulatorCommand = _persistentConfig.Commands.ExitEmulator;
         ExitSelfCommand = _persistentConfig.Commands.ExitSelf;
+    }
+
+    private string CaptureCurrentProfileName()
+    {
+        return _runtime.ConfigurationService.CurrentConfig.CurrentProfile;
+    }
+
+    private bool IsCurrentProfile(string profileName)
+    {
+        return string.Equals(
+            _runtime.ConfigurationService.CurrentConfig.CurrentProfile,
+            profileName,
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    private void CancelPendingPersistDebounce()
+    {
+        _persistDebounceCts?.Cancel();
+        _persistDebounceCts?.Dispose();
+        _persistDebounceCts = null;
     }
 }

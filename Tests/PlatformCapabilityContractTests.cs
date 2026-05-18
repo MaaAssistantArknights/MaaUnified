@@ -394,7 +394,7 @@ public sealed class PlatformCapabilityContractTests
     }
 
     [Fact]
-    public void PlatformServicesFactory_CreateDefaults_PrefersAvaloniaTrayOnWindows()
+    public void PlatformServicesFactory_CreateDefaults_PrefersWindowsNotifyIconTrayOnWindows()
     {
         if (!OperatingSystem.IsWindows())
         {
@@ -402,7 +402,7 @@ public sealed class PlatformCapabilityContractTests
         }
 
         var bundle = PlatformServicesFactory.CreateDefaults();
-        Assert.IsType<AvaloniaTrayIconTrayService>(bundle.TrayService);
+        Assert.IsType<WindowsNotifyIconTrayService>(bundle.TrayService);
     }
 
     [Fact]
@@ -848,6 +848,8 @@ public sealed class PlatformCapabilityContractTests
 
         public event EventHandler<TrayCommandEvent>? CommandInvoked;
 
+        public event EventHandler<TrayMenuRequestEvent>? MenuRequested;
+
         public Task<PlatformOperationResult> InitializeAsync(string appTitle, TrayMenuText? menuText, CancellationToken cancellationToken = default)
             => Task.FromResult(PlatformOperation.Failed(Capability.Provider, "initialize failed", PlatformErrorCodes.TrayInitFailed, "tray.initialize"));
 
@@ -874,6 +876,8 @@ public sealed class PlatformCapabilityContractTests
             FallbackMode: "window-menu");
 
         public event EventHandler<TrayCommandEvent>? CommandInvoked;
+
+        public event EventHandler<TrayMenuRequestEvent>? MenuRequested;
 
         public Task<PlatformOperationResult> InitializeAsync(string appTitle, TrayMenuText? menuText, CancellationToken cancellationToken = default)
             => throw new InvalidOperationException("TryCreate failed.");
@@ -991,6 +995,8 @@ public sealed class PlatformCapabilityContractTests
 
         public event EventHandler<TrayCommandEvent>? CommandInvoked;
 
+        public event EventHandler<TrayMenuRequestEvent>? MenuRequested;
+
         public Task<PlatformOperationResult> InitializeAsync(string appTitle, TrayMenuText? menuText, CancellationToken cancellationToken = default)
             => Task.FromResult(PlatformOperation.NativeSuccess(Capability.Provider, "init", "tray.initialize"));
 
@@ -1008,6 +1014,9 @@ public sealed class PlatformCapabilityContractTests
 
         public void Emit(TrayCommandId command, string source)
             => CommandInvoked?.Invoke(this, new TrayCommandEvent(command, source, DateTimeOffset.UtcNow));
+
+        public void EmitMenu(int x, int y, string source)
+            => MenuRequested?.Invoke(this, new TrayMenuRequestEvent(x, y, source, DateTimeOffset.UtcNow));
     }
 
     private sealed class TriggerableHotkeyService : IGlobalHotkeyService

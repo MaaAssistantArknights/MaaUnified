@@ -15,12 +15,17 @@ public sealed class AvaloniaDialogService : IAppDialogService
     private const string IssueReportIssueEntryUrl = "https://github.com/MaaAssistantArknights/MaaAssistantArknights/issues/new/choose";
     // All desktop dialog service instances share owner-modal state through the same main window.
     private static readonly SemaphoreSlim DialogPresentationSemaphore = new(1, 1);
+    private static int _activeOwnerModalCount;
     private readonly MAAUnifiedRuntime _runtime;
 
     public AvaloniaDialogService(MAAUnifiedRuntime runtime)
     {
         _runtime = runtime;
     }
+
+    public static event EventHandler? OwnerModalStateChanged;
+
+    public static bool HasActiveOwnerModal => Volatile.Read(ref _activeOwnerModalCount) > 0;
 
     public async Task<DialogCompletion<AnnouncementDialogPayload>> ShowAnnouncementAsync(
         AnnouncementDialogRequest request,
@@ -304,7 +309,15 @@ public sealed class AvaloniaDialogService : IAppDialogService
             cancellationToken.ThrowIfCancellationRequested();
             dialog.Topmost = ResolveTopmost(dialog, owner);
             DialogWindowScaling.ApplyOwnerUiScale(dialog, owner);
-            return new DialogPresentationResult<TResult>(true, await dialog.ShowDialog<TResult>(owner));
+            BeginOwnerModalPresentation();
+            try
+            {
+                return new DialogPresentationResult<TResult>(true, await dialog.ShowDialog<TResult>(owner));
+            }
+            finally
+            {
+                EndOwnerModalPresentation();
+            }
         }
         finally
         {
@@ -313,6 +326,39 @@ public sealed class AvaloniaDialogService : IAppDialogService
     }
 
     private readonly record struct DialogPresentationResult<TResult>(bool OwnerAvailable, TResult? Result);
+
+    private static void BeginOwnerModalPresentation()
+    {
+        if (Interlocked.Increment(ref _activeOwnerModalCount) == 1)
+        {
+            RaiseOwnerModalStateChanged();
+        }
+    }
+
+    private static void EndOwnerModalPresentation()
+    {
+        if (Interlocked.Decrement(ref _activeOwnerModalCount) == 0)
+        {
+            RaiseOwnerModalStateChanged();
+        }
+    }
+
+    private static void RaiseOwnerModalStateChanged()
+    {
+        var handler = OwnerModalStateChanged;
+        if (handler is null)
+        {
+            return;
+        }
+
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            handler.Invoke(null, EventArgs.Empty);
+            return;
+        }
+
+        Dispatcher.UIThread.Post(() => handler.Invoke(null, EventArgs.Empty), DispatcherPriority.Background);
+    }
 
     private static bool ResolveTopmost(Window dialog, Window owner)
     {

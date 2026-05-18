@@ -544,6 +544,16 @@ public partial class TaskQueueView : UserControl
         }
     }
 
+    private void OnRunButtonPointerEntered(object? sender, PointerEventArgs e)
+    {
+        VM?.SetRunButtonHover(true);
+    }
+
+    private void OnRunButtonPointerExited(object? sender, PointerEventArgs e)
+    {
+        VM?.SetRunButtonHover(false);
+    }
+
     private async void OnWaitAndStopClick(object? sender, RoutedEventArgs e)
     {
         if (VM is not null)

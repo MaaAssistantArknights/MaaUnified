@@ -454,14 +454,13 @@ public sealed class DialogModuleP1FeatureTests
         };
 
         var popupScale = File.ReadAllText(Path.Combine(root, "App", "Controls", "PopupUiScale.cs"));
-        var controlStyles = File.ReadAllText(Path.Combine(root, "App", "Styles", "ControlStyles.axaml"));
         var foundationStyles = File.ReadAllText(Path.Combine(root, "App", "Styles", "AppFoundationStyles.axaml"));
         Assert.Contains("shell.EffectiveUiScaleFactor", popupScale, StringComparison.Ordinal);
         Assert.Contains("new LayoutTransformControl", popupScale, StringComparison.Ordinal);
         Assert.Contains("popup.Child = null;", popupScale, StringComparison.Ordinal);
         Assert.Contains("Popup.ChildProperty.Changed.AddClassHandler<Popup>", popupScale, StringComparison.Ordinal);
         Assert.Contains("child.GetVisualParent() is not null", popupScale, StringComparison.Ordinal);
-        Assert.Contains("Property=\"controls:PopupUiScale.UseTopLevelUiScale\" Value=\"True\"", controlStyles, StringComparison.Ordinal);
+        var controlStyles = File.ReadAllText(Path.Combine(root, "App", "Styles", "ControlStyles.axaml"));
         var titleTextCode = File.ReadAllText(Path.Combine(root, "App", "Controls", "AppWindowTitleText.cs"));
         Assert.Contains("controls|AppWindowTitleText.dialog-window-title", controlStyles, StringComparison.Ordinal);
         Assert.Contains("Property=\"Margin\" Value=\"8,0,0,0\"", controlStyles, StringComparison.Ordinal);

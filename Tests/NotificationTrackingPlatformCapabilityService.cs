@@ -30,6 +30,12 @@ internal sealed class NotificationTrackingPlatformCapabilityService : IPlatformC
         remove => _inner.TrayCommandInvoked -= value;
     }
 
+    public event EventHandler<TrayMenuRequestEvent>? TrayMenuRequested
+    {
+        add => _inner.TrayMenuRequested += value;
+        remove => _inner.TrayMenuRequested -= value;
+    }
+
     public event EventHandler<GlobalHotkeyTriggeredEvent>? GlobalHotkeyTriggered
     {
         add => _inner.GlobalHotkeyTriggered += value;

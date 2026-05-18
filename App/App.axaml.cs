@@ -276,6 +276,7 @@ public partial class App : Avalonia.Application
 
     private static void OnDesktopExit(object? sender, ControlledApplicationLifetimeExitEventArgs e)
     {
+        Program.RecordStartupStage("App.Exit.DesktopExit", "Classic desktop lifetime exit event received.");
         StopUiLagProbe();
         _uiFontFamilyResourceUpdater?.Dispose();
         _uiFontFamilyResourceUpdater = null;
@@ -286,7 +287,9 @@ public partial class App : Avalonia.Application
 
         try
         {
+            Program.RecordStartupStage("App.Exit.Dispose.Begin", "Disposing runtime during desktop exit.");
             _ = DisposeRuntimeOnExitAsync(CancellationToken.None).GetAwaiter().GetResult();
+            Program.RecordStartupStage("App.Exit.Dispose.End", "Runtime disposal finished during desktop exit.");
             if (OperatingSystem.IsWindows())
             {
                 // Some Windows native integrations can leave foreground threads alive after Avalonia shutdown.
@@ -530,10 +533,11 @@ public partial class App : Avalonia.Application
         try
         {
             var disposeTask = Runtime.DisposeAsync().AsTask();
-            var completed = await Task.WhenAny(disposeTask, Task.Delay(RuntimeDisposeTimeout, cancellationToken));
+            var completed = await Task.WhenAny(disposeTask, Task.Delay(RuntimeDisposeTimeout, cancellationToken))
+                .ConfigureAwait(false);
             if (ReferenceEquals(completed, disposeTask))
             {
-                await disposeTask;
+                await disposeTask.ConfigureAwait(false);
                 return true;
             }
 
@@ -549,12 +553,13 @@ public partial class App : Avalonia.Application
                 new Dictionary<string, object?>
                 {
                     ["timeoutMs"] = (int)RuntimeDisposeTimeout.TotalMilliseconds,
-                });
+                }).ConfigureAwait(false);
             return false;
         }
         catch (Exception ex)
         {
-            await SafeRecordExceptionAsync("App.Exit.Dispose", "Failed to dispose runtime during app exit.", ex);
+            await SafeRecordExceptionAsync("App.Exit.Dispose", "Failed to dispose runtime during app exit.", ex)
+                .ConfigureAwait(false);
             return false;
         }
     }

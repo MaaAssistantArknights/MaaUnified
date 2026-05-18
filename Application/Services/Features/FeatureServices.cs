@@ -3506,6 +3506,8 @@ public sealed class PlatformCapabilityFeatureService : IPlatformCapabilityServic
 
     public event EventHandler<TrayCommandEvent>? TrayCommandInvoked;
 
+    public event EventHandler<TrayMenuRequestEvent>? TrayMenuRequested;
+
     public event EventHandler<GlobalHotkeyTriggeredEvent>? GlobalHotkeyTriggered;
 
     public event EventHandler<OverlayStateChangedEvent>? OverlayStateChanged;
@@ -3515,6 +3517,7 @@ public sealed class PlatformCapabilityFeatureService : IPlatformCapabilityServic
         _platform = platform;
         _diagnostics = diagnostics;
         _platform.TrayService.CommandInvoked += OnTrayCommandInvoked;
+        _platform.TrayService.MenuRequested += OnTrayMenuRequested;
         _platform.HotkeyService.Triggered += OnGlobalHotkeyTriggered;
         _platform.OverlayService.OverlayStateChanged += OnOverlayStateChanged;
     }
@@ -3829,6 +3832,24 @@ public sealed class PlatformCapabilityFeatureService : IPlatformCapabilityServic
             _ = _diagnostics.RecordErrorAsync(
                 "PlatformCapability.TrayCommand",
                 "Tray command callback failed.",
+                ex);
+        }
+    }
+
+    private void OnTrayMenuRequested(object? sender, TrayMenuRequestEvent e)
+    {
+        _ = _diagnostics.RecordEventAsync(
+            "PlatformCapability.TrayMenuRequested",
+            $"source={e.Source} x={e.ScreenX} y={e.ScreenY} ts={e.Timestamp:O}");
+        try
+        {
+            TrayMenuRequested?.Invoke(this, e);
+        }
+        catch (Exception ex)
+        {
+            _ = _diagnostics.RecordErrorAsync(
+                "PlatformCapability.TrayMenuRequested",
+                "Tray menu request callback failed.",
                 ex);
         }
     }

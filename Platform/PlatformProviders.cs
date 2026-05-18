@@ -68,7 +68,6 @@ public sealed class WindowsNotifyIconTrayService : ITrayService, IDisposable
     private const nint DefaultAppIconId = 32512; // IDI_APPLICATION
     private readonly CommandNotificationService _notificationFallback = new();
     private readonly WindowMenuTrayService _fallbackService = new();
-    private readonly Dictionary<TrayCommandId, PopupMenuItem> _menuItems = new();
     private nint _iconHandle;
     private bool _ownsIconHandle;
     private bool _visible = true;
@@ -76,7 +75,7 @@ public sealed class WindowsNotifyIconTrayService : ITrayService, IDisposable
     private bool _fallbackMode;
     private TrayMenuState _menuState = new(true, true, true, true, true);
     private TrayMenuText _menuText = TrayMenuText.Default;
-    private TrayIconWithContextMenu? _trayIcon;
+    private H.NotifyIcon.Core.TrayIcon? _trayIcon;
 
     public PlatformCapabilityStatus Capability => new(
         Supported: true,
@@ -86,6 +85,8 @@ public sealed class WindowsNotifyIconTrayService : ITrayService, IDisposable
         FallbackMode: "window-menu");
 
     public event EventHandler<TrayCommandEvent>? CommandInvoked;
+
+    public event EventHandler<TrayMenuRequestEvent>? MenuRequested;
 
     public WindowsNotifyIconTrayService()
     {
@@ -126,8 +127,6 @@ public sealed class WindowsNotifyIconTrayService : ITrayService, IDisposable
         {
             try
             {
-                RebuildMenu();
-                ApplyMenuState();
                 _trayIcon?.UpdateToolTip(string.IsNullOrWhiteSpace(appTitle) ? "MAAUnified" : appTitle.Trim());
                 return PlatformOperation.NativeSuccess(
                     Capability.Provider,
@@ -142,16 +141,15 @@ public sealed class WindowsNotifyIconTrayService : ITrayService, IDisposable
 
         try
         {
-            _trayIcon = new TrayIconWithContextMenu("MAAUnified");
-            RebuildMenu();
+            _trayIcon = new H.NotifyIcon.Core.TrayIcon("MAAUnified");
             _trayIcon.UpdateToolTip(string.IsNullOrWhiteSpace(appTitle) ? "MAAUnified" : appTitle.Trim());
             _iconHandle = LoadTrayIconHandle(out _ownsIconHandle);
             _trayIcon.UpdateIcon(_iconHandle);
             _trayIcon.UpdateVisibility(_visible ? IconVisibility.Visible : IconVisibility.Hidden);
             _trayIcon.Create();
+            _trayIcon.MessageWindow.MouseEventReceived += OnTrayMouseEventReceived;
             _initialized = true;
             _fallbackMode = false;
-            ApplyMenuState();
             return PlatformOperation.NativeSuccess(
                 Capability.Provider,
                 "Tray service initialized.",
@@ -173,6 +171,11 @@ public sealed class WindowsNotifyIconTrayService : ITrayService, IDisposable
 
         try
         {
+            if (_trayIcon is not null)
+            {
+                _trayIcon.MessageWindow.MouseEventReceived -= OnTrayMouseEventReceived;
+            }
+
             _trayIcon?.TryRemove();
             _trayIcon?.Dispose();
             _trayIcon = null;
@@ -267,22 +270,6 @@ public sealed class WindowsNotifyIconTrayService : ITrayService, IDisposable
         }
 
         _menuState = state;
-        if (_initialized)
-        {
-            try
-            {
-                ApplyMenuState();
-            }
-            catch (Exception ex)
-            {
-                return Task.FromResult(PlatformOperation.Failed(
-                    Capability.Provider,
-                    $"Tray menu state update failed: {ex.Message}",
-                    PlatformErrorCodes.TrayMenuDispatchFailed,
-                    "tray.setMenuState"));
-            }
-        }
-
         return Task.FromResult(PlatformOperation.NativeSuccess(
             Capability.Provider,
             "Tray menu state updated.",
@@ -334,63 +321,34 @@ public sealed class WindowsNotifyIconTrayService : ITrayService, IDisposable
         }
     }
 
-    private PopupMenu BuildMenu()
-    {
-        var menu = new PopupMenu();
-        menu.Items.Add(CreateMenuItem(TrayCommandId.Start, _menuText.Start));
-        menu.Items.Add(CreateMenuItem(TrayCommandId.Stop, _menuText.Stop));
-        menu.Items.Add(new PopupMenuSeparator());
-        menu.Items.Add(CreateMenuItem(TrayCommandId.ForceShow, _menuText.ForceShow));
-        menu.Items.Add(CreateMenuItem(TrayCommandId.HideTray, _menuText.HideTray));
-        menu.Items.Add(CreateMenuItem(TrayCommandId.ToggleOverlay, _menuText.ToggleOverlay));
-        menu.Items.Add(CreateMenuItem(TrayCommandId.SwitchLanguage, _menuText.SwitchLanguage));
-        menu.Items.Add(CreateMenuItem(TrayCommandId.Restart, _menuText.Restart));
-        menu.Items.Add(new PopupMenuSeparator());
-        menu.Items.Add(CreateMenuItem(TrayCommandId.Exit, _menuText.Exit));
-        return menu;
-    }
-
-    private void RebuildMenu()
-    {
-        _menuItems.Clear();
-        if (_trayIcon is not null)
-        {
-            _trayIcon.ContextMenu = BuildMenu();
-        }
-    }
-
-    private PopupMenuItem CreateMenuItem(TrayCommandId command, string text)
-    {
-        var item = new PopupMenuItem(text, (_, _) => RaiseCommand(command));
-        _menuItems[command] = item;
-        return item;
-    }
-
-    private void ApplyMenuState()
-    {
-        SetEnabled(TrayCommandId.Start, _menuState.StartEnabled);
-        SetEnabled(TrayCommandId.Stop, _menuState.StopEnabled);
-        SetEnabled(TrayCommandId.ToggleOverlay, _menuState.OverlayEnabled);
-        SetEnabled(TrayCommandId.ForceShow, _menuState.ForceShowEnabled);
-        SetEnabled(TrayCommandId.HideTray, _menuState.HideTrayEnabled);
-        SetEnabled(TrayCommandId.SwitchLanguage, true);
-        SetEnabled(TrayCommandId.Restart, true);
-        SetEnabled(TrayCommandId.Exit, true);
-    }
-
-    private void SetEnabled(TrayCommandId command, bool enabled)
-    {
-        if (_menuItems.TryGetValue(command, out var item))
-        {
-            item.Enabled = enabled;
-        }
-    }
-
     private void RaiseCommand(TrayCommandId command)
     {
         try
         {
             CommandInvoked?.Invoke(this, new TrayCommandEvent(command, Capability.Provider, DateTimeOffset.UtcNow));
+        }
+        catch
+        {
+            // Ignore user event exceptions to avoid destabilizing tray message loop.
+        }
+    }
+
+    private void OnTrayMouseEventReceived(object? sender, MessageWindow.MouseEventReceivedEventArgs e)
+    {
+        if (!_initialized || _fallbackMode || _trayIcon is null || e.MouseEvent != MouseEvent.IconRightMouseUp)
+        {
+            return;
+        }
+
+        try
+        {
+            MenuRequested?.Invoke(
+                this,
+                new TrayMenuRequestEvent(
+                    e.Point.X,
+                    e.Point.Y,
+                    Capability.Provider,
+                    DateTimeOffset.UtcNow));
         }
         catch
         {
@@ -505,6 +463,8 @@ public sealed class AvaloniaTrayIconTrayService : ITrayService, IDisposable
         FallbackMode: "window-menu");
 
     public event EventHandler<TrayCommandEvent>? CommandInvoked;
+
+    public event EventHandler<TrayMenuRequestEvent>? MenuRequested;
 
     public AvaloniaTrayIconTrayService()
     {
@@ -857,29 +817,25 @@ public sealed class AvaloniaTrayIconTrayService : ITrayService, IDisposable
     }
 }
 
-public sealed class DesktopNotificationService : INotificationService
+public sealed class DesktopNotificationService : INotificationService, IDisposable
 {
     private readonly CommandNotificationService _fallback = new();
-    private readonly DesktopNotificationAdapter? _nativeAdapter;
+    private readonly object _nativeAdapterGate = new();
+    private readonly string _appName;
+    private DesktopNotificationAdapter? _nativeAdapter;
+    private bool _nativeAdapterInitialized;
 
     public DesktopNotificationService()
     {
-        _nativeAdapter = DesktopNotificationAdapter.TryCreate("MaaAssistantArknights");
+        _appName = "MaaAssistantArknights";
     }
 
-    public PlatformCapabilityStatus Capability => _nativeAdapter is null
-        ? new PlatformCapabilityStatus(
-            Supported: false,
-            Message: "DesktopNotifications backend is unavailable, using command/in-app fallback.",
-            Provider: "desktop-notifications",
-            HasFallback: true,
-            FallbackMode: "command-or-in-app")
-        : new PlatformCapabilityStatus(
-            Supported: true,
-            Message: "System notification uses DesktopNotifications backend.",
-            Provider: "desktop-notifications",
-            HasFallback: true,
-            FallbackMode: "command-or-in-app");
+    public PlatformCapabilityStatus Capability => new(
+        Supported: true,
+        Message: "System notification uses DesktopNotifications backend when available.",
+        Provider: "desktop-notifications",
+        HasFallback: true,
+        FallbackMode: "command-or-in-app");
 
     public static bool TryCreate([NotNullWhen(true)] out DesktopNotificationService? service)
     {
@@ -903,12 +859,13 @@ public sealed class DesktopNotificationService : INotificationService
         cancellationToken.ThrowIfCancellationRequested();
         try
         {
-            if (_nativeAdapter is null)
+            var nativeAdapter = EnsureNativeAdapter();
+            if (nativeAdapter is null)
             {
                 return await NotifyFallbackAsync(title, message, "Native notification backend is unavailable.", cancellationToken);
             }
 
-            await _nativeAdapter.NotifyAsync(title, message, cancellationToken);
+            await nativeAdapter.NotifyAsync(title, message, cancellationToken);
             return PlatformOperation.NativeSuccess(Capability.Provider, "System notification dispatched.", "notification.notify");
         }
         catch (Exception ex)
@@ -945,7 +902,39 @@ public sealed class DesktopNotificationService : INotificationService
             PlatformErrorCodes.NotificationFallback);
     }
 
-    private sealed class DesktopNotificationAdapter
+    public void Dispose()
+    {
+        DesktopNotificationAdapter? nativeAdapter;
+        lock (_nativeAdapterGate)
+        {
+            nativeAdapter = _nativeAdapter;
+            _nativeAdapter = null;
+            _nativeAdapterInitialized = true;
+        }
+
+        nativeAdapter?.Dispose();
+    }
+
+    private DesktopNotificationAdapter? EnsureNativeAdapter()
+    {
+        if (_nativeAdapterInitialized)
+        {
+            return _nativeAdapter;
+        }
+
+        lock (_nativeAdapterGate)
+        {
+            if (!_nativeAdapterInitialized)
+            {
+                _nativeAdapter = DesktopNotificationAdapter.TryCreate(_appName);
+                _nativeAdapterInitialized = true;
+            }
+
+            return _nativeAdapter;
+        }
+    }
+
+    private sealed class DesktopNotificationAdapter : IDisposable
     {
         private readonly object _manager;
         private readonly MethodInfo _showMethod;
@@ -1020,6 +1009,23 @@ public sealed class DesktopNotificationService : INotificationService
             {
                 await task.WaitAsync(cancellationToken);
             }
+        }
+
+        public void Dispose()
+        {
+            if (_manager is IDisposable disposable)
+            {
+                disposable.Dispose();
+                return;
+            }
+
+            var disposeMethod = _manager.GetType().GetMethod(
+                "Dispose",
+                BindingFlags.Instance | BindingFlags.Public,
+                binder: null,
+                types: Type.EmptyTypes,
+                modifiers: null);
+            disposeMethod?.Invoke(_manager, null);
         }
 
         private object CreateNotification(string title, string message)
@@ -1691,6 +1697,8 @@ public sealed class WindowMenuTrayService : ITrayService
     private TrayMenuState _menuState = new(true, true, true, true, true);
 
     public event EventHandler<TrayCommandEvent>? CommandInvoked;
+
+    public event EventHandler<TrayMenuRequestEvent>? MenuRequested;
 
     public PlatformCapabilityStatus Capability => new(
         Supported: false,

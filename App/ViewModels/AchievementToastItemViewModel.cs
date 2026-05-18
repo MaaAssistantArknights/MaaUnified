@@ -8,12 +8,14 @@ public sealed class AchievementToastItemViewModel : ObservableObject, IDisposabl
     private const double CloseCountdownSeconds = 7d;
     private static readonly TimeSpan InitialPointerPauseSuppressionWindow = TimeSpan.FromMilliseconds(500);
     private readonly Action<string>? _dismissCallback;
-    private readonly DispatcherTimer? _closeCountdownTimer;
-    private readonly DateTimeOffset _createdAtUtc;
+    private readonly object _closeCountdownGate = new();
+    private CancellationTokenSource? _closeCountdownCts;
+    private DateTimeOffset? _shownAtUtc;
     private DateTimeOffset _lastCloseCountdownTickUtc;
     private double _remainingCloseCountdownSeconds = CloseCountdownSeconds;
     private double _closeCountdownProgress;
     private bool _isCloseCountdownPaused;
+    private bool _isCloseCountdownStarted;
     private bool _isAnimationHidden = true;
     private bool _isDismissAnimationActive;
     private bool _isDisposed;
@@ -28,8 +30,6 @@ public sealed class AchievementToastItemViewModel : ObservableObject, IDisposabl
         DateTimeOffset unlockedAtUtc,
         Action<string>? dismissCallback = null)
     {
-        var now = DateTimeOffset.UtcNow;
-        _createdAtUtc = now;
         Id = id;
         CelebrateText = celebrateText;
         Title = title;
@@ -39,19 +39,6 @@ public sealed class AchievementToastItemViewModel : ObservableObject, IDisposabl
         UnlockedAtUtc = unlockedAtUtc;
         _dismissCallback = dismissCallback;
         _closeCountdownProgress = AutoClose ? 1d : 0d;
-
-        if (AutoClose)
-        {
-            _closeCountdownTimer = new DispatcherTimer
-            {
-                Interval = TimeSpan.FromMilliseconds(50),
-            };
-            _closeCountdownTimer.Tick += OnCloseCountdownTick;
-            _lastCloseCountdownTickUtc = now;
-            _closeCountdownTimer.Start();
-        }
-
-        Dispatcher.UIThread.Post(BeginEnterAnimation, DispatcherPriority.Loaded);
     }
 
     public string Id { get; }
@@ -70,7 +57,16 @@ public sealed class AchievementToastItemViewModel : ObservableObject, IDisposabl
 
     public bool IsCloseCountdownVisible => AutoClose;
 
-    internal bool IsCloseCountdownPaused => _isCloseCountdownPaused;
+    internal bool IsCloseCountdownPaused
+    {
+        get
+        {
+            lock (_closeCountdownGate)
+            {
+                return _isCloseCountdownPaused;
+            }
+        }
+    }
 
     public bool IsAnimationHidden
     {
@@ -90,30 +86,67 @@ public sealed class AchievementToastItemViewModel : ObservableObject, IDisposabl
         private set => SetProperty(ref _closeCountdownProgress, value);
     }
 
+    public void StartPresentation()
+    {
+        bool shouldShow;
+        lock (_closeCountdownGate)
+        {
+            shouldShow = !IsDismissAnimationActive && !_isDisposed;
+            if (shouldShow)
+            {
+                _shownAtUtc = DateTimeOffset.UtcNow;
+            }
+        }
+
+        if (!shouldShow)
+        {
+            return;
+        }
+
+        IsAnimationHidden = false;
+        StartCloseCountdown();
+    }
+
     public void PauseCloseCountdown()
     {
-        if (!AutoClose || _isDisposed)
+        DateTimeOffset? shownAt;
+        lock (_closeCountdownGate)
+        {
+            if (!AutoClose || _isDisposed)
+            {
+                return;
+            }
+
+            shownAt = _shownAtUtc;
+        }
+
+        if (!shownAt.HasValue ||
+            DateTimeOffset.UtcNow - shownAt.Value < InitialPointerPauseSuppressionWindow)
         {
             return;
         }
 
-        if (DateTimeOffset.UtcNow - _createdAtUtc < InitialPointerPauseSuppressionWindow)
+        lock (_closeCountdownGate)
         {
-            return;
+            if (!_isDisposed)
+            {
+                _isCloseCountdownPaused = true;
+            }
         }
-
-        _isCloseCountdownPaused = true;
     }
 
     public void ResumeCloseCountdown()
     {
-        if (!AutoClose || _isDisposed)
+        lock (_closeCountdownGate)
         {
-            return;
-        }
+            if (!AutoClose || _isDisposed)
+            {
+                return;
+            }
 
-        _isCloseCountdownPaused = false;
-        _lastCloseCountdownTickUtc = DateTimeOffset.UtcNow;
+            _isCloseCountdownPaused = false;
+            _lastCloseCountdownTickUtc = DateTimeOffset.UtcNow;
+        }
     }
 
     public bool BeginDismissAnimation()
@@ -131,51 +164,84 @@ public sealed class AchievementToastItemViewModel : ObservableObject, IDisposabl
 
     public void Dispose()
     {
-        if (_isDisposed)
+        CancellationTokenSource? closeCountdownCts;
+        lock (_closeCountdownGate)
         {
-            return;
+            if (_isDisposed)
+            {
+                return;
+            }
+
+            _isDisposed = true;
+            closeCountdownCts = _closeCountdownCts;
+            _closeCountdownCts = null;
         }
 
-        _isDisposed = true;
-
-        if (_closeCountdownTimer is not null)
-        {
-            _closeCountdownTimer.Stop();
-            _closeCountdownTimer.Tick -= OnCloseCountdownTick;
-        }
+        closeCountdownCts?.Cancel();
+        closeCountdownCts?.Dispose();
     }
 
-    private void BeginEnterAnimation()
+    private void StartCloseCountdown()
     {
-        if (!IsDismissAnimationActive && !_isDisposed)
+        CancellationToken cancellationToken;
+        lock (_closeCountdownGate)
         {
-            IsAnimationHidden = false;
+            if (!AutoClose || _isDisposed || _isCloseCountdownStarted)
+            {
+                return;
+            }
+
+            _isCloseCountdownStarted = true;
+            _lastCloseCountdownTickUtc = DateTimeOffset.UtcNow;
+            _closeCountdownCts = new CancellationTokenSource();
+            cancellationToken = _closeCountdownCts.Token;
         }
+
+        _ = Task.Run(() => RunCloseCountdownLoopAsync(cancellationToken));
     }
 
-    private void OnCloseCountdownTick(object? sender, EventArgs e)
+    private void UpdateCloseCountdownProgress(double progress)
     {
-        if (_isCloseCountdownPaused || _isDisposed)
+        if (Dispatcher.UIThread.CheckAccess())
         {
+            if (!_isDisposed)
+            {
+                CloseCountdownProgress = progress;
+            }
+
             return;
         }
 
-        var now = DateTimeOffset.UtcNow;
-        var elapsed = now - _lastCloseCountdownTickUtc;
-        _lastCloseCountdownTickUtc = now;
+        Dispatcher.UIThread.Post(
+            () =>
+            {
+                if (!_isDisposed)
+                {
+                    CloseCountdownProgress = progress;
+                }
+            },
+            DispatcherPriority.Background);
+    }
 
-        _remainingCloseCountdownSeconds = Math.Max(0d, _remainingCloseCountdownSeconds - elapsed.TotalSeconds);
-        CloseCountdownProgress = Math.Clamp(_remainingCloseCountdownSeconds / CloseCountdownSeconds, 0d, 1d);
-
-        if (_remainingCloseCountdownSeconds > 0d)
+    private void DismissFromCloseCountdown()
+    {
+        if (Dispatcher.UIThread.CheckAccess())
         {
+            DismissOnUiThread();
             return;
         }
 
-        if (_closeCountdownTimer is not null)
+        Dispatcher.UIThread.Post(DismissOnUiThread, DispatcherPriority.Normal);
+    }
+
+    private void DismissOnUiThread()
+    {
+        lock (_closeCountdownGate)
         {
-            _closeCountdownTimer.Stop();
-            _closeCountdownTimer.Tick -= OnCloseCountdownTick;
+            if (_isDisposed)
+            {
+                return;
+            }
         }
 
         if (_dismissCallback is not null)
@@ -185,6 +251,57 @@ public sealed class AchievementToastItemViewModel : ObservableObject, IDisposabl
         else
         {
             Dispose();
+        }
+    }
+
+    private bool TryAdvanceCloseCountdown(out double progress)
+    {
+        lock (_closeCountdownGate)
+        {
+            progress = Math.Clamp(_remainingCloseCountdownSeconds / CloseCountdownSeconds, 0d, 1d);
+            if (_isDisposed)
+            {
+                return false;
+            }
+
+            var now = DateTimeOffset.UtcNow;
+            if (_isCloseCountdownPaused)
+            {
+                _lastCloseCountdownTickUtc = now;
+                return false;
+            }
+
+            var elapsed = now - _lastCloseCountdownTickUtc;
+            _lastCloseCountdownTickUtc = now;
+            _remainingCloseCountdownSeconds = Math.Max(0d, _remainingCloseCountdownSeconds - elapsed.TotalSeconds);
+            progress = Math.Clamp(_remainingCloseCountdownSeconds / CloseCountdownSeconds, 0d, 1d);
+            return _remainingCloseCountdownSeconds <= 0d;
+        }
+    }
+
+    private async Task RunCloseCountdownLoopAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                await Task.Delay(50, cancellationToken).ConfigureAwait(false);
+
+                var shouldDismiss = TryAdvanceCloseCountdown(out var progress);
+                UpdateCloseCountdownProgress(progress);
+
+                if (!shouldDismiss)
+                {
+                    continue;
+                }
+
+                DismissFromCloseCountdown();
+                return;
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Toasts cancel the loop when they are dismissed or disposed.
         }
     }
 }

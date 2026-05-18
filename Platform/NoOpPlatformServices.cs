@@ -4,6 +4,8 @@ public sealed class NoOpTrayService : ITrayService
 {
     public event EventHandler<TrayCommandEvent>? CommandInvoked;
 
+    public event EventHandler<TrayMenuRequestEvent>? MenuRequested;
+
     public PlatformCapabilityStatus Capability => new(
         false,
         "System tray is not supported in this environment",

@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Text.Json.Nodes;
 using MAAUnified.App.ViewModels;
 using MAAUnified.App.ViewModels.Settings;
 using MAAUnified.Application.Configuration;
@@ -94,6 +95,46 @@ public sealed class TimerScheduleAK3FeatureTests
         Assert.True(await WaitForLogCountAtLeastAsync(fixture.Runtime.DiagnosticsService.EventLogPath, "Timer.Schedule.Trigger", 1, retry: 80, delayMs: 30));
         Assert.True(await WaitForLogCountAtLeastAsync(fixture.Runtime.DiagnosticsService.EventLogPath, "Timer.Schedule.SwitchProfile", 1, retry: 80, delayMs: 30));
         Assert.True(await WaitForLogCountAtLeastAsync(fixture.Runtime.DiagnosticsService.EventLogPath, "Timer.Schedule.Start", 1, retry: 80, delayMs: 30));
+    }
+
+    [Fact]
+    public async Task Timer_Schedule_CustomProfileSwitch_ShouldNotLeakPostActionState()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var defaultProfile = fixture.Runtime.ConfigurationService.CurrentConfig.Profiles["Default"];
+        var nightProfile = fixture.Runtime.ConfigurationService.CurrentConfig.Profiles["Night"];
+        defaultProfile.Values["TaskQueue.PostAction"] = new JsonObject
+        {
+            ["exit_emulator"] = true,
+            ["commands"] = new JsonObject(),
+        };
+        nightProfile.Values["TaskQueue.PostAction"] = new JsonObject
+        {
+            ["exit_self"] = true,
+            ["commands"] = new JsonObject(),
+        };
+        await fixture.Runtime.ConfigurationService.SaveAsync();
+        await fixture.Shell.TaskQueuePage.ReloadConfigurationContextAsync();
+
+        fixture.Shell.TaskQueuePage.PostActionModule.Shutdown = true;
+        var scheduledAt = BuildScheduleTime(10, 41);
+        await fixture.ConfigureSingleTimerAsync(scheduledAt, force: false, custom: true, profile: "Night");
+
+        await InvokeEvaluateTimerScheduleAsync(fixture.Shell, scheduledAt);
+
+        Assert.True(await WaitForConditionAsync(
+            () => string.Equals(
+                fixture.Runtime.ConfigurationService.CurrentConfig.CurrentProfile,
+                "Night",
+                StringComparison.OrdinalIgnoreCase),
+            retry: 80,
+            delayMs: 20));
+
+        var savedDefaultPostAction = PostActionConfig.FromJson(defaultProfile.Values["TaskQueue.PostAction"]);
+        var savedNightPostAction = PostActionConfig.FromJson(nightProfile.Values["TaskQueue.PostAction"]);
+
+        Assert.True(savedDefaultPostAction.Shutdown);
+        Assert.False(savedNightPostAction.Shutdown);
     }
 
     [Fact]
@@ -335,6 +376,7 @@ public sealed class TimerScheduleAK3FeatureTests
                 OverlayFeatureService = new OverlayFeatureService(capability),
                 NotificationProviderFeatureService = new NotificationProviderFeatureService(),
                 SettingsFeatureService = new SettingsFeatureService(config, capability, diagnostics),
+                ConfigurationProfileFeatureService = new ConfigurationProfileFeatureService(config),
                 DialogFeatureService = new DialogFeatureService(diagnostics),
                 PostActionFeatureService = new PostActionFeatureService(
                     config,

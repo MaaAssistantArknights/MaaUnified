@@ -402,6 +402,8 @@ public sealed class MainShellViewModelTests
 
         try
         {
+            toast.StartPresentation();
+            Dispatcher.UIThread.RunJobs();
             toast.PauseCloseCountdown();
             Assert.False(toast.IsCloseCountdownPaused);
 
@@ -412,6 +414,70 @@ public sealed class MainShellViewModelTests
         }
         finally
         {
+            toast.Dispose();
+        }
+    }
+
+    [Fact]
+    public async Task AchievementToast_AutoClose_ShouldDismissAfterVisibleCountdown()
+    {
+        var dismissedIds = new List<string>();
+        var toast = new AchievementToastItemViewModel(
+            "ToastAutoClose",
+            "Achievement Unlocked",
+            "Auto close",
+            "Countdown should dismiss the toast.",
+            "#42A5F5",
+            autoClose: true,
+            DateTimeOffset.UtcNow,
+            dismissedIds.Add);
+
+        try
+        {
+            toast.StartPresentation();
+            Dispatcher.UIThread.RunJobs();
+            SetAchievementToastRemainingSeconds(toast, 0.05d);
+
+            Assert.True(await WaitUntilAsync(
+                () =>
+                {
+                    Dispatcher.UIThread.RunJobs();
+                    return dismissedIds.Any(id => string.Equals(id, "ToastAutoClose", StringComparison.Ordinal));
+                },
+                retry: 80,
+                delayMs: 25));
+        }
+        finally
+        {
+            toast.Dispose();
+        }
+    }
+
+    [Fact]
+    public async Task AchievementToast_AutoClose_ShouldNotStartCountdownBeforePresentation()
+    {
+        var toast = new AchievementToastItemViewModel(
+            "ToastAutoCloseBeforeLoaded",
+            "Achievement Unlocked",
+            "Auto close",
+            "Countdown should wait until presentation starts.",
+            "#42A5F5",
+            autoClose: true,
+            DateTimeOffset.UtcNow,
+            _ => { });
+
+        try
+        {
+            await Task.Delay(200);
+            Assert.Equal(7d, GetAchievementToastRemainingSeconds(toast), precision: 2);
+
+            toast.StartPresentation();
+            await Task.Delay(200);
+            Assert.True(GetAchievementToastRemainingSeconds(toast) < 6.95d);
+        }
+        finally
+        {
+            Dispatcher.UIThread.RunJobs();
             toast.Dispose();
         }
     }
@@ -961,6 +1027,33 @@ public sealed class MainShellViewModelTests
                       task => string.Equals(task.Type, "Fight", StringComparison.Ordinal))
                   && fixture.ViewModel.TaskQueuePage.Tasks.All(
                       task => !string.Equals(task.Type, "Recruit", StringComparison.Ordinal))));
+    }
+
+    [Fact]
+    public async Task SettingsProfileSwitch_ShouldFlushPendingPostActionChangesBeforeSwitch()
+    {
+        await using var fixture = await TestFixture.CreateAsync(
+            existingAvaloniaJson: CreateSwitchableProfilesConfigJson());
+        await fixture.ViewModel.InitializeAsync();
+        await fixture.ViewModel.TaskQueuePage.ReloadConfigurationContextAsync();
+
+        fixture.ViewModel.TaskQueuePage.PostActionModule.Shutdown = true;
+        fixture.ViewModel.SettingsPage.ConfigurationManagerSelectedProfile = "Alt";
+        await fixture.ViewModel.SettingsPage.SwitchConfigurationProfileAsync();
+
+        Assert.True(await WaitUntilAsync(
+            () => string.Equals(
+                fixture.Runtime.ConfigurationService.CurrentConfig.CurrentProfile,
+                "Alt",
+                StringComparison.OrdinalIgnoreCase)));
+
+        var defaultProfile = fixture.Runtime.ConfigurationService.CurrentConfig.Profiles["Default"];
+        var altProfile = fixture.Runtime.ConfigurationService.CurrentConfig.Profiles["Alt"];
+        var defaultPostAction = PostActionConfig.FromJson(defaultProfile.Values["TaskQueue.PostAction"]);
+        var altPostAction = PostActionConfig.FromJson(altProfile.Values["TaskQueue.PostAction"]);
+
+        Assert.True(defaultPostAction.Shutdown);
+        Assert.False(altPostAction.Shutdown);
     }
 
     [Fact]
@@ -1827,6 +1920,24 @@ public sealed class MainShellViewModelTests
         await task!;
     }
 
+    private static void SetAchievementToastRemainingSeconds(AchievementToastItemViewModel toast, double seconds)
+    {
+        var field = typeof(AchievementToastItemViewModel).GetField(
+            "_remainingCloseCountdownSeconds",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(field);
+        field!.SetValue(toast, seconds);
+    }
+
+    private static double GetAchievementToastRemainingSeconds(AchievementToastItemViewModel toast)
+    {
+        var field = typeof(AchievementToastItemViewModel).GetField(
+            "_remainingCloseCountdownSeconds",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(field);
+        return (double)field!.GetValue(toast)!;
+    }
+
     private static string GetMaaUnifiedRoot()
     {
         return TestRepoLayout.GetMaaUnifiedRoot();
@@ -2421,6 +2532,8 @@ public sealed class MainShellViewModelTests
             Provider: "test");
 
         public event EventHandler<TrayCommandEvent>? CommandInvoked;
+
+        public event EventHandler<TrayMenuRequestEvent>? MenuRequested;
 
         public int InitializeCallCount { get; private set; }
 

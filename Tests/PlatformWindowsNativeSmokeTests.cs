@@ -18,7 +18,7 @@ public sealed class PlatformWindowsNativeSmokeTests
             Environment.SetEnvironmentVariable("MAA_PLATFORM_FORCE_FALLBACK", null);
             var bundle = PlatformServicesFactory.CreateDefaults();
 
-            Assert.IsType<AvaloniaTrayIconTrayService>(bundle.TrayService);
+            Assert.IsType<WindowsNotifyIconTrayService>(bundle.TrayService);
             Assert.IsType<DesktopNotificationService>(bundle.NotificationService);
             Assert.True(bundle.HotkeyService is SharpHookGlobalHotkeyService or CompositeGlobalHotkeyService);
             Assert.IsType<CrossPlatformAutostartService>(bundle.AutostartService);
@@ -26,7 +26,7 @@ public sealed class PlatformWindowsNativeSmokeTests
 
             var snapshot = PlatformCapabilitySnapshotFactory.FromBundle(bundle);
             Assert.True(snapshot.Tray.Supported);
-            Assert.Equal("avalonia-trayicon", snapshot.Tray.Provider);
+            Assert.Equal("h-notifyicon", snapshot.Tray.Provider);
             Assert.Equal("desktop-notifications", snapshot.Notification.Provider);
             Assert.True(snapshot.Notification.HasFallback);
             Assert.True(snapshot.Hotkey.Supported);
