@@ -1,9 +1,11 @@
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using MAAUnified.Application.Configuration;
 using MAAUnified.Application.Models;
 using MAAUnified.Application.Models.TaskParams;
 using MAAUnified.Application.Services.TaskParams;
+using MAAUnified.Compat.Constants;
 
 namespace MAAUnified.Application.Services;
 
@@ -23,11 +25,13 @@ public sealed class UnifiedConfigurationService
     private const string GuiFileName = "gui.json";
     private const string ParseNullWarningCode = "ConfigRepair.DeserializeNull";
     private const string ParseExceptionWarningCode = "ConfigRepair.DeserializeException";
+    private const string AchievementAutoCloseDefaultRepairMarker = "ConfigRepair.AchievementPopupAutoCloseDefault.True.V1";
 
     private readonly IUnifiedConfigStore _store;
     private readonly IConfigImporter _guiNewImporter;
     private readonly IConfigImporter _guiImporter;
     private readonly string _baseDirectory;
+    private readonly SemaphoreSlim _saveSemaphore = new(1, 1);
     private List<ConfigValidationIssue> _currentValidationIssues = [];
 
     public UnifiedConfigurationService(
@@ -92,21 +96,30 @@ public sealed class UnifiedConfigurationService
                 {
                     CurrentConfig = loaded;
                     var normalizedFightStageCount = NormalizeFightStageSelections(CurrentConfig);
+                    var repairedAchievementPopupAutoCloseCount = RepairAchievementPopupAutoCloseDefault(CurrentConfig);
                     if (normalizedFightStageCount > 0)
                     {
                         LogService.Info(
                             $"Normalized {normalizedFightStageCount} legacy Fight stage selector(s) to `{FightStageSelection.CurrentOrLast}`.");
-                        if (CurrentConfig.SchemaVersion == UnifiedConfig.LatestSchemaVersion)
+                    }
+
+                    if (repairedAchievementPopupAutoCloseCount > 0)
+                    {
+                        LogService.Info(
+                            $"Repaired {repairedAchievementPopupAutoCloseCount} achievement popup auto-close setting(s) to True.");
+                    }
+
+                    if ((normalizedFightStageCount > 0 || repairedAchievementPopupAutoCloseCount > 0)
+                        && CurrentConfig.SchemaVersion == UnifiedConfig.LatestSchemaVersion)
+                    {
+                        try
                         {
-                            try
-                            {
-                                await _store.SaveAsync(CurrentConfig, cancellationToken);
-                                LogService.Info("Persisted normalized fight stage selectors to config/avalonia.json");
-                            }
-                            catch (Exception ex)
-                            {
-                                LogService.Warn($"Failed to persist normalized fight stage selectors: {ex.Message}");
-                            }
+                            await _store.SaveAsync(CurrentConfig, cancellationToken);
+                            LogService.Info("Persisted normalized config values to config/avalonia.json");
+                        }
+                        catch (Exception ex)
+                        {
+                            LogService.Warn($"Failed to persist normalized config values: {ex.Message}");
                         }
                     }
 
@@ -247,6 +260,7 @@ public sealed class UnifiedConfigurationService
                 ImportedFromGui = report.ImportedGui,
                 Warnings = [.. report.Warnings],
             };
+            RepairAchievementPopupAutoCloseDefault(config);
 
             if (request.ManualImport && _store.Exists())
             {
@@ -418,27 +432,35 @@ public sealed class UnifiedConfigurationService
         CancellationToken cancellationToken,
         ConfigValidationMode validationMode = ConfigValidationMode.Full)
     {
-        var sourceSchemaVersion = config.SchemaVersion;
-        if (sourceSchemaVersion != UnifiedConfig.LatestSchemaVersion && _store.Exists())
+        await _saveSemaphore.WaitAsync(cancellationToken);
+        try
         {
-            var suffix = $".schema-v{sourceSchemaVersion}.bak.{DateTimeOffset.UtcNow:yyyyMMddHHmmss}";
-            await _store.BackupAsync(suffix, cancellationToken);
-            LogService.Warn(
-                $"Schema migration write detected: v{sourceSchemaVersion} -> v{UnifiedConfig.LatestSchemaVersion}. Backup created at {_store.ConfigPath}{suffix}");
+            var sourceSchemaVersion = config.SchemaVersion;
+            if (sourceSchemaVersion != UnifiedConfig.LatestSchemaVersion && _store.Exists())
+            {
+                var suffix = $".schema-v{sourceSchemaVersion}.bak.{DateTimeOffset.UtcNow:yyyyMMddHHmmss}";
+                await _store.BackupAsync(suffix, cancellationToken);
+                LogService.Warn(
+                    $"Schema migration write detected: v{sourceSchemaVersion} -> v{UnifiedConfig.LatestSchemaVersion}. Backup created at {_store.ConfigPath}{suffix}");
+            }
+
+            config.SchemaVersion = UnifiedConfig.LatestSchemaVersion;
+            await _store.SaveAsync(config, cancellationToken);
+            CurrentConfig = config;
+            var issues = RefreshValidationState(validationMode, logIssues: true);
+            ConfigChanged?.Invoke(CurrentConfig);
+
+            if (logSavedConfig)
+            {
+                LogService.Info("Saved config/avalonia.json");
+            }
+
+            return issues;
         }
-
-        config.SchemaVersion = UnifiedConfig.LatestSchemaVersion;
-        await _store.SaveAsync(config, cancellationToken);
-        CurrentConfig = config;
-        var issues = RefreshValidationState(validationMode, logIssues: true);
-        ConfigChanged?.Invoke(CurrentConfig);
-
-        if (logSavedConfig)
+        finally
         {
-            LogService.Info("Saved config/avalonia.json");
+            _saveSemaphore.Release();
         }
-
-        return issues;
     }
 
     private List<(IConfigImporter Importer, bool FillMissingOnly)> BuildImportPlan(ImportSource source)
@@ -531,6 +553,83 @@ public sealed class UnifiedConfigurationService
         }
 
         collection.Add(fileName);
+    }
+
+    private static int RepairAchievementPopupAutoCloseDefault(UnifiedConfig config)
+    {
+        if (config.Migration.Warnings.Any(warning => string.Equals(
+                warning,
+                AchievementAutoCloseDefaultRepairMarker,
+                StringComparison.Ordinal)))
+        {
+            return 0;
+        }
+
+        var profiles = config.Profiles.Values.ToArray();
+        if (profiles.Length == 0)
+        {
+            return 0;
+        }
+
+        var hasExplicitFalse = false;
+        foreach (var profile in profiles)
+        {
+            if (!profile.Values.TryGetValue(ConfigurationKeys.AchievementPopupAutoClose, out var value)
+                || !TryReadBool(value, out var parsed))
+            {
+                continue;
+            }
+
+            if (parsed)
+            {
+                return 0;
+            }
+
+            hasExplicitFalse = true;
+        }
+
+        if (!hasExplicitFalse)
+        {
+            return 0;
+        }
+
+        if (config.GlobalValues.TryGetValue(ConfigurationKeys.AchievementPopupAutoClose, out var globalValue)
+            && TryReadBool(globalValue, out var parsedGlobal)
+            && parsedGlobal)
+        {
+            return 0;
+        }
+
+        foreach (var profile in profiles)
+        {
+            profile.Values[ConfigurationKeys.AchievementPopupAutoClose] = JsonValue.Create(true);
+        }
+
+        config.Migration.Warnings.Add(AchievementAutoCloseDefaultRepairMarker);
+        return profiles.Length;
+    }
+
+    private static bool TryReadBool(JsonNode? node, out bool value)
+    {
+        value = false;
+        if (node is null)
+        {
+            return false;
+        }
+
+        var text = node.ToString();
+        if (bool.TryParse(text, out value))
+        {
+            return true;
+        }
+
+        if (int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var number))
+        {
+            value = number != 0;
+            return true;
+        }
+
+        return false;
     }
 
     private static int NormalizeFightStageSelections(UnifiedConfig config)

@@ -527,11 +527,6 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
 
     private static bool IsWindowsPackageResolution(VersionUpdateCheckResult workflowResult)
     {
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-        {
-            return true;
-        }
-
         if (workflowResult.PackageSourceKind == PackageSourceKind.WindowsRelayManifest)
         {
             return true;

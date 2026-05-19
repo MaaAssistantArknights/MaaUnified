@@ -22,11 +22,13 @@ public sealed class VersionUpdateFeatureServiceTests
     [Fact]
     public async Task CheckForUpdatesAsync_ReadsLocalReleaseFeed()
     {
-        var service = new VersionUpdateFeatureService();
+        var root = Path.Combine(Path.GetTempPath(), $"maa-unified-release-feed-root-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(root);
         var feedPath = Path.Combine(Path.GetTempPath(), $"maa-unified-release-feed-{Guid.NewGuid():N}.json");
 
         try
         {
+            var service = CreateLinuxVersionUpdateFeatureService(root);
             await File.WriteAllTextAsync(feedPath, JsonSerializer.Serialize(new[]
             {
                 new
@@ -71,6 +73,11 @@ public sealed class VersionUpdateFeatureServiceTests
         {
             try
             {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+
                 if (File.Exists(feedPath))
                 {
                     File.Delete(feedPath);
@@ -123,7 +130,11 @@ public sealed class VersionUpdateFeatureServiceTests
 
                 return new HttpResponseMessage(HttpStatusCode.NotFound);
             }));
-            var workflow = new AppUpdateWorkflowService(new NoOpAppLifecycleService(), httpClient);
+            var workflow = new AppUpdateWorkflowService(
+                new NoOpAppLifecycleService(),
+                httpClient,
+                OSPlatform.Linux,
+                Architecture.X64);
             var service = new VersionUpdateFeatureService(
                 CreateConfigurationService(root),
                 appUpdateWorkflowService: workflow,
@@ -289,7 +300,11 @@ public sealed class VersionUpdateFeatureServiceTests
 
                 return new HttpResponseMessage(HttpStatusCode.NotFound);
             }));
-            var workflow = new AppUpdateWorkflowService(new NoOpAppLifecycleService(), httpClient);
+            var workflow = new AppUpdateWorkflowService(
+                new NoOpAppLifecycleService(),
+                httpClient,
+                OSPlatform.Linux,
+                Architecture.X64);
             var service = new VersionUpdateFeatureService(
                 CreateConfigurationService(root),
                 appUpdateWorkflowService: workflow,
@@ -1529,6 +1544,19 @@ public sealed class VersionUpdateFeatureServiceTests
             new GuiJsonConfigImporter(),
             new UiLogService(),
             root);
+    }
+
+    private static VersionUpdateFeatureService CreateLinuxVersionUpdateFeatureService(string root, HttpClient? httpClient = null)
+    {
+        var workflow = new AppUpdateWorkflowService(
+            new NoOpAppLifecycleService(),
+            httpClient,
+            OSPlatform.Linux,
+            Architecture.X64);
+        return new VersionUpdateFeatureService(
+            CreateConfigurationService(root),
+            appUpdateWorkflowService: workflow,
+            runtimeBaseDirectory: root);
     }
 
     private static string ReadGlobalString(UnifiedConfig config, string key)

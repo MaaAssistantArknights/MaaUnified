@@ -1348,7 +1348,7 @@ public sealed class MainShellViewModel : ObservableObject
         page.GuiSettingsApplied += OnGuiSettingsApplied;
         page.ResourceVersionUpdated += OnSettingsResourceVersionUpdated;
         page.UpdateAvailabilityChanged += OnSettingsUpdateAvailabilityChanged;
-        page.ConfigurationContextChanged += OnSettingsConfigurationContextChanged;
+        page.ApplyConfigurationContextChangedAsync = ApplySettingsConfigurationContextChangedAsync;
         page.PropertyChanged += OnSettingsPagePropertyChanged;
         page.ApplyStartupSnapshot(BuildLatestShellSnapshot());
         ApplySettingsUpdateAvailabilityState(page);
@@ -2008,6 +2008,9 @@ public sealed class MainShellViewModel : ObservableObject
                 notification.AutoClose,
                 notification.UnlockedAtUtc,
                 DismissAchievementToast));
+        _ = RecordEventAsync(
+            "AchievementToast.Present",
+            $"id={notification.Id}; autoClose={notification.AutoClose}; visible={_achievementToastWindowVisible}; startupCompleted={_achievementToastStartupCompleted}; count={AchievementToasts.Count}");
 
         const int maxVisible = 4;
         while (AchievementToasts.Count(item => !item.IsDismissAnimationActive) > maxVisible)
@@ -2438,6 +2441,24 @@ public sealed class MainShellViewModel : ObservableObject
         return firstSpaceIndex > 0
             ? text[..firstSpaceIndex] + Environment.NewLine + text[(firstSpaceIndex + 1)..]
             : text;
+    }
+
+    private async Task ApplySettingsConfigurationContextChangedAsync(
+        ConfigurationContextChangedEventArgs change,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await HandleSettingsConfigurationContextChangedAsync(change);
+        }
+        catch (Exception ex)
+        {
+            await RecordUnhandledExceptionAsync(
+                "Settings.ConfigurationContextChanged",
+                ex,
+                UiErrorCode.UiOperationFailed,
+                $"閰嶇疆涓婁笅鏂囧埛鏂板け璐? {ex.Message}");
+        }
     }
 
     private async Task HandleSettingsConfigurationContextChangedAsync(ConfigurationContextChangedEventArgs change)
@@ -3308,6 +3329,7 @@ public sealed class MainShellViewModel : ObservableObject
             step.Restart();
             if (TryGetSettingsPage(out var settingsPage))
             {
+                settingsPage.Language = nextLanguage;
                 settingsPage.AutostartStatus = PlatformCapabilityTextMap.FormatAutostartStatus(
                     nextLanguage,
                     settingsPage.StartSelf,
@@ -3437,6 +3459,10 @@ public sealed class MainShellViewModel : ObservableObject
         try
         {
             await WaitForBlockingOperationOverlayRenderAsync();
+            if (TryGetSettingsPage(out var settingsPage))
+            {
+                await settingsPage.FlushConfigurationSavesForCloseAsync(cancellationToken);
+            }
             var switchResult = await _runtime.ShellFeatureService.SwitchLanguageAsync(
                 CurrentShellLanguage,
                 targetLanguage,

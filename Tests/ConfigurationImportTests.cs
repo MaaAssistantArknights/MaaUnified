@@ -447,6 +447,69 @@ public sealed class ConfigurationImportTests
     }
 
     [Fact]
+    public async Task ExistingAvaloniaConfig_BackfilledAchievementAutoCloseFalse_ShouldRepairAndPersist()
+    {
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "avalonia.json"),
+            """
+            {
+              "SchemaVersion": 2,
+              "CurrentProfile": "Default",
+              "Profiles": {
+                "MissingSetting": {
+                  "Values": {},
+                  "TaskQueue": []
+                },
+                "Default": {
+                  "Values": {
+                    "Achievement.PopupDisabled": "False",
+                    "Achievement.PopupAutoClose": "False"
+                  },
+                  "TaskQueue": []
+                },
+                "Alt": {
+                  "Values": {
+                    "Achievement.PopupDisabled": "False",
+                    "Achievement.PopupAutoClose": "False"
+                  },
+                  "TaskQueue": []
+                }
+              },
+              "GlobalValues": {},
+              "Migration": {}
+            }
+            """);
+
+        var service = CreateService(root);
+        var result = await service.LoadOrBootstrapAsync();
+
+        Assert.True(result.LoadedFromExistingConfig);
+        Assert.True(service.CurrentConfig.Profiles["MissingSetting"].Values["Achievement.PopupAutoClose"]?.GetValue<bool>());
+        Assert.True(service.CurrentConfig.Profiles["Default"].Values["Achievement.PopupAutoClose"]?.GetValue<bool>());
+        Assert.True(service.CurrentConfig.Profiles["Alt"].Values["Achievement.PopupAutoClose"]?.GetValue<bool>());
+        Assert.Contains(
+            service.LogService.Snapshot,
+            log => string.Equals(log.Level, "INFO", StringComparison.Ordinal)
+                   && log.Message.Contains("achievement popup auto-close", StringComparison.OrdinalIgnoreCase));
+
+        var persisted = Assert.IsType<JsonObject>(
+            JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(root, "config", "avalonia.json"))));
+        Assert.True(persisted["Profiles"]?["Default"]?["Values"]?["Achievement.PopupAutoClose"]?.GetValue<bool>());
+
+        AchievementUnlockedEvent? unlocked = null;
+        var tracker = new AchievementTrackerService(service, root);
+        tracker.AchievementUnlocked += (_, e) => unlocked = e;
+
+        var unlockResult = tracker.Unlock("Linguist");
+        Assert.True(unlockResult.Success);
+        Assert.NotNull(unlocked);
+        Assert.True(unlocked!.AutoClose);
+    }
+
+    [Fact]
     public async Task CorruptedAvaloniaConfig_RebuildsDefaults_AndDoesNotCrash()
     {
         var root = CreateTempRoot();

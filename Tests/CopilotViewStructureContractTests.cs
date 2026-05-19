@@ -6,7 +6,8 @@ public sealed class CopilotViewStructureContractTests
     public void CopilotView_ShouldKeepVisibleStartButtonAndExpandableFileDropdown()
     {
         var root = GetMaaUnifiedRoot();
-        var xaml = File.ReadAllText(Path.Combine(root, "App", "Features", "Advanced", "CopilotView.axaml"));
+        var xaml = BaselineTestSupport.NormalizeLineEndings(
+            File.ReadAllText(Path.Combine(root, "App", "Features", "Advanced", "CopilotView.axaml")));
 
         Assert.Contains("Content=\"{Binding StartButtonText}\"", xaml, StringComparison.Ordinal);
         Assert.Contains("<TabStrip Classes=\"copilot-nav\"", xaml, StringComparison.Ordinal);
@@ -37,7 +38,8 @@ public sealed class CopilotViewStructureContractTests
     public void CopilotView_BattleList_ShouldUseSelectionListContractWithoutLegacyLoadButton()
     {
         var root = GetMaaUnifiedRoot();
-        var xaml = File.ReadAllText(Path.Combine(root, "App", "Features", "Advanced", "CopilotView.axaml"));
+        var xaml = BaselineTestSupport.NormalizeLineEndings(
+            File.ReadAllText(Path.Combine(root, "App", "Features", "Advanced", "CopilotView.axaml")));
 
         Assert.Contains("<controls:AppSelectionList", xaml, StringComparison.Ordinal);
         Assert.Contains("ItemsSource=\"{Binding Items}\"", xaml, StringComparison.Ordinal);
@@ -89,12 +91,13 @@ public sealed class CopilotViewStructureContractTests
         Assert.Contains("Classes=\"task-queue-list-actions\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Classes=\"task-queue-list-action-stack\"", xaml, StringComparison.Ordinal);
         Assert.Contains("RowDefinitions=\"Auto,*,Auto,Auto\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Grid.Row=\"2\"\n                        Classes=\"task-queue-list-action-divider\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("<Border Grid.Row=\"2\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"task-queue-list-action-divider\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Classes=\"grouped-card-footer-action", xaml, StringComparison.Ordinal);
         Assert.Contains("Classes=\"copilot-list-task-name-display\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Content=\"{Binding ImportBatchButtonText}\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Text=\"{Binding CopilotTaskName", xaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("<controls:AppTextInput Grid.Column=\"0\"\n                                           Text=\"{Binding CopilotTaskName}", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("<controls:AppTextInput Grid.Column=\"0\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Content=\"{Binding AddListButtonText}\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Content=\"{Binding ClearAllButtonText}\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Click=\"OnClearListClick\"", xaml, StringComparison.Ordinal);

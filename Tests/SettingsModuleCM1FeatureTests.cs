@@ -2,6 +2,7 @@ using System.Collections.Specialized;
 using System.Net;
 using System.Net.Http;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.IO.Compression;
 using System.Text.Json.Nodes;
 using MAAUnified.App.Features.Dialogs;
@@ -12,6 +13,7 @@ using MAAUnified.Application.Models;
 using MAAUnified.Application.Orchestration;
 using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Features;
+using MAAUnified.Application.Services.VersionUpdate;
 using MAAUnified.Compat.Constants;
 using MAAUnified.CoreBridge;
 using MAAUnified.Platform;
@@ -23,7 +25,7 @@ public sealed class SettingsModuleCM1FeatureTests
     [Fact]
     public async Task VersionUpdate_SaveChannelAndProxy_UseSeparatedPipelines()
     {
-        await using var fixture = await RuntimeFixture.CreateAsync();
+        await using var fixture = await RuntimeFixture.CreateAsync(CreateLinuxVersionUpdateFeatureService);
         fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.UpdateProxy] = JsonValue.Create("http://127.0.0.1:5000");
         fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.ProxyType] = JsonValue.Create("http");
 
@@ -59,7 +61,7 @@ public sealed class SettingsModuleCM1FeatureTests
     [Fact]
     public async Task VersionUpdate_CheckForUpdates_ShowsNotImplementedMessage()
     {
-        await using var fixture = await RuntimeFixture.CreateAsync();
+        await using var fixture = await RuntimeFixture.CreateAsync(CreateLinuxVersionUpdateFeatureService);
         var vm = new SettingsPageViewModel(
             fixture.Runtime,
             new ConnectionGameSharedStateViewModel(),
@@ -117,7 +119,7 @@ public sealed class SettingsModuleCM1FeatureTests
     [Fact]
     public async Task VersionUpdate_CheckForUpdates_UsesUiVersionForSoftwareUpdate()
     {
-        await using var fixture = await RuntimeFixture.CreateAsync();
+        await using var fixture = await RuntimeFixture.CreateAsync(CreateLinuxVersionUpdateFeatureService);
         var vm = new SettingsPageViewModel(
             fixture.Runtime,
             new ConnectionGameSharedStateViewModel(),
@@ -272,7 +274,7 @@ public sealed class SettingsModuleCM1FeatureTests
     [Fact]
     public async Task VersionUpdate_CheckForUpdates_ShouldNotRaiseErrorDialog()
     {
-        await using var fixture = await RuntimeFixture.CreateAsync();
+        await using var fixture = await RuntimeFixture.CreateAsync(CreateLinuxVersionUpdateFeatureService);
         var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
         await vm.InitializeAsync();
 
@@ -1022,6 +1024,20 @@ public sealed class SettingsModuleCM1FeatureTests
             root);
     }
 
+    private static IVersionUpdateFeatureService CreateLinuxVersionUpdateFeatureService(
+        UnifiedConfigurationService config,
+        string root)
+    {
+        var workflow = new AppUpdateWorkflowService(
+            new NoOpAppLifecycleService(),
+            operatingSystem: OSPlatform.Linux,
+            architecture: Architecture.X64);
+        return new VersionUpdateFeatureService(
+            config,
+            appUpdateWorkflowService: workflow,
+            runtimeBaseDirectory: root);
+    }
+
     private static string ReadGlobalString(UnifiedConfigurationService config, string key)
     {
         if (!config.CurrentConfig.GlobalValues.TryGetValue(key, out var node) || node is null)
@@ -1094,7 +1110,10 @@ public sealed class SettingsModuleCM1FeatureTests
 
         public UnifiedConfigurationService Config { get; }
 
-        public static async Task<RuntimeFixture> CreateAsync(string? root = null, bool cleanupRoot = true)
+        public static async Task<RuntimeFixture> CreateAsync(
+            Func<UnifiedConfigurationService, string, IVersionUpdateFeatureService>? versionUpdateFeatureServiceFactory = null,
+            string? root = null,
+            bool cleanupRoot = true)
         {
             root ??= Path.Combine(Path.GetTempPath(), "maa-unified-tests", Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(Path.Combine(root, "config"));
@@ -1145,7 +1164,8 @@ public sealed class SettingsModuleCM1FeatureTests
                 NotificationProviderFeatureService = new NotificationProviderFeatureService(),
                 SettingsFeatureService = new SettingsFeatureService(config, capability, diagnostics),
                 ConfigurationProfileFeatureService = new ConfigurationProfileFeatureService(config),
-                VersionUpdateFeatureService = new VersionUpdateFeatureService(config, runtimeBaseDirectory: root),
+                VersionUpdateFeatureService = versionUpdateFeatureServiceFactory?.Invoke(config, root)
+                    ?? new VersionUpdateFeatureService(config, runtimeBaseDirectory: root),
                 AchievementFeatureService = new AchievementFeatureService(config),
                 AnnouncementFeatureService = new AnnouncementFeatureService(config),
                 DialogFeatureService = new DialogFeatureService(diagnostics),

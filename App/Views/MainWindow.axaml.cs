@@ -2026,7 +2026,7 @@ public partial class MainWindow : Window
         popup.CommandInvoked += OnTrayContextMenuCommandInvoked;
         popup.Closed += OnTrayContextMenuClosed;
         DialogWindowScaling.ApplyOwnerUiScale(popup, this);
-        popup.OpenAt(new PixelPoint(e.ScreenX, e.ScreenY));
+        popup.OpenAt(e);
         _trayContextMenuWindow = popup;
     }
 

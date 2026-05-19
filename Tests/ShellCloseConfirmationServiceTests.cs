@@ -75,7 +75,7 @@ public sealed class ShellCloseConfirmationServiceTests
         Assert.Equal("MAA is updating", dialogService.LastWarningConfirmRequest?.Title);
         Assert.Equal(
             "An update is in progress. Exiting MAA now may cause resource damage.\nAre you sure you want to exit?",
-            dialogService.LastWarningConfirmRequest?.Message);
+            NormalizeLineEndings(dialogService.LastWarningConfirmRequest?.Message));
         Assert.Equal("Exit", dialogService.LastWarningConfirmRequest?.ConfirmText);
         Assert.Equal("Cancel", dialogService.LastWarningConfirmRequest?.CancelText);
     }
@@ -115,10 +115,13 @@ public sealed class ShellCloseConfirmationServiceTests
         Assert.Equal("MAA가 업데이트 중입니다", request.Title);
         Assert.Equal(
             "업데이트를 실행 중입니다. 지금 MAA를 종료하면 리소스가 손상될 수 있습니다.\n정말로 종료하시겠습니까?",
-            request.Message);
+            NormalizeLineEndings(request.Message));
         Assert.Equal("종료", request.ConfirmText);
         Assert.Equal("취소", request.CancelText);
     }
+
+    private static string? NormalizeLineEndings(string? text)
+        => text?.Replace("\r\n", "\n").Replace('\r', '\n');
 
     private sealed class RecordingDialogService : IAppDialogService
     {
