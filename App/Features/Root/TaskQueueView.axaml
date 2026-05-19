@@ -845,9 +845,12 @@
                 Classes="app-surface app-card task-queue-run-card">
           <Grid RowDefinitions="Auto,Auto,Auto">
             <Button Classes="app-button app-primary task-queue-run-button"
+                    Classes.locked="{Binding IsOwnRunActive}"
                     Grid.Row="0"
                     Content="{Binding RunButtonText}"
                     IsEnabled="{Binding CanToggleRun}"
+                    PointerEntered="OnRunButtonPointerEntered"
+                    PointerExited="OnRunButtonPointerExited"
                     Click="OnToggleRunClick" />
             <TextBlock Grid.Row="1"
                        Classes="app-caption long-wrap state-warning task-queue-warning-text"

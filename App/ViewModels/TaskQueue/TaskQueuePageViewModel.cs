@@ -201,6 +201,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     private bool _isPostActionPanelSelected;
     private bool _isWaitingForStop;
     private bool _isStartRequestActive;
+    private bool _isRunButtonStopHovered;
     private SelectionBatchMode _selectionBatchMode = SelectionBatchMode.Clear;
     private bool _showBatchModeToggle;
     private bool _clearTaskStatusesWhenStopped;
@@ -583,6 +584,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 OnPropertyChanged(nameof(CanEdit));
                 OnPropertyChanged(nameof(RunButtonText));
                 OnPropertyChanged(nameof(IsRunOwnedByAnotherFeature));
+                OnPropertyChanged(nameof(IsOwnRunActive));
                 OnPropertyChanged(nameof(CanToggleRun));
                 OnPropertyChanged(nameof(CanWaitAndStop));
             }
@@ -593,9 +595,28 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
     public bool CanEdit => !IsRunning;
 
-    public string RunButtonText => _isStartRequestActive
-        ? RootTexts.GetOrDefault("TaskQueue.Root.Waiting", "Waiting...")
-        : RootTexts.GetOrDefault("TaskQueue.Root.LinkStart", "Link Start!");
+    public string RunButtonText
+    {
+        get
+        {
+            if (_isStartRequestActive)
+            {
+                return RootTexts.GetOrDefault("TaskQueue.Root.Waiting", "Waiting...");
+            }
+
+            if (IsOwnRunActive)
+            {
+                return _isRunButtonStopHovered
+                    ? RootTexts.GetOrDefault("TaskQueue.Root.Stop", "Stop")
+                    : RootTexts.GetOrDefault("Toolbox.Action.Running", "Running...");
+            }
+
+            return RootTexts.GetOrDefault("TaskQueue.Root.LinkStart", "Link Start!");
+        }
+    }
+
+    public bool IsOwnRunActive => CurrentSessionState is SessionState.Running or SessionState.Stopping
+        && !IsRunOwnedByAnotherFeature;
 
     public bool IsRunOwnedByAnotherFeature
     {
@@ -663,10 +684,35 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         OnPropertyChanged(nameof(CanEdit));
         OnPropertyChanged(nameof(RunButtonText));
         OnPropertyChanged(nameof(IsRunOwnedByAnotherFeature));
+        OnPropertyChanged(nameof(IsOwnRunActive));
         OnPropertyChanged(nameof(CanToggleRun));
     }
 
     public bool IsStartRequestActive => _isStartRequestActive;
+
+    public void SetRunButtonHover(bool hovering)
+    {
+        if (hovering)
+        {
+            if (!IsOwnRunActive || _isRunButtonStopHovered)
+            {
+                return;
+            }
+
+            _isRunButtonStopHovered = true;
+        }
+        else
+        {
+            if (!_isRunButtonStopHovered)
+            {
+                return;
+            }
+
+            _isRunButtonStopHovered = false;
+        }
+
+        OnPropertyChanged(nameof(RunButtonText));
+    }
 
     public bool IsWaitingForStop
     {
@@ -1051,13 +1097,30 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         bool forceReloadStageOptions = false,
         CancellationToken cancellationToken = default)
     {
-        PrepareForConfigurationContextSwitch();
-        await ReloadTasksAsync(cancellationToken, preferProfileSelectedIndex: true);
-        await FightModule.ReloadPersistentConfigAsync(cancellationToken);
-        await InfrastModule.ReloadPersistentConfigAsync(cancellationToken);
-        await RoguelikeModule.ReloadPersistentConfigAsync(cancellationToken);
-        ApplyGuiSettingsFromConfig();
-        await PostActionModule.InitializeAsync(cancellationToken);
+        _suppressSelectedTaskBindingDuringFirstScreenLoad = true;
+        try
+        {
+            PrepareForConfigurationContextSwitch();
+            await ReloadTasksAsync(
+                cancellationToken,
+                preferProfileSelectedIndex: true,
+                waitForPendingBinding: false);
+            await FightModule.ReloadPersistentConfigAsync(cancellationToken);
+            await InfrastModule.ReloadPersistentConfigAsync(cancellationToken);
+            await RoguelikeModule.ReloadPersistentConfigAsync(cancellationToken);
+            ApplyGuiSettingsFromConfig();
+            await PostActionModule.InitializeAsync(cancellationToken);
+        }
+        finally
+        {
+            _suppressSelectedTaskBindingDuringFirstScreenLoad = false;
+        }
+
+        if (SelectedTask is not null)
+        {
+            await BindSelectedTaskAsync(cancellationToken);
+        }
+
         RefreshStagePresentation(forceReloadStageOptions);
         UpdatePostActionSummary();
     }
@@ -1985,6 +2048,12 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         CurrentSessionState = Runtime.SessionService.CurrentState;
         if (CurrentSessionState is SessionState.Running or SessionState.Stopping)
         {
+            if (IsOwnRunActive)
+            {
+                await StopAsync(cancellationToken);
+                return;
+            }
+
             await ShowRunOwnerDialogAsync(cancellationToken);
             return;
         }
@@ -6604,6 +6673,13 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         {
             CurrentSessionState = changedState;
             OnPropertyChanged(nameof(IsRunOwnedByAnotherFeature));
+            OnPropertyChanged(nameof(IsOwnRunActive));
+            if (!IsOwnRunActive)
+            {
+                _isRunButtonStopHovered = false;
+                OnPropertyChanged(nameof(RunButtonText));
+            }
+
             if (changedState is SessionState.Running or SessionState.Stopping)
             {
                 return;

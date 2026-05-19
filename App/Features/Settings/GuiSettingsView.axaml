@@ -4,6 +4,32 @@
              xmlns:vm="clr-namespace:MAAUnified.App.ViewModels.Settings"
              Classes="settings-page"
              x:Class="MAAUnified.App.Features.Settings.GuiSettingsView">
+  <UserControl.Styles>
+    <Style Selector="Grid.gui-settings-preview-row controls|SettingsLabel">
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="Margin" Value="0,0,8,0" />
+    </Style>
+
+    <Style Selector="Grid.gui-settings-preview-row controls|SettingsLabel Grid">
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+    </Style>
+
+    <Style Selector="Grid.gui-settings-preview-row controls|SettingsLabel TextBlock.settings-label-text">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Muted}" />
+      <Setter Property="LineHeight" Value="18" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="TextAlignment" Value="Right" />
+      <Setter Property="TextWrapping" Value="NoWrap" />
+    </Style>
+
+    <Style Selector="Grid.gui-settings-preview-row > TextBlock.gui-settings-preview-text">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Muted}" />
+      <Setter Property="LineHeight" Value="18" />
+    </Style>
+  </UserControl.Styles>
+
   <Grid Margin="4"
         RowDefinitions="Auto,Auto">
     <TextBlock Classes="settings-page-title"
@@ -51,12 +77,12 @@
                         SelectedValue="{Binding LogItemDateFormatString}" />
             </Grid>
 
-            <Grid Classes="settings-page-labeled-row"
+            <Grid Classes="settings-page-labeled-row gui-settings-preview-row"
                   controls:SettingsLabelWidthCoordinator.GroupKey="Gui.Log"
                   ColumnDefinitions="Auto,*">
               <controls:SettingsLabel Text="{Binding RootTexts[Settings.GUI.LogItemDateFormat.PreviewCaption]}" />
               <TextBlock Grid.Column="1"
-                         Classes="app-body"
+                         Classes="app-caption gui-settings-preview-text"
                          Text="{Binding GuiLogItemDateFormatPreview}"
                          TextWrapping="Wrap" />
             </Grid>

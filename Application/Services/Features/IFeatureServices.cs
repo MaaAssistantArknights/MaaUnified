@@ -330,6 +330,8 @@ public interface IPlatformCapabilityService
 {
     event EventHandler<TrayCommandEvent>? TrayCommandInvoked;
 
+    event EventHandler<TrayMenuRequestEvent>? TrayMenuRequested;
+
     event EventHandler<GlobalHotkeyTriggeredEvent>? GlobalHotkeyTriggered;
 
     event EventHandler<OverlayStateChangedEvent>? OverlayStateChanged;

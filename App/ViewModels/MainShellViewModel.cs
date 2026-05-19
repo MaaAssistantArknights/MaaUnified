@@ -1332,6 +1332,18 @@ public sealed class MainShellViewModel : ObservableObject
             _connectionGameSharedState,
             ReportLocalizationFallback,
             dialogService: _dialogService);
+        page.BeforeConfigurationProfileSwitchAsync = async ct =>
+        {
+            if (await TaskQueuePage.FlushConfigurationSavesForCloseAsync(ct))
+            {
+                return UiOperationResult.Ok("Task queue configuration changes flushed.");
+            }
+
+            var message = string.IsNullOrWhiteSpace(TaskQueuePage.LastErrorMessage)
+                ? "Failed to save task queue configuration changes before switching profiles."
+                : TaskQueuePage.LastErrorMessage;
+            return UiOperationResult.Fail(UiErrorCode.ConfigurationProfileSaveFailed, message);
+        };
         page.GuiSettingsPreviewChanged += OnGuiSettingsPreviewChanged;
         page.GuiSettingsApplied += OnGuiSettingsApplied;
         page.ResourceVersionUpdated += OnSettingsResourceVersionUpdated;
@@ -2722,6 +2734,37 @@ public sealed class MainShellViewModel : ObservableObject
 
         try
         {
+            var failedNames = await FlushConfigurationSavesForCloseAsync(cancellationToken);
+            if (failedNames.Count > 0)
+            {
+                await RecordTimerScheduleErrorAsync(
+                    $"slot={slot.Index}; failed to flush pending changes before switching profile: {string.Join(", ", failedNames)}",
+                    cancellationToken: cancellationToken);
+                return false;
+            }
+
+            var switchResult = await _runtime.ConfigurationProfileFeatureService.SwitchProfileAsync(
+                targetProfile,
+                cancellationToken);
+            if (!switchResult.Success)
+            {
+                await RecordTimerScheduleErrorAsync(
+                    $"slot={slot.Index}; failed to switch profile to `{targetProfile}`: {switchResult.Message}",
+                    cancellationToken: cancellationToken);
+                return false;
+            }
+
+            SettingsPage.ConfigurationManagerSelectedProfile = targetProfile;
+            await TaskQueuePage.ReloadConfigurationContextAsync(cancellationToken: cancellationToken);
+            await TaskQueuePage.WaitForPendingBindingAsync(cancellationToken);
+            SyncConnectionFromProfile();
+            await RecordEventAsync(
+                "Timer.Schedule.SwitchProfile",
+                $"slot={slot.Index}; profile={targetProfile}",
+                cancellationToken);
+            return true;
+
+#if false
             config.CurrentProfile = targetProfile;
             var saved = await ConfigurationSaveTracker.Instance.RunTrackedAsync(
                 "Timer.Schedule.SwitchProfile",
@@ -2747,6 +2790,7 @@ public sealed class MainShellViewModel : ObservableObject
                 $"slot={slot.Index}; profile={targetProfile}",
                 cancellationToken);
             return true;
+#endif
         }
         catch (Exception ex)
         {

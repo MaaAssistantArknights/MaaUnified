@@ -432,8 +432,14 @@ public sealed class DialogModuleP1FeatureTests
             service.Split("ShowDialogWithOwnerScaleAsync<DialogReturnSemantic?>", StringSplitOptions.None).Length - 1);
 
         Assert.Contains("DialogWindowScaling.ApplyOwnerUiScale(_runtimeLogWindow, this);", mainWindow, StringComparison.Ordinal);
-        Assert.Contains("DialogWindowScaling.ApplyOwnerUiScale(waitDialog, this);", mainWindow, StringComparison.Ordinal);
+        Assert.Contains("DialogWindowScaling.ApplyOwnerUiScale(popup, this);", mainWindow, StringComparison.Ordinal);
+        Assert.True(
+            mainWindow.IndexOf("_overlayHostWindow = overlayHostWindow;", StringComparison.Ordinal)
+            < mainWindow.IndexOf("overlayHostWindow.Show();", StringComparison.Ordinal),
+            "Overlay host window should be assigned before Show() to avoid callbacks observing a null host.");
         Assert.Contains("DialogWindowScaling.ApplyOwnerUiScale(dialog, owner);", configurationManager, StringComparison.Ordinal);
+        Assert.Contains("return await PickManualImportAsync(topLevel, text);", configurationManager, StringComparison.Ordinal);
+        Assert.DoesNotContain("TopLevel.GetTopLevel(this)!", configurationManager, StringComparison.Ordinal);
         Assert.Contains("DialogWindowScaling.ApplyOwnerUiScale(_screenshotPreviewWindow, owner);", connectSettings, StringComparison.Ordinal);
     }
 
@@ -454,14 +460,13 @@ public sealed class DialogModuleP1FeatureTests
         };
 
         var popupScale = File.ReadAllText(Path.Combine(root, "App", "Controls", "PopupUiScale.cs"));
-        var controlStyles = File.ReadAllText(Path.Combine(root, "App", "Styles", "ControlStyles.axaml"));
         var foundationStyles = File.ReadAllText(Path.Combine(root, "App", "Styles", "AppFoundationStyles.axaml"));
         Assert.Contains("shell.EffectiveUiScaleFactor", popupScale, StringComparison.Ordinal);
         Assert.Contains("new LayoutTransformControl", popupScale, StringComparison.Ordinal);
         Assert.Contains("popup.Child = null;", popupScale, StringComparison.Ordinal);
         Assert.Contains("Popup.ChildProperty.Changed.AddClassHandler<Popup>", popupScale, StringComparison.Ordinal);
         Assert.Contains("child.GetVisualParent() is not null", popupScale, StringComparison.Ordinal);
-        Assert.Contains("Property=\"controls:PopupUiScale.UseTopLevelUiScale\" Value=\"True\"", controlStyles, StringComparison.Ordinal);
+        var controlStyles = File.ReadAllText(Path.Combine(root, "App", "Styles", "ControlStyles.axaml"));
         var titleTextCode = File.ReadAllText(Path.Combine(root, "App", "Controls", "AppWindowTitleText.cs"));
         Assert.Contains("controls|AppWindowTitleText.dialog-window-title", controlStyles, StringComparison.Ordinal);
         Assert.Contains("Property=\"Margin\" Value=\"8,0,0,0\"", controlStyles, StringComparison.Ordinal);

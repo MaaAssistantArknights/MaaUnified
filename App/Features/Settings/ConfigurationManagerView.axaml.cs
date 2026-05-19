@@ -417,9 +417,15 @@ public partial class ConfigurationManagerView : UserControl
 
     private async Task<ConfigurationImportSelectionAnalysis?> ShowImportModeDialogAsync(Func<string, string> text)
     {
-        if (TopLevel.GetTopLevel(this) is not Window owner)
+        var topLevel = TopLevel.GetTopLevel(this);
+        if (topLevel is null)
         {
-            return await PickManualImportAsync(TopLevel.GetTopLevel(this)!, text);
+            return null;
+        }
+
+        if (topLevel is not Window owner)
+        {
+            return await PickManualImportAsync(topLevel, text);
         }
 
         var dialog = new ConfigurationImportModeDialogView();

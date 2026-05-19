@@ -37,14 +37,42 @@ public sealed class SessionStateUiProjectionTests
         await WaitUntilAsync(() => vm.CurrentSessionState == SessionState.Running);
 
         Assert.True(vm.IsRunning);
+        Assert.True(vm.IsOwnRunActive);
         Assert.True(vm.CanToggleRun);
-        Assert.Equal(vm.RootTexts.GetOrDefault("TaskQueue.Root.LinkStart", "Link Start!"), vm.RunButtonText);
+        Assert.Equal(vm.RootTexts.GetOrDefault("Toolbox.Action.Running", "Running..."), vm.RunButtonText);
 
         Assert.True((await fixture.Runtime.ConnectFeatureService.StopAsync()).Success);
         await WaitUntilAsync(() => vm.CurrentSessionState == SessionState.Connected);
 
         Assert.False(vm.IsRunning);
         Assert.True(vm.CanToggleRun);
+        Assert.Equal(vm.RootTexts.GetOrDefault("TaskQueue.Root.LinkStart", "Link Start!"), vm.RunButtonText);
+    }
+
+    [Fact]
+    public async Task TaskQueuePage_OwnRun_ShouldShowStopOnHover_AndToggleToStop()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+
+        Assert.True((await fixture.Runtime.ConnectFeatureService.ConnectAsync("127.0.0.1:5555", "General", null)).Success);
+        Assert.True((await fixture.Runtime.ConnectFeatureService.StartAsync()).Success);
+        await WaitUntilAsync(() => vm.CurrentSessionState == SessionState.Running);
+
+        Assert.True(vm.IsOwnRunActive);
+        Assert.Equal(vm.RootTexts.GetOrDefault("Toolbox.Action.Running", "Running..."), vm.RunButtonText);
+
+        vm.SetRunButtonHover(true);
+        Assert.Equal(vm.RootTexts.GetOrDefault("TaskQueue.Root.Stop", "Stop"), vm.RunButtonText);
+
+        vm.SetRunButtonHover(false);
+        Assert.Equal(vm.RootTexts.GetOrDefault("Toolbox.Action.Running", "Running..."), vm.RunButtonText);
+
+        await vm.ToggleRunAsync();
+        await WaitUntilAsync(() => vm.CurrentSessionState == SessionState.Connected);
+
+        Assert.False(vm.IsOwnRunActive);
+        Assert.Equal(1, Assert.IsType<FakeBridge>(fixture.Bridge).StopCallCount);
         Assert.Equal(vm.RootTexts.GetOrDefault("TaskQueue.Root.LinkStart", "Link Start!"), vm.RunButtonText);
     }
 

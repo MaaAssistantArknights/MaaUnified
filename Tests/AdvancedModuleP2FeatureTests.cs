@@ -628,6 +628,8 @@ public sealed class AdvancedModuleP2FeatureTests
     {
         public event EventHandler<TrayCommandEvent>? CommandInvoked;
 
+        public event EventHandler<TrayMenuRequestEvent>? MenuRequested;
+
         public PlatformCapabilityStatus Capability { get; } = new(
             Supported: true,
             Message: "Scripted tray service.",

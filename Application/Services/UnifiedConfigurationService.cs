@@ -236,6 +236,7 @@ public sealed class UnifiedConfigurationService
             }
 
             ApplyFallbackGlobalValues(config, request, report);
+            PostActionLegacyMigration.MaterializeImportedProfiles(config, report);
 
             config.SchemaVersion = UnifiedConfig.LatestSchemaVersion;
             NormalizeFightStageSelections(config);

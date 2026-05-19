@@ -173,9 +173,9 @@ public sealed class MacOverlayCapabilityService : IOverlayCapabilityService
     public Task<PlatformOperationResult> SetVisibleAsync(bool visible, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        _visible = visible;
         if (!visible)
         {
+            _visible = false;
             EmitStateChanged(
                 OverlayRuntimeMode.Hidden,
                 visible: false,
@@ -199,6 +199,7 @@ public sealed class MacOverlayCapabilityService : IOverlayCapabilityService
                 "overlay.setVisible"));
         }
 
+        _visible = true;
         var targetId = _selectedTarget == nint.Zero ? PreviewTargetId : _selectedTargetId;
         EmitPreviewState(
             targetId,

@@ -764,6 +764,13 @@ public sealed class ConfigurationImportTests
         var report = await service.ImportLegacyAsync(ImportSource.GuiOnly, manualImport: false);
 
         Assert.True(report.Success);
+        var migratedProfile = service.CurrentConfig.Profiles["Default"];
+        var migratedStructured = PostActionConfig.FromJson(migratedProfile.Values["TaskQueue.PostAction"]);
+        Assert.True(migratedProfile.Values.ContainsKey("TaskQueue.PostAction"));
+        Assert.True(migratedStructured.ExitSelf);
+        Assert.True(migratedStructured.Sleep);
+        Assert.False(migratedProfile.Values.ContainsKey("MainFunction.PostActions"));
+        Assert.False(service.CurrentConfig.GlobalValues.ContainsKey("MainFunction.PostActions"));
         var diagnostics = new UiDiagnosticsService(root, service.LogService);
         var feature = new PostActionFeatureService(service, diagnostics, new NoOpPostActionExecutorService());
 
@@ -773,11 +780,6 @@ public sealed class ConfigurationImportTests
         Assert.NotNull(load.Value);
         Assert.True(load.Value!.ExitSelf);
         Assert.True(load.Value.Sleep);
-
-        var profile = service.CurrentConfig.Profiles["Default"];
-        Assert.True(profile.Values.ContainsKey("TaskQueue.PostAction"));
-        Assert.False(profile.Values.ContainsKey("MainFunction.PostActions"));
-        Assert.False(service.CurrentConfig.GlobalValues.ContainsKey("MainFunction.PostActions"));
     }
 
     [Fact]
@@ -802,6 +804,11 @@ public sealed class ConfigurationImportTests
         var report = await service.ImportLegacyAsync(ImportSource.GuiOnly, manualImport: false);
 
         Assert.True(report.Success);
+        var migratedProfile = service.CurrentConfig.Profiles["Default"];
+        var migratedStructured = PostActionConfig.FromJson(migratedProfile.Values["TaskQueue.PostAction"]);
+        Assert.True(migratedProfile.Values.ContainsKey("TaskQueue.PostAction"));
+        Assert.True(migratedStructured.ExitArknights);
+        Assert.False(migratedProfile.Values.ContainsKey("MainFunction.ActionAfterCompleted"));
         var diagnostics = new UiDiagnosticsService(root, service.LogService);
         var feature = new PostActionFeatureService(service, diagnostics, new NoOpPostActionExecutorService());
 
@@ -810,10 +817,6 @@ public sealed class ConfigurationImportTests
         Assert.True(load.Success);
         Assert.NotNull(load.Value);
         Assert.True(load.Value!.ExitArknights);
-
-        var profile = service.CurrentConfig.Profiles["Default"];
-        Assert.True(profile.Values.ContainsKey("TaskQueue.PostAction"));
-        Assert.False(profile.Values.ContainsKey("MainFunction.ActionAfterCompleted"));
     }
 
     [Fact]
@@ -839,6 +842,12 @@ public sealed class ConfigurationImportTests
         var report = await service.ImportLegacyAsync(ImportSource.GuiOnly, manualImport: false);
 
         Assert.True(report.Success);
+        var migratedProfile = service.CurrentConfig.Profiles["Default"];
+        var migratedStructured = PostActionConfig.FromJson(migratedProfile.Values["TaskQueue.PostAction"]);
+        Assert.True(migratedProfile.Values.ContainsKey("TaskQueue.PostAction"));
+        Assert.True(migratedStructured.ExitArknights);
+        Assert.False(migratedProfile.Values.ContainsKey("MainFunction.PostActions"));
+        Assert.False(migratedProfile.Values.ContainsKey("MainFunction.ActionAfterCompleted"));
         var diagnostics = new UiDiagnosticsService(root, service.LogService);
         var feature = new PostActionFeatureService(service, diagnostics, new NoOpPostActionExecutorService());
 
@@ -847,11 +856,6 @@ public sealed class ConfigurationImportTests
         Assert.True(load.Success);
         Assert.NotNull(load.Value);
         Assert.True(load.Value!.ExitArknights);
-
-        var profile = service.CurrentConfig.Profiles["Default"];
-        Assert.True(profile.Values.ContainsKey("TaskQueue.PostAction"));
-        Assert.False(profile.Values.ContainsKey("MainFunction.PostActions"));
-        Assert.False(profile.Values.ContainsKey("MainFunction.ActionAfterCompleted"));
     }
 
     [Fact]
@@ -876,6 +880,12 @@ public sealed class ConfigurationImportTests
         var report = await service.ImportLegacyAsync(ImportSource.GuiOnly, manualImport: false);
 
         Assert.True(report.Success);
+        var migratedProfile = service.CurrentConfig.Profiles["Default"];
+        var migratedStructured = PostActionConfig.FromJson(migratedProfile.Values["TaskQueue.PostAction"]);
+        Assert.True(migratedProfile.Values.ContainsKey("TaskQueue.PostAction"));
+        Assert.True(migratedStructured.ExitEmulator);
+        Assert.True(migratedStructured.ExitSelf);
+        Assert.False(migratedProfile.Values.ContainsKey("MainFunction.ActionAfterCompleted"));
         var diagnostics = new UiDiagnosticsService(root, service.LogService);
         var feature = new PostActionFeatureService(service, diagnostics, new NoOpPostActionExecutorService());
 
@@ -886,11 +896,7 @@ public sealed class ConfigurationImportTests
         Assert.True(load.Value!.ExitEmulator);
         Assert.True(load.Value.ExitSelf);
         Assert.False(load.Value.Hibernate);
-
-        var profile = service.CurrentConfig.Profiles["Default"];
-        Assert.True(profile.Values.ContainsKey("TaskQueue.PostAction"));
-        Assert.False(profile.Values.ContainsKey("MainFunction.ActionAfterCompleted"));
-        var persisted = PostActionConfig.FromJson(profile.Values["TaskQueue.PostAction"]);
+        var persisted = PostActionConfig.FromJson(migratedProfile.Values["TaskQueue.PostAction"]);
         Assert.True(persisted.ExitEmulator);
         Assert.True(persisted.ExitSelf);
     }

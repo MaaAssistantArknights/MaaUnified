@@ -254,6 +254,8 @@ public sealed class ThemeLanguageCombinationSmokeTests
 
         public event EventHandler<TrayCommandEvent>? CommandInvoked;
 
+        public event EventHandler<TrayMenuRequestEvent>? MenuRequested;
+
         public TrayMenuText? LastMenuText { get; private set; }
 
         public Task<PlatformOperationResult> InitializeAsync(

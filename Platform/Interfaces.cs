@@ -105,6 +105,12 @@ public sealed record TrayCommandEvent(
     string Source,
     DateTimeOffset Timestamp);
 
+public sealed record TrayMenuRequestEvent(
+    int ScreenX,
+    int ScreenY,
+    string Source,
+    DateTimeOffset Timestamp);
+
 public sealed record GlobalHotkeyTriggeredEvent(
     string Name,
     string Gesture,
@@ -164,6 +170,8 @@ public interface ITrayService
     PlatformCapabilityStatus Capability { get; }
 
     event EventHandler<TrayCommandEvent>? CommandInvoked;
+
+    event EventHandler<TrayMenuRequestEvent>? MenuRequested;
 
     Task<PlatformOperationResult> InitializeAsync(string appTitle, TrayMenuText? menuText, CancellationToken cancellationToken = default);
 

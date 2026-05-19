@@ -113,6 +113,22 @@ public sealed class MAAUnifiedRuntime : IAsyncDisposable
 
         try
         {
+            if (Platform.NotificationService is IAsyncDisposable notificationAsyncDisposable)
+            {
+                await notificationAsyncDisposable.DisposeAsync().ConfigureAwait(false);
+            }
+            else if (Platform.NotificationService is IDisposable notificationDisposable)
+            {
+                notificationDisposable.Dispose();
+            }
+        }
+        catch
+        {
+            // Best-effort disposal.
+        }
+
+        try
+        {
             if (Platform.HotkeyService is IDisposable hotkeyDisposable)
             {
                 hotkeyDisposable.Dispose();

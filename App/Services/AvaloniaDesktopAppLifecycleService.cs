@@ -27,11 +27,11 @@ public sealed class AvaloniaDesktopAppLifecycleService : IAppLifecycleService
         {
             if (Dispatcher.UIThread.CheckAccess())
             {
-                _desktopLifetime.Shutdown();
+                RequestShutdown();
             }
             else
             {
-                await Dispatcher.UIThread.InvokeAsync(() => _desktopLifetime.Shutdown(), DispatcherPriority.Send, cancellationToken);
+                await Dispatcher.UIThread.InvokeAsync(RequestShutdown, DispatcherPriority.Send, cancellationToken);
             }
 
             return UiOperationResult.Ok("Application shutdown requested.");
@@ -39,6 +39,39 @@ public sealed class AvaloniaDesktopAppLifecycleService : IAppLifecycleService
         catch (Exception ex)
         {
             return UiOperationResult.Fail(UiErrorCode.AppExitFailed, $"Failed to exit application: {ex.Message}");
+        }
+    }
+
+    private void RequestShutdown()
+    {
+        Program.RecordStartupStage("App.Exit.RequestShutdown", "Closing auxiliary windows before Avalonia shutdown.");
+        CloseAuxiliaryWindows();
+        Program.RecordStartupStage("App.Exit.RequestShutdown", "Invoking Avalonia desktop shutdown.");
+        _desktopLifetime.Shutdown();
+    }
+
+    private void CloseAuxiliaryWindows()
+    {
+        var windows = _desktopLifetime.Windows.ToArray();
+        foreach (var window in windows)
+        {
+            if (ReferenceEquals(window, _desktopLifetime.MainWindow))
+            {
+                continue;
+            }
+
+            try
+            {
+                window.Close();
+            }
+            catch (ObjectDisposedException)
+            {
+                // Ignore windows that were already torn down during shutdown.
+            }
+            catch (InvalidOperationException)
+            {
+                // Ignore transient close failures and continue shutting down the app.
+            }
         }
     }
 }

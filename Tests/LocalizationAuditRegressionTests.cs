@@ -967,6 +967,8 @@ public sealed class LocalizationAuditRegressionTests
 
         public event EventHandler<TrayCommandEvent>? CommandInvoked;
 
+        public event EventHandler<TrayMenuRequestEvent>? MenuRequested;
+
         public Task<PlatformOperationResult> InitializeAsync(
             string appTitle,
             TrayMenuText? menuText,
