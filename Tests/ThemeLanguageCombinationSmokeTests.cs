@@ -93,6 +93,13 @@ public sealed class ThemeLanguageCombinationSmokeTests
 
                     vm.SettingsPage.Theme = theme;
                     await vm.SwitchLanguageToAsync(language);
+                    Assert.True(
+                        await WaitUntilAsync(
+                            () => string.Equals(vm.SettingsPage.Language, normalizedLanguage, StringComparison.OrdinalIgnoreCase)
+                                  && string.Equals(vm.TaskQueuePage.Texts.Language, normalizedLanguage, StringComparison.OrdinalIgnoreCase),
+                            retry: 160,
+                            delayMs: 25),
+                        $"theme={theme}; target={normalizedLanguage}; settings={vm.SettingsPage.Language}; taskQueue={vm.TaskQueuePage.Texts.Language}; shell={vm.CurrentShellLanguage}");
 
                     var snapshot = vm.SettingsPage.CurrentGuiSnapshot with
                     {
@@ -102,6 +109,13 @@ public sealed class ThemeLanguageCombinationSmokeTests
                     var applyTask = applyMethod!.Invoke(vm, [snapshot, CancellationToken.None]) as Task;
                     Assert.NotNull(applyTask);
                     await applyTask!;
+                    Assert.True(await WaitUntilAsync(
+                        () => string.Equals(vm.SettingsPage.Theme, theme, StringComparison.OrdinalIgnoreCase)
+                              && string.Equals(vm.SettingsPage.Language, normalizedLanguage, StringComparison.OrdinalIgnoreCase)
+                              && string.Equals(vm.AppliedTheme, theme, StringComparison.OrdinalIgnoreCase)
+                              && string.Equals(vm.TaskQueuePage.Texts.Language, normalizedLanguage, StringComparison.OrdinalIgnoreCase),
+                        retry: 160,
+                        delayMs: 25));
 
                     Assert.Equal(theme, vm.SettingsPage.Theme);
                     Assert.Equal(normalizedLanguage, vm.SettingsPage.Language);
@@ -134,6 +148,21 @@ public sealed class ThemeLanguageCombinationSmokeTests
     {
         var unresolvedKeyPattern = new Regex(@"\b(?:CapabilityName|Status|TrayMenu|Error|Ui)\.[A-Za-z0-9_.-]+\b", RegexOptions.Compiled);
         Assert.DoesNotMatch(unresolvedKeyPattern, value);
+    }
+
+    private static async Task<bool> WaitUntilAsync(Func<bool> predicate, int retry = 40, int delayMs = 25)
+    {
+        for (var i = 0; i < retry; i++)
+        {
+            if (predicate())
+            {
+                return true;
+            }
+
+            await Task.Delay(delayMs);
+        }
+
+        return predicate();
     }
 
     private static string GetMaaUnifiedRoot()

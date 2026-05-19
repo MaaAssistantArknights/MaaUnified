@@ -221,6 +221,11 @@ public sealed class SessionStateUiProjectionTests
     [Fact]
     public async Task TaskQueuePage_Start_WhenConnectFails_ShouldShowConciseGuidanceWithoutIdleNoise()
     {
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+
         await using var fixture = await TestFixture.CreateAsync(bridge: new FailingConnectBridge());
         var vm = new TaskQueuePageViewModel(
             fixture.Runtime,

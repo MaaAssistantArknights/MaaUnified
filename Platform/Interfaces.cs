@@ -109,7 +109,11 @@ public sealed record TrayMenuRequestEvent(
     int ScreenX,
     int ScreenY,
     string Source,
-    DateTimeOffset Timestamp);
+    DateTimeOffset Timestamp,
+    int? AnchorLeft = null,
+    int? AnchorTop = null,
+    int? AnchorRight = null,
+    int? AnchorBottom = null);
 
 public sealed record GlobalHotkeyTriggeredEvent(
     string Name,

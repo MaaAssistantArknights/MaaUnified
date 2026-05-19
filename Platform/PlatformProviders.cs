@@ -6,7 +6,6 @@ using System.Text;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Platform;
-using H.NotifyIcon.Core;
 using Microsoft.Win32;
 using SharpHook;
 using SharpHook.Data;
@@ -66,21 +65,50 @@ internal sealed class SharpHookEventLoopKeyboardHook : IGlobalKeyboardHook
 public sealed class WindowsNotifyIconTrayService : ITrayService, IDisposable
 {
     private const nint DefaultAppIconId = 32512; // IDI_APPLICATION
+    private const uint CallbackMessageId = 0x8001; // WM_APP + 1
+    private const uint NotifyIconId = 1;
+    private const uint NifMessage = 0x00000001;
+    private const uint NifIcon = 0x00000002;
+    private const uint NifTip = 0x00000004;
+    private const uint NifInfo = 0x00000010;
+    private const uint NimAdd = 0x00000000;
+    private const uint NimModify = 0x00000001;
+    private const uint NimDelete = 0x00000002;
+    private const uint NimSetFocus = 0x00000003;
+    private const uint NiifNone = 0x00000000;
+    private const uint MfString = 0x00000000;
+    private const uint MfGrayed = 0x00000001;
+    private const uint MfSeparator = 0x00000800;
+    private const uint TpmRightButton = 0x00000002;
+    private const uint TpmRightAlign = 0x00000008;
+    private const uint TpmReturnCmd = 0x00000100;
+    private const uint WmNull = 0x0000;
+    private const uint WmContextMenu = 0x007B;
+    private const uint WmRButtonUp = 0x0205;
+    private const int SmMenuDropAlignment = 40;
+    private const uint NativeMenuStartId = 10_001;
     private readonly CommandNotificationService _notificationFallback = new();
     private readonly WindowMenuTrayService _fallbackService = new();
+    private readonly TrayWindowProc _windowProc;
+    private readonly string _windowClassName = $"MAAUnified.TrayWindow.{Guid.NewGuid():N}";
     private nint _iconHandle;
+    private nint _windowHandle;
     private bool _ownsIconHandle;
     private bool _visible = true;
     private bool _initialized;
     private bool _fallbackMode;
+    private bool _iconAdded;
+    private bool _trackingNativeMenu;
+    private ushort _windowClassAtom;
+    private uint _taskbarCreatedMessage;
     private TrayMenuState _menuState = new(true, true, true, true, true);
     private TrayMenuText _menuText = TrayMenuText.Default;
-    private H.NotifyIcon.Core.TrayIcon? _trayIcon;
+    private string _toolTip = "MAAUnified";
 
     public PlatformCapabilityStatus Capability => new(
         Supported: true,
-        Message: "System tray integration is available via native notify icon backend.",
-        Provider: "h-notifyicon",
+        Message: "System tray integration is available via Windows Shell notify icon backend.",
+        Provider: "windows-shell-notifyicon",
         HasFallback: true,
         FallbackMode: "window-menu");
 
@@ -90,6 +118,7 @@ public sealed class WindowsNotifyIconTrayService : ITrayService, IDisposable
 
     public WindowsNotifyIconTrayService()
     {
+        _windowProc = WindowProc;
         _fallbackService.CommandInvoked += (_, e) => RaiseCommand(e.Command);
     }
 
@@ -97,11 +126,6 @@ public sealed class WindowsNotifyIconTrayService : ITrayService, IDisposable
     {
         service = null;
         if (!OperatingSystem.IsWindows())
-        {
-            return false;
-        }
-
-        if (!PlatformNativeDependencyProbe.HasAssembly("H.NotifyIcon"))
         {
             return false;
         }
@@ -127,7 +151,9 @@ public sealed class WindowsNotifyIconTrayService : ITrayService, IDisposable
         {
             try
             {
-                _trayIcon?.UpdateToolTip(string.IsNullOrWhiteSpace(appTitle) ? "MAAUnified" : appTitle.Trim());
+                _toolTip = NormalizeToolTip(appTitle);
+                EnsureWindowCreated();
+                EnsureIconState();
                 return PlatformOperation.NativeSuccess(
                     Capability.Provider,
                     "Tray service already initialized.",
@@ -141,13 +167,10 @@ public sealed class WindowsNotifyIconTrayService : ITrayService, IDisposable
 
         try
         {
-            _trayIcon = new H.NotifyIcon.Core.TrayIcon("MAAUnified");
-            _trayIcon.UpdateToolTip(string.IsNullOrWhiteSpace(appTitle) ? "MAAUnified" : appTitle.Trim());
+            _toolTip = NormalizeToolTip(appTitle);
             _iconHandle = LoadTrayIconHandle(out _ownsIconHandle);
-            _trayIcon.UpdateIcon(_iconHandle);
-            _trayIcon.UpdateVisibility(_visible ? IconVisibility.Visible : IconVisibility.Hidden);
-            _trayIcon.Create();
-            _trayIcon.MessageWindow.MouseEventReceived += OnTrayMouseEventReceived;
+            EnsureWindowCreated();
+            EnsureIconState();
             _initialized = true;
             _fallbackMode = false;
             return PlatformOperation.NativeSuccess(
@@ -171,14 +194,8 @@ public sealed class WindowsNotifyIconTrayService : ITrayService, IDisposable
 
         try
         {
-            if (_trayIcon is not null)
-            {
-                _trayIcon.MessageWindow.MouseEventReceived -= OnTrayMouseEventReceived;
-            }
-
-            _trayIcon?.TryRemove();
-            _trayIcon?.Dispose();
-            _trayIcon = null;
+            RemoveIcon();
+            DestroyWindowResources();
             ReleaseIconHandle();
             _initialized = false;
             _fallbackMode = false;
@@ -217,20 +234,20 @@ public sealed class WindowsNotifyIconTrayService : ITrayService, IDisposable
             return await _fallbackService.ShowAsync(title, message, cancellationToken);
         }
 
-        if (_trayIcon is not null && _initialized)
+        if (_initialized && _iconAdded)
         {
             try
             {
-                _trayIcon.ShowNotification(
-                    title,
-                    message,
-                    NotificationIcon.None,
-                    customIconHandle: null,
-                    largeIcon: false,
-                    sound: true,
-                    respectQuietTime: true,
-                    realtime: false,
-                    timeout: TimeSpan.FromSeconds(8));
+                var data = CreateNotifyIconData(NifInfo);
+                data.szInfoTitle = Truncate(title, 63);
+                data.szInfo = Truncate(message, 255);
+                data.dwInfoFlags = NiifNone;
+                data.uTimeoutOrVersion = 8000;
+
+                if (!Shell_NotifyIcon(NimModify, ref data))
+                {
+                    throw new InvalidOperationException("Show notification failed.");
+                }
 
                 return PlatformOperation.NativeSuccess(
                     Capability.Provider,
@@ -285,7 +302,7 @@ public sealed class WindowsNotifyIconTrayService : ITrayService, IDisposable
         }
 
         _visible = visible;
-        if (_trayIcon is null || !_initialized)
+        if (!_initialized)
         {
             return Task.FromResult(PlatformOperation.Failed(
                 Capability.Provider,
@@ -296,15 +313,8 @@ public sealed class WindowsNotifyIconTrayService : ITrayService, IDisposable
 
         try
         {
-            _trayIcon.UpdateVisibility(visible ? IconVisibility.Visible : IconVisibility.Hidden);
-            if (visible)
-            {
-                _trayIcon.Show();
-            }
-            else
-            {
-                _trayIcon.Hide();
-            }
+            EnsureWindowCreated();
+            EnsureIconState();
 
             return Task.FromResult(PlatformOperation.NativeSuccess(
                 Capability.Provider,
@@ -321,6 +331,121 @@ public sealed class WindowsNotifyIconTrayService : ITrayService, IDisposable
         }
     }
 
+    private void EnsureIconState()
+    {
+        if (_visible)
+        {
+            AddOrUpdateIcon(addIfMissing: true);
+        }
+        else
+        {
+            RemoveIcon();
+        }
+    }
+
+    private void EnsureWindowCreated()
+    {
+        if (_windowHandle != nint.Zero)
+        {
+            return;
+        }
+
+        _taskbarCreatedMessage = RegisterWindowMessage("TaskbarCreated");
+        _windowClassAtom = RegisterTrayWindowClass();
+        var hInstance = GetModuleHandle(null);
+        _windowHandle = CreateWindowEx(
+            0,
+            _windowClassName,
+            _windowClassName,
+            0,
+            0,
+            0,
+            0,
+            0,
+            nint.Zero,
+            nint.Zero,
+            hInstance,
+            nint.Zero);
+
+        if (_windowHandle == nint.Zero)
+        {
+            throw new InvalidOperationException($"Tray message window creation failed: {Marshal.GetLastWin32Error()}");
+        }
+    }
+
+    private ushort RegisterTrayWindowClass()
+    {
+        if (_windowClassAtom != 0)
+        {
+            return _windowClassAtom;
+        }
+
+        var hInstance = GetModuleHandle(null);
+        var wndClass = new WndClass
+        {
+            lpfnWndProc = _windowProc,
+            hInstance = hInstance,
+            lpszClassName = _windowClassName,
+        };
+
+        var atom = RegisterClass(ref wndClass);
+        if (atom == 0)
+        {
+            throw new InvalidOperationException($"Tray window class registration failed: {Marshal.GetLastWin32Error()}");
+        }
+
+        return atom;
+    }
+
+    private void AddOrUpdateIcon(bool addIfMissing)
+    {
+        if (_windowHandle == nint.Zero)
+        {
+            throw new InvalidOperationException("Tray message window is not initialized.");
+        }
+
+        if (_iconHandle == nint.Zero)
+        {
+            _iconHandle = LoadTrayIconHandle(out _ownsIconHandle);
+        }
+
+        if (_iconAdded)
+        {
+            var modifyData = CreateNotifyIconData(NifMessage | NifIcon | NifTip);
+            if (!Shell_NotifyIcon(NimModify, ref modifyData))
+            {
+                throw new InvalidOperationException("Tray icon update failed.");
+            }
+
+            return;
+        }
+
+        if (!addIfMissing)
+        {
+            return;
+        }
+
+        var addData = CreateNotifyIconData(NifMessage | NifIcon | NifTip);
+        if (!Shell_NotifyIcon(NimAdd, ref addData))
+        {
+            throw new InvalidOperationException("TryCreate failed.");
+        }
+
+        _iconAdded = true;
+    }
+
+    private void RemoveIcon()
+    {
+        if (!_iconAdded || _windowHandle == nint.Zero)
+        {
+            return;
+        }
+
+        var deleteData = CreateNotifyIconData(0);
+        _ = Shell_NotifyIcon(NimDelete, ref deleteData);
+        _iconAdded = false;
+    }
+
     private void RaiseCommand(TrayCommandId command)
     {
         try
@@ -333,27 +458,297 @@ public sealed class WindowsNotifyIconTrayService : ITrayService, IDisposable
         }
     }
 
-    private void OnTrayMouseEventReceived(object? sender, MessageWindow.MouseEventReceivedEventArgs e)
+    private nint WindowProc(nint hWnd, uint msg, nuint wParam, nint lParam)
     {
-        if (!_initialized || _fallbackMode || _trayIcon is null || e.MouseEvent != MouseEvent.IconRightMouseUp)
+        if (msg == _taskbarCreatedMessage)
         {
-            return;
+            if (_initialized && !_fallbackMode)
+            {
+                try
+                {
+                    _iconAdded = false;
+                    EnsureIconState();
+                }
+                catch
+                {
+                    // Best-effort tray restore after explorer restart.
+                }
+            }
+
+            return DefWindowProc(hWnd, msg, wParam, lParam);
+        }
+
+        if (msg != CallbackMessageId)
+        {
+            return DefWindowProc(hWnd, msg, wParam, lParam);
+        }
+
+        if (!_initialized || _fallbackMode)
+        {
+            return DefWindowProc(hWnd, msg, wParam, lParam);
         }
 
         try
         {
-            MenuRequested?.Invoke(
-                this,
-                new TrayMenuRequestEvent(
-                    e.Point.X,
-                    e.Point.Y,
-                    Capability.Provider,
-                    DateTimeOffset.UtcNow));
+            var eventMessage = unchecked((uint)lParam.ToInt64());
+            switch (eventMessage)
+            {
+                case WmRButtonUp:
+                case WmContextMenu:
+                    if (!TryShowNativeContextMenu()
+                        && TryCreateTrayMenuRequest(out var menuRequest))
+                    {
+                        MenuRequested?.Invoke(
+                            this,
+                            menuRequest);
+                    }
+
+                    break;
+            }
         }
         catch
         {
             // Ignore user event exceptions to avoid destabilizing tray message loop.
         }
+
+        return DefWindowProc(hWnd, msg, wParam, lParam);
+    }
+
+    private bool TryShowNativeContextMenu()
+    {
+        if (_trackingNativeMenu || _windowHandle == nint.Zero)
+        {
+            return true;
+        }
+
+        if (!GetCursorPos(out var point))
+        {
+            return false;
+        }
+
+        var hasIconRect = TryGetNotifyIconRect(out var iconRect);
+        if (hasIconRect && !IsPointNearRect(point, iconRect, tolerance: 48))
+        {
+            point = GetRectCenter(iconRect);
+        }
+
+        var menu = CreatePopupMenu();
+        if (menu == nint.Zero)
+        {
+            return false;
+        }
+
+        _trackingNativeMenu = true;
+        try
+        {
+            AppendTrayMenu(menu);
+            _ = SetForegroundWindow(_windowHandle);
+            var selectedId = TrackPopupMenuEx(
+                menu,
+                GetNativeMenuFlags(),
+                point.X,
+                point.Y,
+                _windowHandle,
+                nint.Zero);
+
+            RestoreNotificationAreaFocus();
+            _ = PostMessage(_windowHandle, WmNull, nuint.Zero, nint.Zero);
+            if (TryMapNativeMenuCommand(selectedId, out var command))
+            {
+                RaiseCommand(command);
+            }
+
+            return true;
+        }
+        finally
+        {
+            _trackingNativeMenu = false;
+            _ = DestroyMenu(menu);
+        }
+    }
+
+    private void RestoreNotificationAreaFocus()
+    {
+        var data = CreateNotifyIconData(0);
+        _ = Shell_NotifyIcon(NimSetFocus, ref data);
+    }
+
+    private void AppendTrayMenu(nint menu)
+    {
+        AppendMenuItem(menu, TrayCommandId.Start, _menuText.Start, _menuState.StartEnabled);
+        AppendMenuItem(menu, TrayCommandId.Stop, _menuText.Stop, _menuState.StopEnabled);
+        AppendMenuSeparator(menu);
+        AppendMenuItem(menu, TrayCommandId.ForceShow, _menuText.ForceShow, _menuState.ForceShowEnabled);
+        AppendMenuItem(menu, TrayCommandId.HideTray, _menuText.HideTray, _menuState.HideTrayEnabled);
+        AppendMenuItem(menu, TrayCommandId.ToggleOverlay, _menuText.ToggleOverlay, _menuState.OverlayEnabled);
+        AppendMenuItem(menu, TrayCommandId.SwitchLanguage, _menuText.SwitchLanguage, enabled: true);
+        AppendMenuItem(menu, TrayCommandId.Restart, _menuText.Restart, enabled: true);
+        AppendMenuSeparator(menu);
+        AppendMenuItem(menu, TrayCommandId.Exit, _menuText.Exit, enabled: true);
+    }
+
+    private static void AppendMenuItem(nint menu, TrayCommandId command, string text, bool enabled)
+    {
+        var flags = MfString | (enabled ? 0 : MfGrayed);
+        _ = AppendMenu(menu, flags, GetNativeMenuId(command), string.IsNullOrWhiteSpace(text) ? command.ToString() : text);
+    }
+
+    private static void AppendMenuSeparator(nint menu)
+    {
+        _ = AppendMenu(menu, MfSeparator, nuint.Zero, null);
+    }
+
+    private static uint GetNativeMenuFlags()
+    {
+        var flags = TpmReturnCmd | TpmRightButton;
+        if (GetSystemMetrics(SmMenuDropAlignment) != 0)
+        {
+            flags |= TpmRightAlign;
+        }
+
+        return flags;
+    }
+
+    private static nuint GetNativeMenuId(TrayCommandId command)
+    {
+        return NativeMenuStartId + (uint)command;
+    }
+
+    private static bool TryMapNativeMenuCommand(uint selectedId, out TrayCommandId command)
+    {
+        command = default;
+        if (selectedId < NativeMenuStartId)
+        {
+            return false;
+        }
+
+        var raw = selectedId - NativeMenuStartId;
+        if (!Enum.IsDefined(typeof(TrayCommandId), (int)raw))
+        {
+            return false;
+        }
+
+        command = (TrayCommandId)raw;
+        return true;
+    }
+
+    private static Point GetRectCenter(Rect rect)
+    {
+        return new Point
+        {
+            X = rect.Left + ((rect.Right - rect.Left) / 2),
+            Y = rect.Top + ((rect.Bottom - rect.Top) / 2),
+        };
+    }
+
+    private bool TryCreateTrayMenuRequest([NotNullWhen(true)] out TrayMenuRequestEvent? request)
+    {
+        request = null;
+        var timestamp = DateTimeOffset.UtcNow;
+
+        if (!GetCursorPos(out var point))
+        {
+            return false;
+        }
+
+        if (TryGetNotifyIconRect(out var iconRect)
+            && IsPointNearRect(point, iconRect, tolerance: 48))
+        {
+            request = new TrayMenuRequestEvent(
+                point.X,
+                point.Y,
+                Capability.Provider,
+                timestamp,
+                iconRect.Left,
+                iconRect.Top,
+                iconRect.Right,
+                iconRect.Bottom);
+            return true;
+        }
+
+        request = new TrayMenuRequestEvent(
+            point.X,
+            point.Y,
+            Capability.Provider,
+            timestamp);
+        return true;
+    }
+
+    private NotifyIconData CreateNotifyIconData(uint flags)
+    {
+        return new NotifyIconData
+        {
+            cbSize = (uint)Marshal.SizeOf<NotifyIconData>(),
+            hWnd = _windowHandle,
+            uID = NotifyIconId,
+            uFlags = flags,
+            uCallbackMessage = CallbackMessageId,
+            hIcon = _iconHandle,
+            szTip = Truncate(_toolTip, 127),
+            szInfo = string.Empty,
+            szInfoTitle = string.Empty,
+            guidItem = Guid.Empty,
+            hBalloonIcon = nint.Zero,
+        };
+    }
+
+    private bool TryGetNotifyIconRect(out Rect rect)
+    {
+        rect = default;
+        if (_windowHandle == nint.Zero)
+        {
+            return false;
+        }
+
+        var identifier = new NotifyIconIdentifier
+        {
+            cbSize = (uint)Marshal.SizeOf<NotifyIconIdentifier>(),
+            hWnd = _windowHandle,
+            uID = NotifyIconId,
+            guidItem = Guid.Empty,
+        };
+
+        return Shell_NotifyIconGetRect(ref identifier, out rect) == 0;
+    }
+
+    private static bool IsPointNearRect(Point point, Rect rect, int tolerance)
+    {
+        return point.X >= rect.Left - tolerance
+            && point.X <= rect.Right + tolerance
+            && point.Y >= rect.Top - tolerance
+            && point.Y <= rect.Bottom + tolerance;
+    }
+
+    private void DestroyWindowResources()
+    {
+        if (_windowHandle != nint.Zero)
+        {
+            _ = DestroyWindow(_windowHandle);
+            _windowHandle = nint.Zero;
+        }
+
+        if (_windowClassAtom != 0)
+        {
+            _ = UnregisterClass(_windowClassName, GetModuleHandle(null));
+            _windowClassAtom = 0;
+        }
+
+        _iconAdded = false;
+    }
+
+    private static string NormalizeToolTip(string appTitle)
+    {
+        return string.IsNullOrWhiteSpace(appTitle) ? "MAAUnified" : appTitle.Trim();
+    }
+
+    private static string Truncate(string value, int maxLength)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return string.Empty;
+        }
+
+        return value.Length <= maxLength ? value : value[..maxLength];
     }
 
     private async Task<PlatformOperationResult> SwitchToFallbackTrayAsync(
@@ -363,14 +758,14 @@ public sealed class WindowsNotifyIconTrayService : ITrayService, IDisposable
     {
         try
         {
-            _trayIcon?.Dispose();
+            RemoveIcon();
+            DestroyWindowResources();
         }
         catch
         {
             // Best-effort cleanup before switching providers.
         }
 
-        _trayIcon = null;
         ReleaseIconHandle();
         _initialized = false;
         _fallbackMode = true;
@@ -394,12 +789,154 @@ public sealed class WindowsNotifyIconTrayService : ITrayService, IDisposable
     [DllImport("user32.dll")]
     private static extern nint LoadIcon(nint hInstance, nint lpIconName);
 
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern nint GetModuleHandle(string? lpModuleName);
+
     [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
     private static extern uint ExtractIconEx(string lpszFile, int nIconIndex, nint[]? phiconLarge, nint[]? phiconSmall, uint nIcons);
+
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool Shell_NotifyIcon(uint dwMessage, ref NotifyIconData lpData);
+
+    [DllImport("shell32.dll", SetLastError = true)]
+    private static extern int Shell_NotifyIconGetRect(ref NotifyIconIdentifier identifier, out Rect iconLocation);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern ushort RegisterClass([In] ref WndClass lpWndClass);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern nint CreateWindowEx(
+        int dwExStyle,
+        string lpClassName,
+        string lpWindowName,
+        int dwStyle,
+        int x,
+        int y,
+        int nWidth,
+        int nHeight,
+        nint hWndParent,
+        nint hMenu,
+        nint hInstance,
+        nint lpParam);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool DestroyWindow(nint hWnd);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool UnregisterClass(string lpClassName, nint hInstance);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern uint RegisterWindowMessage(string lpString);
+
+    [DllImport("user32.dll")]
+    private static extern nint DefWindowProc(nint hWnd, uint msg, nuint wParam, nint lParam);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern nint CreatePopupMenu();
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool DestroyMenu(nint hMenu);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool AppendMenu(nint hMenu, uint uFlags, nuint uIDNewItem, string? lpNewItem);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern uint TrackPopupMenuEx(nint hMenu, uint uFlags, int x, int y, nint hwnd, nint lptpm);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetForegroundWindow(nint hWnd);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool PostMessage(nint hWnd, uint msg, nuint wParam, nint lParam);
+
+    [DllImport("user32.dll")]
+    private static extern int GetSystemMetrics(int nIndex);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetCursorPos(out Point point);
 
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool DestroyIcon(nint hIcon);
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct NotifyIconData
+    {
+        public uint cbSize;
+        public nint hWnd;
+        public uint uID;
+        public uint uFlags;
+        public uint uCallbackMessage;
+        public nint hIcon;
+
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)]
+        public string szTip;
+
+        public uint dwState;
+        public uint dwStateMask;
+
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 256)]
+        public string szInfo;
+
+        public uint uTimeoutOrVersion;
+
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 64)]
+        public string szInfoTitle;
+
+        public uint dwInfoFlags;
+        public Guid guidItem;
+        public nint hBalloonIcon;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NotifyIconIdentifier
+    {
+        public uint cbSize;
+        public nint hWnd;
+        public uint uID;
+        public Guid guidItem;
+    }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct WndClass
+    {
+        public uint style;
+        public TrayWindowProc lpfnWndProc;
+        public int cbClsExtra;
+        public int cbWndExtra;
+        public nint hInstance;
+        public nint hIcon;
+        public nint hCursor;
+        public nint hbrBackground;
+        public string? lpszMenuName;
+        public string lpszClassName;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct Point
+    {
+        public int X;
+        public int Y;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct Rect
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
+
+    private delegate nint TrayWindowProc(nint hWnd, uint msg, nuint wParam, nint lParam);
 
     private static nint LoadTrayIconHandle(out bool ownsHandle)
     {

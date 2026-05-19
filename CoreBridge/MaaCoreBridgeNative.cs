@@ -830,36 +830,34 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge
         var globalRoot = Path.Combine(baseDirectory, "resource", "global");
         resolvedClientType = normalizedClientType;
         clientResourcePath = Path.Combine(globalRoot, normalizedClientType, "resource");
-        if (Directory.Exists(clientResourcePath))
-        {
-            return true;
-        }
 
         if (!Directory.Exists(globalRoot))
         {
             return false;
         }
 
-        foreach (var candidateDirectory in Directory.EnumerateDirectories(globalRoot))
+        var matchingDirectory = Directory.EnumerateDirectories(globalRoot)
+            .Select(static directory => new
+            {
+                Directory = directory,
+                ClientType = Path.GetFileName(directory),
+            })
+            .FirstOrDefault(candidate =>
+                string.Equals(candidate.ClientType, normalizedClientType, StringComparison.OrdinalIgnoreCase));
+        if (matchingDirectory is null)
         {
-            var candidateClientType = Path.GetFileName(candidateDirectory);
-            if (!string.Equals(candidateClientType, normalizedClientType, StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            var candidateResourcePath = Path.Combine(candidateDirectory, "resource");
-            if (!Directory.Exists(candidateResourcePath))
-            {
-                continue;
-            }
-
-            resolvedClientType = candidateClientType;
-            clientResourcePath = candidateResourcePath;
-            return true;
+            return false;
         }
 
-        return false;
+        var matchingResourcePath = Path.Combine(matchingDirectory.Directory, "resource");
+        if (!Directory.Exists(matchingResourcePath))
+        {
+            return false;
+        }
+
+        resolvedClientType = matchingDirectory.ClientType;
+        clientResourcePath = matchingResourcePath;
+        return true;
     }
 
     private static CoreGpuInitializeInfo? ApplyGpuInitialization(

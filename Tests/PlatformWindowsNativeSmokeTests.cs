@@ -26,7 +26,7 @@ public sealed class PlatformWindowsNativeSmokeTests
 
             var snapshot = PlatformCapabilitySnapshotFactory.FromBundle(bundle);
             Assert.True(snapshot.Tray.Supported);
-            Assert.Equal("h-notifyicon", snapshot.Tray.Provider);
+            Assert.Equal("windows-shell-notifyicon", snapshot.Tray.Provider);
             Assert.Equal("desktop-notifications", snapshot.Notification.Provider);
             Assert.True(snapshot.Notification.HasFallback);
             Assert.True(snapshot.Hotkey.Supported);

@@ -67,7 +67,7 @@ public sealed class AvaloniaJsonConfigStore : IUnifiedConfigStore
 
             if (Exists())
             {
-                File.Move(tempPath, ConfigPath, overwrite: true);
+                ReplaceExistingConfig(tempPath);
             }
             else
             {
@@ -93,5 +93,21 @@ public sealed class AvaloniaJsonConfigStore : IUnifiedConfigStore
         var backupPath = ConfigPath + suffix;
         File.Copy(ConfigPath, backupPath, true);
         return Task.CompletedTask;
+    }
+
+    private void ReplaceExistingConfig(string tempPath)
+    {
+        try
+        {
+            File.Replace(tempPath, ConfigPath, destinationBackupFileName: null, ignoreMetadataErrors: true);
+        }
+        catch (PlatformNotSupportedException)
+        {
+            File.Move(tempPath, ConfigPath, overwrite: true);
+        }
+        catch (UnauthorizedAccessException) when (!OperatingSystem.IsWindows())
+        {
+            File.Move(tempPath, ConfigPath, overwrite: true);
+        }
     }
 }

@@ -17,7 +17,7 @@ public sealed class AppUnhandledExceptionFilterTests
             new InvalidOperationException(
                 "org.freedesktop.DBus.Error.ServiceUnknown: The name com.canonical.AppMenu.Registrar was not provided by any .service files"));
 
-        Assert.True(MAAUnified.App.App.ShouldIgnoreUnhandledException(exception));
+        Assert.Equal(OperatingSystem.IsLinux(), MAAUnified.App.App.ShouldIgnoreUnhandledException(exception));
     }
 
     [Fact]

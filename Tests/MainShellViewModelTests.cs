@@ -1070,6 +1070,7 @@ public sealed class MainShellViewModelTests
 
         fixture.ViewModel.SettingsPage.ConfigurationManagerSelectedProfile = "Alt";
         await fixture.ViewModel.SettingsPage.SwitchConfigurationProfileAsync();
+        await fixture.ViewModel.TaskQueuePage.WaitForPendingBindingAsync();
 
         Assert.True(await WaitUntilAsync(
             () => string.Equals(
@@ -1084,11 +1085,15 @@ public sealed class MainShellViewModelTests
             () => fixture.ViewModel.TaskQueuePage.SelectionBatchMode == SelectionBatchMode.Inverse));
         Assert.True(await WaitUntilAsync(
             () => fixture.ViewModel.TaskQueuePage.RoguelikeModule.DelayAbortUntilCombatComplete == false));
+        Assert.True(await WaitUntilAsync(
+            () => fixture.ViewModel.TaskQueuePage.RoguelikeModule.IsTaskBound));
 
         fixture.ViewModel.TaskQueuePage.SelectedTask = Assert.Single(
             fixture.ViewModel.TaskQueuePage.Tasks,
             task => string.Equals(task.Name, "Infrast Alt", StringComparison.Ordinal));
         await fixture.ViewModel.TaskQueuePage.WaitForPendingBindingAsync();
+        Assert.True(await WaitUntilAsync(
+            () => fixture.ViewModel.TaskQueuePage.InfrastModule.IsTaskBound));
         Assert.Equal("243_layout_4_times_a_day.json", fixture.ViewModel.TaskQueuePage.InfrastModule.DefaultInfrast);
         Assert.Equal(65, fixture.ViewModel.TaskQueuePage.InfrastModule.DormThresholdPercent);
 
@@ -1096,6 +1101,8 @@ public sealed class MainShellViewModelTests
             fixture.ViewModel.TaskQueuePage.Tasks,
             task => string.Equals(task.Name, "Fight Alt", StringComparison.Ordinal));
         await fixture.ViewModel.TaskQueuePage.WaitForPendingBindingAsync();
+        Assert.True(await WaitUntilAsync(
+            () => fixture.ViewModel.TaskQueuePage.FightModule.IsTaskBound));
         Assert.Equal("1-7", fixture.ViewModel.TaskQueuePage.FightModule.Stage);
     }
 

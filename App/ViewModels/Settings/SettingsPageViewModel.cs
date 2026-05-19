@@ -411,7 +411,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
     private string _configurationManagerStatusMessage = string.Empty;
     private string _configurationManagerErrorMessage = string.Empty;
     private bool _achievementPopupDisabled;
-    private bool _achievementPopupAutoClose;
+    private bool _achievementPopupAutoClose = AchievementPolicy.Default.PopupAutoClose;
     private int _achievementUnlockedCount;
     private int _achievementTotalCount;
     private bool _achievementDebugEnabled;
@@ -511,6 +511,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
     public event EventHandler? UpdateAvailabilityChanged;
     public event EventHandler<ConfigurationContextChangedEventArgs>? ConfigurationContextChanged;
     public Func<CancellationToken, Task<UiOperationResult>>? BeforeConfigurationProfileSwitchAsync { private get; set; }
+    public Func<ConfigurationContextChangedEventArgs, CancellationToken, Task>? ApplyConfigurationContextChangedAsync { private get; set; }
 
     public ObservableCollection<SettingsSectionViewModel> Sections { get; }
 
@@ -3683,9 +3684,10 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         ConfigurationManagerErrorMessage = string.Empty;
         StatusMessage = message;
         LastErrorMessage = string.Empty;
-        RaiseConfigurationContextChanged(
+        await RaiseConfigurationContextChangedAsync(
             ConfigurationContextChangeReason.ProfileSwitched,
-            message);
+            message,
+            cancellationToken);
     }
 
     public async Task MoveConfigurationProfileUpAsync(CancellationToken cancellationToken = default)
@@ -3801,9 +3803,10 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
             ConfigurationManagerErrorMessage = string.Empty;
             StatusMessage = switchMessage;
             LastErrorMessage = string.Empty;
-            RaiseConfigurationContextChanged(
+            await RaiseConfigurationContextChangedAsync(
                 ConfigurationContextChangeReason.ProfileSwitched,
-                switchMessage);
+                switchMessage,
+                cancellationToken);
         }
         finally
         {
@@ -6098,15 +6101,22 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         await LoadConfigurationProfilesAsync(scope, cancellationToken, updateStatus: false);
         await LoadFromConfigAsync(Runtime.ConfigurationService.CurrentConfig, cancellationToken);
         LoadConnectionSharedStateFromConfig();
-        RaiseConfigurationContextChanged(reason, message, report);
+        await RaiseConfigurationContextChangedAsync(reason, message, cancellationToken, report);
     }
 
-    private void RaiseConfigurationContextChanged(
+    private async Task RaiseConfigurationContextChangedAsync(
         ConfigurationContextChangeReason reason,
         string message,
+        CancellationToken cancellationToken = default,
         ImportReport? report = null)
     {
-        ConfigurationContextChanged?.Invoke(this, new ConfigurationContextChangedEventArgs(reason, message, report));
+        var args = new ConfigurationContextChangedEventArgs(reason, message, report);
+        if (ApplyConfigurationContextChangedAsync is not null)
+        {
+            await ApplyConfigurationContextChangedAsync(args, cancellationToken);
+        }
+
+        ConfigurationContextChanged?.Invoke(this, args);
     }
 
     private static async Task WriteConfigFileAsync(UnifiedConfig config, string filePath, CancellationToken cancellationToken)

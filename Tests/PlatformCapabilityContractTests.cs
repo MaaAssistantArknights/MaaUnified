@@ -144,6 +144,20 @@ public sealed class PlatformCapabilityContractTests
     }
 
     [Fact]
+    public void WindowsNotifyIconTrayService_UsesNativePopupMenuContract()
+    {
+        var root = TestRepoLayout.GetMaaUnifiedRoot();
+        var code = File.ReadAllText(Path.Combine(root, "Platform", "PlatformProviders.cs"));
+
+        Assert.Contains("TrackPopupMenuEx", code, StringComparison.Ordinal);
+        Assert.Contains("SetForegroundWindow", code, StringComparison.Ordinal);
+        Assert.Contains("PostMessage(_windowHandle, WmNull", code, StringComparison.Ordinal);
+        Assert.Contains("NimSetFocus", code, StringComparison.Ordinal);
+        Assert.Contains("Shell_NotifyIconGetRect", code, StringComparison.Ordinal);
+        Assert.Contains("RaiseCommand(command)", code, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task NoOpOverlayService_ReturnsPreviewAndFallbackResult()
     {
         var service = new NoOpOverlayCapabilityService();
