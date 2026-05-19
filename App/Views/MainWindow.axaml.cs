@@ -1832,8 +1832,8 @@ public partial class MainWindow : Window
         {
             DataContext = VM.OverlayPresentation,
         };
-        overlayHostWindow.Show();
         _overlayHostWindow = overlayHostWindow;
+        overlayHostWindow.Show();
         var platformHandle = overlayHostWindow.TryGetPlatformHandle();
         var handle = platformHandle?.Handle ?? nint.Zero;
         if (handle == nint.Zero)

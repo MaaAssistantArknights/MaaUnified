@@ -173,7 +173,6 @@ create_dmg_with_dmgbuild() {
 
   if ! MAA_DMG_APP_PATH="$app_dir" \
     MAA_DMG_NOTE_PATH="$dmg_root/$dmg_note_name" \
-    MAA_DMG_BACKGROUND_PATH="$dmg_background_path" \
     MAA_DMG_VOLUME_ICON_PATH="$resources_dir/$app_icon_name" \
     "$dmgbuild_python" -m dmgbuild \
     -s "$dmg_settings_path" \
@@ -226,6 +225,10 @@ patch_dmg_background() {
   local mount_point
   local mounted_background_dir
   local mounted_background_path
+  local cleanup_required="false"
+  local detach_device=""
+
+  trap 'if [[ "$cleanup_required" == "true" && -n "$detach_device" ]]; then hdiutil detach "$detach_device" >/dev/null 2>&1 || true; fi' RETURN
 
   hdiutil resize -size 512m "$dmg_rw_path" >/dev/null
   attach_output="$(hdiutil attach "$dmg_rw_path" -readwrite -noverify -noautoopen)"
@@ -235,9 +238,13 @@ patch_dmg_background() {
     echo "Failed to mount temporary dmg image: $dmg_rw_path" >&2
     return 1
   fi
+  detach_device="$device"
+  cleanup_required="true"
   if [[ ! -w "$mount_point" ]]; then
     echo "Temporary dmg mounted read-only at $mount_point; expected writable image $dmg_rw_path." >&2
     hdiutil detach "$device" >/dev/null 2>&1 || true
+    cleanup_required="false"
+    trap - RETURN
     return 1
   fi
 
@@ -289,6 +296,8 @@ APPLESCRIPT
 
   sync
   hdiutil detach "$device" >/dev/null
+  cleanup_required="false"
+  trap - RETURN
 }
 
 create_app_icon() {
@@ -383,7 +392,11 @@ should_codesign_file() {
     return 0
   fi
 
-  grep -Eq 'dynamically linked shared library' <<< "$file_type"
+  if grep -Eq 'dynamically linked shared library' <<< "$file_type"; then
+    return 0
+  fi
+
+  return 1
 }
 
 sign_bundle_components_with_identity() {
@@ -536,8 +549,6 @@ mkdir -p "$dmg_background_dir"
 python3 src/MAAUnified/CI/create-dmg-background.py "$dmg_background_png_path"
 if command -v sips >/dev/null 2>&1; then
   sips -s format jpeg "$dmg_background_png_path" --out "$dmg_background_jpeg_path" >/dev/null 2>&1 || true
-fi
-if command -v sips >/dev/null 2>&1; then
   sips -s format tiff "$dmg_background_png_path" --out "$dmg_background_tiff_path" >/dev/null 2>&1 || true
 fi
 if [[ -f "$dmg_background_jpeg_path" ]]; then

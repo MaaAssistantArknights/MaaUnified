@@ -432,8 +432,14 @@ public sealed class DialogModuleP1FeatureTests
             service.Split("ShowDialogWithOwnerScaleAsync<DialogReturnSemantic?>", StringSplitOptions.None).Length - 1);
 
         Assert.Contains("DialogWindowScaling.ApplyOwnerUiScale(_runtimeLogWindow, this);", mainWindow, StringComparison.Ordinal);
-        Assert.Contains("DialogWindowScaling.ApplyOwnerUiScale(waitDialog, this);", mainWindow, StringComparison.Ordinal);
+        Assert.Contains("DialogWindowScaling.ApplyOwnerUiScale(popup, this);", mainWindow, StringComparison.Ordinal);
+        Assert.True(
+            mainWindow.IndexOf("_overlayHostWindow = overlayHostWindow;", StringComparison.Ordinal)
+            < mainWindow.IndexOf("overlayHostWindow.Show();", StringComparison.Ordinal),
+            "Overlay host window should be assigned before Show() to avoid callbacks observing a null host.");
         Assert.Contains("DialogWindowScaling.ApplyOwnerUiScale(dialog, owner);", configurationManager, StringComparison.Ordinal);
+        Assert.Contains("return await PickManualImportAsync(topLevel, text);", configurationManager, StringComparison.Ordinal);
+        Assert.DoesNotContain("TopLevel.GetTopLevel(this)!", configurationManager, StringComparison.Ordinal);
         Assert.Contains("DialogWindowScaling.ApplyOwnerUiScale(_screenshotPreviewWindow, owner);", connectSettings, StringComparison.Ordinal);
     }
 

@@ -67,6 +67,39 @@ public sealed class MacOverlayCapabilityServiceTests
         Assert.Equal(PlatformErrorCodes.OverlayPreviewMode, state.ErrorCode);
     }
 
+    [Fact]
+    public async Task SetVisibleAsync_WhenHiding_ShouldEmitHiddenState()
+    {
+        var service = new MacOverlayCapabilityService(new FakeMacWindowEnumerator([]));
+        var emitted = new List<OverlayStateChangedEvent>();
+        service.OverlayStateChanged += (_, e) => emitted.Add(e);
+
+        var result = await service.SetVisibleAsync(false);
+
+        Assert.True(result.Success);
+        Assert.False(result.UsedFallback);
+        var state = Assert.Single(emitted);
+        Assert.Equal(OverlayRuntimeMode.Hidden, state.Mode);
+        Assert.False(state.Visible);
+        Assert.Equal("preview", state.TargetId);
+    }
+
+    [Fact]
+    public async Task SetVisibleAsync_WhenHostIsMissing_ShouldNotFlipVisibleState()
+    {
+        var service = new MacOverlayCapabilityService(new FakeMacWindowEnumerator([]));
+        var emitted = new List<OverlayStateChangedEvent>();
+        service.OverlayStateChanged += (_, e) => emitted.Add(e);
+
+        var visibleResult = await service.SetVisibleAsync(true);
+        var selectResult = await service.SelectTargetAsync("mac:0x2A");
+
+        Assert.False(visibleResult.Success);
+        Assert.Equal(PlatformErrorCodes.OverlayHostNotBound, visibleResult.ErrorCode);
+        Assert.True(selectResult.Success);
+        Assert.Empty(emitted);
+    }
+
     private sealed class FakeMacWindowEnumerator(IReadOnlyList<OverlayTarget> targets)
         : MacOverlayCapabilityService.IMacWindowEnumerator
     {
