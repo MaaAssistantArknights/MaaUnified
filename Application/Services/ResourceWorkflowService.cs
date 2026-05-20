@@ -1,5 +1,6 @@
 using MAAUnified.Application.Models;
 using MAAUnified.Compat.Constants;
+using MAAUnified.Compat.Runtime;
 using MAAUnified.CoreBridge;
 using MAAUnified.Platform;
 using System.Runtime.InteropServices;
@@ -34,6 +35,7 @@ public sealed class ResourceWorkflowService
         var gpuPreference = ReadGpuPreference(config);
         var libraryPath = Path.Combine(_baseDirectory, ResolveLibraryName());
         var resourceDirectory = Path.Combine(_baseDirectory, "resource");
+        var repairedShadowFileCount = ResourceDirectoryMaintenance.RemoveFlattenedPluginShadowFiles(resourceDirectory);
         var gpuPlan = await Task.Run(
             () =>
             {
@@ -46,6 +48,12 @@ public sealed class ResourceWorkflowService
         var gpuRequest = gpuPlan.Request;
         _logService.Debug(
             $"Core init request: base={_baseDirectory}, lib={libraryPath}, libExists={File.Exists(libraryPath)}, resource={resourceDirectory}, resourceExists={Directory.Exists(resourceDirectory)}, client={clientType ?? "<default>"}");
+        if (repairedShadowFileCount > 0)
+        {
+            _logService.Warn(
+                $"Removed {repairedShadowFileCount} stale plugin shadow resource file(s) before core initialization.");
+        }
+
         LogGpuSelection(gpuPreference, gpuResolution);
 
         // MaaCore resource loading is synchronous and can take multiple seconds.

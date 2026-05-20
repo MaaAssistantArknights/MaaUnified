@@ -3971,6 +3971,9 @@ With save file: farm points through crafting (advanced).
   <data name="Settings.VersionUpdate.Status.WindowsManualUpdateRequired" xml:space="preserve">
     <value>The Windows release is not published yet. Please update manually.</value>
   </data>
+  <data name="Settings.VersionUpdate.Status.LinuxPortableZipManualInstallRequired" xml:space="preserve">
+    <value>The Linux portable package has been downloaded. Extract it to a new directory and launch the AppImage there.</value>
+  </data>
   <data name="Settings.VersionUpdate.Status.MirrorCdkExpired" xml:space="preserve">
     <value>MirrorChyan CDK has expired.</value>
   </data>
@@ -4090,6 +4093,13 @@ With save file: farm points through crafting (advanced).
   </data>
   <data name="Settings.VersionUpdate.Status.SaveProxySucceeded" xml:space="preserve">
     <value>Update proxy settings saved.</value>
+  </data>
+  <data name="MultiInstanceUnderSamePath" xml:space="preserve">
+    <value>Only one instance can be launched under the same path!
+If you want to run multiple MAA at the same time, please copy the whole MAA and start under different path with the same adb and different connect address.</value>
+  </data>
+  <data name="Startup.LinuxPortablePackageMissing" xml:space="preserve">
+    <value>The Linux portable package is incomplete. Please extract the full package, then launch MAAUnified.AppImage from that directory.</value>
   </data>
   <data name="SkillDaemon" xml:space="preserve">
     <value>Start Auto</value>

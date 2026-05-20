@@ -124,13 +124,14 @@ cmake --install build --config RelWithDebInfo
 mkdir -p publish
 dotnet publish src/MAAUnified/App/MAAUnified.App.csproj -c Release -r linux-x64 --self-contained true --no-restore -o publish/bin
 
-# 4) 合并 runtime 到发布目录根部，并生成启动入口
+# 4) 合并 runtime 到发布目录根部，准备便携目录
 cp -a install/. publish/
-bash src/MAAUnified/CI/create-unix-launchers.sh publish linux
+mkdir -p publish/config publish/data publish/cache publish/debug publish/update-packages
+bash src/MAAUnified/CI/create-linux-appimage.sh publish publish MAAUnified x86_64
 
 # 5) 启动本地打包产物
 cd publish
-./MAAUnified
+./MAAUnified.AppImage
 ```
 
 ### Windows x64

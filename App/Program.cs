@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Avalonia;
 using Avalonia.Rendering.Composition;
@@ -11,6 +12,7 @@ using Avalonia.X11;
 using MAAUnified.Compat.Constants;
 using MAAUnified.Compat.Runtime;
 using MAAUnified.Application.Services;
+using MAAUnified.Application.Services.Localization;
 using MAAUnified.Application.Services.VersionUpdate;
 
 namespace MAAUnified.App;
@@ -21,6 +23,8 @@ internal static class Program
     private const string StartupScope = "App.Startup";
     private const string StartupNoDisplayCode = "UiStartupNoDisplay";
     private const string StartupUnhandledCode = "UiStartupUnhandled";
+    private const string StartupPortablePackageMissingCode = "UiStartupPortablePackageMissing";
+    private const string StartupDuplicateInstanceCode = "UiStartupDuplicateInstance";
     internal const string StartupTraceLogName = "avalonia-ui-startup.log";
     internal const string StartupErrorLogName = "avalonia-ui-errors.log";
     private const string ConfigDirectoryName = "config";
@@ -33,12 +37,31 @@ internal static class Program
     {
         var runtimeBaseDirectory = RuntimeLayout.ResolveRuntimeBaseDirectory();
         RecordStartupStage("Main.Entry", BuildStartupEnvironmentSnapshot(args));
+        if (!ValidateLinuxPortablePackageLayout(runtimeBaseDirectory))
+        {
+            return 1;
+        }
+
+        if (!TryAcquireSingleInstanceGuard(runtimeBaseDirectory, out var instanceGuard))
+        {
+            return 3;
+        }
+
+        using var heldInstanceGuard = instanceGuard;
         var macSeedResult = MacAppRuntimeSeed.EnsureSeeded(AppContext.BaseDirectory, runtimeBaseDirectory);
         if (macSeedResult.Status == MacAppRuntimeSeedStatus.Ready)
         {
             RecordStartupStage(
                 "Main.MacAppRuntimeSeed.Ready",
                 $"runtimeBaseDir={macSeedResult.RuntimeBaseDirectory}; resourceSeeded={macSeedResult.ResourceSeeded}; resourceSeedReason={macSeedResult.ResourceSeedReason}; nativeLibraries={macSeedResult.NativeLibraryCount}; bundleResourceDir={macSeedResult.BundleResourceDirectory}");
+        }
+
+        var linuxSeedResult = LinuxPackagedRuntimeSeed.EnsureSeeded(AppContext.BaseDirectory, runtimeBaseDirectory);
+        if (linuxSeedResult.Status == LinuxPackagedRuntimeSeedStatus.Ready)
+        {
+            RecordStartupStage(
+                "Main.LinuxPackagedRuntimeSeed.Ready",
+                $"runtimeBaseDir={linuxSeedResult.RuntimeBaseDirectory}; resourceSeeded={linuxSeedResult.ResourceSeeded}; resourceSeedReason={linuxSeedResult.ResourceSeedReason}; nativeLibraries={linuxSeedResult.NativeLibraryCount}; packagedRuntimeDir={linuxSeedResult.PackagedRuntimeBaseDirectory}");
         }
 
         var pendingUpdateResult = PendingAppUpdateService.TryApplyPendingUpdatePackage(runtimeBaseDirectory);
@@ -398,6 +421,56 @@ internal static class Program
         return $"{Snapshot("DISPLAY")} {Snapshot("WAYLAND_DISPLAY")}";
     }
 
+    internal static bool ValidateLinuxPortablePackageLayout(string runtimeBaseDirectory)
+    {
+        if (!OperatingSystem.IsLinux()
+            || !RuntimeLayout.IsLinuxPortablePackageLaunchInvalid(AppContext.BaseDirectory, linuxAppImagePath: null, out var packageRoot))
+        {
+            return true;
+        }
+
+        var message = LocalizeStartupText(
+            runtimeBaseDirectory,
+            "Startup.LinuxPortablePackageMissing",
+            "Linux portable package is incomplete. Please extract the full package and launch MAAUnified.AppImage from that directory.");
+        var title = LocalizeStartupText(
+            runtimeBaseDirectory,
+            "Common.ErrorPrefix",
+            "Error");
+        RecordStartupStage(
+            "Main.PortablePackage.Invalid",
+            $"packageRoot={packageRoot}; runtimeBaseDir={runtimeBaseDirectory}");
+        ReportStartupFailure(
+            StartupPortablePackageMissingCode,
+            $"{message} packageRoot={packageRoot}");
+        StartupPrompt.Show(title, message, StartupPromptSeverity.Error);
+        return false;
+    }
+
+    internal static bool TryAcquireSingleInstanceGuard(string runtimeBaseDirectory, out PackageInstanceGuard? guard)
+    {
+        guard = null;
+        var identityPath = RuntimeLayout.ResolveSingleInstanceIdentityPath();
+        if (PackageInstanceGuard.TryAcquire(identityPath, out guard))
+        {
+            RecordStartupStage("Main.SingleInstance.Acquired", $"identityPath={identityPath}");
+            return true;
+        }
+
+        var message = LocalizeStartupText(
+            runtimeBaseDirectory,
+            "MultiInstanceUnderSamePath",
+            "Only one instance can be launched under the same path.");
+        var title = LocalizeStartupText(
+            runtimeBaseDirectory,
+            "Common.WarningPrefix",
+            "Warning");
+        RecordStartupStage("Main.SingleInstance.Duplicate", $"identityPath={identityPath}");
+        ReportStartupFailure(StartupDuplicateInstanceCode, $"{message} identityPath={identityPath}");
+        StartupPrompt.Show(title, message, StartupPromptSeverity.Warning);
+        return false;
+    }
+
     private static void ReportStartupFailure(string code, string message, Exception? exception = null)
     {
         var line = new StringBuilder()
@@ -439,6 +512,38 @@ internal static class Program
         catch
         {
             // Never throw from startup error reporting.
+        }
+    }
+
+    private static string LocalizeStartupText(string runtimeBaseDirectory, string key, string fallback)
+    {
+        var language = ResolveStartupLanguage(runtimeBaseDirectory);
+        return UiLocalizer.Create(language).GetOrDefault(key, fallback, StartupScope);
+    }
+
+    private static string ResolveStartupLanguage(string runtimeBaseDirectory)
+    {
+        try
+        {
+            var configPath = Path.Combine(runtimeBaseDirectory, ConfigDirectoryName, AvaloniaConfigFileName);
+            if (!File.Exists(configPath))
+            {
+                return UiLanguageCatalog.DefaultLanguage;
+            }
+
+            using var document = JsonDocument.Parse(File.ReadAllText(configPath));
+            if (!document.RootElement.TryGetProperty("GlobalValues", out var globalValues)
+                || !globalValues.TryGetProperty(ConfigurationKeys.Localization, out var languageNode)
+                || languageNode.ValueKind != JsonValueKind.String)
+            {
+                return UiLanguageCatalog.DefaultLanguage;
+            }
+
+            return UiLanguageCatalog.Normalize(languageNode.GetString());
+        }
+        catch
+        {
+            return UiLanguageCatalog.DefaultLanguage;
         }
     }
 }

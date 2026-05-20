@@ -2594,6 +2594,9 @@
   <data name="Settings.VersionUpdate.Status.WindowsManualUpdateRequired" xml:space="preserve">
     <value>Windows 版はまだ release で公開されていません。手動で更新してください。</value>
   </data>
+  <data name="Settings.VersionUpdate.Status.LinuxPortableZipManualInstallRequired" xml:space="preserve">
+    <value>Linux のポータブルパッケージをダウンロードしました。新しいフォルダに展開し、その中の AppImage を起動してください。</value>
+  </data>
   <data name="Settings.VersionUpdate.Status.MirrorCdkExpired" xml:space="preserve">
     <value>MirrorChyan CDK は期限切れです。</value>
   </data>
@@ -2641,6 +2644,13 @@
   </data>
   <data name="Settings.VersionUpdate.Status.SaveProxySucceeded" xml:space="preserve">
     <value>更新プロキシ設定を保存しました。</value>
+  </data>
+  <data name="MultiInstanceUnderSamePath" xml:space="preserve">
+    <value>同じパスの下で起動できるのは1つのインスタンスのみ！
+MAA を複数開くには、新しい MAA を他のフォルダにコピーし、異なる MAA、同じ adb、異なるシミュレータアドレスを使用して複数の操作を行うように設定します。</value>
+  </data>
+  <data name="Startup.LinuxPortablePackageMissing" xml:space="preserve">
+    <value>Linux ポータブルパッケージの内容が不完全です。完全に展開してから、そのフォルダ内の MAAUnified.AppImage を起動してください。</value>
   </data>
   <data name="SlowAndSteadyWinsTheRace" xml:space="preserve">
     <value>攻守一体（重装、術師、狙撃）</value>

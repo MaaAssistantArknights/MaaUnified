@@ -18,7 +18,7 @@
 | 名称 | Runner | RID | MaaDeps triplet | CMake preset | Debug | Release |
 | --- | --- | --- | --- | --- | --- | --- |
 | `windows-x64` | `windows-latest` | `win-x64` | `x64-windows` | `windows-unified-publish-x64` | 完整调试包 | `.zip` |
-| `linux-x64` | `ubuntu-latest` | `linux-x64` | `x64-linux` | `linux-publish-x64` | 完整调试包 | `.AppImage` |
+| `linux-x64` | `ubuntu-latest` | `linux-x64` | `x64-linux` | `linux-publish-x64` | 完整调试包 | `.zip` |
 | `macos-x64` | `macos-latest` | `osx-x64` | `x64-osx` | `macos-publish-x64` | 完整调试包 | `.dmg` |
 | `macos-arm64` | `macos-latest` | `osx-arm64` | `arm64-osx` | `macos-publish-arm64` | 完整调试包 | `.dmg` |
 
@@ -27,7 +27,7 @@
 正式包形态固定为：
 
 - Windows Release：`.zip`，解压根目录直接看到 `MAAUnified.exe`
-- Linux Release：单个 `.AppImage`
+- Linux Release：`.zip` 便携包，解压根目录直接看到 `MAAUnified.AppImage`
 - macOS Release：`.dmg`
 
 ### macOS 签名与 ad-hoc fallback
@@ -52,7 +52,7 @@ CI 产物需要满足这些约定：
 - Linux / macOS 托管应用和依赖在 `${RUNNER_TEMP}/maaunified-staging/bin/`
 - MaaCore runtime、原生库和 `resource/` 在 `${RUNNER_TEMP}/maaunified-staging/` 根目录
 - Windows 根目录入口是 `${RUNNER_TEMP}/maaunified-staging/MAAUnified.exe`
-- Linux 根目录保留 `${RUNNER_TEMP}/maaunified-staging/MAAUnified` 和 `${RUNNER_TEMP}/maaunified-staging/MAAUnified.sh`
+- Linux 根目录保留 `MAAUnified.AppImage`、`resource/`、原生库，以及 `config/`、`data/`、`cache/`、`debug/`、`update-packages/` 等便携目录
 - Debug 包必须包含可运行应用、runtime、`resource/` 和 `debug/`
 
 ## CI 测试门禁
@@ -124,7 +124,7 @@ Windows GPU 探测遇到 `Indirect`、`Virtual`、`IDD` 一类 adapter 时，应
 3. 跑 Debug workflow，看调试包和测试结果。
 4. 确认目标平台启动、布局和日志都正常。
 5. 创建或确认 GitHub Release。
-6. 跑正式发布 workflow，生成 Windows `.zip`、Linux `.AppImage`、macOS `.dmg`。
+6. 跑正式发布 workflow，生成 Windows `.zip`、Linux `.zip` 便携包、macOS `.dmg`。
 7. 检查 macOS job 日志：若签名状态不是 `developer-id`，发布说明中必须提醒用户该包未经过 Apple notarization。
 
 Windows GUI 启动或 GPU 问题，优先看发布目录下的 `debug/windows-gpu-probe.log` 和 `debug/avalonia-ui-startup.log`。

@@ -566,6 +566,7 @@ public sealed partial class SettingsPageViewModel
         VersionUpdateBody = checkResult.Body;
         VersionUpdatePackage = checkResult.PackageResolutionStatus is
                 PackageResolutionStatus.MacOSManualInstallRequired
+                or PackageResolutionStatus.LinuxPortableZipManualInstallRequired
                 or PackageResolutionStatus.AppImageManualInstallRequired
             ? string.Empty
             : checkResult.PreparedPackagePath ?? string.Empty;
@@ -650,6 +651,7 @@ public sealed partial class SettingsPageViewModel
         return checkResult.PackageResolutionStatus is
             PackageResolutionStatus.WindowsManualUpdateRequired
             or PackageResolutionStatus.MacOSManualInstallRequired
+            or PackageResolutionStatus.LinuxPortableZipManualInstallRequired
             or PackageResolutionStatus.AppImageManualInstallRequired
             or PackageResolutionStatus.Unavailable
             or PackageResolutionStatus.DownloadFailed;
@@ -660,6 +662,7 @@ public sealed partial class SettingsPageViewModel
         var fallback = ResolveVersionUpdatePackageFailureFallback(checkResult.PackageResolutionStatus);
         if (checkResult.PackageResolutionStatus is
                 PackageResolutionStatus.MacOSManualInstallRequired
+                or PackageResolutionStatus.LinuxPortableZipManualInstallRequired
                 or PackageResolutionStatus.AppImageManualInstallRequired
             && !string.IsNullOrWhiteSpace(checkResult.PreparedPackagePath))
         {
@@ -677,6 +680,7 @@ public sealed partial class SettingsPageViewModel
         {
             PackageResolutionStatus.WindowsManualUpdateRequired => "Windows 版目前暂未在 release 发布，请手动更新。",
             PackageResolutionStatus.MacOSManualInstallRequired => "macOS 安装镜像已下载，请打开 dmg 手动安装。",
+            PackageResolutionStatus.LinuxPortableZipManualInstallRequired => "Linux 便携包已下载，请解压到新目录并启动其中的 AppImage。",
             PackageResolutionStatus.AppImageManualInstallRequired => "Linux AppImage 已下载，请手动替换或启动新的 AppImage。",
             PackageResolutionStatus.Unavailable => "更新失败。",
             PackageResolutionStatus.DownloadFailed => "更新失败。",
