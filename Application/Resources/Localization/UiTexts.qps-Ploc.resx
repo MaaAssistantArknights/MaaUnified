@@ -207,4 +207,14 @@
   <data name="Toolbox.Advanced.ExternalNotification.Error.QueryFailed" xml:space="preserve">
     <value>[!! Ƒåîļéď ţö qüéřý éẋţéřñåļ ñöţîƒîçåţîöñ þřöṽîďéřş. !!]</value>
   </data>
+  <data name="Settings.VersionUpdate.Status.LinuxPortableZipManualInstallRequired" xml:space="preserve">
+    <value>[!! Ţĥé Ļîñüẋ þöřţåƀļé þåçķåĝé ĥåş ƀééñ ďöŵñļöåďéď. Éẋţřåçţ îţ ţö å ñéŵ ďîřéçţöřý åñď ļåüñçĥ ţĥé ÅþþÌɱåĝé ţĥéřé. !!]</value>
+  </data>
+  <data name="MultiInstanceUnderSamePath" xml:space="preserve">
+    <value>[!! Öñļý öñé îñşţåñçé çåñ ƀé ļåüñçĥéď üñďéř ţĥé şåɱé þåţĥ!
+Îƒ ýöü ŵåñţ ţö řüñ ɱüļţîþļé MÅÅ åţ ţĥé şåɱé ţîɱé, þļéåşé çöþý ţĥé ŵĥöļé MÅÅ åñď şţåřţ üñďéř ďîƒƒéřéñţ þåţĥ ŵîţĥ ţĥé şåɱé åďƀ åñď ďîƒƒéřéñţ çöññéçţ åďďřéşş. !!]</value>
+  </data>
+  <data name="Startup.LinuxPortablePackageMissing" xml:space="preserve">
+    <value>[!! Ţĥé Ļîñüẋ þöřţåƀļé þåçķåĝé îş îñçöɱþļéţé. Þļéåşé éẋţřåçţ ţĥé ƒüļļ þåçķåĝé, ţĥéñ ļåüñçĥ MÅÅÛñîƒîéď.ÅþþÌɱåĝé ƒřöɱ ţĥåţ ďîřéçţöřý. !!]</value>
+  </data>
 </root>

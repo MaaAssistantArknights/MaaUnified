@@ -14,6 +14,7 @@ using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.VersionUpdate;
 using MAAUnified.Application.Services.Localization;
 using MAAUnified.Compat.Constants;
+using MAAUnified.Compat.Runtime;
 using MAAUnified.CoreBridge;
 using MAAUnified.Platform;
 
@@ -24,6 +25,7 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
     private const string WindowsManualUpdateMessageKey = "Settings.VersionUpdate.Status.WindowsManualUpdateRequired";
     private const string MacOSManualInstallMessageKey = "Settings.VersionUpdate.Status.MacOSManualInstallRequired";
     private const string AppImageManualInstallMessageKey = "Settings.VersionUpdate.Status.AppImageManualInstallRequired";
+    private const string LinuxPortableZipManualInstallMessageKey = "Settings.VersionUpdate.Status.LinuxPortableZipManualInstallRequired";
     private const string PackageUnavailableMessageKey = "Settings.VersionUpdate.Status.PackageUnavailable";
     private const string PackageDownloadFailedMessageKey = "Settings.VersionUpdate.Status.PackageDownloadFailed";
     private const string GithubResourceArchiveUrl = "https://github.com/MaaAssistantArknights/MaaResource/archive/refs/heads/main.zip";
@@ -418,6 +420,14 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
                             PackageFailureMessageKey = MacOSManualInstallMessageKey,
                         };
                     }
+                    else if (IsLinuxPortableZipPackage(effectiveResult))
+                    {
+                        effectiveResult = effectiveResult with
+                        {
+                            PackageResolutionStatus = PackageResolutionStatus.LinuxPortableZipManualInstallRequired,
+                            PackageFailureMessageKey = LinuxPortableZipManualInstallMessageKey,
+                        };
+                    }
                     else if (IsAppImagePackage(effectiveResult))
                     {
                         effectiveResult = effectiveResult with
@@ -435,6 +445,13 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
                         PublishUpdateLog(FormatUpdateLogText(
                             "VersionUpdate.Log.Software.MacOSDmgReady",
                             "macOS 安装镜像已下载：{0}。请打开 dmg 手动安装。",
+                            downloadResult.Value));
+                    }
+                    else if (IsLinuxPortableZipPackage(effectiveResult))
+                    {
+                        PublishUpdateLog(FormatUpdateLogText(
+                            "VersionUpdate.Log.Software.LinuxPortableZipReady",
+                            "Linux 便携包已下载：{0}。请解压到新目录并启动其中的 AppImage。",
                             downloadResult.Value));
                     }
                     else if (IsAppImagePackage(effectiveResult))
@@ -549,6 +566,13 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
         return packageName.EndsWith(".dmg", StringComparison.OrdinalIgnoreCase);
     }
 
+    private static bool IsLinuxPortableZipPackage(VersionUpdateCheckResult workflowResult)
+    {
+        var packageName = workflowResult.PackageName ?? workflowResult.PreparedPackagePath ?? string.Empty;
+        return packageName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase)
+            && packageName.Contains("linux", StringComparison.OrdinalIgnoreCase);
+    }
+
     private static bool IsAppImagePackage(VersionUpdateCheckResult workflowResult)
     {
         var packageName = workflowResult.PackageName ?? workflowResult.PreparedPackagePath ?? string.Empty;
@@ -567,6 +591,11 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
             return $"发现新版本：{result.TargetVersion}。macOS 安装镜像已下载，请打开 dmg 手动安装。";
         }
 
+        if (result.PackageResolutionStatus == PackageResolutionStatus.LinuxPortableZipManualInstallRequired)
+        {
+            return $"发现新版本：{result.TargetVersion}。Linux 便携包已下载，请解压到新目录并启动其中的 AppImage。";
+        }
+
         if (result.PackageResolutionStatus == PackageResolutionStatus.AppImageManualInstallRequired)
         {
             return $"发现新版本：{result.TargetVersion}。Linux AppImage 已下载，请手动替换或启动新的 AppImage。";
@@ -583,6 +612,8 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
                 => $"发现新版本：{result.TargetVersion}。Windows 版目前暂未在 release 发布，请手动更新。",
             PackageResolutionStatus.MacOSManualInstallRequired
                 => $"发现新版本：{result.TargetVersion}。macOS 安装镜像已下载，请打开 dmg 手动安装。",
+            PackageResolutionStatus.LinuxPortableZipManualInstallRequired
+                => $"发现新版本：{result.TargetVersion}。Linux 便携包已下载，请解压到新目录并启动其中的 AppImage。",
             PackageResolutionStatus.AppImageManualInstallRequired
                 => $"发现新版本：{result.TargetVersion}。Linux AppImage 已下载，请手动替换或启动新的 AppImage。",
             PackageResolutionStatus.Unavailable
@@ -739,6 +770,15 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
             await Task.Run(
                 () => MergeDirectory(extractedResourceDirectory, resourceDirectory),
                 cancellationToken).ConfigureAwait(false);
+            var repairedShadowFileCount = ResourceDirectoryMaintenance.RemoveFlattenedPluginShadowFiles(resourceDirectory);
+            if (repairedShadowFileCount > 0)
+            {
+                await TraceVersionUpdateAsync(
+                    scope,
+                    $"Removed stale plugin shadow resource files count={repairedShadowFileCount}",
+                    cancellationToken).ConfigureAwait(false);
+            }
+
             await TraceVersionUpdateAsync(scope, "Merge end", cancellationToken).ConfigureAwait(false);
             progress?.Report(new VersionUpdateProgressInfo(
                 VersionUpdateProgressOperation.ResourcePackage,
@@ -933,6 +973,16 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
             await Task.Run(
                 () => MergeDirectory(mergeSource, runtimeBaseDirectory),
                 cancellationToken).ConfigureAwait(false);
+            var repairedShadowFileCount = ResourceDirectoryMaintenance.RemoveFlattenedPluginShadowFiles(
+                Path.Combine(runtimeBaseDirectory, "resource"));
+            if (repairedShadowFileCount > 0)
+            {
+                await TraceVersionUpdateAsync(
+                    scope,
+                    $"Removed stale plugin shadow resource files count={repairedShadowFileCount}",
+                    cancellationToken).ConfigureAwait(false);
+            }
+
             await TraceVersionUpdateAsync(scope, "Merge end", cancellationToken).ConfigureAwait(false);
             _achievementTrackerService?.Unlock("MirrorChyanFirstUse");
             progress?.Report(new VersionUpdateProgressInfo(

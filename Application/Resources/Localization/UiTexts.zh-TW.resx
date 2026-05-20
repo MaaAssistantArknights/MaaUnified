@@ -2486,6 +2486,9 @@
   <data name="Settings.VersionUpdate.Status.WindowsManualUpdateRequired" xml:space="preserve">
     <value>Windows 版目前尚未在 release 發佈，請手動更新。</value>
   </data>
+  <data name="Settings.VersionUpdate.Status.LinuxPortableZipManualInstallRequired" xml:space="preserve">
+    <value>Linux 可攜式套件已下載，請解壓到新目錄後啟動其中的 AppImage。</value>
+  </data>
   <data name="Settings.VersionUpdate.Status.MirrorCdkExpired" xml:space="preserve">
     <value>MirrorChyan CDK 已過期。</value>
   </data>
@@ -2533,6 +2536,13 @@
   </data>
   <data name="Settings.VersionUpdate.Status.SaveProxySucceeded" xml:space="preserve">
     <value>版本更新代理設定儲存成功。</value>
+  </data>
+  <data name="MultiInstanceUnderSamePath" xml:space="preserve">
+    <value>同一路徑下只能啟動一個執行個體！
+如需多開 MAA，請複製一份新的 MAA 到其他資料夾，並設定使用不同的 MAA，搭配相同的 ADB 與不同的模擬器位址進行多開操作。</value>
+  </data>
+  <data name="Startup.LinuxPortablePackageMissing" xml:space="preserve">
+    <value>Linux 可攜式套件目錄不完整。請先完整解壓，再執行同目錄中的 MAAUnified.AppImage。</value>
   </data>
   <data name="SlowAndSteadyWinsTheRace" xml:space="preserve">
     <value>穩紮穩打（重裝、術師、狙擊）</value>

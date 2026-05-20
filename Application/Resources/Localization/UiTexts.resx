@@ -3972,6 +3972,9 @@ Session state `{0}` does not allow {2}.</value>
   <data name="Settings.VersionUpdate.Status.WindowsManualUpdateRequired" xml:space="preserve">
     <value>Windows 版目前暂未在 release 发布，请手动更新。</value>
   </data>
+  <data name="Settings.VersionUpdate.Status.LinuxPortableZipManualInstallRequired" xml:space="preserve">
+    <value>Linux 便携包已下载，请解压到新目录并启动其中的 AppImage。</value>
+  </data>
   <data name="Settings.VersionUpdate.Status.MirrorCdkExpired" xml:space="preserve">
     <value>MirrorChyan CDK 已过期。</value>
   </data>
@@ -4091,6 +4094,13 @@ Session state `{0}` does not allow {2}.</value>
   </data>
   <data name="Settings.VersionUpdate.Status.SaveProxySucceeded" xml:space="preserve">
     <value>版本更新代理配置保存成功。</value>
+  </data>
+  <data name="MultiInstanceUnderSamePath" xml:space="preserve">
+    <value>同一路径下只能启动一个实例！
+如需多开 MAA，请复制一份新的 MAA 到其他文件夹下，并设置使用不同的 MAA，相同的 adb 和不同的模拟器地址进行多开操作。</value>
+  </data>
+  <data name="Startup.LinuxPortablePackageMissing" xml:space="preserve">
+    <value>Linux 便携包目录不完整。请先完整解压，再运行同目录中的 MAAUnified.AppImage。</value>
   </data>
   <data name="SkillDaemon" xml:space="preserve">
     <value>开始挂机</value>

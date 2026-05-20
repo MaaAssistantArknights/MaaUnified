@@ -98,6 +98,41 @@ public sealed class ResourceWorkflowGpuFeatureTests
                 && entry.Message.Contains("Falling back to CPU OCR for this session", StringComparison.OrdinalIgnoreCase));
     }
 
+    [Fact]
+    public async Task InitializeCoreAsync_WhenFlattenedPluginShadowFilesExist_RemovesThemBeforeBridgeInitialization()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "maa-unified-resource-workflow", Guid.NewGuid().ToString("N"));
+        var resourceDirectory = Path.Combine(root, "resource", "tasks", "RA");
+        var pluginDirectory = Path.Combine(resourceDirectory, "plugin");
+        Directory.CreateDirectory(pluginDirectory);
+        File.WriteAllText(Path.Combine(root, "libMaaCore.so"), "placeholder");
+        File.WriteAllText(Path.Combine(resourceDirectory, "base.json"), "root-base");
+        File.WriteAllText(Path.Combine(pluginDirectory, "base.json"), "plugin-base");
+
+        try
+        {
+            var bridge = new CapturingBridge();
+            var log = new UiLogService();
+            var service = new ResourceWorkflowService(root, bridge, log, new UnsupportedGpuCapabilityService());
+
+            var result = await service.InitializeCoreAsync(BuildConfig(new Dictionary<string, string>()));
+
+            Assert.True(result.Success);
+            Assert.False(File.Exists(Path.Combine(pluginDirectory, "base.json")));
+            Assert.Contains(
+                log.Snapshot,
+                entry => entry.Level == "WARN"
+                    && entry.Message.Contains("stale plugin shadow resource file", StringComparison.OrdinalIgnoreCase));
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
     private static UnifiedConfig BuildConfig(IReadOnlyDictionary<string, string> profileValues)
     {
         var profile = new UnifiedProfile();

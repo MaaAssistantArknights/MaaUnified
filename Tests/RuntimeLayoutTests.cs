@@ -45,6 +45,157 @@ public sealed class RuntimeLayoutTests
     }
 
     [Fact]
+    public void ResolveRuntimeBaseDirectory_WhenRunningInsideAppImage_ReturnsLinuxApplicationSupportDirectory()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+
+        var originalAppDir = Environment.GetEnvironmentVariable("APPDIR");
+        var originalAppImage = Environment.GetEnvironmentVariable("APPIMAGE");
+        var originalXdgDataHome = Environment.GetEnvironmentVariable("XDG_DATA_HOME");
+        var xdgDataHome = Path.Combine(Path.GetTempPath(), "maa-unified-linux-app-support", Guid.NewGuid().ToString("N"));
+        var executableBaseDirectory = Path.Combine(
+            Path.GetTempPath(),
+            "maa-unified-runtime-layout",
+            Guid.NewGuid().ToString("N"),
+            "AppDir",
+            "usr",
+            "share",
+            "maaunified",
+            "bin");
+
+        try
+        {
+            Environment.SetEnvironmentVariable("APPDIR", Path.GetDirectoryName(Path.GetDirectoryName(Path.GetDirectoryName(Path.GetDirectoryName(executableBaseDirectory))))!);
+            Environment.SetEnvironmentVariable("APPIMAGE", "/tmp/MAAUnified.AppImage");
+            Environment.SetEnvironmentVariable("XDG_DATA_HOME", xdgDataHome);
+
+            var resolved = RuntimeLayout.ResolveRuntimeBaseDirectory(executableBaseDirectory);
+
+            Assert.Equal(
+                Path.GetFullPath(Path.Combine(xdgDataHome, RuntimeLayout.LinuxAppSupportDirectoryName)),
+                resolved);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("APPDIR", originalAppDir);
+            Environment.SetEnvironmentVariable("APPIMAGE", originalAppImage);
+            Environment.SetEnvironmentVariable("XDG_DATA_HOME", originalXdgDataHome);
+        }
+    }
+
+    [Fact]
+    public void ResolveRuntimeBaseDirectory_WhenRunningFromPortableLinuxPackage_ReturnsAppImageDirectory()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+
+        var originalAppDir = Environment.GetEnvironmentVariable("APPDIR");
+        var originalAppImage = Environment.GetEnvironmentVariable("APPIMAGE");
+        var root = Path.Combine(Path.GetTempPath(), "maa-unified-runtime-layout", Guid.NewGuid().ToString("N"));
+        var appImagePath = Path.Combine(root, "MAAUnified.AppImage");
+        var executableBaseDirectory = Path.Combine(root, "bin");
+
+        try
+        {
+            Directory.CreateDirectory(executableBaseDirectory);
+            Directory.CreateDirectory(Path.Combine(root, "resource"));
+            File.WriteAllText(appImagePath, "launcher");
+            File.WriteAllText(Path.Combine(executableBaseDirectory, "MAAUnified"), "app");
+            File.WriteAllText(Path.Combine(root, "libMaaCore.so"), "core");
+            Environment.SetEnvironmentVariable("APPDIR", Path.Combine(Path.GetTempPath(), "maa-unified-appdir", Guid.NewGuid().ToString("N")));
+            Environment.SetEnvironmentVariable("APPIMAGE", appImagePath);
+
+            var resolved = RuntimeLayout.ResolveRuntimeBaseDirectory(executableBaseDirectory);
+
+            Assert.Equal(Path.GetFullPath(root), resolved);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("APPDIR", originalAppDir);
+            Environment.SetEnvironmentVariable("APPIMAGE", originalAppImage);
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void IsLinuxPortablePackageLaunchInvalid_WhenResourceIsMissing_ReturnsTrue()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+
+        var originalAppImage = Environment.GetEnvironmentVariable("APPIMAGE");
+        var root = Path.Combine(Path.GetTempPath(), "maa-unified-runtime-layout", Guid.NewGuid().ToString("N"));
+        var appImagePath = Path.Combine(root, "MAAUnified.AppImage");
+        var executableBaseDirectory = Path.Combine(root, "bin");
+
+        try
+        {
+            Directory.CreateDirectory(executableBaseDirectory);
+            File.WriteAllText(appImagePath, "launcher");
+            File.WriteAllText(Path.Combine(executableBaseDirectory, "MAAUnified"), "app");
+            File.WriteAllText(Path.Combine(root, "libMaaCore.so"), "core");
+            Environment.SetEnvironmentVariable("APPIMAGE", appImagePath);
+
+            Assert.True(RuntimeLayout.IsLinuxPortablePackageLaunchInvalid(executableBaseDirectory, linuxAppImagePath: null, out var packageRoot));
+            Assert.Equal(Path.GetFullPath(root), packageRoot);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("APPIMAGE", originalAppImage);
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void ResolveSingleInstanceIdentityPath_WhenRunningFromPortableLinuxPackage_UsesPackageRoot()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+
+        var originalAppImage = Environment.GetEnvironmentVariable("APPIMAGE");
+        var root = Path.Combine(Path.GetTempPath(), "maa-unified-runtime-layout", Guid.NewGuid().ToString("N"));
+        var appImagePath = Path.Combine(root, "MAAUnified.AppImage");
+        var executableBaseDirectory = Path.Combine(root, "bin");
+
+        try
+        {
+            Directory.CreateDirectory(executableBaseDirectory);
+            Directory.CreateDirectory(Path.Combine(root, "resource"));
+            File.WriteAllText(appImagePath, "launcher");
+            File.WriteAllText(Path.Combine(executableBaseDirectory, "MAAUnified"), "app");
+            File.WriteAllText(Path.Combine(root, "libMaaCore.so"), "core");
+            Environment.SetEnvironmentVariable("APPIMAGE", appImagePath);
+
+            var resolved = RuntimeLayout.ResolveSingleInstanceIdentityPath(executableBaseDirectory);
+
+            Assert.Equal(Path.GetFullPath(root), resolved);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("APPIMAGE", originalAppImage);
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public void IsPackagedBinDirectory_WhenDevelopmentOutputDirectory_ReturnsFalse()
     {
         var developmentOutputDirectory = Path.Combine(

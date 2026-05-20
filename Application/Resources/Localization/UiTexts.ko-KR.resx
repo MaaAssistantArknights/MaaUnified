@@ -2595,6 +2595,9 @@ OF-1 스테이지가 개방되지 않은 경우에는 선택하지 마세요.</v
   <data name="Settings.VersionUpdate.Status.WindowsManualUpdateRequired" xml:space="preserve">
     <value>Windows 버전은 아직 release에 게시되지 않았습니다. 수동으로 업데이트해 주세요.</value>
   </data>
+  <data name="Settings.VersionUpdate.Status.LinuxPortableZipManualInstallRequired" xml:space="preserve">
+    <value>Linux 휴대용 패키지가 다운로드되었습니다. 새 디렉터리에 압축을 풀고 그 안의 AppImage를 실행해 주세요.</value>
+  </data>
   <data name="Settings.VersionUpdate.Status.MirrorCdkExpired" xml:space="preserve">
     <value>MirrorChyan CDK가 만료되었습니다.</value>
   </data>
@@ -2642,6 +2645,13 @@ OF-1 스테이지가 개방되지 않은 경우에는 선택하지 마세요.</v
   </data>
   <data name="Settings.VersionUpdate.Status.SaveProxySucceeded" xml:space="preserve">
     <value>업데이트 프록시 설정을 저장했습니다.</value>
+  </data>
+  <data name="MultiInstanceUnderSamePath" xml:space="preserve">
+    <value>동일한 경로에서는 하나의 인스턴스만 실행할 수 있습니다!
+여러 개의 MAA를 동시에 실행하려면 MAA 전체 폴더를 복사한 뒤, 같은 adb를 사용하되 연결 주소는 다르게 설정하여 서로 다른 경로에서 실행하세요.</value>
+  </data>
+  <data name="Startup.LinuxPortablePackageMissing" xml:space="preserve">
+    <value>Linux 휴대용 패키지 구성이 불완전합니다. 전체 패키지를 압축 해제한 뒤, 같은 디렉터리의 MAAUnified.AppImage를 실행해 주세요.</value>
   </data>
   <data name="SlowAndSteadyWinsTheRace" xml:space="preserve">
     <value>차근차근 (디펜더, 캐스터, 스나이퍼)</value>

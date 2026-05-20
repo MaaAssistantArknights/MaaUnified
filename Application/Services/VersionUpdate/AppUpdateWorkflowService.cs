@@ -738,9 +738,11 @@ public sealed class AppUpdateWorkflowService
             ? normalized.EndsWith(".zip", StringComparison.Ordinal) ? 10 : 0
             : _platform.IsMacOS
                 ? normalized.EndsWith(".dmg", StringComparison.Ordinal) ? 10 : 0
-                : normalized.EndsWith(".appimage", StringComparison.Ordinal)
+                : normalized.EndsWith(".zip", StringComparison.Ordinal)
                     ? 20
-                    : normalized.EndsWith(".tar.gz", StringComparison.Ordinal) || normalized.EndsWith(".tgz", StringComparison.Ordinal) ? 10 : 0;
+                    : normalized.EndsWith(".appimage", StringComparison.Ordinal)
+                        ? 10
+                        : normalized.EndsWith(".tar.gz", StringComparison.Ordinal) || normalized.EndsWith(".tgz", StringComparison.Ordinal) ? 5 : 0;
         if (extensionScore == 0)
         {
             return 0;
@@ -1532,7 +1534,7 @@ public sealed class AppUpdateWorkflowService
 
     private string BuildFallbackPackageName(string targetVersion)
     {
-        var extension = _platform.IsWindows ? ".zip" : _platform.IsMacOS ? ".dmg" : ".AppImage";
+        var extension = _platform.IsWindows ? ".zip" : _platform.IsMacOS ? ".dmg" : ".zip";
         return $"MAAUnified-{targetVersion}-{_platform.OperatingSystem}-{_platform.Architecture}{extension}";
     }
 

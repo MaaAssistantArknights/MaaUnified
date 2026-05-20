@@ -11,6 +11,7 @@ public enum PackageResolutionStatus
     DownloadFailed = 4,
     MacOSManualInstallRequired = 5,
     AppImageManualInstallRequired = 6,
+    LinuxPortableZipManualInstallRequired = 7,
 }
 
 public enum PackageSourceKind

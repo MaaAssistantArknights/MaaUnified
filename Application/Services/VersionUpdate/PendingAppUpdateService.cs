@@ -257,6 +257,7 @@ public static class PendingAppUpdateService
     private static bool IsManualInstallPackage(string packagePath)
     {
         return packagePath.EndsWith(".dmg", StringComparison.OrdinalIgnoreCase)
+            || (OperatingSystem.IsLinux() && packagePath.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
             || packagePath.EndsWith(".AppImage", StringComparison.OrdinalIgnoreCase);
     }
 
