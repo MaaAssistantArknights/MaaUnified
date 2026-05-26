@@ -342,6 +342,323 @@ public sealed class VersionUpdateFeatureServiceTests
     }
 
     [Fact]
+    public async Task CheckForUpdatesAsync_WithGithubSourceAndNoResourceApi_UsesGithubReleasesFirst()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"maa-unified-github-first-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(root);
+
+        try
+        {
+            using var httpClient = new HttpClient(new StubHttpMessageHandler(static request =>
+            {
+                var url = request.RequestUri?.AbsoluteUri ?? string.Empty;
+                if (url == "https://api.github.com/repos/MaaAssistantArknights/MaaAssistantArknights/releases")
+                {
+                    return new HttpResponseMessage(HttpStatusCode.OK)
+                    {
+                        Content = new StringContent("""
+                            [
+                              {
+                                "tag_name": "v2.0.0",
+                                "name": "Release v2.0.0",
+                                "body": "GitHub body.",
+                                "prerelease": false,
+                                "assets": [
+                                  {
+                                    "name": "MAAUnified-v2.0.0-linux-x64.zip",
+                                    "browser_download_url": "https://example.com/MAAUnified-v2.0.0-linux-x64.zip"
+                                  }
+                                ]
+                              }
+                            ]
+                            """),
+                    };
+                }
+
+                if (url.Contains("api.maa.plus", StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new InvalidOperationException("MAA API should not be queried before GitHub for the Github source.");
+                }
+
+                return new HttpResponseMessage(HttpStatusCode.NotFound);
+            }));
+            var service = CreateLinuxVersionUpdateFeatureService(root, httpClient);
+
+            var result = await service.CheckForUpdatesAsync(
+                VersionUpdatePolicy.Default with
+                {
+                    ResourceUpdateSource = "Github",
+                    ResourceApi = string.Empty,
+                    AutoDownloadUpdatePackage = false,
+                },
+                "v1.0.0");
+
+            Assert.True(result.Success);
+            Assert.NotNull(result.Value);
+            Assert.True(result.Value!.HasPackage);
+            Assert.Equal("MAAUnified-v2.0.0-linux-x64.zip", result.Value.PackageName);
+            Assert.Equal("GitHub body.", result.Value.Body);
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    [Fact]
+    public async Task CheckForUpdatesAsync_WithStableChannel_DoesNotSelectBetaGithubRelease()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"maa-unified-stable-skip-beta-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(root);
+
+        try
+        {
+            using var httpClient = new HttpClient(new StubHttpMessageHandler(static request =>
+            {
+                if (request.RequestUri?.AbsoluteUri == "https://api.github.com/repos/MaaAssistantArknights/MaaAssistantArknights/releases")
+                {
+                    return new HttpResponseMessage(HttpStatusCode.OK)
+                    {
+                        Content = new StringContent("""
+                            [
+                              {
+                                "tag_name": "v2.0.0-beta.1",
+                                "name": "Release v2.0.0-beta.1",
+                                "body": "Beta body.",
+                                "prerelease": true,
+                                "assets": [
+                                  {
+                                    "name": "MAAUnified-v2.0.0-beta.1-linux-x64.zip",
+                                    "browser_download_url": "https://example.com/MAAUnified-v2.0.0-beta.1-linux-x64.zip"
+                                  }
+                                ]
+                              }
+                            ]
+                            """),
+                    };
+                }
+
+                return new HttpResponseMessage(HttpStatusCode.NotFound);
+            }));
+            var service = CreateLinuxVersionUpdateFeatureService(root, httpClient);
+
+            var result = await service.CheckForUpdatesAsync(
+                VersionUpdatePolicy.Default with
+                {
+                    ResourceUpdateSource = "Github",
+                    VersionType = "Stable",
+                    ResourceApi = string.Empty,
+                    AutoDownloadUpdatePackage = false,
+                },
+                "v1.0.0");
+
+            Assert.True(result.Success);
+            Assert.NotNull(result.Value);
+            Assert.False(result.Value!.IsNewVersion);
+            Assert.False(result.Value.HasPackage);
+            Assert.Equal("v1.0.0", result.Value.TargetVersion);
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    [Fact]
+    public async Task CheckForUpdatesAsync_WithBetaChannel_SelectsBetaGithubRelease()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"maa-unified-beta-select-beta-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(root);
+
+        try
+        {
+            using var httpClient = new HttpClient(new StubHttpMessageHandler(static request =>
+            {
+                if (request.RequestUri?.AbsoluteUri == "https://api.github.com/repos/MaaAssistantArknights/MaaAssistantArknights/releases")
+                {
+                    return new HttpResponseMessage(HttpStatusCode.OK)
+                    {
+                        Content = new StringContent("""
+                            [
+                              {
+                                "tag_name": "v2.0.0-beta.1",
+                                "name": "Release v2.0.0-beta.1",
+                                "body": "Beta body.",
+                                "prerelease": true,
+                                "assets": [
+                                  {
+                                    "name": "MAAUnified-v2.0.0-beta.1-linux-x64.zip",
+                                    "browser_download_url": "https://example.com/MAAUnified-v2.0.0-beta.1-linux-x64.zip"
+                                  }
+                                ]
+                              }
+                            ]
+                            """),
+                    };
+                }
+
+                return new HttpResponseMessage(HttpStatusCode.NotFound);
+            }));
+            var service = CreateLinuxVersionUpdateFeatureService(root, httpClient);
+
+            var result = await service.CheckForUpdatesAsync(
+                VersionUpdatePolicy.Default with
+                {
+                    ResourceUpdateSource = "Github",
+                    VersionType = "Beta",
+                    ResourceApi = string.Empty,
+                    AutoDownloadUpdatePackage = false,
+                },
+                "v1.0.0");
+
+            Assert.True(result.Success);
+            Assert.NotNull(result.Value);
+            Assert.True(result.Value!.IsNewVersion);
+            Assert.True(result.Value.HasPackage);
+            Assert.Equal("v2.0.0-beta.1", result.Value.TargetVersion);
+            Assert.Equal("MAAUnified-v2.0.0-beta.1-linux-x64.zip", result.Value.PackageName);
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    [Fact]
+    public async Task CheckForUpdatesAsync_WhenMaaApiHasOnlyLegacyPackage_FallsBackToGithubUnifiedPackage()
+    {
+        const string maaApiBaseUrl = "https://api.example.com/MaaAssistantArknights/api/";
+        var root = Path.Combine(Path.GetTempPath(), $"maa-unified-github-package-fallback-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(root);
+
+        try
+        {
+            using var httpClient = new HttpClient(new StubHttpMessageHandler(static request =>
+            {
+                var url = request.RequestUri?.AbsoluteUri ?? string.Empty;
+                if (url == $"{maaApiBaseUrl}version/summary.json")
+                {
+                    return new HttpResponseMessage(HttpStatusCode.OK)
+                    {
+                        Content = new StringContent("""
+                            {
+                              "stable": {
+                                "version": "v2.0.0",
+                                "detail": "stable.json"
+                              }
+                            }
+                            """),
+                    };
+                }
+
+                if (url == $"{maaApiBaseUrl}stable.json")
+                {
+                    return new HttpResponseMessage(HttpStatusCode.OK)
+                    {
+                        Content = new StringContent("""
+                            {
+                              "details": {
+                                "tag_name": "v2.0.0",
+                                "name": "Release v2.0.0",
+                                "body": "MAA API body.",
+                                "prerelease": false,
+                                "assets": [
+                                  {
+                                    "name": "MAA-v2.0.0-linux-x64.zip",
+                                    "browser_download_url": "https://example.com/MAA-v2.0.0-linux-x64.zip"
+                                  }
+                                ]
+                              }
+                            }
+                            """),
+                    };
+                }
+
+                if (url == "https://api.github.com/repos/MaaAssistantArknights/MaaAssistantArknights/releases")
+                {
+                    return new HttpResponseMessage(HttpStatusCode.OK)
+                    {
+                        Content = new StringContent("""
+                            [
+                              {
+                                "tag_name": "v2.0.0",
+                                "name": "Release v2.0.0",
+                                "body": "GitHub fallback body.",
+                                "prerelease": false,
+                                "assets": [
+                                  {
+                                    "name": "MAAUnified-v2.0.0-linux-x64.zip",
+                                    "browser_download_url": "https://example.com/MAAUnified-v2.0.0-linux-x64.zip"
+                                  }
+                                ]
+                              }
+                            ]
+                            """),
+                    };
+                }
+
+                return new HttpResponseMessage(HttpStatusCode.NotFound);
+            }));
+            var service = CreateLinuxVersionUpdateFeatureService(root, httpClient);
+
+            var result = await service.CheckForUpdatesAsync(
+                VersionUpdatePolicy.Default with
+                {
+                    ResourceApi = maaApiBaseUrl,
+                    AutoDownloadUpdatePackage = false,
+                },
+                "v1.0.0");
+
+            Assert.True(result.Success);
+            Assert.NotNull(result.Value);
+            Assert.True(result.Value!.HasPackage);
+            Assert.Equal("MAAUnified-v2.0.0-linux-x64.zip", result.Value.PackageName);
+            Assert.Equal("GitHub fallback body.", result.Value.Body);
+            Assert.Equal(PackageResolutionStatus.Available, result.Value.PackageResolutionStatus);
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    [Fact]
     public async Task CheckForUpdatesAsync_ReleaseAssets_SkipsLegacyMaaPackages()
     {
         var root = Path.Combine(Path.GetTempPath(), $"maa-unified-release-asset-filter-{Guid.NewGuid():N}");
