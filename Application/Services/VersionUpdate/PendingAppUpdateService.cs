@@ -104,19 +104,21 @@ public static class PendingAppUpdateService
             var changesFile = Path.Combine(extractDirectory, "changes.json");
             var isOtaPackage = File.Exists(removeListFile) || File.Exists(changesFile);
             var removeList = LoadRemoveList(removeListFile, changesFile);
+            var removeEntries = BuildBackupEntries(baseDirectory, backupDirectory, removeList);
+            var extractedDirectories = BuildExtractedDirectoryEntries(extractDirectory, baseDirectory, backupDirectory);
+            var payloadFiles = BuildPayloadFileEntries(extractDirectory, baseDirectory, backupDirectory);
 
-            if (removeList.Length > 0)
+            if (removeEntries.Length > 0)
             {
-                foreach (var relativePath in removeList)
+                foreach (var entry in removeEntries)
                 {
-                    var currentPath = Path.Combine(baseDirectory, relativePath);
+                    var currentPath = entry.TargetPath;
                     if (!File.Exists(currentPath))
                     {
                         continue;
                     }
 
-                    var backupPath = Path.Combine(backupDirectory, relativePath);
-                    MoveExistingEntryToBackup(currentPath, backupPath);
+                    MoveExistingEntryToBackup(currentPath, entry.BackupPath);
                 }
             }
             else if (!isOtaPackage)
@@ -130,47 +132,38 @@ public static class PendingAppUpdateService
                         continue;
                     }
 
-                    var currentDirectory = Path.Combine(baseDirectory, directoryName);
+                    var currentDirectory = ResolvePackagePathUnderRoot(baseDirectory, directoryName);
                     if (!Directory.Exists(currentDirectory))
                     {
                         continue;
                     }
 
-                    var currentBackupDirectory = Path.Combine(backupDirectory, directoryName);
+                    var currentBackupDirectory = ResolvePackagePathUnderRoot(backupDirectory, directoryName);
                     MoveDirectoryWithBackup(currentDirectory, currentBackupDirectory);
                 }
             }
 
             Directory.CreateDirectory(backupDirectory);
-            foreach (var directory in Directory.GetDirectories(extractDirectory, "*", SearchOption.AllDirectories))
+            foreach (var directory in extractedDirectories)
             {
-                Directory.CreateDirectory(directory.Replace(extractDirectory, baseDirectory, StringComparison.Ordinal));
-                Directory.CreateDirectory(directory.Replace(extractDirectory, backupDirectory, StringComparison.Ordinal));
+                Directory.CreateDirectory(directory.TargetPath);
+                Directory.CreateDirectory(directory.BackupPath);
             }
 
-            foreach (var file in Directory.GetFiles(extractDirectory, "*", SearchOption.AllDirectories))
+            foreach (var file in payloadFiles)
             {
-                var fileName = Path.GetFileName(file);
-                if (string.Equals(fileName, "removelist.txt", StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(fileName, "changes.json", StringComparison.OrdinalIgnoreCase))
+                if (File.Exists(file.TargetPath))
                 {
-                    continue;
-                }
-
-                var currentFilePath = file.Replace(extractDirectory, baseDirectory, StringComparison.Ordinal);
-                if (File.Exists(currentFilePath))
-                {
-                    var backupPath = file.Replace(extractDirectory, backupDirectory, StringComparison.Ordinal);
-                    DeleteFileWithBackup(backupPath);
-                    EnsureParentDirectoryExists(backupPath);
-                    File.Move(currentFilePath, backupPath);
+                    DeleteFileWithBackup(file.BackupPath);
+                    EnsureParentDirectoryExists(file.BackupPath);
+                    File.Move(file.TargetPath, file.BackupPath);
                 }
                 else
                 {
-                    EnsureParentDirectoryExists(currentFilePath);
+                    EnsureParentDirectoryExists(file.TargetPath);
                 }
 
-                File.Move(file, currentFilePath);
+                File.Move(file.SourcePath, file.TargetPath);
             }
 
             SafeDeleteDirectory(extractDirectory);
@@ -291,7 +284,9 @@ public static class PendingAppUpdateService
     {
         if (File.Exists(removeListFile))
         {
-            return File.ReadAllLines(removeListFile);
+            return File.ReadAllLines(removeListFile)
+                .Where(static line => !string.IsNullOrWhiteSpace(line))
+                .ToArray();
         }
 
         if (!File.Exists(changesFile))
@@ -313,6 +308,141 @@ public static class PendingAppUpdateService
         {
             return [];
         }
+    }
+
+    private static PendingUpdateBackupEntry[] BuildBackupEntries(
+        string targetRoot,
+        string backupRoot,
+        IEnumerable<string> relativePaths)
+    {
+        return relativePaths
+            .Select(relativePath => new PendingUpdateBackupEntry(
+                ResolveManifestPathUnderRoot(targetRoot, relativePath),
+                ResolveManifestPathUnderRoot(backupRoot, relativePath)))
+            .ToArray();
+    }
+
+    private static PendingUpdateDirectoryEntry[] BuildExtractedDirectoryEntries(
+        string extractRoot,
+        string targetRoot,
+        string backupRoot)
+    {
+        return Directory.GetDirectories(extractRoot, "*", SearchOption.AllDirectories)
+            .Select(directory => GetPackageRelativePath(extractRoot, directory))
+            .Select(relativePath => new PendingUpdateDirectoryEntry(
+                ResolvePackagePathUnderRoot(targetRoot, relativePath),
+                ResolvePackagePathUnderRoot(backupRoot, relativePath)))
+            .ToArray();
+    }
+
+    private static PendingUpdatePayloadFileEntry[] BuildPayloadFileEntries(
+        string extractRoot,
+        string targetRoot,
+        string backupRoot)
+    {
+        return Directory.GetFiles(extractRoot, "*", SearchOption.AllDirectories)
+            .Where(static file => !IsControlFileName(Path.GetFileName(file)))
+            .Select(file =>
+            {
+                var relativePath = GetPackageRelativePath(extractRoot, file);
+                return new PendingUpdatePayloadFileEntry(
+                    ResolvePackagePathUnderRoot(extractRoot, relativePath),
+                    ResolvePackagePathUnderRoot(targetRoot, relativePath),
+                    ResolvePackagePathUnderRoot(backupRoot, relativePath));
+            })
+            .ToArray();
+    }
+
+    private static bool IsControlFileName(string fileName)
+    {
+        return string.Equals(fileName, "removelist.txt", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(fileName, "changes.json", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string GetPackageRelativePath(string rootPath, string fullPath)
+    {
+        return NormalizeRelativePath(Path.GetRelativePath(rootPath, fullPath), trim: false);
+    }
+
+    private static string ResolveManifestPathUnderRoot(string rootPath, string relativePath)
+    {
+        return ResolvePathUnderRoot(rootPath, relativePath, trimRelativePath: true);
+    }
+
+    private static string ResolvePackagePathUnderRoot(string rootPath, string relativePath)
+    {
+        return ResolvePathUnderRoot(rootPath, relativePath, trimRelativePath: false);
+    }
+
+    private static string ResolvePathUnderRoot(string rootPath, string relativePath, bool trimRelativePath)
+    {
+        if (!TryResolvePathUnderRoot(rootPath, relativePath, trimRelativePath, out var resolvedPath))
+        {
+            throw new InvalidDataException($"Illegal path in update package: {relativePath}");
+        }
+
+        return resolvedPath;
+    }
+
+    private static bool TryResolvePathUnderRoot(
+        string rootPath,
+        string relativePath,
+        bool trimRelativePath,
+        out string resolvedPath)
+    {
+        resolvedPath = string.Empty;
+        if (relativePath is null)
+        {
+            return false;
+        }
+
+        var normalizedRelativePath = NormalizeRelativePath(relativePath, trimRelativePath);
+        if (string.IsNullOrEmpty(normalizedRelativePath))
+        {
+            return false;
+        }
+
+        if (Path.IsPathRooted(normalizedRelativePath)
+            || (OperatingSystem.IsWindows() && HasWindowsDriveSpecifier(normalizedRelativePath)))
+        {
+            return false;
+        }
+
+        var normalizedRoot = EnsureTrailingSeparator(Path.GetFullPath(rootPath));
+        var candidatePath = Path.GetFullPath(Path.Combine(rootPath, normalizedRelativePath));
+        var comparison = OperatingSystem.IsWindows()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
+        if (!candidatePath.StartsWith(normalizedRoot, comparison))
+        {
+            return false;
+        }
+
+        resolvedPath = candidatePath;
+        return true;
+    }
+
+    private static string NormalizeRelativePath(string relativePath, bool trim)
+    {
+        var normalizedPath = trim ? relativePath.Trim() : relativePath;
+        return normalizedPath
+            .Replace('\\', Path.DirectorySeparatorChar)
+            .Replace('/', Path.DirectorySeparatorChar);
+    }
+
+    private static bool HasWindowsDriveSpecifier(string relativePath)
+    {
+        return relativePath.Length >= 2
+            && relativePath[1] == ':'
+            && ((relativePath[0] >= 'A' && relativePath[0] <= 'Z')
+                || (relativePath[0] >= 'a' && relativePath[0] <= 'z'));
+    }
+
+    private static string EnsureTrailingSeparator(string path)
+    {
+        return path.EndsWith(Path.DirectorySeparatorChar)
+            ? path
+            : path + Path.DirectorySeparatorChar;
     }
 
     private static void MoveExistingEntryToBackup(string sourcePath, string backupPath)
@@ -402,4 +532,17 @@ public static class PendingAppUpdateService
             // Best-effort cleanup.
         }
     }
+
+    private sealed record PendingUpdateBackupEntry(
+        string TargetPath,
+        string BackupPath);
+
+    private sealed record PendingUpdateDirectoryEntry(
+        string TargetPath,
+        string BackupPath);
+
+    private sealed record PendingUpdatePayloadFileEntry(
+        string SourcePath,
+        string TargetPath,
+        string BackupPath);
 }

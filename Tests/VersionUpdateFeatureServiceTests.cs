@@ -1836,6 +1836,220 @@ public sealed class VersionUpdateFeatureServiceTests
     }
 
     [Fact]
+    public async Task TryApplyPendingUpdatePackage_WhenRemoveListHasBlankLines_IgnoresBlankLines()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"maa-unified-pending-update-blank-removelist-{Guid.NewGuid():N}");
+
+        try
+        {
+            var configDir = Path.Combine(root, "config");
+            var packageDir = Path.Combine(root, "update-packages");
+            Directory.CreateDirectory(configDir);
+            Directory.CreateDirectory(packageDir);
+
+            var staleFile = Path.Combine(root, "stale.txt");
+            await File.WriteAllTextAsync(staleFile, "stale");
+
+            var packagePath = Path.Combine(packageDir, "update.tar.gz");
+            await CreateTarGzPackageAsync(
+                packagePath,
+                ("removelist.txt", $"{Environment.NewLine}stale.txt{Environment.NewLine}{Environment.NewLine}"),
+                ("app.txt", "new"));
+
+            var config = new UnifiedConfig();
+            config.GlobalValues[ConfigurationKeys.VersionName] = JsonValue.Create("v2.0.0");
+            config.GlobalValues[ConfigurationKeys.VersionUpdatePackage] = JsonValue.Create(Path.Combine("update-packages", "update.tar.gz"));
+            var store = new AvaloniaJsonConfigStore(root);
+            await store.SaveAsync(config);
+
+            var result = PendingAppUpdateService.TryApplyPendingUpdatePackage(root);
+
+            Assert.Equal(PendingAppUpdateStatus.Applied, result.Status);
+            Assert.False(File.Exists(staleFile));
+            Assert.Equal("new", await File.ReadAllTextAsync(Path.Combine(root, "app.txt")));
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    [Fact]
+    public async Task TryApplyPendingUpdatePackage_WhenPayloadFileNameHasLeadingSpace_PreservesFileName()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"maa-unified-pending-update-spaced-payload-{Guid.NewGuid():N}");
+
+        try
+        {
+            var configDir = Path.Combine(root, "config");
+            var packageDir = Path.Combine(root, "update-packages");
+            Directory.CreateDirectory(configDir);
+            Directory.CreateDirectory(packageDir);
+
+            var packagePath = Path.Combine(packageDir, "update.tar.gz");
+            await CreateTarGzPackageAsync(packagePath, (" spaced.txt", "new"));
+
+            var config = new UnifiedConfig();
+            config.GlobalValues[ConfigurationKeys.VersionName] = JsonValue.Create("v2.0.0");
+            config.GlobalValues[ConfigurationKeys.VersionUpdatePackage] = JsonValue.Create(Path.Combine("update-packages", "update.tar.gz"));
+            var store = new AvaloniaJsonConfigStore(root);
+            await store.SaveAsync(config);
+
+            var result = PendingAppUpdateService.TryApplyPendingUpdatePackage(root);
+
+            Assert.Equal(PendingAppUpdateStatus.Applied, result.Status);
+            Assert.Equal("new", await File.ReadAllTextAsync(Path.Combine(root, " spaced.txt")));
+            Assert.False(File.Exists(Path.Combine(root, "spaced.txt")));
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    [Fact]
+    public async Task TryApplyPendingUpdatePackage_WhenRemoveListEscapesRoot_RejectsPackageAndKeepsOutsideFile()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"maa-unified-pending-update-traversal-{Guid.NewGuid():N}");
+        var outsideFile = $"{root}-outside.txt";
+
+        try
+        {
+            var configDir = Path.Combine(root, "config");
+            var packageDir = Path.Combine(root, "update-packages");
+            Directory.CreateDirectory(configDir);
+            Directory.CreateDirectory(packageDir);
+            await File.WriteAllTextAsync(outsideFile, "outside");
+
+            var packagePath = Path.Combine(packageDir, "update.tar.gz");
+            var outsideRelativePath = Path.GetRelativePath(root, outsideFile);
+            await CreateTarGzPackageAsync(packagePath, ("removelist.txt", outsideRelativePath));
+
+            var config = new UnifiedConfig();
+            config.GlobalValues[ConfigurationKeys.VersionName] = JsonValue.Create("v2.0.0");
+            config.GlobalValues[ConfigurationKeys.VersionUpdatePackage] = JsonValue.Create(Path.Combine("update-packages", "update.tar.gz"));
+            var store = new AvaloniaJsonConfigStore(root);
+            await store.SaveAsync(config);
+
+            var result = PendingAppUpdateService.TryApplyPendingUpdatePackage(root);
+            var reloaded = await store.LoadAsync();
+
+            Assert.Equal(PendingAppUpdateStatus.Failed, result.Status);
+            Assert.Equal("outside", await File.ReadAllTextAsync(outsideFile));
+            Assert.False(File.Exists(packagePath));
+            Assert.NotNull(reloaded);
+            Assert.Equal(string.Empty, ReadGlobalString(reloaded!, ConfigurationKeys.VersionUpdatePackage));
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+            catch
+            {
+            }
+
+            try
+            {
+                if (File.Exists(outsideFile))
+                {
+                    File.Delete(outsideFile);
+                }
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    [Fact]
+    public async Task TryApplyPendingUpdatePackage_WhenChangesDeletedPathIsRooted_RejectsPackageAndKeepsOutsideFile()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"maa-unified-pending-update-rooted-{Guid.NewGuid():N}");
+        var outsideFile = $"{root}-outside.txt";
+
+        try
+        {
+            var configDir = Path.Combine(root, "config");
+            var packageDir = Path.Combine(root, "update-packages");
+            Directory.CreateDirectory(configDir);
+            Directory.CreateDirectory(packageDir);
+            await File.WriteAllTextAsync(outsideFile, "outside");
+
+            var packagePath = Path.Combine(packageDir, "update.tar.gz");
+            var changesJson = JsonSerializer.Serialize(new
+            {
+                deleted = new[]
+                {
+                    outsideFile,
+                },
+            });
+            await CreateTarGzPackageAsync(packagePath, ("changes.json", changesJson));
+
+            var config = new UnifiedConfig();
+            config.GlobalValues[ConfigurationKeys.VersionName] = JsonValue.Create("v2.0.0");
+            config.GlobalValues[ConfigurationKeys.VersionUpdatePackage] = JsonValue.Create(Path.Combine("update-packages", "update.tar.gz"));
+            var store = new AvaloniaJsonConfigStore(root);
+            await store.SaveAsync(config);
+
+            var result = PendingAppUpdateService.TryApplyPendingUpdatePackage(root);
+            var reloaded = await store.LoadAsync();
+
+            Assert.Equal(PendingAppUpdateStatus.Failed, result.Status);
+            Assert.Equal("outside", await File.ReadAllTextAsync(outsideFile));
+            Assert.False(File.Exists(packagePath));
+            Assert.NotNull(reloaded);
+            Assert.Equal(string.Empty, ReadGlobalString(reloaded!, ConfigurationKeys.VersionUpdatePackage));
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+            catch
+            {
+            }
+
+            try
+            {
+                if (File.Exists(outsideFile))
+                {
+                    File.Delete(outsideFile);
+                }
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    [Fact]
     public async Task TryApplyPendingUpdatePackage_WhenPackageIsDmg_ClearsPendingStateWithoutDeletingPackage()
     {
         var root = Path.Combine(Path.GetTempPath(), $"maa-unified-pending-update-dmg-{Guid.NewGuid():N}");
