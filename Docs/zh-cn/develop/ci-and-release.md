@@ -17,19 +17,26 @@
 
 | 名称 | Runner | RID | MaaDeps triplet | CMake preset | Debug | Release |
 | --- | --- | --- | --- | --- | --- | --- |
-| `windows-x64` | `windows-latest` | `win-x64` | `x64-windows` | `windows-unified-publish-x64` | 完整调试包 | `.zip` |
-| `linux-x64` | `ubuntu-latest` | `linux-x64` | `x64-linux` | `linux-publish-x64` | 完整调试包 | `.zip` |
-| `macos-x64` | `macos-latest` | `osx-x64` | `x64-osx` | `macos-publish-x64` | 完整调试包 | `.dmg` |
-| `macos-arm64` | `macos-latest` | `osx-arm64` | `arm64-osx` | `macos-publish-arm64` | 完整调试包 | `.dmg` |
+| `windows-x64` | `windows-latest` | `win-x64` | `x64-windows` | `windows-unified-publish-x64` | 完整调试包 | 暂不发布 |
+| `linux-x64` | `ubuntu-latest` | `linux-x64` | `x64-linux` | `linux-publish-x64` | 桌面便携 `.zip` | Beta 桌面便携 `.zip` |
+| `macos-x64` | `macos-latest` | `osx-x64` | `x64-osx` | `macos-publish-x64` | 完整调试包 | 暂不发布 |
+| `macos-arm64` | `macos-latest` | `osx-arm64` | `arm64-osx` | `macos-publish-arm64` | 完整调试包 | 暂不发布 |
 
 调试包保留日志和符号，用来复现和排障。正式包面向分发。
 
-正式包形态固定为：
+当前 MAAUnified 只随主仓 Beta 发布 Linux 桌面便携包。`.github/workflows/release-maaunified.yml` 只在 `vX.Y.Z-beta.N` 这类 tag 上上传 `linux-x64`，Stable tag 不上传 MAAUnified 包，Windows 和 macOS 也暂不加入 release。
 
-- Windows Release：`.zip`，解压根目录直接看到 `MAAUnified.exe`
+当前 Beta 包形态固定为：
+
 - Linux Release：`.zip` 便携包，解压根目录直接看到 `MAAUnified.AppImage`
-- macOS Release：`.dmg`
 
+Linux Debug 包也使用同样的桌面便携 `.zip` 布局。`MAAUnified.AppImage` 是便携目录的桌面启动入口，不是单文件自包含包；必须先解压完整 `.zip`，再从解压后的根目录运行。
+
+## 软件更新产物
+
+MAAUnified 软件更新当前只发布 Beta Linux 包。更新检查只接受 `MAAUnified-*` 包名；Beta 通道可从 GitHub Release 下载 Linux 桌面便携 `.zip`，并在下次启动时解压覆盖运行时文件并保留 `config/`、`data/` 等可写目录。Stable 通道暂不发布 MAAUnified 包。Windows 和 macOS 更新能力保留在代码中，但对应包暂不上传到 release。
+
+Mirror酱目前只支持资源更新；选择 Mirror酱作为软件更新源时，界面会提示 MAAUnified 暂未支持 Mirror酱软件更新，并要求切换到海外源/GitHub。
 ### macOS 签名与 ad-hoc fallback
 
 macOS 正式包优先使用 Developer ID 签名和 Apple notarization。签名材料由这些 GitHub Secrets 提供：
@@ -124,8 +131,8 @@ Windows GPU 探测遇到 `Indirect`、`Virtual`、`IDD` 一类 adapter 时，应
 3. 跑 Debug workflow，看调试包和测试结果。
 4. 确认目标平台启动、布局和日志都正常。
 5. 创建或确认 GitHub Release。
-6. 跑正式发布 workflow，生成 Windows `.zip`、Linux `.zip` 便携包、macOS `.dmg`。
-7. 检查 macOS job 日志：若签名状态不是 `developer-id`，发布说明中必须提醒用户该包未经过 Apple notarization。
+6. 跑正式发布 workflow。只有 Beta tag 会生成并上传 Linux 桌面便携 `.zip`；Stable tag 会跳过 MAAUnified 发布。
+7. Windows/macOS 加入 release 前，需要重新启用对应 matrix，并检查 macOS 签名与 notarization 状态。
 
 Windows GUI 启动或 GPU 问题，优先看发布目录下的 `debug/windows-gpu-probe.log` 和 `debug/avalonia-ui-startup.log`。
 

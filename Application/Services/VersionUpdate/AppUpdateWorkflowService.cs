@@ -77,7 +77,18 @@ public sealed class AppUpdateWorkflowService
             var release = await ResolveReleaseAsync(policy.ResourceApi, policy.VersionType, httpClient, cancellationToken).ConfigureAwait(false);
             if (!release.HasValue)
             {
-                throw new InvalidOperationException("No releases were returned by the configured resource.");
+                return new VersionUpdateCheckResult(
+                    Channel: policy.VersionType,
+                    CurrentVersion: currentVersion,
+                    TargetVersion: currentVersion,
+                    ReleaseName: currentVersion,
+                    Summary: string.Empty,
+                    Body: string.Empty,
+                    PackageName: null,
+                    PackageDownloadUrl: null,
+                    PackageSize: null,
+                    IsNewVersion: false,
+                    HasPackage: false);
             }
 
             var releaseValue = release.Value;
@@ -988,6 +999,10 @@ public sealed class AppUpdateWorkflowService
     {
         JsonElement? fallback = null;
         var normalizedChannel = (channel ?? string.Empty).Trim();
+        var requiresChannelMatch =
+            string.Equals(normalizedChannel, "Stable", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(normalizedChannel, "Beta", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(normalizedChannel, "Nightly", StringComparison.OrdinalIgnoreCase);
         foreach (var release in releases)
         {
             if (fallback is null)
@@ -1001,7 +1016,7 @@ public sealed class AppUpdateWorkflowService
             }
         }
 
-        return fallback;
+        return requiresChannelMatch ? null : fallback;
     }
 
     private static bool MatchesChannel(JsonElement release, string channel)
@@ -1014,7 +1029,7 @@ public sealed class AppUpdateWorkflowService
 
         if (string.Equals(channel, "Beta", StringComparison.OrdinalIgnoreCase))
         {
-            return tag.Contains("beta", StringComparison.OrdinalIgnoreCase)
+            return IsBetaReleaseTag(tag)
                 || name.Contains("beta", StringComparison.OrdinalIgnoreCase);
         }
 
@@ -1027,10 +1042,37 @@ public sealed class AppUpdateWorkflowService
 
         if (string.Equals(channel, "Stable", StringComparison.OrdinalIgnoreCase))
         {
-            return !prerelease;
+            return !prerelease
+                && !HasPrereleaseTagSuffix(tag);
         }
 
         return true;
+    }
+
+    private static bool IsBetaReleaseTag(string tag)
+    {
+        var normalized = NormalizeVersionTag(tag);
+        var dashIndex = normalized.IndexOf('-', StringComparison.Ordinal);
+        if (dashIndex < 0 || dashIndex == normalized.Length - 1)
+        {
+            return false;
+        }
+
+        var prerelease = normalized[(dashIndex + 1)..];
+        return prerelease.StartsWith("beta", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool HasPrereleaseTagSuffix(string tag)
+    {
+        return NormalizeVersionTag(tag).Contains('-', StringComparison.Ordinal);
+    }
+
+    private static string NormalizeVersionTag(string tag)
+    {
+        var normalized = (tag ?? string.Empty).Trim();
+        return normalized.StartsWith('v') || normalized.StartsWith('V')
+            ? normalized[1..]
+            : normalized;
     }
 
     private static bool MatchesNormalizedChannel(string manifestChannel, string requestedChannel)
