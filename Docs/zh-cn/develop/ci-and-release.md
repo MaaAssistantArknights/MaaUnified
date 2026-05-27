@@ -6,10 +6,11 @@
 
 ## CI workflow
 
-主仓以这两条 workflow 为准：
+主仓以这些 workflow 为准：
 
 - `.github/workflows/ci-avalonia.yml`：调试包和合并前验证
-- `.github/workflows/release-maaunified.yml`：正式发布包
+- `.github/workflows/ci.yml`：官方 Release Pipeline，Beta 发布时一并生成并上传 MAAUnified Linux GUI 包
+- `.github/workflows/release-maaunified.yml`：手动补发 MAAUnified Beta 包
 
 `src/MAAUnified/CI/` 下的文件只当模板或同步副本看，不作为实际入口。
 
@@ -24,7 +25,7 @@
 
 调试包保留日志和符号，用来复现和排障。正式包面向分发。
 
-当前 MAAUnified 只随主仓 Beta 发布 Linux 桌面便携包。`.github/workflows/release-maaunified.yml` 只在 `vX.Y.Z-beta.N` 这类 tag 上上传 `linux-x64`，Stable tag 不上传 MAAUnified 包，Windows 和 macOS 也暂不加入 release。
+当前 MAAUnified 只随主仓 Beta 发布 Linux 桌面便携包。`.github/workflows/ci.yml` 的 `Build MAAUnified Linux GUI` job 只在 `vX.Y.Z-beta...` tag 上产出 `MAAUnified-<tag>-linux-x64.zip`，最终由 `Publish Release` job 和主仓 `MAA-*` 包一起上传到同一个 GitHub prerelease。Stable tag 不上传 MAAUnified 包，Windows 和 macOS 也暂不加入 release。
 
 当前 Beta 包形态固定为：
 
@@ -131,8 +132,9 @@ Windows GPU 探测遇到 `Indirect`、`Virtual`、`IDD` 一类 adapter 时，应
 3. 跑 Debug workflow，看调试包和测试结果。
 4. 确认目标平台启动、布局和日志都正常。
 5. 创建或确认 GitHub Release。
-6. 跑正式发布 workflow。只有 Beta tag 会生成并上传 Linux 桌面便携 `.zip`；Stable tag 会跳过 MAAUnified 发布。
-7. Windows/macOS 加入 release 前，需要重新启用对应 matrix，并检查 macOS 签名与 notarization 状态。
+6. 跑官方 Release Pipeline。只有 Beta tag 会让 `Build MAAUnified Linux GUI` job 生成 Linux 桌面便携 `.zip`，`Publish Release` job 会和主仓包一起上传；Stable tag 会跳过 MAAUnified 发布。
+7. 需要手动补发 MAAUnified Beta 包时，再跑 `.github/workflows/release-maaunified.yml`。
+8. Windows/macOS 加入 release 前，需要重新启用对应 matrix，并检查 macOS 签名与 notarization 状态。
 
 Windows GUI 启动或 GPU 问题，优先看发布目录下的 `debug/windows-gpu-probe.log` 和 `debug/avalonia-ui-startup.log`。
 
