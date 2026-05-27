@@ -415,6 +415,33 @@ public sealed partial class SettingsPageViewModel
 
     private StartPerformanceSettingsSnapshot BuildNormalizedStartPerformanceSnapshot()
     {
+        var gpuUse = PerformanceUseGpu;
+        var gpuDescription = (PerformancePreferredGpuDescription ?? string.Empty).Trim();
+        var gpuInstancePath = (PerformancePreferredGpuInstancePath ?? string.Empty).Trim();
+        if (SelectedGpuOption?.Descriptor is { } selectedGpu)
+        {
+            switch (selectedGpu.Kind)
+            {
+                case GpuOptionKind.Disabled:
+                    gpuUse = false;
+                    gpuDescription = string.Empty;
+                    gpuInstancePath = string.Empty;
+                    break;
+
+                case GpuOptionKind.SystemDefault:
+                    gpuUse = true;
+                    gpuDescription = string.Empty;
+                    gpuInstancePath = string.Empty;
+                    break;
+
+                case GpuOptionKind.SpecificGpu:
+                    gpuUse = true;
+                    gpuDescription = (selectedGpu.IsCustomEntry ? GpuCustomDescription : selectedGpu.Description).Trim();
+                    gpuInstancePath = (selectedGpu.IsCustomEntry ? GpuCustomInstancePath : selectedGpu.InstancePath).Trim();
+                    break;
+            }
+        }
+
         return new StartPerformanceSettingsSnapshot(
             RunDirectly: RunDirectly,
             MinimizeDirectly: MinimizeDirectly,
@@ -422,10 +449,10 @@ public sealed partial class SettingsPageViewModel
             EmulatorPath: (EmulatorPath ?? string.Empty).Trim(),
             EmulatorAddCommand: (EmulatorAddCommand ?? string.Empty).Trim(),
             EmulatorWaitSeconds: EmulatorWaitSeconds,
-            PerformanceUseGpu: PerformanceUseGpu,
+            PerformanceUseGpu: gpuUse,
             PerformanceAllowDeprecatedGpu: PerformanceAllowDeprecatedGpu,
-            PerformancePreferredGpuDescription: (PerformancePreferredGpuDescription ?? string.Empty).Trim(),
-            PerformancePreferredGpuInstancePath: (PerformancePreferredGpuInstancePath ?? string.Empty).Trim(),
+            PerformancePreferredGpuDescription: gpuDescription,
+            PerformancePreferredGpuInstancePath: gpuInstancePath,
             DeploymentWithPause: DeploymentWithPause,
             StartsWithScript: (StartsWithScript ?? string.Empty).Trim(),
             EndsWithScript: (EndsWithScript ?? string.Empty).Trim(),
