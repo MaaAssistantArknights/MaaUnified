@@ -3566,6 +3566,9 @@ With save file: farm points through crafting (advanced).
   <data name="Settings.RemoteControl.ReportTaskEndpointWatermark" xml:space="preserve">
     <value>https://example.com/api/task/report</value>
   </data>
+  <data name="Settings.RemoteControl.RegenerateDeviceIdentity" xml:space="preserve">
+    <value>Regenerate</value>
+  </data>
   <data name="Settings.RemoteControl.Status.SaveFailed" xml:space="preserve">
     <value>Failed to save remote control settings.</value>
   </data>
@@ -4525,6 +4528,9 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
   </data>
   <data name="TaskQueue.Root.RightClick" xml:space="preserve">
     <value>Right click</value>
+  </data>
+  <data name="TaskQueue.Root.RunTaskOnce" xml:space="preserve">
+    <value>Run Once</value>
   </data>
   <data name="TaskQueue.Root.RuntimeTitle" xml:space="preserve">
     <value>Runtime &amp; Overlay</value>

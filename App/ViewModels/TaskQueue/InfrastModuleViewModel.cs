@@ -52,6 +52,7 @@ public sealed class InfrastModuleViewModel : TaskModuleSettingsViewModelBase
     private bool _suppressDefaultInfrastPersist;
     private bool _suppressFacilitySelectionChanged;
     private readonly List<ParsedPlan> _parsedPlans = [];
+    private InfrastPlanCacheEntry? _planCache;
 
     public InfrastModuleViewModel(MAAUnifiedRuntime runtime, LocalizedTextMap texts)
         : base(runtime, texts, TaskModuleTypes.Infrast)
@@ -65,6 +66,8 @@ public sealed class InfrastModuleViewModel : TaskModuleSettingsViewModelBase
     public ObservableCollection<PlanOption> PlanOptions { get; } = [];
 
     public ObservableCollection<FacilityOption> FacilityOptions { get; } = [];
+
+    internal int PlanFileReadCount { get; private set; }
 
     public IReadOnlyList<IntOption> ModeOptions => _modeOptions;
 
@@ -428,7 +431,10 @@ public sealed class InfrastModuleViewModel : TaskModuleSettingsViewModelBase
         return Task.CompletedTask;
     }
 
-    public async Task ReloadPlansAsync(CancellationToken cancellationToken = default)
+    public Task ReloadPlansAsync(CancellationToken cancellationToken = default)
+        => ReloadPlansAsync(forceReload: false, cancellationToken);
+
+    public async Task ReloadPlansAsync(bool forceReload, CancellationToken cancellationToken = default)
     {
         _parsedPlans.Clear();
         PlanOptions.Clear();
@@ -452,58 +458,25 @@ public sealed class InfrastModuleViewModel : TaskModuleSettingsViewModelBase
             return;
         }
 
+        var fileInfo = new FileInfo(CustomFilePath);
+        var cacheKey = new InfrastPlanCacheKey(
+            fileInfo.FullName,
+            fileInfo.LastWriteTimeUtc,
+            fileInfo.Length);
+        if (!forceReload && _planCache is { } cache && cache.Key == cacheKey)
+        {
+            await ApplyParsedPlansAsync(cache.Plans, cancellationToken);
+            return;
+        }
+
+        _planCache = null;
         try
         {
+            PlanFileReadCount++;
             var json = await File.ReadAllTextAsync(CustomFilePath, cancellationToken);
-            var root = JsonNode.Parse(json) as JsonObject;
-            if (root?["plans"] is not JsonArray plansArray)
-            {
-                throw new JsonException("`plans` section missing.");
-            }
-
-            var index = 0;
-            foreach (var node in plansArray.OfType<JsonObject>())
-            {
-                var name = node["name"]?.GetValue<string?>() ?? string.Format(
-                    Texts.GetOrDefault("Infrast.Plan.DefaultName", "Plan {0}"),
-                    index + 1);
-                var periods = ParsePlanPeriods(node["period"]);
-                _parsedPlans.Add(new ParsedPlan(index, name, periods));
-                index++;
-            }
-
-            if (_parsedPlans.Any(plan => plan.Periods.Count > 0))
-            {
-                PlanOptions.Add(new PlanOption(-1, BuildAutoPlanDisplayName()));
-            }
-
-            foreach (var plan in _parsedPlans)
-            {
-                PlanOptions.Add(new PlanOption(plan.Index, plan.Name));
-            }
-
-            SelectedPlan = PlanOptions.FirstOrDefault(option => option.Index == SelectedPlanIndex);
-            if (SelectedPlan is null && SelectedPlanIndex >= 0)
-            {
-                var message = string.Format(
-                    Texts.GetOrDefault("Infrast.Error.PlanOutOfRange", "Plan index {0} is out of range for `{1}`."),
-                    SelectedPlanIndex,
-                    CustomFilePath);
-                LastErrorMessage = message;
-                await Runtime.DiagnosticsService.RecordFailedResultAsync(
-                    "Infrast.ParsePlan",
-                    UiOperationResult.Fail(UiErrorCode.InfrastPlanOutOfRange, message),
-                    cancellationToken);
-            }
-            else
-            {
-                LastErrorMessage = string.Empty;
-            }
-
-            StatusMessage = string.Format(
-                CultureInfo.CurrentCulture,
-                Texts.GetOrDefault("Infrast.Status.LoadedPlans", "Loaded {0} plans."),
-                _parsedPlans.Count);
+            var parsedPlans = ParsePlans(json);
+            _planCache = new InfrastPlanCacheEntry(cacheKey, parsedPlans);
+            await ApplyParsedPlansAsync(parsedPlans, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -514,6 +487,75 @@ public sealed class InfrastModuleViewModel : TaskModuleSettingsViewModelBase
                 UiOperationResult.Fail(UiErrorCode.InfrastPlanParseFailed, LastErrorMessage, ex.Message),
                 cancellationToken);
         }
+    }
+
+    private IReadOnlyList<ParsedPlan> ParsePlans(string json)
+    {
+        var root = JsonNode.Parse(json) as JsonObject;
+        if (root?["plans"] is not JsonArray plansArray)
+        {
+            throw new JsonException("`plans` section missing.");
+        }
+
+        var parsedPlans = new List<ParsedPlan>();
+        var index = 0;
+        foreach (var node in plansArray.OfType<JsonObject>())
+        {
+            var name = node["name"]?.GetValue<string?>() ?? string.Format(
+                Texts.GetOrDefault("Infrast.Plan.DefaultName", "Plan {0}"),
+                index + 1);
+            var periods = ParsePlanPeriods(node["period"]);
+            parsedPlans.Add(new ParsedPlan(index, name, periods));
+            index++;
+        }
+
+        return parsedPlans;
+    }
+
+    private async Task ApplyParsedPlansAsync(IReadOnlyList<ParsedPlan> parsedPlans, CancellationToken cancellationToken)
+    {
+        _parsedPlans.Clear();
+        _parsedPlans.AddRange(parsedPlans.Select(
+            plan => new ParsedPlan(plan.Index, plan.Name, [.. plan.Periods])));
+
+        PlanOptions.Clear();
+        if (_parsedPlans.Any(plan => plan.Periods.Count > 0))
+        {
+            PlanOptions.Add(new PlanOption(-1, BuildAutoPlanDisplayName()));
+        }
+
+        foreach (var plan in _parsedPlans)
+        {
+            PlanOptions.Add(new PlanOption(plan.Index, plan.Name));
+        }
+
+        SelectedPlan = PlanOptions.FirstOrDefault(option => option.Index == SelectedPlanIndex);
+        if (SelectedPlan is null && SelectedPlanIndex >= 0)
+        {
+            await ReportPlanOutOfRangeAsync(cancellationToken);
+        }
+        else
+        {
+            LastErrorMessage = string.Empty;
+        }
+
+        StatusMessage = string.Format(
+            CultureInfo.CurrentCulture,
+            Texts.GetOrDefault("Infrast.Status.LoadedPlans", "Loaded {0} plans."),
+            _parsedPlans.Count);
+    }
+
+    private async Task ReportPlanOutOfRangeAsync(CancellationToken cancellationToken)
+    {
+        var message = string.Format(
+            Texts.GetOrDefault("Infrast.Error.PlanOutOfRange", "Plan index {0} is out of range for `{1}`."),
+            SelectedPlanIndex,
+            CustomFilePath);
+        LastErrorMessage = message;
+        await Runtime.DiagnosticsService.RecordFailedResultAsync(
+            "Infrast.ParsePlan",
+            UiOperationResult.Fail(UiErrorCode.InfrastPlanOutOfRange, message),
+            cancellationToken);
     }
 
     protected override async Task LoadFromParametersAsync(JsonObject parameters, CancellationToken cancellationToken)
@@ -910,6 +952,10 @@ public sealed class InfrastModuleViewModel : TaskModuleSettingsViewModelBase
             set => SetProperty(ref _isSelected, value);
         }
     }
+
+    private sealed record InfrastPlanCacheEntry(InfrastPlanCacheKey Key, IReadOnlyList<ParsedPlan> Plans);
+
+    private readonly record struct InfrastPlanCacheKey(string FullPath, DateTime LastWriteTimeUtc, long Length);
 
     private sealed record ParsedPlan(int Index, string Name, List<TimeRange> Periods);
 

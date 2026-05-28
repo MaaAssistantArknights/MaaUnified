@@ -70,7 +70,14 @@ public sealed class RootViewStructureContractTests
         Assert.Contains("Text=\"{Binding TaskListTitleText}\"", text, StringComparison.Ordinal);
         Assert.Contains("Text=\"{Binding TaskConfigTitleText}\"", text, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"TaskSettingsHost\"", text, StringComparison.Ordinal);
-        Assert.Contains("TaskSettingsHost.Content = VM?.SelectedTaskSettingsViewModel;", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("IsEnabled=\"{Binding CanEdit}\"", text, StringComparison.Ordinal);
+        Assert.Contains("<taskViews:StartUpTaskView DataContext=\"{Binding StartUpModule}\"", text, StringComparison.Ordinal);
+        Assert.Contains("<taskViews:FightSettingsView DataContext=\"{Binding FightModule}\"", text, StringComparison.Ordinal);
+        Assert.Contains("<taskViews:InfrastSettingsView DataContext=\"{Binding InfrastModule}\"", text, StringComparison.Ordinal);
+        Assert.Contains("IsVisible=\"{Binding IsStartUpTaskSelected}\"", text, StringComparison.Ordinal);
+        Assert.Contains("IsVisible=\"{Binding ShowPostActionSettingsPanel}\"", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("TaskSettingsHost.Content =", codeBehind, StringComparison.Ordinal);
+        Assert.DoesNotContain("GetOrCreateTaskSettingsView", codeBehind, StringComparison.Ordinal);
         Assert.Contains("IsEnabled=\"{Binding CanToggleRun}\"", text, StringComparison.Ordinal);
         Assert.Contains("Text=\"{Binding CoreInitializationMessage}\"", text, StringComparison.Ordinal);
         Assert.Contains("IsVisible=\"{Binding HasCoreInitializationMessage}\"", text, StringComparison.Ordinal);
@@ -111,8 +118,9 @@ public sealed class RootViewStructureContractTests
         Assert.Contains("Style Selector=\"Border.task-queue-row-action:pointerover\"", foundationStyles, StringComparison.Ordinal);
         Assert.DoesNotContain("Style Selector=\"Border.task-queue-row-action\"", text, StringComparison.Ordinal);
         Assert.Contains("PointerPressed=\"OnTaskGearPointerPressed\"", text, StringComparison.Ordinal);
-        Assert.Contains("<DataTemplate DataType=\"taskVm:StartUpTaskModuleViewModel\">", text, StringComparison.Ordinal);
-        Assert.Contains("<DataTemplate DataType=\"taskVm:FightTaskModuleViewModel\">", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("<DataTemplate DataType=\"taskVm:StartUpTaskModuleViewModel\">", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("<DataTemplate DataType=\"taskVm:FightTaskModuleViewModel\">", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("TaskSettingsViewWarmupOrder", codeBehind, StringComparison.Ordinal);
         Assert.DoesNotContain("TaskQueue.Root.AutoReload", text, StringComparison.Ordinal);
         Assert.DoesNotContain("IsChecked=\"{Binding AutoReload}\"", text, StringComparison.Ordinal);
         Assert.DoesNotContain("Click=\"OnInverseClick\"", text, StringComparison.Ordinal);

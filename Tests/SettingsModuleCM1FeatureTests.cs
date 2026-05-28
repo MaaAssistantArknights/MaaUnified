@@ -1249,6 +1249,7 @@ public sealed class SettingsModuleCM1FeatureTests
             ErrorDialogRequest request,
             string sourceScope,
             Func<CancellationToken, Task<UiOperationResult>>? openIssueReportAsync = null,
+            Func<CancellationToken, Task<UiOperationResult>>? openSettingsAsync = null,
             CancellationToken cancellationToken = default)
             => Task.FromResult(new DialogCompletion<ErrorDialogPayload>(DialogReturnSemantic.Close, null, "recorded"));
 

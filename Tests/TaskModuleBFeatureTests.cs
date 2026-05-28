@@ -954,6 +954,43 @@ public sealed class TaskModuleBFeatureTests
     }
 
     [Fact]
+    public async Task Infrast_ReloadPlans_ShouldCacheUnchangedFileAndRefreshOnDemandOrFileChange()
+    {
+        await using var fixture = await TestFixture.CreateAsync("en-us");
+        var module = new InfrastModuleViewModel(fixture.Runtime, new LocalizedTextMap { Language = "en-us" });
+
+        var customPlanPath = Path.Combine(fixture.Root, "config", "infrast.cache.json");
+        await File.WriteAllTextAsync(
+            customPlanPath,
+            "{\"plans\":[{\"name\":\"PlanA\",\"period\":[\"00:00-12:00\"]}]}");
+
+        module.Mode = 10000;
+        module.CustomFilePath = customPlanPath;
+        await module.ReloadPlansAsync();
+
+        Assert.Equal(1, module.PlanFileReadCount);
+        Assert.Contains(module.PlanOptions, option => option.Display == "PlanA");
+
+        await module.ReloadPlansAsync();
+
+        Assert.Equal(1, module.PlanFileReadCount);
+
+        await module.ReloadPlansAsync(forceReload: true);
+
+        Assert.Equal(2, module.PlanFileReadCount);
+
+        await File.WriteAllTextAsync(
+            customPlanPath,
+            "{\"plans\":[{\"name\":\"PlanB\",\"period\":[\"00:00-12:00\"]}]}");
+        File.SetLastWriteTimeUtc(customPlanPath, DateTime.UtcNow.AddMinutes(1));
+
+        await module.ReloadPlansAsync();
+
+        Assert.Equal(3, module.PlanFileReadCount);
+        Assert.Contains(module.PlanOptions, option => option.Display == "PlanB");
+    }
+
+    [Fact]
     public async Task Infrast_Parse_FailureAndOutOfRange_LogErrorCode()
     {
         await using var fixture = await TestFixture.CreateAsync("en-us");

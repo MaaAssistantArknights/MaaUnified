@@ -598,6 +598,7 @@ public sealed class ToolboxModuleO2FeatureTests
             ErrorDialogRequest request,
             string sourceScope,
             Func<CancellationToken, Task<UiOperationResult>>? openIssueReportAsync = null,
+            Func<CancellationToken, Task<UiOperationResult>>? openSettingsAsync = null,
             CancellationToken cancellationToken = default)
         {
             ErrorCallCount++;

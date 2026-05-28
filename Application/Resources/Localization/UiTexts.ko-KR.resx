@@ -829,6 +829,12 @@ OF-1 스테이지가 개방되지 않은 경우에는 선택하지 마세요.</v
   <data name="Mall.VisitOnce" xml:space="preserve">
     <value>친구 방문 하루 한 번</value>
   </data>
+  <data name="Infrast.Advanced" xml:space="preserve">
+    <value>고급 옵션</value>
+  </data>
+  <data name="Infrast.Facility" xml:space="preserve">
+    <value>시설 순서</value>
+  </data>
   <data name="MissionStart.FightTask" xml:space="preserve">
     <value>작전 개시 {0}회 (-{1} 이성)</value>
   </data>
@@ -893,6 +899,48 @@ OF-1 스테이지가 개방되지 않은 경우에는 선택하지 마세요.</v
   </data>
   <data name="PostAction.Unsupported" xml:space="preserve">
     <value>이 동작은 현재 플랫폼에서 지원되지 않아 로그 기록으로 대체됩니다.</value>
+  </data>
+  <data name="Recruit.NotChooseLevel1" xml:space="preserve">
+    <value>1성 수동 선택 안 함</value>
+  </data>
+  <data name="Recruit.NotChooseLevel1Tip" xml:space="preserve">
+    <value>로봇 태그가 인식되면 1성 태그 조합을 자동으로 확정하지 않습니다.</value>
+  </data>
+  <data name="TaskQueue.Error.SelectTaskToMove" xml:space="preserve">
+    <value>먼저 이동할 작업을 선택하세요.</value>
+  </data>
+  <data name="TaskQueue.Error.SelectTaskToRemove" xml:space="preserve">
+    <value>먼저 삭제할 작업을 선택하세요.</value>
+  </data>
+  <data name="TaskQueue.Error.SelectTaskToRename" xml:space="preserve">
+    <value>먼저 이름을 바꿀 작업을 선택하세요.</value>
+  </data>
+  <data name="TaskQueue.Log.AllCompleted" xml:space="preserve">
+    <value>모든 작업 완료</value>
+  </data>
+  <data name="TaskQueue.Log.Observed" xml:space="preserve">
+    <value>{0}: {1}</value>
+  </data>
+  <data name="TaskQueue.Log.SubTaskCompleted" xml:space="preserve">
+    <value>{0}: {1} 완료</value>
+  </data>
+  <data name="TaskQueue.Log.SubTaskError" xml:space="preserve">
+    <value>{0}: {1} 실패</value>
+  </data>
+  <data name="TaskQueue.Log.SubTaskRunning" xml:space="preserve">
+    <value>{0}: {1} 실행 중</value>
+  </data>
+  <data name="TaskQueue.Log.TaskCompleted" xml:space="preserve">
+    <value>작업 완료: {0}</value>
+  </data>
+  <data name="TaskQueue.Log.TaskError" xml:space="preserve">
+    <value>작업 실패: {0}</value>
+  </data>
+  <data name="TaskQueue.Log.TaskStart" xml:space="preserve">
+    <value>작업 시작: {0}</value>
+  </data>
+  <data name="TaskQueue.Log.TaskStopped" xml:space="preserve">
+    <value>작업이 중지됨</value>
   </data>
   <data name="PostAction.Warn.IfNoOtherNeedsSystemAction" xml:space="preserve">
     <value>｢다른 MAA가 없는 경우｣를 사용하려면 최소 하나의 시스템 동작(절전/최대 절전/종료)을 선택해야 합니다.</value>
@@ -2268,6 +2316,9 @@ OF-1 스테이지가 개방되지 않은 경우에는 선택하지 마세요.</v
   <data name="Settings.RemoteControl.ReportTaskEndpointWatermark" xml:space="preserve">
     <value>https://example.com/api/task/report</value>
   </data>
+  <data name="Settings.RemoteControl.RegenerateDeviceIdentity" xml:space="preserve">
+    <value>재생성</value>
+  </data>
   <data name="Settings.RemoteControl.Status.SaveFailed" xml:space="preserve">
     <value>원격 제어 설정 저장에 실패했습니다.</value>
   </data>
@@ -2856,6 +2907,9 @@ OF-1 스테이지가 개방되지 않은 경우에는 선택하지 마세요.</v
   <data name="TaskQueue.Root.Clear" xml:space="preserve">
     <value>지우기</value>
   </data>
+  <data name="TaskQueue.Root.DailyStageTooltip" xml:space="preserve">
+    <value>｢도구-창고 인식｣에서 보유 재고 데이터를 업데이트할 수 있습니다</value>
+  </data>
   <data name="TaskQueue.Root.Delete" xml:space="preserve">
     <value>삭제</value>
   </data>
@@ -2873,6 +2927,9 @@ OF-1 스테이지가 개방되지 않은 경우에는 선택하지 마세요.</v
   </data>
   <data name="TaskQueue.Root.MoveUp" xml:space="preserve">
     <value>위로 이동</value>
+  </data>
+  <data name="TaskQueue.Root.OverlayButton" xml:space="preserve">
+    <value>오버레이</value>
   </data>
   <data name="TaskQueue.Root.OverlayTargetPickerCancel" xml:space="preserve">
     <value>취소</value>
@@ -2898,6 +2955,12 @@ OF-1 스테이지가 개방되지 않은 경우에는 선택하지 마세요.</v
   <data name="TaskQueue.Root.OverlayTargetPickerTitle" xml:space="preserve">
     <value>창 선택</value>
   </data>
+  <data name="TaskQueue.Root.PickTarget" xml:space="preserve">
+    <value>대상 선택</value>
+  </data>
+  <data name="TaskQueue.Root.PostActionTitleWithOnce" xml:space="preserve">
+    <value>{0}（{1}）</value>
+  </data>
   <data name="TaskQueue.Root.Rename" xml:space="preserve">
     <value>이름 바꾸기</value>
   </data>
@@ -2922,8 +2985,14 @@ OF-1 스테이지가 개방되지 않은 경우에는 선택하지 마세요.</v
   <data name="TaskQueue.Root.RightClick" xml:space="preserve">
     <value>오른쪽 클릭</value>
   </data>
+  <data name="TaskQueue.Root.RunTaskOnce" xml:space="preserve">
+    <value>1회 실행</value>
+  </data>
   <data name="TaskQueue.Root.SelectAll" xml:space="preserve">
     <value>전체 선택</value>
+  </data>
+  <data name="TaskQueue.Root.SwitchBatchMode" xml:space="preserve">
+    <value>{0}(으)로 전환</value>
   </data>
   <data name="TaskQueue.Root.TaskConfigTitle" xml:space="preserve">
     <value>작업 설정</value>
@@ -4252,6 +4321,18 @@ OF-1 스테이지가 개방되지 않은 경우에는 선택하지 마세요.</v
   </data>
   <data name="TaskQueue.Status.Running" xml:space="preserve">
     <value>실행 중……</value>
+  </data>
+  <data name="TaskQueue.Status.Idle" xml:space="preserve">
+    <value>시작 전</value>
+  </data>
+  <data name="TaskQueue.Status.Observed" xml:space="preserve">
+    <value>기록됨</value>
+  </data>
+  <data name="TaskQueue.Status.Skipped" xml:space="preserve">
+    <value>건너뜀</value>
+  </data>
+  <data name="TaskQueue.Status.Success" xml:space="preserve">
+    <value>완료</value>
   </data>
   <data name="TaskQueue.Root.ToggleOverlay" xml:space="preserve">
     <value>로그 오버레이 켜기/끄기</value>

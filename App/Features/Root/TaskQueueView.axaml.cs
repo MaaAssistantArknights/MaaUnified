@@ -1,8 +1,11 @@
 using Avalonia;
+using Avalonia.Animation;
+using Avalonia.Animation.Easings;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using System.ComponentModel;
@@ -20,12 +23,23 @@ public partial class TaskQueueView : UserControl
     private const double TaskSelectionIndicatorHeight = 22d;
     private const double TaskDropIndicatorHeight = 3d;
     private const string TaskRowDraggingClass = "dragging";
+    private static readonly Transitions TaskSelectionIndicatorTransitions =
+    [
+        new DoubleTransition
+        {
+            Property = TranslateTransform.YProperty,
+            Duration = TimeSpan.FromSeconds(0.16),
+            Easing = new CubicEaseOut(),
+        },
+    ];
     private static readonly TimeSpan LogThumbnailPreviewShowDelay = TimeSpan.FromSeconds(0.5);
     private static readonly TimeSpan LogThumbnailPreviewFadeDuration = TimeSpan.FromSeconds(0.5);
 
     private readonly Dictionary<Control, LogThumbnailPreviewState> _logThumbnailPreviewStates = [];
     private readonly AppSlidingSegmentController _settingsModeSlider;
+    private readonly TranslateTransform _taskSelectionIndicatorTransform = new();
     private TaskQueuePageViewModel? _observedVm;
+    private ScrollViewer? _taskListScrollViewer;
     private Point? _taskRowDragStart;
     private TaskQueueItemViewModel? _taskRowDragSource;
     private Control? _taskRowDragSourceControl;
@@ -34,6 +48,9 @@ public partial class TaskQueueView : UserControl
     private int _taskRowInsertionIndex = -1;
     private bool _taskRowDragInProgress;
     private bool _taskSelectionIndicatorUpdateQueued;
+    private bool _taskSelectionIndicatorPendingAnimation;
+    private double _taskSelectionIndicatorLeft = double.NaN;
+    private double _taskSelectionIndicatorTop = double.NaN;
     private Control? _openTaskQueuePopupOwner;
     private Control? _suppressNextTaskQueuePopupOpenOwner;
 
@@ -44,16 +61,19 @@ public partial class TaskQueueView : UserControl
             SettingsModeTrack,
             SettingsModeSelectionSlider,
             () => VM?.IsAdvancedSettingsSelected == true ? AdvancedSettingsModeButton : GeneralSettingsModeButton);
+        TaskSelectionIndicator.RenderTransform = _taskSelectionIndicatorTransform;
+        TaskListBox.SelectionChanged += OnTaskListSelectionChanged;
+        TaskListBox.ContainerPrepared += OnTaskListContainerPrepared;
+        TaskListBox.ContainerClearing += OnTaskListContainerClearing;
+        TaskListBox.SizeChanged += OnTaskListMetricChanged;
         AttachedToVisualTree += OnAttachedToVisualTree;
         DataContextChanged += OnDataContextChanged;
-        LayoutUpdated += OnLayoutUpdated;
         DetachedFromVisualTree += OnDetachedFromVisualTree;
         SettingsModeTrack.SizeChanged += OnSettingsModeSliderLayoutMetricChanged;
         GeneralSettingsModeButton.SizeChanged += OnSettingsModeSliderLayoutMetricChanged;
         AdvancedSettingsModeButton.SizeChanged += OnSettingsModeSliderLayoutMetricChanged;
         UpdateVmSubscription();
-        SyncTaskSettingsHost();
-        QueueTaskSelectionIndicatorUpdate();
+        QueueTaskSelectionIndicatorUpdate(animate: false);
         QueueSettingsModeSliderSync();
     }
 
@@ -62,27 +82,14 @@ public partial class TaskQueueView : UserControl
     private void OnDataContextChanged(object? sender, EventArgs e)
     {
         UpdateVmSubscription();
-        SyncTaskSettingsHost();
-        QueueTaskSelectionIndicatorUpdate();
+        QueueTaskSelectionIndicatorUpdate(animate: false);
     }
 
     private void OnAttachedToVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
     {
-        QueueTaskSelectionIndicatorUpdate();
+        RefreshTaskListScrollViewer();
+        QueueTaskSelectionIndicatorUpdate(animate: false);
         QueueSettingsModeSliderSync();
-    }
-
-    private void OnLayoutUpdated(object? sender, EventArgs e)
-    {
-        if (!_taskRowDragInProgress)
-        {
-            UpdateTaskSelectionIndicator();
-        }
-
-        if (SettingsModeSwitch.IsVisible)
-        {
-            QueueSettingsModeSliderSync(resetMetrics: false);
-        }
     }
 
     private void OnDetachedFromVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
@@ -92,6 +99,7 @@ public partial class TaskQueueView : UserControl
         CloseLogThumbnailPreviewsImmediately();
         HideTaskSelectionIndicator();
         HideSettingsModeSlider();
+        DetachTaskListScrollViewer();
         SetObservedVm(null);
     }
 
@@ -251,8 +259,6 @@ public partial class TaskQueueView : UserControl
 
     private void OnVmPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        var shouldSyncSettings = string.IsNullOrEmpty(e.PropertyName)
-            || string.Equals(e.PropertyName, nameof(TaskQueuePageViewModel.SelectedTaskSettingsViewModel), StringComparison.Ordinal);
         var shouldUpdateSelectionIndicator = string.IsNullOrEmpty(e.PropertyName)
             || string.Equals(e.PropertyName, nameof(TaskQueuePageViewModel.SelectedTask), StringComparison.Ordinal);
         var shouldUpdateSettingsModeSlider = string.IsNullOrEmpty(e.PropertyName)
@@ -263,14 +269,12 @@ public partial class TaskQueueView : UserControl
             || string.Equals(e.PropertyName, nameof(TaskQueuePageViewModel.GeneralSettingsButtonText), StringComparison.Ordinal)
             || string.Equals(e.PropertyName, nameof(TaskQueuePageViewModel.AdvancedSettingsButtonText), StringComparison.Ordinal);
 
-        if (shouldSyncSettings)
-        {
-            SyncTaskSettingsHost();
-        }
-
         if (shouldUpdateSelectionIndicator)
         {
-            QueueTaskSelectionIndicatorUpdate();
+            QueueTaskSelectionIndicatorUpdate(animate: string.Equals(
+                e.PropertyName,
+                nameof(TaskQueuePageViewModel.SelectedTask),
+                StringComparison.Ordinal));
         }
 
         if (shouldUpdateSettingsModeSlider)
@@ -284,14 +288,30 @@ public partial class TaskQueueView : UserControl
         QueueSettingsModeSliderSync(resetMetrics: false);
     }
 
-    private void SyncTaskSettingsHost()
+    private void OnTaskListSelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
-        if (TaskSettingsHost is null)
-        {
-            return;
-        }
+        QueueTaskSelectionIndicatorUpdate(animate: true);
+    }
 
-        TaskSettingsHost.Content = VM?.SelectedTaskSettingsViewModel;
+    private void OnTaskListContainerPrepared(object? sender, ContainerPreparedEventArgs e)
+    {
+        RefreshTaskListScrollViewer();
+        QueueTaskSelectionIndicatorUpdate(animate: false);
+    }
+
+    private void OnTaskListContainerClearing(object? sender, ContainerClearingEventArgs e)
+    {
+        QueueTaskSelectionIndicatorUpdate(animate: false);
+    }
+
+    private void OnTaskListMetricChanged(object? sender, SizeChangedEventArgs e)
+    {
+        QueueTaskSelectionIndicatorUpdate(animate: false);
+    }
+
+    private void OnTaskListScrollChanged(object? sender, ScrollChangedEventArgs e)
+    {
+        QueueTaskSelectionIndicatorUpdate(animate: false);
     }
 
     private void OnOpenButtonContextMenuClick(object? sender, RoutedEventArgs e)
@@ -874,7 +894,7 @@ public partial class TaskQueueView : UserControl
         return true;
     }
 
-    private IEnumerable<Control> GetVisibleTaskRows(ListBox listBox)
+    private static IEnumerable<Control> GetVisibleTaskRows(ListBox listBox)
     {
         return listBox.GetVisualDescendants()
             .OfType<Control>()
@@ -1004,6 +1024,33 @@ public partial class TaskQueueView : UserControl
         return listBox?.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault();
     }
 
+    private void RefreshTaskListScrollViewer()
+    {
+        var next = GetTaskListScrollViewer();
+        if (ReferenceEquals(_taskListScrollViewer, next))
+        {
+            return;
+        }
+
+        DetachTaskListScrollViewer();
+        _taskListScrollViewer = next;
+        if (_taskListScrollViewer is not null)
+        {
+            _taskListScrollViewer.ScrollChanged += OnTaskListScrollChanged;
+        }
+    }
+
+    private void DetachTaskListScrollViewer()
+    {
+        if (_taskListScrollViewer is null)
+        {
+            return;
+        }
+
+        _taskListScrollViewer.ScrollChanged -= OnTaskListScrollChanged;
+        _taskListScrollViewer = null;
+    }
+
     private Border? GetTaskDropIndicator()
     {
         return this.FindControl<Border>("TaskDropIndicator");
@@ -1068,11 +1115,12 @@ public partial class TaskQueueView : UserControl
         _taskRowDragSourceIndex = -1;
         _taskRowInsertionIndex = -1;
         _taskRowDragInProgress = false;
-        QueueTaskSelectionIndicatorUpdate();
+        QueueTaskSelectionIndicatorUpdate(animate: false);
     }
 
-    private void QueueTaskSelectionIndicatorUpdate()
+    private void QueueTaskSelectionIndicatorUpdate(bool animate)
     {
+        _taskSelectionIndicatorPendingAnimation |= animate;
         if (_taskSelectionIndicatorUpdateQueued)
         {
             return;
@@ -1083,12 +1131,14 @@ public partial class TaskQueueView : UserControl
             () =>
             {
                 _taskSelectionIndicatorUpdateQueued = false;
-                UpdateTaskSelectionIndicator();
+                var shouldAnimate = _taskSelectionIndicatorPendingAnimation;
+                _taskSelectionIndicatorPendingAnimation = false;
+                UpdateTaskSelectionIndicator(shouldAnimate);
             },
             DispatcherPriority.Loaded);
     }
 
-    private void UpdateTaskSelectionIndicator()
+    private void UpdateTaskSelectionIndicator(bool animate)
     {
         if (_taskRowDragInProgress)
         {
@@ -1106,8 +1156,7 @@ public partial class TaskQueueView : UserControl
             return;
         }
 
-        var selectedRow = GetVisibleTaskRows(listBox)
-            .FirstOrDefault(row => ReferenceEquals(row.DataContext, selectedTask));
+        var selectedRow = GetTaskRowForItem(listBox, selectedTask);
         if (selectedRow is null)
         {
             HideTaskSelectionIndicator();
@@ -1123,16 +1172,28 @@ public partial class TaskQueueView : UserControl
 
         var leftInset = selectedRow is Border border ? border.Padding.Left : 0d;
         var top = rowPoint.Value.Y + Math.Max(0d, selectedRow.Bounds.Height - TaskSelectionIndicatorHeight) / 2d;
-        var nextMargin = new Thickness(rowPoint.Value.X + leftInset, top, 0d, 0d);
+        var left = rowPoint.Value.X + leftInset;
 
         indicator.Width = 3d;
         indicator.Height = TaskSelectionIndicatorHeight;
         indicator.Opacity = 1d;
-        indicator.IsVisible = true;
-        if (!AreClose(indicator.Margin, nextMargin))
+        Canvas.SetTop(indicator, 0d);
+
+        if (double.IsNaN(_taskSelectionIndicatorLeft) || Math.Abs(_taskSelectionIndicatorLeft - left) > 0.1d)
         {
-            indicator.Margin = nextMargin;
+            Canvas.SetLeft(indicator, left);
+            _taskSelectionIndicatorLeft = left;
         }
+
+        var shouldAnimate = animate && indicator.IsVisible;
+        _taskSelectionIndicatorTransform.Transitions = shouldAnimate ? TaskSelectionIndicatorTransitions : null;
+        if (double.IsNaN(_taskSelectionIndicatorTop) || Math.Abs(_taskSelectionIndicatorTop - top) > 0.1d)
+        {
+            _taskSelectionIndicatorTransform.Y = top;
+            _taskSelectionIndicatorTop = top;
+        }
+
+        indicator.IsVisible = true;
     }
 
     private void HideTaskSelectionIndicator()
@@ -1142,14 +1203,46 @@ public partial class TaskQueueView : UserControl
         {
             indicator.IsVisible = false;
         }
+
+        _taskSelectionIndicatorTransform.Transitions = null;
+        _taskSelectionIndicatorLeft = double.NaN;
+        _taskSelectionIndicatorTop = double.NaN;
     }
 
-    private static bool AreClose(Thickness current, Thickness next)
+    private static Control? GetTaskRowForItem(ListBox listBox, TaskQueueItemViewModel selectedTask)
     {
-        return Math.Abs(current.Left - next.Left) < 0.1d
-            && Math.Abs(current.Top - next.Top) < 0.1d
-            && Math.Abs(current.Right - next.Right) < 0.1d
-            && Math.Abs(current.Bottom - next.Bottom) < 0.1d;
+        if (listBox.ContainerFromItem(selectedTask) is Control container)
+        {
+            var row = ResolveTaskRow(container, selectedTask);
+            if (row is not null)
+            {
+                return row;
+            }
+        }
+
+        return GetVisibleTaskRows(listBox)
+            .FirstOrDefault(row => ReferenceEquals(row.DataContext, selectedTask));
+    }
+
+    private static Control? ResolveTaskRow(Control root, TaskQueueItemViewModel selectedTask)
+    {
+        if (IsTaskRow(root, selectedTask))
+        {
+            return root;
+        }
+
+        return root.GetVisualDescendants()
+            .OfType<Control>()
+            .FirstOrDefault(row => IsTaskRow(row, selectedTask));
+    }
+
+    private static bool IsTaskRow(Control control, TaskQueueItemViewModel selectedTask)
+    {
+        return control.Classes.Contains("task-queue-item-card")
+            && ReferenceEquals(control.DataContext, selectedTask)
+            && control.IsEffectivelyVisible
+            && control.Bounds.Width > 0d
+            && control.Bounds.Height > 0d;
     }
 
     private void OpenTaskRowContextMenu(Control rowControl)

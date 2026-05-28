@@ -2,45 +2,8 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:controls="clr-namespace:MAAUnified.App.Controls"
              xmlns:taskViews="clr-namespace:MAAUnified.App.Features.TaskQueue"
-             xmlns:taskVm="clr-namespace:MAAUnified.App.ViewModels.TaskQueue"
              Classes="task-queue-page"
              x:Class="MAAUnified.App.Features.Root.TaskQueueView">
-  <UserControl.DataTemplates>
-    <DataTemplate DataType="taskVm:StartUpTaskModuleViewModel">
-      <taskViews:StartUpTaskView />
-    </DataTemplate>
-    <DataTemplate DataType="taskVm:FightTaskModuleViewModel">
-      <taskViews:FightSettingsView />
-    </DataTemplate>
-    <DataTemplate DataType="taskVm:RecruitTaskModuleViewModel">
-      <taskViews:RecruitSettingsView />
-    </DataTemplate>
-    <DataTemplate DataType="taskVm:InfrastModuleViewModel">
-      <taskViews:InfrastSettingsView />
-    </DataTemplate>
-    <DataTemplate DataType="taskVm:MallModuleViewModel">
-      <taskViews:MallSettingsView />
-    </DataTemplate>
-    <DataTemplate DataType="taskVm:AwardModuleViewModel">
-      <taskViews:AwardSettingsView />
-    </DataTemplate>
-    <DataTemplate DataType="taskVm:RoguelikeModuleViewModel">
-      <taskViews:RoguelikeSettingsView />
-    </DataTemplate>
-    <DataTemplate DataType="taskVm:ReclamationModuleViewModel">
-      <taskViews:ReclamationSettingsView />
-    </DataTemplate>
-    <DataTemplate DataType="taskVm:UserDataUpdateModuleViewModel">
-      <taskViews:UserDataUpdateSettingsView />
-    </DataTemplate>
-    <DataTemplate DataType="taskVm:CustomModuleViewModel">
-      <taskViews:CustomSettingsView />
-    </DataTemplate>
-    <DataTemplate DataType="taskVm:PostActionModuleViewModel">
-      <taskViews:PostActionSettingsView />
-    </DataTemplate>
-  </UserControl.DataTemplates>
-
   <UserControl.Styles>
     <Style Selector="Grid.task-queue-config-panel">
       <Setter Property="Width" Value="{DynamicResource MAA.Size.TaskQueue.ConfigPanelWidth}" />
@@ -423,9 +386,6 @@
       <Setter Property="IsHitTestVisible" Value="False" />
       <Setter Property="Transitions">
         <Transitions>
-          <ThicknessTransition Property="Margin"
-                               Duration="0:0:0.22"
-                               Easing="CubicEaseOut" />
           <DoubleTransition Property="Height"
                             Duration="0:0:0.18"
                             Easing="CubicEaseOut" />
@@ -720,16 +680,6 @@
                               Margin="{DynamicResource MAA.Thickness.MarginActionButtonLeft}"
                               Tag="{Binding}"
                               PointerPressed="OnTaskGearPointerPressed">
-                        <ToolTip.Tip>
-                          <Grid Margin="14"
-                                Background="Transparent"
-                                ClipToBounds="False">
-                            <Border Classes="app-tooltip-card">
-                              <TextBlock Classes="app-tooltip-card-text"
-                                         Text="{Binding DataContext.TaskMenuTooltipText, RelativeSource={RelativeSource AncestorType=UserControl}}" />
-                            </Border>
-                          </Grid>
-                        </ToolTip.Tip>
                         <Viewbox Width="15"
                                  Height="15"
                                  HorizontalAlignment="Center"
@@ -880,8 +830,42 @@
               <TextBlock Classes="app-caption"
                          Text="{Binding NoTaskSelectedHint}" />
             </Border>
-            <ContentControl x:Name="TaskSettingsHost"
-                            IsEnabled="{Binding CanEdit}" />
+            <Grid x:Name="TaskSettingsHost"
+                  IsEnabled="{Binding CanEdit}">
+              <Border IsVisible="{Binding IsStartUpTaskSelected}">
+                <taskViews:StartUpTaskView DataContext="{Binding StartUpModule}" />
+              </Border>
+              <Border IsVisible="{Binding IsFightTaskSelected}">
+                <taskViews:FightSettingsView DataContext="{Binding FightModule}" />
+              </Border>
+              <Border IsVisible="{Binding IsRecruitTaskSelected}">
+                <taskViews:RecruitSettingsView DataContext="{Binding RecruitModule}" />
+              </Border>
+              <Border IsVisible="{Binding IsInfrastTaskSelected}">
+                <taskViews:InfrastSettingsView DataContext="{Binding InfrastModule}" />
+              </Border>
+              <Border IsVisible="{Binding IsMallTaskSelected}">
+                <taskViews:MallSettingsView DataContext="{Binding MallModule}" />
+              </Border>
+              <Border IsVisible="{Binding IsAwardTaskSelected}">
+                <taskViews:AwardSettingsView DataContext="{Binding AwardModule}" />
+              </Border>
+              <Border IsVisible="{Binding IsRoguelikeTaskSelected}">
+                <taskViews:RoguelikeSettingsView DataContext="{Binding RoguelikeModule}" />
+              </Border>
+              <Border IsVisible="{Binding IsReclamationTaskSelected}">
+                <taskViews:ReclamationSettingsView DataContext="{Binding ReclamationModule}" />
+              </Border>
+              <Border IsVisible="{Binding IsUserDataUpdateTaskSelected}">
+                <taskViews:UserDataUpdateSettingsView DataContext="{Binding UserDataUpdateModule}" />
+              </Border>
+              <Border IsVisible="{Binding IsCustomTaskSelected}">
+                <taskViews:CustomSettingsView DataContext="{Binding CustomModule}" />
+              </Border>
+              <Border IsVisible="{Binding ShowPostActionSettingsPanel}">
+                <taskViews:PostActionSettingsView DataContext="{Binding PostActionModule}" />
+              </Border>
+            </Grid>
             <Border Classes="task-settings-mode-scroll-spacer"
                     IsVisible="{Binding ShowSettingsModeSwitch}" />
           </controls:AdaptiveSpacingStackPanel>

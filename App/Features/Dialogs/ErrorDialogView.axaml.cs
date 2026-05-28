@@ -17,8 +17,10 @@ public partial class ErrorDialogView : Window, IDialogChromeAware
     private const double SimpleMinWidth = 520d;
 
     private Func<CancellationToken, Task<UiOperationResult>>? _openIssueReportAsync;
+    private Func<CancellationToken, Task<UiOperationResult>>? _openSettingsAsync;
     private bool _copied;
     private bool _issueOpened;
+    private bool _settingsOpened;
     private bool _simpleConnectFailureMode;
     private string _language = "en-us";
     private string _formattedText = string.Empty;
@@ -32,21 +34,25 @@ public partial class ErrorDialogView : Window, IDialogChromeAware
 
     public void ApplyRequest(
         ErrorDialogRequest request,
-        Func<CancellationToken, Task<UiOperationResult>>? openIssueReportAsync = null)
+        Func<CancellationToken, Task<UiOperationResult>>? openIssueReportAsync = null,
+        Func<CancellationToken, Task<UiOperationResult>>? openSettingsAsync = null)
     {
         _copied = false;
         _issueOpened = false;
+        _settingsOpened = false;
         _request = request;
         _language = request.Language;
         _simpleConnectFailureMode = request.Result.Error?.Code == UiErrorCode.ConnectFailed;
         Title = request.Title;
         _openIssueReportAsync = openIssueReportAsync;
+        _openSettingsAsync = openSettingsAsync;
         DialogShell.Title = request.Title;
         ApplyWindowSizeMode();
         CopyButton.Content = _simpleConnectFailureMode
             ? DialogTextCatalog.ErrorDialogCopyErrorInfoButton(request.Language)
             : DialogTextCatalog.ErrorDialogCopyButton(request.Language);
         IssueReportButton.Content = DialogTextCatalog.ErrorDialogIssueReportButton(request.Language);
+        OpenSettingsButton.Content = DialogTextCatalog.ErrorDialogOpenSettingsButton(request.Language);
         ConfirmButton.Content = _simpleConnectFailureMode
             ? DialogTextCatalog.WarningDialogConfirmButton(request.Language)
             : request.ConfirmText;
@@ -71,6 +77,8 @@ public partial class ErrorDialogView : Window, IDialogChromeAware
         ErrorDetailBox.CaretIndex = 0;
         IssueReportButton.IsVisible = !_simpleConnectFailureMode && _openIssueReportAsync is not null;
         IssueReportButton.IsEnabled = !_simpleConnectFailureMode && _openIssueReportAsync is not null;
+        OpenSettingsButton.IsVisible = _simpleConnectFailureMode && _openSettingsAsync is not null;
+        OpenSettingsButton.IsEnabled = _simpleConnectFailureMode && _openSettingsAsync is not null;
         CancelButton.IsVisible = !_simpleConnectFailureMode;
     }
 
@@ -98,7 +106,8 @@ public partial class ErrorDialogView : Window, IDialogChromeAware
         return new ErrorDialogPayload(
             FormattedErrorText: _formattedText,
             Copied: _copied,
-            IssueReportOpened: _issueOpened);
+            IssueReportOpened: _issueOpened,
+            SettingsOpened: _settingsOpened);
     }
 
     private static string BuildFormattedErrorText(ErrorDialogRequest request)
@@ -156,6 +165,29 @@ public partial class ErrorDialogView : Window, IDialogChromeAware
         }
     }
 
+    private async void OnOpenSettingsClick(object? sender, RoutedEventArgs e)
+    {
+        if (_openSettingsAsync is null)
+        {
+            return;
+        }
+
+        OpenSettingsButton.IsEnabled = false;
+        try
+        {
+            var result = await _openSettingsAsync(CancellationToken.None);
+            if (result.Success)
+            {
+                _settingsOpened = true;
+                Close(DialogReturnSemantic.Details);
+            }
+        }
+        finally
+        {
+            OpenSettingsButton.IsEnabled = _openSettingsAsync is not null;
+        }
+    }
+
     private void OnConfirmClick(object? sender, RoutedEventArgs e)
     {
         Close(DialogReturnSemantic.Confirm);
@@ -184,6 +216,8 @@ public partial class ErrorDialogView : Window, IDialogChromeAware
         DetailHost.IsVisible = true;
         IssueReportButton.IsVisible = _openIssueReportAsync is not null;
         IssueReportButton.IsEnabled = _openIssueReportAsync is not null;
+        OpenSettingsButton.IsVisible = false;
+        OpenSettingsButton.IsEnabled = false;
         CancelButton.IsVisible = true;
 
         FriendlyMessageText.Text = request.Result.Message;
@@ -215,6 +249,9 @@ public partial class ErrorDialogView : Window, IDialogChromeAware
         IssueReportButton.Content = chrome.GetNamedTextOrDefault(
             DialogTextCatalog.ChromeKeys.IssueReportButton,
             IssueReportButton.Content?.ToString() ?? "IssueReport");
+        OpenSettingsButton.Content = chrome.GetNamedTextOrDefault(
+            DialogTextCatalog.ChromeKeys.OpenSettingsButton,
+            OpenSettingsButton.Content?.ToString() ?? "Settings");
         ConfirmButton.Content = chrome.ConfirmText ?? ConfirmButton.Content;
         CancelButton.Content = chrome.CancelText ?? CancelButton.Content;
     }

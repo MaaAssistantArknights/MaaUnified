@@ -721,6 +721,12 @@
   <data name="Mall.VisitOnce" xml:space="preserve">
     <value>好友訪問每日一次</value>
   </data>
+  <data name="Infrast.Advanced" xml:space="preserve">
+    <value>進階選項</value>
+  </data>
+  <data name="Infrast.Facility" xml:space="preserve">
+    <value>房間順序</value>
+  </data>
   <data name="MissionStart.FightTask" xml:space="preserve">
     <value>開始行動 {0} 次，消耗 {1} 理智</value>
   </data>
@@ -785,6 +791,48 @@
   </data>
   <data name="PostAction.Unsupported" xml:space="preserve">
     <value>此動作目前平台不支援，將降級為記錄日誌。</value>
+  </data>
+  <data name="Recruit.NotChooseLevel1" xml:space="preserve">
+    <value>不手動選擇一星</value>
+  </data>
+  <data name="Recruit.NotChooseLevel1Tip" xml:space="preserve">
+    <value>若辨識出支援機械標籤，將不會自動確認一星標籤組合。</value>
+  </data>
+  <data name="TaskQueue.Error.SelectTaskToMove" xml:space="preserve">
+    <value>請先選擇要移動的任務。</value>
+  </data>
+  <data name="TaskQueue.Error.SelectTaskToRemove" xml:space="preserve">
+    <value>請先選擇要刪除的任務。</value>
+  </data>
+  <data name="TaskQueue.Error.SelectTaskToRename" xml:space="preserve">
+    <value>請先選擇要重新命名的任務。</value>
+  </data>
+  <data name="TaskQueue.Log.AllCompleted" xml:space="preserve">
+    <value>全部任務完成</value>
+  </data>
+  <data name="TaskQueue.Log.Observed" xml:space="preserve">
+    <value>{0}: {1}</value>
+  </data>
+  <data name="TaskQueue.Log.SubTaskCompleted" xml:space="preserve">
+    <value>{0}: {1} 已完成</value>
+  </data>
+  <data name="TaskQueue.Log.SubTaskError" xml:space="preserve">
+    <value>{0}: {1} 失敗</value>
+  </data>
+  <data name="TaskQueue.Log.SubTaskRunning" xml:space="preserve">
+    <value>{0}: {1} 執行中</value>
+  </data>
+  <data name="TaskQueue.Log.TaskCompleted" xml:space="preserve">
+    <value>任務完成: {0}</value>
+  </data>
+  <data name="TaskQueue.Log.TaskError" xml:space="preserve">
+    <value>任務失敗: {0}</value>
+  </data>
+  <data name="TaskQueue.Log.TaskStart" xml:space="preserve">
+    <value>開始任務: {0}</value>
+  </data>
+  <data name="TaskQueue.Log.TaskStopped" xml:space="preserve">
+    <value>任務已停止</value>
   </data>
   <data name="PostAction.Warn.IfNoOtherNeedsSystemAction" xml:space="preserve">
     <value>｢無其他 MAA 執行時｣ 需要至少勾選一個系統動作（睡眠 / 休眠 / 關機）。</value>
@@ -2159,6 +2207,9 @@
   <data name="Settings.RemoteControl.ReportTaskEndpointWatermark" xml:space="preserve">
     <value>https://example.com/api/task/report</value>
   </data>
+  <data name="Settings.RemoteControl.RegenerateDeviceIdentity" xml:space="preserve">
+    <value>重新產生</value>
+  </data>
   <data name="Settings.RemoteControl.Status.SaveFailed" xml:space="preserve">
     <value>遠端控制設定儲存失敗。</value>
   </data>
@@ -2747,6 +2798,9 @@
   <data name="TaskQueue.Root.Clear" xml:space="preserve">
     <value>清空</value>
   </data>
+  <data name="TaskQueue.Root.DailyStageTooltip" xml:space="preserve">
+    <value>可透過 ｢小工具-倉庫辨識｣ 更新庫存資料</value>
+  </data>
   <data name="TaskQueue.Root.Delete" xml:space="preserve">
     <value>刪除</value>
   </data>
@@ -2764,6 +2818,9 @@
   </data>
   <data name="TaskQueue.Root.MoveUp" xml:space="preserve">
     <value>上移</value>
+  </data>
+  <data name="TaskQueue.Root.OverlayButton" xml:space="preserve">
+    <value>浮動視窗</value>
   </data>
   <data name="TaskQueue.Root.OverlayTargetPickerCancel" xml:space="preserve">
     <value>取消</value>
@@ -2789,6 +2846,12 @@
   <data name="TaskQueue.Root.OverlayTargetPickerTitle" xml:space="preserve">
     <value>選擇視窗</value>
   </data>
+  <data name="TaskQueue.Root.PickTarget" xml:space="preserve">
+    <value>選擇目標</value>
+  </data>
+  <data name="TaskQueue.Root.PostActionTitleWithOnce" xml:space="preserve">
+    <value>{0}（{1}）</value>
+  </data>
   <data name="TaskQueue.Root.Rename" xml:space="preserve">
     <value>重新命名</value>
   </data>
@@ -2813,8 +2876,14 @@
   <data name="TaskQueue.Root.RightClick" xml:space="preserve">
     <value>右鍵</value>
   </data>
+  <data name="TaskQueue.Root.RunTaskOnce" xml:space="preserve">
+    <value>單次執行</value>
+  </data>
   <data name="TaskQueue.Root.SelectAll" xml:space="preserve">
     <value>全選</value>
+  </data>
+  <data name="TaskQueue.Root.SwitchBatchMode" xml:space="preserve">
+    <value>切換為{0}</value>
   </data>
   <data name="TaskQueue.Root.TaskConfigTitle" xml:space="preserve">
     <value>任務設定</value>
@@ -4254,6 +4323,18 @@
   </data>
   <data name="TaskQueue.Status.Running" xml:space="preserve">
     <value>正在執行中……</value>
+  </data>
+  <data name="TaskQueue.Status.Idle" xml:space="preserve">
+    <value>未開始</value>
+  </data>
+  <data name="TaskQueue.Status.Observed" xml:space="preserve">
+    <value>已記錄</value>
+  </data>
+  <data name="TaskQueue.Status.Skipped" xml:space="preserve">
+    <value>已略過</value>
+  </data>
+  <data name="TaskQueue.Status.Success" xml:space="preserve">
+    <value>已完成</value>
   </data>
   <data name="TaskQueue.Root.ToggleOverlay" xml:space="preserve">
     <value>開啟 / 關閉日誌浮動視窗</value>

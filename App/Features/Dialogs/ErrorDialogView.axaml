@@ -80,6 +80,11 @@
                 Classes="app-button app-secondary"
                 Content="IssueReport"
                 Click="OnOpenIssueReportClick" />
+        <Button x:Name="OpenSettingsButton"
+                Classes="app-button app-secondary"
+                Content="Settings"
+                IsVisible="False"
+                Click="OnOpenSettingsClick" />
         <Button x:Name="CancelButton"
                 Classes="app-button app-secondary"
                 Content="Ignore"

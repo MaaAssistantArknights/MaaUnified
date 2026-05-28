@@ -168,7 +168,8 @@ public sealed record ErrorDialogRequest(
 public sealed record ErrorDialogPayload(
     string FormattedErrorText,
     bool Copied,
-    bool IssueReportOpened);
+    bool IssueReportOpened,
+    bool SettingsOpened);
 
 public sealed record AchievementListItem(
     string Id,

@@ -223,6 +223,50 @@ public sealed class TaskQueueG1FeatureTests
         Assert.Equal("Reclamation", vm.AddTaskMenuReclamationText);
     }
 
+    [Fact]
+    public async Task TaskQueuePage_SelectTask_ShouldSettleDeferredBinding()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.Fight, "fight")).Success);
+        Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.Recruit, "recruit")).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        vm.SelectedTask = vm.Tasks[1];
+
+        Assert.True(vm.CanEditSelectedTaskSettings);
+
+        await vm.WaitForPendingBindingAsync();
+
+        Assert.False(vm.IsSelectedTaskBindingPending);
+        Assert.True(vm.CanEditSelectedTaskSettings);
+        Assert.True(vm.RecruitModule.IsTaskBound);
+    }
+
+    [Fact]
+    public async Task TaskQueuePage_RapidSelect_ShouldBindLatestTaskAndClearPendingAfterLatestBinding()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.Fight, "fight")).Success);
+        Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.Recruit, "recruit")).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        vm.SelectedTask = vm.Tasks[0];
+        vm.SelectedTask = vm.Tasks[1];
+
+        Assert.True(vm.CanEditSelectedTaskSettings);
+
+        await vm.WaitForPendingBindingAsync();
+
+        Assert.Same(vm.Tasks[1], vm.SelectedTask);
+        Assert.False(vm.IsSelectedTaskBindingPending);
+        Assert.True(vm.RecruitModule.IsTaskBound);
+        Assert.False(vm.FightModule.IsTaskBound);
+    }
+
     [HostRepoFact]
     public async Task TaskQueuePage_SetLanguage_ShouldKeepRoguelikeCoreCharStableAndRebuildLocalizedOptions()
     {
@@ -534,6 +578,33 @@ public sealed class TaskQueueG1FeatureTests
         Assert.True(queue.Success);
         Assert.NotNull(queue.Value);
         Assert.All(queue.Value!, task => Assert.False(task.IsEnabled));
+    }
+
+    [Fact]
+    public async Task TaskQueuePage_SelectAll_ShouldOnlyUpdateTaskEnabledState()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup-a", enabled: true)).Success);
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Fight", "fight-b", enabled: true)).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        vm.SelectedTask = vm.Tasks[0];
+        await vm.WaitForPendingBindingAsync();
+
+        vm.StartUpModule.AccountName = "dirty-before-select-all";
+        Assert.True(vm.StartUpModule.IsDirty);
+
+        await vm.SelectAllAsync(false);
+
+        Assert.True(vm.StartUpModule.IsDirty);
+        Assert.All(vm.Tasks, task => Assert.False(task.IsEnabled));
+
+        var queue = await fixture.TaskQueue.GetCurrentTaskQueueAsync();
+        Assert.True(queue.Success);
+        Assert.NotNull(queue.Value);
+        Assert.All(queue.Value!, task => Assert.False(task.IsEnabled));
+        Assert.NotEqual("dirty-before-select-all", queue.Value![0].Params["account_name"]?.GetValue<string>());
     }
 
     [Fact]

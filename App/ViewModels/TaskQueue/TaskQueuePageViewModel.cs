@@ -241,6 +241,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     private string _lastCompletionNotificationRunId = string.Empty;
     private string _lastFailureNotificationRunId = string.Empty;
     private bool _selectedTaskSettingsHostResetPending;
+    private bool _isSelectedTaskBindingPending;
     private readonly IUiLanguageCoordinator _uiLanguageCoordinator;
 
     public TaskQueuePageViewModel(
@@ -582,6 +583,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             {
                 OnPropertyChanged(nameof(IsRunning));
                 OnPropertyChanged(nameof(CanEdit));
+                OnPropertyChanged(nameof(CanEditSelectedTaskSettings));
                 OnPropertyChanged(nameof(RunButtonText));
                 OnPropertyChanged(nameof(IsRunOwnedByAnotherFeature));
                 OnPropertyChanged(nameof(IsOwnRunActive));
@@ -594,6 +596,14 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     public bool IsRunning => _isStartRequestActive || CurrentSessionState is SessionState.Running or SessionState.Stopping;
 
     public bool CanEdit => !IsRunning;
+
+    public bool IsSelectedTaskBindingPending
+    {
+        get => _isSelectedTaskBindingPending;
+        private set => SetProperty(ref _isSelectedTaskBindingPending, value);
+    }
+
+    public bool CanEditSelectedTaskSettings => CanEdit;
 
     public string RunButtonText
     {
@@ -682,6 +692,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         OnPropertyChanged(nameof(IsStartRequestActive));
         OnPropertyChanged(nameof(IsRunning));
         OnPropertyChanged(nameof(CanEdit));
+        OnPropertyChanged(nameof(CanEditSelectedTaskSettings));
         OnPropertyChanged(nameof(RunButtonText));
         OnPropertyChanged(nameof(IsRunOwnedByAnotherFeature));
         OnPropertyChanged(nameof(IsOwnRunActive));
@@ -774,15 +785,6 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         }
     }
 
-    public string TaskMenuTooltipText =>
-        $"{RootTexts.GetOrDefault("TaskQueue.Root.LeftClick", "Left click")}: {RootTexts.GetOrDefault("TaskQueue.Root.TaskSettings", "Task settings")}{Environment.NewLine}" +
-        $"{RootTexts.GetOrDefault("TaskQueue.Root.RightClick", "Right click")}: " +
-        $"{Texts.GetOrDefault("RunTaskOnce", "Run once")} / " +
-        $"{RootTexts.GetOrDefault("TaskQueue.Root.MoveUp", "Move up")} / " +
-        $"{RootTexts.GetOrDefault("TaskQueue.Root.MoveDown", "Move down")} / " +
-        $"{RootTexts.GetOrDefault("TaskQueue.Root.Rename", "Rename")} / " +
-        $"{RootTexts.GetOrDefault("TaskQueue.Root.Delete", "Delete")}";
-
     public string TaskListTitleText => RootTexts.GetOrDefault("TaskQueue.Root.TaskListTitle", "Task list");
 
     public string TaskConfigTitleText
@@ -810,7 +812,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
     public string TaskMenuRenameText => RootTexts.GetOrDefault("TaskQueue.Root.Rename", "Rename");
 
-    public string TaskMenuRunOnceText => Texts.GetOrDefault("RunTaskOnce", "Run once");
+    public string TaskMenuRunOnceText => RootTexts.GetOrDefault("TaskQueue.Root.RunTaskOnce", "Run once");
 
     public string TaskMenuDeleteText => RootTexts.GetOrDefault("TaskQueue.Root.Delete", "Delete");
 
@@ -1175,7 +1177,6 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         OnPropertyChanged(nameof(WaitAndStopButtonText));
         OnPropertyChanged(nameof(BatchActionText));
         OnPropertyChanged(nameof(BatchToggleMenuText));
-        OnPropertyChanged(nameof(TaskMenuTooltipText));
         OnPropertyChanged(nameof(OverlayMode));
         OnPropertyChanged(nameof(IsOverlayHiddenMode));
         OnPropertyChanged(nameof(IsOverlayPreviewMode));
@@ -1811,18 +1812,70 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
     public async Task SelectAllAsync(bool enabled, CancellationToken cancellationToken = default)
     {
-        await ExecuteQueueMutationAsync(
+        await ExecuteTaskEnabledBatchAsync(
             "TaskQueue.SelectAll",
             ct => Runtime.TaskQueueFeatureService.SetAllTasksEnabledAsync(enabled, ct),
+            _ => enabled,
             cancellationToken: cancellationToken);
     }
 
     public async Task InverseSelectionAsync(CancellationToken cancellationToken = default)
     {
-        await ExecuteQueueMutationAsync(
+        await ExecuteTaskEnabledBatchAsync(
             "TaskQueue.InverseSelection",
             ct => Runtime.TaskQueueFeatureService.InvertTasksEnabledAsync(ct),
+            current => !current,
             cancellationToken: cancellationToken);
+    }
+
+    private async Task<bool> ExecuteTaskEnabledBatchAsync(
+        string scope,
+        Func<CancellationToken, Task<UiOperationResult>> mutationAsync,
+        Func<bool, bool> resolveEnabled,
+        CancellationToken cancellationToken = default)
+    {
+        if (!await EnsureEditableAsync(scope, cancellationToken))
+        {
+            return false;
+        }
+
+        await _queueMutationLock.WaitAsync(cancellationToken);
+        try
+        {
+            var result = await mutationAsync(cancellationToken);
+            if (!await ApplyResultAsync(result, scope, cancellationToken))
+            {
+                return false;
+            }
+
+            ApplyLocalTaskEnabledBatch(resolveEnabled);
+            RegisterTaskQueueSavePending();
+            return true;
+        }
+        finally
+        {
+            _queueMutationLock.Release();
+        }
+    }
+
+    private void ApplyLocalTaskEnabledBatch(Func<bool, bool> resolveEnabled)
+    {
+        _suppressTaskEnabledSync = true;
+        try
+        {
+            foreach (var task in Tasks)
+            {
+                var next = resolveEnabled(task.IsEnabled);
+                if (task.IsEnabled != next)
+                {
+                    task.IsEnabled = next;
+                }
+            }
+        }
+        finally
+        {
+            _suppressTaskEnabledSync = false;
+        }
     }
 
     public async Task ExecuteBatchActionAsync(CancellationToken cancellationToken = default)
@@ -2347,13 +2400,12 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
         var connectMessage = BuildConnectFailureMessage(connectResult);
         LastErrorMessage = connectMessage;
-        NavigateToConnectionSettingsIfAvailable();
         AppendStartPrecheckWarningMessage(LastErrorMessage);
         AppendStartFailureLog(LastErrorMessage);
-        await RecordFailedResultAsync(
+        await Runtime.DialogFeatureService.ReportErrorAsync(
             scope,
             UiOperationResult.Fail(
-                UiErrorCode.SessionStateNotAllowed,
+                UiErrorCode.ConnectFailed,
                 LastErrorMessage,
                 connectResult.Error?.Details),
             cancellationToken);
@@ -2445,7 +2497,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             lastFailure = result;
         }
 
-        return lastFailure ?? UiOperationResult.Fail(UiErrorCode.UiOperationFailed, "Connection failed.");
+        return lastFailure ?? UiOperationResult.Fail(UiErrorCode.ConnectFailed, "Connection failed.");
     }
 
     private string BuildConnectFailureMessage(UiOperationResult connectResult)
@@ -2600,11 +2652,6 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         {
             return (false, ex.Message);
         }
-    }
-
-    private void NavigateToConnectionSettingsIfAvailable()
-    {
-        _navigateToSettingsSection?.Invoke("Connect");
     }
 
     private static string BuildSessionStateNotAllowedMessage(SessionState state, string actionZh, string actionEn)
@@ -3555,7 +3602,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         }
     }
 
-    private Task BindSelectedTaskAsync(CancellationToken cancellationToken = default)
+    private async Task BindSelectedTaskAsync(CancellationToken cancellationToken = default)
     {
         int expectedVersion;
         lock (_pendingBindingGate)
@@ -3563,7 +3610,15 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             expectedVersion = _pendingBindingVersion;
         }
 
-        return BindSelectedTaskCoreAsync(expectedVersion, cancellationToken);
+        IsSelectedTaskBindingPending = true;
+        try
+        {
+            await BindSelectedTaskCoreAsync(expectedVersion, cancellationToken);
+        }
+        finally
+        {
+            ClearSelectedTaskBindingPendingIfCurrent(expectedVersion);
+        }
     }
 
     private async Task BindSelectedTaskCoreAsync(int expectedVersion, CancellationToken cancellationToken = default)
@@ -3798,16 +3853,20 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
     private void ScheduleBindSelectedTask()
     {
+        int expectedVersion;
+        CancellationToken cancellationToken;
         lock (_pendingBindingGate)
         {
             _pendingBindingVersion++;
-            var expectedVersion = _pendingBindingVersion;
+            expectedVersion = _pendingBindingVersion;
 
             _pendingBindingCts?.Cancel();
             _pendingBindingCts?.Dispose();
             _pendingBindingCts = new CancellationTokenSource();
+            cancellationToken = _pendingBindingCts.Token;
 
-            _pendingBindingTask = ExecuteTrackedBindingAsync(expectedVersion, _pendingBindingCts.Token);
+            IsSelectedTaskBindingPending = true;
+            _pendingBindingTask = ExecuteTrackedBindingAsync(expectedVersion, cancellationToken);
         }
     }
 
@@ -3815,6 +3874,12 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     {
         try
         {
+            await Task.Delay(1, cancellationToken);
+            if (IsBindingStale(expectedVersion, cancellationToken))
+            {
+                return;
+            }
+
             await BindSelectedTaskCoreAsync(expectedVersion, cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -3828,6 +3893,18 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 ex,
                 UiErrorCode.TaskLoadFailed,
                 "Bind selected task failed.");
+        }
+        finally
+        {
+            ClearSelectedTaskBindingPendingIfCurrent(expectedVersion);
+        }
+    }
+
+    private void ClearSelectedTaskBindingPendingIfCurrent(int expectedVersion)
+    {
+        if (IsBindingVersionCurrent(expectedVersion))
+        {
+            IsSelectedTaskBindingPending = false;
         }
     }
 
@@ -6595,6 +6672,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             _pendingBindingCts = null;
             _pendingBindingTask = Task.CompletedTask;
         }
+
+        IsSelectedTaskBindingPending = false;
     }
 
     private void RememberSelectedTaskIndex()
