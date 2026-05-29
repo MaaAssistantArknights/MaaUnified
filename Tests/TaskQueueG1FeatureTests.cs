@@ -45,6 +45,8 @@ public sealed class TaskQueueG1FeatureTests
 
         Assert.Equal(expected.Length, vm.Tasks.Count);
         Assert.Equal(expected, vm.Tasks.Select(task => task.Type).ToArray());
+        Assert.Equal(vm.Tasks.Count, vm.TaskPanels.Count);
+        Assert.Equal(expected, vm.TaskPanels.Select(panel => panel.ModuleType).ToArray());
     }
 
     [Fact]
@@ -143,7 +145,7 @@ public sealed class TaskQueueG1FeatureTests
     }
 
     [Fact]
-    public async Task TaskQueuePage_SetLanguage_ShouldRebindCurrentlyOpenTaskSettings()
+    public async Task TaskQueuePage_SetLanguage_ShouldKeepPreloadedTaskSettingsStable()
     {
         await using var fixture = await TestFixture.CreateAsync(language: "zh-cn");
         Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.Reclamation, "reclamation")).Success);
@@ -162,7 +164,36 @@ public sealed class TaskQueueG1FeatureTests
         await vm.WaitForPendingBindingAsync();
 
         Assert.Equal("en-us", vm.Texts.Language);
+        Assert.Equal(1, vm.ReclamationModule.Mode);
+
+        await vm.ReloadTasksAsync();
         Assert.Equal(0, vm.ReclamationModule.Mode);
+    }
+
+    [Fact]
+    public async Task ReclamationModule_SaveArchiveMode_ShouldNormalizeHiddenClearStore()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.Reclamation, "reclamation")).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        vm.SelectedTask = Assert.Single(vm.Tasks);
+        await vm.WaitForPendingBindingAsync();
+
+        vm.ReclamationModule.Mode = 1;
+        vm.ReclamationModule.ClearStore = true;
+
+        Assert.True(await vm.ReclamationModule.SaveAsync(), vm.ReclamationModule.LastErrorMessage);
+
+        var parameters = (await fixture.TaskQueue.GetTaskParamsAsync(0)).Value!;
+        Assert.False(parameters["clear_store"]?.GetValue<bool>());
+
+        var validate = await fixture.TaskQueue.ValidateTaskAsync(0);
+        Assert.True(validate.Success, validate.Message);
+        Assert.DoesNotContain(
+            validate.Value!.Issues,
+            issue => issue.Code == "ReclamationClearStoreIgnoredInArchive");
     }
 
     [Fact]
@@ -262,9 +293,11 @@ public sealed class TaskQueueG1FeatureTests
         await vm.WaitForPendingBindingAsync();
 
         Assert.Same(vm.Tasks[1], vm.SelectedTask);
+        Assert.Same(vm.TaskPanels[1], vm.SelectedTaskPanel);
         Assert.False(vm.IsSelectedTaskBindingPending);
         Assert.True(vm.RecruitModule.IsTaskBound);
-        Assert.False(vm.FightModule.IsTaskBound);
+        Assert.True(vm.TaskPanels.All(panel => panel.Module.IsTaskBound));
+        Assert.Single(vm.TaskPanels.Where(panel => panel.IsSelected));
     }
 
     [HostRepoFact]
@@ -692,6 +725,8 @@ public sealed class TaskQueueG1FeatureTests
         vm.SelectedTask = vm.Tasks[1];
         await vm.WaitForPendingBindingAsync();
 
+        Assert.True(await vm.FlushConfigurationSavesForCloseAsync());
+
         var saved = await fixture.TaskQueue.GetTaskParamsAsync(0);
         Assert.True(saved.Success);
         Assert.Equal("dirty-account", saved.Value?["account_name"]?.GetValue<string>());
@@ -819,6 +854,24 @@ public sealed class TaskQueueG1FeatureTests
     }
 
     [Fact]
+    public async Task RoguelikeModule_RefreshGuiOptions_ShouldNotDirtyCleanModule()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.Roguelike, "rogue")).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        vm.SelectedTask = Assert.Single(vm.Tasks);
+        await vm.WaitForPendingBindingAsync();
+
+        Assert.False(vm.RoguelikeModule.IsDirty);
+
+        vm.RoguelikeModule.RefreshGuiDependentOptions();
+
+        Assert.False(vm.RoguelikeModule.IsDirty);
+    }
+
+    [Fact]
     public async Task TaskQueuePage_TaskEnabledToggle_ShouldPersistToService()
     {
         await using var fixture = await TestFixture.CreateAsync();
@@ -898,6 +951,8 @@ public sealed class TaskQueueG1FeatureTests
         vm.SelectedTask = vm.Tasks[1];
         vm.SelectedTask = vm.Tasks[0];
         await vm.WaitForPendingBindingAsync();
+
+        Assert.True(await vm.FlushConfigurationSavesForCloseAsync());
 
         var firstParams = await fixture.TaskQueue.GetTaskParamsAsync(0);
         Assert.True(firstParams.Success);

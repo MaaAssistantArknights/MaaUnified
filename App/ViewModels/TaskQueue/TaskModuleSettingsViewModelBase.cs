@@ -6,7 +6,7 @@ using MAAUnified.Application.Services;
 
 namespace MAAUnified.App.ViewModels.TaskQueue;
 
-public abstract class TaskModuleSettingsViewModelBase : ObservableObject
+public abstract class TaskModuleSettingsViewModelBase : ObservableObject, ITaskModulePanelViewModel
 {
     private readonly SemaphoreSlim _persistLock = new(1, 1);
     private CancellationTokenSource? _persistDebounceCts;

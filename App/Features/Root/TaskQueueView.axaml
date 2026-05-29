@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:controls="clr-namespace:MAAUnified.App.Controls"
              xmlns:taskViews="clr-namespace:MAAUnified.App.Features.TaskQueue"
+             xmlns:taskVm="clr-namespace:MAAUnified.App.ViewModels.TaskQueue"
              Classes="task-queue-page"
              x:Class="MAAUnified.App.Features.Root.TaskQueueView">
   <UserControl.Styles>
@@ -832,36 +833,48 @@
             </Border>
             <Grid x:Name="TaskSettingsHost"
                   IsEnabled="{Binding CanEdit}">
-              <Border IsVisible="{Binding IsStartUpTaskSelected}">
-                <taskViews:StartUpTaskView DataContext="{Binding StartUpModule}" />
-              </Border>
-              <Border IsVisible="{Binding IsFightTaskSelected}">
-                <taskViews:FightSettingsView DataContext="{Binding FightModule}" />
-              </Border>
-              <Border IsVisible="{Binding IsRecruitTaskSelected}">
-                <taskViews:RecruitSettingsView DataContext="{Binding RecruitModule}" />
-              </Border>
-              <Border IsVisible="{Binding IsInfrastTaskSelected}">
-                <taskViews:InfrastSettingsView DataContext="{Binding InfrastModule}" />
-              </Border>
-              <Border IsVisible="{Binding IsMallTaskSelected}">
-                <taskViews:MallSettingsView DataContext="{Binding MallModule}" />
-              </Border>
-              <Border IsVisible="{Binding IsAwardTaskSelected}">
-                <taskViews:AwardSettingsView DataContext="{Binding AwardModule}" />
-              </Border>
-              <Border IsVisible="{Binding IsRoguelikeTaskSelected}">
-                <taskViews:RoguelikeSettingsView DataContext="{Binding RoguelikeModule}" />
-              </Border>
-              <Border IsVisible="{Binding IsReclamationTaskSelected}">
-                <taskViews:ReclamationSettingsView DataContext="{Binding ReclamationModule}" />
-              </Border>
-              <Border IsVisible="{Binding IsUserDataUpdateTaskSelected}">
-                <taskViews:UserDataUpdateSettingsView DataContext="{Binding UserDataUpdateModule}" />
-              </Border>
-              <Border IsVisible="{Binding IsCustomTaskSelected}">
-                <taskViews:CustomSettingsView DataContext="{Binding CustomModule}" />
-              </Border>
+              <ItemsControl ItemsSource="{Binding TaskPanels}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <Border IsVisible="{Binding IsSelected}">
+                      <ContentControl Content="{Binding ModuleViewModel}">
+                        <ContentControl.DataTemplates>
+                          <DataTemplate DataType="taskVm:StartUpTaskModuleViewModel">
+                            <taskViews:StartUpTaskView />
+                          </DataTemplate>
+                          <DataTemplate DataType="taskVm:FightTaskModuleViewModel">
+                            <taskViews:FightSettingsView />
+                          </DataTemplate>
+                          <DataTemplate DataType="taskVm:RecruitTaskModuleViewModel">
+                            <taskViews:RecruitSettingsView />
+                          </DataTemplate>
+                          <DataTemplate DataType="taskVm:InfrastModuleViewModel">
+                            <taskViews:InfrastSettingsView />
+                          </DataTemplate>
+                          <DataTemplate DataType="taskVm:MallModuleViewModel">
+                            <taskViews:MallSettingsView />
+                          </DataTemplate>
+                          <DataTemplate DataType="taskVm:AwardModuleViewModel">
+                            <taskViews:AwardSettingsView />
+                          </DataTemplate>
+                          <DataTemplate DataType="taskVm:RoguelikeModuleViewModel">
+                            <taskViews:RoguelikeSettingsView />
+                          </DataTemplate>
+                          <DataTemplate DataType="taskVm:ReclamationModuleViewModel">
+                            <taskViews:ReclamationSettingsView />
+                          </DataTemplate>
+                          <DataTemplate DataType="taskVm:UserDataUpdateModuleViewModel">
+                            <taskViews:UserDataUpdateSettingsView />
+                          </DataTemplate>
+                          <DataTemplate DataType="taskVm:CustomModuleViewModel">
+                            <taskViews:CustomSettingsView />
+                          </DataTemplate>
+                        </ContentControl.DataTemplates>
+                      </ContentControl>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
               <Border IsVisible="{Binding ShowPostActionSettingsPanel}">
                 <taskViews:PostActionSettingsView DataContext="{Binding PostActionModule}" />
               </Border>

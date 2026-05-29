@@ -96,11 +96,17 @@ public sealed class UnifiedConfigurationService
                 {
                     CurrentConfig = loaded;
                     var normalizedFightStageCount = NormalizeFightStageSelections(CurrentConfig);
+                    var normalizedTaskParamCount = NormalizeTaskQueueParams(CurrentConfig);
                     var repairedAchievementPopupAutoCloseCount = RepairAchievementPopupAutoCloseDefault(CurrentConfig);
                     if (normalizedFightStageCount > 0)
                     {
                         LogService.Info(
                             $"Normalized {normalizedFightStageCount} legacy Fight stage selector(s) to `{FightStageSelection.CurrentOrLast}`.");
+                    }
+
+                    if (normalizedTaskParamCount > 0)
+                    {
+                        LogService.Info($"Normalized {normalizedTaskParamCount} task parameter set(s).");
                     }
 
                     if (repairedAchievementPopupAutoCloseCount > 0)
@@ -109,7 +115,7 @@ public sealed class UnifiedConfigurationService
                             $"Repaired {repairedAchievementPopupAutoCloseCount} achievement popup auto-close setting(s) to True.");
                     }
 
-                    if ((normalizedFightStageCount > 0 || repairedAchievementPopupAutoCloseCount > 0)
+                    if ((normalizedFightStageCount > 0 || normalizedTaskParamCount > 0 || repairedAchievementPopupAutoCloseCount > 0)
                         && CurrentConfig.SchemaVersion == UnifiedConfig.LatestSchemaVersion)
                     {
                         try
@@ -445,6 +451,12 @@ public sealed class UnifiedConfigurationService
             }
 
             config.SchemaVersion = UnifiedConfig.LatestSchemaVersion;
+            var normalizedTaskParamCount = NormalizeTaskQueueParams(config);
+            if (normalizedTaskParamCount > 0)
+            {
+                LogService.Info($"Normalized {normalizedTaskParamCount} task parameter set(s) before saving config/avalonia.json");
+            }
+
             await _store.SaveAsync(config, cancellationToken);
             CurrentConfig = config;
             var issues = RefreshValidationState(validationMode, logIssues: true);
@@ -630,6 +642,36 @@ public sealed class UnifiedConfigurationService
         }
 
         return false;
+    }
+
+    private static int NormalizeTaskQueueParams(UnifiedConfig config)
+    {
+        var normalizedCount = 0;
+        foreach (var profile in config.Profiles.Values)
+        {
+            foreach (var task in profile.TaskQueue)
+            {
+                var compiled = TaskParamCompiler.CompileTask(task, profile, config, strict: true);
+                if (compiled.HasBlockingIssues)
+                {
+                    continue;
+                }
+
+                var normalizedParams = compiled.Params.DeepClone() as JsonObject ?? new JsonObject();
+                var typeChanged = !string.Equals(task.Type, compiled.NormalizedType, StringComparison.Ordinal);
+                var paramsChanged = !JsonNode.DeepEquals(task.Params, normalizedParams);
+                if (!typeChanged && !paramsChanged)
+                {
+                    continue;
+                }
+
+                task.Type = compiled.NormalizedType;
+                task.Params = normalizedParams;
+                normalizedCount += 1;
+            }
+        }
+
+        return normalizedCount;
     }
 
     private static int NormalizeFightStageSelections(UnifiedConfig config)

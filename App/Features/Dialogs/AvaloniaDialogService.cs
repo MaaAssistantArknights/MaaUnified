@@ -313,6 +313,17 @@ public sealed class AvaloniaDialogService : IAppDialogService
             }
 
             cancellationToken.ThrowIfCancellationRequested();
+            if (owner.WindowState == WindowState.Minimized)
+            {
+                owner.WindowState = WindowState.Normal;
+            }
+
+            if (!owner.IsVisible)
+            {
+                owner.Show();
+            }
+
+            owner.Activate();
             dialog.Topmost = ResolveTopmost(dialog, owner);
             DialogWindowScaling.ApplyOwnerUiScale(dialog, owner);
             BeginOwnerModalPresentation();

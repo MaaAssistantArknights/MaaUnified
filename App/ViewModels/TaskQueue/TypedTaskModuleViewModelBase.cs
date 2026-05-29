@@ -11,7 +11,7 @@ using MAAUnified.Application.Services.TaskParams;
 
 namespace MAAUnified.App.ViewModels.TaskQueue;
 
-public abstract class TypedTaskModuleViewModelBase<TDto> : ObservableObject
+public abstract class TypedTaskModuleViewModelBase<TDto> : ObservableObject, ITaskModulePanelViewModel
     where TDto : class, new()
 {
     private bool _isAdvancedMode;
@@ -150,6 +150,11 @@ public abstract class TypedTaskModuleViewModelBase<TDto> : ObservableObject
         }
 
         return SaveAsync(cancellationToken);
+    }
+
+    public Task<bool> FlushPendingChangesAsync(CancellationToken cancellationToken = default)
+    {
+        return SaveIfDirtyAsync(cancellationToken);
     }
 
     public async Task<bool> SaveAsync(CancellationToken cancellationToken = default)
