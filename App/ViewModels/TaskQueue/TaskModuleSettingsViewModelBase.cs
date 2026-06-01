@@ -96,6 +96,14 @@ public abstract class TaskModuleSettingsViewModelBase : ObservableObject, ITaskM
         IsTaskBound = false;
     }
 
+    public void RebindTaskIndex(int taskIndex)
+    {
+        if (_boundTaskIndex >= 0)
+        {
+            _boundTaskIndex = taskIndex;
+        }
+    }
+
     public async Task<bool> FlushPendingChangesAsync(CancellationToken cancellationToken = default)
     {
         _persistDebounceCts?.Cancel();

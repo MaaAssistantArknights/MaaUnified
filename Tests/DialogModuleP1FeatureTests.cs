@@ -721,6 +721,20 @@ public sealed class DialogModuleP1FeatureTests
     }
 
     [Fact]
+    public void AnnouncementDialogView_TryNormalizeMarkdownInlineLayout_ShouldWaitUntilMarkdownTreeExists()
+    {
+        var root = new Border();
+
+        Assert.False(AnnouncementDialogView.TryNormalizeMarkdownInlineLayout(root));
+
+        var textBlock = new TextBlock();
+        textBlock.Inlines!.Add(new Run("公告"));
+        root.Child = textBlock;
+
+        Assert.True(AnnouncementDialogView.TryNormalizeMarkdownInlineLayout(root));
+    }
+
+    [Fact]
     public void AchievementListRequestSnapshots_ShouldKeepExistingItemsAndPayload_WhenLanguageChanges()
     {
         var firstRequest = CreateAchievementListRequest("zh-cn");

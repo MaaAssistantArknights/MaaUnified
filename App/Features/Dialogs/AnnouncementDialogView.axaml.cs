@@ -457,37 +457,59 @@ public partial class AnnouncementDialogView : Window, IDialogChromeAware
             MarkdownText = markdownText,
         };
         viewer.Classes.Add("announcement-dialog-markdown-viewer");
-        viewer.AttachedToVisualTree += static (sender, _) =>
+        void NormalizeAndStopWhenReady(Control control)
+        {
+            if (!TryNormalizeMarkdownInlineLayout(control))
+            {
+                return;
+            }
+
+            viewer.LayoutUpdated -= OnViewerLayoutUpdated;
+        }
+
+        viewer.AttachedToVisualTree += (sender, _) =>
         {
             if (sender is Control control)
             {
-                NormalizeMarkdownInlineLayout(control);
+                NormalizeAndStopWhenReady(control);
             }
         };
-        viewer.LayoutUpdated += static (sender, _) =>
-        {
-            if (sender is Control control)
-            {
-                NormalizeMarkdownInlineLayout(control);
-            }
-        };
+        viewer.LayoutUpdated += OnViewerLayoutUpdated;
         return viewer;
+
+        void OnViewerLayoutUpdated(object? sender, EventArgs e)
+        {
+            if (sender is Control control)
+            {
+                NormalizeAndStopWhenReady(control);
+            }
+        }
     }
 
     internal static void NormalizeMarkdownInlineLayout(Control root)
     {
+        _ = TryNormalizeMarkdownInlineLayout(root);
+    }
+
+    internal static bool TryNormalizeMarkdownInlineLayout(Control root)
+    {
+        var foundMarkdownContent = false;
         foreach (var control in EnumerateLogicalControls(root))
         {
             switch (control)
             {
                 case TextBlock textBlock:
+                    foundMarkdownContent = true;
                     NormalizeMarkdownTextBlock(textBlock);
                     break;
                 case Button button:
+                    foundMarkdownContent = true;
                     NormalizeMarkdownLinkButton(button);
                     break;
             }
         }
+
+        return foundMarkdownContent;
     }
 
     private static void NormalizeMarkdownTextBlock(TextBlock textBlock)

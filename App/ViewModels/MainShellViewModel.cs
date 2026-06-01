@@ -232,19 +232,21 @@ public sealed class MainShellViewModel : ObservableObject
         var failedNames = new List<string>();
         if (!await TaskQueuePage.FlushConfigurationSavesForCloseAsync(cancellationToken))
         {
-            failedNames.AddRange(ConfigurationSaveTracker.Instance.FailedDisplayNames);
+            failedNames.AddRange(ConfigurationSaveTracker.Instance.GetFailedDisplayNames(_runtime.DiagnosticsService));
         }
 
         if (TryGetSettingsPage(out var settingsPage))
         {
             if (!await settingsPage.FlushConfigurationSavesForCloseAsync(cancellationToken))
             {
-                failedNames.AddRange(ConfigurationSaveTracker.Instance.FailedDisplayNames);
+                failedNames.AddRange(ConfigurationSaveTracker.Instance.GetFailedDisplayNames(_runtime.DiagnosticsService));
             }
         }
 
-        failedNames.AddRange(await ConfigurationSaveTracker.Instance.RetryPendingOrFailedAsync(cancellationToken: cancellationToken));
-        failedNames.AddRange(ConfigurationSaveTracker.Instance.FailedDisplayNames);
+        failedNames.AddRange(await ConfigurationSaveTracker.Instance.RetryPendingOrFailedAsync(
+            cancellationToken: cancellationToken,
+            diagnosticsService: _runtime.DiagnosticsService));
+        failedNames.AddRange(ConfigurationSaveTracker.Instance.GetFailedDisplayNames(_runtime.DiagnosticsService));
         return failedNames
             .Where(static name => !string.IsNullOrWhiteSpace(name))
             .Distinct(StringComparer.Ordinal)

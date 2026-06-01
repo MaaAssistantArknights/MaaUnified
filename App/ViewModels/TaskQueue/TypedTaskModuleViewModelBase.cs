@@ -142,6 +142,14 @@ public abstract class TypedTaskModuleViewModelBase<TDto> : ObservableObject, ITa
         OnPropertyChanged(nameof(HasValidationIssues));
     }
 
+    public void RebindTaskIndex(int taskIndex)
+    {
+        if (_boundTaskIndex >= 0)
+        {
+            _boundTaskIndex = taskIndex;
+        }
+    }
+
     public Task<bool> SaveIfDirtyAsync(CancellationToken cancellationToken = default)
     {
         if (!IsTaskBound || !IsDirty)

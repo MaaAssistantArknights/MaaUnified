@@ -165,6 +165,15 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             ],
         };
 
+    private static readonly IReadOnlyDictionary<string, string[]> LegacyLocalizedTaskTitleKeys =
+        new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
+        {
+            [TaskModuleTypes.Fight] =
+            [
+                "RemainingSanityStage",
+            ],
+        };
+
     private const int MaxLogCards = 180;
     private const int MaxOverlayLogs = 200;
     private const string UiMallCreditFightLastTime = "_ui_mall_credit_fight_last_time";
@@ -1305,6 +1314,11 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             return moduleDisplay;
         }
 
+        if (TryResolveLegacyLocalizedTaskTitle(name, item.Type, out var localizedTitle))
+        {
+            return localizedTitle;
+        }
+
         if (IsDefaultTaskName(name, item.Type, moduleDisplay))
         {
             return moduleDisplay;
@@ -1324,6 +1338,48 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
         return LegacyTaskNameAliases.TryGetValue(normalizedModuleType, out var aliases)
                && aliases.Any(alias => string.Equals(name, alias, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private bool TryResolveLegacyLocalizedTaskTitle(string name, string moduleType, out string localizedTitle)
+    {
+        localizedTitle = string.Empty;
+        var normalizedModuleType = TaskModuleTypes.Normalize(moduleType);
+        if (!LegacyLocalizedTaskTitleKeys.TryGetValue(normalizedModuleType, out var keys))
+        {
+            return false;
+        }
+
+        foreach (var key in keys)
+        {
+            if (!IsLegacyLocalizedTaskTitleAlias(name, key))
+            {
+                continue;
+            }
+
+            localizedTitle = AchievementTextCatalog.GetString(key, Texts.Language, name);
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool IsLegacyLocalizedTaskTitleAlias(string name, string key)
+    {
+        foreach (var language in UiLanguageCatalog.Ordered)
+        {
+            if (string.Equals(language, "pallas", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var alias = AchievementTextCatalog.GetString(key, language, key);
+            if (string.Equals(name, alias, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private void OnPostActionModulePropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -1948,12 +2004,61 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             return;
         }
 
-        await ExecuteQueueMutationAsync(
-            "TaskQueue.MoveTask",
-            ct => Runtime.TaskQueueFeatureService.MoveTaskAsync(from, to, ct),
-            ct => SelectTaskByIndexAsync(to, ct),
-            resetBindingsBeforeReload: true,
-            cancellationToken);
+        if (!await EnsureEditableAsync("TaskQueue.MoveTask", cancellationToken))
+        {
+            return;
+        }
+
+        await _queueMutationLock.WaitAsync(cancellationToken);
+        try
+        {
+            await WaitForPendingBindingAsync(cancellationToken);
+            if (!await SaveBoundTaskModulesAsync(cancellationToken))
+            {
+                return;
+            }
+
+            var result = await Runtime.TaskQueueFeatureService.MoveTaskAsync(from, to, cancellationToken);
+            if (!await ApplyResultAsync(result, "TaskQueue.MoveTask", cancellationToken))
+            {
+                return;
+            }
+
+            ApplyLocalTaskMove(from, to);
+            RegisterTaskQueueSavePending();
+
+            if (SelectedTaskPanel is not null)
+            {
+                await RefreshTaskPanelValidationSummaryAsync(SelectedTaskPanel, cancellationToken);
+            }
+        }
+        finally
+        {
+            _queueMutationLock.Release();
+        }
+    }
+
+    private void ApplyLocalTaskMove(int from, int to)
+    {
+        if (from < 0 || to < 0 || from >= Tasks.Count || to >= Tasks.Count || from == to)
+        {
+            return;
+        }
+
+        Tasks.Move(from, to);
+
+        if (from < TaskPanels.Count && to < TaskPanels.Count)
+        {
+            TaskPanels.Move(from, to);
+            for (var index = 0; index < TaskPanels.Count; index++)
+            {
+                TaskPanels[index].RebindTaskIndex(index);
+            }
+        }
+
+        RememberSelectedTaskIndex();
+        UpdateSelectedTaskPanel();
+        RaiseSelectedTaskProjectionChanged();
     }
 
     public async Task SelectAllAsync(bool enabled, CancellationToken cancellationToken = default)
@@ -3940,7 +4045,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
                 var failedNames = await ConfigurationSaveTracker.Instance.RetryPendingOrFailedAsync(
                     static key => key.StartsWith("TaskQueue.", StringComparison.Ordinal),
-                    cancellationToken);
+                    cancellationToken,
+                    Runtime.DiagnosticsService);
                 return failedNames.Count == 0;
             }
 

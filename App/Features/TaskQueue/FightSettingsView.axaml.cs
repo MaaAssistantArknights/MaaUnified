@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using MAAUnified.App.Controls;
 using MAAUnified.App.ViewModels.TaskQueue;
 
 namespace MAAUnified.App.Features.TaskQueue;
@@ -26,19 +27,8 @@ public partial class FightSettingsView : UserControl
         }
     }
 
-    private void OnMoveStagePlanEntryUpClick(object? sender, RoutedEventArgs e)
+    private void OnStagePlanItemReorderRequested(object? sender, AppSelectionListItemReorderEventArgs e)
     {
-        if (sender is Button { Tag: FightTaskModuleViewModel.StagePlanEntry entry })
-        {
-            ViewModel?.MoveStagePlanEntryUp(entry);
-        }
-    }
-
-    private void OnMoveStagePlanEntryDownClick(object? sender, RoutedEventArgs e)
-    {
-        if (sender is Button { Tag: FightTaskModuleViewModel.StagePlanEntry entry })
-        {
-            ViewModel?.MoveStagePlanEntryDown(entry);
-        }
+        ViewModel?.MoveStagePlanEntry(e.SourceIndex, e.TargetIndex);
     }
 }

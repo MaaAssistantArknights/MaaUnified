@@ -71,13 +71,16 @@ public sealed class RootViewStructureContractTests
         Assert.Contains("Text=\"{Binding TaskConfigTitleText}\"", text, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"TaskSettingsHost\"", text, StringComparison.Ordinal);
         Assert.Contains("IsEnabled=\"{Binding CanEdit}\"", text, StringComparison.Ordinal);
-        Assert.Contains("ItemsSource=\"{Binding TaskPanels}\"", text, StringComparison.Ordinal);
-        Assert.Contains("Content=\"{Binding ModuleViewModel}\"", text, StringComparison.Ordinal);
+        Assert.Contains("Content=\"{Binding SelectedTaskSettingsViewModel}\"", text, StringComparison.Ordinal);
         Assert.Contains("DataType=\"taskVm:StartUpTaskModuleViewModel\"", text, StringComparison.Ordinal);
         Assert.Contains("DataType=\"taskVm:FightTaskModuleViewModel\"", text, StringComparison.Ordinal);
         Assert.Contains("DataType=\"taskVm:InfrastModuleViewModel\"", text, StringComparison.Ordinal);
-        Assert.Contains("IsVisible=\"{Binding IsSelected}\"", text, StringComparison.Ordinal);
-        Assert.Contains("IsVisible=\"{Binding ShowPostActionSettingsPanel}\"", text, StringComparison.Ordinal);
+        Assert.Contains("DataType=\"taskVm:PostActionModuleViewModel\"", text, StringComparison.Ordinal);
+        Assert.Contains("<taskViews:PostActionSettingsView />", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("ItemsSource=\"{Binding TaskPanels}\"", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Content=\"{Binding ModuleViewModel}\"", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("IsVisible=\"{Binding IsSelected}\"", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("IsVisible=\"{Binding ShowPostActionSettingsPanel}\"", text, StringComparison.Ordinal);
         Assert.DoesNotContain("TaskSettingsHost.Content =", codeBehind, StringComparison.Ordinal);
         Assert.DoesNotContain("GetOrCreateTaskSettingsView", codeBehind, StringComparison.Ordinal);
         Assert.Contains("IsEnabled=\"{Binding CanToggleRun}\"", text, StringComparison.Ordinal);
@@ -251,6 +254,40 @@ public sealed class RootViewStructureContractTests
         Assert.Contains("CanReorderItems=\"True\"", text, StringComparison.Ordinal);
         Assert.Contains("Classes=\"app-selection-list-item-shell\"", text, StringComparison.Ordinal);
         Assert.DoesNotContain("<ListBox Classes=\"infrast-facility-list\"", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void FightSettingsView_ShouldUseSharedSelectionListForStagePlan()
+    {
+        var root = GetMaaUnifiedRoot();
+        var text = File.ReadAllText(Path.Combine(root, "App", "Features", "TaskQueue", "FightSettingsView.axaml"));
+        var codeBehind = File.ReadAllText(Path.Combine(root, "App", "Features", "TaskQueue", "FightSettingsView.axaml.cs"));
+
+        Assert.Contains("IsVisible=\"{Binding ShowStagePlanSelector}\"", text, StringComparison.Ordinal);
+        Assert.Contains("IsVisible=\"{Binding ShowStagePlanList}\"", text, StringComparison.Ordinal);
+        Assert.Contains("SelectedValueBinding=\"{Binding Value}\"", text, StringComparison.Ordinal);
+        Assert.Contains("SelectedItem=\"{Binding SelectedStageOption, Mode=OneWay}\"", text, StringComparison.Ordinal);
+        Assert.Contains("SelectedValue=\"{Binding SelectedStageValue, Mode=TwoWay}\"", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("SelectedItem=\"{Binding SelectedStageOption, Mode=TwoWay}\"", text, StringComparison.Ordinal);
+        Assert.Contains("FieldWidth=\"{DynamicResource MAA.Size.Settings.FieldCenteredWidth}\"", text, StringComparison.Ordinal);
+        Assert.Contains("FieldWidth=\"222\"", text, StringComparison.Ordinal);
+        Assert.Contains("<controls:AppSelectionList x:Name=\"StagePlanSelectionList\"", text, StringComparison.Ordinal);
+        Assert.Contains("ItemsSource=\"{Binding StagePlan}\"", text, StringComparison.Ordinal);
+        Assert.Contains("CanReorderItems=\"{Binding UseAlternateStage}\"", text, StringComparison.Ordinal);
+        Assert.Contains("CanReorderFromComboBox=\"True\"", text, StringComparison.Ordinal);
+        Assert.Contains("ItemReorderRequested=\"OnStagePlanItemReorderRequested\"", text, StringComparison.Ordinal);
+        Assert.Contains("<controls:AppSelectionList.ReorderDragPreviewContentTemplate>", text, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"grouped-card-frame compact stage-plan-frame\"", text, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"app-compact-selection-list stage-plan-selection-list selection-list-section-cards selection-list-no-indicator\"", text, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"fight-settings-stage-field stage-plan-embedded-select\"", text, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"app-selection-list-item-shell\"", text, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"settings-dropdown-delete-button stage-plan-delete-button\"", text, StringComparison.Ordinal);
+        Assert.Contains("Click=\"OnAddStagePlanEntryClick\"", text, StringComparison.Ordinal);
+        Assert.Contains("MoveStagePlanEntry(e.SourceIndex, e.TargetIndex)", codeBehind, StringComparison.Ordinal);
+        Assert.DoesNotContain("OnMoveStagePlanEntryUpClick", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("OnMoveStagePlanEntryDownClick", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("OnMoveStagePlanEntryUpClick", codeBehind, StringComparison.Ordinal);
+        Assert.DoesNotContain("OnMoveStagePlanEntryDownClick", codeBehind, StringComparison.Ordinal);
     }
 
     [Fact]

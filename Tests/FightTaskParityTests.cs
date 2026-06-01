@@ -1,10 +1,12 @@
 using System.Text.Json.Nodes;
 using System.Threading.Channels;
+using Avalonia.Threading;
 using MAAUnified.App.ViewModels.TaskQueue;
 using MAAUnified.Application.Configuration;
 using MAAUnified.Application.Models.TaskParams;
 using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Features;
+using MAAUnified.Application.Services.Localization;
 using MAAUnified.Application.Services.TaskParams;
 using MAAUnified.Application.Orchestration;
 using MAAUnified.Compat.Constants;
@@ -173,6 +175,7 @@ public sealed class FightTaskParityTests
 
         var values = module.StageOptions.Select(option => option.Value).ToArray();
 
+        Assert.Equal(FightStageSelection.CurrentOrLast, values[0]);
         Assert.Contains(FightStageSelection.CurrentOrLast, values);
         Assert.Contains("1-7", values);
         Assert.Contains("Annihilation", values);
@@ -182,7 +185,85 @@ public sealed class FightTaskParityTests
     }
 
     [Fact]
-    public async Task FightModule_ClosedStageOptions_ShouldBeSelectableWhenVisibleAndHiddenWhenRequested()
+    public async Task FightModule_StageOptions_ShouldUseWpfLocalizedPermanentStageDisplay()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var module = new FightTaskModuleViewModel(fixture.Runtime, new LocalizedTextMap { Language = "zh-cn" });
+        module.HideUnavailableStage = false;
+
+        var ce = Assert.Single(
+            module.StageOptions,
+            option => string.Equals(option.Value, "CE-6", StringComparison.OrdinalIgnoreCase));
+        var chip = Assert.Single(
+            module.StageOptions,
+            option => string.Equals(option.Value, "PR-A-1", StringComparison.OrdinalIgnoreCase));
+
+        Assert.Equal(AchievementTextCatalog.GetString("CE-6", "zh-cn", "CE-6"), ce.DisplayName);
+        Assert.Equal(AchievementTextCatalog.GetString("PR-A-1", "zh-cn", "PR-A-1"), chip.DisplayName);
+    }
+
+    [Fact]
+    public async Task FightModule_StageOptions_ShouldNotIncludeBulkStageManagerResourceStages()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Directory.CreateDirectory(Path.Combine(fixture.Root, "resource"));
+        await File.WriteAllTextAsync(
+            Path.Combine(fixture.Root, "resource", "stages.json"),
+            """
+            [
+              { "code": "ACT-TEST-1" }
+            ]
+            """);
+
+        var module = new FightTaskModuleViewModel(fixture.Runtime, new LocalizedTextMap { Language = "en-us" });
+        module.HideUnavailableStage = false;
+        module.RefreshStageOptions(forceReload: true);
+
+        var values = module.StageOptions.Select(option => option.Value).ToArray();
+        Assert.DoesNotContain("ACT-TEST-1", values);
+        Assert.Contains("1-7", values);
+    }
+
+    [Fact]
+    public async Task FightModule_StageOptions_ShouldIncludeActiveTaskStageFallbacks()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Directory.CreateDirectory(Path.Combine(fixture.Root, "resource", "tasks", "Stages"));
+        await File.WriteAllTextAsync(
+            Path.Combine(fixture.Root, "resource", "stages.json"),
+            """
+            [
+              { "code": "MT-4", "stageId": "act42side_04_rep" },
+              { "code": "MT-10", "stageId": "act42side_10_rep" },
+              { "code": "GT-5", "stageId": "act4d0_05_perm" }
+            ]
+            """);
+        await File.WriteAllTextAsync(
+            Path.Combine(fixture.Root, "resource", "tasks", "Stages", "MT.json"),
+            """
+            {
+              "MT-10": { "algorithm": "JustReturn" },
+              "MT-4": { "algorithm": "JustReturn" },
+              "MT-OpenOpt": { "algorithm": "JustReturn" },
+              "MT-10@SideStoryStage": { "text": ["MT-10"] }
+            }
+            """);
+
+        var module = new FightTaskModuleViewModel(fixture.Runtime, new LocalizedTextMap { Language = "en-us" });
+        module.HideUnavailableStage = false;
+        module.RefreshStageOptions(forceReload: true);
+
+        var values = module.StageOptions.Select(option => option.Value).ToArray();
+        Assert.Contains("MT-10", values);
+        Assert.Contains("MT-4", values);
+        Assert.DoesNotContain("MT-OpenOpt", values);
+        Assert.DoesNotContain("GT-5", values);
+        Assert.True(Array.IndexOf(values, "MT-10") < Array.IndexOf(values, "1-7"));
+        Assert.True(Array.IndexOf(values, "MT-10") < Array.IndexOf(values, "MT-4"));
+    }
+
+    [Fact]
+    public async Task FightModule_ClosedStageOptions_ShouldKeepSelectedStageVisibleWhenUnavailableStagesAreHidden()
     {
         await using var fixture = await TestFixture.CreateAsync();
         var module = new FightTaskModuleViewModel(fixture.Runtime, new LocalizedTextMap { Language = "en-us" });
@@ -204,9 +285,195 @@ public sealed class FightTaskParityTests
 
         module.HideUnavailableStage = true;
 
-        Assert.DoesNotContain(
+        Assert.Contains(
             module.StageOptions,
             option => string.Equals(option.Value, closedStage, StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task FightModule_MoveStagePlanEntry_ReordersAndSyncsPrimaryStage()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var module = new FightTaskModuleViewModel(fixture.Runtime, new LocalizedTextMap { Language = "en-us" });
+
+        module.Stage = "LS-6";
+        module.AddStagePlanEntry();
+        module.StagePlan[1].Stage = "CE-6";
+        module.AddStagePlanEntry();
+        module.StagePlan[2].Stage = "AP-5";
+
+        module.MoveStagePlanEntry(1, 0);
+
+        Assert.Equal(["CE-6", "LS-6", "AP-5"], module.StagePlan.Select(entry => entry.Stage).ToArray());
+        Assert.Equal("CE-6", module.Stage);
+
+        var reordered = module.StagePlan.Select(entry => entry.Stage).ToArray();
+        module.MoveStagePlanEntry(-1, 0);
+        module.MoveStagePlanEntry(0, -1);
+        module.MoveStagePlanEntry(module.StagePlan.Count, 0);
+        module.MoveStagePlanEntry(0, module.StagePlan.Count);
+        module.MoveStagePlanEntry(0, 0);
+
+        Assert.Equal(reordered, module.StagePlan.Select(entry => entry.Stage).ToArray());
+        Assert.Equal("CE-6", module.Stage);
+    }
+
+    [Fact]
+    public async Task FightModule_SelectedStageValue_ShouldUpdateSelectionAndRestoreAfterTransientEmpty()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var module = new FightTaskModuleViewModel(fixture.Runtime, new LocalizedTextMap { Language = "en-us" });
+        module.HideUnavailableStage = false;
+        var moduleChanges = new List<string>();
+        module.PropertyChanged += (_, e) => moduleChanges.Add(e.PropertyName ?? string.Empty);
+
+        module.SelectedStageValue = "LS-6";
+
+        Assert.Equal("LS-6", module.Stage);
+        Assert.Equal("LS-6", module.SelectedStageOption?.Value);
+
+        module.SelectedStageValue = null!;
+        Dispatcher.UIThread.RunJobs(null);
+
+        Assert.Equal("LS-6", module.Stage);
+        Assert.Contains(nameof(FightTaskModuleViewModel.SelectedStageValue), moduleChanges);
+
+        moduleChanges.Clear();
+        module.SelectedStageValue = string.Empty;
+        Dispatcher.UIThread.RunJobs(null);
+
+        Assert.Equal("LS-6", module.Stage);
+        Assert.Contains(nameof(FightTaskModuleViewModel.SelectedStageValue), moduleChanges);
+
+        module.UseAlternateStage = true;
+        module.AddStagePlanEntry();
+        module.StagePlan[1].SelectedStageValue = "CE-6";
+        var entryChanges = new List<string>();
+        module.StagePlan[1].PropertyChanged += (_, e) => entryChanges.Add(e.PropertyName ?? string.Empty);
+
+        Assert.Equal("CE-6", module.StagePlan[1].Stage);
+        Assert.Equal("CE-6", module.StagePlan[1].SelectedStageOption?.Value);
+
+        module.StagePlan[1].SelectedStageValue = null!;
+        Dispatcher.UIThread.RunJobs(null);
+
+        Assert.Equal("CE-6", module.StagePlan[1].Stage);
+        Assert.Contains(nameof(FightTaskModuleViewModel.StagePlanEntry.SelectedStageValue), entryChanges);
+
+        entryChanges.Clear();
+        module.StagePlan[1].SelectedStageValue = string.Empty;
+        Dispatcher.UIThread.RunJobs(null);
+
+        Assert.Equal("CE-6", module.StagePlan[1].Stage);
+        Assert.Contains(nameof(FightTaskModuleViewModel.StagePlanEntry.SelectedStageValue), entryChanges);
+    }
+
+    [Fact]
+    public async Task FightModule_AddStagePlanEntry_ShouldRefreshSelectedStageOptions()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var module = new FightTaskModuleViewModel(fixture.Runtime, new LocalizedTextMap { Language = "en-us" });
+        module.HideUnavailableStage = false;
+        module.UseAlternateStage = true;
+        module.Stage = "LS-6";
+        module.AddStagePlanEntry();
+        module.StagePlan[1].Stage = "CE-6";
+        module.AddStagePlanEntry();
+        module.StagePlan[2].Stage = "CA-5";
+
+        module.AddStagePlanEntry();
+
+        Assert.Equal(["LS-6", "CE-6", "CA-5", FightStageSelection.CurrentOrLast], module.StagePlan.Select(entry => entry.Stage).ToArray());
+        Assert.Equal("LS-6", module.StagePlan[0].SelectedStageOption?.Value);
+        Assert.Equal("CE-6", module.StagePlan[1].SelectedStageOption?.Value);
+        Assert.Equal("CA-5", module.StagePlan[2].SelectedStageOption?.Value);
+        Assert.Equal(FightStageSelection.CurrentOrLast, module.StagePlan[3].SelectedStageOption?.Value);
+        Assert.False(string.IsNullOrWhiteSpace(module.StagePlan[0].PreviewStageText));
+        Assert.False(string.IsNullOrWhiteSpace(module.StagePlan[1].PreviewStageText));
+        Assert.False(string.IsNullOrWhiteSpace(module.StagePlan[2].PreviewStageText));
+        Assert.False(string.IsNullOrWhiteSpace(module.StagePlan[3].PreviewStageText));
+
+        var options = module.StageOptions;
+        var entryChanges = new List<string>();
+        module.StagePlan[1].PropertyChanged += (_, e) => entryChanges.Add(e.PropertyName ?? string.Empty);
+        module.StagePlan[1].SelectedStageOption = null;
+
+        Assert.Equal("CE-6", module.StagePlan[1].Stage);
+        Assert.Contains(nameof(FightTaskModuleViewModel.StagePlanEntry.SelectedStageOption), entryChanges);
+
+        entryChanges.Clear();
+        module.StagePlan[1].SelectedStageValue = "CA-5";
+
+        Assert.Equal("CA-5", module.StagePlan[1].Stage);
+        Assert.Same(options, module.StageOptions);
+        Assert.Contains(nameof(FightTaskModuleViewModel.StagePlanEntry.SelectedStageValue), entryChanges);
+    }
+
+    [Fact]
+    public async Task FightModule_StagePlanSelections_ShouldRecoverAfterStartupOptionRefresh()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var module = new FightTaskModuleViewModel(fixture.Runtime, new LocalizedTextMap { Language = "en-us" });
+        module.HideUnavailableStage = false;
+        module.UseAlternateStage = true;
+        module.Stage = "MT-8";
+        module.AddStagePlanEntry();
+        module.StagePlan[1].Stage = "MT-9";
+        module.AddStagePlanEntry();
+        module.StagePlan[2].Stage = "CA-5";
+        var stageOptions = module.StageOptions;
+        var selectedOptions = module.StagePlan
+            .Select(entry => entry.SelectedStageOption)
+            .Where(option => option is not null)
+            .ToArray();
+
+        module.RefreshStageOptions(forceReload: true);
+        foreach (var entry in module.StagePlan)
+        {
+            entry.SelectedStageValue = null!;
+        }
+
+        Dispatcher.UIThread.RunJobs(null);
+
+        Assert.Equal(["MT-8", "MT-9", "CA-5"], module.StagePlan.Select(entry => entry.Stage).ToArray());
+        Assert.Same(stageOptions, module.StageOptions);
+        Assert.All(selectedOptions, option => Assert.Contains(module.StageOptions, candidate => ReferenceEquals(candidate, option)));
+        Assert.Equal("MT-8", module.SelectedStageValue);
+        Assert.Equal(["MT-8", "MT-9", "CA-5"], module.StagePlan.Select(entry => entry.SelectedStageValue).ToArray());
+        Assert.All(module.StagePlan, entry => Assert.False(string.IsNullOrWhiteSpace(entry.PreviewStageText)));
+    }
+
+    [Fact]
+    public async Task FightModule_StageSelections_ShouldRefreshSelectedItemsAfterLanguageAndResourceRefresh()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var texts = new LocalizedTextMap { Language = "en-us" };
+        var module = new FightTaskModuleViewModel(fixture.Runtime, texts);
+        module.HideUnavailableStage = false;
+        module.UseAlternateStage = true;
+        module.Stage = "LS-6";
+        module.AddStagePlanEntry();
+        module.StagePlan[1].Stage = "CE-6";
+
+        var oldPrimary = module.SelectedStageOption;
+        var oldAlternate = module.StagePlan[1].SelectedStageOption;
+        Assert.NotNull(oldPrimary);
+        Assert.NotNull(oldAlternate);
+
+        texts.Language = "zh-cn";
+        module.RefreshStageOptions(forceReload: true);
+        Dispatcher.UIThread.RunJobs(null);
+
+        Assert.Equal("LS-6", module.Stage);
+        Assert.Equal("LS-6", module.SelectedStageValue);
+        Assert.Equal("LS-6", module.SelectedStageOption?.Value);
+        Assert.NotSame(oldPrimary, module.SelectedStageOption);
+        Assert.Equal("CE-6", module.StagePlan[1].Stage);
+        Assert.Equal("CE-6", module.StagePlan[1].SelectedStageValue);
+        Assert.Equal("CE-6", module.StagePlan[1].SelectedStageOption?.Value);
+        Assert.NotSame(oldAlternate, module.StagePlan[1].SelectedStageOption);
+        Assert.False(string.IsNullOrWhiteSpace(module.SelectedStageOption?.DisplayName));
+        Assert.False(string.IsNullOrWhiteSpace(module.StagePlan[1].SelectedStageOption?.DisplayName));
     }
 
     [Fact]
@@ -223,17 +490,17 @@ public sealed class FightTaskParityTests
         var entry = Assert.Single(module.StagePlan);
         Assert.Equal(closedStage, module.Stage);
         Assert.Equal(closedStage, entry.Stage);
-        Assert.Null(module.SelectedStageOption);
+        Assert.Equal(closedStage, module.SelectedStageOption?.Value);
         Assert.True(entry.IsClosed);
         Assert.False(entry.IsOutdated);
         Assert.Equal(string.Empty, entry.StatusText);
-        Assert.DoesNotContain(
+        Assert.Contains(
             module.StageOptions,
             option => string.Equals(option.Value, closedStage, StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
-    public async Task FightModule_OutdatedSelectedStage_ShouldBePreservedInternallyButHiddenFromOptions()
+    public async Task FightModule_OutdatedSelectedStage_ShouldBePreservedAsOutdatedOption()
     {
         await using var fixture = await TestFixture.CreateAsync();
         var module = new FightTaskModuleViewModel(fixture.Runtime, new LocalizedTextMap { Language = "en-us" });
@@ -246,16 +513,36 @@ public sealed class FightTaskParityTests
         var entry = Assert.Single(module.StagePlan);
         Assert.Equal(outdatedStage, module.Stage);
         Assert.Equal(outdatedStage, entry.Stage);
-        Assert.Null(module.SelectedStageOption);
-        Assert.True(entry.IsOutdated);
-        Assert.Equal("(Outdated)", entry.StatusText);
-        Assert.DoesNotContain(
+        var option = Assert.Single(
             module.StageOptions,
             option => string.Equals(option.Value, outdatedStage, StringComparison.OrdinalIgnoreCase));
-        Assert.DoesNotContain(module.StageOptions, option => option.IsOutdated);
-        Assert.DoesNotContain(
+        Assert.Same(option, module.SelectedStageOption);
+        Assert.True(option.IsOutdated);
+        Assert.False(option.IsOpen);
+        Assert.Equal(outdatedStage, option.DisplayName);
+        Assert.True(entry.IsOutdated);
+        Assert.Equal("(Outdated)", entry.StatusText);
+    }
+
+    [Fact]
+    public async Task FightModule_MoveStagePlanEntry_ShouldPreserveOutdatedStageSelection()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var module = new FightTaskModuleViewModel(fixture.Runtime, new LocalizedTextMap { Language = "en-us" });
+        const string outdatedStage = "EXPIRED-ALT-STAGE";
+
+        module.UseAlternateStage = true;
+        module.Stage = "LS-6";
+        module.AddStagePlanEntry();
+        module.StagePlan[1].Stage = outdatedStage;
+
+        module.MoveStagePlanEntry(1, 0);
+
+        Assert.Equal([outdatedStage, "LS-6"], module.StagePlan.Select(entry => entry.Stage).ToArray());
+        Assert.Equal(outdatedStage, module.Stage);
+        Assert.Contains(
             module.StageOptions,
-            option => option.DisplayName.Contains("Outdated", StringComparison.OrdinalIgnoreCase));
+            option => string.Equals(option.Value, outdatedStage, StringComparison.OrdinalIgnoreCase) && option.IsOutdated);
     }
 
     private static string ResolveClosedWeeklyStage()
@@ -361,6 +648,7 @@ public sealed class FightTaskParityTests
                 SettingsFeatureService = new SettingsFeatureService(config, capability, diagnostics),
                 DialogFeatureService = new DialogFeatureService(diagnostics),
                 PostActionFeatureService = new PostActionFeatureService(config, diagnostics, platform.PostActionExecutorService),
+                StageManagerFeatureService = new StageManagerFeatureService(config, root),
             };
             return new TestFixture(root, config, taskQueue, bridge, runtime);
         }

@@ -5,6 +5,42 @@
              xmlns:taskVm="clr-namespace:MAAUnified.App.ViewModels.TaskQueue"
              Classes="task-queue-page"
              x:Class="MAAUnified.App.Features.Root.TaskQueueView">
+  <UserControl.DataTemplates>
+    <DataTemplate DataType="taskVm:StartUpTaskModuleViewModel">
+      <taskViews:StartUpTaskView />
+    </DataTemplate>
+    <DataTemplate DataType="taskVm:FightTaskModuleViewModel">
+      <taskViews:FightSettingsView />
+    </DataTemplate>
+    <DataTemplate DataType="taskVm:RecruitTaskModuleViewModel">
+      <taskViews:RecruitSettingsView />
+    </DataTemplate>
+    <DataTemplate DataType="taskVm:InfrastModuleViewModel">
+      <taskViews:InfrastSettingsView />
+    </DataTemplate>
+    <DataTemplate DataType="taskVm:MallModuleViewModel">
+      <taskViews:MallSettingsView />
+    </DataTemplate>
+    <DataTemplate DataType="taskVm:AwardModuleViewModel">
+      <taskViews:AwardSettingsView />
+    </DataTemplate>
+    <DataTemplate DataType="taskVm:RoguelikeModuleViewModel">
+      <taskViews:RoguelikeSettingsView />
+    </DataTemplate>
+    <DataTemplate DataType="taskVm:ReclamationModuleViewModel">
+      <taskViews:ReclamationSettingsView />
+    </DataTemplate>
+    <DataTemplate DataType="taskVm:UserDataUpdateModuleViewModel">
+      <taskViews:UserDataUpdateSettingsView />
+    </DataTemplate>
+    <DataTemplate DataType="taskVm:CustomModuleViewModel">
+      <taskViews:CustomSettingsView />
+    </DataTemplate>
+    <DataTemplate DataType="taskVm:PostActionModuleViewModel">
+      <taskViews:PostActionSettingsView />
+    </DataTemplate>
+  </UserControl.DataTemplates>
+
   <UserControl.Styles>
     <Style Selector="Grid.task-queue-config-panel">
       <Setter Property="Width" Value="{DynamicResource MAA.Size.TaskQueue.ConfigPanelWidth}" />
@@ -833,51 +869,7 @@
             </Border>
             <Grid x:Name="TaskSettingsHost"
                   IsEnabled="{Binding CanEdit}">
-              <ItemsControl ItemsSource="{Binding TaskPanels}">
-                <ItemsControl.ItemTemplate>
-                  <DataTemplate>
-                    <Border IsVisible="{Binding IsSelected}">
-                      <ContentControl Content="{Binding ModuleViewModel}">
-                        <ContentControl.DataTemplates>
-                          <DataTemplate DataType="taskVm:StartUpTaskModuleViewModel">
-                            <taskViews:StartUpTaskView />
-                          </DataTemplate>
-                          <DataTemplate DataType="taskVm:FightTaskModuleViewModel">
-                            <taskViews:FightSettingsView />
-                          </DataTemplate>
-                          <DataTemplate DataType="taskVm:RecruitTaskModuleViewModel">
-                            <taskViews:RecruitSettingsView />
-                          </DataTemplate>
-                          <DataTemplate DataType="taskVm:InfrastModuleViewModel">
-                            <taskViews:InfrastSettingsView />
-                          </DataTemplate>
-                          <DataTemplate DataType="taskVm:MallModuleViewModel">
-                            <taskViews:MallSettingsView />
-                          </DataTemplate>
-                          <DataTemplate DataType="taskVm:AwardModuleViewModel">
-                            <taskViews:AwardSettingsView />
-                          </DataTemplate>
-                          <DataTemplate DataType="taskVm:RoguelikeModuleViewModel">
-                            <taskViews:RoguelikeSettingsView />
-                          </DataTemplate>
-                          <DataTemplate DataType="taskVm:ReclamationModuleViewModel">
-                            <taskViews:ReclamationSettingsView />
-                          </DataTemplate>
-                          <DataTemplate DataType="taskVm:UserDataUpdateModuleViewModel">
-                            <taskViews:UserDataUpdateSettingsView />
-                          </DataTemplate>
-                          <DataTemplate DataType="taskVm:CustomModuleViewModel">
-                            <taskViews:CustomSettingsView />
-                          </DataTemplate>
-                        </ContentControl.DataTemplates>
-                      </ContentControl>
-                    </Border>
-                  </DataTemplate>
-                </ItemsControl.ItemTemplate>
-              </ItemsControl>
-              <Border IsVisible="{Binding ShowPostActionSettingsPanel}">
-                <taskViews:PostActionSettingsView DataContext="{Binding PostActionModule}" />
-              </Border>
+              <ContentControl Content="{Binding SelectedTaskSettingsViewModel}" />
             </Grid>
             <Border Classes="task-settings-mode-scroll-spacer"
                     IsVisible="{Binding ShowSettingsModeSwitch}" />

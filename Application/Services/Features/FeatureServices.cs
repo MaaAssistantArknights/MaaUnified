@@ -1307,6 +1307,11 @@ public sealed class TaskQueueFeatureService : ITaskQueueFeatureService
             return localizedModuleName;
         }
 
+        if (TryResolveLegacyLocalizedTaskTitle(taskName, normalizedType, localizer, out var localizedTitle))
+        {
+            return localizedTitle;
+        }
+
         return IsDefaultTaskName(taskName, normalizedType, localizedModuleName)
             ? localizedModuleName
             : taskName;
@@ -1331,6 +1336,42 @@ public sealed class TaskQueueFeatureService : ITaskQueueFeatureService
         return false;
     }
 
+    private static bool TryResolveLegacyLocalizedTaskTitle(
+        string taskName,
+        string normalizedType,
+        IUiLocalizer localizer,
+        out string localizedTitle)
+    {
+        localizedTitle = string.Empty;
+        if (!string.Equals(normalizedType, TaskModuleTypes.Fight, StringComparison.OrdinalIgnoreCase)
+            || !IsLegacyLocalizedTaskTitleAlias(taskName, "RemainingSanityStage"))
+        {
+            return false;
+        }
+
+        localizedTitle = AchievementTextCatalog.GetString("RemainingSanityStage", localizer.Language, taskName);
+        return true;
+    }
+
+    private static bool IsLegacyLocalizedTaskTitleAlias(string taskName, string key)
+    {
+        foreach (var language in UiLanguageCatalog.Ordered)
+        {
+            if (string.Equals(language, "pallas", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var alias = AchievementTextCatalog.GetString(key, language, key);
+            if (string.Equals(taskName, alias, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private IEnumerable<string> EnumerateLocalizedTaskAliases(string normalizedType)
     {
         var titleKey = GetTaskTitleKey(normalizedType);
@@ -1341,6 +1382,11 @@ public sealed class TaskQueueFeatureService : ITaskQueueFeatureService
             if (!string.IsNullOrWhiteSpace(titleKey))
             {
                 yield return localizer.GetOrDefault(titleKey, normalizedType, "TaskQueue.Status");
+            }
+
+            if (string.Equals(normalizedType, TaskModuleTypes.Fight, StringComparison.OrdinalIgnoreCase))
+            {
+                yield return AchievementTextCatalog.GetString("RemainingSanityStage", language, "Remaining Sanity");
             }
         }
     }

@@ -12,6 +12,7 @@ public sealed class TaskQueueTaskPanelViewModel : ObservableObject
     private string _validationSummary = string.Empty;
     private bool _hasBlockingValidationIssues;
     private int _validationIssueCount;
+    private int _taskIndex;
 
     public TaskQueueTaskPanelViewModel(
         TaskQueueItemViewModel task,
@@ -20,7 +21,7 @@ public sealed class TaskQueueTaskPanelViewModel : ObservableObject
         ITaskModulePanelViewModel moduleViewModel)
     {
         Task = task;
-        TaskIndex = taskIndex;
+        _taskIndex = taskIndex;
         ModuleType = moduleType;
         Module = moduleViewModel;
         ModuleViewModel = moduleViewModel;
@@ -28,13 +29,28 @@ public sealed class TaskQueueTaskPanelViewModel : ObservableObject
 
     public TaskQueueItemViewModel Task { get; }
 
-    public int TaskIndex { get; }
+    public int TaskIndex
+    {
+        get => _taskIndex;
+        private set => SetProperty(ref _taskIndex, value);
+    }
 
     public string ModuleType { get; }
 
     public ITaskModulePanelViewModel Module { get; }
 
     public object ModuleViewModel { get; }
+
+    public void RebindTaskIndex(int taskIndex)
+    {
+        if (TaskIndex == taskIndex)
+        {
+            return;
+        }
+
+        TaskIndex = taskIndex;
+        Module.RebindTaskIndex(taskIndex);
+    }
 
     public bool IsSelected
     {

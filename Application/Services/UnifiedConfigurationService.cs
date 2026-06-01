@@ -21,6 +21,11 @@ public sealed class UnifiedConfigurationService
     {
         WriteIndented = true,
     };
+    private static readonly JsonSerializerOptions _configSnapshotOptions = new()
+    {
+        WriteIndented = true,
+        PropertyNameCaseInsensitive = true,
+    };
     private const string GuiNewFileName = "gui.new.json";
     private const string GuiFileName = "gui.json";
     private const string ParseNullWarningCode = "ConfigRepair.DeserializeNull";
@@ -33,6 +38,7 @@ public sealed class UnifiedConfigurationService
     private readonly string _baseDirectory;
     private readonly SemaphoreSlim _saveSemaphore = new(1, 1);
     private List<ConfigValidationIssue> _currentValidationIssues = [];
+    private string? _lastPersistedConfigSnapshot;
 
     public UnifiedConfigurationService(
         IUnifiedConfigStore store,
@@ -98,6 +104,8 @@ public sealed class UnifiedConfigurationService
                     var normalizedFightStageCount = NormalizeFightStageSelections(CurrentConfig);
                     var normalizedTaskParamCount = NormalizeTaskQueueParams(CurrentConfig);
                     var repairedAchievementPopupAutoCloseCount = RepairAchievementPopupAutoCloseDefault(CurrentConfig);
+                    var normalizedConfigChanged = normalizedFightStageCount > 0 || normalizedTaskParamCount > 0 || repairedAchievementPopupAutoCloseCount > 0;
+                    var persistedNormalizedConfig = false;
                     if (normalizedFightStageCount > 0)
                     {
                         LogService.Info(
@@ -115,18 +123,27 @@ public sealed class UnifiedConfigurationService
                             $"Repaired {repairedAchievementPopupAutoCloseCount} achievement popup auto-close setting(s) to True.");
                     }
 
-                    if ((normalizedFightStageCount > 0 || normalizedTaskParamCount > 0 || repairedAchievementPopupAutoCloseCount > 0)
-                        && CurrentConfig.SchemaVersion == UnifiedConfig.LatestSchemaVersion)
+                    if (normalizedConfigChanged && CurrentConfig.SchemaVersion == UnifiedConfig.LatestSchemaVersion)
                     {
                         try
                         {
                             await _store.SaveAsync(CurrentConfig, cancellationToken);
+                            persistedNormalizedConfig = true;
                             LogService.Info("Persisted normalized config values to config/avalonia.json");
                         }
                         catch (Exception ex)
                         {
                             LogService.Warn($"Failed to persist normalized config values: {ex.Message}");
                         }
+                    }
+
+                    if (!normalizedConfigChanged || persistedNormalizedConfig)
+                    {
+                        _lastPersistedConfigSnapshot = SerializeConfigSnapshot(CurrentConfig);
+                    }
+                    else
+                    {
+                        _lastPersistedConfigSnapshot = null;
                     }
 
                     var schemaMigrationNotice = BuildSchemaMigrationNotice();
@@ -452,12 +469,20 @@ public sealed class UnifiedConfigurationService
 
             config.SchemaVersion = UnifiedConfig.LatestSchemaVersion;
             var normalizedTaskParamCount = NormalizeTaskQueueParams(config);
+            var configSnapshot = SerializeConfigSnapshot(config);
+            if (string.Equals(_lastPersistedConfigSnapshot, configSnapshot, StringComparison.Ordinal))
+            {
+                CurrentConfig = config;
+                return RefreshValidationState(validationMode, logIssues: true);
+            }
+
             if (normalizedTaskParamCount > 0)
             {
                 LogService.Info($"Normalized {normalizedTaskParamCount} task parameter set(s) before saving config/avalonia.json");
             }
 
             await _store.SaveAsync(config, cancellationToken);
+            _lastPersistedConfigSnapshot = configSnapshot;
             CurrentConfig = config;
             var issues = RefreshValidationState(validationMode, logIssues: true);
             ConfigChanged?.Invoke(CurrentConfig);
@@ -473,6 +498,11 @@ public sealed class UnifiedConfigurationService
         {
             _saveSemaphore.Release();
         }
+    }
+
+    private static string SerializeConfigSnapshot(UnifiedConfig config)
+    {
+        return JsonSerializer.Serialize(config, _configSnapshotOptions);
     }
 
     private List<(IConfigImporter Importer, bool FillMissingOnly)> BuildImportPlan(ImportSource source)
@@ -651,7 +681,7 @@ public sealed class UnifiedConfigurationService
         {
             foreach (var task in profile.TaskQueue)
             {
-                var compiled = TaskParamCompiler.CompileTask(task, profile, config, strict: true);
+                var compiled = TaskParamCompiler.NormalizeTaskForPersistence(task, profile, config, strict: true);
                 if (compiled.HasBlockingIssues)
                 {
                     continue;

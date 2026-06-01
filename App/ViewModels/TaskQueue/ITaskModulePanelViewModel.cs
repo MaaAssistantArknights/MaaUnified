@@ -8,6 +8,8 @@ public interface ITaskModulePanelViewModel
 
     string LastErrorMessage { get; }
 
+    void RebindTaskIndex(int taskIndex);
+
     void ClearBinding();
 
     Task<bool> FlushPendingChangesAsync(CancellationToken cancellationToken = default);

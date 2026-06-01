@@ -39,7 +39,25 @@ public sealed class ConfigurationSaveTracker
         }
     }
 
+    public IReadOnlyList<string> GetPendingOrFailedKeys(UiDiagnosticsService diagnosticsService)
+    {
+        lock (_gate)
+        {
+            return _entries
+                .Where(pair => ReferenceEquals(pair.Value.DiagnosticsService, diagnosticsService)
+                    && (pair.Value.Pending || pair.Value.Failed))
+                .Select(static pair => pair.Key)
+                .ToArray();
+        }
+    }
+
     public IReadOnlyList<string> FailedDisplayNames => SnapshotNames(static entry => entry.Failed);
+
+    public IReadOnlyList<string> GetFailedDisplayNames(UiDiagnosticsService diagnosticsService)
+    {
+        return SnapshotNames(pair => pair.Value.Failed
+            && ReferenceEquals(pair.Value.DiagnosticsService, diagnosticsService));
+    }
 
     public IReadOnlyList<string> PendingOrFailedDisplayNames => SnapshotNames(static entry => entry.Pending || entry.Failed);
 
@@ -288,9 +306,10 @@ public sealed class ConfigurationSaveTracker
 
     public async Task<IReadOnlyList<string>> RetryPendingOrFailedAsync(
         Func<string, bool>? keyPredicate = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        UiDiagnosticsService? diagnosticsService = null)
     {
-        var entries = SnapshotRetryEntries(keyPredicate);
+        var entries = SnapshotRetryEntries(keyPredicate, diagnosticsService);
         foreach (var entry in entries)
         {
             if (entry.RetryAsync is null || entry.DiagnosticsService is null)
@@ -308,7 +327,10 @@ public sealed class ConfigurationSaveTracker
                 cancellationToken);
         }
 
-        return SnapshotNames(pair => (keyPredicate is null || keyPredicate(pair.Key)) && pair.Value.Failed);
+        return SnapshotNames(pair =>
+            (keyPredicate is null || keyPredicate(pair.Key))
+            && (diagnosticsService is null || ReferenceEquals(pair.Value.DiagnosticsService, diagnosticsService))
+            && pair.Value.Failed);
     }
 
     public bool IsPendingOrFailed(string key)
@@ -413,12 +435,15 @@ public sealed class ConfigurationSaveTracker
         }
     }
 
-    private IReadOnlyList<RetryEntry> SnapshotRetryEntries(Func<string, bool>? keyPredicate)
+    private IReadOnlyList<RetryEntry> SnapshotRetryEntries(
+        Func<string, bool>? keyPredicate,
+        UiDiagnosticsService? diagnosticsService)
     {
         lock (_gate)
         {
             return _entries
                 .Where(pair => (keyPredicate is null || keyPredicate(pair.Key))
+                    && (diagnosticsService is null || ReferenceEquals(pair.Value.DiagnosticsService, diagnosticsService))
                     && pair.Value.ActiveCount <= 0
                     && (pair.Value.Pending || pair.Value.Failed))
                 .Select(pair => new RetryEntry(

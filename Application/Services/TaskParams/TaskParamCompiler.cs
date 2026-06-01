@@ -1190,6 +1190,21 @@ public static class TaskParamCompiler
         };
     }
 
+    public static TaskCompileOutput NormalizeTaskForPersistence(
+        UnifiedTaskItem task,
+        UnifiedProfile profile,
+        UnifiedConfig config,
+        bool strict)
+    {
+        var normalized = NormalizeTaskType(task.Type);
+        if (string.Equals(normalized, TaskModuleTypes.Mall, StringComparison.OrdinalIgnoreCase))
+        {
+            return NormalizeMallForPersistence(task);
+        }
+
+        return CompileTask(task, profile, config, strict);
+    }
+
     public static JsonObject BuildCoreParams(string taskType, JsonObject parameters)
     {
         var runtimeParams = parameters.DeepClone() as JsonObject ?? new JsonObject();
@@ -1328,6 +1343,30 @@ public static class TaskParamCompiler
             },
             Issues = issues,
         };
+    }
+
+    private static TaskCompileOutput NormalizeMallForPersistence(UnifiedTaskItem task)
+    {
+        var model = MallParams.FromJson(task.Params);
+        model.BuyFirst = NormalizeMallStoredList(model.BuyFirst);
+        model.Blacklist = NormalizeMallStoredList(model.Blacklist);
+
+        return new TaskCompileOutput
+        {
+            NormalizedType = "Mall",
+            Params = model.ToJson(),
+            Issues = [],
+        };
+    }
+
+    private static List<string> NormalizeMallStoredList(IEnumerable<string?> values)
+    {
+        return values
+            .Where(static item => !string.IsNullOrWhiteSpace(item))
+            .Select(static item => item!.Trim())
+            .Where(static item => !string.IsNullOrWhiteSpace(item))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
     }
 
     private static TaskCompileOutput CompileRecruitFromTask(
