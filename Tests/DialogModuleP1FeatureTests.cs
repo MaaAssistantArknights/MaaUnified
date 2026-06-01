@@ -1,5 +1,9 @@
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Documents;
 using Avalonia.Interactivity;
+using Avalonia.Layout;
+using Avalonia.Media;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -577,6 +581,20 @@ public sealed class DialogModuleP1FeatureTests
     }
 
     [Fact]
+    public void DialogPresentation_ShouldRestoreAndActivateOwnerBeforeShowingModalWindow()
+    {
+        var root = BaselineTestSupport.GetMaaUnifiedRoot();
+        var dialogServiceCode = File.ReadAllText(Path.Combine(root, "App", "Features", "Dialogs", "AvaloniaDialogService.cs"));
+
+        Assert.Contains("if (owner.WindowState == WindowState.Minimized)", dialogServiceCode, StringComparison.Ordinal);
+        Assert.Contains("owner.WindowState = WindowState.Normal;", dialogServiceCode, StringComparison.Ordinal);
+        Assert.Contains("if (!owner.IsVisible)", dialogServiceCode, StringComparison.Ordinal);
+        Assert.Contains("owner.Show();", dialogServiceCode, StringComparison.Ordinal);
+        Assert.Contains("owner.Activate();", dialogServiceCode, StringComparison.Ordinal);
+        Assert.Contains("await dialog.ShowDialog<TResult>(owner)", dialogServiceCode, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void SelectionDialogs_ShouldUseSurfaceSelectionListMode_AndSharedCompactEmptyState()
     {
         var root = BaselineTestSupport.GetMaaUnifiedRoot();
@@ -657,6 +675,63 @@ public sealed class DialogModuleP1FeatureTests
             第二段也应保留
             """,
             section.MarkdownContent);
+    }
+
+    [Fact]
+    public void AnnouncementDialogView_ShouldCenterMarkdownInlineControls()
+    {
+        var codeBorder = new Border
+        {
+            Child = new TextBlock
+            {
+                Text = "config",
+            },
+        };
+        var linkButton = new Button
+        {
+            Content = "GitHub",
+            Padding = new Thickness(8, 4),
+            MinHeight = 32,
+        };
+        var textBlock = new TextBlock();
+        var codeInline = new InlineUIContainer
+        {
+            Child = codeBorder,
+        };
+        var linkInline = new InlineUIContainer
+        {
+            Child = linkButton,
+        };
+        textBlock.Inlines!.Add(new Run("由 "));
+        textBlock.Inlines.Add(linkInline);
+        textBlock.Inlines.Add(new Run(" 下载，保留 "));
+        textBlock.Inlines.Add(codeInline);
+        textBlock.Inlines.Add(new Run(" 文件夹。"));
+
+        AnnouncementDialogView.NormalizeMarkdownInlineLayout(textBlock);
+
+        Assert.Equal(BaselineAlignment.Center, linkInline.BaselineAlignment);
+        Assert.Equal(BaselineAlignment.Center, codeInline.BaselineAlignment);
+        Assert.Equal(VerticalAlignment.Center, linkButton.VerticalAlignment);
+        Assert.Equal(VerticalAlignment.Center, linkButton.VerticalContentAlignment);
+        Assert.Equal(new Thickness(0), linkButton.Padding);
+        Assert.Equal(new Thickness(0), linkButton.BorderThickness);
+        Assert.Equal(0, linkButton.MinHeight);
+        Assert.Equal(VerticalAlignment.Center, codeBorder.VerticalAlignment);
+    }
+
+    [Fact]
+    public void AnnouncementDialogView_TryNormalizeMarkdownInlineLayout_ShouldWaitUntilMarkdownTreeExists()
+    {
+        var root = new Border();
+
+        Assert.False(AnnouncementDialogView.TryNormalizeMarkdownInlineLayout(root));
+
+        var textBlock = new TextBlock();
+        textBlock.Inlines!.Add(new Run("公告"));
+        root.Child = textBlock;
+
+        Assert.True(AnnouncementDialogView.TryNormalizeMarkdownInlineLayout(root));
     }
 
     [Fact]

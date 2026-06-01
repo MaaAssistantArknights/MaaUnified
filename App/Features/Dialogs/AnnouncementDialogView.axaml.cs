@@ -1,8 +1,10 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Documents;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
+using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
@@ -455,7 +457,129 @@ public partial class AnnouncementDialogView : Window, IDialogChromeAware
             MarkdownText = markdownText,
         };
         viewer.Classes.Add("announcement-dialog-markdown-viewer");
+        void NormalizeAndStopWhenReady(Control control)
+        {
+            if (!TryNormalizeMarkdownInlineLayout(control))
+            {
+                return;
+            }
+
+            viewer.LayoutUpdated -= OnViewerLayoutUpdated;
+        }
+
+        viewer.AttachedToVisualTree += (sender, _) =>
+        {
+            if (sender is Control control)
+            {
+                NormalizeAndStopWhenReady(control);
+            }
+        };
+        viewer.LayoutUpdated += OnViewerLayoutUpdated;
         return viewer;
+
+        void OnViewerLayoutUpdated(object? sender, EventArgs e)
+        {
+            if (sender is Control control)
+            {
+                NormalizeAndStopWhenReady(control);
+            }
+        }
+    }
+
+    internal static void NormalizeMarkdownInlineLayout(Control root)
+    {
+        _ = TryNormalizeMarkdownInlineLayout(root);
+    }
+
+    internal static bool TryNormalizeMarkdownInlineLayout(Control root)
+    {
+        var foundMarkdownContent = false;
+        foreach (var control in EnumerateLogicalControls(root))
+        {
+            switch (control)
+            {
+                case TextBlock textBlock:
+                    foundMarkdownContent = true;
+                    NormalizeMarkdownTextBlock(textBlock);
+                    break;
+                case Button button:
+                    foundMarkdownContent = true;
+                    NormalizeMarkdownLinkButton(button);
+                    break;
+            }
+        }
+
+        return foundMarkdownContent;
+    }
+
+    private static void NormalizeMarkdownTextBlock(TextBlock textBlock)
+    {
+        textBlock.TextWrapping = TextWrapping.Wrap;
+        if (textBlock.Inlines is null)
+        {
+            return;
+        }
+
+        foreach (var inline in textBlock.Inlines)
+        {
+            NormalizeMarkdownInline(inline);
+        }
+    }
+
+    private static void NormalizeMarkdownInline(Inline inline)
+    {
+        if (inline is Span span)
+        {
+            foreach (var childInline in span.Inlines)
+            {
+                NormalizeMarkdownInline(childInline);
+            }
+        }
+
+        if (inline is not InlineUIContainer container)
+        {
+            return;
+        }
+
+        container.BaselineAlignment = BaselineAlignment.Center;
+        if (container.Child is not Control child)
+        {
+            return;
+        }
+
+        child.VerticalAlignment = VerticalAlignment.Center;
+        if (child is Button button)
+        {
+            NormalizeMarkdownLinkButton(button);
+        }
+        else if (child is Border border)
+        {
+            border.VerticalAlignment = VerticalAlignment.Center;
+        }
+    }
+
+    private static void NormalizeMarkdownLinkButton(Button button)
+    {
+        button.MinHeight = 0d;
+        button.MinWidth = 0d;
+        button.Padding = new Thickness(0d);
+        button.BorderThickness = new Thickness(0d);
+        button.VerticalAlignment = VerticalAlignment.Center;
+        button.VerticalContentAlignment = VerticalAlignment.Center;
+        button.HorizontalContentAlignment = HorizontalAlignment.Center;
+        button.Background = Brushes.Transparent;
+    }
+
+    private static IEnumerable<Control> EnumerateLogicalControls(Control root)
+    {
+        yield return root;
+        foreach (var child in root.GetLogicalChildren().OfType<Control>())
+        {
+            foreach (var descendant in EnumerateLogicalControls(child))
+            {
+                yield return descendant;
+            }
+        }
     }
 
     private void SelectSection(AnnouncementSectionDisplayItem? section)

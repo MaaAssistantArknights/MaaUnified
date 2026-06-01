@@ -163,7 +163,7 @@ public sealed class OverlayAdvancedPageViewModel : PageViewModelBase
 
         _ = await RunTrackedConfigurationSaveAsync(
             "Advanced.Overlay.TargetSelection",
-            Texts.GetOrDefault("Overlay.Title", "悬浮窗"),
+            Texts.GetOrDefault("Toolbox.Advanced.Overlay.Title", "Overlay"),
             "Advanced.Overlay.SaveTarget",
             ct => Runtime.SettingsFeatureService.SaveGlobalSettingsAsync(
                 new Dictionary<string, string>(StringComparer.Ordinal)

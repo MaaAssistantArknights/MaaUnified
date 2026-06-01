@@ -146,7 +146,7 @@ public sealed class StageManagerPageViewModel : PageViewModelBase
             ClientType: ClientType);
         _ = await RunTrackedConfigurationSaveAsync(
             "Advanced.StageManager",
-            Texts.GetOrDefault("StageManager.Title", "关卡管理"),
+            Texts.GetOrDefault("Toolbox.Advanced.StageManager.Title", "Stage Manager"),
             "Advanced.StageManager.Save",
             ct => Runtime.StageManagerFeatureService.SaveConfigAsync(config, ct),
             cancellationToken);

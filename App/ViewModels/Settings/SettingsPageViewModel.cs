@@ -5397,7 +5397,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
     public async Task<bool> FlushConfigurationSavesForCloseAsync(CancellationToken cancellationToken = default)
     {
         var scopes = new HashSet<string>(
-            ConfigurationSaveTracker.Instance.PendingOrFailedKeys
+            ConfigurationSaveTracker.Instance.GetPendingOrFailedKeys(Runtime.DiagnosticsService)
                 .Where(static key => key.StartsWith("Settings.AutoSave.", StringComparison.Ordinal)),
             StringComparer.Ordinal);
 
@@ -5424,7 +5424,8 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
 
         var failedNames = await ConfigurationSaveTracker.Instance.RetryPendingOrFailedAsync(
             static key => key.StartsWith("Settings.AutoSave.", StringComparison.Ordinal),
-            cancellationToken);
+            cancellationToken,
+            Runtime.DiagnosticsService);
         return failedNames.Count == 0;
     }
 

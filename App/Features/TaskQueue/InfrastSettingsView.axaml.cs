@@ -20,7 +20,7 @@ public partial class InfrastSettingsView : UserControl
     {
         if (VM is not null)
         {
-            await VM.ReloadPlansAsync();
+            await VM.ReloadPlansAsync(forceReload: true);
         }
     }
 
@@ -61,7 +61,7 @@ public partial class InfrastSettingsView : UserControl
         if (!string.IsNullOrWhiteSpace(path))
         {
             vm.SelectCustomFile(path);
-            await vm.ReloadPlansAsync();
+            await vm.ReloadPlansAsync(forceReload: true);
         }
     }
 

@@ -58,6 +58,7 @@ public sealed class NoOpAppDialogService : IAppDialogService
         ErrorDialogRequest request,
         string sourceScope,
         Func<CancellationToken, Task<UiOperationResult>>? openIssueReportAsync = null,
+        Func<CancellationToken, Task<UiOperationResult>>? openSettingsAsync = null,
         CancellationToken cancellationToken = default)
     {
         return Task.FromResult(new DialogCompletion<ErrorDialogPayload>(

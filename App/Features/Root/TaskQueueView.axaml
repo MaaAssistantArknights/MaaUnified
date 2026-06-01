@@ -423,9 +423,6 @@
       <Setter Property="IsHitTestVisible" Value="False" />
       <Setter Property="Transitions">
         <Transitions>
-          <ThicknessTransition Property="Margin"
-                               Duration="0:0:0.22"
-                               Easing="CubicEaseOut" />
           <DoubleTransition Property="Height"
                             Duration="0:0:0.18"
                             Easing="CubicEaseOut" />
@@ -720,16 +717,6 @@
                               Margin="{DynamicResource MAA.Thickness.MarginActionButtonLeft}"
                               Tag="{Binding}"
                               PointerPressed="OnTaskGearPointerPressed">
-                        <ToolTip.Tip>
-                          <Grid Margin="14"
-                                Background="Transparent"
-                                ClipToBounds="False">
-                            <Border Classes="app-tooltip-card">
-                              <TextBlock Classes="app-tooltip-card-text"
-                                         Text="{Binding DataContext.TaskMenuTooltipText, RelativeSource={RelativeSource AncestorType=UserControl}}" />
-                            </Border>
-                          </Grid>
-                        </ToolTip.Tip>
                         <Viewbox Width="15"
                                  Height="15"
                                  HorizontalAlignment="Center"
@@ -880,8 +867,10 @@
               <TextBlock Classes="app-caption"
                          Text="{Binding NoTaskSelectedHint}" />
             </Border>
-            <ContentControl x:Name="TaskSettingsHost"
-                            IsEnabled="{Binding CanEdit}" />
+            <Grid x:Name="TaskSettingsHost"
+                  IsEnabled="{Binding CanEdit}">
+              <ContentControl Content="{Binding SelectedTaskSettingsViewModel}" />
+            </Grid>
             <Border Classes="task-settings-mode-scroll-spacer"
                     IsVisible="{Binding ShowSettingsModeSwitch}" />
           </controls:AdaptiveSpacingStackPanel>

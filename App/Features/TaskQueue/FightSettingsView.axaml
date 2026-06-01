@@ -68,18 +68,85 @@
     <Style Selector="controls|AppSelect.fight-settings-inline-select">
       <Setter Property="HorizontalAlignment" Value="Left" />
     </Style>
-    <Style Selector="controls|AppSelect.fight-settings-stage-field,
+    <Style Selector="ComboBox.fight-settings-stage-field,
+                     controls|AppSelect.fight-settings-stage-field,
                      controls|AppTextInput.fight-settings-stage-field">
       <Setter Property="HorizontalAlignment" Value="Stretch" />
       <Setter Property="MinWidth" Value="0" />
     </Style>
-    <Style Selector="StackPanel.stage-plan-list,
-                     controls|AdaptiveSpacingStackPanel.stage-plan-list">
-      <Setter Property="Spacing" Value="2" />
+    <Style Selector="ComboBox.fight-settings-stage-field,
+                     controls|AppSelect.fight-settings-stage-field">
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
     </Style>
-    <Style Selector="Button.stage-plan-action">
-      <Setter Property="MinWidth" Value="32" />
-      <Setter Property="Padding" Value="8,0" />
+    <Style Selector="Border.stage-plan-frame">
+      <Setter Property="Padding" Value="4" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+    </Style>
+    <Style Selector="controls|AppSelectionList.stage-plan-selection-list">
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="Margin" Value="0" />
+    </Style>
+    <Style Selector="controls|AppSelectionList.stage-plan-selection-list ListBoxItem">
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+    </Style>
+    <Style Selector="controls|AppSelectionList.stage-plan-selection-list Border.app-selection-list-item-shell">
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="MinHeight" Value="38" />
+      <Setter Property="Padding" Value="4" />
+    </Style>
+    <Style Selector="Button.settings-dropdown-delete-button.stage-plan-delete-button">
+      <Setter Property="Margin" Value="2,0,0,0" />
+    </Style>
+    <Style Selector="ComboBox.stage-plan-embedded-select">
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+    </Style>
+    <Style Selector="ComboBox.stage-plan-embedded-select /template/ Border#Background,
+                     ComboBox.stage-plan-embedded-select /template/ Border#PART_BorderElement,
+                     ComboBox.stage-plan-embedded-select /template/ Border#PART_Border">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="{DynamicResource MAA.BorderThickness.Thin}" />
+      <Setter Property="BoxShadow" Value="0 0 0 0 #00000000" />
+    </Style>
+    <Style Selector="ComboBox.stage-plan-embedded-select:pointerover,
+                     ComboBox.stage-plan-embedded-select:focus,
+                     ComboBox.stage-plan-embedded-select:focus-visible">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.SubtleBackgroundHover}" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+    </Style>
+    <Style Selector="ComboBox.stage-plan-embedded-select:pointerover /template/ Border#Background,
+                     ComboBox.stage-plan-embedded-select:focus /template/ Border#Background,
+                     ComboBox.stage-plan-embedded-select:focus-visible /template/ Border#Background,
+                     ComboBox.stage-plan-embedded-select:pointerover /template/ Border#PART_BorderElement,
+                     ComboBox.stage-plan-embedded-select:focus /template/ Border#PART_BorderElement,
+                     ComboBox.stage-plan-embedded-select:focus-visible /template/ Border#PART_BorderElement,
+                     ComboBox.stage-plan-embedded-select:pointerover /template/ Border#PART_Border,
+                     ComboBox.stage-plan-embedded-select:focus /template/ Border#PART_Border,
+                     ComboBox.stage-plan-embedded-select:focus-visible /template/ Border#PART_Border">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.SubtleBackgroundHover}" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="{DynamicResource MAA.BorderThickness.Thin}" />
+    </Style>
+    <Style Selector="Grid.stage-plan-panel">
+      <Setter Property="MinWidth" Value="0" />
+    </Style>
+    <Style Selector="Border.stage-plan-actions">
+      <Setter Property="Margin" Value="-4,0,-4,-4" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Surface.Card}" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="0,0,10,10" />
+      <Setter Property="ClipToBounds" Value="True" />
+    </Style>
+    <Style Selector="Border.stage-plan-footer-divider">
+      <Setter Property="Height" Value="1" />
+      <Setter Property="Margin" Value="-4,0,-4,0" />
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Border.Card}" />
     </Style>
     <Style Selector="TextBlock.stage-plan-status">
       <Setter Property="Margin" Value="0" />
@@ -90,81 +157,154 @@
   <controls:AdaptiveSpacingStackPanel Margin="4" Classes="fight-settings-root">
     <controls:AdaptiveSpacingStackPanel Classes="fight-settings-root">
       <controls:AdaptiveSpacingStackPanel IsVisible="{Binding IsGeneralMode}" Classes="fight-settings-group task-settings-section">
-        <ItemsControl ItemsSource="{Binding StagePlan}">
-          <ItemsControl.ItemsPanel>
-            <ItemsPanelTemplate>
-              <controls:AdaptiveSpacingStackPanel Classes="stage-plan-list" />
-            </ItemsPanelTemplate>
-          </ItemsControl.ItemsPanel>
-          <ItemsControl.ItemTemplate>
-            <DataTemplate x:DataType="vm:FightTaskModuleViewModel+StagePlanEntry">
-              <Border Classes="app-surface app-card fight-settings-card">
-                <controls:SettingsInlineRow Classes="task-settings-card-content"
-                                            FieldWidth="{DynamicResource MAA.Size.Settings.FieldWideWidth}"
-                                            controls:SettingsLabelWidthCoordinator.GroupKey="TaskQueue.Fields">
-                  <controls:SettingsLabel Text="{Binding DataContext.StageSelectDisplayText, RelativeSource={RelativeSource AncestorType=UserControl}}" />
-                  <Grid Classes="stage-plan-row"
-                        ColumnDefinitions="*,8,Auto,8,Auto,8,Auto,8,Auto">
-                    <controls:AppSelect Grid.Column="0"
-                                        Classes="fight-settings-inline-select fight-settings-stage-field"
-                                        IsVisible="{Binding DataContext.ShowStagePlanComboBox, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                        ItemsSource="{Binding DataContext.StageOptions, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                        SelectedValueBinding="{Binding Value}"
-                                        SelectedValue="{Binding Stage}">
-                      <controls:AppSelect.ItemTemplate>
-                        <DataTemplate x:DataType="vm:FightTaskModuleViewModel+StageOption">
-                          <TextBlock Text="{Binding DisplayName}"
-                                     Classes.stage-closed="{Binding IsClosed}"
-                                     Classes.stage-outdated="{Binding IsOutdated}"
-                                     Classes.state-error="{Binding IsOutdated}" />
-                        </DataTemplate>
-                      </controls:AppSelect.ItemTemplate>
-                    </controls:AppSelect>
-
-                    <controls:AppTextInput Grid.Column="0"
-                                           Classes="fight-settings-stage-field"
-                                           IsVisible="{Binding DataContext.ShowStagePlanTextBox, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                           Text="{Binding EditableStageText}"
-                                           Watermark="{Binding DataContext.Texts[Fight.DefaultStage], RelativeSource={RelativeSource AncestorType=UserControl}}" />
-
-                    <TextBlock Grid.Column="2"
-                               Classes="app-caption stage-closed stage-plan-status"
-                               Text="{Binding StatusText}"
+        <Border Classes="app-surface app-card fight-settings-card">
+          <controls:AdaptiveSpacingStackPanel Classes="task-settings-card-content">
+            <controls:SettingsInlineRow IsVisible="{Binding ShowStagePlanSelector}"
+                                        FieldWidth="{DynamicResource MAA.Size.Settings.FieldCenteredWidth}"
+                                        controls:SettingsLabelWidthCoordinator.GroupKey="TaskQueue.Fields">
+              <controls:SettingsLabel Text="{Binding StageSelectDisplayText}" />
+              <controls:AppSelect Grid.Column="2"
+                                  Classes="fight-settings-stage-field"
+                                  ItemsSource="{Binding StageOptions}"
+                                  SelectedValueBinding="{Binding Value}"
+                                  SelectedItem="{Binding SelectedStageOption, Mode=OneWay}"
+                                  SelectedValue="{Binding SelectedStageValue, Mode=TwoWay}">
+                <controls:AppSelect.ItemTemplate>
+                  <DataTemplate x:DataType="vm:FightTaskModuleViewModel+StageOption">
+                    <TextBlock Text="{Binding DisplayName}"
                                Classes.stage-closed="{Binding IsClosed}"
                                Classes.stage-outdated="{Binding IsOutdated}"
                                Classes.state-error="{Binding IsOutdated}" />
-                    <Button Grid.Column="4"
-                            Classes="app-button app-secondary stage-plan-action"
-                            Content="{Binding DataContext.MoveStagePlanEntryUpText, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                            IsVisible="{Binding DataContext.UseAlternateStage, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                            Tag="{Binding}"
-                            Click="OnMoveStagePlanEntryUpClick" />
-                    <Button Grid.Column="6"
-                            Classes="app-button app-secondary stage-plan-action"
-                            Content="{Binding DataContext.MoveStagePlanEntryDownText, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                            IsVisible="{Binding DataContext.UseAlternateStage, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                            Tag="{Binding}"
-                            Click="OnMoveStagePlanEntryDownClick" />
-                    <Button Grid.Column="8"
-                            Classes="app-button app-secondary stage-plan-action"
-                            Content="{Binding DataContext.RemoveStagePlanEntryText, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                            IsVisible="{Binding DataContext.UseAlternateStage, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                            IsEnabled="{Binding DataContext.CanRemoveStagePlanEntry, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                            Tag="{Binding}"
-                            Click="OnRemoveStagePlanEntryClick" />
-                  </Grid>
-                </controls:SettingsInlineRow>
-              </Border>
-            </DataTemplate>
-          </ItemsControl.ItemTemplate>
-        </ItemsControl>
+                  </DataTemplate>
+                </controls:AppSelect.ItemTemplate>
+              </controls:AppSelect>
+            </controls:SettingsInlineRow>
 
-        <Border Classes="app-surface app-card fight-settings-card"
-                IsVisible="{Binding UseAlternateStage}">
-          <Button Classes="app-button app-secondary"
-                  HorizontalAlignment="Left"
-                  Content="{Binding AddStageText}"
-                  Click="OnAddStagePlanEntryClick" />
+            <controls:SettingsInlineRow IsVisible="{Binding ShowStagePlanList}"
+                                        FieldWidth="222"
+                                        controls:SettingsLabelWidthCoordinator.GroupKey="TaskQueue.Fields">
+              <controls:SettingsLabel Text="{Binding StageSelectDisplayText}" />
+              <Border Grid.Column="2"
+                      Classes="grouped-card-frame compact stage-plan-frame">
+                <Grid Classes="stage-plan-panel"
+                      RowDefinitions="Auto,Auto,Auto">
+                  <controls:AppSelectionList x:Name="StagePlanSelectionList"
+                                             Grid.Row="0"
+                                             Classes="app-compact-selection-list stage-plan-selection-list selection-list-section-cards selection-list-no-indicator"
+                                             ItemsSource="{Binding StagePlan}"
+                                             CanReorderItems="{Binding UseAlternateStage}"
+                                             CanReorderFromComboBox="True"
+                                             ItemReorderRequested="OnStagePlanItemReorderRequested">
+                    <controls:AppSelectionList.ReorderDragPreviewContentTemplate>
+                      <DataTemplate x:DataType="vm:FightTaskModuleViewModel+StagePlanEntry">
+                        <Border Classes="app-selection-list-item-shell"
+                                HorizontalAlignment="Stretch">
+                          <Grid Classes="stage-plan-row"
+                                HorizontalAlignment="Stretch"
+                                ColumnDefinitions="*,4,Auto,4,Auto">
+                            <controls:AppSelect Grid.Column="0"
+                                                Classes="fight-settings-stage-field stage-plan-embedded-select"
+                                                HorizontalAlignment="Stretch"
+                                                MinWidth="0"
+                                                IsVisible="{Binding DataContext.ShowStagePlanComboBox, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                ItemsSource="{Binding DataContext.StageOptions, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                SelectedValueBinding="{Binding Value}"
+                                                SelectedItem="{Binding SelectedStageOption, Mode=OneWay}"
+                                                SelectedValue="{Binding SelectedStageValue, Mode=TwoWay}">
+                              <controls:AppSelect.ItemTemplate>
+                                <DataTemplate x:DataType="vm:FightTaskModuleViewModel+StageOption">
+                                  <TextBlock Text="{Binding DisplayName}"
+                                             Classes.stage-closed="{Binding IsClosed}"
+                                             Classes.stage-outdated="{Binding IsOutdated}"
+                                             Classes.state-error="{Binding IsOutdated}" />
+                                </DataTemplate>
+                              </controls:AppSelect.ItemTemplate>
+                            </controls:AppSelect>
+
+                            <controls:AppTextInput Grid.Column="0"
+                                                   Classes="fight-settings-stage-field"
+                                                   HorizontalAlignment="Stretch"
+                                                   MinWidth="0"
+                                                   IsVisible="{Binding DataContext.ShowStagePlanTextBox, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                   Text="{Binding EditableStageText}"
+                                                   Watermark="{Binding DataContext.Texts[Fight.DefaultStage], RelativeSource={RelativeSource AncestorType=UserControl}}" />
+
+                            <TextBlock Grid.Column="2"
+                                       Classes="app-caption stage-closed stage-plan-status"
+                                       Text="{Binding StatusText}"
+                                       Classes.stage-closed="{Binding IsClosed}"
+                                       Classes.stage-outdated="{Binding IsOutdated}"
+                                       Classes.state-error="{Binding IsOutdated}" />
+                            <Button Grid.Column="4"
+                                    Classes="settings-dropdown-delete-button stage-plan-delete-button"
+                                    IsEnabled="{Binding DataContext.CanRemoveStagePlanEntry, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                          </Grid>
+                        </Border>
+                      </DataTemplate>
+                    </controls:AppSelectionList.ReorderDragPreviewContentTemplate>
+                    <controls:AppSelectionList.ItemTemplate>
+                      <DataTemplate x:DataType="vm:FightTaskModuleViewModel+StagePlanEntry">
+                        <Border Classes="app-selection-list-item-shell"
+                                HorizontalAlignment="Stretch">
+                          <Grid Classes="stage-plan-row"
+                                HorizontalAlignment="Stretch"
+                                ColumnDefinitions="*,4,Auto,4,Auto">
+                            <controls:AppSelect Grid.Column="0"
+                                                Classes="fight-settings-stage-field stage-plan-embedded-select"
+                                                HorizontalAlignment="Stretch"
+                                                MinWidth="0"
+                                                IsVisible="{Binding DataContext.ShowStagePlanComboBox, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                ItemsSource="{Binding DataContext.StageOptions, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                SelectedValueBinding="{Binding Value}"
+                                                SelectedItem="{Binding SelectedStageOption, Mode=OneWay}"
+                                                SelectedValue="{Binding SelectedStageValue, Mode=TwoWay}">
+                              <controls:AppSelect.ItemTemplate>
+                                <DataTemplate x:DataType="vm:FightTaskModuleViewModel+StageOption">
+                                  <TextBlock Text="{Binding DisplayName}"
+                                             Classes.stage-closed="{Binding IsClosed}"
+                                             Classes.stage-outdated="{Binding IsOutdated}"
+                                             Classes.state-error="{Binding IsOutdated}" />
+                                </DataTemplate>
+                              </controls:AppSelect.ItemTemplate>
+                            </controls:AppSelect>
+
+                            <controls:AppTextInput Grid.Column="0"
+                                                   Classes="fight-settings-stage-field"
+                                                   HorizontalAlignment="Stretch"
+                                                   MinWidth="0"
+                                                   IsVisible="{Binding DataContext.ShowStagePlanTextBox, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                   Text="{Binding EditableStageText}"
+                                                   Watermark="{Binding DataContext.Texts[Fight.DefaultStage], RelativeSource={RelativeSource AncestorType=UserControl}}" />
+
+                            <TextBlock Grid.Column="2"
+                                       Classes="app-caption stage-closed stage-plan-status"
+                                       Text="{Binding StatusText}"
+                                       Classes.stage-closed="{Binding IsClosed}"
+                                       Classes.stage-outdated="{Binding IsOutdated}"
+                                       Classes.state-error="{Binding IsOutdated}" />
+                            <Button Grid.Column="4"
+                                    Classes="settings-dropdown-delete-button stage-plan-delete-button"
+                                    IsEnabled="{Binding DataContext.CanRemoveStagePlanEntry, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                    Tag="{Binding}"
+                                    ToolTip.Tip="{Binding DataContext.RemoveStagePlanEntryText, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                    Click="OnRemoveStagePlanEntryClick" />
+                          </Grid>
+                        </Border>
+                      </DataTemplate>
+                    </controls:AppSelectionList.ItemTemplate>
+                  </controls:AppSelectionList>
+                  <Border Grid.Row="1"
+                          Classes="stage-plan-footer-divider" />
+                  <Border Grid.Row="2"
+                          Classes="stage-plan-actions">
+                    <Button Classes="grouped-card-footer-action"
+                            Content="{Binding AddStageText}"
+                            Click="OnAddStagePlanEntryClick" />
+                  </Border>
+                </Grid>
+              </Border>
+            </controls:SettingsInlineRow>
+          </controls:AdaptiveSpacingStackPanel>
         </Border>
 
         <Border Classes="app-surface app-card fight-settings-card">
@@ -277,7 +417,7 @@
                                   IsEnabled="{Binding UseCustomAnnihilation}"
                                   ItemsSource="{Binding AnnihilationStageOptions}"
                                   SelectedValueBinding="{Binding Value}"
-                                  SelectedValue="{Binding AnnihilationStage}">
+                                  SelectedValue="{Binding SelectedAnnihilationStageValue, Mode=TwoWay}">
                 <controls:AppSelect.ItemTemplate>
                   <DataTemplate x:DataType="vm:FightTaskModuleViewModel+StringOption">
                     <TextBlock Text="{Binding DisplayName}" />

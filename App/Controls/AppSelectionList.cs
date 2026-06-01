@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Templates;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.VisualTree;
@@ -21,6 +22,14 @@ public class AppSelectionList : ListBox
     public static readonly StyledProperty<bool> CanReorderItemsProperty =
         AvaloniaProperty.Register<AppSelectionList, bool>(
             nameof(CanReorderItems));
+
+    public static readonly StyledProperty<bool> CanReorderFromComboBoxProperty =
+        AvaloniaProperty.Register<AppSelectionList, bool>(
+            nameof(CanReorderFromComboBox));
+
+    public static readonly StyledProperty<IDataTemplate?> ReorderDragPreviewContentTemplateProperty =
+        AvaloniaProperty.Register<AppSelectionList, IDataTemplate?>(
+            nameof(ReorderDragPreviewContentTemplate));
 
     private const string RailClassName = "selection-list-rail";
     private const string SurfaceClassName = "selection-list-surface";
@@ -43,7 +52,6 @@ public class AppSelectionList : ListBox
     private Border? _reorderDropIndicator;
     private ContentControl? _reorderDragPreview;
     private ScrollViewer? _scrollViewer;
-    private int _dragSourceIndex = -1;
     private int _dragInsertionIndex = -1;
     private bool _dragInProgress;
 
@@ -76,6 +84,18 @@ public class AppSelectionList : ListBox
     {
         get => GetValue(CanReorderItemsProperty);
         set => SetValue(CanReorderItemsProperty, value);
+    }
+
+    public bool CanReorderFromComboBox
+    {
+        get => GetValue(CanReorderFromComboBoxProperty);
+        set => SetValue(CanReorderFromComboBoxProperty, value);
+    }
+
+    public IDataTemplate? ReorderDragPreviewContentTemplate
+    {
+        get => GetValue(ReorderDragPreviewContentTemplateProperty);
+        set => SetValue(ReorderDragPreviewContentTemplateProperty, value);
     }
 
     protected override void OnApplyTemplate(TemplateAppliedEventArgs e)
@@ -148,7 +168,7 @@ public class AppSelectionList : ListBox
         }
 
         var container = TryGetItemContainer(e.Source);
-        if (container is null || IsInteractiveDragSource(e.Source, container))
+        if (container is null || IsInteractiveDragSource(e.Source, container, CanReorderFromComboBox))
         {
             ResetReorderState();
             return;
@@ -165,7 +185,6 @@ public class AppSelectionList : ListBox
         _dragStart = e.GetPosition(container);
         _dragItem = item;
         _dragItemContainer = container;
-        _dragSourceIndex = sourceIndex;
         _dragInsertionIndex = sourceIndex;
     }
 
@@ -208,9 +227,9 @@ public class AppSelectionList : ListBox
             return;
         }
 
-        var sourceIndex = _dragSourceIndex;
-        var insertionIndex = _dragInsertionIndex;
         var item = _dragItem;
+        var sourceIndex = item is null ? -1 : IndexOfItem(item);
+        var insertionIndex = _dragInsertionIndex;
         var shouldMove = item is not null
             && sourceIndex >= 0
             && insertionIndex >= 0
@@ -241,12 +260,14 @@ public class AppSelectionList : ListBox
             return;
         }
 
+        TryGetAncestor<ComboBox>(e.Source, _dragItemContainer)?.SetCurrentValue(ComboBox.IsDropDownOpenProperty, false);
+
         _dragInProgress = true;
-        _dragItemContainer.Classes.Set(DraggingClassName, true);
         _dragPointer = e.Pointer;
         e.Pointer.Capture(_dragItemContainer);
 
         ShowDragPreview();
+        _dragItemContainer.Classes.Set(DraggingClassName, true);
         UpdateReorderDrag(e);
     }
 
@@ -279,7 +300,7 @@ public class AppSelectionList : ListBox
         }
 
         _reorderDragPreview.Content = _dragItem;
-        _reorderDragPreview.ContentTemplate = ItemTemplate;
+        _reorderDragPreview.ContentTemplate = ReorderDragPreviewContentTemplate ?? ItemTemplate;
         _reorderDragPreview.Width = _dragItemContainer.Bounds.Width;
         _reorderDragPreview.Height = _dragItemContainer.Bounds.Height;
         _reorderDragPreview.IsVisible = true;
@@ -466,8 +487,13 @@ public class AppSelectionList : ListBox
         return null;
     }
 
-    private static bool IsInteractiveDragSource(object? source, ListBoxItem container)
+    private static bool IsInteractiveDragSource(object? source, ListBoxItem container, bool allowComboBoxDrag)
     {
+        if (allowComboBoxDrag && TryGetAncestor<ComboBox>(source, container) is not null)
+        {
+            return false;
+        }
+
         var current = source as Visual;
         while (current is not null)
         {
@@ -486,7 +512,7 @@ public class AppSelectionList : ListBox
                 return true;
             }
 
-            if (current is TextBox or Slider)
+            if (current is TextBox or Slider or ComboBox)
             {
                 return true;
             }
@@ -495,6 +521,28 @@ public class AppSelectionList : ListBox
         }
 
         return false;
+    }
+
+    private static TControl? TryGetAncestor<TControl>(object? source, Control stopAt)
+        where TControl : Control
+    {
+        var current = source as Visual;
+        while (current is not null)
+        {
+            if (ReferenceEquals(current, stopAt))
+            {
+                return null;
+            }
+
+            if (current is TControl control)
+            {
+                return control;
+            }
+
+            current = current.GetVisualParent();
+        }
+
+        return null;
     }
 
     private void ResetReorderState()
@@ -515,7 +563,6 @@ public class AppSelectionList : ListBox
         _dragItem = null;
         _dragItemContainer = null;
         _dragPointer = null;
-        _dragSourceIndex = -1;
         _dragInsertionIndex = -1;
         _dragInProgress = false;
     }

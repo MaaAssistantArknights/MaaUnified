@@ -69,6 +69,15 @@
   <data name="Copilot.Tip.ClearList" xml:space="preserve">
     <value>[!! Đéļéţé åļļ çöþîļöţ ţåşķş îñ ţħé ƀåţţļé ļîşţ. !!]</value>
   </data>
+  <data name="Settings.RemoteControl.RegenerateDeviceIdentity" xml:space="preserve">
+    <value>[!! Řéĝéñéřåţé !!]</value>
+  </data>
+  <data name="TaskQueue.Root.RunTaskOnce" xml:space="preserve">
+    <value>[!! Řüñ Öñçé !!]</value>
+  </data>
+  <data name="TaskQueue.Module.UserDataUpdate" xml:space="preserve">
+    <value>[!! Ûþďåţé Đåţå !!]</value>
+  </data>
   <data name="TaskQueue.Status.ParamsLoaded" xml:space="preserve">
     <value>[!! Łöåđéď þåřåɱş ƒöř `{0}`. !!]</value>
   </data>

@@ -2639,6 +2639,7 @@ public partial class MainWindow : Window
                         ? DialogTextCatalog.ErrorDialogCopyErrorInfoButton(nextLanguage)
                         : DialogTextCatalog.ErrorDialogCopyButton(nextLanguage)),
                     (DialogTextCatalog.ChromeKeys.IssueReportButton, DialogTextCatalog.ErrorDialogIssueReportButton(nextLanguage)),
+                    (DialogTextCatalog.ChromeKeys.OpenSettingsButton, DialogTextCatalog.ErrorDialogOpenSettingsButton(nextLanguage)),
                     (DialogTextCatalog.ChromeKeys.TimestampLabel, DialogTextCatalog.ErrorDialogTimestampLabel(nextLanguage)),
                     (DialogTextCatalog.ChromeKeys.ContextLabel, DialogTextCatalog.ErrorDialogContextLabel(nextLanguage)),
                     (DialogTextCatalog.ChromeKeys.CodeLabel, DialogTextCatalog.ErrorDialogCodeLabel(nextLanguage)),
@@ -2658,11 +2659,26 @@ public partial class MainWindow : Window
         Func<CancellationToken, Task<UiOperationResult>>? openIssueReportAsync = VM is null
             ? null
             : VM.SettingsPage.OpenIssueReportEntryForDialogAsync;
+        Func<CancellationToken, Task<UiOperationResult>>? openSettingsAsync = isConnectFailed && VM is not null
+            ? OpenConnectionSettingsForDialogAsync
+            : null;
         await _dialogService.ShowErrorAsync(
             request,
             "MainWindow.DialogFeature.ErrorPopup",
             openIssueReportAsync,
+            openSettingsAsync,
             CancellationToken.None);
+    }
+
+    private Task<UiOperationResult> OpenConnectionSettingsForDialogAsync(CancellationToken cancellationToken = default)
+    {
+        if (VM is null)
+        {
+            return Task.FromResult(UiOperationResult.Fail(UiErrorCode.UiOperationFailed, "Main window is not ready."));
+        }
+
+        VM.OpenConnectionSettings();
+        return Task.FromResult(UiOperationResult.Ok("Connection settings opened."));
     }
 
     private string Localize(UiOperationResult result)

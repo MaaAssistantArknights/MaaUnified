@@ -17,6 +17,8 @@ public sealed class SettingsRemoteControlViewBindingTests
             xaml);
         Assert.Contains("IsReadOnly=\"True\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Click=\"OnRegenerateRemoteDeviceIdentityClick\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("RootTexts[Settings.RemoteControl.RegenerateDeviceIdentity]", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("RootTexts[RemoteControlRegenerateDeviceIdentity]", xaml, StringComparison.Ordinal);
     }
 
     [Fact]

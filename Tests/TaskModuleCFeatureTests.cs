@@ -358,6 +358,37 @@ public sealed class TaskModuleCFeatureTests
     }
 
     [Fact]
+    public async Task SaveConfig_NormalizesReclamationParamsAcrossProfiles()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var config = fixture.Config.CurrentConfig;
+        config.CurrentProfile = "Current";
+        config.Profiles["Current"] = new UnifiedProfile();
+        config.Profiles["Default"].TaskQueue.Add(new UnifiedTaskItem
+        {
+            Type = TaskModuleTypes.Reclamation,
+            Name = "Reclamation",
+            Params = new JsonObject
+            {
+                ["theme"] = "Tales",
+                ["mode"] = 1,
+                ["increment_mode"] = 0,
+                ["num_craft_batches"] = 16,
+                ["tools_to_craft"] = new JsonArray(),
+                ["clear_store"] = true,
+            },
+        });
+
+        await fixture.Config.SaveAsync();
+
+        var task = Assert.Single(config.Profiles["Default"].TaskQueue);
+        Assert.False(task.Params["clear_store"]?.GetValue<bool>());
+        Assert.DoesNotContain(
+            fixture.Config.CurrentValidationIssues,
+            issue => issue.Code == "ReclamationClearStoreIgnoredInArchive");
+    }
+
+    [Fact]
     public async Task SaveReclamation_ZeroCraftBatches_IsPreservedForWpfParity()
     {
         await using var fixture = await TestFixture.CreateAsync();

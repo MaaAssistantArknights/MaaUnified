@@ -165,6 +165,15 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             ],
         };
 
+    private static readonly IReadOnlyDictionary<string, string[]> LegacyLocalizedTaskTitleKeys =
+        new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
+        {
+            [TaskModuleTypes.Fight] =
+            [
+                "RemainingSanityStage",
+            ],
+        };
+
     private const int MaxLogCards = 180;
     private const int MaxOverlayLogs = 200;
     private const string UiMallCreditFightLastTime = "_ui_mall_credit_fight_last_time";
@@ -173,7 +182,6 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         "^(?:\\[?\\d{2}:\\d{2}:\\d{2}\\]?\\s+)+",
         RegexOptions.Compiled);
 
-    private readonly SemaphoreSlim _taskBindingLock = new(1, 1);
     private readonly SemaphoreSlim _logThumbnailSemaphore = new(1, 1);
     private readonly SemaphoreSlim _queueMutationLock = new(1, 1);
     private readonly SemaphoreSlim _runTransitionLock = new(1, 1);
@@ -186,13 +194,20 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     private readonly Action<string>? _navigateToSettingsSection;
     private readonly Func<CancellationToken, Task<bool>>? _ensureCoreReadyForExecutionAsync;
     private readonly Func<string, CancellationToken, Task>? _stopRunOwnerAsync;
+    private readonly StartUpTaskModuleViewModel _fallbackStartUpModule;
+    private readonly FightTaskModuleViewModel _fallbackFightModule;
+    private readonly RecruitTaskModuleViewModel _fallbackRecruitModule;
+    private readonly InfrastModuleViewModel _fallbackInfrastModule;
+    private readonly MallModuleViewModel _fallbackMallModule;
+    private readonly AwardModuleViewModel _fallbackAwardModule;
+    private readonly RoguelikeModuleViewModel _fallbackRoguelikeModule;
+    private readonly ReclamationModuleViewModel _fallbackReclamationModule;
+    private readonly UserDataUpdateModuleViewModel _fallbackUserDataUpdateModule;
+    private readonly CustomModuleViewModel _fallbackCustomModule;
     private Task _pendingBindingTask = Task.CompletedTask;
-    private CancellationTokenSource? _pendingBindingCts;
     private CancellationTokenSource? _moduleAutoSaveCts;
-    private int _pendingBindingVersion;
     private bool _suppressTaskEnabledSync;
     private bool _suppressModuleAutoSave;
-    private bool _suppressSelectedTaskBindingDuringFirstScreenLoad;
     private SessionState _currentSessionState;
     private bool _hasBlockingConfigIssues;
     private int _blockingConfigIssueCount;
@@ -241,6 +256,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     private string _lastCompletionNotificationRunId = string.Empty;
     private string _lastFailureNotificationRunId = string.Empty;
     private bool _selectedTaskSettingsHostResetPending;
+    private bool _isSelectedTaskBindingPending;
+    private TaskQueueTaskPanelViewModel? _selectedTaskPanel;
     private readonly IUiLanguageCoordinator _uiLanguageCoordinator;
 
     public TaskQueuePageViewModel(
@@ -263,6 +280,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         _uiLanguageCoordinator.LanguageChanged += OnUnifiedLanguageChanged;
         TaskModules = new ObservableCollection<TaskModuleOption>();
         Tasks = new ObservableCollection<TaskQueueItemViewModel>();
+        TaskPanels = new ObservableCollection<TaskQueueTaskPanelViewModel>();
         LogCards = new ObservableCollection<TaskQueueLogCardViewModel>();
         OverlayLogs = new ObservableCollection<TaskQueueLogEntryViewModel>();
         OverlayTargets = new ObservableCollection<OverlayTarget>();
@@ -287,28 +305,28 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         _overlayStatusText = string.IsNullOrWhiteSpace(_overlaySharedState.StatusMessage)
             ? Texts.GetOrDefault("TaskQueue.OverlayDisconnected", "Overlay disconnected")
             : _overlaySharedState.StatusMessage;
-        StartUpModule = new StartUpTaskModuleViewModel(
+        _fallbackStartUpModule = new StartUpTaskModuleViewModel(
             runtime,
             Texts,
             _connectionGameSharedState,
             RunAccountSwitchManualAsync);
-        FightModule = new FightTaskModuleViewModel(runtime, Texts);
-        RecruitModule = new RecruitTaskModuleViewModel(runtime, Texts);
-        InfrastModule = new InfrastModuleViewModel(runtime, Texts);
-        MallModule = new MallModuleViewModel(runtime, Texts);
-        AwardModule = new AwardModuleViewModel(runtime, Texts);
-        RoguelikeModule = new RoguelikeModuleViewModel(runtime, Texts);
-        ReclamationModule = new ReclamationModuleViewModel(runtime, Texts);
-        UserDataUpdateModule = new UserDataUpdateModuleViewModel(runtime, Texts);
-        CustomModule = new CustomModuleViewModel(runtime, Texts);
+        _fallbackFightModule = new FightTaskModuleViewModel(runtime, Texts);
+        _fallbackRecruitModule = new RecruitTaskModuleViewModel(runtime, Texts);
+        _fallbackInfrastModule = new InfrastModuleViewModel(runtime, Texts);
+        _fallbackMallModule = new MallModuleViewModel(runtime, Texts);
+        _fallbackAwardModule = new AwardModuleViewModel(runtime, Texts);
+        _fallbackRoguelikeModule = new RoguelikeModuleViewModel(runtime, Texts);
+        _fallbackReclamationModule = new ReclamationModuleViewModel(runtime, Texts);
+        _fallbackUserDataUpdateModule = new UserDataUpdateModuleViewModel(runtime, Texts);
+        _fallbackCustomModule = new CustomModuleViewModel(runtime, Texts);
         PostActionModule = new PostActionModuleViewModel(runtime, Texts);
         ApplySettingsModeToTaskModules();
-        StartUpModule.PropertyChanged += OnTypedModulePropertyChanged;
-        FightModule.PropertyChanged += OnTypedModulePropertyChanged;
-        RecruitModule.PropertyChanged += OnTypedModulePropertyChanged;
-        RoguelikeModule.PropertyChanged += OnTypedModulePropertyChanged;
-        ReclamationModule.PropertyChanged += OnTypedModulePropertyChanged;
-        CustomModule.PropertyChanged += OnTypedModulePropertyChanged;
+        _fallbackStartUpModule.PropertyChanged += OnTypedModulePropertyChanged;
+        _fallbackFightModule.PropertyChanged += OnTypedModulePropertyChanged;
+        _fallbackRecruitModule.PropertyChanged += OnTypedModulePropertyChanged;
+        _fallbackRoguelikeModule.PropertyChanged += OnTypedModulePropertyChanged;
+        _fallbackReclamationModule.PropertyChanged += OnTypedModulePropertyChanged;
+        _fallbackCustomModule.PropertyChanged += OnTypedModulePropertyChanged;
         PostActionModule.PropertyChanged += OnPostActionModulePropertyChanged;
 
         RebuildTaskModuleOptions();
@@ -338,6 +356,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
     public ObservableCollection<TaskQueueItemViewModel> Tasks { get; }
 
+    public ObservableCollection<TaskQueueTaskPanelViewModel> TaskPanels { get; }
+
     public ObservableCollection<TaskQueueLogCardViewModel> LogCards { get; }
 
     public ObservableCollection<TaskQueueLogEntryViewModel> OverlayLogs { get; }
@@ -362,25 +382,25 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
     public RootLocalizationTextMap RootTexts { get; }
 
-    public StartUpTaskModuleViewModel StartUpModule { get; }
+    public StartUpTaskModuleViewModel StartUpModule => ResolveModuleForProjection<StartUpTaskModuleViewModel>() ?? _fallbackStartUpModule;
 
-    public FightTaskModuleViewModel FightModule { get; }
+    public FightTaskModuleViewModel FightModule => ResolveModuleForProjection<FightTaskModuleViewModel>() ?? _fallbackFightModule;
 
-    public RecruitTaskModuleViewModel RecruitModule { get; }
+    public RecruitTaskModuleViewModel RecruitModule => ResolveModuleForProjection<RecruitTaskModuleViewModel>() ?? _fallbackRecruitModule;
 
-    public InfrastModuleViewModel InfrastModule { get; }
+    public InfrastModuleViewModel InfrastModule => ResolveModuleForProjection<InfrastModuleViewModel>() ?? _fallbackInfrastModule;
 
-    public MallModuleViewModel MallModule { get; }
+    public MallModuleViewModel MallModule => ResolveModuleForProjection<MallModuleViewModel>() ?? _fallbackMallModule;
 
-    public AwardModuleViewModel AwardModule { get; }
+    public AwardModuleViewModel AwardModule => ResolveModuleForProjection<AwardModuleViewModel>() ?? _fallbackAwardModule;
 
-    public RoguelikeModuleViewModel RoguelikeModule { get; }
+    public RoguelikeModuleViewModel RoguelikeModule => ResolveModuleForProjection<RoguelikeModuleViewModel>() ?? _fallbackRoguelikeModule;
 
-    public ReclamationModuleViewModel ReclamationModule { get; }
+    public ReclamationModuleViewModel ReclamationModule => ResolveModuleForProjection<ReclamationModuleViewModel>() ?? _fallbackReclamationModule;
 
-    public UserDataUpdateModuleViewModel UserDataUpdateModule { get; }
+    public UserDataUpdateModuleViewModel UserDataUpdateModule => ResolveModuleForProjection<UserDataUpdateModuleViewModel>() ?? _fallbackUserDataUpdateModule;
 
-    public CustomModuleViewModel CustomModule { get; }
+    public CustomModuleViewModel CustomModule => ResolveModuleForProjection<CustomModuleViewModel>() ?? _fallbackCustomModule;
 
     public PostActionModuleViewModel PostActionModule { get; }
 
@@ -501,11 +521,22 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 IsPostActionPanelSelected = false;
             }
             RememberSelectedTaskIndex();
+            UpdateSelectedTaskPanel();
             RaiseSelectedTaskProjectionChanged();
             ResetSettingsModeForSelectedTask();
-            if (!_suppressSelectedTaskBindingDuringFirstScreenLoad)
+        }
+    }
+
+    public TaskQueueTaskPanelViewModel? SelectedTaskPanel
+    {
+        get => _selectedTaskPanel;
+        private set
+        {
+            if (SetProperty(ref _selectedTaskPanel, value))
             {
-                ScheduleBindSelectedTask();
+                OnPropertyChanged(nameof(SelectedTaskSettingsViewModel));
+                ProjectSelectedTaskValidationSummary();
+                RaiseModuleProjectionPropertiesChanged();
             }
         }
     }
@@ -569,6 +600,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 SetAdvancedSettingsSelected(false);
             }
 
+            UpdateSelectedTaskPanel();
             RaiseSelectedTaskProjectionChanged();
         }
     }
@@ -582,6 +614,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             {
                 OnPropertyChanged(nameof(IsRunning));
                 OnPropertyChanged(nameof(CanEdit));
+                OnPropertyChanged(nameof(CanEditSelectedTaskSettings));
                 OnPropertyChanged(nameof(RunButtonText));
                 OnPropertyChanged(nameof(IsRunOwnedByAnotherFeature));
                 OnPropertyChanged(nameof(IsOwnRunActive));
@@ -594,6 +627,14 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     public bool IsRunning => _isStartRequestActive || CurrentSessionState is SessionState.Running or SessionState.Stopping;
 
     public bool CanEdit => !IsRunning;
+
+    public bool IsSelectedTaskBindingPending
+    {
+        get => _isSelectedTaskBindingPending;
+        private set => SetProperty(ref _isSelectedTaskBindingPending, value);
+    }
+
+    public bool CanEditSelectedTaskSettings => CanEdit;
 
     public string RunButtonText
     {
@@ -682,6 +723,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         OnPropertyChanged(nameof(IsStartRequestActive));
         OnPropertyChanged(nameof(IsRunning));
         OnPropertyChanged(nameof(CanEdit));
+        OnPropertyChanged(nameof(CanEditSelectedTaskSettings));
         OnPropertyChanged(nameof(RunButtonText));
         OnPropertyChanged(nameof(IsRunOwnedByAnotherFeature));
         OnPropertyChanged(nameof(IsOwnRunActive));
@@ -774,15 +816,6 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         }
     }
 
-    public string TaskMenuTooltipText =>
-        $"{RootTexts.GetOrDefault("TaskQueue.Root.LeftClick", "Left click")}: {RootTexts.GetOrDefault("TaskQueue.Root.TaskSettings", "Task settings")}{Environment.NewLine}" +
-        $"{RootTexts.GetOrDefault("TaskQueue.Root.RightClick", "Right click")}: " +
-        $"{Texts.GetOrDefault("RunTaskOnce", "Run once")} / " +
-        $"{RootTexts.GetOrDefault("TaskQueue.Root.MoveUp", "Move up")} / " +
-        $"{RootTexts.GetOrDefault("TaskQueue.Root.MoveDown", "Move down")} / " +
-        $"{RootTexts.GetOrDefault("TaskQueue.Root.Rename", "Rename")} / " +
-        $"{RootTexts.GetOrDefault("TaskQueue.Root.Delete", "Delete")}";
-
     public string TaskListTitleText => RootTexts.GetOrDefault("TaskQueue.Root.TaskListTitle", "Task list");
 
     public string TaskConfigTitleText
@@ -810,7 +843,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
     public string TaskMenuRenameText => RootTexts.GetOrDefault("TaskQueue.Root.Rename", "Rename");
 
-    public string TaskMenuRunOnceText => Texts.GetOrDefault("RunTaskOnce", "Run once");
+    public string TaskMenuRunOnceText => RootTexts.GetOrDefault("TaskQueue.Root.RunTaskOnce", "Run once");
 
     public string TaskMenuDeleteText => RootTexts.GetOrDefault("TaskQueue.Root.Delete", "Delete");
 
@@ -905,20 +938,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 return null;
             }
 
-            return SelectedTaskModule switch
-            {
-                TaskModuleTypes.StartUp => StartUpModule,
-                TaskModuleTypes.Fight => FightModule,
-                TaskModuleTypes.Recruit => RecruitModule,
-                TaskModuleTypes.Infrast => InfrastModule,
-                TaskModuleTypes.Mall => MallModule,
-                TaskModuleTypes.Award => AwardModule,
-                TaskModuleTypes.Roguelike => RoguelikeModule,
-                TaskModuleTypes.Reclamation => ReclamationModule,
-                TaskModuleTypes.UserDataUpdate => UserDataUpdateModule,
-                TaskModuleTypes.Custom => CustomModule,
-                _ => null,
-            };
+            return SelectedTaskPanel?.ModuleViewModel;
         }
     }
 
@@ -1062,15 +1082,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     {
         SetLanguage(ResolveLanguage());
         RefreshConfigValidationState(Runtime.ConfigurationService.CurrentValidationIssues);
-        _suppressSelectedTaskBindingDuringFirstScreenLoad = true;
-        try
-        {
-            await ReloadTasksAsync(cancellationToken, preferProfileSelectedIndex: true, waitForPendingBinding: false);
-        }
-        finally
-        {
-            _suppressSelectedTaskBindingDuringFirstScreenLoad = false;
-        }
+        await ReloadTasksAsync(cancellationToken, preferProfileSelectedIndex: true, waitForPendingBinding: false);
 
         ApplyGuiSettingsFromConfig();
         UpdatePostActionSummary();
@@ -1078,15 +1090,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
     public async Task InitializeDeferredStartupAsync(CancellationToken cancellationToken = default)
     {
-        if (SelectedTask is not null)
-        {
-            ScheduleBindSelectedTask();
-        }
-
         await WaitForPendingBindingAsync(cancellationToken);
-        await FightModule.ReloadPersistentConfigAsync(cancellationToken);
-        await InfrastModule.ReloadPersistentConfigAsync(cancellationToken);
-        await RoguelikeModule.ReloadPersistentConfigAsync(cancellationToken);
+        await ReloadTaskPanelPersistentConfigAsync(cancellationToken);
         RefreshStagePresentation();
         await ReloadOverlayTargetsAsync(cancellationToken);
         await PostActionModule.InitializeAsync(cancellationToken);
@@ -1097,29 +1102,14 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         bool forceReloadStageOptions = false,
         CancellationToken cancellationToken = default)
     {
-        _suppressSelectedTaskBindingDuringFirstScreenLoad = true;
-        try
-        {
-            PrepareForConfigurationContextSwitch();
-            await ReloadTasksAsync(
-                cancellationToken,
-                preferProfileSelectedIndex: true,
-                waitForPendingBinding: false);
-            await FightModule.ReloadPersistentConfigAsync(cancellationToken);
-            await InfrastModule.ReloadPersistentConfigAsync(cancellationToken);
-            await RoguelikeModule.ReloadPersistentConfigAsync(cancellationToken);
-            ApplyGuiSettingsFromConfig();
-            await PostActionModule.InitializeAsync(cancellationToken);
-        }
-        finally
-        {
-            _suppressSelectedTaskBindingDuringFirstScreenLoad = false;
-        }
-
-        if (SelectedTask is not null)
-        {
-            await BindSelectedTaskAsync(cancellationToken);
-        }
+        PrepareForConfigurationContextSwitch();
+        await ReloadTasksAsync(
+            cancellationToken,
+            preferProfileSelectedIndex: true,
+            waitForPendingBinding: false);
+        await ReloadTaskPanelPersistentConfigAsync(cancellationToken);
+        ApplyGuiSettingsFromConfig();
+        await PostActionModule.InitializeAsync(cancellationToken);
 
         RefreshStagePresentation(forceReloadStageOptions);
         UpdatePostActionSummary();
@@ -1150,7 +1140,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             ? Texts.GetOrDefault("TaskQueue.OverlayDisconnected", "Overlay disconnected")
             : _overlaySharedState.StatusMessage;
 
-        FightModule.RefreshStageOptions(_connectionGameSharedState.ClientType);
+        RefreshFightStageOptions(_connectionGameSharedState.ClientType);
         RebuildTaskModuleOptions();
         RefreshTaskItemsLocalization();
 
@@ -1164,18 +1154,10 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             ResetSelectedTaskSettingsHost();
         }
 
-        if (SelectedTask is not null)
-        {
-            // Reuse the existing selection-binding path so the open task panel rebuilds
-            // any bind-time localized projections without requiring the user to reselect it.
-            ScheduleBindSelectedTask();
-        }
-
         OnPropertyChanged(nameof(RunButtonText));
         OnPropertyChanged(nameof(WaitAndStopButtonText));
         OnPropertyChanged(nameof(BatchActionText));
         OnPropertyChanged(nameof(BatchToggleMenuText));
-        OnPropertyChanged(nameof(TaskMenuTooltipText));
         OnPropertyChanged(nameof(OverlayMode));
         OnPropertyChanged(nameof(IsOverlayHiddenMode));
         OnPropertyChanged(nameof(IsOverlayPreviewMode));
@@ -1232,7 +1214,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         _logTimestampFormat = NormalizeLogTimestampFormat(snapshot.LogItemDateFormatString);
         _useSystemNotifications = snapshot.UseNotify;
         ApplySelectionBatchMode(snapshot.InverseClearMode);
-        RoguelikeModule.RefreshGuiDependentOptions();
+        RefreshRoguelikeGuiDependentOptions();
     }
 
     public void SetCoreAvailability(bool isReady, string? message = null)
@@ -1243,7 +1225,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
     public void RefreshStagePresentation(bool forceReloadStageOptions = false)
     {
-        FightModule.RefreshStageOptions(_connectionGameSharedState.ClientType, forceReloadStageOptions);
+        RefreshFightStageOptions(_connectionGameSharedState.ClientType, forceReloadStageOptions);
         DailyStageHint = FightTaskModuleViewModel.BuildDailyResourceHint(
             Texts.Language,
             _connectionGameSharedState.ClientType,
@@ -1332,6 +1314,11 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             return moduleDisplay;
         }
 
+        if (TryResolveLegacyLocalizedTaskTitle(name, item.Type, out var localizedTitle))
+        {
+            return localizedTitle;
+        }
+
         if (IsDefaultTaskName(name, item.Type, moduleDisplay))
         {
             return moduleDisplay;
@@ -1351,6 +1338,48 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
         return LegacyTaskNameAliases.TryGetValue(normalizedModuleType, out var aliases)
                && aliases.Any(alias => string.Equals(name, alias, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private bool TryResolveLegacyLocalizedTaskTitle(string name, string moduleType, out string localizedTitle)
+    {
+        localizedTitle = string.Empty;
+        var normalizedModuleType = TaskModuleTypes.Normalize(moduleType);
+        if (!LegacyLocalizedTaskTitleKeys.TryGetValue(normalizedModuleType, out var keys))
+        {
+            return false;
+        }
+
+        foreach (var key in keys)
+        {
+            if (!IsLegacyLocalizedTaskTitleAlias(name, key))
+            {
+                continue;
+            }
+
+            localizedTitle = AchievementTextCatalog.GetString(key, Texts.Language, name);
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool IsLegacyLocalizedTaskTitleAlias(string name, string key)
+    {
+        foreach (var language in UiLanguageCatalog.Ordered)
+        {
+            if (string.Equals(language, "pallas", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var alias = AchievementTextCatalog.GetString(key, language, key);
+            if (string.Equals(name, alias, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private void OnPostActionModulePropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -1472,6 +1501,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             _suppressTaskEnabledSync = false;
         }
 
+        await RebuildTaskPanelsAsync(cancellationToken);
+
         var reloadSelectionIndex = ResolveReloadSelectionIndex(preferProfileSelectedIndex, previousSelectedIndex, Tasks.Count);
         if (reloadSelectionIndex.HasValue)
         {
@@ -1571,6 +1602,178 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
         SelectedTask = Tasks[index];
         await WaitForPendingBindingAsync(cancellationToken);
+    }
+
+    private async Task RebuildTaskPanelsAsync(CancellationToken cancellationToken)
+    {
+        ClearTaskPanels();
+        for (var index = 0; index < Tasks.Count; index++)
+        {
+            var panel = await CreateTaskPanelAsync(Tasks[index], index, cancellationToken);
+            TaskPanels.Add(panel);
+        }
+
+        ApplySettingsModeToTaskModules();
+        UpdateSelectedTaskPanel();
+        RaiseModuleProjectionPropertiesChanged();
+    }
+
+    private async Task<TaskQueueTaskPanelViewModel> CreateTaskPanelAsync(
+        TaskQueueItemViewModel task,
+        int index,
+        CancellationToken cancellationToken)
+    {
+        var moduleType = TaskModuleTypes.Normalize(task.Type);
+        var module = CreateTaskModuleViewModel(moduleType);
+        if (module is INotifyPropertyChanged typedModule
+            && module is not TaskModuleSettingsViewModelBase)
+        {
+            typedModule.PropertyChanged += OnTypedModulePropertyChanged;
+        }
+
+        var panel = new TaskQueueTaskPanelViewModel(task, index, moduleType, module);
+        try
+        {
+            await BindTaskPanelAsync(panel, cancellationToken);
+            await RefreshTaskPanelValidationSummaryAsync(panel, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            panel.ApplyLoadError(ex.Message);
+            await RecordUnhandledExceptionAsync(
+                "TaskQueue.PreloadTaskPanel",
+                ex,
+                UiErrorCode.TaskLoadFailed,
+                "Preload task panel failed.");
+        }
+
+        return panel;
+    }
+
+    private IEnumerable<TModule> EnumeratePanelModules<TModule>()
+        where TModule : class
+    {
+        return TaskPanels
+            .Select(static panel => panel.ModuleViewModel)
+            .OfType<TModule>();
+    }
+
+    private async Task ReloadTaskPanelPersistentConfigAsync(CancellationToken cancellationToken)
+    {
+        foreach (var module in EnumeratePanelModules<FightTaskModuleViewModel>())
+        {
+            await module.ReloadPersistentConfigAsync(cancellationToken);
+        }
+
+        foreach (var module in EnumeratePanelModules<InfrastModuleViewModel>())
+        {
+            await module.ReloadPersistentConfigAsync(cancellationToken);
+        }
+
+        foreach (var module in EnumeratePanelModules<RoguelikeModuleViewModel>())
+        {
+            await module.ReloadPersistentConfigAsync(cancellationToken);
+        }
+    }
+
+    private void RefreshFightStageOptions(string? clientType = null, bool forceReload = false)
+    {
+        _fallbackFightModule.RefreshStageOptions(clientType, forceReload);
+        foreach (var module in EnumeratePanelModules<FightTaskModuleViewModel>())
+        {
+            module.RefreshStageOptions(clientType, forceReload);
+        }
+    }
+
+    private void RefreshRoguelikeGuiDependentOptions()
+    {
+        _fallbackRoguelikeModule.RefreshGuiDependentOptions();
+        foreach (var module in EnumeratePanelModules<RoguelikeModuleViewModel>())
+        {
+            module.RefreshGuiDependentOptions();
+        }
+    }
+
+    private ITaskModulePanelViewModel CreateTaskModuleViewModel(string moduleType)
+    {
+        return moduleType switch
+        {
+            TaskModuleTypes.StartUp => new StartUpTaskModuleViewModel(
+                Runtime,
+                Texts,
+                _connectionGameSharedState,
+                RunAccountSwitchManualAsync),
+            TaskModuleTypes.Fight => new FightTaskModuleViewModel(Runtime, Texts),
+            TaskModuleTypes.Recruit => new RecruitTaskModuleViewModel(Runtime, Texts),
+            TaskModuleTypes.Infrast => new InfrastModuleViewModel(Runtime, Texts),
+            TaskModuleTypes.Mall => new MallModuleViewModel(Runtime, Texts),
+            TaskModuleTypes.Award => new AwardModuleViewModel(Runtime, Texts),
+            TaskModuleTypes.Roguelike => new RoguelikeModuleViewModel(Runtime, Texts),
+            TaskModuleTypes.Reclamation => new ReclamationModuleViewModel(Runtime, Texts),
+            TaskModuleTypes.UserDataUpdate => new UserDataUpdateModuleViewModel(Runtime, Texts),
+            TaskModuleTypes.Custom => new CustomModuleViewModel(Runtime, Texts),
+            _ => new CustomModuleViewModel(Runtime, Texts),
+        };
+    }
+
+    private async Task BindTaskPanelAsync(TaskQueueTaskPanelViewModel panel, CancellationToken cancellationToken)
+    {
+        switch (panel.ModuleViewModel)
+        {
+            case StartUpTaskModuleViewModel startUp:
+                await startUp.BindAsync(panel.TaskIndex, cancellationToken);
+                break;
+            case FightTaskModuleViewModel fight:
+                await fight.BindAsync(panel.TaskIndex, cancellationToken);
+                break;
+            case RecruitTaskModuleViewModel recruit:
+                await recruit.BindAsync(panel.TaskIndex, cancellationToken);
+                break;
+            case RoguelikeModuleViewModel roguelike:
+                await roguelike.BindAsync(panel.TaskIndex, cancellationToken);
+                break;
+            case ReclamationModuleViewModel reclamation:
+                await reclamation.BindAsync(panel.TaskIndex, cancellationToken);
+                break;
+            case CustomModuleViewModel custom:
+                await custom.BindAsync(panel.TaskIndex, cancellationToken);
+                break;
+            case TaskModuleSettingsViewModelBase jsonModule:
+                var paramsResult = await Runtime.TaskQueueFeatureService.GetTaskParamsAsync(panel.TaskIndex, cancellationToken);
+                if (!paramsResult.Success || paramsResult.Value is null)
+                {
+                    LastErrorMessage = paramsResult.Message;
+                    panel.ApplyLoadError(paramsResult.Message);
+                    return;
+                }
+
+                await jsonModule.BindAsync(panel.TaskIndex, paramsResult.Value, cancellationToken);
+                break;
+        }
+    }
+
+    private async Task RefreshTaskPanelValidationSummaryAsync(
+        TaskQueueTaskPanelViewModel panel,
+        CancellationToken cancellationToken)
+    {
+        var result = await Runtime.TaskQueueFeatureService.ValidateTaskAsync(panel.TaskIndex, cancellationToken);
+        if (!result.Success || result.Value is null)
+        {
+            panel.ApplyValidationLoadFailure(Texts, result.Message);
+            LastErrorMessage = result.Message;
+            return;
+        }
+
+        panel.ClearLoadError();
+        panel.ApplyValidationReport(result.Value, Texts);
+        if (ReferenceEquals(panel, SelectedTaskPanel))
+        {
+            ProjectSelectedTaskValidationSummary();
+        }
     }
 
     private async void OnTaskPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -1801,28 +2004,129 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             return;
         }
 
-        await ExecuteQueueMutationAsync(
-            "TaskQueue.MoveTask",
-            ct => Runtime.TaskQueueFeatureService.MoveTaskAsync(from, to, ct),
-            ct => SelectTaskByIndexAsync(to, ct),
-            resetBindingsBeforeReload: true,
-            cancellationToken);
+        if (!await EnsureEditableAsync("TaskQueue.MoveTask", cancellationToken))
+        {
+            return;
+        }
+
+        await _queueMutationLock.WaitAsync(cancellationToken);
+        try
+        {
+            await WaitForPendingBindingAsync(cancellationToken);
+            if (!await SaveBoundTaskModulesAsync(cancellationToken))
+            {
+                return;
+            }
+
+            var result = await Runtime.TaskQueueFeatureService.MoveTaskAsync(from, to, cancellationToken);
+            if (!await ApplyResultAsync(result, "TaskQueue.MoveTask", cancellationToken))
+            {
+                return;
+            }
+
+            ApplyLocalTaskMove(from, to);
+            RegisterTaskQueueSavePending();
+
+            if (SelectedTaskPanel is not null)
+            {
+                await RefreshTaskPanelValidationSummaryAsync(SelectedTaskPanel, cancellationToken);
+            }
+        }
+        finally
+        {
+            _queueMutationLock.Release();
+        }
+    }
+
+    private void ApplyLocalTaskMove(int from, int to)
+    {
+        if (from < 0 || to < 0 || from >= Tasks.Count || to >= Tasks.Count || from == to)
+        {
+            return;
+        }
+
+        Tasks.Move(from, to);
+
+        if (from < TaskPanels.Count && to < TaskPanels.Count)
+        {
+            TaskPanels.Move(from, to);
+            for (var index = 0; index < TaskPanels.Count; index++)
+            {
+                TaskPanels[index].RebindTaskIndex(index);
+            }
+        }
+
+        RememberSelectedTaskIndex();
+        UpdateSelectedTaskPanel();
+        RaiseSelectedTaskProjectionChanged();
     }
 
     public async Task SelectAllAsync(bool enabled, CancellationToken cancellationToken = default)
     {
-        await ExecuteQueueMutationAsync(
+        await ExecuteTaskEnabledBatchAsync(
             "TaskQueue.SelectAll",
             ct => Runtime.TaskQueueFeatureService.SetAllTasksEnabledAsync(enabled, ct),
+            _ => enabled,
             cancellationToken: cancellationToken);
     }
 
     public async Task InverseSelectionAsync(CancellationToken cancellationToken = default)
     {
-        await ExecuteQueueMutationAsync(
+        await ExecuteTaskEnabledBatchAsync(
             "TaskQueue.InverseSelection",
             ct => Runtime.TaskQueueFeatureService.InvertTasksEnabledAsync(ct),
+            current => !current,
             cancellationToken: cancellationToken);
+    }
+
+    private async Task<bool> ExecuteTaskEnabledBatchAsync(
+        string scope,
+        Func<CancellationToken, Task<UiOperationResult>> mutationAsync,
+        Func<bool, bool> resolveEnabled,
+        CancellationToken cancellationToken = default)
+    {
+        if (!await EnsureEditableAsync(scope, cancellationToken))
+        {
+            return false;
+        }
+
+        await _queueMutationLock.WaitAsync(cancellationToken);
+        try
+        {
+            var result = await mutationAsync(cancellationToken);
+            if (!await ApplyResultAsync(result, scope, cancellationToken))
+            {
+                return false;
+            }
+
+            ApplyLocalTaskEnabledBatch(resolveEnabled);
+            RegisterTaskQueueSavePending();
+            return true;
+        }
+        finally
+        {
+            _queueMutationLock.Release();
+        }
+    }
+
+    private void ApplyLocalTaskEnabledBatch(Func<bool, bool> resolveEnabled)
+    {
+        _suppressTaskEnabledSync = true;
+        try
+        {
+            foreach (var task in Tasks)
+            {
+                var next = resolveEnabled(task.IsEnabled);
+                if (task.IsEnabled != next)
+                {
+                    task.IsEnabled = next;
+                }
+            }
+        }
+        finally
+        {
+            _suppressTaskEnabledSync = false;
+        }
     }
 
     public async Task ExecuteBatchActionAsync(CancellationToken cancellationToken = default)
@@ -1891,6 +2195,48 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 StringComparison.OrdinalIgnoreCase);
     }
 
+    private TModule? ResolveModuleForProjection<TModule>()
+        where TModule : class
+    {
+        if (SelectedTaskPanel?.ModuleViewModel is TModule selectedModule)
+        {
+            return selectedModule;
+        }
+
+        return TaskPanels
+            .Select(static panel => panel.ModuleViewModel)
+            .OfType<TModule>()
+            .FirstOrDefault();
+    }
+
+    private void UpdateSelectedTaskPanel()
+    {
+        var next = SelectedTask is null
+            ? null
+            : TaskPanels.FirstOrDefault(panel => ReferenceEquals(panel.Task, SelectedTask));
+
+        foreach (var panel in TaskPanels)
+        {
+            panel.IsSelected = ReferenceEquals(panel, next) && !IsPostActionPanelSelected;
+        }
+
+        SelectedTaskPanel = next;
+    }
+
+    private void RaiseModuleProjectionPropertiesChanged()
+    {
+        OnPropertyChanged(nameof(StartUpModule));
+        OnPropertyChanged(nameof(FightModule));
+        OnPropertyChanged(nameof(RecruitModule));
+        OnPropertyChanged(nameof(InfrastModule));
+        OnPropertyChanged(nameof(MallModule));
+        OnPropertyChanged(nameof(AwardModule));
+        OnPropertyChanged(nameof(RoguelikeModule));
+        OnPropertyChanged(nameof(ReclamationModule));
+        OnPropertyChanged(nameof(UserDataUpdateModule));
+        OnPropertyChanged(nameof(CustomModule));
+    }
+
     private void RaiseSelectedTaskProjectionChanged()
     {
         OnPropertyChanged(nameof(IsNoTaskSelected));
@@ -1908,6 +2254,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         OnPropertyChanged(nameof(IsCustomTaskSelected));
         OnPropertyChanged(nameof(IsPostActionTaskSelected));
         OnPropertyChanged(nameof(ShowPostActionSettingsPanel));
+        OnPropertyChanged(nameof(SelectedTaskPanel));
         OnPropertyChanged(nameof(SelectedTaskSettingsViewModel));
         OnPropertyChanged(nameof(CanUseAdvancedSettings));
         OnPropertyChanged(nameof(ShowSettingsModeSwitch));
@@ -1948,16 +2295,21 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
     private void ApplySettingsModeToTaskModules()
     {
-        StartUpModule.IsAdvancedMode = _isAdvancedSettingsSelected;
-        FightModule.IsAdvancedMode = _isAdvancedSettingsSelected;
-        RecruitModule.IsAdvancedMode = _isAdvancedSettingsSelected;
-        InfrastModule.IsAdvancedMode = _isAdvancedSettingsSelected;
-        MallModule.IsAdvancedMode = _isAdvancedSettingsSelected;
-        AwardModule.IsAdvancedMode = _isAdvancedSettingsSelected;
-        RoguelikeModule.IsAdvancedMode = _isAdvancedSettingsSelected;
-        ReclamationModule.IsAdvancedMode = _isAdvancedSettingsSelected;
-        UserDataUpdateModule.IsAdvancedMode = _isAdvancedSettingsSelected;
-        CustomModule.IsAdvancedMode = _isAdvancedSettingsSelected;
+        _fallbackStartUpModule.IsAdvancedMode = _isAdvancedSettingsSelected;
+        _fallbackFightModule.IsAdvancedMode = _isAdvancedSettingsSelected;
+        _fallbackRecruitModule.IsAdvancedMode = _isAdvancedSettingsSelected;
+        _fallbackInfrastModule.IsAdvancedMode = _isAdvancedSettingsSelected;
+        _fallbackMallModule.IsAdvancedMode = _isAdvancedSettingsSelected;
+        _fallbackAwardModule.IsAdvancedMode = _isAdvancedSettingsSelected;
+        _fallbackRoguelikeModule.IsAdvancedMode = _isAdvancedSettingsSelected;
+        _fallbackReclamationModule.IsAdvancedMode = _isAdvancedSettingsSelected;
+        _fallbackUserDataUpdateModule.IsAdvancedMode = _isAdvancedSettingsSelected;
+        _fallbackCustomModule.IsAdvancedMode = _isAdvancedSettingsSelected;
+
+        foreach (var panel in TaskPanels)
+        {
+            panel.Module.IsAdvancedMode = _isAdvancedSettingsSelected;
+        }
     }
 
     private void OnTypedModulePropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -1981,7 +2333,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             || string.Equals(e.PropertyName, nameof(StartUpTaskModuleViewModel.StatusMessage), StringComparison.Ordinal)
             || string.Equals(e.PropertyName, nameof(StartUpTaskModuleViewModel.LastErrorMessage), StringComparison.Ordinal)
             || string.Equals(e.PropertyName, nameof(StartUpTaskModuleViewModel.IsTaskBound), StringComparison.Ordinal)
-            || string.Equals(e.PropertyName, nameof(StartUpTaskModuleViewModel.IsDirty), StringComparison.Ordinal))
+            || string.Equals(e.PropertyName, nameof(StartUpTaskModuleViewModel.IsDirty), StringComparison.Ordinal)
+            || string.Equals(e.PropertyName, nameof(StartUpTaskModuleViewModel.HasValidationIssues), StringComparison.Ordinal))
         {
             return;
         }
@@ -2347,13 +2700,12 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
         var connectMessage = BuildConnectFailureMessage(connectResult);
         LastErrorMessage = connectMessage;
-        NavigateToConnectionSettingsIfAvailable();
         AppendStartPrecheckWarningMessage(LastErrorMessage);
         AppendStartFailureLog(LastErrorMessage);
-        await RecordFailedResultAsync(
+        await Runtime.DialogFeatureService.ReportErrorAsync(
             scope,
             UiOperationResult.Fail(
-                UiErrorCode.SessionStateNotAllowed,
+                UiErrorCode.ConnectFailed,
                 LastErrorMessage,
                 connectResult.Error?.Details),
             cancellationToken);
@@ -2445,7 +2797,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             lastFailure = result;
         }
 
-        return lastFailure ?? UiOperationResult.Fail(UiErrorCode.UiOperationFailed, "Connection failed.");
+        return lastFailure ?? UiOperationResult.Fail(UiErrorCode.ConnectFailed, "Connection failed.");
     }
 
     private string BuildConnectFailureMessage(UiOperationResult connectResult)
@@ -2600,11 +2952,6 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         {
             return (false, ex.Message);
         }
-    }
-
-    private void NavigateToConnectionSettingsIfAvailable()
-    {
-        _navigateToSettingsSection?.Invoke("Connect");
     }
 
     private static string BuildSessionStateNotAllowedMessage(SessionState state, string actionZh, string actionEn)
@@ -3404,18 +3751,38 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         SelectedTaskValidationSummary = string.Empty;
     }
 
+    private void ProjectSelectedTaskValidationSummary()
+    {
+        if (SelectedTaskPanel is null)
+        {
+            ResetSelectedTaskValidationSummary();
+            return;
+        }
+
+        SelectedTaskValidationIssueCount = SelectedTaskPanel.ValidationIssueCount;
+        SelectedTaskHasBlockingValidationIssues = SelectedTaskPanel.HasBlockingValidationIssues;
+        SelectedTaskValidationSummary = SelectedTaskPanel.ValidationSummary;
+    }
+
     private async Task RefreshSelectedTaskValidationSummaryAsync(int index, CancellationToken cancellationToken)
     {
+        var panel = TaskPanels.FirstOrDefault(candidate => candidate.TaskIndex == index);
         var result = await Runtime.TaskQueueFeatureService.ValidateTaskAsync(index, cancellationToken);
         if (!result.Success || result.Value is null)
         {
-            SelectedTaskValidationIssueCount = 0;
-            SelectedTaskHasBlockingValidationIssues = false;
-            SelectedTaskValidationSummary = Texts.GetOrDefault(
-                "TaskQueue.Validation.LoadFailed",
-                "Failed to load validation report.");
+            if (panel is not null)
+            {
+                panel.ApplyValidationLoadFailure(Texts, result.Message);
+            }
+
             LastErrorMessage = result.Message;
+            ProjectSelectedTaskValidationSummary();
             return;
+        }
+
+        if (panel is not null)
+        {
+            panel.ApplyValidationReport(result.Value, Texts);
         }
 
         UpdateSelectedTaskValidationSummary(result.Value);
@@ -3424,6 +3791,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     private void UpdateSelectedTaskValidationSummary(TaskValidationReport report)
     {
         var blockingCount = report.Issues.Count(i => i.Blocking);
+        SelectedTaskPanel?.ApplyValidationReport(report, Texts);
         SelectedTaskValidationIssueCount = blockingCount;
         SelectedTaskHasBlockingValidationIssues = blockingCount > 0;
 
@@ -3440,6 +3808,11 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
     private void RefreshSelectedTaskValidationSummaryLocalization()
     {
+        foreach (var panel in TaskPanels)
+        {
+            panel.RefreshValidationSummaryLocalization(Texts);
+        }
+
         if (SelectedTaskValidationIssueCount > 0)
         {
             SelectedTaskValidationSummary = string.Format(
@@ -3555,308 +3928,57 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         }
     }
 
-    private Task BindSelectedTaskAsync(CancellationToken cancellationToken = default)
+    private async Task BindSelectedTaskAsync(CancellationToken cancellationToken = default)
     {
-        int expectedVersion;
-        lock (_pendingBindingGate)
-        {
-            expectedVersion = _pendingBindingVersion;
-        }
-
-        return BindSelectedTaskCoreAsync(expectedVersion, cancellationToken);
-    }
-
-    private async Task BindSelectedTaskCoreAsync(int expectedVersion, CancellationToken cancellationToken = default)
-    {
-        await _taskBindingLock.WaitAsync(cancellationToken);
+        IsSelectedTaskBindingPending = true;
         try
         {
-            if (!await SaveBoundTaskModulesAsync(cancellationToken))
+            if (SelectedTaskPanel is not null)
             {
-                return;
+                await RefreshTaskPanelValidationSummaryAsync(SelectedTaskPanel, cancellationToken);
             }
-
-            if (IsBindingStale(expectedVersion, cancellationToken))
-            {
-                return;
-            }
-
-            if (SelectedTask is null)
-            {
-                ClearTaskModuleBindings();
-                ResetSelectedTaskValidationSummary();
-                return;
-            }
-
-            var index = Tasks.IndexOf(SelectedTask);
-            if (index < 0)
+            else
             {
                 ResetSelectedTaskValidationSummary();
-                return;
             }
-
-            var moduleType = TaskModuleTypes.Normalize(SelectedTask.Type);
-            if (string.Equals(moduleType, TaskModuleTypes.StartUp, StringComparison.OrdinalIgnoreCase))
-            {
-                await StartUpModule.BindAsync(index, cancellationToken);
-                if (IsBindingStale(expectedVersion, cancellationToken))
-                {
-                    return;
-                }
-
-                FightModule.ClearBinding();
-                RecruitModule.ClearBinding();
-                InfrastModule.ClearBinding();
-                MallModule.ClearBinding();
-                AwardModule.ClearBinding();
-                RoguelikeModule.ClearBinding();
-                ReclamationModule.ClearBinding();
-                UserDataUpdateModule.ClearBinding();
-                CustomModule.ClearBinding();
-                await RefreshSelectedTaskValidationSummaryAsync(index, cancellationToken);
-                return;
-            }
-
-            if (string.Equals(moduleType, TaskModuleTypes.Fight, StringComparison.OrdinalIgnoreCase))
-            {
-                await FightModule.BindAsync(index, cancellationToken);
-                if (IsBindingStale(expectedVersion, cancellationToken))
-                {
-                    return;
-                }
-
-                StartUpModule.ClearBinding();
-                RecruitModule.ClearBinding();
-                InfrastModule.ClearBinding();
-                MallModule.ClearBinding();
-                AwardModule.ClearBinding();
-                RoguelikeModule.ClearBinding();
-                ReclamationModule.ClearBinding();
-                UserDataUpdateModule.ClearBinding();
-                CustomModule.ClearBinding();
-                await RefreshSelectedTaskValidationSummaryAsync(index, cancellationToken);
-                return;
-            }
-
-            if (string.Equals(moduleType, TaskModuleTypes.Recruit, StringComparison.OrdinalIgnoreCase))
-            {
-                await RecruitModule.BindAsync(index, cancellationToken);
-                if (IsBindingStale(expectedVersion, cancellationToken))
-                {
-                    return;
-                }
-
-                StartUpModule.ClearBinding();
-                FightModule.ClearBinding();
-                InfrastModule.ClearBinding();
-                MallModule.ClearBinding();
-                AwardModule.ClearBinding();
-                RoguelikeModule.ClearBinding();
-                ReclamationModule.ClearBinding();
-                UserDataUpdateModule.ClearBinding();
-                CustomModule.ClearBinding();
-                await RefreshSelectedTaskValidationSummaryAsync(index, cancellationToken);
-                return;
-            }
-
-            if (string.Equals(moduleType, TaskModuleTypes.Roguelike, StringComparison.OrdinalIgnoreCase))
-            {
-                await RoguelikeModule.BindAsync(index, cancellationToken);
-                if (IsBindingStale(expectedVersion, cancellationToken))
-                {
-                    return;
-                }
-
-                StartUpModule.ClearBinding();
-                FightModule.ClearBinding();
-                RecruitModule.ClearBinding();
-                InfrastModule.ClearBinding();
-                MallModule.ClearBinding();
-                AwardModule.ClearBinding();
-                ReclamationModule.ClearBinding();
-                UserDataUpdateModule.ClearBinding();
-                CustomModule.ClearBinding();
-                await RefreshSelectedTaskValidationSummaryAsync(index, cancellationToken);
-                return;
-            }
-
-            if (string.Equals(moduleType, TaskModuleTypes.Reclamation, StringComparison.OrdinalIgnoreCase))
-            {
-                await ReclamationModule.BindAsync(index, cancellationToken);
-                if (IsBindingStale(expectedVersion, cancellationToken))
-                {
-                    return;
-                }
-
-                StartUpModule.ClearBinding();
-                FightModule.ClearBinding();
-                RecruitModule.ClearBinding();
-                InfrastModule.ClearBinding();
-                MallModule.ClearBinding();
-                AwardModule.ClearBinding();
-                RoguelikeModule.ClearBinding();
-                UserDataUpdateModule.ClearBinding();
-                CustomModule.ClearBinding();
-                await RefreshSelectedTaskValidationSummaryAsync(index, cancellationToken);
-                return;
-            }
-
-            if (string.Equals(moduleType, TaskModuleTypes.Custom, StringComparison.OrdinalIgnoreCase))
-            {
-                await CustomModule.BindAsync(index, cancellationToken);
-                if (IsBindingStale(expectedVersion, cancellationToken))
-                {
-                    return;
-                }
-
-                StartUpModule.ClearBinding();
-                FightModule.ClearBinding();
-                RecruitModule.ClearBinding();
-                InfrastModule.ClearBinding();
-                MallModule.ClearBinding();
-                AwardModule.ClearBinding();
-                RoguelikeModule.ClearBinding();
-                ReclamationModule.ClearBinding();
-                await RefreshSelectedTaskValidationSummaryAsync(index, cancellationToken);
-                return;
-            }
-
-            StartUpModule.ClearBinding();
-            FightModule.ClearBinding();
-            RecruitModule.ClearBinding();
-            RoguelikeModule.ClearBinding();
-            ReclamationModule.ClearBinding();
-            CustomModule.ClearBinding();
-
-            var paramsResult = await Runtime.TaskQueueFeatureService.GetTaskParamsAsync(index, cancellationToken);
-            if (!paramsResult.Success || paramsResult.Value is null)
-            {
-                LastErrorMessage = paramsResult.Message;
-                ResetSelectedTaskValidationSummary();
-                return;
-            }
-
-            if (string.Equals(moduleType, TaskModuleTypes.Infrast, StringComparison.OrdinalIgnoreCase))
-            {
-                await InfrastModule.BindAsync(index, paramsResult.Value, cancellationToken);
-                if (IsBindingStale(expectedVersion, cancellationToken))
-                {
-                    return;
-                }
-            }
-            else
-            {
-                InfrastModule.ClearBinding();
-            }
-
-            if (string.Equals(moduleType, TaskModuleTypes.Mall, StringComparison.OrdinalIgnoreCase))
-            {
-                await MallModule.BindAsync(index, paramsResult.Value, cancellationToken);
-                if (IsBindingStale(expectedVersion, cancellationToken))
-                {
-                    return;
-                }
-            }
-            else
-            {
-                MallModule.ClearBinding();
-            }
-
-            if (string.Equals(moduleType, TaskModuleTypes.UserDataUpdate, StringComparison.OrdinalIgnoreCase))
-            {
-                await UserDataUpdateModule.BindAsync(index, paramsResult.Value, cancellationToken);
-                if (IsBindingStale(expectedVersion, cancellationToken))
-                {
-                    return;
-                }
-            }
-            else
-            {
-                UserDataUpdateModule.ClearBinding();
-            }
-
-            if (string.Equals(moduleType, TaskModuleTypes.Award, StringComparison.OrdinalIgnoreCase))
-            {
-                await AwardModule.BindAsync(index, paramsResult.Value, cancellationToken);
-                if (IsBindingStale(expectedVersion, cancellationToken))
-                {
-                    return;
-                }
-            }
-            else
-            {
-                AwardModule.ClearBinding();
-            }
-
-            await RefreshSelectedTaskValidationSummaryAsync(index, cancellationToken);
         }
         finally
         {
-            _taskBindingLock.Release();
+            IsSelectedTaskBindingPending = false;
         }
-    }
-
-    private void ScheduleBindSelectedTask()
-    {
-        lock (_pendingBindingGate)
-        {
-            _pendingBindingVersion++;
-            var expectedVersion = _pendingBindingVersion;
-
-            _pendingBindingCts?.Cancel();
-            _pendingBindingCts?.Dispose();
-            _pendingBindingCts = new CancellationTokenSource();
-
-            _pendingBindingTask = ExecuteTrackedBindingAsync(expectedVersion, _pendingBindingCts.Token);
-        }
-    }
-
-    private async Task ExecuteTrackedBindingAsync(int expectedVersion, CancellationToken cancellationToken)
-    {
-        try
-        {
-            await BindSelectedTaskCoreAsync(expectedVersion, cancellationToken);
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            // no-op
-        }
-        catch (Exception ex)
-        {
-            await RecordUnhandledExceptionAsync(
-                "TaskQueue.BindSelectedTask",
-                ex,
-                UiErrorCode.TaskLoadFailed,
-                "Bind selected task failed.");
-        }
-    }
-
-    private bool IsBindingVersionCurrent(int expectedVersion)
-    {
-        lock (_pendingBindingGate)
-        {
-            return expectedVersion == _pendingBindingVersion;
-        }
-    }
-
-    private bool IsBindingStale(int expectedVersion, CancellationToken cancellationToken)
-    {
-        return cancellationToken.IsCancellationRequested || !IsBindingVersionCurrent(expectedVersion);
     }
 
     private void ClearTaskModuleBindings()
     {
-        StartUpModule.ClearBinding();
-        FightModule.ClearBinding();
-        RecruitModule.ClearBinding();
-        InfrastModule.ClearBinding();
-        MallModule.ClearBinding();
-        AwardModule.ClearBinding();
-        RoguelikeModule.ClearBinding();
-        ReclamationModule.ClearBinding();
-        UserDataUpdateModule.ClearBinding();
-        CustomModule.ClearBinding();
+        ClearTaskPanels();
+        _fallbackStartUpModule.ClearBinding();
+        _fallbackFightModule.ClearBinding();
+        _fallbackRecruitModule.ClearBinding();
+        _fallbackInfrastModule.ClearBinding();
+        _fallbackMallModule.ClearBinding();
+        _fallbackAwardModule.ClearBinding();
+        _fallbackRoguelikeModule.ClearBinding();
+        _fallbackReclamationModule.ClearBinding();
+        _fallbackUserDataUpdateModule.ClearBinding();
+        _fallbackCustomModule.ClearBinding();
         ResetSelectedTaskValidationSummary();
+    }
+
+    private void ClearTaskPanels()
+    {
+        foreach (var panel in TaskPanels)
+        {
+            if (panel.ModuleViewModel is INotifyPropertyChanged typedModule
+                && panel.ModuleViewModel is not TaskModuleSettingsViewModelBase)
+            {
+                typedModule.PropertyChanged -= OnTypedModulePropertyChanged;
+            }
+
+            panel.Module.ClearBinding();
+        }
+
+        TaskPanels.Clear();
+        SelectedTaskPanel = null;
     }
 
     private void ResetBindingsForStructuralQueueMutation()
@@ -3871,64 +3993,15 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         var succeeded = true;
         var lastErrorMessage = string.Empty;
 
-        if (!await StartUpModule.SaveIfDirtyAsync(cancellationToken))
+        foreach (var panel in TaskPanels)
         {
-            succeeded = false;
-            lastErrorMessage = StartUpModule.LastErrorMessage;
-        }
+            if (await panel.Module.FlushPendingChangesAsync(cancellationToken))
+            {
+                continue;
+            }
 
-        if (!await FightModule.SaveIfDirtyAsync(cancellationToken))
-        {
             succeeded = false;
-            lastErrorMessage = FightModule.LastErrorMessage;
-        }
-
-        if (!await RecruitModule.SaveIfDirtyAsync(cancellationToken))
-        {
-            succeeded = false;
-            lastErrorMessage = RecruitModule.LastErrorMessage;
-        }
-
-        if (!await RoguelikeModule.SaveIfDirtyAsync(cancellationToken))
-        {
-            succeeded = false;
-            lastErrorMessage = RoguelikeModule.LastErrorMessage;
-        }
-
-        if (!await ReclamationModule.SaveIfDirtyAsync(cancellationToken))
-        {
-            succeeded = false;
-            lastErrorMessage = ReclamationModule.LastErrorMessage;
-        }
-
-        if (!await CustomModule.SaveIfDirtyAsync(cancellationToken))
-        {
-            succeeded = false;
-            lastErrorMessage = CustomModule.LastErrorMessage;
-        }
-
-        if (!await InfrastModule.FlushPendingChangesAsync(cancellationToken))
-        {
-            succeeded = false;
-            lastErrorMessage = InfrastModule.LastErrorMessage;
-        }
-
-        if (!await MallModule.FlushPendingChangesAsync(cancellationToken))
-        {
-            succeeded = false;
-            lastErrorMessage = MallModule.LastErrorMessage;
-        }
-
-        if (!await AwardModule.FlushPendingChangesAsync(cancellationToken))
-        {
-            succeeded = false;
-            lastErrorMessage = AwardModule.LastErrorMessage;
-        }
-
-        if (!await UserDataUpdateModule.FlushPendingChangesAsync(cancellationToken))
-        {
-            succeeded = false;
-            lastErrorMessage = UserDataUpdateModule.LastErrorMessage;
+            lastErrorMessage = panel.LastErrorMessage;
         }
 
         if (!await PostActionModule.FlushPendingChangesAsync(cancellationToken))
@@ -3972,7 +4045,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
                 var failedNames = await ConfigurationSaveTracker.Instance.RetryPendingOrFailedAsync(
                     static key => key.StartsWith("TaskQueue.", StringComparison.Ordinal),
-                    cancellationToken);
+                    cancellationToken,
+                    Runtime.DiagnosticsService);
                 return failedNames.Count == 0;
             }
 
@@ -6446,7 +6520,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             ConfigurationKeys.UseNotify,
             fallback: true);
         RefreshSelectionBatchModeFromConfig();
-        RoguelikeModule.RefreshGuiDependentOptions();
+        RefreshRoguelikeGuiDependentOptions();
     }
 
     private void ApplySelectionBatchMode(string inverseClearMode, bool? persistedInverseMode = null)
@@ -6589,12 +6663,10 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     {
         lock (_pendingBindingGate)
         {
-            _pendingBindingVersion++;
-            _pendingBindingCts?.Cancel();
-            _pendingBindingCts?.Dispose();
-            _pendingBindingCts = null;
             _pendingBindingTask = Task.CompletedTask;
         }
+
+        IsSelectedTaskBindingPending = false;
     }
 
     private void RememberSelectedTaskIndex()

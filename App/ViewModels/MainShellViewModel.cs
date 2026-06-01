@@ -232,19 +232,21 @@ public sealed class MainShellViewModel : ObservableObject
         var failedNames = new List<string>();
         if (!await TaskQueuePage.FlushConfigurationSavesForCloseAsync(cancellationToken))
         {
-            failedNames.AddRange(ConfigurationSaveTracker.Instance.FailedDisplayNames);
+            failedNames.AddRange(ConfigurationSaveTracker.Instance.GetFailedDisplayNames(_runtime.DiagnosticsService));
         }
 
         if (TryGetSettingsPage(out var settingsPage))
         {
             if (!await settingsPage.FlushConfigurationSavesForCloseAsync(cancellationToken))
             {
-                failedNames.AddRange(ConfigurationSaveTracker.Instance.FailedDisplayNames);
+                failedNames.AddRange(ConfigurationSaveTracker.Instance.GetFailedDisplayNames(_runtime.DiagnosticsService));
             }
         }
 
-        failedNames.AddRange(await ConfigurationSaveTracker.Instance.RetryPendingOrFailedAsync(cancellationToken: cancellationToken));
-        failedNames.AddRange(ConfigurationSaveTracker.Instance.FailedDisplayNames);
+        failedNames.AddRange(await ConfigurationSaveTracker.Instance.RetryPendingOrFailedAsync(
+            cancellationToken: cancellationToken,
+            diagnosticsService: _runtime.DiagnosticsService));
+        failedNames.AddRange(ConfigurationSaveTracker.Instance.GetFailedDisplayNames(_runtime.DiagnosticsService));
         return failedNames
             .Where(static name => !string.IsNullOrWhiteSpace(name))
             .Distinct(StringComparer.Ordinal)
@@ -1503,10 +1505,9 @@ public sealed class MainShellViewModel : ObservableObject
                     : BuildLinkStartStateNotAllowedMessage(CurrentSessionState);
 
                 await ApplyResultAsync(
-                    UiOperationResult.Fail(UiErrorCode.SessionStateNotAllowed, stateMessage),
+                    UiOperationResult.Fail(UiErrorCode.ConnectFailed, stateMessage, startConnectResult?.Error?.Details),
                     "App.Shell.Start",
                     cancellationToken);
-                NavigateToSettingsSection("Connect");
                 return;
             }
 
@@ -1558,7 +1559,7 @@ public sealed class MainShellViewModel : ObservableObject
             lastFailure = result;
         }
 
-        return lastFailure ?? UiOperationResult.Fail(UiErrorCode.UiOperationFailed, "Connection failed.");
+        return lastFailure ?? UiOperationResult.Fail(UiErrorCode.ConnectFailed, "Connection failed.");
     }
 
     private string BuildConnectionFailureMessage(UiOperationResult connectResult)
@@ -2122,6 +2123,11 @@ public sealed class MainShellViewModel : ObservableObject
 
             SettingsPage.SelectSection(sectionKey);
         });
+    }
+
+    public void OpenConnectionSettings()
+    {
+        NavigateToSettingsSection("Connect");
     }
 
     private void OnSettingsResourceVersionUpdated(object? sender, EventArgs e)

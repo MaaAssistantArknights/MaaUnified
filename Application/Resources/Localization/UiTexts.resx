@@ -3567,6 +3567,9 @@ Session state `{0}` does not allow {2}.</value>
   <data name="Settings.RemoteControl.ReportTaskEndpointWatermark" xml:space="preserve">
     <value>https://example.com/api/task/report</value>
   </data>
+  <data name="Settings.RemoteControl.RegenerateDeviceIdentity" xml:space="preserve">
+    <value>重新生成</value>
+  </data>
   <data name="Settings.RemoteControl.Status.SaveFailed" xml:space="preserve">
     <value>远程控制配置保存失败。</value>
   </data>
@@ -4526,6 +4529,9 @@ Session state `{0}` does not allow {2}.</value>
   </data>
   <data name="TaskQueue.Root.RightClick" xml:space="preserve">
     <value>右键</value>
+  </data>
+  <data name="TaskQueue.Root.RunTaskOnce" xml:space="preserve">
+    <value>单次运行</value>
   </data>
   <data name="TaskQueue.Root.RuntimeTitle" xml:space="preserve">
     <value>运行与 Overlay</value>

@@ -83,7 +83,7 @@
                                  IsReadOnly="True"
                                  Text="{Binding RemoteDeviceIdentity, Mode=OneWay}"
                                  Watermark="{Binding RootTexts[Settings.RemoteControl.DeviceIdentityWatermark]}"
-                                 ActionContent="{Binding RootTexts[RemoteControlRegenerateDeviceIdentity]}"
+                                 ActionContent="{Binding RootTexts[Settings.RemoteControl.RegenerateDeviceIdentity]}"
                                  ActionClick="OnRegenerateRemoteDeviceIdentityClick" />
       </Grid>
     </controls:AdaptiveSpacingStackPanel>

@@ -6,7 +6,7 @@ using MAAUnified.Application.Services;
 
 namespace MAAUnified.App.ViewModels.TaskQueue;
 
-public abstract class TaskModuleSettingsViewModelBase : ObservableObject
+public abstract class TaskModuleSettingsViewModelBase : ObservableObject, ITaskModulePanelViewModel
 {
     private readonly SemaphoreSlim _persistLock = new(1, 1);
     private CancellationTokenSource? _persistDebounceCts;
@@ -94,6 +94,14 @@ public abstract class TaskModuleSettingsViewModelBase : ObservableObject
         _boundTaskIndex = -1;
         _suppressPersist = true;
         IsTaskBound = false;
+    }
+
+    public void RebindTaskIndex(int taskIndex)
+    {
+        if (_boundTaskIndex >= 0)
+        {
+            _boundTaskIndex = taskIndex;
+        }
     }
 
     public async Task<bool> FlushPendingChangesAsync(CancellationToken cancellationToken = default)
@@ -197,7 +205,7 @@ public abstract class TaskModuleSettingsViewModelBase : ObservableObject
             "Infrast" => Texts.GetOrDefault("Infrast.Title", "基建换班"),
             "Mall" => Texts.GetOrDefault("Mall.Title", "信用收取"),
             "Award" => Texts.GetOrDefault("Award.Title", "领取奖励"),
-            "TaskQueue.UserDataUpdate" => Texts.GetOrDefault("UserDataUpdate.Title", "数据更新"),
+            "TaskQueue.UserDataUpdate" => Texts.GetOrDefault("TaskQueue.Module.UserDataUpdate", "Update Data"),
             _ => ModuleType.StartsWith("TaskQueue.", StringComparison.Ordinal)
                 ? ModuleType["TaskQueue.".Length..]
                 : ModuleType,

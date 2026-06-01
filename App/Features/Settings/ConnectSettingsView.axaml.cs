@@ -180,13 +180,20 @@ public partial class ConnectSettingsView : UserControl
             var connectResult = await ConnectWithCurrentSettingsAsync(vm);
             if (!connectResult.Success)
             {
+                var failureMessage = BuildConnectFailureMessage(vm, connectResult);
                 LogScreenshotTestEvent(
                     "connect",
                     vm,
                     "failed",
                     message: connectResult.Message,
                     errorCode: connectResult.Error?.Code);
-                vm.TestLinkInfo = BuildConnectFailureMessage(vm, connectResult);
+                vm.TestLinkInfo = failureMessage;
+                await App.Runtime.DialogFeatureService.ReportErrorAsync(
+                    "Settings.Connect.ScreenshotTest",
+                    UiOperationResult.Fail(
+                        UiErrorCode.ConnectFailed,
+                        failureMessage,
+                        connectResult.Error?.Details));
                 return;
             }
 
@@ -339,7 +346,7 @@ public partial class ConnectSettingsView : UserControl
             lastFailure = result;
         }
 
-        return lastFailure ?? UiOperationResult.Fail(UiErrorCode.UiOperationFailed, T("Settings.Connect.Error.ConnectionFailedShort"));
+        return lastFailure ?? UiOperationResult.Fail(UiErrorCode.ConnectFailed, T("Settings.Connect.Error.ConnectionFailedShort"));
     }
 
     private static async Task DownloadFileAsync(string url, string targetPath)

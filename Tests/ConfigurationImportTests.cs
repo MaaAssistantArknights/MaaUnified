@@ -712,6 +712,79 @@ public sealed class ConfigurationImportTests
     }
 
     [Fact]
+    public async Task SaveAsync_UnchangedLoadedConfig_ShouldNotWriteOrRaiseConfigChanged()
+    {
+        var root = CreateTempRoot();
+        var store = new CountingConfigStore(root, new UnifiedConfig());
+        var service = CreateService(root, store);
+        await service.LoadOrBootstrapAsync();
+
+        var configChangedCount = 0;
+        service.ConfigChanged += _ => configChangedCount += 1;
+
+        await service.SaveAsync();
+
+        Assert.Equal(0, store.SaveCount);
+        Assert.Equal(0, configChangedCount);
+        Assert.DoesNotContain(
+            service.LogService.Snapshot,
+            log => string.Equals(log.Message, "Saved config/avalonia.json", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task SaveAsync_ChangedLoadedConfig_ShouldWriteAndRaiseConfigChanged()
+    {
+        var root = CreateTempRoot();
+        var store = new CountingConfigStore(root, new UnifiedConfig());
+        var service = CreateService(root, store);
+        await service.LoadOrBootstrapAsync();
+
+        var configChangedCount = 0;
+        service.ConfigChanged += _ => configChangedCount += 1;
+        service.CurrentConfig.GlobalValues["GUI.Localization"] = JsonValue.Create("en-us");
+
+        await service.SaveAsync();
+
+        Assert.Equal(1, store.SaveCount);
+        Assert.Equal(1, configChangedCount);
+    }
+
+    [Fact]
+    public async Task SaveAsync_NormalizedToLoadedSnapshot_ShouldNotWriteOrRaiseConfigChanged()
+    {
+        var root = CreateTempRoot();
+        var loadedConfig = new UnifiedConfig();
+        var task = new UnifiedTaskItem
+        {
+            Type = TaskModuleTypes.Reclamation,
+            Name = "Reclamation",
+            Params = new JsonObject
+            {
+                ["mode"] = 1,
+                ["clear_store"] = false,
+            },
+        };
+        var compiled = TaskParamCompiler.CompileTask(task, loadedConfig.Profiles["Default"], loadedConfig, strict: true);
+        task.Type = compiled.NormalizedType;
+        task.Params = compiled.Params.DeepClone() as JsonObject ?? [];
+        loadedConfig.Profiles["Default"].TaskQueue.Add(task);
+
+        var store = new CountingConfigStore(root, loadedConfig);
+        var service = CreateService(root, store);
+        await service.LoadOrBootstrapAsync();
+
+        var configChangedCount = 0;
+        service.ConfigChanged += _ => configChangedCount += 1;
+        service.CurrentConfig.Profiles["Default"].TaskQueue[0].Params["clear_store"] = true;
+
+        await service.SaveAsync();
+
+        Assert.Equal(0, store.SaveCount);
+        Assert.Equal(0, configChangedCount);
+        Assert.False(service.CurrentConfig.Profiles["Default"].TaskQueue[0].Params["clear_store"]?.GetValue<bool>());
+    }
+
+    [Fact]
     public async Task LoadOrBootstrap_AutoImportFailure_WritesDebugReport()
     {
         var root = CreateTempRoot();
@@ -1238,7 +1311,7 @@ public sealed class ConfigurationImportTests
         Assert.False(report.Success);
         var task = service.CurrentConfig.Profiles["Default"].TaskQueue.Single();
         Assert.False(task.IsEnabled);
-        Assert.Equal("UnknownLegacyTask", task.Type);
+        Assert.Equal("UnknownLegacy", task.Type);
         Assert.NotEmpty(report.Errors);
     }
 
@@ -1301,6 +1374,11 @@ public sealed class ConfigurationImportTests
     private static UnifiedConfigurationService CreateService(string baseDirectory)
     {
         var store = new AvaloniaJsonConfigStore(baseDirectory);
+        return CreateService(baseDirectory, store);
+    }
+
+    private static UnifiedConfigurationService CreateService(string baseDirectory, IUnifiedConfigStore store)
+    {
         var log = new UiLogService();
         return new UnifiedConfigurationService(store, new GuiNewJsonConfigImporter(), new GuiJsonConfigImporter(), log, baseDirectory);
     }
@@ -1310,5 +1388,39 @@ public sealed class ConfigurationImportTests
         var root = Path.Combine(Path.GetTempPath(), "maa-unified-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
         return root;
+    }
+
+    private sealed class CountingConfigStore : IUnifiedConfigStore
+    {
+        private UnifiedConfig? _config;
+
+        public CountingConfigStore(string baseDirectory, UnifiedConfig? config)
+        {
+            ConfigPath = Path.Combine(baseDirectory, "config", "avalonia.json");
+            _config = config;
+        }
+
+        public string ConfigPath { get; }
+
+        public int SaveCount { get; private set; }
+
+        public bool Exists() => _config is not null;
+
+        public Task<UnifiedConfig?> LoadAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(_config);
+        }
+
+        public Task SaveAsync(UnifiedConfig config, CancellationToken cancellationToken = default)
+        {
+            SaveCount += 1;
+            _config = config;
+            return Task.CompletedTask;
+        }
+
+        public Task BackupAsync(string suffix, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
     }
 }

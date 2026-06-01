@@ -45,6 +45,8 @@ public sealed class TaskQueueG1FeatureTests
 
         Assert.Equal(expected.Length, vm.Tasks.Count);
         Assert.Equal(expected, vm.Tasks.Select(task => task.Type).ToArray());
+        Assert.Equal(vm.Tasks.Count, vm.TaskPanels.Count);
+        Assert.Equal(expected, vm.TaskPanels.Select(panel => panel.ModuleType).ToArray());
     }
 
     [Fact]
@@ -81,6 +83,7 @@ public sealed class TaskQueueG1FeatureTests
         Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.Fight, "理智作战")).Success);
         Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.Recruit, "公開招募")).Success);
         Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.Reclamation, "生息演算")).Success);
+        Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.Fight, "剩余理智")).Success);
 
         var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
         await vm.InitializeAsync();
@@ -88,12 +91,14 @@ public sealed class TaskQueueG1FeatureTests
         Assert.Equal("理智作战", vm.Tasks[0].DisplayName);
         Assert.Equal("自动公招", vm.Tasks[1].DisplayName);
         Assert.Equal("生息演算", vm.Tasks[2].DisplayName);
+        Assert.Equal("剩余理智", vm.Tasks[3].DisplayName);
 
         vm.SetLanguage("en-us");
 
         Assert.Equal("Combat", vm.Tasks[0].DisplayName);
         Assert.Equal("Recruit", vm.Tasks[1].DisplayName);
         Assert.Equal("Reclamation", vm.Tasks[2].DisplayName);
+        Assert.Equal("Remaining Sanity", vm.Tasks[3].DisplayName);
     }
 
     [Fact]
@@ -143,7 +148,7 @@ public sealed class TaskQueueG1FeatureTests
     }
 
     [Fact]
-    public async Task TaskQueuePage_SetLanguage_ShouldRebindCurrentlyOpenTaskSettings()
+    public async Task TaskQueuePage_SetLanguage_ShouldKeepPreloadedTaskSettingsStable()
     {
         await using var fixture = await TestFixture.CreateAsync(language: "zh-cn");
         Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.Reclamation, "reclamation")).Success);
@@ -162,7 +167,36 @@ public sealed class TaskQueueG1FeatureTests
         await vm.WaitForPendingBindingAsync();
 
         Assert.Equal("en-us", vm.Texts.Language);
+        Assert.Equal(1, vm.ReclamationModule.Mode);
+
+        await vm.ReloadTasksAsync();
         Assert.Equal(0, vm.ReclamationModule.Mode);
+    }
+
+    [Fact]
+    public async Task ReclamationModule_SaveArchiveMode_ShouldNormalizeHiddenClearStore()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.Reclamation, "reclamation")).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        vm.SelectedTask = Assert.Single(vm.Tasks);
+        await vm.WaitForPendingBindingAsync();
+
+        vm.ReclamationModule.Mode = 1;
+        vm.ReclamationModule.ClearStore = true;
+
+        Assert.True(await vm.ReclamationModule.SaveAsync(), vm.ReclamationModule.LastErrorMessage);
+
+        var parameters = (await fixture.TaskQueue.GetTaskParamsAsync(0)).Value!;
+        Assert.False(parameters["clear_store"]?.GetValue<bool>());
+
+        var validate = await fixture.TaskQueue.ValidateTaskAsync(0);
+        Assert.True(validate.Success, validate.Message);
+        Assert.DoesNotContain(
+            validate.Value!.Issues,
+            issue => issue.Code == "ReclamationClearStoreIgnoredInArchive");
     }
 
     [Fact]
@@ -206,6 +240,58 @@ public sealed class TaskQueueG1FeatureTests
     }
 
     [Fact]
+    public async Task FightSettingsView_SetLanguageHostReset_ShouldRefreshGeneralModeLabels()
+    {
+        await using var fixture = await TestFixture.CreateAsync(language: "zh-cn");
+        Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.Fight, "fight")).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        vm.SelectedTask = Assert.Single(vm.Tasks);
+        await vm.WaitForPendingBindingAsync();
+
+        EnsureAvaloniaApplication();
+        var view = new FightSettingsView
+        {
+            DataContext = vm.SelectedTaskSettingsViewModel,
+        };
+        PrepareView(view);
+
+        var zhTexts = GetRenderedTextsAndContent(view);
+        Assert.Contains("使用药剂", zhTexts);
+        Assert.Contains("使用源石*", zhTexts);
+        Assert.Contains("指定次数", zhTexts);
+        Assert.Contains("代理倍率", zhTexts);
+        Assert.Contains("指定材料", zhTexts);
+        Assert.Contains("目标数量", zhTexts);
+
+        vm.PropertyChanged += (_, e) =>
+        {
+            if (string.Equals(e.PropertyName, nameof(TaskQueuePageViewModel.SelectedTaskSettingsViewModel), StringComparison.Ordinal))
+            {
+                view.DataContext = vm.SelectedTaskSettingsViewModel;
+            }
+        };
+
+        vm.SetLanguage("en-us");
+        PrepareView(view);
+
+        var enTexts = GetRenderedTextsAndContent(view);
+        Assert.Contains("Use Sanity Potion", enTexts);
+        Assert.Contains("Use Originium*", enTexts);
+        Assert.Contains("Perform battles", enTexts);
+        Assert.Contains("Series", enTexts);
+        Assert.Contains("Material", enTexts);
+        Assert.Contains("Drop count", enTexts);
+        Assert.DoesNotContain("使用药剂", enTexts);
+        Assert.DoesNotContain("使用源石*", enTexts);
+        Assert.DoesNotContain("指定次数", enTexts);
+        Assert.DoesNotContain("代理倍率", enTexts);
+        Assert.DoesNotContain("指定材料", enTexts);
+        Assert.DoesNotContain("目标数量", enTexts);
+    }
+
+    [Fact]
     public async Task TaskQueuePage_SetLanguage_ShouldRefreshRootChromeTextProperties()
     {
         await using var fixture = await TestFixture.CreateAsync(language: "zh-cn");
@@ -221,6 +307,52 @@ public sealed class TaskQueueG1FeatureTests
         Assert.NotEqual(zhReclamation, vm.AddTaskMenuReclamationText);
         Assert.Equal("Select all", vm.SelectAllButtonText);
         Assert.Equal("Reclamation", vm.AddTaskMenuReclamationText);
+    }
+
+    [Fact]
+    public async Task TaskQueuePage_SelectTask_ShouldSettleDeferredBinding()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.Fight, "fight")).Success);
+        Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.Recruit, "recruit")).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        vm.SelectedTask = vm.Tasks[1];
+
+        Assert.True(vm.CanEditSelectedTaskSettings);
+
+        await vm.WaitForPendingBindingAsync();
+
+        Assert.False(vm.IsSelectedTaskBindingPending);
+        Assert.True(vm.CanEditSelectedTaskSettings);
+        Assert.True(vm.RecruitModule.IsTaskBound);
+    }
+
+    [Fact]
+    public async Task TaskQueuePage_RapidSelect_ShouldBindLatestTaskAndClearPendingAfterLatestBinding()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.Fight, "fight")).Success);
+        Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.Recruit, "recruit")).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        vm.SelectedTask = vm.Tasks[0];
+        vm.SelectedTask = vm.Tasks[1];
+
+        Assert.True(vm.CanEditSelectedTaskSettings);
+
+        await vm.WaitForPendingBindingAsync();
+
+        Assert.Same(vm.Tasks[1], vm.SelectedTask);
+        Assert.Same(vm.TaskPanels[1], vm.SelectedTaskPanel);
+        Assert.False(vm.IsSelectedTaskBindingPending);
+        Assert.True(vm.RecruitModule.IsTaskBound);
+        Assert.True(vm.TaskPanels.All(panel => panel.Module.IsTaskBound));
+        Assert.Single(vm.TaskPanels.Where(panel => panel.IsSelected));
     }
 
     [HostRepoFact]
@@ -537,6 +669,33 @@ public sealed class TaskQueueG1FeatureTests
     }
 
     [Fact]
+    public async Task TaskQueuePage_SelectAll_ShouldOnlyUpdateTaskEnabledState()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup-a", enabled: true)).Success);
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Fight", "fight-b", enabled: true)).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        vm.SelectedTask = vm.Tasks[0];
+        await vm.WaitForPendingBindingAsync();
+
+        vm.StartUpModule.AccountName = "dirty-before-select-all";
+        Assert.True(vm.StartUpModule.IsDirty);
+
+        await vm.SelectAllAsync(false);
+
+        Assert.True(vm.StartUpModule.IsDirty);
+        Assert.All(vm.Tasks, task => Assert.False(task.IsEnabled));
+
+        var queue = await fixture.TaskQueue.GetCurrentTaskQueueAsync();
+        Assert.True(queue.Success);
+        Assert.NotNull(queue.Value);
+        Assert.All(queue.Value!, task => Assert.False(task.IsEnabled));
+        Assert.NotEqual("dirty-before-select-all", queue.Value![0].Params["account_name"]?.GetValue<string>());
+    }
+
+    [Fact]
     public async Task TaskQueuePage_ToggleSelectionBatchMode_ShouldPersistLegacyKeys()
     {
         await using var fixture = await TestFixture.CreateAsync();
@@ -621,6 +780,8 @@ public sealed class TaskQueueG1FeatureTests
         vm.SelectedTask = vm.Tasks[1];
         await vm.WaitForPendingBindingAsync();
 
+        Assert.True(await vm.FlushConfigurationSavesForCloseAsync());
+
         var saved = await fixture.TaskQueue.GetTaskParamsAsync(0);
         Assert.True(saved.Success);
         Assert.Equal("dirty-account", saved.Value?["account_name"]?.GetValue<string>());
@@ -649,6 +810,37 @@ public sealed class TaskQueueG1FeatureTests
         Assert.NotNull(queue.Value);
         Assert.Equal("startup-a", queue.Value![1].Name);
         Assert.Equal("dirty-before-move", queue.Value[1].Params["account_name"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task TaskQueuePage_MoveSelectedTask_ShouldKeepPanelAndRebindToNewIndex()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup-a")).Success);
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Fight", "fight-b")).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        vm.SelectedTask = vm.Tasks[0];
+        await vm.WaitForPendingBindingAsync();
+
+        var selectedSettings = vm.SelectedTaskSettingsViewModel;
+
+        await vm.MoveSelectedTaskToAsync(1);
+        await vm.WaitForPendingBindingAsync();
+
+        Assert.Same(selectedSettings, vm.SelectedTaskSettingsViewModel);
+        Assert.Equal("startup-a", vm.Tasks[1].Name);
+        Assert.Equal(1, vm.TaskPanels.Single(panel => ReferenceEquals(panel.Task, vm.SelectedTask)).TaskIndex);
+
+        vm.StartUpModule.AccountName = "dirty-after-move";
+        Assert.True(await vm.FlushConfigurationSavesForCloseAsync());
+
+        var queue = await fixture.TaskQueue.GetCurrentTaskQueueAsync();
+        Assert.True(queue.Success);
+        Assert.NotNull(queue.Value);
+        Assert.Equal("dirty-after-move", queue.Value![1].Params["account_name"]?.GetValue<string>());
+        Assert.NotEqual("dirty-after-move", queue.Value[0].Params["account_name"]?.GetValue<string>());
     }
 
     [Fact]
@@ -748,6 +940,24 @@ public sealed class TaskQueueG1FeatureTests
     }
 
     [Fact]
+    public async Task RoguelikeModule_RefreshGuiOptions_ShouldNotDirtyCleanModule()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.Roguelike, "rogue")).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        vm.SelectedTask = Assert.Single(vm.Tasks);
+        await vm.WaitForPendingBindingAsync();
+
+        Assert.False(vm.RoguelikeModule.IsDirty);
+
+        vm.RoguelikeModule.RefreshGuiDependentOptions();
+
+        Assert.False(vm.RoguelikeModule.IsDirty);
+    }
+
+    [Fact]
     public async Task TaskQueuePage_TaskEnabledToggle_ShouldPersistToService()
     {
         await using var fixture = await TestFixture.CreateAsync();
@@ -828,6 +1038,8 @@ public sealed class TaskQueueG1FeatureTests
         vm.SelectedTask = vm.Tasks[0];
         await vm.WaitForPendingBindingAsync();
 
+        Assert.True(await vm.FlushConfigurationSavesForCloseAsync());
+
         var firstParams = await fixture.TaskQueue.GetTaskParamsAsync(0);
         Assert.True(firstParams.Success);
         Assert.Equal("rapid-a", firstParams.Value?["account_name"]?.GetValue<string>());
@@ -867,6 +1079,31 @@ public sealed class TaskQueueG1FeatureTests
             .OfType<TextBlock>()
             .Concat(view.GetLogicalDescendants().OfType<TextBlock>())
             .Select(textBlock => textBlock.Text?.Trim())
+            .Where(text => !string.IsNullOrWhiteSpace(text))
+            .Distinct(StringComparer.Ordinal)
+            .Cast<string>()
+            .ToArray();
+    }
+
+    private static IReadOnlyList<string> GetRenderedTextsAndContent(Control view)
+    {
+        Dispatcher.UIThread.RunJobs(null);
+        var textBlocks = view.GetVisualDescendants()
+            .OfType<TextBlock>()
+            .Concat(view.GetLogicalDescendants().OfType<TextBlock>())
+            .Select(textBlock => textBlock.Text?.Trim());
+        var checkBoxes = view.GetVisualDescendants()
+            .OfType<CheckBox>()
+            .Concat(view.GetLogicalDescendants().OfType<CheckBox>())
+            .Select(checkBox => checkBox.Content?.ToString()?.Trim());
+        var buttons = view.GetVisualDescendants()
+            .OfType<Button>()
+            .Concat(view.GetLogicalDescendants().OfType<Button>())
+            .Select(button => button.Content?.ToString()?.Trim());
+
+        return textBlocks
+            .Concat(checkBoxes)
+            .Concat(buttons)
             .Where(text => !string.IsNullOrWhiteSpace(text))
             .Distinct(StringComparer.Ordinal)
             .Cast<string>()

@@ -1027,41 +1027,41 @@ public sealed class RoguelikeModuleViewModel : TypedTaskModuleViewModelBase<Rogu
                 .ToArray();
             if (!_themeOptions.Any(option => string.Equals(option.Type, Theme, StringComparison.OrdinalIgnoreCase)))
             {
-                SetTrackedProperty(ref _theme, "JieGarden", nameof(Theme));
+                SetProperty(ref _theme, "JieGarden", nameof(Theme));
             }
 
             _modeOptions = BuildModeOptions();
             if (!_modeOptions.Any(option => option.Value == Mode))
             {
-                SetTrackedProperty(ref _mode, _modeOptions[0].Value, nameof(Mode));
+                SetProperty(ref _mode, _modeOptions[0].Value, nameof(Mode));
             }
 
             if (_mode == ModeInvestment && !_investmentEnabled)
             {
-                SetTrackedProperty(ref _investmentEnabled, true, nameof(InvestmentEnabled));
+                SetProperty(ref _investmentEnabled, true, nameof(InvestmentEnabled));
             }
 
             _difficultyOptions = BuildDifficultyOptions();
             if (!_difficultyOptions.Any(option => option.Value == Difficulty))
             {
-                SetTrackedProperty(ref _difficulty, -1, nameof(Difficulty));
+                SetProperty(ref _difficulty, -1, nameof(Difficulty));
             }
 
             _rolesOptions = BuildRolesOptions();
             if (!_rolesOptions.Any(option => string.Equals(option.Type, Roles, StringComparison.Ordinal)))
             {
-                SetTrackedProperty(ref _roles, "稳扎稳打", nameof(Roles));
+                SetProperty(ref _roles, "稳扎稳打", nameof(Roles));
             }
 
             _squadOptions = BuildSquadOptions();
             if (!_squadOptions.Any(option => string.Equals(option.Type, Squad, StringComparison.Ordinal)))
             {
-                SetTrackedProperty(ref _squad, "指挥分队", nameof(Squad));
+                SetProperty(ref _squad, "指挥分队", nameof(Squad));
             }
 
             if (!_squadOptions.Any(option => string.Equals(option.Type, CollectibleModeSquad, StringComparison.Ordinal)))
             {
-                SetTrackedProperty(ref _collectibleModeSquad, _squad, nameof(CollectibleModeSquad));
+                SetProperty(ref _collectibleModeSquad, _squad, nameof(CollectibleModeSquad));
             }
 
             _findPlayTimeTargetOptions =
@@ -1072,7 +1072,7 @@ public sealed class RoguelikeModuleViewModel : TypedTaskModuleViewModelBase<Rogu
             ];
             if (_findPlayTimeTarget is < 1 or > 3)
             {
-                SetTrackedProperty(ref _findPlayTimeTarget, 1, nameof(FindPlayTimeTarget));
+                SetProperty(ref _findPlayTimeTarget, 1, nameof(FindPlayTimeTarget));
             }
 
             _coreCharOptions = BuildCoreCharOptions();

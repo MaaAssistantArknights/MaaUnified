@@ -23,6 +23,7 @@ public static class DialogTextCatalog
         public const string EmptyStateBody = "EmptyStateBody";
         public const string CopyButton = "CopyButton";
         public const string IssueReportButton = "IssueReportButton";
+        public const string OpenSettingsButton = "OpenSettingsButton";
         public const string TimestampLabel = "TimestampLabel";
         public const string ContextLabel = "ContextLabel";
         public const string CodeLabel = "CodeLabel";
@@ -72,6 +73,11 @@ public static class DialogTextCatalog
     public static string ErrorDialogIssueReportButton(string? language)
     {
         return GetText(language, "Dialog.Error.IssueReportButton", "问题反馈", "IssueReport");
+    }
+
+    public static string ErrorDialogOpenSettingsButton(string? language)
+    {
+        return GetText(language, "Dialog.Error.OpenSettingsButton", "去设置", "Settings");
     }
 
     public static string ErrorDialogCloseButton(string? language)

@@ -11,7 +11,7 @@ using MAAUnified.Application.Services.TaskParams;
 
 namespace MAAUnified.App.ViewModels.TaskQueue;
 
-public abstract class TypedTaskModuleViewModelBase<TDto> : ObservableObject
+public abstract class TypedTaskModuleViewModelBase<TDto> : ObservableObject, ITaskModulePanelViewModel
     where TDto : class, new()
 {
     private bool _isAdvancedMode;
@@ -142,6 +142,14 @@ public abstract class TypedTaskModuleViewModelBase<TDto> : ObservableObject
         OnPropertyChanged(nameof(HasValidationIssues));
     }
 
+    public void RebindTaskIndex(int taskIndex)
+    {
+        if (_boundTaskIndex >= 0)
+        {
+            _boundTaskIndex = taskIndex;
+        }
+    }
+
     public Task<bool> SaveIfDirtyAsync(CancellationToken cancellationToken = default)
     {
         if (!IsTaskBound || !IsDirty)
@@ -150,6 +158,11 @@ public abstract class TypedTaskModuleViewModelBase<TDto> : ObservableObject
         }
 
         return SaveAsync(cancellationToken);
+    }
+
+    public Task<bool> FlushPendingChangesAsync(CancellationToken cancellationToken = default)
+    {
+        return SaveIfDirtyAsync(cancellationToken);
     }
 
     public async Task<bool> SaveAsync(CancellationToken cancellationToken = default)

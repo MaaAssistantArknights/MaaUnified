@@ -32,8 +32,8 @@
                 BorderBrush="{TemplateBinding BorderBrush}"
                 BorderThickness="{TemplateBinding BorderThickness}"
                 CornerRadius="{TemplateBinding CornerRadius}"
-                ClipToBounds="True">
-          <Grid ClipToBounds="True">
+                ClipToBounds="False">
+          <Grid ClipToBounds="False">
             <controls:AppSelectionIndicatorPresenter Classes="selection-indicator-rail"
                                                     Target="{Binding RelativeSource={RelativeSource TemplatedParent}}"
                                                     Orientation="Vertical"
@@ -50,7 +50,8 @@
             </ScrollViewer>
 
             <Canvas IsHitTestVisible="False"
-                    ZIndex="10">
+                    ClipToBounds="False"
+                    ZIndex="100">
               <Border x:Name="PART_ReorderDropIndicator"
                       Classes="app-selection-list-reorder-drop-indicator"
                       IsVisible="False" />
@@ -58,6 +59,7 @@
                               Classes="app-selection-list-reorder-drag-preview"
                               HorizontalAlignment="Left"
                               VerticalAlignment="Top"
+                              ClipToBounds="False"
                               IsVisible="False" />
             </Canvas>
           </Grid>

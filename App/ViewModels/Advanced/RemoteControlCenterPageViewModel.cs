@@ -61,7 +61,7 @@ public sealed class RemoteControlCenterPageViewModel : PageViewModelBase
         WarningMessage = string.Empty;
         _ = await RunTrackedConfigurationSaveAsync(
             "Advanced.RemoteControlCenter",
-            Texts.GetOrDefault("RemoteControlCenter.Title", "远程控制"),
+            Texts.GetOrDefault("Toolbox.Advanced.RemoteControl.Title", "Remote Control"),
             "Advanced.RemoteControlCenter.Save",
             ct => Runtime.SettingsFeatureService.SaveGlobalSettingsAsync(
                 new Dictionary<string, string>(StringComparer.Ordinal)

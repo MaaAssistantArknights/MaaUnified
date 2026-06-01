@@ -143,6 +143,7 @@ public sealed class AvaloniaDialogService : IAppDialogService
         ErrorDialogRequest request,
         string sourceScope,
         Func<CancellationToken, Task<UiOperationResult>>? openIssueReportAsync = null,
+        Func<CancellationToken, Task<UiOperationResult>>? openSettingsAsync = null,
         CancellationToken cancellationToken = default)
     {
         var normalizedRequest = request with
@@ -151,7 +152,7 @@ public sealed class AvaloniaDialogService : IAppDialogService
         };
         var token = await _runtime.DialogFeatureService.BeginDialogAsync(DialogType.Error, sourceScope, normalizedRequest.Title, cancellationToken);
         var dialog = new ErrorDialogView();
-        dialog.ApplyRequest(normalizedRequest, openIssueReportAsync ?? OpenIssueReportAsync);
+        dialog.ApplyRequest(normalizedRequest, openIssueReportAsync ?? OpenIssueReportAsync, openSettingsAsync);
         using var chromeBinding = AttachChromeLocalization(dialog, normalizedRequest.Title, normalizedRequest.Chrome);
         var presentation = await ShowDialogWithOwnerScaleAsync<DialogReturnSemantic?>(dialog, cancellationToken);
         if (!presentation.OwnerAvailable)
@@ -171,6 +172,11 @@ public sealed class AvaloniaDialogService : IAppDialogService
         if (payload.IssueReportOpened)
         {
             await _runtime.DialogFeatureService.RecordDialogActionAsync(token, "open-issue", "issue-report-entry", cancellationToken);
+        }
+
+        if (payload.SettingsOpened)
+        {
+            await _runtime.DialogFeatureService.RecordDialogActionAsync(token, "open-settings", "connection", cancellationToken);
         }
 
         await _runtime.DialogFeatureService.RecordDialogActionAsync(token, "return", semantic.ToString(), cancellationToken);
@@ -307,6 +313,17 @@ public sealed class AvaloniaDialogService : IAppDialogService
             }
 
             cancellationToken.ThrowIfCancellationRequested();
+            if (owner.WindowState == WindowState.Minimized)
+            {
+                owner.WindowState = WindowState.Normal;
+            }
+
+            if (!owner.IsVisible)
+            {
+                owner.Show();
+            }
+
+            owner.Activate();
             dialog.Topmost = ResolveTopmost(dialog, owner);
             DialogWindowScaling.ApplyOwnerUiScale(dialog, owner);
             BeginOwnerModalPresentation();

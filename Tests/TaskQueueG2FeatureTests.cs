@@ -43,6 +43,38 @@ public sealed class TaskQueueG2FeatureTests
     }
 
     [Fact]
+    public async Task StartAsync_WhenAutoConnectFails_ShouldRaiseConnectFailedDialog()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup-a")).Success);
+        fixture.Bridge.ForceConnectFailure = true;
+
+        var raised = new List<DialogErrorRaisedEvent>();
+        fixture.Runtime.DialogFeatureService.ErrorRaised += (_, e) => raised.Add(e);
+        var navigatedSection = string.Empty;
+        var sharedState = new ConnectionGameSharedStateViewModel
+        {
+            RetryOnDisconnected = false,
+            AllowAdbRestart = false,
+            AllowAdbHardRestart = false,
+        };
+        var vm = new TaskQueuePageViewModel(
+            fixture.Runtime,
+            sharedState,
+            navigateToSettingsSection: section => navigatedSection = section);
+        await vm.InitializeAsync();
+
+        await vm.StartAsync();
+
+        var dialogError = Assert.Single(
+            raised,
+            error => string.Equals(error.Context, "TaskQueue.Start", StringComparison.Ordinal));
+        Assert.Equal(UiErrorCode.ConnectFailed, dialogError.Result.Error?.Code);
+        Assert.Equal(string.Empty, navigatedSection);
+        Assert.Equal(0, fixture.Bridge.StartCallCount);
+    }
+
+    [Fact]
     public async Task StopAsync_ShouldFlushDirtyBoundModulesBeforeStop()
     {
         await using var fixture = await TestFixture.CreateAsync();

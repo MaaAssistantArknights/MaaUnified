@@ -1,8 +1,10 @@
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Avalonia.Threading;
 using MAAUnified.App.Services;
 using MAAUnified.App.ViewModels.Infrastructure;
 using MAAUnified.Application.Models;
@@ -89,6 +91,11 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
         Path.Combine("resource", "gui", "StageActivityV2.json"),
     ];
 
+    private static readonly IReadOnlyList<string> StageJsonCandidateRelativePaths =
+    [
+        Path.Combine("resource", "stages.json"),
+    ];
+
     private static readonly IReadOnlyList<(string StageCode, string ZhTip, string EnTip, IReadOnlyList<string[]>? InventoryGroups)> DailyHintSpecs =
     [
         ("CE-6", "CE-6: 龙门币", "CE-6: LMD", null),
@@ -157,12 +164,12 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
     private IReadOnlyList<StringOption> _stageResetModeOptions = [];
     private IReadOnlyList<StringOption> _annihilationStageOptions = [];
     private IReadOnlyList<DropOption> _dropOptions = [];
-    private IReadOnlyList<StageOption> _stageOptions = [];
+    private readonly ObservableCollection<StageOption> _stageOptions = [];
 
     public FightTaskModuleViewModel(MAAUnifiedRuntime runtime, LocalizedTextMap texts)
         : base(runtime, texts, "TaskQueue.Fight")
     {
-        _stagePlan.CollectionChanged += (_, _) => OnStagePlanCollectionChanged();
+        _stagePlan.CollectionChanged += (_, e) => OnStagePlanCollectionChanged(e);
         Texts.PropertyChanged += OnTextsChanged;
         ApplyPersistentAutoRestartOnDrop(ResolveAutoRestartOnDrop());
         EnsureStagePlanInitialized();
@@ -192,9 +199,22 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
 
     public StringOption? SelectedAnnihilationStageOption
     {
-        get => AnnihilationStageOptions.FirstOrDefault(
-            option => string.Equals(option.Value, AnnihilationStage, StringComparison.OrdinalIgnoreCase));
+        get => FindAnnihilationStageOption(AnnihilationStage);
         set => AnnihilationStage = value?.Value ?? "Annihilation";
+    }
+
+    public string SelectedAnnihilationStageValue
+    {
+        get => AnnihilationStage;
+        set
+        {
+            if (value is null)
+            {
+                return;
+            }
+
+            AnnihilationStage = value;
+        }
     }
 
     public IReadOnlyList<StageOption> StageOptions => _stageOptions;
@@ -209,11 +229,39 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
         {
             if (value is null)
             {
+                OnPropertyChanged(nameof(SelectedStageOption));
+                OnPropertyChanged(nameof(SelectedStageValue));
                 return;
             }
 
             Stage = value.Value;
         }
+    }
+
+    public string SelectedStageValue
+    {
+        get => SelectedStageOption?.Value ?? Stage;
+        set
+        {
+            if (IsTransientEmptySelectionValue(value))
+            {
+                RequestSelectedStageValueRefresh();
+                return;
+            }
+
+            Stage = value;
+        }
+    }
+
+    private void RequestSelectedStageValueRefresh()
+    {
+        Dispatcher.UIThread.Post(
+            () =>
+            {
+                OnPropertyChanged(nameof(SelectedStageOption));
+                OnPropertyChanged(nameof(SelectedStageValue));
+            },
+            DispatcherPriority.Background);
     }
 
     public IReadOnlyList<DropOption> DropOptions => _dropOptions;
@@ -241,6 +289,10 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
     public bool IsHideUnavailableStageEnabled => !UseWeeklySchedule;
 
     public bool CanRemoveStagePlanEntry => StagePlan.Count > 1;
+
+    public bool ShowStagePlanSelector => !UseAlternateStage;
+
+    public bool ShowStagePlanList => UseAlternateStage;
 
     public bool ShowStagePlanComboBox => !IsStageManually;
 
@@ -312,6 +364,7 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
             }
 
             OnPropertyChanged(nameof(SelectedStageOption));
+            OnPropertyChanged(nameof(SelectedStageValue));
         }
     }
 
@@ -523,6 +576,7 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
             }
 
             OnPropertyChanged(nameof(SelectedAnnihilationStageOption));
+            OnPropertyChanged(nameof(SelectedAnnihilationStageValue));
             RebuildStageOptions();
         }
     }
@@ -616,6 +670,8 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
             }
 
             OnPropertyChanged(nameof(StageSelectDisplayText));
+            OnPropertyChanged(nameof(ShowStagePlanSelector));
+            OnPropertyChanged(nameof(ShowStagePlanList));
         }
     }
 
@@ -836,6 +892,7 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
         OnPropertyChanged(nameof(SelectedStageResetModeOption));
         OnPropertyChanged(nameof(AnnihilationStageOptions));
         OnPropertyChanged(nameof(SelectedAnnihilationStageOption));
+        OnPropertyChanged(nameof(SelectedAnnihilationStageValue));
         OnPropertyChanged(nameof(UseStoneDisplayName));
         OnPropertyChanged(nameof(StageSelectDisplayText));
         OnPropertyChanged(nameof(AddStageText));
@@ -1191,16 +1248,19 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
     {
         var normalizedClientType = NormalizeClientType(clientTypeOverride ?? ResolveClientTypeFromConfig());
         var dayOfWeek = MallDailyResetHelper.GetYjDate(DateTime.UtcNow, normalizedClientType).DayOfWeek;
-        var stageCodes = ResolveWpfStageSelectionCodes(normalizedClientType);
+        var stageCodes = ResolveStageSelectionCodes(normalizedClientType, forceReload);
+        var knownStageCodes = stageCodes.ToHashSet(StringComparer.OrdinalIgnoreCase);
         var defaultStageDisplay = Texts.GetOrDefault("Fight.DefaultStage", "Cur/Last");
-        var annihilationDisplay = UseCustomAnnihilation
-            ? AnnihilationStageOptions.FirstOrDefault(
-                  option => string.Equals(option.Value, AnnihilationStage, StringComparison.OrdinalIgnoreCase))
-                  ?.DisplayName ?? Texts.GetOrDefault("Fight.Annihilation.Current", "Current Annihilation")
-            : Texts.GetOrDefault("Fight.Annihilation.Current", "Current Annihilation");
+        var annihilationDisplay = ResolveAnnihilationStageDisplay();
+        var previousOptions = _stageOptions;
         var list = new List<StageOption>
         {
-            new(defaultStageDisplay, FightStageSelection.CurrentOrLast, IsOpen: true, IsOutdated: false),
+            ReuseStageOption(
+                previousOptions,
+                defaultStageDisplay,
+                FightStageSelection.CurrentOrLast,
+                isOpen: true,
+                isOutdated: false),
         };
 
         foreach (var stageCode in stageCodes)
@@ -1219,28 +1279,166 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
 
             var display = string.Equals(normalizedStage, "Annihilation", StringComparison.OrdinalIgnoreCase)
                 ? annihilationDisplay
-                : normalizedStage;
-            list.Add(new StageOption(display, normalizedStage, isOpen, IsOutdated: false));
+                : ResolveStageDisplayName(normalizedStage);
+            list.Add(ReuseStageOption(previousOptions, display, normalizedStage, isOpen, isOutdated: false));
         }
 
-        _stageOptions = list;
+        AppendMissingStagePlanOptions(list, knownStageCodes, previousOptions, dayOfWeek);
+
+        ApplyStageOptions(list);
+
         OnPropertyChanged(nameof(StageOptions));
-        OnPropertyChanged(nameof(SelectedStageOption));
         RefreshStagePlanPresentation();
+        RequestSelectedStageValueRefresh();
+        RequestStagePlanSelectedStageValueRefresh();
     }
 
-    private static IReadOnlyList<string> ResolveWpfStageSelectionCodes(string clientType)
+    private void ApplyStageOptions(IReadOnlyList<StageOption> options)
+    {
+        for (var targetIndex = 0; targetIndex < options.Count; targetIndex++)
+        {
+            var option = options[targetIndex];
+            if (targetIndex < _stageOptions.Count && EqualityComparer<StageOption>.Default.Equals(_stageOptions[targetIndex], option))
+            {
+                continue;
+            }
+
+            var existingIndex = IndexOfStageOption(option, targetIndex + 1);
+            if (existingIndex >= 0)
+            {
+                _stageOptions.Move(existingIndex, targetIndex);
+                continue;
+            }
+
+            if (targetIndex < _stageOptions.Count)
+            {
+                _stageOptions[targetIndex] = option;
+            }
+            else
+            {
+                _stageOptions.Add(option);
+            }
+        }
+
+        while (_stageOptions.Count > options.Count)
+        {
+            _stageOptions.RemoveAt(_stageOptions.Count - 1);
+        }
+    }
+
+    private int IndexOfStageOption(StageOption option, int startIndex)
+    {
+        for (var index = Math.Max(0, startIndex); index < _stageOptions.Count; index++)
+        {
+            if (EqualityComparer<StageOption>.Default.Equals(_stageOptions[index], option))
+            {
+                return index;
+            }
+        }
+
+        return -1;
+    }
+
+    private IReadOnlyList<string> ResolveStageSelectionCodes(string clientType, bool forceReload = false)
     {
         var ordered = new List<string>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        AddStageCodes(FallbackStageCodes, ordered, seen);
 
+        _ = forceReload;
         if (TryLoadStageActivityStageCodes(clientType, out var activityCodes))
         {
             AddStageCodes(activityCodes, ordered, seen);
         }
 
+        if (TryLoadActiveTaskStageCodes(clientType, out var taskStageCodes))
+        {
+            AddStageCodes(taskStageCodes, ordered, seen);
+        }
+
+        AddStageCodes(FallbackStageCodes, ordered, seen);
+
         return ordered;
+    }
+
+    private string ResolveAnnihilationStageDisplay()
+    {
+        var defaultDisplay = Texts.GetOrDefault("Fight.Annihilation.Current", "Current Annihilation");
+        return UseCustomAnnihilation
+            ? FindAnnihilationStageOption(AnnihilationStage)?.DisplayName ?? defaultDisplay
+            : defaultDisplay;
+    }
+
+    private StringOption? FindAnnihilationStageOption(string? value)
+    {
+        var normalized = NormalizeAnnihilationStageOptionValue(value);
+        return AnnihilationStageOptions.FirstOrDefault(
+            option => string.Equals(
+                NormalizeAnnihilationStageOptionValue(option.Value),
+                normalized,
+                StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string NormalizeAnnihilationStageOptionValue(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)
+            || string.Equals(value.Trim(), "Annihilation", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Annihilation";
+        }
+
+        var trimmed = value.Trim();
+        return trimmed.EndsWith("@Annihilation", StringComparison.OrdinalIgnoreCase)
+            ? trimmed
+            : $"{trimmed}@Annihilation";
+    }
+
+    private string ResolveStageDisplayName(string stageCode)
+    {
+        return AchievementTextCatalog.GetString(stageCode, Texts.Language, stageCode);
+    }
+
+    private void AppendMissingStagePlanOptions(
+        ICollection<StageOption> target,
+        ISet<string> knownStageCodes,
+        IReadOnlyList<StageOption> previousOptions,
+        DayOfWeek dayOfWeek)
+    {
+        var seen = target
+            .Select(option => option.Value)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var entry in StagePlan)
+        {
+            var stage = FightStageSelection.NormalizeStoredValue(entry.Stage);
+            if (FightStageSelection.IsCurrentOrLast(stage) || !seen.Add(stage))
+            {
+                continue;
+            }
+
+            var isKnown = knownStageCodes.Contains(stage);
+            target.Add(ReuseStageOption(
+                previousOptions,
+                isKnown ? ResolveStageDisplayName(stage) : stage,
+                stage,
+                isOpen: IsStageManually || (isKnown && IsStageOpen(stage, dayOfWeek)),
+                isOutdated: !isKnown && !IsStageManually));
+        }
+    }
+
+    private static StageOption ReuseStageOption(
+        IReadOnlyList<StageOption> previousOptions,
+        string displayName,
+        string value,
+        bool isOpen,
+        bool isOutdated)
+    {
+        var existing = previousOptions.FirstOrDefault(option =>
+            string.Equals(option.Value, value, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(option.DisplayName, displayName, StringComparison.Ordinal)
+            && option.IsOpen == isOpen
+            && option.IsOutdated == isOutdated);
+
+        return existing ?? new StageOption(displayName, value, isOpen, isOutdated);
     }
 
     private static void AddStageCodes(IEnumerable<string> source, ICollection<string> target, ISet<string> seen)
@@ -1255,7 +1453,7 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
         }
     }
 
-    private static bool TryLoadStageActivityStageCodes(string clientType, out IReadOnlyList<string> stageCodes)
+    private bool TryLoadStageActivityStageCodes(string clientType, out IReadOnlyList<string> stageCodes)
     {
         stageCodes = Array.Empty<string>();
         var path = ResolveStageActivityPath();
@@ -1284,7 +1482,203 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
         }
     }
 
-    private static string? ResolveStageActivityPath()
+    private bool TryLoadActiveTaskStageCodes(string clientType, out IReadOnlyList<string> stageCodes)
+    {
+        stageCodes = Array.Empty<string>();
+        if (!TryLoadActiveStagePrefixes(clientType, out var activePrefixes) || activePrefixes.Count == 0)
+        {
+            return false;
+        }
+
+        var result = new List<string>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var prefix in activePrefixes)
+        {
+            foreach (var path in ResolveStageTaskFileCandidatePaths(clientType, prefix))
+            {
+                if (TryAppendStageTaskCodes(path, prefix, result, seen))
+                {
+                    break;
+                }
+            }
+        }
+
+        stageCodes = result;
+        return result.Count > 0;
+    }
+
+    private bool TryLoadActiveStagePrefixes(string clientType, out IReadOnlyList<string> prefixes)
+    {
+        prefixes = Array.Empty<string>();
+        foreach (var path in ResolveStageJsonCandidatePaths(clientType))
+        {
+            if (!File.Exists(path))
+            {
+                continue;
+            }
+
+            if (!TryReadActiveStagePrefixes(path, out prefixes))
+            {
+                continue;
+            }
+
+            return prefixes.Count > 0;
+        }
+
+        return false;
+    }
+
+    private IEnumerable<string> ResolveStageJsonCandidatePaths(string clientType)
+    {
+        var clientDirectory = NormalizeClientDirectory(clientType);
+        foreach (var root in EnumerateRuntimeRoots())
+        {
+            if (!string.Equals(clientDirectory, "Official", StringComparison.OrdinalIgnoreCase))
+            {
+                yield return Path.Combine(root, "resource", "global", clientDirectory, "resource", "stages.json");
+            }
+
+            foreach (var relativePath in StageJsonCandidateRelativePaths)
+            {
+                yield return Path.Combine(root, relativePath);
+            }
+        }
+    }
+
+    private IEnumerable<string> ResolveStageTaskFileCandidatePaths(string clientType, string prefix)
+    {
+        var clientDirectory = NormalizeClientDirectory(clientType);
+        foreach (var root in EnumerateRuntimeRoots())
+        {
+            if (!string.Equals(clientDirectory, "Official", StringComparison.OrdinalIgnoreCase))
+            {
+                yield return Path.Combine(root, "resource", "global", clientDirectory, "resource", "tasks", "Stages", $"{prefix}.json");
+            }
+
+            yield return Path.Combine(root, "resource", "tasks", "Stages", $"{prefix}.json");
+        }
+    }
+
+    private static bool TryReadActiveStagePrefixes(string path, out IReadOnlyList<string> prefixes)
+    {
+        prefixes = Array.Empty<string>();
+        try
+        {
+            var result = new List<string>();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var root = JsonNode.Parse(File.ReadAllText(path));
+            if (root is JsonArray array)
+            {
+                foreach (var node in array)
+                {
+                    AppendActiveStagePrefix(node, result, seen);
+                }
+            }
+            else if (root is JsonObject objectRoot)
+            {
+                foreach (var pair in objectRoot)
+                {
+                    AppendActiveStagePrefix(pair.Value, result, seen);
+                }
+            }
+
+            prefixes = result;
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static void AppendActiveStagePrefix(JsonNode? node, ICollection<string> target, ISet<string> seen)
+    {
+        if (node is not JsonObject stage
+            || !TryReadString(stage["code"], out var code)
+            || !TryReadString(stage["stageId"], out var stageId)
+            || !stageId.EndsWith("_rep", StringComparison.OrdinalIgnoreCase)
+            || !TryReadStagePrefix(code, out var prefix)
+            || !seen.Add(prefix))
+        {
+            return;
+        }
+
+        target.Add(prefix);
+    }
+
+    private static bool TryAppendStageTaskCodes(
+        string path,
+        string prefix,
+        ICollection<string> target,
+        ISet<string> seen)
+    {
+        if (!File.Exists(path))
+        {
+            return false;
+        }
+
+        try
+        {
+            if (JsonNode.Parse(File.ReadAllText(path)) is not JsonObject root)
+            {
+                return false;
+            }
+
+            var originalCount = target.Count;
+            foreach (var pair in root)
+            {
+                if (IsTaskStageCodeForPrefix(pair.Key, prefix))
+                {
+                    AddStageCodes([pair.Key], target, seen);
+                }
+            }
+
+            return target.Count > originalCount;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool TryReadStagePrefix(string code, out string prefix)
+    {
+        prefix = string.Empty;
+        var separatorIndex = code.IndexOf('-');
+        if (separatorIndex <= 0)
+        {
+            return false;
+        }
+
+        prefix = code[..separatorIndex];
+        return prefix.All(static c => c is >= 'A' and <= 'Z' or >= 'a' and <= 'z');
+    }
+
+    private static bool IsTaskStageCodeForPrefix(string key, string prefix)
+    {
+        if (string.IsNullOrWhiteSpace(key) || key.IndexOf('@', StringComparison.Ordinal) >= 0)
+        {
+            return false;
+        }
+
+        var prefixWithSeparator = $"{prefix}-";
+        if (!key.StartsWith(prefixWithSeparator, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var nextIndex = prefixWithSeparator.Length;
+        return nextIndex < key.Length && char.IsDigit(key[nextIndex]);
+    }
+
+    private static string NormalizeClientDirectory(string clientType)
+    {
+        return string.IsNullOrWhiteSpace(clientType)
+            ? "Official"
+            : clientType.Trim();
+    }
+
+    private string? ResolveStageActivityPath()
     {
         foreach (var root in EnumerateRuntimeRoots())
         {
@@ -1301,15 +1695,18 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
         return null;
     }
 
-    private static IEnumerable<string> EnumerateRuntimeRoots()
+    private IEnumerable<string> EnumerateRuntimeRoots()
     {
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var candidates = new[]
         {
+            ResolveConfigurationBaseDirectory(),
             RuntimeLayout.ResolveRuntimeBaseDirectory(),
             Environment.CurrentDirectory,
             Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..")),
-        };
+        }
+        .Where(static candidate => !string.IsNullOrWhiteSpace(candidate))
+        .Select(static candidate => candidate!);
 
         foreach (var candidate in candidates)
         {
@@ -1323,6 +1720,21 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
 
                 current = current.Parent;
             }
+        }
+    }
+
+    private string? ResolveConfigurationBaseDirectory()
+    {
+        try
+        {
+            var field = typeof(UnifiedConfigurationService).GetField(
+                "_baseDirectory",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            return field?.GetValue(Runtime.ConfigurationService) as string;
+        }
+        catch
+        {
+            return null;
         }
     }
 
@@ -1549,12 +1961,7 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
         }
 
         var index = StagePlan.IndexOf(entry);
-        if (index <= 0)
-        {
-            return;
-        }
-
-        StagePlan.Move(index, index - 1);
+        MoveStagePlanEntry(index, index - 1);
     }
 
     public void MoveStagePlanEntryDown(StagePlanEntry? entry)
@@ -1565,15 +1972,24 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
         }
 
         var index = StagePlan.IndexOf(entry);
-        if (index < 0 || index >= StagePlan.Count - 1)
+        MoveStagePlanEntry(index, index + 1);
+    }
+
+    public void MoveStagePlanEntry(int sourceIndex, int targetIndex)
+    {
+        if (sourceIndex == targetIndex
+            || sourceIndex < 0
+            || targetIndex < 0
+            || sourceIndex >= StagePlan.Count
+            || targetIndex >= StagePlan.Count)
         {
             return;
         }
 
-        StagePlan.Move(index, index + 1);
+        StagePlan.Move(sourceIndex, targetIndex);
     }
 
-    private void OnStagePlanCollectionChanged()
+    private void OnStagePlanCollectionChanged(NotifyCollectionChangedEventArgs e)
     {
         if (_suppressStagePlanSync)
         {
@@ -1596,7 +2012,7 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
         SyncPrimaryStageFromPlan(markDirty: true);
         OnPropertyChanged(nameof(CanRemoveStagePlanEntry));
         OnPropertyChanged(nameof(StageSelectDisplayText));
-        RebuildStageOptions();
+        RefreshStageOptionsForStagePlanChange(e.Action);
         MarkDirty();
     }
 
@@ -1668,6 +2084,7 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
             {
                 SetProperty(ref _stage, primary, nameof(Stage));
                 OnPropertyChanged(nameof(SelectedStageOption));
+                OnPropertyChanged(nameof(SelectedStageValue));
             }
         }
         finally
@@ -1689,8 +2106,7 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
 
     private void NormalizeStagePlanAgainstKnownStages()
     {
-        var knownStageCodes = Runtime.StageManagerFeatureService
-            .GetStageCodes(ResolveClientTypeFromConfig())
+        var knownStageCodes = ResolveStageSelectionCodes(ResolveClientTypeFromConfig())
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         var updated = false;
@@ -1720,6 +2136,11 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
         }
 
         return FightStageSelection.NormalizeStoredValue(value);
+    }
+
+    private static bool IsTransientEmptySelectionValue(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value);
     }
 
     private string NormalizeManualStageInput(string? value)
@@ -1764,18 +2185,52 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
             SyncPrimaryStageFromPlan(markDirty: true);
         }
 
-        RebuildStageOptions();
+        RefreshStageOptionsForStagePlanChange(NotifyCollectionChangedAction.Add);
         MarkDirty();
+    }
+
+    private void RefreshStageOptionsForStagePlanChange(NotifyCollectionChangedAction action)
+    {
+        if (action is NotifyCollectionChangedAction.Remove
+            or NotifyCollectionChangedAction.Replace
+            or NotifyCollectionChangedAction.Reset
+            || StagePlanContainsMissingStageOption())
+        {
+            RebuildStageOptions();
+            return;
+        }
+
+        RefreshStagePlanPresentation();
+    }
+
+    private bool StagePlanContainsMissingStageOption()
+    {
+        var selectedValues = _stageOptions
+            .Select(option => option.Value)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        return StagePlan
+            .Select(entry => FightStageSelection.NormalizeStoredValue(entry.Stage))
+            .Any(stage => !FightStageSelection.IsCurrentOrLast(stage) && !selectedValues.Contains(stage));
+    }
+
+    private void RequestStagePlanSelectedStageValueRefresh()
+    {
+        foreach (var entry in StagePlan)
+        {
+            entry.RequestSelectedStageValueRefresh();
+        }
     }
 
     private void RefreshStagePlanPresentation()
     {
         var normalizedClientType = NormalizeClientType(ResolveClientTypeFromConfig());
         var dayOfWeek = MallDailyResetHelper.GetYjDate(DateTime.UtcNow, normalizedClientType).DayOfWeek;
-        var knownStageCodes = ResolveWpfStageSelectionCodes(normalizedClientType)
+        var knownStageCodes = ResolveStageSelectionCodes(normalizedClientType)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         foreach (var entry in StagePlan)
         {
+            entry.RefreshSelectedStageOption();
             var stage = FightStageSelection.NormalizeStoredValue(entry.Stage);
             if (FightStageSelection.IsCurrentOrLast(stage))
             {
@@ -1910,7 +2365,43 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
                 }
 
                 OnPropertyChanged(nameof(EditableStageText));
+                OnPropertyChanged(nameof(SelectedStageOption));
+                OnPropertyChanged(nameof(SelectedStageValue));
+                OnPropertyChanged(nameof(PreviewStageText));
                 _owner.OnStagePlanEntryChanged(this);
+            }
+        }
+
+        public StageOption? SelectedStageOption
+        {
+            get => _owner.StageOptions.FirstOrDefault(
+                option => string.Equals(option.Value, Stage, StringComparison.OrdinalIgnoreCase));
+            set
+            {
+                if (value is null)
+                {
+                    OnPropertyChanged(nameof(SelectedStageOption));
+                    OnPropertyChanged(nameof(SelectedStageValue));
+                    OnPropertyChanged(nameof(PreviewStageText));
+                    return;
+                }
+
+                Stage = value.Value;
+            }
+        }
+
+        public string SelectedStageValue
+        {
+            get => SelectedStageOption?.Value ?? Stage;
+            set
+            {
+                if (IsTransientEmptySelectionValue(value))
+                {
+                    RequestSelectedStageValueRefresh();
+                    return;
+                }
+
+                Stage = value;
             }
         }
 
@@ -1919,6 +2410,12 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
             get => FightStageSelection.IsCurrentOrLast(Stage) ? string.Empty : Stage;
             set => Stage = value;
         }
+
+        public string PreviewStageText =>
+            SelectedStageOption?.DisplayName
+            ?? (FightStageSelection.IsCurrentOrLast(Stage)
+                ? _owner.Texts.GetOrDefault("Fight.DefaultStage", "Cur/Last")
+                : Stage);
 
         public bool IsOpen
         {
@@ -1952,6 +2449,20 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
             IsOutdated = isOutdated;
             StatusText = statusText;
         }
+
+        internal void RefreshSelectedStageOption()
+        {
+            OnPropertyChanged(nameof(SelectedStageOption));
+            OnPropertyChanged(nameof(SelectedStageValue));
+            OnPropertyChanged(nameof(PreviewStageText));
+        }
+
+        internal void RequestSelectedStageValueRefresh()
+        {
+            Dispatcher.UIThread.Post(RefreshSelectedStageOption, DispatcherPriority.Background);
+        }
+
+        public override string ToString() => FightStageSelection.IsCurrentOrLast(Stage) ? string.Empty : Stage;
     }
 
     public sealed record StageOption(string DisplayName, string Value, bool IsOpen, bool IsOutdated)

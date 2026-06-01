@@ -25,7 +25,7 @@ public sealed class UserDataUpdateModuleViewModel : TaskModuleSettingsViewModelB
         RefreshSyncTimesFromConfig();
     }
 
-    public string TitleText => Texts.GetOrDefault("TaskQueue.Module.UserDataUpdate", "更新数据");
+    public string TitleText => Texts.GetOrDefault("TaskQueue.Module.UserDataUpdate", "Update Data");
 
     public string UpdateOperBoxText => Texts.GetOrDefault("Toolbox.ToolName.OperBox", "干员识别");
 

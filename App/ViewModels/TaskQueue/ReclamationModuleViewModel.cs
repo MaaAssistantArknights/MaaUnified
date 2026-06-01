@@ -187,7 +187,7 @@ public sealed class ReclamationModuleViewModel : TypedTaskModuleViewModelBase<Re
             IncrementMode = IncrementMode,
             NumCraftBatches = Math.Clamp(NumCraftBatches, 0, 99999),
             ToolsToCraft = toolsToCraft,
-            ClearStore = ClearStore,
+            ClearStore = Mode == 1 ? false : ClearStore,
         };
     }
 
