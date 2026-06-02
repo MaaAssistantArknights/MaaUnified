@@ -9,8 +9,8 @@
 主仓以这些 workflow 为准：
 
 - `.github/workflows/ci-avalonia.yml`：调试包和合并前验证
-- `.github/workflows/ci.yml`：官方 Release Pipeline，Beta 发布时一并生成并上传 MAAUnified Linux GUI 包
-- `.github/workflows/release-maaunified.yml`：手动补发 MAAUnified Beta 包
+- `.github/workflows/ci.yml`：官方 Release Pipeline，tag 发布时一并生成并上传 MAAUnified Linux GUI 包
+- `.github/workflows/release-maaunified.yml`：手动补发 MAAUnified Release 包
 
 `src/MAAUnified/CI/` 下的文件只当模板或同步副本看，不作为实际入口。
 
@@ -19,13 +19,13 @@
 | 名称 | Runner | RID | MaaDeps triplet | CMake preset | Debug | Release |
 | --- | --- | --- | --- | --- | --- | --- |
 | `windows-x64` | `windows-latest` | `win-x64` | `x64-windows` | `windows-unified-publish-x64` | 完整调试包 | 暂不发布 |
-| `linux-x64` | `ubuntu-latest` | `linux-x64` | `x64-linux` | `linux-publish-x64` | 桌面便携 `.zip` | Beta 桌面便携 `.zip` |
+| `linux-x64` | `ubuntu-latest` | `linux-x64` | `x64-linux` | `linux-publish-x64` | 桌面便携 `.zip` | 桌面便携 `.zip` |
 | `macos-x64` | `macos-latest` | `osx-x64` | `x64-osx` | `macos-publish-x64` | 完整调试包 | 暂不发布 |
 | `macos-arm64` | `macos-latest` | `osx-arm64` | `arm64-osx` | `macos-publish-arm64` | 完整调试包 | 暂不发布 |
 
 调试包保留日志和符号，用来复现和排障。正式包面向分发。
 
-当前 MAAUnified 只随主仓 Beta 发布 Linux 桌面便携包。`.github/workflows/ci.yml` 的 `Build MAAUnified Linux GUI` job 只在 `vX.Y.Z-beta...` tag 上产出 `MAAUnified-<tag>-linux-x64.zip`，最终由 `Publish Release` job 和主仓 `MAA-*` 包一起上传到同一个 GitHub prerelease。Stable tag 不上传 MAAUnified 包，Windows 和 macOS 也暂不加入 release。
+当前 MAAUnified 随主仓 tag 发布 Linux 桌面便携包。`.github/workflows/ci.yml` 的 `Build MAAUnified Linux GUI` job 会在 `vX.Y.Z` 和 `vX.Y.Z-beta...` tag 上产出 `MAAUnified-<tag>-linux-x64.zip`，最终由 `Publish Release` job 和主仓 `MAA-*` 包一起上传到同一个 GitHub Release。Windows 和 macOS 也暂不加入 release。
 
 当前 Beta 包形态固定为：
 
@@ -35,7 +35,7 @@ Linux Debug 包也使用同样的桌面便携 `.zip` 布局。`MAAUnified.AppIma
 
 ## 软件更新产物
 
-MAAUnified 软件更新当前只发布 Beta Linux 包。更新检查只接受 `MAAUnified-*` 包名；Beta 通道可从 GitHub Release 下载 Linux 桌面便携 `.zip`，并在下次启动时解压覆盖运行时文件并保留 `config/`、`data/` 等可写目录。Stable 通道暂不发布 MAAUnified 包。Windows 和 macOS 更新能力保留在代码中，但对应包暂不上传到 release。
+MAAUnified 软件更新当前发布 Linux 包。更新检查只接受 `MAAUnified-*` 包名；Beta 通道和 Stable 通道都可从 GitHub Release 下载 Linux 桌面便携 `.zip`，并在下次启动时解压覆盖运行时文件并保留 `config/`、`data/` 等可写目录。Windows 和 macOS 更新能力保留在代码中，但对应包暂不上传到 release。
 
 Mirror酱目前只支持资源更新；选择 Mirror酱作为软件更新源时，界面会提示 MAAUnified 暂未支持 Mirror酱软件更新，并要求切换到海外源/GitHub。
 ### macOS 签名与 ad-hoc fallback
@@ -132,8 +132,8 @@ Windows GPU 探测遇到 `Indirect`、`Virtual`、`IDD` 一类 adapter 时，应
 3. 跑 Debug workflow，看调试包和测试结果。
 4. 确认目标平台启动、布局和日志都正常。
 5. 创建或确认 GitHub Release。
-6. 跑官方 Release Pipeline。只有 Beta tag 会让 `Build MAAUnified Linux GUI` job 生成 Linux 桌面便携 `.zip`，`Publish Release` job 会和主仓包一起上传；Stable tag 会跳过 MAAUnified 发布。
-7. 需要手动补发 MAAUnified Beta 包时，再跑 `.github/workflows/release-maaunified.yml`。
+6. 跑官方 Release Pipeline。所有 tag 都会让 `Build MAAUnified Linux GUI` job 生成 Linux 桌面便携 `.zip`，`Publish Release` job 会和主仓包一起上传。
+7. 需要手动补发 MAAUnified 包时，再跑 `.github/workflows/release-maaunified.yml`。
 8. Windows/macOS 加入 release 前，需要重新启用对应 matrix，并检查 macOS 签名与 notarization 状态。
 
 Windows GUI 启动或 GPU 问题，优先看发布目录下的 `debug/windows-gpu-probe.log` 和 `debug/avalonia-ui-startup.log`。
