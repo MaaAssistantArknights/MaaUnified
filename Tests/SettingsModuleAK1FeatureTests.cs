@@ -6,12 +6,14 @@ using MAAUnified.App.Features.Dialogs;
 using MAAUnified.App.Services;
 using MAAUnified.App.ViewModels;
 using MAAUnified.App.ViewModels.Settings;
+using MAAUnified.App.ViewModels.TaskQueue;
 using MAAUnified.Application.Configuration;
 using MAAUnified.Application.Models;
 using MAAUnified.Application.Orchestration;
 using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Features;
 using MAAUnified.Application.Services.Localization;
+using MAAUnified.Application.Services.TaskParams;
 using MAAUnified.Compat.Constants;
 using MAAUnified.CoreBridge;
 using MAAUnified.Platform;
@@ -29,6 +31,7 @@ public sealed class SettingsModuleAK1FeatureTests
         "ClientType",
         "StartGame",
         "TouchMode",
+        "PlayCoverScreencapMode",
         "AutoDetect",
         "AlwaysAutoDetect",
         "RetryOnDisconnected",
@@ -314,6 +317,267 @@ public sealed class SettingsModuleAK1FeatureTests
         Assert.False(state.ShowMuMuExtrasSection);
         Assert.False(state.ShowLdPlayerExtrasSection);
         Assert.False(state.ShowEmulatorExtrasSection);
+    }
+
+    [Fact]
+    public void ConnectionGameSharedState_PlayCover_ShouldExposeScreencapModesAndSkipAdbHints()
+    {
+        var state = new ConnectionGameSharedStateViewModel
+        {
+            ConnectConfig = "MacPlayTools",
+            PlayCoverScreencapMode = "MacSCK",
+            ConnectAddress = "localhost:1717",
+            AdbPath = "adb",
+            AutoDetect = false,
+        };
+
+        // PlayCover is macOS-only, so the MacPlayTools connect-config option is offered on macOS only.
+        if (OperatingSystem.IsMacOS())
+        {
+            Assert.Contains(
+                state.ConnectConfigOptions,
+                option => string.Equals(option.Value, "MacPlayTools", StringComparison.OrdinalIgnoreCase));
+        }
+        else
+        {
+            Assert.DoesNotContain(
+                state.ConnectConfigOptions,
+                option => string.Equals(option.Value, "MacPlayTools", StringComparison.OrdinalIgnoreCase));
+        }
+        Assert.Contains(
+            state.PlayCoverScreencapModeOptions,
+            option => string.Equals(option.Value, "RGBA", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(
+            state.PlayCoverScreencapModeOptions,
+            option => string.Equals(option.Value, "BGR", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(
+            state.PlayCoverScreencapModeOptions,
+            option => string.Equals(option.Value, "MacSCK", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(
+            state.TouchModeOptions,
+            option => string.Equals(option.Value, "MacPlayTools", StringComparison.OrdinalIgnoreCase));
+        Assert.True(state.IsPlayCoverConnection);
+        Assert.False(state.IsAdbConnectionMode);
+        Assert.True(state.ShowConnectAddressField);
+        Assert.True(state.CanEditConnectAddressField);
+        Assert.False(state.ShowMacBundledAdbControls);
+        Assert.False(state.ShowManualAdbPathControls);
+        Assert.False(state.UseMacBundledAdbEffective);
+        Assert.Null(state.ResolveEffectiveAdbPath(updateStateWhenResolved: true));
+        Assert.Equal("MacPlayTools", state.TouchMode);
+        Assert.Equal("MacSCK", state.EffectiveConnectConfig);
+        Assert.Null(state.BuildConnectionSettingsHintMessage());
+
+        state.PlayCoverScreencapMode = "BGR";
+        Assert.Equal("MacBGR", state.EffectiveConnectConfig);
+
+        state.PlayCoverScreencapMode = "RGBA";
+        Assert.Equal("CompatMac", state.EffectiveConnectConfig);
+    }
+
+    [Fact]
+    public void ConnectionGameSharedState_PlayCover_ShouldUsePlayToolsDefaultAddressCandidate()
+    {
+        var state = new ConnectionGameSharedStateViewModel
+        {
+            ConnectConfig = "MacPlayTools",
+            ConnectAddress = "127.0.0.1:5555",
+            AutoDetect = true,
+        };
+
+        var candidates = state.BuildConnectAddressCandidates(includeConfiguredAddress: true);
+
+        Assert.Contains("127.0.0.1:5555", candidates);
+        Assert.Contains(PlayCoverConnectConfigResolver.DefaultPlayToolsAddress, candidates);
+    }
+
+    [Theory]
+    [InlineData("macsck", "MacSCK", "MacSCK")]
+    [InlineData("MACBGR", "BGR", "MacBGR")]
+    [InlineData("compatmac", "RGBA", "CompatMac")]
+    public void ConnectionGameSharedState_PlayCoverScreencapMode_ShouldNormalizeCaseInsensitiveAliases(
+        string input,
+        string expectedStoredMode,
+        string expectedEffectiveConnectConfig)
+    {
+        var state = new ConnectionGameSharedStateViewModel
+        {
+            ConnectConfig = "MacPlayTools",
+            PlayCoverScreencapMode = input,
+        };
+
+        Assert.Equal(expectedStoredMode, state.PlayCoverScreencapMode);
+        Assert.Equal(expectedEffectiveConnectConfig, state.EffectiveConnectConfig);
+    }
+
+    [Fact]
+    public void ConnectionGameSharedState_SwitchingAwayFromPlayCover_ShouldResetTouchModeToDefault()
+    {
+        var state = new ConnectionGameSharedStateViewModel
+        {
+            ConnectConfig = "MacPlayTools",
+        };
+
+        state.TouchMode = "MacPlayTools";
+        Assert.Equal("MacPlayTools", state.TouchMode);
+
+        state.ConnectConfig = "General";
+
+        Assert.Equal("MaaFwAdb", state.TouchMode);
+        Assert.DoesNotContain(
+            state.TouchModeOptions,
+            option => string.Equals(option.Value, "MacPlayTools", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void ConnectionGameSharedState_PlayCoverEmptyAddress_ShouldShowConnectionAddressHint()
+    {
+        var state = new ConnectionGameSharedStateViewModel
+        {
+            ConnectConfig = "MacPlayTools",
+            ConnectAddress = string.Empty,
+            AutoDetect = true,
+            AlwaysAutoDetect = false,
+        };
+
+        var hint = state.BuildConnectionSettingsHintMessage();
+
+        Assert.NotNull(hint);
+        Assert.True(
+            hint.Contains("连接地址为空", StringComparison.Ordinal)
+            || hint.Contains("Connection address is empty", StringComparison.OrdinalIgnoreCase),
+            hint);
+    }
+
+    [Theory]
+    [InlineData("macsck", null, "MacSCK")]
+    [InlineData("macbgr", null, "MacBGR")]
+    [InlineData("compatmac", null, "CompatMac")]
+    [InlineData("MacPlayTools", "macsck", "MacSCK")]
+    [InlineData("MacPlayTools", "macbgr", "MacBGR")]
+    [InlineData("MacPlayTools", "bgr", "MacBGR")]
+    [InlineData("MacPlayTools", "compatmac", "CompatMac")]
+    public void PlayCoverConnectConfigResolver_ShouldNormalizeCaseInsensitiveInputs(
+        string connectConfig,
+        string? screencapMode,
+        string expected)
+    {
+        var actual = PlayCoverConnectConfigResolver.ResolveEffectiveConnectConfig(connectConfig, screencapMode);
+
+        Assert.Equal(expected, actual);
+    }
+
+    [Theory]
+    [InlineData("MacPlayTools", "minitouch", "MacPlayTools")]
+    [InlineData("MacSCK", "maatouch", "MacPlayTools")]
+    [InlineData("CompatMac", "adb", "MacPlayTools")]
+    [InlineData("General", "minitouch", "minitouch")]
+    [InlineData("General", "MacPlayTools", "MaaFwAdb")]
+    public void PlayCoverConnectConfigResolver_ShouldResolveTouchModeConsistently(
+        string connectConfig,
+        string configuredTouchMode,
+        string expected)
+    {
+        var actual = PlayCoverConnectConfigResolver.ResolveTouchMode(connectConfig, configuredTouchMode);
+
+        Assert.Equal(expected, actual);
+    }
+
+    [Theory]
+    [InlineData("Official", "com.hypergryph.arknights")]
+    [InlineData("Bilibili", "com.hypergryph.arknights")]
+    [InlineData("YoStarEN", "com.YoStarEN.Arknights")]
+    [InlineData("YoStarJP", "com.YoStarJP.Arknights")]
+    [InlineData("YoStarKR", "com.YoStarKR.Arknights")]
+    [InlineData("txwy", "tw.txwy.ios.arknights")]
+    public void TaskQueuePage_PlayCoverStartGame_ShouldUseMaaMacGuiBundleIds(
+        string clientType,
+        string expectedBundleId)
+    {
+        var path = TaskQueuePageViewModel.ResolvePlayCoverAppBundlePath(clientType);
+
+        Assert.Equal(expectedBundleId, TaskQueuePageViewModel.ResolvePlayCoverAppBundleId(clientType));
+        Assert.EndsWith(
+            Path.Combine("Library", "Containers", "io.playcover.PlayCover", "Applications", $"{expectedBundleId}.app"),
+            path,
+            StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("CompatMac", "RGBA", "CompatMac")]
+    [InlineData("compatmac", "RGBA", "CompatMac")]
+    [InlineData("MacBGR", "BGR", "MacBGR")]
+    [InlineData("macbgr", "BGR", "MacBGR")]
+    [InlineData("MacSCK", "MacSCK", "MacSCK")]
+    [InlineData("macsck", "MacSCK", "MacSCK")]
+    public void ConnectionGameProfileSync_LegacyPlayCoverProfiles_ShouldMigrateToUnifiedConnection(
+        string storedConnectConfig,
+        string expectedScreencapMode,
+        string expectedEffectiveConnectConfig)
+    {
+        var profile = new UnifiedProfile();
+        profile.Values["ConnectConfig"] = JsonValue.Create(storedConnectConfig);
+        profile.Values["TouchMode"] = JsonValue.Create("minitouch");
+
+        var state = new ConnectionGameSharedStateViewModel();
+        ConnectionGameProfileSync.ReadFromProfile(profile, state, tolerateMissing: false);
+
+        if (!OperatingSystem.IsMacOS())
+        {
+            Assert.Equal("General", state.ConnectConfig);
+            Assert.Equal("minitouch", state.TouchMode);
+            Assert.Equal("General", state.EffectiveConnectConfig);
+            return;
+        }
+
+        Assert.Equal("MacPlayTools", state.ConnectConfig);
+        Assert.Equal(expectedScreencapMode, state.PlayCoverScreencapMode);
+        Assert.Equal("MacPlayTools", state.TouchMode);
+        Assert.Equal(expectedEffectiveConnectConfig, state.EffectiveConnectConfig);
+    }
+
+    [Theory]
+    [InlineData("MacPlayTools")]
+    [InlineData("CompatMac")]
+    [InlineData("MacBGR")]
+    [InlineData("MacSCK")]
+    public void ConnectionGameProfileSync_PlayCoverProfilesOnNonMac_ShouldFallBackToGeneral(string storedConnectConfig)
+    {
+        var actual = ConnectionGameProfileSync.NormalizeStoredConnectConfigForPlatform(
+            storedConnectConfig,
+            isMacOS: false);
+
+        Assert.Equal("General", actual);
+    }
+
+    [Theory]
+    [InlineData("MacPlayTools")]
+    [InlineData("CompatMac")]
+    [InlineData("MacBGR")]
+    [InlineData("MacSCK")]
+    public void ConnectionGameProfileSync_PlayCoverProfilesOnMac_ShouldKeepUnifiedConnection(string storedConnectConfig)
+    {
+        var actual = ConnectionGameProfileSync.NormalizeStoredConnectConfigForPlatform(
+            storedConnectConfig,
+            isMacOS: true);
+
+        Assert.Equal("MacPlayTools", actual);
+    }
+
+    [Fact]
+    public void TaskParamCompiler_PlayCoverProfileWithoutAddress_ShouldDefaultToPlayToolsAddress()
+    {
+        var task = new UnifiedTaskItem
+        {
+            Type = TaskModuleTypes.StartUp,
+        };
+        var profile = new UnifiedProfile();
+        profile.Values["ConnectConfig"] = JsonValue.Create("MacPlayTools");
+
+        var (dto, issues) = TaskParamCompiler.ReadStartUp(task, profile, new UnifiedConfig(), strict: false);
+
+        Assert.Empty(issues);
+        Assert.Equal(PlayCoverConnectConfigResolver.DefaultPlayToolsAddress, dto.ConnectAddress);
     }
 
     [Fact]
@@ -786,6 +1050,51 @@ public sealed class SettingsModuleAK1FeatureTests
         Assert.True(extras.AdbLiteEnabled);
 
         Assert.True(extras.KillAdbOnExit);
+    }
+
+    [Theory]
+    [InlineData("CompatMac")]
+    [InlineData("MacSCK")]
+    [InlineData("MacBGR")]
+    public async Task ConnectFeatureService_PlayCoverEffectiveConfig_ShouldForceMacPlayToolsTouchMode(string connectConfig)
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var profile = fixture.GetCurrentProfile();
+        profile.Values["TouchMode"] = JsonValue.Create("minitouch");
+
+        var result = await fixture.Runtime.ConnectFeatureService.ConnectAsync("127.0.0.1:1717", connectConfig, null);
+
+        Assert.True(result.Success);
+        var extras = Assert.IsType<CoreConnectionExtras>(fixture.Bridge.LastConnectionInfo?.Extras);
+        Assert.Equal("MacPlayTools", extras.TouchMode);
+        Assert.Null(fixture.Bridge.LastConnectionInfo!.AdbPath);
+    }
+
+    [Fact]
+    public async Task TaskQueueStartUp_TouchModeOptions_ShouldExcludePlayCoverTouchMode()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+
+        Assert.DoesNotContain(
+            vm.StartUpModule.TouchModeOptions,
+            option => string.Equals(option.Type, "MacPlayTools", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task StartAsync_PlayCoverProfile_ShouldForceMacPlayToolsTouchMode()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var profile = fixture.GetCurrentProfile();
+        profile.Values["ConnectConfig"] = JsonValue.Create("MacPlayTools");
+        profile.Values["PlayCoverScreencapMode"] = JsonValue.Create("MacSCK");
+        profile.Values["TouchMode"] = JsonValue.Create("minitouch");
+
+        var result = await fixture.Runtime.ConnectFeatureService.StartAsync();
+
+        Assert.True(result.Success);
+        var applied = Assert.IsType<CoreInstanceOptions>(fixture.Bridge.LastAppliedInstanceOptions);
+        Assert.Equal("MacPlayTools", applied.TouchMode);
     }
 
     [Fact]

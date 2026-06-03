@@ -1,3 +1,5 @@
+using System.Net;
+using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 using MAAUnified.Application.Configuration;
@@ -81,6 +83,51 @@ public sealed class ConnectFeatureWaitAndStopTests
         Assert.Contains("config=General", result.Error?.NativeDetails, StringComparison.Ordinal);
         Assert.Contains("clientType=Official", result.Error?.NativeDetails, StringComparison.Ordinal);
         Assert.Equal(0, fixture.Bridge.ConnectCallCount);
+    }
+
+    [Fact]
+    public async Task ValidateAndConnectAsync_PlayCoverTcpProbeFailure_ShouldUsePlayCoverDiagnosticsWithoutAdbProbe()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var port = GetUnusedLoopbackPort();
+
+        var result = await fixture.Connect.ValidateAndConnectAsync(
+            new CoreConnectionInfo(
+                $"127.0.0.1:{port}",
+                "MacSCK",
+                null,
+                new CoreConnectionExtras(TouchMode: "MacPlayTools"),
+                TimeSpan.FromSeconds(20)));
+
+        Assert.False(result.Success);
+        Assert.Equal(CoreErrorCode.ConnectFailed, result.Error?.Code);
+        Assert.Contains("PlayCover MaaTools address", result.Error?.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("ADB debugging", result.Error?.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("stage=tcp-probe", result.Error?.NativeDetails, StringComparison.Ordinal);
+        Assert.DoesNotContain("adb devices:", result.Error?.NativeDetails, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(0, fixture.Bridge.ConnectCallCount);
+    }
+
+    [Fact]
+    public async Task ValidateAndConnectAsync_PlayCoverTcpAddress_ShouldSkipAdbTargetPrecheck()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        using var listener = new TcpListener(IPAddress.Loopback, port: 0);
+        listener.Start();
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        var acceptedClientTask = listener.AcceptTcpClientAsync();
+
+        var result = await fixture.Connect.ValidateAndConnectAsync(
+            new CoreConnectionInfo(
+                $"127.0.0.1:{port}",
+                "MacSCK",
+                null,
+                new CoreConnectionExtras(TouchMode: "MacPlayTools"),
+                TimeSpan.FromSeconds(20)));
+
+        using var acceptedClient = await acceptedClientTask.WaitAsync(TimeSpan.FromSeconds(2));
+        Assert.True(result.Success);
+        Assert.Equal(1, fixture.Bridge.ConnectCallCount);
     }
 
     [Fact]
@@ -202,6 +249,13 @@ public sealed class ConnectFeatureWaitAndStopTests
                 // ignore temp cleanup failures
             }
         }
+    }
+
+    private static int GetUnusedLoopbackPort()
+    {
+        using var listener = new TcpListener(IPAddress.Loopback, port: 0);
+        listener.Start();
+        return ((IPEndPoint)listener.LocalEndpoint).Port;
     }
 
     private sealed class WaitStopBridge : IMaaCoreBridge

@@ -167,6 +167,41 @@ public sealed class MainShellViewModelTests
     }
 
     [Fact]
+    public async Task StartAsync_PlayCoverConnection_ShouldUseEffectiveConnectConfig()
+    {
+        var bridge = new FakeBridge();
+        await using var fixture = await TestFixture.CreateAsync(bridge: bridge);
+        await fixture.ViewModel.InitializeAsync();
+        Assert.True(await WaitUntilAsync(() => fixture.ViewModel.IsCoreReady, retry: 160, delayMs: 25));
+        fixture.ViewModel.ConnectionGameSharedState.ConnectConfig = "MacPlayTools";
+        fixture.ViewModel.ConnectionGameSharedState.PlayCoverScreencapMode = "MacSCK";
+        fixture.ViewModel.ConnectionGameSharedState.ConnectAddress = "127.0.0.1:1717";
+
+        await fixture.ViewModel.StartAsync();
+
+        Assert.NotNull(bridge.LastConnectionInfo);
+        Assert.Equal("MacSCK", bridge.LastConnectionInfo!.ConnectConfig);
+        Assert.Equal("127.0.0.1:1717", bridge.LastConnectionInfo.Address);
+        Assert.Null(bridge.LastConnectionInfo.AdbPath);
+    }
+
+    [Fact]
+    public async Task BuildConnectionFailureMessage_PlayCoverConnection_ShouldUsePlayCoverGuidance()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        fixture.ViewModel.ConnectionGameSharedState.ConnectConfig = "MacPlayTools";
+        fixture.ViewModel.ConnectionGameSharedState.PlayCoverScreencapMode = "MacSCK";
+
+        var message = InvokeBuildConnectionFailureMessage(
+            fixture.ViewModel,
+            UiOperationResult.Fail(CoreErrorCode.ConnectFailed.ToString(), "connection failed"));
+
+        Assert.Contains("PlayCover", message, StringComparison.Ordinal);
+        Assert.Contains("PlayTools", message, StringComparison.Ordinal);
+        Assert.DoesNotContain("emulator and ADB", message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task ExecuteStartupLaunchBehaviorAsync_AllOptionsConfigured_ShouldInvokeStartupActionsOnceInOrder()
     {
         await using var fixture = await TestFixture.CreateAsync(
@@ -2019,6 +2054,18 @@ public sealed class MainShellViewModelTests
             BindingFlags.Instance | BindingFlags.NonPublic);
         Assert.NotNull(field);
         return (double)field!.GetValue(toast)!;
+    }
+
+    private static string InvokeBuildConnectionFailureMessage(
+        MainShellViewModel vm,
+        UiOperationResult result)
+    {
+        var method = typeof(MainShellViewModel).GetMethod(
+            "BuildDiagnosticConnectFailureResult",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(method);
+        var diagnostic = (UiOperationResult)method!.Invoke(vm, [result, null, null])!;
+        return diagnostic.Message;
     }
 
     private static string GetMaaUnifiedRoot()

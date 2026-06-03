@@ -10,6 +10,7 @@ using MAAUnified.Application.Models;
 using MAAUnified.Application.Orchestration;
 using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Features;
+using MAAUnified.Application.Services.RemoteControl;
 using MAAUnified.Compat.Constants;
 using MAAUnified.CoreBridge;
 using MAAUnified.Platform;
@@ -226,6 +227,42 @@ public sealed class SettingsRemoteExternalNotificationFeatureTests
         Assert.Contains(UiErrorCode.RemoteControlInvalidParameters, vm.RemoteControlErrorMessage, StringComparison.Ordinal);
         Assert.Equal("baseline-user", ReadCurrentProfileString(fixture.Config, ConfigurationKeys.RemoteControlUserIdentity));
         Assert.Equal("baseline-device", ReadCurrentProfileString(fixture.Config, ConfigurationKeys.RemoteControlDeviceIdentity));
+    }
+
+    [Fact]
+    public async Task RemoteControlCaptureImage_PlayCoverConnection_ShouldUseEffectiveConnectConfig()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync();
+        var profile = fixture.Config.CurrentConfig.Profiles[fixture.Config.CurrentConfig.CurrentProfile];
+        profile.Values["ConnectAddress"] = JsonValue.Create("127.0.0.1:1717");
+        profile.Values["ConnectConfig"] = JsonValue.Create("MacPlayTools");
+        profile.Values["PlayCoverScreencapMode"] = JsonValue.Create("MacSCK");
+        var dispatcher = CreateRemoteControlCommandDispatcher(fixture);
+        var result = await DispatchRemoteControlCommandAsync(dispatcher, "CaptureImage");
+
+        Assert.True(ReadRemoteControlCommandSuccess(result));
+        Assert.NotNull(fixture.Bridge.LastConnectionInfo);
+        Assert.Equal("MacSCK", fixture.Bridge.LastConnectionInfo!.ConnectConfig);
+        Assert.Equal("127.0.0.1:1717", fixture.Bridge.LastConnectionInfo.Address);
+        Assert.Null(fixture.Bridge.LastConnectionInfo.AdbPath);
+    }
+
+    [Fact]
+    public async Task RemoteControlCaptureImage_PlayCoverProfileWithoutAddress_ShouldUsePlayToolsDefaultAddress()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync();
+        var profile = fixture.Config.CurrentConfig.Profiles[fixture.Config.CurrentConfig.CurrentProfile];
+        profile.Values.Remove("ConnectAddress");
+        profile.Values["ConnectConfig"] = JsonValue.Create("MacPlayTools");
+        profile.Values["PlayCoverScreencapMode"] = JsonValue.Create("MacSCK");
+        var dispatcher = CreateRemoteControlCommandDispatcher(fixture);
+        var result = await DispatchRemoteControlCommandAsync(dispatcher, "CaptureImage");
+
+        Assert.True(ReadRemoteControlCommandSuccess(result));
+        Assert.NotNull(fixture.Bridge.LastConnectionInfo);
+        Assert.Equal("MacSCK", fixture.Bridge.LastConnectionInfo!.ConnectConfig);
+        Assert.Equal(PlayCoverConnectConfigResolver.DefaultPlayToolsAddress, fixture.Bridge.LastConnectionInfo.Address);
+        Assert.Null(fixture.Bridge.LastConnectionInfo.AdbPath);
     }
 
     [Fact]
@@ -555,6 +592,65 @@ public sealed class SettingsRemoteExternalNotificationFeatureTests
         return (NotificationProviderFeatureService)ctor!.Invoke([true, null, sendHttpAsync]);
     }
 
+    private static object CreateRemoteControlCommandDispatcher(RuntimeFixture fixture)
+    {
+        var type = typeof(RemoteControlFeatureService).Assembly.GetType(
+            "MAAUnified.Application.Services.RemoteControl.RemoteControlCommandDispatcher",
+            throwOnError: true);
+        var ctor = type!.GetConstructor(
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+            binder: null,
+            [
+                typeof(UnifiedConfigurationService),
+                typeof(UnifiedSessionService),
+                typeof(IConnectFeatureService),
+                typeof(ITaskQueueFeatureService),
+                typeof(IToolboxFeatureService),
+                typeof(IMaaCoreBridge),
+                typeof(UiLogService),
+            ],
+            modifiers: null);
+        Assert.NotNull(ctor);
+        return ctor!.Invoke(
+        [
+            fixture.Config,
+            fixture.Runtime.SessionService,
+            fixture.Runtime.ConnectFeatureService,
+            fixture.Runtime.TaskQueueFeatureService,
+            fixture.Runtime.ToolboxFeatureService,
+            fixture.Runtime.CoreBridge,
+            fixture.Runtime.LogService,
+        ]);
+    }
+
+    private static async Task<object> DispatchRemoteControlCommandAsync(object dispatcher, string command)
+    {
+        var request = CreateRemoteControlCommandRequest(command);
+        var method = dispatcher.GetType().GetMethod(
+            "DispatchAsync",
+            BindingFlags.Instance | BindingFlags.Public);
+        Assert.NotNull(method);
+        var task = (Task)method!.Invoke(dispatcher, [request, CancellationToken.None])!;
+        await task;
+        return task.GetType().GetProperty("Result")!.GetValue(task)!;
+    }
+
+    private static object CreateRemoteControlCommandRequest(string command)
+    {
+        var type = typeof(RemoteControlFeatureService).Assembly.GetType(
+            "MAAUnified.Application.Services.RemoteControl.RemoteControlCommandRequest",
+            throwOnError: true);
+        return Activator.CreateInstance(
+            type!,
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+            binder: null,
+            args: [command, null, "user", "device"],
+            culture: null)!;
+    }
+
+    private static bool ReadRemoteControlCommandSuccess(object result)
+        => (bool)result.GetType().GetProperty("Success")!.GetValue(result)!;
+
     private static string ReadCurrentProfileString(UnifiedConfigurationService config, string key)
     {
         if (!string.IsNullOrWhiteSpace(config.CurrentConfig.CurrentProfile)
@@ -594,6 +690,8 @@ public sealed class SettingsRemoteExternalNotificationFeatureTests
         public UnifiedConfigurationService Config { get; }
 
         public UiDiagnosticsService Diagnostics { get; }
+
+        public FakeBridge Bridge => (FakeBridge)Runtime.CoreBridge;
 
         public static async Task<RuntimeFixture> CreateAsync(
             string? root = null,
@@ -759,6 +857,8 @@ public sealed class SettingsRemoteExternalNotificationFeatureTests
 
     private sealed class FakeBridge : IMaaCoreBridge
     {
+        public CoreConnectionInfo? LastConnectionInfo { get; private set; }
+
         public Task<CoreResult<CoreInitializeInfo>> InitializeAsync(
             CoreInitializeRequest request,
             CancellationToken cancellationToken = default)
@@ -768,6 +868,7 @@ public sealed class SettingsRemoteExternalNotificationFeatureTests
 
         public Task<CoreResult<bool>> ConnectAsync(CoreConnectionInfo connectionInfo, CancellationToken cancellationToken = default)
         {
+            LastConnectionInfo = connectionInfo;
             return Task.FromResult(CoreResult<bool>.Ok(true));
         }
 
@@ -798,7 +899,7 @@ public sealed class SettingsRemoteExternalNotificationFeatureTests
 
         public Task<CoreResult<byte[]>> GetImageAsync(CancellationToken cancellationToken = default)
         {
-            return Task.FromResult(CoreResult<byte[]>.Fail(new CoreError(CoreErrorCode.GetImageFailed, "not supported")));
+            return Task.FromResult(CoreResult<byte[]>.Ok([1, 2, 3]));
         }
 
         public async IAsyncEnumerable<CoreCallbackEvent> CallbackStreamAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)

@@ -205,6 +205,11 @@ public sealed class SessionStateSyncTests
             "ConnectionInfo",
             """{"what":"ScreencapCost","details":{"min":101,"avg":202,"max":303}}""",
             DateTimeOffset.UtcNow));
+        bridge.Publish(new CoreCallbackEvent(
+            2,
+            "ConnectionInfo",
+            """{"what":"ResolutionInfo","details":{"width":1280,"height":720}}""",
+            DateTimeOffset.UtcNow));
         bridge.Publish(new CoreCallbackEvent(10001, "TaskChainStart", "{}", DateTimeOffset.UtcNow));
 
         await WaitUntilAsync(() => session.CurrentState == SessionState.Running);
@@ -214,7 +219,8 @@ public sealed class SessionStateSyncTests
             log => string.Equals(log.Level, "WARN", StringComparison.OrdinalIgnoreCase)
                 && log.Message.Contains("ConnectionInfo.what", StringComparison.Ordinal)
                 && (log.Message.Contains("ScreencapCost", StringComparison.Ordinal)
-                    || log.Message.Contains("FastestWayToScreencap", StringComparison.Ordinal)));
+                    || log.Message.Contains("FastestWayToScreencap", StringComparison.Ordinal)
+                    || log.Message.Contains("ResolutionInfo", StringComparison.Ordinal)));
 
         cts.Cancel();
         bridge.Complete();
