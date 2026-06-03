@@ -340,6 +340,7 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
             OnPropertyChanged(nameof(ShowEmulatorExtrasSection));
             OnPropertyChanged(nameof(CanEditConnectAddressField));
             OnPropertyChanged(nameof(CanEditAdbConnectionFields));
+            OnPropertyChanged(nameof(UseMacBundledAdbEffective));
             OnPropertyChanged(nameof(ShowMacBundledAdbControls));
             OnPropertyChanged(nameof(ShowManualAdbPathControls));
             var resolvedTouchMode = PlayCoverConnectConfigResolver.ResolveTouchMode(_connectConfig, TouchMode);
@@ -456,7 +457,7 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
         }
     }
 
-    public bool UseMacBundledAdbEffective => MacBundledAdbPolicy.ShouldUseBundledAdb(MacUseBundledAdb);
+    public bool UseMacBundledAdbEffective => IsAdbConnectionMode && MacBundledAdbPolicy.ShouldUseBundledAdb(MacUseBundledAdb);
 
     public bool ShowManualAdbPathControls => IsAdbConnectionMode && !UseMacBundledAdbEffective;
 
@@ -894,16 +895,21 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
     public string BuildConnectionFailureGuidance()
     {
         return IsPlayCoverConnection
-            ? BuildBilingualMessage(
+            ? BuildLocalizedMessage(
                 "PlayCover 连接失败。请确认游戏标题栏中的 PlayTools 地址正确，且已开启 MaaTools；如果使用 MacSCK，请允许屏幕录制权限。",
                 "PlayCover connection failed. Check the PlayTools address from the game title bar and ensure MaaTools is enabled. If using MacSCK, allow Screen Recording permission.")
-            : BuildBilingualMessage(
+            : BuildLocalizedMessage(
                 "连接失败。请“检查连接设置” -> “尝试重启模拟器与 ADB” -> “重启电脑”。",
                 "Connection failed. Check connection settings -> try restarting the emulator and ADB -> reboot the computer.");
     }
 
     public string? ResolveEffectiveAdbPath(bool updateStateWhenResolved = false)
     {
+        if (IsPlayCoverConnection)
+        {
+            return null;
+        }
+
         if (UseMacBundledAdbEffective)
         {
             return ResolveBundledAdbPath();
@@ -960,7 +966,7 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
         var resolvedAdbPath = effectiveAdbPath ?? ResolveEffectiveAdbPath(updateStateWhenResolved: true);
         return new CoreConnectionInfo(
             (address ?? ConnectAddress ?? string.Empty).Trim(),
-            (ConnectConfig ?? string.Empty).Trim(),
+            EffectiveConnectConfig,
             string.IsNullOrWhiteSpace(resolvedAdbPath) ? null : resolvedAdbPath.Trim(),
             BuildCoreConnectionExtras(),
             timeout);

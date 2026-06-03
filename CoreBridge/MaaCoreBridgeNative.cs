@@ -266,7 +266,7 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge, IMaaCoreBridgeRecovery
 
                     var exports = _exports!;
                     var handle = _instance;
-                    pending = new ConnectPendingState(asyncCallId: null);
+                    pending = new ConnectPendingState(asyncCallId: null, connectionInfo.ConnectConfig);
                     lock (_sync)
                     {
                         _pendingConnect = pending;
@@ -966,6 +966,20 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge, IMaaCoreBridgeRecovery
             cancellationToken).ConfigureAwait(false);
     }
 
+    private bool IsNativeRuntimeConnected()
+    {
+        try
+        {
+            return _exports is not null
+                && _instance != nint.Zero
+                && AsBool(_exports.AsstConnected(_instance));
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     public async Task<CoreResult<bool>> ReloadResourceAsync(
         string? clientType = null,
         CancellationToken cancellationToken = default)
@@ -1324,14 +1338,14 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge, IMaaCoreBridgeRecovery
             return;
         }
 
-        TryHandlePendingConnectCallback(pending, callback);
+        TryHandlePendingConnectCallback(pending, callback, IsNativeRuntimeConnected);
     }
 
     internal static CoreResult<bool>? ApplyConnectCallbacksForTest(
         int? asyncCallId,
         params CoreCallbackEvent[] callbacks)
     {
-        var pending = new ConnectPendingState(asyncCallId);
+        var pending = new ConnectPendingState(asyncCallId, connectConfig: null);
         foreach (var callback in callbacks)
         {
             TryHandlePendingConnectCallback(pending, callback);
@@ -1346,7 +1360,7 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge, IMaaCoreBridgeRecovery
 
     internal static CoreResult<bool> CompleteInvalidAsyncConnectStartForTest(int asyncCallId)
     {
-        var pending = new ConnectPendingState(null);
+        var pending = new ConnectPendingState(null, connectConfig: null);
         return CompleteInvalidAsyncConnectStart(pending, asyncCallId);
     }
 
@@ -1357,7 +1371,10 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge, IMaaCoreBridgeRecovery
         return result;
     }
 
-    private static void TryHandlePendingConnectCallback(ConnectPendingState pending, CoreCallbackEvent callback)
+    private static void TryHandlePendingConnectCallback(
+        ConnectPendingState pending,
+        CoreCallbackEvent callback,
+        Func<bool>? isNativeRuntimeConnected = null)
     {
         if (!TryParsePayload(callback.PayloadJson, out var root))
         {
@@ -1398,6 +1415,11 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge, IMaaCoreBridgeRecovery
             pending.MarkAsyncCall(ret);
             if (ret)
             {
+                if (isNativeRuntimeConnected?.Invoke() == true)
+                {
+                    pending.MarkConnected();
+                }
+
                 pending.TryCompleteSuccessfulConnect();
             }
             else
@@ -1413,7 +1435,10 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge, IMaaCoreBridgeRecovery
         {
             var what = GetString(root, "what");
             if (string.Equals(what, "Connected", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(what, "Reconnected", StringComparison.OrdinalIgnoreCase))
+                || string.Equals(what, "Reconnected", StringComparison.OrdinalIgnoreCase)
+                // MacPlayTools/PlayCover reports a usable first frame without emitting the usual Connected event.
+                || (pending.IsPlayCoverConnect
+                    && string.Equals(what, "ResolutionInfo", StringComparison.OrdinalIgnoreCase)))
             {
                 pending.MarkConnected();
                 pending.TryCompleteSuccessfulConnect();
@@ -2256,13 +2281,22 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge, IMaaCoreBridgeRecovery
     {
         private int _completed;
 
-        public ConnectPendingState(int? asyncCallId)
+        public ConnectPendingState(int? asyncCallId, string? connectConfig)
         {
             AsyncCallId = asyncCallId;
+            ConnectConfig = (connectConfig ?? string.Empty).Trim();
             Completion = new TaskCompletionSource<CoreResult<bool>>(TaskCreationOptions.RunContinuationsAsynchronously);
         }
 
         public int? AsyncCallId { get; private set; }
+
+        public string ConnectConfig { get; }
+
+        public bool IsPlayCoverConnect =>
+            string.Equals(ConnectConfig, "MacPlayTools", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(ConnectConfig, "CompatMac", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(ConnectConfig, "MacSCK", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(ConnectConfig, "MacBGR", StringComparison.OrdinalIgnoreCase);
 
         public bool AsyncCallReceived { get; private set; }
 
