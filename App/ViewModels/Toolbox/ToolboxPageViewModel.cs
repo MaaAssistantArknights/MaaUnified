@@ -1969,8 +1969,9 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
             return _connectionState.BuildConnectAddressCandidates(includeConfiguredAddress: true);
         }
 
-        var configured = ResolveProfileString("ConnectAddress", LegacyConfigurationKeys.ConnectAddress) ?? "127.0.0.1:5555";
         var connectConfig = ResolveConnectConfig();
+        var configured = ResolveProfileString("ConnectAddress", LegacyConfigurationKeys.ConnectAddress)
+            ?? PlayCoverConnectConfigResolver.ResolveDefaultConnectAddress(connectConfig);
         var autoDetect = ResolveProfileBool("AutoDetect", fallback: true);
         var alwaysAutoDetect = ResolveProfileBool("AlwaysAutoDetect", fallback: false, LegacyConfigurationKeys.AlwaysAutoDetect);
         var candidates = new List<string>();
@@ -1991,10 +1992,12 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
     {
         if (_connectionState is not null)
         {
-            return string.IsNullOrWhiteSpace(_connectionState.ConnectConfig) ? "General" : _connectionState.ConnectConfig.Trim();
+            return _connectionState.EffectiveConnectConfig;
         }
 
-        return ResolveProfileString("ConnectConfig", LegacyConfigurationKeys.ConnectConfig) ?? "General";
+        var connectConfig = ResolveProfileString("ConnectConfig", LegacyConfigurationKeys.ConnectConfig) ?? "General";
+        var playCoverScreencapMode = ResolveProfileString("PlayCoverScreencapMode");
+        return PlayCoverConnectConfigResolver.ResolveEffectiveConnectConfig(connectConfig, playCoverScreencapMode);
     }
 
     private string ResolveConnectAddress()
@@ -2011,6 +2014,12 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
 
     private string? ResolveEffectiveAdbPath()
     {
+        var connectConfig = ResolveConnectConfig();
+        if (PlayCoverConnectConfigResolver.IsPlayCoverConnectConfig(connectConfig))
+        {
+            return null;
+        }
+
         if (_connectionState is not null)
         {
             var resolved = _connectionState.ResolveEffectiveAdbPath(updateStateWhenResolved: true);
@@ -2028,6 +2037,12 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
 
     private bool ResolveMacBundledAdbInUse()
     {
+        var connectConfig = ResolveConnectConfig();
+        if (PlayCoverConnectConfigResolver.IsPlayCoverConnectConfig(connectConfig))
+        {
+            return false;
+        }
+
         if (_connectionState is not null)
         {
             return _connectionState.UseMacBundledAdbEffective;
@@ -2222,7 +2237,13 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
 
     private static IReadOnlyList<string> GetDefaultAddresses(string connectConfig)
     {
-        return connectConfig.Trim() switch
+        var normalized = connectConfig.Trim();
+        if (PlayCoverConnectConfigResolver.IsPlayCoverConnectConfig(normalized))
+        {
+            return [PlayCoverConnectConfigResolver.DefaultPlayToolsAddress];
+        }
+
+        return normalized switch
         {
             "BlueStacks" => ["127.0.0.1:5555", "127.0.0.1:5556", "127.0.0.1:5565", "127.0.0.1:5575", "127.0.0.1:5585", "127.0.0.1:5595", "127.0.0.1:5554"],
             "MuMuEmulator12" => ["127.0.0.1:16384", "127.0.0.1:16416", "127.0.0.1:16448", "127.0.0.1:16480", "127.0.0.1:16512", "127.0.0.1:16544", "127.0.0.1:16576"],

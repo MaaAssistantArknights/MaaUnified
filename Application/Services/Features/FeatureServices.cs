@@ -59,6 +59,10 @@ public sealed class ConnectFeatureService : IConnectFeatureService
             ["Nox"] = ["127.0.0.1:62001", "127.0.0.1:59865"],
             ["XYAZ"] = ["127.0.0.1:21503"],
             ["WSA"] = ["127.0.0.1:58526"],
+            ["MacPlayTools"] = [PlayCoverConnectConfigResolver.DefaultPlayToolsAddress],
+            ["CompatMac"] = [PlayCoverConnectConfigResolver.DefaultPlayToolsAddress],
+            ["MacSCK"] = [PlayCoverConnectConfigResolver.DefaultPlayToolsAddress],
+            ["MacBGR"] = [PlayCoverConnectConfigResolver.DefaultPlayToolsAddress],
         };
 
     public ConnectFeatureService(
@@ -142,7 +146,18 @@ public sealed class ConnectFeatureService : IConnectFeatureService
             return CoreResult<bool>.Fail(new CoreError(CoreErrorCode.InvalidRequest, "Address cannot be empty."));
         }
 
-        if (MacBundledAdbPolicy.IsBundledAdbPath(connectionInfo.AdbPath)
+        var requestedConnectConfig = PlayCoverConnectConfigResolver.ResolveEffectiveConnectConfig(
+            connectionInfo.ConnectConfig,
+            playCoverScreencapMode: null);
+        var requestedConnectionInfo = connectionInfo with
+        {
+            ConnectConfig = requestedConnectConfig,
+            AdbPath = PlayCoverConnectConfigResolver.IsPlayCoverConnectConfig(requestedConnectConfig)
+                ? null
+                : connectionInfo.AdbPath,
+        };
+
+        if (MacBundledAdbPolicy.IsBundledAdbPath(requestedConnectionInfo.AdbPath)
             && !MacBundledAdbPolicy.IsCurrentTermsAccepted(_configService.CurrentConfig))
         {
             return CoreResult<bool>.Fail(new CoreError(
@@ -150,7 +165,7 @@ public sealed class ConnectFeatureService : IConnectFeatureService
                 "macOS bundled ADB requires Android SDK Platform-Tools terms acceptance before use."));
         }
 
-        if (!MacBundledAdbPolicy.TryResolveAdbPathForConnect(connectionInfo.AdbPath, out var effectiveAdbPath, out var adbDiagnostic))
+        if (!MacBundledAdbPolicy.TryResolveAdbPathForConnect(requestedConnectionInfo.AdbPath, out var effectiveAdbPath, out var adbDiagnostic))
         {
             _logService?.Warn(adbDiagnostic ?? "ADB path is invalid for the current platform.");
             return CoreResult<bool>.Fail(new CoreError(
@@ -160,13 +175,13 @@ public sealed class ConnectFeatureService : IConnectFeatureService
 
         if (MacBundledAdbPolicy.IsSupportedPlatform)
         {
-            _logService?.Debug(MacBundledAdbPolicy.BuildResolutionContext(connectionInfo.AdbPath, effectiveAdbPath));
+            _logService?.Debug(MacBundledAdbPolicy.BuildResolutionContext(requestedConnectionInfo.AdbPath, effectiveAdbPath));
         }
 
         var normalized = NormalizeConnectionInfo(
-            connectionInfo with
+            requestedConnectionInfo with
             {
-                Extras = BuildConnectionExtras(instanceOptions: null, connectionInfo.Extras),
+                Extras = BuildConnectionExtras(instanceOptions: null, requestedConnectionInfo.Extras),
             },
             effectiveAdbPath);
 
@@ -424,10 +439,15 @@ public sealed class ConnectFeatureService : IConnectFeatureService
                 "Current profile is missing.");
         }
 
-        var connectConfig = ReadProfileString(profile, "ConnectConfig", ConfigurationKeys.ConnectConfig) ?? "General";
-        var configuredAddress = ReadProfileString(profile, "ConnectAddress", ConfigurationKeys.ConnectAddress) ?? "127.0.0.1:5555";
-        var adbPath = ResolveProfileAdbPath(profile);
-        var extras = ResolveConnectionExtrasFromConfig();
+        var storedConnectConfig = ReadProfileString(profile, "ConnectConfig", ConfigurationKeys.ConnectConfig) ?? "General";
+        var playCoverScreencapMode = ReadProfileString(profile, "PlayCoverScreencapMode", "PlayCoverScreencapMode");
+        var connectConfig = PlayCoverConnectConfigResolver.ResolveEffectiveConnectConfig(storedConnectConfig, playCoverScreencapMode);
+        var configuredAddress = ReadProfileString(profile, "ConnectAddress", ConfigurationKeys.ConnectAddress)
+            ?? PlayCoverConnectConfigResolver.ResolveDefaultConnectAddress(connectConfig, "127.0.0.1:5555");
+        var adbPath = PlayCoverConnectConfigResolver.IsPlayCoverConnectConfig(connectConfig)
+            ? null
+            : ResolveProfileAdbPath(profile);
+        var extras = NormalizeConnectionExtrasForConnectConfig(connectConfig, ResolveConnectionExtrasFromConfig());
         return BuildConnectionCandidates(
             configuredAddress,
             connectConfig,
@@ -450,7 +470,15 @@ public sealed class ConnectFeatureService : IConnectFeatureService
         TimeSpan? timeout = null)
     {
         var normalizedConfiguredAddress = NormalizeText(configuredAddress);
-        var normalizedConnectConfig = NormalizeText(connectConfig);
+        var normalizedConnectConfig = PlayCoverConnectConfigResolver.ResolveEffectiveConnectConfig(
+            NormalizeText(connectConfig),
+            playCoverScreencapMode: null);
+        var normalizedAdbPath = PlayCoverConnectConfigResolver.IsPlayCoverConnectConfig(normalizedConnectConfig)
+            ? null
+            : NormalizeNullableText(adbPath);
+        var normalizedExtras = NormalizeConnectionExtrasForConnectConfig(
+            normalizedConnectConfig,
+            extras ?? CoreConnectionExtras.Empty);
         var addresses = BuildConnectAddressCandidates(
             normalizedConfiguredAddress,
             normalizedConnectConfig,
@@ -468,8 +496,8 @@ public sealed class ConnectFeatureService : IConnectFeatureService
             candidates.Add(new CoreConnectionInfo(
                 address,
                 normalizedConnectConfig,
-                NormalizeNullableText(adbPath),
-                NormalizeConnectionExtras(extras ?? CoreConnectionExtras.Empty),
+                normalizedAdbPath,
+                normalizedExtras,
                 timeout ?? DefaultConnectBudget));
         }
 
@@ -884,19 +912,39 @@ public sealed class ConnectFeatureService : IConnectFeatureService
         CoreConnectionInfo connectionInfo,
         string? effectiveAdbPath)
     {
+        var normalizedConnectConfig = PlayCoverConnectConfigResolver.ResolveEffectiveConnectConfig(
+            NormalizeText(connectionInfo.ConnectConfig),
+            playCoverScreencapMode: null);
         var normalized = connectionInfo with
         {
             Address = NormalizeText(connectionInfo.Address),
-            ConnectConfig = NormalizeText(connectionInfo.ConnectConfig),
+            ConnectConfig = normalizedConnectConfig,
         };
         var extras = normalized.Extras ?? CoreConnectionExtras.Empty;
+        var resolvedAdbPath = PlayCoverConnectConfigResolver.IsPlayCoverConnectConfig(normalizedConnectConfig)
+            ? null
+            : effectiveAdbPath;
 
         return new CoreConnectionInfo(
             NormalizeText(normalized.Address),
-            NormalizeText(normalized.ConnectConfig),
-            NormalizeNullableText(effectiveAdbPath),
-            NormalizeConnectionExtras(extras),
+            normalizedConnectConfig,
+            NormalizeNullableText(resolvedAdbPath),
+            NormalizeConnectionExtrasForConnectConfig(normalizedConnectConfig, extras),
             NormalizeConnectBudget(normalized.Timeout));
+    }
+
+    private static CoreConnectionExtras NormalizeConnectionExtrasForConnectConfig(
+        string? connectConfig,
+        CoreConnectionExtras extras)
+    {
+        var normalized = NormalizeConnectionExtras(extras);
+        return PlayCoverConnectConfigResolver.IsPlayCoverConnectConfig(connectConfig)
+            ? normalized with
+            {
+                MacUseBundledAdb = false,
+                TouchMode = PlayCoverConnectConfigResolver.ResolveTouchMode(connectConfig, normalized.TouchMode ?? DefaultTouchMode),
+            }
+            : normalized;
     }
 
     private static CoreConnectionExtras NormalizeConnectionExtras(CoreConnectionExtras extras)
@@ -1029,13 +1077,16 @@ public sealed class ConnectFeatureService : IConnectFeatureService
         CancellationToken cancellationToken)
     {
         var isTcpAddress = LooksLikeTcpAddress(connectionInfo.Address, out var host, out var port);
+        var isPlayCoverConnection = PlayCoverConnectConfigResolver.IsPlayCoverConnectConfig(connectionInfo.ConnectConfig);
         if (isTcpAddress
             && !await CanOpenTcpAsync(host, port, QuickTcpProbeTimeout, cancellationToken).ConfigureAwait(false))
         {
-            var adbDevices = await TryListAdbDevicesAsync(connectionInfo.AdbPath, cancellationToken).ConfigureAwait(false);
+            var adbDevices = isPlayCoverConnection
+                ? null
+                : await TryListAdbDevicesAsync(connectionInfo.AdbPath, cancellationToken).ConfigureAwait(false);
             return CoreResult<bool>.Fail(new CoreError(
                 CoreErrorCode.ConnectFailed,
-                $"Connection address `{connectionInfo.Address}` failed a quick TCP probe. Candidate causes: emulator is not running, port is wrong, ADB debugging is disabled, or the address belongs to another emulator.",
+                BuildQuickTcpProbeFailureMessage(connectionInfo, isPlayCoverConnection),
                 BuildQuickPrecheckFailureDetails(
                     connectionInfo,
                     host,
@@ -1069,6 +1120,11 @@ public sealed class ConnectFeatureService : IConnectFeatureService
 
     private static bool ShouldRunQuickAdbTargetPrecheck(CoreConnectionInfo connectionInfo)
     {
+        if (PlayCoverConnectConfigResolver.IsPlayCoverConnectConfig(connectionInfo.ConnectConfig))
+        {
+            return false;
+        }
+
         if (!UsesAdbTransport(connectionInfo.ConnectConfig, connectionInfo.Address)
             || string.IsNullOrWhiteSpace(connectionInfo.Address))
         {
@@ -1076,6 +1132,15 @@ public sealed class ConnectFeatureService : IConnectFeatureService
         }
 
         return true;
+    }
+
+    private static string BuildQuickTcpProbeFailureMessage(
+        CoreConnectionInfo connectionInfo,
+        bool isPlayCoverConnection)
+    {
+        return isPlayCoverConnection
+            ? $"PlayCover MaaTools address `{connectionInfo.Address}` failed a quick TCP probe. Candidate causes: the game is not running, MaaTools is disabled, or the PlayTools address/port is wrong."
+            : $"Connection address `{connectionInfo.Address}` failed a quick TCP probe. Candidate causes: emulator is not running, port is wrong, ADB debugging is disabled, or the address belongs to another emulator.";
     }
 
     private static async Task<AdbTargetPrecheckResult> QuickAdbTargetPrecheckAsync(
@@ -1704,6 +1769,7 @@ public sealed class ConnectFeatureService : IConnectFeatureService
             "nox" => ["127.0.0.1:62001", "127.0.0.1:59865"],
             "xyaz" => ["127.0.0.1:21503"],
             "wsa" => ["127.0.0.1:58526"],
+            "macplaytools" or "compatmac" or "macsck" or "macbgr" => [PlayCoverConnectConfigResolver.DefaultPlayToolsAddress],
             _ => [],
         };
     }
@@ -1753,8 +1819,18 @@ public sealed class ConnectFeatureService : IConnectFeatureService
                 KillAdbOnExit: false);
         }
 
+        var storedConnectConfig = ReadProfileString(profile, "ConnectConfig", ConfigurationKeys.ConnectConfig);
+        var playCoverScreencapMode = ReadProfileString(profile, "PlayCoverScreencapMode", "PlayCoverScreencapMode");
+        var effectiveConnectConfig = PlayCoverConnectConfigResolver.ResolveEffectiveConnectConfig(
+            storedConnectConfig,
+            playCoverScreencapMode);
+        var configuredTouchMode = ReadProfileString(profile, "TouchMode", ConfigurationKeys.TouchMode);
+
         return new CoreInstanceOptions(
-            TouchMode: ReadProfileString(profile, "TouchMode", ConfigurationKeys.TouchMode) ?? DefaultTouchMode,
+            TouchMode: PlayCoverConnectConfigResolver.ResolveTouchMode(
+                effectiveConnectConfig,
+                configuredTouchMode,
+                DefaultTouchMode),
             DeploymentWithPause: ReadProfileBoolFlexible(profile, ConfigurationKeys.RoguelikeDeploymentWithPause),
             AdbLiteEnabled: ReadProfileBool(profile, "AdbLiteEnabled", ConfigurationKeys.AdbLiteEnabled),
             KillAdbOnExit: ReadProfileBool(profile, "KillAdbOnExit", ConfigurationKeys.KillAdbOnExit));
