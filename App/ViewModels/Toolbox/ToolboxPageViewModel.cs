@@ -13,6 +13,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
 using MAAUnified.App.Features.Dialogs;
+using MAAUnified.App.Services;
 using MAAUnified.App.ViewModels.Infrastructure;
 using MAAUnified.App.ViewModels.Settings;
 using MAAUnified.Application.Models;
@@ -1893,6 +1894,18 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
     private async Task<UiOperationResult> TryConnectWithCurrentSettingsAsync(CancellationToken cancellationToken)
     {
         var connectConfig = ResolveConnectConfig();
+        var consent = await MacBundledAdbConsentService.EnsureAcceptedAsync(
+            Runtime,
+            _dialogService,
+            ResolveMacBundledAdbInUse(),
+            "Toolbox.Connect.MacBundledAdbConsent",
+            _texts.Language,
+            cancellationToken);
+        if (!consent.Success)
+        {
+            return consent;
+        }
+
         var adbPath = ResolveEffectiveAdbPath();
         var candidates = BuildConnectAddressCandidates();
         UiOperationResult? lastFailure = null;
@@ -1956,8 +1969,24 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
             return string.IsNullOrWhiteSpace(resolved) ? null : resolved;
         }
 
+        if (ResolveMacBundledAdbInUse())
+        {
+            return MacBundledAdbPolicy.ResolveBundledAdbPath();
+        }
+
         var adb = ResolveProfileString("AdbPath", LegacyConfigurationKeys.AdbPath);
         return string.IsNullOrWhiteSpace(adb) ? null : adb;
+    }
+
+    private bool ResolveMacBundledAdbInUse()
+    {
+        if (_connectionState is not null)
+        {
+            return _connectionState.UseMacBundledAdbEffective;
+        }
+
+        return Runtime.ConfigurationService.TryGetCurrentProfile(out var profile)
+            && MacBundledAdbPolicy.ShouldUseBundledAdb(MacBundledAdbPolicy.ReadUseBundledAdb(profile));
     }
 
     private string ResolveServerType()

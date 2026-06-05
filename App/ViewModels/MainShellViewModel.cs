@@ -1530,6 +1530,18 @@ public sealed class MainShellViewModel : ObservableObject
 
     private async Task<UiOperationResult> ConnectWithCurrentSettingsAsync(CancellationToken cancellationToken)
     {
+        var consent = await MacBundledAdbConsentService.EnsureAcceptedAsync(
+            _runtime,
+            _dialogService,
+            _connectionGameSharedState.UseMacBundledAdbEffective,
+            "App.Shell.Connect.MacBundledAdbConsent",
+            CurrentShellLanguage,
+            cancellationToken);
+        if (!consent.Success)
+        {
+            return consent;
+        }
+
         var effectiveAdbPath = _connectionGameSharedState.ResolveEffectiveAdbPath(updateStateWhenResolved: true);
         var adbPath = string.IsNullOrWhiteSpace(effectiveAdbPath) ? null : effectiveAdbPath;
         var instanceOptions = _connectionGameSharedState.BuildCoreInstanceOptions();

@@ -257,7 +257,8 @@ public sealed class AvaloniaDialogService : IAppDialogService
             normalizedRequest.ConfirmText,
             normalizedRequest.CancelText,
             normalizedRequest.Language,
-            normalizedRequest.CountdownSeconds);
+            normalizedRequest.CountdownSeconds,
+            normalizedRequest.Links);
         using var chromeBinding = AttachChromeLocalization(dialog, normalizedRequest.Title, normalizedRequest.Chrome);
         var presentation = await ShowDialogWithOwnerScaleAsync<DialogReturnSemantic?>(dialog, cancellationToken);
         if (!presentation.OwnerAvailable)
@@ -291,12 +292,17 @@ public sealed class AvaloniaDialogService : IAppDialogService
             return null;
         }
 
-        if (desktop.MainWindow is { IsVisible: true } mainWindow)
+        if (desktop.MainWindow is { } mainWindow)
         {
             return mainWindow;
         }
 
-        return desktop.Windows.LastOrDefault(static window => window.IsVisible);
+        return desktop.Windows.LastOrDefault(IsDialogOwnerCandidate);
+    }
+
+    private static bool IsDialogOwnerCandidate(Window window)
+    {
+        return window.IsVisible && !window.Topmost;
     }
 
     private static async Task<DialogPresentationResult<TResult>> ShowDialogWithOwnerScaleAsync<TResult>(
@@ -379,17 +385,7 @@ public sealed class AvaloniaDialogService : IAppDialogService
 
     private static bool ResolveTopmost(Window dialog, Window owner)
     {
-        if (dialog.Topmost || owner.Topmost)
-        {
-            return true;
-        }
-
-        if (Avalonia.Application.Current?.ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime desktop)
-        {
-            return false;
-        }
-
-        return desktop.Windows.Any(window => !ReferenceEquals(window, dialog) && window.IsVisible && window.Topmost);
+        return dialog.Topmost || owner.Topmost;
     }
 
     private static Task<UiOperationResult> OpenIssueReportAsync(CancellationToken cancellationToken = default)

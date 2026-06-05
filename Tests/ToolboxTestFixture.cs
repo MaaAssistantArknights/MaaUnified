@@ -69,6 +69,7 @@ internal sealed class ToolboxTestFixture : IAsyncDisposable
             profile.Values["ConnectAddress"] = JsonValue.Create("127.0.0.1:5555");
             profile.Values["ConnectConfig"] = JsonValue.Create("General");
             profile.Values["AutoDetect"] = JsonValue.Create(true);
+            profile.Values[MacBundledAdbPolicy.ProfileUseBundledAdbKey] = JsonValue.Create(false);
             if (profileSeeds is not null)
             {
                 foreach (var pair in profileSeeds)
@@ -122,6 +123,7 @@ internal sealed class ToolboxTestFixture : IAsyncDisposable
             ConnectConfig = "General",
             ClientType = "Official",
             AutoDetect = true,
+            MacUseBundledAdb = false,
         };
 
         return new ToolboxTestFixture(root, config, bridge, runtime, connectionState);

@@ -15,6 +15,8 @@ using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using MAAUnified.Application.Models;
 using MAAUnified.App.Controls;
+using MAAUnified.App.Features.Dialogs;
+using MAAUnified.App.Services;
 using MAAUnified.App.Views;
 using MAAUnified.App.ViewModels.Settings;
 using MAAUnified.Application.Services.Localization;
@@ -314,6 +316,21 @@ public partial class ConnectSettingsView : UserControl
 
     private async Task<UiOperationResult> ConnectWithCurrentSettingsAsync(ConnectionGameSharedStateViewModel vm)
     {
+        IAppDialogService dialogService = Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime
+            ? new AvaloniaDialogService(App.Runtime)
+            : NoOpAppDialogService.Instance;
+        var consent = await MacBundledAdbConsentService.EnsureAcceptedAsync(
+            App.Runtime,
+            dialogService,
+            vm.UseMacBundledAdbEffective,
+            "Settings.Connect.Test.MacBundledAdbConsent",
+            vm.RootTexts.Language,
+            CancellationToken.None);
+        if (!consent.Success)
+        {
+            return consent;
+        }
+
         var effectiveAdbPath = vm.ResolveEffectiveAdbPath(updateStateWhenResolved: true);
         var adbPath = string.IsNullOrWhiteSpace(effectiveAdbPath) ? null : effectiveAdbPath;
         var instanceOptions = vm.BuildCoreInstanceOptions();

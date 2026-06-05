@@ -27,4 +27,19 @@
   <ItemGroup>
     <AvaloniaResource Include="Assets/**" />
   </ItemGroup>
+
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'osx-arm64' Or '$(RuntimeIdentifier)' == 'osx-x64'">
+    <Content Include="..\ExternalTools\macos\adb"
+             Link="platform-tools/adb"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest">
+      <TargetPath>platform-tools/adb</TargetPath>
+    </Content>
+  </ItemGroup>
+
+  <Target Name="PreserveMacBundledAdbExecutableBit"
+          AfterTargets="Publish"
+          Condition="'$(RuntimeIdentifier)' == 'osx-arm64' Or '$(RuntimeIdentifier)' == 'osx-x64'">
+    <Exec Command="chmod 755 &quot;$(PublishDir)platform-tools/adb&quot;" />
+  </Target>
 </Project>

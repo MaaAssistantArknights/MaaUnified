@@ -292,6 +292,9 @@ jobs:
         run: |
           staging_dir="$MAAUNIFIED_STAGING_DIR"
           test -x "$staging_dir/bin/MAAUnified"
+          test -x "$staging_dir/bin/platform-tools/adb"
+          file "$staging_dir/bin/platform-tools/adb" | grep -q 'Mach-O universal binary'
+          "$staging_dir/bin/platform-tools/adb" version
           test -f "$staging_dir/libMaaCore.dylib"
           test -d "$staging_dir/resource"
           ! test -e "$staging_dir/MAAUnified.command"

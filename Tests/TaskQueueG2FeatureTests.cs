@@ -10,6 +10,7 @@ using MAAUnified.Application.Models;
 using MAAUnified.Application.Orchestration;
 using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Features;
+using MAAUnified.Application.Services.TaskParams;
 using MAAUnified.CoreBridge;
 using MAAUnified.Platform;
 using LegacyConfigurationKeys = MAAUnified.Compat.Constants.ConfigurationKeys;
@@ -40,6 +41,54 @@ public sealed class TaskQueueG2FeatureTests
         var appended = Assert.Single(fixture.Bridge.AppendedTasks);
         var appendedParams = Assert.IsType<JsonObject>(JsonNode.Parse(appended.ParamsJson));
         Assert.Equal("flush-before-start", appendedParams["account_name"]?.GetValue<string>());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task StartUpModule_SaveAsync_ShouldPersistMacUseBundledAdbToProfileAndReload(bool useBundledAdb)
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup-a")).Success);
+
+        Assert.True(fixture.Runtime.ConfigurationService.TryGetCurrentProfile(out var profile));
+        profile.Values[MacBundledAdbPolicy.ProfileUseBundledAdbKey] = JsonValue.Create(!useBundledAdb);
+
+        var shared = new ConnectionGameSharedStateViewModel
+        {
+            ConnectAddress = "127.0.0.1:5555",
+            ConnectConfig = "General",
+            MacUseBundledAdb = !useBundledAdb,
+        };
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, shared);
+        await vm.InitializeAsync();
+        vm.SelectedTask = Assert.Single(vm.Tasks);
+        await vm.WaitForPendingBindingAsync();
+
+        vm.StartUpModule.MacUseBundledAdb = useBundledAdb;
+
+        Assert.True(await vm.StartUpModule.SaveAsync());
+        Assert.Equal(useBundledAdb, profile.Values[MacBundledAdbPolicy.ProfileUseBundledAdbKey]?.GetValue<bool>());
+
+        var queueResult = await fixture.TaskQueue.GetCurrentTaskQueueAsync();
+        Assert.True(queueResult.Success);
+        var task = Assert.Single(queueResult.Value!);
+        var (dto, issues) = TaskParamCompiler.ReadStartUp(
+            task,
+            profile,
+            fixture.Runtime.ConfigurationService.CurrentConfig,
+            strict: true);
+        Assert.Empty(issues);
+        Assert.Equal(useBundledAdb, dto.MacUseBundledAdb);
+
+        var reloadedShared = new ConnectionGameSharedStateViewModel();
+        ConnectionGameProfileSync.ReadFromProfile(profile, reloadedShared, tolerateMissing: false);
+        var reloadedVm = new TaskQueuePageViewModel(fixture.Runtime, reloadedShared);
+        await reloadedVm.InitializeAsync();
+        reloadedVm.SelectedTask = Assert.Single(reloadedVm.Tasks);
+        await reloadedVm.WaitForPendingBindingAsync();
+
+        Assert.Equal(useBundledAdb, reloadedVm.StartUpModule.MacUseBundledAdb);
     }
 
     [Fact]
@@ -157,6 +206,8 @@ public sealed class TaskQueueG2FeatureTests
         var shared = new ConnectionGameSharedStateViewModel
         {
             ConnectAddress = "127.0.0.1:5555",
+            ConnectConfig = "General",
+            MacUseBundledAdb = false,
         };
         var vm = new TaskQueuePageViewModel(fixture.Runtime, shared);
         await vm.InitializeAsync();
@@ -809,6 +860,10 @@ public sealed class TaskQueueG2FeatureTests
                 root);
             await config.LoadOrBootstrapAsync();
             config.CurrentConfig.GlobalValues["GUI.Localization"] = language;
+            if (config.TryGetCurrentProfile(out var profile))
+            {
+                profile.Values[MacBundledAdbPolicy.ProfileUseBundledAdbKey] = JsonValue.Create(false);
+            }
 
             var bridge = new CapturingBridge();
             var session = new UnifiedSessionService(bridge, config, log, new SessionStateMachine());

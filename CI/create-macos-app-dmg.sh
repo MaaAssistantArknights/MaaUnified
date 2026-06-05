@@ -30,6 +30,8 @@ dmg_background_tiff_path="$dmg_background_dir/installer-background.tiff"
 dmg_note_name="Installation Notes.txt"
 app_icon_name="MAAUnified.icns"
 brand_icon_path="src/MAAUnified/App/Assets/Brand/newlogo.ico"
+bundled_adb_source_path="src/MAAUnified/ExternalTools/macos/adb"
+bundled_adb_target_path="$macos_dir/platform-tools/adb"
 signing_status_path="$release_dir/.$package_name.signing-status"
 dmg_settings_path="$release_dir/.$package_name.dmg-settings.py"
 dmgbuild_log_path="$release_dir/.$package_name.dmgbuild.log"
@@ -47,6 +49,17 @@ fi
 
 if [[ ! -d "$staging_dir/resource" ]]; then
   echo "MaaCore resource directory not found: $staging_dir/resource" >&2
+  exit 1
+fi
+
+if [[ ! -f "$bundled_adb_source_path" ]]; then
+  echo "Bundled macOS ADB asset not found: $bundled_adb_source_path" >&2
+  exit 1
+fi
+
+if ! file "$bundled_adb_source_path" | grep -q 'Mach-O universal binary'; then
+  echo "Bundled macOS ADB asset must be a universal Mach-O binary: $bundled_adb_source_path" >&2
+  file "$bundled_adb_source_path" >&2 || true
   exit 1
 fi
 
@@ -404,15 +417,19 @@ sign_bundle_components_with_identity() {
   local use_timestamp="$2"
   local file
   local codesign_args=(--force --options runtime)
+  local helper_codesign_args=(--force)
 
   if [[ "$use_timestamp" == "true" ]]; then
     codesign_args+=(--timestamp)
+    helper_codesign_args+=(--timestamp)
   fi
 
   while IFS= read -r file; do
     if should_codesign_file "$file"; then
       if [[ "$file" == "$macos_dir/MAAUnified" ]]; then
         codesign "${codesign_args[@]}" --entitlements "$entitlements_path" --sign "$identity" "$file" || return
+      elif [[ "$file" == "$bundled_adb_target_path" ]]; then
+        codesign "${helper_codesign_args[@]}" --sign "$identity" "$file" || return
       else
         codesign "${codesign_args[@]}" --sign "$identity" "$file" || return
       fi
@@ -464,6 +481,11 @@ cp -a "$staging_dir/bin/." "$macos_dir/"
 shopt -s nullglob
 cp -a "$staging_dir"/*.dylib "$macos_dir/"
 shopt -u nullglob
+mkdir -p "$(dirname "$bundled_adb_target_path")"
+cp "$bundled_adb_source_path" "$bundled_adb_target_path"
+chmod 0755 "$bundled_adb_target_path"
+test -f "$bundled_adb_target_path"
+test -x "$bundled_adb_target_path"
 cp -a "$staging_dir/resource" "$resources_dir/resource"
 create_app_icon
 
@@ -527,6 +549,9 @@ plutil -lint "$contents_dir/Info.plist"
 plutil -lint "$entitlements_path"
 test -x "$macos_dir/MAAUnified"
 test -f "$macos_dir/libMaaCore.dylib"
+test -f "$bundled_adb_target_path"
+test -x "$bundled_adb_target_path"
+file "$bundled_adb_target_path" | grep -q 'Mach-O universal binary'
 test -d "$resources_dir/resource"
 
 if [[ "${MACOS_CODESIGN_ENABLED:-false}" == "true" ]]; then

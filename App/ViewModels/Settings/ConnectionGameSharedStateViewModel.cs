@@ -5,6 +5,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using MAAUnified.App.ViewModels.Infrastructure;
 using MAAUnified.Application.Services.Localization;
+using MAAUnified.Application.Services;
 using MAAUnified.CoreBridge;
 
 namespace MAAUnified.App.ViewModels.Settings;
@@ -50,6 +51,7 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
     private bool _adbLiteEnabled;
     private bool _killAdbOnExit;
     private bool _adbReplaced;
+    private bool _macUseBundledAdb = true;
     private bool _muMu12ExtrasEnabled;
     private string _muMu12EmulatorPath = string.Empty;
     private bool _muMuBridgeConnection;
@@ -247,6 +249,7 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
         _language = normalized;
         RootTexts.Language = normalized;
         OnPropertyChanged(nameof(RootTexts));
+        OnPropertyChanged(nameof(MacUseBundledAdbText));
         RebuildOptions();
         RefreshLocalizedConnectTexts();
     }
@@ -357,6 +360,34 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
     public bool IsAttachWindowMode => string.Equals(ConnectConfig, "PC", StringComparison.OrdinalIgnoreCase);
 
     public bool IsAdbConnectionMode => !IsAttachWindowMode;
+
+    public bool IsMacBundledAdbSupported => MacBundledAdbPolicy.IsSupportedPlatform;
+
+    public string MacUseBundledAdbText => UiLanguageCatalog.Normalize(_language) switch
+    {
+        "zh-cn" => "使用内置 ADB",
+        "zh-tw" => "使用內建 ADB",
+        "ja-jp" => "内蔵 ADB を使用",
+        "ko-kr" => "번들 ADB 사용",
+        _ => "Use bundled ADB",
+    };
+
+    public bool MacUseBundledAdb
+    {
+        get => _macUseBundledAdb;
+        set
+        {
+            if (SetProperty(ref _macUseBundledAdb, value))
+            {
+                OnPropertyChanged(nameof(UseMacBundledAdbEffective));
+                OnPropertyChanged(nameof(ShowManualAdbPathControls));
+            }
+        }
+    }
+
+    public bool UseMacBundledAdbEffective => MacBundledAdbPolicy.ShouldUseBundledAdb(MacUseBundledAdb);
+
+    public bool ShowManualAdbPathControls => !UseMacBundledAdbEffective;
 
     public bool IsMuMuEmulator12Mode => string.Equals(ConnectConfig, "MuMuEmulator12", StringComparison.OrdinalIgnoreCase);
 
@@ -679,6 +710,21 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
 
     public string? BuildAdbPathHintMessage()
     {
+        if (UseMacBundledAdbEffective)
+        {
+            var bundledPath = ResolveBundledAdbPath();
+            if (File.Exists(bundledPath))
+            {
+                return null;
+            }
+
+            return BuildLocalizedOrBilingualMessage(
+                "Settings.Connect.Hint.MacBundledAdbNotFound",
+                "内置 ADB 不存在：{0}",
+                "Bundled ADB was not found: {0}",
+                bundledPath);
+        }
+
         var normalized = (AdbPath ?? string.Empty).Trim();
         if (string.IsNullOrEmpty(normalized))
         {
@@ -732,6 +778,11 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
 
     public string? ResolveEffectiveAdbPath(bool updateStateWhenResolved = false)
     {
+        if (UseMacBundledAdbEffective)
+        {
+            return ResolveBundledAdbPath();
+        }
+
         var normalized = (AdbPath ?? string.Empty).Trim();
         if (string.IsNullOrEmpty(normalized))
         {
@@ -757,6 +808,9 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
 
         return resolved;
     }
+
+    public static string ResolveBundledAdbPath()
+        => MacBundledAdbPolicy.ResolveBundledAdbPath();
 
     public CoreInstanceOptions BuildCoreInstanceOptions(bool? deploymentWithPause = null)
     {

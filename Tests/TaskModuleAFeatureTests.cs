@@ -865,6 +865,9 @@ public sealed class TaskModuleAFeatureTests
         Assert.Contains("DynamicResource", startUpView);
         Assert.Contains("DynamicResource", fightView);
         Assert.Contains("DynamicResource", recruitView);
+        Assert.Contains("IsVisible=\"{Binding IsMacBundledAdbSupported}\"", startUpView);
+        Assert.Contains("IsChecked=\"{Binding MacUseBundledAdb}\"", startUpView);
+        Assert.Contains("IsVisible=\"{Binding ShowManualAdbPathControls}\"", startUpView);
         Assert.DoesNotContain("SelectedAttachWindowScreencapOption", startUpView);
         Assert.DoesNotContain("SelectedAttachWindowMouseOption", startUpView);
         Assert.DoesNotContain("SelectedAttachWindowKeyboardOption", startUpView);

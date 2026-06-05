@@ -14,6 +14,8 @@ public sealed class StartUpTaskParamsDto
 
     public string AdbPath { get; set; } = string.Empty;
 
+    public bool? MacUseBundledAdb { get; set; }
+
     public string TouchMode { get; set; } = "minitouch";
 
     public bool AutoDetectConnection { get; set; } = true;

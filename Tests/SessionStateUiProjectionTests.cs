@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using System.Text.Json.Nodes;
 using MAAUnified.App.Features.Dialogs;
 using MAAUnified.App.ViewModels.Copilot;
 using MAAUnified.App.ViewModels.Settings;
@@ -170,7 +171,14 @@ public sealed class SessionStateUiProjectionTests
     public async Task TaskQueuePage_ToggleRun_WhenNotConnected_ShouldAutoConnectAndStart()
     {
         await using var fixture = await TestFixture.CreateAsync();
-        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        var vm = new TaskQueuePageViewModel(
+            fixture.Runtime,
+            new ConnectionGameSharedStateViewModel
+            {
+                ConnectAddress = "127.0.0.1:5555",
+                ConnectConfig = "General",
+                MacUseBundledAdb = false,
+            });
         await vm.InitializeAsync();
 
         Assert.Equal(SessionState.Idle, vm.CurrentSessionState);
@@ -186,7 +194,14 @@ public sealed class SessionStateUiProjectionTests
     public async Task TaskQueuePage_Start_ShouldClearVisibleLogsFromPreviousRun()
     {
         await using var fixture = await TestFixture.CreateAsync(existingAvaloniaJson: CreateRunnableConfigJson());
-        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        var vm = new TaskQueuePageViewModel(
+            fixture.Runtime,
+            new ConnectionGameSharedStateViewModel
+            {
+                ConnectAddress = "127.0.0.1:5555",
+                ConnectConfig = "General",
+                MacUseBundledAdb = false,
+            });
         await vm.InitializeAsync();
 
         vm.AppendSystemLog("stale system log");
@@ -571,6 +586,10 @@ public sealed class SessionStateUiProjectionTests
                 log,
                 root);
             await config.LoadOrBootstrapAsync();
+            if (config.TryGetCurrentProfile(out var profile))
+            {
+                profile.Values[MacBundledAdbPolicy.ProfileUseBundledAdbKey] = JsonValue.Create(false);
+            }
 
             bridge ??= new FakeBridge();
             var session = new UnifiedSessionService(bridge, config, log, new SessionStateMachine());

@@ -108,9 +108,15 @@
               </controls:AdaptiveSpacingStackPanel>
             </Grid>
 
+            <CheckBox Classes="app-checkbox"
+                      Content="{Binding MacUseBundledAdbText}"
+                      IsChecked="{Binding MacUseBundledAdb}"
+                      IsVisible="{Binding IsMacBundledAdbSupported}" />
+
             <Grid Classes="settings-page-labeled-action-row"
                   controls:SettingsLabelWidthCoordinator.GroupKey="Connect.AdbCore"
-                  ColumnDefinitions="Auto,*">
+                  ColumnDefinitions="Auto,*"
+                  IsVisible="{Binding ShowManualAdbPathControls}">
               <controls:SettingsLabel Text="{Binding RootTexts[Settings.Connect.AdbPath]}" />
               <controls:AppActionInput Grid.Column="1"
                                        Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
@@ -320,6 +326,7 @@
                     Classes="app-button app-secondary"
                     Margin="12,0,0,0"
                     Content="{Binding RootTexts[Settings.Connect.ReplaceAdb]}"
+                    IsVisible="{Binding ShowManualAdbPathControls}"
                     Click="OnReplaceAdbClick" />
           </Grid>
 

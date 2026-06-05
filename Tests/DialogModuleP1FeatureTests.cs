@@ -578,6 +578,41 @@ public sealed class DialogModuleP1FeatureTests
         Assert.Contains("FriendlyMessageText.Classes.Set(\"error-dialog-simple-message\", _simpleConnectFailureMode);", errorDialogCode, StringComparison.Ordinal);
         Assert.Contains("DetailHost.IsVisible = !_simpleConnectFailureMode;", errorDialogCode, StringComparison.Ordinal);
         Assert.Contains("CancelButton.IsVisible = !_simpleConnectFailureMode;", errorDialogCode, StringComparison.Ordinal);
+        Assert.Contains("DialogShell.Mode = AppWindowFrameMode.CompactModal;", errorDialogCode, StringComparison.Ordinal);
+        Assert.Contains("DialogShell.Mode = AppWindowFrameMode.ResizableDialog;", errorDialogCode, StringComparison.Ordinal);
+        Assert.Contains("Dispatcher.UIThread.Post(CenterExpandedDetailsToOwner, DispatcherPriority.Loaded);", errorDialogCode, StringComparison.Ordinal);
+        Assert.Contains("Position = new PixelPoint(x, y);", errorDialogCode, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void DialogPresentation_ShouldRestoreAndActivateOwnerBeforeShowingModalWindow()
+    {
+        var root = BaselineTestSupport.GetMaaUnifiedRoot();
+        var dialogServiceCode = File.ReadAllText(Path.Combine(root, "App", "Features", "Dialogs", "AvaloniaDialogService.cs"));
+
+        Assert.Contains("if (owner.WindowState == WindowState.Minimized)", dialogServiceCode, StringComparison.Ordinal);
+        Assert.Contains("owner.WindowState = WindowState.Normal;", dialogServiceCode, StringComparison.Ordinal);
+        Assert.Contains("if (!owner.IsVisible)", dialogServiceCode, StringComparison.Ordinal);
+        Assert.Contains("owner.Show();", dialogServiceCode, StringComparison.Ordinal);
+        Assert.Contains("owner.Activate();", dialogServiceCode, StringComparison.Ordinal);
+        Assert.Contains("await dialog.ShowDialog<TResult>(owner)", dialogServiceCode, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void DialogPresentation_ShouldNotPromoteDialogsBecauseOtherTopmostWindows()
+    {
+        var root = BaselineTestSupport.GetMaaUnifiedRoot();
+        var dialogServiceCode = File.ReadAllText(Path.Combine(root, "App", "Features", "Dialogs", "AvaloniaDialogService.cs"));
+        var appWindowFrameCode = File.ReadAllText(Path.Combine(root, "App", "Controls", "AppWindowFrame.cs"));
+
+        Assert.Contains("dialog.Topmost = ResolveTopmost(dialog, owner);", dialogServiceCode, StringComparison.Ordinal);
+        Assert.Contains("return dialog.Topmost || owner.Topmost;", dialogServiceCode, StringComparison.Ordinal);
+        Assert.DoesNotContain("desktop.Windows.Any", dialogServiceCode, StringComparison.Ordinal);
+        Assert.Contains("if (desktop.MainWindow is { } mainWindow)", dialogServiceCode, StringComparison.Ordinal);
+        Assert.Contains("LastOrDefault(IsDialogOwnerCandidate)", dialogServiceCode, StringComparison.Ordinal);
+        Assert.Contains("return window.IsVisible && !window.Topmost;", dialogServiceCode, StringComparison.Ordinal);
+        Assert.DoesNotContain("LastOrDefault(static window => window.IsVisible)", dialogServiceCode, StringComparison.Ordinal);
+        Assert.Contains("hostWindow?.CanResize == true", appWindowFrameCode, StringComparison.Ordinal);
     }
 
     [Fact]

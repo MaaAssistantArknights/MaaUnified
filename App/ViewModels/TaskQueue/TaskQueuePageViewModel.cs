@@ -2721,7 +2721,13 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         }
 
         var address = (_connectionGameSharedState.ConnectAddress ?? string.Empty).Trim();
-        var adbExecutable = _connectionGameSharedState.ResolveEffectiveAdbPath(updateStateWhenResolved: true) ?? "adb";
+        var adbExecutableResult = await ResolveAdbExecutableForRecoveryAsync(cancellationToken);
+        if (!adbExecutableResult.Success)
+        {
+            return adbExecutableResult;
+        }
+
+        var adbExecutable = adbExecutableResult.Message;
 
         if (_connectionGameSharedState.RetryOnDisconnected)
         {
@@ -2766,8 +2772,38 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         return connectResult;
     }
 
+    private async Task<UiOperationResult> ResolveAdbExecutableForRecoveryAsync(CancellationToken cancellationToken)
+    {
+        var consent = await MacBundledAdbConsentService.EnsureAcceptedAsync(
+            Runtime,
+            _dialogService,
+            _connectionGameSharedState.UseMacBundledAdbEffective,
+            "TaskQueue.Recovery.MacBundledAdbConsent",
+            Texts.Language,
+            cancellationToken);
+        if (!consent.Success)
+        {
+            return consent;
+        }
+
+        var effectiveAdbPath = _connectionGameSharedState.ResolveEffectiveAdbPath(updateStateWhenResolved: true);
+        return UiOperationResult.Ok(string.IsNullOrWhiteSpace(effectiveAdbPath) ? "adb" : effectiveAdbPath);
+    }
+
     private async Task<UiOperationResult> TryConnectWithCurrentSettingsAsync(CancellationToken cancellationToken)
     {
+        var consent = await MacBundledAdbConsentService.EnsureAcceptedAsync(
+            Runtime,
+            _dialogService,
+            _connectionGameSharedState.UseMacBundledAdbEffective,
+            "TaskQueue.Connect.MacBundledAdbConsent",
+            Texts.Language,
+            cancellationToken);
+        if (!consent.Success)
+        {
+            return consent;
+        }
+
         var effectiveAdbPath = _connectionGameSharedState.ResolveEffectiveAdbPath(updateStateWhenResolved: true);
         var adbPath = string.IsNullOrWhiteSpace(effectiveAdbPath) ? null : effectiveAdbPath;
         var instanceOptions = _connectionGameSharedState.BuildCoreInstanceOptions();

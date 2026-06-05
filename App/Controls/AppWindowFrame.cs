@@ -733,7 +733,7 @@ public class AppWindowFrame : ContentControl
         var isHostMaximizedState = hostWindowState == WindowState.Maximized;
 
         AllowsHeaderDrag = isResizableDialog;
-        ShowsResizeGrips = isResizableDialog && isHostNormalState;
+        ShowsResizeGrips = isResizableDialog && isHostNormalState && hostWindow?.CanResize == true;
 
         PseudoClasses.Set(":resizable-dialog", isResizableDialog);
         PseudoClasses.Set(":compact-modal", !isResizableDialog);

@@ -1,6 +1,8 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using Avalonia.Threading;
+using MAAUnified.App.Controls;
 using MAAUnified.App.Infrastructure;
 using MAAUnified.App.ViewModels.Infrastructure;
 using MAAUnified.Application.Models;
@@ -86,6 +88,7 @@ public partial class ErrorDialogView : Window, IDialogChromeAware
     {
         if (_simpleConnectFailureMode)
         {
+            DialogShell.Mode = AppWindowFrameMode.CompactModal;
             Width = SimpleWidth;
             MinWidth = SimpleMinWidth;
             Height = double.NaN;
@@ -94,6 +97,7 @@ public partial class ErrorDialogView : Window, IDialogChromeAware
             return;
         }
 
+        DialogShell.Mode = AppWindowFrameMode.ResizableDialog;
         Width = DefaultWidth;
         MinWidth = DefaultMinWidth;
         Height = DefaultHeight;
@@ -227,6 +231,55 @@ public partial class ErrorDialogView : Window, IDialogChromeAware
         Grid.SetColumn(SummaryContentPanel, 1);
         Grid.SetColumnSpan(SummaryContentPanel, 1);
         SummaryContentPanel.Margin = new Thickness(18, 2, 0, 0);
+        Dispatcher.UIThread.Post(CenterExpandedDetailsToOwner, DispatcherPriority.Loaded);
+    }
+
+    private void CenterExpandedDetailsToOwner()
+    {
+        if (Owner is not Window owner)
+        {
+            return;
+        }
+
+        var scale = Math.Max(0.01d, owner.DesktopScaling);
+        var ownerWidthPx = Math.Max(1, owner.Bounds.Width * scale);
+        var ownerHeightPx = Math.Max(1, owner.Bounds.Height * scale);
+        var dialogWidthPx = Math.Max(1, ResolveDialogWidth() * scale);
+        var dialogHeightPx = Math.Max(1, ResolveDialogHeight() * scale);
+        var x = owner.Position.X + (int)Math.Round((ownerWidthPx - dialogWidthPx) / 2d);
+        var y = owner.Position.Y + (int)Math.Round((ownerHeightPx - dialogHeightPx) / 2d);
+        var screen = owner.Screens.ScreenFromWindow(owner) ?? owner.Screens.Primary;
+
+        if (screen is not null)
+        {
+            var workingArea = screen.WorkingArea;
+            var maxX = workingArea.X + Math.Max(0, workingArea.Width - (int)Math.Round(dialogWidthPx));
+            var maxY = workingArea.Y + Math.Max(0, workingArea.Height - (int)Math.Round(dialogHeightPx));
+            x = Math.Clamp(x, workingArea.X, maxX);
+            y = Math.Clamp(y, workingArea.Y, maxY);
+        }
+
+        Position = new PixelPoint(x, y);
+    }
+
+    private double ResolveDialogWidth()
+    {
+        if (Bounds.Width > 0d)
+        {
+            return Bounds.Width;
+        }
+
+        return double.IsFinite(Width) && Width > 0d ? Width : DefaultWidth;
+    }
+
+    private double ResolveDialogHeight()
+    {
+        if (Bounds.Height > 0d)
+        {
+            return Bounds.Height;
+        }
+
+        return double.IsFinite(Height) && Height > 0d ? Height : DefaultHeight;
     }
 
     public void ApplyDialogChrome(DialogChromeSnapshot chrome)
