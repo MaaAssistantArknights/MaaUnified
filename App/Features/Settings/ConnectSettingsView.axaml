@@ -190,7 +190,7 @@
                 IsVisible="{Binding IsAdbConnectionMode}" />
 
         <controls:AdaptiveSpacingStackPanel Classes="settings-page-column-stack settings-page-branch-block connect-settings-section"
-                    IsVisible="{Binding IsAdbConnectionMode}">
+                    IsVisible="{Binding ShowEmulatorExtrasSection}">
           <controls:AdaptiveSpacingStackPanel Classes="settings-page-compact-flow settings-page-branch-block"
                       IsVisible="{Binding ShowMuMuExtrasSection}">
             <CheckBox Classes="app-checkbox"
@@ -272,7 +272,8 @@
           </controls:AdaptiveSpacingStackPanel>
         </controls:AdaptiveSpacingStackPanel>
 
-        <Border Classes="settings-page-subtle-divider" />
+        <Border Classes="settings-page-subtle-divider"
+                IsVisible="{Binding ShowEmulatorExtrasSection}" />
 
         <controls:AdaptiveSpacingStackPanel Classes="settings-page-compact-flow settings-page-status-block connect-settings-section">
           <controls:AdaptiveSpacingStackPanel Classes="connect-settings-screenshot-action-row">

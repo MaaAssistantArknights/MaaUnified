@@ -287,6 +287,27 @@ public sealed class SettingsModuleAK1FeatureTests
     }
 
     [Fact]
+    public void ConnectionGameSharedState_EmulatorExtrasSection_ShouldOnlyShowWhenExtrasAreAvailable()
+    {
+        var state = new ConnectionGameSharedStateViewModel();
+
+        Assert.False(state.ShowEmulatorExtrasSection);
+
+        state.ConnectConfig = "MuMuEmulator12";
+        Assert.True(state.ShowMuMuExtrasSection);
+        Assert.True(state.ShowEmulatorExtrasSection);
+
+        state.ConnectConfig = "LDPlayer";
+        Assert.True(state.ShowLdPlayerExtrasSection);
+        Assert.True(state.ShowEmulatorExtrasSection);
+
+        state.ConnectConfig = "General";
+        Assert.False(state.ShowMuMuExtrasSection);
+        Assert.False(state.ShowLdPlayerExtrasSection);
+        Assert.False(state.ShowEmulatorExtrasSection);
+    }
+
+    [Fact]
     public void ConnectionGameSharedState_AvdConfig_ShouldProvideEmulatorCandidatesWhenAutoDetectEnabled()
     {
         var state = new ConnectionGameSharedStateViewModel

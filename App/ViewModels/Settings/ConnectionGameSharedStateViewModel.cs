@@ -293,6 +293,7 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
             OnPropertyChanged(nameof(IsLdPlayerMode));
             OnPropertyChanged(nameof(ShowMuMuExtrasSection));
             OnPropertyChanged(nameof(ShowLdPlayerExtrasSection));
+            OnPropertyChanged(nameof(ShowEmulatorExtrasSection));
             OnPropertyChanged(nameof(CanEditAdbConnectionFields));
             if (string.Equals(_connectConfig, "PC", StringComparison.OrdinalIgnoreCase))
             {
@@ -396,6 +397,8 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
     public bool ShowMuMuExtrasSection => IsAdbConnectionMode && IsMuMuEmulator12Mode;
 
     public bool ShowLdPlayerExtrasSection => IsAdbConnectionMode && IsLdPlayerMode;
+
+    public bool ShowEmulatorExtrasSection => ShowMuMuExtrasSection || ShowLdPlayerExtrasSection;
 
     public bool IsYoStarEnClientType => string.Equals(ClientType, "YoStarEN", StringComparison.OrdinalIgnoreCase);
 
