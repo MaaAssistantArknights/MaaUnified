@@ -830,7 +830,7 @@
         <Border Grid.Row="2"
                 Margin="0,6,0,0"
                 Classes="app-surface app-card task-queue-run-card">
-          <Grid RowDefinitions="Auto,Auto,Auto">
+          <Grid RowDefinitions="Auto,Auto">
             <Button Classes="app-button app-primary task-queue-run-button"
                     Classes.locked="{Binding IsOwnRunActive}"
                     Grid.Row="0"
@@ -843,10 +843,6 @@
                        Classes="app-caption long-wrap state-warning task-queue-warning-text"
                        Text="{Binding CoreInitializationMessage}"
                        IsVisible="{Binding HasCoreInitializationMessage}" />
-            <TextBlock Grid.Row="2"
-                       Classes="app-caption long-wrap state-warning task-queue-warning-text"
-                       Text="{Binding StartPrecheckWarningMessage}"
-                       IsVisible="{Binding HasStartPrecheckWarningMessage}" />
           </Grid>
         </Border>
       </Grid>

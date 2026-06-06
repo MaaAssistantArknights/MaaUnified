@@ -217,7 +217,9 @@ public sealed class TaskQueueG2FeatureTests
 
         Assert.True(vm.IsRunning);
         Assert.False(vm.CanEdit);
-        Assert.False(vm.CanToggleRun);
+        Assert.True(vm.CanToggleRun);
+        Assert.True(vm.IsOwnRunActive);
+        Assert.Equal(vm.RootTexts.GetOrDefault("TaskQueue.Root.Stop", "Stop"), vm.RunButtonText);
 
         await startTask;
 
@@ -246,7 +248,29 @@ public sealed class TaskQueueG2FeatureTests
         Assert.True(vm.CanEdit);
         Assert.True(vm.CanToggleRun);
         Assert.Equal(0, fixture.Bridge.StartCallCount);
-        Assert.Contains("Connection failed", vm.LastErrorMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("连接失败", vm.LastErrorMessage, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("zh-cn", "连接失败，正在尝试通过 ADB 重新连接。", "Connection failed")]
+    [InlineData("en-us", "Connection failed. Trying to reconnect by ADB.", "连接失败")]
+    public async Task ConnectionRecoveryAttemptLog_ShouldUseCurrentLanguageOnly(
+        string language,
+        string expected,
+        string unexpected)
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        vm.SetLanguage(language);
+
+        typeof(TaskQueuePageViewModel)
+            .GetMethod("AppendConnectionRecoveryAttemptLog", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(vm, ["正在尝试通过 ADB 重新连接。", "Trying to reconnect by ADB."]);
+
+        var content = Assert.Single(vm.LogCards).PrimaryContent;
+        Assert.Equal(expected, content);
+        Assert.DoesNotContain(unexpected, content, StringComparison.Ordinal);
     }
 
     [Fact]

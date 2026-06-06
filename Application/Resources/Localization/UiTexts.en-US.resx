@@ -291,8 +291,7 @@ By pressing ｢Confirm｣, you understand and accept the possible risks.</value>
     <value>Select a copilot item to update.</value>
   </data>
   <data name="Copilot.Error.SessionStateNotAllowed" xml:space="preserve">
-    <value>会话状态 `{0}` 不允许{1}。
-Session state `{0}` does not allow {2}.</value>
+    <value>Session state `{0}` does not allow {2}.</value>
   </data>
   <data name="Copilot.Error.SortPersistFail" xml:space="preserve">
     <value>Sort failed: list save failed.</value>

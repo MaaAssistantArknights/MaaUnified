@@ -57,6 +57,7 @@ public partial class MainWindow : Window
     private const int ResponsiveWidthProgressSteps = 24;
     private static readonly TimeSpan ResizeSettleDelay = TimeSpan.FromMilliseconds(120);
     private static readonly TimeSpan CloseCompletionWatchdogDelay = TimeSpan.FromSeconds(15);
+    private static readonly TimeSpan OverlayPreviewFollowInterval = TimeSpan.FromMilliseconds(300);
     private static readonly KeyValuePair<string, object>[] CompactLayoutResourceOverrides =
     [
         new("MAA.Thickness.SectionPadding", new Thickness(6)),
@@ -136,6 +137,8 @@ public partial class MainWindow : Window
     private OverlayHostWindow? _overlayHostWindow;
     private RuntimeLogWindow? _runtimeLogWindow;
     private TrayContextMenuWindow? _trayContextMenuWindow;
+    private DispatcherTimer? _overlayPreviewFollowTimer;
+    private string? _overlayPreviewFollowTargetId;
     private RootPageHostViewModel? _settingsWarmupRootPage;
     private bool _settingsWarmupStarted;
     private bool _settingsSectionWarmupStarted;
@@ -362,6 +365,7 @@ public partial class MainWindow : Window
             _resizeSettleTimer = null;
         }
 
+        StopOverlayPreviewFollow();
         _rootHostResponsiveMetrics.Clear();
         if (_dialogErrorBound)
         {
@@ -1903,6 +1907,18 @@ public partial class MainWindow : Window
         _overlayHostWindow.SetOverlayActive(e.Visible, e.Mode);
         if (!e.Visible || e.Mode != OverlayRuntimeMode.Preview)
         {
+            StopOverlayPreviewFollow();
+            return;
+        }
+
+        ApplyOverlayPreviewBounds(e.TargetId);
+        UpdateOverlayPreviewFollow(e.TargetId);
+    }
+
+    private void ApplyOverlayPreviewBounds(string targetId)
+    {
+        if (_overlayHostWindow is null)
+        {
             return;
         }
 
@@ -1910,14 +1926,16 @@ public partial class MainWindow : Window
         {
             var screens = _overlayHostWindow.Screens;
             PixelRect? anchorBounds = null;
-            if (OperatingSystem.IsMacOS()
-                && !string.Equals(e.TargetId, "preview", StringComparison.OrdinalIgnoreCase)
-                && MacOverlayCapabilityService.TryGetTargetBounds(e.TargetId, out var targetBounds))
+            if (ShouldFollowMacOverlayPreviewTarget(targetId)
+                && MacOverlayCapabilityService.TryGetTargetBounds(targetId, out var targetBounds))
             {
                 anchorBounds = targetBounds;
             }
 
-            var screen = screens.ScreenFromWindow(this)
+            var screen = anchorBounds is { } anchor
+                ? screens.ScreenFromPoint(new PixelPoint(anchor.X, anchor.Y))
+                : null;
+            screen ??= screens.ScreenFromWindow(this)
                 ?? screens.ScreenFromWindow(_overlayHostWindow)
                 ?? screens.Primary;
             if (screen is null)
@@ -1932,6 +1950,58 @@ public partial class MainWindow : Window
             // Ignore late overlay events while the shell is shutting down.
         }
     }
+
+    private void UpdateOverlayPreviewFollow(string targetId)
+    {
+        if (!ShouldFollowMacOverlayPreviewTarget(targetId))
+        {
+            StopOverlayPreviewFollow();
+            return;
+        }
+
+        _overlayPreviewFollowTargetId = targetId;
+        if (_overlayPreviewFollowTimer is null)
+        {
+            _overlayPreviewFollowTimer = new DispatcherTimer
+            {
+                Interval = OverlayPreviewFollowInterval,
+            };
+            _overlayPreviewFollowTimer.Tick += OnOverlayPreviewFollowTimerTick;
+        }
+
+        if (!_overlayPreviewFollowTimer.IsEnabled)
+        {
+            _overlayPreviewFollowTimer.Start();
+        }
+    }
+
+    private void StopOverlayPreviewFollow()
+    {
+        if (_overlayPreviewFollowTimer is not null)
+        {
+            _overlayPreviewFollowTimer.Stop();
+            _overlayPreviewFollowTimer.Tick -= OnOverlayPreviewFollowTimerTick;
+            _overlayPreviewFollowTimer = null;
+        }
+
+        _overlayPreviewFollowTargetId = null;
+    }
+
+    private void OnOverlayPreviewFollowTimerTick(object? sender, EventArgs e)
+    {
+        if (string.IsNullOrWhiteSpace(_overlayPreviewFollowTargetId))
+        {
+            StopOverlayPreviewFollow();
+            return;
+        }
+
+        ApplyOverlayPreviewBounds(_overlayPreviewFollowTargetId);
+    }
+
+    private static bool ShouldFollowMacOverlayPreviewTarget(string targetId)
+        => OperatingSystem.IsMacOS()
+           && !string.IsNullOrWhiteSpace(targetId)
+           && !string.Equals(targetId, "preview", StringComparison.OrdinalIgnoreCase);
 
     private async void OnTrayCommandInvoked(object? sender, TrayCommandEvent e)
         => await App.RunUiTaskAsync(

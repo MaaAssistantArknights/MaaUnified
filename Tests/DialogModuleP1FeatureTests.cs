@@ -136,6 +136,65 @@ public sealed class DialogModuleP1FeatureTests
     }
 
     [Fact]
+    public void DialogTextCatalog_ShouldKeepSpecificConnectFailureMessage()
+    {
+        var result = UiOperationResult.Fail(
+            UiErrorCode.ConnectFailed,
+            "ADB 命令执行失败：adb kill-server。Permission denied",
+            "ADB command: adb kill-server");
+
+        var localized = DialogTextCatalog.LocalizeErrorResult("zh-cn", result);
+
+        Assert.Equal("ADB 命令执行失败：adb kill-server。Permission denied", localized.Message);
+        Assert.Equal(localized.Message, localized.Error?.Message);
+        Assert.DoesNotContain("原始消息", localized.Error?.Details ?? string.Empty, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void DialogTextCatalog_ShouldKeepGenericConnectFailureForUnknownMessage()
+    {
+        var result = UiOperationResult.Fail(
+            UiErrorCode.ConnectFailed,
+            "Connection failed: unexpected callback payload",
+            "{\"what\":\"ConnectFailed\"}");
+
+        var localized = DialogTextCatalog.LocalizeErrorResult("zh-cn", result);
+
+        Assert.Equal("连接模拟器失败。", localized.Message);
+        Assert.Contains("原始消息", localized.Error?.Details ?? string.Empty, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void DialogTextCatalog_ShouldExtractSpecificConnectFailureSuggestion()
+    {
+        var result = UiOperationResult.Fail(
+            UiErrorCode.ConnectFailed,
+            "ADB 启动失败。" + Environment.NewLine + "请检查连接设置中的 ADB 路径是否指向 adb 可执行文件。",
+            "ADB command: adb kill-server");
+
+        var localized = DialogTextCatalog.LocalizeErrorResult("zh-cn", result);
+        var suggestion = DialogTextCatalog.BuildErrorSuggestion("zh-cn", result);
+
+        Assert.Equal("ADB 启动失败。", localized.Message);
+        Assert.Equal("请检查连接设置中的 ADB 路径是否指向 adb 可执行文件。", suggestion);
+    }
+
+    [Fact]
+    public void DialogTextCatalog_ShouldKeepAdbTargetDeviceFailureMessage()
+    {
+        var result = UiOperationResult.Fail(
+            UiErrorCode.ConnectFailed,
+            "ADB 未连接到目标设备。" + Environment.NewLine + "请检查连接地址和端口是否正确，常见 ADB 端口为 5555。",
+            "ADB command: adb connect");
+
+        var localized = DialogTextCatalog.LocalizeErrorResult("zh-cn", result);
+        var suggestion = DialogTextCatalog.BuildErrorSuggestion("zh-cn", result);
+
+        Assert.Equal("ADB 未连接到目标设备。", localized.Message);
+        Assert.Contains("5555", suggestion, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task DialogFeatureService_BeginActionComplete_ShouldWriteTraceEvents()
     {
         await using var fixture = DialogFeatureFixture.Create();
@@ -566,16 +625,20 @@ public sealed class DialogModuleP1FeatureTests
         var root = BaselineTestSupport.GetMaaUnifiedRoot();
         var errorDialogXaml = File.ReadAllText(Path.Combine(root, "App", "Features", "Dialogs", "ErrorDialogView.axaml"));
         var errorDialogCode = File.ReadAllText(Path.Combine(root, "App", "Features", "Dialogs", "ErrorDialogView.axaml.cs"));
+        var appStyles = File.ReadAllText(Path.Combine(root, "App", "Styles", "AppFoundationStyles.axaml"));
 
         Assert.Contains("x:Name=\"FriendlyMessageText\"", errorDialogXaml, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"SuggestionPanel\"", errorDialogXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("error-dialog-suggestion-panel", errorDialogXaml, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"DetailSectionTitle\"", errorDialogXaml, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"DetailHost\"", errorDialogXaml, StringComparison.Ordinal);
-        Assert.Contains("FriendlyMessageText.Text = _simpleConnectFailureMode", errorDialogCode, StringComparison.Ordinal);
-        Assert.Contains("SuggestionPanel.IsVisible = !_simpleConnectFailureMode && !string.IsNullOrWhiteSpace(request.Suggestion);", errorDialogCode, StringComparison.Ordinal);
+        Assert.Contains("FriendlyMessageText.Text = request.Result.Message;", errorDialogCode, StringComparison.Ordinal);
+        Assert.Contains("SuggestionPanel.IsVisible = !string.IsNullOrWhiteSpace(request.Suggestion);", errorDialogCode, StringComparison.Ordinal);
         Assert.Contains("_simpleConnectFailureMode = request.Result.Error?.Code == UiErrorCode.ConnectFailed;", errorDialogCode, StringComparison.Ordinal);
         Assert.Contains("SizeToContent = SizeToContent.Height;", errorDialogCode, StringComparison.Ordinal);
         Assert.Contains("FriendlyMessageText.Classes.Set(\"error-dialog-simple-message\", _simpleConnectFailureMode);", errorDialogCode, StringComparison.Ordinal);
+        Assert.Contains("Style Selector=\"TextBlock.error-dialog-simple-message\"", appStyles, StringComparison.Ordinal);
+        Assert.Contains("Value=\"{DynamicResource MAA.Brush.App.Text.Primary}\"", appStyles, StringComparison.Ordinal);
         Assert.Contains("DetailHost.IsVisible = !_simpleConnectFailureMode;", errorDialogCode, StringComparison.Ordinal);
         Assert.Contains("CancelButton.IsVisible = !_simpleConnectFailureMode;", errorDialogCode, StringComparison.Ordinal);
         Assert.Contains("DialogShell.Mode = AppWindowFrameMode.CompactModal;", errorDialogCode, StringComparison.Ordinal);

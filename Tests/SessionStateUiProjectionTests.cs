@@ -191,6 +191,44 @@ public sealed class SessionStateUiProjectionTests
     }
 
     [Fact]
+    public async Task TaskQueuePage_LinkStart_ShouldExposeStopImmediately_WhenConnectIsPending()
+    {
+        var bridge = new BlockingConnectBridge();
+        bridge.StopCompletion = new TaskCompletionSource<CoreResult<bool>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var fixture = await TestFixture.CreateAsync(
+            existingAvaloniaJson: CreateRunnableConfigJson(),
+            bridge: bridge);
+        var vm = new TaskQueuePageViewModel(
+            fixture.Runtime,
+            new ConnectionGameSharedStateViewModel
+            {
+                ConnectAddress = "127.0.0.1:5555",
+                ConnectConfig = "General",
+                MacUseBundledAdb = false,
+            });
+        await vm.InitializeAsync();
+
+        var startTask = vm.StartAsync();
+        await WaitUntilAsync(() => vm.IsStartRequestActive);
+
+        Assert.True(vm.IsOwnRunActive);
+        Assert.True(vm.CanToggleRun);
+        Assert.Equal(vm.RootTexts.GetOrDefault("TaskQueue.Root.Stop", "Stop"), vm.RunButtonText);
+
+        var stopClickTask = vm.ToggleRunAsync();
+        await stopClickTask.WaitAsync(TimeSpan.FromSeconds(2));
+        await bridge.StopStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+        Assert.Equal(1, bridge.StopCallCount);
+        Assert.False(vm.IsStartRequestActive);
+        Assert.False(vm.IsOwnRunActive);
+        Assert.True(vm.CanToggleRun);
+        Assert.Equal(vm.RootTexts.GetOrDefault("TaskQueue.Root.LinkStart", "Link Start!"), vm.RunButtonText);
+        bridge.StopCompletion.SetResult(CoreResult<bool>.Fail(new CoreError(CoreErrorCode.StopFailed, "not running")));
+        await startTask.WaitAsync(TimeSpan.FromSeconds(2));
+    }
+
+    [Fact]
     public async Task TaskQueuePage_Start_ShouldClearVisibleLogsFromPreviousRun()
     {
         await using var fixture = await TestFixture.CreateAsync(existingAvaloniaJson: CreateRunnableConfigJson());
@@ -257,12 +295,9 @@ public sealed class SessionStateUiProjectionTests
 
         Assert.Contains("连接失败", vm.LastErrorMessage, StringComparison.Ordinal);
         Assert.Contains("当前系统是 Linux", vm.LastErrorMessage, StringComparison.Ordinal);
-        Assert.Contains("连接失败，请检查当前配置的 ADB 路径。", vm.StartPrecheckWarningMessage, StringComparison.Ordinal);
-        Assert.Contains("Connection failed. Check the ADB path of the current profile.", vm.StartPrecheckWarningMessage, StringComparison.Ordinal);
         Assert.DoesNotContain("会话状态", vm.LastErrorMessage, StringComparison.Ordinal);
         Assert.DoesNotContain("Session state", vm.LastErrorMessage, StringComparison.Ordinal);
         Assert.DoesNotContain("错误详情", vm.LastErrorMessage, StringComparison.Ordinal);
-        Assert.DoesNotContain(@"D:\Program Files", vm.StartPrecheckWarningMessage, StringComparison.Ordinal);
         Assert.DoesNotContain("ADB restart failed:", FlattenLogs(vm), StringComparison.Ordinal);
     }
 
@@ -281,10 +316,9 @@ public sealed class SessionStateUiProjectionTests
 
         Assert.Equal(SessionState.Connected, vm.CurrentSessionState);
         Assert.Equal("recruit-blocking", vm.SelectedTask?.Name);
-        Assert.True(vm.HasStartPrecheckWarningMessage);
-        Assert.Contains("recruit-blocking", vm.StartPrecheckWarningMessage, StringComparison.OrdinalIgnoreCase);
         await WaitUntilAsync(() => HasLinkStartFailureLog(vm));
         Assert.True(HasLinkStartFailureLog(vm));
+        Assert.Contains("recruit-blocking", FlattenLogs(vm), StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -314,7 +348,7 @@ public sealed class SessionStateUiProjectionTests
     }
 
     [Fact]
-    public async Task CopilotPage_Start_WhenSessionNotConnected_ShouldExposeBilingualErrorMessage()
+    public async Task CopilotPage_Start_WhenSessionNotConnected_ShouldExposeCurrentLanguageErrorMessage()
     {
         await using var fixture = await TestFixture.CreateAsync();
         var vm = new CopilotPageViewModel(fixture.Runtime);
@@ -324,8 +358,8 @@ public sealed class SessionStateUiProjectionTests
         await vm.StartAsync();
 
         Assert.Contains("会话状态", vm.LastErrorMessage, StringComparison.Ordinal);
-        Assert.Contains("Session state", vm.LastErrorMessage, StringComparison.Ordinal);
-        Assert.Contains("start", vm.LastErrorMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Session state", vm.LastErrorMessage, StringComparison.Ordinal);
+        Assert.Contains("开始", vm.LastErrorMessage, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -789,6 +823,59 @@ public sealed class SessionStateUiProjectionTests
 
         public Task<CoreResult<bool>> StopAsync(CancellationToken cancellationToken = default)
             => Task.FromResult(CoreResult<bool>.Fail(new CoreError(CoreErrorCode.StopFailed, "not running")));
+
+        public Task<CoreResult<CoreRuntimeStatus>> GetRuntimeStatusAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(CoreResult<CoreRuntimeStatus>.Ok(new CoreRuntimeStatus(true, false, false)));
+
+        public Task<CoreResult<bool>> AttachWindowAsync(CoreAttachWindowRequest request, CancellationToken cancellationToken = default)
+            => Task.FromResult(CoreResult<bool>.Fail(new CoreError(CoreErrorCode.NotSupported, "not supported")));
+
+        public Task<CoreResult<byte[]>> GetImageAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(CoreResult<byte[]>.Fail(new CoreError(CoreErrorCode.GetImageFailed, "not supported")));
+
+        public async IAsyncEnumerable<CoreCallbackEvent> CallbackStreamAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            await Task.CompletedTask;
+            yield break;
+        }
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    private sealed class BlockingConnectBridge : IMaaCoreBridge
+    {
+        private readonly TaskCompletionSource<CoreResult<bool>> _connectCompletion =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public int StopCallCount { get; private set; }
+
+        public TaskCompletionSource<bool> StopStarted { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource<CoreResult<bool>>? StopCompletion { get; set; }
+
+        public Task<CoreResult<CoreInitializeInfo>> InitializeAsync(CoreInitializeRequest request, CancellationToken cancellationToken = default)
+            => Task.FromResult(CoreResult<CoreInitializeInfo>.Ok(new CoreInitializeInfo(request.BaseDirectory, "fake", "fake", request.ClientType)));
+
+        public async Task<CoreResult<bool>> ConnectAsync(CoreConnectionInfo connectionInfo, CancellationToken cancellationToken = default)
+        {
+            using var registration = cancellationToken.Register(() => _connectCompletion.TrySetCanceled(cancellationToken));
+            return await _connectCompletion.Task;
+        }
+
+        public Task<CoreResult<int>> AppendTaskAsync(CoreTaskRequest task, CancellationToken cancellationToken = default)
+            => Task.FromResult(CoreResult<int>.Ok(1));
+
+        public Task<CoreResult<bool>> StartAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(CoreResult<bool>.Fail(new CoreError(CoreErrorCode.StartFailed, "not connected")));
+
+        public Task<CoreResult<bool>> StopAsync(CancellationToken cancellationToken = default)
+        {
+            StopCallCount++;
+            StopStarted.TrySetResult(true);
+            return StopCompletion?.Task
+                ?? Task.FromResult(CoreResult<bool>.Fail(new CoreError(CoreErrorCode.StopFailed, "not running")));
+        }
 
         public Task<CoreResult<CoreRuntimeStatus>> GetRuntimeStatusAsync(CancellationToken cancellationToken = default)
             => Task.FromResult(CoreResult<CoreRuntimeStatus>.Ok(new CoreRuntimeStatus(true, false, false)));

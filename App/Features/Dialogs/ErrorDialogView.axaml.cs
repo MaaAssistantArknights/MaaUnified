@@ -62,12 +62,10 @@ public partial class ErrorDialogView : Window, IDialogChromeAware
         var code = request.Result.Error?.Code ?? UiErrorCode.UiOperationFailed;
         ContextLine.Text = $"[{request.Context}] {code}";
         ContextLine.IsVisible = !_simpleConnectFailureMode;
-        FriendlyMessageText.Text = _simpleConnectFailureMode
-            ? request.Suggestion ?? request.Result.Message
-            : request.Result.Message;
+        FriendlyMessageText.Text = request.Result.Message;
         FriendlyMessageText.Classes.Set("error-dialog-simple-message", _simpleConnectFailureMode);
-        SuggestionText.Text = _simpleConnectFailureMode ? string.Empty : request.Suggestion ?? string.Empty;
-        SuggestionPanel.IsVisible = !_simpleConnectFailureMode && !string.IsNullOrWhiteSpace(request.Suggestion);
+        SuggestionText.Text = request.Suggestion ?? string.Empty;
+        SuggestionPanel.IsVisible = !string.IsNullOrWhiteSpace(request.Suggestion);
         SummaryHero.IsVisible = !_simpleConnectFailureMode;
         Grid.SetColumn(SummaryContentPanel, _simpleConnectFailureMode ? 0 : 1);
         Grid.SetColumnSpan(SummaryContentPanel, _simpleConnectFailureMode ? 2 : 1);
@@ -291,9 +289,12 @@ public partial class ErrorDialogView : Window, IDialogChromeAware
             : DialogTextCatalog.ErrorDialogCopyButton(_language);
         if (_simpleConnectFailureMode)
         {
-            FriendlyMessageText.Text = chrome.GetNamedTextOrDefault(
-                DialogTextCatalog.ChromeKeys.Prompt,
-                FriendlyMessageText.Text ?? string.Empty);
+            var prompt = chrome.GetNamedTextOrDefault(DialogTextCatalog.ChromeKeys.Prompt, string.Empty);
+            if (!string.IsNullOrWhiteSpace(prompt) && string.IsNullOrWhiteSpace(SuggestionText.Text))
+            {
+                SuggestionText.Text = prompt;
+                SuggestionPanel.IsVisible = true;
+            }
         }
 
         DetailSectionTitle.Text = chrome.GetNamedTextOrDefault(

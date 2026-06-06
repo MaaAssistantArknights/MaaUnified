@@ -18,6 +18,7 @@ using MAAUnified.App.Controls;
 using MAAUnified.App.Features.Dialogs;
 using MAAUnified.App.Services;
 using MAAUnified.App.Views;
+using MAAUnified.App.ViewModels.Infrastructure;
 using MAAUnified.App.ViewModels.Settings;
 using MAAUnified.Application.Services.Localization;
 using MAAUnified.Compat.Runtime;
@@ -341,6 +342,7 @@ public partial class ConnectSettingsView : UserControl
             "prepared",
             message: $"count={candidates.Count}, adb={adbPath ?? "<null>"}");
         UiOperationResult? lastFailure = null;
+        var candidateFailures = new List<ConnectionAttemptFailure>();
 
         foreach (var candidate in candidates)
         {
@@ -361,9 +363,13 @@ public partial class ConnectSettingsView : UserControl
                 errorCode: result.Error?.Code,
                 candidate: candidate);
             lastFailure = result;
+            candidateFailures.Add(new ConnectionAttemptFailure(candidate, result));
         }
 
-        return lastFailure ?? UiOperationResult.Fail(UiErrorCode.ConnectFailed, T("Settings.Connect.Error.ConnectionFailedShort"));
+        return BuildDiagnosticConnectFailureResult(
+            vm,
+            lastFailure ?? UiOperationResult.Fail(UiErrorCode.ConnectFailed, T("Settings.Connect.Error.ConnectionFailedShort")),
+            candidateFailures);
     }
 
     private static async Task DownloadFileAsync(string url, string targetPath)
@@ -437,6 +443,22 @@ public partial class ConnectSettingsView : UserControl
         }
 
         return builder.ToString().Trim();
+    }
+
+    private UiOperationResult BuildDiagnosticConnectFailureResult(
+        ConnectionGameSharedStateViewModel vm,
+        UiOperationResult connectResult,
+        IReadOnlyList<ConnectionAttemptFailure>? candidateFailures = null)
+    {
+        var diagnostic = ConnectionFailureDiagnosticBuilder.Build(
+            connectResult,
+            vm,
+            candidateFailures,
+            language: vm.RootTexts.Language);
+        return UiOperationResult.Fail(
+            UiErrorCode.ConnectFailed,
+            diagnostic.BuildDialogMessage(),
+            diagnostic.Details);
     }
 
     private static void LogScreenshotTestEvent(

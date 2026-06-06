@@ -743,7 +743,7 @@ public sealed class MainShellViewModel : ObservableObject
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
-                TaskQueuePage.SetCoreAvailability(false, BuildBilingualMessage("启动已取消。", "Startup was canceled."));
+                TaskQueuePage.SetCoreAvailability(false, BuildLocalizedMessage("启动已取消。", "Startup was canceled."));
                 UpdateStartupPhase("启动已取消", "后台启动阶段已取消。");
                 RecordStartupPhase("Cancelled", "Startup pipeline canceled.");
             }
@@ -1281,10 +1281,7 @@ public sealed class MainShellViewModel : ObservableObject
             return connectResult;
         }
 
-        return UiOperationResult.Fail(
-            connectResult.Error?.Code ?? UiErrorCode.SessionStateNotAllowed,
-            BuildConnectionFailureMessage(connectResult),
-            connectResult.Error?.Details);
+        return connectResult;
     }
 
     private async Task StopRunOwnerFromDialogAsync(string owner, CancellationToken cancellationToken)
@@ -1388,9 +1385,9 @@ public sealed class MainShellViewModel : ObservableObject
         Program.RecordStartupStage($"Stage.{stage}", message, exception);
     }
 
-    private static string BuildCoreWarmupPendingMessage()
+    private string BuildCoreWarmupPendingMessage()
     {
-        return BuildBilingualMessage(
+        return BuildLocalizedMessage(
             "核心初始化中，可继续浏览界面；Start/LinkStart 会在预热完成后继续执行。",
             "Core initialization is in progress. You can keep browsing the UI; Start/LinkStart will continue after warmup finishes.");
     }
@@ -1402,9 +1399,9 @@ public sealed class MainShellViewModel : ObservableObject
             : TaskQueuePage.CoreInitializationMessage;
     }
 
-    private static string BuildCoreWarmupFailureMessage(string initCode, string initMessage)
+    private string BuildCoreWarmupFailureMessage(string initCode, string initMessage)
     {
-        return BuildBilingualMessage(
+        return BuildLocalizedMessage(
             $"Core 初始化失败: {initCode} {initMessage}",
             $"Core initialize failed: {initCode} {initMessage}");
     }
@@ -1429,14 +1426,6 @@ public sealed class MainShellViewModel : ObservableObject
             }
 
             var result = await ConnectWithCurrentSettingsAsync(cancellationToken);
-            if (!result.Success)
-            {
-                result = UiOperationResult.Fail(
-                    result.Error?.Code ?? UiErrorCode.UiOperationFailed,
-                    BuildConnectionFailureMessage(result),
-                    result.Error?.Details);
-            }
-
             CurrentSessionState = _runtime.SessionService.CurrentState;
             if (!await ApplyResultAsync(result, "App.Shell.Connect", cancellationToken))
             {
@@ -1501,7 +1490,7 @@ public sealed class MainShellViewModel : ObservableObject
             if (CurrentSessionState != SessionState.Connected)
             {
                 var stateMessage = startConnectResult is { Success: false } failedConnect
-                    ? BuildConnectionFailureMessage(failedConnect)
+                    ? failedConnect.Message
                     : BuildLinkStartStateNotAllowedMessage(CurrentSessionState);
 
                 await ApplyResultAsync(
@@ -1549,6 +1538,7 @@ public sealed class MainShellViewModel : ObservableObject
         _runtime.LogService.Debug(
             $"Connect candidates prepared: count={candidates.Count}, config={_connectionGameSharedState.ConnectConfig}, adb={adbPath ?? "<null>"}");
         UiOperationResult? lastFailure = null;
+        var candidateFailures = new List<ConnectionAttemptFailure>();
 
         foreach (var candidate in candidates)
         {
@@ -1569,35 +1559,29 @@ public sealed class MainShellViewModel : ObservableObject
             _runtime.LogService.Debug(
                 $"Connect candidate failed: {candidate}, code={result.Error?.Code}, message={result.Message}");
             lastFailure = result;
+            candidateFailures.Add(new ConnectionAttemptFailure(candidate, result));
         }
 
-        return lastFailure ?? UiOperationResult.Fail(UiErrorCode.ConnectFailed, "Connection failed.");
+        return BuildDiagnosticConnectFailureResult(
+            lastFailure ?? UiOperationResult.Fail(UiErrorCode.ConnectFailed, "Connection failed."),
+            candidateFailures);
     }
 
-    private string BuildConnectionFailureMessage(UiOperationResult connectResult)
+    private UiOperationResult BuildDiagnosticConnectFailureResult(
+        UiOperationResult connectResult,
+        IReadOnlyList<ConnectionAttemptFailure>? candidateFailures = null,
+        AdbCommandFailureInfo? adbCommandFailure = null)
     {
-        var segments = new List<string>
-        {
-            BuildBilingualMessage(
-                "连接失败。请“检查连接设置” -> “尝试重启模拟器与 ADB” -> “重启电脑”。",
-                "Connection failed. Check connection settings -> try restarting the emulator and ADB -> reboot the computer."),
-        };
-
-        var settingsHint = _connectionGameSharedState.BuildConnectionSettingsHintMessage();
-        if (!string.IsNullOrWhiteSpace(settingsHint))
-        {
-            segments.Add(settingsHint);
-        }
-
-        if (!string.IsNullOrWhiteSpace(connectResult.Message)
-            && !string.Equals(connectResult.Message, "Connection failed.", StringComparison.OrdinalIgnoreCase))
-        {
-            segments.Add(BuildBilingualMessage(
-                $"连接回调：{connectResult.Message}",
-                $"Connection callback: {connectResult.Message}"));
-        }
-
-        return string.Join(Environment.NewLine, segments);
+        var diagnostic = ConnectionFailureDiagnosticBuilder.Build(
+            connectResult,
+            _connectionGameSharedState,
+            candidateFailures,
+            adbCommandFailure,
+            CurrentShellLanguage);
+        return UiOperationResult.Fail(
+            UiErrorCode.ConnectFailed,
+            diagnostic.BuildDialogMessage(),
+            diagnostic.Details);
     }
 
     public async Task StopAsync(CancellationToken cancellationToken = default, bool userInitiated = true)
@@ -2047,23 +2031,23 @@ public sealed class MainShellViewModel : ObservableObject
         });
     }
 
-    private static string BuildLinkStartStateNotAllowedMessage(SessionState state)
+    private string BuildLinkStartStateNotAllowedMessage(SessionState state)
     {
         var zh = $"会话状态 `{state}` 不允许 Start/LinkStart。请先前往“设置 > 连接设置”完成连接。";
         var en = $"Session state `{state}` does not allow Start/LinkStart. Go to Settings > Connection and connect first.";
-        return BuildBilingualMessage(zh, en);
+        return BuildLocalizedMessage(zh, en);
     }
 
-    private static string BuildStopStateNotAllowedMessage(SessionState state)
+    private string BuildStopStateNotAllowedMessage(SessionState state)
     {
         var zh = $"会话状态 `{state}` 不允许 Stop。";
         var en = $"Session state `{state}` does not allow Stop.";
-        return BuildBilingualMessage(zh, en);
+        return BuildLocalizedMessage(zh, en);
     }
 
-    private static string BuildBilingualMessage(string zh, string en)
+    private string BuildLocalizedMessage(string zh, string en)
     {
-        return $"{zh}{Environment.NewLine}{en}";
+        return DialogTextCatalog.Select(CurrentShellLanguage, zh, en);
     }
 
     private void ApplyDeveloperModeFromConfig()

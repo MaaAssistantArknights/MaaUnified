@@ -291,8 +291,7 @@
     <value>请选择要更新的作业。</value>
   </data>
   <data name="Copilot.Error.SessionStateNotAllowed" xml:space="preserve">
-    <value>会话状态 `{0}` 不允许{1}。
-Session state `{0}` does not allow {2}.</value>
+    <value>会话状态 `{0}` 不允许{1}。</value>
   </data>
   <data name="Copilot.Error.SortPersistFail" xml:space="preserve">
     <value>排序失败：列表保存失败。</value>

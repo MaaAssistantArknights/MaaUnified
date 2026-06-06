@@ -212,6 +212,19 @@ public static class DialogTextCatalog
             return result;
         }
 
+        if (IsSpecificConnectFailure(result))
+        {
+            var message = ExtractSpecificConnectFailureMessage(result.Message);
+            return result with
+            {
+                Message = message,
+                Error = result.Error with
+                {
+                    Message = message,
+                },
+            };
+        }
+
         var localizedMessage = BuildErrorMessage(language, result);
         var details = BuildLocalizedDetails(language, result, localizedMessage);
         return result with
@@ -228,6 +241,12 @@ public static class DialogTextCatalog
     public static string BuildErrorSuggestion(string? language, UiOperationResult result)
     {
         var rawMessage = result.Error?.Message ?? result.Message;
+        if (IsSpecificConnectFailure(result)
+            && TryExtractSpecificConnectFailureSuggestion(rawMessage, out var specificSuggestion))
+        {
+            return specificSuggestion;
+        }
+
         return result.Error?.Code switch
         {
             UiErrorCode.ConfigurationProfileInvalidName
@@ -341,4 +360,70 @@ public static class DialogTextCatalog
 
         return $"{details}{Environment.NewLine}{originalMessage}";
     }
+
+    private static bool IsSpecificConnectFailure(UiOperationResult result)
+    {
+        if (!string.Equals(result.Error?.Code, UiErrorCode.ConnectFailed, StringComparison.Ordinal)
+            || string.IsNullOrWhiteSpace(result.Message))
+        {
+            return false;
+        }
+
+        var message = result.Message.Trim();
+        return message.Contains("ADB 启动失败", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("ADB failed to start", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("ADB 命令执行失败", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("ADB command failed", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("ADB 未连接到目标设备", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("target device", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("ADB 路径", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("ADB path", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("内置 ADB", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("Bundled ADB", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("连接地址", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("connection address", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("模拟器路径", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("emulator path", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("Windows 路径", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("Windows path", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("连接模拟器超时", StringComparison.Ordinal)
+            || message.Contains("timed out", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("触控模式不可用", StringComparison.Ordinal)
+            || message.Contains("touch mode", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("连接核心", StringComparison.Ordinal)
+            || message.Contains("connection core", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string ExtractSpecificConnectFailureMessage(string message)
+    {
+        var lines = SplitNonEmptyLines(message);
+        return lines.Count == 0 ? message : lines[0];
+    }
+
+    private static bool TryExtractSpecificConnectFailureSuggestion(string message, out string suggestion)
+    {
+        var lines = SplitNonEmptyLines(message);
+        if (lines.Count <= 1)
+        {
+            suggestion = string.Empty;
+            return false;
+        }
+
+        var remaining = lines.Skip(1).ToList();
+        if (remaining.Count > 1
+            && remaining[0].StartsWith("Connection failed:", StringComparison.OrdinalIgnoreCase)
+            && lines[0].StartsWith("连接失败：", StringComparison.Ordinal))
+        {
+            remaining.RemoveAt(0);
+        }
+
+        suggestion = string.Join(Environment.NewLine, remaining);
+        return !string.IsNullOrWhiteSpace(suggestion);
+    }
+
+    private static List<string> SplitNonEmptyLines(string message)
+        => message
+            .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(static line => !string.IsNullOrWhiteSpace(line))
+            .ToList();
 }

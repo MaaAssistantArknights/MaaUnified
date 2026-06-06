@@ -1063,7 +1063,12 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
         string actionEn)
     {
         return string.Format(
-            T("Copilot.Error.SessionStateNotAllowed", "会话状态 `{0}` 不允许{1}。\nSession state `{0}` does not allow {2}."),
+            T(
+                "Copilot.Error.SessionStateNotAllowed",
+                DialogTextCatalog.Select(
+                    _currentLanguage,
+                    "会话状态 `{0}` 不允许{1}。",
+                    "Session state `{0}` does not allow {2}.")),
             state,
             actionZh,
             actionEn);

@@ -194,15 +194,13 @@ public sealed class TaskModuleBFeatureTests
         await vm.StartAsync();
 
         Assert.True(vm.IsRunning);
-        Assert.True(vm.HasStartPrecheckWarningMessage);
-        Assert.Contains("Disabled Mall credit fight", vm.StartPrecheckWarningMessage, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Current/Last", vm.StartPrecheckWarningMessage, StringComparison.OrdinalIgnoreCase);
         Assert.False(profile.TaskQueue[1].Params["credit_fight"]?.GetValue<bool>());
         Assert.Equal(2, fixture.Bridge.AppendedTasks.Count);
 
         var eventLog = await File.ReadAllTextAsync(Path.Combine(fixture.Root, "debug", "avalonia-ui-events.log"));
         Assert.Contains("TaskQueue.Start.PrecheckWarning", eventLog, StringComparison.Ordinal);
         Assert.Contains("Disabled Mall credit fight", eventLog, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Current/Last", eventLog, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

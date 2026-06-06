@@ -39,7 +39,6 @@
                          Classes="app-lead long-wrap"
                          Text="" />
               <Border x:Name="SuggestionPanel"
-                      Classes="error-dialog-suggestion-panel"
                       IsVisible="False">
                 <TextBlock x:Name="SuggestionText"
                            Classes="app-body long-wrap"

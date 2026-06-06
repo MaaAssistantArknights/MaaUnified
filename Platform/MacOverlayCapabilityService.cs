@@ -10,19 +10,28 @@ public sealed class MacOverlayCapabilityService : IOverlayCapabilityService
     private const int MaxTargets = 80;
     private const string PreviewTargetId = "preview";
     private readonly IMacWindowEnumerator _windowEnumerator;
+    private readonly IMacOverlayHostConfigurator _hostConfigurator;
     private string _selectedTargetId = PreviewTargetId;
     private nint _selectedTarget;
     private nint _hostWindow;
     private bool _visible;
 
     public MacOverlayCapabilityService()
-        : this(new NativeMacWindowEnumerator())
+        : this(new NativeMacWindowEnumerator(), new NativeMacOverlayHostConfigurator())
     {
     }
 
     internal MacOverlayCapabilityService(IMacWindowEnumerator windowEnumerator)
+        : this(windowEnumerator, NoOpMacOverlayHostConfigurator.Instance)
+    {
+    }
+
+    internal MacOverlayCapabilityService(
+        IMacWindowEnumerator windowEnumerator,
+        IMacOverlayHostConfigurator hostConfigurator)
     {
         _windowEnumerator = windowEnumerator;
+        _hostConfigurator = hostConfigurator;
     }
 
     public PlatformCapabilityStatus Capability => new(
@@ -74,9 +83,18 @@ public sealed class MacOverlayCapabilityService : IOverlayCapabilityService
         }
 
         _hostWindow = hostWindowHandle;
+        if (!_hostConfigurator.Configure(_hostWindow, clickThrough, opacity, out var configureMessage))
+        {
+            return Task.FromResult(PlatformOperation.Failed(
+                Capability.Provider,
+                configureMessage,
+                PlatformErrorCodes.OverlayAttachFailed,
+                "overlay.bindHost"));
+        }
+
         return Task.FromResult(PlatformOperation.NativeSuccess(
             Capability.Provider,
-            "macOS overlay host window bound.",
+            configureMessage,
             "overlay.bindHost"));
     }
 
@@ -217,6 +235,46 @@ public sealed class MacOverlayCapabilityService : IOverlayCapabilityService
     internal interface IMacWindowEnumerator
     {
         IReadOnlyList<OverlayTarget> EnumerateTargets(int currentProcessId);
+    }
+
+    internal interface IMacOverlayHostConfigurator
+    {
+        bool Configure(nint hostWindowHandle, bool clickThrough, double opacity, out string message);
+    }
+
+    private sealed class NoOpMacOverlayHostConfigurator : IMacOverlayHostConfigurator
+    {
+        public static readonly NoOpMacOverlayHostConfigurator Instance = new();
+
+        private NoOpMacOverlayHostConfigurator()
+        {
+        }
+
+        public bool Configure(nint hostWindowHandle, bool clickThrough, double opacity, out string message)
+        {
+            message = "macOS overlay host window bound.";
+            return true;
+        }
+    }
+
+    private sealed class NativeMacOverlayHostConfigurator : IMacOverlayHostConfigurator
+    {
+        public bool Configure(nint hostWindowHandle, bool clickThrough, double opacity, out string message)
+        {
+            try
+            {
+                MacAppKitInterop.SetIgnoresMouseEvents(hostWindowHandle, clickThrough);
+                message = clickThrough
+                    ? "macOS overlay host window bound with click-through enabled."
+                    : "macOS overlay host window bound.";
+                return true;
+            }
+            catch (Exception ex)
+            {
+                message = $"Failed to configure macOS overlay click-through: {ex.Message}";
+                return false;
+            }
+        }
     }
 
     private static IReadOnlyList<OverlayTarget> EnsurePreviewTarget(IReadOnlyList<OverlayTarget> targets)
@@ -581,6 +639,31 @@ public sealed class MacOverlayCapabilityService : IOverlayCapabilityService
 
         [DllImport(CoreGraphicsLibrary)]
         public static extern nint CGWindowListCopyWindowInfo(uint option, uint relativeToWindow);
+    }
+
+    private static class MacAppKitInterop
+    {
+        private const string ObjectiveCLibrary = "/usr/lib/libobjc.A.dylib";
+        private static readonly nint SetIgnoresMouseEventsSelector = sel_registerName("setIgnoresMouseEvents:");
+
+        public static void SetIgnoresMouseEvents(nint nsWindow, bool ignoresMouseEvents)
+        {
+            if (nsWindow == nint.Zero)
+            {
+                return;
+            }
+
+            objc_msgSend(nsWindow, SetIgnoresMouseEventsSelector, ignoresMouseEvents);
+        }
+
+        [DllImport(ObjectiveCLibrary, EntryPoint = "sel_registerName")]
+        private static extern nint sel_registerName(string selectorName);
+
+        [DllImport(ObjectiveCLibrary, EntryPoint = "objc_msgSend")]
+        private static extern void objc_msgSend(
+            nint receiver,
+            nint selector,
+            [MarshalAs(UnmanagedType.I1)] bool value);
     }
 
     private static class MacCoreFoundationInterop

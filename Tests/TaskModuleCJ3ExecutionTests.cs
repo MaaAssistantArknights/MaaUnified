@@ -93,8 +93,6 @@ public sealed class TaskModuleCJ3ExecutionTests
 
         Assert.False(vm.IsRunning);
         Assert.Contains("TaskFieldTypeInvalid", vm.LastErrorMessage, StringComparison.OrdinalIgnoreCase);
-        Assert.True(vm.HasStartPrecheckWarningMessage);
-        Assert.Contains("TaskFieldTypeInvalid", vm.StartPrecheckWarningMessage, StringComparison.OrdinalIgnoreCase);
         Assert.NotNull(vm.SelectedTask);
         Assert.Empty(fixture.Bridge.AppendedTasks);
     }

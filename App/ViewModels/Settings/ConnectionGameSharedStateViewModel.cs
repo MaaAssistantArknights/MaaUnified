@@ -688,7 +688,7 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
     {
         if (string.IsNullOrWhiteSpace(ConnectAddress) && !AutoDetect && !AlwaysAutoDetect)
         {
-            return BuildLocalizedOrBilingualMessage(
+            return BuildLocalizedMessage(
                 "Settings.Connect.Hint.ConnectionAddressEmpty",
                 "连接地址为空，请填写“IP:端口”后再连接。",
                 "Connection address is empty. Enter \"IP:port\" and try again.");
@@ -718,7 +718,7 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
                 return null;
             }
 
-            return BuildLocalizedOrBilingualMessage(
+            return BuildLocalizedMessage(
                 "Settings.Connect.Hint.MacBundledAdbNotFound",
                 "内置 ADB 不存在：{0}",
                 "Bundled ADB was not found: {0}",
@@ -740,7 +740,7 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
         {
             if (string.IsNullOrEmpty(TryFindAdbUnderDirectory(normalized)))
             {
-                return BuildLocalizedOrBilingualMessage(
+                return BuildLocalizedMessage(
                     "Settings.Connect.Hint.AdbPathDirectoryMissingExecutable",
                     "ADB 路径是目录，但目录内未找到 adb 可执行文件：{0}",
                     "ADB path is a directory, but adb executable was not found in it: {0}",
@@ -752,7 +752,7 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
 
         if (IsWindowsDrivePathMissingSlash(normalized))
         {
-            return BuildLocalizedOrBilingualMessage(
+            return BuildLocalizedMessage(
                 "Settings.Connect.Hint.AdbPathMissingDriveSlash",
                 "ADB 路径格式可能不正确（盘符后缺少斜杠）：{0}",
                 "ADB path format looks invalid (missing slash after drive letter): {0}",
@@ -761,7 +761,7 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
 
         if (!OperatingSystem.IsWindows() && LooksLikeWindowsPath(normalized))
         {
-            return BuildLocalizedOrBilingualMessage(
+            return BuildLocalizedMessage(
                 "Settings.Connect.Hint.AdbPathWindowsPathOnNonWindows",
                 "当前系统是 {0}，但 ADB 路径看起来是 Windows 路径：{1}",
                 "Current system is {0}, but ADB path looks like a Windows path: {1}",
@@ -769,7 +769,7 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
                 normalized);
         }
 
-        return BuildLocalizedOrBilingualMessage(
+        return BuildLocalizedMessage(
             "Settings.Connect.Hint.AdbPathNotFound",
             "ADB 路径不存在：{0}",
             "ADB path does not exist: {0}",
@@ -908,7 +908,7 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
 
         if (!Directory.Exists(normalized))
         {
-            errorMessage = BuildLocalizedOrBilingualMessage(
+            errorMessage = BuildLocalizedMessage(
                 "Settings.Connect.Hint.MuMuPathNotFound",
                 "MuMu 模拟器路径不存在：{0}",
                 "MuMu emulator path does not exist: {0}",
@@ -923,7 +923,7 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
             return true;
         }
 
-        errorMessage = BuildLocalizedOrBilingualMessage(
+        errorMessage = BuildLocalizedMessage(
             "Settings.Connect.Hint.MuMuExternalRendererMissing",
             "MuMu 模拟器路径缺少 external_renderer_ipc.dll：{0}",
             "MuMu emulator path is missing external_renderer_ipc.dll: {0}",
@@ -942,7 +942,7 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
 
         if (!Directory.Exists(normalized))
         {
-            errorMessage = BuildLocalizedOrBilingualMessage(
+            errorMessage = BuildLocalizedMessage(
                 "Settings.Connect.Hint.LdPlayerPathNotFound",
                 "LDPlayer 模拟器路径不存在：{0}",
                 "LDPlayer emulator path does not exist: {0}",
@@ -957,7 +957,7 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
             return true;
         }
 
-        errorMessage = BuildLocalizedOrBilingualMessage(
+        errorMessage = BuildLocalizedMessage(
             "Settings.Connect.Hint.LdPlayerOpenGlMissing",
             "LDPlayer 模拟器路径缺少 ldopengl64.dll：{0}",
             "LDPlayer emulator path is missing ldopengl64.dll: {0}",
@@ -1260,10 +1260,10 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
             ?? BuildFallbackScreencapCostText(_language, "---", "---", "---", "--");
     }
 
-    private string BuildLocalizedOrBilingualMessage(string key, string zhFormat, string enFormat, params object[] args)
+    private string BuildLocalizedMessage(string key, string zhFormat, string enFormat, params object[] args)
     {
         return TryFormatRootText(key, args)
-            ?? BuildBilingualMessage(
+            ?? BuildLocalizedMessage(
                 string.Format(CultureInfo.CurrentCulture, zhFormat, args),
                 string.Format(CultureInfo.CurrentCulture, enFormat, args));
     }
@@ -1320,9 +1320,9 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
         };
     }
 
-    private static string BuildBilingualMessage(string zh, string en)
+    private string BuildLocalizedMessage(string zh, string en)
     {
-        return $"{zh}{Environment.NewLine}{en}";
+        return DialogTextCatalog.Select(_language, zh, en);
     }
 
     private static IReadOnlyList<string> GetAdbFileNameCandidates()

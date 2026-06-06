@@ -46,6 +46,34 @@ public sealed class MacOverlayCapabilityServiceTests
     }
 
     [Fact]
+    public async Task BindHostWindowAsync_ShouldApplyClickThroughConfiguration()
+    {
+        var configurator = new RecordingMacOverlayHostConfigurator();
+        var service = new MacOverlayCapabilityService(new FakeMacWindowEnumerator([]), configurator);
+
+        var result = await service.BindHostWindowAsync(0x100, clickThrough: true, opacity: 0.75);
+
+        Assert.True(result.Success);
+        Assert.Equal((nint)0x100, configurator.HostWindowHandle);
+        Assert.True(configurator.ClickThrough);
+        Assert.Equal(0.75, configurator.Opacity, precision: 6);
+    }
+
+    [Fact]
+    public async Task BindHostWindowAsync_WhenClickThroughConfigurationFails_ShouldFail()
+    {
+        var service = new MacOverlayCapabilityService(
+            new FakeMacWindowEnumerator([]),
+            new FailingMacOverlayHostConfigurator());
+
+        var result = await service.BindHostWindowAsync(0x100, clickThrough: true, opacity: 0.75);
+
+        Assert.False(result.Success);
+        Assert.Equal(PlatformErrorCodes.OverlayAttachFailed, result.ErrorCode);
+        Assert.Contains("click-through failed", result.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task SelectTargetAsync_WhenMacTargetIsVisible_ShouldEmitPreviewFallbackState()
     {
         var service = new MacOverlayCapabilityService(new FakeMacWindowEnumerator([]));
@@ -111,5 +139,32 @@ public sealed class MacOverlayCapabilityServiceTests
     {
         public IReadOnlyList<OverlayTarget> EnumerateTargets(int currentProcessId)
             => throw new InvalidOperationException("CoreGraphics unavailable");
+    }
+
+    private sealed class RecordingMacOverlayHostConfigurator : MacOverlayCapabilityService.IMacOverlayHostConfigurator
+    {
+        public nint HostWindowHandle { get; private set; }
+
+        public bool ClickThrough { get; private set; }
+
+        public double Opacity { get; private set; }
+
+        public bool Configure(nint hostWindowHandle, bool clickThrough, double opacity, out string message)
+        {
+            HostWindowHandle = hostWindowHandle;
+            ClickThrough = clickThrough;
+            Opacity = opacity;
+            message = "configured";
+            return true;
+        }
+    }
+
+    private sealed class FailingMacOverlayHostConfigurator : MacOverlayCapabilityService.IMacOverlayHostConfigurator
+    {
+        public bool Configure(nint hostWindowHandle, bool clickThrough, double opacity, out string message)
+        {
+            message = "click-through failed";
+            return false;
+        }
     }
 }
