@@ -47,6 +47,14 @@ public sealed class ConnectFeatureService : IConnectFeatureService
             return CoreResult<bool>.Fail(new CoreError(CoreErrorCode.InvalidRequest, "Address cannot be empty."));
         }
 
+        if (MacBundledAdbPolicy.IsBundledAdbPath(adbPath)
+            && !MacBundledAdbPolicy.IsCurrentTermsAccepted(_configService.CurrentConfig))
+        {
+            return CoreResult<bool>.Fail(new CoreError(
+                CoreErrorCode.InvalidRequest,
+                "macOS bundled ADB requires Android SDK Platform-Tools terms acceptance before use."));
+        }
+
         var apply = await ApplyResolvedInstanceOptionsAsync(instanceOptions, cancellationToken);
         if (!apply.Success)
         {
@@ -809,6 +817,7 @@ public sealed class TaskQueueFeatureService : ITaskQueueFeatureService
             ConnectConfig = dto.ConnectConfig,
             ConnectAddress = dto.ConnectAddress,
             AdbPath = dto.AdbPath,
+            MacUseBundledAdb = dto.MacUseBundledAdb,
             TouchMode = dto.TouchMode,
             AutoDetectConnection = dto.AutoDetectConnection,
             AttachWindowScreencapMethod = dto.AttachWindowScreencapMethod,

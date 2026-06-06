@@ -163,6 +163,31 @@ public sealed class MainWindowSizingTests
         Assert.Equal(expected, actual, precision: 6);
     }
 
+    [Fact]
+    public void OverlayPreviewBounds_ShouldKeepLogicalWidthOnHiDpiScreens()
+    {
+        var workingArea = new PixelRect(0, 0, 3024, 1964);
+        var margin = OverlayHostWindow.ResolvePreviewMarginPixels(2.0);
+
+        var size = OverlayHostWindow.ResolvePreviewPixelSize(workingArea, 2.0, margin);
+
+        Assert.Equal(48, margin);
+        Assert.Equal(960, size.Width);
+        Assert.Equal(520, size.Height);
+    }
+
+    [Fact]
+    public void OverlayPreviewPosition_WhenAnchored_ShouldUseTargetTopLeft()
+    {
+        var workingArea = new PixelRect(0, 0, 3024, 1964);
+        var target = new PixelRect(100, 200, 1280, 720);
+        var size = new PixelSize(960, 520);
+
+        var position = OverlayHostWindow.ResolvePreviewPosition(workingArea, size, target, marginPixels: 48);
+
+        Assert.Equal(new PixelPoint(148, 248), position);
+    }
+
     [Theory]
     [InlineData(WindowResizeReason.User, true)]
     [InlineData(WindowResizeReason.Application, false)]

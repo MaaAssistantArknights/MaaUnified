@@ -31,6 +31,14 @@
                        Classes="app-lead long-wrap"
                        IsVisible="False"
                        Text="" />
+            <ItemsControl x:Name="LinksItemsControl"
+                          IsVisible="False">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <StackPanel Spacing="6" />
+                </ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+            </ItemsControl>
             <Border x:Name="EmphasisPanel"
                     Classes="app-highlight app-warning-highlight"
                     IsVisible="False">

@@ -10,13 +10,13 @@
       <Setter Property="Background">
         <Setter.Value>
           <SolidColorBrush Color="{DynamicResource MAA.Color.Dialog.CardSurface}"
-                           Opacity="0.9" />
+                           Opacity="0.68" />
         </Setter.Value>
       </Setter>
       <Setter Property="BorderBrush">
         <Setter.Value>
           <SolidColorBrush Color="{DynamicResource MAA.Color.Dialog.CardBorder}"
-                           Opacity="0.86" />
+                           Opacity="0.58" />
         </Setter.Value>
       </Setter>
       <Setter Property="BorderThickness" Value="1" />
@@ -75,7 +75,7 @@
             HorizontalAlignment="Left"
             VerticalAlignment="Top"
             Margin="8"
-            MaxWidth="250">
+            MaxWidth="440">
       <ScrollViewer x:Name="OverlayScroller"
                     HorizontalScrollBarVisibility="Disabled"
                     VerticalScrollBarVisibility="Hidden">

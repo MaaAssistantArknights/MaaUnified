@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Diagnostics;
 using System.Threading;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
@@ -18,6 +20,7 @@ public partial class WarningConfirmDialogView : Window, IDialogChromeAware
     private string _emphasisSnapshot = string.Empty;
     private string _detailSnapshot = string.Empty;
     private string _detailsButtonSnapshot = string.Empty;
+    private IReadOnlyList<DialogLinkItem> _linksSnapshot = [];
     private int _countdownSeconds;
     private int _remainingCountdownSeconds;
 
@@ -35,7 +38,8 @@ public partial class WarningConfirmDialogView : Window, IDialogChromeAware
         string confirmText = "",
         string cancelText = "",
         string? language = null,
-        int countdownSeconds = 0)
+        int countdownSeconds = 0,
+        IReadOnlyList<DialogLinkItem>? links = null)
     {
         StopCountdown();
         var effectiveLanguage = language ?? "en-us";
@@ -51,11 +55,13 @@ public partial class WarningConfirmDialogView : Window, IDialogChromeAware
         _emphasisSnapshot = string.Empty;
         _detailSnapshot = _messageSnapshot;
         _detailsButtonSnapshot = string.Empty;
+        _linksSnapshot = links ?? [];
         _countdownSeconds = Math.Max(0, countdownSeconds);
         _remainingCountdownSeconds = _countdownSeconds;
         Title = _titleSnapshot;
         DialogShell.Title = _titleSnapshot;
         ApplyContent(_leadSnapshot, _emphasisSnapshot, _detailSnapshot);
+        ApplyLinks(_linksSnapshot);
         ApplyDetailsButton(_detailsButtonSnapshot);
         CancelButton.Content = _cancelSnapshot;
         UpdateConfirmButtonText(_remainingCountdownSeconds);
@@ -173,6 +179,7 @@ public partial class WarningConfirmDialogView : Window, IDialogChromeAware
         Title = chromeTitle;
         DialogShell.Title = chrome.GetNamedTextOrDefault(DialogTextCatalog.ChromeKeys.SectionTitle, chromeTitle);
         ApplyContent(_leadSnapshot, _emphasisSnapshot, _detailSnapshot);
+        ApplyLinks(_linksSnapshot);
         ApplyDetailsButton(_detailsButtonSnapshot);
         _confirmSnapshot = chrome.ConfirmText ?? _confirmSnapshot;
         _cancelSnapshot = chrome.CancelText ?? _cancelSnapshot;
@@ -190,6 +197,50 @@ public partial class WarningConfirmDialogView : Window, IDialogChromeAware
 
         DetailTextBlock.Text = detail;
         DetailTextBlock.IsVisible = !string.IsNullOrWhiteSpace(detail);
+    }
+
+    private void ApplyLinks(IReadOnlyList<DialogLinkItem> links)
+    {
+        LinksItemsControl.Items.Clear();
+        foreach (var link in links)
+        {
+            if (string.IsNullOrWhiteSpace(link.Title) || string.IsNullOrWhiteSpace(link.Url))
+            {
+                continue;
+            }
+
+            var button = new Button
+            {
+                Classes = { "app-button", "app-secondary" },
+                Content = link.Title,
+                HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left,
+                Tag = link.Url,
+            };
+            button.Click += OnLinkClick;
+            LinksItemsControl.Items.Add(button);
+        }
+
+        LinksItemsControl.IsVisible = LinksItemsControl.Items.Count > 0;
+    }
+
+    private void OnLinkClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: string url } || string.IsNullOrWhiteSpace(url))
+        {
+            return;
+        }
+
+        try
+        {
+            Process.Start(new ProcessStartInfo(url)
+            {
+                UseShellExecute = true,
+            });
+        }
+        catch
+        {
+            // Link opening is best-effort; dialog confirmation remains available.
+        }
     }
 
     private void ApplyDetailsButton(string text)

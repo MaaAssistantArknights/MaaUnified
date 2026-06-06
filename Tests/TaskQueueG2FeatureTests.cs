@@ -10,6 +10,7 @@ using MAAUnified.Application.Models;
 using MAAUnified.Application.Orchestration;
 using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Features;
+using MAAUnified.Application.Services.TaskParams;
 using MAAUnified.CoreBridge;
 using MAAUnified.Platform;
 using LegacyConfigurationKeys = MAAUnified.Compat.Constants.ConfigurationKeys;
@@ -40,6 +41,54 @@ public sealed class TaskQueueG2FeatureTests
         var appended = Assert.Single(fixture.Bridge.AppendedTasks);
         var appendedParams = Assert.IsType<JsonObject>(JsonNode.Parse(appended.ParamsJson));
         Assert.Equal("flush-before-start", appendedParams["account_name"]?.GetValue<string>());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task StartUpModule_SaveAsync_ShouldPersistMacUseBundledAdbToProfileAndReload(bool useBundledAdb)
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup-a")).Success);
+
+        Assert.True(fixture.Runtime.ConfigurationService.TryGetCurrentProfile(out var profile));
+        profile.Values[MacBundledAdbPolicy.ProfileUseBundledAdbKey] = JsonValue.Create(!useBundledAdb);
+
+        var shared = new ConnectionGameSharedStateViewModel
+        {
+            ConnectAddress = "127.0.0.1:5555",
+            ConnectConfig = "General",
+            MacUseBundledAdb = !useBundledAdb,
+        };
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, shared);
+        await vm.InitializeAsync();
+        vm.SelectedTask = Assert.Single(vm.Tasks);
+        await vm.WaitForPendingBindingAsync();
+
+        vm.StartUpModule.MacUseBundledAdb = useBundledAdb;
+
+        Assert.True(await vm.StartUpModule.SaveAsync());
+        Assert.Equal(useBundledAdb, profile.Values[MacBundledAdbPolicy.ProfileUseBundledAdbKey]?.GetValue<bool>());
+
+        var queueResult = await fixture.TaskQueue.GetCurrentTaskQueueAsync();
+        Assert.True(queueResult.Success);
+        var task = Assert.Single(queueResult.Value!);
+        var (dto, issues) = TaskParamCompiler.ReadStartUp(
+            task,
+            profile,
+            fixture.Runtime.ConfigurationService.CurrentConfig,
+            strict: true);
+        Assert.Empty(issues);
+        Assert.Equal(useBundledAdb, dto.MacUseBundledAdb);
+
+        var reloadedShared = new ConnectionGameSharedStateViewModel();
+        ConnectionGameProfileSync.ReadFromProfile(profile, reloadedShared, tolerateMissing: false);
+        var reloadedVm = new TaskQueuePageViewModel(fixture.Runtime, reloadedShared);
+        await reloadedVm.InitializeAsync();
+        reloadedVm.SelectedTask = Assert.Single(reloadedVm.Tasks);
+        await reloadedVm.WaitForPendingBindingAsync();
+
+        Assert.Equal(useBundledAdb, reloadedVm.StartUpModule.MacUseBundledAdb);
     }
 
     [Fact]
@@ -157,6 +206,8 @@ public sealed class TaskQueueG2FeatureTests
         var shared = new ConnectionGameSharedStateViewModel
         {
             ConnectAddress = "127.0.0.1:5555",
+            ConnectConfig = "General",
+            MacUseBundledAdb = false,
         };
         var vm = new TaskQueuePageViewModel(fixture.Runtime, shared);
         await vm.InitializeAsync();
@@ -166,7 +217,9 @@ public sealed class TaskQueueG2FeatureTests
 
         Assert.True(vm.IsRunning);
         Assert.False(vm.CanEdit);
-        Assert.False(vm.CanToggleRun);
+        Assert.True(vm.CanToggleRun);
+        Assert.True(vm.IsOwnRunActive);
+        Assert.Equal(vm.RootTexts.GetOrDefault("TaskQueue.Root.Stop", "Stop"), vm.RunButtonText);
 
         await startTask;
 
@@ -195,7 +248,29 @@ public sealed class TaskQueueG2FeatureTests
         Assert.True(vm.CanEdit);
         Assert.True(vm.CanToggleRun);
         Assert.Equal(0, fixture.Bridge.StartCallCount);
-        Assert.Contains("Connection failed", vm.LastErrorMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("连接失败", vm.LastErrorMessage, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("zh-cn", "连接失败，正在尝试通过 ADB 重新连接。", "Connection failed")]
+    [InlineData("en-us", "Connection failed. Trying to reconnect by ADB.", "连接失败")]
+    public async Task ConnectionRecoveryAttemptLog_ShouldUseCurrentLanguageOnly(
+        string language,
+        string expected,
+        string unexpected)
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        vm.SetLanguage(language);
+
+        typeof(TaskQueuePageViewModel)
+            .GetMethod("AppendConnectionRecoveryAttemptLog", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(vm, ["正在尝试通过 ADB 重新连接。", "Trying to reconnect by ADB."]);
+
+        var content = Assert.Single(vm.LogCards).PrimaryContent;
+        Assert.Equal(expected, content);
+        Assert.DoesNotContain(unexpected, content, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -809,6 +884,10 @@ public sealed class TaskQueueG2FeatureTests
                 root);
             await config.LoadOrBootstrapAsync();
             config.CurrentConfig.GlobalValues["GUI.Localization"] = language;
+            if (config.TryGetCurrentProfile(out var profile))
+            {
+                profile.Values[MacBundledAdbPolicy.ProfileUseBundledAdbKey] = JsonValue.Create(false);
+            }
 
             var bridge = new CapturingBridge();
             var session = new UnifiedSessionService(bridge, config, log, new SessionStateMachine());

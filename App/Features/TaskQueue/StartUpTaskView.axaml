@@ -104,7 +104,15 @@
       </controls:AdaptiveSpacingStackPanel>
 
     <controls:AdaptiveSpacingStackPanel Classes="startup-section-content">
-        <Border Classes="app-surface app-card">
+        <Border Classes="app-surface app-card"
+                IsVisible="{Binding IsMacBundledAdbSupported}">
+          <CheckBox Classes="app-checkbox"
+                    Content="{Binding MacUseBundledAdbText}"
+                    IsChecked="{Binding MacUseBundledAdb}" />
+        </Border>
+
+        <Border Classes="app-surface app-card"
+                IsVisible="{Binding ShowManualAdbPathControls}">
           <controls:SettingsInlineRow Classes="startup-card-content"
                                       FieldWidth="{DynamicResource MAA.Size.Settings.FieldInputWidth}"
                                       controls:SettingsLabelWidthCoordinator.GroupKey="TaskQueue.Fields">

@@ -12,17 +12,18 @@ namespace MAAUnified.App.Views;
 public partial class OverlayHostWindow : Window
 {
     private const double OverlayPanelMargin = 8d;
-    private const double OverlayPanelMaxWidth = 250d;
+    private const double OverlayPanelMaxWidth = 440d;
     private const double NativeAttachedLogicalWidth = OverlayPanelMaxWidth + (OverlayPanelMargin * 2d);
-    private const double NativeAttachedLogicalHeight = 240d;
-    private const int PreviewWindowWidth = 320;
-    private const int PreviewWindowHeight = 240;
-    private const int PreviewWindowMargin = 24;
+    private const double NativeAttachedLogicalHeight = 260d;
+    private const double PreviewWindowLogicalWidth = 480d;
+    private const double PreviewWindowLogicalHeight = 260d;
+    private const double PreviewWindowLogicalMargin = 24d;
     private OverlayPresentationViewModel? _presentation;
     private INotifyCollectionChanged? _currentLogCollection;
     private Border? _overlayPanel;
     private ScrollViewer? _overlayScroller;
     private bool _nativeAttached;
+    private bool _previewResizeQueued;
 
     public OverlayHostWindow()
     {
@@ -56,9 +57,14 @@ public partial class OverlayHostWindow : Window
         Opened += (_, _) =>
         {
             UpdatePanelConstraints();
+            SchedulePreviewResizeToContent();
             ScheduleScrollToEnd();
         };
-        SizeChanged += (_, _) => UpdatePanelConstraints();
+        SizeChanged += (_, _) =>
+        {
+            UpdatePanelConstraints();
+            SchedulePreviewResizeToContent();
+        };
     }
 
     public void SetOverlayActive(bool active, OverlayRuntimeMode mode = OverlayRuntimeMode.Preview)
@@ -84,35 +90,64 @@ public partial class OverlayHostWindow : Window
         }
 
         UpdatePanelConstraints();
+        SchedulePreviewResizeToContent();
         ScheduleScrollToEnd();
     }
 
     public void ApplyPreviewBounds(PixelRect workingArea, PixelRect? anchorBounds = null)
     {
         var scale = Math.Max(0.01d, RenderScaling);
-        var usableWidth = Math.Max(1, workingArea.Width - (PreviewWindowMargin * 2));
-        var usableHeight = Math.Max(1, workingArea.Height - (PreviewWindowMargin * 2));
-        var width = Math.Min(PreviewWindowWidth, usableWidth);
-        var height = Math.Min(PreviewWindowHeight, usableHeight);
-        var maxX = workingArea.X + workingArea.Width - width - PreviewWindowMargin;
-        var minX = workingArea.X + PreviewWindowMargin;
-        var minY = workingArea.Y + PreviewWindowMargin;
-        var maxY = workingArea.Y + workingArea.Height - height - PreviewWindowMargin;
+        var margin = ResolvePreviewMarginPixels(scale);
+        var pixelSize = ResolvePreviewPixelSize(workingArea, scale, margin);
+        var position = ResolvePreviewPosition(workingArea, pixelSize, anchorBounds, margin);
+
+        Width = pixelSize.Width / scale;
+        Height = pixelSize.Height / scale;
+        Position = position;
+        UpdatePanelConstraints();
+        SchedulePreviewResizeToContent();
+        ScheduleScrollToEnd();
+    }
+
+    internal static PixelSize ResolvePreviewPixelSize(PixelRect workingArea, double renderScaling, int marginPixels)
+    {
+        var scale = Math.Max(0.01d, renderScaling);
+        var usableWidthPixels = Math.Max(1, workingArea.Width - (marginPixels * 2));
+        var usableHeightPixels = Math.Max(1, workingArea.Height - (marginPixels * 2));
+        var widthPixels = Math.Min(
+            Math.Max(1, (int)Math.Round(PreviewWindowLogicalWidth * scale)),
+            usableWidthPixels);
+        var heightPixels = Math.Min(
+            Math.Max(1, (int)Math.Round(PreviewWindowLogicalHeight * scale)),
+            usableHeightPixels);
+
+        return new PixelSize(widthPixels, heightPixels);
+    }
+
+    internal static PixelPoint ResolvePreviewPosition(
+        PixelRect workingArea,
+        PixelSize pixelSize,
+        PixelRect? anchorBounds,
+        int marginPixels)
+    {
+        var maxX = workingArea.X + workingArea.Width - pixelSize.Width - marginPixels;
+        var minX = workingArea.X + marginPixels;
+        var minY = workingArea.Y + marginPixels;
+        var maxY = workingArea.Y + workingArea.Height - pixelSize.Height - marginPixels;
 
         var x = Math.Max(minX, maxX);
         var y = minY;
         if (anchorBounds is { Width: > 0, Height: > 0 } anchor)
         {
-            x = Clamp(anchor.X + anchor.Width - width - PreviewWindowMargin, minX, maxX);
-            y = Clamp(anchor.Y + PreviewWindowMargin, minY, maxY);
+            x = Clamp(anchor.X + marginPixels, minX, maxX);
+            y = Clamp(anchor.Y + marginPixels, minY, maxY);
         }
 
-        Width = width / scale;
-        Height = height / scale;
-        Position = new PixelPoint(x, y);
-        UpdatePanelConstraints();
-        ScheduleScrollToEnd();
+        return new PixelPoint(x, y);
     }
+
+    internal static int ResolvePreviewMarginPixels(double renderScaling)
+        => Math.Max(0, (int)Math.Round(PreviewWindowLogicalMargin * Math.Max(0.01d, renderScaling)));
 
     private static int Clamp(int value, int min, int max)
     {
@@ -141,6 +176,7 @@ public partial class OverlayHostWindow : Window
 
         _presentation.PropertyChanged += OnPresentationPropertyChanged;
         SubscribeCurrentLogCollection();
+        SchedulePreviewResizeToContent();
         ScheduleScrollToEnd();
     }
 
@@ -152,6 +188,7 @@ public partial class OverlayHostWindow : Window
         }
 
         SubscribeCurrentLogCollection();
+        SchedulePreviewResizeToContent();
         ScheduleScrollToEnd();
     }
 
@@ -176,7 +213,48 @@ public partial class OverlayHostWindow : Window
 
     private void OnCurrentLogCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
+        SchedulePreviewResizeToContent();
         ScheduleScrollToEnd();
+    }
+
+    private void SchedulePreviewResizeToContent()
+    {
+        if (_previewResizeQueued)
+        {
+            return;
+        }
+
+        _previewResizeQueued = true;
+        Dispatcher.UIThread.Post(() =>
+        {
+            _previewResizeQueued = false;
+            ResizePreviewHeightToContent();
+        }, DispatcherPriority.Background);
+    }
+
+    private void ResizePreviewHeightToContent()
+    {
+        if (_nativeAttached
+            || _overlayPanel is null
+            || _overlayScroller is null
+            || !_overlayPanel.IsVisible)
+        {
+            return;
+        }
+
+        var logicalWidth = Math.Max(1d, Bounds.Width);
+        var availableWidth = Math.Max(1d, logicalWidth - (OverlayPanelMargin * 2d));
+        _overlayPanel.MaxWidth = Math.Min(OverlayPanelMaxWidth, availableWidth);
+        _overlayScroller.MaxHeight = Math.Max(1d, PreviewWindowLogicalHeight - (OverlayPanelMargin * 2d));
+        _overlayPanel.Measure(new Size(_overlayPanel.MaxWidth, double.PositiveInfinity));
+
+        var desiredHeight = Math.Ceiling(Math.Clamp(_overlayPanel.DesiredSize.Height, 1d, PreviewWindowLogicalHeight));
+        if (Math.Abs(Height - desiredHeight) > 0.5d)
+        {
+            Height = desiredHeight;
+        }
+
+        UpdatePanelConstraints();
     }
 
     private void ScheduleScrollToEnd()

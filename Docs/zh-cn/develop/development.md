@@ -177,8 +177,7 @@ cp -a install/. publish/
 bash src/MAAUnified/CI/create-unix-launchers.sh publish macos
 
 # 5) 启动本地打包产物
-cd publish
-./MAAUnified
+./publish/MAAUnified
 ```
 
 ### macOS Apple Silicon (arm64)
@@ -202,8 +201,7 @@ cp -a install/. publish/
 bash src/MAAUnified/CI/create-unix-launchers.sh publish macos
 
 # 5) 启动本地打包产物
-cd publish
-./MAAUnified
+./publish/MAAUnified
 ```
 
 ## 运行目录与诊断日志

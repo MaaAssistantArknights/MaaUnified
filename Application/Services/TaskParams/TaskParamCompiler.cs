@@ -158,6 +158,7 @@ public static class TaskParamCompiler
             ConnectConfig = ResolveStringSetting(profile, config, "ConnectConfig", "Connect.ConnectConfig") ?? "General",
             ConnectAddress = ResolveStringSetting(profile, config, "ConnectAddress", "Connect.Address") ?? "127.0.0.1:5555",
             AdbPath = ResolveStringSetting(profile, config, "AdbPath", "Connect.AdbPath") ?? string.Empty,
+            MacUseBundledAdb = MacBundledAdbPolicy.ReadUseBundledAdb(profile),
             TouchMode = ResolveStringSetting(profile, config, "TouchMode", "Connect.TouchMode") ?? "minitouch",
             AutoDetectConnection = ResolveBooleanSetting(profile, config, true, "AutoDetect", "Connect.AutoDetect"),
             AttachWindowScreencapMethod = ResolveStringSetting(profile, config, "AttachWindowScreencapMethod", "Connect.AttachWindow.ScreencapMethod") ?? "2",
@@ -1442,6 +1443,11 @@ public static class TaskParamCompiler
         profile.Values["ConnectConfig"] = JsonValue.Create(dto.ConnectConfig);
         profile.Values["ConnectAddress"] = JsonValue.Create(dto.ConnectAddress);
         profile.Values["AdbPath"] = JsonValue.Create(dto.AdbPath);
+        if (dto.MacUseBundledAdb.HasValue)
+        {
+            profile.Values[MacBundledAdbPolicy.ProfileUseBundledAdbKey] = JsonValue.Create(dto.MacUseBundledAdb.Value);
+        }
+
         profile.Values["TouchMode"] = JsonValue.Create(dto.TouchMode);
         profile.Values["AutoDetect"] = JsonValue.Create(dto.AutoDetectConnection);
         profile.Values["AttachWindowScreencapMethod"] = JsonValue.Create(dto.AttachWindowScreencapMethod);

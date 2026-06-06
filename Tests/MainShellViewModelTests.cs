@@ -1629,7 +1629,8 @@ public sealed class MainShellViewModelTests
                 "GUI.Background.Opacity": 32,
                 "GUI.Background.BlurEffectRadius": 9,
                 "GUI.Background.StretchMode": "UniformToFill",
-                "HotKeys": "ShowGui=Ctrl+Shift+Alt+G;LinkStart=Ctrl+Shift+Alt+R"
+                "HotKeys": "ShowGui=Ctrl+Shift+Alt+G;LinkStart=Ctrl+Shift+Alt+R",
+                "GUI.HotKeys.MacDefaultsVersion": "1"
               },
               "Migration": {}
             }
@@ -1649,6 +1650,9 @@ public sealed class MainShellViewModelTests
               "Profiles": {
                 "Default": {
                   "Values": {
+                    "ConnectAddress": "127.0.0.1:5555",
+                    "ConnectConfig": "General",
+                    "MacUseBundledAdb": false,
                     "Start.RunDirectly": {{runDirectly.ToString().ToLowerInvariant()}},
                     "Start.OpenEmulatorAfterLaunch": {{openEmulatorAfterLaunch.ToString().ToLowerInvariant()}}
                   },
@@ -2165,6 +2169,10 @@ public sealed class MainShellViewModelTests
             if (preloadConfig)
             {
                 await config.LoadOrBootstrapAsync();
+                if (config.TryGetCurrentProfile(out var profile))
+                {
+                    profile.Values[MacBundledAdbPolicy.ProfileUseBundledAdbKey] = JsonValue.Create(false);
+                }
             }
 
             var runtimeBridge = bridge ?? new FakeBridge();

@@ -2,6 +2,8 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text.Json.Nodes;
 using System.Threading.Channels;
+using MAAUnified.App.Features.Dialogs;
+using MAAUnified.App.Services;
 using MAAUnified.App.ViewModels;
 using MAAUnified.App.ViewModels.Settings;
 using MAAUnified.Application.Configuration;
@@ -9,6 +11,7 @@ using MAAUnified.Application.Models;
 using MAAUnified.Application.Orchestration;
 using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Features;
+using MAAUnified.Application.Services.Localization;
 using MAAUnified.Compat.Constants;
 using MAAUnified.CoreBridge;
 using MAAUnified.Platform;
@@ -29,6 +32,7 @@ public sealed class SettingsModuleAK1FeatureTests
         "AutoDetect",
         "AlwaysAutoDetect",
         "RetryOnDisconnected",
+        MacBundledAdbPolicy.ProfileUseBundledAdbKey,
     ];
 
     [Fact]
@@ -51,6 +55,188 @@ public sealed class SettingsModuleAK1FeatureTests
         ConnectionGameProfileSync.ReadFromProfile(profile, state, tolerateMissing: false);
 
         Assert.Equal("adb", state.AdbPath);
+    }
+
+    [Fact]
+    public void ConnectionGameProfileSync_MacUseBundledAdb_ShouldRoundTripAndReadLegacyAlias()
+    {
+        var profile = new UnifiedProfile();
+        var state = new ConnectionGameSharedStateViewModel
+        {
+            MacUseBundledAdb = false,
+        };
+
+        ConnectionGameProfileSync.WriteToProfile(profile, state);
+
+        Assert.True(profile.Values.TryGetValue(MacBundledAdbPolicy.ProfileUseBundledAdbKey, out var written));
+        Assert.False(written!.GetValue<bool>());
+
+        var propertyProfile = new UnifiedProfile();
+        state.MacUseBundledAdb = true;
+        ConnectionGameProfileSync.WritePropertyToProfile(
+            propertyProfile,
+            state,
+            nameof(ConnectionGameSharedStateViewModel.MacUseBundledAdb));
+
+        Assert.True(propertyProfile.Values[MacBundledAdbPolicy.ProfileUseBundledAdbKey]!.GetValue<bool>());
+
+        var legacyProfile = new UnifiedProfile();
+        legacyProfile.Values[MacBundledAdbPolicy.LegacyUseBundledAdbKey] = JsonValue.Create(false);
+        state.MacUseBundledAdb = true;
+        ConnectionGameProfileSync.ReadFromProfile(legacyProfile, state, tolerateMissing: false);
+
+        Assert.False(state.MacUseBundledAdb);
+    }
+
+    [Fact]
+    public void ConnectionGameSharedState_MacBundledAdbDefault_ShouldHideManualAdbPathOnMac()
+    {
+        var state = new ConnectionGameSharedStateViewModel();
+
+        Assert.True(state.MacUseBundledAdb);
+        if (!OperatingSystem.IsMacOS())
+        {
+            Assert.True(state.ShowManualAdbPathControls);
+            return;
+        }
+
+        Assert.False(state.ShowManualAdbPathControls);
+
+        state.MacUseBundledAdb = false;
+
+        Assert.True(state.ShowManualAdbPathControls);
+    }
+
+    [Fact]
+    public void ConnectionGameSharedState_ResolveEffectiveAdbPath_WhenBundledOnMac_ShouldNotRewriteAdbPath()
+    {
+        if (!OperatingSystem.IsMacOS())
+        {
+            return;
+        }
+
+        var state = new ConnectionGameSharedStateViewModel
+        {
+            MacUseBundledAdb = true,
+            AdbPath = "/custom/adb",
+        };
+
+        var resolved = state.ResolveEffectiveAdbPath(updateStateWhenResolved: true);
+
+        Assert.Equal(MacBundledAdbPolicy.ResolveBundledAdbPath(), resolved);
+        Assert.Equal("/custom/adb", state.AdbPath);
+    }
+
+    [Fact]
+    public void WarningConfirmDialogRequest_Links_ShouldPreserveLinkList()
+    {
+        var links = new[]
+        {
+            new DialogLinkItem("Terms", "https://example.com/terms"),
+            new DialogLinkItem("Docs", "https://example.com/docs"),
+        };
+
+        var request = new WarningConfirmDialogRequest(
+            Title: "Title",
+            Message: "Message",
+            Links: links);
+
+        Assert.Equal(2, request.Links?.Count);
+        Assert.Equal("Terms", request.Links![0].Title);
+        Assert.Equal("https://example.com/docs", request.Links[1].Url);
+    }
+
+    public static IEnumerable<object[]> MacBundledAdbConsentLanguages =>
+        UiLanguageCatalog.Ordered.Select(language => new object[] { language });
+
+    [Theory]
+    [MemberData(nameof(MacBundledAdbConsentLanguages))]
+    public void MacBundledAdbConsentService_GetTexts_ShouldLocalizeSupportedLanguages(
+        string language)
+    {
+        var (expectedTitle, expectedConfirm, expectedLicenseLink) = ExpectedMacBundledAdbConsentTexts(language);
+        var texts = MacBundledAdbConsentService.GetTexts(language);
+
+        Assert.Equal(expectedTitle, texts.Title);
+        Assert.Equal(expectedConfirm, texts.ConfirmText);
+        Assert.Equal(expectedLicenseLink, texts.AndroidSdkLicenseLinkText);
+    }
+
+    private static (string Title, string ConfirmText, string LicenseLinkText) ExpectedMacBundledAdbConsentTexts(
+        string language)
+        => language switch
+        {
+            "zh-cn" => ("Android SDK Platform-Tools 条款", "同意并继续", "Android SDK 许可协议"),
+            "zh-tw" => ("Android SDK Platform-Tools 條款", "同意並繼續", "Android SDK 授權協議"),
+            "en-us" => ("Android SDK Platform-Tools Terms", "Accept and continue", "Android SDK License Agreement"),
+            "ja-jp" => ("Android SDK Platform-Tools の利用規約", "同意して続行", "Android SDK ライセンス契約"),
+            "ko-kr" => ("Android SDK Platform-Tools 약관", "동의하고 계속", "Android SDK 라이선스 계약"),
+            "pallas" => ("Android SDK Platform-Tools Terms", "Accept and continue", "Android SDK License Agreement"),
+            _ => throw new InvalidOperationException($"Missing bundled ADB consent text expectations for `{language}`."),
+        };
+
+    [Fact]
+    public async Task MacBundledAdbConsentService_Accept_ShouldWriteTermsAndSave()
+    {
+        if (!OperatingSystem.IsMacOS())
+        {
+            return;
+        }
+
+        await using var fixture = await TestFixture.CreateAsync();
+        var dialog = new CapturingDialogService
+        {
+            WarningConfirmReturn = DialogReturnSemantic.Confirm,
+        };
+
+        var result = await MacBundledAdbConsentService.EnsureAcceptedAsync(
+            fixture.Runtime,
+            dialog,
+            bundledAdbInUse: true,
+            "Settings.Tests.MacBundledAdbConsent",
+            "en-us");
+
+        Assert.True(result.Success, result.Message);
+        Assert.Equal(1, dialog.WarningConfirmCallCount);
+        Assert.Equal("Settings.Tests.MacBundledAdbConsent", dialog.LastWarningConfirmScope);
+        Assert.NotNull(dialog.LastWarningConfirmRequest?.Links);
+        Assert.Contains(dialog.LastWarningConfirmRequest!.Links!, link => link.Url.Contains("developer.android.com", StringComparison.OrdinalIgnoreCase));
+        Assert.True(MacBundledAdbPolicy.IsCurrentTermsAccepted(fixture.Config.CurrentConfig));
+        Assert.True(
+            fixture.Config.CurrentConfig.GlobalValues.TryGetValue(ConfigurationKeys.MacBundledAdbTermsAcceptedAtUtc, out var acceptedAt)
+            && DateTimeOffset.TryParse(acceptedAt?.GetValue<string>(), out _));
+
+        var persisted = await File.ReadAllTextAsync(fixture.ConfigPath);
+        Assert.Contains(MacBundledAdbPolicy.CurrentTermsVersion, persisted, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task MacBundledAdbConsentService_Cancel_ShouldReturnFailureWithoutWritingTerms()
+    {
+        if (!OperatingSystem.IsMacOS())
+        {
+            return;
+        }
+
+        await using var fixture = await TestFixture.CreateAsync();
+        var dialog = new CapturingDialogService
+        {
+            WarningConfirmReturn = DialogReturnSemantic.Close,
+        };
+
+        var result = await MacBundledAdbConsentService.EnsureAcceptedAsync(
+            fixture.Runtime,
+            dialog,
+            bundledAdbInUse: true,
+            "Settings.Tests.MacBundledAdbConsent",
+            "en-us");
+
+        Assert.False(result.Success);
+        Assert.True(result.UserCancelled);
+        Assert.Equal(1, dialog.WarningConfirmCallCount);
+        Assert.False(MacBundledAdbPolicy.IsCurrentTermsAccepted(fixture.Config.CurrentConfig));
+        Assert.False(fixture.Config.CurrentConfig.GlobalValues.ContainsKey(ConfigurationKeys.MacBundledAdbTermsAcceptedVersion));
+        Assert.False(fixture.Config.CurrentConfig.GlobalValues.ContainsKey(ConfigurationKeys.MacBundledAdbTermsAcceptedAtUtc));
     }
 
     [Fact]
@@ -98,6 +284,27 @@ public sealed class SettingsModuleAK1FeatureTests
         Assert.Contains(
             state.TouchModeOptions,
             option => string.Equals(option.Value, "MaaFwAdb", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void ConnectionGameSharedState_EmulatorExtrasSection_ShouldOnlyShowWhenExtrasAreAvailable()
+    {
+        var state = new ConnectionGameSharedStateViewModel();
+
+        Assert.False(state.ShowEmulatorExtrasSection);
+
+        state.ConnectConfig = "MuMuEmulator12";
+        Assert.True(state.ShowMuMuExtrasSection);
+        Assert.True(state.ShowEmulatorExtrasSection);
+
+        state.ConnectConfig = "LDPlayer";
+        Assert.True(state.ShowLdPlayerExtrasSection);
+        Assert.True(state.ShowEmulatorExtrasSection);
+
+        state.ConnectConfig = "General";
+        Assert.False(state.ShowMuMuExtrasSection);
+        Assert.False(state.ShowLdPlayerExtrasSection);
+        Assert.False(state.ShowEmulatorExtrasSection);
     }
 
     [Fact]
@@ -377,6 +584,42 @@ public sealed class SettingsModuleAK1FeatureTests
     }
 
     [Fact]
+    public async Task StartUpModule_MacBundledAdbControls_ShouldFollowSharedStateVisibility()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup")).Success);
+
+        var state = fixture.Shell.SettingsPage.ConnectionGameSharedState;
+        state.MacUseBundledAdb = true;
+
+        await fixture.Shell.TaskQueuePage.ReloadTasksAsync();
+        await WaitUntilAsync(() => fixture.Shell.TaskQueuePage.StartUpModule.IsTaskBound);
+
+        var module = fixture.Shell.TaskQueuePage.StartUpModule;
+
+        Assert.Equal(state.MacUseBundledAdb, module.MacUseBundledAdb);
+        Assert.Equal(state.MacUseBundledAdbText, module.MacUseBundledAdbText);
+        Assert.Equal(state.IsMacBundledAdbSupported, module.IsMacBundledAdbSupported);
+        Assert.Equal(state.ShowManualAdbPathControls, module.ShowManualAdbPathControls);
+
+        if (OperatingSystem.IsMacOS())
+        {
+            Assert.False(module.ShowManualAdbPathControls);
+        }
+        else
+        {
+            Assert.False(module.IsMacBundledAdbSupported);
+            Assert.True(module.ShowManualAdbPathControls);
+        }
+
+        module.MacUseBundledAdb = false;
+
+        Assert.False(state.MacUseBundledAdb);
+        Assert.False(module.MacUseBundledAdb);
+        Assert.True(module.ShowManualAdbPathControls);
+    }
+
+    [Fact]
     public async Task StartUpBinding_DoesNotBackfillSharedStateFromStaleTaskParams()
     {
         await using var fixture = await TestFixture.CreateAsync();
@@ -471,6 +714,7 @@ public sealed class SettingsModuleAK1FeatureTests
         state.ConnectAddress = "127.0.0.1:5555";
         state.ConnectConfig = "MuMuEmulator12";
         state.AdbPath = @"D:\Program Files\Netease\MuMuPlayer-12.0\shell\.\adb.exe";
+        state.MacUseBundledAdb = false;
 
         await fixture.Shell.ConnectAsync();
 
@@ -494,6 +738,7 @@ public sealed class SettingsModuleAK1FeatureTests
         state.TouchMode = "maatouch";
         state.AdbLiteEnabled = true;
         state.KillAdbOnExit = true;
+        state.MacUseBundledAdb = false;
 
         await fixture.Shell.ConnectAsync();
 
@@ -660,6 +905,8 @@ public sealed class SettingsModuleAK1FeatureTests
 
         public string Root { get; }
 
+        public string ConfigPath => Path.Combine(Root, "config", "avalonia.json");
+
         public UnifiedConfigurationService Config { get; }
 
         public TaskQueueFeatureService TaskQueue { get; }
@@ -751,6 +998,96 @@ public sealed class SettingsModuleAK1FeatureTests
             {
                 // ignore temporary folder cleanup failures
             }
+        }
+    }
+
+    private sealed class CapturingDialogService : IAppDialogService
+    {
+        public int WarningConfirmCallCount { get; private set; }
+
+        public string? LastWarningConfirmScope { get; private set; }
+
+        public WarningConfirmDialogRequest? LastWarningConfirmRequest { get; private set; }
+
+        public DialogReturnSemantic WarningConfirmReturn { get; set; } = DialogReturnSemantic.Close;
+
+        public Task<DialogCompletion<AnnouncementDialogPayload>> ShowAnnouncementAsync(
+            AnnouncementDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<AnnouncementDialogPayload>(
+                DialogReturnSemantic.Close,
+                null,
+                "captured"));
+
+        public Task<DialogCompletion<VersionUpdateDialogPayload>> ShowVersionUpdateAsync(
+            VersionUpdateDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<VersionUpdateDialogPayload>(
+                DialogReturnSemantic.Close,
+                null,
+                "captured"));
+
+        public Task<DialogCompletion<ProcessPickerDialogPayload>> ShowProcessPickerAsync(
+            ProcessPickerDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<ProcessPickerDialogPayload>(
+                DialogReturnSemantic.Close,
+                null,
+                "captured"));
+
+        public Task<DialogCompletion<EmulatorPathDialogPayload>> ShowEmulatorPathAsync(
+            EmulatorPathDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<EmulatorPathDialogPayload>(
+                DialogReturnSemantic.Close,
+                null,
+                "captured"));
+
+        public Task<DialogCompletion<ErrorDialogPayload>> ShowErrorAsync(
+            ErrorDialogRequest request,
+            string sourceScope,
+            Func<CancellationToken, Task<UiOperationResult>>? openIssueReportAsync = null,
+            Func<CancellationToken, Task<UiOperationResult>>? openSettingsAsync = null,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<ErrorDialogPayload>(
+                DialogReturnSemantic.Close,
+                null,
+                "captured"));
+
+        public Task<DialogCompletion<AchievementListDialogPayload>> ShowAchievementListAsync(
+            AchievementListDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<AchievementListDialogPayload>(
+                DialogReturnSemantic.Close,
+                null,
+                "captured"));
+
+        public Task<DialogCompletion<TextDialogPayload>> ShowTextAsync(
+            TextDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<TextDialogPayload>(
+                DialogReturnSemantic.Close,
+                null,
+                "captured"));
+
+        public Task<DialogCompletion<WarningConfirmDialogPayload>> ShowWarningConfirmAsync(
+            WarningConfirmDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+        {
+            WarningConfirmCallCount++;
+            LastWarningConfirmScope = sourceScope;
+            LastWarningConfirmRequest = request;
+            return Task.FromResult(new DialogCompletion<WarningConfirmDialogPayload>(
+                WarningConfirmReturn,
+                WarningConfirmReturn == DialogReturnSemantic.Confirm ? new WarningConfirmDialogPayload(true) : null,
+                "captured"));
         }
     }
 

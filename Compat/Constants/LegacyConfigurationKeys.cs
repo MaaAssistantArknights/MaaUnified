@@ -87,6 +87,8 @@ public static class ConfigurationKeys
     public const string KillAdbOnExit = "Connect.KillAdbOnExit";
     public const string TouchMode = "Connect.TouchMode";
     public const string AdbReplaced = "Connect.AdbReplaced";
+    public const string MacBundledAdbTermsAcceptedVersion = "Connect.MacBundledAdbTermsAcceptedVersion";
+    public const string MacBundledAdbTermsAcceptedAtUtc = "Connect.MacBundledAdbTermsAcceptedAtUtc";
 
     // AttachWindow (Win32窗口绑定) 配置
     public const string UseAttachWindow = "Connect.UseAttachWindow";

@@ -3359,6 +3359,32 @@
       }
     },
     {
+      "key": "Connect.MacBundledAdbTermsAcceptedVersion",
+      "owner_item_id": "Settings.Connect",
+      "parity_status": "Aligned",
+      "priority": "P0",
+      "notes": "Aligned mapping implemented in Avalonia runtime; see evidence and validation tests.",
+      "evidence": {
+        "ui_path": "App/Features/Settings/ConnectSettingsView.axaml",
+        "log_path": "debug/avalonia-ui-events.log",
+        "scope": "Config.Connect.MacBundledAdbTermsAcceptedVersion",
+        "case_id": "CFG-059"
+      }
+    },
+    {
+      "key": "Connect.MacBundledAdbTermsAcceptedAtUtc",
+      "owner_item_id": "Settings.Connect",
+      "parity_status": "Aligned",
+      "priority": "P0",
+      "notes": "Aligned mapping implemented in Avalonia runtime; see evidence and validation tests.",
+      "evidence": {
+        "ui_path": "App/Features/Settings/ConnectSettingsView.axaml",
+        "log_path": "debug/avalonia-ui-events.log",
+        "scope": "Config.Connect.MacBundledAdbTermsAcceptedAtUtc",
+        "case_id": "CFG-060"
+      }
+    },
+    {
       "key": "Connect.UseAttachWindow",
       "owner_item_id": "Settings.Connect",
       "parity_status": "Aligned",
@@ -6905,7 +6931,7 @@
 	  "metadata": {
 	    "feature_item_count": 38,
 	    "system_item_count": 13,
-	    "config_key_count": 295,
+	    "config_key_count": 297,
 	    "fallback_record_count": 15
 	  }
 	}

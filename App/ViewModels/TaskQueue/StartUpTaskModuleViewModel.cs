@@ -277,6 +277,29 @@ public sealed class StartUpTaskModuleViewModel : TypedTaskModuleViewModelBase<St
         }
     }
 
+    public bool IsMacBundledAdbSupported => _sharedState.IsMacBundledAdbSupported;
+
+    public string MacUseBundledAdbText => _sharedState.MacUseBundledAdbText;
+
+    public bool MacUseBundledAdb
+    {
+        get => _sharedState.MacUseBundledAdb;
+        set
+        {
+            if (_sharedState.MacUseBundledAdb == value)
+            {
+                return;
+            }
+
+            _sharedState.MacUseBundledAdb = value;
+            MarkDirty();
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(ShowManualAdbPathControls));
+        }
+    }
+
+    public bool ShowManualAdbPathControls => _sharedState.ShowManualAdbPathControls;
+
     public string TouchMode
     {
         get => _sharedState.TouchMode;
@@ -432,6 +455,7 @@ public sealed class StartUpTaskModuleViewModel : TypedTaskModuleViewModelBase<St
             ConnectConfig = ConnectConfig.Trim(),
             ConnectAddress = ConnectAddress.Trim(),
             AdbPath = AdbPath.Trim(),
+            MacUseBundledAdb = MacUseBundledAdb,
             TouchMode = TouchMode.Trim(),
             AutoDetectConnection = AutoDetectConnection,
             AttachWindowScreencapMethod = AttachWindowScreencapMethod.Trim(),
@@ -460,6 +484,16 @@ public sealed class StartUpTaskModuleViewModel : TypedTaskModuleViewModelBase<St
                 break;
             case nameof(ConnectionGameSharedStateViewModel.AdbPath):
                 OnPropertyChanged(nameof(AdbPath));
+                break;
+            case nameof(ConnectionGameSharedStateViewModel.MacUseBundledAdb):
+                OnPropertyChanged(nameof(MacUseBundledAdb));
+                break;
+            case nameof(ConnectionGameSharedStateViewModel.MacUseBundledAdbText):
+                OnPropertyChanged(nameof(MacUseBundledAdbText));
+                break;
+            case nameof(ConnectionGameSharedStateViewModel.UseMacBundledAdbEffective):
+            case nameof(ConnectionGameSharedStateViewModel.ShowManualAdbPathControls):
+                OnPropertyChanged(nameof(ShowManualAdbPathControls));
                 break;
             case nameof(ConnectionGameSharedStateViewModel.ClientType):
                 OnPropertyChanged(nameof(ClientType));

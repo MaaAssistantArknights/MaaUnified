@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using MAAUnified.Application.Models;
+using MAAUnified.Application.Services;
 
 namespace MAAUnified.App.ViewModels.Settings;
 
@@ -25,6 +26,7 @@ internal static class ConnectionGameProfileSync
     private const string AdbLiteEnabledKey = "AdbLiteEnabled";
     private const string KillAdbOnExitKey = "KillAdbOnExit";
     private const string AdbReplacedKey = "AdbReplaced";
+    private const string MacUseBundledAdbKey = MacBundledAdbPolicy.ProfileUseBundledAdbKey;
     private const string MuMu12ExtrasEnabledKey = "MuMu12ExtrasEnabled";
     private const string MuMu12EmulatorPathKey = "MuMu12EmulatorPath";
     private const string MuMuBridgeConnectionKey = "MuMuBridgeConnection";
@@ -45,6 +47,7 @@ internal static class ConnectionGameProfileSync
     private const string AdbLiteEnabledLegacyKey = "Connect.AdbLiteEnabled";
     private const string KillAdbOnExitLegacyKey = "Connect.KillAdbOnExit";
     private const string AdbReplacedLegacyKey = "Connect.AdbReplaced";
+    private const string MacUseBundledAdbLegacyKey = MacBundledAdbPolicy.LegacyUseBundledAdbKey;
     private const string MuMu12ExtrasEnabledLegacyKey = "Connect.MuMu12Extras.Enabled";
     private const string MuMu12EmulatorPathLegacyKey = "Connect.MuMu12EmulatorPath";
     private const string MuMuBridgeConnectionLegacyKey = "Connect.MumuBridgeConnection";
@@ -71,6 +74,7 @@ internal static class ConnectionGameProfileSync
     private const bool DefaultAdbLiteEnabled = false;
     private const bool DefaultKillAdbOnExit = false;
     private const bool DefaultAdbReplaced = false;
+    private const bool DefaultMacUseBundledAdb = true;
     private const bool DefaultMuMu12ExtrasEnabled = false;
     private const string DefaultMuMu12EmulatorPath = "";
     private const bool DefaultMuMuBridgeConnection = false;
@@ -99,6 +103,7 @@ internal static class ConnectionGameProfileSync
         nameof(ConnectionGameSharedStateViewModel.AdbLiteEnabled),
         nameof(ConnectionGameSharedStateViewModel.KillAdbOnExit),
         nameof(ConnectionGameSharedStateViewModel.AdbReplaced),
+        nameof(ConnectionGameSharedStateViewModel.MacUseBundledAdb),
         nameof(ConnectionGameSharedStateViewModel.MuMu12ExtrasEnabled),
         nameof(ConnectionGameSharedStateViewModel.MuMu12EmulatorPath),
         nameof(ConnectionGameSharedStateViewModel.MuMuBridgeConnection),
@@ -133,6 +138,7 @@ internal static class ConnectionGameProfileSync
         profile.Values[AdbLiteEnabledKey] = JsonValue.Create(state.AdbLiteEnabled);
         profile.Values[KillAdbOnExitKey] = JsonValue.Create(state.KillAdbOnExit);
         profile.Values[AdbReplacedKey] = JsonValue.Create(state.AdbReplaced);
+        profile.Values[MacUseBundledAdbKey] = JsonValue.Create(state.MacUseBundledAdb);
         profile.Values[MuMu12ExtrasEnabledKey] = JsonValue.Create(state.MuMu12ExtrasEnabled);
         profile.Values[MuMu12EmulatorPathKey] = JsonValue.Create((state.MuMu12EmulatorPath ?? string.Empty).Trim());
         profile.Values[MuMuBridgeConnectionKey] = JsonValue.Create(state.MuMuBridgeConnection);
@@ -195,6 +201,9 @@ internal static class ConnectionGameProfileSync
             case nameof(ConnectionGameSharedStateViewModel.AdbReplaced):
                 profile.Values[AdbReplacedKey] = JsonValue.Create(state.AdbReplaced);
                 return;
+            case nameof(ConnectionGameSharedStateViewModel.MacUseBundledAdb):
+                profile.Values[MacUseBundledAdbKey] = JsonValue.Create(state.MacUseBundledAdb);
+                return;
             case nameof(ConnectionGameSharedStateViewModel.MuMu12ExtrasEnabled):
                 profile.Values[MuMu12ExtrasEnabledKey] = JsonValue.Create(state.MuMu12ExtrasEnabled);
                 return;
@@ -253,6 +262,7 @@ internal static class ConnectionGameProfileSync
         var fallbackAdbLiteEnabled = tolerateMissing ? state.AdbLiteEnabled : DefaultAdbLiteEnabled;
         var fallbackKillAdbOnExit = tolerateMissing ? state.KillAdbOnExit : DefaultKillAdbOnExit;
         var fallbackAdbReplaced = tolerateMissing ? state.AdbReplaced : DefaultAdbReplaced;
+        var fallbackMacUseBundledAdb = tolerateMissing ? state.MacUseBundledAdb : DefaultMacUseBundledAdb;
         var fallbackMuMu12ExtrasEnabled = tolerateMissing ? state.MuMu12ExtrasEnabled : DefaultMuMu12ExtrasEnabled;
         var fallbackMuMu12EmulatorPath = tolerateMissing ? state.MuMu12EmulatorPath : DefaultMuMu12EmulatorPath;
         var fallbackMuMuBridgeConnection = tolerateMissing ? state.MuMuBridgeConnection : DefaultMuMuBridgeConnection;
@@ -335,6 +345,11 @@ internal static class ConnectionGameProfileSync
             fallbackAdbReplaced,
             AdbReplacedKey,
             AdbReplacedLegacyKey);
+        state.MacUseBundledAdb = ReadProfileBoolWithAliases(
+            profile,
+            fallbackMacUseBundledAdb,
+            MacUseBundledAdbKey,
+            MacUseBundledAdbLegacyKey);
         state.MuMu12ExtrasEnabled = ReadProfileBoolWithAliases(
             profile,
             fallbackMuMu12ExtrasEnabled,

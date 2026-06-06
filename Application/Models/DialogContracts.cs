@@ -218,6 +218,10 @@ public sealed record TextDialogRequest(
 
 public sealed record TextDialogPayload(string Text);
 
+public sealed record DialogLinkItem(
+    string Title,
+    string Url);
+
 public sealed record WarningConfirmDialogRequest(
     string Title,
     string Message,
@@ -225,6 +229,7 @@ public sealed record WarningConfirmDialogRequest(
     string CancelText = "Cancel",
     string Language = "en-us",
     int CountdownSeconds = 0,
-    DialogChromeCatalog? Chrome = null);
+    DialogChromeCatalog? Chrome = null,
+    IReadOnlyList<DialogLinkItem>? Links = null);
 
 public sealed record WarningConfirmDialogPayload(bool Confirmed);

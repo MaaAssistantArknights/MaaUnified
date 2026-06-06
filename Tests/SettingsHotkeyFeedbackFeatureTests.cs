@@ -60,6 +60,7 @@ public sealed class SettingsHotkeyFeedbackFeatureTests
 
         await using var fixture = await RuntimeFixture.CreateAsync(hotkeyService: hotkeyService);
         fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.HotKeys] = JsonValue.Create("ShowGui=Ctrl+1;LinkStart=Ctrl+2");
+        fixture.Config.CurrentConfig.GlobalValues[HotkeyConfigurationCodec.MacDefaultsVersionKey] = JsonValue.Create("1");
         await fixture.Config.SaveAsync();
 
         var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
@@ -155,6 +156,7 @@ public sealed class SettingsHotkeyFeedbackFeatureTests
             await using (var first = await RuntimeFixture.CreateAsync(root, cleanupRoot: false, hotkeyService: firstHotkeyService))
             {
                 first.Config.CurrentConfig.GlobalValues[ConfigurationKeys.HotKeys] = JsonValue.Create("ShowGui=Ctrl+1;LinkStart=Ctrl+2");
+                first.Config.CurrentConfig.GlobalValues[HotkeyConfigurationCodec.MacDefaultsVersionKey] = JsonValue.Create("1");
                 await first.Config.SaveAsync();
 
                 var vm = new SettingsPageViewModel(first.Runtime, new ConnectionGameSharedStateViewModel());
@@ -195,6 +197,7 @@ public sealed class SettingsHotkeyFeedbackFeatureTests
         await using var fixture = await RuntimeFixture.CreateAsync();
         fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.HotKeys] = JsonValue.Create(
             "{\"ShowGui\":{\"Key\":50,\"Modifiers\":7},\"LinkStart\":{\"Key\":61,\"Modifiers\":7}}");
+        fixture.Config.CurrentConfig.GlobalValues[HotkeyConfigurationCodec.MacDefaultsVersionKey] = JsonValue.Create("1");
         await fixture.Config.SaveAsync();
 
         var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
@@ -216,6 +219,7 @@ public sealed class SettingsHotkeyFeedbackFeatureTests
         var hotkeyService = new ScriptedHotkeyService();
         await using var fixture = await RuntimeFixture.CreateAsync(hotkeyService: hotkeyService);
         fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.HotKeys] = JsonValue.Create("ShowGui=Ctrl+1;LinkStart=Ctrl+2");
+        fixture.Config.CurrentConfig.GlobalValues[HotkeyConfigurationCodec.MacDefaultsVersionKey] = JsonValue.Create("1");
         await fixture.Config.SaveAsync();
 
         var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());

@@ -526,7 +526,21 @@ internal sealed class RemoteControlCommandDispatcher
         var config = _configService.CurrentConfig;
         var address = ReadConfigString(profile, config, "ConnectAddress", LegacyConfigurationKeys.ConnectAddress) ?? "127.0.0.1:5555";
         var connectConfig = ReadConfigString(profile, config, "ConnectConfig", LegacyConfigurationKeys.ConnectConfig) ?? "General";
-        var adbPath = ReadConfigString(profile, config, "AdbPath", LegacyConfigurationKeys.AdbPath);
+        string? adbPath;
+        if (MacBundledAdbPolicy.ShouldUseBundledAdb(MacBundledAdbPolicy.ReadUseBundledAdb(profile)))
+        {
+            if (!MacBundledAdbPolicy.IsCurrentTermsAccepted(config))
+            {
+                return MacBundledAdbPolicy.BuildMissingConsentFailure();
+            }
+
+            adbPath = MacBundledAdbPolicy.ResolveBundledAdbPath();
+        }
+        else
+        {
+            adbPath = ReadConfigString(profile, config, "AdbPath", LegacyConfigurationKeys.AdbPath);
+        }
+
         return await _connectFeatureService.ConnectAsync(address, connectConfig, adbPath, cancellationToken);
     }
 

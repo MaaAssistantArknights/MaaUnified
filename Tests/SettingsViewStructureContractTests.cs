@@ -69,6 +69,10 @@ public sealed class SettingsViewStructureContractTests
         var timer = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "TimerSettingsView.axaml"));
         Assert.Contains("IsVisible=\"{Binding ForceScheduledStart}\"", timer, StringComparison.Ordinal);
 
+        var connect = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "ConnectSettingsView.axaml"));
+        Assert.Equal(2, Regex.Matches(connect, "IsVisible=\"\\{Binding ShowEmulatorExtrasSection\\}\"").Count);
+        Assert.DoesNotContain("Classes=\"settings-page-column-stack settings-page-branch-block connect-settings-section\"\n                    IsVisible=\"{Binding IsAdbConnectionMode}\"", connect, StringComparison.Ordinal);
+
         var achievement = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "AchievementSettingsView.axaml"));
         Assert.Contains("IsVisible=\"{Binding CanEditAchievementPopupAutoClose}\"", achievement, StringComparison.Ordinal);
         Assert.Contains("OnBackupAchievementClick", achievement, StringComparison.Ordinal);
