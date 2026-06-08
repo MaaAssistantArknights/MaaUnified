@@ -2743,7 +2743,6 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
         var connectMessage = BuildConnectFailureMessage(connectResult);
         LastErrorMessage = connectMessage;
-        AppendStartPrecheckWarningMessage(LastErrorMessage);
         AppendStartFailureLog(LastErrorMessage);
         await Runtime.DialogFeatureService.ReportErrorAsync(
             scope,
