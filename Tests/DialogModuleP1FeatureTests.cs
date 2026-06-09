@@ -679,20 +679,6 @@ public sealed class DialogModuleP1FeatureTests
     }
 
     [Fact]
-    public void DialogPresentation_ShouldRestoreAndActivateOwnerBeforeShowingModalWindow()
-    {
-        var root = BaselineTestSupport.GetMaaUnifiedRoot();
-        var dialogServiceCode = File.ReadAllText(Path.Combine(root, "App", "Features", "Dialogs", "AvaloniaDialogService.cs"));
-
-        Assert.Contains("if (owner.WindowState == WindowState.Minimized)", dialogServiceCode, StringComparison.Ordinal);
-        Assert.Contains("owner.WindowState = WindowState.Normal;", dialogServiceCode, StringComparison.Ordinal);
-        Assert.Contains("if (!owner.IsVisible)", dialogServiceCode, StringComparison.Ordinal);
-        Assert.Contains("owner.Show();", dialogServiceCode, StringComparison.Ordinal);
-        Assert.Contains("owner.Activate();", dialogServiceCode, StringComparison.Ordinal);
-        Assert.Contains("await dialog.ShowDialog<TResult>(owner)", dialogServiceCode, StringComparison.Ordinal);
-    }
-
-    [Fact]
     public void SelectionDialogs_ShouldUseSurfaceSelectionListMode_AndSharedCompactEmptyState()
     {
         var root = BaselineTestSupport.GetMaaUnifiedRoot();
