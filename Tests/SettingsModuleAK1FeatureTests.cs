@@ -993,7 +993,13 @@ public sealed class SettingsModuleAK1FeatureTests
             };
 
             var capability = new PlatformCapabilityFeatureService(platform, diagnostics);
-            var connectFeatureService = new ConnectFeatureService(session, config, log, bridge, root);
+            var connectFeatureService = new ConnectFeatureService(
+                session,
+                config,
+                log,
+                bridge,
+                root,
+                enableQuickConnectionPrecheck: false);
             var shellFeatureService = new ShellFeatureService(connectFeatureService);
             var runtime = new MAAUnifiedRuntime
             {

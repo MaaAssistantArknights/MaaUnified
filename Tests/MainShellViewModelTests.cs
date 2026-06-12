@@ -2273,7 +2273,13 @@ public sealed class MainShellViewModelTests
             };
 
             var capability = new PlatformCapabilityFeatureService(platform, diagnostics);
-            var connect = new ConnectFeatureService(session, config, log, runtimeBridge, root);
+            var connect = new ConnectFeatureService(
+                session,
+                config,
+                log,
+                runtimeBridge,
+                root,
+                enableQuickConnectionPrecheck: false);
             shellService ??= new ShellFeatureService(connect);
 
             var runtime = new MAAUnifiedRuntime
