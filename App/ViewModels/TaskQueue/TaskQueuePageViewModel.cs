@@ -2822,6 +2822,11 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 return connectResult;
             }
 
+            if (string.Equals(connectResult.Error?.Code, UiErrorCode.OperationAlreadyRunning, StringComparison.Ordinal))
+            {
+                return connectResult;
+            }
+
             AdbCommandFailureInfo? lastAdbFailure = null;
             var address = (_connectionGameSharedState.ConnectAddress ?? string.Empty).Trim();
             var adbExecutableResult = await ResolveAdbExecutableForRecoveryAsync(retryToken);
