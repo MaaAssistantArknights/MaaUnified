@@ -4253,7 +4253,10 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
     <value>ADB Input (Deprecated)</value>
   </data>
   <data name="StartUp.Option.TouchMode.MaaTouch" xml:space="preserve">
-    <value>MaaTouch</value>
+    <value>MaaTouch (Experimental)</value>
+  </data>
+  <data name="StartUp.Option.TouchMode.MaaFwAdbTouch" xml:space="preserve">
+    <value>MaaFramework (Experimental)</value>
   </data>
   <data name="StartUp.Option.TouchMode.MiniTouch" xml:space="preserve">
     <value>Minitouch (Default)</value>

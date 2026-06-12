@@ -195,6 +195,42 @@ public sealed class DialogModuleP1FeatureTests
     }
 
     [Fact]
+    public void DialogTextCatalog_ShouldKeepAddressOrPortDiagnosticAndSuggestion()
+    {
+        var result = UiOperationResult.Fail(
+            UiErrorCode.ConnectFailed,
+            "无法连接到这个地址或端口。" + Environment.NewLine + "请确认模拟器已启动，连接地址和端口正确；常见 ADB 端口为 5555。",
+            "probe: 127.0.0.1:5555 refused");
+
+        var localized = DialogTextCatalog.LocalizeErrorResult("zh-cn", result);
+        var suggestion = DialogTextCatalog.BuildErrorSuggestion("zh-cn", result);
+
+        Assert.Equal("无法连接到这个地址或端口。", localized.Message);
+        Assert.Equal(localized.Message, localized.Error?.Message);
+        Assert.NotEqual("连接模拟器失败。", localized.Message);
+        Assert.Contains("地址和端口", suggestion, StringComparison.Ordinal);
+        Assert.Contains("5555", suggestion, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void DialogTextCatalog_ShouldKeepAvailableDeviceDiagnosticAndSuggestion()
+    {
+        var result = UiOperationResult.Fail(
+            UiErrorCode.ConnectFailed,
+            "ADB 未连接到可用设备。" + Environment.NewLine + "请在 adb devices 中确认设备为 device 状态；如果显示 unauthorized 请在模拟器内授权。",
+            "adb devices: unauthorized");
+
+        var localized = DialogTextCatalog.LocalizeErrorResult("zh-cn", result);
+        var suggestion = DialogTextCatalog.BuildErrorSuggestion("zh-cn", result);
+
+        Assert.Equal("ADB 未连接到可用设备。", localized.Message);
+        Assert.Equal(localized.Message, localized.Error?.Message);
+        Assert.NotEqual("连接模拟器失败。", localized.Message);
+        Assert.Contains("adb devices", suggestion, StringComparison.Ordinal);
+        Assert.Contains("device 状态", suggestion, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task DialogFeatureService_BeginActionComplete_ShouldWriteTraceEvents()
     {
         await using var fixture = DialogFeatureFixture.Create();
@@ -645,6 +681,28 @@ public sealed class DialogModuleP1FeatureTests
         Assert.Contains("DialogShell.Mode = AppWindowFrameMode.ResizableDialog;", errorDialogCode, StringComparison.Ordinal);
         Assert.Contains("Dispatcher.UIThread.Post(CenterExpandedDetailsToOwner, DispatcherPriority.Loaded);", errorDialogCode, StringComparison.Ordinal);
         Assert.Contains("Position = new PixelPoint(x, y);", errorDialogCode, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ScreenshotTestFailure_ShouldUseSharedDiagnosticAndKeepInlineStatusShort()
+    {
+        var root = BaselineTestSupport.GetMaaUnifiedRoot();
+        var connectSettingsCode = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "ConnectSettingsView.axaml.cs"));
+        var connectSettingsXaml = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "ConnectSettingsView.axaml"));
+
+        Assert.Contains("BuildDiagnosticConnectFailureResult(vm, result.Result, candidateFailures);", connectSettingsCode, StringComparison.Ordinal);
+        Assert.Contains("BuildDiagnosticConnectFailureResult(vm, failure);", connectSettingsCode, StringComparison.Ordinal);
+        Assert.Contains("vm.TestLinkInfo = BuildScreenshotTestFailureStatus(testResult.Result);", connectSettingsCode, StringComparison.Ordinal);
+        Assert.Contains("vm.TestLinkInfoSeverity = BuildScreenshotTestFailureSeverity(testResult.Result);", connectSettingsCode, StringComparison.Ordinal);
+        Assert.Contains("vm.TestLinkInfo = T(\"Settings.Connect.Error.ConnectionFailedShort\", \"Connection failed.\");", connectSettingsCode, StringComparison.Ordinal);
+        Assert.Contains("TestLinkInfoSeverity.Error", connectSettingsCode, StringComparison.Ordinal);
+        Assert.Contains("testResult.Result.Error?.Details", connectSettingsCode, StringComparison.Ordinal);
+        Assert.Contains("Classes.state-warning=\"{Binding TestLinkInfoIsWarning}\"", connectSettingsXaml, StringComparison.Ordinal);
+        Assert.Contains("Classes.state-error=\"{Binding TestLinkInfoIsError}\"", connectSettingsXaml, StringComparison.Ordinal);
+        Assert.Contains("TextBlock.connect-settings-test-result.state-error", connectSettingsXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("vm.TestLinkInfo = failureMessage;", connectSettingsCode, StringComparison.Ordinal);
+        Assert.DoesNotContain("vm.TestLinkInfo = Tf(\"Settings.Connect.Error.ScreenshotTestException\", ex.Message);", connectSettingsCode, StringComparison.Ordinal);
+        Assert.DoesNotContain("Tf(\"Settings.Connect.Error.Details\"", connectSettingsCode, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -433,6 +433,36 @@ public sealed class SettingsModuleAK1FeatureTests
     }
 
     [Fact]
+    public void ConnectionGameSharedState_TestLinkInfo_ShouldExposeAndResetSeverity()
+    {
+        var state = new ConnectionGameSharedStateViewModel();
+
+        state.TestLinkInfo = "连接失败";
+        state.TestLinkInfoSeverity = TestLinkInfoSeverity.Error;
+
+        Assert.True(state.TestLinkInfoIsError);
+        Assert.False(state.TestLinkInfoIsWarning);
+
+        state.TestLinkInfo = state.ScreencapCost;
+
+        Assert.Equal(TestLinkInfoSeverity.Normal, state.TestLinkInfoSeverity);
+        Assert.False(state.TestLinkInfoIsError);
+        Assert.False(state.TestLinkInfoIsWarning);
+    }
+
+    [Fact]
+    public void ConnectSettingsView_ScreenshotTestException_ShouldKeepInlineStatusShort()
+    {
+        var root = BaselineTestSupport.GetMaaUnifiedRoot();
+        var connectSettingsCode = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "ConnectSettingsView.axaml.cs"));
+
+        Assert.Contains("vm.TestLinkInfo = T(\"Settings.Connect.Error.ConnectionFailedShort\", \"Connection failed.\");", connectSettingsCode, StringComparison.Ordinal);
+        Assert.Contains("vm.TestLinkInfoSeverity = TestLinkInfoSeverity.Error;", connectSettingsCode, StringComparison.Ordinal);
+        Assert.Contains("message: ex.Message", connectSettingsCode, StringComparison.Ordinal);
+        Assert.DoesNotContain("vm.TestLinkInfo = Tf(\"Settings.Connect.Error.ScreenshotTestException\", ex.Message);", connectSettingsCode, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ConnectionGameSharedState_ClientTypeFlags_ShouldExposeYoStarAndOverseasHints()
     {
         var state = new ConnectionGameSharedStateViewModel

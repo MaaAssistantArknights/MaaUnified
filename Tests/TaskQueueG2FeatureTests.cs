@@ -3,6 +3,7 @@ using System.Runtime.CompilerServices;
 using System.Text.Json.Nodes;
 using System.Threading.Channels;
 using Avalonia.Threading;
+using MAAUnified.App.ViewModels.Infrastructure;
 using MAAUnified.App.ViewModels.Settings;
 using MAAUnified.App.ViewModels.TaskQueue;
 using MAAUnified.Application.Configuration;
@@ -252,6 +253,49 @@ public sealed class TaskQueueG2FeatureTests
         Assert.True(vm.CanToggleRun);
         Assert.Equal(0, fixture.Bridge.StartCallCount);
         Assert.Contains("连接失败", vm.LastErrorMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task BuildConnectFailureMessage_WhenConnectResultHasSpecificDiagnostic_ShouldKeepDiagnosticFirstLine()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var vm = new TaskQueuePageViewModel(
+            fixture.Runtime,
+            new ConnectionGameSharedStateViewModel
+            {
+                ConnectAddress = "127.0.0.1:5554",
+                ConnectConfig = "General",
+                AdbPath = fixture.ReadyAdbPath,
+            });
+        await vm.InitializeAsync();
+        vm.SetLanguage("zh-cn");
+
+        var diagnosticMessage = string.Join(
+            Environment.NewLine,
+            "无法连接到这个地址或端口。",
+            "请确认模拟器已启动，连接地址和端口正确；常见 ADB 端口为 5555。");
+        var connectResult = UiOperationResult.Fail(
+            UiErrorCode.ConnectFailed,
+            diagnosticMessage,
+            "probe=tcp host=127.0.0.1 port=5554 timeoutMs=750");
+
+        var message = Assert.IsType<string>(
+            typeof(TaskQueuePageViewModel)
+                .GetMethod("BuildConnectFailureMessage", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .Invoke(vm, [connectResult]));
+        var firstLine = message
+            .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .First();
+        var localized = DialogTextCatalog.LocalizeErrorResult(
+            "zh-cn",
+            UiOperationResult.Fail(UiErrorCode.ConnectFailed, message, connectResult.Error?.Details));
+
+        Assert.Equal("无法连接到这个地址或端口。", firstLine);
+        Assert.Equal("无法连接到这个地址或端口。", localized.Message);
+        Assert.Equal(localized.Message, localized.Error?.Message);
+        Assert.NotEqual("连接模拟器失败。", localized.Message);
+        Assert.Contains("连接失败。请", message, StringComparison.Ordinal);
+        Assert.DoesNotContain("连接回调：无法连接到这个地址或端口。", message, StringComparison.Ordinal);
     }
 
     [Theory]

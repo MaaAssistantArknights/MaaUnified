@@ -10,6 +10,13 @@ using MAAUnified.CoreBridge;
 
 namespace MAAUnified.App.ViewModels.Settings;
 
+public enum TestLinkInfoSeverity
+{
+    Normal,
+    Warning,
+    Error,
+}
+
 public sealed class ConnectionGameSharedStateViewModel : ObservableObject
 {
     private const int MaxConnectAddressHistory = 5;
@@ -64,6 +71,7 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
     private string _attachWindowMouseMethod = DefaultAttachWindowInputMethod;
     private string _attachWindowKeyboardMethod = DefaultAttachWindowInputMethod;
     private string _testLinkInfo = string.Empty;
+    private TestLinkInfoSeverity _testLinkInfoSeverity;
     private string _screencapCost = string.Empty;
     private long? _lastScreencapCostMin;
     private long? _lastScreencapCostAvg;
@@ -636,11 +644,29 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
             if (SetProperty(ref _testLinkInfo, value ?? string.Empty))
             {
                 OnPropertyChanged(nameof(HasTestLinkInfo));
+                TestLinkInfoSeverity = TestLinkInfoSeverity.Normal;
             }
         }
     }
 
     public bool HasTestLinkInfo => !string.IsNullOrWhiteSpace(TestLinkInfo);
+
+    public TestLinkInfoSeverity TestLinkInfoSeverity
+    {
+        get => _testLinkInfoSeverity;
+        set
+        {
+            if (SetProperty(ref _testLinkInfoSeverity, value))
+            {
+                OnPropertyChanged(nameof(TestLinkInfoIsWarning));
+                OnPropertyChanged(nameof(TestLinkInfoIsError));
+            }
+        }
+    }
+
+    public bool TestLinkInfoIsWarning => TestLinkInfoSeverity == TestLinkInfoSeverity.Warning;
+
+    public bool TestLinkInfoIsError => TestLinkInfoSeverity == TestLinkInfoSeverity.Error;
 
     public string ScreencapCost
     {

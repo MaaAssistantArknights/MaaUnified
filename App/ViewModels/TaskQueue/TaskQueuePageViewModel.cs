@@ -3336,12 +3336,19 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
     private string BuildConnectFailureMessage(UiOperationResult connectResult)
     {
-        var segments = new List<string>
+        var genericHint = BuildLocalizedMessage(
+            "连接失败。请“检查连接设置” -> “尝试重启模拟器与 ADB” -> “重启电脑”。",
+            "Connection failed. Check connection settings -> try restarting the emulator and ADB -> reboot the computer.");
+        var segments = new List<string>();
+        var hasDiagnosticMessage = HasSpecificConnectFailureDiagnostic(connectResult);
+        if (hasDiagnosticMessage && !string.IsNullOrWhiteSpace(connectResult.Message))
         {
-            BuildLocalizedMessage(
-                "连接失败。请“检查连接设置” -> “尝试重启模拟器与 ADB” -> “重启电脑”。",
-                "Connection failed. Check connection settings -> try restarting the emulator and ADB -> reboot the computer."),
-        };
+            segments.Add(connectResult.Message.Trim());
+        }
+        else
+        {
+            segments.Add(genericHint);
+        }
 
         var settingsHint = _connectionGameSharedState.BuildConnectionSettingsHintMessage();
         if (!string.IsNullOrWhiteSpace(settingsHint))
@@ -3349,7 +3356,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             segments.Add(settingsHint);
         }
 
-        if (!string.IsNullOrWhiteSpace(connectResult.Message)
+        if (!hasDiagnosticMessage
+            && !string.IsNullOrWhiteSpace(connectResult.Message)
             && !string.Equals(connectResult.Message, "Connection failed.", StringComparison.OrdinalIgnoreCase))
         {
             segments.Add(BuildLocalizedMessage(
@@ -3357,7 +3365,27 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 $"Connection callback: {connectResult.Message}"));
         }
 
+        if (hasDiagnosticMessage && !segments.Contains(genericHint, StringComparer.Ordinal))
+        {
+            segments.Add(genericHint);
+        }
+
         return string.Join(Environment.NewLine, segments);
+    }
+
+    private bool HasSpecificConnectFailureDiagnostic(UiOperationResult connectResult)
+    {
+        if (!string.Equals(connectResult.Error?.Code, UiErrorCode.ConnectFailed, StringComparison.Ordinal)
+            || string.IsNullOrWhiteSpace(connectResult.Message))
+        {
+            return false;
+        }
+
+        var localized = DialogTextCatalog.LocalizeErrorResult(Texts.Language, connectResult);
+        var generic = DialogTextCatalog.LocalizeErrorResult(
+            Texts.Language,
+            UiOperationResult.Fail(UiErrorCode.ConnectFailed, "Connection failed."));
+        return !string.Equals(localized.Message, generic.Message, StringComparison.Ordinal);
     }
 
     private string BuildRunOwnerBlockedMessage(string actionZh, string actionEn, string owner)

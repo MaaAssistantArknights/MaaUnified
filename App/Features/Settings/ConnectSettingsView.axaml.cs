@@ -4,7 +4,6 @@ using System.IO.Compression;
 using System.Linq;
 using System.Net.Http;
 using System.Runtime.InteropServices;
-using System.Text;
 using System.Text.Json;
 using Avalonia;
 using Avalonia.Controls;
@@ -189,7 +188,6 @@ public partial class ConnectSettingsView : UserControl
             var testResult = await RunScreenshotTestWithCurrentSettingsAsync(vm);
             if (!testResult.Success)
             {
-                var failureMessage = BuildConnectFailureMessage(vm, testResult.Result);
                 LogScreenshotTestEvent(
                     "test",
                     vm,
@@ -197,12 +195,13 @@ public partial class ConnectSettingsView : UserControl
                     message: testResult.Result.Message,
                     errorCode: testResult.Result.Error?.Code,
                     candidate: testResult.SuccessfulAddress);
-                vm.TestLinkInfo = failureMessage;
+                vm.TestLinkInfo = BuildScreenshotTestFailureStatus(testResult.Result);
+                vm.TestLinkInfoSeverity = BuildScreenshotTestFailureSeverity(testResult.Result);
                 await App.Runtime.DialogFeatureService.ReportErrorAsync(
                     "Settings.Connect.ScreenshotTest",
                     UiOperationResult.Fail(
                         UiErrorCode.ConnectFailed,
-                        failureMessage,
+                        testResult.Result.Message,
                         testResult.Result.Error?.Details));
                 return;
             }
@@ -249,7 +248,8 @@ public partial class ConnectSettingsView : UserControl
                 "failed",
                 message: ex.Message,
                 errorCode: ex.GetType().Name);
-            vm.TestLinkInfo = Tf("Settings.Connect.Error.ScreenshotTestException", ex.Message);
+            vm.TestLinkInfo = T("Settings.Connect.Error.ConnectionFailedShort", "Connection failed.");
+            vm.TestLinkInfoSeverity = TestLinkInfoSeverity.Error;
         }
     }
 
@@ -333,11 +333,13 @@ public partial class ConnectSettingsView : UserControl
             timeout: ScreenshotTestConnectTimeout);
         if (!candidatesResult.Success || candidatesResult.Value is null)
         {
+            var failure = UiOperationResult.Fail(
+                candidatesResult.Error?.Code ?? UiErrorCode.ConnectFailed,
+                candidatesResult.Message,
+                candidatesResult.Error?.Details);
+            var diagnostic = BuildDiagnosticConnectFailureResult(vm, failure);
             return new ConnectionScreenshotTestOperationResult(
-                UiOperationResult.Fail(
-                    candidatesResult.Error?.Code ?? UiErrorCode.ConnectFailed,
-                    candidatesResult.Message,
-                    candidatesResult.Error?.Details),
+                diagnostic,
                 null,
                 null,
                 []);
@@ -439,27 +441,6 @@ public partial class ConnectSettingsView : UserControl
         return string.Format(System.Globalization.CultureInfo.CurrentCulture, T(key), args);
     }
 
-    private string BuildConnectFailureMessage(
-        ConnectionGameSharedStateViewModel vm,
-        UiOperationResult connectResult)
-    {
-        var builder = new StringBuilder();
-        builder.AppendLine(Tf("Settings.Connect.Error.ConnectFailed", connectResult.Message));
-
-        if (!string.IsNullOrWhiteSpace(connectResult.Error?.Details))
-        {
-            builder.AppendLine(Tf("Settings.Connect.Error.Details", connectResult.Error.Details));
-        }
-
-        var settingsHint = vm.BuildConnectionSettingsHintMessage();
-        if (!string.IsNullOrWhiteSpace(settingsHint))
-        {
-            builder.AppendLine(settingsHint);
-        }
-
-        return builder.ToString().Trim();
-    }
-
     private UiOperationResult BuildDiagnosticConnectFailureResult(
         ConnectionGameSharedStateViewModel vm,
         UiOperationResult connectResult,
@@ -475,6 +456,16 @@ public partial class ConnectSettingsView : UserControl
             diagnostic.BuildDialogMessage(),
             diagnostic.Details);
     }
+
+    private string BuildScreenshotTestFailureStatus(UiOperationResult result)
+        => string.Equals(result.Error?.Code, UiErrorCode.OperationAlreadyRunning, StringComparison.Ordinal)
+            ? result.Message
+            : T("Settings.Connect.Error.ConnectionFailedShort", "Connection failed.");
+
+    private static TestLinkInfoSeverity BuildScreenshotTestFailureSeverity(UiOperationResult result)
+        => string.Equals(result.Error?.Code, UiErrorCode.OperationAlreadyRunning, StringComparison.Ordinal)
+            ? TestLinkInfoSeverity.Warning
+            : TestLinkInfoSeverity.Error;
 
     private static void LogScreenshotTestEvent(
         string stage,

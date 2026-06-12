@@ -37,10 +37,10 @@ public sealed class StartUpTaskModuleViewModel : TypedTaskModuleViewModelBase<St
 
     private static readonly (string Value, string TextKey, string Fallback)[] TouchModeOptionSpecs =
     [
-        ("MaaFwAdb", "StartUp.Option.TouchMode.MaaFwAdbTouch", "MaaFwAdb (Default)"),
-        ("minitouch", "StartUp.Option.TouchMode.MiniTouch", "Minitouch"),
+        ("minitouch", "StartUp.Option.TouchMode.MiniTouch", "Minitouch (Default)"),
         ("maatouch", "StartUp.Option.TouchMode.MaaTouch", "MaaTouch (Experimental)"),
         ("adb", "StartUp.Option.TouchMode.AdbTouch", "ADB Input (Deprecated)"),
+        ("MaaFwAdb", "StartUp.Option.TouchMode.MaaFwAdbTouch", "MaaFramework (Experimental)"),
     ];
 
     private static readonly (string Value, string TextKey, string Fallback)[] AttachWindowScreencapOptionSpecs =

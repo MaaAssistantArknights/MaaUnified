@@ -2835,6 +2835,9 @@ OF-1 스테이지가 개방되지 않은 경우에는 선택하지 마세요.</v
   <data name="StartUp.Option.TouchMode.MaaTouch" xml:space="preserve">
     <value>MaaTouch (실험적)</value>
   </data>
+  <data name="StartUp.Option.TouchMode.MaaFwAdbTouch" xml:space="preserve">
+    <value>MaaFramework (실험적)</value>
+  </data>
   <data name="StartUp.Option.TouchMode.MiniTouch" xml:space="preserve">
     <value>Minitouch (기본값)</value>
   </data>
