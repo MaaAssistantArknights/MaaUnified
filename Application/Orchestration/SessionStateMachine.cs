@@ -25,6 +25,7 @@ public sealed class SessionStateMachine
                 SessionState.Idle,
                 SessionState.Connected,
                 SessionState.Running,
+                SessionState.Stopping,
             ],
             [SessionState.Connected] =
             [

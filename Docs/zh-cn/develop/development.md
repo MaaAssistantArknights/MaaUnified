@@ -158,6 +158,8 @@ Copy-Item install\* publish\ -Recurse -Force
 
 ### macOS Intel (x64)
 
+临时操作：在 MaaFramework latest release 找对应架构的 macOS 包，Intel 选 `MAA-macos-x86_64-v*.zip`。解压后把 `bin/libMaaAdbControlUnit.dylib` 放进 `install/`。访问 GitHub 需要本地代理时保留 `-x http://127.0.0.1:7897`；不需要代理时去掉。
+
 ```bash
 # 1) 还原 Avalonia app 依赖，并下载 macOS Intel x64 运行时依赖
 dotnet restore src/MAAUnified/App/MAAUnified.App.csproj -r osx-x64
@@ -168,19 +170,33 @@ cmake --preset macos-publish-x64 --fresh -DINSTALL_PYTHON=OFF
 cmake --build --preset macos-publish-x64
 cmake --install build --config RelWithDebInfo
 
-# 3) 发布 Avalonia app 到 publish/bin
+# 3) 临时操作：下载对应架构的 MaaFramework ADB control unit，并放入 install/
+#    latest: https://github.com/MaaXYZ/MaaFramework/releases/latest
+#    在 latest 页面找到 MAA-macos-x86_64-v*.zip，把实际下载链接填到 MAAFW_ZIP_URL
+MAAFW_ZIP_URL="https://github.com/MaaXYZ/MaaFramework/releases/download/vX.Y.Z/MAA-macos-x86_64-vX.Y.Z.zip"
+rm -rf /tmp/MaaFramework-temp /tmp/MaaFramework-macos-x86_64.zip
+curl -x http://127.0.0.1:7897 -L \
+  -o /tmp/MaaFramework-macos-x86_64.zip \
+  "$MAAFW_ZIP_URL"
+unzip -q /tmp/MaaFramework-macos-x86_64.zip -d /tmp/MaaFramework-temp
+cp -f /tmp/MaaFramework-temp/bin/libMaaAdbControlUnit.dylib install/
+test -f install/libMaaAdbControlUnit.dylib
+
+# 4) 发布 Avalonia app 到 publish/bin
 mkdir -p publish
 dotnet publish src/MAAUnified/App/MAAUnified.App.csproj -c Release -r osx-x64 --self-contained true --no-restore -o publish/bin
 
-# 4) 合并 runtime 到发布目录根部，并生成启动入口
+# 5) 合并 runtime 到发布目录根部，并生成启动入口
 cp -a install/. publish/
 bash src/MAAUnified/CI/create-unix-launchers.sh publish macos
 
-# 5) 启动本地打包产物
+# 6) 启动本地打包产物
 ./publish/MAAUnified
 ```
 
 ### macOS Apple Silicon (arm64)
+
+临时操作：在 MaaFramework latest release 找对应架构的 macOS 包，Apple Silicon 选 `MAA-macos-aarch64-v*.zip`。解压后把 `bin/libMaaAdbControlUnit.dylib` 放进 `install/`。访问 GitHub 需要本地代理时保留 `-x http://127.0.0.1:7897`；不需要代理时去掉。
 
 ```bash
 # 1) 还原 Avalonia app 依赖，并下载 macOS Apple Silicon arm64 运行时依赖
@@ -192,15 +208,27 @@ cmake --preset macos-publish-arm64 -DINSTALL_PYTHON=OFF
 cmake --build --preset macos-publish-arm64
 cmake --install build --config RelWithDebInfo
 
-# 3) 发布 Avalonia app 到 publish/bin
+# 3) 临时操作：下载对应架构的 MaaFramework ADB control unit，并放入 install/
+#    latest: https://github.com/MaaXYZ/MaaFramework/releases/latest
+#    在 latest 页面找到 MAA-macos-aarch64-v*.zip，把实际下载链接填到 MAAFW_ZIP_URL
+MAAFW_ZIP_URL="https://github.com/MaaXYZ/MaaFramework/releases/download/vX.Y.Z/MAA-macos-aarch64-vX.Y.Z.zip"
+rm -rf /tmp/MaaFramework-temp /tmp/MaaFramework-macos-aarch64.zip
+curl -x http://127.0.0.1:7897 -L \
+  -o /tmp/MaaFramework-macos-aarch64.zip \
+  "$MAAFW_ZIP_URL"
+unzip -q /tmp/MaaFramework-macos-aarch64.zip -d /tmp/MaaFramework-temp
+cp -f /tmp/MaaFramework-temp/bin/libMaaAdbControlUnit.dylib install/
+test -f install/libMaaAdbControlUnit.dylib
+
+# 4) 发布 Avalonia app 到 publish/bin
 mkdir -p publish
 dotnet publish src/MAAUnified/App/MAAUnified.App.csproj -c Release -r osx-arm64 --self-contained true --no-restore -o publish/bin
 
-# 4) 合并 runtime 到发布目录根部，并生成启动入口
+# 5) 合并 runtime 到发布目录根部，并生成启动入口
 cp -a install/. publish/
 bash src/MAAUnified/CI/create-unix-launchers.sh publish macos
 
-# 5) 启动本地打包产物
+# 6) 启动本地打包产物
 ./publish/MAAUnified
 ```
 
@@ -212,6 +240,7 @@ bash src/MAAUnified/CI/create-unix-launchers.sh publish macos
 - Linux / macOS 入口在根目录：`publish/MAAUnified`
 - 托管应用和依赖在 `publish/bin/`
 - MaaCore runtime、原生库和 `resource/` 在 `publish/` 根目录
+- macOS 根目录需要 `publish/libMaaCore.dylib` 和 `publish/libMaaAdbControlUnit.dylib` 同级；若已有 MaaFramework control unit，也可在 publish 时通过 `-p:MaaUnifiedMacAdbControlUnitSource=/path/to/libMaaAdbControlUnit.dylib` 显式指定来源
 - 诊断日志在 `publish/debug/`
 
 常看这几个文件：

@@ -119,6 +119,13 @@ public sealed class MainShellViewModel : ObservableObject
             (Avalonia.Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime
                 ? new AvaloniaDialogService(runtime)
                 : NoOpAppDialogService.Instance);
+        if (runtime.ConnectFeatureService is ConnectFeatureService connectFeatureService)
+        {
+            connectFeatureService.MacRawByNcRiskPromptService = new MacRawByNcRiskConnectionPromptService(
+                _dialogService,
+                runtime.UiLanguageCoordinator);
+        }
+
         _connectionGameSharedState = new ConnectionGameSharedStateViewModel();
         _overlaySharedState = OverlaySharedStateRegistry.Get(runtime);
         _connectionGameSharedState.PropertyChanged += OnSharedConnectionStateChanged;
@@ -1255,7 +1262,14 @@ public sealed class MainShellViewModel : ObservableObject
         CurrentSessionState = _runtime.SessionService.CurrentState;
         if (CurrentSessionState == SessionState.Connected)
         {
-            return UiOperationResult.Ok("Session already connected.");
+            var currentConnection = BuildCurrentConnectionInfo();
+            if (_runtime.SessionService.IsConnectedWith(currentConnection))
+            {
+                return UiOperationResult.Ok("Session already connected.");
+            }
+
+            _runtime.LogService.Info(
+                $"Secondary run reconnect required because connection settings changed: current address={currentConnection.Address}, config={currentConnection.ConnectConfig}, adb={currentConnection.AdbPath ?? "<null>"}; previous address={_runtime.SessionService.LastSuccessfulConnectionInfo?.Address ?? "<null>"}, config={_runtime.SessionService.LastSuccessfulConnectionInfo?.ConnectConfig ?? "<null>"}, adb={_runtime.SessionService.LastSuccessfulConnectionInfo?.AdbPath ?? "<null>"}");
         }
 
         if (CurrentSessionState is SessionState.Running or SessionState.Stopping)
@@ -1282,6 +1296,12 @@ public sealed class MainShellViewModel : ObservableObject
         }
 
         return connectResult;
+    }
+
+    private CoreConnectionInfo BuildCurrentConnectionInfo()
+    {
+        var effectiveAdbPath = _connectionGameSharedState.ResolveEffectiveAdbPath(updateStateWhenResolved: true);
+        return _connectionGameSharedState.BuildCoreConnectionInfo(effectiveAdbPath: effectiveAdbPath);
     }
 
     private async Task StopRunOwnerFromDialogAsync(string owner, CancellationToken cancellationToken)
@@ -1473,9 +1493,23 @@ public sealed class MainShellViewModel : ObservableObject
             return;
         }
 
-        if (CurrentSessionState != SessionState.Connected)
+        CoreConnectionInfo? requiredConnection = null;
+        var shouldConnect = CurrentSessionState != SessionState.Connected;
+        if (CurrentSessionState == SessionState.Connected)
         {
-            var connectResult = await ConnectWithCurrentSettingsAsync(cancellationToken);
+            var currentConnection = BuildCurrentConnectionInfo();
+            if (!_runtime.SessionService.IsConnectedWith(currentConnection))
+            {
+                shouldConnect = true;
+                requiredConnection = currentConnection;
+                _runtime.LogService.Info(
+                    $"Shell Start reconnect required because connection settings changed: current address={currentConnection.Address}, config={currentConnection.ConnectConfig}, adb={currentConnection.AdbPath ?? "<null>"}; previous address={_runtime.SessionService.LastSuccessfulConnectionInfo?.Address ?? "<null>"}, config={_runtime.SessionService.LastSuccessfulConnectionInfo?.ConnectConfig ?? "<null>"}, adb={_runtime.SessionService.LastSuccessfulConnectionInfo?.AdbPath ?? "<null>"}");
+            }
+        }
+
+        if (shouldConnect)
+        {
+            var connectResult = await ConnectWithCurrentSettingsAsync(cancellationToken, requiredConnection);
             startConnectResult = connectResult;
             CurrentSessionState = _runtime.SessionService.CurrentState;
             if (connectResult.Success)
@@ -1517,7 +1551,9 @@ public sealed class MainShellViewModel : ObservableObject
         await SyncTrayMenuStateAsync(cancellationToken);
     }
 
-    private async Task<UiOperationResult> ConnectWithCurrentSettingsAsync(CancellationToken cancellationToken)
+    private async Task<UiOperationResult> ConnectWithCurrentSettingsAsync(
+        CancellationToken cancellationToken,
+        CoreConnectionInfo? requiredConnection = null)
     {
         var consent = await MacBundledAdbConsentService.EnsureAcceptedAsync(
             _runtime,
@@ -1531,39 +1567,48 @@ public sealed class MainShellViewModel : ObservableObject
             return consent;
         }
 
-        var effectiveAdbPath = _connectionGameSharedState.ResolveEffectiveAdbPath(updateStateWhenResolved: true);
-        var adbPath = string.IsNullOrWhiteSpace(effectiveAdbPath) ? null : effectiveAdbPath;
-        var instanceOptions = _connectionGameSharedState.BuildCoreInstanceOptions();
-        var candidates = _connectionGameSharedState.BuildConnectAddressCandidates(includeConfiguredAddress: true);
-        _runtime.LogService.Debug(
-            $"Connect candidates prepared: count={candidates.Count}, config={_connectionGameSharedState.ConnectConfig}, adb={adbPath ?? "<null>"}");
-        UiOperationResult? lastFailure = null;
-        var candidateFailures = new List<ConnectionAttemptFailure>();
-
-        foreach (var candidate in candidates)
+        if (requiredConnection is not null)
         {
-            _runtime.LogService.Debug($"Trying connect candidate: {candidate}");
-            var result = await _runtime.ShellFeatureService.ConnectAsync(
-                candidate,
-                _connectionGameSharedState.ConnectConfig,
-                adbPath,
-                instanceOptions,
-                cancellationToken);
-            if (result.Success)
-            {
-                _runtime.LogService.Debug($"Connect candidate succeeded: {candidate}");
-                _connectionGameSharedState.ConnectAddress = candidate;
-                return result;
-            }
-
             _runtime.LogService.Debug(
-                $"Connect candidate failed: {candidate}, code={result.Error?.Code}, message={result.Message}");
-            lastFailure = result;
-            candidateFailures.Add(new ConnectionAttemptFailure(candidate, result));
+                $"Connect required target prepared: address={requiredConnection.Address}, config={requiredConnection.ConnectConfig}, adb={requiredConnection.AdbPath ?? "<null>"}");
+            return await _runtime.ConnectFeatureService.ConnectAsync(requiredConnection, cancellationToken);
         }
 
+        var effectiveAdbPath = _connectionGameSharedState.ResolveEffectiveAdbPath(updateStateWhenResolved: true);
+        var adbPath = string.IsNullOrWhiteSpace(effectiveAdbPath) ? null : effectiveAdbPath;
+        var candidates = _connectionGameSharedState
+            .BuildConnectAddressCandidates(includeConfiguredAddress: true)
+            .Select(candidate => _connectionGameSharedState.BuildCoreConnectionInfo(
+                address: candidate,
+                effectiveAdbPath: adbPath,
+                timeout: TimeSpan.FromSeconds(20)))
+            .ToList();
+        _runtime.LogService.Debug(
+            $"Connect candidates prepared: count={candidates.Count}, config={_connectionGameSharedState.ConnectConfig}, adb={adbPath ?? "<null>"}");
+
+        var result = await _runtime.ConnectFeatureService.ConnectCandidatesAsync(candidates, cancellationToken);
+        if (result.Success)
+        {
+            _runtime.LogService.Debug($"Connect candidate succeeded: {result.SuccessfulAddress}");
+            if (!string.IsNullOrWhiteSpace(result.SuccessfulAddress))
+            {
+                _connectionGameSharedState.ConnectAddress = result.SuccessfulAddress;
+            }
+
+            return result.Result;
+        }
+
+        foreach (var failure in result.CandidateFailures)
+        {
+            _runtime.LogService.Debug(
+                $"Connect candidate failed: {failure.Candidate}, code={failure.Result.Error?.Code}, message={failure.Result.Message}");
+        }
+
+        var candidateFailures = result.CandidateFailures
+            .Select(static failure => new ConnectionAttemptFailure(failure.Candidate, failure.Result))
+            .ToList();
         return BuildDiagnosticConnectFailureResult(
-            lastFailure ?? UiOperationResult.Fail(UiErrorCode.ConnectFailed, "Connection failed."),
+            result.Result,
             candidateFailures);
     }
 

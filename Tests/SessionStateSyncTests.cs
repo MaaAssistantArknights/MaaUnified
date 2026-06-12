@@ -222,6 +222,51 @@ public sealed class SessionStateSyncTests
     }
 
     [Fact]
+    public async Task CallbackStream_ConnectedWhileConnecting_ShouldNotFinalizeSessionState()
+    {
+        var bridge = new FakeBridge
+        {
+            BlockConnect = true,
+            ConnectCompletion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously),
+        };
+        var session = new UnifiedSessionService(bridge, CreateConfigService(), new UiLogService(), new SessionStateMachine());
+
+        using var cts = new CancellationTokenSource();
+        var pumpTask = Task.Run(async () =>
+        {
+            try
+            {
+                await session.StartCallbackPumpAsync(_ => Task.CompletedTask, cts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                // expected on cancellation
+            }
+        });
+
+        var connectTask = session.ConnectAsync("127.0.0.1:5555", "General", null);
+        await bridge.ConnectStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        Assert.Equal(SessionState.Connecting, session.CurrentState);
+
+        bridge.Publish(new CoreCallbackEvent(
+            2,
+            "ConnectionInfo",
+            """{"what":"Connected","details":{"address":"127.0.0.1:5555","config":"General"}}""",
+            DateTimeOffset.UtcNow));
+
+        await Task.Delay(100);
+        Assert.Equal(SessionState.Connecting, session.CurrentState);
+
+        bridge.ConnectCompletion.SetResult(true);
+        Assert.True((await connectTask.WaitAsync(TimeSpan.FromSeconds(2))).Success);
+        Assert.Equal(SessionState.Connected, session.CurrentState);
+
+        cts.Cancel();
+        bridge.Complete();
+        await pumpTask;
+    }
+
+    [Fact]
     public async Task CallbackStream_OnEventThrows_ShouldWarnAndContinuePump()
     {
         var bridge = new FakeBridge();
@@ -540,6 +585,13 @@ public sealed class SessionStateSyncTests
 
         public bool StopSucceeds { get; init; } = true;
 
+        public bool BlockConnect { get; init; }
+
+        public TaskCompletionSource<bool>? ConnectCompletion { get; init; }
+
+        public TaskCompletionSource<bool> ConnectStarted { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
         public CoreRuntimeStatus RuntimeStatus { get; set; } = new(true, true, false);
 
         public bool ReloadResourceSucceeds { get; init; } = true;
@@ -551,10 +603,25 @@ public sealed class SessionStateSyncTests
         public Task<CoreResult<CoreInitializeInfo>> InitializeAsync(CoreInitializeRequest request, CancellationToken cancellationToken = default)
             => Task.FromResult(CoreResult<CoreInitializeInfo>.Ok(new CoreInitializeInfo(request.BaseDirectory, "fake", "fake", request.ClientType)));
 
-        public Task<CoreResult<bool>> ConnectAsync(CoreConnectionInfo connectionInfo, CancellationToken cancellationToken = default)
-            => Task.FromResult(ConnectSucceeds
+        public async Task<CoreResult<bool>> ConnectAsync(CoreConnectionInfo connectionInfo, CancellationToken cancellationToken = default)
+        {
+            ConnectStarted.TrySetResult(true);
+            if (BlockConnect)
+            {
+                if (ConnectCompletion is null)
+                {
+                    await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                }
+                else
+                {
+                    await ConnectCompletion.Task.WaitAsync(cancellationToken);
+                }
+            }
+
+            return ConnectSucceeds
                 ? CoreResult<bool>.Ok(true)
-                : CoreResult<bool>.Fail(new CoreError(CoreErrorCode.ConnectFailed, "connect failed")));
+                : CoreResult<bool>.Fail(new CoreError(CoreErrorCode.ConnectFailed, "connect failed"));
+        }
 
         public Task<CoreResult<int>> AppendTaskAsync(CoreTaskRequest task, CancellationToken cancellationToken = default)
             => Task.FromResult(CoreResult<int>.Ok(1));

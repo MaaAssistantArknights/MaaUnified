@@ -20,7 +20,7 @@ public sealed class CopilotN3ExecutionTests
     public async Task CopilotFlow_StrictPump_ImportExecuteStopFeedback_ShouldCompleteByCallbackPump()
     {
         await using var fixture = await CopilotN3Fixture.CreateAsync();
-        Assert.True((await fixture.Runtime.ConnectFeatureService.ConnectAsync("127.0.0.1:5555", "General", null)).Success);
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(fixture.Runtime.ConnectFeatureService, fixture.ReadyAdbPath)).Success);
 
         var filePath = fixture.CreateCopilotFile();
         fixture.ViewModel.FilePath = filePath;
@@ -72,7 +72,7 @@ public sealed class CopilotN3ExecutionTests
     public async Task CopilotFlow_InternalEntry_ImportExecuteStopFeedback_ShouldCompleteWithoutReflection()
     {
         await using var fixture = await CopilotN3Fixture.CreateAsync();
-        Assert.True((await fixture.Runtime.ConnectFeatureService.ConnectAsync("127.0.0.1:5555", "General", null)).Success);
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(fixture.Runtime.ConnectFeatureService, fixture.ReadyAdbPath)).Success);
 
         var filePath = fixture.CreateCopilotFile();
         fixture.ViewModel.FilePath = filePath;
@@ -110,7 +110,7 @@ public sealed class CopilotN3ExecutionTests
     public async Task RuntimeCallbacks_ShouldTrackUseCopilotAndMapOutdatedAchievements()
     {
         await using var fixture = await CopilotN3Fixture.CreateAsync();
-        Assert.True((await fixture.Runtime.ConnectFeatureService.ConnectAsync("127.0.0.1:5555", "General", null)).Success);
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(fixture.Runtime.ConnectFeatureService, fixture.ReadyAdbPath)).Success);
 
         fixture.ViewModel.FilePath = fixture.CreateCopilotFile();
         await fixture.ViewModel.ImportFromFileAsync();
@@ -143,7 +143,7 @@ public sealed class CopilotN3ExecutionTests
     public async Task StartAsync_ShouldAppendWpfStyleStartLogs_WithoutRawCallbackDump()
     {
         await using var fixture = await CopilotN3Fixture.CreateAsync();
-        Assert.True((await fixture.Runtime.ConnectFeatureService.ConnectAsync("127.0.0.1:5555", "General", null)).Success);
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(fixture.Runtime.ConnectFeatureService, fixture.ReadyAdbPath)).Success);
 
         var filePath = fixture.CreateCopilotFile();
         fixture.ViewModel.FilePath = filePath;
@@ -174,7 +174,7 @@ public sealed class CopilotN3ExecutionTests
     public async Task Callback_BattleFormation_ShouldAppendUserFacingLog()
     {
         await using var fixture = await CopilotN3Fixture.CreateAsync();
-        Assert.True((await fixture.Runtime.ConnectFeatureService.ConnectAsync("127.0.0.1:5555", "General", null)).Success);
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(fixture.Runtime.ConnectFeatureService, fixture.ReadyAdbPath)).Success);
 
         var filePath = fixture.CreateCopilotFile();
         fixture.ViewModel.FilePath = filePath;
@@ -203,7 +203,7 @@ public sealed class CopilotN3ExecutionTests
     public async Task CopilotStart_WhenTaskQueueOwnsRun_ShouldBeBlocked()
     {
         await using var fixture = await CopilotN3Fixture.CreateAsync();
-        Assert.True((await fixture.Runtime.ConnectFeatureService.ConnectAsync("127.0.0.1:5555", "General", null)).Success);
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(fixture.Runtime.ConnectFeatureService, fixture.ReadyAdbPath)).Success);
         Assert.True(fixture.Runtime.SessionService.TryBeginRun("TaskQueue", out _));
 
         var filePath = fixture.CreateCopilotFile();
@@ -220,7 +220,7 @@ public sealed class CopilotN3ExecutionTests
     public async Task TaskQueueStart_WhenCopilotOwnsRun_ShouldBeBlockedAndLogged()
     {
         await using var fixture = await CopilotN3Fixture.CreateAsync();
-        Assert.True((await fixture.Runtime.ConnectFeatureService.ConnectAsync("127.0.0.1:5555", "General", null)).Success);
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(fixture.Runtime.ConnectFeatureService, fixture.ReadyAdbPath)).Success);
         Assert.True((await fixture.Runtime.TaskQueueFeatureService.AddTaskAsync("StartUp", "startup-a")).Success);
 
         var taskQueue = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
@@ -242,7 +242,7 @@ public sealed class CopilotN3ExecutionTests
     public async Task Copilot_StopWithoutCallback_ShouldRecoverUiAndRunOwner()
     {
         await using var fixture = await CopilotN3Fixture.CreateAsync();
-        Assert.True((await fixture.Runtime.ConnectFeatureService.ConnectAsync("127.0.0.1:5555", "General", null)).Success);
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(fixture.Runtime.ConnectFeatureService, fixture.ReadyAdbPath)).Success);
 
         var filePath = fixture.CreateCopilotFile();
         fixture.ViewModel.FilePath = filePath;
@@ -269,7 +269,7 @@ public sealed class CopilotN3ExecutionTests
     public async Task Copilot_CallbackPayloadMalformed_ShouldWarnAndContinue()
     {
         await using var fixture = await CopilotN3Fixture.CreateAsync();
-        Assert.True((await fixture.Runtime.ConnectFeatureService.ConnectAsync("127.0.0.1:5555", "General", null)).Success);
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(fixture.Runtime.ConnectFeatureService, fixture.ReadyAdbPath)).Success);
 
         var filePath = fixture.CreateCopilotFile();
         fixture.ViewModel.FilePath = filePath;
@@ -339,7 +339,7 @@ public sealed class CopilotN3ExecutionTests
     public async Task StartAsync_WhenUseCopilotListEnabled_ShouldAppendWpfParityPayload()
     {
         await using var fixture = await CopilotN3Fixture.CreateAsync();
-        Assert.True((await fixture.Runtime.ConnectFeatureService.ConnectAsync("127.0.0.1:5555", "General", null)).Success);
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(fixture.Runtime.ConnectFeatureService, fixture.ReadyAdbPath)).Success);
 
         var vm = fixture.ViewModel;
         vm.UseCopilotList = true;
@@ -380,7 +380,7 @@ public sealed class CopilotN3ExecutionTests
     public async Task StartAsync_WhenUseCopilotListContainsLegacyItem_ShouldFailWithWpfParityMessage()
     {
         await using var fixture = await CopilotN3Fixture.CreateAsync();
-        Assert.True((await fixture.Runtime.ConnectFeatureService.ConnectAsync("127.0.0.1:5555", "General", null)).Success);
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(fixture.Runtime.ConnectFeatureService, fixture.ReadyAdbPath)).Success);
 
         var vm = fixture.ViewModel;
         vm.UseCopilotList = true;
@@ -441,11 +441,13 @@ public sealed class CopilotN3ExecutionTests
         private CopilotN3Fixture(
             string root,
             MAAUnifiedRuntime runtime,
-            Bridge bridge)
+            Bridge bridge,
+            string readyAdbPath)
         {
             Root = root;
             Runtime = runtime;
             Bridge = bridge;
+            ReadyAdbPath = readyAdbPath;
             ViewModel = new CopilotPageViewModel(runtime);
             _pumpTask = runtime.SessionService.StartCallbackPumpAsync(_ => Task.CompletedTask, _pumpCts.Token);
         }
@@ -455,6 +457,8 @@ public sealed class CopilotN3ExecutionTests
         public MAAUnifiedRuntime Runtime { get; }
 
         public Bridge Bridge { get; }
+
+        public string ReadyAdbPath { get; }
 
         public CopilotPageViewModel ViewModel { get; }
 
@@ -486,6 +490,7 @@ public sealed class CopilotN3ExecutionTests
                 log,
                 root);
             await config.LoadOrBootstrapAsync();
+            var readyAdbPath = await TestConnectionFixtureSupport.PrepareReadyRuntimeAsync(root, config, "copilot-n3-ready");
 
             var bridge = new Bridge();
             var session = new UnifiedSessionService(bridge, config, log, new SessionStateMachine());
@@ -501,7 +506,7 @@ public sealed class CopilotN3ExecutionTests
             };
 
             var capability = new PlatformCapabilityFeatureService(platform, diagnostics);
-            var connect = new ConnectFeatureService(session, config);
+            var connect = new ConnectFeatureService(session, config, log, bridge, root);
             var achievementTracker = new AchievementTrackerService(config, root);
             var runtime = new MAAUnifiedRuntime
             {
@@ -530,7 +535,7 @@ public sealed class CopilotN3ExecutionTests
                     platform.PostActionExecutorService),
             };
 
-            return new CopilotN3Fixture(root, runtime, bridge);
+            return new CopilotN3Fixture(root, runtime, bridge, readyAdbPath);
         }
 
         public async ValueTask DisposeAsync()

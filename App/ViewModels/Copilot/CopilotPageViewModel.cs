@@ -802,20 +802,16 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
         SetStartRequestActive(true);
         try
         {
-            if (CurrentSessionState != SessionState.Connected)
+            var connectResult = await EnsureConnectedForStartAsync(cancellationToken);
+            if (!connectResult.Success)
             {
-                var connectResult = await EnsureConnectedForStartAsync(cancellationToken);
-                if (!connectResult.Success)
-                {
-                    StatusMessage = T("Copilot.Status.StartFailed", "启动失败。");
-                    LastErrorMessage = connectResult.Message;
-                    await RecordFailedResultAsync("Copilot.Start.Connect", connectResult, cancellationToken);
-                    return;
-                }
-
-                CurrentSessionState = Runtime.SessionService.CurrentState;
+                StatusMessage = T("Copilot.Status.StartFailed", "启动失败。");
+                LastErrorMessage = connectResult.Message;
+                await RecordFailedResultAsync("Copilot.Start.Connect", connectResult, cancellationToken);
+                return;
             }
 
+            CurrentSessionState = Runtime.SessionService.CurrentState;
             var appendPlan = await AppendConfiguredCopilotAsync(cancellationToken);
             if (appendPlan is null)
             {
@@ -879,6 +875,21 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
         CurrentSessionState = Runtime.SessionService.CurrentState;
         if (CurrentSessionState == SessionState.Connected)
         {
+            if (_ensureConnectedAsync is not null)
+            {
+                var ensureResult = await _ensureConnectedAsync(cancellationToken);
+                CurrentSessionState = Runtime.SessionService.CurrentState;
+                if (ensureResult.Success && CurrentSessionState == SessionState.Connected)
+                {
+                    return ensureResult;
+                }
+
+                return UiOperationResult.Fail(
+                    ensureResult.Error?.Code ?? UiErrorCode.SessionStateNotAllowed,
+                    ensureResult.Message,
+                    ensureResult.Error?.Details);
+            }
+
             return UiOperationResult.Ok("Session already connected.");
         }
 

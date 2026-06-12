@@ -5,6 +5,7 @@ using MAAUnified.Application.Models;
 using MAAUnified.Application.Orchestration;
 using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Features;
+using MAAUnified.Compat.Runtime;
 using MAAUnified.CoreBridge;
 
 namespace MAAUnified.Tests;
@@ -56,21 +57,111 @@ public sealed class ConnectFeatureWaitAndStopTests
         Assert.Equal(SessionState.Connected, fixture.Session.CurrentState);
     }
 
+    [Fact]
+    public async Task ValidateAndConnectAsync_WhenTcpCandidateFailsQuickProbe_ShouldStopBeforeBridgeConnectAndReportDiagnostics()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+
+        var result = await fixture.Connect.ValidateAndConnectAsync(
+            new CoreConnectionInfo(
+                "127.0.0.1:1",
+                "General",
+                null,
+                new CoreConnectionExtras(
+                    TouchMode: "MaaFwAdb",
+                    AdbLiteEnabled: true,
+                    ClientType: "Official"),
+                TimeSpan.FromSeconds(20)));
+
+        Assert.False(result.Success);
+        Assert.Equal(CoreErrorCode.ConnectFailed, result.Error?.Code);
+        Assert.Contains("quick TCP probe", result.Error?.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("fallback=", result.Error?.NativeDetails, StringComparison.Ordinal);
+        Assert.Contains("address=127.0.0.1:1", result.Error?.NativeDetails, StringComparison.Ordinal);
+        Assert.Contains("config=General", result.Error?.NativeDetails, StringComparison.Ordinal);
+        Assert.Contains("clientType=Official", result.Error?.NativeDetails, StringComparison.Ordinal);
+        Assert.Equal(0, fixture.Bridge.ConnectCallCount);
+    }
+
+    [Fact]
+    public async Task RunScreenshotTestAsync_ShouldBlockConcurrentConnect_AndRecoverAfterFailure()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        fixture.Bridge.BlockConnect = true;
+        var screenshotTask = fixture.Connect.RunScreenshotTestAsync(
+            [new CoreConnectionInfo("emulator-5554", "General", null)],
+            sampleCount: 3);
+        await fixture.Bridge.ConnectStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+        var concurrentConnect = await fixture.Connect.ConnectCandidatesAsync(
+            [new CoreConnectionInfo("emulator-5556", "General", null)]);
+
+        Assert.False(concurrentConnect.Success);
+        Assert.Equal(UiErrorCode.OperationAlreadyRunning, concurrentConnect.Result.Error?.Code);
+        Assert.Equal(1, fixture.Bridge.ConnectCallCount);
+
+        fixture.Bridge.ConnectCompletion!.SetResult(CoreResult<bool>.Fail(new CoreError(CoreErrorCode.ConnectFailed, "blocked failure")));
+        var failedScreenshot = await screenshotTask.WaitAsync(TimeSpan.FromSeconds(2));
+        Assert.False(failedScreenshot.Success);
+
+        fixture.Bridge.BlockConnect = false;
+        var recovered = await fixture.Connect.RunScreenshotTestAsync(
+            [new CoreConnectionInfo("emulator-5558", "General", null)],
+            sampleCount: 3);
+
+        Assert.True(recovered.Success);
+        Assert.Equal("emulator-5558", recovered.SuccessfulAddress);
+        Assert.Equal(3, recovered.Screenshot?.SampleMilliseconds.Count);
+        Assert.Equal(3, fixture.Bridge.GetImageBgrCallCount);
+    }
+
+    [Fact]
+    public async Task RunScreenshotTestAsync_ShouldBlockConcurrentStop_AndRecoverAfterFailure()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        fixture.Bridge.BlockConnect = true;
+        var screenshotTask = fixture.Connect.RunScreenshotTestAsync(
+            [new CoreConnectionInfo("emulator-5554", "General", null)],
+            sampleCount: 3);
+        await fixture.Bridge.ConnectStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+        var stopResult = await fixture.Connect.StopAsync();
+
+        Assert.False(stopResult.Success);
+        Assert.Equal(UiErrorCode.OperationAlreadyRunning, stopResult.Error?.Code);
+        Assert.Equal(0, fixture.Bridge.StopCallCount);
+
+        fixture.Bridge.ConnectCompletion!.SetResult(CoreResult<bool>.Fail(new CoreError(CoreErrorCode.ConnectFailed, "blocked failure")));
+        var failedScreenshot = await screenshotTask.WaitAsync(TimeSpan.FromSeconds(2));
+        Assert.False(failedScreenshot.Success);
+
+        fixture.Bridge.BlockConnect = false;
+        var recovered = await fixture.Connect.RunScreenshotTestAsync(
+            [new CoreConnectionInfo("emulator-5558", "General", null)],
+            sampleCount: 1);
+        Assert.True(recovered.Success);
+        Assert.Equal("emulator-5558", recovered.SuccessfulAddress);
+    }
+
     private sealed class TestFixture : IAsyncDisposable
     {
         private TestFixture(
             string root,
+            UiLogService log,
             WaitStopBridge bridge,
             UnifiedSessionService session,
             ConnectFeatureService connect)
         {
             Root = root;
+            Log = log;
             Bridge = bridge;
             Session = session;
             Connect = connect;
         }
 
         public string Root { get; }
+
+        public UiLogService Log { get; }
 
         public WaitStopBridge Bridge { get; }
 
@@ -82,6 +173,11 @@ public sealed class ConnectFeatureWaitAndStopTests
         {
             var root = Path.Combine(Path.GetTempPath(), "maa-unified-tests", Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(Path.Combine(root, "config"));
+            File.WriteAllText(
+                RuntimeLayout.ResolveMacMaaFrameworkRuntimeLibraryPath(
+                    root,
+                    RuntimeLayout.MacMaaAdbControlUnitLibraryFileName),
+                "control-unit");
 
             var store = new AvaloniaJsonConfigStore(root);
             var log = new UiLogService();
@@ -90,8 +186,8 @@ public sealed class ConnectFeatureWaitAndStopTests
 
             var bridge = new WaitStopBridge();
             var session = new UnifiedSessionService(bridge, config, log, new SessionStateMachine());
-            var connect = new ConnectFeatureService(session, config);
-            return new TestFixture(root, bridge, session, connect);
+            var connect = new ConnectFeatureService(session, config, log, bridge, root);
+            return new TestFixture(root, log, bridge, session, connect);
         }
 
         public async ValueTask DisposeAsync()
@@ -114,17 +210,33 @@ public sealed class ConnectFeatureWaitAndStopTests
         private bool _connected;
         private bool _running;
 
+        public int ConnectCallCount { get; private set; }
         public int StopCallCount { get; private set; }
+        public int GetImageBgrCallCount { get; private set; }
+        public bool BlockConnect { get; set; }
+        public TaskCompletionSource<CoreResult<bool>>? ConnectCompletion { get; private set; }
+        public TaskCompletionSource<bool> ConnectStarted { get; private set; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public Task<CoreResult<CoreInitializeInfo>> InitializeAsync(CoreInitializeRequest request, CancellationToken cancellationToken = default)
             => Task.FromResult(CoreResult<CoreInitializeInfo>.Ok(new CoreInitializeInfo(request.BaseDirectory, "fake", "fake", request.ClientType)));
 
-        public Task<CoreResult<bool>> ConnectAsync(CoreConnectionInfo connectionInfo, CancellationToken cancellationToken = default)
+        public async Task<CoreResult<bool>> ConnectAsync(CoreConnectionInfo connectionInfo, CancellationToken cancellationToken = default)
         {
+            ConnectCallCount++;
+            ConnectStarted.TrySetResult(true);
+            if (BlockConnect)
+            {
+                ConnectCompletion ??= new TaskCompletionSource<CoreResult<bool>>(TaskCreationOptions.RunContinuationsAsynchronously);
+                var blockedResult = await ConnectCompletion.Task.WaitAsync(cancellationToken);
+                _connected = blockedResult.Success;
+                return blockedResult;
+            }
+
             _connected = !string.IsNullOrWhiteSpace(connectionInfo.Address);
-            return Task.FromResult(_connected
+            return _connected
                 ? CoreResult<bool>.Ok(true)
-                : CoreResult<bool>.Fail(new CoreError(CoreErrorCode.ConnectFailed, "connect failed")));
+                : CoreResult<bool>.Fail(new CoreError(CoreErrorCode.ConnectFailed, "connect failed"));
         }
 
         public Task<CoreResult<int>> AppendTaskAsync(CoreTaskRequest task, CancellationToken cancellationToken = default)
@@ -159,6 +271,12 @@ public sealed class ConnectFeatureWaitAndStopTests
 
         public Task<CoreResult<byte[]>> GetImageAsync(CancellationToken cancellationToken = default)
             => Task.FromResult(CoreResult<byte[]>.Fail(new CoreError(CoreErrorCode.GetImageFailed, "not supported")));
+
+        public Task<CoreResult<byte[]>> GetImageBgrAsync(bool forceScreencap = false, CancellationToken cancellationToken = default)
+        {
+            GetImageBgrCallCount++;
+            return Task.FromResult(CoreResult<byte[]>.Ok([1, 2, 3]));
+        }
 
         public async IAsyncEnumerable<CoreCallbackEvent> CallbackStreamAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
         {

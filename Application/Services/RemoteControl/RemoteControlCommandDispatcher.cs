@@ -506,11 +506,6 @@ internal sealed class RemoteControlCommandDispatcher
             return UiOperationResult.Fail(UiErrorCode.RemoteControlUnsupported, "Remote command requires connect/session services.");
         }
 
-        if (_sessionService.CurrentState is SessionState.Connected or SessionState.Running or SessionState.Stopping)
-        {
-            return UiOperationResult.Ok($"Session state is `{_sessionService.CurrentState}`.");
-        }
-
         if (_sessionService.CurrentState is SessionState.Connecting)
         {
             return UiOperationResult.Fail(
@@ -518,69 +513,35 @@ internal sealed class RemoteControlCommandDispatcher
                 $"Session state `{_sessionService.CurrentState}` cannot connect right now.");
         }
 
-        if (!_configService.TryGetCurrentProfile(out var profile))
+        var candidatesResult = _connectFeatureService.BuildCurrentProfileConnectionCandidates(includeConfiguredAddress: true);
+        if (!candidatesResult.Success || candidatesResult.Value is null || candidatesResult.Value.Count == 0)
         {
-            return UiOperationResult.Fail(UiErrorCode.ProfileMissing, "Current profile is missing.");
+            return UiOperationResult.Fail(
+                candidatesResult.Error?.Code ?? UiErrorCode.ProfileMissing,
+                candidatesResult.Message,
+                candidatesResult.Error?.Details);
         }
 
-        var config = _configService.CurrentConfig;
-        var address = ReadConfigString(profile, config, "ConnectAddress", LegacyConfigurationKeys.ConnectAddress) ?? "127.0.0.1:5555";
-        var connectConfig = ReadConfigString(profile, config, "ConnectConfig", LegacyConfigurationKeys.ConnectConfig) ?? "General";
-        string? adbPath;
-        if (MacBundledAdbPolicy.ShouldUseBundledAdb(MacBundledAdbPolicy.ReadUseBundledAdb(profile)))
+        var candidates = candidatesResult.Value;
+        var currentConnection = candidates[0];
+        if (_sessionService.CurrentState is SessionState.Running or SessionState.Stopping)
         {
-            if (!MacBundledAdbPolicy.IsCurrentTermsAccepted(config))
+            return UiOperationResult.Ok($"Session state is `{_sessionService.CurrentState}`.");
+        }
+
+        if (_sessionService.CurrentState == SessionState.Connected)
+        {
+            if (_sessionService.IsConnectedWith(currentConnection))
             {
-                return MacBundledAdbPolicy.BuildMissingConsentFailure();
+                return UiOperationResult.Ok($"Session state is `{_sessionService.CurrentState}`.");
             }
 
-            adbPath = MacBundledAdbPolicy.ResolveBundledAdbPath();
-        }
-        else
-        {
-            adbPath = ReadConfigString(profile, config, "AdbPath", LegacyConfigurationKeys.AdbPath);
+            _logService?.Info(
+                $"Remote control reconnect required because connection settings changed: current address={currentConnection.Address}, config={currentConnection.ConnectConfig}, adb={currentConnection.AdbPath ?? "<null>"}; previous address={_sessionService.LastSuccessfulConnectionInfo?.Address ?? "<null>"}, config={_sessionService.LastSuccessfulConnectionInfo?.ConnectConfig ?? "<null>"}, adb={_sessionService.LastSuccessfulConnectionInfo?.AdbPath ?? "<null>"}");
         }
 
-        return await _connectFeatureService.ConnectAsync(address, connectConfig, adbPath, cancellationToken);
-    }
-
-    private static string? ReadConfigString(UnifiedProfile profile, UnifiedConfig config, string profileKey, string globalKey)
-    {
-        if (TryReadString(profile.Values, profileKey, out var profileValue))
-        {
-            return profileValue;
-        }
-
-        if (TryReadString(config.GlobalValues, globalKey, out var globalValue))
-        {
-            return globalValue;
-        }
-
-        return null;
-    }
-
-    private static bool TryReadString(IReadOnlyDictionary<string, JsonNode?> values, string key, out string? value)
-    {
-        value = null;
-        if (!values.TryGetValue(key, out var node) || node is null)
-        {
-            return false;
-        }
-
-        if (node is JsonValue raw && raw.TryGetValue(out string? scalar) && !string.IsNullOrWhiteSpace(scalar))
-        {
-            value = scalar.Trim();
-            return true;
-        }
-
-        var text = node.ToString();
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            return false;
-        }
-
-        value = text.Trim();
-        return true;
+        var connectResult = await _connectFeatureService.ConnectCandidatesAsync(candidates, cancellationToken);
+        return connectResult.Result;
     }
 
     private static string NormalizeCommand(string? rawCommand)

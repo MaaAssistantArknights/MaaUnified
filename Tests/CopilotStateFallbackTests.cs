@@ -17,7 +17,7 @@ public sealed class CopilotStateFallbackTests
     public async Task StopWithoutCallback_ShouldRecoverUiAndRunOwner()
     {
         await using var fixture = await TestFixture.CreateAsync();
-        Assert.True((await fixture.Runtime.ConnectFeatureService.ConnectAsync("127.0.0.1:5555", "General", null)).Success);
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(fixture.Runtime.ConnectFeatureService, fixture.ReadyAdbPath)).Success);
 
         var filePath = fixture.CreateCopilotFile();
         fixture.ViewModel.FilePath = filePath;
@@ -42,12 +42,13 @@ public sealed class CopilotStateFallbackTests
 
     private sealed class TestFixture : IAsyncDisposable
     {
-        private TestFixture(string root, MAAUnifiedRuntime runtime, TestBridge bridge, CopilotPageViewModel viewModel)
+        private TestFixture(string root, MAAUnifiedRuntime runtime, TestBridge bridge, CopilotPageViewModel viewModel, string readyAdbPath)
         {
             Root = root;
             Runtime = runtime;
             Bridge = bridge;
             ViewModel = viewModel;
+            ReadyAdbPath = readyAdbPath;
         }
 
         public string Root { get; }
@@ -57,6 +58,8 @@ public sealed class CopilotStateFallbackTests
         public TestBridge Bridge { get; }
 
         public CopilotPageViewModel ViewModel { get; }
+
+        public string ReadyAdbPath { get; }
 
         public string CreateCopilotFile()
         {
@@ -85,6 +88,7 @@ public sealed class CopilotStateFallbackTests
                 log,
                 root);
             await config.LoadOrBootstrapAsync();
+            var readyAdbPath = await TestConnectionFixtureSupport.PrepareReadyRuntimeAsync(root, config, "copilot-fallback-ready");
 
             var bridge = new TestBridge();
             var session = new UnifiedSessionService(bridge, config, log, new SessionStateMachine());
@@ -100,7 +104,7 @@ public sealed class CopilotStateFallbackTests
             };
 
             var capability = new PlatformCapabilityFeatureService(platform, diagnostics);
-            var connect = new ConnectFeatureService(session, config);
+            var connect = new ConnectFeatureService(session, config, log, bridge, root);
             var runtime = new MAAUnifiedRuntime
             {
                 CoreBridge = bridge,
@@ -124,7 +128,7 @@ public sealed class CopilotStateFallbackTests
                 PostActionFeatureService = new PostActionFeatureService(config, diagnostics, platform.PostActionExecutorService),
             };
 
-            return new TestFixture(root, runtime, bridge, new CopilotPageViewModel(runtime));
+            return new TestFixture(root, runtime, bridge, new CopilotPageViewModel(runtime), readyAdbPath);
         }
 
         public async ValueTask DisposeAsync()

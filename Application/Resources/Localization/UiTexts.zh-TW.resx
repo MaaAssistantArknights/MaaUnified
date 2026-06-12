@@ -4603,4 +4603,19 @@
   <data name="Toolbox.Advanced.ExternalNotification.Error.QueryFailed" xml:space="preserve">
     <value>查詢外部通知 Provider 失敗。</value>
   </data>
+  <data name="MacRawByNcRisk.Dialog.Title" xml:space="preserve">
+    <value>連線設定存在風險</value>
+  </data>
+  <data name="MacRawByNcRisk.Dialog.Message" xml:space="preserve">
+    <value>{0} + adbLite={1} 組合存在 macOS RawByNc/POSIX 連線問題，可能導致連線失敗或卡住。建議將 adbLite 修改為 {2}。</value>
+  </data>
+  <data name="MacRawByNcRisk.Dialog.ApplyRecommended" xml:space="preserve">
+    <value>一鍵修改</value>
+  </data>
+  <data name="MacRawByNcRisk.Dialog.ForceRun" xml:space="preserve">
+    <value>強制執行</value>
+  </data>
+  <data name="MacRawByNcRisk.Dialog.DefaultTouchMode" xml:space="preserve">
+    <value>預設觸控方式</value>
+  </data>
 </root>

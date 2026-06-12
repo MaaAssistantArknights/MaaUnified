@@ -15,6 +15,7 @@ using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Features;
 using MAAUnified.Application.Services.VersionUpdate;
 using MAAUnified.Compat.Constants;
+using MAAUnified.Compat.Runtime;
 using MAAUnified.CoreBridge;
 using MAAUnified.Platform;
 
@@ -240,6 +241,112 @@ public sealed class SettingsModuleCM1FeatureTests
 
         Assert.True(VersionUpdatePolicy.Default.AutoDownloadUpdatePackage);
         Assert.True(vm.VersionUpdateAutoDownload);
+    }
+
+    [Fact]
+    public async Task ConnectSettingsView_ScreenshotLifecycleCandidates_ShouldPreserveFullConnectionSignature()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync();
+        var state = new ConnectionGameSharedStateViewModel
+        {
+            ConnectAddress = "192.168.0.252:5555",
+            ConnectConfig = "General",
+            ClientType = "YoStarEN",
+            TouchMode = "MaaFwAdb",
+            AdbLiteEnabled = true,
+            KillAdbOnExit = true,
+            MacUseBundledAdb = false,
+            MuMu12ExtrasEnabled = true,
+            MuMu12EmulatorPath = "/opt/mumu",
+            MuMuBridgeConnection = true,
+            MuMu12Index = "2",
+            LdPlayerExtrasEnabled = true,
+            LdPlayerEmulatorPath = "/opt/ld",
+            LdPlayerManualSetIndex = true,
+            LdPlayerIndex = "4",
+            AttachWindowScreencapMethod = "2",
+            AttachWindowMouseMethod = "32",
+            AttachWindowKeyboardMethod = "64",
+            AutoDetect = true,
+        };
+
+        var candidatesResult = fixture.Runtime.ConnectFeatureService.BuildConnectionCandidates(
+            state.ConnectAddress,
+            state.ConnectConfig,
+            "/resolved/adb",
+            state.BuildCoreConnectionExtras(),
+            state.AutoDetect,
+            state.AlwaysAutoDetect,
+            includeConfiguredAddress: true,
+            timeout: TimeSpan.FromSeconds(20));
+
+        Assert.True(candidatesResult.Success);
+        var result = Assert.IsAssignableFrom<IReadOnlyList<CoreConnectionInfo>>(candidatesResult.Value);
+        Assert.NotEmpty(result);
+        var first = result[0];
+        Assert.Equal("192.168.0.252:5555", first.Address);
+        Assert.Equal("General", first.ConnectConfig);
+        Assert.Equal("/resolved/adb", first.AdbPath);
+        Assert.Equal(TimeSpan.FromSeconds(20), first.Timeout);
+        Assert.NotNull(first.Extras);
+        Assert.Equal("YoStarEN", first.Extras!.ClientType);
+        Assert.Equal("MaaFwAdb", first.Extras.TouchMode);
+        Assert.True(first.Extras.AdbLiteEnabled);
+        Assert.True(first.Extras.KillAdbOnExit);
+        Assert.True(first.Extras.MuMu12ExtrasEnabled);
+        Assert.Equal("/opt/mumu", first.Extras.MuMu12EmulatorPath);
+        Assert.True(first.Extras.MuMuBridgeConnection);
+        Assert.Equal("2", first.Extras.MuMu12Index);
+        Assert.True(first.Extras.LdPlayerExtrasEnabled);
+        Assert.Equal("/opt/ld", first.Extras.LdPlayerEmulatorPath);
+        Assert.True(first.Extras.LdPlayerManualSetIndex);
+        Assert.Equal("4", first.Extras.LdPlayerIndex);
+        Assert.Equal("2", first.Extras.AttachWindowScreencapMethod);
+        Assert.Equal("32", first.Extras.AttachWindowMouseMethod);
+        Assert.Equal("64", first.Extras.AttachWindowKeyboardMethod);
+        Assert.Single(result);
+    }
+
+    [Fact]
+    public async Task ConnectSettingsView_ScreenshotLifecycleCandidates_WhenMacBundledAdb_ShouldUseEffectiveBundledAdb()
+    {
+        if (!OperatingSystem.IsMacOS())
+        {
+            return;
+        }
+
+        await using var fixture = await RuntimeFixture.CreateAsync();
+        TouchMacMaaAdbControlUnitLibrary(fixture.Root);
+        var state = new ConnectionGameSharedStateViewModel
+        {
+            ConnectAddress = "192.168.0.252:5555",
+            ConnectConfig = "General",
+            MacUseBundledAdb = true,
+            TouchMode = "minitouch",
+            AutoDetect = true,
+        };
+
+        var effectiveAdbPath = state.ResolveEffectiveAdbPath(updateStateWhenResolved: true);
+        var candidatesResult = fixture.Runtime.ConnectFeatureService.BuildConnectionCandidates(
+            state.ConnectAddress,
+            state.ConnectConfig,
+            effectiveAdbPath,
+            state.BuildCoreConnectionExtras(),
+            state.AutoDetect,
+            state.AlwaysAutoDetect,
+            includeConfiguredAddress: true,
+            timeout: TimeSpan.FromSeconds(20));
+
+        Assert.True(candidatesResult.Success);
+        var candidate = Assert.Single(candidatesResult.Value!);
+        Assert.Equal("192.168.0.252:5555", candidate.Address);
+        Assert.Equal("General", candidate.ConnectConfig);
+        Assert.Equal(MacBundledAdbPolicy.ResolveBundledAdbPath(), candidate.AdbPath);
+        Assert.True(candidate.Extras?.MacUseBundledAdb);
+        Assert.Equal("minitouch", candidate.Extras?.TouchMode);
+        Assert.False(candidate.Extras?.AdbLiteEnabled);
+        Assert.Null(candidate.Extras?.FallbackStrategy);
+        Assert.Equal(TimeSpan.FromSeconds(20), candidate.Timeout);
     }
 
     [Fact]
@@ -1066,6 +1173,16 @@ public sealed class SettingsModuleCM1FeatureTests
             _ => key,
         };
 
+    private static void TouchMacMaaAdbControlUnitLibrary(string runtimeBaseDirectory)
+    {
+        Directory.CreateDirectory(runtimeBaseDirectory);
+        File.WriteAllText(
+            RuntimeLayout.ResolveMacMaaFrameworkRuntimeLibraryPath(
+                runtimeBaseDirectory,
+                RuntimeLayout.MacMaaAdbControlUnitLibraryFileName),
+            "test-control-unit");
+    }
+
     private sealed class ThrowOnSaveStore : IUnifiedConfigStore
     {
         public string ConfigPath => "throw-on-save";
@@ -1142,7 +1259,10 @@ public sealed class SettingsModuleCM1FeatureTests
             };
 
             var capability = new PlatformCapabilityFeatureService(platform, diagnostics);
-            var connect = new ConnectFeatureService(session, config);
+            var connect = new ConnectFeatureService(
+                session,
+                config,
+                runtimeBaseDirectory: root);
             var shell = new ShellFeatureService(connect);
             var runtime = new MAAUnifiedRuntime
             {

@@ -65,7 +65,7 @@ internal static class ConnectionGameProfileSync
     private const string DefaultAdbPath = "adb";
     private const string DefaultClientType = "Official";
     private const bool DefaultStartGame = true;
-    private const string DefaultTouchMode = "minitouch";
+    private const string DefaultTouchMode = "MaaFwAdb";
     private const bool DefaultAutoDetect = true;
     private const bool DefaultAlwaysAutoDetect = false;
     private const bool DefaultRetryOnDisconnected = false;

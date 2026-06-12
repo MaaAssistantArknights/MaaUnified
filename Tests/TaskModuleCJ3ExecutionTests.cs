@@ -88,7 +88,7 @@ public sealed class TaskModuleCJ3ExecutionTests
 
         var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
         await vm.InitializeAsync();
-        Assert.True((await fixture.Runtime.ConnectFeatureService.ConnectAsync("127.0.0.1:5555", "General", null)).Success);
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(fixture.Runtime.ConnectFeatureService, fixture.ReadyAdbPath)).Success);
         await vm.StartAsync();
 
         Assert.False(vm.IsRunning);
@@ -118,12 +118,14 @@ public sealed class TaskModuleCJ3ExecutionTests
             string root,
             TaskQueueFeatureService taskQueue,
             MAAUnifiedRuntime runtime,
-            CapturingBridge bridge)
+            CapturingBridge bridge,
+            string readyAdbPath)
         {
             Root = root;
             TaskQueue = taskQueue;
             Runtime = runtime;
             Bridge = bridge;
+            ReadyAdbPath = readyAdbPath;
         }
 
         public string Root { get; }
@@ -133,6 +135,8 @@ public sealed class TaskModuleCJ3ExecutionTests
         public MAAUnifiedRuntime Runtime { get; }
 
         public CapturingBridge Bridge { get; }
+
+        public string ReadyAdbPath { get; }
 
         public static async Task<TestFixture> CreateAsync(string language = "zh-cn")
         {
@@ -149,6 +153,7 @@ public sealed class TaskModuleCJ3ExecutionTests
                 root);
             await config.LoadOrBootstrapAsync();
             config.CurrentConfig.GlobalValues["GUI.Localization"] = language;
+            var readyAdbPath = await TestConnectionFixtureSupport.PrepareReadyRuntimeAsync(root, config, "taskmodule-cj3-ready");
 
             var bridge = new CapturingBridge();
             var session = new UnifiedSessionService(bridge, config, log, new SessionStateMachine());
@@ -166,7 +171,7 @@ public sealed class TaskModuleCJ3ExecutionTests
             };
 
             var capability = new PlatformCapabilityFeatureService(platform, diagnostics);
-            var connectFeatureService = new ConnectFeatureService(session, config);
+            var connectFeatureService = new ConnectFeatureService(session, config, log, bridge, root);
             var postActionFeatureService = new PostActionFeatureService(
                 config,
                 diagnostics,
@@ -195,7 +200,7 @@ public sealed class TaskModuleCJ3ExecutionTests
                 PostActionFeatureService = postActionFeatureService,
             };
 
-            return new TestFixture(root, taskQueue, runtime, bridge);
+            return new TestFixture(root, taskQueue, runtime, bridge, readyAdbPath);
         }
 
         public async ValueTask DisposeAsync()

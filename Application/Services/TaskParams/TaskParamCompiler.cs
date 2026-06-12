@@ -159,7 +159,7 @@ public static class TaskParamCompiler
             ConnectAddress = ResolveStringSetting(profile, config, "ConnectAddress", "Connect.Address") ?? "127.0.0.1:5555",
             AdbPath = ResolveStringSetting(profile, config, "AdbPath", "Connect.AdbPath") ?? string.Empty,
             MacUseBundledAdb = MacBundledAdbPolicy.ReadUseBundledAdb(profile),
-            TouchMode = ResolveStringSetting(profile, config, "TouchMode", "Connect.TouchMode") ?? "minitouch",
+            TouchMode = ResolveStringSetting(profile, config, "TouchMode", "Connect.TouchMode") ?? "MaaFwAdb",
             AutoDetectConnection = ResolveBooleanSetting(profile, config, true, "AutoDetect", "Connect.AutoDetect"),
             AttachWindowScreencapMethod = ResolveStringSetting(profile, config, "AttachWindowScreencapMethod", "Connect.AttachWindow.ScreencapMethod") ?? "2",
             AttachWindowMouseMethod = ResolveStringSetting(profile, config, "AttachWindowMouseMethod", "Connect.AttachWindow.MouseMethod") ?? "64",

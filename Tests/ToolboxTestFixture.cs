@@ -37,6 +37,8 @@ internal sealed class ToolboxTestFixture : IAsyncDisposable
 
     public ConnectionGameSharedStateViewModel ConnectionState { get; }
 
+    public string ReadyAdbPath { get; private set; } = string.Empty;
+
     public static async Task<ToolboxTestFixture> CreateAsync(
         IReadOnlyDictionary<string, string>? globalSeeds = null,
         IReadOnlyDictionary<string, JsonNode?>? profileSeeds = null)
@@ -53,6 +55,7 @@ internal sealed class ToolboxTestFixture : IAsyncDisposable
             log,
             root);
         await config.LoadOrBootstrapAsync();
+        var readyAdbPath = await TestConnectionFixtureSupport.PrepareReadyRuntimeAsync(root, config, "toolbox-ready");
 
         if (globalSeeds is not null)
         {
@@ -66,8 +69,9 @@ internal sealed class ToolboxTestFixture : IAsyncDisposable
         {
             profile.Values["ClientType"] = JsonValue.Create("Official");
             profile.Values["ServerType"] = JsonValue.Create("CN");
-            profile.Values["ConnectAddress"] = JsonValue.Create("127.0.0.1:5555");
-            profile.Values["ConnectConfig"] = JsonValue.Create("General");
+            profile.Values["ConnectAddress"] = JsonValue.Create(TestConnectionFixtureSupport.ReadyConnectAddress);
+            profile.Values["ConnectConfig"] = JsonValue.Create(TestConnectionFixtureSupport.ReadyConnectConfig);
+            profile.Values["AdbPath"] = JsonValue.Create(readyAdbPath);
             profile.Values["AutoDetect"] = JsonValue.Create(true);
             profile.Values[MacBundledAdbPolicy.ProfileUseBundledAdbKey] = JsonValue.Create(false);
             if (profileSeeds is not null)
@@ -93,7 +97,7 @@ internal sealed class ToolboxTestFixture : IAsyncDisposable
         };
 
         var capability = new PlatformCapabilityFeatureService(platform, diagnostics);
-        var connect = new ConnectFeatureService(session, config);
+        var connect = new ConnectFeatureService(session, config, log, bridge, root);
         var runtime = new MAAUnifiedRuntime
         {
             CoreBridge = bridge,
@@ -119,14 +123,18 @@ internal sealed class ToolboxTestFixture : IAsyncDisposable
 
         var connectionState = new ConnectionGameSharedStateViewModel
         {
-            ConnectAddress = "127.0.0.1:5555",
-            ConnectConfig = "General",
+            ConnectAddress = TestConnectionFixtureSupport.ReadyConnectAddress,
+            ConnectConfig = TestConnectionFixtureSupport.ReadyConnectConfig,
+            AdbPath = readyAdbPath,
             ClientType = "Official",
             AutoDetect = true,
             MacUseBundledAdb = false,
         };
 
-        return new ToolboxTestFixture(root, config, bridge, runtime, connectionState);
+        return new ToolboxTestFixture(root, config, bridge, runtime, connectionState)
+        {
+            ReadyAdbPath = readyAdbPath,
+        };
     }
 
     public async ValueTask DisposeAsync()

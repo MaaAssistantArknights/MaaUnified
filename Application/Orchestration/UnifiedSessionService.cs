@@ -146,15 +146,25 @@ public sealed record SessionCallbackEnvelope(
 
 public sealed class UnifiedSessionService
 {
+    private static readonly TimeSpan DefaultConnectTimeout = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan ConnectingStopWaitTimeout = TimeSpan.FromSeconds(2);
     private readonly IMaaCoreBridge _bridge;
     private readonly UnifiedConfigurationService _configService;
     private readonly UiLogService _logService;
     private readonly SessionStateMachine _stateMachine;
     private readonly object _taskIndexMapGate = new();
     private readonly object _runOwnerGate = new();
+    private readonly object _connectionOperationGate = new();
+    private readonly SemaphoreSlim _connectionOperationLock = new(1, 1);
     private readonly Dictionary<int, int> _taskIndexByCoreTaskId = new();
+    private CoreConnectionInfo? _lastSuccessfulConnectionInfo;
     private string? _currentRunOwner;
     private string? _currentRunOwnerDisplayName;
+    private CancellationTokenSource? _activeConnectCts;
+    private CoreConnectionInfo? _activeConnectionTarget;
+    private long _activeConnectionGeneration;
+    private long _connectionOperationGeneration;
+    private bool _ignoreIdleConnectionCallbacks;
 
     public UnifiedSessionService(
         IMaaCoreBridge bridge,
@@ -170,6 +180,8 @@ public sealed class UnifiedSessionService
     }
 
     public SessionState CurrentState => _stateMachine.CurrentState;
+
+    public CoreConnectionInfo? LastSuccessfulConnectionInfo => _lastSuccessfulConnectionInfo;
 
     public event Action<SessionState>? SessionStateChanged;
 
@@ -287,33 +299,209 @@ public sealed class UnifiedSessionService
         }
     }
 
-    public async Task<CoreResult<bool>> ConnectAsync(string address, string connectConfig, string? adbPath, CancellationToken cancellationToken = default)
+    public async Task<CoreResult<bool>> ConnectAsync(
+        string address,
+        string connectConfig,
+        string? adbPath,
+        CoreConnectionExtras? extras = null,
+        CancellationToken cancellationToken = default)
     {
-        _logService.Debug(
-            $"Session.Connect requested: state={CurrentState}, address={address}, config={connectConfig}, adb={adbPath ?? "<null>"}");
-        MoveToState(SessionState.Connecting, "Session.Connect", "begin");
-        var result = await _bridge.ConnectAsync(new CoreConnectionInfo(address, connectConfig, adbPath), cancellationToken);
-        if (result.Success)
-        {
-            MoveToState(SessionState.Connected, "Session.Connect", "connected");
-            _logService.Info($"Connected to {address}");
-        }
-        else
-        {
-            var fallbackState = await ResolveFailureStateAsync("Session.Connect", SessionState.Idle, cancellationToken);
-            MoveToState(fallbackState, "Session.Connect", "connect-failed-fallback");
-            _logService.Warn($"Failed to connect to {address}: {result.Error?.Code} {result.Error?.Message}");
-        }
-
-        return result;
+        var connectionInfo = new CoreConnectionInfo(
+            NormalizeConnectionText(address),
+            NormalizeConnectionText(connectConfig),
+            NormalizeConnectionPath(adbPath),
+            extras,
+            Timeout: DefaultConnectTimeout);
+        return await ConnectAsync(connectionInfo, cancellationToken);
     }
 
-    public Task<CoreResult<bool>> ApplyInstanceOptionsAsync(
+    public async Task<CoreResult<bool>> ConnectAsync(
+        CoreConnectionInfo requestedConnectionInfo,
+        CancellationToken cancellationToken = default)
+    {
+        var connectionInfo = NormalizeConnectionInfo(requestedConnectionInfo, DefaultConnectTimeout);
+        _logService.Debug(
+            $"Session.Connect requested: state={CurrentState}, {BuildConnectionSummary(connectionInfo)}");
+
+        await _connectionOperationLock.WaitAsync(cancellationToken);
+        CancellationTokenSource? operationCts = null;
+        bool disposeOperationCts = true;
+        long generation = 0;
+        try
+        {
+            operationCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            var operationToken = operationCts.Token;
+            lock (_connectionOperationGate)
+            {
+                generation = ++_connectionOperationGeneration;
+                _activeConnectCts?.Dispose();
+                _activeConnectCts = operationCts;
+                _activeConnectionTarget = connectionInfo;
+                _activeConnectionGeneration = generation;
+                _ignoreIdleConnectionCallbacks = false;
+            }
+
+            if (CurrentState == SessionState.Connected && !LastSuccessfulConnectionInfoMatches(connectionInfo))
+            {
+                var previousSummary = _lastSuccessfulConnectionInfo is null
+                    ? "<null>"
+                    : BuildConnectionSummary(_lastSuccessfulConnectionInfo);
+                _logService.Info(
+                    $"Session.Connect invalidated previous connection before reconnect: current={BuildConnectionSummary(connectionInfo)}, previous={previousSummary}");
+                _lastSuccessfulConnectionInfo = null;
+            }
+
+            MoveToState(SessionState.Connecting, "Session.Connect", "begin");
+            CoreResult<bool> result;
+            try
+            {
+                for (var attempt = 0; ; attempt++)
+                {
+                    var bridgeConnectTask = _bridge.ConnectAsync(connectionInfo, operationToken);
+                    var completedTask = await Task.WhenAny(
+                        bridgeConnectTask,
+                        WaitForConnectCancellationAsync(operationToken)).ConfigureAwait(false);
+                    if (completedTask == bridgeConnectTask)
+                    {
+                        result = await bridgeConnectTask.ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        disposeOperationCts = false;
+                        ObserveAbandonedConnectTask(bridgeConnectTask, operationCts, connectionInfo, generation);
+                        if (IsCurrentConnectionGeneration(generation))
+                        {
+                            var fallbackState = await ResolveFailureStateAsync("Session.Connect", SessionState.Idle, CancellationToken.None);
+                            MoveToState(fallbackState, "Session.Connect", "connect-canceled-fallback");
+                            throw new OperationCanceledException(operationToken);
+                        }
+
+                        _logService.Warn(
+                            $"Session.Connect canceled after supersede for address={connectionInfo.Address}, generation={generation}.");
+                        return CoreResult<bool>.Fail(new CoreError(CoreErrorCode.ConnectTimeout, "Connect was superseded by a newer operation."));
+                    }
+
+                    if (result.Success || attempt > 0 || !IsAbandonedNativeStopFailure(result.Error))
+                    {
+                        break;
+                    }
+
+                    _logService.Warn(
+                        $"Session.Connect recovering abandoned native stop before retry: {BuildConnectionSummary(connectionInfo)}");
+                    var recover = await RecoverAbandonedStopAsync(operationToken).ConfigureAwait(false);
+                    if (!recover.Success)
+                    {
+                        result = CoreResult<bool>.Fail(recover.Error!);
+                        break;
+                    }
+
+                    _lastSuccessfulConnectionInfo = null;
+                    MarkIdleConnectionCallbacksStale();
+                    MoveToState(SessionState.Connecting, "Session.Connect", "abandoned-stop-recovered-retry");
+                }
+            }
+            catch (OperationCanceledException) when (operationToken.IsCancellationRequested)
+            {
+                if (IsCurrentConnectionGeneration(generation))
+                {
+                    var fallbackState = await ResolveFailureStateAsync("Session.Connect", SessionState.Idle, CancellationToken.None);
+                    MoveToState(fallbackState, "Session.Connect", "connect-canceled-fallback");
+                    throw;
+                }
+
+                _logService.Warn(
+                    $"Session.Connect canceled after supersede for address={connectionInfo.Address}, generation={generation}.");
+                return CoreResult<bool>.Fail(new CoreError(CoreErrorCode.ConnectTimeout, "Connect was superseded by a newer operation."));
+            }
+
+            if (!IsCurrentConnectionGeneration(generation))
+            {
+                _logService.Warn(
+                    $"Session.Connect ignored stale result for address={connectionInfo.Address}, generation={generation}.");
+                return CoreResult<bool>.Fail(new CoreError(CoreErrorCode.ConnectTimeout, "Connect result was superseded by a newer operation."));
+            }
+
+            if (result.Success)
+            {
+                _lastSuccessfulConnectionInfo = connectionInfo;
+                MoveToState(SessionState.Connected, "Session.Connect", "connected");
+                _logService.Info($"Connected: {BuildConnectionSummary(connectionInfo)}");
+            }
+            else
+            {
+                ClearActiveConnectionTarget(connectionInfo);
+                var fallbackState = await ResolveFailureStateAsync("Session.Connect", SessionState.Idle, cancellationToken);
+                MoveToState(fallbackState, "Session.Connect", "connect-failed-fallback");
+                _logService.Warn(
+                    $"Failed to connect: {BuildConnectionSummary(connectionInfo)}; error={result.Error?.Code} {result.Error?.Message}");
+            }
+
+            return result;
+        }
+        finally
+        {
+            lock (_connectionOperationGate)
+            {
+                if (ReferenceEquals(_activeConnectCts, operationCts))
+                {
+                    _activeConnectCts = null;
+                }
+
+                if (_activeConnectionGeneration == generation)
+                {
+                    _activeConnectionTarget = null;
+                    _activeConnectionGeneration = 0;
+                }
+            }
+
+            if (disposeOperationCts)
+            {
+                operationCts?.Dispose();
+            }
+            _connectionOperationLock.Release();
+        }
+    }
+
+    public bool IsConnectedWith(CoreConnectionInfo connectionInfo)
+    {
+        return CurrentState == SessionState.Connected
+            && LastSuccessfulConnectionInfoMatches(connectionInfo);
+    }
+
+    private bool LastSuccessfulConnectionInfoMatches(CoreConnectionInfo connectionInfo)
+    {
+        var last = _lastSuccessfulConnectionInfo;
+        if (last is null)
+        {
+            return false;
+        }
+
+        return ConnectionInfoMatches(last, connectionInfo, compareExtras: true);
+    }
+
+    public async Task<CoreResult<bool>> ApplyInstanceOptionsAsync(
         CoreInstanceOptions options,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        return _bridge.ApplyInstanceOptionsAsync(options, cancellationToken);
+        var result = await _bridge.ApplyInstanceOptionsAsync(options, cancellationToken).ConfigureAwait(false);
+        if (result.Success || !IsAbandonedNativeStopFailure(result.Error))
+        {
+            return result;
+        }
+
+        _logService.Warn("Session.ApplyInstanceOptions recovering abandoned native stop before retry.");
+        var recover = await RecoverAbandonedStopAsync(cancellationToken).ConfigureAwait(false);
+        if (!recover.Success)
+        {
+            return CoreResult<bool>.Fail(recover.Error!);
+        }
+
+        _lastSuccessfulConnectionInfo = null;
+        ClearActiveConnectionTarget();
+        MarkIdleConnectionCallbacksStale();
+        MoveToState(SessionState.Idle, "Session.ApplyInstanceOptions", "abandoned-stop-recovered");
+        return await _bridge.ApplyInstanceOptionsAsync(options, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<CoreResult<int>> AppendTasksFromCurrentProfileAsync(CancellationToken cancellationToken = default)
@@ -614,20 +802,59 @@ public sealed class UnifiedSessionService
     public async Task<CoreResult<bool>> StopAsync(CancellationToken cancellationToken = default)
     {
         _logService.Debug($"Session.Stop requested: state={CurrentState}");
-        MoveToState(SessionState.Stopping, "Session.Stop", "begin-stop");
-        var result = await _bridge.StopAsync(cancellationToken);
-        if (result.Success)
+
+        var stopRequestedDuringConnect = CurrentState == SessionState.Connecting;
+        if (stopRequestedDuringConnect)
         {
-            MoveToState(SessionState.Connected, "Session.Stop", "stopped");
-        }
-        else
-        {
-            var fallbackState = await ResolveFailureStateAsync("Session.Stop", SessionState.Connected, cancellationToken);
-            MoveToState(fallbackState, "Session.Stop", "stop-failed-fallback");
+            MoveToState(SessionState.Stopping, "Session.Stop", "cancel-connecting");
+            SupersedeActiveConnectOperation(cancelNativeOperation: true);
+            MoveToState(SessionState.Idle, "Session.Stop", "supersede-connecting");
+            if (!await _connectionOperationLock.WaitAsync(ConnectingStopWaitTimeout, cancellationToken).ConfigureAwait(false))
+            {
+                _logService.Info("Session.Stop marked pending connect as superseded; native connect is still settling.");
+                return CoreResult<bool>.Ok(true);
+            }
+
+            _connectionOperationLock.Release();
+            _logService.Info("Session.Stop completed after pending connect settled.");
+            return CoreResult<bool>.Ok(true);
         }
 
-        _logService.Info(result.Success ? "Task execution stopped" : $"Task execution stop failed: {result.Error?.Code} {result.Error?.Message}");
-        return result;
+        SupersedeActiveConnectOperation(cancelNativeOperation: true);
+        await _connectionOperationLock.WaitAsync(cancellationToken);
+        try
+        {
+            var initialState = CurrentState;
+            MoveToState(SessionState.Stopping, "Session.Stop", "begin-stop");
+
+            var result = await _bridge.StopAsync(cancellationToken);
+            if (result.Success)
+            {
+                var fallbackState = await ResolveFailureStateAsync("Session.Stop", SessionState.Connected, cancellationToken);
+                MoveToState(fallbackState == SessionState.Running ? SessionState.Connected : fallbackState, "Session.Stop", "stopped");
+            }
+            else if (IsAbandonedNativeStopFailure(result.Error))
+            {
+                _lastSuccessfulConnectionInfo = null;
+                ClearActiveConnectionTarget();
+                MarkIdleConnectionCallbacksStale();
+                _logService.Warn(
+                    $"Session.Stop stop-abandoned-invalidated: {result.Error?.Code} {result.Error?.Message}");
+                MoveToState(SessionState.Idle, "Session.Stop", "stop-abandoned-invalidated");
+            }
+            else
+            {
+                var fallbackState = await ResolveFailureStateAsync("Session.Stop", SessionState.Connected, cancellationToken);
+                MoveToState(fallbackState, "Session.Stop", "stop-failed-fallback");
+            }
+
+            _logService.Info(result.Success ? "Task execution stopped" : $"Task execution stop failed: {result.Error?.Code} {result.Error?.Message}");
+            return result;
+        }
+        finally
+        {
+            _connectionOperationLock.Release();
+        }
     }
 
     public Task<CoreResult<CoreRuntimeStatus>> GetRuntimeStatusAsync(CancellationToken cancellationToken = default)
@@ -762,15 +989,67 @@ public sealed class UnifiedSessionService
             return;
         }
 
+        if (string.Equals(what, "ResolutionGot", StringComparison.OrdinalIgnoreCase))
+        {
+            if (TryGetCallbackConnectionInfo(envelope.Payload, out var resolutionConnectionInfo))
+            {
+                _ = ShouldAcceptConnectedCallback(resolutionConnectionInfo, what);
+            }
+
+            return;
+        }
+
         if (string.Equals(what, "Connected", StringComparison.OrdinalIgnoreCase)
             || string.Equals(what, "Reconnected", StringComparison.OrdinalIgnoreCase))
         {
+            var hasCallbackConnectionInfo = TryGetCallbackConnectionInfo(envelope.Payload, out var callbackConnectionInfo);
+            if (CurrentState == SessionState.Idle)
+            {
+                if (_ignoreIdleConnectionCallbacks)
+                {
+                    _logService.Warn(
+                        $"Session.Callback ignored stale ConnectionInfo:{what} while session is idle.");
+                    return;
+                }
+
+                _logService.Debug(
+                    $"Session.Callback accepted ConnectionInfo:{what} while session is idle.");
+            }
+
+            if (!ShouldAcceptConnectedCallback(hasCallbackConnectionInfo ? callbackConnectionInfo : null, what))
+            {
+                return;
+            }
+
+            if (CurrentState == SessionState.Connecting)
+            {
+                _logService.Debug(
+                    $"Session.Callback recorded ConnectionInfo:{what} while connect is still pending.");
+                return;
+            }
+
+            if (hasCallbackConnectionInfo)
+            {
+                _lastSuccessfulConnectionInfo = CompleteCallbackConnectionInfo(callbackConnectionInfo);
+            }
+
             MoveToState(SessionState.Connected, "Session.Callback", $"ConnectionInfo:{what}");
             return;
         }
 
         if (string.Equals(what, "Disconnect", StringComparison.OrdinalIgnoreCase))
         {
+            if (TryGetCallbackConnectionInfo(envelope.Payload, out var disconnectConnectionInfo)
+                && _lastSuccessfulConnectionInfo is not null
+                && !ConnectionInfoMatches(_lastSuccessfulConnectionInfo, disconnectConnectionInfo, compareExtras: false))
+            {
+                _logService.Warn(
+                    $"Session.Callback ignored stale ConnectionInfo:Disconnect for address={disconnectConnectionInfo.Address}, config={disconnectConnectionInfo.ConnectConfig}.");
+                return;
+            }
+
+            _lastSuccessfulConnectionInfo = null;
+            ClearActiveConnectionTarget();
             MoveToState(SessionState.Idle, "Session.Callback", "ConnectionInfo:Disconnect");
             return;
         }
@@ -837,6 +1116,129 @@ public sealed class UnifiedSessionService
         return SessionState.Idle;
     }
 
+    private static string NormalizeConnectionText(string? value)
+        => (value ?? string.Empty).Trim();
+
+    private static string? NormalizeConnectionPath(string? value)
+    {
+        var normalized = NormalizeConnectionText(value);
+        return string.IsNullOrWhiteSpace(normalized) ? null : normalized;
+    }
+
+    private static CoreConnectionInfo NormalizeConnectionInfo(
+        CoreConnectionInfo connectionInfo,
+        TimeSpan? fallbackTimeout = null)
+    {
+        return new CoreConnectionInfo(
+            NormalizeConnectionText(connectionInfo.Address),
+            NormalizeConnectionText(connectionInfo.ConnectConfig),
+            NormalizeConnectionPath(connectionInfo.AdbPath),
+            NormalizeConnectionExtras(connectionInfo.Extras),
+            connectionInfo.Timeout ?? fallbackTimeout);
+    }
+
+    private static bool ConnectionInfoMatches(
+        CoreConnectionInfo left,
+        CoreConnectionInfo right,
+        bool compareExtras)
+    {
+        var rightConfig = NormalizeConnectionText(right.ConnectConfig);
+        var rightAdbPath = NormalizeConnectionPath(right.AdbPath);
+        return string.Equals(
+                NormalizeConnectionText(left.Address),
+                NormalizeConnectionText(right.Address),
+                StringComparison.Ordinal)
+            && (string.IsNullOrWhiteSpace(rightConfig)
+                || string.Equals(
+                    NormalizeConnectionText(left.ConnectConfig),
+                    rightConfig,
+                    StringComparison.Ordinal))
+            && (rightAdbPath is null
+                || string.Equals(
+                    NormalizeConnectionPath(left.AdbPath),
+                    rightAdbPath,
+                    StringComparison.Ordinal))
+            && (!compareExtras || NormalizeConnectionExtras(left.Extras) == NormalizeConnectionExtras(right.Extras));
+    }
+
+    private static CoreConnectionExtras NormalizeConnectionExtras(CoreConnectionExtras? extras)
+    {
+        extras ??= CoreConnectionExtras.Empty;
+        return new CoreConnectionExtras(
+            MacUseBundledAdb: extras.MacUseBundledAdb,
+            TouchMode: NormalizeConnectionText(extras.TouchMode),
+            AdbLiteEnabled: extras.AdbLiteEnabled,
+            KillAdbOnExit: extras.KillAdbOnExit,
+            MuMu12ExtrasEnabled: extras.MuMu12ExtrasEnabled,
+            MuMu12EmulatorPath: NormalizeConnectionText(extras.MuMu12EmulatorPath),
+            MuMuBridgeConnection: extras.MuMuBridgeConnection,
+            MuMu12Index: NormalizeConnectionText(extras.MuMu12Index),
+            LdPlayerExtrasEnabled: extras.LdPlayerExtrasEnabled,
+            LdPlayerEmulatorPath: NormalizeConnectionText(extras.LdPlayerEmulatorPath),
+            LdPlayerManualSetIndex: extras.LdPlayerManualSetIndex,
+            LdPlayerIndex: NormalizeConnectionText(extras.LdPlayerIndex),
+            AttachWindowScreencapMethod: NormalizeConnectionText(extras.AttachWindowScreencapMethod),
+            AttachWindowMouseMethod: NormalizeConnectionText(extras.AttachWindowMouseMethod),
+            AttachWindowKeyboardMethod: NormalizeConnectionText(extras.AttachWindowKeyboardMethod),
+            ClientType: NormalizeConnectionText(extras.ClientType),
+            FallbackStrategy: NormalizeConnectionText(extras.FallbackStrategy),
+            ConfiguredTouchMode: NormalizeConnectionText(extras.ConfiguredTouchMode),
+            ConfiguredAdbLiteEnabled: extras.ConfiguredAdbLiteEnabled,
+            FallbackReason: NormalizeConnectionText(extras.FallbackReason),
+            FallbackRequiredLibrary: NormalizeConnectionText(extras.FallbackRequiredLibrary),
+            FallbackRequiredLibraryExists: extras.FallbackRequiredLibraryExists);
+    }
+
+    private static string BuildConnectionSummary(CoreConnectionInfo connectionInfo)
+    {
+        var extras = NormalizeConnectionExtras(connectionInfo.Extras);
+        return $"address={connectionInfo.Address}, config={connectionInfo.ConnectConfig}, adb={connectionInfo.AdbPath ?? "<null>"}, "
+               + $"macBundledAdb={extras.MacUseBundledAdb}, touch={extras.TouchMode}, adbLite={extras.AdbLiteEnabled}, killAdbOnExit={extras.KillAdbOnExit}, "
+               + $"mumuExtras={extras.MuMu12ExtrasEnabled}:{extras.MuMu12EmulatorPath}:{extras.MuMuBridgeConnection}:{extras.MuMu12Index}, "
+               + $"ldExtras={extras.LdPlayerExtrasEnabled}:{extras.LdPlayerEmulatorPath}:{extras.LdPlayerManualSetIndex}:{extras.LdPlayerIndex}, "
+               + $"attach={extras.AttachWindowScreencapMethod}:{extras.AttachWindowMouseMethod}:{extras.AttachWindowKeyboardMethod}, "
+               + $"clientType={extras.ClientType}, fallback={extras.FallbackStrategy}, "
+               + $"configured=touch={extras.ConfiguredTouchMode},adbLite={extras.ConfiguredAdbLiteEnabled}, "
+               + $"reason={extras.FallbackReason}";
+    }
+
+    private static bool TryGetCallbackConnectionInfo(JsonObject? payload, out CoreConnectionInfo connectionInfo)
+    {
+        connectionInfo = null!;
+        if (payload?["details"] is not JsonObject details)
+        {
+            return false;
+        }
+
+        var address = NormalizeConnectionText(GetJsonString(details, "address"));
+        var config = NormalizeConnectionText(GetJsonString(details, "config"));
+        if (string.IsNullOrWhiteSpace(address))
+        {
+            return false;
+        }
+
+        connectionInfo = new CoreConnectionInfo(
+            address,
+            config,
+            NormalizeConnectionPath(GetJsonString(details, "adb")));
+        return true;
+    }
+
+    private static string? GetJsonString(JsonObject payload, string key)
+    {
+        if (!payload.TryGetPropertyValue(key, out var node) || node is null)
+        {
+            return null;
+        }
+
+        if (node is JsonValue value && value.TryGetValue(out string? text))
+        {
+            return text;
+        }
+
+        return node.ToString();
+    }
+
     private async Task<CoreResult<bool>> WaitUntilReloadSafeAsync(
         TimeSpan timeout,
         CancellationToken cancellationToken)
@@ -888,5 +1290,207 @@ public sealed class UnifiedSessionService
     private static bool IsReloadSoftBlockedState(SessionState state)
     {
         return state is SessionState.Running or SessionState.Stopping;
+    }
+
+    private static bool IsAbandonedNativeStopFailure(CoreError? error)
+    {
+        if (error?.Code != CoreErrorCode.StopFailed)
+        {
+            return false;
+        }
+
+        var text = $"{error.Message}\n{error.NativeDetails}";
+        return text.Contains("native stop timed out", StringComparison.OrdinalIgnoreCase)
+               || text.Contains("native instance was abandoned", StringComparison.OrdinalIgnoreCase)
+               || text.Contains("native operation was abandoned", StringComparison.OrdinalIgnoreCase)
+               || text.Contains("instance was abandoned", StringComparison.OrdinalIgnoreCase)
+               || text.Contains("AsstStop did not return", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private Task<CoreResult<bool>> RecoverAbandonedStopAsync(CancellationToken cancellationToken)
+        => _bridge is IMaaCoreBridgeRecovery recovery
+            ? recovery.RecoverAbandonedStopAsync(cancellationToken)
+            : _bridge.RecoverFromAbandonedStopAsync(cancellationToken);
+
+    private void ClearActiveConnectionTarget(CoreConnectionInfo? expected = null)
+    {
+        lock (_connectionOperationGate)
+        {
+            if (expected is not null
+                && _activeConnectionTarget is not null
+                && !ConnectionInfoMatches(_activeConnectionTarget, expected, compareExtras: true))
+            {
+                return;
+            }
+
+            _activeConnectionTarget = null;
+            _activeConnectionGeneration = 0;
+        }
+    }
+
+    private void MarkIdleConnectionCallbacksStale()
+    {
+        lock (_connectionOperationGate)
+        {
+            _ignoreIdleConnectionCallbacks = true;
+        }
+    }
+
+    private bool IsCurrentConnectionGeneration(long generation)
+    {
+        lock (_connectionOperationGate)
+        {
+            return generation == _connectionOperationGeneration;
+        }
+    }
+
+    private bool ShouldAcceptConnectedCallback(CoreConnectionInfo? callbackConnectionInfo, string what)
+    {
+        CoreConnectionInfo? activeTarget;
+        lock (_connectionOperationGate)
+        {
+            activeTarget = _activeConnectionTarget;
+        }
+
+        if (callbackConnectionInfo is not null)
+        {
+            if (activeTarget is not null
+                && !ConnectionInfoMatches(activeTarget, callbackConnectionInfo, compareExtras: false))
+            {
+                _logService.Warn(
+                    $"Session.Callback ignored stale ConnectionInfo:{what} for address={callbackConnectionInfo.Address}, config={callbackConnectionInfo.ConnectConfig}; active address={activeTarget.Address}, config={activeTarget.ConnectConfig}.");
+                return false;
+            }
+
+            if (_lastSuccessfulConnectionInfo is not null
+                && !ConnectionInfoMatches(_lastSuccessfulConnectionInfo, callbackConnectionInfo, compareExtras: false))
+            {
+                _logService.Warn(
+                    $"Session.Callback ignored stale ConnectionInfo:{what} for address={callbackConnectionInfo.Address}, config={callbackConnectionInfo.ConnectConfig}; current address={_lastSuccessfulConnectionInfo.Address}, config={_lastSuccessfulConnectionInfo.ConnectConfig}.");
+                return false;
+            }
+
+            return _lastSuccessfulConnectionInfo is not null || activeTarget is not null;
+        }
+
+        if (_lastSuccessfulConnectionInfo is null && activeTarget is null)
+        {
+            if (CurrentState == SessionState.Idle)
+            {
+                return true;
+            }
+
+            _logService.Warn(
+                $"Session.Callback ignored ConnectionInfo:{what} without connection details and no active connection target.");
+            return false;
+        }
+
+        return true;
+    }
+
+    private CoreConnectionInfo CompleteCallbackConnectionInfo(CoreConnectionInfo callbackConnectionInfo)
+    {
+        CoreConnectionInfo? activeTarget;
+        lock (_connectionOperationGate)
+        {
+            activeTarget = _activeConnectionTarget;
+        }
+
+        if (activeTarget is not null
+            && ConnectionInfoMatches(activeTarget, callbackConnectionInfo, compareExtras: false))
+        {
+            return activeTarget;
+        }
+
+        if (_lastSuccessfulConnectionInfo is not null
+            && ConnectionInfoMatches(_lastSuccessfulConnectionInfo, callbackConnectionInfo, compareExtras: false))
+        {
+            return _lastSuccessfulConnectionInfo;
+        }
+
+        return callbackConnectionInfo;
+    }
+
+    private static async Task WaitForConnectCancellationAsync(CancellationToken cancellationToken)
+    {
+        if (!cancellationToken.CanBeCanceled)
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan).ConfigureAwait(false);
+            return;
+        }
+
+        if (cancellationToken.IsCancellationRequested)
+        {
+            return;
+        }
+
+        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var registration = cancellationToken.Register(
+            static state => ((TaskCompletionSource)state!).TrySetResult(),
+            completion);
+        await completion.Task.ConfigureAwait(false);
+    }
+
+    private void ObserveAbandonedConnectTask(
+        Task<CoreResult<bool>> bridgeConnectTask,
+        CancellationTokenSource operationCts,
+        CoreConnectionInfo connectionInfo,
+        long generation)
+    {
+        _ = bridgeConnectTask.ContinueWith(
+            task =>
+            {
+                try
+                {
+                    if (task.IsFaulted)
+                    {
+                        _logService.Warn(
+                            $"Abandoned connect task faulted after supersede: {BuildConnectionSummary(connectionInfo)}; generation={generation}; error={task.Exception?.GetBaseException().Message}");
+                    }
+                    else if (task.IsCanceled)
+                    {
+                        _logService.Debug(
+                            $"Abandoned connect task canceled after supersede: {BuildConnectionSummary(connectionInfo)}; generation={generation}.");
+                    }
+                    else
+                    {
+                        _logService.Debug(
+                            $"Abandoned connect task completed after supersede: {BuildConnectionSummary(connectionInfo)}; generation={generation}; success={task.Result.Success}.");
+                    }
+                }
+                finally
+                {
+                    operationCts.Dispose();
+                }
+            },
+            CancellationToken.None,
+            TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
+    }
+
+    private void SupersedeActiveConnectOperation(bool cancelNativeOperation)
+    {
+        lock (_connectionOperationGate)
+        {
+            _connectionOperationGeneration++;
+            _activeConnectionTarget = null;
+            _activeConnectionGeneration = 0;
+            if (_activeConnectCts is not null)
+            {
+                _ignoreIdleConnectionCallbacks = true;
+            }
+
+            try
+            {
+                if (cancelNativeOperation)
+                {
+                    _activeConnectCts?.Cancel();
+                }
+            }
+            catch (ObjectDisposedException)
+            {
+                // Best effort: the operation has already completed.
+            }
+        }
     }
 }

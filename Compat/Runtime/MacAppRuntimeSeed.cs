@@ -11,6 +11,8 @@ public sealed record MacAppRuntimeSeedResult(
     string RuntimeBaseDirectory,
     string? BundleResourceDirectory = null,
     int NativeLibraryCount = 0,
+    IReadOnlyList<string>? SeededMaaFrameworkRuntimeLibraries = null,
+    IReadOnlyList<string>? MissingMaaFrameworkRuntimeLibraries = null,
     bool ResourceSeeded = false,
     string ResourceSeedReason = "");
 
@@ -33,7 +35,7 @@ public static class MacAppRuntimeSeed
 
         Directory.CreateDirectory(resolvedRuntimeBaseDirectory);
 
-        var nativeLibraryCount = CopyNativeLibraries(executableDirectory, resolvedRuntimeBaseDirectory);
+        var nativeSeedResult = CopyNativeLibraries(executableDirectory, resolvedRuntimeBaseDirectory);
         var bundleResourceDirectory = ResolveBundleResourceDirectory(executableDirectory);
         var resourceSeedResult = SeedResourceDirectoryIfNeeded(
             bundleResourceDirectory,
@@ -43,12 +45,14 @@ public static class MacAppRuntimeSeed
             MacAppRuntimeSeedStatus.Ready,
             resolvedRuntimeBaseDirectory,
             bundleResourceDirectory,
-            nativeLibraryCount,
+            nativeSeedResult.NativeLibraryCount,
+            nativeSeedResult.SeededMaaFrameworkRuntimeLibraries,
+            nativeSeedResult.MissingMaaFrameworkRuntimeLibraries,
             resourceSeedResult.Seeded,
             resourceSeedResult.Reason);
     }
 
-    private static int CopyNativeLibraries(string executableDirectory, string runtimeBaseDirectory)
+    private static NativeLibrarySeedDecision CopyNativeLibraries(string executableDirectory, string runtimeBaseDirectory)
     {
         var count = 0;
         foreach (var sourcePath in Directory.EnumerateFiles(executableDirectory, "*.dylib", SearchOption.TopDirectoryOnly))
@@ -58,7 +62,14 @@ public static class MacAppRuntimeSeed
             count++;
         }
 
-        return count;
+        var missingMaaFrameworkRuntimeLibraries = RuntimeLayout.ResolveMissingMacMaaFrameworkRuntimeLibraries(runtimeBaseDirectory);
+        var seededMaaFrameworkRuntimeLibraries = RuntimeLayout.MacMaaFrameworkRuntimeLibraryFileNames
+            .Except(missingMaaFrameworkRuntimeLibraries, StringComparer.Ordinal)
+            .ToArray();
+        return new NativeLibrarySeedDecision(
+            count,
+            seededMaaFrameworkRuntimeLibraries,
+            missingMaaFrameworkRuntimeLibraries);
     }
 
     private static string ResolveBundleResourceDirectory(string executableDirectory)
@@ -173,4 +184,9 @@ public static class MacAppRuntimeSeed
     }
 
     private sealed record ResourceSeedDecision(bool Seeded, string Reason);
+
+    private sealed record NativeLibrarySeedDecision(
+        int NativeLibraryCount,
+        IReadOnlyList<string> SeededMaaFrameworkRuntimeLibraries,
+        IReadOnlyList<string> MissingMaaFrameworkRuntimeLibraries);
 }

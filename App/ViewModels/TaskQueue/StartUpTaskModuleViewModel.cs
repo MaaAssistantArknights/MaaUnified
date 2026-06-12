@@ -37,7 +37,8 @@ public sealed class StartUpTaskModuleViewModel : TypedTaskModuleViewModelBase<St
 
     private static readonly (string Value, string TextKey, string Fallback)[] TouchModeOptionSpecs =
     [
-        ("minitouch", "StartUp.Option.TouchMode.MiniTouch", "Minitouch (Default)"),
+        ("MaaFwAdb", "StartUp.Option.TouchMode.MaaFwAdbTouch", "MaaFwAdb (Default)"),
+        ("minitouch", "StartUp.Option.TouchMode.MiniTouch", "Minitouch"),
         ("maatouch", "StartUp.Option.TouchMode.MaaTouch", "MaaTouch (Experimental)"),
         ("adb", "StartUp.Option.TouchMode.AdbTouch", "ADB Input (Deprecated)"),
     ];

@@ -42,4 +42,49 @@
           Condition="'$(RuntimeIdentifier)' == 'osx-arm64' Or '$(RuntimeIdentifier)' == 'osx-x64'">
     <Exec Command="chmod 755 &quot;$(PublishDir)platform-tools/adb&quot;" />
   </Target>
+
+  <Target Name="CopyMacMaaAdbControlUnitToPublishRoot"
+          AfterTargets="Publish"
+          Condition="'$(RuntimeIdentifier)' == 'osx-arm64' Or '$(RuntimeIdentifier)' == 'osx-x64'">
+    <PropertyGroup>
+      <_MaaUnifiedHostRepoRoot Condition="'$(MaaUnifiedHostRepoRoot)' == ''">$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)/../../..'))</_MaaUnifiedHostRepoRoot>
+      <_MaaUnifiedHostRepoRoot Condition="'$(MaaUnifiedHostRepoRoot)' != ''">$([System.IO.Path]::GetFullPath('$(MaaUnifiedHostRepoRoot)'))</_MaaUnifiedHostRepoRoot>
+      <_MaaUnifiedPublishDirFull>$([System.IO.Path]::GetFullPath('$(PublishDir)'))</_MaaUnifiedPublishDirFull>
+      <_MaaUnifiedPublishDirTrimmed>$([System.IO.Path]::TrimEndingDirectorySeparator('$(_MaaUnifiedPublishDirFull)'))</_MaaUnifiedPublishDirTrimmed>
+      <_MaaUnifiedPublishDirName>$([System.IO.Path]::GetFileName('$(_MaaUnifiedPublishDirTrimmed)'))</_MaaUnifiedPublishDirName>
+      <_MaaUnifiedMacPublishRoot Condition="'$(MaaUnifiedMacPublishRoot)' == '' and '$(_MaaUnifiedPublishDirName)' == 'bin'">$([System.IO.Path]::GetDirectoryName('$(_MaaUnifiedPublishDirTrimmed)'))</_MaaUnifiedMacPublishRoot>
+      <_MaaUnifiedMacPublishRoot Condition="'$(MaaUnifiedMacPublishRoot)' == '' and '$(_MaaUnifiedPublishDirName)' != 'bin'">$(_MaaUnifiedPublishDirTrimmed)</_MaaUnifiedMacPublishRoot>
+      <_MaaUnifiedMacPublishRoot Condition="'$(MaaUnifiedMacPublishRoot)' != ''">$([System.IO.Path]::GetFullPath('$(MaaUnifiedMacPublishRoot)'))</_MaaUnifiedMacPublishRoot>
+      <_MaaUnifiedMacCoreDestination>$([System.IO.Path]::Combine('$(_MaaUnifiedMacPublishRoot)', 'libMaaCore.dylib'))</_MaaUnifiedMacCoreDestination>
+      <_MaaUnifiedMacAdbControlUnitDestination>$([System.IO.Path]::Combine('$(_MaaUnifiedMacPublishRoot)', 'libMaaAdbControlUnit.dylib'))</_MaaUnifiedMacAdbControlUnitDestination>
+      <_MaaUnifiedMacAdbControlUnitInstallSource>$([System.IO.Path]::Combine('$(_MaaUnifiedHostRepoRoot)', 'install', 'libMaaAdbControlUnit.dylib'))</_MaaUnifiedMacAdbControlUnitInstallSource>
+      <_MaaUnifiedMacAdbControlUnitPublishSource>$([System.IO.Path]::Combine('$(_MaaUnifiedHostRepoRoot)', 'publish', 'libMaaAdbControlUnit.dylib'))</_MaaUnifiedMacAdbControlUnitPublishSource>
+      <_MaaUnifiedMacAdbControlUnitConfiguredBuildSource>$([System.IO.Path]::Combine('$(_MaaUnifiedHostRepoRoot)', 'build', 'bin', '$(Configuration)', 'libMaaAdbControlUnit.dylib'))</_MaaUnifiedMacAdbControlUnitConfiguredBuildSource>
+      <_MaaUnifiedMacAdbControlUnitRelWithDebInfoSource>$([System.IO.Path]::Combine('$(_MaaUnifiedHostRepoRoot)', 'build', 'bin', 'RelWithDebInfo', 'libMaaAdbControlUnit.dylib'))</_MaaUnifiedMacAdbControlUnitRelWithDebInfoSource>
+      <_MaaUnifiedMacAdbControlUnitDebugSource>$([System.IO.Path]::Combine('$(_MaaUnifiedHostRepoRoot)', 'build', 'bin', 'Debug', 'libMaaAdbControlUnit.dylib'))</_MaaUnifiedMacAdbControlUnitDebugSource>
+      <_MaaUnifiedMacAdbControlUnitAppBundleSource>$([System.IO.Path]::Combine('$(_MaaUnifiedHostRepoRoot)', 'release', 'MAAUnified.app', 'Contents', 'MacOS', 'libMaaAdbControlUnit.dylib'))</_MaaUnifiedMacAdbControlUnitAppBundleSource>
+      <_MaaUnifiedMacAdbControlUnitSource Condition="'$(MaaUnifiedMacAdbControlUnitSource)' != '' and Exists('$(MaaUnifiedMacAdbControlUnitSource)')">$(MaaUnifiedMacAdbControlUnitSource)</_MaaUnifiedMacAdbControlUnitSource>
+      <_MaaUnifiedMacAdbControlUnitSource Condition="'$(_MaaUnifiedMacAdbControlUnitSource)' == '' and Exists('$(_MaaUnifiedMacAdbControlUnitDestination)')">$(_MaaUnifiedMacAdbControlUnitDestination)</_MaaUnifiedMacAdbControlUnitSource>
+      <_MaaUnifiedMacAdbControlUnitSource Condition="'$(_MaaUnifiedMacAdbControlUnitSource)' == '' and Exists('$(_MaaUnifiedMacAdbControlUnitInstallSource)')">$(_MaaUnifiedMacAdbControlUnitInstallSource)</_MaaUnifiedMacAdbControlUnitSource>
+      <_MaaUnifiedMacAdbControlUnitSource Condition="'$(_MaaUnifiedMacAdbControlUnitSource)' == '' and Exists('$(_MaaUnifiedMacAdbControlUnitPublishSource)')">$(_MaaUnifiedMacAdbControlUnitPublishSource)</_MaaUnifiedMacAdbControlUnitSource>
+      <_MaaUnifiedMacAdbControlUnitSource Condition="'$(_MaaUnifiedMacAdbControlUnitSource)' == '' and Exists('$(_MaaUnifiedMacAdbControlUnitConfiguredBuildSource)')">$(_MaaUnifiedMacAdbControlUnitConfiguredBuildSource)</_MaaUnifiedMacAdbControlUnitSource>
+      <_MaaUnifiedMacAdbControlUnitSource Condition="'$(_MaaUnifiedMacAdbControlUnitSource)' == '' and Exists('$(_MaaUnifiedMacAdbControlUnitRelWithDebInfoSource)')">$(_MaaUnifiedMacAdbControlUnitRelWithDebInfoSource)</_MaaUnifiedMacAdbControlUnitSource>
+      <_MaaUnifiedMacAdbControlUnitSource Condition="'$(_MaaUnifiedMacAdbControlUnitSource)' == '' and Exists('$(_MaaUnifiedMacAdbControlUnitDebugSource)')">$(_MaaUnifiedMacAdbControlUnitDebugSource)</_MaaUnifiedMacAdbControlUnitSource>
+      <_MaaUnifiedMacAdbControlUnitSource Condition="'$(_MaaUnifiedMacAdbControlUnitSource)' == '' and Exists('$(_MaaUnifiedMacAdbControlUnitAppBundleSource)')">$(_MaaUnifiedMacAdbControlUnitAppBundleSource)</_MaaUnifiedMacAdbControlUnitSource>
+    </PropertyGroup>
+
+    <Error Condition="'$(MaaUnifiedMacAdbControlUnitSource)' != '' and !Exists('$(MaaUnifiedMacAdbControlUnitSource)')"
+           Text="Configured MaaUnifiedMacAdbControlUnitSource does not exist: $(MaaUnifiedMacAdbControlUnitSource)" />
+    <Copy SourceFiles="$(_MaaUnifiedMacAdbControlUnitSource)"
+          DestinationFiles="$(_MaaUnifiedMacAdbControlUnitDestination)"
+          SkipUnchangedFiles="true"
+          Condition="'$(_MaaUnifiedMacAdbControlUnitSource)' != '' and '$(_MaaUnifiedMacAdbControlUnitSource)' != '$(_MaaUnifiedMacAdbControlUnitDestination)'" />
+    <Message Importance="high"
+             Condition="'$(_MaaUnifiedMacAdbControlUnitSource)' != ''"
+             Text="Ensured libMaaAdbControlUnit.dylib in macOS publish root: $(_MaaUnifiedMacAdbControlUnitDestination) (source: $(_MaaUnifiedMacAdbControlUnitSource))" />
+    <Error Condition="'$(_MaaUnifiedMacAdbControlUnitSource)' == '' and Exists('$(_MaaUnifiedMacCoreDestination)')"
+           Text="libMaaAdbControlUnit.dylib not found for macOS publish root $(_MaaUnifiedMacPublishRoot). The publish root already contains libMaaCore.dylib, and the temporary RawByNc guard requires libMaaAdbControlUnit.dylib beside it. Provide the dylib from an existing MaaCore staging/publish/build output (for example install/, publish/, build/bin/$(Configuration), build/bin/RelWithDebInfo, build/bin/Debug) or set MaaUnifiedMacAdbControlUnitSource." />
+    <Warning Condition="'$(_MaaUnifiedMacAdbControlUnitSource)' == '' and !Exists('$(_MaaUnifiedMacCoreDestination)')"
+             Text="libMaaAdbControlUnit.dylib was not found in existing MaaCore staging/publish/build outputs, so MaaUnified did not copy it to the macOS publish root. If this publish output will also contain libMaaCore.dylib, provide libMaaAdbControlUnit.dylib beside it before running." />
+  </Target>
 </Project>

@@ -70,6 +70,50 @@ public sealed class ConnectionFailureDiagnosticBuilderTests
     }
 
     [Fact]
+    public void Build_WhenQuickAddressPrecheckFails_ShouldIncludeEffectiveConfigFallbackAndClientType()
+    {
+        var state = new ConnectionGameSharedStateViewModel
+        {
+            ConnectAddress = "192.168.0.10:5555",
+            ConnectConfig = "General",
+            MacUseBundledAdb = false,
+            AdbPath = Environment.ProcessPath ?? AppContext.BaseDirectory,
+            TouchMode = "MaaFwAdb",
+            AdbLiteEnabled = true,
+            ClientType = "YoStarEN",
+        };
+
+        var result = UiOperationResult.Fail(
+            nameof(CoreErrorCode.ConnectFailed),
+            "Connection address `192.168.0.10:5555` failed a quick TCP probe.",
+            """
+            Quick connect precheck failed.
+            probe=tcp host=192.168.0.10 port=5555 timeoutMs=750
+            adb=/tmp/platform-tools/adb
+            address=192.168.0.10:5555
+            config=General
+            fallback=configured:MaaFwAdb/adbLite=True
+            extras=macBundledAdb=False,touch=MaaFwAdb,adbLite=True,killAdbOnExit=False,mumu=False:<empty>:False:<empty>,ld=False:<empty>:False:<empty>,attach=<empty>:<empty>:<empty>
+            clientType=YoStarEN
+            adb devices:
+            adb devices exit=0
+            stdout:
+            List of devices attached
+            """);
+
+        var diagnostic = ConnectionFailureDiagnosticBuilder.Build(
+            result,
+            state,
+            language: "en-us");
+
+        Assert.Contains("Fallback: configured:MaaFwAdb/adbLite=True", diagnostic.Details, StringComparison.Ordinal);
+        Assert.Contains("ADB: " + state.AdbPath, diagnostic.Details, StringComparison.Ordinal);
+        Assert.Contains("Address: 192.168.0.10:5555", diagnostic.Details, StringComparison.Ordinal);
+        Assert.Contains("Connect config: General", diagnostic.Details, StringComparison.Ordinal);
+        Assert.Contains("clientType=YoStarEN", diagnostic.Details, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Build_WhenTouchModeUnavailable_ShouldExplainTouchMode()
     {
         const string details = """

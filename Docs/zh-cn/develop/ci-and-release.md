@@ -59,9 +59,27 @@ CI 产物需要满足这些约定：
 - CI 组装目录位于 runner 临时目录 `${RUNNER_TEMP}/maaunified-staging`
 - Linux / macOS 托管应用和依赖在 `${RUNNER_TEMP}/maaunified-staging/bin/`
 - MaaCore runtime、原生库和 `resource/` 在 `${RUNNER_TEMP}/maaunified-staging/` 根目录
+- macOS staging 根目录必须同时包含 `libMaaCore.dylib` 和 `libMaaAdbControlUnit.dylib`；后者来自 MaaFramework macOS 包的 `bin/libMaaAdbControlUnit.dylib`，需要与 `libMaaCore.dylib` 同目录。
 - Windows 根目录入口是 `${RUNNER_TEMP}/maaunified-staging/MAAUnified.exe`
 - Linux 根目录保留 `MAAUnified.AppImage`、`resource/`、原生库，以及 `config/`、`data/`、`cache/`、`debug/`、`update-packages/` 等便携目录
 - Debug 包必须包含可运行应用、runtime、`resource/` 和 `debug/`
+
+### macOS MaaFramework control unit
+
+临时操作：真实 workflow 在 `Build MaaCore runtime` 后、`Publish MAAUnified app` 前下载 MaaFramework macOS 包，并把 `bin/*AdbControlUnit*` 复制到 `install/`。
+
+本地手工处理时，打开 MaaFramework latest release，找到对应架构的 macOS 包：
+
+- latest：https://github.com/MaaXYZ/MaaFramework/releases/latest
+- Intel：`MAA-macos-x86_64-v*.zip`
+- Apple Silicon：`MAA-macos-aarch64-v*.zip`
+
+解压后复制：
+
+```bash
+cp -f MaaFramework-temp/bin/libMaaAdbControlUnit.dylib install/
+test -f install/libMaaAdbControlUnit.dylib
+```
 
 ## CI 测试门禁
 

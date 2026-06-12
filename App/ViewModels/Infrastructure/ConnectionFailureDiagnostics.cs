@@ -30,7 +30,8 @@ public sealed record AdbCommandFailureInfo(
     int? ExitCode,
     string? StandardError,
     string? StandardOutput,
-    string? ExceptionMessage = null)
+    string? ExceptionMessage = null,
+    string? ResolutionDiagnosticContext = null)
 {
     public bool Success => ExitCode == 0 && string.IsNullOrWhiteSpace(ExceptionMessage);
 
@@ -51,6 +52,12 @@ public sealed record AdbCommandFailureInfo(
         if (!string.IsNullOrWhiteSpace(ExceptionMessage))
         {
             builder.AppendLine($"Exception: {ExceptionMessage.Trim()}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(ResolutionDiagnosticContext))
+        {
+            builder.AppendLine("ADB resolution:");
+            builder.AppendLine(ResolutionDiagnosticContext.Trim());
         }
 
         if (!string.IsNullOrWhiteSpace(StandardError))
@@ -102,7 +109,7 @@ public static class ConnectionFailureDiagnosticBuilder
         string? language = null)
     {
         var attempts = candidateFailures?.ToList() ?? [];
-        var details = BuildDetails(connectResult, attempts, adbCommandFailure);
+        var details = BuildDetails(connectResult, state, attempts, adbCommandFailure);
         var fallbackMessage = BuildGenericMessage(state, language);
         var fallbackSuggestion = Select(language, "请检查连接设置，尝试重启模拟器与 ADB；仍失败时重启电脑。", "Check connection settings, try restarting the emulator and ADB, then reboot if it still fails.");
 
@@ -326,10 +333,30 @@ public static class ConnectionFailureDiagnosticBuilder
 
     private static string BuildDetails(
         UiOperationResult connectResult,
+        ConnectionGameSharedStateViewModel? state,
         IReadOnlyList<ConnectionAttemptFailure> candidateFailures,
         AdbCommandFailureInfo? adbCommandFailure)
     {
         var builder = new StringBuilder();
+        if (state is not null)
+        {
+            var effectiveAdbPath = state.ResolveEffectiveAdbPath(updateStateWhenResolved: false);
+            var connectionInfo = state.BuildCoreConnectionInfo(effectiveAdbPath: effectiveAdbPath);
+            var extras = connectionInfo.Extras ?? CoreConnectionExtras.Empty;
+            var fallback = !string.IsNullOrWhiteSpace(extras.FallbackStrategy)
+                ? extras.FallbackStrategy
+                : $"configured:{extras.TouchMode ?? "MaaFwAdb"}/adbLite={extras.AdbLiteEnabled}";
+            builder.AppendLine("Effective connection configuration:");
+            builder.AppendLine($"ADB: {connectionInfo.AdbPath ?? "<system adb>"}");
+            builder.AppendLine($"Address: {connectionInfo.Address}");
+            builder.AppendLine($"Connect config: {connectionInfo.ConnectConfig}");
+            builder.AppendLine($"Fallback: {fallback}");
+            builder.AppendLine($"Configured: touch={extras.ConfiguredTouchMode ?? extras.TouchMode ?? "MaaFwAdb"}, adbLite={extras.ConfiguredAdbLiteEnabled ?? extras.AdbLiteEnabled}");
+            builder.AppendLine($"Touch/controller fallback: touch={extras.TouchMode ?? "<default>"}, adbLite={extras.AdbLiteEnabled}, killAdbOnExit={extras.KillAdbOnExit}");
+            builder.AppendLine($"Extras/clientType: macBundledAdb={extras.MacUseBundledAdb}, MuMu={extras.MuMu12ExtrasEnabled}:{extras.MuMu12EmulatorPath ?? "<empty>"}:{extras.MuMuBridgeConnection}:{extras.MuMu12Index ?? "<empty>"}, LD={extras.LdPlayerExtrasEnabled}:{extras.LdPlayerEmulatorPath ?? "<empty>"}:{extras.LdPlayerManualSetIndex}:{extras.LdPlayerIndex ?? "<empty>"}, Attach={extras.AttachWindowScreencapMethod ?? "<empty>"}:{extras.AttachWindowMouseMethod ?? "<empty>"}:{extras.AttachWindowKeyboardMethod ?? "<empty>"}, clientType={extras.ClientType ?? "<empty>"}");
+            builder.AppendLine();
+        }
+
         if (adbCommandFailure is not null)
         {
             builder.AppendLine(adbCommandFailure.BuildDetails());

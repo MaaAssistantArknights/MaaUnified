@@ -246,6 +246,46 @@ public sealed class RuntimeLayoutTests
     }
 
     [Fact]
+    public void EnsureSeeded_WhenMacAppHasMaaAdbControlUnit_CopiesAndReportsMaaFrameworkRuntimeLibrary()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "maa-unified-runtime-seed", Guid.NewGuid().ToString("N"));
+        var executableBaseDirectory = Path.Combine(root, "MAAUnified.app", "Contents", "MacOS");
+        var bundleResourceDirectory = Path.Combine(root, "MAAUnified.app", "Contents", "Resources", "resource");
+        var runtimeBaseDirectory = Path.Combine(root, "Application Support", "MAAUnified");
+        Directory.CreateDirectory(executableBaseDirectory);
+        Directory.CreateDirectory(bundleResourceDirectory);
+        File.WriteAllText(Path.Combine(executableBaseDirectory, RuntimeLayout.MacCoreLibraryFileName), "core");
+        File.WriteAllText(Path.Combine(executableBaseDirectory, RuntimeLayout.MacMaaAdbControlUnitLibraryFileName), "control-unit");
+
+        var result = MacAppRuntimeSeed.EnsureSeeded(executableBaseDirectory, runtimeBaseDirectory);
+
+        Assert.Equal(MacAppRuntimeSeedStatus.Ready, result.Status);
+        Assert.Equal(2, result.NativeLibraryCount);
+        Assert.Contains(RuntimeLayout.MacMaaAdbControlUnitLibraryFileName, result.SeededMaaFrameworkRuntimeLibraries ?? []);
+        Assert.Empty(result.MissingMaaFrameworkRuntimeLibraries ?? []);
+        Assert.True(File.Exists(Path.Combine(runtimeBaseDirectory, RuntimeLayout.MacCoreLibraryFileName)));
+        Assert.True(File.Exists(Path.Combine(runtimeBaseDirectory, RuntimeLayout.MacMaaAdbControlUnitLibraryFileName)));
+    }
+
+    [Fact]
+    public void EnsureSeeded_WhenMacAppIsMissingMaaAdbControlUnit_ReportsMissingMaaFrameworkRuntimeLibrary()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "maa-unified-runtime-seed", Guid.NewGuid().ToString("N"));
+        var executableBaseDirectory = Path.Combine(root, "MAAUnified.app", "Contents", "MacOS");
+        var bundleResourceDirectory = Path.Combine(root, "MAAUnified.app", "Contents", "Resources", "resource");
+        var runtimeBaseDirectory = Path.Combine(root, "Application Support", "MAAUnified");
+        Directory.CreateDirectory(executableBaseDirectory);
+        Directory.CreateDirectory(bundleResourceDirectory);
+        File.WriteAllText(Path.Combine(executableBaseDirectory, RuntimeLayout.MacCoreLibraryFileName), "core");
+
+        var result = MacAppRuntimeSeed.EnsureSeeded(executableBaseDirectory, runtimeBaseDirectory);
+
+        Assert.Equal(MacAppRuntimeSeedStatus.Ready, result.Status);
+        Assert.Contains(RuntimeLayout.MacMaaAdbControlUnitLibraryFileName, result.MissingMaaFrameworkRuntimeLibraries ?? []);
+        Assert.DoesNotContain(RuntimeLayout.MacMaaAdbControlUnitLibraryFileName, result.SeededMaaFrameworkRuntimeLibraries ?? []);
+    }
+
+    [Fact]
     public void EnsureSeeded_WhenRuntimeResourceAlreadyExists_DoesNotOverwriteResource()
     {
         var root = Path.Combine(Path.GetTempPath(), "maa-unified-runtime-seed", Guid.NewGuid().ToString("N"));
