@@ -28,6 +28,7 @@ public sealed class ConnectFeatureService : IConnectFeatureService
     private readonly UiLogService? _logService;
     private readonly IMaaCoreBridge? _bridge;
     private readonly string? _runtimeBaseDirectory;
+    private readonly bool _enableQuickConnectionPrecheck;
     private IMacRawByNcRiskConnectionPromptService _macRawByNcRiskPromptService;
     private readonly SemaphoreSlim _lifecycleOperationLock = new(1, 1);
     private readonly object _lifecycleOperationGate = new();
@@ -66,7 +67,8 @@ public sealed class ConnectFeatureService : IConnectFeatureService
         UiLogService? logService = null,
         IMaaCoreBridge? bridge = null,
         string? runtimeBaseDirectory = null,
-        IMacRawByNcRiskConnectionPromptService? macRawByNcRiskPromptService = null)
+        IMacRawByNcRiskConnectionPromptService? macRawByNcRiskPromptService = null,
+        bool enableQuickConnectionPrecheck = true)
     {
         _sessionService = sessionService;
         _configService = configService;
@@ -77,6 +79,7 @@ public sealed class ConnectFeatureService : IConnectFeatureService
             : RuntimeLayout.NormalizeDirectory(runtimeBaseDirectory);
         _macRawByNcRiskPromptService = macRawByNcRiskPromptService
             ?? NoOpMacRawByNcRiskConnectionPromptService.Instance;
+        _enableQuickConnectionPrecheck = enableQuickConnectionPrecheck;
     }
 
     public IMacRawByNcRiskConnectionPromptService MacRawByNcRiskPromptService
@@ -178,7 +181,7 @@ public sealed class ConnectFeatureService : IConnectFeatureService
         LogEffectiveConnectionConfiguration(normalized);
 
         var quickPrecheckPassed = false;
-        if (ShouldRunQuickConnectionPrecheck(normalized))
+        if (_enableQuickConnectionPrecheck && ShouldRunQuickConnectionPrecheck(normalized))
         {
             var quickScreen = await QuickScreenConnectionAsync(normalized, cancellationToken).ConfigureAwait(false);
             if (!quickScreen.Success)

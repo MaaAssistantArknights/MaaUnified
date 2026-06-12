@@ -849,7 +849,13 @@ public sealed class SessionStateUiProjectionTests
             };
 
             var capability = new PlatformCapabilityFeatureService(platform, diagnostics);
-            var connect = new ConnectFeatureService(session, config, log, bridge, root);
+            var connect = new ConnectFeatureService(
+                session,
+                config,
+                log,
+                bridge,
+                root,
+                enableQuickConnectionPrecheck: false);
             var runtime = new MAAUnifiedRuntime
             {
                 CoreBridge = bridge,
