@@ -8597,11 +8597,11 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
 
     private void ApplyGpuSelection(GpuOptionDescriptor descriptor)
     {
-        InvalidatePendingGpuRefresh();
         SetGpuLegacyPropertiesSilently(
             descriptor,
             descriptor.IsCustomEntry ? GpuCustomDescription : null,
             descriptor.IsCustomEntry ? GpuCustomInstancePath : null);
+        InvalidatePendingGpuRefresh();
 
         if (descriptor.IsCustomEntry)
         {
@@ -8622,11 +8622,11 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
             return;
         }
 
-        InvalidatePendingGpuRefresh();
         SetGpuLegacyPropertiesSilently(
             SelectedGpuOption.Descriptor,
             GpuCustomDescription,
             GpuCustomInstancePath);
+        InvalidatePendingGpuRefresh();
         RefreshGpuUiState();
         MarkStartPerformanceDirty();
     }
