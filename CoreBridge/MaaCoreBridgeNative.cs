@@ -567,9 +567,8 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge, IMaaCoreBridgeRecovery
                     return Fail<bool>(CoreErrorCode.NotSupported, "AsstSetConnectionExtras export is unavailable.");
                 }
 
-                return AsBool(exports.AsstSetConnectionExtras(name.Trim(), extrasJson ?? "{}"))
-                    ? CoreResult<bool>.Ok(true)
-                    : Fail<bool>(CoreErrorCode.InvalidRequest, $"Failed to set connection extras `{name.Trim()}`.");
+                exports.AsstSetConnectionExtras(name.Trim(), extrasJson ?? "{}");
+                return CoreResult<bool>.Ok(true);
             },
             cancellationToken).ConfigureAwait(false);
     }
@@ -2357,7 +2356,7 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge, IMaaCoreBridgeRecovery
         [MarshalAs(UnmanagedType.LPUTF8Str)] string value);
 
     [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-    private delegate byte AsstSetConnectionExtrasDelegate(
+    private delegate void AsstSetConnectionExtrasDelegate(
         [MarshalAs(UnmanagedType.LPUTF8Str)] string name,
         [MarshalAs(UnmanagedType.LPUTF8Str)] string extras);
 
