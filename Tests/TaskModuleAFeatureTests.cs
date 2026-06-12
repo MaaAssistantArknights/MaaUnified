@@ -728,7 +728,7 @@ public sealed class TaskModuleAFeatureTests
             ClientType = "Official",
             StartGameEnabled = true,
             ConnectConfig = "General",
-            ConnectAddress = "127.0.0.1:5555",
+            ConnectAddress = TestConnectionFixtureSupport.ReadyConnectAddress,
             AdbPath = string.Empty,
             TouchMode = "minitouch",
             AutoDetectConnection = false,
@@ -794,7 +794,7 @@ public sealed class TaskModuleAFeatureTests
         var session = new UnifiedSessionService(bridge, config, log, new SessionStateMachine());
         var platform = PlatformServicesFactory.CreateDefaults();
         var platformCapabilityService = new PlatformCapabilityFeatureService(platform, diagnostics);
-        var connectFeatureService = new ConnectFeatureService(session, config);
+        var connectFeatureService = new ConnectFeatureService(session, config, log, bridge, root);
         var runtime = new MAAUnifiedRuntime
         {
             CoreBridge = bridge,
@@ -824,7 +824,8 @@ public sealed class TaskModuleAFeatureTests
         try
         {
             var page = new TaskQueuePageViewModel(runtime, new ConnectionGameSharedStateViewModel());
-            Assert.True((await runtime.ConnectFeatureService.ConnectAsync("127.0.0.1:5555", "General", null)).Success);
+            var readyAdbPath = await TestConnectionFixtureSupport.PrepareReadyRuntimeAsync(root, config, "taskmodule-a-diagnostics-ready");
+            Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(runtime.ConnectFeatureService, readyAdbPath)).Success);
             await page.StartAsync();
             Assert.True(page.HasBlockingConfigIssues);
             Assert.True(page.BlockingConfigIssueCount > 0);
@@ -956,6 +957,7 @@ public sealed class TaskModuleAFeatureTests
                 log,
                 root);
             await config.LoadOrBootstrapAsync();
+            _ = await TestConnectionFixtureSupport.PrepareReadyRuntimeAsync(root, config, "taskmodule-a-ready");
 
             var bridge = new CapturingBridge();
             var session = new UnifiedSessionService(bridge, config, log, new SessionStateMachine());

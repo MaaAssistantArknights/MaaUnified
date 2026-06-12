@@ -77,13 +77,15 @@ public sealed record CoreInstanceOptions(
     string? TouchMode = null,
     bool? DeploymentWithPause = null,
     bool? AdbLiteEnabled = null,
-    bool? KillAdbOnExit = null)
+    bool? KillAdbOnExit = null,
+    string? ClientType = null)
 {
     public bool IsEmpty =>
         string.IsNullOrWhiteSpace(TouchMode)
         && DeploymentWithPause is null
         && AdbLiteEnabled is null
-        && KillAdbOnExit is null;
+        && KillAdbOnExit is null
+        && ClientType is null;
 
     public CoreInstanceOptions MergeWith(CoreInstanceOptions fallback)
     {
@@ -93,14 +95,43 @@ public sealed record CoreInstanceOptions(
             string.IsNullOrWhiteSpace(TouchMode) ? fallback.TouchMode : TouchMode,
             DeploymentWithPause ?? fallback.DeploymentWithPause,
             AdbLiteEnabled ?? fallback.AdbLiteEnabled,
-            KillAdbOnExit ?? fallback.KillAdbOnExit);
+            KillAdbOnExit ?? fallback.KillAdbOnExit,
+            ClientType ?? fallback.ClientType);
     }
+}
+
+public sealed record CoreConnectionExtras(
+    bool MacUseBundledAdb = false,
+    string? TouchMode = null,
+    bool AdbLiteEnabled = false,
+    bool KillAdbOnExit = false,
+    bool MuMu12ExtrasEnabled = false,
+    string? MuMu12EmulatorPath = null,
+    bool MuMuBridgeConnection = false,
+    string? MuMu12Index = null,
+    bool LdPlayerExtrasEnabled = false,
+    string? LdPlayerEmulatorPath = null,
+    bool LdPlayerManualSetIndex = false,
+    string? LdPlayerIndex = null,
+    string? AttachWindowScreencapMethod = null,
+    string? AttachWindowMouseMethod = null,
+    string? AttachWindowKeyboardMethod = null,
+    string? ClientType = null,
+    string? FallbackStrategy = null,
+    string? ConfiguredTouchMode = null,
+    bool? ConfiguredAdbLiteEnabled = null,
+    string? FallbackReason = null,
+    string? FallbackRequiredLibrary = null,
+    bool? FallbackRequiredLibraryExists = null)
+{
+    public static CoreConnectionExtras Empty { get; } = new();
 }
 
 public sealed record CoreConnectionInfo(
     string Address,
     string ConnectConfig,
     string? AdbPath,
+    CoreConnectionExtras? Extras = null,
     TimeSpan? Timeout = null);
 
 public sealed record CoreTaskRequest(string Type, string Name, bool IsEnabled, string ParamsJson);

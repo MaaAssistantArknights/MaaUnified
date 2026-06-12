@@ -205,6 +205,30 @@ jobs:
           cmake --build --preset ${{ matrix.cmake_preset }}
           cmake --install build --config RelWithDebInfo
 
+      - name: Download MaaFramework ADB control unit (macOS)
+        if: runner.os == 'macOS'
+        uses: robinraju/release-downloader@v1
+        with:
+          repository: MaaXYZ/MaaFramework
+          latest: true
+          fileName: ${{ matrix.rid == 'osx-x64' && '*macos-x86_64*.zip' || '*macos-aarch64*.zip' }}
+          extract: true
+          out-file-path: MaaFramework-temp
+
+      - name: Install MaaFramework ADB control unit (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          mkdir -p install
+          shopt -s nullglob
+          control_units=(MaaFramework-temp/bin/*AdbControlUnit*)
+          if (( ${#control_units[@]} == 0 )); then
+            echo "MaaFramework release did not contain bin/*AdbControlUnit*." >&2
+            exit 1
+          fi
+          cp -f "${control_units[@]}" install/
+          test -f install/libMaaAdbControlUnit.dylib
+
       - name: Publish MAAUnified app (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
@@ -256,6 +280,10 @@ jobs:
             test -f "$staging_dir/libMaaCore.so"
           else
             test -f "$staging_dir/libMaaCore.dylib"
+            if [[ ! -f "$staging_dir/libMaaAdbControlUnit.dylib" ]]; then
+              echo "libMaaAdbControlUnit.dylib not found in macOS staging root. macOS safe RawByNc fallback requires it beside libMaaCore.dylib; provide it from the existing MaaCore staging or publish output before packaging." >&2
+              exit 1
+            fi
           fi
           test -d "$staging_dir/resource"
 
@@ -296,6 +324,10 @@ jobs:
           file "$staging_dir/bin/platform-tools/adb" | grep -q 'Mach-O universal binary'
           "$staging_dir/bin/platform-tools/adb" version
           test -f "$staging_dir/libMaaCore.dylib"
+          if [[ ! -f "$staging_dir/libMaaAdbControlUnit.dylib" ]]; then
+            echo "libMaaAdbControlUnit.dylib not found in macOS staging root. macOS safe RawByNc fallback requires it beside libMaaCore.dylib; provide it from the existing MaaCore staging or publish output before packaging." >&2
+            exit 1
+          fi
           test -d "$staging_dir/resource"
           ! test -e "$staging_dir/MAAUnified.command"
           ! find "$staging_dir" -maxdepth 1 -type f \( -name 'System.*.dll' -o -name 'Avalonia.*.dll' \) | grep -q .

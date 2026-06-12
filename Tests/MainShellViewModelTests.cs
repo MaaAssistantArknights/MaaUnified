@@ -15,6 +15,7 @@ using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Features;
 using MAAUnified.Application.Services.Localization;
 using MAAUnified.Compat.Constants;
+using MAAUnified.Compat.Runtime;
 using MAAUnified.CoreBridge;
 using MAAUnified.Platform;
 
@@ -126,10 +127,42 @@ public sealed class MainShellViewModelTests
                 runDirectly: true,
                 minimizeDirectly: false,
                 openEmulatorAfterLaunch: false));
+        await fixture.SeedStartupDirectRunRuntimeAsync();
         await fixture.ViewModel.InitializeAsync();
 
         await fixture.ViewModel.ExecuteStartupLaunchBehaviorAsync();
 
+        Assert.Equal(SessionState.Running, fixture.Runtime.SessionService.CurrentState);
+    }
+
+    [Fact]
+    public async Task StartAsync_WhenConnectedSettingsChanged_ShouldReconnectWithCurrentSettings()
+    {
+        var bridge = new FakeBridge();
+        await using var fixture = await TestFixture.CreateAsync(
+            existingAvaloniaJson: CreateRunnableShellConfigJson(),
+            bridge: bridge);
+        await fixture.ViewModel.InitializeAsync();
+        Assert.True(await WaitUntilAsync(() => fixture.ViewModel.IsCoreReady, retry: 160, delayMs: 25));
+
+        Assert.True((await fixture.Runtime.ConnectFeatureService.ConnectAsync(
+            "127.0.0.1:5555",
+            "General",
+            null)).Success);
+        Assert.Equal(1, bridge.ConnectCallCount);
+
+        fixture.ViewModel.ConnectionGameSharedState.ConnectAddress = "127.0.0.1:5556";
+        Assert.True(fixture.Runtime.ConfigurationService.TryGetCurrentProfile(out var profile));
+        profile.Values["ConnectAddress"] = JsonValue.Create("127.0.0.1:5556");
+        Assert.False(fixture.Runtime.SessionService.IsConnectedWith(
+            fixture.ViewModel.ConnectionGameSharedState.BuildCoreConnectionInfo()));
+
+        await fixture.ViewModel.StartAsync();
+
+        Assert.True(
+            bridge.ConnectCallCount >= 2,
+            $"connectCount={bridge.ConnectCallCount}, state={fixture.Runtime.SessionService.CurrentState}, vmState={fixture.ViewModel.CurrentSessionState}, last={bridge.LastConnectionInfo?.Address ?? "<null>"}, global={fixture.ViewModel.GlobalStatus}, error={fixture.ViewModel.LastError}");
+        Assert.Equal("127.0.0.1:5556", bridge.LastConnectionInfo?.Address);
         Assert.Equal(SessionState.Running, fixture.Runtime.SessionService.CurrentState);
     }
 
@@ -1348,6 +1381,11 @@ public sealed class MainShellViewModelTests
         Assert.True(await WaitUntilAsync(() =>
             versionUpdate.CheckForUpdatesCallCount >= 1
             && versionUpdate.CheckResourceCallCount >= 1));
+        Assert.True(await WaitUntilAsync(() =>
+            fixture.ViewModel.HasWindowVersionUpdateInfo
+            && fixture.ViewModel.HasWindowResourceUpdateInfo,
+            retry: 160,
+            delayMs: 25));
         Assert.Equal("MirrorChyan", fixture.ViewModel.SettingsPage.VersionUpdateResourceSource);
         Assert.Equal(0, versionUpdate.UpdateResourceCallCount);
         Assert.True(fixture.ViewModel.HasWindowVersionUpdateInfo);
@@ -1662,6 +1700,40 @@ public sealed class MainShellViewModelTests
               "GlobalValues": {
                 "Start.MinimizeDirectly": {{minimizeDirectly.ToString().ToLowerInvariant()}}
               },
+              "Migration": {}
+            }
+            """;
+    }
+
+    private static string CreateRunnableShellConfigJson()
+    {
+        return
+            """
+            {
+              "SchemaVersion": 2,
+              "CurrentProfile": "Default",
+              "Profiles": {
+                "Default": {
+                  "Values": {
+                    "ConnectAddress": "127.0.0.1:5555",
+                    "ConnectConfig": "General",
+                    "MacUseBundledAdb": false
+                  },
+                  "TaskQueue": [
+                    {
+                      "Type": "StartUp",
+                      "Name": "StartUp",
+                      "IsEnabled": true,
+                      "Params": {
+                        "client_type": "Official",
+                        "start_game_enabled": true,
+                        "account_name": ""
+                      }
+                    }
+                  ]
+                }
+              },
+              "GlobalValues": {},
               "Migration": {}
             }
             """;
@@ -2136,6 +2208,17 @@ public sealed class MainShellViewModelTests
 
         public CapturingTrayService TrayService { get; }
 
+        public async Task SeedStartupDirectRunRuntimeAsync()
+        {
+            TouchMacMaaAdbControlUnitLibrary(Root);
+            var adbPath = await CreateExecutableAdbAsync("startup-direct-run");
+            if (Runtime.ConfigurationService.TryGetCurrentProfile(out var profile))
+            {
+                profile.Values["AdbPath"] = JsonValue.Create(adbPath);
+                profile.Values[MacBundledAdbPolicy.ProfileUseBundledAdbKey] = JsonValue.Create(false);
+            }
+        }
+
         public static async Task<TestFixture> CreateAsync(
             IShellFeatureService? shellService = null,
             IUiLanguageCoordinator? uiLanguageCoordinator = null,
@@ -2190,7 +2273,7 @@ public sealed class MainShellViewModelTests
             };
 
             var capability = new PlatformCapabilityFeatureService(platform, diagnostics);
-            var connect = new ConnectFeatureService(session, config);
+            var connect = new ConnectFeatureService(session, config, log, runtimeBridge, root);
             shellService ??= new ShellFeatureService(connect);
 
             var runtime = new MAAUnifiedRuntime
@@ -2225,6 +2308,53 @@ public sealed class MainShellViewModelTests
             };
 
             return new TestFixture(root, runtime, new MainShellViewModel(runtime, dialogService), tray);
+        }
+
+        private static void TouchMacMaaAdbControlUnitLibrary(string runtimeBaseDirectory)
+        {
+            Directory.CreateDirectory(runtimeBaseDirectory);
+            File.WriteAllText(
+                RuntimeLayout.ResolveMacMaaFrameworkRuntimeLibraryPath(
+                    runtimeBaseDirectory,
+                    RuntimeLayout.MacMaaAdbControlUnitLibraryFileName),
+                "test-control-unit");
+        }
+
+        private async Task<string> CreateExecutableAdbAsync(string name)
+        {
+            var directory = Path.Combine(Root, "adb-tools", name);
+            Directory.CreateDirectory(directory);
+            var adbPath = Path.Combine(directory, OperatingSystem.IsWindows() ? "adb.exe" : "adb");
+            await File.WriteAllTextAsync(
+                adbPath,
+                OperatingSystem.IsWindows()
+                    ? string.Empty
+                    : """
+                      #!/bin/sh
+                      if [ "$1" = "-s" ] && [ "$3" = "get-state" ]; then
+                        printf 'device\n'
+                        exit 0
+                      fi
+                      if [ "$1" = "devices" ]; then
+                        printf 'List of devices attached\nemulator-5554\tdevice\nemulator-5556\tdevice\n127.0.0.1:5555\tdevice\n'
+                        exit 0
+                      fi
+                      if [ "$1" = "connect" ] && [ -n "$2" ]; then
+                        printf 'already connected to %s\n' "$2"
+                        exit 0
+                      fi
+                      exit 0
+                      """);
+            if (!OperatingSystem.IsWindows())
+            {
+                File.SetUnixFileMode(
+                    adbPath,
+                    UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute
+                    | UnixFileMode.GroupRead | UnixFileMode.GroupExecute
+                    | UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
+            }
+
+            return adbPath;
         }
 
         public async ValueTask DisposeAsync()
@@ -2598,6 +2728,10 @@ public sealed class MainShellViewModelTests
 
         public int InitializeCallCount { get; private set; }
 
+        public int ConnectCallCount { get; private set; }
+
+        public CoreConnectionInfo? LastConnectionInfo { get; private set; }
+
         public Task<CoreResult<CoreInitializeInfo>> InitializeAsync(
             CoreInitializeRequest request,
             CancellationToken cancellationToken = default)
@@ -2608,6 +2742,8 @@ public sealed class MainShellViewModelTests
 
         public Task<CoreResult<bool>> ConnectAsync(CoreConnectionInfo connectionInfo, CancellationToken cancellationToken = default)
         {
+            ConnectCallCount++;
+            LastConnectionInfo = connectionInfo;
             return Task.FromResult(CoreResult<bool>.Ok(true));
         }
 

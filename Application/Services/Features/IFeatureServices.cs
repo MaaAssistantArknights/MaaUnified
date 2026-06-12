@@ -7,9 +7,78 @@ using MAAUnified.Platform;
 
 namespace MAAUnified.Application.Services.Features;
 
+public sealed record ConnectionCandidateAttempt(string Candidate, UiOperationResult Result);
+
+public enum MacRawByNcRiskConnectionDecision
+{
+    Cancel = 0,
+    ApplyRecommended = 1,
+    ForceRun = 2,
+}
+
+public sealed record MacRawByNcRiskConnectionPrompt(
+    string SourceScope,
+    string Address,
+    string ConnectConfig,
+    string? ConfiguredTouchMode,
+    bool ConfiguredAdbLiteEnabled,
+    string RecommendedTouchMode,
+    bool RecommendedAdbLiteEnabled,
+    string Language);
+
+public interface IMacRawByNcRiskConnectionPromptService
+{
+    Task<MacRawByNcRiskConnectionDecision> ConfirmAsync(
+        MacRawByNcRiskConnectionPrompt prompt,
+        CancellationToken cancellationToken = default);
+}
+
+public sealed class NoOpMacRawByNcRiskConnectionPromptService : IMacRawByNcRiskConnectionPromptService
+{
+    public static NoOpMacRawByNcRiskConnectionPromptService Instance { get; } = new();
+
+    private NoOpMacRawByNcRiskConnectionPromptService()
+    {
+    }
+
+    public Task<MacRawByNcRiskConnectionDecision> ConfirmAsync(
+        MacRawByNcRiskConnectionPrompt prompt,
+        CancellationToken cancellationToken = default)
+        => Task.FromResult(MacRawByNcRiskConnectionDecision.ForceRun);
+}
+
+public sealed record ConnectionConnectOperationResult(
+    UiOperationResult Result,
+    string? SuccessfulAddress,
+    IReadOnlyList<ConnectionCandidateAttempt> CandidateFailures)
+{
+    public bool Success => Result.Success;
+}
+
+public sealed record ConnectionScreenshotTestResult(
+    IReadOnlyList<long> SampleMilliseconds,
+    byte[] LatestImageBgr);
+
+public sealed record ConnectionScreenshotTestOperationResult(
+    UiOperationResult Result,
+    ConnectionScreenshotTestResult? Screenshot,
+    string? SuccessfulAddress,
+    IReadOnlyList<ConnectionCandidateAttempt> CandidateFailures)
+{
+    public bool Success => Result.Success;
+}
+
 public interface IConnectFeatureService
 {
     Task<CoreResult<bool>> ValidateAndConnectAsync(string address, string config, string? adbPath, CancellationToken cancellationToken = default);
+
+    Task<CoreResult<bool>> ValidateAndConnectAsync(
+        CoreConnectionInfo connectionInfo,
+        CancellationToken cancellationToken = default)
+        => ValidateAndConnectAsync(
+            connectionInfo,
+            instanceOptions: null,
+            cancellationToken);
 
     Task<CoreResult<bool>> ValidateAndConnectAsync(
         string address,
@@ -19,7 +88,26 @@ public interface IConnectFeatureService
         CancellationToken cancellationToken = default)
         => ValidateAndConnectAsync(address, config, adbPath, cancellationToken);
 
+    Task<CoreResult<bool>> ValidateAndConnectAsync(
+        CoreConnectionInfo connectionInfo,
+        CoreInstanceOptions? instanceOptions = null,
+        CancellationToken cancellationToken = default)
+        => ValidateAndConnectAsync(
+            connectionInfo.Address,
+            connectionInfo.ConnectConfig,
+            connectionInfo.AdbPath,
+            instanceOptions,
+            cancellationToken);
+
     Task<UiOperationResult> ConnectAsync(string address, string config, string? adbPath, CancellationToken cancellationToken = default);
+
+    Task<UiOperationResult> ConnectAsync(
+        CoreConnectionInfo connectionInfo,
+        CancellationToken cancellationToken = default)
+        => ConnectAsync(
+            connectionInfo,
+            instanceOptions: null,
+            cancellationToken);
 
     Task<UiOperationResult> ConnectAsync(
         string address,
@@ -28,6 +116,73 @@ public interface IConnectFeatureService
         CoreInstanceOptions? instanceOptions,
         CancellationToken cancellationToken = default)
         => ConnectAsync(address, config, adbPath, cancellationToken);
+
+    Task<UiOperationResult> ConnectAsync(
+        CoreConnectionInfo connectionInfo,
+        CoreInstanceOptions? instanceOptions = null,
+        CancellationToken cancellationToken = default);
+
+    UiOperationResult<IReadOnlyList<CoreConnectionInfo>> BuildCurrentProfileConnectionCandidates(
+        bool includeConfiguredAddress = true)
+        => UiOperationResult<IReadOnlyList<CoreConnectionInfo>>.Fail(
+            UiErrorCode.ProfileMissing,
+            "Current profile connection settings are unavailable.");
+
+    UiOperationResult<IReadOnlyList<CoreConnectionInfo>> BuildConnectionCandidates(
+        string configuredAddress,
+        string connectConfig,
+        string? adbPath,
+        CoreConnectionExtras? extras = null,
+        bool autoDetect = true,
+        bool alwaysAutoDetect = false,
+        bool includeConfiguredAddress = true,
+        TimeSpan? timeout = null)
+        => UiOperationResult<IReadOnlyList<CoreConnectionInfo>>.Fail(
+            UiErrorCode.ConnectFailed,
+            "Connection candidate construction is unavailable.");
+
+    async Task<ConnectionConnectOperationResult> ConnectCandidatesAsync(
+        IReadOnlyList<CoreConnectionInfo> candidates,
+        CancellationToken cancellationToken = default)
+    {
+        if (candidates.Count == 0)
+        {
+            return new ConnectionConnectOperationResult(
+                UiOperationResult.Fail(UiErrorCode.ConnectFailed, "No connection candidates were available."),
+                null,
+                []);
+        }
+
+        var result = await ConnectAsync(candidates[0], cancellationToken: cancellationToken);
+        return new ConnectionConnectOperationResult(
+            result,
+            result.Success ? candidates[0].Address : null,
+            result.Success ? [] : [new ConnectionCandidateAttempt(candidates[0].Address, result)]);
+    }
+
+    Task<ConnectionConnectOperationResult> ConnectCurrentProfileAsync(CancellationToken cancellationToken = default)
+    {
+        var candidates = BuildCurrentProfileConnectionCandidates(includeConfiguredAddress: true);
+        return candidates.Success && candidates.Value is not null
+            ? ConnectCandidatesAsync(candidates.Value, cancellationToken)
+            : Task.FromResult(new ConnectionConnectOperationResult(
+                UiOperationResult.Fail(
+                    candidates.Error?.Code ?? UiErrorCode.ConnectFailed,
+                    candidates.Message,
+                    candidates.Error?.Details),
+                null,
+                []));
+    }
+
+    Task<ConnectionScreenshotTestOperationResult> RunScreenshotTestAsync(
+        IReadOnlyList<CoreConnectionInfo> candidates,
+        int sampleCount = 3,
+        CancellationToken cancellationToken = default)
+        => Task.FromResult(new ConnectionScreenshotTestOperationResult(
+            UiOperationResult.Fail(UiErrorCode.ConnectFailed, "Screenshot test is unsupported by current connect service."),
+            null,
+            null,
+            []));
 
     Task<CoreResult<bool>> ApplyInstanceOptionsAsync(
         CoreInstanceOptions? instanceOptions = null,
@@ -47,12 +202,31 @@ public interface IShellFeatureService
     Task<UiOperationResult> ConnectAsync(string address, string config, string? adbPath, CancellationToken cancellationToken = default);
 
     Task<UiOperationResult> ConnectAsync(
+        CoreConnectionInfo connectionInfo,
+        CancellationToken cancellationToken = default)
+        => ConnectAsync(
+            connectionInfo,
+            instanceOptions: null,
+            cancellationToken);
+
+    Task<UiOperationResult> ConnectAsync(
         string address,
         string config,
         string? adbPath,
         CoreInstanceOptions? instanceOptions,
         CancellationToken cancellationToken = default)
         => ConnectAsync(address, config, adbPath, cancellationToken);
+
+    Task<UiOperationResult> ConnectAsync(
+        CoreConnectionInfo connectionInfo,
+        CoreInstanceOptions? instanceOptions = null,
+        CancellationToken cancellationToken = default)
+        => ConnectAsync(
+            connectionInfo.Address,
+            connectionInfo.ConnectConfig,
+            connectionInfo.AdbPath,
+            instanceOptions,
+            cancellationToken);
 
     Task<UiOperationResult<ImportReport>> ImportLegacyConfigAsync(ImportSource source, bool manualImport, CancellationToken cancellationToken = default);
 

@@ -9,6 +9,7 @@ using MAAUnified.Application.Models;
 using MAAUnified.Application.Orchestration;
 using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Features;
+using MAAUnified.Compat.Runtime;
 using MAAUnified.CoreBridge;
 using MAAUnified.Platform;
 
@@ -191,24 +192,107 @@ public sealed class SessionStateUiProjectionTests
     }
 
     [Fact]
+    public async Task TaskQueuePage_LinkStart_OnMacRawByNcRiskForceRun_ShouldUseCommonPromptAndKeepConfiguredCombination()
+    {
+        if (!OperatingSystem.IsMacOS())
+        {
+            return;
+        }
+
+        var bridge = new FakeBridge();
+        await using var fixture = await TestFixture.CreateAsync(bridge: bridge);
+        var adbPath = await fixture.CreateExecutableAdbAsync("linkstart-risk");
+        var prompt = new RecordingMacRawByNcPromptService(MacRawByNcRiskConnectionDecision.ForceRun);
+        if (fixture.Runtime.ConnectFeatureService is ConnectFeatureService connectFeatureService)
+        {
+            connectFeatureService.MacRawByNcRiskPromptService = prompt;
+        }
+
+        var connectionState = new ConnectionGameSharedStateViewModel
+        {
+            ConnectAddress = TestConnectionFixtureSupport.ReadyConnectAddress,
+            ConnectConfig = TestConnectionFixtureSupport.ReadyConnectConfig,
+            AdbPath = adbPath,
+            MacUseBundledAdb = false,
+            TouchMode = "minitouch",
+            AdbLiteEnabled = false,
+            AutoDetect = false,
+        };
+        fixture.WriteConnectionStateToProfile(connectionState);
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, connectionState);
+        await vm.InitializeAsync();
+
+        await vm.ToggleRunAsync();
+        await WaitUntilAsync(() => vm.CurrentSessionState is SessionState.Running or SessionState.Connected);
+
+        Assert.Equal(1, prompt.CallCount);
+        Assert.Equal("Connect", prompt.LastPrompt?.SourceScope);
+        Assert.Equal("minitouch", bridge.LastConnectionInfo?.Extras?.TouchMode);
+        Assert.False(bridge.LastConnectionInfo?.Extras?.AdbLiteEnabled);
+        Assert.Equal("temporary-macos-rawbync-guard:force-run", bridge.LastConnectionInfo?.Extras?.FallbackStrategy);
+        Assert.Equal("user-forced-risk-combination", bridge.LastConnectionInfo?.Extras?.FallbackReason);
+    }
+
+    [Fact]
+    public async Task TaskQueuePage_ToggleRun_WhenConnectedSettingsChanged_ShouldReconnectWithCurrentSettings()
+    {
+        await using var fixture = await TestFixture.CreateAsync(existingAvaloniaJson: CreateRunnableConfigJson());
+        var bridge = Assert.IsType<FakeBridge>(fixture.Bridge);
+        var connectionState = new ConnectionGameSharedStateViewModel
+        {
+            ConnectAddress = "emulator-5554",
+            ConnectConfig = "General",
+            AdbPath = await fixture.CreateExecutableAdbAsync("adb-old"),
+            MacUseBundledAdb = false,
+        };
+        fixture.WriteConnectionStateToProfile(connectionState);
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, connectionState);
+        await vm.InitializeAsync();
+
+        Assert.True((await fixture.Runtime.ConnectFeatureService.ConnectAsync(
+            connectionState.ConnectAddress,
+            connectionState.ConnectConfig,
+            connectionState.AdbPath)).Success);
+        Assert.Equal(1, bridge.ConnectCallCount);
+
+        connectionState.ConnectAddress = "emulator-5556";
+        connectionState.AdbPath = await fixture.CreateExecutableAdbAsync("adb-new");
+        fixture.WriteConnectionStateToProfile(connectionState);
+        Assert.False(fixture.Runtime.SessionService.IsConnectedWith(
+            connectionState.BuildCoreConnectionInfo(effectiveAdbPath: connectionState.AdbPath)));
+
+        await vm.ToggleRunAsync();
+        await WaitUntilAsync(
+            () => bridge.ConnectCallCount == 2,
+            failureMessage: () => $"connectCount={bridge.ConnectCallCount}, state={vm.CurrentSessionState}, error={vm.LastErrorMessage ?? "<null>"}");
+
+        Assert.Equal(2, bridge.ConnectCallCount);
+        Assert.NotNull(bridge.LastConnectionInfo);
+        Assert.Equal("emulator-5556", bridge.LastConnectionInfo!.Address);
+        Assert.Equal(connectionState.AdbPath, bridge.LastConnectionInfo.AdbPath);
+    }
+
+    [Fact]
     public async Task TaskQueuePage_LinkStart_ShouldExposeStopImmediately_WhenConnectIsPending()
     {
         var bridge = new BlockingConnectBridge();
-        bridge.StopCompletion = new TaskCompletionSource<CoreResult<bool>>(TaskCreationOptions.RunContinuationsAsynchronously);
         await using var fixture = await TestFixture.CreateAsync(
             existingAvaloniaJson: CreateRunnableConfigJson(),
             bridge: bridge);
+        var adbPath = await fixture.CreateExecutableAdbAsync("adb-connect-pending");
         var vm = new TaskQueuePageViewModel(
             fixture.Runtime,
             new ConnectionGameSharedStateViewModel
             {
-                ConnectAddress = "127.0.0.1:5555",
+                ConnectAddress = "emulator-5554",
                 ConnectConfig = "General",
+                AdbPath = adbPath,
                 MacUseBundledAdb = false,
             });
         await vm.InitializeAsync();
 
         var startTask = vm.StartAsync();
+        await bridge.FirstConnectStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
         await WaitUntilAsync(() => vm.IsStartRequestActive);
 
         Assert.True(vm.IsOwnRunActive);
@@ -217,15 +301,101 @@ public sealed class SessionStateUiProjectionTests
 
         var stopClickTask = vm.ToggleRunAsync();
         await stopClickTask.WaitAsync(TimeSpan.FromSeconds(2));
-        await bridge.StopStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
 
         Assert.Equal(1, bridge.StopCallCount);
         Assert.False(vm.IsStartRequestActive);
         Assert.False(vm.IsOwnRunActive);
+        Assert.Equal(SessionState.Idle, fixture.Runtime.SessionService.CurrentState);
+        Assert.Null(fixture.Runtime.SessionService.CurrentRunOwner);
         Assert.True(vm.CanToggleRun);
         Assert.Equal(vm.RootTexts.GetOrDefault("TaskQueue.Root.LinkStart", "Link Start!"), vm.RunButtonText);
-        bridge.StopCompletion.SetResult(CoreResult<bool>.Fail(new CoreError(CoreErrorCode.StopFailed, "not running")));
         await startTask.WaitAsync(TimeSpan.FromSeconds(2));
+    }
+
+    [Fact]
+    public async Task TaskQueuePage_LinkStartCancelDuringConnecting_ShouldReleaseRunOwnerAndAllowNextLinkStart()
+    {
+        var bridge = new BlockingConnectBridge
+        {
+            IgnoreConnectCancellation = true,
+        };
+        await using var fixture = await TestFixture.CreateAsync(
+            existingAvaloniaJson: CreateRunnableConfigJson(),
+            bridge: bridge);
+        var adbPath = await fixture.CreateExecutableAdbAsync("adb-connect-cancel-during-connecting");
+        var vm = new TaskQueuePageViewModel(
+            fixture.Runtime,
+            new ConnectionGameSharedStateViewModel
+            {
+                ConnectAddress = "emulator-5554",
+                ConnectConfig = "General",
+                AdbPath = adbPath,
+                MacUseBundledAdb = false,
+            });
+        await vm.InitializeAsync();
+
+        var firstStartTask = vm.ToggleRunAsync();
+        await bridge.FirstConnectStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        await WaitUntilAsync(() => vm.IsStartRequestActive);
+
+        await vm.ToggleRunAsync().WaitAsync(TimeSpan.FromSeconds(2));
+        await firstStartTask.WaitAsync(TimeSpan.FromSeconds(2));
+
+        Assert.Equal(SessionState.Idle, fixture.Runtime.SessionService.CurrentState);
+        Assert.False(vm.IsStartRequestActive);
+        Assert.False(vm.IsOwnRunActive);
+        Assert.Null(fixture.Runtime.SessionService.CurrentRunOwner);
+
+        bridge.BlockConnect = false;
+        var secondStartTask = vm.ToggleRunAsync();
+        await WaitUntilAsync(() => bridge.ConnectCallCount >= 2);
+        await secondStartTask.WaitAsync(TimeSpan.FromSeconds(2));
+
+        Assert.True(fixture.Runtime.SessionService.CurrentState is SessionState.Running or SessionState.Connected);
+        Assert.True(bridge.ConnectCallCount >= 2);
+    }
+
+    [Fact]
+    public async Task TaskQueuePage_LinkStart_ShouldBeBlockedWhileScreenshotLifecycleOperationOwnsConnect()
+    {
+        var bridge = new BlockingScreenshotBridge();
+        await using var fixture = await TestFixture.CreateAsync(
+            existingAvaloniaJson: CreateRunnableConfigJson(),
+            bridge: bridge);
+        var connectionState = new ConnectionGameSharedStateViewModel
+        {
+            ConnectAddress = "127.0.0.1:5555",
+            ConnectConfig = "General",
+            ClientType = "YoStarEN",
+            TouchMode = "MaaFwAdb",
+            AttachWindowMouseMethod = "32",
+            MacUseBundledAdb = false,
+        };
+        fixture.WriteConnectionStateToProfile(connectionState);
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, connectionState);
+        await vm.InitializeAsync();
+
+        var screenshotTask = fixture.Runtime.ConnectFeatureService.RunScreenshotTestAsync(
+            [connectionState.BuildCoreConnectionInfo(timeout: TimeSpan.FromSeconds(20))],
+            sampleCount: 1);
+        await bridge.ConnectStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+        await vm.ToggleRunAsync();
+        await WaitUntilAsync(() => HasLinkStartFailureLog(vm));
+        Assert.Contains("already running", vm.LastErrorMessage ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+
+        bridge.ConnectCompletion!.SetResult(CoreResult<bool>.Fail(new CoreError(CoreErrorCode.ConnectFailed, "blocked failure")));
+        var failedScreenshot = await screenshotTask.WaitAsync(TimeSpan.FromSeconds(2));
+        Assert.False(failedScreenshot.Success);
+
+        bridge.BlockConnect = false;
+        await vm.ToggleRunAsync();
+        await WaitUntilAsync(() => bridge.ConnectCallCount >= 2);
+        Assert.True(fixture.Runtime.SessionService.CurrentState is SessionState.Running or SessionState.Connected);
+        Assert.NotNull(bridge.LastConnectionInfo);
+        Assert.Equal("YoStarEN", bridge.LastConnectionInfo!.Extras?.ClientType);
+        Assert.Equal("MaaFwAdb", bridge.LastConnectionInfo.Extras?.TouchMode);
+        Assert.Equal("32", bridge.LastConnectionInfo.Extras?.AttachWindowMouseMethod);
     }
 
     [Fact]
@@ -305,11 +475,20 @@ public sealed class SessionStateUiProjectionTests
     public async Task TaskQueuePage_Start_WhenValidationBlocks_ShouldSelectFirstBlockingTaskAndAppendFailureLog()
     {
         await using var fixture = await TestFixture.CreateAsync(existingAvaloniaJson: CreateValidationBlockingConfigJson());
-        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        var connectionState = new ConnectionGameSharedStateViewModel
+        {
+            ConnectAddress = "127.0.0.1:5555",
+            ConnectConfig = "General",
+            MacUseBundledAdb = false,
+        };
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, connectionState);
         await vm.InitializeAsync();
 
         Assert.Equal("reclamation-ok", vm.SelectedTask?.Name);
-        Assert.True((await fixture.Runtime.ConnectFeatureService.ConnectAsync("127.0.0.1:5555", "General", null)).Success);
+        Assert.True((await fixture.Runtime.ConnectFeatureService.ConnectAsync(
+            connectionState.ConnectAddress,
+            connectionState.ConnectConfig,
+            connectionState.AdbPath)).Success);
         await WaitUntilAsync(() => vm.CurrentSessionState == SessionState.Connected);
 
         await vm.StartAsync();
@@ -360,6 +539,30 @@ public sealed class SessionStateUiProjectionTests
         Assert.Contains("会话状态", vm.LastErrorMessage, StringComparison.Ordinal);
         Assert.DoesNotContain("Session state", vm.LastErrorMessage, StringComparison.Ordinal);
         Assert.Contains("开始", vm.LastErrorMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task CopilotPage_Start_WhenConnected_ShouldStillRunEnsureConnectedCallback()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var ensureCalls = 0;
+        var vm = new CopilotPageViewModel(
+            fixture.Runtime,
+            ensureConnectedAsync: _ =>
+            {
+                ensureCalls++;
+                return Task.FromResult(UiOperationResult.Fail(UiErrorCode.ConnectFailed, "connection changed"));
+            });
+        vm.Items.Add(new CopilotItemViewModel("sample", "Copilot", inlinePayload: "{}"));
+        vm.SelectedItem = vm.Items[0];
+
+        Assert.True((await fixture.Runtime.ConnectFeatureService.ConnectAsync("127.0.0.1:5555", "General", null)).Success);
+        await WaitUntilAsync(() => vm.CurrentSessionState == SessionState.Connected);
+
+        await vm.StartAsync();
+
+        Assert.Equal(1, ensureCalls);
+        Assert.Equal("connection changed", vm.LastErrorMessage);
     }
 
     [Fact]
@@ -436,7 +639,11 @@ public sealed class SessionStateUiProjectionTests
         Assert.True(vm.CanToggleRun);
     }
 
-    private static async Task WaitUntilAsync(Func<bool> condition, int retry = 80, int delayMs = 25)
+    private static async Task WaitUntilAsync(
+        Func<bool> condition,
+        int retry = 80,
+        int delayMs = 25,
+        Func<string>? failureMessage = null)
     {
         for (var i = 0; i < retry; i++)
         {
@@ -448,7 +655,7 @@ public sealed class SessionStateUiProjectionTests
             await Task.Delay(delayMs);
         }
 
-        throw new TimeoutException("Condition not reached in expected time.");
+        throw new TimeoutException(failureMessage?.Invoke() ?? "Condition not reached in expected time.");
     }
 
     private static bool HasLinkStartFailureLog(TaskQueuePageViewModel vm)
@@ -499,7 +706,7 @@ public sealed class SessionStateUiProjectionTests
                       "Name": "Recruit",
                       "IsEnabled": true,
                       "Params": {
-                        "times": 4
+                        "select": [1]
                       }
                     }
                   ]
@@ -526,11 +733,13 @@ public sealed class SessionStateUiProjectionTests
                   },
                   "TaskQueue": [
                     {
-                      "Type": "Recruit",
-                      "Name": "Recruit",
+                      "Type": "StartUp",
+                      "Name": "StartUp",
                       "IsEnabled": true,
                       "Params": {
-                        "times": 4
+                        "client_type": "Official",
+                        "start_game_enabled": true,
+                        "account_name": ""
                       }
                     }
                   ]
@@ -604,6 +813,7 @@ public sealed class SessionStateUiProjectionTests
         {
             var root = Path.Combine(Path.GetTempPath(), "maa-unified-tests", Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(Path.Combine(root, "config"));
+            TouchMacMaaAdbControlUnitLibrary(root);
             if (!string.IsNullOrWhiteSpace(existingAvaloniaJson))
             {
                 await File.WriteAllTextAsync(
@@ -639,7 +849,7 @@ public sealed class SessionStateUiProjectionTests
             };
 
             var capability = new PlatformCapabilityFeatureService(platform, diagnostics);
-            var connect = new ConnectFeatureService(session, config);
+            var connect = new ConnectFeatureService(session, config, log, bridge, root);
             var runtime = new MAAUnifiedRuntime
             {
                 CoreBridge = bridge,
@@ -667,6 +877,59 @@ public sealed class SessionStateUiProjectionTests
             };
 
             return new TestFixture(root, runtime, bridge);
+        }
+
+        private static void TouchMacMaaAdbControlUnitLibrary(string runtimeBaseDirectory)
+        {
+            Directory.CreateDirectory(runtimeBaseDirectory);
+            File.WriteAllText(
+                RuntimeLayout.ResolveMacMaaFrameworkRuntimeLibraryPath(
+                    runtimeBaseDirectory,
+                    RuntimeLayout.MacMaaAdbControlUnitLibraryFileName),
+                "test-control-unit");
+        }
+
+        public async Task<string> CreateExecutableAdbAsync(string name)
+        {
+            var directory = Path.Combine(Root, "adb-tools", name);
+            Directory.CreateDirectory(directory);
+            var adbPath = Path.Combine(directory, OperatingSystem.IsWindows() ? "adb.exe" : "adb");
+            await File.WriteAllTextAsync(
+                adbPath,
+                OperatingSystem.IsWindows()
+                    ? string.Empty
+                    : """
+                      #!/bin/sh
+                      if [ "$1" = "-s" ] && [ "$3" = "get-state" ]; then
+                        printf 'device\n'
+                        exit 0
+                      fi
+                      if [ "$1" = "devices" ]; then
+                        printf 'List of devices attached\nemulator-5554\tdevice\nemulator-5556\tdevice\n127.0.0.1:5555\tdevice\n'
+                        exit 0
+                      fi
+                      if [ "$1" = "connect" ] && [ -n "$2" ]; then
+                        printf 'already connected to %s\n' "$2"
+                        exit 0
+                      fi
+                      exit 0
+                      """);
+            if (!OperatingSystem.IsWindows())
+            {
+                File.SetUnixFileMode(
+                    adbPath,
+                    UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute
+                    | UnixFileMode.GroupRead | UnixFileMode.GroupExecute
+                    | UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
+            }
+
+            return adbPath;
+        }
+
+        public void WriteConnectionStateToProfile(ConnectionGameSharedStateViewModel state)
+        {
+            Assert.True(Runtime.ConfigurationService.TryGetCurrentProfile(out var profile));
+            ConnectionGameProfileSync.WriteToProfile(profile, state);
         }
 
         public async ValueTask DisposeAsync()
@@ -747,18 +1010,41 @@ public sealed class SessionStateUiProjectionTests
         }
     }
 
+    private sealed class RecordingMacRawByNcPromptService(MacRawByNcRiskConnectionDecision decision)
+        : IMacRawByNcRiskConnectionPromptService
+    {
+        public int CallCount { get; private set; }
+
+        public MacRawByNcRiskConnectionPrompt? LastPrompt { get; private set; }
+
+        public Task<MacRawByNcRiskConnectionDecision> ConfirmAsync(
+            MacRawByNcRiskConnectionPrompt prompt,
+            CancellationToken cancellationToken = default)
+        {
+            CallCount++;
+            LastPrompt = prompt;
+            return Task.FromResult(decision);
+        }
+    }
+
     private sealed class FakeBridge : IMaaCoreBridge
     {
         private bool _connected;
         private bool _running;
 
+        public int ConnectCallCount { get; private set; }
+
         public int StopCallCount { get; private set; }
+
+        public CoreConnectionInfo? LastConnectionInfo { get; private set; }
 
         public Task<CoreResult<CoreInitializeInfo>> InitializeAsync(CoreInitializeRequest request, CancellationToken cancellationToken = default)
             => Task.FromResult(CoreResult<CoreInitializeInfo>.Ok(new CoreInitializeInfo(request.BaseDirectory, "fake", "fake", request.ClientType)));
 
         public Task<CoreResult<bool>> ConnectAsync(CoreConnectionInfo connectionInfo, CancellationToken cancellationToken = default)
         {
+            ConnectCallCount++;
+            LastConnectionInfo = connectionInfo;
             _connected = !string.IsNullOrWhiteSpace(connectionInfo.Address);
             return Task.FromResult(_connected
                 ? CoreResult<bool>.Ok(true)
@@ -847,7 +1133,16 @@ public sealed class SessionStateUiProjectionTests
         private readonly TaskCompletionSource<CoreResult<bool>> _connectCompletion =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
 
+        private bool _connected;
+        private bool _running;
+
+        public bool BlockConnect { get; set; } = true;
+        public bool IgnoreConnectCancellation { get; set; }
+        public int ConnectCallCount { get; private set; }
         public int StopCallCount { get; private set; }
+
+        public TaskCompletionSource<bool> FirstConnectStarted { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public TaskCompletionSource<bool> StopStarted { get; } =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -859,6 +1154,21 @@ public sealed class SessionStateUiProjectionTests
 
         public async Task<CoreResult<bool>> ConnectAsync(CoreConnectionInfo connectionInfo, CancellationToken cancellationToken = default)
         {
+            ConnectCallCount++;
+            FirstConnectStarted.TrySetResult(true);
+            if (!BlockConnect)
+            {
+                _connected = !string.IsNullOrWhiteSpace(connectionInfo.Address);
+                return _connected
+                    ? CoreResult<bool>.Ok(true)
+                    : CoreResult<bool>.Fail(new CoreError(CoreErrorCode.ConnectFailed, "connect failed"));
+            }
+
+            if (IgnoreConnectCancellation)
+            {
+                return await _connectCompletion.Task;
+            }
+
             using var registration = cancellationToken.Register(() => _connectCompletion.TrySetCanceled(cancellationToken));
             return await _connectCompletion.Task;
         }
@@ -867,24 +1177,105 @@ public sealed class SessionStateUiProjectionTests
             => Task.FromResult(CoreResult<int>.Ok(1));
 
         public Task<CoreResult<bool>> StartAsync(CancellationToken cancellationToken = default)
-            => Task.FromResult(CoreResult<bool>.Fail(new CoreError(CoreErrorCode.StartFailed, "not connected")));
+        {
+            if (!_connected)
+            {
+                return Task.FromResult(CoreResult<bool>.Fail(new CoreError(CoreErrorCode.StartFailed, "not connected")));
+            }
+
+            return Task.FromResult(CoreResult<bool>.Ok(true));
+        }
 
         public Task<CoreResult<bool>> StopAsync(CancellationToken cancellationToken = default)
         {
             StopCallCount++;
+            _running = false;
             StopStarted.TrySetResult(true);
             return StopCompletion?.Task
                 ?? Task.FromResult(CoreResult<bool>.Fail(new CoreError(CoreErrorCode.StopFailed, "not running")));
         }
 
         public Task<CoreResult<CoreRuntimeStatus>> GetRuntimeStatusAsync(CancellationToken cancellationToken = default)
-            => Task.FromResult(CoreResult<CoreRuntimeStatus>.Ok(new CoreRuntimeStatus(true, false, false)));
+            => Task.FromResult(CoreResult<CoreRuntimeStatus>.Ok(new CoreRuntimeStatus(true, _connected, _running)));
 
         public Task<CoreResult<bool>> AttachWindowAsync(CoreAttachWindowRequest request, CancellationToken cancellationToken = default)
             => Task.FromResult(CoreResult<bool>.Fail(new CoreError(CoreErrorCode.NotSupported, "not supported")));
 
         public Task<CoreResult<byte[]>> GetImageAsync(CancellationToken cancellationToken = default)
             => Task.FromResult(CoreResult<byte[]>.Fail(new CoreError(CoreErrorCode.GetImageFailed, "not supported")));
+
+        public async IAsyncEnumerable<CoreCallbackEvent> CallbackStreamAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            await Task.CompletedTask;
+            yield break;
+        }
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    private sealed class BlockingScreenshotBridge : IMaaCoreBridge
+    {
+        private bool _connected;
+        private bool _running;
+
+        public bool BlockConnect { get; set; } = true;
+        public int ConnectCallCount { get; private set; }
+        public CoreConnectionInfo? LastConnectionInfo { get; private set; }
+        public TaskCompletionSource<bool> ConnectStarted { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource<CoreResult<bool>>? ConnectCompletion { get; set; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task<CoreResult<CoreInitializeInfo>> InitializeAsync(CoreInitializeRequest request, CancellationToken cancellationToken = default)
+            => Task.FromResult(CoreResult<CoreInitializeInfo>.Ok(new CoreInitializeInfo(request.BaseDirectory, "fake", "fake", request.ClientType)));
+
+        public async Task<CoreResult<bool>> ConnectAsync(CoreConnectionInfo connectionInfo, CancellationToken cancellationToken = default)
+        {
+            ConnectCallCount++;
+            LastConnectionInfo = connectionInfo;
+            ConnectStarted.TrySetResult(true);
+            if (BlockConnect)
+            {
+                return await ConnectCompletion!.Task.WaitAsync(cancellationToken);
+            }
+
+            _connected = !string.IsNullOrWhiteSpace(connectionInfo.Address);
+            return _connected
+                ? CoreResult<bool>.Ok(true)
+                : CoreResult<bool>.Fail(new CoreError(CoreErrorCode.ConnectFailed, "connect failed"));
+        }
+
+        public Task<CoreResult<int>> AppendTaskAsync(CoreTaskRequest task, CancellationToken cancellationToken = default)
+            => Task.FromResult(CoreResult<int>.Ok(1));
+
+        public Task<CoreResult<bool>> StartAsync(CancellationToken cancellationToken = default)
+        {
+            if (!_connected)
+            {
+                return Task.FromResult(CoreResult<bool>.Fail(new CoreError(CoreErrorCode.StartFailed, "not connected")));
+            }
+
+            _running = true;
+            return Task.FromResult(CoreResult<bool>.Ok(true));
+        }
+
+        public Task<CoreResult<bool>> StopAsync(CancellationToken cancellationToken = default)
+        {
+            _running = false;
+            return Task.FromResult(CoreResult<bool>.Ok(true));
+        }
+
+        public Task<CoreResult<CoreRuntimeStatus>> GetRuntimeStatusAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(CoreResult<CoreRuntimeStatus>.Ok(new CoreRuntimeStatus(true, _connected, _running)));
+
+        public Task<CoreResult<bool>> AttachWindowAsync(CoreAttachWindowRequest request, CancellationToken cancellationToken = default)
+            => Task.FromResult(CoreResult<bool>.Fail(new CoreError(CoreErrorCode.NotSupported, "not supported")));
+
+        public Task<CoreResult<byte[]>> GetImageAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(CoreResult<byte[]>.Fail(new CoreError(CoreErrorCode.GetImageFailed, "not supported")));
+
+        public Task<CoreResult<byte[]>> GetImageBgrAsync(bool forceScreencap = false, CancellationToken cancellationToken = default)
+            => Task.FromResult(CoreResult<byte[]>.Ok([1, 2, 3]));
 
         public async IAsyncEnumerable<CoreCallbackEvent> CallbackStreamAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
         {

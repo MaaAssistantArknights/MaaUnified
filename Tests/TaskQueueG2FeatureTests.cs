@@ -3,6 +3,7 @@ using System.Runtime.CompilerServices;
 using System.Text.Json.Nodes;
 using System.Threading.Channels;
 using Avalonia.Threading;
+using MAAUnified.App.ViewModels.Infrastructure;
 using MAAUnified.App.ViewModels.Settings;
 using MAAUnified.App.ViewModels.TaskQueue;
 using MAAUnified.Application.Configuration;
@@ -34,7 +35,7 @@ public sealed class TaskQueueG2FeatureTests
         await vm.WaitForPendingBindingAsync();
         vm.StartUpModule.AccountName = "flush-before-start";
 
-        Assert.True((await fixture.Runtime.ConnectFeatureService.ConnectAsync("127.0.0.1:5555", "General", null)).Success);
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(fixture.Runtime.ConnectFeatureService, fixture.ReadyAdbPath)).Success);
         await vm.StartAsync();
 
         Assert.Equal(1, fixture.Bridge.StartCallCount);
@@ -56,8 +57,9 @@ public sealed class TaskQueueG2FeatureTests
 
         var shared = new ConnectionGameSharedStateViewModel
         {
-            ConnectAddress = "127.0.0.1:5555",
-            ConnectConfig = "General",
+            ConnectAddress = TestConnectionFixtureSupport.ReadyConnectAddress,
+            ConnectConfig = TestConnectionFixtureSupport.ReadyConnectConfig,
+            AdbPath = fixture.ReadyAdbPath,
             MacUseBundledAdb = !useBundledAdb,
         };
         var vm = new TaskQueuePageViewModel(fixture.Runtime, shared);
@@ -135,7 +137,7 @@ public sealed class TaskQueueG2FeatureTests
         await vm.WaitForPendingBindingAsync();
         vm.StartUpModule.AccountName = "before-start";
 
-        Assert.True((await fixture.Runtime.ConnectFeatureService.ConnectAsync("127.0.0.1:5555", "General", null)).Success);
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(fixture.Runtime.ConnectFeatureService, fixture.ReadyAdbPath)).Success);
         await vm.StartAsync();
         vm.StartUpModule.AccountName = "before-stop";
 
@@ -157,7 +159,7 @@ public sealed class TaskQueueG2FeatureTests
         var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
         await vm.InitializeAsync();
 
-        Assert.True((await fixture.Runtime.ConnectFeatureService.ConnectAsync("127.0.0.1:5555", "General", null)).Success);
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(fixture.Runtime.ConnectFeatureService, fixture.ReadyAdbPath)).Success);
         await vm.StartAsync();
         await vm.StopAsync();
 
@@ -180,7 +182,7 @@ public sealed class TaskQueueG2FeatureTests
         var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
         await vm.InitializeAsync();
 
-        Assert.True((await fixture.Runtime.ConnectFeatureService.ConnectAsync("127.0.0.1:5555", "General", null)).Success);
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(fixture.Runtime.ConnectFeatureService, fixture.ReadyAdbPath)).Success);
         await vm.StartAsync();
         Assert.True(vm.IsRunning);
 
@@ -205,8 +207,9 @@ public sealed class TaskQueueG2FeatureTests
 
         var shared = new ConnectionGameSharedStateViewModel
         {
-            ConnectAddress = "127.0.0.1:5555",
-            ConnectConfig = "General",
+            ConnectAddress = TestConnectionFixtureSupport.ReadyConnectAddress,
+            ConnectConfig = TestConnectionFixtureSupport.ReadyConnectConfig,
+            AdbPath = fixture.ReadyAdbPath,
             MacUseBundledAdb = false,
         };
         var vm = new TaskQueuePageViewModel(fixture.Runtime, shared);
@@ -237,7 +240,8 @@ public sealed class TaskQueueG2FeatureTests
 
         var shared = new ConnectionGameSharedStateViewModel
         {
-            ConnectAddress = "127.0.0.1:5555",
+            ConnectAddress = TestConnectionFixtureSupport.ReadyConnectAddress,
+            AdbPath = fixture.ReadyAdbPath,
         };
         var vm = new TaskQueuePageViewModel(fixture.Runtime, shared);
         await vm.InitializeAsync();
@@ -249,6 +253,49 @@ public sealed class TaskQueueG2FeatureTests
         Assert.True(vm.CanToggleRun);
         Assert.Equal(0, fixture.Bridge.StartCallCount);
         Assert.Contains("连接失败", vm.LastErrorMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task BuildConnectFailureMessage_WhenConnectResultHasSpecificDiagnostic_ShouldKeepDiagnosticFirstLine()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var vm = new TaskQueuePageViewModel(
+            fixture.Runtime,
+            new ConnectionGameSharedStateViewModel
+            {
+                ConnectAddress = "127.0.0.1:5554",
+                ConnectConfig = "General",
+                AdbPath = fixture.ReadyAdbPath,
+            });
+        await vm.InitializeAsync();
+        vm.SetLanguage("zh-cn");
+
+        var diagnosticMessage = string.Join(
+            Environment.NewLine,
+            "无法连接到这个地址或端口。",
+            "请确认模拟器已启动，连接地址和端口正确；常见 ADB 端口为 5555。");
+        var connectResult = UiOperationResult.Fail(
+            UiErrorCode.ConnectFailed,
+            diagnosticMessage,
+            "probe=tcp host=127.0.0.1 port=5554 timeoutMs=750");
+
+        var message = Assert.IsType<string>(
+            typeof(TaskQueuePageViewModel)
+                .GetMethod("BuildConnectFailureMessage", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .Invoke(vm, [connectResult]));
+        var firstLine = message
+            .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .First();
+        var localized = DialogTextCatalog.LocalizeErrorResult(
+            "zh-cn",
+            UiOperationResult.Fail(UiErrorCode.ConnectFailed, message, connectResult.Error?.Details));
+
+        Assert.Equal("无法连接到这个地址或端口。", firstLine);
+        Assert.Equal("无法连接到这个地址或端口。", localized.Message);
+        Assert.Equal(localized.Message, localized.Error?.Message);
+        Assert.NotEqual("连接模拟器失败。", localized.Message);
+        Assert.Contains("连接失败。请", message, StringComparison.Ordinal);
+        Assert.DoesNotContain("连接回调：无法连接到这个地址或端口。", message, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -536,7 +583,7 @@ public sealed class TaskQueueG2FeatureTests
         var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
         await vm.InitializeAsync();
 
-        Assert.True((await fixture.Runtime.ConnectFeatureService.ConnectAsync("127.0.0.1:5555", "General", null)).Success);
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(fixture.Runtime.ConnectFeatureService, fixture.ReadyAdbPath)).Success);
         await vm.StartAsync();
 
         var callback = new CoreCallbackEvent(
@@ -564,7 +611,7 @@ public sealed class TaskQueueG2FeatureTests
         var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
         await vm.InitializeAsync();
 
-        Assert.True((await fixture.Runtime.ConnectFeatureService.ConnectAsync("127.0.0.1:5555", "General", null)).Success);
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(fixture.Runtime.ConnectFeatureService, fixture.ReadyAdbPath)).Success);
         await vm.StartAsync();
 
         var callback = new CoreCallbackEvent(
@@ -743,7 +790,7 @@ public sealed class TaskQueueG2FeatureTests
         var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
         await vm.InitializeAsync();
 
-        Assert.True((await fixture.Runtime.ConnectFeatureService.ConnectAsync("127.0.0.1:5555", "General", null)).Success);
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(fixture.Runtime.ConnectFeatureService, fixture.ReadyAdbPath)).Success);
         await vm.StartAsync();
         Assert.Equal(SessionState.Running, vm.CurrentSessionState);
 
@@ -847,7 +894,8 @@ public sealed class TaskQueueG2FeatureTests
             TaskQueueFeatureService taskQueue,
             CapturingBridge bridge,
             CountingPostActionFeatureService postAction,
-            NotificationTrackingPlatformCapabilityService notificationTracker)
+            NotificationTrackingPlatformCapabilityService notificationTracker,
+            string readyAdbPath)
         {
             Root = root;
             Runtime = runtime;
@@ -855,6 +903,7 @@ public sealed class TaskQueueG2FeatureTests
             Bridge = bridge;
             PostAction = postAction;
             NotificationTracker = notificationTracker;
+            ReadyAdbPath = readyAdbPath;
         }
 
         public string Root { get; }
@@ -868,6 +917,8 @@ public sealed class TaskQueueG2FeatureTests
         public CountingPostActionFeatureService PostAction { get; }
 
         public NotificationTrackingPlatformCapabilityService NotificationTracker { get; }
+
+        public string ReadyAdbPath { get; }
 
         public static async Task<TestFixture> CreateAsync(string language = "zh-cn")
         {
@@ -888,6 +939,7 @@ public sealed class TaskQueueG2FeatureTests
             {
                 profile.Values[MacBundledAdbPolicy.ProfileUseBundledAdbKey] = JsonValue.Create(false);
             }
+            var readyAdbPath = await TestConnectionFixtureSupport.PrepareReadyRuntimeAsync(root, config, "taskqueue-g2-ready");
 
             var bridge = new CapturingBridge();
             var session = new UnifiedSessionService(bridge, config, log, new SessionStateMachine());
@@ -906,7 +958,7 @@ public sealed class TaskQueueG2FeatureTests
 
             var capability = new PlatformCapabilityFeatureService(platform, diagnostics);
             var notificationTracker = new NotificationTrackingPlatformCapabilityService(capability);
-            var connect = new ConnectFeatureService(session, config);
+            var connect = new ConnectFeatureService(session, config, log, bridge, root);
             var postAction = new CountingPostActionFeatureService();
             var achievementTracker = new AchievementTrackerService(config, root);
 
@@ -934,7 +986,7 @@ public sealed class TaskQueueG2FeatureTests
                 PostActionFeatureService = postAction,
             };
 
-            return new TestFixture(root, runtime, taskQueue, bridge, postAction, notificationTracker);
+            return new TestFixture(root, runtime, taskQueue, bridge, postAction, notificationTracker, readyAdbPath);
         }
 
         public async ValueTask DisposeAsync()

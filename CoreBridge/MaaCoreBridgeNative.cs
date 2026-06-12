@@ -1,12 +1,13 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Diagnostics;
 using System.Text.Json;
 using System.Threading.Channels;
 using MAAUnified.Compat.Runtime;
 
 namespace MAAUnified.CoreBridge;
 
-public sealed class MaaCoreBridgeNative : IMaaCoreBridge
+public sealed class MaaCoreBridgeNative : IMaaCoreBridge, IMaaCoreBridgeRecovery
 {
     private const int MsgInitFailed = 1;
     private const int MsgConnectionInfo = 2;
@@ -17,15 +18,28 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge
     private const int AsstInstanceOptionDeploymentWithPause = 3;
     private const int AsstInstanceOptionAdbLiteEnabled = 4;
     private const int AsstInstanceOptionKillAdbOnExit = 5;
+    private const int AsstInstanceOptionClientType = 6;
+    private static readonly TimeSpan DefaultConnectTimeout = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan DefaultStopTimeout = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan DefaultStopCallTimeout = TimeSpan.FromSeconds(3);
+    private static readonly TimeSpan DefaultScreencapTimeout = TimeSpan.FromSeconds(8);
+    private static readonly TimeSpan AbandonedConnectStopTimeout = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan DisposeWaitTimeout = TimeSpan.FromSeconds(5);
     private const int DefaultScreencapWidth = 1280;
     private const int DefaultScreencapHeight = 720;
     private const int DefaultScreencapChannels = 3;
     private const ulong DefaultBgrFrameBufferSize = (ulong)DefaultScreencapWidth * DefaultScreencapHeight * DefaultScreencapChannels;
+    private const ulong MaxImageBufferSize = 64UL * 1024UL * 1024UL;
     private static readonly HashSet<string> DefaultClientTypes = new(StringComparer.OrdinalIgnoreCase)
     {
         string.Empty,
         "Official",
         "Bilibili",
+    };
+    private static readonly HashSet<string> ClientTypeConnectionConfigs = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "WSA",
+        "Androws",
     };
     private static readonly IReadOnlyDictionary<string, string> ClientTypeAliasMap =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -38,7 +52,6 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge
             ["YoStarKR"] = "YoStarKR",
         };
 
-    private static readonly TimeSpan _defaultConnectTimeout = TimeSpan.FromSeconds(30);
 
     private readonly Channel<CoreCallbackEvent> _callbackChannel = Channel.CreateUnbounded<CoreCallbackEvent>(
         new UnboundedChannelOptions
@@ -49,6 +62,7 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge
 
     private readonly SemaphoreSlim _lifecycleLock = new(1, 1);
     private readonly SemaphoreSlim _connectLock = new(1, 1);
+    private readonly SemaphoreSlim _nativeCallLock = new(1, 1);
     private readonly object _sync = new();
 
     private nint _nativeLibrary;
@@ -56,11 +70,14 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge
     private string? _libraryPath;
     private string? _baseDirectory;
     private string? _loadedClientType;
+    private string _coreVersion = string.Empty;
     private CoreGpuInitializeInfo? _gpuInitializeInfo;
     private bool _disposed;
+    private bool _nativeStopAbandoned;
     private AsstExports? _exports;
     private AsstApiCallbackDelegate? _callbackDelegate;
     private ConnectPendingState? _pendingConnect;
+    private readonly List<nint> _abandonedInstances = [];
 
     public bool SupportsBackToHome => true;
 
@@ -85,12 +102,21 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge
                 return Fail<CoreInitializeInfo>(CoreErrorCode.Disposed, "Bridge is already disposed.");
             }
 
+            if (_nativeStopAbandoned)
+            {
+                return Fail<CoreInitializeInfo>(
+                    CoreErrorCode.StopFailed,
+                    "Bridge native stop timed out; instance was abandoned to avoid use-after-free.");
+            }
+
             if (_instance != nint.Zero && _exports is not null && _libraryPath is not null && _baseDirectory is not null)
             {
                 if (!string.IsNullOrWhiteSpace(request.ClientType)
                     && !string.Equals(_loadedClientType, request.ClientType, StringComparison.OrdinalIgnoreCase))
                 {
-                    var clientLoad = LoadClientResource(request.ClientType, _baseDirectory, _exports);
+                    var clientLoad = await RunNativeCallAsync(
+                        () => LoadClientResource(request.ClientType, _baseDirectory, _exports),
+                        cancellationToken).ConfigureAwait(false);
                     if (!clientLoad.Success)
                     {
                         return CoreResult<CoreInitializeInfo>.Fail(clientLoad.Error!);
@@ -135,46 +161,68 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge
             }
 
             _callbackDelegate = OnNativeCallback;
-            var gpuInitializeInfo = ApplyGpuInitialization(request.Gpu, exports);
-
-            if (!AsBool(exports.AsstSetUserDir(runtimeBaseDirectory)))
-            {
-                NativeLibrary.Free(loadedLibrary);
-                return Fail<CoreInitializeInfo>(CoreErrorCode.ResourceLoadFailed, "AsstSetUserDir returned false.");
-            }
-
-            if (!AsBool(exports.AsstLoadResource(runtimeBaseDirectory)))
-            {
-                NativeLibrary.Free(loadedLibrary);
-                return Fail<CoreInitializeInfo>(CoreErrorCode.ResourceLoadFailed, "AsstLoadResource(baseDir) returned false.");
-            }
-
-            if (!string.IsNullOrWhiteSpace(request.ClientType))
-            {
-                var clientLoad = LoadClientResource(request.ClientType, runtimeBaseDirectory, exports);
-                if (!clientLoad.Success)
+            var nativeInitialize = await RunNativeCallAsync(
+                () =>
                 {
-                    NativeLibrary.Free(loadedLibrary);
-                    return CoreResult<CoreInitializeInfo>.Fail(clientLoad.Error!);
-                }
-            }
+                    var gpuInitializeInfo = ApplyGpuInitialization(request.Gpu, exports);
 
-            var instance = exports.AsstCreateEx(_callbackDelegate, nint.Zero);
-            if (instance == nint.Zero)
+                    if (!AsBool(exports.AsstSetUserDir(runtimeBaseDirectory)))
+                    {
+                        NativeLibrary.Free(loadedLibrary);
+                        return Fail<NativeInitializeResult>(
+                            CoreErrorCode.ResourceLoadFailed,
+                            "AsstSetUserDir returned false.");
+                    }
+
+                    if (!AsBool(exports.AsstLoadResource(runtimeBaseDirectory)))
+                    {
+                        NativeLibrary.Free(loadedLibrary);
+                        return Fail<NativeInitializeResult>(
+                            CoreErrorCode.ResourceLoadFailed,
+                            "AsstLoadResource(baseDir) returned false.");
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(request.ClientType))
+                    {
+                        var clientLoad = LoadClientResource(request.ClientType, runtimeBaseDirectory, exports);
+                        if (!clientLoad.Success)
+                        {
+                            NativeLibrary.Free(loadedLibrary);
+                            return CoreResult<NativeInitializeResult>.Fail(clientLoad.Error!);
+                        }
+                    }
+
+                    var instance = exports.AsstCreateEx(_callbackDelegate, nint.Zero);
+                    if (instance == nint.Zero)
+                    {
+                        NativeLibrary.Free(loadedLibrary);
+                        return Fail<NativeInitializeResult>(
+                            CoreErrorCode.CoreInstanceCreateFailed,
+                            "AsstCreateEx returned null.");
+                    }
+
+                    var version = Marshal.PtrToStringUTF8(exports.AsstGetVersion()) ?? string.Empty;
+                    return CoreResult<NativeInitializeResult>.Ok(new NativeInitializeResult(
+                        instance,
+                        gpuInitializeInfo,
+                        version));
+                },
+                cancellationToken).ConfigureAwait(false);
+            if (!nativeInitialize.Success || nativeInitialize.Value is null)
             {
-                NativeLibrary.Free(loadedLibrary);
-                return Fail<CoreInitializeInfo>(CoreErrorCode.CoreInstanceCreateFailed, "AsstCreateEx returned null.");
+                return CoreResult<CoreInitializeInfo>.Fail(nativeInitialize.Error!);
             }
 
             _nativeLibrary = loadedLibrary;
             _exports = exports;
-            _instance = instance;
+            _instance = nativeInitialize.Value.Instance;
             _libraryPath = libraryPath;
             _baseDirectory = runtimeBaseDirectory;
             _loadedClientType = request.ClientType;
-            _gpuInitializeInfo = gpuInitializeInfo;
+            _gpuInitializeInfo = nativeInitialize.Value.GpuInitializeInfo;
+            _coreVersion = nativeInitialize.Value.Version;
 
-            return CoreResult<CoreInitializeInfo>.Ok(BuildInitializeInfo(runtimeBaseDirectory, libraryPath, request.ClientType, gpuInitializeInfo));
+            return CoreResult<CoreInitializeInfo>.Ok(BuildInitializeInfo(runtimeBaseDirectory, libraryPath, request.ClientType, nativeInitialize.Value.GpuInitializeInfo));
         }
         finally
         {
@@ -196,50 +244,88 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge
             return Fail<bool>(CoreErrorCode.InvalidRequest, "Connection config is empty.");
         }
 
-        var status = EnsureReady();
-        if (!status.Success)
-        {
-            return CoreResult<bool>.Fail(status.Error!);
-        }
-
         await _connectLock.WaitAsync(cancellationToken);
         try
         {
-            var exports = _exports!;
-            var handle = _instance;
-
-            var asyncCallId = exports.AsstAsyncConnect(
-                handle,
-                connectionInfo.AdbPath ?? string.Empty,
-                connectionInfo.Address,
-                connectionInfo.ConnectConfig,
-                0);
-
-            if (asyncCallId <= 0)
+            var timeout = NormalizeTimeout(connectionInfo.Timeout, DefaultConnectTimeout);
+            var prepare = await PrepareConnectionAsync(connectionInfo, cancellationToken).ConfigureAwait(false);
+            if (!prepare.Success)
             {
-                return Fail<bool>(CoreErrorCode.ConnectFailed, "AsstAsyncConnect returned invalid async call id.");
+                return prepare;
             }
 
-            var pending = new ConnectPendingState(asyncCallId);
-            lock (_sync)
+            ConnectPendingState? pending = null;
+            var startResult = await RunNativeCallAsync(
+                () =>
+                {
+                    var status = EnsureReady();
+                    if (!status.Success)
+                    {
+                        return CoreResult<bool>.Fail(status.Error!);
+                    }
+
+                    var exports = _exports!;
+                    var handle = _instance;
+                    pending = new ConnectPendingState(asyncCallId: null);
+                    lock (_sync)
+                    {
+                        _pendingConnect = pending;
+                    }
+
+                    var asyncCallId = exports.AsstAsyncConnect(
+                        handle,
+                        connectionInfo.AdbPath ?? string.Empty,
+                        connectionInfo.Address,
+                        connectionInfo.ConnectConfig,
+                        block: 0);
+                    if (asyncCallId <= 0)
+                    {
+                        lock (_sync)
+                        {
+                            if (ReferenceEquals(_pendingConnect, pending))
+                            {
+                                _pendingConnect = null;
+                            }
+                        }
+
+                        return CompleteInvalidAsyncConnectStart(pending, asyncCallId);
+                    }
+
+                    pending.SetAsyncCallId(asyncCallId);
+                    return CoreResult<bool>.Ok(true);
+                },
+                cancellationToken).ConfigureAwait(false);
+
+            if (!startResult.Success)
             {
-                _pendingConnect = pending;
+                return startResult;
             }
-
-            var timeout = connectionInfo.Timeout is null || connectionInfo.Timeout <= TimeSpan.Zero
-                ? _defaultConnectTimeout
-                : connectionInfo.Timeout.Value;
-
-            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            timeoutCts.CancelAfter(timeout);
 
             try
             {
-                return await pending.Completion.Task.WaitAsync(timeoutCts.Token);
-            }
-            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-            {
-                return Fail<bool>(CoreErrorCode.ConnectTimeout, $"Connect timeout after {timeout.TotalSeconds:0.#} seconds.");
+                var completed = await Task.WhenAny(
+                    pending!.Completion.Task,
+                    Task.Delay(timeout, CancellationToken.None),
+                    WaitForCancellationAsync(cancellationToken)).ConfigureAwait(false);
+                if (completed == pending.Completion.Task)
+                {
+                    return await pending.Completion.Task.ConfigureAwait(false);
+                }
+
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    await AbortPendingConnectAsync(
+                        pending,
+                        CoreResult<bool>.Fail(new CoreError(CoreErrorCode.ConnectTimeout, "Connect was canceled.")),
+                        AbandonedConnectStopTimeout).ConfigureAwait(false);
+                    cancellationToken.ThrowIfCancellationRequested();
+                }
+
+                var timeoutResult = CoreResult<bool>.Fail(new CoreError(
+                    CoreErrorCode.ConnectTimeout,
+                    $"Connect timed out after {timeout.TotalSeconds:N0}s."));
+                await AbortPendingConnectAsync(pending, timeoutResult, AbandonedConnectStopTimeout).ConfigureAwait(false);
+                return timeoutResult;
             }
             finally
             {
@@ -258,93 +344,457 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge
         }
     }
 
-    public Task<CoreResult<bool>> ApplyInstanceOptionsAsync(
+    public async Task<CoreResult<bool>> ApplyInstanceOptionsAsync(
         CoreInstanceOptions options,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var status = EnsureReady();
-        if (!status.Success)
-        {
-            return Task.FromResult(CoreResult<bool>.Fail(status.Error!));
-        }
 
         if (options is null || options.IsEmpty)
         {
-            return Task.FromResult(CoreResult<bool>.Ok(true));
+            return CoreResult<bool>.Ok(true);
         }
 
-        var exports = _exports!;
-        if (exports.AsstSetInstanceOption is null)
-        {
-            return Task.FromResult(Fail<bool>(CoreErrorCode.NotSupported, "AsstSetInstanceOption export is unavailable."));
-        }
-
-        if (!string.IsNullOrWhiteSpace(options.TouchMode))
-        {
-            var normalizedTouchMode = options.TouchMode.Trim();
-            if (!AsBool(exports.AsstSetInstanceOption(_instance, AsstInstanceOptionTouchMode, normalizedTouchMode)))
+        return await RunNativeCallAsync(
+            () =>
             {
-                return Task.FromResult(Fail<bool>(
+                var status = EnsureReady();
+                if (!status.Success)
+                {
+                    return CoreResult<bool>.Fail(status.Error!);
+                }
+
+                var exports = _exports!;
+                if (exports.AsstSetInstanceOption is null)
+                {
+                    return Fail<bool>(CoreErrorCode.NotSupported, "AsstSetInstanceOption export is unavailable.");
+                }
+
+                if (!string.IsNullOrWhiteSpace(options.TouchMode))
+                {
+                    var normalizedTouchMode = options.TouchMode.Trim();
+                    if (!AsBool(exports.AsstSetInstanceOption(_instance, AsstInstanceOptionTouchMode, normalizedTouchMode)))
+                    {
+                        return Fail<bool>(
+                            CoreErrorCode.InvalidRequest,
+                            $"Failed to set touch mode to `{normalizedTouchMode}`.");
+                    }
+                }
+
+                if (options.DeploymentWithPause is bool deploymentWithPause
+                    && !AsBool(exports.AsstSetInstanceOption(
+                        _instance,
+                        AsstInstanceOptionDeploymentWithPause,
+                        deploymentWithPause ? "1" : "0")))
+                {
+                    return Fail<bool>(
+                        CoreErrorCode.InvalidRequest,
+                        $"Failed to set deployment with pause to `{deploymentWithPause}`.");
+                }
+
+                if (options.AdbLiteEnabled is bool adbLiteEnabled
+                    && !AsBool(exports.AsstSetInstanceOption(
+                        _instance,
+                        AsstInstanceOptionAdbLiteEnabled,
+                        adbLiteEnabled ? "1" : "0")))
+                {
+                    return Fail<bool>(
+                        CoreErrorCode.InvalidRequest,
+                        $"Failed to set ADB Lite enabled to `{adbLiteEnabled}`.");
+                }
+
+                if (options.KillAdbOnExit is bool killAdbOnExit
+                    && !AsBool(exports.AsstSetInstanceOption(
+                        _instance,
+                        AsstInstanceOptionKillAdbOnExit,
+                        killAdbOnExit ? "1" : "0")))
+                {
+                    return Fail<bool>(
+                        CoreErrorCode.InvalidRequest,
+                        $"Failed to set kill ADB on exit to `{killAdbOnExit}`.");
+                }
+
+                if (options.ClientType is not null
+                    && !AsBool(exports.AsstSetInstanceOption(
+                        _instance,
+                        AsstInstanceOptionClientType,
+                        options.ClientType.Trim())))
+                {
+                    return Fail<bool>(
+                        CoreErrorCode.InvalidRequest,
+                        $"Failed to set client type to `{options.ClientType.Trim()}`.");
+                }
+
+                return CoreResult<bool>.Ok(true);
+            },
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public Task<CoreResult<bool>> RecoverFromAbandonedStopAsync(CancellationToken cancellationToken = default)
+        => RecoverAbandonedStopAsync(cancellationToken);
+
+    public async Task<CoreResult<bool>> RecoverAbandonedStopAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        await _lifecycleLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        var connectLockTaken = false;
+        try
+        {
+            if (_disposed)
+            {
+                return Fail<bool>(CoreErrorCode.Disposed, "Bridge is already disposed.");
+            }
+
+            if (!_nativeStopAbandoned)
+            {
+                return Fail<bool>(
                     CoreErrorCode.InvalidRequest,
-                    $"Failed to set touch mode to `{normalizedTouchMode}`."));
+                    "Bridge recovery is only available after an abandoned native stop.");
+            }
+
+            if (_exports is null || _callbackDelegate is null || _baseDirectory is null)
+            {
+                return Fail<bool>(
+                    CoreErrorCode.NotInitialized,
+                    "Bridge cannot recover abandoned native stop before initialization.");
+            }
+
+            await _connectLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+            connectLockTaken = true;
+
+            ConnectPendingState? pending;
+            lock (_sync)
+            {
+                pending = _pendingConnect;
+                _pendingConnect = null;
+            }
+
+            pending?.TryComplete(Fail<bool>(
+                CoreErrorCode.StopFailed,
+                "Bridge recovered from abandoned native stop; pending connect was discarded."));
+
+            var exports = _exports;
+            var baseDirectory = _baseDirectory;
+            var clientType = _loadedClientType;
+            var callbackDelegate = _callbackDelegate;
+
+            await _nativeCallLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                var createResult = await Task.Run(
+                    () =>
+                    {
+                        if (!AsBool(exports.AsstLoadResource(baseDirectory)))
+                        {
+                            return Fail<nint>(
+                                CoreErrorCode.ResourceLoadFailed,
+                                "AsstLoadResource(baseDir) returned false during abandoned stop recovery.");
+                        }
+
+                        if (!string.IsNullOrWhiteSpace(clientType))
+                        {
+                            var clientLoad = LoadClientResource(clientType, baseDirectory, exports);
+                            if (!clientLoad.Success)
+                            {
+                                return CoreResult<nint>.Fail(clientLoad.Error!);
+                            }
+                        }
+
+                        var instance = exports.AsstCreateEx(callbackDelegate, nint.Zero);
+                        return instance == nint.Zero
+                            ? Fail<nint>(
+                                CoreErrorCode.CoreInstanceCreateFailed,
+                                "AsstCreateEx returned null during abandoned stop recovery.")
+                            : CoreResult<nint>.Ok(instance);
+                    },
+                    CancellationToken.None).ConfigureAwait(false);
+
+                if (!createResult.Success)
+                {
+                    return CoreResult<bool>.Fail(createResult.Error!);
+                }
+
+                var abandonedInstance = _instance;
+                if (abandonedInstance != nint.Zero)
+                {
+                    _abandonedInstances.Add(abandonedInstance);
+                }
+
+                _instance = createResult.Value;
+                _nativeStopAbandoned = false;
+                return CoreResult<bool>.Ok(true);
+            }
+            finally
+            {
+                _nativeCallLock.Release();
+            }
+        }
+        finally
+        {
+            if (connectLockTaken)
+            {
+                _connectLock.Release();
+            }
+
+            _lifecycleLock.Release();
+        }
+    }
+
+    public async Task<CoreResult<bool>> SetConnectionExtrasAsync(
+        string name,
+        string extrasJson,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return Fail<bool>(CoreErrorCode.InvalidRequest, "Connection extras name is empty.");
+        }
+
+        return await RunNativeCallAsync(
+            () =>
+            {
+                var status = EnsureReady();
+                if (!status.Success)
+                {
+                    return CoreResult<bool>.Fail(status.Error!);
+                }
+
+                var exports = _exports!;
+                if (exports.AsstSetConnectionExtras is null)
+                {
+                    return Fail<bool>(CoreErrorCode.NotSupported, "AsstSetConnectionExtras export is unavailable.");
+                }
+
+                return AsBool(exports.AsstSetConnectionExtras(name.Trim(), extrasJson ?? "{}"))
+                    ? CoreResult<bool>.Ok(true)
+                    : Fail<bool>(CoreErrorCode.InvalidRequest, $"Failed to set connection extras `{name.Trim()}`.");
+            },
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<CoreResult<bool>> PrepareConnectionAsync(
+        CoreConnectionInfo connectionInfo,
+        CancellationToken cancellationToken)
+    {
+        var extras = connectionInfo.Extras ?? CoreConnectionExtras.Empty;
+        var options = BuildConnectionInstanceOptions(connectionInfo, extras);
+        if (!options.IsEmpty)
+        {
+            var apply = await ApplyInstanceOptionsAsync(options, cancellationToken).ConfigureAwait(false);
+            if (!apply.Success)
+            {
+                return apply;
             }
         }
 
-        if (options.DeploymentWithPause is bool deploymentWithPause
-            && !AsBool(exports.AsstSetInstanceOption(
-                _instance,
-                AsstInstanceOptionDeploymentWithPause,
-                deploymentWithPause ? "1" : "0")))
+        var muMuExtras = BuildMuMu12ExtrasJson(connectionInfo, extras);
+        var setMuMu = await SetConnectionExtrasIfSupportedAsync("MuMuEmulator12", muMuExtras, cancellationToken)
+            .ConfigureAwait(false);
+        if (!setMuMu.Success)
         {
-            return Task.FromResult(Fail<bool>(
-                CoreErrorCode.InvalidRequest,
-                $"Failed to set deployment with pause to `{deploymentWithPause}`."));
+            return setMuMu;
         }
 
-        if (options.AdbLiteEnabled is bool adbLiteEnabled
-            && !AsBool(exports.AsstSetInstanceOption(
-                _instance,
-                AsstInstanceOptionAdbLiteEnabled,
-                adbLiteEnabled ? "1" : "0")))
+        var ldExtras = BuildLdPlayerExtrasJson(connectionInfo, extras);
+        var setLd = await SetConnectionExtrasIfSupportedAsync("LDPlayer", ldExtras, cancellationToken)
+            .ConfigureAwait(false);
+        if (!setLd.Success)
         {
-            return Task.FromResult(Fail<bool>(
-                CoreErrorCode.InvalidRequest,
-                $"Failed to set ADB Lite enabled to `{adbLiteEnabled}`."));
+            return setLd;
         }
 
-        if (options.KillAdbOnExit is bool killAdbOnExit
-            && !AsBool(exports.AsstSetInstanceOption(
-                _instance,
-                AsstInstanceOptionKillAdbOnExit,
-                killAdbOnExit ? "1" : "0")))
-        {
-            return Task.FromResult(Fail<bool>(
-                CoreErrorCode.InvalidRequest,
-                $"Failed to set kill ADB on exit to `{killAdbOnExit}`."));
-        }
-
-        return Task.FromResult(CoreResult<bool>.Ok(true));
+        return CoreResult<bool>.Ok(true);
     }
 
-    public Task<CoreResult<int>> AppendTaskAsync(CoreTaskRequest task, CancellationToken cancellationToken = default)
+    private async Task<CoreResult<bool>> SetConnectionExtrasIfSupportedAsync(
+        string name,
+        string extrasJson,
+        CancellationToken cancellationToken)
+    {
+        var set = await SetConnectionExtrasAsync(name, extrasJson, cancellationToken).ConfigureAwait(false);
+        return set.Success || set.Error?.Code is CoreErrorCode.NotSupported
+            ? CoreResult<bool>.Ok(true)
+            : set;
+    }
+
+    private static CoreInstanceOptions BuildConnectionInstanceOptions(
+        CoreConnectionInfo connectionInfo,
+        CoreConnectionExtras extras)
+    {
+        return new CoreInstanceOptions(
+            TouchMode: NormalizeText(extras.TouchMode),
+            AdbLiteEnabled: extras.AdbLiteEnabled,
+            KillAdbOnExit: extras.KillAdbOnExit,
+            ClientType: ResolveConnectionClientType(connectionInfo.ConnectConfig, extras.ClientType));
+    }
+
+    private static string ResolveConnectionClientType(string connectConfig, string? clientType)
+        => ClientTypeConnectionConfigs.Contains(connectConfig)
+            ? NormalizeClientType(clientType)
+            : string.Empty;
+
+    private static string BuildMuMu12ExtrasJson(CoreConnectionInfo connectionInfo, CoreConnectionExtras extras)
+    {
+        if (!string.Equals(connectionInfo.ConnectConfig, "MuMuEmulator12", StringComparison.OrdinalIgnoreCase)
+            || !extras.MuMu12ExtrasEnabled)
+        {
+            return "{}";
+        }
+
+        var payload = new Dictionary<string, object?>
+        {
+            ["path"] = NormalizeText(extras.MuMu12EmulatorPath) ?? string.Empty,
+        };
+
+        if (extras.MuMuBridgeConnection)
+        {
+            payload["index"] = ParseNonNegativeInt(extras.MuMu12Index);
+        }
+
+        return JsonSerializer.Serialize(payload);
+    }
+
+    private static string BuildLdPlayerExtrasJson(CoreConnectionInfo connectionInfo, CoreConnectionExtras extras)
+    {
+        if (!string.Equals(connectionInfo.ConnectConfig, "LDPlayer", StringComparison.OrdinalIgnoreCase)
+            || !extras.LdPlayerExtrasEnabled)
+        {
+            return "{}";
+        }
+
+        var index = extras.LdPlayerManualSetIndex
+            ? ParseNonNegativeInt(extras.LdPlayerIndex)
+            : GetLdPlayerIndexFromAddress(connectionInfo.Address);
+        return JsonSerializer.Serialize(new Dictionary<string, object?>
+        {
+            ["path"] = NormalizeText(extras.LdPlayerEmulatorPath) ?? string.Empty,
+            ["index"] = index,
+            ["pid"] = GetLdPlayerPid(NormalizeText(extras.LdPlayerEmulatorPath), index),
+        });
+    }
+
+    internal static string BuildMuMu12ExtrasJsonForTest(CoreConnectionInfo connectionInfo)
+        => BuildMuMu12ExtrasJson(connectionInfo, connectionInfo.Extras ?? CoreConnectionExtras.Empty);
+
+    internal static string BuildLdPlayerExtrasJsonForTest(CoreConnectionInfo connectionInfo)
+        => BuildLdPlayerExtrasJson(connectionInfo, connectionInfo.Extras ?? CoreConnectionExtras.Empty);
+
+    internal static string ResolveConnectionClientTypeForTest(CoreConnectionInfo connectionInfo)
+        => ResolveConnectionClientType(
+            connectionInfo.ConnectConfig,
+            (connectionInfo.Extras ?? CoreConnectionExtras.Empty).ClientType);
+
+    private static int ParseNonNegativeInt(string? value)
+        => int.TryParse(value, out var parsed) && parsed > 0 ? parsed : 0;
+
+    private static int GetLdPlayerIndexFromAddress(string? address)
+    {
+        var normalized = NormalizeText(address);
+        if (string.IsNullOrWhiteSpace(normalized))
+        {
+            return 0;
+        }
+
+        const int baseEmulatorPort = 5554;
+        const int baseAdbPort = 5555;
+        if (normalized.StartsWith("emulator-", StringComparison.OrdinalIgnoreCase)
+            && int.TryParse(normalized["emulator-".Length..], out var emulatorPort))
+        {
+            return Math.Max(0, (emulatorPort - baseEmulatorPort) / 2);
+        }
+
+        if (normalized.StartsWith("127.0.0.1:", StringComparison.OrdinalIgnoreCase)
+            && int.TryParse(normalized["127.0.0.1:".Length..], out var adbPort))
+        {
+            return Math.Max(0, (adbPort - baseAdbPort) / 2);
+        }
+
+        return 0;
+    }
+
+    private static int GetLdPlayerPid(string? emulatorPath, int index)
+    {
+        if (string.IsNullOrWhiteSpace(emulatorPath))
+        {
+            return 0;
+        }
+
+        var consolePath = Path.Combine(emulatorPath, "ldconsole.exe");
+        if (!File.Exists(consolePath))
+        {
+            return 0;
+        }
+
+        try
+        {
+            using var process = Process.Start(new ProcessStartInfo
+            {
+                FileName = consolePath,
+                Arguments = "list2",
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            });
+            if (process is null)
+            {
+                return 0;
+            }
+
+            var output = process.StandardOutput.ReadToEnd();
+            if (!process.WaitForExit(1000))
+            {
+                try
+                {
+                    process.Kill(entireProcessTree: true);
+                }
+                catch
+                {
+                    // best effort
+                }
+
+                return 0;
+            }
+
+            foreach (var line in output.Split([Environment.NewLine], StringSplitOptions.RemoveEmptyEntries))
+            {
+                var parts = line.Split(',');
+                if (parts.Length >= 6
+                    && int.TryParse(parts[0], out var currentIndex)
+                    && currentIndex == index
+                    && int.TryParse(parts[5], out var pid))
+                {
+                    return pid;
+                }
+            }
+        }
+        catch
+        {
+            return 0;
+        }
+
+        return 0;
+    }
+
+    private static string? NormalizeText(string? value)
+    {
+        var normalized = (value ?? string.Empty).Trim();
+        return string.IsNullOrWhiteSpace(normalized) ? null : normalized;
+    }
+
+    public async Task<CoreResult<int>> AppendTaskAsync(CoreTaskRequest task, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
         if (string.IsNullOrWhiteSpace(task.Type))
         {
-            return Task.FromResult(Fail<int>(CoreErrorCode.InvalidRequest, "Task type is empty."));
+            return Fail<int>(CoreErrorCode.InvalidRequest, "Task type is empty.");
         }
 
         if (string.IsNullOrWhiteSpace(task.ParamsJson))
         {
-            return Task.FromResult(Fail<int>(CoreErrorCode.InvalidRequest, "Task params are empty."));
-        }
-
-        var status = EnsureReady();
-        if (!status.Success)
-        {
-            return Task.FromResult(CoreResult<int>.Fail(status.Error!));
+            return Fail<int>(CoreErrorCode.InvalidRequest, "Task params are empty.");
         }
 
         try
@@ -353,70 +803,127 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge
         }
         catch (Exception ex)
         {
-            return Task.FromResult(Fail<int>(CoreErrorCode.InvalidRequest, "Task params json is invalid.", ex: ex));
+            return Fail<int>(CoreErrorCode.InvalidRequest, "Task params json is invalid.", ex: ex);
         }
 
-        var taskId = _exports!.AsstAppendTask(_instance, task.Type, task.ParamsJson);
-        if (taskId <= 0)
+        var connectReady = await WaitForPendingConnectReadyAsync(cancellationToken).ConfigureAwait(false);
+        if (!connectReady.Success)
         {
-            return Task.FromResult(Fail<int>(CoreErrorCode.AppendTaskFailed, $"AsstAppendTask returned invalid task id for `{task.Type}`."));
+            return CoreResult<int>.Fail(connectReady.Error!);
         }
 
-        return Task.FromResult(CoreResult<int>.Ok(taskId));
+        return await RunNativeCallAsync(
+            () =>
+            {
+                var status = EnsureReady();
+                if (!status.Success)
+                {
+                    return CoreResult<int>.Fail(status.Error!);
+                }
+
+                var taskId = _exports!.AsstAppendTask(_instance, task.Type, task.ParamsJson);
+                if (taskId <= 0)
+                {
+                    return Fail<int>(CoreErrorCode.AppendTaskFailed, $"AsstAppendTask returned invalid task id for `{task.Type}`.");
+                }
+
+                return CoreResult<int>.Ok(taskId);
+            },
+            cancellationToken).ConfigureAwait(false);
     }
 
-    public Task<CoreResult<bool>> StartAsync(CancellationToken cancellationToken = default)
+    public async Task<CoreResult<bool>> StartAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var status = EnsureReady();
-        if (!status.Success)
+
+        var connectReady = await WaitForPendingConnectReadyAsync(cancellationToken).ConfigureAwait(false);
+        if (!connectReady.Success)
         {
-            return Task.FromResult(CoreResult<bool>.Fail(status.Error!));
+            return CoreResult<bool>.Fail(connectReady.Error!);
         }
 
-        var ok = AsBool(_exports!.AsstStart(_instance));
-        if (!ok)
-        {
-            return Task.FromResult(Fail<bool>(CoreErrorCode.StartFailed, "AsstStart returned false."));
-        }
+        return await RunNativeCallAsync(
+            () =>
+            {
+                var status = EnsureReady();
+                if (!status.Success)
+                {
+                    return CoreResult<bool>.Fail(status.Error!);
+                }
 
-        return Task.FromResult(CoreResult<bool>.Ok(true));
+                var ok = AsBool(_exports!.AsstStart(_instance));
+                if (!ok)
+                {
+                    return Fail<bool>(CoreErrorCode.StartFailed, "AsstStart returned false.");
+                }
+
+                return CoreResult<bool>.Ok(true);
+            },
+            cancellationToken).ConfigureAwait(false);
     }
 
-    public Task<CoreResult<bool>> StopAsync(CancellationToken cancellationToken = default)
+    public async Task<CoreResult<bool>> StopAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var status = EnsureReady();
-        if (!status.Success)
+
+        var stopCall = await RunNativeCallWithTimeoutAsync(
+            () =>
+            {
+                var status = EnsureReady();
+                if (!status.Success)
+                {
+                    return CoreResult<bool>.Fail(status.Error!);
+                }
+
+                return AsBool(_exports!.AsstStop(_instance))
+                    ? CoreResult<bool>.Ok(true)
+                    : Fail<bool>(CoreErrorCode.StopFailed, "AsstStop returned false.");
+            },
+            DefaultStopCallTimeout,
+            "AsstStop",
+            CoreErrorCode.StopFailed,
+            cancellationToken).ConfigureAwait(false);
+        if (!stopCall.Success)
         {
-            return Task.FromResult(CoreResult<bool>.Fail(status.Error!));
+            if (IsAsstStopTimeout(stopCall.Error))
+            {
+                MarkNativeStopAbandoned();
+            }
+
+            return CoreResult<bool>.Fail(stopCall.Error!);
         }
 
-        var ok = AsBool(_exports!.AsstStop(_instance));
-        if (!ok)
+        var stopped = await WaitUntilNotRunningAsync(DefaultStopTimeout, cancellationToken).ConfigureAwait(false);
+        if (!stopped.Success)
         {
-            return Task.FromResult(Fail<bool>(CoreErrorCode.StopFailed, "AsstStop returned false."));
+            return stopped;
         }
 
-        return Task.FromResult(CoreResult<bool>.Ok(true));
+        return CoreResult<bool>.Ok(true);
     }
 
-    public Task<CoreResult<bool>> BackToHomeAsync(CancellationToken cancellationToken = default)
+    public async Task<CoreResult<bool>> BackToHomeAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var status = EnsureReady();
-        if (!status.Success)
-        {
-            return Task.FromResult(CoreResult<bool>.Fail(status.Error!));
-        }
 
-        var ok = AsBool(_exports!.AsstBackToHome(_instance));
-        if (!ok)
-        {
-            return Task.FromResult(Fail<bool>(CoreErrorCode.NotImplemented, "AsstBackToHome returned false."));
-        }
+        return await RunNativeCallAsync(
+            () =>
+            {
+                var status = EnsureReady();
+                if (!status.Success)
+                {
+                    return CoreResult<bool>.Fail(status.Error!);
+                }
 
-        return Task.FromResult(CoreResult<bool>.Ok(true));
+                var ok = AsBool(_exports!.AsstBackToHome(_instance));
+                if (!ok)
+                {
+                    return Fail<bool>(CoreErrorCode.NotImplemented, "AsstBackToHome returned false.");
+                }
+
+                return CoreResult<bool>.Ok(true);
+            },
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<CoreResult<bool>> StartCloseDownAsync(string clientType, CancellationToken cancellationToken = default)
@@ -441,22 +948,23 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge
         return await StartAsync(cancellationToken);
     }
 
-    public Task<CoreResult<CoreRuntimeStatus>> GetRuntimeStatusAsync(CancellationToken cancellationToken = default)
+    public async Task<CoreResult<CoreRuntimeStatus>> GetRuntimeStatusAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (_disposed)
-        {
-            return Task.FromResult(Fail<CoreRuntimeStatus>(CoreErrorCode.Disposed, "Bridge is already disposed."));
-        }
+        return await RunNativeCallAsync(
+            () =>
+            {
+                var status = EnsureReady();
+                if (!status.Success)
+                {
+                    return CoreResult<CoreRuntimeStatus>.Fail(status.Error!);
+                }
 
-        if (_exports is null || _instance == nint.Zero)
-        {
-            return Task.FromResult(Fail<CoreRuntimeStatus>(CoreErrorCode.NotInitialized, "Bridge is not initialized."));
-        }
-
-        var connected = AsBool(_exports.AsstConnected(_instance));
-        var running = AsBool(_exports.AsstRunning(_instance));
-        return Task.FromResult(CoreResult<CoreRuntimeStatus>.Ok(new CoreRuntimeStatus(true, connected, running)));
+                var connected = AsBool(_exports!.AsstConnected(_instance));
+                var running = AsBool(_exports.AsstRunning(_instance));
+                return CoreResult<CoreRuntimeStatus>.Ok(new CoreRuntimeStatus(true, connected, running));
+            },
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<CoreResult<bool>> ReloadResourceAsync(
@@ -478,26 +986,33 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge
                 return Fail<bool>(CoreErrorCode.NotInitialized, "Bridge base directory is unavailable.");
             }
 
-            var exports = _exports!;
-            var baseDirectory = _baseDirectory!;
-            if (!AsBool(exports.AsstLoadResource(baseDirectory)))
-            {
-                return Fail<bool>(CoreErrorCode.ResourceLoadFailed, "AsstLoadResource(baseDir) returned false during resource reload.");
-            }
-
-            var effectiveClientType = string.IsNullOrWhiteSpace(clientType)
-                ? _loadedClientType
-                : clientType;
-            if (!string.IsNullOrWhiteSpace(effectiveClientType))
-            {
-                var clientLoad = LoadClientResource(effectiveClientType, baseDirectory, exports);
-                if (!clientLoad.Success)
+            return await RunNativeCallAsync(
+                () =>
                 {
-                    return CoreResult<bool>.Fail(clientLoad.Error!);
-                }
-            }
+                    var exports = _exports!;
+                    var baseDirectory = _baseDirectory!;
+                    if (!AsBool(exports.AsstLoadResource(baseDirectory)))
+                    {
+                        return Fail<bool>(
+                            CoreErrorCode.ResourceLoadFailed,
+                            "AsstLoadResource(baseDir) returned false during resource reload.");
+                    }
 
-            return CoreResult<bool>.Ok(true);
+                    var effectiveClientType = string.IsNullOrWhiteSpace(clientType)
+                        ? _loadedClientType
+                        : clientType;
+                    if (!string.IsNullOrWhiteSpace(effectiveClientType))
+                    {
+                        var clientLoad = LoadClientResource(effectiveClientType, baseDirectory, exports);
+                        if (!clientLoad.Success)
+                        {
+                            return CoreResult<bool>.Fail(clientLoad.Error!);
+                        }
+                    }
+
+                    return CoreResult<bool>.Ok(true);
+                },
+                cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -513,104 +1028,156 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge
         return Task.FromResult(Fail<bool>(CoreErrorCode.NotSupported, "AttachWindow is not implemented in MAAUnified bridge yet."));
     }
 
-    public Task<CoreResult<byte[]>> GetImageAsync(CancellationToken cancellationToken = default)
+    public async Task<CoreResult<byte[]>> GetImageAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var status = EnsureReady();
-        if (!status.Success)
+
+        var connectReady = await WaitForPendingConnectReadyAsync(cancellationToken).ConfigureAwait(false);
+        if (!connectReady.Success)
         {
-            return Task.FromResult(CoreResult<byte[]>.Fail(status.Error!));
+            return CoreResult<byte[]>.Fail(connectReady.Error!);
         }
 
-        var exports = _exports!;
-        var nullSize = exports.AsstGetNullSize();
-        // Align with the WPF path: reserve a full-size BGR frame upfront to avoid NullSize on large PNG payloads.
-        ulong bufferSize = 1280UL * 720UL * 3UL;
-
-        for (var retry = 0; retry < 6; retry++)
-        {
-            if (bufferSize > int.MaxValue)
+        return await RunNativeCallAsync(
+            () =>
             {
-                return Task.FromResult(Fail<byte[]>(CoreErrorCode.GetImageFailed, "Image buffer size exceeds supported limit."));
+                var status = EnsureReady();
+                if (!status.Success)
+                {
+                    return CoreResult<byte[]>.Fail(status.Error!);
+                }
+
+                var exports = _exports!;
+                var nullSize = exports.AsstGetNullSize();
+                return ReadImageBytesWithDynamicBuffer(
+                    nullSize,
+                    DefaultBgrFrameBufferSize,
+                    (buffer, bufferSize) => exports.AsstGetImage(_instance, buffer, bufferSize),
+                    "AsstGetImage");
+            },
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    internal static CoreResult<byte[]> ReadImageBytesWithDynamicBufferForTest(
+        ulong nullSize,
+        ulong initialBufferSize,
+        Func<nint, ulong, ulong> getImage)
+        => ReadImageBytesWithDynamicBuffer(nullSize, initialBufferSize, getImage, "AsstGetImage");
+
+    private static CoreResult<byte[]> ReadImageBytesWithDynamicBuffer(
+        ulong nullSize,
+        ulong initialBufferSize,
+        Func<nint, ulong, ulong> getImage,
+        string apiName)
+    {
+        var bufferSize = initialBufferSize == 0 ? DefaultBgrFrameBufferSize : initialBufferSize;
+        while (true)
+        {
+            if (bufferSize > MaxImageBufferSize)
+            {
+                return Fail<byte[]>(CoreErrorCode.GetImageFailed, "Image buffer size exceeds supported limit.");
             }
 
             var buffer = Marshal.AllocHGlobal((nint)bufferSize);
             try
             {
-                var imageSize = exports.AsstGetImage(_instance, buffer, bufferSize);
-                if (imageSize == nullSize || imageSize == 0)
+                var imageSize = getImage(buffer, bufferSize);
+                if (imageSize == 0)
                 {
-                    return Task.FromResult(Fail<byte[]>(CoreErrorCode.GetImageFailed, "AsstGetImage returned null image."));
+                    return Fail<byte[]>(CoreErrorCode.GetImageFailed, $"{apiName} returned empty image.");
+                }
+
+                if (imageSize == nullSize)
+                {
+                    if (bufferSize >= MaxImageBufferSize)
+                    {
+                        return Fail<byte[]>(
+                            CoreErrorCode.GetImageFailed,
+                            $"{apiName} returned null image after buffer grew to {MaxImageBufferSize} bytes.");
+                    }
+
+                    bufferSize = GrowImageBuffer(bufferSize);
+                    continue;
                 }
 
                 if (imageSize > bufferSize)
                 {
+                    if (imageSize > MaxImageBufferSize)
+                    {
+                        return Fail<byte[]>(CoreErrorCode.GetImageFailed, $"Image size `{imageSize}` exceeds supported limit.");
+                    }
+
                     bufferSize = imageSize;
                     continue;
                 }
 
                 if (imageSize > int.MaxValue)
                 {
-                    return Task.FromResult(Fail<byte[]>(CoreErrorCode.GetImageFailed, "Image size is too large."));
+                    return Fail<byte[]>(CoreErrorCode.GetImageFailed, "Image size is too large.");
                 }
 
                 var data = new byte[(int)imageSize];
                 Marshal.Copy(buffer, data, 0, data.Length);
-                return Task.FromResult(CoreResult<byte[]>.Ok(data));
+                return CoreResult<byte[]>.Ok(data);
             }
             finally
             {
                 Marshal.FreeHGlobal(buffer);
             }
         }
-
-        return Task.FromResult(Fail<byte[]>(CoreErrorCode.GetImageFailed, "AsstGetImage did not fit buffer after retries."));
     }
 
-    public Task<CoreResult<byte[]>> GetImageBgrAsync(bool forceScreencap = false, CancellationToken cancellationToken = default)
+    private static ulong GrowImageBuffer(ulong bufferSize)
+    {
+        if (bufferSize >= MaxImageBufferSize / 2)
+        {
+            return MaxImageBufferSize;
+        }
+
+        return bufferSize * 2;
+    }
+
+    public async Task<CoreResult<byte[]>> GetImageBgrAsync(bool forceScreencap = false, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var status = EnsureReady();
-        if (!status.Success)
+
+        var connectReady = await WaitForPendingConnectReadyAsync(cancellationToken).ConfigureAwait(false);
+        if (!connectReady.Success)
         {
-            return Task.FromResult(CoreResult<byte[]>.Fail(status.Error!));
+            return CoreResult<byte[]>.Fail(connectReady.Error!);
         }
 
-        var exports = _exports!;
-        if (exports.AsstGetImageBgr is null)
-        {
-            return Task.FromResult(Fail<byte[]>(CoreErrorCode.NotSupported, "AsstGetImageBgr is unavailable in current MaaCore."));
-        }
-
-        if (forceScreencap && exports.AsstAsyncScreencap is not null)
-        {
-            _ = exports.AsstAsyncScreencap(_instance, 1);
-        }
-
-        var nullSize = exports.AsstGetNullSize();
-        var bufferSize = DefaultBgrFrameBufferSize;
-        var buffer = Marshal.AllocHGlobal((nint)bufferSize);
-        try
-        {
-            var imageSize = exports.AsstGetImageBgr(_instance, buffer, bufferSize);
-            if (imageSize == nullSize || imageSize == 0)
+        return await RunNativeCallWithTimeoutAsync(
+            () =>
             {
-                return Task.FromResult(Fail<byte[]>(CoreErrorCode.GetImageFailed, "AsstGetImageBgr returned null image."));
-            }
+                var status = EnsureReady();
+                if (!status.Success)
+                {
+                    return CoreResult<byte[]>.Fail(status.Error!);
+                }
 
-            if (imageSize > bufferSize || imageSize > int.MaxValue)
-            {
-                return Task.FromResult(Fail<byte[]>(CoreErrorCode.GetImageFailed, $"Unexpected raw image size `{imageSize}`."));
-            }
+                var exports = _exports!;
+                if (exports.AsstGetImageBgr is null)
+                {
+                    return Fail<byte[]>(CoreErrorCode.NotSupported, "AsstGetImageBgr is unavailable in current MaaCore.");
+                }
 
-            var data = new byte[(int)imageSize];
-            Marshal.Copy(buffer, data, 0, data.Length);
-            return Task.FromResult(CoreResult<byte[]>.Ok(data));
-        }
-        finally
-        {
-            Marshal.FreeHGlobal(buffer);
-        }
+                if (forceScreencap && exports.AsstAsyncScreencap is not null)
+                {
+                    _ = exports.AsstAsyncScreencap(_instance, 1);
+                }
+
+                var nullSize = exports.AsstGetNullSize();
+                return ReadImageBytesWithDynamicBuffer(
+                    nullSize,
+                    DefaultBgrFrameBufferSize,
+                    (buffer, bufferSize) => exports.AsstGetImageBgr(_instance, buffer, bufferSize),
+                    "AsstGetImageBgr");
+            },
+            forceScreencap ? DefaultScreencapTimeout : Timeout.InfiniteTimeSpan,
+            forceScreencap ? "AsstAsyncScreencap/AsstGetImageBgr" : "AsstGetImageBgr",
+            CoreErrorCode.GetImageFailed,
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async IAsyncEnumerable<CoreCallbackEvent> CallbackStreamAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
@@ -624,6 +1191,8 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge
     public async ValueTask DisposeAsync()
     {
         await _lifecycleLock.WaitAsync();
+        var connectLockTaken = false;
+        var nativeLockTaken = false;
         try
         {
             if (_disposed)
@@ -643,25 +1212,67 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge
             pending?.TryComplete(
                 CoreResult<bool>.Fail(new CoreError(CoreErrorCode.Disposed, "Bridge disposed while waiting for connect.")));
 
-            if (_instance != nint.Zero && _exports is not null)
+            connectLockTaken = await _connectLock.WaitAsync(DisposeWaitTimeout).ConfigureAwait(false);
+            nativeLockTaken = await _nativeCallLock.WaitAsync(DisposeWaitTimeout).ConfigureAwait(false);
+            if (!nativeLockTaken)
+            {
+                MarkNativeStopAbandoned();
+                _callbackChannel.Writer.TryComplete();
+                return;
+            }
+
+            if (_instance != nint.Zero && _exports is not null && !_nativeStopAbandoned)
             {
                 try
                 {
-                    _exports.AsstDestroy(_instance);
+                    var stopCall = await InvokeAsstStopWithTimeoutAsync(_exports, _instance, TimeSpan.FromSeconds(1))
+                        .ConfigureAwait(false);
+                    if (!stopCall.Success)
+                    {
+                        MarkNativeStopAbandoned();
+                        _callbackChannel.Writer.TryComplete();
+                        return;
+                    }
+
+                    _ = await Task.Run(
+                            async () => await WaitUntilNotRunningCoreAsync(
+                                    _exports,
+                                    _instance,
+                                    TimeSpan.FromSeconds(1),
+                                    CancellationToken.None)
+                                .ConfigureAwait(false),
+                            CancellationToken.None)
+                        .ConfigureAwait(false);
                 }
                 catch
                 {
                     // ignored during dispose
                 }
 
-                _instance = nint.Zero;
+                if (!_nativeStopAbandoned)
+                {
+                    try
+                    {
+                        await Task.Run(() => _exports.AsstDestroy(_instance), CancellationToken.None)
+                            .ConfigureAwait(false);
+                    }
+                    catch
+                    {
+                        // ignored during dispose
+                    }
+
+                    _instance = nint.Zero;
+                }
             }
 
-            _exports = null;
-            _callbackDelegate = null;
-            _gpuInitializeInfo = null;
+            if (!_nativeStopAbandoned && _abandonedInstances.Count == 0)
+            {
+                _exports = null;
+                _callbackDelegate = null;
+                _gpuInitializeInfo = null;
+            }
 
-            if (_nativeLibrary != nint.Zero)
+            if (!_nativeStopAbandoned && _abandonedInstances.Count == 0 && _nativeLibrary != nint.Zero)
             {
                 try
                 {
@@ -679,6 +1290,16 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge
         }
         finally
         {
+            if (nativeLockTaken)
+            {
+                _nativeCallLock.Release();
+            }
+
+            if (connectLockTaken)
+            {
+                _connectLock.Release();
+            }
+
             _lifecycleLock.Release();
         }
     }
@@ -704,6 +1325,41 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge
             return;
         }
 
+        TryHandlePendingConnectCallback(pending, callback);
+    }
+
+    internal static CoreResult<bool>? ApplyConnectCallbacksForTest(
+        int? asyncCallId,
+        params CoreCallbackEvent[] callbacks)
+    {
+        var pending = new ConnectPendingState(asyncCallId);
+        foreach (var callback in callbacks)
+        {
+            TryHandlePendingConnectCallback(pending, callback);
+            if (pending.TryGetCompletedResult(out var result))
+            {
+                return result;
+            }
+        }
+
+        return null;
+    }
+
+    internal static CoreResult<bool> CompleteInvalidAsyncConnectStartForTest(int asyncCallId)
+    {
+        var pending = new ConnectPendingState(null);
+        return CompleteInvalidAsyncConnectStart(pending, asyncCallId);
+    }
+
+    private static CoreResult<bool> CompleteInvalidAsyncConnectStart(ConnectPendingState pending, int asyncCallId)
+    {
+        var result = Fail<bool>(CoreErrorCode.ConnectFailed, $"AsstAsyncConnect returned invalid async call id `{asyncCallId}`.");
+        pending.TryComplete(result);
+        return result;
+    }
+
+    private static void TryHandlePendingConnectCallback(ConnectPendingState pending, CoreCallbackEvent callback)
+    {
         if (!TryParsePayload(callback.PayloadJson, out var root))
         {
             if (callback.MsgId == MsgInitFailed)
@@ -719,24 +1375,36 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge
         {
             var asyncCallId = GetInt(root, "async_call_id");
             var what = GetString(root, "what");
-            if (asyncCallId != pending.AsyncCallId || !string.Equals(what, "Connect", StringComparison.OrdinalIgnoreCase))
+            if (asyncCallId is not int callbackAsyncCallId
+                || !string.Equals(what, "Connect", StringComparison.OrdinalIgnoreCase))
             {
                 return;
+            }
+
+            if (pending.AsyncCallId is int pendingAsyncCallId)
+            {
+                if (callbackAsyncCallId != pendingAsyncCallId)
+                {
+                    return;
+                }
+            }
+            else
+            {
+                pending.SetAsyncCallId(callbackAsyncCallId);
             }
 
             var details = GetObject(root, "details");
             var ret = details is not null && GetBool(details.Value, "ret");
 
             pending.MarkAsyncCall(ret);
-            if (!ret)
+            if (ret)
             {
-                pending.TryComplete(Fail<bool>(CoreErrorCode.ConnectFailed, "AsstAsyncConnect callback reported ret=false.", callback.PayloadJson));
-                return;
+                pending.TryCompleteSuccessfulConnect();
             }
-
-            if (pending.CanCompleteSuccess)
+            else
             {
-                pending.TryComplete(CoreResult<bool>.Ok(true));
+                pending.TryComplete(
+                    Fail<bool>(CoreErrorCode.ConnectFailed, "AsstAsyncConnect callback reported ret=false.", callback.PayloadJson));
             }
 
             return;
@@ -749,11 +1417,7 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge
                 || string.Equals(what, "Reconnected", StringComparison.OrdinalIgnoreCase))
             {
                 pending.MarkConnected();
-                if (pending.CanCompleteSuccess)
-                {
-                    pending.TryComplete(CoreResult<bool>.Ok(true));
-                }
-
+                pending.TryCompleteSuccessfulConnect();
                 return;
             }
 
@@ -776,12 +1440,348 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge
             return Fail<bool>(CoreErrorCode.Disposed, "Bridge is already disposed.");
         }
 
+        if (_nativeStopAbandoned)
+        {
+            return Fail<bool>(
+                CoreErrorCode.StopFailed,
+                "Bridge native stop timed out; instance was abandoned to avoid use-after-free.");
+        }
+
         if (_exports is null || _instance == nint.Zero)
         {
             return Fail<bool>(CoreErrorCode.NotInitialized, "Bridge is not initialized.");
         }
 
         return CoreResult<bool>.Ok(true);
+    }
+
+    private async Task AbortPendingConnectAsync(
+        ConnectPendingState pending,
+        CoreResult<bool> result,
+        TimeSpan stopTimeout)
+    {
+        lock (_sync)
+        {
+            if (ReferenceEquals(_pendingConnect, pending))
+            {
+                _pendingConnect = null;
+            }
+        }
+
+        pending.TryComplete(result);
+
+        using var stopCts = new CancellationTokenSource(stopTimeout);
+        CoreResult<bool> stopCall;
+        try
+        {
+            stopCall = await RunNativeCallWithTimeoutAsync(
+                () =>
+                {
+                    if (_exports is null || _instance == nint.Zero || _disposed || _nativeStopAbandoned)
+                    {
+                        return CoreResult<bool>.Ok(true);
+                    }
+
+                    return AsBool(_exports.AsstStop(_instance))
+                        ? CoreResult<bool>.Ok(true)
+                        : Fail<bool>(CoreErrorCode.StopFailed, "AsstStop returned false.");
+                },
+                stopTimeout,
+                "AsstStop",
+                CoreErrorCode.StopFailed,
+                stopCts.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            MarkNativeStopAbandoned();
+            return;
+        }
+
+        if (!stopCall.Success)
+        {
+            if (IsAsstStopTimeout(stopCall.Error))
+            {
+                MarkNativeStopAbandoned();
+            }
+
+            return;
+        }
+
+        using var timeoutCts = new CancellationTokenSource(stopTimeout);
+        _ = await WaitUntilNotRunningAsync(stopTimeout, timeoutCts.Token).ConfigureAwait(false);
+    }
+
+    private async Task<CoreResult<bool>> WaitForPendingConnectReadyAsync(CancellationToken cancellationToken)
+    {
+        ConnectPendingState? pending;
+        lock (_sync)
+        {
+            pending = _pendingConnect;
+        }
+
+        if (pending is null)
+        {
+            return CoreResult<bool>.Ok(true);
+        }
+
+        return await pending.Completion.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<T> RunNativeCallAsync<T>(
+        Func<T> nativeCall,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        await _nativeCallLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return await Task.Run(nativeCall, CancellationToken.None).ConfigureAwait(false);
+        }
+        finally
+        {
+            _nativeCallLock.Release();
+        }
+    }
+
+    private async Task<CoreResult<T>> RunNativeCallWithTimeoutAsync<T>(
+        Func<CoreResult<T>> nativeCall,
+        TimeSpan timeout,
+        string apiName,
+        CoreErrorCode timeoutCode,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        await _nativeCallLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        var releaseLock = true;
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var nativeTask = Task.Run(nativeCall, CancellationToken.None);
+            Task completed;
+            if (timeout == Timeout.InfiniteTimeSpan)
+            {
+                completed = await Task.WhenAny(nativeTask, WaitForCancellationAsync(cancellationToken)).ConfigureAwait(false);
+                if (completed != nativeTask)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                }
+            }
+            else
+            {
+                completed = await Task.WhenAny(
+                    nativeTask,
+                    Task.Delay(timeout, cancellationToken)).ConfigureAwait(false);
+            }
+
+            if (completed != nativeTask)
+            {
+                MarkNativeStopAbandoned();
+                releaseLock = true;
+                return CoreResult<T>.Fail(new CoreError(
+                    timeoutCode,
+                    $"{apiName} did not return within {timeout.TotalSeconds:N1}s; native instance was abandoned."));
+            }
+
+            return await nativeTask.ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            return CoreResult<T>.Fail(new CoreError(
+                timeoutCode,
+                $"{apiName} threw an exception.",
+                Exception: ex.ToString()));
+        }
+        finally
+        {
+            if (releaseLock)
+            {
+                _nativeCallLock.Release();
+            }
+        }
+    }
+
+    private static async Task<CoreResult<bool>> InvokeAsstStopWithTimeoutAsync(
+        AsstExports exports,
+        nint handle,
+        TimeSpan timeout)
+        => await InvokeNativeStopWithTimeoutAsync(() => AsBool(exports.AsstStop(handle)), timeout)
+            .ConfigureAwait(false);
+
+    internal static async Task<CoreResult<bool>> InvokeNativeStopWithTimeoutForTestAsync(
+        Func<bool> stopCall,
+        TimeSpan timeout)
+        => await InvokeNativeStopWithTimeoutAsync(stopCall, timeout).ConfigureAwait(false);
+
+    internal static async Task<CoreResult<T>> InvokeNativeCallWithTimeoutForTestAsync<T>(
+        Func<CoreResult<T>> nativeCall,
+        TimeSpan timeout,
+        string apiName,
+        CoreErrorCode timeoutCode)
+    {
+        try
+        {
+            var nativeTask = Task.Run(nativeCall);
+            var completed = await Task.WhenAny(nativeTask, Task.Delay(timeout)).ConfigureAwait(false);
+            if (completed != nativeTask)
+            {
+                return CoreResult<T>.Fail(new CoreError(
+                    timeoutCode,
+                    $"{apiName} did not return within {timeout.TotalSeconds:N1}s; native instance was abandoned."));
+            }
+
+            return await nativeTask.ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            return CoreResult<T>.Fail(new CoreError(
+                timeoutCode,
+                $"{apiName} threw an exception.",
+                Exception: ex.ToString()));
+        }
+    }
+
+    private static async Task<CoreResult<bool>> InvokeNativeStopWithTimeoutAsync(
+        Func<bool> stopCall,
+        TimeSpan timeout)
+    {
+        try
+        {
+            var stopTask = Task.Run(stopCall);
+            var completed = await Task.WhenAny(stopTask, Task.Delay(timeout)).ConfigureAwait(false);
+            if (completed != stopTask)
+            {
+                return CoreResult<bool>.Fail(new CoreError(
+                    CoreErrorCode.StopFailed,
+                    $"AsstStop did not return within {timeout.TotalSeconds:N1}s; native operation was abandoned."));
+            }
+
+            var ok = await stopTask.ConfigureAwait(false);
+            return ok
+                ? CoreResult<bool>.Ok(true)
+                : Fail<bool>(CoreErrorCode.StopFailed, "AsstStop returned false.");
+        }
+        catch (Exception ex)
+        {
+            return Fail<bool>(CoreErrorCode.StopFailed, "AsstStop threw an exception.", ex: ex);
+        }
+    }
+
+    private static bool IsAsstStopTimeout(CoreError? error)
+        => error?.Code == CoreErrorCode.StopFailed
+           && (error.Message.Contains("AsstStop did not return", StringComparison.Ordinal)
+               || error.Message.Contains("AsstStop did not return within", StringComparison.Ordinal));
+
+    private void MarkNativeStopAbandoned()
+    {
+        _nativeStopAbandoned = true;
+    }
+
+    private async Task<CoreResult<bool>> WaitUntilNotRunningAsync(
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        var deadline = DateTimeOffset.UtcNow + timeout;
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var runningResult = await RunNativeCallAsync(
+                () =>
+                {
+                    var status = EnsureReady();
+                    if (!status.Success)
+                    {
+                        return CoreResult<bool>.Fail(status.Error!);
+                    }
+
+                    return CoreResult<bool>.Ok(AsBool(_exports!.AsstRunning(_instance)));
+                },
+                cancellationToken).ConfigureAwait(false);
+            if (!runningResult.Success)
+            {
+                return CoreResult<bool>.Fail(runningResult.Error!);
+            }
+
+            if (!runningResult.Value)
+            {
+                return CoreResult<bool>.Ok(true);
+            }
+
+            var now = DateTimeOffset.UtcNow;
+            if (now >= deadline)
+            {
+                return Fail<bool>(
+                    CoreErrorCode.StopFailed,
+                    $"Timed out waiting for MaaCore to stop after {timeout.TotalSeconds:N0}s.");
+            }
+
+            var delay = deadline - now;
+            if (delay > TimeSpan.FromMilliseconds(100))
+            {
+                delay = TimeSpan.FromMilliseconds(100);
+            }
+
+            await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    private static async Task<bool> WaitUntilNotRunningCoreAsync(
+        AsstExports exports,
+        nint handle,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        var deadline = DateTimeOffset.UtcNow + timeout;
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!AsBool(exports.AsstRunning(handle)))
+            {
+                return true;
+            }
+
+            var now = DateTimeOffset.UtcNow;
+            if (now >= deadline)
+            {
+                return false;
+            }
+
+            var delay = deadline - now;
+            if (delay > TimeSpan.FromMilliseconds(100))
+            {
+                delay = TimeSpan.FromMilliseconds(100);
+            }
+
+            await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    private static TimeSpan NormalizeTimeout(TimeSpan? requested, TimeSpan fallback)
+    {
+        if (requested is not { } timeout || timeout <= TimeSpan.Zero)
+        {
+            return fallback;
+        }
+
+        return timeout < TimeSpan.FromMilliseconds(250)
+            ? TimeSpan.FromMilliseconds(250)
+            : timeout;
+    }
+
+    private static Task WaitForCancellationAsync(CancellationToken cancellationToken)
+    {
+        if (!cancellationToken.CanBeCanceled)
+        {
+            return Task.Delay(Timeout.InfiniteTimeSpan);
+        }
+
+        var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        cancellationToken.Register(static state => ((TaskCompletionSource)state!).TrySetResult(), tcs);
+        return tcs.Task;
     }
 
     private CoreResult<bool> LoadClientResource(string clientType, string baseDirectory, AsstExports exports)
@@ -923,10 +1923,7 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge
         string? clientType,
         CoreGpuInitializeInfo? gpuInitializeInfo)
     {
-        var version = _exports is null
-            ? string.Empty
-            : Marshal.PtrToStringUTF8(_exports.AsstGetVersion()) ?? string.Empty;
-        return new CoreInitializeInfo(baseDirectory, libraryPath, version, clientType, gpuInitializeInfo);
+        return new CoreInitializeInfo(baseDirectory, libraryPath, _coreVersion, clientType, gpuInitializeInfo);
     }
 
     private static CoreResult<string> ResolveLibraryName()
@@ -954,6 +1951,7 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge
         missingSymbol = string.Empty;
         TryLoadExport<AsstSetStaticOptionDelegate>(library, "AsstSetStaticOption", out var asstSetStaticOption);
         TryLoadExport<AsstSetInstanceOptionDelegate>(library, "AsstSetInstanceOption", out var asstSetInstanceOption);
+        TryLoadExport<AsstSetConnectionExtrasDelegate>(library, "AsstSetConnectionExtras", out var asstSetConnectionExtras);
 
         if (!TryLoadExport<AsstSetUserDirDelegate>(library, "AsstSetUserDir", out var asstSetUserDir))
         {
@@ -979,6 +1977,13 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge
         if (!TryLoadExport<AsstDestroyDelegate>(library, "AsstDestroy", out var asstDestroy))
         {
             missingSymbol = "AsstDestroy";
+            exports = null!;
+            return false;
+        }
+
+        if (!TryLoadExport<AsstConnectDelegate>(library, "AsstConnect", out var asstConnect))
+        {
+            missingSymbol = "AsstConnect";
             exports = null!;
             return false;
         }
@@ -1059,10 +2064,12 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge
         exports = new AsstExports(
             asstSetStaticOption,
             asstSetInstanceOption,
+            asstSetConnectionExtras,
             asstSetUserDir!,
             asstLoadResource!,
             asstCreateEx!,
             asstDestroy!,
+            asstConnect!,
             asstAsyncConnect!,
             asstAppendTask!,
             asstStart!,
@@ -1250,13 +2257,13 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge
     {
         private int _completed;
 
-        public ConnectPendingState(int asyncCallId)
+        public ConnectPendingState(int? asyncCallId)
         {
             AsyncCallId = asyncCallId;
             Completion = new TaskCompletionSource<CoreResult<bool>>(TaskCreationOptions.RunContinuationsAsynchronously);
         }
 
-        public int AsyncCallId { get; }
+        public int? AsyncCallId { get; private set; }
 
         public bool AsyncCallReceived { get; private set; }
 
@@ -1264,9 +2271,12 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge
 
         public bool ConnectionEstablished { get; private set; }
 
-        public bool CanCompleteSuccess => AsyncCallReceived && AsyncCallSucceeded && ConnectionEstablished;
-
         public TaskCompletionSource<CoreResult<bool>> Completion { get; }
+
+        public void SetAsyncCallId(int asyncCallId)
+        {
+            AsyncCallId ??= asyncCallId;
+        }
 
         public void MarkAsyncCall(bool succeeded)
         {
@@ -1279,6 +2289,14 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge
             ConnectionEstablished = true;
         }
 
+        public void TryCompleteSuccessfulConnect()
+        {
+            if (ConnectionEstablished && AsyncCallReceived && AsyncCallSucceeded)
+            {
+                TryComplete(CoreResult<bool>.Ok(true));
+            }
+        }
+
         public void TryComplete(CoreResult<bool> result)
         {
             if (Interlocked.CompareExchange(ref _completed, 1, 0) != 0)
@@ -1288,15 +2306,34 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge
 
             Completion.TrySetResult(result);
         }
+
+        public bool TryGetCompletedResult(out CoreResult<bool> result)
+        {
+            if (!Completion.Task.IsCompletedSuccessfully)
+            {
+                result = null!;
+                return false;
+            }
+
+            result = Completion.Task.Result;
+            return true;
+        }
     }
+
+    private sealed record NativeInitializeResult(
+        nint Instance,
+        CoreGpuInitializeInfo? GpuInitializeInfo,
+        string Version);
 
     private sealed record AsstExports(
         AsstSetStaticOptionDelegate? AsstSetStaticOption,
         AsstSetInstanceOptionDelegate? AsstSetInstanceOption,
+        AsstSetConnectionExtrasDelegate? AsstSetConnectionExtras,
         AsstSetUserDirDelegate AsstSetUserDir,
         AsstLoadResourceDelegate AsstLoadResource,
         AsstCreateExDelegate AsstCreateEx,
         AsstDestroyDelegate AsstDestroy,
+        AsstConnectDelegate AsstConnect,
         AsstAsyncConnectDelegate AsstAsyncConnect,
         AsstAppendTaskDelegate AsstAppendTask,
         AsstStartDelegate AsstStart,
@@ -1320,6 +2357,11 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge
         [MarshalAs(UnmanagedType.LPUTF8Str)] string value);
 
     [UnmanagedFunctionPointer(CallingConvention.Winapi)]
+    private delegate byte AsstSetConnectionExtrasDelegate(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string name,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string extras);
+
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     private delegate byte AsstSetUserDirDelegate([MarshalAs(UnmanagedType.LPUTF8Str)] string path);
 
     [UnmanagedFunctionPointer(CallingConvention.Winapi)]
@@ -1330,6 +2372,13 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge
 
     [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     private delegate void AsstDestroyDelegate(nint handle);
+
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
+    private delegate byte AsstConnectDelegate(
+        nint handle,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string adbPath,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string address,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string config);
 
     [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     private delegate int AsstAsyncConnectDelegate(

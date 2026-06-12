@@ -44,6 +44,14 @@ public sealed class SettingsModuleAK1FeatureTests
     }
 
     [Fact]
+    public void ConnectionGameSharedState_DefaultTouchMode_ShouldBeMaaFwAdb()
+    {
+        var state = new ConnectionGameSharedStateViewModel();
+
+        Assert.Equal("MaaFwAdb", state.TouchMode);
+    }
+
+    [Fact]
     public void ConnectionGameProfileSync_ReadFromEmptyProfile_ShouldUseSystemAdbDefault()
     {
         var profile = new UnifiedProfile();
@@ -55,6 +63,7 @@ public sealed class SettingsModuleAK1FeatureTests
         ConnectionGameProfileSync.ReadFromProfile(profile, state, tolerateMissing: false);
 
         Assert.Equal("adb", state.AdbPath);
+        Assert.Equal("MaaFwAdb", state.TouchMode);
     }
 
     [Fact]
@@ -327,7 +336,7 @@ public sealed class SettingsModuleAK1FeatureTests
     public void ConnectionGameSharedState_RemoveAddressFromHistory_ShouldDeleteOnlyTargetEntry()
     {
         var state = new ConnectionGameSharedStateViewModel();
-        state.ConnectAddress = "127.0.0.1:5555";
+        state.ConnectAddress = TestConnectionFixtureSupport.ReadyConnectAddress;
         state.ConnectAddress = "127.0.0.1:5556";
         state.ConnectAddress = "127.0.0.1:5557";
 
@@ -421,6 +430,36 @@ public sealed class SettingsModuleAK1FeatureTests
                 Directory.Delete(autoDetectedPath, recursive: true);
             }
         }
+    }
+
+    [Fact]
+    public void ConnectionGameSharedState_TestLinkInfo_ShouldExposeAndResetSeverity()
+    {
+        var state = new ConnectionGameSharedStateViewModel();
+
+        state.TestLinkInfo = "连接失败";
+        state.TestLinkInfoSeverity = TestLinkInfoSeverity.Error;
+
+        Assert.True(state.TestLinkInfoIsError);
+        Assert.False(state.TestLinkInfoIsWarning);
+
+        state.TestLinkInfo = state.ScreencapCost;
+
+        Assert.Equal(TestLinkInfoSeverity.Normal, state.TestLinkInfoSeverity);
+        Assert.False(state.TestLinkInfoIsError);
+        Assert.False(state.TestLinkInfoIsWarning);
+    }
+
+    [Fact]
+    public void ConnectSettingsView_ScreenshotTestException_ShouldKeepInlineStatusShort()
+    {
+        var root = BaselineTestSupport.GetMaaUnifiedRoot();
+        var connectSettingsCode = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "ConnectSettingsView.axaml.cs"));
+
+        Assert.Contains("vm.TestLinkInfo = T(\"Settings.Connect.Error.ConnectionFailedShort\", \"Connection failed.\");", connectSettingsCode, StringComparison.Ordinal);
+        Assert.Contains("vm.TestLinkInfoSeverity = TestLinkInfoSeverity.Error;", connectSettingsCode, StringComparison.Ordinal);
+        Assert.Contains("message: ex.Message", connectSettingsCode, StringComparison.Ordinal);
+        Assert.DoesNotContain("vm.TestLinkInfo = Tf(\"Settings.Connect.Error.ScreenshotTestException\", ex.Message);", connectSettingsCode, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -711,7 +750,7 @@ public sealed class SettingsModuleAK1FeatureTests
     {
         await using var fixture = await TestFixture.CreateAsync();
         var state = fixture.Shell.ConnectionGameSharedState;
-        state.ConnectAddress = "127.0.0.1:5555";
+        state.ConnectAddress = TestConnectionFixtureSupport.ReadyConnectAddress;
         state.ConnectConfig = "MuMuEmulator12";
         state.AdbPath = @"D:\Program Files\Netease\MuMuPlayer-12.0\shell\.\adb.exe";
         state.MacUseBundledAdb = false;
@@ -733,7 +772,7 @@ public sealed class SettingsModuleAK1FeatureTests
     {
         await using var fixture = await TestFixture.CreateAsync();
         var state = fixture.Shell.ConnectionGameSharedState;
-        state.ConnectAddress = "127.0.0.1:5555";
+        state.ConnectAddress = TestConnectionFixtureSupport.ReadyConnectAddress;
         state.ConnectConfig = "General";
         state.TouchMode = "maatouch";
         state.AdbLiteEnabled = true;
@@ -742,10 +781,11 @@ public sealed class SettingsModuleAK1FeatureTests
 
         await fixture.Shell.ConnectAsync();
 
-        var applied = Assert.IsType<CoreInstanceOptions>(fixture.Bridge.LastAppliedInstanceOptions);
-        Assert.Equal("maatouch", applied.TouchMode);
-        Assert.True(applied.AdbLiteEnabled);
-        Assert.True(applied.KillAdbOnExit);
+        var extras = Assert.IsType<CoreConnectionExtras>(fixture.Bridge.LastConnectionInfo?.Extras);
+        Assert.Equal("maatouch", extras.TouchMode);
+        Assert.True(extras.AdbLiteEnabled);
+
+        Assert.True(extras.KillAdbOnExit);
     }
 
     [Fact]
@@ -893,7 +933,8 @@ public sealed class SettingsModuleAK1FeatureTests
             TaskQueueFeatureService taskQueue,
             MAAUnifiedRuntime runtime,
             MainShellViewModel shell,
-            FakeBridge bridge)
+            FakeBridge bridge,
+            string readyAdbPath)
         {
             Root = root;
             Config = config;
@@ -901,6 +942,7 @@ public sealed class SettingsModuleAK1FeatureTests
             Runtime = runtime;
             Shell = shell;
             Bridge = bridge;
+            ReadyAdbPath = readyAdbPath;
         }
 
         public string Root { get; }
@@ -917,6 +959,8 @@ public sealed class SettingsModuleAK1FeatureTests
 
         public FakeBridge Bridge { get; }
 
+        public string ReadyAdbPath { get; }
+
         public static async Task<TestFixture> CreateAsync()
         {
             var root = Path.Combine(Path.GetTempPath(), "maa-unified-tests", Guid.NewGuid().ToString("N"));
@@ -931,6 +975,7 @@ public sealed class SettingsModuleAK1FeatureTests
                 log,
                 root);
             await config.LoadOrBootstrapAsync();
+            var readyAdbPath = await TestConnectionFixtureSupport.PrepareReadyRuntimeAsync(root, config, "settings-ak1-ready");
 
             var bridge = new FakeBridge();
             var session = new UnifiedSessionService(bridge, config, log, new SessionStateMachine());
@@ -948,7 +993,7 @@ public sealed class SettingsModuleAK1FeatureTests
             };
 
             var capability = new PlatformCapabilityFeatureService(platform, diagnostics);
-            var connectFeatureService = new ConnectFeatureService(session, config);
+            var connectFeatureService = new ConnectFeatureService(session, config, log, bridge, root);
             var shellFeatureService = new ShellFeatureService(connectFeatureService);
             var runtime = new MAAUnifiedRuntime
             {
@@ -976,7 +1021,7 @@ public sealed class SettingsModuleAK1FeatureTests
             var shell = new MainShellViewModel(runtime);
             InvokePrivateMethod(shell, "SyncConnectionFromProfile");
 
-            return new TestFixture(root, config, taskQueue, runtime, shell, bridge);
+            return new TestFixture(root, config, taskQueue, runtime, shell, bridge, readyAdbPath);
         }
 
         public UnifiedProfile GetCurrentProfile()

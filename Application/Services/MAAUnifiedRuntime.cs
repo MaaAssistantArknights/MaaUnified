@@ -172,7 +172,12 @@ public static class MAAUnifiedRuntimeFactory
             logService,
             platform.GpuCapabilityService);
 
-        var connectFeatureService = new ConnectFeatureService(sessionService, configService);
+        var connectFeatureService = new ConnectFeatureService(
+            sessionService,
+            configService,
+            logService,
+            bridge,
+            runtimeBaseDirectory);
         var shellFeatureService = new ShellFeatureService(connectFeatureService);
         var taskQueueFeatureService = new TaskQueueFeatureService(sessionService, configService);
         var copilotFeatureService = new CopilotFeatureService();

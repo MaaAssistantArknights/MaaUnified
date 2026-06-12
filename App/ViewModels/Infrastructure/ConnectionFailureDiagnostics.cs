@@ -15,6 +15,7 @@ public enum ConnectionFailureCategory
     EmulatorPathInvalid,
     ConnectTimeout,
     AdbDeviceUnavailable,
+    AddressOrPortUnavailable,
     TouchModeUnavailable,
     CoreConnectFailed,
     CoreUnavailable,
@@ -30,7 +31,8 @@ public sealed record AdbCommandFailureInfo(
     int? ExitCode,
     string? StandardError,
     string? StandardOutput,
-    string? ExceptionMessage = null)
+    string? ExceptionMessage = null,
+    string? ResolutionDiagnosticContext = null)
 {
     public bool Success => ExitCode == 0 && string.IsNullOrWhiteSpace(ExceptionMessage);
 
@@ -51,6 +53,12 @@ public sealed record AdbCommandFailureInfo(
         if (!string.IsNullOrWhiteSpace(ExceptionMessage))
         {
             builder.AppendLine($"Exception: {ExceptionMessage.Trim()}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(ResolutionDiagnosticContext))
+        {
+            builder.AppendLine("ADB resolution:");
+            builder.AppendLine(ResolutionDiagnosticContext.Trim());
         }
 
         if (!string.IsNullOrWhiteSpace(StandardError))
@@ -102,13 +110,13 @@ public static class ConnectionFailureDiagnosticBuilder
         string? language = null)
     {
         var attempts = candidateFailures?.ToList() ?? [];
-        var details = BuildDetails(connectResult, attempts, adbCommandFailure);
+        var details = BuildDetails(connectResult, state, attempts, adbCommandFailure);
         var fallbackMessage = BuildGenericMessage(state, language);
         var fallbackSuggestion = Select(language, "请检查连接设置，尝试重启模拟器与 ADB；仍失败时重启电脑。", "Check connection settings, try restarting the emulator and ADB, then reboot if it still fails.");
 
         var code = connectResult.Error?.Code ?? string.Empty;
         var messageText = connectResult.Message ?? string.Empty;
-        var rawText = FirstNonEmpty(connectResult.Error?.Details, connectResult.Message) ?? string.Empty;
+        var rawText = string.Join('\n', connectResult.Message, connectResult.Error?.Details);
         var extracted = ExtractCoreReason(connectResult.Error?.Details);
 
         if (IsCode(code, nameof(CoreErrorCode.ConnectTimeout)))
@@ -128,6 +136,26 @@ public static class ConnectionFailureDiagnosticBuilder
                 ConnectionFailureCategory.TouchModeUnavailable,
                 Select(language, "当前触控模式不可用。", "The current touch mode is not available."),
                 Select(language, "请前往连接设置切换其他触控模式后重试。", "Switch to another touch mode in connection settings, then try again."),
+                details);
+        }
+
+        if (LooksLikeAddressOrPortUnavailable(rawText) || LooksLikeAddressOrPortUnavailable(extracted))
+        {
+            return new ConnectionFailureDiagnostic(
+                true,
+                ConnectionFailureCategory.AddressOrPortUnavailable,
+                Select(language, "无法连接到这个地址或端口。", "Could not connect to this address or port."),
+                Select(language, "请确认模拟器已启动，连接地址和端口正确；常见 ADB 端口为 5555，部分模拟器会使用 5554 等端口。", "Make sure the emulator is running and the address and port are correct; common ADB ports include 5555, while some emulators use ports such as 5554."),
+                details);
+        }
+
+        if (LooksLikeAdbDeviceUnavailable(rawText) || LooksLikeAdbDeviceUnavailable(extracted))
+        {
+            return new ConnectionFailureDiagnostic(
+                true,
+                ConnectionFailureCategory.AdbDeviceUnavailable,
+                Select(language, "ADB 未连接到可用设备。", "ADB is not connected to an available device."),
+                Select(language, "请在 adb devices 中确认设备为 device 状态；如果显示 unauthorized 请在模拟器内授权，如果显示 offline/no devices 请重启模拟器或 ADB 后重试。", "Check adb devices and make sure the target is in the device state. If it shows unauthorized, authorize it in the emulator; if it shows offline/no devices, restart the emulator or ADB and try again."),
                 details);
         }
 
@@ -151,7 +179,7 @@ public static class ConnectionFailureDiagnosticBuilder
                 details);
         }
 
-        if (LooksLikeConnectCommandNotConnected(extracted) || LooksLikeConnectCommandNotConnected(messageText))
+        if (LooksLikeConnectCommandNotConnected(extracted) || LooksLikeConnectCommandNotConnected(rawText))
         {
             return new ConnectionFailureDiagnostic(
                 true,
@@ -172,6 +200,16 @@ public static class ConnectionFailureDiagnosticBuilder
                     ConnectionFailureCategory.AdbCommandFailed,
                     Select(language, "ADB 启动失败。", "ADB failed to start."),
                     Select(language, "请检查连接设置中的 ADB 路径是否指向 adb 可执行文件，而不是 dmg、zip、目录或其他安装包。", "Check that the ADB path points to the adb executable, not a dmg, zip, folder, or installer package."),
+                    details);
+            }
+
+            if (ContainsAny(extracted, "InvalidConnection"))
+            {
+                return new ConnectionFailureDiagnostic(
+                    true,
+                    ConnectionFailureCategory.AddressOrPortUnavailable,
+                    Select(language, "连接配置无效。", "The connection configuration is invalid."),
+                    Select(language, "请检查连接地址格式、端口、连接类型和 ADB 路径后重试。", "Check the address format, port, connection type, and ADB path, then try again."),
                     details);
             }
 
@@ -305,6 +343,62 @@ public static class ConnectionFailureDiagnosticBuilder
             "No route to host",
             "timed out");
 
+    private static bool LooksLikeAdbDeviceUnavailable(string? value)
+        => ContainsAny(
+            value,
+            "device unauthorized",
+            "unauthorized",
+            "device offline",
+            "offline",
+            "no devices",
+            "no device",
+            "no such device")
+        || LooksLikeEmptyAdbDevicesList(value);
+
+    private static bool LooksLikeEmptyAdbDevicesList(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)
+            || !value.Contains("List of devices attached", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var lines = value.ReplaceLineEndings("\n").Split('\n');
+        for (var index = 0; index < lines.Length; index++)
+        {
+            if (!lines[index].Contains("List of devices attached", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            return lines.Skip(index + 1)
+                .Select(static line => line.Trim())
+                .Where(static line => line.Length > 0)
+                .All(static line => line.Contains(':', StringComparison.Ordinal)
+                    || line.StartsWith("adb ", StringComparison.OrdinalIgnoreCase));
+        }
+
+        return false;
+    }
+
+    private static bool LooksLikeAddressOrPortUnavailable(string? value)
+        => ContainsAny(
+            value,
+            "tcp-probe-failed",
+            "failed a quick TCP probe",
+            "probe=tcp",
+            "Connection refused",
+            "No route to host",
+            "unable to connect",
+            "failed to connect",
+            "cannot connect",
+            "timed out",
+            "address already in use",
+            "InvalidConnection",
+            "invalid connection",
+            "invalid address",
+            "invalid port");
+
     private static string BuildAdbFailureSearchText(AdbCommandFailureInfo failure)
         => string.Join(
             "\n",
@@ -326,10 +420,30 @@ public static class ConnectionFailureDiagnosticBuilder
 
     private static string BuildDetails(
         UiOperationResult connectResult,
+        ConnectionGameSharedStateViewModel? state,
         IReadOnlyList<ConnectionAttemptFailure> candidateFailures,
         AdbCommandFailureInfo? adbCommandFailure)
     {
         var builder = new StringBuilder();
+        if (state is not null)
+        {
+            var effectiveAdbPath = state.ResolveEffectiveAdbPath(updateStateWhenResolved: false);
+            var connectionInfo = state.BuildCoreConnectionInfo(effectiveAdbPath: effectiveAdbPath);
+            var extras = connectionInfo.Extras ?? CoreConnectionExtras.Empty;
+            var fallback = !string.IsNullOrWhiteSpace(extras.FallbackStrategy)
+                ? extras.FallbackStrategy
+                : $"configured:{extras.TouchMode ?? "MaaFwAdb"}/adbLite={extras.AdbLiteEnabled}";
+            builder.AppendLine("Effective connection configuration:");
+            builder.AppendLine($"ADB: {connectionInfo.AdbPath ?? "<system adb>"}");
+            builder.AppendLine($"Address: {connectionInfo.Address}");
+            builder.AppendLine($"Connect config: {connectionInfo.ConnectConfig}");
+            builder.AppendLine($"Fallback: {fallback}");
+            builder.AppendLine($"Configured: touch={extras.ConfiguredTouchMode ?? extras.TouchMode ?? "MaaFwAdb"}, adbLite={extras.ConfiguredAdbLiteEnabled ?? extras.AdbLiteEnabled}");
+            builder.AppendLine($"Touch/controller fallback: touch={extras.TouchMode ?? "<default>"}, adbLite={extras.AdbLiteEnabled}, killAdbOnExit={extras.KillAdbOnExit}");
+            builder.AppendLine($"Extras/clientType: macBundledAdb={extras.MacUseBundledAdb}, MuMu={extras.MuMu12ExtrasEnabled}:{extras.MuMu12EmulatorPath ?? "<empty>"}:{extras.MuMuBridgeConnection}:{extras.MuMu12Index ?? "<empty>"}, LD={extras.LdPlayerExtrasEnabled}:{extras.LdPlayerEmulatorPath ?? "<empty>"}:{extras.LdPlayerManualSetIndex}:{extras.LdPlayerIndex ?? "<empty>"}, Attach={extras.AttachWindowScreencapMethod ?? "<empty>"}:{extras.AttachWindowMouseMethod ?? "<empty>"}:{extras.AttachWindowKeyboardMethod ?? "<empty>"}, clientType={extras.ClientType ?? "<empty>"}");
+            builder.AppendLine();
+        }
+
         if (adbCommandFailure is not null)
         {
             builder.AppendLine(adbCommandFailure.BuildDetails());

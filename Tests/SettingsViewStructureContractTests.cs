@@ -71,7 +71,13 @@ public sealed class SettingsViewStructureContractTests
 
         var connect = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "ConnectSettingsView.axaml"));
         Assert.Equal(2, Regex.Matches(connect, "IsVisible=\"\\{Binding ShowEmulatorExtrasSection\\}\"").Count);
-        Assert.DoesNotContain("Classes=\"settings-page-column-stack settings-page-branch-block connect-settings-section\"\n                    IsVisible=\"{Binding IsAdbConnectionMode}\"", connect, StringComparison.Ordinal);
+        var emulatorExtrasSectionTag = Assert.Single(
+            Regex.Matches(connect, "<controls:AdaptiveSpacingStackPanel[^>]*Classes=\"settings-page-column-stack settings-page-branch-block connect-settings-section\"[^>]*>")
+                .Select(static match => match.Value),
+            static tag => tag.Contains("IsVisible=\"{Binding ShowEmulatorExtrasSection}\"", StringComparison.Ordinal));
+        Assert.Contains("Classes=\"settings-page-column-stack settings-page-branch-block connect-settings-section\"", emulatorExtrasSectionTag, StringComparison.Ordinal);
+        Assert.Contains("IsVisible=\"{Binding ShowEmulatorExtrasSection}\"", emulatorExtrasSectionTag, StringComparison.Ordinal);
+        Assert.DoesNotContain("IsVisible=\"{Binding IsAdbConnectionMode}\"", emulatorExtrasSectionTag, StringComparison.Ordinal);
 
         var achievement = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "AchievementSettingsView.axaml"));
         Assert.Contains("IsVisible=\"{Binding CanEditAchievementPopupAutoClose}\"", achievement, StringComparison.Ordinal);
@@ -472,6 +478,7 @@ public sealed class SettingsViewStructureContractTests
         var root = GetMaaUnifiedRoot();
         var script = File.ReadAllText(Path.Combine(root, "CI", "create-macos-app-dmg.sh"));
         var backgroundScript = File.ReadAllText(Path.Combine(root, "CI", "create-dmg-background.py"));
+        var ciWorkflow = File.ReadAllText(Path.Combine(root, "CI", "ci-avalonia.yml"));
 
         Assert.Contains("com.apple.security.cs.allow-jit", script, StringComparison.Ordinal);
         Assert.Contains("com.apple.security.cs.allow-unsigned-executable-memory", script, StringComparison.Ordinal);
@@ -487,6 +494,11 @@ public sealed class SettingsViewStructureContractTests
         Assert.Contains("hdiutil convert \"$dmg_rw_path\" -format UDZO", script, StringComparison.Ordinal);
         Assert.Contains("hdiutil verify \"$dmg_path\"", script, StringComparison.Ordinal);
         Assert.Contains("write_dmg_install_note()", script, StringComparison.Ordinal);
+        Assert.Contains("macos_adb_control_unit_library_name=\"libMaaAdbControlUnit.dylib\"", script, StringComparison.Ordinal);
+        Assert.Contains("macOS safe RawByNc fallback requires $macos_adb_control_unit_library_name beside $macos_core_library_name", script, StringComparison.Ordinal);
+        Assert.Contains("test -f \"$macos_dir/$macos_adb_control_unit_library_name\"", script, StringComparison.Ordinal);
+        Assert.Contains("libMaaAdbControlUnit.dylib not found in macOS staging root", ciWorkflow, StringComparison.Ordinal);
+        Assert.Contains("macOS safe RawByNc fallback requires it beside libMaaCore.dylib", ciWorkflow, StringComparison.Ordinal);
         Assert.Contains("Installation Notes.txt", script, StringComparison.Ordinal);
         Assert.Contains("MAAUnified macOS インストールメモ", script, StringComparison.Ordinal);
         Assert.Contains("MAAUnified macOS 설치 안내", script, StringComparison.Ordinal);
@@ -510,6 +522,67 @@ public sealed class SettingsViewStructureContractTests
         Assert.Contains("rect(commandBoxX, 260, commandBoxWidth, 106, commandBackground)", backgroundScript, StringComparison.Ordinal);
         Assert.Contains("let commandBoxWidth: CGFloat = 430", backgroundScript, StringComparison.Ordinal);
         Assert.Contains("let commandBoxX: CGFloat = 24", backgroundScript, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void MacOSAppPublish_ShouldCopyMaaAdbControlUnitToPublishRoot()
+    {
+        var root = GetMaaUnifiedRoot();
+        var appProject = File.ReadAllText(Path.Combine(root, "App", "MAAUnified.App.csproj"));
+
+        Assert.Contains("CopyMacMaaAdbControlUnitToPublishRoot", appProject, StringComparison.Ordinal);
+        Assert.Contains("AfterTargets=\"Publish\"", appProject, StringComparison.Ordinal);
+        Assert.Contains("libMaaAdbControlUnit.dylib", appProject, StringComparison.Ordinal);
+        Assert.Contains("libMaaCore.dylib", appProject, StringComparison.Ordinal);
+        Assert.Contains("MaaUnifiedMacAdbControlUnitSource", appProject, StringComparison.Ordinal);
+        Assert.Contains("install", appProject, StringComparison.Ordinal);
+        Assert.Contains("publish", appProject, StringComparison.Ordinal);
+        Assert.Contains("build", appProject, StringComparison.Ordinal);
+        Assert.Contains("RelWithDebInfo", appProject, StringComparison.Ordinal);
+        Assert.Contains("Debug", appProject, StringComparison.Ordinal);
+        Assert.Contains("DestinationFiles=\"$(_MaaUnifiedMacAdbControlUnitDestination)\"", appProject, StringComparison.Ordinal);
+        Assert.Contains("temporary RawByNc guard requires libMaaAdbControlUnit.dylib beside it", appProject, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void MacOSCIWorkflow_ShouldDownloadMaaFrameworkAdbControlUnitIntoInstall()
+    {
+        var maaUnifiedRoot = GetMaaUnifiedRoot();
+        var hostRoot = TestRepoLayout.GetHostRepoRoot();
+        var workflowPaths = new[]
+        {
+            Path.Combine(maaUnifiedRoot, "CI", "ci-avalonia.yml"),
+            Path.Combine(hostRoot, ".github", "workflows", "ci-avalonia.yml"),
+            Path.Combine(hostRoot, ".github", "workflows", "release-maaunified.yml"),
+        };
+
+        foreach (var workflowPath in workflowPaths)
+        {
+            var workflow = File.ReadAllText(workflowPath);
+
+            Assert.Contains("Download MaaFramework ADB control unit (macOS)", workflow, StringComparison.Ordinal);
+            Assert.Contains("uses: robinraju/release-downloader@v1", workflow, StringComparison.Ordinal);
+            Assert.Contains("repository: MaaXYZ/MaaFramework", workflow, StringComparison.Ordinal);
+            Assert.Contains("latest: true", workflow, StringComparison.Ordinal);
+            Assert.Contains("*macos-x86_64*.zip", workflow, StringComparison.Ordinal);
+            Assert.Contains("*macos-aarch64*.zip", workflow, StringComparison.Ordinal);
+            Assert.Contains("extract: true", workflow, StringComparison.Ordinal);
+            Assert.Contains("out-file-path: MaaFramework-temp", workflow, StringComparison.Ordinal);
+            Assert.Contains("control_units=(MaaFramework-temp/bin/*AdbControlUnit*)", workflow, StringComparison.Ordinal);
+            Assert.Contains("cp -f \"${control_units[@]}\" install/", workflow, StringComparison.Ordinal);
+            Assert.Contains("test -f install/libMaaAdbControlUnit.dylib", workflow, StringComparison.Ordinal);
+            Assert.True(
+                workflow.IndexOf("Build MaaCore runtime", StringComparison.Ordinal)
+                    < workflow.IndexOf("Download MaaFramework ADB control unit (macOS)", StringComparison.Ordinal),
+                $"{workflowPath} should download MaaFramework after building MaaCore.");
+            Assert.True(
+                workflow.IndexOf("Install MaaFramework ADB control unit (macOS)", StringComparison.Ordinal)
+                    < workflow.IndexOf("Publish MAAUnified app", StringComparison.Ordinal),
+                $"{workflowPath} should install MaaFramework before publishing MAAUnified.");
+        }
+
+        var appProject = File.ReadAllText(Path.Combine(maaUnifiedRoot, "App", "MAAUnified.App.csproj"));
+        Assert.DoesNotContain("release-downloader", appProject, StringComparison.Ordinal);
     }
 
     [Fact]

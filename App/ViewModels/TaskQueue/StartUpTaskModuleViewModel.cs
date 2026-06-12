@@ -40,6 +40,7 @@ public sealed class StartUpTaskModuleViewModel : TypedTaskModuleViewModelBase<St
         ("minitouch", "StartUp.Option.TouchMode.MiniTouch", "Minitouch (Default)"),
         ("maatouch", "StartUp.Option.TouchMode.MaaTouch", "MaaTouch (Experimental)"),
         ("adb", "StartUp.Option.TouchMode.AdbTouch", "ADB Input (Deprecated)"),
+        ("MaaFwAdb", "StartUp.Option.TouchMode.MaaFwAdbTouch", "MaaFramework (Experimental)"),
     ];
 
     private static readonly (string Value, string TextKey, string Fallback)[] AttachWindowScreencapOptionSpecs =

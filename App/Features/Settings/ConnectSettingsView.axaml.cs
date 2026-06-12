@@ -1,16 +1,15 @@
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Net.Http;
 using System.Runtime.InteropServices;
-using System.Text;
 using System.Text.Json;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Media.Imaging;
+using Avalonia.Platform;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using MAAUnified.Application.Models;
@@ -20,6 +19,7 @@ using MAAUnified.App.Services;
 using MAAUnified.App.Views;
 using MAAUnified.App.ViewModels.Infrastructure;
 using MAAUnified.App.ViewModels.Settings;
+using MAAUnified.Application.Services.Features;
 using MAAUnified.Application.Services.Localization;
 using MAAUnified.Compat.Runtime;
 
@@ -27,6 +27,11 @@ namespace MAAUnified.App.Features.Settings;
 
 public partial class ConnectSettingsView : UserControl
 {
+    private const int ScreenshotPreviewWidth = 1280;
+    private const int ScreenshotPreviewHeight = 720;
+    private const int ScreenshotPreviewChannels = 3;
+    private static readonly TimeSpan ScreenshotTestConnectTimeout = TimeSpan.FromSeconds(20);
+    private const int ScreenshotTestSampleCount = 3;
     private ScreenshotPreviewWindow? _screenshotPreviewWindow;
 
     public ConnectSettingsView()
@@ -179,58 +184,41 @@ public partial class ConnectSettingsView : UserControl
         try
         {
             vm.TestLinkInfo = T("Settings.Connect.Status.ConnectingEmulator");
-            LogScreenshotTestEvent("start", vm, "begin", message: "trying connection with current settings");
-            var connectResult = await ConnectWithCurrentSettingsAsync(vm);
-            if (!connectResult.Success)
+            LogScreenshotTestEvent("start", vm, "begin", message: "trying connection and screenshot with current settings");
+            var testResult = await RunScreenshotTestWithCurrentSettingsAsync(vm);
+            if (!testResult.Success)
             {
-                var failureMessage = BuildConnectFailureMessage(vm, connectResult);
                 LogScreenshotTestEvent(
-                    "connect",
+                    "test",
                     vm,
                     "failed",
-                    message: connectResult.Message,
-                    errorCode: connectResult.Error?.Code);
-                vm.TestLinkInfo = failureMessage;
+                    message: testResult.Result.Message,
+                    errorCode: testResult.Result.Error?.Code,
+                    candidate: testResult.SuccessfulAddress);
+                vm.TestLinkInfo = BuildScreenshotTestFailureStatus(testResult.Result);
+                vm.TestLinkInfoSeverity = BuildScreenshotTestFailureSeverity(testResult.Result);
                 await App.Runtime.DialogFeatureService.ReportErrorAsync(
                     "Settings.Connect.ScreenshotTest",
                     UiOperationResult.Fail(
                         UiErrorCode.ConnectFailed,
-                        failureMessage,
-                        connectResult.Error?.Details));
+                        testResult.Result.Message,
+                        testResult.Result.Error?.Details));
                 return;
             }
 
-            LogScreenshotTestEvent("connect", vm, "succeeded", message: "starting 3x GetImage probes");
-
-            var elapsedSamples = new List<long>(3);
-            byte[]? latestImage = null;
-            for (var i = 0; i < 3; i++)
+            if (!string.IsNullOrWhiteSpace(testResult.SuccessfulAddress))
             {
-                var watch = Stopwatch.StartNew();
-                var imageResult = await App.Runtime.CoreBridge.GetImageAsync();
-                watch.Stop();
-                if (!imageResult.Success || imageResult.Value is null || imageResult.Value.Length == 0)
-                {
-                    var errorMessage = imageResult.Error?.Message ?? T("Settings.Connect.Error.GetImageFailed");
-                    LogScreenshotTestEvent(
-                        "capture",
-                        vm,
-                        "failed",
-                        message: errorMessage,
-                        errorCode: imageResult.Error is null ? null : imageResult.Error.Code.ToString(),
-                        sampleIndex: i + 1,
-                        samplesMs: elapsedSamples);
-                    vm.TestLinkInfo = Tf("Settings.Connect.Error.ScreenshotTestFailed", errorMessage);
-                    return;
-                }
+                vm.ConnectAddress = testResult.SuccessfulAddress;
+            }
 
-                latestImage = imageResult.Value;
-                elapsedSamples.Add(watch.ElapsedMilliseconds);
+            var elapsedSamples = testResult.Screenshot?.SampleMilliseconds ?? [];
+            for (var i = 0; i < elapsedSamples.Count; i++)
+            {
                 LogScreenshotTestEvent(
                     "capture",
                     vm,
                     "sample_succeeded",
-                    message: $"{watch.ElapsedMilliseconds} ms",
+                    message: $"{elapsedSamples[i]} ms",
                     sampleIndex: i + 1,
                     samplesMs: elapsedSamples);
             }
@@ -247,7 +235,7 @@ public partial class ConnectSettingsView : UserControl
                 message: vm.ScreencapCost,
                 samplesMs: elapsedSamples);
 
-            if (latestImage is { Length: > 0 })
+            if (testResult.Screenshot?.LatestImageBgr is { Length: > 0 } latestImage)
             {
                 ShowOrUpdateScreenshotPreview(latestImage);
             }
@@ -260,7 +248,8 @@ public partial class ConnectSettingsView : UserControl
                 "failed",
                 message: ex.Message,
                 errorCode: ex.GetType().Name);
-            vm.TestLinkInfo = Tf("Settings.Connect.Error.ScreenshotTestException", ex.Message);
+            vm.TestLinkInfo = T("Settings.Connect.Error.ConnectionFailedShort", "Connection failed.");
+            vm.TestLinkInfoSeverity = TestLinkInfoSeverity.Error;
         }
     }
 
@@ -315,7 +304,7 @@ public partial class ConnectSettingsView : UserControl
         }
     }
 
-    private async Task<UiOperationResult> ConnectWithCurrentSettingsAsync(ConnectionGameSharedStateViewModel vm)
+    private async Task<ConnectionScreenshotTestOperationResult> RunScreenshotTestWithCurrentSettingsAsync(ConnectionGameSharedStateViewModel vm)
     {
         IAppDialogService dialogService = Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime
             ? new AvaloniaDialogService(App.Runtime)
@@ -329,47 +318,75 @@ public partial class ConnectSettingsView : UserControl
             CancellationToken.None);
         if (!consent.Success)
         {
-            return consent;
+            return new ConnectionScreenshotTestOperationResult(consent, null, null, []);
         }
 
         var effectiveAdbPath = vm.ResolveEffectiveAdbPath(updateStateWhenResolved: true);
-        var adbPath = string.IsNullOrWhiteSpace(effectiveAdbPath) ? null : effectiveAdbPath;
-        var instanceOptions = vm.BuildCoreInstanceOptions();
-        var candidates = vm.BuildConnectAddressCandidates(includeConfiguredAddress: true);
+        var candidatesResult = App.Runtime.ConnectFeatureService.BuildConnectionCandidates(
+            vm.ConnectAddress,
+            vm.ConnectConfig,
+            effectiveAdbPath,
+            vm.BuildCoreConnectionExtras(),
+            vm.AutoDetect,
+            vm.AlwaysAutoDetect,
+            includeConfiguredAddress: true,
+            timeout: ScreenshotTestConnectTimeout);
+        if (!candidatesResult.Success || candidatesResult.Value is null)
+        {
+            var failure = UiOperationResult.Fail(
+                candidatesResult.Error?.Code ?? UiErrorCode.ConnectFailed,
+                candidatesResult.Message,
+                candidatesResult.Error?.Details);
+            var diagnostic = BuildDiagnosticConnectFailureResult(vm, failure);
+            return new ConnectionScreenshotTestOperationResult(
+                diagnostic,
+                null,
+                null,
+                []);
+        }
+
+        var candidates = candidatesResult.Value;
         LogScreenshotTestEvent(
             "connect_candidates",
             vm,
             "prepared",
-            message: $"count={candidates.Count}, adb={adbPath ?? "<null>"}");
-        UiOperationResult? lastFailure = null;
-        var candidateFailures = new List<ConnectionAttemptFailure>();
+            message: $"count={candidates.Count}, adb={effectiveAdbPath ?? "<null>"}");
 
-        foreach (var candidate in candidates)
+        var result = await App.Runtime.ConnectFeatureService.RunScreenshotTestAsync(
+            candidates,
+            sampleCount: ScreenshotTestSampleCount,
+            cancellationToken: CancellationToken.None);
+        foreach (var failure in result.CandidateFailures)
         {
-            LogScreenshotTestEvent("connect_attempt", vm, "trying", candidate: candidate);
-            var result = await App.Runtime.ShellFeatureService.ConnectAsync(candidate, vm.ConnectConfig, adbPath, instanceOptions);
-            if (result.Success)
-            {
-                LogScreenshotTestEvent("connect_attempt", vm, "succeeded", candidate: candidate);
-                vm.ConnectAddress = candidate;
-                return result;
-            }
-
             LogScreenshotTestEvent(
                 "connect_attempt",
                 vm,
                 "failed",
-                message: result.Message,
-                errorCode: result.Error?.Code,
-                candidate: candidate);
-            lastFailure = result;
-            candidateFailures.Add(new ConnectionAttemptFailure(candidate, result));
+                message: failure.Result.Message,
+                errorCode: failure.Result.Error?.Code,
+                candidate: failure.Candidate);
         }
 
-        return BuildDiagnosticConnectFailureResult(
-            vm,
-            lastFailure ?? UiOperationResult.Fail(UiErrorCode.ConnectFailed, T("Settings.Connect.Error.ConnectionFailedShort")),
-            candidateFailures);
+        if (!result.Success)
+        {
+            if (string.Equals(result.Result.Error?.Code, UiErrorCode.OperationAlreadyRunning, StringComparison.Ordinal))
+            {
+                return result;
+            }
+
+            var candidateFailures = result.CandidateFailures
+                .Select(static failure => new ConnectionAttemptFailure(failure.Candidate, failure.Result))
+                .ToList();
+            var diagnostic = BuildDiagnosticConnectFailureResult(vm, result.Result, candidateFailures);
+            return new ConnectionScreenshotTestOperationResult(
+                diagnostic,
+                result.Screenshot,
+                result.SuccessfulAddress,
+                result.CandidateFailures);
+        }
+
+        LogScreenshotTestEvent("connect", vm, "succeeded", candidate: result.SuccessfulAddress);
+        return result;
     }
 
     private static async Task DownloadFileAsync(string url, string targetPath)
@@ -424,27 +441,6 @@ public partial class ConnectSettingsView : UserControl
         return string.Format(System.Globalization.CultureInfo.CurrentCulture, T(key), args);
     }
 
-    private string BuildConnectFailureMessage(
-        ConnectionGameSharedStateViewModel vm,
-        UiOperationResult connectResult)
-    {
-        var builder = new StringBuilder();
-        builder.AppendLine(Tf("Settings.Connect.Error.ConnectFailed", connectResult.Message));
-
-        if (!string.IsNullOrWhiteSpace(connectResult.Error?.Details))
-        {
-            builder.AppendLine(Tf("Settings.Connect.Error.Details", connectResult.Error.Details));
-        }
-
-        var settingsHint = vm.BuildConnectionSettingsHintMessage();
-        if (!string.IsNullOrWhiteSpace(settingsHint))
-        {
-            builder.AppendLine(settingsHint);
-        }
-
-        return builder.ToString().Trim();
-    }
-
     private UiOperationResult BuildDiagnosticConnectFailureResult(
         ConnectionGameSharedStateViewModel vm,
         UiOperationResult connectResult,
@@ -460,6 +456,16 @@ public partial class ConnectSettingsView : UserControl
             diagnostic.BuildDialogMessage(),
             diagnostic.Details);
     }
+
+    private string BuildScreenshotTestFailureStatus(UiOperationResult result)
+        => string.Equals(result.Error?.Code, UiErrorCode.OperationAlreadyRunning, StringComparison.Ordinal)
+            ? result.Message
+            : T("Settings.Connect.Error.ConnectionFailedShort", "Connection failed.");
+
+    private static TestLinkInfoSeverity BuildScreenshotTestFailureSeverity(UiOperationResult result)
+        => string.Equals(result.Error?.Code, UiErrorCode.OperationAlreadyRunning, StringComparison.Ordinal)
+            ? TestLinkInfoSeverity.Warning
+            : TestLinkInfoSeverity.Error;
 
     private static void LogScreenshotTestEvent(
         string stage,
@@ -490,8 +496,11 @@ public partial class ConnectSettingsView : UserControl
 
     private void ShowOrUpdateScreenshotPreview(byte[] imageBytes)
     {
-        using var stream = new MemoryStream(imageBytes, writable: false);
-        var bitmap = new Bitmap(stream);
+        var bitmap = CreateBgrPreviewBitmap(imageBytes);
+        if (bitmap is null)
+        {
+            return;
+        }
 
         EnsureScreenshotPreviewWindow();
         if (_screenshotPreviewWindow is null)
@@ -520,6 +529,37 @@ public partial class ConnectSettingsView : UserControl
         }
 
         _screenshotPreviewWindow.Show();
+    }
+
+    private static WriteableBitmap? CreateBgrPreviewBitmap(byte[] bgrData)
+    {
+        var stride = ScreenshotPreviewWidth * ScreenshotPreviewChannels;
+        var frameBytes = ScreenshotPreviewHeight * stride;
+        if (bgrData.Length < frameBytes)
+        {
+            return null;
+        }
+
+        var bitmap = new WriteableBitmap(
+            new PixelSize(ScreenshotPreviewWidth, ScreenshotPreviewHeight),
+            new Vector(96, 96),
+            PixelFormats.Bgr24,
+            AlphaFormat.Opaque);
+        using var framebuffer = bitmap.Lock();
+        if (framebuffer.RowBytes == stride)
+        {
+            Marshal.Copy(bgrData, 0, framebuffer.Address, frameBytes);
+            return bitmap;
+        }
+
+        for (var row = 0; row < ScreenshotPreviewHeight; row++)
+        {
+            var sourceOffset = row * stride;
+            var destination = IntPtr.Add(framebuffer.Address, row * framebuffer.RowBytes);
+            Marshal.Copy(bgrData, sourceOffset, destination, stride);
+        }
+
+        return bitmap;
     }
 
     private void EnsureScreenshotPreviewWindow()

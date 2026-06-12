@@ -16,6 +16,7 @@ using MAAUnified.Application.Services.Localization;
 using MAAUnified.Application.Services.TaskParams;
 using MAAUnified.CoreBridge;
 using MAAUnified.Compat.Constants;
+using MAAUnified.Compat.Runtime;
 using MAAUnified.Platform;
 
 namespace MAAUnified.Application.Services.Features;
@@ -24,12 +25,64 @@ public sealed class ConnectFeatureService : IConnectFeatureService
 {
     private readonly UnifiedSessionService _sessionService;
     private readonly UnifiedConfigurationService _configService;
-    private const string DefaultTouchMode = "minitouch";
+    private readonly UiLogService? _logService;
+    private readonly IMaaCoreBridge? _bridge;
+    private readonly string? _runtimeBaseDirectory;
+    private IMacRawByNcRiskConnectionPromptService _macRawByNcRiskPromptService;
+    private readonly SemaphoreSlim _lifecycleOperationLock = new(1, 1);
+    private readonly object _lifecycleOperationGate = new();
+    private readonly object _macRawByNcRiskDecisionGate = new();
+    private readonly AsyncLocal<int> _lifecycleOperationDepth = new();
+    private CancellationTokenSource? _activeLifecycleOperationCts;
+    private string? _activeLifecycleOperation;
+    private MacRawByNcRiskForceRunCacheEntry? _macRawByNcRiskForceRunCache;
+    private const string DefaultTouchMode = "MaaFwAdb";
+    private static readonly TimeSpan DefaultConnectBudget = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan LifecycleOperationWaitTimeout = TimeSpan.FromMilliseconds(250);
+    private static readonly TimeSpan QuickTcpProbeTimeout = TimeSpan.FromMilliseconds(750);
+    private static readonly TimeSpan QuickAdbDevicesTimeout = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan MacRawByNcForceRunCacheTtl = TimeSpan.FromMinutes(5);
+    private const string MaaFwAdbTouchMode = "MaaFwAdb";
+    private const string MacRawByNcGuardAppliedRecommendedStrategy = "temporary-macos-rawbync-guard:applied-recommended-profile";
+    private const string MacRawByNcGuardForceRunStrategy = "temporary-macos-rawbync-guard:force-run";
+    private const string MacRawByNcGuardReasonUserForced = "user-forced-risk-combination";
+    private const string MacRawByNcGuardReasonUserAppliedRecommendation = "user-applied-recommended-combination";
+    private static readonly IReadOnlyDictionary<string, IReadOnlyList<string>> DefaultAddressByConnectConfig =
+        new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["General"] = [string.Empty],
+            ["BlueStacks"] = ["127.0.0.1:5555", "127.0.0.1:5556", "127.0.0.1:5565", "127.0.0.1:5575", "127.0.0.1:5585", "127.0.0.1:5595", "127.0.0.1:5554"],
+            ["MuMuEmulator12"] = ["127.0.0.1:16384", "127.0.0.1:16416", "127.0.0.1:16448", "127.0.0.1:16480", "127.0.0.1:16512", "127.0.0.1:16544", "127.0.0.1:16576"],
+            ["LDPlayer"] = ["emulator-5554", "emulator-5556", "emulator-5558", "emulator-5560", "127.0.0.1:5555", "127.0.0.1:5557", "127.0.0.1:5559", "127.0.0.1:5561"],
+            ["AVD"] = ["emulator-5554", "emulator-5556"],
+            ["Nox"] = ["127.0.0.1:62001", "127.0.0.1:59865"],
+            ["XYAZ"] = ["127.0.0.1:21503"],
+            ["WSA"] = ["127.0.0.1:58526"],
+        };
 
-    public ConnectFeatureService(UnifiedSessionService sessionService, UnifiedConfigurationService configService)
+    public ConnectFeatureService(
+        UnifiedSessionService sessionService,
+        UnifiedConfigurationService configService,
+        UiLogService? logService = null,
+        IMaaCoreBridge? bridge = null,
+        string? runtimeBaseDirectory = null,
+        IMacRawByNcRiskConnectionPromptService? macRawByNcRiskPromptService = null)
     {
         _sessionService = sessionService;
         _configService = configService;
+        _logService = logService;
+        _bridge = bridge;
+        _runtimeBaseDirectory = string.IsNullOrWhiteSpace(runtimeBaseDirectory)
+            ? null
+            : RuntimeLayout.NormalizeDirectory(runtimeBaseDirectory);
+        _macRawByNcRiskPromptService = macRawByNcRiskPromptService
+            ?? NoOpMacRawByNcRiskConnectionPromptService.Instance;
+    }
+
+    public IMacRawByNcRiskConnectionPromptService MacRawByNcRiskPromptService
+    {
+        get => _macRawByNcRiskPromptService;
+        set => _macRawByNcRiskPromptService = value ?? NoOpMacRawByNcRiskConnectionPromptService.Instance;
     }
 
     public Task<CoreResult<bool>> ValidateAndConnectAsync(string address, string config, string? adbPath, CancellationToken cancellationToken = default)
@@ -42,12 +95,51 @@ public sealed class ConnectFeatureService : IConnectFeatureService
         CoreInstanceOptions? instanceOptions,
         CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(address))
+        var connectionInfo = new CoreConnectionInfo(
+            address,
+            config,
+            adbPath,
+            BuildConnectionExtras(instanceOptions, connectionExtras: null),
+            DefaultConnectBudget);
+        return await ValidateAndConnectAsync(connectionInfo, cancellationToken: cancellationToken);
+    }
+
+    public async Task<CoreResult<bool>> ValidateAndConnectAsync(
+        CoreConnectionInfo connectionInfo,
+        CancellationToken cancellationToken = default)
+    {
+        using var operation = await TryBeginLifecycleOperationAsync("Connect", cancellationToken).ConfigureAwait(false);
+        if (operation is null)
+        {
+            return CoreResult<bool>.Fail(new CoreError(
+                CoreErrorCode.InvalidRequest,
+                BuildLifecycleOperationBusyMessage("Connect")));
+        }
+
+        try
+        {
+            return await ValidateAndConnectCoreAsync(connectionInfo, "Connect", operation.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && operation.Token.IsCancellationRequested)
+        {
+            return CoreResult<bool>.Fail(new CoreError(
+                CoreErrorCode.ConnectTimeout,
+                "Connect was superseded by a newer lifecycle operation."));
+        }
+    }
+
+    private async Task<CoreResult<bool>> ValidateAndConnectCoreAsync(
+        CoreConnectionInfo connectionInfo,
+        string sourceScope,
+        CancellationToken cancellationToken,
+        MacRawByNcRiskPromptSession? riskPromptSession = null)
+    {
+        if (string.IsNullOrWhiteSpace(connectionInfo.Address))
         {
             return CoreResult<bool>.Fail(new CoreError(CoreErrorCode.InvalidRequest, "Address cannot be empty."));
         }
 
-        if (MacBundledAdbPolicy.IsBundledAdbPath(adbPath)
+        if (MacBundledAdbPolicy.IsBundledAdbPath(connectionInfo.AdbPath)
             && !MacBundledAdbPolicy.IsCurrentTermsAccepted(_configService.CurrentConfig))
         {
             return CoreResult<bool>.Fail(new CoreError(
@@ -55,13 +147,175 @@ public sealed class ConnectFeatureService : IConnectFeatureService
                 "macOS bundled ADB requires Android SDK Platform-Tools terms acceptance before use."));
         }
 
-        var apply = await ApplyResolvedInstanceOptionsAsync(instanceOptions, cancellationToken);
-        if (!apply.Success)
+        if (!MacBundledAdbPolicy.TryResolveAdbPathForConnect(connectionInfo.AdbPath, out var effectiveAdbPath, out var adbDiagnostic))
         {
-            return apply;
+            _logService?.Warn(adbDiagnostic ?? "ADB path is invalid for the current platform.");
+            return CoreResult<bool>.Fail(new CoreError(
+                CoreErrorCode.InvalidRequest,
+                adbDiagnostic ?? "ADB path is invalid for the current platform."));
         }
 
-        return await _sessionService.ConnectAsync(address, config, adbPath, cancellationToken);
+        if (MacBundledAdbPolicy.IsSupportedPlatform)
+        {
+            _logService?.Debug(MacBundledAdbPolicy.BuildResolutionContext(connectionInfo.AdbPath, effectiveAdbPath));
+        }
+
+        var normalized = NormalizeConnectionInfo(
+            connectionInfo with
+            {
+                Extras = BuildConnectionExtras(instanceOptions: null, connectionInfo.Extras),
+            },
+            effectiveAdbPath);
+
+        var riskResolution = await ResolveMacRawByNcRiskConnectionAsync(normalized, sourceScope, cancellationToken, riskPromptSession)
+            .ConfigureAwait(false);
+        if (!riskResolution.Success)
+        {
+            return CoreResult<bool>.Fail(riskResolution.Error!);
+        }
+
+        normalized = riskResolution.Value!;
+        LogEffectiveConnectionConfiguration(normalized);
+
+        var quickPrecheckPassed = false;
+        if (ShouldRunQuickConnectionPrecheck(normalized))
+        {
+            var quickScreen = await QuickScreenConnectionAsync(normalized, cancellationToken).ConfigureAwait(false);
+            if (!quickScreen.Success)
+            {
+                return quickScreen;
+            }
+
+            quickPrecheckPassed = true;
+        }
+
+        using var budgetCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        budgetCts.CancelAfter(NormalizeConnectBudget(normalized.Timeout));
+        try
+        {
+            var connect = await _sessionService.ConnectAsync(normalized, budgetCts.Token).ConfigureAwait(false);
+            return await EnrichEarlyCoreConnectFailureAsync(connect, normalized, quickPrecheckPassed, budgetCts.Token)
+                .ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && budgetCts.IsCancellationRequested)
+        {
+            return CoreResult<bool>.Fail(new CoreError(
+                CoreErrorCode.ConnectTimeout,
+                $"Connect timed out after {NormalizeConnectBudget(normalized.Timeout).TotalSeconds:N0}s. "
+                + "Possible causes: emulator not running, wrong address/port, ADB unreachable, touch/controller fallback unavailable, or MaaCore screencap negotiation stuck."));
+        }
+    }
+
+    private async Task<CoreResult<CoreConnectionInfo>> ResolveMacRawByNcRiskConnectionAsync(
+        CoreConnectionInfo connectionInfo,
+        string sourceScope,
+        CancellationToken cancellationToken,
+        MacRawByNcRiskPromptSession? riskPromptSession)
+    {
+        // Temporary product-side guard while MaaCore's macOS RawByNc/POSIX path is not fully fixed:
+        // warn the user at the shared connection boundary instead of silently rewriting their profile.
+        var extras = connectionInfo.Extras ?? CoreConnectionExtras.Empty;
+        if (!ShouldPromptMacRawByNcRisk(connectionInfo, extras))
+        {
+            return CoreResult<CoreConnectionInfo>.Ok(connectionInfo);
+        }
+
+        var riskKey = MacRawByNcRiskConnectionKey.Create(connectionInfo, extras, sourceScope);
+        MacRawByNcRiskConnectionDecision decision;
+        if (riskPromptSession?.HasDecision == true)
+        {
+            decision = riskPromptSession.Decision;
+        }
+        else if (TryGetRememberedMacRawByNcForceRun(riskKey))
+        {
+            decision = MacRawByNcRiskConnectionDecision.ForceRun;
+        }
+        else
+        {
+            var prompt = new MacRawByNcRiskConnectionPrompt(
+                sourceScope,
+                connectionInfo.Address,
+                connectionInfo.ConnectConfig,
+                extras.TouchMode,
+                extras.AdbLiteEnabled,
+                MaaFwAdbTouchMode,
+                RecommendedAdbLiteEnabled: true,
+                ReadCurrentLanguage());
+            decision = await _macRawByNcRiskPromptService.ConfirmAsync(prompt, cancellationToken).ConfigureAwait(false);
+            riskPromptSession?.Remember(decision);
+            if (decision == MacRawByNcRiskConnectionDecision.ForceRun)
+            {
+                RememberMacRawByNcForceRun(riskKey);
+            }
+        }
+
+        return decision switch
+        {
+            MacRawByNcRiskConnectionDecision.ApplyRecommended => await ApplyMacRawByNcRecommendedConnectionAsync(
+                connectionInfo,
+                extras,
+                cancellationToken).ConfigureAwait(false),
+            MacRawByNcRiskConnectionDecision.ForceRun => CoreResult<CoreConnectionInfo>.Ok(MarkMacRawByNcForceRun(connectionInfo, extras)),
+            _ => CoreResult<CoreConnectionInfo>.Fail(new CoreError(
+                CoreErrorCode.InvalidRequest,
+                "Connection canceled because the macOS RawByNc risk prompt was closed.")),
+        };
+    }
+
+    private async Task<CoreResult<CoreConnectionInfo>> ApplyMacRawByNcRecommendedConnectionAsync(
+        CoreConnectionInfo connectionInfo,
+        CoreConnectionExtras configuredExtras,
+        CancellationToken cancellationToken)
+    {
+        if (!_configService.TryGetCurrentProfile(out var profile))
+        {
+            return CoreResult<CoreConnectionInfo>.Fail(new CoreError(
+                CoreErrorCode.InvalidRequest,
+                "Current profile is missing; cannot apply the recommended macOS RawByNc connection settings."));
+        }
+
+        var configuredTouch = configuredExtras.TouchMode;
+        var configuredAdbLite = configuredExtras.AdbLiteEnabled;
+        profile.Values["AdbLiteEnabled"] = JsonValue.Create(true);
+        _configService.RevalidateCurrentConfig(logIssues: false);
+        await _configService.SaveAsync(cancellationToken).ConfigureAwait(false);
+        ClearRememberedMacRawByNcForceRun();
+
+        _logService?.Warn(
+            "macOS RawByNc temporary prompt applied recommendation: "
+            + $"profile={_configService.CurrentConfig.CurrentProfile}, touch={configuredTouch ?? "<default>"}, adbLite=True. "
+            + "This is a temporary measure until MaaCore fully fixes the macOS RawByNc/POSIX path.");
+
+        var effectiveExtras = configuredExtras with
+        {
+            AdbLiteEnabled = true,
+            FallbackStrategy = MacRawByNcGuardAppliedRecommendedStrategy,
+            ConfiguredTouchMode = configuredTouch,
+            ConfiguredAdbLiteEnabled = configuredAdbLite,
+            FallbackReason = MacRawByNcGuardReasonUserAppliedRecommendation,
+        };
+        return CoreResult<CoreConnectionInfo>.Ok(connectionInfo with { Extras = effectiveExtras });
+    }
+
+    private CoreConnectionInfo MarkMacRawByNcForceRun(
+        CoreConnectionInfo connectionInfo,
+        CoreConnectionExtras configuredExtras)
+    {
+        _logService?.Warn(
+            "macOS RawByNc temporary prompt force-run selected: "
+            + $"touch={configuredExtras.TouchMode ?? "<default>"}, adbLite={configuredExtras.AdbLiteEnabled}. "
+            + "Core may hit the known macOS RawByNc/POSIX issue; this does not modify the saved profile.");
+
+        return connectionInfo with
+        {
+            Extras = configuredExtras with
+            {
+                FallbackStrategy = MacRawByNcGuardForceRunStrategy,
+                ConfiguredTouchMode = configuredExtras.TouchMode,
+                ConfiguredAdbLiteEnabled = configuredExtras.AdbLiteEnabled,
+                FallbackReason = MacRawByNcGuardReasonUserForced,
+            },
+        };
     }
 
     public async Task<UiOperationResult> ConnectAsync(string address, string config, string? adbPath, CancellationToken cancellationToken = default)
@@ -76,6 +330,27 @@ public sealed class ConnectFeatureService : IConnectFeatureService
     {
         var result = await ValidateAndConnectAsync(address, config, adbPath, instanceOptions, cancellationToken);
         return UiOperationResult.FromCore(result, $"Connected to {address}");
+    }
+
+    public async Task<UiOperationResult> ConnectAsync(
+        CoreConnectionInfo connectionInfo,
+        CoreInstanceOptions? instanceOptions,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await ValidateAndConnectAsync(
+            connectionInfo with
+            {
+                Extras = BuildConnectionExtras(instanceOptions, connectionInfo.Extras),
+            },
+            cancellationToken);
+        return UiOperationResult.FromCore(result, $"Connected to {connectionInfo.Address}");
+    }
+
+    public async Task<UiOperationResult> ConnectAsync(
+        CoreConnectionInfo connectionInfo,
+        CancellationToken cancellationToken = default)
+    {
+        return await ConnectAsync(connectionInfo, instanceOptions: null, cancellationToken);
     }
 
     public Task<CoreResult<bool>> ApplyInstanceOptionsAsync(
@@ -93,20 +368,191 @@ public sealed class ConnectFeatureService : IConnectFeatureService
 
     public async Task<UiOperationResult> StartAsync(CancellationToken cancellationToken = default)
     {
-        var apply = await ApplyResolvedInstanceOptionsAsync(instanceOptions: null, cancellationToken);
+        using var operation = await TryBeginLifecycleOperationAsync("Start", cancellationToken).ConfigureAwait(false);
+        if (operation is null)
+        {
+            return UiOperationResult.Fail(UiErrorCode.OperationAlreadyRunning, BuildLifecycleOperationBusyMessage("Start"));
+        }
+
+        var apply = await ApplyResolvedInstanceOptionsAsync(instanceOptions: null, operation.Token);
         if (!apply.Success)
         {
             return UiOperationResult.FromCore(apply, "Core instance options updated.");
         }
 
-        var result = await _sessionService.StartAsync(cancellationToken);
+        var result = await _sessionService.StartAsync(operation.Token);
         return UiOperationResult.FromCore(result, "Task execution started.");
     }
 
     public async Task<UiOperationResult> StopAsync(CancellationToken cancellationToken = default)
     {
-        var result = await _sessionService.StopAsync(cancellationToken);
+        if (_sessionService.CurrentState == SessionState.Connecting)
+        {
+            var activeOperation = GetActiveLifecycleOperation();
+            if (!string.IsNullOrWhiteSpace(activeOperation)
+                && !string.Equals(activeOperation, "Connect", StringComparison.Ordinal)
+                && !string.Equals(activeOperation, "Stop", StringComparison.Ordinal))
+            {
+                return UiOperationResult.Fail(UiErrorCode.OperationAlreadyRunning, BuildLifecycleOperationBusyMessage("Stop"));
+            }
+
+            CancelActiveLifecycleOperation("Stop during Connecting");
+            var connectingStopResult = await _sessionService.StopAsync(cancellationToken).ConfigureAwait(false);
+            return UiOperationResult.FromCore(connectingStopResult, "Task execution stopped.");
+        }
+
+        using var operation = await TryBeginLifecycleOperationAsync("Stop", cancellationToken).ConfigureAwait(false);
+        if (operation is null)
+        {
+            return UiOperationResult.Fail(UiErrorCode.OperationAlreadyRunning, BuildLifecycleOperationBusyMessage("Stop"));
+        }
+
+        var result = await _sessionService.StopAsync(operation.Token);
         return UiOperationResult.FromCore(result, "Task execution stopped.");
+    }
+
+    public UiOperationResult<IReadOnlyList<CoreConnectionInfo>> BuildCurrentProfileConnectionCandidates(
+        bool includeConfiguredAddress = true)
+    {
+        if (!_configService.TryGetCurrentProfile(out var profile))
+        {
+            return UiOperationResult<IReadOnlyList<CoreConnectionInfo>>.Fail(
+                UiErrorCode.ProfileMissing,
+                "Current profile is missing.");
+        }
+
+        var connectConfig = ReadProfileString(profile, "ConnectConfig", ConfigurationKeys.ConnectConfig) ?? "General";
+        var configuredAddress = ReadProfileString(profile, "ConnectAddress", ConfigurationKeys.ConnectAddress) ?? "127.0.0.1:5555";
+        var adbPath = ResolveProfileAdbPath(profile);
+        var extras = ResolveConnectionExtrasFromConfig();
+        return BuildConnectionCandidates(
+            configuredAddress,
+            connectConfig,
+            adbPath,
+            extras,
+            ReadProfileBool(profile, "AutoDetect", ConfigurationKeys.AutoDetect, fallback: true),
+            ReadProfileBool(profile, "AlwaysAutoDetect", ConfigurationKeys.AlwaysAutoDetect),
+            includeConfiguredAddress,
+            DefaultConnectBudget);
+    }
+
+    public UiOperationResult<IReadOnlyList<CoreConnectionInfo>> BuildConnectionCandidates(
+        string configuredAddress,
+        string connectConfig,
+        string? adbPath,
+        CoreConnectionExtras? extras = null,
+        bool autoDetect = true,
+        bool alwaysAutoDetect = false,
+        bool includeConfiguredAddress = true,
+        TimeSpan? timeout = null)
+    {
+        var normalizedConfiguredAddress = NormalizeText(configuredAddress);
+        var normalizedConnectConfig = NormalizeText(connectConfig);
+        var addresses = BuildConnectAddressCandidates(
+            normalizedConfiguredAddress,
+            normalizedConnectConfig,
+            autoDetect,
+            alwaysAutoDetect);
+        var candidates = new List<CoreConnectionInfo>(addresses.Count);
+        foreach (var address in addresses)
+        {
+            if (!includeConfiguredAddress
+                && string.Equals(address, normalizedConfiguredAddress, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            candidates.Add(new CoreConnectionInfo(
+                address,
+                normalizedConnectConfig,
+                NormalizeNullableText(adbPath),
+                NormalizeConnectionExtras(extras ?? CoreConnectionExtras.Empty),
+                timeout ?? DefaultConnectBudget));
+        }
+
+        return UiOperationResult<IReadOnlyList<CoreConnectionInfo>>.Ok(candidates, "Connection candidates built.");
+    }
+
+    public async Task<ConnectionConnectOperationResult> ConnectCandidatesAsync(
+        IReadOnlyList<CoreConnectionInfo> candidates,
+        CancellationToken cancellationToken = default)
+    {
+        using var operation = await TryBeginLifecycleOperationAsync("Connect", cancellationToken).ConfigureAwait(false);
+        if (operation is null)
+        {
+            return new ConnectionConnectOperationResult(
+                UiOperationResult.Fail(UiErrorCode.OperationAlreadyRunning, BuildLifecycleOperationBusyMessage("Connect")),
+                null,
+                []);
+        }
+
+        return await ConnectCandidatesCoreAsync(candidates, "Connect", operation.Token).ConfigureAwait(false);
+    }
+
+    public async Task<ConnectionScreenshotTestOperationResult> RunScreenshotTestAsync(
+        IReadOnlyList<CoreConnectionInfo> candidates,
+        int sampleCount = 3,
+        CancellationToken cancellationToken = default)
+    {
+        using var operation = await TryBeginLifecycleOperationAsync("ScreenshotTest", cancellationToken).ConfigureAwait(false);
+        if (operation is null)
+        {
+            return new ConnectionScreenshotTestOperationResult(
+                UiOperationResult.Fail(UiErrorCode.OperationAlreadyRunning, BuildLifecycleOperationBusyMessage("ScreenshotTest")),
+                null,
+                null,
+                []);
+        }
+
+        if (_bridge is null)
+        {
+            return new ConnectionScreenshotTestOperationResult(
+                UiOperationResult.Fail(UiErrorCode.ConnectFailed, "Core bridge is unavailable for screenshot test."),
+                null,
+                null,
+                []);
+        }
+
+        sampleCount = Math.Clamp(sampleCount, 1, 10);
+        var connect = await ConnectCandidatesCoreAsync(candidates, "ScreenshotTest", operation.Token).ConfigureAwait(false);
+        if (!connect.Success)
+        {
+            return new ConnectionScreenshotTestOperationResult(
+                connect.Result,
+                null,
+                connect.SuccessfulAddress,
+                connect.CandidateFailures);
+        }
+
+        var samples = new List<long>(sampleCount);
+        byte[]? latestImage = null;
+        for (var index = 0; index < sampleCount; index++)
+        {
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+            var imageResult = await _bridge.GetImageBgrAsync(forceScreencap: true, operation.Token).ConfigureAwait(false);
+            watch.Stop();
+            if (!imageResult.Success || imageResult.Value is null || imageResult.Value.Length == 0)
+            {
+                var failure = UiOperationResult.Fail(
+                    imageResult.Error?.Code.ToString() ?? UiErrorCode.ConnectFailed,
+                    imageResult.Error?.Message ?? "Failed to capture screenshot.",
+                    imageResult.Error?.NativeDetails ?? imageResult.Error?.Exception);
+                return new ConnectionScreenshotTestOperationResult(
+                    failure,
+                    null,
+                    connect.SuccessfulAddress,
+                    connect.CandidateFailures);
+            }
+
+            latestImage = imageResult.Value;
+            samples.Add(watch.ElapsedMilliseconds);
+        }
+
+        return new ConnectionScreenshotTestOperationResult(
+            UiOperationResult.Ok("Screenshot test completed."),
+            new ConnectionScreenshotTestResult(samples, latestImage ?? []),
+            connect.SuccessfulAddress,
+            connect.CandidateFailures);
     }
 
     public async Task<UiOperationResult> WaitAndStopAsync(TimeSpan wait, CancellationToken cancellationToken = default)
@@ -166,6 +612,1112 @@ public sealed class ConnectFeatureService : IConnectFeatureService
         return state is SessionState.Running or SessionState.Stopping;
     }
 
+    private async Task<ConnectionConnectOperationResult> ConnectCandidatesCoreAsync(
+        IReadOnlyList<CoreConnectionInfo> candidates,
+        string sourceScope,
+        CancellationToken cancellationToken)
+    {
+        if (candidates.Count == 0)
+        {
+            return new ConnectionConnectOperationResult(
+                UiOperationResult.Fail(UiErrorCode.ConnectFailed, "No connection candidates were available."),
+                null,
+                []);
+        }
+
+        UiOperationResult? lastFailure = null;
+        var candidateFailures = new List<ConnectionCandidateAttempt>();
+        var riskPromptSession = new MacRawByNcRiskPromptSession();
+        foreach (var candidate in candidates)
+        {
+            UiOperationResult result;
+            try
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                result = UiOperationResult.FromCore(
+                    await ValidateAndConnectCoreAsync(candidate, sourceScope, cancellationToken, riskPromptSession).ConfigureAwait(false),
+                    $"Connected to {candidate.Address}");
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                result = UiOperationResult.Fail(
+                    UiErrorCode.ConnectFailed,
+                    "Connect was superseded by a newer lifecycle operation.");
+            }
+
+            if (result.Success)
+            {
+                return new ConnectionConnectOperationResult(result, candidate.Address, candidateFailures);
+            }
+
+            lastFailure = result;
+            candidateFailures.Add(new ConnectionCandidateAttempt(candidate.Address, result));
+            if (riskPromptSession.HasDecision
+                && riskPromptSession.Decision == MacRawByNcRiskConnectionDecision.Cancel)
+            {
+                break;
+            }
+        }
+
+        return new ConnectionConnectOperationResult(
+            lastFailure ?? UiOperationResult.Fail(UiErrorCode.ConnectFailed, "Connection failed."),
+            null,
+            candidateFailures);
+    }
+
+    private sealed class MacRawByNcRiskPromptSession
+    {
+        public bool HasDecision { get; private set; }
+
+        public MacRawByNcRiskConnectionDecision Decision { get; private set; }
+
+        public void Remember(MacRawByNcRiskConnectionDecision decision)
+        {
+            HasDecision = true;
+            Decision = decision;
+        }
+    }
+
+    private bool TryGetRememberedMacRawByNcForceRun(MacRawByNcRiskConnectionKey key)
+    {
+        lock (_macRawByNcRiskDecisionGate)
+        {
+            if (_macRawByNcRiskForceRunCache is not { } cache)
+            {
+                return false;
+            }
+
+            if (DateTimeOffset.UtcNow - cache.CreatedAtUtc > MacRawByNcForceRunCacheTtl)
+            {
+                _macRawByNcRiskForceRunCache = null;
+                return false;
+            }
+
+            return cache.Key.Equals(key);
+        }
+    }
+
+    private void RememberMacRawByNcForceRun(MacRawByNcRiskConnectionKey key)
+    {
+        lock (_macRawByNcRiskDecisionGate)
+        {
+            _macRawByNcRiskForceRunCache = new MacRawByNcRiskForceRunCacheEntry(key, DateTimeOffset.UtcNow);
+        }
+    }
+
+    private void ClearRememberedMacRawByNcForceRun()
+    {
+        lock (_macRawByNcRiskDecisionGate)
+        {
+            _macRawByNcRiskForceRunCache = null;
+        }
+    }
+
+    private readonly record struct MacRawByNcRiskForceRunCacheEntry(
+        MacRawByNcRiskConnectionKey Key,
+        DateTimeOffset CreatedAtUtc);
+
+    private readonly record struct MacRawByNcRiskConnectionKey(
+        string SourceScope,
+        string Address,
+        string ConnectConfig,
+        string AdbPath,
+        string TouchMode,
+        bool AdbLiteEnabled)
+    {
+        public static MacRawByNcRiskConnectionKey Create(
+            CoreConnectionInfo connectionInfo,
+            CoreConnectionExtras extras,
+            string sourceScope)
+        {
+            return new MacRawByNcRiskConnectionKey(
+                NormalizeKeyPart(sourceScope),
+                NormalizeKeyPart(connectionInfo.Address),
+                NormalizeKeyPart(connectionInfo.ConnectConfig),
+                NormalizeKeyPart(connectionInfo.AdbPath),
+                NormalizeKeyPart(extras.TouchMode),
+                extras.AdbLiteEnabled);
+        }
+
+        private static string NormalizeKeyPart(string? value)
+            => (value ?? string.Empty).Trim().ToUpperInvariant();
+    }
+
+    private async Task<LifecycleOperationLease?> TryBeginLifecycleOperationAsync(
+        string operationName,
+        CancellationToken cancellationToken)
+    {
+        if (_lifecycleOperationDepth.Value > 0)
+        {
+            CancellationTokenSource? activeCts;
+            lock (_lifecycleOperationGate)
+            {
+                activeCts = _activeLifecycleOperationCts;
+            }
+
+            _lifecycleOperationDepth.Value++;
+            return new LifecycleOperationLease(this, activeCts, nested: true);
+        }
+
+        if (!await _lifecycleOperationLock.WaitAsync(LifecycleOperationWaitTimeout, cancellationToken).ConfigureAwait(false))
+        {
+            return null;
+        }
+
+        var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        lock (_lifecycleOperationGate)
+        {
+            _activeLifecycleOperationCts = cts;
+            _activeLifecycleOperation = operationName;
+        }
+
+        _lifecycleOperationDepth.Value = 1;
+        return new LifecycleOperationLease(this, cts, nested: false);
+    }
+
+    private void EndLifecycleOperation(CancellationTokenSource? operationCts, bool nested)
+    {
+        if (nested)
+        {
+            _lifecycleOperationDepth.Value = Math.Max(0, _lifecycleOperationDepth.Value - 1);
+            return;
+        }
+
+        var shouldRelease = false;
+        lock (_lifecycleOperationGate)
+        {
+            if (ReferenceEquals(_activeLifecycleOperationCts, operationCts))
+            {
+                _activeLifecycleOperationCts = null;
+                _activeLifecycleOperation = null;
+                shouldRelease = true;
+            }
+        }
+
+        _lifecycleOperationDepth.Value = 0;
+        operationCts?.Dispose();
+        if (shouldRelease)
+        {
+            _lifecycleOperationLock.Release();
+        }
+    }
+
+    private void CancelActiveLifecycleOperation(string reason)
+    {
+        CancellationTokenSource? cts;
+        lock (_lifecycleOperationGate)
+        {
+            cts = _activeLifecycleOperationCts;
+            _activeLifecycleOperationCts = null;
+            _activeLifecycleOperation = null;
+        }
+
+        try
+        {
+            cts?.Cancel();
+            if (cts is not null)
+            {
+                _logService?.Info($"Connection lifecycle operation canceled: {reason}.");
+            }
+        }
+        catch (ObjectDisposedException)
+        {
+            // Operation already completed.
+        }
+
+        if (cts is not null)
+        {
+            _lifecycleOperationLock.Release();
+        }
+    }
+
+    private string? GetActiveLifecycleOperation()
+    {
+        lock (_lifecycleOperationGate)
+        {
+            return _activeLifecycleOperation;
+        }
+    }
+
+    private string BuildLifecycleOperationBusyMessage(string requestedOperation)
+    {
+        lock (_lifecycleOperationGate)
+        {
+            return string.IsNullOrWhiteSpace(_activeLifecycleOperation)
+                ? $"Connection lifecycle already running; `{requestedOperation}` could not start."
+                : $"Connection lifecycle already running `{_activeLifecycleOperation}`; `{requestedOperation}` could not start.";
+        }
+    }
+
+    private sealed class LifecycleOperationLease : IDisposable
+    {
+        private readonly ConnectFeatureService _owner;
+        private readonly CancellationTokenSource? _cts;
+        private readonly bool _nested;
+        private bool _disposed;
+
+        public LifecycleOperationLease(ConnectFeatureService owner, CancellationTokenSource? cts, bool nested)
+        {
+            _owner = owner;
+            _cts = cts;
+            _nested = nested;
+        }
+
+        public CancellationToken Token => _cts?.Token ?? CancellationToken.None;
+
+        public void Dispose()
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            _disposed = true;
+            _owner.EndLifecycleOperation(_cts, _nested);
+        }
+    }
+
+    private CoreConnectionInfo NormalizeConnectionInfo(
+        CoreConnectionInfo connectionInfo,
+        string? effectiveAdbPath)
+    {
+        var normalized = connectionInfo with
+        {
+            Address = NormalizeText(connectionInfo.Address),
+            ConnectConfig = NormalizeText(connectionInfo.ConnectConfig),
+        };
+        var extras = normalized.Extras ?? CoreConnectionExtras.Empty;
+
+        return new CoreConnectionInfo(
+            NormalizeText(normalized.Address),
+            NormalizeText(normalized.ConnectConfig),
+            NormalizeNullableText(effectiveAdbPath),
+            NormalizeConnectionExtras(extras),
+            NormalizeConnectBudget(normalized.Timeout));
+    }
+
+    private static CoreConnectionExtras NormalizeConnectionExtras(CoreConnectionExtras extras)
+        => new(
+            MacUseBundledAdb: extras.MacUseBundledAdb,
+            TouchMode: NormalizeNullableText(extras.TouchMode),
+            AdbLiteEnabled: extras.AdbLiteEnabled,
+            KillAdbOnExit: extras.KillAdbOnExit,
+            MuMu12ExtrasEnabled: extras.MuMu12ExtrasEnabled,
+            MuMu12EmulatorPath: NormalizeNullableText(extras.MuMu12EmulatorPath),
+            MuMuBridgeConnection: extras.MuMuBridgeConnection,
+            MuMu12Index: NormalizeNullableText(extras.MuMu12Index),
+            LdPlayerExtrasEnabled: extras.LdPlayerExtrasEnabled,
+            LdPlayerEmulatorPath: NormalizeNullableText(extras.LdPlayerEmulatorPath),
+            LdPlayerManualSetIndex: extras.LdPlayerManualSetIndex,
+            LdPlayerIndex: NormalizeNullableText(extras.LdPlayerIndex),
+            AttachWindowScreencapMethod: NormalizeNullableText(extras.AttachWindowScreencapMethod),
+            AttachWindowMouseMethod: NormalizeNullableText(extras.AttachWindowMouseMethod),
+            AttachWindowKeyboardMethod: NormalizeNullableText(extras.AttachWindowKeyboardMethod),
+            ClientType: NormalizeNullableText(extras.ClientType),
+            FallbackStrategy: NormalizeNullableText(extras.FallbackStrategy),
+            ConfiguredTouchMode: NormalizeNullableText(extras.ConfiguredTouchMode),
+            ConfiguredAdbLiteEnabled: extras.ConfiguredAdbLiteEnabled,
+            FallbackReason: NormalizeNullableText(extras.FallbackReason),
+            FallbackRequiredLibrary: NormalizeNullableText(extras.FallbackRequiredLibrary),
+            FallbackRequiredLibraryExists: extras.FallbackRequiredLibraryExists);
+
+    private CoreConnectionExtras BuildConnectionExtras(
+        CoreInstanceOptions? instanceOptions,
+        CoreConnectionExtras? connectionExtras)
+    {
+        var fromConfig = ResolveConnectionExtrasFromConfig();
+        var fallback = instanceOptions ?? new CoreInstanceOptions();
+        var incoming = connectionExtras ?? CoreConnectionExtras.Empty;
+        var hasIncoming = connectionExtras is not null;
+        return new CoreConnectionExtras(
+            MacUseBundledAdb: hasIncoming ? incoming.MacUseBundledAdb : fromConfig.MacUseBundledAdb,
+            TouchMode: PreferText(incoming.TouchMode, fallback.TouchMode, fromConfig.TouchMode),
+            AdbLiteEnabled: hasIncoming ? incoming.AdbLiteEnabled : (fallback.AdbLiteEnabled ?? fromConfig.AdbLiteEnabled),
+            KillAdbOnExit: hasIncoming ? incoming.KillAdbOnExit : (fallback.KillAdbOnExit ?? fromConfig.KillAdbOnExit),
+            MuMu12ExtrasEnabled: hasIncoming ? incoming.MuMu12ExtrasEnabled : fromConfig.MuMu12ExtrasEnabled,
+            MuMu12EmulatorPath: PreferText(incoming.MuMu12EmulatorPath, fromConfig.MuMu12EmulatorPath),
+            MuMuBridgeConnection: hasIncoming ? incoming.MuMuBridgeConnection : fromConfig.MuMuBridgeConnection,
+            MuMu12Index: PreferText(incoming.MuMu12Index, fromConfig.MuMu12Index),
+            LdPlayerExtrasEnabled: hasIncoming ? incoming.LdPlayerExtrasEnabled : fromConfig.LdPlayerExtrasEnabled,
+            LdPlayerEmulatorPath: PreferText(incoming.LdPlayerEmulatorPath, fromConfig.LdPlayerEmulatorPath),
+            LdPlayerManualSetIndex: hasIncoming ? incoming.LdPlayerManualSetIndex : fromConfig.LdPlayerManualSetIndex,
+            LdPlayerIndex: PreferText(incoming.LdPlayerIndex, fromConfig.LdPlayerIndex),
+            AttachWindowScreencapMethod: PreferText(incoming.AttachWindowScreencapMethod, fromConfig.AttachWindowScreencapMethod),
+            AttachWindowMouseMethod: PreferText(incoming.AttachWindowMouseMethod, fromConfig.AttachWindowMouseMethod),
+            AttachWindowKeyboardMethod: PreferText(incoming.AttachWindowKeyboardMethod, fromConfig.AttachWindowKeyboardMethod),
+            ClientType: PreferText(incoming.ClientType, fallback.ClientType, fromConfig.ClientType),
+            FallbackStrategy: incoming.FallbackStrategy,
+            ConfiguredTouchMode: incoming.ConfiguredTouchMode,
+            ConfiguredAdbLiteEnabled: incoming.ConfiguredAdbLiteEnabled,
+            FallbackReason: incoming.FallbackReason,
+            FallbackRequiredLibrary: incoming.FallbackRequiredLibrary,
+            FallbackRequiredLibraryExists: incoming.FallbackRequiredLibraryExists);
+    }
+
+    private CoreConnectionExtras ResolveConnectionExtrasFromConfig()
+    {
+        var instanceOptions = ResolveInstanceOptionsFromConfig();
+        if (!_configService.TryGetCurrentProfile(out var profile))
+        {
+            return new CoreConnectionExtras(
+                TouchMode: instanceOptions.TouchMode,
+                AdbLiteEnabled: instanceOptions.AdbLiteEnabled ?? false,
+                KillAdbOnExit: instanceOptions.KillAdbOnExit ?? false,
+                ClientType: instanceOptions.ClientType);
+        }
+
+        return new CoreConnectionExtras(
+            MacUseBundledAdb: MacBundledAdbPolicy.ReadUseBundledAdb(profile),
+            TouchMode: instanceOptions.TouchMode,
+            AdbLiteEnabled: instanceOptions.AdbLiteEnabled ?? false,
+            KillAdbOnExit: instanceOptions.KillAdbOnExit ?? false,
+            MuMu12ExtrasEnabled: ReadProfileBool(profile, "MuMu12ExtrasEnabled", ConfigurationKeys.MuMu12ExtrasEnabled),
+            MuMu12EmulatorPath: ReadProfileString(profile, "MuMu12EmulatorPath", ConfigurationKeys.MuMu12EmulatorPath),
+            MuMuBridgeConnection: ReadProfileBool(profile, "MuMuBridgeConnection", ConfigurationKeys.MumuBridgeConnection),
+            MuMu12Index: ReadProfileString(profile, "MuMu12Index", ConfigurationKeys.MuMu12Index),
+            LdPlayerExtrasEnabled: ReadProfileBool(profile, "LdPlayerExtrasEnabled", ConfigurationKeys.LdPlayerExtrasEnabled),
+            LdPlayerEmulatorPath: ReadProfileString(profile, "LdPlayerEmulatorPath", ConfigurationKeys.LdPlayerEmulatorPath),
+            LdPlayerManualSetIndex: ReadProfileBool(profile, "LdPlayerManualSetIndex", ConfigurationKeys.LdPlayerManualSetIndex),
+            LdPlayerIndex: ReadProfileString(profile, "LdPlayerIndex", ConfigurationKeys.LdPlayerIndex),
+            AttachWindowScreencapMethod: ReadProfileString(profile, "AttachWindowScreencapMethod", ConfigurationKeys.AttachWindowScreencapMethod),
+            AttachWindowMouseMethod: ReadProfileString(profile, "AttachWindowMouseMethod", ConfigurationKeys.AttachWindowMouseMethod),
+            AttachWindowKeyboardMethod: ReadProfileString(profile, "AttachWindowKeyboardMethod", ConfigurationKeys.AttachWindowKeyboardMethod),
+            ClientType: ReadProfileString(profile, "ClientType", ConfigurationKeys.ClientType));
+    }
+
+    private static string? PreferText(params string?[] values)
+    {
+        foreach (var value in values)
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                return value.Trim();
+            }
+        }
+
+        return null;
+    }
+
+    private void LogEffectiveConnectionConfiguration(CoreConnectionInfo connectionInfo)
+    {
+        var extras = connectionInfo.Extras ?? CoreConnectionExtras.Empty;
+        var fallbackSummary = DescribeFallbackStrategy(connectionInfo, extras, ResolveRuntimeBaseDirectory());
+        _logService?.Info(
+            "Effective connection config: "
+            + $"adb={connectionInfo.AdbPath ?? "<system adb>"}, address={connectionInfo.Address}, config={connectionInfo.ConnectConfig}, "
+            + $"fallback={fallbackSummary}, macBundledAdb={extras.MacUseBundledAdb}, touch={extras.TouchMode ?? "<default>"}, adbLite={extras.AdbLiteEnabled}, killAdbOnExit={extras.KillAdbOnExit}, "
+            + $"mumuExtras={extras.MuMu12ExtrasEnabled}:{extras.MuMu12EmulatorPath ?? "<empty>"}:{extras.MuMuBridgeConnection}:{extras.MuMu12Index ?? "<empty>"}, "
+            + $"ldExtras={extras.LdPlayerExtrasEnabled}:{extras.LdPlayerEmulatorPath ?? "<empty>"}:{extras.LdPlayerManualSetIndex}:{extras.LdPlayerIndex ?? "<empty>"}, "
+            + $"attach={extras.AttachWindowScreencapMethod ?? "<empty>"}:{extras.AttachWindowMouseMethod ?? "<empty>"}:{extras.AttachWindowKeyboardMethod ?? "<empty>"}, "
+            + $"clientType={extras.ClientType ?? "<empty>"}.");
+
+        if (MacBundledAdbPolicy.IsSupportedPlatform
+            && !string.IsNullOrWhiteSpace(extras.FallbackStrategy)
+            && extras.FallbackStrategy.StartsWith("temporary-macos-rawbync-guard:", StringComparison.Ordinal))
+        {
+            _logService?.Warn(
+                "macOS temporary RawByNc/POSIX connection prompt decision recorded: "
+                + $"{extras.FallbackStrategy}. This is a temporary measure until the Core macOS RawByNc/POSIX issue is fully fixed.");
+        }
+    }
+
+    private async Task<CoreResult<bool>> QuickScreenConnectionAsync(
+        CoreConnectionInfo connectionInfo,
+        CancellationToken cancellationToken)
+    {
+        var isTcpAddress = LooksLikeTcpAddress(connectionInfo.Address, out var host, out var port);
+        if (isTcpAddress
+            && !await CanOpenTcpAsync(host, port, QuickTcpProbeTimeout, cancellationToken).ConfigureAwait(false))
+        {
+            var adbDevices = await TryListAdbDevicesAsync(connectionInfo.AdbPath, cancellationToken).ConfigureAwait(false);
+            return CoreResult<bool>.Fail(new CoreError(
+                CoreErrorCode.ConnectFailed,
+                $"Connection address `{connectionInfo.Address}` failed a quick TCP probe. Candidate causes: emulator is not running, port is wrong, ADB debugging is disabled, or the address belongs to another emulator.",
+                BuildQuickPrecheckFailureDetails(
+                    connectionInfo,
+                    host,
+                    port,
+                    "tcp-probe-failed",
+                    adbDevices)));
+        }
+
+        if (ShouldRunQuickAdbTargetPrecheck(connectionInfo))
+        {
+            var adbPrecheck = await QuickAdbTargetPrecheckAsync(
+                connectionInfo,
+                isTcpAddress,
+                cancellationToken).ConfigureAwait(false);
+            if (!adbPrecheck.Success)
+            {
+                return CoreResult<bool>.Fail(new CoreError(
+                    CoreErrorCode.ConnectFailed,
+                    adbPrecheck.Message,
+                    BuildQuickPrecheckFailureDetails(
+                        connectionInfo,
+                        isTcpAddress ? host : null,
+                        isTcpAddress ? port : null,
+                        "adb-target-unavailable",
+                        adbPrecheck.Details)));
+            }
+        }
+
+        return CoreResult<bool>.Ok(true);
+    }
+
+    private static bool ShouldRunQuickAdbTargetPrecheck(CoreConnectionInfo connectionInfo)
+    {
+        if (!UsesAdbTransport(connectionInfo.ConnectConfig, connectionInfo.Address)
+            || string.IsNullOrWhiteSpace(connectionInfo.Address))
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private static async Task<AdbTargetPrecheckResult> QuickAdbTargetPrecheckAsync(
+        CoreConnectionInfo connectionInfo,
+        bool isTcpAddress,
+        CancellationToken cancellationToken)
+    {
+        var builder = new StringBuilder();
+        builder.AppendLine("ADB target precheck.");
+
+        var stateBefore = await RunAdbPrecheckCommandAsync(
+            connectionInfo.AdbPath,
+            "adb serial get-state",
+            ["-s", connectionInfo.Address, "get-state"],
+            cancellationToken).ConfigureAwait(false);
+        builder.AppendLine(stateBefore.Format());
+        if (IsAdbDeviceStateReady(stateBefore))
+        {
+            return AdbTargetPrecheckResult.Ok(builder.ToString());
+        }
+
+        if (isTcpAddress)
+        {
+            var connect = await RunAdbPrecheckCommandAsync(
+                connectionInfo.AdbPath,
+                "adb connect",
+                ["connect", connectionInfo.Address],
+                cancellationToken).ConfigureAwait(false);
+            builder.AppendLine(connect.Format());
+            if (!LooksLikeAdbConnectSucceeded(connect))
+            {
+                var devices = await RunAdbPrecheckCommandAsync(
+                    connectionInfo.AdbPath,
+                    "adb devices -l",
+                    ["devices", "-l"],
+                    cancellationToken).ConfigureAwait(false);
+                builder.AppendLine(devices.Format());
+                return AdbTargetPrecheckResult.Fail(
+                    $"ADB could not connect to `{connectionInfo.Address}` during quick precheck. Check the address, port, emulator ADB setting, and network reachability.",
+                    builder.ToString());
+            }
+
+            var stateAfterConnect = await RunAdbPrecheckCommandAsync(
+                connectionInfo.AdbPath,
+                "adb serial get-state",
+                ["-s", connectionInfo.Address, "get-state"],
+                cancellationToken).ConfigureAwait(false);
+            builder.AppendLine(stateAfterConnect.Format());
+            if (IsAdbDeviceStateReady(stateAfterConnect))
+            {
+                return AdbTargetPrecheckResult.Ok(builder.ToString());
+            }
+        }
+
+        var devicesAfter = await RunAdbPrecheckCommandAsync(
+            connectionInfo.AdbPath,
+            "adb devices -l",
+            ["devices", "-l"],
+            cancellationToken).ConfigureAwait(false);
+        builder.AppendLine(devicesAfter.Format());
+        if (AdbDevicesContainsReadySerial(devicesAfter.StandardOutput, connectionInfo.Address))
+        {
+            return AdbTargetPrecheckResult.Ok(builder.ToString());
+        }
+
+        return AdbTargetPrecheckResult.Fail(
+            $"ADB did not report target device `{connectionInfo.Address}` as connected during quick precheck. Check the address and port; common ADB port is 5555.",
+            builder.ToString());
+    }
+
+    private static bool IsAdbDeviceStateReady(AdbPrecheckCommandResult result)
+        => result.Success
+           && string.Equals(result.StandardOutput.Trim(), "device", StringComparison.OrdinalIgnoreCase);
+
+    private static bool LooksLikeAdbConnectSucceeded(AdbPrecheckCommandResult result)
+    {
+        var text = string.Join('\n', result.StandardOutput, result.StandardError, result.ExceptionMessage);
+        return result.Success
+               && ContainsAny(text, "connected to", "already connected to")
+               && !ContainsAny(text, "failed to connect", "unable to connect", "cannot connect", "No route to host", "Connection refused", "timed out");
+    }
+
+    private static bool AdbDevicesContainsReadySerial(string devicesOutput, string serial)
+    {
+        if (string.IsNullOrWhiteSpace(devicesOutput) || string.IsNullOrWhiteSpace(serial))
+        {
+            return false;
+        }
+
+        foreach (var line in devicesOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (line.StartsWith("List of devices", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var columns = line.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+            if (columns.Length >= 2
+                && string.Equals(columns[0], serial.Trim(), StringComparison.OrdinalIgnoreCase)
+                && string.Equals(columns[1], "device", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static async Task<AdbPrecheckCommandResult> RunAdbPrecheckCommandAsync(
+        string? adbPath,
+        string commandName,
+        IReadOnlyList<string> arguments,
+        CancellationToken cancellationToken)
+    {
+        var executable = string.IsNullOrWhiteSpace(adbPath) ? "adb" : adbPath.Trim();
+        try
+        {
+            using var process = new System.Diagnostics.Process();
+            process.StartInfo.FileName = executable;
+            foreach (var argument in arguments)
+            {
+                process.StartInfo.ArgumentList.Add(argument);
+            }
+
+            process.StartInfo.RedirectStandardOutput = true;
+            process.StartInfo.RedirectStandardError = true;
+            process.StartInfo.UseShellExecute = false;
+            process.StartInfo.CreateNoWindow = true;
+            if (!process.Start())
+            {
+                return new AdbPrecheckCommandResult(
+                    commandName,
+                    executable,
+                    arguments,
+                    null,
+                    string.Empty,
+                    string.Empty,
+                    "process did not start");
+            }
+
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(QuickAdbDevicesTimeout);
+            var stdoutTask = process.StandardOutput.ReadToEndAsync(timeoutCts.Token);
+            var stderrTask = process.StandardError.ReadToEndAsync(timeoutCts.Token);
+            await process.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
+            return new AdbPrecheckCommandResult(
+                commandName,
+                executable,
+                arguments,
+                process.ExitCode,
+                await stdoutTask.ConfigureAwait(false),
+                await stderrTask.ConfigureAwait(false),
+                null);
+        }
+        catch (Exception ex)
+        {
+            return new AdbPrecheckCommandResult(
+                commandName,
+                executable,
+                arguments,
+                null,
+                string.Empty,
+                string.Empty,
+                ex.Message);
+        }
+    }
+
+    private sealed record AdbTargetPrecheckResult(bool Success, string Message, string Details)
+    {
+        public static AdbTargetPrecheckResult Ok(string details)
+            => new(true, "ADB target precheck passed.", details);
+
+        public static AdbTargetPrecheckResult Fail(string message, string details)
+            => new(false, message, details);
+    }
+
+    private sealed record AdbPrecheckCommandResult(
+        string CommandName,
+        string Executable,
+        IReadOnlyList<string> Arguments,
+        int? ExitCode,
+        string StandardOutput,
+        string StandardError,
+        string? ExceptionMessage)
+    {
+        public bool Success => ExitCode == 0 && string.IsNullOrWhiteSpace(ExceptionMessage);
+
+        public string Format()
+        {
+            var builder = new StringBuilder();
+            builder.AppendLine($"{CommandName}: {Executable} {string.Join(' ', Arguments)} exit={ExitCode?.ToString(CultureInfo.InvariantCulture) ?? "<none>"}");
+            if (!string.IsNullOrWhiteSpace(ExceptionMessage))
+            {
+                builder.AppendLine($"exception: {ExceptionMessage.Trim()}");
+            }
+
+            builder.AppendLine("stdout:");
+            builder.AppendLine(StandardOutput.Trim());
+            builder.AppendLine("stderr:");
+            builder.AppendLine(StandardError.Trim());
+            return builder.ToString().Trim();
+        }
+    }
+
+    private static async Task<CoreResult<bool>> EnrichEarlyCoreConnectFailureAsync(
+        CoreResult<bool> result,
+        CoreConnectionInfo connectionInfo,
+        bool quickPrecheckPassed,
+        CancellationToken cancellationToken)
+    {
+        if (result.Success || !LooksLikeEarlyCoreConnectFailure(result.Error))
+        {
+            return result;
+        }
+
+        var adbState = await TryCollectAdbConnectionStateAsync(
+            connectionInfo,
+            quickPrecheckPassed,
+            cancellationToken).ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(adbState))
+        {
+            return result;
+        }
+
+        var error = result.Error!;
+        return CoreResult<bool>.Fail(error with
+        {
+            NativeDetails = AppendDiagnosticDetails(error.NativeDetails ?? error.Exception, adbState),
+        });
+    }
+
+    private static bool LooksLikeEarlyCoreConnectFailure(CoreError? error)
+    {
+        if (error is null || error.Code != CoreErrorCode.ConnectFailed)
+        {
+            return false;
+        }
+
+        var text = string.Join('\n', error.Message, error.NativeDetails, error.Exception);
+        return ContainsAny(
+            text,
+            "ret=false",
+            "\"ret\":false",
+            "invalid async call id",
+            "\"cost\":0",
+            "\"cost\": 0",
+            "\"uuid\":\"\"",
+            "\"uuid\": \"\"");
+    }
+
+    private static bool ContainsAny(string? text, params string[] fragments)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return false;
+        }
+
+        return fragments.Any(fragment => text.Contains(fragment, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string AppendDiagnosticDetails(string? existing, string diagnostic)
+    {
+        var normalizedDiagnostic = diagnostic.Trim();
+        if (string.IsNullOrWhiteSpace(existing))
+        {
+            return normalizedDiagnostic;
+        }
+
+        return existing.Trim() + Environment.NewLine + Environment.NewLine + normalizedDiagnostic;
+    }
+
+    private static async Task<string?> TryCollectAdbConnectionStateAsync(
+        CoreConnectionInfo connectionInfo,
+        bool quickPrecheckPassed,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var builder = new StringBuilder();
+            builder.AppendLine("ADB state after core connect failure.");
+            builder.AppendLine($"trigger=core-early-failure precheck={(quickPrecheckPassed ? "passed" : "not-run")}");
+            builder.AppendLine($"adb={connectionInfo.AdbPath ?? "<system adb>"}");
+            builder.AppendLine($"address={connectionInfo.Address}");
+            builder.AppendLine($"config={connectionInfo.ConnectConfig}");
+            AppendConnectionEffectiveConfigurationDetails(builder, connectionInfo);
+            builder.AppendLine($"serial={connectionInfo.Address}");
+
+            if (LooksLikeTcpAddress(connectionInfo.Address, out _, out _))
+            {
+                builder.AppendLine(await RunAdbDiagnosticCommandAsync(
+                    connectionInfo.AdbPath,
+                    "adb connect",
+                    ["connect", connectionInfo.Address],
+                    cancellationToken).ConfigureAwait(false));
+            }
+
+            builder.AppendLine(await RunAdbDiagnosticCommandAsync(
+                connectionInfo.AdbPath,
+                "adb devices -l",
+                ["devices", "-l"],
+                cancellationToken).ConfigureAwait(false));
+
+            if (!string.IsNullOrWhiteSpace(connectionInfo.Address))
+            {
+                builder.AppendLine(await RunAdbDiagnosticCommandAsync(
+                    connectionInfo.AdbPath,
+                    "adb serial get-state",
+                    ["-s", connectionInfo.Address, "get-state"],
+                    cancellationToken).ConfigureAwait(false));
+            }
+
+            return builder.ToString().Trim();
+        }
+        catch (Exception ex)
+        {
+            return $"ADB state after core connect failure failed: {ex.Message}";
+        }
+    }
+
+    private static void AppendConnectionEffectiveConfigurationDetails(StringBuilder builder, CoreConnectionInfo connectionInfo)
+    {
+        var extras = connectionInfo.Extras ?? CoreConnectionExtras.Empty;
+        builder.AppendLine($"fallback={DescribeFallbackStrategy(connectionInfo, extras)}");
+        if (!string.IsNullOrWhiteSpace(extras.FallbackReason))
+        {
+            builder.AppendLine($"reason={extras.FallbackReason}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(extras.FallbackRequiredLibrary))
+        {
+            builder.AppendLine($"requiredLibrary={extras.FallbackRequiredLibrary}");
+            builder.AppendLine($"requiredLibraryExists={extras.FallbackRequiredLibraryExists}");
+        }
+
+        builder.AppendLine(
+            $"configured=touch={extras.ConfiguredTouchMode ?? extras.TouchMode ?? DefaultTouchMode},adbLite={extras.ConfiguredAdbLiteEnabled ?? extras.AdbLiteEnabled},killAdbOnExit={extras.KillAdbOnExit}");
+        builder.AppendLine(
+            $"effective=touch={extras.TouchMode ?? DefaultTouchMode},adbLite={extras.AdbLiteEnabled},killAdbOnExit={extras.KillAdbOnExit}");
+        builder.AppendLine(
+            $"extras=macBundledAdb={extras.MacUseBundledAdb},touch={extras.TouchMode ?? "<default>"},adbLite={extras.AdbLiteEnabled},killAdbOnExit={extras.KillAdbOnExit},mumu={extras.MuMu12ExtrasEnabled}:{extras.MuMu12EmulatorPath ?? "<empty>"}:{extras.MuMuBridgeConnection}:{extras.MuMu12Index ?? "<empty>"},ld={extras.LdPlayerExtrasEnabled}:{extras.LdPlayerEmulatorPath ?? "<empty>"}:{extras.LdPlayerManualSetIndex}:{extras.LdPlayerIndex ?? "<empty>"},attach={extras.AttachWindowScreencapMethod ?? "<empty>"}:{extras.AttachWindowMouseMethod ?? "<empty>"}:{extras.AttachWindowKeyboardMethod ?? "<empty>"},clientType={extras.ClientType ?? "<empty>"}");
+    }
+
+    private static async Task<string> RunAdbDiagnosticCommandAsync(
+        string? adbPath,
+        string commandName,
+        IReadOnlyList<string> arguments,
+        CancellationToken cancellationToken)
+    {
+        var executable = string.IsNullOrWhiteSpace(adbPath) ? "adb" : adbPath.Trim();
+        try
+        {
+            using var process = new System.Diagnostics.Process();
+            process.StartInfo.FileName = executable;
+            foreach (var argument in arguments)
+            {
+                process.StartInfo.ArgumentList.Add(argument);
+            }
+
+            process.StartInfo.RedirectStandardOutput = true;
+            process.StartInfo.RedirectStandardError = true;
+            process.StartInfo.UseShellExecute = false;
+            process.StartInfo.CreateNoWindow = true;
+            if (!process.Start())
+            {
+                return $"{commandName} did not start.";
+            }
+
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(QuickAdbDevicesTimeout);
+            var stdoutTask = process.StandardOutput.ReadToEndAsync(timeoutCts.Token);
+            var stderrTask = process.StandardError.ReadToEndAsync(timeoutCts.Token);
+            await process.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
+            return $"{commandName}: {executable} {string.Join(' ', arguments)} exit={process.ExitCode}"
+                + $"\nstdout:\n{await stdoutTask.ConfigureAwait(false)}"
+                + $"\nstderr:\n{await stderrTask.ConfigureAwait(false)}";
+        }
+        catch (Exception ex)
+        {
+            return $"{commandName} failed: {ex.Message}";
+        }
+    }
+
+    private static bool LooksLikeTcpAddress(string address, out string host, out int port)
+    {
+        host = string.Empty;
+        port = 0;
+        var normalized = NormalizeText(address);
+        var separator = normalized.LastIndexOf(':');
+        if (separator <= 0 || separator == normalized.Length - 1)
+        {
+            return false;
+        }
+
+        host = normalized[..separator];
+        return int.TryParse(normalized[(separator + 1)..], out port)
+            && port is > 0 and <= 65535;
+    }
+
+    private static async Task<bool> CanOpenTcpAsync(
+        string host,
+        int port,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var client = new TcpClient();
+            var connectTask = client.ConnectAsync(host, port, cancellationToken).AsTask();
+            var completed = await Task.WhenAny(connectTask, Task.Delay(timeout, cancellationToken)).ConfigureAwait(false);
+            if (completed != connectTask)
+            {
+                return false;
+            }
+
+            await connectTask.ConfigureAwait(false);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static async Task<string?> TryListAdbDevicesAsync(string? adbPath, CancellationToken cancellationToken)
+    {
+        var executable = string.IsNullOrWhiteSpace(adbPath) ? "adb" : adbPath.Trim();
+        try
+        {
+            using var process = new System.Diagnostics.Process();
+            process.StartInfo.FileName = executable;
+            process.StartInfo.Arguments = "devices";
+            process.StartInfo.RedirectStandardOutput = true;
+            process.StartInfo.RedirectStandardError = true;
+            process.StartInfo.UseShellExecute = false;
+            process.StartInfo.CreateNoWindow = true;
+            if (!process.Start())
+            {
+                return "adb devices did not start.";
+            }
+
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(QuickAdbDevicesTimeout);
+            var stdoutTask = process.StandardOutput.ReadToEndAsync(timeoutCts.Token);
+            var stderrTask = process.StandardError.ReadToEndAsync(timeoutCts.Token);
+            await process.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
+            return $"adb devices exit={process.ExitCode}\nstdout:\n{await stdoutTask.ConfigureAwait(false)}\nstderr:\n{await stderrTask.ConfigureAwait(false)}";
+        }
+        catch (Exception ex)
+        {
+            return $"adb devices quick screen failed: {ex.Message}";
+        }
+    }
+
+    private bool ShouldPromptMacRawByNcRisk(CoreConnectionInfo connectionInfo, CoreConnectionExtras extras)
+    {
+        if (!OperatingSystem.IsMacOS())
+        {
+            return false;
+        }
+
+        if (!UsesAdbTransport(connectionInfo.ConnectConfig, connectionInfo.Address))
+        {
+            return false;
+        }
+
+        if (LooksLikeCompatMacConfig(connectionInfo.ConnectConfig))
+        {
+            return false;
+        }
+
+        if (!MayUseLegacyRawByNetcat(extras.TouchMode))
+        {
+            return false;
+        }
+
+        return !extras.AdbLiteEnabled;
+    }
+
+    private string ReadCurrentLanguage()
+    {
+        if (_configService.CurrentConfig.GlobalValues.TryGetValue(ConfigurationKeys.Localization, out var node)
+            && node is JsonValue jsonValue
+            && jsonValue.TryGetValue(out string? language)
+            && !string.IsNullOrWhiteSpace(language))
+        {
+            return UiLanguageCatalog.Normalize(language);
+        }
+
+        return UiLanguageCatalog.DefaultLanguage;
+    }
+
+    private string ResolveRuntimeBaseDirectory()
+        => _runtimeBaseDirectory ?? RuntimeLayout.ResolveRuntimeBaseDirectory();
+
+    private static bool UsesAdbTransport(string connectConfig, string address)
+    {
+        if (LooksLikeTcpAddress(address, out _, out _))
+        {
+            return true;
+        }
+
+        return string.Equals(connectConfig, "General", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(connectConfig, "BlueStacks", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(connectConfig, "LDPlayer", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(connectConfig, "MuMuEmulator12", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(connectConfig, "AVD", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(connectConfig, "Nox", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(connectConfig, "WSA", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(connectConfig, "XYAZ", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool LooksLikeCompatMacConfig(string connectConfig)
+        => string.Equals(connectConfig, "CompatMac", StringComparison.OrdinalIgnoreCase);
+
+    private static bool MayUseLegacyRawByNetcat(string? touchMode)
+    {
+        return string.IsNullOrWhiteSpace(touchMode)
+            || string.Equals(touchMode, "minitouch", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(touchMode, "maatouch", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(touchMode, "adb", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string DescribeFallbackStrategy(
+        CoreConnectionInfo connectionInfo,
+        CoreConnectionExtras extras,
+        string? runtimeBaseDirectory = null)
+    {
+        if (!string.IsNullOrWhiteSpace(extras.FallbackStrategy))
+        {
+            return extras.FallbackStrategy;
+        }
+
+        return $"configured:{extras.TouchMode ?? DefaultTouchMode}/adbLite={extras.AdbLiteEnabled}";
+    }
+
+    private static string BuildQuickPrecheckFailureDetails(
+        CoreConnectionInfo connectionInfo,
+        string? host,
+        int? port,
+        string stage,
+        string? adbDetails)
+    {
+        var extras = connectionInfo.Extras ?? CoreConnectionExtras.Empty;
+        var builder = new StringBuilder();
+        builder.AppendLine("Quick connect precheck failed.");
+        builder.AppendLine($"stage={stage}");
+        if (!string.IsNullOrWhiteSpace(host) && port is int tcpPort)
+        {
+            builder.AppendLine($"probe=tcp host={host} port={tcpPort} timeoutMs={(int)QuickTcpProbeTimeout.TotalMilliseconds}");
+        }
+
+        builder.AppendLine($"adb={connectionInfo.AdbPath ?? "<system adb>"}");
+        builder.AppendLine($"address={connectionInfo.Address}");
+        builder.AppendLine($"config={connectionInfo.ConnectConfig}");
+        AppendConnectionEffectiveConfigurationDetails(builder, connectionInfo);
+        builder.AppendLine($"clientType={extras.ClientType ?? "<empty>"}");
+        if (!string.IsNullOrWhiteSpace(adbDetails))
+        {
+            builder.AppendLine("adb details:");
+            builder.AppendLine(adbDetails.Trim());
+        }
+
+        return builder.ToString().Trim();
+    }
+
+    private static bool ShouldRunQuickConnectionPrecheck(CoreConnectionInfo connectionInfo)
+        => connectionInfo.Timeout is { } timeout && timeout > TimeSpan.Zero && timeout < DefaultConnectBudget;
+
+    private string? ResolveProfileAdbPath(UnifiedProfile profile)
+    {
+        if (MacBundledAdbPolicy.ShouldUseBundledAdb(MacBundledAdbPolicy.ReadUseBundledAdb(profile)))
+        {
+            return MacBundledAdbPolicy.ResolveBundledAdbPath();
+        }
+
+        return ReadProfileString(profile, "AdbPath", ConfigurationKeys.AdbPath);
+    }
+
+    private static IReadOnlyList<string> BuildConnectAddressCandidates(
+        string configuredAddress,
+        string connectConfig,
+        bool autoDetect,
+        bool alwaysAutoDetect)
+    {
+        var candidates = new List<string>();
+        AddAddressCandidate(candidates, configuredAddress);
+        if (autoDetect || alwaysAutoDetect)
+        {
+            foreach (var fallbackAddress in GetDefaultAddresses(connectConfig))
+            {
+                AddAddressCandidate(candidates, fallbackAddress);
+            }
+        }
+
+        if (candidates.Count == 0)
+        {
+            foreach (var fallbackAddress in GetDefaultAddresses(connectConfig))
+            {
+                AddAddressCandidate(candidates, fallbackAddress);
+            }
+        }
+
+        return candidates;
+    }
+
+    private static void AddAddressCandidate(List<string> candidates, string? address)
+    {
+        var normalized = NormalizeText(address);
+        if (string.IsNullOrWhiteSpace(normalized)
+            || candidates.Any(candidate => string.Equals(candidate, normalized, StringComparison.OrdinalIgnoreCase)))
+        {
+            return;
+        }
+
+        candidates.Add(normalized);
+    }
+
+    private static IReadOnlyList<string> GetDefaultAddresses(string connectConfig)
+    {
+        return NormalizeText(connectConfig).ToLowerInvariant() switch
+        {
+            "bluestacks" => ["127.0.0.1:5555", "127.0.0.1:5556", "127.0.0.1:5565", "127.0.0.1:5575", "127.0.0.1:5585", "127.0.0.1:5595", "127.0.0.1:5554"],
+            "mumuemulator12" => ["127.0.0.1:16384", "127.0.0.1:16416", "127.0.0.1:16448", "127.0.0.1:16480", "127.0.0.1:16512", "127.0.0.1:16544", "127.0.0.1:16576"],
+            "ldplayer" => ["emulator-5554", "emulator-5556", "emulator-5558", "emulator-5560", "127.0.0.1:5555", "127.0.0.1:5557", "127.0.0.1:5559", "127.0.0.1:5561"],
+            "avd" => ["emulator-5554", "emulator-5556"],
+            "nox" => ["127.0.0.1:62001", "127.0.0.1:59865"],
+            "xyaz" => ["127.0.0.1:21503"],
+            "wsa" => ["127.0.0.1:58526"],
+            _ => [],
+        };
+    }
+
+    private static TimeSpan NormalizeConnectBudget(TimeSpan? requested)
+        => requested is { } timeout && timeout > TimeSpan.Zero && timeout < DefaultConnectBudget
+            ? timeout
+            : DefaultConnectBudget;
+
+    private static string NormalizeText(string? value) => (value ?? string.Empty).Trim();
+
+    private static string? NormalizeNullableText(string? value)
+    {
+        var normalized = NormalizeText(value);
+        return string.IsNullOrWhiteSpace(normalized) ? null : normalized;
+    }
+
     private async Task<CoreResult<bool>> ApplyResolvedInstanceOptionsAsync(
         CoreInstanceOptions? instanceOptions,
         CancellationToken cancellationToken)
@@ -222,7 +1774,7 @@ public sealed class ConnectFeatureService : IConnectFeatureService
         return false;
     }
 
-    private static bool ReadProfileBool(UnifiedProfile profile, string key, string legacyKey)
+    private bool ReadProfileBool(UnifiedProfile profile, string key, string legacyKey)
     {
         if (profile.Values.TryGetValue(key, out var currentNode)
             && TryReadBool(currentNode, out var currentValue))
@@ -236,10 +1788,51 @@ public sealed class ConnectFeatureService : IConnectFeatureService
             return legacyValue;
         }
 
+        if (_configService.CurrentConfig.GlobalValues.TryGetValue(legacyKey, out var globalLegacyNode)
+            && TryReadBool(globalLegacyNode, out var globalLegacyValue))
+        {
+            return globalLegacyValue;
+        }
+
+        if (_configService.CurrentConfig.GlobalValues.TryGetValue(key, out var globalCurrentNode)
+            && TryReadBool(globalCurrentNode, out var globalCurrentValue))
+        {
+            return globalCurrentValue;
+        }
+
         return false;
     }
 
-    private static string? ReadProfileString(UnifiedProfile profile, string key, string legacyKey)
+    private bool ReadProfileBool(UnifiedProfile profile, string key, string legacyKey, bool fallback)
+    {
+        if (profile.Values.TryGetValue(key, out var currentNode)
+            && TryReadBool(currentNode, out var currentValue))
+        {
+            return currentValue;
+        }
+
+        if (profile.Values.TryGetValue(legacyKey, out var legacyNode)
+            && TryReadBool(legacyNode, out var legacyValue))
+        {
+            return legacyValue;
+        }
+
+        if (_configService.CurrentConfig.GlobalValues.TryGetValue(legacyKey, out var globalLegacyNode)
+            && TryReadBool(globalLegacyNode, out var globalLegacyValue))
+        {
+            return globalLegacyValue;
+        }
+
+        if (_configService.CurrentConfig.GlobalValues.TryGetValue(key, out var globalCurrentNode)
+            && TryReadBool(globalCurrentNode, out var globalCurrentValue))
+        {
+            return globalCurrentValue;
+        }
+
+        return fallback;
+    }
+
+    private string? ReadProfileString(UnifiedProfile profile, string key, string legacyKey)
     {
         if (profile.Values.TryGetValue(key, out var currentNode)
             && TryReadString(currentNode, out var currentValue))
@@ -251,6 +1844,18 @@ public sealed class ConnectFeatureService : IConnectFeatureService
             && TryReadString(legacyNode, out var legacyValue))
         {
             return legacyValue;
+        }
+
+        if (_configService.CurrentConfig.GlobalValues.TryGetValue(legacyKey, out var globalLegacyNode)
+            && TryReadString(globalLegacyNode, out var globalLegacyValue))
+        {
+            return globalLegacyValue;
+        }
+
+        if (_configService.CurrentConfig.GlobalValues.TryGetValue(key, out var globalCurrentNode)
+            && TryReadString(globalCurrentNode, out var globalCurrentValue))
+        {
+            return globalCurrentValue;
         }
 
         return null;
@@ -350,6 +1955,21 @@ public sealed class ShellFeatureService : IShellFeatureService
         CancellationToken cancellationToken = default)
     {
         return _connectFeatureService.ConnectAsync(address, config, adbPath, instanceOptions, cancellationToken);
+    }
+
+    public Task<UiOperationResult> ConnectAsync(
+        CoreConnectionInfo connectionInfo,
+        CancellationToken cancellationToken = default)
+    {
+        return _connectFeatureService.ConnectAsync(connectionInfo, cancellationToken: cancellationToken);
+    }
+
+    public Task<UiOperationResult> ConnectAsync(
+        CoreConnectionInfo connectionInfo,
+        CoreInstanceOptions? instanceOptions = null,
+        CancellationToken cancellationToken = default)
+    {
+        return _connectFeatureService.ConnectAsync(connectionInfo, instanceOptions, cancellationToken);
     }
 
     public Task<UiOperationResult<ImportReport>> ImportLegacyConfigAsync(

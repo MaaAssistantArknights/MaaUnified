@@ -34,6 +34,8 @@
 
 macOS 包优先使用 Developer ID 签名和 Apple notarization。CI 缺少签名材料或签名失败时，会 warning 并降级生成 ad-hoc/unsigned `.dmg`；这类包未公证，首次打开可能需要在“隐私与安全性”中手动允许，或确认来源后执行 `xattr -dr com.apple.quarantine /Applications/MAAUnified.app`。
 
+macOS 运行时目录必须让 `libMaaAdbControlUnit.dylib` 与 `libMaaCore.dylib` 同级。这是 RawByNc 问题的临时处理；本地构建时按 [本地开发](./Docs/zh-cn/develop/development.md) 在 MaaFramework latest release 找对应架构的 macOS 包，并把其中的 `bin/libMaaAdbControlUnit.dylib` 放进 `install/`。
+
 ## 开发上手
 
 `MAAUnified` 的完整运行依赖 MaaCore runtime、`resource/` 和主仓打包布局。日常开发建议始终在 `MaaAssistantArknights` 主仓环境里联调，不要只在 `src/MAAUnified` 里单独看托管前端。

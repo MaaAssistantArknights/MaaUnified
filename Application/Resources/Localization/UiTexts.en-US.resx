@@ -4253,7 +4253,10 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
     <value>ADB Input (Deprecated)</value>
   </data>
   <data name="StartUp.Option.TouchMode.MaaTouch" xml:space="preserve">
-    <value>MaaTouch</value>
+    <value>MaaTouch (Experimental)</value>
+  </data>
+  <data name="StartUp.Option.TouchMode.MaaFwAdbTouch" xml:space="preserve">
+    <value>MaaFramework (Experimental)</value>
   </data>
   <data name="StartUp.Option.TouchMode.MiniTouch" xml:space="preserve">
     <value>Minitouch (Default)</value>
@@ -5464,5 +5467,20 @@ A backup named avalonia.json.schema-v{0}.bak.&lt;timestamp&gt; will be created b
   </data>
   <data name="Toolbox.Advanced.ExternalNotification.Error.QueryFailed" xml:space="preserve">
     <value>Failed to query external notification providers.</value>
+  </data>
+  <data name="MacRawByNcRisk.Dialog.Title" xml:space="preserve">
+    <value>Risky connection settings</value>
+  </data>
+  <data name="MacRawByNcRisk.Dialog.Message" xml:space="preserve">
+    <value>{0} + adbLite={1} can trigger the macOS RawByNc/POSIX connection issue, which may cause connection failures or hangs. We recommend setting adbLite to {2}.</value>
+  </data>
+  <data name="MacRawByNcRisk.Dialog.ApplyRecommended" xml:space="preserve">
+    <value>Apply Fix</value>
+  </data>
+  <data name="MacRawByNcRisk.Dialog.ForceRun" xml:space="preserve">
+    <value>Force Run</value>
+  </data>
+  <data name="MacRawByNcRisk.Dialog.DefaultTouchMode" xml:space="preserve">
+    <value>default touch mode</value>
   </data>
 </root>

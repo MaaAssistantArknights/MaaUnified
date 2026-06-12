@@ -226,4 +226,19 @@
   <data name="Startup.LinuxPortablePackageMissing" xml:space="preserve">
     <value>[!! Ţĥé Ļîñüẋ þöřţåƀļé þåçķåĝé îş îñçöɱþļéţé. Þļéåşé éẋţřåçţ ţĥé ƒüļļ þåçķåĝé, ţĥéñ ļåüñçĥ MÅÅÛñîƒîéď.ÅþþÌɱåĝé ƒřöɱ ţĥåţ ďîřéçţöřý. !!]</value>
   </data>
+  <data name="MacRawByNcRisk.Dialog.Title" xml:space="preserve">
+    <value>[!! Řîşķý çöññéçţîöñ şéţţîñĝş !!]</value>
+  </data>
+  <data name="MacRawByNcRisk.Dialog.Message" xml:space="preserve">
+    <value>[!! {0} + åďƀĻîţé={1} çåñ ţřîĝĝéř ţĥé ɱåçÖŞ ŘåŵƁýÑç/ÞÖŞÎẊ çöññéçţîöñ îşşüé, ŵĥîçĥ ɱåý çåüşé çöññéçţîöñ ƒåîļüřéş öř ĥåñĝş. Ŵé řéçöɱɱéñď şéţţîñĝ åďƀĻîţé ţö {2}. !!]</value>
+  </data>
+  <data name="MacRawByNcRisk.Dialog.ApplyRecommended" xml:space="preserve">
+    <value>[!! Åþþļý Ƒîẋ !!]</value>
+  </data>
+  <data name="MacRawByNcRisk.Dialog.ForceRun" xml:space="preserve">
+    <value>[!! Ƒöřçé Řüñ !!]</value>
+  </data>
+  <data name="MacRawByNcRisk.Dialog.DefaultTouchMode" xml:space="preserve">
+    <value>[!! ďéƒåüļţ ţöüçĥ ɱöďé !!]</value>
+  </data>
 </root>

@@ -31,6 +31,14 @@
       <Setter Property="TextAlignment" Value="Left" />
       <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Secondary}" />
     </Style>
+
+    <Style Selector="TextBlock.connect-settings-test-result.state-warning">
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.State.Warning}" />
+    </Style>
+
+    <Style Selector="TextBlock.connect-settings-test-result.state-error">
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.State.Error}" />
+    </Style>
   </UserControl.Styles>
 
   <Grid Margin="4"
@@ -282,6 +290,8 @@
                     Content="{Binding RootTexts[Settings.Connect.ScreenshotTest]}"
                     Click="OnScreenshotTestClick" />
             <TextBlock Classes="app-caption connect-settings-status-text connect-settings-test-result"
+                       Classes.state-warning="{Binding TestLinkInfoIsWarning}"
+                       Classes.state-error="{Binding TestLinkInfoIsError}"
                        Text="{Binding TestLinkInfo}"
                        IsVisible="{Binding HasTestLinkInfo}" />
           </controls:AdaptiveSpacingStackPanel>

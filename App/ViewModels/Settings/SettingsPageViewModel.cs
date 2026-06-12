@@ -9652,6 +9652,10 @@ public sealed record StartPerformanceSettingsSnapshot(
         return new Dictionary<string, string>(StringComparer.Ordinal)
         {
             [ConfigurationKeys.MinimizeDirectly] = MinimizeDirectly.ToString(),
+            [ConfigurationKeys.PerformanceUseGpu] = PerformanceUseGpu.ToString(),
+            [ConfigurationKeys.PerformanceAllowDeprecatedGpu] = PerformanceAllowDeprecatedGpu.ToString(),
+            [ConfigurationKeys.PerformancePreferredGpuDescription] = PerformancePreferredGpuDescription,
+            [ConfigurationKeys.PerformancePreferredGpuInstancePath] = PerformancePreferredGpuInstancePath,
         };
     }
 
@@ -9677,14 +9681,6 @@ public sealed record StartPerformanceSettingsSnapshot(
             [ConfigurationKeys.TaskTimeoutMinutes] = TaskTimeoutMinutes.ToString(),
             [ConfigurationKeys.ReminderIntervalMinutes] = ReminderIntervalMinutes.ToString(),
         };
-
-        if (includeGpuSettings)
-        {
-            updates[ConfigurationKeys.PerformanceUseGpu] = PerformanceUseGpu.ToString();
-            updates[ConfigurationKeys.PerformanceAllowDeprecatedGpu] = PerformanceAllowDeprecatedGpu.ToString();
-            updates[ConfigurationKeys.PerformancePreferredGpuDescription] = PerformancePreferredGpuDescription;
-            updates[ConfigurationKeys.PerformancePreferredGpuInstancePath] = PerformancePreferredGpuInstancePath;
-        }
 
         return updates;
     }

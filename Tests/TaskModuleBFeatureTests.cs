@@ -189,7 +189,8 @@ public sealed class TaskModuleBFeatureTests
 
         var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
         await vm.InitializeAsync();
-        Assert.True((await fixture.Runtime.ConnectFeatureService.ConnectAsync("127.0.0.1:5555", "General", null)).Success);
+        var readyAdbPath = await TestConnectionFixtureSupport.PrepareReadyRuntimeAsync(fixture.Root, fixture.Config, "taskmodule-b-warning-ready");
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(fixture.Runtime.ConnectFeatureService, readyAdbPath)).Success);
 
         await vm.StartAsync();
 
@@ -1154,6 +1155,11 @@ public sealed class TaskModuleBFeatureTests
 
             await config.LoadOrBootstrapAsync();
             config.CurrentConfig.GlobalValues["GUI.Localization"] = language;
+            if (config.TryGetCurrentProfile(out var profile))
+            {
+                profile.Values[MacBundledAdbPolicy.ProfileUseBundledAdbKey] = JsonValue.Create(false);
+            }
+            _ = await TestConnectionFixtureSupport.PrepareReadyRuntimeAsync(root, config, "taskmodule-b-ready");
 
             bridge ??= new FakeBridge();
             var session = new UnifiedSessionService(bridge, config, log, new SessionStateMachine());
@@ -1179,7 +1185,7 @@ public sealed class TaskModuleBFeatureTests
                 bridge,
                 lifecycle,
                 promptService ?? new NoOpPostActionPromptService());
-            var connectFeatureService = new ConnectFeatureService(session, config);
+            var connectFeatureService = new ConnectFeatureService(session, config, log, bridge, root);
             var runtime = new MAAUnifiedRuntime
             {
                 CoreBridge = bridge,

@@ -4254,7 +4254,10 @@
     <value>ADB Input（不推荐使用）</value>
   </data>
   <data name="StartUp.Option.TouchMode.MaaTouch" xml:space="preserve">
-    <value>MaaTouch</value>
+    <value>MaaTouch（实验功能）</value>
+  </data>
+  <data name="StartUp.Option.TouchMode.MaaFwAdbTouch" xml:space="preserve">
+    <value>MaaFramework（实验功能）</value>
   </data>
   <data name="StartUp.Option.TouchMode.MiniTouch" xml:space="preserve">
     <value>Minitouch（默认）</value>
@@ -5444,5 +5447,20 @@
   </data>
   <data name="Toolbox.Advanced.ExternalNotification.Error.QueryFailed" xml:space="preserve">
     <value>查询外部通知 Provider 失败。</value>
+  </data>
+  <data name="MacRawByNcRisk.Dialog.Title" xml:space="preserve">
+    <value>连接配置存在风险</value>
+  </data>
+  <data name="MacRawByNcRisk.Dialog.Message" xml:space="preserve">
+    <value>{0} + adbLite={1} 组合存在 macOS RawByNc/POSIX 连接问题，可能导致连接失败或卡住。建议将 adbLite 修改为 {2}。</value>
+  </data>
+  <data name="MacRawByNcRisk.Dialog.ApplyRecommended" xml:space="preserve">
+    <value>一键修改</value>
+  </data>
+  <data name="MacRawByNcRisk.Dialog.ForceRun" xml:space="preserve">
+    <value>强行运行</value>
+  </data>
+  <data name="MacRawByNcRisk.Dialog.DefaultTouchMode" xml:space="preserve">
+    <value>默认触控方式</value>
   </data>
 </root>

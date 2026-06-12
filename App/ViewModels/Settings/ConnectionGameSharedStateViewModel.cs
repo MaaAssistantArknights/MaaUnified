@@ -10,6 +10,13 @@ using MAAUnified.CoreBridge;
 
 namespace MAAUnified.App.ViewModels.Settings;
 
+public enum TestLinkInfoSeverity
+{
+    Normal,
+    Warning,
+    Error,
+}
+
 public sealed class ConnectionGameSharedStateViewModel : ObservableObject
 {
     private const int MaxConnectAddressHistory = 5;
@@ -42,7 +49,7 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
     private string _adbPath = "adb";
     private string _clientType = "Official";
     private bool _startGameEnabled = true;
-    private string _touchMode = "minitouch";
+    private string _touchMode = "MaaFwAdb";
     private bool _autoDetect = true;
     private bool _alwaysAutoDetect;
     private bool _retryOnDisconnected;
@@ -64,6 +71,7 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
     private string _attachWindowMouseMethod = DefaultAttachWindowInputMethod;
     private string _attachWindowKeyboardMethod = DefaultAttachWindowInputMethod;
     private string _testLinkInfo = string.Empty;
+    private TestLinkInfoSeverity _testLinkInfoSeverity;
     private string _screencapCost = string.Empty;
     private long? _lastScreencapCostMin;
     private long? _lastScreencapCostAvg;
@@ -502,7 +510,8 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
         set
         {
             var normalized = (value ?? string.Empty).Trim();
-            if (MuMu12ExtrasEnabled
+            if (ShowMuMuExtrasSection
+                && MuMu12ExtrasEnabled
                 && !string.IsNullOrWhiteSpace(normalized)
                 && !ValidateMuMu12EmulatorPath(normalized, out var error))
             {
@@ -556,7 +565,8 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
         set
         {
             var normalized = (value ?? string.Empty).Trim();
-            if (LdPlayerExtrasEnabled
+            if (ShowLdPlayerExtrasSection
+                && LdPlayerExtrasEnabled
                 && !string.IsNullOrWhiteSpace(normalized)
                 && !ValidateLdPlayerEmulatorPath(normalized, out var error))
             {
@@ -634,11 +644,29 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
             if (SetProperty(ref _testLinkInfo, value ?? string.Empty))
             {
                 OnPropertyChanged(nameof(HasTestLinkInfo));
+                TestLinkInfoSeverity = TestLinkInfoSeverity.Normal;
             }
         }
     }
 
     public bool HasTestLinkInfo => !string.IsNullOrWhiteSpace(TestLinkInfo);
+
+    public TestLinkInfoSeverity TestLinkInfoSeverity
+    {
+        get => _testLinkInfoSeverity;
+        set
+        {
+            if (SetProperty(ref _testLinkInfoSeverity, value))
+            {
+                OnPropertyChanged(nameof(TestLinkInfoIsWarning));
+                OnPropertyChanged(nameof(TestLinkInfoIsError));
+            }
+        }
+    }
+
+    public bool TestLinkInfoIsWarning => TestLinkInfoSeverity == TestLinkInfoSeverity.Warning;
+
+    public bool TestLinkInfoIsError => TestLinkInfoSeverity == TestLinkInfoSeverity.Error;
 
     public string ScreencapCost
     {
@@ -825,7 +853,43 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
             TouchMode: touchMode,
             DeploymentWithPause: deploymentWithPause,
             AdbLiteEnabled: AdbLiteEnabled,
-            KillAdbOnExit: KillAdbOnExit);
+            KillAdbOnExit: KillAdbOnExit,
+            ClientType: ResolveEffectiveCoreClientType());
+    }
+
+    public CoreConnectionInfo BuildCoreConnectionInfo(
+        string? address = null,
+        string? effectiveAdbPath = null,
+        TimeSpan? timeout = null)
+    {
+        var resolvedAdbPath = effectiveAdbPath ?? ResolveEffectiveAdbPath(updateStateWhenResolved: true);
+        return new CoreConnectionInfo(
+            (address ?? ConnectAddress ?? string.Empty).Trim(),
+            (ConnectConfig ?? string.Empty).Trim(),
+            string.IsNullOrWhiteSpace(resolvedAdbPath) ? null : resolvedAdbPath.Trim(),
+            BuildCoreConnectionExtras(),
+            timeout);
+    }
+
+    public CoreConnectionExtras BuildCoreConnectionExtras()
+    {
+        return new CoreConnectionExtras(
+            MacUseBundledAdb: UseMacBundledAdbEffective,
+            TouchMode: string.IsNullOrWhiteSpace(TouchMode) ? null : TouchMode.Trim(),
+            AdbLiteEnabled: AdbLiteEnabled,
+            KillAdbOnExit: KillAdbOnExit,
+            MuMu12ExtrasEnabled: MuMu12ExtrasEnabled,
+            MuMu12EmulatorPath: string.IsNullOrWhiteSpace(MuMu12EmulatorPath) ? null : MuMu12EmulatorPath.Trim(),
+            MuMuBridgeConnection: MuMuBridgeConnection,
+            MuMu12Index: string.IsNullOrWhiteSpace(MuMu12Index) ? null : MuMu12Index.Trim(),
+            LdPlayerExtrasEnabled: LdPlayerExtrasEnabled,
+            LdPlayerEmulatorPath: string.IsNullOrWhiteSpace(LdPlayerEmulatorPath) ? null : LdPlayerEmulatorPath.Trim(),
+            LdPlayerManualSetIndex: LdPlayerManualSetIndex,
+            LdPlayerIndex: string.IsNullOrWhiteSpace(LdPlayerIndex) ? null : LdPlayerIndex.Trim(),
+            AttachWindowScreencapMethod: string.IsNullOrWhiteSpace(AttachWindowScreencapMethod) ? null : AttachWindowScreencapMethod.Trim(),
+            AttachWindowMouseMethod: string.IsNullOrWhiteSpace(AttachWindowMouseMethod) ? null : AttachWindowMouseMethod.Trim(),
+            AttachWindowKeyboardMethod: string.IsNullOrWhiteSpace(AttachWindowKeyboardMethod) ? null : AttachWindowKeyboardMethod.Trim(),
+            ClientType: string.IsNullOrWhiteSpace(ClientType) ? null : ClientType.Trim());
     }
 
     public void RemoveAddressFromHistory(string? address)
@@ -1008,6 +1072,14 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
         }
 
         return normalized;
+    }
+
+    private string ResolveEffectiveCoreClientType()
+    {
+        return string.Equals(ConnectConfig, "WSA", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(ConnectConfig, "Androws", StringComparison.OrdinalIgnoreCase)
+            ? (ClientType ?? string.Empty).Trim()
+            : string.Empty;
     }
 
     private static string NormalizeTouchModeAlias(string normalized)

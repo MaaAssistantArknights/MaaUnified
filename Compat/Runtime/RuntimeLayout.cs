@@ -4,10 +4,30 @@ public static class RuntimeLayout
 {
     public const string RuntimeBinDirectoryName = "bin";
     public const string MacAppSupportDirectoryName = "MAAUnified";
+    public const string MacCoreLibraryFileName = "libMaaCore.dylib";
+    public const string MacMaaAdbControlUnitLibraryFileName = "libMaaAdbControlUnit.dylib";
     public const string LinuxAppSupportDirectoryName = "MAAUnified";
     public const string LinuxPortableLauncherFileName = "MAAUnified.AppImage";
     public const string LinuxPortableResourceDirectoryName = "resource";
     public const string LinuxPortableCoreLibraryPrefix = "libMaaCore.so";
+    public static readonly IReadOnlyList<string> MacMaaFrameworkRuntimeLibraryFileNames =
+    [
+        MacMaaAdbControlUnitLibraryFileName,
+    ];
+
+    public static string ResolveMacMaaFrameworkRuntimeLibraryPath(string runtimeBaseDirectory, string libraryFileName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(libraryFileName);
+        return Path.Combine(NormalizeDirectory(runtimeBaseDirectory), libraryFileName);
+    }
+
+    public static IReadOnlyList<string> ResolveMissingMacMaaFrameworkRuntimeLibraries(string runtimeBaseDirectory)
+    {
+        var normalizedRuntimeBaseDirectory = NormalizeDirectory(runtimeBaseDirectory);
+        return MacMaaFrameworkRuntimeLibraryFileNames
+            .Where(library => !File.Exists(ResolveMacMaaFrameworkRuntimeLibraryPath(normalizedRuntimeBaseDirectory, library)))
+            .ToArray();
+    }
 
     public static string ResolveRuntimeBaseDirectory(
         string? executableBaseDirectory = null,

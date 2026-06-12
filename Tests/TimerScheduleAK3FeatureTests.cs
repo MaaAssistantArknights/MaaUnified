@@ -338,8 +338,17 @@ public sealed class TimerScheduleAK3FeatureTests
                 log,
                 root);
             await config.LoadOrBootstrapAsync();
+            var readyAdbPath = await TestConnectionFixtureSupport.PrepareReadyRuntimeAsync(root, config, "timer-ak3-ready");
 
             config.CurrentConfig.Profiles["Night"] = new UnifiedProfile();
+            foreach (var profile in config.CurrentConfig.Profiles.Values)
+            {
+                profile.Values[MacBundledAdbPolicy.ProfileUseBundledAdbKey] = JsonValue.Create(false);
+                profile.Values["ConnectAddress"] = JsonValue.Create(TestConnectionFixtureSupport.ReadyConnectAddress);
+                profile.Values["ConnectConfig"] = JsonValue.Create(TestConnectionFixtureSupport.ReadyConnectConfig);
+                profile.Values["AdbPath"] = JsonValue.Create(readyAdbPath);
+            }
+
             await config.SaveAsync();
 
             var bridge = new CountingBridge();
@@ -356,7 +365,7 @@ public sealed class TimerScheduleAK3FeatureTests
             };
 
             var capability = new PlatformCapabilityFeatureService(platform, diagnostics);
-            var connect = new ConnectFeatureService(session, config);
+            var connect = new ConnectFeatureService(session, config, log, bridge, root);
             var runtime = new MAAUnifiedRuntime
             {
                 CoreBridge = bridge,
@@ -393,7 +402,7 @@ public sealed class TimerScheduleAK3FeatureTests
 
             var shell = new MainShellViewModel(runtime);
             await shell.InitializeAsync();
-            var connectResult = await runtime.ConnectFeatureService.ConnectAsync("127.0.0.1:5555", "General", null);
+            var connectResult = await TestConnectionFixtureSupport.ConnectReadyAsync(runtime.ConnectFeatureService, readyAdbPath);
             Assert.True(connectResult.Success, connectResult.Message);
             TestShellCleanup.StopTimerScheduler(shell);
             await shell.TaskQueuePage.ReloadTasksAsync();

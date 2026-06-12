@@ -53,7 +53,7 @@ internal static class Program
         {
             RecordStartupStage(
                 "Main.MacAppRuntimeSeed.Ready",
-                $"runtimeBaseDir={macSeedResult.RuntimeBaseDirectory}; resourceSeeded={macSeedResult.ResourceSeeded}; resourceSeedReason={macSeedResult.ResourceSeedReason}; nativeLibraries={macSeedResult.NativeLibraryCount}; bundleResourceDir={macSeedResult.BundleResourceDirectory}");
+                $"runtimeBaseDir={macSeedResult.RuntimeBaseDirectory}; resourceSeeded={macSeedResult.ResourceSeeded}; resourceSeedReason={macSeedResult.ResourceSeedReason}; nativeLibraries={macSeedResult.NativeLibraryCount}; seededMaaFrameworkRuntimeLibraries={FormatStartupList(macSeedResult.SeededMaaFrameworkRuntimeLibraries)}; missingMaaFrameworkRuntimeLibraries={FormatStartupList(macSeedResult.MissingMaaFrameworkRuntimeLibraries)}; bundleResourceDir={macSeedResult.BundleResourceDirectory}");
         }
 
         var linuxSeedResult = LinuxPackagedRuntimeSeed.EnsureSeeded(AppContext.BaseDirectory, runtimeBaseDirectory);
@@ -158,6 +158,11 @@ internal static class Program
 
         return !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("WAYLAND_DISPLAY"));
     }
+
+    private static string FormatStartupList(IReadOnlyList<string>? values)
+        => values is null || values.Count == 0
+            ? "<none>"
+            : string.Join(',', values);
 
     internal static bool IsDisplayInitializationFailure(Exception exception)
     {

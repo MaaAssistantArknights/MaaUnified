@@ -70,6 +70,115 @@ public sealed class ConnectionFailureDiagnosticBuilderTests
     }
 
     [Fact]
+    public void Build_WhenQuickAddressPrecheckFails_ShouldIncludeEffectiveConfigFallbackAndClientType()
+    {
+        var state = new ConnectionGameSharedStateViewModel
+        {
+            ConnectAddress = "192.168.0.10:5555",
+            ConnectConfig = "General",
+            MacUseBundledAdb = false,
+            AdbPath = Environment.ProcessPath ?? AppContext.BaseDirectory,
+            TouchMode = "MaaFwAdb",
+            AdbLiteEnabled = true,
+            ClientType = "YoStarEN",
+        };
+
+        var result = UiOperationResult.Fail(
+            nameof(CoreErrorCode.ConnectFailed),
+            "Connection address `192.168.0.10:5555` failed a quick TCP probe.",
+            """
+            Quick connect precheck failed.
+            probe=tcp host=192.168.0.10 port=5555 timeoutMs=750
+            adb=/tmp/platform-tools/adb
+            address=192.168.0.10:5555
+            config=General
+            fallback=configured:MaaFwAdb/adbLite=True
+            extras=macBundledAdb=False,touch=MaaFwAdb,adbLite=True,killAdbOnExit=False,mumu=False:<empty>:False:<empty>,ld=False:<empty>:False:<empty>,attach=<empty>:<empty>:<empty>
+            clientType=YoStarEN
+            adb devices:
+            adb devices exit=0
+            stdout:
+            List of devices attached
+            """);
+
+        var diagnostic = ConnectionFailureDiagnosticBuilder.Build(
+            result,
+            state,
+            language: "en-us");
+
+        Assert.Contains("Fallback: configured:MaaFwAdb/adbLite=True", diagnostic.Details, StringComparison.Ordinal);
+        Assert.Contains("ADB: " + state.AdbPath, diagnostic.Details, StringComparison.Ordinal);
+        Assert.Contains("Address: 192.168.0.10:5555", diagnostic.Details, StringComparison.Ordinal);
+        Assert.Contains("Connect config: General", diagnostic.Details, StringComparison.Ordinal);
+        Assert.Contains("clientType=YoStarEN", diagnostic.Details, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Build_WhenTcpProbeFails_ShouldExplainAddressOrPort()
+    {
+        var result = UiOperationResult.Fail(
+            nameof(CoreErrorCode.ConnectFailed),
+            "Connection address `127.0.0.1:5554` failed a quick TCP probe. Candidate causes: emulator is not running, port is wrong, ADB debugging is disabled, or the address belongs to another emulator.",
+            """
+            Quick connect precheck failed.
+            stage=tcp-probe-failed
+            probe=tcp host=127.0.0.1 port=5554 timeoutMs=750
+            """);
+
+        var diagnostic = ConnectionFailureDiagnosticBuilder.Build(
+            result,
+            CreateManualAdbState(),
+            language: "zh-cn");
+
+        Assert.True(diagnostic.IsSpecific);
+        Assert.Equal(ConnectionFailureCategory.AddressOrPortUnavailable, diagnostic.Category);
+        Assert.Contains("地址或端口", diagnostic.BuildDialogMessage(), StringComparison.Ordinal);
+        Assert.Contains("模拟器已启动", diagnostic.BuildDialogMessage(), StringComparison.Ordinal);
+        Assert.DoesNotContain("probe=tcp", diagnostic.BuildDialogMessage(), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("probe=tcp host=127.0.0.1 port=5554 timeoutMs=750", diagnostic.Details, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Build_WhenAdbDevicesReportsUnauthorized_ShouldExplainDeviceState()
+    {
+        var diagnostic = ConnectionFailureDiagnosticBuilder.Build(
+            UiOperationResult.Fail(
+                nameof(CoreErrorCode.ConnectFailed),
+                "adb devices reported device unauthorized.",
+                """
+                adb devices:
+                List of devices attached
+                emulator-5554 unauthorized
+                """),
+            CreateManualAdbState(),
+            language: "zh-cn");
+
+        Assert.True(diagnostic.IsSpecific);
+        Assert.Equal(ConnectionFailureCategory.AdbDeviceUnavailable, diagnostic.Category);
+        Assert.Contains("ADB 未连接到可用设备", diagnostic.Message, StringComparison.Ordinal);
+        Assert.Contains("授权", diagnostic.Suggestion, StringComparison.Ordinal);
+        Assert.DoesNotContain("List of devices attached", diagnostic.BuildDialogMessage(), StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("emulator-5554 unauthorized", diagnostic.BuildDialogMessage(), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("unauthorized", diagnostic.Details, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Build_WhenCoreReportsInvalidConnection_ShouldExplainConnectionConfiguration()
+    {
+        var diagnostic = ConnectionFailureDiagnosticBuilder.Build(
+            UiOperationResult.Fail(
+                "InvalidConnection",
+                "InvalidConnection: invalid address or port."),
+            CreateManualAdbState(),
+            language: "zh-cn");
+
+        Assert.True(diagnostic.IsSpecific);
+        Assert.Equal(ConnectionFailureCategory.AddressOrPortUnavailable, diagnostic.Category);
+        Assert.Contains("地址", diagnostic.BuildDialogMessage(), StringComparison.Ordinal);
+        Assert.DoesNotContain("InvalidConnection", diagnostic.BuildDialogMessage(), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Build_WhenTouchModeUnavailable_ShouldExplainTouchMode()
     {
         const string details = """

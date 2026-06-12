@@ -1200,7 +1200,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
                 null,
                 UiOperationResult.Fail(UiErrorCode.ToolNotSupported, $"Tool tab index `{SelectedTabIndex}` is not supported."),
                 "resolve",
-                cancellationToken);
+                cancellationToken: cancellationToken);
             return;
         }
 
@@ -1883,12 +1883,37 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
 
     private async Task<UiOperationResult> EnsureConnectedAsync(CancellationToken cancellationToken)
     {
-        if (Runtime.SessionService.CurrentState is SessionState.Connected or SessionState.Running or SessionState.Stopping)
+        if (Runtime.SessionService.CurrentState is SessionState.Running or SessionState.Stopping)
         {
             return UiOperationResult.Ok("Session already connected.");
         }
 
+        if (Runtime.SessionService.CurrentState == SessionState.Connected)
+        {
+            var currentConnection = BuildCurrentConnectionInfo();
+            if (Runtime.SessionService.IsConnectedWith(currentConnection))
+            {
+                return UiOperationResult.Ok("Session already connected.");
+            }
+
+            Runtime.LogService.Info(
+                $"Toolbox reconnect required because connection settings changed: current address={currentConnection.Address}, config={currentConnection.ConnectConfig}, adb={currentConnection.AdbPath ?? "<null>"}; previous address={Runtime.SessionService.LastSuccessfulConnectionInfo?.Address ?? "<null>"}, config={Runtime.SessionService.LastSuccessfulConnectionInfo?.ConnectConfig ?? "<null>"}, adb={Runtime.SessionService.LastSuccessfulConnectionInfo?.AdbPath ?? "<null>"}");
+        }
+
         return await TryConnectWithCurrentSettingsAsync(cancellationToken);
+    }
+
+    private CoreConnectionInfo BuildCurrentConnectionInfo()
+    {
+        var adbPath = ResolveEffectiveAdbPath();
+        return _connectionState is not null
+            ? _connectionState.BuildCoreConnectionInfo(
+                address: ResolveConnectAddress(),
+                effectiveAdbPath: adbPath)
+            : new CoreConnectionInfo(
+                ResolveConnectAddress(),
+                ResolveConnectConfig(),
+                string.IsNullOrWhiteSpace(adbPath) ? null : adbPath.Trim());
     }
 
     private async Task<UiOperationResult> TryConnectWithCurrentSettingsAsync(CancellationToken cancellationToken)
@@ -1912,7 +1937,18 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
 
         foreach (var candidate in candidates)
         {
-            var result = await Runtime.ConnectFeatureService.ConnectAsync(candidate, connectConfig, adbPath, cancellationToken);
+            var result = await Runtime.ConnectFeatureService.ConnectAsync(
+                _connectionState is not null
+                    ? _connectionState.BuildCoreConnectionInfo(
+                        address: candidate,
+                        effectiveAdbPath: adbPath,
+                        timeout: TimeSpan.FromSeconds(20))
+                    : new CoreConnectionInfo(
+                        candidate,
+                        connectConfig,
+                        string.IsNullOrWhiteSpace(adbPath) ? null : adbPath.Trim(),
+                        Timeout: TimeSpan.FromSeconds(20)),
+                cancellationToken);
             if (result.Success)
             {
                 return result;
@@ -1959,6 +1995,18 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         }
 
         return ResolveProfileString("ConnectConfig", LegacyConfigurationKeys.ConnectConfig) ?? "General";
+    }
+
+    private string ResolveConnectAddress()
+    {
+        if (_connectionState is not null)
+        {
+            return string.IsNullOrWhiteSpace(_connectionState.ConnectAddress)
+                ? "127.0.0.1:5555"
+                : _connectionState.ConnectAddress.Trim();
+        }
+
+        return ResolveProfileString("ConnectAddress", LegacyConfigurationKeys.ConnectAddress) ?? "127.0.0.1:5555";
     }
 
     private string? ResolveEffectiveAdbPath()

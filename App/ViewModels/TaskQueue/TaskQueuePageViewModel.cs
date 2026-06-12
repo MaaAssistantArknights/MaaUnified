@@ -31,6 +31,10 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     private const string TaskQueueRunOwner = "TaskQueue";
     private const string TaskSelectedIndexConfigKey = "TaskSelectedIndex";
     private const string TaskQueueSaveKey = "TaskQueue.Queue";
+    private static readonly TimeSpan LinkStartCancelStopTimeout = TimeSpan.FromSeconds(12);
+    private static readonly TimeSpan ConnectRetryTotalBudget = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan ConnectCandidateTotalBudget = TimeSpan.FromSeconds(20);
+    private static readonly TimeSpan AdbRecoveryCommandTimeout = TimeSpan.FromSeconds(8);
     private static readonly string[] WpfDefaultTaskOrder =
     [
         TaskModuleTypes.StartUp,
@@ -205,6 +209,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     private readonly UserDataUpdateModuleViewModel _fallbackUserDataUpdateModule;
     private readonly CustomModuleViewModel _fallbackCustomModule;
     private Task _pendingBindingTask = Task.CompletedTask;
+    private Task _stopStartRequestTask = Task.CompletedTask;
     private CancellationTokenSource? _moduleAutoSaveCts;
     private int _pendingBindingVersion;
     private CancellationTokenSource? _startRequestCts;
@@ -2513,13 +2518,33 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                     return;
                 }
 
-                if (!await EnsureConnectedForLinkStartAsync("TaskQueue.Start", startCancellationToken))
+                await WaitForPendingBindingAsync(startCancellationToken);
+                if (!await SaveBoundTaskModulesAsync(startCancellationToken))
                 {
                     return;
                 }
 
-                await WaitForPendingBindingAsync(startCancellationToken);
-                if (!await SaveBoundTaskModulesAsync(startCancellationToken))
+                RefreshConfigValidationState(Runtime.ConfigurationService.RevalidateCurrentConfig());
+                if (HasBlockingConfigIssues)
+                {
+                    var first = Runtime.ConfigurationService.CurrentValidationIssues.FirstOrDefault(i => i.Blocking);
+                    LastErrorMessage = first is null
+                        ? "Config validation has blocking issues."
+                        : $"{first.Scope}:{first.Code}:{first.Field}:{first.Message}";
+                    await NavigateToFirstBlockingIssueAsync(first, startCancellationToken);
+                    if (!string.IsNullOrWhiteSpace(SelectedTask?.Name)
+                        && !LastErrorMessage.Contains(SelectedTask.Name, StringComparison.OrdinalIgnoreCase))
+                    {
+                        LastErrorMessage = $"{LastErrorMessage} ({SelectedTask.Name})";
+                    }
+
+                    AppendStartFailureLog(LastErrorMessage);
+
+                    await RecordConfigValidationFailureAsync(first, startCancellationToken);
+                    return;
+                }
+
+                if (!await EnsureConnectedForLinkStartAsync("TaskQueue.Start", startCancellationToken))
                 {
                     return;
                 }
@@ -2560,20 +2585,6 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
                 if (!await ValidateEnabledTasksBeforeStartAsync(startCancellationToken))
                 {
-                    return;
-                }
-
-                RefreshConfigValidationState(Runtime.ConfigurationService.RevalidateCurrentConfig());
-                if (HasBlockingConfigIssues)
-                {
-                    var first = Runtime.ConfigurationService.CurrentValidationIssues.FirstOrDefault(i => i.Blocking);
-                    LastErrorMessage = first is null
-                        ? "Config validation has blocking issues."
-                        : $"{first.Scope}:{first.Code}:{first.Field}:{first.Message}";
-                    await NavigateToFirstBlockingIssueAsync(first, startCancellationToken);
-                    AppendStartFailureLog(LastErrorMessage);
-
-                    await RecordConfigValidationFailureAsync(first, startCancellationToken);
                     return;
                 }
 
@@ -2628,33 +2639,57 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         }
     }
 
-    private Task StopStartRequestAsync(CancellationToken cancellationToken)
+    private async Task StopStartRequestAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        var sessionStateAtCancelRequest = Runtime.SessionService.CurrentState;
         _startRequestCts?.Cancel();
+        Runtime.SessionService.EndRun(TaskQueueRunOwner);
         _clearTaskStatusesWhenStopped = true;
         _ = Runtime.AchievementTrackerService.Unlock("TacticalRetreat");
 
         CurrentSessionState = Runtime.SessionService.CurrentState;
         SyncStoppedUiStateIfSessionNotActive();
         SetStartRequestActive(false);
-        _ = StopStartRequestCoreAsync();
-        return Task.CompletedTask;
+        if (sessionStateAtCancelRequest is not (SessionState.Connecting or SessionState.Running or SessionState.Stopping))
+        {
+            return;
+        }
+
+        _stopStartRequestTask = StopStartRequestCoreWithTimeoutAsync(cancellationToken);
+        var settleWindow = Task.Delay(TimeSpan.FromMilliseconds(250), cancellationToken);
+        await Task.WhenAny(_stopStartRequestTask, settleWindow);
     }
 
-    private async Task StopStartRequestCoreAsync()
+    private async Task StopStartRequestCoreWithTimeoutAsync(CancellationToken cancellationToken)
+    {
+        using var stopCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        stopCts.CancelAfter(LinkStartCancelStopTimeout);
+        await StopStartRequestCoreAsync(stopCts.Token);
+    }
+
+    private async Task StopStartRequestCoreAsync(CancellationToken cancellationToken)
     {
         try
         {
-            var stopResult = await Task.Run(
-                () => Runtime.ConnectFeatureService.StopAsync(CancellationToken.None));
+            var stopResult = await Runtime.ConnectFeatureService.StopAsync(cancellationToken);
             if (!stopResult.Success
                 && Runtime.SessionService.CurrentState is SessionState.Running or SessionState.Stopping)
             {
                 await RecordFailedResultAsync(
                     "TaskQueue.StopStartRequest",
-                    stopResult);
+                    stopResult,
+                    CancellationToken.None);
             }
+        }
+        catch (OperationCanceledException)
+        {
+            await RecordFailedResultAsync(
+                "TaskQueue.StopStartRequest",
+                UiOperationResult.Fail(
+                    UiErrorCode.OperationAlreadyStopped,
+                    $"Stop for canceled LinkStart did not settle within {LinkStartCancelStopTimeout.TotalSeconds:N0}s."),
+                CancellationToken.None);
         }
         catch (Exception ex)
         {
@@ -2718,9 +2753,18 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
         CurrentSessionState = Runtime.SessionService.CurrentState;
         Runtime.LogService.Debug($"LinkStart precheck: state={CurrentSessionState}");
+        CoreConnectionInfo? requiredConnection = null;
         if (CurrentSessionState == SessionState.Connected)
         {
-            return true;
+            var currentConnection = BuildCurrentConnectionInfo();
+            if (Runtime.SessionService.IsConnectedWith(currentConnection))
+            {
+                return true;
+            }
+
+            requiredConnection = currentConnection;
+            Runtime.LogService.Info(
+                $"LinkStart reconnect required because connection settings changed: current address={currentConnection.Address}, config={currentConnection.ConnectConfig}, adb={currentConnection.AdbPath ?? "<null>"}; previous address={Runtime.SessionService.LastSuccessfulConnectionInfo?.Address ?? "<null>"}, config={Runtime.SessionService.LastSuccessfulConnectionInfo?.ConnectConfig ?? "<null>"}, adb={Runtime.SessionService.LastSuccessfulConnectionInfo?.AdbPath ?? "<null>"}");
         }
 
         if (CurrentSessionState is SessionState.Running or SessionState.Stopping)
@@ -2734,102 +2778,125 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             return false;
         }
 
-        var connectResult = await TryConnectWithRetryAsync(cancellationToken);
+        var connectResult = await TryConnectWithRetryAsync(cancellationToken, requiredConnection);
         CurrentSessionState = Runtime.SessionService.CurrentState;
         if (connectResult.Success && CurrentSessionState == SessionState.Connected)
         {
             return true;
         }
 
-        var connectMessage = BuildConnectFailureMessage(connectResult);
+        var connectMessage = string.Equals(connectResult.Error?.Code, UiErrorCode.OperationAlreadyRunning, StringComparison.Ordinal)
+            ? connectResult.Message
+            : BuildConnectFailureMessage(connectResult);
         LastErrorMessage = connectMessage;
         AppendStartFailureLog(LastErrorMessage);
         await Runtime.DialogFeatureService.ReportErrorAsync(
             scope,
             UiOperationResult.Fail(
-                UiErrorCode.ConnectFailed,
+                connectResult.Error?.Code ?? UiErrorCode.ConnectFailed,
                 LastErrorMessage,
                 connectResult.Error?.Details),
             cancellationToken);
         return false;
     }
 
-    private async Task<UiOperationResult> TryConnectWithRetryAsync(CancellationToken cancellationToken)
+    private CoreConnectionInfo BuildCurrentConnectionInfo()
     {
-        var connectResult = await TryConnectWithCurrentSettingsAsync(cancellationToken);
-        if (connectResult.Success)
-        {
-            return connectResult;
-        }
+        var effectiveAdbPath = _connectionGameSharedState.ResolveEffectiveAdbPath(updateStateWhenResolved: true);
+        return _connectionGameSharedState.BuildCoreConnectionInfo(effectiveAdbPath: effectiveAdbPath);
+    }
 
-        AdbCommandFailureInfo? lastAdbFailure = null;
-        var address = (_connectionGameSharedState.ConnectAddress ?? string.Empty).Trim();
-        var adbExecutableResult = await ResolveAdbExecutableForRecoveryAsync(cancellationToken);
-        if (!adbExecutableResult.Success)
-        {
-            return BuildDiagnosticConnectFailureResult(adbExecutableResult);
-        }
+    private async Task<UiOperationResult> TryConnectWithRetryAsync(
+        CancellationToken cancellationToken,
+        CoreConnectionInfo? requiredConnection = null)
+    {
+        using var retryCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        retryCts.CancelAfter(ConnectRetryTotalBudget);
+        var retryToken = retryCts.Token;
 
-        var adbExecutable = adbExecutableResult.Message;
-
-        if (_connectionGameSharedState.RetryOnDisconnected)
+        try
         {
-            AppendConnectionRecoveryAttemptLog("正在尝试启动模拟器。", "Trying to start the emulator.");
-            _ = await TryStartEmulatorForReconnectAsync(cancellationToken);
-            connectResult = await TryConnectWithCurrentSettingsAsync(cancellationToken);
+            var connectResult = await TryConnectWithCurrentSettingsAsync(retryToken, requiredConnection);
             if (connectResult.Success)
             {
                 return connectResult;
             }
-        }
 
-        if (!string.IsNullOrWhiteSpace(address)
-            && AppendConnectionRecoveryAttemptLog("正在尝试通过 ADB 重新连接。", "Trying to reconnect by ADB."))
-        {
-            var reconnect = await TryReconnectByAdbAsync(adbExecutable, address, cancellationToken);
-            if (reconnect.Success)
+            AdbCommandFailureInfo? lastAdbFailure = null;
+            var address = (_connectionGameSharedState.ConnectAddress ?? string.Empty).Trim();
+            var adbExecutableResult = await ResolveAdbExecutableForRecoveryAsync(retryToken);
+            if (!adbExecutableResult.Success)
             {
-                connectResult = await TryConnectWithCurrentSettingsAsync(cancellationToken);
+                return BuildDiagnosticConnectFailureResult(adbExecutableResult);
+            }
+
+            var adbExecutable = adbExecutableResult.Message;
+
+            if (_connectionGameSharedState.RetryOnDisconnected)
+            {
+                AppendConnectionRecoveryAttemptLog("正在尝试启动模拟器。", "Trying to start the emulator.");
+                _ = await TryStartEmulatorForReconnectAsync(retryToken);
+                connectResult = await TryConnectWithCurrentSettingsAsync(retryToken, requiredConnection);
                 if (connectResult.Success)
                 {
                     return connectResult;
                 }
             }
 
-            lastAdbFailure = reconnect.Failure ?? lastAdbFailure;
-        }
-
-        if (_connectionGameSharedState.AllowAdbRestart
-            && AppendConnectionRecoveryAttemptLog("正在尝试重启 ADB。", "Trying to restart ADB."))
-        {
-            var restart = await TryRestartAdbServerAsync(adbExecutable, cancellationToken);
-            if (restart.Success)
+            if (!string.IsNullOrWhiteSpace(address)
+                && AppendConnectionRecoveryAttemptLog("正在尝试通过 ADB 重新连接。", "Trying to reconnect by ADB."))
             {
-                connectResult = await TryConnectWithCurrentSettingsAsync(cancellationToken);
-                if (connectResult.Success)
+                var reconnect = await TryReconnectByAdbAsync(adbExecutable, address, retryToken);
+                if (reconnect.Success)
                 {
-                    return connectResult;
+                    connectResult = await TryConnectWithCurrentSettingsAsync(retryToken, requiredConnection);
+                    if (connectResult.Success)
+                    {
+                        return connectResult;
+                    }
                 }
+
+                lastAdbFailure = reconnect.Failure ?? lastAdbFailure;
             }
 
-            lastAdbFailure = restart.Failure ?? lastAdbFailure;
-        }
-
-        if (_connectionGameSharedState.AllowAdbHardRestart
-            && AppendConnectionRecoveryAttemptLog("正在尝试强制重启 ADB。", "Trying to hard-restart ADB."))
-        {
-            var hardRestart = await TryHardRestartAdbServerAsync(adbExecutable, cancellationToken);
-            if (hardRestart.Success)
+            if (_connectionGameSharedState.AllowAdbRestart
+                && AppendConnectionRecoveryAttemptLog("正在尝试重启 ADB。", "Trying to restart ADB."))
             {
-                connectResult = await TryConnectWithCurrentSettingsAsync(cancellationToken);
+                var restart = await TryRestartAdbServerAsync(adbExecutable, retryToken);
+                if (restart.Success)
+                {
+                    connectResult = await TryConnectWithCurrentSettingsAsync(retryToken, requiredConnection);
+                    if (connectResult.Success)
+                    {
+                        return connectResult;
+                    }
+                }
+
+                lastAdbFailure = restart.Failure ?? lastAdbFailure;
             }
 
-            lastAdbFailure = hardRestart.Failure ?? lastAdbFailure;
-        }
+            if (_connectionGameSharedState.AllowAdbHardRestart
+                && AppendConnectionRecoveryAttemptLog("正在尝试强制重启 ADB。", "Trying to hard-restart ADB."))
+            {
+                var hardRestart = await TryHardRestartAdbServerAsync(adbExecutable, retryToken);
+                if (hardRestart.Success)
+                {
+                    connectResult = await TryConnectWithCurrentSettingsAsync(retryToken, requiredConnection);
+                }
 
-        return lastAdbFailure is null
-            ? connectResult
-            : BuildDiagnosticConnectFailureResult(connectResult, adbCommandFailure: lastAdbFailure);
+                lastAdbFailure = hardRestart.Failure ?? lastAdbFailure;
+            }
+
+            return lastAdbFailure is null
+                ? connectResult
+                : BuildDiagnosticConnectFailureResult(connectResult, adbCommandFailure: lastAdbFailure);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && retryCts.IsCancellationRequested)
+        {
+            return UiOperationResult.Fail(
+                UiErrorCode.ConnectFailed,
+                $"Connection attempts timed out after {ConnectRetryTotalBudget.TotalSeconds:N0}s.");
+        }
     }
 
     private async Task<UiOperationResult> ResolveAdbExecutableForRecoveryAsync(CancellationToken cancellationToken)
@@ -2847,57 +2914,106 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         }
 
         var effectiveAdbPath = _connectionGameSharedState.ResolveEffectiveAdbPath(updateStateWhenResolved: true);
+        if (MacBundledAdbPolicy.IsSupportedPlatform)
+        {
+            Runtime.LogService.Debug(MacBundledAdbPolicy.BuildResolutionContext(
+                _connectionGameSharedState.AdbPath,
+                effectiveAdbPath,
+                _connectionGameSharedState.UseMacBundledAdbEffective));
+        }
+
         return UiOperationResult.Ok(string.IsNullOrWhiteSpace(effectiveAdbPath) ? "adb" : effectiveAdbPath);
     }
 
-    private async Task<UiOperationResult> TryConnectWithCurrentSettingsAsync(CancellationToken cancellationToken)
+    private async Task<UiOperationResult> TryConnectWithCurrentSettingsAsync(
+        CancellationToken cancellationToken,
+        CoreConnectionInfo? requiredConnection = null)
     {
-        var consent = await MacBundledAdbConsentService.EnsureAcceptedAsync(
-            Runtime,
-            _dialogService,
-            _connectionGameSharedState.UseMacBundledAdbEffective,
-            "TaskQueue.Connect.MacBundledAdbConsent",
-            Texts.Language,
-            cancellationToken);
-        if (!consent.Success)
-        {
-            return consent;
-        }
+        using var candidateCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        candidateCts.CancelAfter(ConnectCandidateTotalBudget);
+        var candidateToken = candidateCts.Token;
 
-        var effectiveAdbPath = _connectionGameSharedState.ResolveEffectiveAdbPath(updateStateWhenResolved: true);
-        var adbPath = string.IsNullOrWhiteSpace(effectiveAdbPath) ? null : effectiveAdbPath;
-        var instanceOptions = _connectionGameSharedState.BuildCoreInstanceOptions();
-        var candidates = _connectionGameSharedState.BuildConnectAddressCandidates(includeConfiguredAddress: true);
-        Runtime.LogService.Debug(
-            $"TaskQueue connect candidates prepared: count={candidates.Count}, config={_connectionGameSharedState.ConnectConfig}, adb={adbPath ?? "<null>"}");
-        UiOperationResult? lastFailure = null;
-        var candidateFailures = new List<ConnectionAttemptFailure>();
-
-        foreach (var candidate in candidates)
+        try
         {
-            Runtime.LogService.Debug($"TaskQueue trying connect candidate: {candidate}");
-            var result = await Runtime.ConnectFeatureService.ConnectAsync(
-                candidate,
-                _connectionGameSharedState.ConnectConfig,
-                adbPath,
-                instanceOptions,
-                cancellationToken);
-            if (result.Success)
+            var consent = await MacBundledAdbConsentService.EnsureAcceptedAsync(
+                Runtime,
+                _dialogService,
+                _connectionGameSharedState.UseMacBundledAdbEffective,
+                "TaskQueue.Connect.MacBundledAdbConsent",
+                Texts.Language,
+                candidateToken);
+            if (!consent.Success)
             {
-                Runtime.LogService.Debug($"TaskQueue connect succeeded: {candidate}");
-                _connectionGameSharedState.ConnectAddress = candidate;
-                return result;
+                return consent;
             }
 
-            Runtime.LogService.Debug(
-                $"TaskQueue connect failed: {candidate}, code={result.Error?.Code}, message={result.Message}");
-            lastFailure = result;
-            candidateFailures.Add(new ConnectionAttemptFailure(candidate, result));
-        }
+            if (requiredConnection is not null)
+            {
+                Runtime.LogService.Debug(
+                    $"TaskQueue connect required target prepared: address={requiredConnection.Address}, config={requiredConnection.ConnectConfig}, adb={requiredConnection.AdbPath ?? "<null>"}");
+                return await Runtime.ConnectFeatureService.ConnectAsync(requiredConnection, candidateToken);
+            }
 
-        return BuildDiagnosticConnectFailureResult(
-            lastFailure ?? UiOperationResult.Fail(UiErrorCode.ConnectFailed, "Connection failed."),
-            candidateFailures);
+            var effectiveAdbPath = _connectionGameSharedState.ResolveEffectiveAdbPath(updateStateWhenResolved: true);
+            var candidatesResult = Runtime.ConnectFeatureService.BuildConnectionCandidates(
+                _connectionGameSharedState.ConnectAddress,
+                _connectionGameSharedState.ConnectConfig,
+                effectiveAdbPath,
+                _connectionGameSharedState.BuildCoreConnectionExtras(),
+                _connectionGameSharedState.AutoDetect,
+                _connectionGameSharedState.AlwaysAutoDetect,
+                includeConfiguredAddress: true,
+                timeout: ConnectCandidateTotalBudget);
+            if (!candidatesResult.Success || candidatesResult.Value is null)
+            {
+                return UiOperationResult.Fail(
+                    candidatesResult.Error?.Code ?? UiErrorCode.ConnectFailed,
+                    candidatesResult.Message,
+                    candidatesResult.Error?.Details);
+            }
+
+            var candidates = candidatesResult.Value;
+            Runtime.LogService.Debug(
+                $"TaskQueue connect candidates prepared: count={candidates.Count}, config={_connectionGameSharedState.ConnectConfig}, adb={effectiveAdbPath ?? "<null>"}");
+            if (MacBundledAdbPolicy.IsSupportedPlatform)
+            {
+                Runtime.LogService.Debug(MacBundledAdbPolicy.BuildResolutionContext(
+                    _connectionGameSharedState.AdbPath,
+                    effectiveAdbPath,
+                    _connectionGameSharedState.UseMacBundledAdbEffective));
+            }
+
+            var result = await Runtime.ConnectFeatureService.ConnectCandidatesAsync(candidates, candidateToken);
+            if (result.Success)
+            {
+                Runtime.LogService.Debug($"TaskQueue connect succeeded: {result.SuccessfulAddress}");
+                if (!string.IsNullOrWhiteSpace(result.SuccessfulAddress))
+                {
+                    _connectionGameSharedState.ConnectAddress = result.SuccessfulAddress;
+                }
+
+                return result.Result;
+            }
+
+            if (string.Equals(result.Result.Error?.Code, UiErrorCode.OperationAlreadyRunning, StringComparison.Ordinal))
+            {
+                return result.Result;
+            }
+
+            var candidateFailures = result.CandidateFailures
+                .Select(static failure => new ConnectionAttemptFailure(failure.Candidate, failure.Result))
+                .ToList();
+            return BuildDiagnosticConnectFailureResult(
+                result.Result,
+                candidateFailures);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && candidateCts.IsCancellationRequested)
+        {
+            return BuildDiagnosticConnectFailureResult(
+                UiOperationResult.Fail(
+                    UiErrorCode.ConnectFailed,
+                    $"Connection candidates timed out after {ConnectCandidateTotalBudget.TotalSeconds:N0}s."));
+        }
     }
 
     private UiOperationResult BuildDiagnosticConnectFailureResult(
@@ -2927,13 +3043,23 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             return AdbRecoveryResult.Failed(null);
         }
 
-        var disconnect = await RunProcessAsync("adb disconnect", adbExecutable, $"disconnect {address}", cancellationToken);
+        var disconnect = await RunProcessAsync(
+            "adb disconnect",
+            adbExecutable,
+            $"disconnect {address}",
+            cancellationToken,
+            logDiagnostic: Runtime.LogService.Warn);
         if (!disconnect.Success && !IsBenignAdbDisconnectFailure(disconnect))
         {
             return AdbRecoveryResult.Failed(disconnect);
         }
 
-        var connect = await RunProcessAsync("adb connect", adbExecutable, $"connect {address}", cancellationToken);
+        var connect = await RunProcessAsync(
+            "adb connect",
+            adbExecutable,
+            $"connect {address}",
+            cancellationToken,
+            logDiagnostic: Runtime.LogService.Warn);
         return connect.Success
             ? AdbRecoveryResult.Ok()
             : AdbRecoveryResult.Failed(connect);
@@ -2956,13 +3082,23 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
     private async Task<AdbRecoveryResult> TryRestartAdbServerAsync(string adbExecutable, CancellationToken cancellationToken)
     {
-        var killServer = await RunProcessAsync("adb kill-server", adbExecutable, "kill-server", cancellationToken);
+        var killServer = await RunProcessAsync(
+            "adb kill-server",
+            adbExecutable,
+            "kill-server",
+            cancellationToken,
+            logDiagnostic: Runtime.LogService.Warn);
         if (!killServer.Success)
         {
             return AdbRecoveryResult.Failed(killServer);
         }
 
-        var startServer = await RunProcessAsync("adb start-server", adbExecutable, "start-server", cancellationToken);
+        var startServer = await RunProcessAsync(
+            "adb start-server",
+            adbExecutable,
+            "start-server",
+            cancellationToken,
+            logDiagnostic: Runtime.LogService.Warn);
         return startServer.Success
             ? AdbRecoveryResult.Ok()
             : AdbRecoveryResult.Failed(startServer);
@@ -2973,7 +3109,12 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         AdbCommandFailureInfo? taskkillFailure = null;
         if (OperatingSystem.IsWindows())
         {
-            var taskkill = await RunProcessAsync("taskkill adb.exe", "taskkill", "/F /IM adb.exe", cancellationToken);
+            var taskkill = await RunProcessAsync(
+                "taskkill adb.exe",
+                "taskkill",
+                "/F /IM adb.exe",
+                cancellationToken,
+                logDiagnostic: Runtime.LogService.Warn);
             if (!taskkill.Success)
             {
                 taskkillFailure = taskkill;
@@ -3038,12 +3179,48 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         }
     }
 
+    internal static Task<AdbCommandFailureInfo> RunAdbRecoveryProcessForTestAsync(
+        string commandName,
+        string fileName,
+        string arguments,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        return RunProcessAsync(commandName, fileName, arguments, cancellationToken, timeout);
+    }
+
     private static async Task<AdbCommandFailureInfo> RunProcessAsync(
         string commandName,
         string fileName,
         string arguments,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        TimeSpan? timeout = null,
+        Action<string>? logDiagnostic = null)
     {
+        var effectiveTimeout = timeout ?? AdbRecoveryCommandTimeout;
+        var resolutionDiagnosticContext = MacBundledAdbPolicy.IsSupportedPlatform
+            ? MacBundledAdbPolicy.BuildResolutionContext(fileName, fileName)
+            : null;
+        AdbCommandFailureInfo BuildFailure(
+            int? exitCode,
+            string? standardError,
+            string? standardOutput,
+            string? exceptionMessage)
+        {
+            var failure = new AdbCommandFailureInfo(
+                commandName,
+                fileName,
+                arguments,
+                exitCode,
+                standardError,
+                standardOutput,
+                exceptionMessage,
+                resolutionDiagnosticContext);
+            logDiagnostic?.Invoke(
+                $"ADB recovery command `{commandName}` failed: file=`{fileName}`, args=`{arguments}`, timeout={effectiveTimeout.TotalSeconds:N1}s, exitCode={exitCode?.ToString() ?? "<null>"}, error={standardError ?? "<null>"}, output={standardOutput ?? "<null>"}, exception={exceptionMessage ?? "<null>"}, adbResolution={resolutionDiagnosticContext ?? "<not-macos>"}");
+            return failure;
+        }
+
         try
         {
             using var process = new Process
@@ -3061,29 +3238,73 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
             if (!process.Start())
             {
+                return BuildFailure(null, null, null, $"Failed to start process `{fileName}`.");
+            }
+
+            var errorTask = process.StandardError.ReadToEndAsync();
+            var outputTask = process.StandardOutput.ReadToEndAsync();
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(effectiveTimeout);
+
+            try
+            {
+                await process.WaitForExitAsync(timeoutCts.Token);
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && timeoutCts.IsCancellationRequested)
+            {
+                var killDiagnostic = TryKillProcessTree(process);
+                return BuildFailure(
+                    null,
+                    null,
+                    null,
+                    $"Process timed out after {effectiveTimeout.TotalSeconds:N1}s and was killed. {killDiagnostic}");
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                var killDiagnostic = TryKillProcessTree(process);
+                return BuildFailure(null, null, null, $"Process was canceled and killed. {killDiagnostic}");
+            }
+
+            var error = await errorTask;
+            var output = await outputTask;
+            if (process.ExitCode == 0)
+            {
                 return new AdbCommandFailureInfo(
                     commandName,
                     fileName,
                     arguments,
-                    null,
-                    null,
-                    null,
-                    $"Failed to start process `{fileName}`.");
+                    process.ExitCode,
+                    error,
+                    output,
+                    ResolutionDiagnosticContext: resolutionDiagnosticContext);
             }
 
-            await process.WaitForExitAsync(cancellationToken);
-            var error = await process.StandardError.ReadToEndAsync(cancellationToken);
-            var output = await process.StandardOutput.ReadToEndAsync(cancellationToken);
-            if (process.ExitCode == 0)
-            {
-                return new AdbCommandFailureInfo(commandName, fileName, arguments, process.ExitCode, error, output);
-            }
-
-            return new AdbCommandFailureInfo(commandName, fileName, arguments, process.ExitCode, error, output);
+            return BuildFailure(process.ExitCode, error, output, null);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            return new AdbCommandFailureInfo(commandName, fileName, arguments, null, null, null, ex.Message);
+            return BuildFailure(null, null, null, ex.Message);
+        }
+    }
+
+    private static string TryKillProcessTree(Process process)
+    {
+        try
+        {
+            if (process.HasExited)
+            {
+                return "Process had already exited before kill.";
+            }
+
+            process.Kill(entireProcessTree: true);
+            var exited = process.WaitForExit(milliseconds: 1_000);
+            return exited
+                ? "Kill(entireProcessTree:true) completed."
+                : "Kill(entireProcessTree:true) was requested, but the process did not exit within 1.0s.";
+        }
+        catch (Exception ex)
+        {
+            return $"Kill(entireProcessTree:true) failed: {ex.Message}";
         }
     }
 
@@ -3115,12 +3336,19 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
     private string BuildConnectFailureMessage(UiOperationResult connectResult)
     {
-        var segments = new List<string>
+        var genericHint = BuildLocalizedMessage(
+            "连接失败。请“检查连接设置” -> “尝试重启模拟器与 ADB” -> “重启电脑”。",
+            "Connection failed. Check connection settings -> try restarting the emulator and ADB -> reboot the computer.");
+        var segments = new List<string>();
+        var hasDiagnosticMessage = HasSpecificConnectFailureDiagnostic(connectResult);
+        if (hasDiagnosticMessage && !string.IsNullOrWhiteSpace(connectResult.Message))
         {
-            BuildLocalizedMessage(
-                "连接失败。请“检查连接设置” -> “尝试重启模拟器与 ADB” -> “重启电脑”。",
-                "Connection failed. Check connection settings -> try restarting the emulator and ADB -> reboot the computer."),
-        };
+            segments.Add(connectResult.Message.Trim());
+        }
+        else
+        {
+            segments.Add(genericHint);
+        }
 
         var settingsHint = _connectionGameSharedState.BuildConnectionSettingsHintMessage();
         if (!string.IsNullOrWhiteSpace(settingsHint))
@@ -3128,7 +3356,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             segments.Add(settingsHint);
         }
 
-        if (!string.IsNullOrWhiteSpace(connectResult.Message)
+        if (!hasDiagnosticMessage
+            && !string.IsNullOrWhiteSpace(connectResult.Message)
             && !string.Equals(connectResult.Message, "Connection failed.", StringComparison.OrdinalIgnoreCase))
         {
             segments.Add(BuildLocalizedMessage(
@@ -3136,7 +3365,27 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 $"Connection callback: {connectResult.Message}"));
         }
 
+        if (hasDiagnosticMessage && !segments.Contains(genericHint, StringComparer.Ordinal))
+        {
+            segments.Add(genericHint);
+        }
+
         return string.Join(Environment.NewLine, segments);
+    }
+
+    private bool HasSpecificConnectFailureDiagnostic(UiOperationResult connectResult)
+    {
+        if (!string.Equals(connectResult.Error?.Code, UiErrorCode.ConnectFailed, StringComparison.Ordinal)
+            || string.IsNullOrWhiteSpace(connectResult.Message))
+        {
+            return false;
+        }
+
+        var localized = DialogTextCatalog.LocalizeErrorResult(Texts.Language, connectResult);
+        var generic = DialogTextCatalog.LocalizeErrorResult(
+            Texts.Language,
+            UiOperationResult.Fail(UiErrorCode.ConnectFailed, "Connection failed."));
+        return !string.Equals(localized.Message, generic.Message, StringComparison.Ordinal);
     }
 
     private string BuildRunOwnerBlockedMessage(string actionZh, string actionEn, string owner)
@@ -6604,6 +6853,11 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
     private void ApplyGuiSettingsFromConfig()
     {
+        if (Runtime.ConfigurationService.TryGetCurrentProfile(out var profile))
+        {
+            ConnectionGameProfileSync.ReadFromProfile(profile, _connectionGameSharedState, tolerateMissing: true);
+        }
+
         _logTimestampFormat = ResolveLogTimestampFormat();
         _useSystemNotifications = TryReadGlobalBool(
             Runtime.ConfigurationService.CurrentConfig.GlobalValues,

@@ -17,6 +17,7 @@ using MAAUnified.App.Services;
 using MAAUnified.App.ViewModels;
 using MAAUnified.App.ViewModels.Infrastructure;
 using MAAUnified.Application.Models;
+using MAAUnified.Application.Services.Features;
 using MAAUnified.Application.Services.Localization;
 using MAAUnified.Platform;
 using System.ComponentModel;
@@ -165,6 +166,13 @@ public partial class MainWindow : Window
         _dialogService = Avalonia.Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime
             ? new AvaloniaDialogService(App.Runtime)
             : NoOpAppDialogService.Instance;
+        if (App.Runtime.ConnectFeatureService is ConnectFeatureService connectFeatureService)
+        {
+            connectFeatureService.MacRawByNcRiskPromptService = new MacRawByNcRiskConnectionPromptService(
+                _dialogService,
+                App.Runtime.UiLanguageCoordinator);
+        }
+
         _closeConfirmationService = new ShellCloseConfirmationService(_dialogService);
         BindDialogErrorEvents();
         Opened += OnWindowOpened;

@@ -2835,6 +2835,9 @@ OF-1 스테이지가 개방되지 않은 경우에는 선택하지 마세요.</v
   <data name="StartUp.Option.TouchMode.MaaTouch" xml:space="preserve">
     <value>MaaTouch (실험적)</value>
   </data>
+  <data name="StartUp.Option.TouchMode.MaaFwAdbTouch" xml:space="preserve">
+    <value>MaaFramework (실험적)</value>
+  </data>
   <data name="StartUp.Option.TouchMode.MiniTouch" xml:space="preserve">
     <value>Minitouch (기본값)</value>
   </data>
@@ -4600,5 +4603,20 @@ OF-1 스테이지가 개방되지 않은 경우에는 선택하지 마세요.</v
   </data>
   <data name="Toolbox.Advanced.ExternalNotification.Error.QueryFailed" xml:space="preserve">
     <value>외부 알림 제공자를 조회하지 못했습니다.</value>
+  </data>
+  <data name="MacRawByNcRisk.Dialog.Title" xml:space="preserve">
+    <value>연결 설정에 위험이 있습니다</value>
+  </data>
+  <data name="MacRawByNcRisk.Dialog.Message" xml:space="preserve">
+    <value>{0} + adbLite={1} 조합은 macOS RawByNc/POSIX 연결 문제를 일으켜 연결 실패나 멈춤이 발생할 수 있습니다. adbLite를 {2}(으)로 설정하는 것을 권장합니다.</value>
+  </data>
+  <data name="MacRawByNcRisk.Dialog.ApplyRecommended" xml:space="preserve">
+    <value>한 번에 수정</value>
+  </data>
+  <data name="MacRawByNcRisk.Dialog.ForceRun" xml:space="preserve">
+    <value>강제로 실행</value>
+  </data>
+  <data name="MacRawByNcRisk.Dialog.DefaultTouchMode" xml:space="preserve">
+    <value>기본 터치 방식</value>
   </data>
 </root>

@@ -36,14 +36,25 @@ signing_status_path="$release_dir/.$package_name.signing-status"
 dmg_settings_path="$release_dir/.$package_name.dmg-settings.py"
 dmgbuild_log_path="$release_dir/.$package_name.dmgbuild.log"
 dmg_volume_name="$package_name"
+macos_core_library_name="libMaaCore.dylib"
+macos_adb_control_unit_library_name="libMaaAdbControlUnit.dylib"
+# MaaFramework ADB control is loaded from the MaaCore runtime directory. Keep the
+# control unit beside libMaaCore.dylib so the macOS RawByNc guard can use
+# MaaFwAdb+AdbLite instead of falling back to Core legacy RawByNc paths.
 
 if [[ ! -x "$staging_dir/bin/MAAUnified" ]]; then
   echo "Managed app executable not found: $staging_dir/bin/MAAUnified" >&2
   exit 1
 fi
 
-if [[ ! -f "$staging_dir/libMaaCore.dylib" ]]; then
-  echo "MaaCore dylib not found: $staging_dir/libMaaCore.dylib" >&2
+if [[ ! -f "$staging_dir/$macos_core_library_name" ]]; then
+  echo "MaaCore dylib not found: $staging_dir/$macos_core_library_name" >&2
+  exit 1
+fi
+
+if [[ ! -f "$staging_dir/$macos_adb_control_unit_library_name" ]]; then
+  echo "MaaFramework ADB control unit dylib not found: $staging_dir/$macos_adb_control_unit_library_name" >&2
+  echo "macOS safe RawByNc fallback requires $macos_adb_control_unit_library_name beside $macos_core_library_name in the staging/runtime root; provide it from the existing MaaCore staging or publish output before packaging." >&2
   exit 1
 fi
 
@@ -481,6 +492,8 @@ cp -a "$staging_dir/bin/." "$macos_dir/"
 shopt -s nullglob
 cp -a "$staging_dir"/*.dylib "$macos_dir/"
 shopt -u nullglob
+test -f "$macos_dir/$macos_core_library_name"
+test -f "$macos_dir/$macos_adb_control_unit_library_name"
 mkdir -p "$(dirname "$bundled_adb_target_path")"
 cp "$bundled_adb_source_path" "$bundled_adb_target_path"
 chmod 0755 "$bundled_adb_target_path"
