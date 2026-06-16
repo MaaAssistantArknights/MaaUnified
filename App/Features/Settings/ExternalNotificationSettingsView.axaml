@@ -350,6 +350,17 @@
           </controls:AdaptiveSpacingStackPanel>
           <controls:AdaptiveSpacingStackPanel Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
                       Classes="external-notification-field-stack settings-page-column-stack">
+            <TextBlock Classes="app-caption"
+                       Text="{DynamicResource ExternalNotificationCustomWebhookHeaders}" />
+            <controls:AppTextInput Height="80"
+                     AcceptsReturn="True"
+                     DismissFocusOnEnter="False"
+                     TextWrapping="Wrap"
+                     Classes="settings-input settings-input-block"
+                     Text="{Binding CustomWebhookHeaders, UpdateSourceTrigger=PropertyChanged}" />
+          </controls:AdaptiveSpacingStackPanel>
+          <controls:AdaptiveSpacingStackPanel Width="{DynamicResource MAA.Size.Settings.FieldPathWideWidth}"
+                      Classes="external-notification-field-stack settings-page-column-stack">
             <controls:SettingsLabel Text="{DynamicResource ExternalNotificationCustomWebhookBody}"
                                     Tip="{DynamicResource ExternalNotificationCustomWebhookPlaceholders}" />
             <controls:AppTextInput Height="120"

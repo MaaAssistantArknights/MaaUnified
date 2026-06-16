@@ -36,9 +36,19 @@ public sealed class ImportReport
 
     public List<string> Errors { get; set; } = [];
 
+    public List<ImportUnreadableConfigValue> UnreadableValues { get; set; } = [];
+
     public string OutputConfigPath { get; set; } = string.Empty;
 
     public string ReportPath { get; set; } = string.Empty;
 
     public string Summary => $"mapped={MappedFieldCount}, fallback={DefaultFallbackCount}, conflicts={ConflictCount}";
 }
+
+public sealed record ImportUnreadableConfigValue(
+    string ConfigurationName,
+    string Key,
+    string DisplayName,
+    string DisplayResourceKey,
+    bool IsGlobal,
+    string Reason);

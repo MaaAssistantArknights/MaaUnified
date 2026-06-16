@@ -67,6 +67,7 @@ public sealed class GuiNewJsonConfigImporter : IConfigImporter
                         var normalizedKey = NormalizeProfileKey(valueProp.Name);
                         JsonImportMergeHelper.MergeProfileValue(
                             profile,
+                            configProp.Name,
                             normalizedKey,
                             JsonImportMergeHelper.ToJsonNode(valueProp.Value),
                             fillMissingOnly,

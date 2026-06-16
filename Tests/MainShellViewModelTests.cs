@@ -717,7 +717,7 @@ public sealed class MainShellViewModelTests
     }
 
     [Fact]
-    public async Task ExecuteTrayCommandAsync_SwitchLanguageCycle_ShouldUseShellFeatureService()
+    public async Task ExecuteTrayCommandAsync_SwitchLanguageCycle_ShouldBeDisabled()
     {
         var shellSpy = new SpyShellFeatureService("en-us");
         await using var fixture = await TestFixture.CreateAsync(shellSpy);
@@ -725,10 +725,12 @@ public sealed class MainShellViewModelTests
         var action = await fixture.ViewModel.ExecuteTrayCommandAsync(TrayCommandId.SwitchLanguage, "test-tray");
 
         Assert.Equal(ShellUiAction.None, action);
-        Assert.Equal(1, shellSpy.SwitchLanguageCallCount);
-        Assert.Equal("zh-cn", shellSpy.LastCurrentLanguage);
+        Assert.Equal(0, shellSpy.SwitchLanguageCallCount);
+        Assert.Empty(shellSpy.LastCurrentLanguage);
         Assert.Null(shellSpy.LastTargetLanguage);
-        Assert.Contains(fixture.ViewModel.GrowlMessages, msg => msg.Contains("语言切换为: en-us", StringComparison.Ordinal));
+        Assert.True(await WaitForLogContainsAsync(
+            fixture.Runtime.DiagnosticsService.EventLogPath,
+            "App.Shell.Tray.SwitchLanguage"));
     }
 
     [Fact]
@@ -838,6 +840,22 @@ public sealed class MainShellViewModelTests
 
         Assert.Equal(ShellUiAction.ShowMainWindow, showAction);
         Assert.Equal(ShellUiAction.CloseMainWindow, closeAction);
+    }
+
+    [Fact]
+    public async Task ExecuteTrayCommandAsync_HideTray_ShouldDisableUseTraySetting()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        await fixture.ViewModel.InitializeAsync();
+        fixture.ViewModel.SettingsPage.UseTray = true;
+        await fixture.ViewModel.SettingsPage.SaveGuiSettingsAsync();
+
+        var action = await fixture.ViewModel.ExecuteTrayCommandAsync(TrayCommandId.HideTray, "test-tray");
+
+        Assert.Equal(ShellUiAction.None, action);
+        Assert.False(fixture.ViewModel.SettingsPage.UseTray);
+        Assert.False(fixture.TrayService.LastVisible);
+        Assert.Equal("False", ReadGlobalString(fixture.Runtime.ConfigurationService, ConfigurationKeys.UseTray));
     }
 
     [Fact]
@@ -2695,6 +2713,8 @@ public sealed class MainShellViewModelTests
 
         public string? LastAppTitle { get; private set; }
 
+        public bool LastVisible { get; private set; } = true;
+
         public Task<PlatformOperationResult> InitializeAsync(
             string appTitle,
             TrayMenuText? menuText,
@@ -2724,6 +2744,7 @@ public sealed class MainShellViewModelTests
 
         public Task<PlatformOperationResult> SetVisibleAsync(bool visible, CancellationToken cancellationToken = default)
         {
+            LastVisible = visible;
             return Task.FromResult(PlatformOperation.NativeSuccess(Capability.Provider, "set-visible", "tray.setVisible"));
         }
     }

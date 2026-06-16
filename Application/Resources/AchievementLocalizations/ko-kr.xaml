@@ -75,6 +75,7 @@
     <system:String x:Key="ExternalNotificationGotifyToken">애플리케이션 토큰</system:String>
     <system:String x:Key="ExternalNotificationCustomWebhook">Custom Webhook</system:String>
     <system:String x:Key="ExternalNotificationCustomWebhookUrl">Webhook URL</system:String>
+    <system:String x:Key="ExternalNotificationCustomWebhookHeaders">Webhook Headers</system:String>
     <system:String x:Key="ExternalNotificationCustomWebhookBody">메시지 본문 템플릿</system:String>
     <system:String x:Key="ExternalNotificationCustomWebhookPlaceholders">플레이스홀더: {title}, {content}, {time}</system:String>
     <system:String x:Key="UseGpuForInference">추론 가속화를 위해 GPU 사용</system:String>

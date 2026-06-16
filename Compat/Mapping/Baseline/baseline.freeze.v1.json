@@ -2085,55 +2085,6 @@
       }
     },
     {
-      "item_id": "System.TrayMenu.SwitchLanguage",
-      "kind": "System",
-      "group": "System",
-      "display_name": "Tray Switch Language",
-      "wpf_reference": "WPF::Tray Switch Language",
-      "avalonia_path": "App/Views/MainWindow.axaml",
-      "parity_status": "Aligned",
-      "priority": "P0",
-      "fields": [
-        {
-          "field_id": "primary_state",
-          "name": "PrimaryState",
-          "default_value": "Toggle zh-cn/en-us",
-          "source": "WPF system baseline",
-          "notes": "System entrypoint baseline."
-        }
-      ],
-      "interactions": [
-        {
-          "interaction_id": "execute",
-          "action": "Invoke command/action once.",
-          "expected_result": "Action result is visible to user.",
-          "fallback_behavior": "On unsupported platform, fallback remains visible and non-crashing."
-        }
-      ],
-      "visibility_rules": [
-        {
-          "rule_id": "entry_available",
-          "condition": "Main window is loaded.",
-          "expected_visibility": "Visible"
-        }
-      ],
-      "error_feedback": [
-        {
-          "code": "UiOperationFailed",
-          "trigger": "Action execution failure.",
-          "user_message": "Readable failure feedback is shown.",
-          "log_path": "debug/avalonia-ui-errors.log",
-          "non_crash": true
-        }
-      ],
-      "evidence": {
-        "ui_path": "App/Views/MainWindow.axaml",
-        "log_path": "debug/avalonia-ui-errors.log",
-        "scope": "System.System.TrayMenu.SwitchLanguage",
-        "case_id": "BL-049"
-      }
-    },
-    {
       "item_id": "System.TrayMenu.ForceShow",
       "kind": "System",
       "group": "System",
@@ -6670,17 +6621,17 @@
     {
       "capability_id": "Tray",
       "platform": "macos",
-      "expected_mode": "degrade-visible",
-      "current_mode": "fallback",
+      "expected_mode": "full",
+      "current_mode": "full",
       "parity_status": "Aligned",
       "priority": "P0",
       "visible": true,
       "recorded": true,
       "locatable": true,
-      "message": "System tray is not supported in this environment",
+      "message": "macOS tray uses AppKit NSStatusItem with Avalonia/window-menu fallback; tray notifications still use notification fallback.",
       "evidence": {
         "ui_path": "App/Views/MainWindow.axaml",
-        "log_path": "debug/avalonia-ui-errors.log",
+        "log_path": "debug/avalonia-platform-events.log",
         "scope": "Capability.Tray.macos",
         "case_id": "FAL-MAC-TRA"
       }
@@ -6930,7 +6881,7 @@
   ],
 	  "metadata": {
 	    "feature_item_count": 38,
-	    "system_item_count": 13,
+	    "system_item_count": 12,
 	    "config_key_count": 297,
 	    "fallback_record_count": 15
 	  }

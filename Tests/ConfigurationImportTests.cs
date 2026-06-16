@@ -107,6 +107,61 @@ public sealed class ConfigurationImportTests
     }
 
     [Fact]
+    public async Task GuiImport_DpapiEncryptedExternalNotificationValue_ShouldReportWarningAndClearWhenUnavailable()
+    {
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+        var legacyEncryptedValue = Convert.ToBase64String(
+        [
+            0x01, 0x00, 0x00, 0x00,
+            0xd0, 0x8c, 0x9d, 0xdf, 0x01, 0x15, 0xd1, 0x11,
+            0x8c, 0x7a, 0x00, 0xc0, 0x4f, 0xc2, 0x97, 0xeb,
+            0x00, 0x01, 0x02, 0x03,
+            0x04, 0x05, 0x06, 0x07,
+            0x08, 0x09, 0x0a, 0x0b,
+            0x0c, 0x0d, 0x0e, 0x0f,
+            0x10, 0x11, 0x12, 0x13,
+            0x14, 0x15, 0x16, 0x17,
+            0x18, 0x19, 0x1a, 0x1b,
+            0x1c, 0x1d, 0x1e, 0x1f,
+            0x20, 0x21, 0x22, 0x23,
+            0x24, 0x25, 0x26, 0x27,
+            0x28, 0x29, 0x2a, 0x2b,
+            0x2c, 0x2d, 0x2e, 0x2f,
+        ]);
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.json"),
+            $$"""
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": {
+                  "ExternalNotification.Enabled": "Bark",
+                  "ExternalNotification.Bark.SendKey": "{{legacyEncryptedValue}}"
+                }
+              }
+            }
+            """);
+
+        var service = CreateService(root);
+        var report = await service.ImportLegacyAsync(ImportSource.GuiOnly, manualImport: false);
+
+        Assert.True(report.Success);
+        Assert.Contains(
+            report.Warnings,
+            warning => warning.Contains("ExternalNotification.Bark.SendKey", StringComparison.Ordinal)
+                       && warning.Contains("could not be decrypted", StringComparison.Ordinal)
+                       && warning.Contains("cleared", StringComparison.Ordinal));
+        var unreadableValue = Assert.Single(report.UnreadableValues);
+        Assert.Equal("Default", unreadableValue.ConfigurationName);
+        Assert.Equal("ExternalNotification.Bark.SendKey", unreadableValue.Key);
+        Assert.Equal("ExternalNotificationBarkSendKey", unreadableValue.DisplayResourceKey);
+        var profile = service.CurrentConfig.Profiles["Default"];
+        Assert.Equal(string.Empty, profile.Values["ExternalNotification.Bark.SendKey"]?.GetValue<string>());
+    }
+
+    [Fact]
     public async Task GuiNewImport_FightCurrentOrLastStage_ShouldStoreSentinelValue()
     {
         var root = CreateTempRoot();
