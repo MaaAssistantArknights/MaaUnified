@@ -18,6 +18,7 @@ internal static class JsonImportMergeHelper
         bool fillMissingOnly,
         ImportReport report)
     {
+        value = LegacyEncryptedConfigValueConverter.ConvertGlobalValue(key, value, report);
         if (config.GlobalValues.TryGetValue(key, out var existing))
         {
             if (fillMissingOnly)
@@ -42,11 +43,13 @@ internal static class JsonImportMergeHelper
 
     public static void MergeProfileValue(
         UnifiedProfile profile,
+        string profileName,
         string key,
         JsonNode? value,
         bool fillMissingOnly,
         ImportReport report)
     {
+        value = LegacyEncryptedConfigValueConverter.ConvertProfileValue(profileName, key, value, report);
         if (profile.Values.TryGetValue(key, out var existing))
         {
             if (fillMissingOnly)

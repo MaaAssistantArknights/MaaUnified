@@ -356,16 +356,25 @@ public sealed class SettingsRemoteExternalNotificationFeatureTests
                 vm.ExternalNotificationSendWhenTimeout = false;
                 vm.ExternalNotificationEnableDetails = true;
 
+                vm.NotificationProviderSelections.Single(
+                    static item => string.Equals(item.Provider, "Smtp", StringComparison.OrdinalIgnoreCase)).IsEnabled = true;
+                vm.NotificationProviderSelections.Single(
+                    static item => string.Equals(item.Provider, "Telegram", StringComparison.OrdinalIgnoreCase)).IsEnabled = true;
+                vm.NotificationProviderSelections.Single(
+                    static item => string.Equals(item.Provider, "CustomWebhook", StringComparison.OrdinalIgnoreCase)).IsEnabled = true;
+
                 vm.SelectedNotificationProvider = "Smtp";
                 vm.NotificationProviderParametersText = "server=smtp.example.com\nport=587\nfrom=ops@example.com\nto=dev@example.com";
                 vm.SelectedNotificationProvider = "Telegram";
                 vm.NotificationProviderParametersText = "botToken=token-1\nchatId=10001";
+                vm.SelectedNotificationProvider = "CustomWebhook";
+                vm.NotificationProviderParametersText = "url=https://example.com/hook\nheaders=X-Token: 123\nbody={title}";
 
                 await vm.SaveExternalNotificationAsync();
 
                 Assert.Contains("server=smtp.example.com", vm.StatusMessage, StringComparison.Ordinal);
                 Assert.Equal(
-                    "SMTP,Telegram",
+                    "SMTP,Telegram,Custom Webhook",
                     ReadCurrentProfileString(first.Config, ConfigurationKeys.ExternalNotificationEnabled));
             }
 
@@ -390,6 +399,9 @@ public sealed class SettingsRemoteExternalNotificationFeatureTests
             Assert.Contains("server=smtp.example.com", reloaded.NotificationProviderParametersText, StringComparison.Ordinal);
             reloaded.SelectedNotificationProvider = "Telegram";
             Assert.Contains("chatId=10001", reloaded.NotificationProviderParametersText, StringComparison.Ordinal);
+            reloaded.SelectedNotificationProvider = "CustomWebhook";
+            Assert.Contains("headers=X-Token: 123", reloaded.NotificationProviderParametersText, StringComparison.Ordinal);
+            Assert.Contains("body={title}", reloaded.NotificationProviderParametersText, StringComparison.Ordinal);
         }
         finally
         {
@@ -457,6 +469,41 @@ public sealed class SettingsRemoteExternalNotificationFeatureTests
         Assert.Equal(
             "SMTP,Telegram,Custom Webhook",
             ReadCurrentProfileString(fixture.Config, ConfigurationKeys.ExternalNotificationEnabled));
+    }
+
+    [Fact]
+    public async Task ExternalNotification_UncheckedProviderWithStoredParameters_ShouldNotShowOrValidate()
+    {
+        var notification = new ScriptedNotificationProviderFeatureService
+        {
+            ValidateHandler = static request =>
+                string.Equals(request.Provider, "Smtp", StringComparison.OrdinalIgnoreCase)
+                    ? UiOperationResult.Fail(UiErrorCode.NotificationProviderInvalidParameters, "smtp should stay disabled")
+                    : UiOperationResult.Ok("valid"),
+        };
+
+        await using var fixture = await RuntimeFixture.CreateAsync(notificationProviderFeatureService: notification);
+        var profile = fixture.Config.CurrentConfig.Profiles[fixture.Config.CurrentConfig.CurrentProfile];
+        profile.Values[ConfigurationKeys.ExternalNotificationEnabled] = JsonValue.Create("Bark");
+        profile.Values[ConfigurationKeys.ExternalNotificationBarkServer] = JsonValue.Create("https://api.day.app");
+        profile.Values[ConfigurationKeys.ExternalNotificationBarkSendKey] = JsonValue.Create("bark-key");
+        profile.Values[ConfigurationKeys.ExternalNotificationSmtpUseSsl] = JsonValue.Create("false");
+        profile.Values[ConfigurationKeys.ExternalNotificationSmtpRequiresAuthentication] = JsonValue.Create("false");
+        await fixture.Config.SaveAsync();
+
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        Assert.True(vm.ExternalNotificationEnabled);
+        Assert.True(vm.BarkSectionVisible);
+        Assert.False(vm.SmtpSectionVisible);
+
+        await vm.SaveExternalNotificationAsync();
+
+        Assert.True(vm.BarkSectionVisible);
+        Assert.False(vm.SmtpSectionVisible);
+        Assert.DoesNotContain(notification.ValidateCalls, call => string.Equals(call.Provider, "Smtp", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal("Bark", ReadCurrentProfileString(fixture.Config, ConfigurationKeys.ExternalNotificationEnabled));
     }
 
     [Fact]

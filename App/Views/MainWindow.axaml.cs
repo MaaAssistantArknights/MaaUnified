@@ -2125,7 +2125,6 @@ public partial class MainWindow : Window
             new TrayContextMenuItemEntry(text.ForceShow, TrayCommandId.ForceShow, true),
             new TrayContextMenuItemEntry(text.HideTray, TrayCommandId.HideTray, true),
             new TrayContextMenuItemEntry(text.ToggleOverlay, TrayCommandId.ToggleOverlay, true),
-            new TrayContextMenuItemEntry(text.SwitchLanguage, TrayCommandId.SwitchLanguage, true),
             new TrayContextMenuItemEntry(text.Restart, TrayCommandId.Restart, true),
             new TrayContextMenuSeparatorEntry(),
             new TrayContextMenuItemEntry(text.Exit, TrayCommandId.Exit, true),

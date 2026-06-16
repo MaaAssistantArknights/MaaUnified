@@ -75,6 +75,7 @@
     <system:String x:Key="ExternalNotificationGotifyToken">Application Token</system:String>
     <system:String x:Key="ExternalNotificationCustomWebhook">Custom Webhook</system:String>
     <system:String x:Key="ExternalNotificationCustomWebhookUrl">Webhook URL</system:String>
+    <system:String x:Key="ExternalNotificationCustomWebhookHeaders">Webhook headers</system:String>
     <system:String x:Key="ExternalNotificationCustomWebhookBody">Message body template</system:String>
     <system:String x:Key="ExternalNotificationCustomWebhookPlaceholders">Placeholders: {title}, {content}, {time}</system:String>
     <system:String x:Key="UseGpuForInference">Use GPU for inference acceleration</system:String>

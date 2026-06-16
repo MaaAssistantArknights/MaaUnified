@@ -23,6 +23,7 @@ public partial class WarningConfirmDialogView : Window, IDialogChromeAware
     private IReadOnlyList<DialogLinkItem> _linksSnapshot = [];
     private int _countdownSeconds;
     private int _remainingCountdownSeconds;
+    private bool _showCancelButton = true;
 
     public WarningConfirmDialogView()
     {
@@ -39,7 +40,8 @@ public partial class WarningConfirmDialogView : Window, IDialogChromeAware
         string cancelText = "",
         string? language = null,
         int countdownSeconds = 0,
-        IReadOnlyList<DialogLinkItem>? links = null)
+        IReadOnlyList<DialogLinkItem>? links = null,
+        bool showCancelButton = true)
     {
         StopCountdown();
         var effectiveLanguage = language ?? "en-us";
@@ -56,6 +58,7 @@ public partial class WarningConfirmDialogView : Window, IDialogChromeAware
         _detailSnapshot = _messageSnapshot;
         _detailsButtonSnapshot = string.Empty;
         _linksSnapshot = links ?? [];
+        _showCancelButton = showCancelButton;
         _countdownSeconds = Math.Max(0, countdownSeconds);
         _remainingCountdownSeconds = _countdownSeconds;
         Title = _titleSnapshot;
@@ -64,6 +67,7 @@ public partial class WarningConfirmDialogView : Window, IDialogChromeAware
         ApplyLinks(_linksSnapshot);
         ApplyDetailsButton(_detailsButtonSnapshot);
         CancelButton.Content = _cancelSnapshot;
+        CancelButton.IsVisible = _showCancelButton;
         UpdateConfirmButtonText(_remainingCountdownSeconds);
     }
 
@@ -184,6 +188,7 @@ public partial class WarningConfirmDialogView : Window, IDialogChromeAware
         _confirmSnapshot = chrome.ConfirmText ?? _confirmSnapshot;
         _cancelSnapshot = chrome.CancelText ?? _cancelSnapshot;
         CancelButton.Content = _cancelSnapshot;
+        CancelButton.IsVisible = _showCancelButton;
         UpdateConfirmButtonText(_remainingCountdownSeconds);
     }
 

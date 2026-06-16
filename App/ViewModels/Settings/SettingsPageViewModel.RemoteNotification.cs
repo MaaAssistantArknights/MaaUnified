@@ -1244,15 +1244,6 @@ public sealed partial class SettingsPageViewModel
             return [];
         }
 
-        foreach (var provider in AvailableNotificationProviders)
-        {
-            if (_notificationProviderParameters.TryGetValue(provider, out var parameterText)
-                && !string.IsNullOrWhiteSpace(parameterText))
-            {
-                _enabledNotificationProviders.Add(provider);
-            }
-        }
-
         var enabledProviders = _enabledNotificationProviders
             .Where(provider => AvailableNotificationProviders.Contains(provider, StringComparer.OrdinalIgnoreCase))
             .Distinct(StringComparer.OrdinalIgnoreCase)

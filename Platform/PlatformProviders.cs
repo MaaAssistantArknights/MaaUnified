@@ -581,7 +581,6 @@ public sealed class WindowsNotifyIconTrayService : ITrayService, IDisposable
         AppendMenuItem(menu, TrayCommandId.ForceShow, _menuText.ForceShow, _menuState.ForceShowEnabled);
         AppendMenuItem(menu, TrayCommandId.HideTray, _menuText.HideTray, _menuState.HideTrayEnabled);
         AppendMenuItem(menu, TrayCommandId.ToggleOverlay, _menuText.ToggleOverlay, _menuState.OverlayEnabled);
-        AppendMenuItem(menu, TrayCommandId.SwitchLanguage, _menuText.SwitchLanguage, enabled: true);
         AppendMenuItem(menu, TrayCommandId.Restart, _menuText.Restart, enabled: true);
         AppendMenuSeparator(menu);
         AppendMenuItem(menu, TrayCommandId.Exit, _menuText.Exit, enabled: true);
@@ -991,6 +990,7 @@ public sealed class AvaloniaTrayIconTrayService : ITrayService, IDisposable
     private TrayMenuText _menuText = TrayMenuText.Default;
     private Avalonia.Controls.TrayIcon? _trayIcon;
     private Avalonia.Controls.TrayIcons? _trayIcons;
+    private NativeMenu? _menu;
 
     public PlatformCapabilityStatus Capability => new(
         Supported: true,
@@ -1219,24 +1219,40 @@ public sealed class AvaloniaTrayIconTrayService : ITrayService, IDisposable
 
     private void RebuildMenu()
     {
-        _menuItems.Clear();
         if (_trayIcon is null)
         {
             return;
         }
 
-        var menu = new NativeMenu();
-        menu.Items.Add(CreateMenuItem(TrayCommandId.Start, _menuText.Start));
-        menu.Items.Add(CreateMenuItem(TrayCommandId.Stop, _menuText.Stop));
-        menu.Items.Add(new NativeMenuItemSeparator());
-        menu.Items.Add(CreateMenuItem(TrayCommandId.ForceShow, _menuText.ForceShow));
-        menu.Items.Add(CreateMenuItem(TrayCommandId.HideTray, _menuText.HideTray));
-        menu.Items.Add(CreateMenuItem(TrayCommandId.ToggleOverlay, _menuText.ToggleOverlay));
-        menu.Items.Add(CreateMenuItem(TrayCommandId.SwitchLanguage, _menuText.SwitchLanguage));
-        menu.Items.Add(CreateMenuItem(TrayCommandId.Restart, _menuText.Restart));
-        menu.Items.Add(new NativeMenuItemSeparator());
-        menu.Items.Add(CreateMenuItem(TrayCommandId.Exit, _menuText.Exit));
-        _trayIcon.Menu = menu;
+        if (_menu is null)
+        {
+            _menu = new NativeMenu();
+            _trayIcon.Menu = _menu;
+            _menuItems.Clear();
+            AddMenuItem(TrayCommandId.Start, _menuText.Start);
+            AddMenuItem(TrayCommandId.Stop, _menuText.Stop);
+            _menu.Items.Add(new NativeMenuItemSeparator());
+            AddMenuItem(TrayCommandId.ForceShow, _menuText.ForceShow);
+            AddMenuItem(TrayCommandId.HideTray, _menuText.HideTray);
+            AddMenuItem(TrayCommandId.ToggleOverlay, _menuText.ToggleOverlay);
+            AddMenuItem(TrayCommandId.Restart, _menuText.Restart);
+            _menu.Items.Add(new NativeMenuItemSeparator());
+            AddMenuItem(TrayCommandId.Exit, _menuText.Exit);
+            return;
+        }
+
+        UpdateMenuItemText(TrayCommandId.Start, _menuText.Start);
+        UpdateMenuItemText(TrayCommandId.Stop, _menuText.Stop);
+        UpdateMenuItemText(TrayCommandId.ForceShow, _menuText.ForceShow);
+        UpdateMenuItemText(TrayCommandId.HideTray, _menuText.HideTray);
+        UpdateMenuItemText(TrayCommandId.ToggleOverlay, _menuText.ToggleOverlay);
+        UpdateMenuItemText(TrayCommandId.Restart, _menuText.Restart);
+        UpdateMenuItemText(TrayCommandId.Exit, _menuText.Exit);
+    }
+
+    private void AddMenuItem(TrayCommandId command, string text)
+    {
+        _menu?.Items.Add(CreateMenuItem(command, text));
     }
 
     private NativeMenuItem CreateMenuItem(TrayCommandId command, string text)
@@ -1247,6 +1263,14 @@ public sealed class AvaloniaTrayIconTrayService : ITrayService, IDisposable
         return item;
     }
 
+    private void UpdateMenuItemText(TrayCommandId command, string text)
+    {
+        if (_menuItems.TryGetValue(command, out var item))
+        {
+            item.Header = text;
+        }
+    }
+
     private void ApplyMenuState()
     {
         SetEnabled(TrayCommandId.Start, _menuState.StartEnabled);
@@ -1254,7 +1278,6 @@ public sealed class AvaloniaTrayIconTrayService : ITrayService, IDisposable
         SetEnabled(TrayCommandId.ToggleOverlay, _menuState.OverlayEnabled);
         SetEnabled(TrayCommandId.ForceShow, _menuState.ForceShowEnabled);
         SetEnabled(TrayCommandId.HideTray, _menuState.HideTrayEnabled);
-        SetEnabled(TrayCommandId.SwitchLanguage, true);
         SetEnabled(TrayCommandId.Restart, true);
         SetEnabled(TrayCommandId.Exit, true);
     }
@@ -1351,6 +1374,8 @@ public sealed class AvaloniaTrayIconTrayService : ITrayService, IDisposable
         _trayIcon = null;
         _trayIcons?.Clear();
         _trayIcons = null;
+        _menu = null;
+        _menuItems.Clear();
     }
 }
 

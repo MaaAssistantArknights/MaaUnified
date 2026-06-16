@@ -121,6 +121,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         "Gotify",
         "CustomWebhook",
     ];
+    private const string ExternalNotificationCustomWebhookHeadersKey = "ExternalNotification.CustomWebhook.Headers";
     private static readonly IReadOnlyDictionary<string, string> EmptySettingUpdates =
         new Dictionary<string, string>(StringComparer.Ordinal);
     private static readonly IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> ProviderConfigKeyMap =
@@ -178,6 +179,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
             ["CustomWebhook"] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
                 ["url"] = ConfigurationKeys.ExternalNotificationCustomWebhookUrl,
+                ["headers"] = ExternalNotificationCustomWebhookHeadersKey,
                 ["body"] = ConfigurationKeys.ExternalNotificationCustomWebhookBody,
             },
         };
@@ -201,7 +203,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
             ["Bark"] = [nameof(BarkServer), nameof(BarkSendKey)],
             ["Qmsg"] = [nameof(QmsgServer), nameof(QmsgKey), nameof(QmsgUser), nameof(QmsgBot)],
             ["Gotify"] = [nameof(GotifyServer), nameof(GotifyToken)],
-            ["CustomWebhook"] = [nameof(CustomWebhookUrl), nameof(CustomWebhookBody)],
+            ["CustomWebhook"] = [nameof(CustomWebhookUrl), nameof(CustomWebhookHeaders), nameof(CustomWebhookBody)],
         };
     private static readonly IReadOnlyList<string> ExternalNotificationSectionPropertyNames =
         [
@@ -1902,6 +1904,23 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
 
             SetProviderParameterValue("CustomWebhook", "url", normalized);
             OnPropertyChanged(nameof(CustomWebhookUrl));
+            MarkExternalNotificationDirty();
+        }
+    }
+
+    public string CustomWebhookHeaders
+    {
+        get => GetProviderParameterValue("CustomWebhook", "headers");
+        set
+        {
+            var normalized = value ?? string.Empty;
+            if (string.Equals(GetProviderParameterValue("CustomWebhook", "headers"), normalized, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            SetProviderParameterValue("CustomWebhook", "headers", normalized);
+            OnPropertyChanged(nameof(CustomWebhookHeaders));
             MarkExternalNotificationDirty();
         }
     }

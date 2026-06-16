@@ -1424,40 +1424,6 @@
       "requires_fallback_trace": true
     },
     {
-      "case_id": "ACC-049",
-      "tier": "Tier-1",
-      "item_id": "System.TrayMenu.SwitchLanguage",
-      "platforms": [
-        "windows",
-        "macos",
-        "linux"
-      ],
-      "themes": [
-        "Light",
-        "Dark"
-      ],
-      "locales": [
-        "zh-cn",
-        "zh-tw",
-        "en-us",
-        "ja-jp",
-        "ko-kr",
-        "pallas"
-      ],
-      "steps": [
-        "Open System.TrayMenu.SwitchLanguage.",
-        "Execute primary interaction.",
-        "Trigger one controlled failure path."
-      ],
-      "expected": [
-        "Behavior matches frozen defaults and interaction semantics.",
-        "Failure is visible to user and written to debug logs.",
-        "Application process remains alive."
-      ],
-      "non_crash_required": true,
-      "requires_fallback_trace": true
-    },
-    {
       "case_id": "ACC-050",
       "tier": "Tier-1",
       "item_id": "System.TrayMenu.ForceShow",

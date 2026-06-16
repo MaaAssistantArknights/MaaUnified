@@ -2507,6 +2507,9 @@
   <data name="Settings.Action.Close" xml:space="preserve">
     <value>关闭</value>
   </data>
+  <data name="Settings.Action.GotIt" xml:space="preserve">
+    <value>知道了</value>
+  </data>
   <data name="Settings.Action.Delete" xml:space="preserve">
     <value>删除</value>
   </data>
@@ -2665,6 +2668,9 @@
   </data>
   <data name="Settings.ConfigurationManager.Dialog.ImportConfigTitle" xml:space="preserve">
     <value>导入配置</value>
+  </data>
+  <data name="Settings.ConfigurationManager.Dialog.ImportUnreadableValuesTitle" xml:space="preserve">
+    <value>部分配置导入失败</value>
   </data>
   <data name="Settings.ConfigurationManager.Dialog.ImportLegacyTitle" xml:space="preserve">
     <value>导入旧配置</value>

@@ -1529,6 +1529,9 @@
   <data name="Settings.Action.Close" xml:space="preserve">
     <value>閉じる</value>
   </data>
+  <data name="Settings.Action.GotIt" xml:space="preserve">
+    <value>了解</value>
+  </data>
   <data name="Settings.Action.Delete" xml:space="preserve">
     <value>削除</value>
   </data>
@@ -1642,6 +1645,9 @@
   </data>
   <data name="Settings.ConfigurationManager.Dialog.ImportConfigTitle" xml:space="preserve">
     <value>プロファイルをインポート</value>
+  </data>
+  <data name="Settings.ConfigurationManager.Dialog.ImportUnreadableValuesTitle" xml:space="preserve">
+    <value>一部の設定のインポートに失敗しました</value>
   </data>
   <data name="Settings.ConfigurationManager.Dialog.ImportLegacyTitle" xml:space="preserve">
     <value>旧版プロファイルをインポート</value>

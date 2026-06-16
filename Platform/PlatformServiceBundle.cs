@@ -39,6 +39,12 @@ public static class PlatformServicesFactory
         try
         {
             if (!forceFallback
+                && OperatingSystem.IsMacOS()
+                && MacStatusItemTrayService.TryCreate(out var macStatusItemTray))
+            {
+                trayService = macStatusItemTray;
+            }
+            else if (!forceFallback
                 && OperatingSystem.IsWindows()
                 && WindowsNotifyIconTrayService.TryCreate(out var windowsTray))
             {

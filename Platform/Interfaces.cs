@@ -96,6 +96,7 @@ public enum TrayCommandId
     HideTray = 3,
     ToggleOverlay = 4,
     Exit = 5,
+    // Reserved for compatibility; tray cycle-language entry is currently disabled.
     SwitchLanguage = 6,
     Restart = 7,
 }

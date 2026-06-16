@@ -2506,6 +2506,9 @@ With save file: farm points through crafting (advanced).
   <data name="Settings.Action.Close" xml:space="preserve">
     <value>Close</value>
   </data>
+  <data name="Settings.Action.GotIt" xml:space="preserve">
+    <value>Got it</value>
+  </data>
   <data name="Settings.Action.Delete" xml:space="preserve">
     <value>Delete</value>
   </data>
@@ -2664,6 +2667,9 @@ With save file: farm points through crafting (advanced).
   </data>
   <data name="Settings.ConfigurationManager.Dialog.ImportConfigTitle" xml:space="preserve">
     <value>Import Profile</value>
+  </data>
+  <data name="Settings.ConfigurationManager.Dialog.ImportUnreadableValuesTitle" xml:space="preserve">
+    <value>Some Settings Failed to Import</value>
   </data>
   <data name="Settings.ConfigurationManager.Dialog.ImportLegacyTitle" xml:space="preserve">
     <value>Import Legacy Profile</value>

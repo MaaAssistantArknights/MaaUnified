@@ -1795,7 +1795,10 @@ public sealed class MainShellViewModel : ObservableObject
                     return ShellUiAction.ShowMainWindow;
 
                 case TrayCommandId.HideTray:
-                    await SetTrayVisibleAsync(false, cancellationToken);
+                    SettingsPage.UseTray = false;
+                    var trayDisabledSnapshot = SettingsPage.CurrentGuiSnapshot;
+                    await SettingsPage.SaveGuiSettingsAsync(cancellationToken);
+                    await ApplyGuiSettingsAsync(trayDisabledSnapshot, cancellationToken);
                     await RecordEventAsync(
                         scope,
                         $"source={source}; hide-requested",
@@ -1811,9 +1814,11 @@ public sealed class MainShellViewModel : ObservableObject
                     return ShellUiAction.None;
 
                 case TrayCommandId.SwitchLanguage:
-                    await ExecuteTrayLanguageSwitchAsync(
-                        targetLanguage: null,
-                        source,
+                    // The tray cycle-language command is kept reserved for compatibility,
+                    // but the tray menu no longer exposes or dispatches it.
+                    await RecordEventAsync(
+                        scope,
+                        $"source={source}; disabled",
                         cancellationToken);
                     return ShellUiAction.None;
 

@@ -32,6 +32,7 @@ public partial class App : Avalonia.Application
         "ExternalNotificationBarkServer",
         "ExternalNotificationCustomWebhook",
         "ExternalNotificationCustomWebhookBody",
+        "ExternalNotificationCustomWebhookHeaders",
         "ExternalNotificationCustomWebhookPlaceholders",
         "ExternalNotificationCustomWebhookUrl",
         "ExternalNotificationDingTalkAccessToken",

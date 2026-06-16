@@ -144,6 +144,17 @@ public sealed class PlatformCapabilityContractTests
     }
 
     [Fact]
+    public void AvaloniaTrayIconTrayService_ReusesNativeMenuItemsWhenRefreshingText()
+    {
+        var root = TestRepoLayout.GetMaaUnifiedRoot();
+        var code = File.ReadAllText(Path.Combine(root, "Platform", "PlatformProviders.cs"));
+
+        Assert.DoesNotContain("_menu.Items.Clear()", code, StringComparison.Ordinal);
+        Assert.Contains("item.Header = text", code, StringComparison.Ordinal);
+        Assert.Contains("Tray service already initialized.", code, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void WindowsNotifyIconTrayService_UsesNativePopupMenuContract()
     {
         var root = TestRepoLayout.GetMaaUnifiedRoot();
@@ -400,7 +411,7 @@ public sealed class PlatformCapabilityContractTests
     public void PlatformServicesFactory_CreateDefaults_UsesExpectedProviderFamilies()
     {
         var bundle = PlatformServicesFactory.CreateDefaults();
-        Assert.True(bundle.TrayService is WindowsNotifyIconTrayService or AvaloniaTrayIconTrayService or WindowMenuTrayService or NoOpTrayService);
+        Assert.True(bundle.TrayService is WindowsNotifyIconTrayService or MacStatusItemTrayService or AvaloniaTrayIconTrayService or WindowMenuTrayService or NoOpTrayService);
         Assert.True(bundle.NotificationService is DesktopNotificationService or CommandNotificationService or NoOpNotificationService);
         Assert.True(bundle.HotkeyService is SharpHookGlobalHotkeyService or MacCarbonGlobalHotkeyService or LinuxPortalGlobalHotkeyService or CompositeGlobalHotkeyService or WindowScopedHotkeyService or NoOpGlobalHotkeyService);
         Assert.True(bundle.AutostartService is CrossPlatformAutostartService or NoOpAutostartService);
@@ -417,6 +428,58 @@ public sealed class PlatformCapabilityContractTests
 
         var bundle = PlatformServicesFactory.CreateDefaults();
         Assert.IsType<WindowsNotifyIconTrayService>(bundle.TrayService);
+    }
+
+    [Fact]
+    public void PlatformServicesFactory_CreateDefaults_DoesNotEnableMacStatusItemTrayByDefault()
+    {
+        if (!OperatingSystem.IsMacOS())
+        {
+            return;
+        }
+
+        var originalEnable = Environment.GetEnvironmentVariable(MacStatusItemTrayService.EnableEnvironmentVariable);
+        var originalFallback = Environment.GetEnvironmentVariable("MAA_PLATFORM_FORCE_FALLBACK");
+        try
+        {
+            Environment.SetEnvironmentVariable(MacStatusItemTrayService.EnableEnvironmentVariable, null);
+            Environment.SetEnvironmentVariable("MAA_PLATFORM_FORCE_FALLBACK", null);
+
+            var bundle = PlatformServicesFactory.CreateDefaults();
+            Assert.IsNotType<MacStatusItemTrayService>(bundle.TrayService);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(MacStatusItemTrayService.EnableEnvironmentVariable, originalEnable);
+            Environment.SetEnvironmentVariable("MAA_PLATFORM_FORCE_FALLBACK", originalFallback);
+        }
+    }
+
+    [Fact]
+    public void PlatformServicesFactory_CreateDefaults_PrefersMacStatusItemTrayOnMacOSWhenEnabled()
+    {
+        if (!OperatingSystem.IsMacOS())
+        {
+            return;
+        }
+
+        var originalEnable = Environment.GetEnvironmentVariable(MacStatusItemTrayService.EnableEnvironmentVariable);
+        var originalFallback = Environment.GetEnvironmentVariable("MAA_PLATFORM_FORCE_FALLBACK");
+        try
+        {
+            Environment.SetEnvironmentVariable(MacStatusItemTrayService.EnableEnvironmentVariable, "1");
+            Environment.SetEnvironmentVariable("MAA_PLATFORM_FORCE_FALLBACK", null);
+
+            var bundle = PlatformServicesFactory.CreateDefaults();
+            Assert.IsType<MacStatusItemTrayService>(bundle.TrayService);
+            Assert.Equal("macos-appkit-statusitem", bundle.TrayService.Capability.Provider);
+            Assert.Equal("avalonia-trayicon/window-menu", bundle.TrayService.Capability.FallbackMode);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(MacStatusItemTrayService.EnableEnvironmentVariable, originalEnable);
+            Environment.SetEnvironmentVariable("MAA_PLATFORM_FORCE_FALLBACK", originalFallback);
+        }
     }
 
     [Fact]

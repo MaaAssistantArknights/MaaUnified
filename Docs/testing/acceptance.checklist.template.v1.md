@@ -3,7 +3,7 @@
 ## 摘要
 - Schema version: `1.0.0`
 - Baseline ref: `src/MAAUnified/Compat/Mapping/Baseline/baseline.freeze.v1.json`
-- Case count: `52`
+- Case count: `51`
 
 ## Matrix Strategy
 - Tier-1: Root + Settings + System entries, full platform/theme/locale matrix.
@@ -64,7 +64,6 @@
 | `ACC-046` | Tier-1 | `System.ImportLegacyConfig` | windows, macos, linux | Light, Dark | zh-cn, zh-tw, en-us, ja-jp, ko-kr, pallas |
 | `ACC-047` | Tier-1 | `System.TrayMenu.Start` | windows, macos, linux | Light, Dark | zh-cn, zh-tw, en-us, ja-jp, ko-kr, pallas |
 | `ACC-048` | Tier-1 | `System.TrayMenu.Stop` | windows, macos, linux | Light, Dark | zh-cn, zh-tw, en-us, ja-jp, ko-kr, pallas |
-| `ACC-049` | Tier-1 | `System.TrayMenu.SwitchLanguage` | windows, macos, linux | Light, Dark | zh-cn, zh-tw, en-us, ja-jp, ko-kr, pallas |
 | `ACC-050` | Tier-1 | `System.TrayMenu.ForceShow` | windows, macos, linux | Light, Dark | zh-cn, zh-tw, en-us, ja-jp, ko-kr, pallas |
 | `ACC-051` | Tier-1 | `System.TrayMenu.HideTray` | windows, macos, linux | Light, Dark | zh-cn, zh-tw, en-us, ja-jp, ko-kr, pallas |
 | `ACC-052` | Tier-1 | `System.TrayMenu.ToggleOverlay` | windows, macos, linux | Light, Dark | zh-cn, zh-tw, en-us, ja-jp, ko-kr, pallas |

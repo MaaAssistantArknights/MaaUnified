@@ -230,6 +230,7 @@ public sealed record WarningConfirmDialogRequest(
     string Language = "en-us",
     int CountdownSeconds = 0,
     DialogChromeCatalog? Chrome = null,
-    IReadOnlyList<DialogLinkItem>? Links = null);
+    IReadOnlyList<DialogLinkItem>? Links = null,
+    bool ShowCancelButton = true);
 
 public sealed record WarningConfirmDialogPayload(bool Confirmed);

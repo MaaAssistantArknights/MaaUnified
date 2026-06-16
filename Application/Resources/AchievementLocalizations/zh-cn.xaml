@@ -75,6 +75,7 @@
     <system:String x:Key="ExternalNotificationGotifyToken">应用程序令牌</system:String>
     <system:String x:Key="ExternalNotificationCustomWebhook">自定义 Webhook</system:String>
     <system:String x:Key="ExternalNotificationCustomWebhookUrl">Webhook URL</system:String>
+    <system:String x:Key="ExternalNotificationCustomWebhookHeaders">Webhook 请求头</system:String>
     <system:String x:Key="ExternalNotificationCustomWebhookBody">消息体模板</system:String>
     <system:String x:Key="ExternalNotificationCustomWebhookPlaceholders">可用占位符：{title}、{content}、{time}</system:String>
     <system:String x:Key="UseGpuForInference">使用 GPU 加速推理</system:String>

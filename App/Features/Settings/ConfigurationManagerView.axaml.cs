@@ -1,6 +1,7 @@
 using System.IO;
 using System.Globalization;
 using System.Linq;
+using System.Text;
 using System.Text.Json.Nodes;
 using Avalonia;
 using Avalonia.Controls;
@@ -353,6 +354,7 @@ public partial class ConfigurationManagerView : UserControl
         var report = await vm.ImportLegacyConfigurationsAsync(request);
         if (report.AppliedConfig)
         {
+            await ShowUnreadableImportedValuesDialogAsync(report, language, text);
             return true;
         }
 
@@ -376,6 +378,7 @@ public partial class ConfigurationManagerView : UserControl
             var retriedReport = await vm.ImportLegacyConfigurationsAsync(request with { AllowPartialImport = true });
             if (retriedReport.AppliedConfig)
             {
+                await ShowUnreadableImportedValuesDialogAsync(retriedReport, language, text);
                 return true;
             }
 
@@ -413,6 +416,90 @@ public partial class ConfigurationManagerView : UserControl
         }
 
         return true;
+    }
+
+    private static async Task ShowUnreadableImportedValuesDialogAsync(
+        ImportReport report,
+        string? language,
+        Func<string, string> text)
+    {
+        if (report.UnreadableValues.Count == 0)
+        {
+            return;
+        }
+
+        await ShowWarningDialogAsync(
+            language,
+            text("Settings.ConfigurationManager.Dialog.ImportUnreadableValuesTitle"),
+            BuildUnreadableImportedValuesMessage(report, language, text),
+            confirmText: text("Settings.Action.GotIt"),
+            cancelText: string.Empty,
+            sourceScope: "Settings.ConfigurationManager.ImportUnreadableValues.Dialog",
+            showCancelButton: false);
+    }
+
+    private static string BuildUnreadableImportedValuesMessage(
+        ImportReport report,
+        string? language,
+        Func<string, string> text)
+    {
+        var useChinese = string.IsNullOrWhiteSpace(language)
+                         || language.StartsWith("zh", StringComparison.OrdinalIgnoreCase);
+        var builder = new StringBuilder();
+        foreach (var value in report.UnreadableValues)
+        {
+            var displayName = ResolveImportedValueDisplayName(value, text);
+            var configurationName = string.IsNullOrWhiteSpace(value.ConfigurationName)
+                ? (useChinese ? "全局" : "Global")
+                : value.ConfigurationName.Trim();
+
+            if (builder.Length > 0)
+            {
+                builder.AppendLine();
+            }
+
+            if (useChinese)
+            {
+                builder
+                    .Append(configurationName)
+                    .Append(" 配置的 ")
+                    .Append(displayName)
+                    .Append(" 导入失败，无法读取 ")
+                    .Append(displayName)
+                    .Append(" 配置。请手动修改。");
+            }
+            else
+            {
+                builder
+                    .Append("Failed to import ")
+                    .Append(displayName)
+                    .Append(" in ")
+                    .Append(configurationName)
+                    .Append(". The ")
+                    .Append(displayName)
+                    .Append(" configuration could not be read. Please edit it manually.");
+            }
+        }
+
+        return builder.ToString();
+    }
+
+    private static string ResolveImportedValueDisplayName(
+        ImportUnreadableConfigValue value,
+        Func<string, string> text)
+    {
+        if (!string.IsNullOrWhiteSpace(value.DisplayResourceKey))
+        {
+            var localized = text(value.DisplayResourceKey);
+            if (!string.Equals(localized, value.DisplayResourceKey, StringComparison.Ordinal))
+            {
+                return localized;
+            }
+        }
+
+        return string.IsNullOrWhiteSpace(value.DisplayName)
+            ? value.Key
+            : value.DisplayName;
     }
 
     private async Task<ConfigurationImportSelectionAnalysis?> ShowImportModeDialogAsync(Func<string, string> text)
@@ -471,7 +558,8 @@ public partial class ConfigurationManagerView : UserControl
         string message,
         string confirmText,
         string cancelText,
-        string sourceScope)
+        string sourceScope,
+        bool showCancelButton = true)
     {
         var completion = await ResolveDialogService().ShowWarningConfirmAsync(
             new WarningConfirmDialogRequest(
@@ -479,7 +567,8 @@ public partial class ConfigurationManagerView : UserControl
                 Message: message,
                 ConfirmText: confirmText,
                 CancelText: cancelText,
-                Language: language ?? "en-us"),
+                Language: language ?? "en-us",
+                ShowCancelButton: showCancelButton),
             sourceScope);
         return completion.Return == DialogReturnSemantic.Confirm;
     }

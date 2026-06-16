@@ -8,7 +8,7 @@
 - Themes: `Light, Dark`
 - Locales: `zh-cn, zh-tw, en-us, ja-jp, ko-kr, pallas`
 - Feature items: `38`
-- System items: `13`
+- System items: `12`
 - Config keys: `297`
 - Fallback records: `15`
 
@@ -65,7 +65,6 @@
 | `System.ImportLegacyConfig` | Aligned | `App/Views/MainWindow.axaml` |
 | `System.TrayMenu.Start` | Aligned | `App/Views/MainWindow.axaml` |
 | `System.TrayMenu.Stop` | Aligned | `App/Views/MainWindow.axaml` |
-| `System.TrayMenu.SwitchLanguage` | Aligned | `App/Views/MainWindow.axaml` |
 | `System.TrayMenu.ForceShow` | Aligned | `App/Views/MainWindow.axaml` |
 | `System.TrayMenu.HideTray` | Aligned | `App/Views/MainWindow.axaml` |
 | `System.TrayMenu.ToggleOverlay` | Aligned | `App/Views/MainWindow.axaml` |
@@ -163,7 +162,7 @@
 | Capability | Platform | Expected | Current | Parity | Visible | Recorded | Locatable |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Tray | windows | full | full | Aligned | True | True | True |
-| Tray | macos | degrade-visible | fallback | Aligned | True | True | True |
+| Tray | macos | full | full | Aligned | True | True | True |
 | Tray | linux | degrade-visible | fallback | Aligned | True | True | True |
 | Notification | windows | full | full | Aligned | True | True | True |
 | Notification | macos | degrade-visible | fallback | Aligned | True | True | True |
