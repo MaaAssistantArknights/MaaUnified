@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 using MAAUnified.Application.Configuration;
+using MAAUnified.Application.Models;
 using MAAUnified.Application.Orchestration;
 using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Features;
@@ -22,6 +23,56 @@ public sealed class RuntimeDisposalTests
         var root = Path.Combine(Path.GetTempPath(), "maa-runtime-disposal-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(Path.Combine(root, "config"));
 
+        var notificationService = new DisposableNotificationService();
+        var runtime = CreateRuntime(root, notificationService: notificationService);
+
+        try
+        {
+            await runtime.DisposeAsync();
+            Assert.True(notificationService.Disposed);
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(root, recursive: true);
+            }
+            catch
+            {
+                // Ignore cleanup failures in temporary test directories.
+            }
+        }
+    }
+
+    [Fact]
+    public async Task DisposeAsync_ShouldDisposeCoreBridgeBeforeTrayShutdown()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "maa-runtime-disposal-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+        var order = new List<string>();
+        var bridge = new RecordingBridge(order, "core");
+        var tray = new RecordingTrayService(order, "tray");
+        var runtime = CreateRuntime(root, bridge: bridge, trayService: tray);
+
+        try
+        {
+            await runtime.DisposeAsync();
+
+            Assert.Equal(["core", "tray"], order.Where(item => item is "core" or "tray").ToArray());
+        }
+        finally
+        {
+            TryDeleteDirectory(root);
+        }
+    }
+
+    private static MAAUnifiedRuntime CreateRuntime(
+        string root,
+        IMaaCoreBridge? bridge = null,
+        ITrayService? trayService = null,
+        INotificationService? notificationService = null,
+        IWebApiFeatureService? webApiFeatureService = null)
+    {
         var log = new UiLogService();
         var diagnostics = new UiDiagnosticsService(root, log);
         var config = new UnifiedConfigurationService(
@@ -30,13 +81,12 @@ public sealed class RuntimeDisposalTests
             new GuiJsonConfigImporter(),
             log,
             root);
-        var bridge = new NullBridge();
+        bridge ??= new NullBridge();
         var session = new UnifiedSessionService(bridge, config, log, new SessionStateMachine());
-        var notificationService = new DisposableNotificationService();
         var platform = new PlatformServiceBundle
         {
-            TrayService = new NoOpTrayService(),
-            NotificationService = notificationService,
+            TrayService = trayService ?? new NoOpTrayService(),
+            NotificationService = notificationService ?? new NoOpNotificationService(),
             HotkeyService = new NoOpGlobalHotkeyService(),
             AutostartService = new NoOpAutostartService(),
             FileDialogService = new NoOpFileDialogService(),
@@ -45,7 +95,7 @@ public sealed class RuntimeDisposalTests
         };
 
         var capability = new PlatformCapabilityFeatureService(platform, diagnostics);
-        var runtime = new MAAUnifiedRuntime
+        return new MAAUnifiedRuntime
         {
             CoreBridge = bridge,
             ConfigurationService = config,
@@ -64,26 +114,22 @@ public sealed class RuntimeDisposalTests
             OverlayFeatureService = new OverlayFeatureService(capability),
             NotificationProviderFeatureService = new NotificationProviderFeatureService(),
             SettingsFeatureService = new SettingsFeatureService(config, capability, diagnostics),
+            WebApiFeatureService = webApiFeatureService ?? new WebApiFeatureService(),
             DialogFeatureService = new DialogFeatureService(diagnostics),
             PostActionFeatureService = new PostActionFeatureService(config, diagnostics, platform.PostActionExecutorService),
             UiLanguageCoordinator = new UiLanguageCoordinator(config),
         };
+    }
 
+    private static void TryDeleteDirectory(string root)
+    {
         try
         {
-            await runtime.DisposeAsync();
-            Assert.True(notificationService.Disposed);
+            Directory.Delete(root, recursive: true);
         }
-        finally
+        catch
         {
-            try
-            {
-                Directory.Delete(root, recursive: true);
-            }
-            catch
-            {
-                // Ignore cleanup failures in temporary test directories.
-            }
+            // Ignore cleanup failures in temporary test directories.
         }
     }
 
@@ -105,7 +151,7 @@ public sealed class RuntimeDisposalTests
         }
     }
 
-    private sealed class NullBridge : IMaaCoreBridge
+    private class NullBridge : IMaaCoreBridge
     {
         private readonly Channel<CoreCallbackEvent> _callbacks = Channel.CreateUnbounded<CoreCallbackEvent>();
 
@@ -141,10 +187,58 @@ public sealed class RuntimeDisposalTests
             }
         }
 
-        public ValueTask DisposeAsync()
+        public virtual ValueTask DisposeAsync()
         {
             _callbacks.Writer.TryComplete();
             return ValueTask.CompletedTask;
         }
     }
+
+    private sealed class RecordingBridge(List<string> order, string disposeName) : NullBridge
+    {
+        public bool Disposed { get; private set; }
+
+        public override ValueTask DisposeAsync()
+        {
+            Disposed = true;
+            lock (order)
+            {
+                order.Add(disposeName);
+            }
+
+            return base.DisposeAsync();
+        }
+    }
+
+    private sealed class RecordingTrayService(List<string> order, string shutdownName) : ITrayService
+    {
+        public PlatformCapabilityStatus Capability => new(true, "recording tray", Provider: "recording");
+
+        public event EventHandler<TrayCommandEvent>? CommandInvoked;
+
+        public event EventHandler<TrayMenuRequestEvent>? MenuRequested;
+
+        public Task<PlatformOperationResult> InitializeAsync(string appTitle, TrayMenuText? menuText, CancellationToken cancellationToken = default)
+            => Task.FromResult(PlatformOperation.NativeSuccess(Capability.Provider, "initialized", "tray.initialize"));
+
+        public Task<PlatformOperationResult> ShutdownAsync(CancellationToken cancellationToken = default)
+        {
+            lock (order)
+            {
+                order.Add(shutdownName);
+            }
+
+            return Task.FromResult(PlatformOperation.NativeSuccess(Capability.Provider, "shutdown", "tray.shutdown"));
+        }
+
+        public Task<PlatformOperationResult> ShowAsync(string title, string message, CancellationToken cancellationToken = default)
+            => Task.FromResult(PlatformOperation.NativeSuccess(Capability.Provider, "shown", "tray.show"));
+
+        public Task<PlatformOperationResult> SetMenuStateAsync(TrayMenuState state, CancellationToken cancellationToken = default)
+            => Task.FromResult(PlatformOperation.NativeSuccess(Capability.Provider, "menu", "tray.setMenuState"));
+
+        public Task<PlatformOperationResult> SetVisibleAsync(bool visible, CancellationToken cancellationToken = default)
+            => Task.FromResult(PlatformOperation.NativeSuccess(Capability.Provider, "visible", "tray.setVisible"));
+    }
+
 }

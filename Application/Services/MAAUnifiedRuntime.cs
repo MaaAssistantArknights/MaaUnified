@@ -81,70 +81,103 @@ public sealed class MAAUnifiedRuntime : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        await RunExitCleanupAsync(
+            "App.Exit.Cleanup.WebApi",
+            () => WebApiFeatureService.StopAsync(CancellationToken.None)).ConfigureAwait(false);
+
+        await RunExitCleanupAsync(
+            "App.Exit.Cleanup.RemoteControl",
+            async () =>
+            {
+                if (RemoteControlFeatureService is IAsyncDisposable remoteControlDisposable)
+                {
+                    await remoteControlDisposable.DisposeAsync().ConfigureAwait(false);
+                }
+            }).ConfigureAwait(false);
+
+        await RunExitCleanupAsync(
+            "App.Exit.Cleanup.CoreBridge",
+            async () => await CoreBridge.DisposeAsync().ConfigureAwait(false)).ConfigureAwait(false);
+
+        await RunExitCleanupAsync(
+            "App.Exit.Cleanup.Tray",
+            () => Platform.TrayService.ShutdownAsync(CancellationToken.None)).ConfigureAwait(false);
+
+        await RunExitCleanupAsync(
+            "App.Exit.Cleanup.Notification",
+            async () =>
+            {
+                if (Platform.NotificationService is IAsyncDisposable notificationAsyncDisposable)
+                {
+                    await notificationAsyncDisposable.DisposeAsync().ConfigureAwait(false);
+                }
+                else if (Platform.NotificationService is IDisposable notificationDisposable)
+                {
+                    notificationDisposable.Dispose();
+                }
+            }).ConfigureAwait(false);
+
+        await RunExitCleanupAsync(
+            "App.Exit.Cleanup.Hotkey.Unregister",
+            async () =>
+            {
+                await Platform.HotkeyService.UnregisterAsync("ShowGui", CancellationToken.None).ConfigureAwait(false);
+                await Platform.HotkeyService.UnregisterAsync("LinkStart", CancellationToken.None).ConfigureAwait(false);
+            }).ConfigureAwait(false);
+
+        await RunExitCleanupAsync(
+            "App.Exit.Cleanup.Hotkey",
+            () =>
+            {
+                if (Platform.HotkeyService is IDisposable hotkeyDisposable)
+                {
+                    hotkeyDisposable.Dispose();
+                }
+
+                return Task.CompletedTask;
+            }).ConfigureAwait(false);
+
+        await RunExitCleanupAsync(
+            "App.Exit.Cleanup.Overlay",
+            () =>
+            {
+                if (Platform.OverlayService is IDisposable overlayDisposable)
+                {
+                    overlayDisposable.Dispose();
+                }
+
+                return Task.CompletedTask;
+            }).ConfigureAwait(false);
+    }
+
+    private async Task RunExitCleanupAsync(string scope, Func<Task> cleanup)
+    {
+        ArgumentNullException.ThrowIfNull(cleanup);
+
         try
         {
-            await WebApiFeatureService.StopAsync(CancellationToken.None).ConfigureAwait(false);
+            await RecordExitCleanupEventAsync(scope, "begin").ConfigureAwait(false);
+            await cleanup().ConfigureAwait(false);
+            await RecordExitCleanupEventAsync(scope, "end").ConfigureAwait(false);
         }
-        catch
+        catch (Exception ex)
         {
-            // Best-effort disposal.
+            LogService.Warn($"{scope} failed during app exit: {ex.Message}");
+            await DiagnosticsService.RecordErrorAsync(scope, "Exit cleanup failed.", ex, CancellationToken.None)
+                .ConfigureAwait(false);
         }
+    }
 
+    private async Task RecordExitCleanupEventAsync(string scope, string message)
+    {
         try
         {
-            if (RemoteControlFeatureService is IAsyncDisposable remoteControlDisposable)
-            {
-                await remoteControlDisposable.DisposeAsync().ConfigureAwait(false);
-            }
+            await DiagnosticsService.RecordEventAsync(scope, message, CancellationToken.None).ConfigureAwait(false);
         }
-        catch
+        catch (Exception ex)
         {
-            // Best-effort disposal.
+            LogService.Warn($"{scope} diagnostics event failed during app exit: {ex.Message}");
         }
-
-        try
-        {
-            await Platform.TrayService.ShutdownAsync(CancellationToken.None).ConfigureAwait(false);
-        }
-        catch
-        {
-            // Best-effort disposal.
-        }
-
-        try
-        {
-            if (Platform.NotificationService is IAsyncDisposable notificationAsyncDisposable)
-            {
-                await notificationAsyncDisposable.DisposeAsync().ConfigureAwait(false);
-            }
-            else if (Platform.NotificationService is IDisposable notificationDisposable)
-            {
-                notificationDisposable.Dispose();
-            }
-        }
-        catch
-        {
-            // Best-effort disposal.
-        }
-
-        try
-        {
-            if (Platform.HotkeyService is IDisposable hotkeyDisposable)
-            {
-                hotkeyDisposable.Dispose();
-            }
-
-            if (Platform.OverlayService is IDisposable overlayDisposable)
-            {
-                overlayDisposable.Dispose();
-            }
-        }
-        catch
-        {
-            // Best-effort disposal.
-        }
-
-        await CoreBridge.DisposeAsync().ConfigureAwait(false);
     }
 }
 
