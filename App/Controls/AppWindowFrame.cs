@@ -7,6 +7,7 @@ using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.VisualTree;
 using MAAUnified.App.Infrastructure;
+using System.ComponentModel;
 
 namespace MAAUnified.App.Controls;
 
@@ -129,6 +130,8 @@ public class AppWindowFrame : ContentControl
     }
 
     public event EventHandler? CloseRequested;
+
+    public event EventHandler<CancelEventArgs>? MinimizeRequested;
 
     public AppWindowFrame()
     {
@@ -480,6 +483,14 @@ public class AppWindowFrame : ContentControl
     {
         if (ResolveHostWindow() is not Window window)
         {
+            return;
+        }
+
+        var args = new CancelEventArgs();
+        MinimizeRequested?.Invoke(this, args);
+        if (args.Cancel)
+        {
+            e.Handled = true;
             return;
         }
 

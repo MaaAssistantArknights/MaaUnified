@@ -289,11 +289,13 @@ public partial class App : Avalonia.Application
         try
         {
             Program.RecordStartupStage("App.Exit.Dispose.Begin", "Disposing runtime during desktop exit.");
-            _ = DisposeRuntimeOnExitAsync(CancellationToken.None).GetAwaiter().GetResult();
-            Program.RecordStartupStage("App.Exit.Dispose.End", "Runtime disposal finished during desktop exit.");
-            if (OperatingSystem.IsWindows())
+            var disposed = DisposeRuntimeOnExitAsync(CancellationToken.None).GetAwaiter().GetResult();
+            Program.RecordStartupStage(
+                "App.Exit.Dispose.End",
+                $"Runtime disposal finished during desktop exit. completed={disposed}");
+            if (!disposed || OperatingSystem.IsWindows())
             {
-                // Some Windows native integrations can leave foreground threads alive after Avalonia shutdown.
+                // Native integrations can leave foreground threads alive after Avalonia shutdown or a disposal timeout.
                 Environment.Exit(0);
             }
         }
@@ -533,7 +535,7 @@ public partial class App : Avalonia.Application
 
         try
         {
-            var disposeTask = Runtime.DisposeAsync().AsTask();
+            var disposeTask = Task.Run(async () => await Runtime.DisposeAsync().ConfigureAwait(false));
             var completed = await Task.WhenAny(disposeTask, Task.Delay(RuntimeDisposeTimeout, cancellationToken))
                 .ConfigureAwait(false);
             if (ReferenceEquals(completed, disposeTask))

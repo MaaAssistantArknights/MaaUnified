@@ -58,7 +58,7 @@ public sealed class UiDiagnosticsService
             builder.Append(" | ").Append(exception.GetType().Name).Append(": ").Append(exception.Message);
         }
 
-        await WriteLineAsync(ErrorLogPath, builder.ToString(), cancellationToken);
+        await WriteLineAsync(ErrorLogPath, builder.ToString(), cancellationToken).ConfigureAwait(false);
     }
 
     public Task RecordFailedResultAsync(string scope, UiOperationResult result, CancellationToken cancellationToken = default)
@@ -367,7 +367,7 @@ public sealed class UiDiagnosticsService
 
     private async Task WriteLineAsync(string path, string line, CancellationToken cancellationToken = default)
     {
-        await _writeLock.WaitAsync(cancellationToken);
+        await _writeLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             var directory = Path.GetDirectoryName(path);
@@ -376,7 +376,7 @@ public sealed class UiDiagnosticsService
                 Directory.CreateDirectory(directory);
             }
 
-            await File.AppendAllTextAsync(path, line + Environment.NewLine, cancellationToken);
+            await File.AppendAllTextAsync(path, line + Environment.NewLine, cancellationToken).ConfigureAwait(false);
         }
         finally
         {

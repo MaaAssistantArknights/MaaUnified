@@ -27,6 +27,10 @@ public static class PlatformServicesFactory
             Environment.GetEnvironmentVariable("MAA_PLATFORM_FORCE_FALLBACK"),
             "1",
             StringComparison.OrdinalIgnoreCase);
+        var forceWindowMenuTray = string.Equals(
+            Environment.GetEnvironmentVariable("MAA_PLATFORM_FORCE_WINDOW_MENU_TRAY"),
+            "1",
+            StringComparison.OrdinalIgnoreCase);
 
         ITrayService trayService;
         INotificationService notificationService;
@@ -38,20 +42,29 @@ public static class PlatformServicesFactory
 
         try
         {
-            if (!forceFallback
-                && OperatingSystem.IsMacOS()
-                && MacStatusItemTrayService.TryCreate(out var macStatusItemTray))
+            if (forceFallback || forceWindowMenuTray)
             {
-                trayService = macStatusItemTray;
+                trayService = new WindowMenuTrayService();
             }
-            else if (!forceFallback
-                && OperatingSystem.IsWindows()
-                && WindowsNotifyIconTrayService.TryCreate(out var windowsTray))
+            else if (OperatingSystem.IsMacOS())
             {
-                trayService = windowsTray;
+                trayService = MacStatusItemTrayService.TryCreate(out var macStatusItemTray)
+                    ? macStatusItemTray
+                    : new WindowMenuTrayService();
             }
-            else if (!forceFallback
-                     && AvaloniaTrayIconTrayService.TryCreate(out var nativeAvaloniaTray))
+            else if (OperatingSystem.IsWindows())
+            {
+                trayService = WindowsNotifyIconTrayService.TryCreate(out var windowsTray)
+                    ? windowsTray
+                    : new WindowMenuTrayService();
+            }
+            else if (OperatingSystem.IsLinux())
+            {
+                trayService = AvaloniaTrayIconTrayService.TryCreate(out var linuxTray)
+                    ? linuxTray
+                    : new WindowMenuTrayService();
+            }
+            else if (AvaloniaTrayIconTrayService.TryCreate(out var nativeAvaloniaTray))
             {
                 trayService = nativeAvaloniaTray;
             }

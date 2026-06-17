@@ -72,7 +72,7 @@ public sealed class MacStatusItemTrayService : ITrayService, IDisposable
         Message: "macOS status item tray integration is available via AppKit NSStatusItem.",
         Provider: "macos-appkit-statusitem",
         HasFallback: true,
-        FallbackMode: "avalonia-trayicon/window-menu");
+        FallbackMode: "window-menu");
 
     public event EventHandler<TrayCommandEvent>? CommandInvoked;
 
@@ -399,9 +399,7 @@ public sealed class MacStatusItemTrayService : ITrayService, IDisposable
     }
 
     private static ITrayService CreateFallbackService()
-        => AvaloniaTrayIconTrayService.TryCreate(out var avaloniaTray)
-            ? avaloniaTray
-            : new WindowMenuTrayService();
+        => new WindowMenuTrayService();
 
     private static string NormalizeTitle(string appTitle)
         => string.IsNullOrWhiteSpace(appTitle) ? "MAAUnified" : appTitle.Trim();

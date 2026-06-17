@@ -112,6 +112,7 @@ public partial class MainWindow : Window
     private bool _dialogErrorBound;
     private bool _processingDialogErrors;
     private bool _processingMinimizeToTray;
+    private bool _dockHiddenForMinimizeToTray;
     private bool _allowLifecycleClose;
     private bool _closeRequestPending;
     private bool _compactLayoutEnabled;
@@ -182,6 +183,7 @@ public partial class MainWindow : Window
         Closed += OnWindowClosed;
         DataContextChanged += OnWindowDataContextChanged;
         PropertyChanged += OnWindowPropertyChanged;
+        WindowShellFrame.MinimizeRequested += OnWindowMinimizeRequested;
         WindowShellFrame.PropertyChanged += OnWindowShellFramePropertyChanged;
         TaskQueueRootHost.PropertyChanged += OnRootHostPropertyChanged;
         CopilotRootHost.PropertyChanged += OnRootHostPropertyChanged;
@@ -360,6 +362,7 @@ public partial class MainWindow : Window
         BindShellBackgroundVm(null);
         EndLiveResizeVisualThrottle();
         Resized -= OnWindowResized;
+        WindowShellFrame.MinimizeRequested -= OnWindowMinimizeRequested;
         WindowShellFrame.PropertyChanged -= OnWindowShellFramePropertyChanged;
         DataContextChanged -= OnWindowDataContextChanged;
         TaskQueueRootHost.PropertyChanged -= OnRootHostPropertyChanged;
@@ -399,15 +402,6 @@ public partial class MainWindow : Window
             vm.PlatformCapabilityService.GlobalHotkeyTriggered -= OnGlobalHotkeyTriggered;
             vm.PlatformCapabilityService.OverlayStateChanged -= OnPlatformOverlayStateChanged;
             _platformBound = false;
-            await RunPlatformShutdownStepAsync(
-                "PlatformCapability.Hotkey.Unregister.ShowGui",
-                () => vm.PlatformCapabilityService.UnregisterGlobalHotkeyAsync("ShowGui"));
-            await RunPlatformShutdownStepAsync(
-                "PlatformCapability.Hotkey.Unregister.LinkStart",
-                () => vm.PlatformCapabilityService.UnregisterGlobalHotkeyAsync("LinkStart"));
-            await RunPlatformShutdownStepAsync(
-                "PlatformCapability.Tray.Shutdown",
-                () => vm.PlatformCapabilityService.ShutdownTrayAsync());
         }
 
         if (_overlayHostWindow is not null)
@@ -454,28 +448,6 @@ public partial class MainWindow : Window
         AvaloniaDialogService.OwnerModalStateChanged -= OnOwnerModalStateChanged;
         App.Runtime.UiLanguageCoordinator.LanguageChanged -= OnUiLanguageChanged;
     });
-
-    private async Task RunPlatformShutdownStepAsync(string scope, Func<Task<UiOperationResult>> action)
-    {
-        try
-        {
-            var result = await action();
-            if (!result.Success)
-            {
-                await App.Runtime.DiagnosticsService.RecordFailedResultAsync(scope, result);
-            }
-        }
-        catch (Exception ex) when (App.ShouldIgnoreUnhandledException(ex))
-        {
-        }
-        catch (Exception ex)
-        {
-            await App.Runtime.DiagnosticsService.RecordErrorAsync(
-                scope,
-                $"{scope} failed during window shutdown.",
-                ex);
-        }
-    }
 
     private async Task RunWindowCleanupStepAsync(string scope, Func<Task> action)
     {
@@ -530,6 +502,19 @@ public partial class MainWindow : Window
         App.PostUiCallback(
             "MainWindow.AchievementToast.OwnerModalStateChanged",
             TryStartPendingAchievementToastPresentations);
+    }
+
+    private async void OnWindowMinimizeRequested(object? sender, CancelEventArgs e)
+    {
+        if (!ShouldMinimizeToTray())
+        {
+            return;
+        }
+
+        e.Cancel = true;
+        await App.RunUiTaskAsync(
+            "MainWindow.MinimizeButtonToTray",
+            () => HideMainWindowToTrayAsync(requireMinimizedState: false));
     }
 
     private void OnWindowResized(object? sender, WindowResizedEventArgs e)
@@ -2063,6 +2048,11 @@ public partial class MainWindow : Window
             switch (action)
             {
                 case ShellUiAction.None:
+                    if (command == TrayCommandId.HideTray)
+                    {
+                        ShowAndActivateMainWindow();
+                    }
+
                     break;
                 case ShellUiAction.ShowMainWindow:
                     ShowAndActivateMainWindow();
@@ -2198,12 +2188,29 @@ public partial class MainWindow : Window
 
     private async Task HandleMinimizeToTrayAsync(CancellationToken cancellationToken = default)
     {
+        if (!ShouldMinimizeToTray() || WindowState != WindowState.Minimized)
+        {
+            return;
+        }
+
+        await HideMainWindowToTrayAsync(requireMinimizedState: true, cancellationToken);
+    }
+
+    private bool ShouldMinimizeToTray()
+    {
         var vm = VM;
-        if (_processingMinimizeToTray
-            || vm is null
-            || WindowState != WindowState.Minimized
-            || !vm.SettingsPage.UseTray
-            || !vm.SettingsPage.MinimizeToTray)
+        return !_processingMinimizeToTray
+            && vm is not null
+            && vm.SettingsPage.UseTray
+            && vm.SettingsPage.MinimizeToTray;
+    }
+
+    private async Task HideMainWindowToTrayAsync(
+        bool requireMinimizedState,
+        CancellationToken cancellationToken = default)
+    {
+        var vm = VM;
+        if (_processingMinimizeToTray || vm is null)
         {
             return;
         }
@@ -2213,8 +2220,12 @@ public partial class MainWindow : Window
             _processingMinimizeToTray = true;
             var trayVisible = await vm.PlatformCapabilityService.SetTrayVisibleAsync(true, cancellationToken);
             await HandlePlatformResultAsync("PlatformCapability.Tray.MinimizeToTray", trayVisible, cancellationToken);
-            WindowState = WindowState.Normal;
-            Hide();
+            if (requireMinimizedState && WindowState != WindowState.Minimized)
+            {
+                return;
+            }
+
+            HideMainWindowToTray();
         }
         finally
         {
@@ -2225,6 +2236,7 @@ public partial class MainWindow : Window
 
     private void ShowAndActivateMainWindow()
     {
+        RestoreDockIconAfterMinimizeToTray();
         if (!IsVisible)
         {
             Show();
@@ -2238,6 +2250,36 @@ public partial class MainWindow : Window
         FitToCurrentScreenWorkingArea();
         UpdateAdaptiveLayoutMode();
         Activate();
+    }
+
+    private void HideMainWindowToTray()
+    {
+        HideDockIconForMinimizeToTray();
+        Hide();
+    }
+
+    private void HideDockIconForMinimizeToTray()
+    {
+        if (_dockHiddenForMinimizeToTray || !OperatingSystem.IsMacOS())
+        {
+            return;
+        }
+
+        _dockHiddenForMinimizeToTray = MacApplicationActivationPolicy.TryHideFromDock();
+    }
+
+    private void RestoreDockIconAfterMinimizeToTray()
+    {
+        if (!_dockHiddenForMinimizeToTray)
+        {
+            return;
+        }
+
+        _dockHiddenForMinimizeToTray = false;
+        if (OperatingSystem.IsMacOS())
+        {
+            MacApplicationActivationPolicy.TryShowInDock();
+        }
     }
 
     private void FitToCurrentScreenWorkingArea()

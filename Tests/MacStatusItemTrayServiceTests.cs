@@ -21,7 +21,7 @@ public sealed class MacStatusItemTrayServiceTests
         Assert.True(result.Success);
         Assert.False(result.UsedFallback);
         Assert.Equal("macos-appkit-statusitem", result.Provider);
-        Assert.Equal("avalonia-trayicon/window-menu", service.Capability.FallbackMode);
+        Assert.Equal("window-menu", service.Capability.FallbackMode);
         Assert.Equal(1, interop.CreateCount);
         Assert.Equal("MAAUnified", interop.Tooltips.Single());
         AssertMenuOrder(interop.LastMenu);
