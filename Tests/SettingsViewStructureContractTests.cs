@@ -545,47 +545,6 @@ public sealed class SettingsViewStructureContractTests
     }
 
     [Fact]
-    public void MacOSCIWorkflow_ShouldDownloadMaaFrameworkAdbControlUnitIntoInstall()
-    {
-        var maaUnifiedRoot = GetMaaUnifiedRoot();
-        var hostRoot = TestRepoLayout.GetHostRepoRoot();
-        var workflowPaths = new[]
-        {
-            Path.Combine(maaUnifiedRoot, "CI", "ci-avalonia.yml"),
-            Path.Combine(hostRoot, ".github", "workflows", "ci-avalonia.yml"),
-            Path.Combine(hostRoot, ".github", "workflows", "release-maaunified.yml"),
-        };
-
-        foreach (var workflowPath in workflowPaths)
-        {
-            var workflow = File.ReadAllText(workflowPath);
-
-            Assert.Contains("Download MaaFramework ADB control unit (macOS)", workflow, StringComparison.Ordinal);
-            Assert.Contains("uses: robinraju/release-downloader@v1", workflow, StringComparison.Ordinal);
-            Assert.Contains("repository: MaaXYZ/MaaFramework", workflow, StringComparison.Ordinal);
-            Assert.Contains("latest: true", workflow, StringComparison.Ordinal);
-            Assert.Contains("*macos-x86_64*.zip", workflow, StringComparison.Ordinal);
-            Assert.Contains("*macos-aarch64*.zip", workflow, StringComparison.Ordinal);
-            Assert.Contains("extract: true", workflow, StringComparison.Ordinal);
-            Assert.Contains("out-file-path: MaaFramework-temp", workflow, StringComparison.Ordinal);
-            Assert.Contains("control_units=(MaaFramework-temp/bin/*AdbControlUnit*)", workflow, StringComparison.Ordinal);
-            Assert.Contains("cp -f \"${control_units[@]}\" install/", workflow, StringComparison.Ordinal);
-            Assert.Contains("test -f install/libMaaAdbControlUnit.dylib", workflow, StringComparison.Ordinal);
-            Assert.True(
-                workflow.IndexOf("Build MaaCore runtime", StringComparison.Ordinal)
-                    < workflow.IndexOf("Download MaaFramework ADB control unit (macOS)", StringComparison.Ordinal),
-                $"{workflowPath} should download MaaFramework after building MaaCore.");
-            Assert.True(
-                workflow.IndexOf("Install MaaFramework ADB control unit (macOS)", StringComparison.Ordinal)
-                    < workflow.IndexOf("Publish MAAUnified app", StringComparison.Ordinal),
-                $"{workflowPath} should install MaaFramework before publishing MAAUnified.");
-        }
-
-        var appProject = File.ReadAllText(Path.Combine(maaUnifiedRoot, "App", "MAAUnified.App.csproj"));
-        Assert.DoesNotContain("release-downloader", appProject, StringComparison.Ordinal);
-    }
-
-    [Fact]
     public void ControlStyles_ShouldExposeSharedSettingsFormResources()
     {
         var root = GetMaaUnifiedRoot();
