@@ -266,6 +266,61 @@ public sealed class SettingsRemoteExternalNotificationFeatureTests
     }
 
     [Fact]
+    public async Task ExternalNotification_Bark_SendTest_PostsPushPayload()
+    {
+        HttpRequestMessage? capturedRequest = null;
+        string? capturedBody = null;
+        var service = CreateNotificationProviderServiceForHttpProbe(
+            async (request, cancellationToken) =>
+            {
+                capturedRequest = request;
+                capturedBody = request.Content is null
+                    ? null
+                    : await request.Content.ReadAsStringAsync(cancellationToken);
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("""{"code":200}"""),
+                };
+            });
+
+        var result = await service.SendTestAsync(
+            new NotificationProviderTestRequest(
+                "Bark",
+                "sendKey=bark-key\nserver=https://api.day.app",
+                "title",
+                "message"));
+
+        Assert.True(result.Success);
+        Assert.NotNull(capturedRequest);
+        Assert.Equal(HttpMethod.Post, capturedRequest!.Method);
+        Assert.Equal("https://api.day.app/push", capturedRequest.RequestUri?.ToString());
+        Assert.Contains("\"device_key\":\"bark-key\"", capturedBody, StringComparison.Ordinal);
+        Assert.Contains("\"title\":\"title\"", capturedBody, StringComparison.Ordinal);
+        Assert.Contains("\"body\":\"message\"", capturedBody, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ExternalNotification_ValidateParameters_UsesChannelStatusText()
+    {
+        var notification = new ScriptedNotificationProviderFeatureService
+        {
+            ValidateHandler = static _ => UiOperationResult.Ok("valid"),
+        };
+
+        await using var fixture = await RuntimeFixture.CreateAsync(notificationProviderFeatureService: notification);
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        vm.ExternalNotificationEnabled = true;
+        vm.SelectedNotificationProvider = "Bark";
+        vm.NotificationProviderParametersText = "sendKey=abc123\nserver=https://api.day.app";
+        await vm.ValidateExternalNotificationParametersAsync();
+
+        Assert.Equal("Bark 通道参数校验通过。", vm.ExternalNotificationStatusMessage);
+        Assert.DoesNotContain("Provider", vm.ExternalNotificationStatusMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ExternalNotification_TestSend_SelectedProviderOnly()
     {
         var notification = new ScriptedNotificationProviderFeatureService
@@ -284,7 +339,30 @@ public sealed class SettingsRemoteExternalNotificationFeatureTests
 
         var call = Assert.Single(notification.SendCalls);
         Assert.Equal("Telegram", call.Provider);
-        Assert.Contains("测试发送成功", vm.ExternalNotificationStatusMessage, StringComparison.Ordinal);
+        Assert.Equal("Telegram 通道测试通知发送成功。", vm.ExternalNotificationStatusMessage);
+    }
+
+    [Fact]
+    public async Task ExternalNotification_ValidateAndTestWithoutEnabledProvider_ShowVisibleError()
+    {
+        var notification = new ScriptedNotificationProviderFeatureService();
+        await using var fixture = await RuntimeFixture.CreateAsync(notificationProviderFeatureService: notification);
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        Assert.False(vm.ExternalNotificationEnabled);
+
+        await vm.ValidateExternalNotificationParametersAsync();
+
+        Assert.True(vm.HasExternalNotificationErrorMessage);
+        Assert.Contains(UiErrorCode.NotificationProviderInvalidParameters, vm.ExternalNotificationErrorMessage, StringComparison.Ordinal);
+        Assert.Empty(notification.ValidateCalls);
+
+        await vm.TestExternalNotificationAsync();
+
+        Assert.True(vm.HasExternalNotificationErrorMessage);
+        Assert.Contains(UiErrorCode.NotificationProviderInvalidParameters, vm.ExternalNotificationErrorMessage, StringComparison.Ordinal);
+        Assert.Empty(notification.SendCalls);
     }
 
     [Fact]
@@ -372,7 +450,9 @@ public sealed class SettingsRemoteExternalNotificationFeatureTests
 
                 await vm.SaveExternalNotificationAsync();
 
-                Assert.Contains("server=smtp.example.com", vm.StatusMessage, StringComparison.Ordinal);
+                Assert.Contains("SMTP, Telegram, Custom Webhook", vm.StatusMessage, StringComparison.Ordinal);
+                Assert.Contains("已保存", vm.StatusMessage, StringComparison.Ordinal);
+                Assert.DoesNotContain("server=smtp.example.com", vm.StatusMessage, StringComparison.Ordinal);
                 Assert.Equal(
                     "SMTP,Telegram,Custom Webhook",
                     ReadCurrentProfileString(first.Config, ConfigurationKeys.ExternalNotificationEnabled));
@@ -417,7 +497,7 @@ public sealed class SettingsRemoteExternalNotificationFeatureTests
     }
 
     [Fact]
-    public async Task ExternalNotification_Disabled_SkipsValidationAndSuppressesMessages()
+    public async Task ExternalNotification_Disabled_SkipsProviderCallsAndSavesEmptyProviderList()
     {
         var notification = new ScriptedNotificationProviderFeatureService
         {
@@ -438,12 +518,20 @@ public sealed class SettingsRemoteExternalNotificationFeatureTests
         vm.NotificationProviderParametersText = "server";
 
         await vm.ValidateExternalNotificationParametersAsync();
+
+        Assert.True(vm.HasExternalNotificationErrorMessage);
+        Assert.Contains(UiErrorCode.NotificationProviderInvalidParameters, vm.ExternalNotificationErrorMessage, StringComparison.Ordinal);
+
         await vm.TestExternalNotificationAsync();
+
+        Assert.True(vm.HasExternalNotificationErrorMessage);
+        Assert.Contains(UiErrorCode.NotificationProviderInvalidParameters, vm.ExternalNotificationErrorMessage, StringComparison.Ordinal);
+
         await vm.SaveExternalNotificationAsync();
 
         Assert.Empty(notification.ValidateCalls);
         Assert.Empty(notification.SendCalls);
-        Assert.False(vm.HasExternalNotificationStatusMessage);
+        Assert.True(vm.HasExternalNotificationStatusMessage);
         Assert.False(vm.HasExternalNotificationWarningMessage);
         Assert.False(vm.HasExternalNotificationErrorMessage);
         Assert.Equal(string.Empty, ReadCurrentProfileString(fixture.Config, ConfigurationKeys.ExternalNotificationEnabled));

@@ -10,6 +10,7 @@ using MAAUnified.App.ViewModels;
 using MAAUnified.App.ViewModels.Settings;
 using MAAUnified.App.ViewModels.TaskQueue;
 using MAAUnified.Application.Configuration;
+using MAAUnified.Application.Models;
 using MAAUnified.Application.Orchestration;
 using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Features;
@@ -81,6 +82,41 @@ public sealed class TaskQueueNotificationTests
         Assert.Contains("Task error", fixture.NotificationCapability.LastMessage, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public async Task TaskChainError_SendsExternalNotification_WhenConfigured()
+    {
+        var notificationProvider = new ScriptedNotificationProviderFeatureService();
+        await using var fixture = await NotificationFixture.CreateAsync(
+            useNotify: false,
+            notificationProviderFeatureService: notificationProvider);
+        if (fixture.Config.TryGetCurrentProfile(out var profile))
+        {
+            profile.Values[ConfigurationKeys.ExternalNotificationEnabled] = JsonValue.Create("Bark");
+            profile.Values[ConfigurationKeys.ExternalNotificationSendWhenError] = JsonValue.Create(true);
+            profile.Values[ConfigurationKeys.ExternalNotificationBarkSendKey] = JsonValue.Create("bark-key");
+            profile.Values[ConfigurationKeys.ExternalNotificationBarkServer] = JsonValue.Create("https://api.day.app");
+        }
+
+        await fixture.ViewModel.InitializeAsync();
+
+        var payload = new JsonObject
+        {
+            ["RunId"] = "external-error-run",
+            ["TaskChain"] = "Fight",
+        };
+        await NotificationFixture.InvokeCallbackAsync(
+            fixture.ViewModel,
+            new CoreCallbackEvent(0, "TaskChainError", payload.ToJsonString(), DateTimeOffset.UtcNow));
+
+        await WaitForExternalNotificationCountAsync(notificationProvider, 1);
+        Assert.Equal(0, fixture.NotificationCapability.NotificationCallCount);
+        var call = Assert.Single(notificationProvider.SendCalls);
+        Assert.Equal("Bark", call.Provider);
+        Assert.Contains("sendKey=bark-key", call.ParametersText, StringComparison.Ordinal);
+        Assert.Contains("server=https://api.day.app", call.ParametersText, StringComparison.Ordinal);
+        Assert.Contains("failed", call.Title, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static async Task WaitForNotificationCountAsync(
         NotificationTrackingPlatformCapabilityService service,
         int expectedCount,
@@ -96,6 +132,63 @@ public sealed class TaskQueueNotificationTests
         {
             throw new TimeoutException(
                 $"Expected notification count {expectedCount}, but saw {service.NotificationCallCount}.");
+        }
+    }
+
+    private static async Task WaitForExternalNotificationCountAsync(
+        ScriptedNotificationProviderFeatureService service,
+        int expectedCount,
+        int timeoutMs = 1000)
+    {
+        var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
+        while (service.SendCalls.Count != expectedCount && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(20);
+        }
+
+        if (service.SendCalls.Count != expectedCount)
+        {
+            throw new TimeoutException(
+                $"Expected external notification count {expectedCount}, but saw {service.SendCalls.Count}.");
+        }
+    }
+
+    private sealed class ScriptedNotificationProviderFeatureService : INotificationProviderFeatureService
+    {
+        public List<NotificationProviderTestRequest> SendCalls { get; } = [];
+
+        public Task<string[]> GetAvailableProvidersAsync(CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(new[]
+            {
+                "Smtp",
+                "ServerChan",
+                "Bark",
+                "Discord",
+                "DingTalk",
+                "Telegram",
+                "Qmsg",
+                "Gotify",
+                "CustomWebhook",
+            });
+        }
+
+        public Task<UiOperationResult> ValidateProviderParametersAsync(
+            NotificationProviderRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(UiOperationResult.Ok("valid"));
+        }
+
+        public Task<UiOperationResult> SendTestAsync(
+            NotificationProviderTestRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            SendCalls.Add(request);
+            return Task.FromResult(UiOperationResult.Ok("sent"));
         }
     }
 
@@ -125,7 +218,10 @@ public sealed class TaskQueueNotificationTests
 
         public TaskQueuePageViewModel ViewModel { get; }
 
-        public static async Task<NotificationFixture> CreateAsync(bool useNotify, string language = "en-us")
+        public static async Task<NotificationFixture> CreateAsync(
+            bool useNotify,
+            string language = "en-us",
+            INotificationProviderFeatureService? notificationProviderFeatureService = null)
         {
             var root = Path.Combine(Path.GetTempPath(), "maa-taskqueue-notification-tests", Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(Path.Combine(root, "config"));
@@ -190,7 +286,7 @@ public sealed class TaskQueueNotificationTests
                 RemoteControlFeatureService = new RemoteControlFeatureService(),
                 PlatformCapabilityService = tracking,
                 OverlayFeatureService = new OverlayFeatureService(tracking),
-                NotificationProviderFeatureService = new NotificationProviderFeatureService(),
+                NotificationProviderFeatureService = notificationProviderFeatureService ?? new NotificationProviderFeatureService(),
                 SettingsFeatureService = new SettingsFeatureService(config, tracking, diagnostics),
                 DialogFeatureService = dialog,
                 PostActionFeatureService = postAction,

@@ -380,16 +380,6 @@ public sealed class DialogModuleP1FeatureTests
                 new[] { 120d, targetHeaderTop, 420d }));
     }
 
-    [Theory]
-    [InlineData(120d, 60d, 0d)]
-    [InlineData(60d, 60d, 0d)]
-    [InlineData(30d, 60d, 30d)]
-    [InlineData(-40d, 60d, 60d)]
-    public void AnnouncementDialogView_ShouldClampStickyPushOffset(double nextViewportTop, double stickyHeight, double expected)
-    {
-        Assert.Equal(expected, AnnouncementDialogView.ComputeStickyPushOffset(nextViewportTop, stickyHeight));
-    }
-
     [Fact]
     public void AnnouncementDialogView_ShouldUseAppWindowFrameAndRailSelectionListStyles()
     {
@@ -403,9 +393,14 @@ public sealed class DialogModuleP1FeatureTests
         Assert.Contains("<controls:AppWindowFrame", xaml, StringComparison.Ordinal);
         Assert.Contains("Mode=\"ResizableDialog\"", xaml, StringComparison.Ordinal);
         Assert.Contains("VisualMode=\"Rail\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("ReserveTrailingAccessorySpace=\"True\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("ReserveTrailingAccessorySpace=\"True\"", xaml, StringComparison.Ordinal);
         Assert.Contains("app-selection-list-item-shell", xaml, StringComparison.Ordinal);
-        Assert.Contains("announcement-dialog-sticky-title-viewport", xaml, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"announcement-dialog-list-item-layout\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("<Border Grid.Column=\"1\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Grid.announcement-dialog-list-item-layout", controlStyles, StringComparison.Ordinal);
+        Assert.Contains("Property=\"MaxWidth\" Value=\"244\"", controlStyles, StringComparison.Ordinal);
+        Assert.DoesNotContain("AppStickyTitlePresenter", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("announcement-dialog-sticky-title", xaml + controlStyles, StringComparison.Ordinal);
         Assert.DoesNotContain("announcement-dialog-section-list", xaml + controlStyles, StringComparison.Ordinal);
         Assert.DoesNotContain("announcement-dialog-list-selection-surface", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("announcement-dialog-read-progress", xaml, StringComparison.Ordinal);
@@ -418,7 +413,6 @@ public sealed class DialogModuleP1FeatureTests
         Assert.DoesNotContain("Math.Max(0d, point.Value.Y", code, StringComparison.Ordinal);
         Assert.DoesNotContain("modern-dialog-title", code, StringComparison.Ordinal);
         Assert.Contains("app-window-title", code, StringComparison.Ordinal);
-        Assert.Contains("_primarySectionHeader ??= header", code, StringComparison.Ordinal);
         Assert.Contains("CreateSectionHeader(item.Title)", code, StringComparison.Ordinal);
         Assert.Contains("CreateMarkdownViewer(item.MarkdownContent)", code, StringComparison.Ordinal);
         Assert.Contains("controls|AppSelectionList.selection-list-rail Border.app-selection-list-item-shell", selectionListStyles, StringComparison.Ordinal);
@@ -437,7 +431,7 @@ public sealed class DialogModuleP1FeatureTests
         Assert.Contains("Border.app-surface.app-section", foundationStyles, StringComparison.Ordinal);
         Assert.Contains("TextBlock.app-window-title", foundationStyles, StringComparison.Ordinal);
         Assert.Contains("ComputeSectionTargetOffset", code, StringComparison.Ordinal);
-        Assert.Contains("ComputeStickyPushOffset", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("ComputeStickyPushOffset", code, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -567,21 +561,25 @@ public sealed class DialogModuleP1FeatureTests
         Assert.Contains("child.GetVisualParent() is not null", popupScale, StringComparison.Ordinal);
         var controlStyles = File.ReadAllText(Path.Combine(root, "App", "Styles", "ControlStyles.axaml"));
         var titleTextCode = File.ReadAllText(Path.Combine(root, "App", "Controls", "AppWindowTitleText.cs"));
-        Assert.Contains("controls|AppWindowTitleText.dialog-window-title", controlStyles, StringComparison.Ordinal);
-        Assert.Contains("Property=\"Margin\" Value=\"8,0,0,0\"", controlStyles, StringComparison.Ordinal);
+        var controlTitleStyle = ExtractStyleBlock(controlStyles, "controls|AppWindowTitleText.dialog-window-title");
+        var foundationTitleStyle = ExtractStyleBlock(foundationStyles, "controls|AppWindowFrame /template/ controls|AppWindowTitleText.dialog-window-title");
+        Assert.Contains("controls|AppWindowTitleText.dialog-window-title", controlTitleStyle, StringComparison.Ordinal);
+        Assert.Contains("Property=\"Margin\" Value=\"8,0,0,0\"", controlTitleStyle, StringComparison.Ordinal);
         Assert.Contains("<x:Double x:Key=\"MAA.FontSize.WindowTitle\">20</x:Double>", controlStyles, StringComparison.Ordinal);
-        Assert.Contains("Property=\"TextWrapping\" Value=\"NoWrap\"", controlStyles, StringComparison.Ordinal);
-        Assert.Contains("Property=\"TextTrimming\" Value=\"CharacterEllipsis\"", controlStyles, StringComparison.Ordinal);
-        Assert.Contains("Property=\"MaxLines\" Value=\"1\"", controlStyles, StringComparison.Ordinal);
+        Assert.Contains("Property=\"TextWrapping\" Value=\"Wrap\"", controlTitleStyle, StringComparison.Ordinal);
+        Assert.Contains("Property=\"TextTrimming\" Value=\"None\"", controlTitleStyle, StringComparison.Ordinal);
+        Assert.DoesNotContain("Property=\"MaxLines\" Value=\"1\"", controlTitleStyle, StringComparison.Ordinal);
         Assert.Contains("<controls:AppWindowTitleText Classes=\"dialog-window-title\"", foundationStyles, StringComparison.Ordinal);
         Assert.Contains("TitleText=\"{TemplateBinding Title}\"", foundationStyles, StringComparison.Ordinal);
         Assert.DoesNotContain("Classes=\"app-window-title dialog-window-title\"", foundationStyles, StringComparison.Ordinal);
-        Assert.Contains("Property=\"Height\" Value=\"24\"", foundationStyles, StringComparison.Ordinal);
-        Assert.Contains("Property=\"MinHeight\" Value=\"24\"", foundationStyles, StringComparison.Ordinal);
-        Assert.Contains("Property=\"MaxHeight\" Value=\"24\"", foundationStyles, StringComparison.Ordinal);
-        Assert.Contains("Property=\"FontSize\" Value=\"{DynamicResource MAA.FontSize.WindowTitle}\"", foundationStyles, StringComparison.Ordinal);
-        Assert.Contains("Property=\"FontWeight\" Value=\"Bold\"", foundationStyles, StringComparison.Ordinal);
-        Assert.Contains("Property=\"LineHeight\" Value=\"24\"", foundationStyles, StringComparison.Ordinal);
+        Assert.DoesNotContain("Property=\"Height\" Value=\"24\"", foundationTitleStyle, StringComparison.Ordinal);
+        Assert.Contains("Property=\"MinHeight\" Value=\"24\"", foundationTitleStyle, StringComparison.Ordinal);
+        Assert.DoesNotContain("Property=\"MaxHeight\" Value=\"24\"", foundationTitleStyle, StringComparison.Ordinal);
+        Assert.Contains("Property=\"FontSize\" Value=\"{DynamicResource MAA.FontSize.WindowTitle}\"", foundationTitleStyle, StringComparison.Ordinal);
+        Assert.Contains("Property=\"FontWeight\" Value=\"Bold\"", foundationTitleStyle, StringComparison.Ordinal);
+        Assert.Contains("Property=\"TextWrapping\" Value=\"Wrap\"", foundationTitleStyle, StringComparison.Ordinal);
+        Assert.Contains("Property=\"TextTrimming\" Value=\"None\"", foundationTitleStyle, StringComparison.Ordinal);
+        Assert.Contains("Property=\"LineHeight\" Value=\"24\"", foundationTitleStyle, StringComparison.Ordinal);
         Assert.Contains("title.IndexOf(\" - \", StringComparison.Ordinal)", titleTextCode, StringComparison.Ordinal);
         Assert.Contains("FontWeight.Bold", titleTextCode, StringComparison.Ordinal);
         Assert.Contains("FontWeight.Medium", titleTextCode, StringComparison.Ordinal);
@@ -595,6 +593,15 @@ public sealed class DialogModuleP1FeatureTests
             Assert.True(
                 popupCount == scaledPopupCount,
                 $"{relativePath} should opt every custom Popup into top-level UI scaling.");
+        }
+
+        static string ExtractStyleBlock(string text, string selector)
+        {
+            var start = text.IndexOf(selector, StringComparison.Ordinal);
+            Assert.True(start >= 0, $"Missing style selector: {selector}");
+            var end = text.IndexOf("</Style>", start, StringComparison.Ordinal);
+            Assert.True(end >= 0, $"Missing style end for selector: {selector}");
+            return text[start..(end + "</Style>".Length)];
         }
     }
 

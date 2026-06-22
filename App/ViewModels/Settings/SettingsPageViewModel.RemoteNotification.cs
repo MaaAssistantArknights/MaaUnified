@@ -211,7 +211,9 @@ public sealed partial class SettingsPageViewModel
         var enabledProviders = ResolveEnabledNotificationProviders();
         if (enabledProviders.Count == 0)
         {
-            LastErrorMessage = string.Empty;
+            await ApplyNoExternalNotificationProviderFailureAsync(
+                "Settings.ExternalNotification.Validate",
+                cancellationToken);
             return;
         }
 
@@ -233,8 +235,8 @@ public sealed partial class SettingsPageViewModel
         ExternalNotificationStatusMessage = string.Format(
             RootTexts.GetOrDefault(
                 "Settings.ExternalNotification.Status.ValidateSucceeded",
-                "Provider `{0}` parameter validation succeeded."),
-            string.Join(", ", enabledProviders.Select(MapProviderToLegacyDisplayName)));
+                "{0} channel parameters validated."),
+            BuildExternalNotificationProviderListText(enabledProviders));
         StatusMessage = ExternalNotificationStatusMessage;
         LastErrorMessage = string.Empty;
         await RecordEventAsync(
@@ -250,7 +252,9 @@ public sealed partial class SettingsPageViewModel
         var enabledProviders = ResolveEnabledNotificationProviders();
         if (enabledProviders.Count == 0)
         {
-            LastErrorMessage = string.Empty;
+            await ApplyNoExternalNotificationProviderFailureAsync(
+                "Settings.ExternalNotification.TestSend",
+                cancellationToken);
             return;
         }
 
@@ -276,8 +280,8 @@ public sealed partial class SettingsPageViewModel
         ExternalNotificationStatusMessage = string.Format(
             RootTexts.GetOrDefault(
                 "Settings.ExternalNotification.Status.TestSucceeded",
-                "Provider `{0}` test notification sent."),
-            string.Join(", ", enabledProviders.Select(MapProviderToLegacyDisplayName)));
+                "{0} channel test notification sent."),
+            BuildExternalNotificationProviderListText(enabledProviders));
         StatusMessage = ExternalNotificationStatusMessage;
         LastErrorMessage = string.Empty;
         await RecordEventAsync(
@@ -1277,13 +1281,28 @@ public sealed partial class SettingsPageViewModel
 
     private string BuildExternalNotificationSaveStatusMessage(IReadOnlyCollection<string> enabledProviders)
     {
-        var baseMessage = RootTexts.GetOrDefault(
-            "Settings.ExternalNotification.Status.SaveSucceeded",
-            "External notification settings saved.");
-        var summary = BuildExternalNotificationConfigurationSummary(enabledProviders);
-        return string.IsNullOrWhiteSpace(summary)
-            ? baseMessage
-            : $"{baseMessage} {summary}";
+        if (enabledProviders.Count == 0)
+        {
+            return RootTexts.GetOrDefault(
+                "Settings.ExternalNotification.Status.SaveSucceeded",
+                "External notification settings saved.");
+        }
+
+        return string.Format(
+            RootTexts.GetOrDefault(
+                "Settings.ExternalNotification.Status.SaveSucceededWithProvider",
+                "{0} notification parameters validated and saved."),
+            BuildExternalNotificationProviderListText(enabledProviders));
+    }
+
+    private static string BuildExternalNotificationProviderListText(IEnumerable<string> providers)
+    {
+        return string.Join(
+            ", ",
+            providers
+                .Where(static provider => !string.IsNullOrWhiteSpace(provider))
+                .Select(MapProviderToLegacyDisplayName)
+                .Distinct(StringComparer.OrdinalIgnoreCase));
     }
 
     private string BuildExternalNotificationConfigurationSummary(IEnumerable<string> providers)
@@ -1467,6 +1486,18 @@ public sealed partial class SettingsPageViewModel
                     UiErrorCode.NotificationProviderUnsupported),
             _ => fallbackMessage,
         };
+    }
+
+    private async Task ApplyNoExternalNotificationProviderFailureAsync(
+        string scope,
+        CancellationToken cancellationToken)
+    {
+        var result = UiOperationResult.Fail(
+            UiErrorCode.NotificationProviderInvalidParameters,
+            RootTexts.GetOrDefault(
+                "Settings.ExternalNotification.Error.NoEnabledProvider",
+                "Select at least one notification provider before validating or sending a test notification."));
+        await ApplyExternalNotificationFailure(result, scope, cancellationToken);
     }
 
     private async Task ApplyExternalNotificationFailure(

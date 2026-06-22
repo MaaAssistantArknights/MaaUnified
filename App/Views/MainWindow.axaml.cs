@@ -113,6 +113,7 @@ public partial class MainWindow : Window
     private bool _processingDialogErrors;
     private bool _processingMinimizeToTray;
     private bool _dockHiddenForMinimizeToTray;
+    private bool _trayTemporarilyVisibleForHiddenMainWindow;
     private bool _allowLifecycleClose;
     private bool _closeRequestPending;
     private bool _compactLayoutEnabled;
@@ -2050,12 +2051,12 @@ public partial class MainWindow : Window
                 case ShellUiAction.None:
                     if (command == TrayCommandId.HideTray)
                     {
-                        ShowAndActivateMainWindow();
+                        await ShowAndActivateMainWindowAsync(cancellationToken);
                     }
 
                     break;
                 case ShellUiAction.ShowMainWindow:
-                    ShowAndActivateMainWindow();
+                    await ShowAndActivateMainWindowAsync(cancellationToken);
                     break;
                 case ShellUiAction.CloseMainWindow:
                     var exitScope = command == TrayCommandId.Restart
@@ -2168,7 +2169,7 @@ public partial class MainWindow : Window
         {
             if (string.Equals(e.Name, "ShowGui", StringComparison.OrdinalIgnoreCase))
             {
-                ShowAndActivateMainWindow();
+                await ToggleMainWindowFromHotkeyAsync();
                 return;
             }
 
@@ -2234,6 +2235,17 @@ public partial class MainWindow : Window
         }
     }
 
+    private async Task ToggleMainWindowFromHotkeyAsync(CancellationToken cancellationToken = default)
+    {
+        if (WindowState == WindowState.Minimized || !IsVisible)
+        {
+            await ShowAndActivateMainWindowAsync(cancellationToken);
+            return;
+        }
+
+        await HideMainWindowToTrayAsync(requireMinimizedState: false, cancellationToken);
+    }
+
     private void ShowAndActivateMainWindow()
     {
         RestoreDockIconAfterMinimizeToTray();
@@ -2252,10 +2264,35 @@ public partial class MainWindow : Window
         Activate();
     }
 
+    private async Task ShowAndActivateMainWindowAsync(CancellationToken cancellationToken = default)
+    {
+        ShowAndActivateMainWindow();
+        await RestoreTemporaryTrayVisibilityAsync(cancellationToken);
+    }
+
     private void HideMainWindowToTray()
     {
+        _trayTemporarilyVisibleForHiddenMainWindow = VM is { SettingsPage.UseTray: false };
         HideDockIconForMinimizeToTray();
         Hide();
+    }
+
+    private async Task RestoreTemporaryTrayVisibilityAsync(CancellationToken cancellationToken = default)
+    {
+        var vm = VM;
+        if (!_trayTemporarilyVisibleForHiddenMainWindow || vm is null)
+        {
+            return;
+        }
+
+        _trayTemporarilyVisibleForHiddenMainWindow = false;
+        if (vm.SettingsPage.UseTray)
+        {
+            return;
+        }
+
+        var trayVisible = await vm.PlatformCapabilityService.SetTrayVisibleAsync(false, cancellationToken);
+        await HandlePlatformResultAsync("PlatformCapability.Tray.RestoreTemporaryHotkeyTray", trayVisible, cancellationToken);
     }
 
     private void HideDockIconForMinimizeToTray()

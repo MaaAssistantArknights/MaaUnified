@@ -173,7 +173,7 @@
             <Grid RowDefinitions="Auto,Auto,*,Auto">
               <LayoutTransformControl LayoutTransform="{Binding ChromeLayoutTransform, RelativeSource={RelativeSource TemplatedParent}}">
                 <Grid ColumnDefinitions="Auto,*,Auto"
-                      Height="{DynamicResource MAA.App.Size.WindowChromeHeight}">
+                      MinHeight="{DynamicResource MAA.App.Size.WindowChromeHeight}">
                   <StackPanel x:Name="PART_LeftWindowControls"
                               Orientation="Horizontal"
                               Spacing="4"
@@ -392,17 +392,14 @@
 
   <Style Selector="controls|AppWindowFrame /template/ controls|AppWindowTitleText.dialog-window-title">
     <Setter Property="Margin" Value="8,0,0,0" />
-    <Setter Property="Height" Value="24" />
     <Setter Property="MinHeight" Value="24" />
-    <Setter Property="MaxHeight" Value="24" />
     <Setter Property="FontSize" Value="{DynamicResource MAA.FontSize.WindowTitle}" />
     <Setter Property="FontWeight" Value="Bold" />
     <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
     <Setter Property="HorizontalAlignment" Value="Stretch" />
     <Setter Property="VerticalAlignment" Value="Center" />
-    <Setter Property="TextWrapping" Value="NoWrap" />
-    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
-    <Setter Property="MaxLines" Value="1" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+    <Setter Property="TextTrimming" Value="None" />
     <Setter Property="LineHeight" Value="24" />
     <Setter Property="ClipToBounds" Value="False" />
   </Style>

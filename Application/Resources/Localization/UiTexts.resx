@@ -3065,6 +3065,9 @@
   <data name="Settings.ExternalNotification.Error.NetworkFailure" xml:space="preserve">
     <value>外部通知网络失败：{0} ({1})</value>
   </data>
+  <data name="Settings.ExternalNotification.Error.NoEnabledProvider" xml:space="preserve">
+    <value>请先至少启用一个通知服务，再校验参数或发送测试通知。</value>
+  </data>
   <data name="Settings.ExternalNotification.Error.ParameterFormatLine" xml:space="preserve">
     <value>参数格式错误（第 {0} 行），应为 key=value：`{1}`</value>
   </data>
@@ -3102,13 +3105,16 @@
     <value>已准备外部通知参数更新。</value>
   </data>
   <data name="Settings.ExternalNotification.Status.SaveSucceeded" xml:space="preserve">
-    <value>外部通知配置保存成功。</value>
+    <value>外部通知设置已保存。</value>
+  </data>
+  <data name="Settings.ExternalNotification.Status.SaveSucceededWithProvider" xml:space="preserve">
+    <value>{0} 通知参数校验通过，已保存。</value>
   </data>
   <data name="Settings.ExternalNotification.Status.TestSucceeded" xml:space="preserve">
-    <value>Provider `{0}` 测试发送成功。</value>
+    <value>{0} 通道测试通知发送成功。</value>
   </data>
   <data name="Settings.ExternalNotification.Status.ValidateSucceeded" xml:space="preserve">
-    <value>Provider `{0}` 参数校验通过。</value>
+    <value>{0} 通道参数校验通过。</value>
   </data>
   <data name="Settings.ExternalNotification.TestMessage" xml:space="preserve">
     <value>测试通知内容</value>

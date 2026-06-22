@@ -43,6 +43,6 @@ public sealed class BaselineKeyCoverageClosureTests
             File.ReadAllText(Path.Combine(root, "Application", "Services", "Features", "NotificationProviderFeatureService.cs")));
         Assert.Contains("if (provider == \"DingTalk\")", serviceSource, StringComparison.Ordinal);
         Assert.Contains("DingTalk requires `accessToken`.", serviceSource, StringComparison.Ordinal);
-        Assert.Contains("return await SendDingTalkAsync(parameters, title, message, cancellationToken);", serviceSource, StringComparison.Ordinal);
+        Assert.Contains("\"DingTalk\" => await SendDingTalkAsync(parameters, title, message, cancellationToken)", serviceSource, StringComparison.Ordinal);
     }
 }
