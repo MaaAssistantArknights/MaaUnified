@@ -64,11 +64,12 @@ public sealed class CopilotViewStructureContractTests
 
         Assert.Contains("Tapped=\"OnCopilotListItemBodyTapped\"", xaml, StringComparison.Ordinal);
         Assert.Contains("PointerPressed=\"OnCopilotListItemBodyPointerPressed\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("<Popup x:Name=\"CopilotListActionPopup\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("<controls:AppPopupMenu x:Name=\"CopilotListActionPopup\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Placement=\"Pointer\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("ItemsControl x:Name=\"CopilotListActionPopupItems\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("PointerPressed=\"OnCopilotListActionPopupItemPointerPressed\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Text=\"{Binding Header}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("ItemInvoked=\"OnCopilotListActionPopupItemInvoked\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("CopilotListActionPopupItems", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("copilot-list-action-popup-item-shell", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("OnCopilotListActionPopupItemPointerPressed", xaml, StringComparison.Ordinal);
         Assert.Contains("OnDeleteListItemPointerPressed", xaml, StringComparison.Ordinal);
         Assert.Contains("IsChecked=\"{Binding IsChecked", xaml, StringComparison.Ordinal);
         Assert.Contains("Classes=\"task-queue-row-action copilot-list-delete-hotspot\"", xaml, StringComparison.Ordinal);
@@ -77,6 +78,7 @@ public sealed class CopilotViewStructureContractTests
         Assert.DoesNotContain("Classes=\"app-button app-secondary copilot-list-delete-hotspot\"", xaml, StringComparison.Ordinal);
 
         var codeBehind = File.ReadAllText(Path.Combine(root, "App", "Features", "Advanced", "CopilotView.axaml.cs"));
+        Assert.Contains("AppMenuActionItem", codeBehind, StringComparison.Ordinal);
         Assert.DoesNotContain("CopilotListPopupAction.ToggleChecked", codeBehind, StringComparison.Ordinal);
         Assert.DoesNotContain("CopilotListDisableButtonText", codeBehind, StringComparison.Ordinal);
         Assert.DoesNotContain("CopilotListEnableButtonText", codeBehind, StringComparison.Ordinal);

@@ -116,6 +116,18 @@
   <data name="Common.ErrorPrefix" xml:space="preserve">
     <value>错误</value>
   </data>
+  <data name="Common.Edit.Cut" xml:space="preserve">
+    <value>剪切</value>
+  </data>
+  <data name="Common.Edit.Copy" xml:space="preserve">
+    <value>复制</value>
+  </data>
+  <data name="Common.Edit.Paste" xml:space="preserve">
+    <value>粘贴</value>
+  </data>
+  <data name="Common.Edit.SelectAll" xml:space="preserve">
+    <value>全选</value>
+  </data>
   <data name="Common.LoadingTaskHint" xml:space="preserve">
     <value>请先在左侧任务列表中选择对应任务。</value>
   </data>

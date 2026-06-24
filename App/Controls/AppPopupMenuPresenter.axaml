@@ -1,0 +1,34 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:MAAUnified.App.Controls"
+             x:Class="MAAUnified.App.Controls.AppPopupMenuPresenter"
+             x:Name="Root">
+  <UserControl.DataTemplates>
+    <DataTemplate DataType="controls:AppMenuActionItem">
+      <Border Classes="app-popup-menu-item-shell"
+              IsEnabled="{Binding IsEnabled}"
+              IsVisible="{Binding IsVisible}"
+              Tag="{Binding}"
+              PointerPressed="OnMenuItemPointerPressed">
+        <TextBlock Classes="app-popup-menu-item-text"
+                   Text="{Binding Header}" />
+      </Border>
+    </DataTemplate>
+    <DataTemplate DataType="controls:AppMenuSeparatorEntry">
+      <Border Classes="app-popup-menu-separator" />
+    </DataTemplate>
+  </UserControl.DataTemplates>
+
+  <Border Classes="app-popup-menu-panel">
+    <ItemsControl x:Name="ItemsHost"
+                  Classes="app-popup-menu-list"
+                  ItemsSource="{Binding Items, ElementName=Root}">
+      <ItemsControl.ItemsPanel>
+        <ItemsPanelTemplate>
+          <StackPanel />
+        </ItemsPanelTemplate>
+      </ItemsControl.ItemsPanel>
+    </ItemsControl>
+  </Border>
+</UserControl>
+

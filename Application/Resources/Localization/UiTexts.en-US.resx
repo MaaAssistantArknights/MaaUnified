@@ -116,6 +116,18 @@ By pressing ｢Confirm｣, you understand and accept the possible risks.</value>
   <data name="Common.ErrorPrefix" xml:space="preserve">
     <value>Error</value>
   </data>
+  <data name="Common.Edit.Cut" xml:space="preserve">
+    <value>Cut</value>
+  </data>
+  <data name="Common.Edit.Copy" xml:space="preserve">
+    <value>Copy</value>
+  </data>
+  <data name="Common.Edit.Paste" xml:space="preserve">
+    <value>Paste</value>
+  </data>
+  <data name="Common.Edit.SelectAll" xml:space="preserve">
+    <value>Select all</value>
+  </data>
   <data name="Common.LoadingTaskHint" xml:space="preserve">
     <value>Select a task from the left list first.</value>
   </data>

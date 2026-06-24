@@ -237,75 +237,6 @@
     <Style Selector="Button.grouped-card-footer-action.copilot-list-footer-action">
       <Setter Property="MinWidth" Value="84" />
     </Style>
-    <Style Selector="Popup.copilot-list-action-popup">
-      <Setter Property="WindowManagerAddShadowHint" Value="False" />
-    </Style>
-    <Style Selector="Border.copilot-list-action-popup-panel">
-      <Setter Property="MinWidth" Value="{DynamicResource MAA.App.Interaction.FloatingMenuMinWidth}" />
-      <Setter Property="Padding" Value="{DynamicResource MAA.App.Interaction.FloatingMenuPadding}" />
-      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Surface.Card}" />
-      <Setter Property="BorderBrush" Value="Transparent" />
-      <Setter Property="BorderThickness" Value="0" />
-      <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.Interaction.FloatingMenuCornerRadius}" />
-      <Setter Property="BoxShadow" Value="{DynamicResource MAA.App.BoxShadow.Card}" />
-      <Setter Property="ClipToBounds" Value="False" />
-    </Style>
-    <Style Selector="ItemsControl.copilot-list-action-popup-list">
-      <Setter Property="Background" Value="Transparent" />
-    </Style>
-    <Style Selector="ItemsControl.copilot-list-action-popup-list ContentPresenter">
-      <Setter Property="Background" Value="Transparent" />
-      <Setter Property="BorderBrush" Value="Transparent" />
-      <Setter Property="BorderThickness" Value="0" />
-      <Setter Property="Padding" Value="0" />
-    </Style>
-    <Style Selector="ItemsControl.copilot-list-action-popup-list ContentPresenter /template/ ContentPresenter">
-      <Setter Property="Background" Value="Transparent" />
-      <Setter Property="BorderBrush" Value="Transparent" />
-      <Setter Property="BorderThickness" Value="0" />
-      <Setter Property="Padding" Value="0" />
-    </Style>
-    <Style Selector="ItemsControl.copilot-list-action-popup-list ContentPresenter:pointerover">
-      <Setter Property="Background" Value="Transparent" />
-      <Setter Property="BorderBrush" Value="Transparent" />
-      <Setter Property="BorderThickness" Value="0" />
-    </Style>
-    <Style Selector="ItemsControl.copilot-list-action-popup-list ContentPresenter:pointerover /template/ ContentPresenter">
-      <Setter Property="Background" Value="Transparent" />
-      <Setter Property="BorderBrush" Value="Transparent" />
-      <Setter Property="BorderThickness" Value="0" />
-    </Style>
-    <Style Selector="Border.copilot-list-action-popup-item-shell">
-      <Setter Property="MinHeight" Value="{DynamicResource MAA.App.Interaction.FloatingMenuItemMinHeight}" />
-      <Setter Property="Padding" Value="{DynamicResource MAA.App.Interaction.FloatingMenuItemPadding}" />
-      <Setter Property="Background" Value="Transparent" />
-      <Setter Property="BorderBrush" Value="Transparent" />
-      <Setter Property="BorderThickness" Value="0" />
-      <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.Interaction.FloatingMenuItemCornerRadius}" />
-      <Setter Property="Cursor" Value="Hand" />
-    </Style>
-    <Style Selector="Border.copilot-list-action-popup-item-shell:pointerover">
-      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.SettingsInput.ItemBackgroundHover}" />
-      <Setter Property="BorderBrush" Value="Transparent" />
-    </Style>
-    <Style Selector="Border.copilot-list-action-popup-item-shell:disabled">
-      <Setter Property="Background" Value="Transparent" />
-      <Setter Property="BorderBrush" Value="Transparent" />
-      <Setter Property="Cursor" Value="Arrow" />
-      <Setter Property="Opacity" Value="0.64" />
-    </Style>
-    <Style Selector="TextBlock.copilot-list-action-popup-item-text">
-      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Secondary}" />
-      <Setter Property="FontSize" Value="13" />
-      <Setter Property="LineHeight" Value="18" />
-      <Setter Property="VerticalAlignment" Value="Center" />
-    </Style>
-    <Style Selector="Border.copilot-list-action-popup-item-shell:pointerover TextBlock.copilot-list-action-popup-item-text">
-      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ItemForegroundHover}" />
-    </Style>
-    <Style Selector="Border.copilot-list-action-popup-item-shell:disabled TextBlock.copilot-list-action-popup-item-text">
-      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Action.DisabledForeground}" />
-    </Style>
   </UserControl.Styles>
   <UserControl.DataTemplates>
     <DataTemplate DataType="taskVm:TaskQueueLogEntryViewModel">
@@ -739,35 +670,10 @@
       </Grid>
     </Border>
 
-    <Popup x:Name="CopilotListActionPopup"
-           Classes="copilot-list-action-popup"
-           controls:PopupUiScale.UseTopLevelUiScale="True"
-           IsLightDismissEnabled="True"
-           Placement="Pointer"
-           Closed="OnCopilotListActionPopupClosed">
-      <Border Classes="copilot-list-action-popup-panel">
-        <ItemsControl x:Name="CopilotListActionPopupItems"
-                      Classes="copilot-list-action-popup-list">
-          <ItemsControl.ItemsPanel>
-            <ItemsPanelTemplate>
-              <StackPanel />
-            </ItemsPanelTemplate>
-          </ItemsControl.ItemsPanel>
-          <ItemsControl.ItemTemplate>
-            <DataTemplate>
-              <Border Classes="copilot-list-action-popup-item-shell"
-                      IsEnabled="{Binding IsEnabled}"
-                      IsVisible="{Binding IsVisible}"
-                      Tag="{Binding}"
-                      PointerPressed="OnCopilotListActionPopupItemPointerPressed">
-                <TextBlock Classes="copilot-list-action-popup-item-text"
-                           Text="{Binding Header}" />
-              </Border>
-            </DataTemplate>
-          </ItemsControl.ItemTemplate>
-        </ItemsControl>
-      </Border>
-    </Popup>
+    <controls:AppPopupMenu x:Name="CopilotListActionPopup"
+                           Placement="Pointer"
+                           ItemInvoked="OnCopilotListActionPopupItemInvoked"
+                           Closed="OnCopilotListActionPopupClosed" />
 
     <Border Grid.Column="2"
             Width="{DynamicResource MAA.Size.Copilot.SidePanelWidth}"

@@ -256,21 +256,12 @@ public partial class CopilotView : UserControl
         await VM.MoveListItemToAsync(item, e.TargetIndex);
     }
 
-    private async void OnCopilotListActionPopupItemPointerPressed(object? sender, PointerPressedEventArgs e)
+    private async void OnCopilotListActionPopupItemInvoked(object? sender, AppMenuItemInvokedEventArgs e)
     {
-        if (VM is null || sender is not Control { Tag: CopilotListPopupMenuItem item } control || !item.IsEnabled)
+        if (VM is null || e.Parameter is not CopilotListPopupMenuItem item || !item.IsEnabled)
         {
             return;
         }
-
-        var point = e.GetCurrentPoint(control);
-        if (!point.Properties.IsLeftButtonPressed)
-        {
-            return;
-        }
-
-        e.Handled = true;
-        CloseCopilotListActionPopup();
 
         switch (item.Action)
         {
@@ -293,7 +284,10 @@ public partial class CopilotView : UserControl
     {
         CloseCopilotListActionPopup();
 
-        CopilotListActionPopupItems.ItemsSource = BuildCopilotListMenuItems(item).Where(static menuItem => menuItem.IsVisible).ToArray();
+        CopilotListActionPopup.Items = BuildCopilotListMenuItems(item)
+            .Where(static menuItem => menuItem.IsVisible)
+            .Select(static menuItem => menuItem.ToMenuItem())
+            .ToArray();
         CopilotListActionPopup.PlacementTarget = owner;
         CopilotListActionPopup.IsOpen = true;
     }
@@ -305,12 +299,12 @@ public partial class CopilotView : UserControl
             CopilotListActionPopup.IsOpen = false;
         }
 
-        CopilotListActionPopupItems.ItemsSource = null;
+        CopilotListActionPopup.Items = null;
     }
 
     private void OnCopilotListActionPopupClosed(object? sender, EventArgs e)
     {
-        CopilotListActionPopupItems.ItemsSource = null;
+        CopilotListActionPopup.Items = null;
     }
 
     private IReadOnlyList<CopilotListPopupMenuItem> BuildCopilotListMenuItems(CopilotItemViewModel item)
@@ -452,7 +446,13 @@ public partial class CopilotView : UserControl
         CopilotListPopupAction Action,
         CopilotItemViewModel Item,
         bool IsEnabled = true,
-        bool IsVisible = true);
+        bool IsVisible = true)
+    {
+        public AppMenuActionItem ToMenuItem()
+        {
+            return new AppMenuActionItem(Header, Action, this, IsEnabled, IsVisible);
+        }
+    }
 
     private enum CopilotListPopupAction
     {

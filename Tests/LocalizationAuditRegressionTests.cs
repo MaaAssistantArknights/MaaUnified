@@ -42,6 +42,10 @@ public sealed class LocalizationAuditRegressionTests
 
     private static readonly string[] RootCriticalKeys =
     [
+        "Common.Edit.Cut",
+        "Common.Edit.Copy",
+        "Common.Edit.Paste",
+        "Common.Edit.SelectAll",
         "TaskQueue.Root.TaskListTitle",
         "TaskQueue.Root.TaskConfigTitle",
         "TaskQueue.Root.GeneralSettings",

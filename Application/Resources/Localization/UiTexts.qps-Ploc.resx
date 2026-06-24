@@ -15,6 +15,18 @@
   <data name="Copilot.List.Button.ClearAll" xml:space="preserve">
     <value>[!! Çļéåř åļļ !!]</value>
   </data>
+  <data name="Common.Edit.Cut" xml:space="preserve">
+    <value>[!! Çüţ !!]</value>
+  </data>
+  <data name="Common.Edit.Copy" xml:space="preserve">
+    <value>[!! Çöþý !!]</value>
+  </data>
+  <data name="Common.Edit.Paste" xml:space="preserve">
+    <value>[!! Þåşţé !!]</value>
+  </data>
+  <data name="Common.Edit.SelectAll" xml:space="preserve">
+    <value>[!! Şéļéçţ åļļ !!]</value>
+  </data>
   <data name="Copilot.List.Button.Disable" xml:space="preserve">
     <value>[!! Ďîşåƀļé !!]</value>
   </data>

@@ -401,21 +401,12 @@ public partial class TaskQueueView : UserControl
         e.Handled = true;
     }
 
-    private async void OnTaskQueueActionPopupItemPointerPressed(object? sender, PointerPressedEventArgs e)
+    private async void OnTaskQueueActionPopupItemInvoked(object? sender, AppMenuItemInvokedEventArgs e)
     {
-        if (VM is null || sender is not Control { Tag: TaskQueuePopupMenuItem item } control || !item.IsEnabled)
+        if (VM is null || e.Parameter is not TaskQueuePopupMenuItem item || !item.IsEnabled)
         {
             return;
         }
-
-        var point = e.GetCurrentPoint(control);
-        if (!point.Properties.IsLeftButtonPressed)
-        {
-            return;
-        }
-
-        e.Handled = true;
-        CloseTaskQueueActionPopup();
 
         switch (item.Action)
         {
@@ -518,7 +509,10 @@ public partial class TaskQueueView : UserControl
     {
         CloseTaskQueueActionPopup();
 
-        TaskQueueActionPopupItems.ItemsSource = items.Where(static item => item.IsVisible).ToArray();
+        TaskQueueActionPopup.Items = items
+            .Where(static item => item.IsVisible)
+            .Select(static item => item.ToMenuItem())
+            .ToArray();
         TaskQueueActionPopup.PlacementTarget = owner;
         TaskQueueActionPopup.Placement = placement;
         TaskQueueActionPopup.VerticalOffset = placement == PlacementMode.Pointer ? 0d : 4d;
@@ -533,14 +527,14 @@ public partial class TaskQueueView : UserControl
             TaskQueueActionPopup.IsOpen = false;
         }
 
-        TaskQueueActionPopupItems.ItemsSource = null;
+        TaskQueueActionPopup.Items = null;
         _openTaskQueuePopupOwner = null;
     }
 
     private void OnTaskQueueActionPopupClosed(object? sender, EventArgs e)
     {
         var closedOwner = _openTaskQueuePopupOwner;
-        TaskQueueActionPopupItems.ItemsSource = null;
+        TaskQueueActionPopup.Items = null;
         _openTaskQueuePopupOwner = null;
 
         if (closedOwner is not null)
@@ -1282,7 +1276,13 @@ public partial class TaskQueueView : UserControl
         TaskQueueItemViewModel? Task = null,
         string? TaskType = null,
         bool IsEnabled = true,
-        bool IsVisible = true);
+        bool IsVisible = true)
+    {
+        public AppMenuActionItem ToMenuItem()
+        {
+            return new AppMenuActionItem(Header, Action, this, IsEnabled, IsVisible);
+        }
+    }
 
     private enum TaskQueuePopupAction
     {
