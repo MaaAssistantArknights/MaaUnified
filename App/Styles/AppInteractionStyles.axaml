@@ -90,4 +90,93 @@
     <Setter Property="Padding" Value="{DynamicResource MAA.App.Interaction.SplitButtonPopupPadding}" />
     <Setter Property="MinWidth" Value="180" />
   </Style>
+
+  <Style Selector="controls|AppPopupMenu">
+    <Setter Property="WindowManagerAddShadowHint" Value="False" />
+  </Style>
+
+  <Style Selector="Border.app-popup-menu-panel">
+    <Setter Property="MinWidth" Value="{DynamicResource MAA.App.Interaction.FloatingMenuMinWidth}" />
+    <Setter Property="Padding" Value="{DynamicResource MAA.App.Interaction.FloatingMenuPadding}" />
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Surface.Card}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.Interaction.FloatingMenuCornerRadius}" />
+    <Setter Property="BoxShadow" Value="{DynamicResource MAA.App.BoxShadow.Card}" />
+    <Setter Property="ClipToBounds" Value="False" />
+  </Style>
+
+  <Style Selector="ItemsControl.app-popup-menu-list">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
+  <Style Selector="ItemsControl.app-popup-menu-list ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+  </Style>
+
+  <Style Selector="ItemsControl.app-popup-menu-list ContentPresenter /template/ ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+  </Style>
+
+  <Style Selector="ItemsControl.app-popup-menu-list ContentPresenter:pointerover">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+
+  <Style Selector="ItemsControl.app-popup-menu-list ContentPresenter:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+
+  <Style Selector="Border.app-popup-menu-item-shell">
+    <Setter Property="MinHeight" Value="{DynamicResource MAA.App.Interaction.FloatingMenuItemMinHeight}" />
+    <Setter Property="Padding" Value="{DynamicResource MAA.App.Interaction.FloatingMenuItemPadding}" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.Interaction.FloatingMenuItemCornerRadius}" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+
+  <Style Selector="Border.app-popup-menu-item-shell:pointerover">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.SettingsInput.ItemBackgroundHover}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+  </Style>
+
+  <Style Selector="Border.app-popup-menu-item-shell:disabled">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="Cursor" Value="Arrow" />
+    <Setter Property="Opacity" Value="0.64" />
+  </Style>
+
+  <Style Selector="TextBlock.app-popup-menu-item-text">
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Secondary}" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="LineHeight" Value="18" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="Border.app-popup-menu-item-shell:pointerover TextBlock.app-popup-menu-item-text">
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ItemForegroundHover}" />
+  </Style>
+
+  <Style Selector="Border.app-popup-menu-item-shell:disabled TextBlock.app-popup-menu-item-text">
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Action.DisabledForeground}" />
+  </Style>
+
+  <Style Selector="Border.app-popup-menu-separator">
+    <Setter Property="Height" Value="1" />
+    <Setter Property="Margin" Value="8,6" />
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Border.Section}" />
+    <Setter Property="Opacity" Value="0.72" />
+  </Style>
 </Styles>

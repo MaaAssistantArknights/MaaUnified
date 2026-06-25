@@ -89,7 +89,6 @@
           <Color x:Key="MAA.Color.SettingsInput.ForegroundDisabled">#FF98A4B5</Color>
           <Color x:Key="MAA.Color.SettingsInput.ItemBackgroundHover">#FFECF2FB</Color>
           <Color x:Key="MAA.Color.Settings.RailItemHover">#26EAF1FE</Color>
-          <Color x:Key="MAA.Color.Announcement.StickyTitleBackground">#F9FFFFFF</Color>
           <Color x:Key="MAA.Color.Toolbox.PreviewBadgeBackground">#EE404040</Color>
           <Color x:Key="MAA.Color.Toolbox.PreviewBadgeForeground">#FF7FFFD4</Color>
           <Color x:Key="MAA.Color.Toolbox.OperatorCardBackground">#FFFFFFFF</Color>
@@ -181,7 +180,6 @@
           <Color x:Key="MAA.Color.SettingsInput.ForegroundDisabled">#FF8793A4</Color>
           <Color x:Key="MAA.Color.SettingsInput.ItemBackgroundHover">#FF3B4656</Color>
           <Color x:Key="MAA.Color.Settings.RailItemHover">#20FFFFFF</Color>
-          <Color x:Key="MAA.Color.Announcement.StickyTitleBackground">#F9232A34</Color>
           <Color x:Key="MAA.Color.Toolbox.PreviewBadgeBackground">#EE101317</Color>
           <Color x:Key="MAA.Color.Toolbox.PreviewBadgeForeground">#FF89F0D2</Color>
           <Color x:Key="MAA.Color.Toolbox.OperatorCardBackground">#FF354150</Color>
@@ -260,7 +258,6 @@
       <SolidColorBrush x:Key="MAA.Brush.Dialog.FilterChipSelectedForeground" Color="{DynamicResource MAA.Color.Dialog.FilterChipSelectedForeground}" />
       <SolidColorBrush x:Key="MAA.Brush.SelectionList.SectionCardBackground" Color="{DynamicResource MAA.Color.SelectionList.SectionCardBackground}" />
       <SolidColorBrush x:Key="MAA.Brush.Settings.RailItemHover" Color="{DynamicResource MAA.Color.Settings.RailItemHover}" />
-      <SolidColorBrush x:Key="MAA.Brush.Announcement.StickyTitleBackground" Color="{DynamicResource MAA.Color.Announcement.StickyTitleBackground}" />
       <SolidColorBrush x:Key="MAA.Brush.Toolbox.PreviewBadgeBackground" Color="{DynamicResource MAA.Color.Toolbox.PreviewBadgeBackground}" />
       <SolidColorBrush x:Key="MAA.Brush.Toolbox.PreviewBadgeForeground" Color="{DynamicResource MAA.Color.Toolbox.PreviewBadgeForeground}" />
       <SolidColorBrush x:Key="MAA.Brush.Toolbox.OperatorCardBackground" Color="{DynamicResource MAA.Color.Toolbox.OperatorCardBackground}" />

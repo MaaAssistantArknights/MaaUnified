@@ -379,9 +379,8 @@
     <Setter Property="Margin" Value="8,0,0,0" />
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="LineHeight" Value="20" />
-    <Setter Property="TextWrapping" Value="NoWrap" />
-    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
-    <Setter Property="MaxLines" Value="1" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+    <Setter Property="TextTrimming" Value="None" />
   </Style>
 
   <Style Selector="TextBlock.dialog-window-subtitle">
@@ -646,13 +645,17 @@
     <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Surface.Section}" />
   </Style>
 
+  <Style Selector="Grid.announcement-dialog-list-item-layout">
+    <Setter Property="MaxWidth" Value="244" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+  </Style>
+
   <Style Selector="TextBlock.announcement-dialog-list-title">
     <Setter Property="FontSize" Value="14" />
     <Setter Property="FontWeight" Value="SemiBold" />
     <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Text.Primary}" />
     <Setter Property="HorizontalAlignment" Value="Stretch" />
-    <Setter Property="TextWrapping" Value="WrapWithOverflow" />
-    <Setter Property="MaxLines" Value="2" />
+    <Setter Property="TextWrapping" Value="Wrap" />
     <Setter Property="LineHeight" Value="17" />
   </Style>
 
@@ -700,75 +703,6 @@
   <Style Selector="TextBlock.announcement-dialog-lead">
     <Setter Property="FontSize" Value="15" />
     <Setter Property="LineHeight" Value="22" />
-  </Style>
-
-  <Style Selector="Border.announcement-dialog-sticky-title">
-    <Setter Property="Padding" Value="0" />
-    <Setter Property="CornerRadius" Value="0" />
-    <Setter Property="ClipToBounds" Value="True" />
-    <Setter Property="BorderThickness" Value="0" />
-    <Setter Property="Background" Value="Transparent" />
-  </Style>
-
-  <Style Selector="Border.announcement-dialog-sticky-title-viewport">
-    <Setter Property="Padding" Value="0" />
-    <Setter Property="ClipToBounds" Value="True" />
-    <Setter Property="Background" Value="Transparent" />
-  </Style>
-
-  <Style Selector="Grid.announcement-dialog-sticky-title-track">
-    <Setter Property="ClipToBounds" Value="True" />
-    <Setter Property="RenderTransform">
-      <TranslateTransform Y="0" />
-    </Setter>
-    <Setter Property="Transitions">
-      <Transitions>
-        <TransformOperationsTransition Property="RenderTransform"
-                                       Duration="0:0:0.22" />
-      </Transitions>
-    </Setter>
-  </Style>
-
-  <Style Selector="TextBlock.announcement-dialog-sticky-title-text">
-    <Setter Property="Margin" Value="0" />
-    <Setter Property="Transitions">
-      <Transitions>
-        <ThicknessTransition Property="Margin"
-                             Duration="0:0:0.16" />
-        <TransformOperationsTransition Property="RenderTransform"
-                                       Duration="0:0:0.18" />
-      </Transitions>
-    </Setter>
-  </Style>
-
-  <Style Selector="Border.announcement-dialog-sticky-transition-shell">
-    <Setter Property="ClipToBounds" Value="True" />
-    <Setter Property="Margin" Value="0" />
-    <Setter Property="Padding" Value="0,6,0,4" />
-    <Setter Property="Background" Value="{DynamicResource MAA.Brush.Announcement.StickyTitleBackground}" />
-    <Setter Property="RenderTransform">
-      <TranslateTransform Y="0" />
-    </Setter>
-    <Setter Property="Transitions">
-      <Transitions>
-        <DoubleTransition Property="Height"
-                          Duration="0:0:0.14" />
-        <TransformOperationsTransition Property="RenderTransform"
-                                       Duration="0:0:0.14" />
-      </Transitions>
-    </Setter>
-  </Style>
-
-  <Style Selector="TextBlock.announcement-dialog-sticky-title-previous">
-    <Setter Property="Opacity" Value="0.72" />
-    <Setter Property="RenderTransform">
-      <TranslateTransform Y="0" />
-    </Setter>
-  </Style>
-
-  <Style Selector="Border.announcement-dialog-sticky-title-current-shell">
-    <Setter Property="Padding" Value="0,6,0,4" />
-    <Setter Property="Background" Value="{DynamicResource MAA.Brush.Announcement.StickyTitleBackground}" />
   </Style>
 
   <Style Selector="TextBlock.announcement-dialog-section-heading">

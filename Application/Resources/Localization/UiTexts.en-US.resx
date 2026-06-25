@@ -116,6 +116,18 @@ By pressing ｢Confirm｣, you understand and accept the possible risks.</value>
   <data name="Common.ErrorPrefix" xml:space="preserve">
     <value>Error</value>
   </data>
+  <data name="Common.Edit.Cut" xml:space="preserve">
+    <value>Cut</value>
+  </data>
+  <data name="Common.Edit.Copy" xml:space="preserve">
+    <value>Copy</value>
+  </data>
+  <data name="Common.Edit.Paste" xml:space="preserve">
+    <value>Paste</value>
+  </data>
+  <data name="Common.Edit.SelectAll" xml:space="preserve">
+    <value>Select all</value>
+  </data>
   <data name="Common.LoadingTaskHint" xml:space="preserve">
     <value>Select a task from the left list first.</value>
   </data>
@@ -3064,6 +3076,9 @@ With save file: farm points through crafting (advanced).
   <data name="Settings.ExternalNotification.Error.NetworkFailure" xml:space="preserve">
     <value>External notification network failure: {0} ({1})</value>
   </data>
+  <data name="Settings.ExternalNotification.Error.NoEnabledProvider" xml:space="preserve">
+    <value>Select at least one notification provider before validating or sending a test notification.</value>
+  </data>
   <data name="Settings.ExternalNotification.Error.ParameterFormatLine" xml:space="preserve">
     <value>Invalid parameter format (line {0}). Expected key=value: `{1}`</value>
   </data>
@@ -3103,11 +3118,14 @@ With save file: farm points through crafting (advanced).
   <data name="Settings.ExternalNotification.Status.SaveSucceeded" xml:space="preserve">
     <value>External notification settings saved.</value>
   </data>
+  <data name="Settings.ExternalNotification.Status.SaveSucceededWithProvider" xml:space="preserve">
+    <value>{0} notification parameters validated and saved.</value>
+  </data>
   <data name="Settings.ExternalNotification.Status.TestSucceeded" xml:space="preserve">
-    <value>Provider `{0}` test notification sent.</value>
+    <value>{0} channel test notification sent.</value>
   </data>
   <data name="Settings.ExternalNotification.Status.ValidateSucceeded" xml:space="preserve">
-    <value>Provider `{0}` parameter validation succeeded.</value>
+    <value>{0} channel parameters validated.</value>
   </data>
   <data name="Settings.ExternalNotification.TestMessage" xml:space="preserve">
     <value>Test notification message</value>

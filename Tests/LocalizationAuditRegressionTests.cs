@@ -42,6 +42,10 @@ public sealed class LocalizationAuditRegressionTests
 
     private static readonly string[] RootCriticalKeys =
     [
+        "Common.Edit.Cut",
+        "Common.Edit.Copy",
+        "Common.Edit.Paste",
+        "Common.Edit.SelectAll",
         "TaskQueue.Root.TaskListTitle",
         "TaskQueue.Root.TaskConfigTitle",
         "TaskQueue.Root.GeneralSettings",
@@ -315,10 +319,12 @@ public sealed class LocalizationAuditRegressionTests
         "Settings.ExternalNotification.Status.ValidateSucceeded",
         "Settings.ExternalNotification.Status.TestSucceeded",
         "Settings.ExternalNotification.Status.SaveSucceeded",
+        "Settings.ExternalNotification.Status.SaveSucceededWithProvider",
         "Settings.ExternalNotification.Status.OperationFailed",
         "Settings.ExternalNotification.Status.PreparedUpdates",
         "Settings.ExternalNotification.Error.InvalidParameters",
         "Settings.ExternalNotification.Error.NetworkFailure",
+        "Settings.ExternalNotification.Error.NoEnabledProvider",
         "Settings.ExternalNotification.Error.Unsupported",
         "Settings.ExternalNotification.Error.ParameterFormatLine",
         "Settings.ExternalNotification.Error.ParameterKeyEmpty",

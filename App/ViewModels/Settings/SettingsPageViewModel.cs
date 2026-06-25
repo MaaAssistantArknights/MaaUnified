@@ -1440,13 +1440,13 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
     }
 
     public bool HasExternalNotificationStatusMessage =>
-        ExternalNotificationEnabled && !string.IsNullOrWhiteSpace(ExternalNotificationStatusMessage);
+        !string.IsNullOrWhiteSpace(ExternalNotificationStatusMessage);
 
     public bool HasExternalNotificationWarningMessage =>
-        ExternalNotificationEnabled && !string.IsNullOrWhiteSpace(ExternalNotificationWarningMessage);
+        !string.IsNullOrWhiteSpace(ExternalNotificationWarningMessage);
 
     public bool HasExternalNotificationErrorMessage =>
-        ExternalNotificationEnabled && !string.IsNullOrWhiteSpace(ExternalNotificationErrorMessage);
+        !string.IsNullOrWhiteSpace(ExternalNotificationErrorMessage);
 
     public bool ServerChanSectionVisible => _enabledNotificationProviders.Contains("ServerChan");
 

@@ -31,10 +31,86 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     private const string TaskQueueRunOwner = "TaskQueue";
     private const string TaskSelectedIndexConfigKey = "TaskSelectedIndex";
     private const string TaskQueueSaveKey = "TaskQueue.Queue";
+    private const string ExternalNotificationCustomWebhookHeadersKey = "ExternalNotification.CustomWebhook.Headers";
     private static readonly TimeSpan LinkStartCancelStopTimeout = TimeSpan.FromSeconds(12);
     private static readonly TimeSpan ConnectRetryTotalBudget = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan ConnectCandidateTotalBudget = TimeSpan.FromSeconds(20);
     private static readonly TimeSpan AdbRecoveryCommandTimeout = TimeSpan.FromSeconds(8);
+    private static readonly IReadOnlyDictionary<string, string> NotificationProviderCanonicalNameMap =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["SMTP"] = "Smtp",
+            ["Smtp"] = "Smtp",
+            ["ServerChan"] = "ServerChan",
+            ["Bark"] = "Bark",
+            ["Discord"] = "Discord",
+            ["Discord Webhook"] = "Discord",
+            ["DingTalk"] = "DingTalk",
+            ["Telegram"] = "Telegram",
+            ["Qmsg"] = "Qmsg",
+            ["Gotify"] = "Gotify",
+            ["Custom Webhook"] = "CustomWebhook",
+            ["CustomWebhook"] = "CustomWebhook",
+        };
+    private static readonly IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> ExternalNotificationProviderConfigKeyMap =
+        new Dictionary<string, IReadOnlyDictionary<string, string>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Smtp"] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["server"] = ConfigurationKeys.ExternalNotificationSmtpServer,
+                ["port"] = ConfigurationKeys.ExternalNotificationSmtpPort,
+                ["user"] = ConfigurationKeys.ExternalNotificationSmtpUser,
+                ["password"] = ConfigurationKeys.ExternalNotificationSmtpPassword,
+                ["useSsl"] = ConfigurationKeys.ExternalNotificationSmtpUseSsl,
+                ["requiresAuthentication"] = ConfigurationKeys.ExternalNotificationSmtpRequiresAuthentication,
+                ["from"] = ConfigurationKeys.ExternalNotificationSmtpFrom,
+                ["to"] = ConfigurationKeys.ExternalNotificationSmtpTo,
+            },
+            ["ServerChan"] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["sendKey"] = ConfigurationKeys.ExternalNotificationServerChanSendKey,
+            },
+            ["Bark"] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["sendKey"] = ConfigurationKeys.ExternalNotificationBarkSendKey,
+                ["server"] = ConfigurationKeys.ExternalNotificationBarkServer,
+            },
+            ["Discord"] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["botToken"] = ConfigurationKeys.ExternalNotificationDiscordBotToken,
+                ["userId"] = ConfigurationKeys.ExternalNotificationDiscordUserId,
+                ["webhookUrl"] = ConfigurationKeys.ExternalNotificationDiscordWebhookUrl,
+            },
+            ["DingTalk"] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["accessToken"] = ConfigurationKeys.ExternalNotificationDingTalkAccessToken,
+                ["secret"] = ConfigurationKeys.ExternalNotificationDingTalkSecret,
+            },
+            ["Telegram"] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["botToken"] = ConfigurationKeys.ExternalNotificationTelegramBotToken,
+                ["chatId"] = ConfigurationKeys.ExternalNotificationTelegramChatId,
+                ["topicId"] = ConfigurationKeys.ExternalNotificationTelegramTopicId,
+            },
+            ["Qmsg"] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["server"] = ConfigurationKeys.ExternalNotificationQmsgServer,
+                ["key"] = ConfigurationKeys.ExternalNotificationQmsgKey,
+                ["user"] = ConfigurationKeys.ExternalNotificationQmsgUser,
+                ["bot"] = ConfigurationKeys.ExternalNotificationQmsgBot,
+            },
+            ["Gotify"] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["server"] = ConfigurationKeys.ExternalNotificationGotifyServer,
+                ["token"] = ConfigurationKeys.ExternalNotificationGotifyToken,
+            },
+            ["CustomWebhook"] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["url"] = ConfigurationKeys.ExternalNotificationCustomWebhookUrl,
+                ["headers"] = ExternalNotificationCustomWebhookHeadersKey,
+                ["body"] = ConfigurationKeys.ExternalNotificationCustomWebhookBody,
+            },
+        };
     private static readonly string[] WpfDefaultTaskOrder =
     [
         TaskModuleTypes.StartUp,
@@ -5098,17 +5174,12 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         };
     }
 
-    private void QueueAutomaticSystemNotification(
+    private void QueueAutomaticNotifications(
         CoreCallbackEvent callback,
         CallbackPayload payload,
         int? taskIndex,
         string runId)
     {
-        if (!_useSystemNotifications)
-        {
-            return;
-        }
-
         var request = TryBuildAutomaticSystemNotification(callback, payload, taskIndex, runId);
         if (!request.HasValue)
         {
@@ -5116,6 +5187,16 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         }
 
         var notification = request.Value;
+        if (_useSystemNotifications)
+        {
+            QueueAutomaticSystemNotification(notification);
+        }
+
+        QueueAutomaticExternalNotification(callback, notification);
+    }
+
+    private void QueueAutomaticSystemNotification(TaskQueueSystemNotification notification)
+    {
         _ = Task.Run(async () =>
         {
             try
@@ -5132,6 +5213,124 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                     ex);
             }
         });
+    }
+
+    private void QueueAutomaticExternalNotification(
+        CoreCallbackEvent callback,
+        TaskQueueSystemNotification notification)
+    {
+        var requests = BuildAutomaticExternalNotificationRequests(callback.MsgName, notification);
+        if (requests.Count == 0)
+        {
+            return;
+        }
+
+        _ = Task.Run(async () =>
+        {
+            foreach (var request in requests)
+            {
+                try
+                {
+                    var result = await Runtime.NotificationProviderFeatureService.SendTestAsync(request);
+                    if (!result.Success)
+                    {
+                        await RecordErrorAsync(
+                            notification.Scope,
+                            $"Failed to dispatch automatic external notification via {request.Provider}: {result.Message}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    await RecordErrorAsync(
+                        notification.Scope,
+                        $"Failed to dispatch automatic external notification via {request.Provider}.",
+                        ex);
+                }
+            }
+        });
+    }
+
+    private IReadOnlyList<NotificationProviderTestRequest> BuildAutomaticExternalNotificationRequests(
+        string callbackName,
+        TaskQueueSystemNotification notification)
+    {
+        var config = Runtime.ConfigurationService.CurrentConfig;
+        var enabledProviders = ResolveExternalNotificationProviders(config);
+        if (enabledProviders.Count == 0)
+        {
+            return [];
+        }
+
+        var shouldSend = callbackName switch
+        {
+            "AllTasksCompleted" => TryReadProfileBool(
+                config,
+                ConfigurationKeys.ExternalNotificationSendWhenComplete,
+                true),
+            "TaskChainError" or "SubTaskError" => TryReadProfileBool(
+                config,
+                ConfigurationKeys.ExternalNotificationSendWhenError,
+                true),
+            _ => false,
+        };
+        if (!shouldSend)
+        {
+            return [];
+        }
+
+        var requests = new List<NotificationProviderTestRequest>();
+        foreach (var provider in enabledProviders)
+        {
+            var parametersText = BuildExternalNotificationProviderParameterText(config, provider);
+            requests.Add(new NotificationProviderTestRequest(
+                provider,
+                parametersText,
+                notification.Title,
+                notification.Message));
+        }
+
+        return requests;
+    }
+
+    private static List<string> ResolveExternalNotificationProviders(UnifiedConfig config)
+    {
+        var rawValue = TryReadProfileString(config, ConfigurationKeys.ExternalNotificationEnabled, string.Empty);
+        if (string.IsNullOrWhiteSpace(rawValue))
+        {
+            return [];
+        }
+
+        var providers = new List<string>();
+        foreach (var segment in rawValue.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (NotificationProviderCanonicalNameMap.TryGetValue(segment, out var canonical)
+                && !providers.Contains(canonical, StringComparer.OrdinalIgnoreCase))
+            {
+                providers.Add(canonical);
+            }
+        }
+
+        return providers;
+    }
+
+    private static string BuildExternalNotificationProviderParameterText(UnifiedConfig config, string provider)
+    {
+        if (!ExternalNotificationProviderConfigKeyMap.TryGetValue(provider, out var keyMap))
+        {
+            return string.Empty;
+        }
+
+        var lines = new List<string>();
+        foreach (var (parameterKey, configKey) in keyMap)
+        {
+            var value = TryReadProfileString(config, configKey, string.Empty);
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                lines.Add($"{parameterKey}={value}");
+            }
+        }
+
+        return string.Join(Environment.NewLine, lines);
     }
 
     private TaskQueueSystemNotification? TryBuildAutomaticSystemNotification(
@@ -5982,7 +6181,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                     callback.PayloadJson,
                     UiErrorCode.TaskRuntimeCallbackError,
                     resolveSource);
-                QueueAutomaticSystemNotification(callback, metadata, taskIndex, runId);
+                QueueAutomaticNotifications(callback, metadata, taskIndex, runId);
                 CompleteTaskQueueRunOwnership();
                 break;
             case "TaskChainStopped":
@@ -6022,7 +6221,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                     TaskQueueItemStatus.Success,
                     callback.PayloadJson,
                     resolveSource: resolveSource);
-                QueueAutomaticSystemNotification(callback, metadata, taskIndex, runId);
+                QueueAutomaticNotifications(callback, metadata, taskIndex, runId);
                 if (!string.Equals(_lastPostActionRunId, runId, StringComparison.Ordinal))
                 {
                     _lastPostActionRunId = runId;

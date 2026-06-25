@@ -55,6 +55,18 @@
   <data name="Common.ErrorPrefix" xml:space="preserve">
     <value>エラー</value>
   </data>
+  <data name="Common.Edit.Cut" xml:space="preserve">
+    <value>切り取り</value>
+  </data>
+  <data name="Common.Edit.Copy" xml:space="preserve">
+    <value>コピー</value>
+  </data>
+  <data name="Common.Edit.Paste" xml:space="preserve">
+    <value>貼り付け</value>
+  </data>
+  <data name="Common.Edit.SelectAll" xml:space="preserve">
+    <value>すべて選択</value>
+  </data>
   <data name="Common.LoadingTaskHint" xml:space="preserve">
     <value>左側のタスクリストから対象タスクを選択してください。</value>
   </data>
@@ -1985,6 +1997,9 @@
   <data name="Settings.ExternalNotification.Error.NetworkFailure" xml:space="preserve">
     <value>外部通知ネットワークエラー: {0} ({1})</value>
   </data>
+  <data name="Settings.ExternalNotification.Error.NoEnabledProvider" xml:space="preserve">
+    <value>パラメータ検証またはテスト通知の送信前に、少なくとも 1 つの通知プロバイダーを有効にしてください。</value>
+  </data>
   <data name="Settings.ExternalNotification.Error.ParameterFormatLine" xml:space="preserve">
     <value>パラメータ形式エラー（{0} 行目）。key=value 形式で入力してください: `{1}`</value>
   </data>
@@ -2024,11 +2039,14 @@
   <data name="Settings.ExternalNotification.Status.SaveSucceeded" xml:space="preserve">
     <value>外部通知設定を保存しました。</value>
   </data>
+  <data name="Settings.ExternalNotification.Status.SaveSucceededWithProvider" xml:space="preserve">
+    <value>{0} の通知パラメータを検証し、保存しました。</value>
+  </data>
   <data name="Settings.ExternalNotification.Status.TestSucceeded" xml:space="preserve">
-    <value>Provider `{0}` のテスト通知送信に成功しました。</value>
+    <value>{0} チャンネルのテスト通知送信に成功しました。</value>
   </data>
   <data name="Settings.ExternalNotification.Status.ValidateSucceeded" xml:space="preserve">
-    <value>Provider `{0}` のパラメータ検証に成功しました。</value>
+    <value>{0} チャンネルのパラメータ検証に成功しました。</value>
   </data>
   <data name="Settings.ExternalNotification.TestMessage" xml:space="preserve">
     <value>テスト通知本文</value>

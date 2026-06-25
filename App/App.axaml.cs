@@ -5,6 +5,7 @@ using Avalonia.Threading;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Diagnostics;
+using MAAUnified.App.Controls;
 using MAAUnified.App.Services;
 using MAAUnified.App.ViewModels;
 using MAAUnified.App.ViewModels.Settings;
@@ -84,6 +85,7 @@ public partial class App : Avalonia.Application
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
+        AppTextEditingMenu.Register();
     }
 
     public override void OnFrameworkInitializationCompleted()

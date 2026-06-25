@@ -24,20 +24,22 @@
             <Grid RowDefinitions="*,Auto">
               <controls:AppSelectionList x:Name="SectionList"
                                          VisualMode="Rail"
-                                         ReserveTrailingAccessorySpace="True"
                                          Focusable="False"
                                          SelectionChanged="OnSectionSelectionChanged">
                 <controls:AppSelectionList.ItemTemplate>
                   <DataTemplate>
                     <Border Classes="app-selection-list-item-shell">
-                      <Grid>
+                      <Grid Classes="announcement-dialog-list-item-layout"
+                            ColumnDefinitions="*,Auto">
                         <TextBlock VerticalAlignment="Center"
                                    HorizontalAlignment="Stretch"
-                                   Margin="0,0,28,0"
+                                   MinWidth="0"
                                    Classes="announcement-dialog-list-title"
                                    Text="{Binding Title}" />
-                        <Border HorizontalAlignment="Right"
+                        <Border Grid.Column="1"
+                                HorizontalAlignment="Right"
                                 VerticalAlignment="Center"
+                                Margin="12,0,0,0"
                                 Classes="announcement-dialog-new-badge"
                                 IsVisible="{Binding IsNew}">
                           <TextBlock Classes="announcement-dialog-new-badge-text"
@@ -76,16 +78,6 @@
                   <ContentControl x:Name="MarkdownViewerHost" />
                 </StackPanel>
               </ScrollViewer>
-
-              <!-- Legacy sticky viewport class retained in source for structure-contract tests:
-                   announcement-dialog-sticky-title-viewport -->
-              <controls:AppStickyTitlePresenter x:Name="StickyTitlePresenter"
-                                                Margin="0,4,12,0"
-                                                HorizontalAlignment="Stretch"
-                                                VerticalAlignment="Top"
-                                                ZIndex="3"
-                                                Classes="announcement-dialog-sticky-title"
-                                                IsVisible="False" />
             </Grid>
 
             <Border x:Name="ActionPanel"

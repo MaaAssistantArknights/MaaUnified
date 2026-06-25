@@ -1303,7 +1303,7 @@ public sealed class LinuxPortalGlobalHotkeyService : IGlobalHotkeyService
     }
 }
 
-public sealed class CompositeGlobalHotkeyService : IGlobalHotkeyService
+public sealed class CompositeGlobalHotkeyService : IGlobalHotkeyService, IDisposable, IAsyncDisposable
 {
     private readonly object _syncRoot = new();
     private readonly IGlobalHotkeyService _primary;
@@ -1312,6 +1312,7 @@ public sealed class CompositeGlobalHotkeyService : IGlobalHotkeyService
     private bool _fallbackActive;
     private string _fallbackMessage;
     private HotkeyHostContext _hostContext = new(nint.Zero, string.Empty, "unknown");
+    private bool _disposed;
 
     public CompositeGlobalHotkeyService(IGlobalHotkeyService primary, IGlobalHotkeyService fallback)
     {
@@ -1457,6 +1458,28 @@ public sealed class CompositeGlobalHotkeyService : IGlobalHotkeyService
         return CurrentService().TryGetRegisteredHotkey(name, out state);
     }
 
+    public void Dispose()
+    {
+        if (MarkDisposed())
+        {
+            return;
+        }
+
+        DisposeProvider(_primary);
+        DisposeProvider(_fallback);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (MarkDisposed())
+        {
+            return;
+        }
+
+        await DisposeProviderAsync(_primary).ConfigureAwait(false);
+        await DisposeProviderAsync(_fallback).ConfigureAwait(false);
+    }
+
     private static IReadOnlyList<HotkeyRegistrationOutcome> ProjectRequestedResults(
         IReadOnlyList<HotkeyBindingRequest> requests,
         IReadOnlyList<HotkeyRegistrationOutcome> results)
@@ -1529,6 +1552,47 @@ public sealed class CompositeGlobalHotkeyService : IGlobalHotkeyService
         lock (_syncRoot)
         {
             return _fallbackActive ? _fallback : _primary;
+        }
+    }
+
+    private bool MarkDisposed()
+    {
+        lock (_syncRoot)
+        {
+            if (_disposed)
+            {
+                return true;
+            }
+
+            _disposed = true;
+            _desiredGestures.Clear();
+            return false;
+        }
+    }
+
+    private static void DisposeProvider(IGlobalHotkeyService service)
+    {
+        switch (service)
+        {
+            case IDisposable disposable:
+                disposable.Dispose();
+                break;
+            case IAsyncDisposable asyncDisposable:
+                asyncDisposable.DisposeAsync().AsTask().GetAwaiter().GetResult();
+                break;
+        }
+    }
+
+    private static async ValueTask DisposeProviderAsync(IGlobalHotkeyService service)
+    {
+        switch (service)
+        {
+            case IAsyncDisposable asyncDisposable:
+                await asyncDisposable.DisposeAsync().ConfigureAwait(false);
+                break;
+            case IDisposable disposable:
+                disposable.Dispose();
+                break;
         }
     }
 

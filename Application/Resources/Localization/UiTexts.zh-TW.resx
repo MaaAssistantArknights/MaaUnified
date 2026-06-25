@@ -55,6 +55,18 @@
   <data name="Common.ErrorPrefix" xml:space="preserve">
     <value>錯誤</value>
   </data>
+  <data name="Common.Edit.Cut" xml:space="preserve">
+    <value>剪下</value>
+  </data>
+  <data name="Common.Edit.Copy" xml:space="preserve">
+    <value>複製</value>
+  </data>
+  <data name="Common.Edit.Paste" xml:space="preserve">
+    <value>貼上</value>
+  </data>
+  <data name="Common.Edit.SelectAll" xml:space="preserve">
+    <value>全選</value>
+  </data>
   <data name="Common.LoadingTaskHint" xml:space="preserve">
     <value>請先在左側任務列表中選擇對應任務。</value>
   </data>
@@ -1877,6 +1889,9 @@
   <data name="Settings.ExternalNotification.Error.NetworkFailure" xml:space="preserve">
     <value>外部通知網路錯誤：{0} ({1})</value>
   </data>
+  <data name="Settings.ExternalNotification.Error.NoEnabledProvider" xml:space="preserve">
+    <value>請先至少啟用一個通知服務，再驗證參數或發送測試通知。</value>
+  </data>
   <data name="Settings.ExternalNotification.Error.ParameterFormatLine" xml:space="preserve">
     <value>參數格式錯誤（第 {0} 行），應為 key=value：`{1}`</value>
   </data>
@@ -1914,13 +1929,16 @@
     <value>已準備外部通知參數更新。</value>
   </data>
   <data name="Settings.ExternalNotification.Status.SaveSucceeded" xml:space="preserve">
-    <value>外部通知設定儲存成功。</value>
+    <value>外部通知設定已儲存。</value>
+  </data>
+  <data name="Settings.ExternalNotification.Status.SaveSucceededWithProvider" xml:space="preserve">
+    <value>{0} 通知參數驗證通過，已儲存。</value>
   </data>
   <data name="Settings.ExternalNotification.Status.TestSucceeded" xml:space="preserve">
-    <value>Provider `{0}` 測試通知發送成功。</value>
+    <value>{0} 通道測試通知發送成功。</value>
   </data>
   <data name="Settings.ExternalNotification.Status.ValidateSucceeded" xml:space="preserve">
-    <value>Provider `{0}` 參數驗證通過。</value>
+    <value>{0} 通道參數驗證通過。</value>
   </data>
   <data name="Settings.ExternalNotification.TestMessage" xml:space="preserve">
     <value>測試通知內容</value>

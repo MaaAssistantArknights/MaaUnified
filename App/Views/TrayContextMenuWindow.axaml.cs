@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Platform;
+using MAAUnified.App.Controls;
 using MAAUnified.App.Infrastructure;
 using MAAUnified.Platform;
 
@@ -66,7 +67,12 @@ public partial class TrayContextMenuWindow : Window
 
     public void SetEntries(IReadOnlyList<TrayContextMenuEntry> entries)
     {
-        MenuItemsHost.ItemsSource = entries;
+        MenuPresenter.Items = entries.Select<TrayContextMenuEntry, AppMenuEntry>(static entry => entry switch
+        {
+            TrayContextMenuItemEntry item => new AppMenuActionItem(item.Header, item.Command, IsEnabled: item.IsEnabled),
+            TrayContextMenuSeparatorEntry => new AppMenuSeparatorEntry(),
+            _ => throw new InvalidOperationException($"Unsupported tray context menu entry: {entry.GetType().FullName}"),
+        }).ToArray();
     }
 
     public void OpenAt(PixelPoint anchorPosition)
@@ -124,22 +130,14 @@ public partial class TrayContextMenuWindow : Window
         Close();
     }
 
-    private void OnMenuItemPointerPressed(object? sender, PointerPressedEventArgs e)
+    private void OnMenuItemInvoked(object? sender, AppMenuItemInvokedEventArgs e)
     {
-        if (sender is not Control { Tag: TrayContextMenuItemEntry item } control || !item.IsEnabled)
+        if (e.Command is not TrayCommandId command)
         {
             return;
         }
 
-        var point = e.GetCurrentPoint(control);
-        if (!point.Properties.IsLeftButtonPressed
-            && point.Properties.PointerUpdateKind != PointerUpdateKind.LeftButtonPressed)
-        {
-            return;
-        }
-
-        e.Handled = true;
-        CommandInvoked?.Invoke(this, new TrayContextMenuCommandInvokedEventArgs(item.Command));
+        CommandInvoked?.Invoke(this, new TrayContextMenuCommandInvokedEventArgs(command));
     }
 
     private void PositionWithinWorkingArea()

@@ -24,7 +24,23 @@ public sealed class MacStatusItemTrayServiceTests
         Assert.Equal("window-menu", service.Capability.FallbackMode);
         Assert.Equal(1, interop.CreateCount);
         Assert.Equal("MAAUnified", interop.Tooltips.Single());
+        Assert.NotNull(interop.LastIconBytes);
         AssertMenuOrder(interop.LastMenu);
+    }
+
+    [Fact]
+    public async Task InitializeAsync_ShouldPassEmbeddedPngIconToNativeStatusItem()
+    {
+        var interop = new FakeMacStatusItemInterop();
+        var service = new MacStatusItemTrayService(interop);
+
+        var result = await service.InitializeAsync("MAAUnified", TrayMenuText.Default);
+
+        Assert.True(result.Success);
+        Assert.Contains("icon=loaded", result.Message, StringComparison.Ordinal);
+        Assert.Contains("icon=set", result.Message, StringComparison.Ordinal);
+        Assert.NotNull(interop.LastIconBytes);
+        Assert.True(IsPng(interop.LastIconBytes));
     }
 
     [Fact]
@@ -154,6 +170,17 @@ public sealed class MacStatusItemTrayServiceTests
         Assert.Equal((int)TrayCommandId.Exit, menu[8].Tag);
     }
 
+    private static bool IsPng(byte[]? bytes)
+    {
+        if (bytes is null || bytes.Length < 8)
+        {
+            return false;
+        }
+
+        ReadOnlySpan<byte> signature = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+        return bytes.AsSpan(0, 8).SequenceEqual(signature);
+    }
+
     private sealed class FakeMacStatusItemInterop : IMacStatusItemInterop
     {
         private Action<int>? _menuAction;
@@ -174,19 +201,27 @@ public sealed class MacStatusItemTrayServiceTests
 
         public List<bool> VisibleCalls { get; } = [];
 
+        public byte[]? LastIconBytes { get; private set; }
+
         public MacStatusItemHandle CreateStatusItem(
             string tooltip,
             IReadOnlyList<MacStatusMenuItem> menuItems,
+            byte[]? iconBytes,
             Action<int> menuAction)
         {
             CreateCount++;
             _menuAction = menuAction;
             Tooltips.Add(tooltip);
             LastMenu = menuItems.ToList();
+            LastIconBytes = iconBytes;
             return new MacStatusItemHandle
             {
                 StatusItem = (nint)CreateCount,
                 Target = (nint)(CreateCount + 1000),
+                IconLoaded = iconBytes is { Length: > 0 },
+                IconDiagnostic = iconBytes is { Length: > 0 }
+                    ? $"icon=set bytes={iconBytes.Length}"
+                    : "icon=missing bytes=0",
             };
         }
 

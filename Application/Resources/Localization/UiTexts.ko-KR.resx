@@ -55,6 +55,18 @@
   <data name="Common.ErrorPrefix" xml:space="preserve">
     <value>오류</value>
   </data>
+  <data name="Common.Edit.Cut" xml:space="preserve">
+    <value>잘라내기</value>
+  </data>
+  <data name="Common.Edit.Copy" xml:space="preserve">
+    <value>복사</value>
+  </data>
+  <data name="Common.Edit.Paste" xml:space="preserve">
+    <value>붙여넣기</value>
+  </data>
+  <data name="Common.Edit.SelectAll" xml:space="preserve">
+    <value>모두 선택</value>
+  </data>
   <data name="Common.LoadingTaskHint" xml:space="preserve">
     <value>왼쪽 작업 목록에서 작업을 먼저 선택하세요.</value>
   </data>
@@ -1986,6 +1998,9 @@ OF-1 스테이지가 개방되지 않은 경우에는 선택하지 마세요.</v
   <data name="Settings.ExternalNotification.Error.NetworkFailure" xml:space="preserve">
     <value>외부 알림 네트워크 오류: {0} ({1})</value>
   </data>
+  <data name="Settings.ExternalNotification.Error.NoEnabledProvider" xml:space="preserve">
+    <value>파라미터를 검증하거나 테스트 알림을 보내기 전에 알림 공급자를 하나 이상 사용하도록 설정하세요.</value>
+  </data>
   <data name="Settings.ExternalNotification.Error.ParameterFormatLine" xml:space="preserve">
     <value>파라미터 형식 오류({0}행). key=value 형식이어야 합니다: `{1}`</value>
   </data>
@@ -2025,11 +2040,14 @@ OF-1 스테이지가 개방되지 않은 경우에는 선택하지 마세요.</v
   <data name="Settings.ExternalNotification.Status.SaveSucceeded" xml:space="preserve">
     <value>외부 알림 설정을 저장했습니다.</value>
   </data>
+  <data name="Settings.ExternalNotification.Status.SaveSucceededWithProvider" xml:space="preserve">
+    <value>{0} 알림 파라미터 검증을 통과했고 저장했습니다.</value>
+  </data>
   <data name="Settings.ExternalNotification.Status.TestSucceeded" xml:space="preserve">
-    <value>Provider `{0}` 테스트 알림 전송에 성공했습니다.</value>
+    <value>{0} 채널 테스트 알림 전송에 성공했습니다.</value>
   </data>
   <data name="Settings.ExternalNotification.Status.ValidateSucceeded" xml:space="preserve">
-    <value>Provider `{0}` 파라미터 검증에 성공했습니다.</value>
+    <value>{0} 채널 파라미터 검증에 성공했습니다.</value>
   </data>
   <data name="Settings.ExternalNotification.TestMessage" xml:space="preserve">
     <value>테스트 알림 내용</value>

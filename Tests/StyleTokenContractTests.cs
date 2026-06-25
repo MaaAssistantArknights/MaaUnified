@@ -308,6 +308,68 @@ public sealed class StyleTokenContractTests
     }
 
     [Fact]
+    public void AppPopupMenu_ShouldProvideUnifiedContextMenuFoundation()
+    {
+        var root = GetMaaUnifiedRoot();
+        var controlsRoot = Path.Combine(root, "App", "Controls");
+        var interactionStyles = File.ReadAllText(Path.Combine(root, "App", "Styles", "AppInteractionStyles.axaml"));
+        var appCode = File.ReadAllText(Path.Combine(root, "App", "App.axaml.cs"));
+        var menuEntry = File.ReadAllText(Path.Combine(controlsRoot, "AppMenuEntry.cs"));
+        var popupMenu = File.ReadAllText(Path.Combine(controlsRoot, "AppPopupMenu.cs"));
+        var popupMenuService = File.ReadAllText(Path.Combine(controlsRoot, "AppPopupMenuService.cs"));
+        var presenter = File.ReadAllText(Path.Combine(controlsRoot, "AppPopupMenuPresenter.axaml"));
+        var textEditingMenu = File.ReadAllText(Path.Combine(controlsRoot, "AppTextEditingMenu.cs"));
+        var hotkeys = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "HotKeySettingsView.axaml"));
+
+        Assert.Contains("abstract record AppMenuEntry", menuEntry, StringComparison.Ordinal);
+        Assert.Contains("record AppMenuActionItem", menuEntry, StringComparison.Ordinal);
+        Assert.Contains("record AppMenuSeparatorEntry", menuEntry, StringComparison.Ordinal);
+        Assert.Contains("AppMenuItemInvokedEventArgs", menuEntry, StringComparison.Ordinal);
+        Assert.Contains("public sealed class AppPopupMenu : Popup", popupMenu, StringComparison.Ordinal);
+        Assert.Contains("IsLightDismissEnabled = true", popupMenu, StringComparison.Ordinal);
+        Assert.Contains("ShouldUseOverlayLayer = true", popupMenu, StringComparison.Ordinal);
+        Assert.Contains("WindowManagerAddShadowHint = false", popupMenu, StringComparison.Ordinal);
+        Assert.Contains("PopupUiScale.SetUseTopLevelUiScale(this, true)", popupMenu, StringComparison.Ordinal);
+        var popupInvokeIndex = popupMenu.IndexOf("ItemInvoked?.Invoke(this, e)", StringComparison.Ordinal);
+        var popupCloseIndex = popupMenu.IndexOf("IsOpen = false", popupInvokeIndex, StringComparison.Ordinal);
+        Assert.True(popupInvokeIndex >= 0, "AppPopupMenu should raise item invocation.");
+        Assert.True(popupCloseIndex > popupInvokeIndex, "AppPopupMenu should close after raising item invocation.");
+        Assert.Contains("ActivePopups.Add(popup)", popupMenuService, StringComparison.Ordinal);
+        Assert.Contains("ActivePopups.Remove(popup)", popupMenuService, StringComparison.Ordinal);
+        Assert.Contains("PlacementTarget = owner", popupMenuService, StringComparison.Ordinal);
+        Assert.Contains("ResolvePopupHost(owner)", popupMenuService, StringComparison.Ordinal);
+        Assert.Contains("host.Children.Add(popup)", popupMenuService, StringComparison.Ordinal);
+        Assert.Contains("host.Children.Remove(popup)", popupMenuService, StringComparison.Ordinal);
+        Assert.Contains("x:Class=\"MAAUnified.App.Controls.AppPopupMenuPresenter\"", presenter, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"app-popup-menu-item-shell\"", presenter, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"app-popup-menu-separator\"", presenter, StringComparison.Ordinal);
+
+        Assert.Contains("Style Selector=\"controls|AppPopupMenu\"", interactionStyles, StringComparison.Ordinal);
+        Assert.Contains("Style Selector=\"Border.app-popup-menu-panel\"", interactionStyles, StringComparison.Ordinal);
+        Assert.Contains("Style Selector=\"Border.app-popup-menu-item-shell:pointerover\"", interactionStyles, StringComparison.Ordinal);
+        Assert.Contains("Style Selector=\"Border.app-popup-menu-separator\"", interactionStyles, StringComparison.Ordinal);
+        Assert.Contains("MAA.App.Interaction.FloatingMenuPadding", interactionStyles, StringComparison.Ordinal);
+        Assert.Contains("MAA.App.Interaction.FloatingMenuItemMinHeight", interactionStyles, StringComparison.Ordinal);
+
+        Assert.Contains("AppTextEditingMenu.Register()", appCode, StringComparison.Ordinal);
+        Assert.Contains("InputElement.PointerPressedEvent.AddClassHandler<TextBox>", textEditingMenu, StringComparison.Ordinal);
+        Assert.Contains("InputElement.PointerReleasedEvent.AddClassHandler<TextBox>", textEditingMenu, StringComparison.Ordinal);
+        Assert.Contains("Control.ContextRequestedEvent.AddClassHandler<TextBox>", textEditingMenu, StringComparison.Ordinal);
+        Assert.Contains("RoutingStrategies.Tunnel | RoutingStrategies.Bubble", textEditingMenu, StringComparison.Ordinal);
+        Assert.Contains("e.Handled = true", textEditingMenu, StringComparison.Ordinal);
+        Assert.Contains("PlacementMode.Pointer", textEditingMenu, StringComparison.Ordinal);
+        Assert.Contains("textBox.Cut()", textEditingMenu, StringComparison.Ordinal);
+        Assert.Contains("textBox.Copy()", textEditingMenu, StringComparison.Ordinal);
+        Assert.Contains("textBox.Paste()", textEditingMenu, StringComparison.Ordinal);
+        Assert.Contains("textBox.SelectAll()", textEditingMenu, StringComparison.Ordinal);
+        Assert.Contains("Common.Edit.Cut", textEditingMenu, StringComparison.Ordinal);
+        Assert.Contains("Common.Edit.Copy", textEditingMenu, StringComparison.Ordinal);
+        Assert.Contains("Common.Edit.Paste", textEditingMenu, StringComparison.Ordinal);
+        Assert.Contains("Common.Edit.SelectAll", textEditingMenu, StringComparison.Ordinal);
+        Assert.Contains("controls:AppTextEditingMenu.IsEnabled=\"False\"", hotkeys, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void AppSources_ShouldNotRetainModernDialogShellOrLegacyModernDialogTokens()
     {
         var root = GetMaaUnifiedRoot();

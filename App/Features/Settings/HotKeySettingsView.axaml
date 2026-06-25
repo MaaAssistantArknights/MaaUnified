@@ -42,6 +42,7 @@
             <Grid Width="{DynamicResource MAA.Size.Settings.FieldExtraWideWidth}">
               <TextBox x:Name="ShowGuiCaptureBox"
                        Classes="settings-input-group-editor hotkey-capture-input"
+                       controls:AppTextEditingMenu.IsEnabled="False"
                        IsReadOnly="True"
                        Tag="ShowGui"
                        Text="{Binding ShowGuiHotkeyState.InputText}"
@@ -89,6 +90,7 @@
             <Grid Width="{DynamicResource MAA.Size.Settings.FieldExtraWideWidth}">
               <TextBox x:Name="LinkStartCaptureBox"
                        Classes="settings-input-group-editor hotkey-capture-input"
+                       controls:AppTextEditingMenu.IsEnabled="False"
                        IsReadOnly="True"
                        Tag="LinkStart"
                        Text="{Binding LinkStartHotkeyState.InputText}"

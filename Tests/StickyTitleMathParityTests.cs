@@ -63,8 +63,8 @@ public sealed class StickyTitleMathParityTests
         Assert.DoesNotContain("AppStickyTitleState.Hidden", settingsCode, StringComparison.Ordinal);
         Assert.Contains("return StickyTitleMath.ComputeSectionTargetOffset(headerContentTop, activationLineY);", announcementCode, StringComparison.Ordinal);
         Assert.Contains("return StickyTitleMath.ResolveActiveSectionIndex(offsetY, activationLineY, headerContentTops);", announcementCode, StringComparison.Ordinal);
-        Assert.Contains("return StickyTitleMath.ComputePushOffset(nextViewportTop, stickyHeight);", announcementCode, StringComparison.Ordinal);
-        Assert.Contains("AppStickyTitleState.Hidden", announcementCode, StringComparison.Ordinal);
+        Assert.DoesNotContain("StickyTitleMath.ComputePushOffset", announcementCode, StringComparison.Ordinal);
+        Assert.DoesNotContain("AppStickyTitleState.Hidden", announcementCode, StringComparison.Ordinal);
     }
 
     private static double InvokeSettingsComputeSectionTargetOffset(double headerContentTop, double activationLineY)

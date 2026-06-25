@@ -413,23 +413,30 @@ public sealed class RootViewStructureContractTests
         var taskQueue = File.ReadAllText(Path.Combine(root, "App", "Features", "Root", "TaskQueueView.axaml"));
         var codeBehind = File.ReadAllText(Path.Combine(root, "App", "Features", "Root", "TaskQueueView.axaml.cs"));
         var interactionStyles = File.ReadAllText(Path.Combine(root, "App", "Styles", "AppInteractionStyles.axaml"));
+        var popupMenu = File.ReadAllText(Path.Combine(root, "App", "Controls", "AppPopupMenu.cs"));
+        var popupPresenter = File.ReadAllText(Path.Combine(root, "App", "Controls", "AppPopupMenuPresenter.axaml"));
 
         Assert.DoesNotContain("<ContextMenu", taskQueue, StringComparison.Ordinal);
+        Assert.DoesNotContain("MenuFlyout", taskQueue, StringComparison.Ordinal);
+        Assert.DoesNotContain("NativeMenu", taskQueue, StringComparison.Ordinal);
         Assert.DoesNotContain("app-context-menu", interactionStyles, StringComparison.Ordinal);
         Assert.DoesNotContain("ContextMenu.app-context-menu", interactionStyles, StringComparison.Ordinal);
         Assert.DoesNotContain("PART_ContextMenuChrome", interactionStyles, StringComparison.Ordinal);
         Assert.DoesNotContain("PART_MenuItemChrome", interactionStyles, StringComparison.Ordinal);
-        Assert.Contains("x:Name=\"TaskQueueActionPopup\"", taskQueue, StringComparison.Ordinal);
-        Assert.Contains("IsLightDismissEnabled=\"True\"", taskQueue, StringComparison.Ordinal);
-        Assert.Contains("x:Name=\"TaskQueueActionPopupItems\"", taskQueue, StringComparison.Ordinal);
-        Assert.Contains("Classes=\"task-queue-action-popup-item-shell\"", taskQueue, StringComparison.Ordinal);
-        Assert.Contains("PointerPressed=\"OnTaskQueueActionPopupItemPointerPressed\"", taskQueue, StringComparison.Ordinal);
-        Assert.Contains("Style Selector=\"ItemsControl.task-queue-action-popup-list ContentPresenter /template/ ContentPresenter\"", taskQueue, StringComparison.Ordinal);
-        Assert.Contains("Style Selector=\"ItemsControl.task-queue-action-popup-list ContentPresenter:pointerover /template/ ContentPresenter\"", taskQueue, StringComparison.Ordinal);
+        Assert.Contains("<controls:AppPopupMenu x:Name=\"TaskQueueActionPopup\"", taskQueue, StringComparison.Ordinal);
+        Assert.Contains("ItemInvoked=\"OnTaskQueueActionPopupItemInvoked\"", taskQueue, StringComparison.Ordinal);
+        Assert.DoesNotContain("TaskQueueActionPopupItems", taskQueue, StringComparison.Ordinal);
+        Assert.DoesNotContain("task-queue-action-popup-item-shell", taskQueue, StringComparison.Ordinal);
+        Assert.DoesNotContain("OnTaskQueueActionPopupItemPointerPressed", taskQueue, StringComparison.Ordinal);
         Assert.Contains("OpenTaskQueueActionPopup", codeBehind, StringComparison.Ordinal);
         Assert.Contains("BuildTaskMenuItems", codeBehind, StringComparison.Ordinal);
         Assert.Contains("CloseTaskQueueActionPopup()", codeBehind, StringComparison.Ordinal);
         Assert.Contains("TaskQueuePopupMenuItem", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("AppMenuActionItem", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("IsLightDismissEnabled = true", popupMenu, StringComparison.Ordinal);
+        Assert.Contains("WindowManagerAddShadowHint = false", popupMenu, StringComparison.Ordinal);
+        Assert.Contains("PopupUiScale.SetUseTopLevelUiScale(this, true)", popupMenu, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"app-popup-menu-item-shell\"", popupPresenter, StringComparison.Ordinal);
         Assert.Contains("MAA.App.Interaction.FloatingMenuPadding", interactionStyles, StringComparison.Ordinal);
         Assert.Contains("MAA.App.Interaction.FloatingMenuItemMinHeight", interactionStyles, StringComparison.Ordinal);
     }

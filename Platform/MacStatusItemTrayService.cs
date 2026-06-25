@@ -1,5 +1,7 @@
+using System.Buffers.Binary;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
+using Avalonia.Platform;
 using Avalonia.Threading;
 
 namespace MAAUnified.Platform;
@@ -15,6 +17,10 @@ internal sealed class MacStatusItemHandle
     public nint StatusItem { get; set; }
 
     public nint Target { get; set; }
+
+    public bool IconLoaded { get; set; }
+
+    public string IconDiagnostic { get; set; } = "icon=not-set";
 }
 
 internal interface IMacStatusItemInterop : IDisposable
@@ -24,6 +30,7 @@ internal interface IMacStatusItemInterop : IDisposable
     MacStatusItemHandle CreateStatusItem(
         string tooltip,
         IReadOnlyList<MacStatusMenuItem> menuItems,
+        byte[]? iconBytes,
         Action<int> menuAction);
 
     void UpdateTooltip(MacStatusItemHandle handle, string tooltip);
@@ -38,6 +45,7 @@ internal interface IMacStatusItemInterop : IDisposable
 public sealed class MacStatusItemTrayService : ITrayService, IDisposable
 {
     internal const string EnableEnvironmentVariable = "MAA_PLATFORM_ENABLE_MAC_STATUS_ITEM";
+    private static readonly Uri AppIconUri = new("avares://MAAUnified/Assets/Brand/newlogo.ico");
 
     private readonly IMacStatusItemInterop _interop;
     private readonly CommandNotificationService _notificationFallback = new();
@@ -49,6 +57,7 @@ public sealed class MacStatusItemTrayService : ITrayService, IDisposable
     private string _appTitle = "MAAUnified";
     private TrayMenuText _menuText = TrayMenuText.Default;
     private TrayMenuState _menuState = new(true, true, true, true, true);
+    private string _lastIconDiagnostic = "icon=not-loaded";
 
     public MacStatusItemTrayService()
         : this(new MacStatusItemNativeInterop(), CreateFallbackService())
@@ -133,7 +142,10 @@ public sealed class MacStatusItemTrayService : ITrayService, IDisposable
                         return;
                     }
 
-                    _statusItem = _interop.CreateStatusItem(_appTitle, items, HandleMenuActionTag);
+                    var icon = LoadStatusItemIconBytes();
+                    _lastIconDiagnostic = icon.Diagnostic;
+                    _statusItem = _interop.CreateStatusItem(_appTitle, items, icon.Bytes, HandleMenuActionTag);
+                    _lastIconDiagnostic = $"{_lastIconDiagnostic}; {_statusItem.IconDiagnostic}";
                     _interop.SetVisible(_statusItem, _visible);
                     _initialized = true;
                 },
@@ -141,7 +153,7 @@ public sealed class MacStatusItemTrayService : ITrayService, IDisposable
 
             return PlatformOperation.NativeSuccess(
                 Capability.Provider,
-                "macOS status item tray service initialized.",
+                $"macOS status item tray service initialized. {_lastIconDiagnostic}",
                 "tray.initialize");
         }
         catch (Exception ex)
@@ -324,6 +336,131 @@ public sealed class MacStatusItemTrayService : ITrayService, IDisposable
     private static MacStatusMenuItem CreateSeparator()
         => new(string.Empty, Tag: -1, IsSeparator: true, IsEnabled: false);
 
+    private static StatusItemIconLoadResult LoadStatusItemIconBytes()
+    {
+        StatusItemIconLoadResult? avaresResult = null;
+        try
+        {
+            using var stream = AssetLoader.Open(AppIconUri);
+            using var buffer = new MemoryStream();
+            stream.CopyTo(buffer);
+            return NormalizeStatusItemIconBytes(buffer.ToArray(), $"source={AppIconUri}");
+        }
+        catch (Exception ex)
+        {
+            avaresResult = new StatusItemIconLoadResult(
+                null,
+                $"icon=unavailable source={AppIconUri} error={ex.GetType().Name}: {ex.Message}");
+        }
+
+        foreach (var path in EnumerateFallbackIconPaths())
+        {
+            try
+            {
+                if (!File.Exists(path))
+                {
+                    continue;
+                }
+
+                return NormalizeStatusItemIconBytes(File.ReadAllBytes(path), $"source=file:{path}");
+            }
+            catch (Exception ex)
+            {
+                return new StatusItemIconLoadResult(
+                    null,
+                    $"icon=unavailable source=file:{path} error={ex.GetType().Name}: {ex.Message}; {avaresResult.Diagnostic}");
+            }
+        }
+
+        return avaresResult;
+    }
+
+    private static StatusItemIconLoadResult NormalizeStatusItemIconBytes(byte[] bytes, string source)
+    {
+        if (TryExtractPngPayloadFromIco(bytes, out var pngBytes))
+        {
+            return new StatusItemIconLoadResult(
+                pngBytes,
+                $"icon=loaded {source} format=ico-png bytes={pngBytes.Length}");
+        }
+
+        return new StatusItemIconLoadResult(
+            bytes,
+            $"icon=loaded {source} format=raw bytes={bytes.Length}");
+    }
+
+    private static IEnumerable<string> EnumerateFallbackIconPaths()
+    {
+        foreach (var start in new[] { AppContext.BaseDirectory, Environment.CurrentDirectory })
+        {
+            var directory = new DirectoryInfo(start);
+            for (var depth = 0; directory is not null && depth < 10; depth++, directory = directory.Parent)
+            {
+                yield return Path.Combine(directory.FullName, "Assets", "Brand", "newlogo.ico");
+                yield return Path.Combine(directory.FullName, "src", "MAAUnified", "App", "Assets", "Brand", "newlogo.ico");
+            }
+        }
+    }
+
+    private static bool TryExtractPngPayloadFromIco(byte[] bytes, [NotNullWhen(true)] out byte[]? pngBytes)
+    {
+        pngBytes = null;
+        if (bytes.Length < 6)
+        {
+            return false;
+        }
+
+        var reserved = BinaryPrimitives.ReadUInt16LittleEndian(bytes.AsSpan(0, 2));
+        var iconType = BinaryPrimitives.ReadUInt16LittleEndian(bytes.AsSpan(2, 2));
+        var count = BinaryPrimitives.ReadUInt16LittleEndian(bytes.AsSpan(4, 2));
+        if (reserved != 0 || iconType != 1 || count == 0)
+        {
+            return false;
+        }
+
+        const int DirectoryHeaderLength = 6;
+        const int DirectoryEntryLength = 16;
+        byte[]? bestPng = null;
+        for (var index = 0; index < count; index++)
+        {
+            var entryOffset = DirectoryHeaderLength + (index * DirectoryEntryLength);
+            if (entryOffset + DirectoryEntryLength > bytes.Length)
+            {
+                return false;
+            }
+
+            var imageLength = BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(entryOffset + 8, 4));
+            var imageOffset = BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(entryOffset + 12, 4));
+            if (imageLength == 0
+                || imageOffset > int.MaxValue
+                || imageLength > int.MaxValue
+                || (ulong)imageOffset + imageLength > (ulong)bytes.Length)
+            {
+                continue;
+            }
+
+            var image = bytes.AsSpan((int)imageOffset, (int)imageLength);
+            if (!IsPng(image))
+            {
+                continue;
+            }
+
+            if (bestPng is null || image.Length > bestPng.Length)
+            {
+                bestPng = image.ToArray();
+            }
+        }
+
+        pngBytes = bestPng;
+        return pngBytes is not null;
+    }
+
+    private static bool IsPng(ReadOnlySpan<byte> bytes)
+    {
+        ReadOnlySpan<byte> signature = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+        return bytes.StartsWith(signature);
+    }
+
     private void HandleMenuActionTag(int tag)
     {
         if (!Enum.IsDefined(typeof(TrayCommandId), tag))
@@ -345,6 +482,8 @@ public sealed class MacStatusItemTrayService : ITrayService, IDisposable
             // Keep native callbacks isolated from application subscribers.
         }
     }
+
+    private sealed record StatusItemIconLoadResult(byte[]? Bytes, string Diagnostic);
 
     private async Task<PlatformOperationResult> SwitchToFallbackTrayAsync(
         string appTitle,
@@ -445,6 +584,8 @@ internal sealed partial class MacStatusItemNativeInterop : IMacStatusItemInterop
             {
                 return NativeLibrary.TryLoad(ObjCLibrary, out objcHandle)
                     && NativeLibrary.TryLoad(AppKitFramework, out appKitHandle)
+                    && NativeMethods.objc_getClass("NSData") != nint.Zero
+                    && NativeMethods.objc_getClass("NSImage") != nint.Zero
                     && NativeMethods.objc_getClass("NSStatusBar") != nint.Zero
                     && NativeMethods.objc_getClass("NSMenu") != nint.Zero
                     && NativeMethods.objc_getClass("NSMenuItem") != nint.Zero;
@@ -460,6 +601,7 @@ internal sealed partial class MacStatusItemNativeInterop : IMacStatusItemInterop
     public MacStatusItemHandle CreateStatusItem(
         string tooltip,
         IReadOnlyList<MacStatusMenuItem> menuItems,
+        byte[]? iconBytes,
         Action<int> menuAction)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -489,7 +631,18 @@ internal sealed partial class MacStatusItemNativeInterop : IMacStatusItemInterop
         };
 
         UpdateTooltip(handle, tooltip);
-        SetButtonTitle(handle, "MAA");
+        if (TrySetButtonImage(handle, iconBytes, out var iconDiagnostic))
+        {
+            handle.IconLoaded = true;
+            handle.IconDiagnostic = $"icon=set bytes={iconBytes?.Length ?? 0}";
+        }
+        else
+        {
+            SetButtonTitle(handle, "MAA");
+            handle.IconLoaded = false;
+            handle.IconDiagnostic = iconDiagnostic;
+        }
+
         UpdateMenu(handle, menuItems);
         return handle;
     }
@@ -630,6 +783,63 @@ internal sealed partial class MacStatusItemNativeInterop : IMacStatusItemInterop
         NativeMethods.void_objc_msgSend_nint(button, Selectors.SetTitle, nativeTitle.Handle);
     }
 
+    private static bool TrySetButtonImage(MacStatusItemHandle handle, byte[]? iconBytes, out string iconDiagnostic)
+    {
+        iconDiagnostic = "icon=missing bytes=0";
+        if (iconBytes is null || iconBytes.Length == 0)
+        {
+            return false;
+        }
+
+        try
+        {
+            var button = NativeMethods.IntPtr_objc_msgSend(handle.StatusItem, Selectors.Button);
+            if (button == nint.Zero)
+            {
+                iconDiagnostic = "icon=missing reason=status-item-button-null";
+                return false;
+            }
+
+            var data = NativeMethods.IntPtr_objc_msgSend_bytearray_nuint(
+                NativeMethods.objc_getClass("NSData"),
+                Selectors.DataWithBytesLength,
+                iconBytes,
+                (nuint)iconBytes.Length);
+            if (data == nint.Zero)
+            {
+                iconDiagnostic = "icon=missing reason=nsdata-null";
+                return false;
+            }
+
+            var image = NativeMethods.IntPtr_objc_msgSend_nint(
+                NativeMethods.IntPtr_objc_msgSend(NativeMethods.objc_getClass("NSImage"), Selectors.Alloc),
+                Selectors.InitWithData,
+                data);
+            if (image == nint.Zero)
+            {
+                iconDiagnostic = "icon=missing reason=nsimage-null";
+                return false;
+            }
+
+            try
+            {
+                NativeMethods.void_objc_msgSend_nint(button, Selectors.SetImage, image);
+                SetButtonTitle(handle, string.Empty);
+                iconDiagnostic = "icon=set";
+                return true;
+            }
+            finally
+            {
+                NativeMethods.void_objc_msgSend(image, Selectors.Release);
+            }
+        }
+        catch (Exception ex)
+        {
+            iconDiagnostic = $"icon=missing error={ex.GetType().Name}: {ex.Message}";
+            return false;
+        }
+    }
+
     private static nint CreateTarget(Action<int> menuAction)
     {
         EnsureTargetClass();
@@ -760,7 +970,9 @@ internal sealed partial class MacStatusItemNativeInterop : IMacStatusItemInterop
         public static readonly nint AddItem = NativeMethods.sel_registerName("addItem:");
         public static readonly nint Alloc = NativeMethods.sel_registerName("alloc");
         public static readonly nint Button = NativeMethods.sel_registerName("button");
+        public static readonly nint DataWithBytesLength = NativeMethods.sel_registerName("dataWithBytes:length:");
         public static readonly nint Init = NativeMethods.sel_registerName("init");
+        public static readonly nint InitWithData = NativeMethods.sel_registerName("initWithData:");
         public static readonly nint InitWithTitleActionKeyEquivalent = NativeMethods.sel_registerName("initWithTitle:action:keyEquivalent:");
         public static readonly nint InitWithUtf8String = NativeMethods.sel_registerName("initWithUTF8String:");
         public static readonly nint MenuAction = NativeMethods.sel_registerName(MenuActionSelectorName);
@@ -771,6 +983,7 @@ internal sealed partial class MacStatusItemNativeInterop : IMacStatusItemInterop
         public static readonly nint SeparatorItem = NativeMethods.sel_registerName("separatorItem");
         public static readonly nint SetAutoenablesItems = NativeMethods.sel_registerName("setAutoenablesItems:");
         public static readonly nint SetEnabled = NativeMethods.sel_registerName("setEnabled:");
+        public static readonly nint SetImage = NativeMethods.sel_registerName("setImage:");
         public static readonly nint SetLength = NativeMethods.sel_registerName("setLength:");
         public static readonly nint SetMenu = NativeMethods.sel_registerName("setMenu:");
         public static readonly nint SetTarget = NativeMethods.sel_registerName("setTarget:");
@@ -814,6 +1027,19 @@ internal sealed partial class MacStatusItemNativeInterop : IMacStatusItemInterop
             nint first,
             nint second,
             nint third);
+
+        [DllImport(ObjCLibrary, EntryPoint = "objc_msgSend")]
+        public static extern nint IntPtr_objc_msgSend_nint(
+            nint receiver,
+            nint selector,
+            nint value);
+
+        [DllImport(ObjCLibrary, EntryPoint = "objc_msgSend")]
+        public static extern nint IntPtr_objc_msgSend_bytearray_nuint(
+            nint receiver,
+            nint selector,
+            [In] byte[] bytes,
+            nuint length);
 
         [DllImport(ObjCLibrary, EntryPoint = "objc_msgSend")]
         public static extern nint IntPtr_objc_msgSend_string(

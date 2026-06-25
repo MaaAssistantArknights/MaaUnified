@@ -408,9 +408,15 @@
 
         <Border Classes="settings-page-status-block">
           <controls:AdaptiveSpacingStackPanel Classes="settings-page-status-list">
+            <TextBlock Classes="state-success long-wrap"
+                       Text="{Binding ExternalNotificationStatusMessage}"
+                       IsVisible="{Binding HasExternalNotificationStatusMessage}" />
             <TextBlock Classes="state-warning long-wrap"
                        Text="{Binding ExternalNotificationWarningMessage}"
                        IsVisible="{Binding HasExternalNotificationWarningMessage}" />
+            <TextBlock Classes="state-error long-wrap"
+                       Text="{Binding ExternalNotificationErrorMessage}"
+                       IsVisible="{Binding HasExternalNotificationErrorMessage}" />
           </controls:AdaptiveSpacingStackPanel>
         </Border>
       </controls:AdaptiveSpacingStackPanel>

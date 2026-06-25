@@ -65,8 +65,9 @@ public sealed class NavigationSharedStructureContractTests
         Assert.Contains("VisualMode=\"Rail\"", settings, StringComparison.Ordinal);
         Assert.Contains("<controls:AppSelectionList", announcement, StringComparison.Ordinal);
         Assert.Contains("VisualMode=\"Rail\"", announcement, StringComparison.Ordinal);
-        Assert.Contains("ReserveTrailingAccessorySpace=\"True\"", announcement, StringComparison.Ordinal);
-        Assert.Contains("<controls:AppStickyTitlePresenter x:Name=\"StickyTitlePresenter\"", announcement, StringComparison.Ordinal);
+        Assert.DoesNotContain("ReserveTrailingAccessorySpace=\"True\"", announcement, StringComparison.Ordinal);
+        Assert.DoesNotContain("AppStickyTitlePresenter", announcement, StringComparison.Ordinal);
+        Assert.DoesNotContain("announcement-dialog-sticky-title", announcement, StringComparison.Ordinal);
 
         Assert.Contains("controls|AppSelectionList.selection-list-rail Border.app-selection-list-item-shell", selectionStyles, StringComparison.Ordinal);
         Assert.Contains("controls|AppSelectionList.selection-list-rail.selection-list-rail-trailing-accessory-space Border.app-selection-list-item-shell", selectionStyles, StringComparison.Ordinal);
