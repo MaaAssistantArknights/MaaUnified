@@ -313,6 +313,22 @@ public sealed class PlatformCapabilityContractTests
     }
 
     [Fact]
+    public async Task CompositeGlobalHotkeyService_Dispose_ReleasesMacCarbonPrimary()
+    {
+        var interop = new FakeMacCarbonHotkeyInterop();
+        var primary = new MacCarbonGlobalHotkeyService(interop);
+        var service = new CompositeGlobalHotkeyService(primary, new WindowScopedHotkeyService());
+
+        var register = await service.RegisterAsync("ShowGui", "Meta+Shift+M");
+
+        Assert.True(register.Success);
+        service.Dispose();
+
+        Assert.Single(interop.UnregisterCalls);
+        Assert.False(service.TryGetRegisteredHotkey("ShowGui", out _));
+    }
+
+    [Fact]
     public async Task MacCarbonGlobalHotkeyService_WhenHandlerInstallFails_ReturnsNativeRegistrationFailed()
     {
         var interop = new FakeMacCarbonHotkeyInterop

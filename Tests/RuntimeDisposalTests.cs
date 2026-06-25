@@ -66,12 +66,37 @@ public sealed class RuntimeDisposalTests
         }
     }
 
+    [Fact]
+    public async Task DisposeAsync_ShouldDisposeHotkeyProviderInsteadOfWaitingForUnregister()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "maa-runtime-disposal-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+        var hotkey = new BlockingDisposableHotkeyService();
+        var runtime = CreateRuntime(root, hotkeyService: hotkey);
+
+        try
+        {
+            var disposeTask = runtime.DisposeAsync().AsTask();
+            var completed = await Task.WhenAny(disposeTask, Task.Delay(500));
+
+            Assert.Same(disposeTask, completed);
+            await disposeTask;
+            Assert.True(hotkey.Disposed);
+            Assert.Equal(0, hotkey.UnregisterCallCount);
+        }
+        finally
+        {
+            TryDeleteDirectory(root);
+        }
+    }
+
     private static MAAUnifiedRuntime CreateRuntime(
         string root,
         IMaaCoreBridge? bridge = null,
         ITrayService? trayService = null,
         INotificationService? notificationService = null,
-        IWebApiFeatureService? webApiFeatureService = null)
+        IWebApiFeatureService? webApiFeatureService = null,
+        IGlobalHotkeyService? hotkeyService = null)
     {
         var log = new UiLogService();
         var diagnostics = new UiDiagnosticsService(root, log);
@@ -87,7 +112,7 @@ public sealed class RuntimeDisposalTests
         {
             TrayService = trayService ?? new NoOpTrayService(),
             NotificationService = notificationService ?? new NoOpNotificationService(),
-            HotkeyService = new NoOpGlobalHotkeyService(),
+            HotkeyService = hotkeyService ?? new NoOpGlobalHotkeyService(),
             AutostartService = new NoOpAutostartService(),
             FileDialogService = new NoOpFileDialogService(),
             OverlayService = new NoOpOverlayCapabilityService(),
@@ -149,6 +174,40 @@ public sealed class RuntimeDisposalTests
         {
             Disposed = true;
         }
+    }
+
+    private sealed class BlockingDisposableHotkeyService : IGlobalHotkeyService, IDisposable
+    {
+        public bool Disposed { get; private set; }
+
+        public int UnregisterCallCount { get; private set; }
+
+        public PlatformCapabilityStatus Capability => new(
+            Supported: true,
+            Message: "blocking hotkey service",
+            Provider: "blocking-hotkey");
+
+        public event EventHandler<GlobalHotkeyTriggeredEvent>? Triggered;
+
+        public Task<PlatformOperationResult> RegisterAsync(
+            string name,
+            string gesture,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(PlatformOperation.NativeSuccess(Capability.Provider, "registered", "hotkey.register"));
+
+        public Task<PlatformOperationResult> UnregisterAsync(string name, CancellationToken cancellationToken = default)
+        {
+            UnregisterCallCount += 1;
+            return TaskCompletionSource.Task;
+        }
+
+        public void Dispose()
+        {
+            Disposed = true;
+        }
+
+        private static TaskCompletionSource<PlatformOperationResult> TaskCompletionSource { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
     }
 
     private class NullBridge : IMaaCoreBridge

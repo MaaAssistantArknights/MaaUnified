@@ -118,23 +118,23 @@ public sealed class MAAUnifiedRuntime : IAsyncDisposable
             }).ConfigureAwait(false);
 
         await RunExitCleanupAsync(
-            "App.Exit.Cleanup.Hotkey.Unregister",
+            "App.Exit.Cleanup.Hotkey",
             async () =>
             {
-                await Platform.HotkeyService.UnregisterAsync("ShowGui", CancellationToken.None).ConfigureAwait(false);
-                await Platform.HotkeyService.UnregisterAsync("LinkStart", CancellationToken.None).ConfigureAwait(false);
-            }).ConfigureAwait(false);
+                if (Platform.HotkeyService is IAsyncDisposable hotkeyAsyncDisposable)
+                {
+                    await hotkeyAsyncDisposable.DisposeAsync().ConfigureAwait(false);
+                    return;
+                }
 
-        await RunExitCleanupAsync(
-            "App.Exit.Cleanup.Hotkey",
-            () =>
-            {
                 if (Platform.HotkeyService is IDisposable hotkeyDisposable)
                 {
                     hotkeyDisposable.Dispose();
+                    return;
                 }
 
-                return Task.CompletedTask;
+                await Platform.HotkeyService.UnregisterAsync("ShowGui", CancellationToken.None).ConfigureAwait(false);
+                await Platform.HotkeyService.UnregisterAsync("LinkStart", CancellationToken.None).ConfigureAwait(false);
             }).ConfigureAwait(false);
 
         await RunExitCleanupAsync(
