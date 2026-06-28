@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -2620,6 +2621,11 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                     return;
                 }
 
+                if (!await TryStartPlayCoverGameOnStartupAsync(startCancellationToken))
+                {
+                    return;
+                }
+
                 if (!await EnsureConnectedForLinkStartAsync("TaskQueue.Start", startCancellationToken))
                 {
                     return;
@@ -2898,6 +2904,11 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 return connectResult;
             }
 
+            if (_connectionGameSharedState.IsPlayCoverConnection)
+            {
+                return connectResult;
+            }
+
             if (string.Equals(connectResult.Error?.Code, UiErrorCode.OperationAlreadyRunning, StringComparison.Ordinal))
             {
                 return connectResult;
@@ -3038,7 +3049,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             var effectiveAdbPath = _connectionGameSharedState.ResolveEffectiveAdbPath(updateStateWhenResolved: true);
             var candidatesResult = Runtime.ConnectFeatureService.BuildConnectionCandidates(
                 _connectionGameSharedState.ConnectAddress,
-                _connectionGameSharedState.ConnectConfig,
+                _connectionGameSharedState.EffectiveConnectConfig,
                 effectiveAdbPath,
                 _connectionGameSharedState.BuildCoreConnectionExtras(),
                 _connectionGameSharedState.AutoDetect,
@@ -3055,7 +3066,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
             var candidates = candidatesResult.Value;
             Runtime.LogService.Debug(
-                $"TaskQueue connect candidates prepared: count={candidates.Count}, config={_connectionGameSharedState.ConnectConfig}, adb={effectiveAdbPath ?? "<null>"}");
+                $"TaskQueue connect candidates prepared: count={candidates.Count}, config={_connectionGameSharedState.EffectiveConnectConfig}, adb={effectiveAdbPath ?? "<null>"}");
             if (MacBundledAdbPolicy.IsSupportedPlatform)
             {
                 Runtime.LogService.Debug(MacBundledAdbPolicy.BuildResolutionContext(
@@ -3213,6 +3224,153 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
     private Task<bool> TryStartEmulatorForReconnectAsync(CancellationToken cancellationToken)
         => TryStartEmulatorAsync("reconnect", cancellationToken);
+
+    private async Task<bool> TryStartPlayCoverGameOnStartupAsync(CancellationToken cancellationToken)
+    {
+        if (!ShouldStartPlayCoverGameOnStartup())
+        {
+            return true;
+        }
+
+        if (!OperatingSystem.IsMacOS())
+        {
+            LastErrorMessage = BuildLocalizedMessage(
+                "PlayCover 自动启动仅支持 macOS。",
+                "PlayCover auto-start is only supported on macOS.");
+            AppendStartFailureLog(LastErrorMessage);
+            await RecordFailedResultAsync(
+                "TaskQueue.Start.PlayCoverStartGame",
+                UiOperationResult.Fail(UiErrorCode.SessionStateNotAllowed, LastErrorMessage),
+                cancellationToken);
+            return false;
+        }
+
+        var appBundlePath = ResolvePlayCoverAppBundlePath(_connectionGameSharedState.ClientType);
+        if (!Directory.Exists(appBundlePath))
+        {
+            LastErrorMessage = BuildLocalizedMessage(
+                $"无法找到 PlayCover 游戏文件：{appBundlePath}",
+                $"PlayCover game app was not found: {appBundlePath}");
+            AppendStartFailureLog(LastErrorMessage);
+            await RecordFailedResultAsync(
+                "TaskQueue.Start.PlayCoverStartGame",
+                UiOperationResult.Fail(UiErrorCode.SessionStateNotAllowed, LastErrorMessage),
+                cancellationToken);
+            return false;
+        }
+
+        try
+        {
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = "/usr/bin/open",
+                UseShellExecute = false,
+            };
+            startInfo.ArgumentList.Add(appBundlePath);
+
+            Runtime.LogService.Debug($"Auto start PlayCover client: `{appBundlePath}`");
+            _ = Process.Start(startInfo);
+
+            var address = (_connectionGameSharedState.ConnectAddress ?? string.Empty).Trim();
+            if (!await WaitForPlayCoverMaaToolsAsync(address, cancellationToken))
+            {
+                Runtime.LogService.Warn($"PlayCover client started but MaaTools did not become reachable at `{address}`.");
+            }
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            LastErrorMessage = BuildLocalizedMessage(
+                $"启动 PlayCover 客户端失败：{ex.Message}",
+                $"Failed to start PlayCover client: {ex.Message}");
+            AppendStartFailureLog(LastErrorMessage);
+            await RecordFailedResultAsync(
+                "TaskQueue.Start.PlayCoverStartGame",
+                UiOperationResult.Fail(UiErrorCode.SessionStateNotAllowed, LastErrorMessage),
+                cancellationToken);
+            return false;
+        }
+    }
+
+    private bool ShouldStartPlayCoverGameOnStartup()
+    {
+        return _connectionGameSharedState.IsPlayCoverConnection
+            && _connectionGameSharedState.StartGameEnabled
+            && CurrentSessionState != SessionState.Connected
+            && Tasks.Any(static task => task.IsEnabled
+                && string.Equals(task.Type, TaskModuleTypes.StartUp, StringComparison.OrdinalIgnoreCase));
+    }
+
+    internal static string ResolvePlayCoverAppBundlePath(string? clientType)
+    {
+        var bundleId = ResolvePlayCoverAppBundleId(clientType);
+        return Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            "Library",
+            "Containers",
+            "io.playcover.PlayCover",
+            "Applications",
+            $"{bundleId}.app");
+    }
+
+    internal static string ResolvePlayCoverAppBundleId(string? clientType)
+    {
+        return (clientType ?? string.Empty).Trim().ToLowerInvariant() switch
+        {
+            "yostaren" => "com.YoStarEN.Arknights",
+            "yostarjp" => "com.YoStarJP.Arknights",
+            "yostarkr" => "com.YoStarKR.Arknights",
+            "txwy" => "tw.txwy.ios.arknights",
+            _ => "com.hypergryph.arknights",
+        };
+    }
+
+    private async Task<bool> WaitForPlayCoverMaaToolsAsync(string address, CancellationToken cancellationToken)
+    {
+        if (!TryParseTcpAddress(address, out var host, out var port))
+        {
+            Runtime.LogService.Debug(
+                $"Skipping PlayCover MaaTools readiness wait; address `{address}` is not a valid host:port.");
+            return true;
+        }
+
+        for (var attempt = 0; attempt < 20; attempt++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                using var client = new TcpClient();
+                await client.ConnectAsync(host, port, cancellationToken);
+                return true;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(500), cancellationToken);
+            }
+        }
+
+        return false;
+    }
+
+    private static bool TryParseTcpAddress(string address, out string host, out int port)
+    {
+        host = string.Empty;
+        port = 0;
+
+        var parts = address.Split(':', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length < 2 || !int.TryParse(parts[^1], out port) || port is <= 0 or > 65535)
+        {
+            return false;
+        }
+
+        host = string.Join(':', parts.Take(parts.Length - 1));
+        return !string.IsNullOrWhiteSpace(host);
+    }
 
     private async Task<bool> TryStartEmulatorAsync(string source, CancellationToken cancellationToken)
     {

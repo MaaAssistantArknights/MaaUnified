@@ -2,6 +2,7 @@ using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using MAAUnified.Application.Models;
 using MAAUnified.Application.Models.TaskParams;
+using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Features;
 
 namespace MAAUnified.Application.Services.TaskParams;
@@ -150,16 +151,23 @@ public static class TaskParamCompiler
             ? profileStartGame
             : ReadBool(parameters, "start_game_enabled", strict, issues, "start_up.start_game_enabled", true);
 
+        var connectConfig = ResolveStringSetting(profile, config, "ConnectConfig", "Connect.ConnectConfig") ?? "General";
+        var connectAddress = ResolveStringSetting(profile, config, "ConnectAddress", "Connect.Address");
+        var playCoverScreencapMode = ResolveStringSetting(profile, config, "PlayCoverScreencapMode") ?? "RGBA";
+
         var dto = new StartUpTaskParamsDto
         {
             ClientType = clientType,
             StartGameEnabled = startGameEnabled,
             AccountName = ReadString(parameters, "account_name", strict, issues, "start_up.account_name", string.Empty),
-            ConnectConfig = ResolveStringSetting(profile, config, "ConnectConfig", "Connect.ConnectConfig") ?? "General",
-            ConnectAddress = ResolveStringSetting(profile, config, "ConnectAddress", "Connect.Address") ?? "127.0.0.1:5555",
+            ConnectConfig = connectConfig,
+            ConnectAddress = string.IsNullOrWhiteSpace(connectAddress)
+                ? PlayCoverConnectConfigResolver.ResolveDefaultConnectAddress(connectConfig)
+                : connectAddress,
             AdbPath = ResolveStringSetting(profile, config, "AdbPath", "Connect.AdbPath") ?? string.Empty,
             MacUseBundledAdb = MacBundledAdbPolicy.ReadUseBundledAdb(profile),
             TouchMode = ResolveStringSetting(profile, config, "TouchMode", "Connect.TouchMode") ?? "MaaFwAdb",
+            PlayCoverScreencapMode = playCoverScreencapMode,
             AutoDetectConnection = ResolveBooleanSetting(profile, config, true, "AutoDetect", "Connect.AutoDetect"),
             AttachWindowScreencapMethod = ResolveStringSetting(profile, config, "AttachWindowScreencapMethod", "Connect.AttachWindow.ScreencapMethod") ?? "2",
             AttachWindowMouseMethod = ResolveStringSetting(profile, config, "AttachWindowMouseMethod", "Connect.AttachWindow.MouseMethod") ?? "64",
@@ -1449,6 +1457,7 @@ public static class TaskParamCompiler
         }
 
         profile.Values["TouchMode"] = JsonValue.Create(dto.TouchMode);
+        profile.Values["PlayCoverScreencapMode"] = JsonValue.Create(dto.PlayCoverScreencapMode);
         profile.Values["AutoDetect"] = JsonValue.Create(dto.AutoDetectConnection);
         profile.Values["AttachWindowScreencapMethod"] = JsonValue.Create(dto.AttachWindowScreencapMethod);
         profile.Values["AttachWindowMouseMethod"] = JsonValue.Create(dto.AttachWindowMouseMethod);

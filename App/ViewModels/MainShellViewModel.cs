@@ -1584,7 +1584,7 @@ public sealed class MainShellViewModel : ObservableObject
                 timeout: TimeSpan.FromSeconds(20)))
             .ToList();
         _runtime.LogService.Debug(
-            $"Connect candidates prepared: count={candidates.Count}, config={_connectionGameSharedState.ConnectConfig}, adb={adbPath ?? "<null>"}");
+            $"Connect candidates prepared: count={candidates.Count}, config={_connectionGameSharedState.EffectiveConnectConfig}, adb={adbPath ?? "<null>"}");
 
         var result = await _runtime.ConnectFeatureService.ConnectCandidatesAsync(candidates, cancellationToken);
         if (result.Success)

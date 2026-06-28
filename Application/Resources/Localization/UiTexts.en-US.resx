@@ -4249,6 +4249,18 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
   <data name="StartUp.Option.ConnectConfig.General" xml:space="preserve">
     <value>General Mode</value>
   </data>
+  <data name="StartUp.Option.ConnectConfig.MacPlayTools" xml:space="preserve">
+    <value>PlayCover (macOS)</value>
+  </data>
+  <data name="Settings.Connect.PlayCover.Mode.Compatible" xml:space="preserve">
+    <value>Compatible Mode</value>
+  </data>
+  <data name="Settings.Connect.PlayCover.Mode.BGR" xml:space="preserve">
+    <value>Optimized Mode</value>
+  </data>
+  <data name="Settings.Connect.PlayCover.Mode.SCK" xml:space="preserve">
+    <value>System Screen Capture</value>
+  </data>
   <data name="StartUp.Option.ConnectConfig.GeneralWithoutScreencapErr" xml:space="preserve">
     <value>General Mode (Blocked exception output)</value>
   </data>

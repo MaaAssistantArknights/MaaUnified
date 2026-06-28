@@ -256,7 +256,8 @@ public static class ConnectionFailureDiagnosticBuilder
     {
         var segments = new List<string>
         {
-            Select(
+            state?.BuildConnectionFailureGuidance()
+            ?? Select(
                 language,
                 "连接失败。请“检查连接设置” -> “尝试重启模拟器与 ADB” -> “重启电脑”。",
                 "Connection failed. Check connection settings -> try restarting the emulator and ADB -> reboot the computer."),

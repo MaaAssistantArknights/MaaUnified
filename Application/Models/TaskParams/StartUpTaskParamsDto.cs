@@ -18,6 +18,8 @@ public sealed class StartUpTaskParamsDto
 
     public string TouchMode { get; set; } = "MaaFwAdb";
 
+    public string PlayCoverScreencapMode { get; set; } = "RGBA";
+
     public bool AutoDetectConnection { get; set; } = true;
 
     public string AttachWindowScreencapMethod { get; set; } = "2";
