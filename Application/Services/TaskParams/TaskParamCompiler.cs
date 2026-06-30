@@ -220,6 +220,7 @@ public static class TaskParamCompiler
             ReadString(parameters, "stage", strict, issues, "fight.stage", FightStageSelection.CurrentOrLast));
         var medicine = ReadInt(parameters, "medicine", strict, issues, "fight.medicine", 0);
         var stone = ReadInt(parameters, "stone", strict, issues, "fight.stone", 0);
+        var expiringMedicine = ReadInt(parameters, "expiring_medicine", false, issues, "fight.expiring_medicine", 0);
         var times = ReadInt(parameters, "times", strict, issues, "fight.times", int.MaxValue);
         var series = ReadInt(parameters, "series", strict, issues, "fight.series", 1);
 
@@ -254,7 +255,8 @@ public static class TaskParamCompiler
             EnableTimesLimit = ReadNullableBool(parameters, UiEnableTimesLimit, times != int.MaxValue, issues, "fight.enable_times_limit"),
             Series = series,
             IsDrGrandet = ReadBool(parameters, "DrGrandet", false),
-            UseExpiringMedicine = ReadInt(parameters, "expiring_medicine", false, issues, "fight.expiring_medicine", 0) > 0,
+            UseExpiringMedicine = expiringMedicine > 0,
+            ExpiringMedicine = expiringMedicine > 0 ? expiringMedicine : 9999,
             EnableTargetDrop = ReadNullableBool(parameters, UiEnableTargetDrop, !string.IsNullOrWhiteSpace(dropId), issues, "fight.enable_target_drop"),
             DropId = dropId,
             DropCount = Math.Max(1, dropCount),
@@ -370,7 +372,7 @@ public static class TaskParamCompiler
         {
             ["stage"] = stage,
             ["medicine"] = useMedicine != false ? Math.Max(0, dto.Medicine) : 0,
-            ["expiring_medicine"] = dto.UseExpiringMedicine ? 9999 : 0,
+            ["expiring_medicine"] = dto.UseExpiringMedicine ? Math.Max(1, dto.ExpiringMedicine) : 0,
             ["stone"] = useStone != false ? Math.Max(0, dto.Stone) : 0,
             ["times"] = enableTimesLimit != false ? Math.Max(0, dto.Times) : int.MaxValue,
             ["series"] = dto.Series,
@@ -378,7 +380,7 @@ public static class TaskParamCompiler
             ["report_to_penguin"] = ResolveBooleanSetting(profile, config, "EnablePenguin"),
             ["report_to_yituliu"] = ResolveBooleanSetting(profile, config, "EnableYituliu"),
             ["penguin_id"] = ResolveStringSetting(profile, config, "PenguinId") ?? string.Empty,
-            ["yituliu_id"] = ResolveStringSetting(profile, config, "YituliuId") ?? string.Empty,
+            ["yituliu_id"] = ResolveYituliuId(profile, config),
             ["server"] = ResolveStringSetting(profile, config, "ServerType") ?? "CN",
             ["client_type"] = ResolveStringSetting(profile, config, "ClientType", "Start.ClientType") ?? "Official",
             [UiStagePlan] = ToJsonArray(stagePlan),
@@ -685,7 +687,7 @@ public static class TaskParamCompiler
             ["report_to_penguin"] = ResolveBooleanSetting(profile, config, "EnablePenguin"),
             ["report_to_yituliu"] = ResolveBooleanSetting(profile, config, "EnableYituliu"),
             ["penguin_id"] = ResolveStringSetting(profile, config, "PenguinId") ?? string.Empty,
-            ["yituliu_id"] = ResolveStringSetting(profile, config, "YituliuId") ?? string.Empty,
+            ["yituliu_id"] = ResolveYituliuId(profile, config),
             ["server"] = ResolveStringSetting(profile, config, "ServerType") ?? "CN",
         };
 
@@ -1926,6 +1928,13 @@ public static class TaskParamCompiler
         }
 
         return null;
+    }
+
+    private static string ResolveYituliuId(UnifiedProfile profile, UnifiedConfig config)
+    {
+        return ResolveStringSetting(profile, config, "YituliuId")
+            ?? ResolveStringSetting(profile, config, "PenguinId")
+            ?? string.Empty;
     }
 
     private static bool ResolveBooleanSetting(UnifiedProfile profile, UnifiedConfig config, bool fallback = false, params string[] keys)

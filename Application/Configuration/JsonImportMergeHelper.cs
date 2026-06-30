@@ -49,6 +49,7 @@ internal static class JsonImportMergeHelper
         bool fillMissingOnly,
         ImportReport report)
     {
+        value = LegacyConfigValueNormalizer.NormalizeProfileValue(key, value);
         value = LegacyEncryptedConfigValueConverter.ConvertProfileValue(profileName, key, value, report);
         if (profile.Values.TryGetValue(key, out var existing))
         {

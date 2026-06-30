@@ -258,10 +258,6 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     private const int MaxOverlayLogs = 200;
     private const string UiMallCreditFightLastTime = "_ui_mall_credit_fight_last_time";
     private const string UiMallVisitFriendsLastTime = "_ui_mall_visit_friends_last_time";
-    private static readonly Regex LeadingLogTimestampPattern = new(
-        "^(?:\\[?\\d{2}:\\d{2}:\\d{2}\\]?\\s+)+",
-        RegexOptions.Compiled);
-
     private readonly SemaphoreSlim _logThumbnailSemaphore = new(1, 1);
     private readonly SemaphoreSlim _queueMutationLock = new(1, 1);
     private readonly SemaphoreSlim _runTransitionLock = new(1, 1);
@@ -332,7 +328,6 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     private int _medicineUsedTimes;
     private int _expiringMedicineUsedTimes;
     private int _stoneUsedTimes;
-    private bool _nextLogEntryStartsNewCard;
     private string _logTimestampFormat = DefaultLogItemDateFormat;
     private bool _useSystemNotifications = true;
     private string _lastCompletionNotificationRunId = string.Empty;
@@ -4148,7 +4143,6 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             timestamp: DateTimeOffset.Now,
             content: $"Link Start failed: {message}",
             level: "ERROR",
-            splitMode: TaskQueueLogSplitMode.Before,
             updateThumbnail: false);
     }
 
@@ -4567,7 +4561,6 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         OverlayLogs.Clear();
         DownloadLogEntry = new TaskQueueLogEntryViewModel(string.Empty, string.Empty, "INFO");
         LastRuntimeStatus = null;
-        _nextLogEntryStartsNewCard = false;
     }
 
     public void AppendSystemLog(string message, string level = "INFO")
@@ -4581,7 +4574,6 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             DateTimeOffset.UtcNow,
             message,
             NormalizeLogLevel(level),
-            TaskQueueLogSplitMode.Before,
             updateThumbnail: false);
     }
 
@@ -4615,65 +4607,40 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         DateTimeOffset timestamp,
         string content,
         string level,
-        TaskQueueLogSplitMode splitMode,
         bool updateThumbnail,
         bool forceScreenshot = false)
     {
         var logTime = FormatLogTimestamp(timestamp);
-        var hasContent = !string.IsNullOrWhiteSpace(content);
-        var contentEntries = hasContent
-            ? SplitLogContentEntries(content).ToArray()
-            : [];
-        var needsBeforeSplit = splitMode is TaskQueueLogSplitMode.Before or TaskQueueLogSplitMode.Both;
-        var needsAfterSplit = splitMode is TaskQueueLogSplitMode.After or TaskQueueLogSplitMode.Both;
-        var shouldStartNextEntryOnNewCard = needsBeforeSplit || _nextLogEntryStartsNewCard;
-
-        if (contentEntries.Length == 0 && !updateThumbnail)
+        if (string.IsNullOrWhiteSpace(content) && !updateThumbnail)
         {
-            _nextLogEntryStartsNewCard = shouldStartNextEntryOnNewCard || needsAfterSplit;
             TrimLogCards();
             return;
         }
 
-        TaskQueueLogCardViewModel? lastEntryCard = null;
-        for (var i = 0; i < contentEntries.Length; i++)
+        TaskQueueLogCardViewModel? card = null;
+        if (!string.IsNullOrWhiteSpace(content))
         {
-            var card = GetOrCreateLogCardForEntry(shouldStartNextEntryOnNewCard || i > 0);
             var entry = new TaskQueueLogEntryViewModel(
                 logTime,
-                NormalizeLogContent(contentEntries[i], logTime),
+                NormalizeLogContent(content, logTime),
                 level);
+            card = new TaskQueueLogCardViewModel();
             card.Append(entry);
+            LogCards.Add(card);
             OverlayLogs.Add(entry);
             TrimOverlayLogs();
-            lastEntryCard = card;
         }
 
         if (updateThumbnail)
         {
-            var card = lastEntryCard ?? FindLatestNonEmptyLogCard();
-            if (card is not null)
+            var thumbnailCard = card ?? FindLatestNonEmptyLogCard();
+            if (thumbnailCard is not null)
             {
-                _ = AttachThumbnailToCardAsync(card, forceScreenshot);
+                _ = AttachThumbnailToCardAsync(thumbnailCard, forceScreenshot);
             }
         }
 
-        _nextLogEntryStartsNewCard = contentEntries.Length > 0
-            ? needsAfterSplit
-            : shouldStartNextEntryOnNewCard || needsAfterSplit;
         TrimLogCards();
-    }
-
-    private TaskQueueLogCardViewModel GetOrCreateLogCardForEntry(bool startNewCard)
-    {
-        if (!startNewCard && LogCards.Count > 0)
-        {
-            return LogCards[^1];
-        }
-
-        var card = new TaskQueueLogCardViewModel();
-        LogCards.Add(card);
-        return card;
     }
 
     private TaskQueueLogCardViewModel? FindLatestNonEmptyLogCard()
@@ -4687,46 +4654,6 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         }
 
         return null;
-    }
-
-    private static IEnumerable<string> SplitLogContentEntries(string content)
-    {
-        var normalized = content.Replace("\r\n", "\n").Replace('\r', '\n');
-        var lines = normalized.Split('\n');
-        if (lines.Length <= 1)
-        {
-            yield return content;
-            yield break;
-        }
-
-        var builder = new StringBuilder();
-        foreach (var rawLine in lines)
-        {
-            var line = rawLine.TrimEnd();
-            if (string.IsNullOrWhiteSpace(line))
-            {
-                continue;
-            }
-
-            var startsNewTimestampedEntry = LeadingLogTimestampPattern.IsMatch(line.TrimStart());
-            if (startsNewTimestampedEntry && builder.Length > 0)
-            {
-                yield return builder.ToString();
-                builder.Clear();
-            }
-
-            if (builder.Length > 0)
-            {
-                builder.AppendLine();
-            }
-
-            builder.Append(line);
-        }
-
-        if (builder.Length > 0)
-        {
-            yield return builder.ToString();
-        }
     }
 
     private void TrimOverlayLogs()
@@ -4857,7 +4784,6 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             text = text[displayTime.Length..].TrimStart();
         }
 
-        text = LeadingLogTimestampPattern.Replace(text, string.Empty).TrimStart();
         return string.IsNullOrWhiteSpace(text) ? "-" : text;
     }
 
@@ -4969,12 +4895,11 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         var taskLabel = IsValidTaskIndex(taskIndex, Tasks.Count)
             ? Tasks[taskIndex!.Value].Name
             : moduleDisplay;
-        var (message, level, splitMode, withThumbnail) = callbackName switch
+        var (message, level, withThumbnail) = callbackName switch
         {
             "TaskChainStart" => (
                 string.Format(RootTexts.GetOrDefault("TaskQueue.Log.TaskStart", "Task started: {0}"), taskLabel),
                 "INFO",
-                TaskQueueLogSplitMode.Before,
                 false),
             "SubTaskStart" => (
                 string.Format(
@@ -4982,7 +4907,6 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                     moduleDisplay,
                     subTask ?? "SubTask"),
                 "INFO",
-                TaskQueueLogSplitMode.None,
                 false),
             "SubTaskCompleted" => (
                 string.Format(
@@ -4990,17 +4914,14 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                     moduleDisplay,
                     subTask ?? "SubTask"),
                 "SUCCESS",
-                TaskQueueLogSplitMode.None,
                 true),
             "TaskChainCompleted" => (
                 string.Format(RootTexts.GetOrDefault("TaskQueue.Log.TaskCompleted", "Task completed: {0}"), taskLabel),
                 "SUCCESS",
-                TaskQueueLogSplitMode.After,
                 true),
             "TaskChainError" => (
                 string.Format(RootTexts.GetOrDefault("TaskQueue.Log.TaskError", "{0} failed"), taskLabel),
                 "ERROR",
-                TaskQueueLogSplitMode.Both,
                 true),
             "SubTaskError" => (
                 string.Format(
@@ -5008,17 +4929,14 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                     moduleDisplay,
                     subTask ?? "SubTask"),
                 "ERROR",
-                TaskQueueLogSplitMode.None,
                 true),
             "TaskChainStopped" => (
                 RootTexts.GetOrDefault("TaskQueue.Log.TaskStopped", "Task stopped"),
                 "WARN",
-                TaskQueueLogSplitMode.Both,
                 false),
             "AllTasksCompleted" => (
                 RootTexts.GetOrDefault("TaskQueue.Log.AllCompleted", "All tasks completed"),
                 "SUCCESS",
-                TaskQueueLogSplitMode.Both,
                 true),
             _ => (
                 string.Format(
@@ -5026,7 +4944,6 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                     moduleDisplay,
                     callbackName),
                 "INFO",
-                TaskQueueLogSplitMode.None,
                 false),
         };
 
@@ -5034,7 +4951,6 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             timestamp: DateTimeOffset.Now,
             content: message,
             level: level,
-            splitMode: splitMode,
             updateThumbnail: withThumbnail,
             forceScreenshot: withThumbnail);
     }
@@ -5070,7 +4986,6 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             timestamp: callback.Timestamp,
             content: value.Content,
             level: value.Level,
-            splitMode: value.SplitMode,
             updateThumbnail: value.UpdateThumbnail,
             forceScreenshot: value.ForceScreenshot);
     }
@@ -5078,8 +4993,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     private TaskQueueCallbackUserLog BuildTaskChainStartLog(int? taskIndex, string? taskChain)
     {
         return new(
-            Content: GetRootText("StartTask", "Start task: ") + ResolveTaskLogName(taskIndex, taskChain),
-            SplitMode: TaskQueueLogSplitMode.Before);
+            Content: GetRootText("StartTask", "Start task: ") + ResolveTaskLogName(taskIndex, taskChain));
     }
 
     private TaskQueueCallbackUserLog BuildTaskChainCompletedLog(int? taskIndex, string? taskChain)
@@ -5098,7 +5012,6 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         return new(
             content,
             "SUCCESS",
-            SplitMode: TaskQueueLogSplitMode.Before,
             UpdateThumbnail: true,
             ForceScreenshot: true);
     }
@@ -5153,7 +5066,6 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         return new(
             Content: content,
             Level: "SUCCESS",
-            SplitMode: TaskQueueLogSplitMode.Both,
             UpdateThumbnail: true,
             ForceScreenshot: true);
     }
@@ -5437,9 +5349,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         var execTimes = GetIntValue(payload.Details, "exec_times") ?? 0;
         return taskName switch
         {
-            "StartButton2" or "AnnihilationConfirm" => new(
-                BuildFightMissionStartLog(),
-                SplitMode: TaskQueueLogSplitMode.Before),
+            "StartButton2" or "AnnihilationConfirm" => new(BuildFightMissionStartLog()),
             "StoneConfirm" => BuildStoneUsedLog(execTimes),
             "AbandonAction" => new(GetRootText("ActingCommandError", "PRTS error"), "ERROR"),
             "FightMissionFailedAndStop" => new(GetRootText("FightMissionFailedAndStop", "Proxy failed too many times, task stopped"), "ERROR"),
@@ -5548,8 +5458,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             && string.Equals(taskName, "StartExplore", StringComparison.Ordinal))
         {
             return new(
-                $"{GetRootText("BegunToExplore", "Exploration started")} {execTimes} {GetRootText("UnitTime", "times")}",
-                SplitMode: TaskQueueLogSplitMode.Before);
+                $"{GetRootText("BegunToExplore", "Exploration started")} {execTimes} {GetRootText("UnitTime", "times")}");
         }
 
         if (!string.Equals(taskChain, TaskModuleTypes.Mall, StringComparison.OrdinalIgnoreCase))
@@ -5559,8 +5468,10 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
         return taskName switch
         {
-            "EndOfActionThenStop" => new(GetRootText("CompleteTask", "Complete task: ") + GetRootText("CreditFight", "Combat with Support to earn Credits")),
-            "VisitLimited" or "VisitNextBlack" => new(GetRootText("CompleteTask", "Complete task: ") + GetRootText("Visiting", "Visit Friends")),
+            "EndOfActionThenStop" => new(
+                GetRootText("CompleteTask", "Complete task: ") + GetRootText("CreditFight", "Combat with Support to earn Credits")),
+            "VisitLimited" or "VisitNextBlack" => new(
+                GetRootText("CompleteTask", "Complete task: ") + GetRootText("Visiting", "Visit Friends")),
             _ => null,
         };
     }
@@ -5610,12 +5521,12 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             case "CreditFullOnlyBuyDiscount":
                 return new($"{GetRootText("CreditFullOnlyBuyDiscount", "Remaining credits: ")}{GetIntValue(payload.Details, "credit") ?? 0}");
             case "StageInfo":
-                return new($"{GetRootText("StartCombat", "Start combat: ")}{GetStringValue(payload.Details, "name") ?? string.Empty}");
+                return new(
+                    $"{GetRootText("StartCombat", "Start combat: ")}{GetStringValue(payload.Details, "name") ?? string.Empty}");
             case "StageInfoError":
                 return new(
                     GetRootText("StageInfoError", "Stage recognition error"),
                     "ERROR",
-                    TaskQueueLogSplitMode.Both,
                     UpdateThumbnail: true,
                     ForceScreenshot: true);
             case "CustomInfrastRoomGroupsMatch":
@@ -5763,7 +5674,9 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 .Append(curTimes.Value);
         }
 
-        return new(content.ToString(), UpdateThumbnail: true);
+        return new(
+            content.ToString(),
+            UpdateThumbnail: true);
     }
 
     private TaskQueueCallbackUserLog? BuildEnterFacilityLog(JsonObject? details)
@@ -5776,8 +5689,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         var facility = GetStringValue(details, "facility") ?? string.Empty;
         var index = (GetIntValue(details, "index") ?? -1) + 1;
         return new(
-            $"{GetRootText("ThisFacility", "Current Facility: ")}{facility} {index:D2}",
-            SplitMode: TaskQueueLogSplitMode.Before);
+            $"{GetRootText("ThisFacility", "Current Facility: ")}{facility} {index:D2}");
     }
 
     private TaskQueueCallbackUserLog? BuildRecruitTagsDetectedLog(JsonObject? details)
@@ -5795,7 +5707,6 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         var content = lines.Length == 0 ? GetRootText("NoDrop", "Nothing") : string.Join(Environment.NewLine, lines);
         return new(
             $"{GetRootText("RecruitingResults", "Recruitment Results: ")}{Environment.NewLine}{content}",
-            SplitMode: TaskQueueLogSplitMode.Before,
             UpdateThumbnail: true);
     }
 
@@ -6762,7 +6673,6 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     private readonly record struct TaskQueueCallbackUserLog(
         string Content,
         string Level = "INFO",
-        TaskQueueLogSplitMode SplitMode = TaskQueueLogSplitMode.None,
         bool UpdateThumbnail = false,
         bool ForceScreenshot = false);
 

@@ -141,6 +141,7 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
     private int _series = 1;
     private bool _isDrGrandet;
     private bool _useExpiringMedicine;
+    private int _expiringMedicine = 9999;
     private bool? _enableTargetDrop = false;
     private string _dropId = string.Empty;
     private int _dropCount = 1;
@@ -788,6 +789,7 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
         Series = dto.Series;
         IsDrGrandet = dto.IsDrGrandet;
         UseExpiringMedicine = dto.UseExpiringMedicine;
+        _expiringMedicine = Math.Max(1, dto.ExpiringMedicine);
         EnableTargetDrop = dto.EnableTargetDrop;
         DropId = dto.DropId;
         DropCount = dto.DropCount;
@@ -827,6 +829,7 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
             Series = Math.Clamp(Series, -1, 6),
             IsDrGrandet = IsDrGrandet,
             UseExpiringMedicine = UseExpiringMedicine,
+            ExpiringMedicine = UseExpiringMedicine ? Math.Max(1, _expiringMedicine) : 0,
             EnableTargetDrop = EnableTargetDrop,
             DropId = DropId.Trim(),
             DropCount = Math.Max(1, DropCount),

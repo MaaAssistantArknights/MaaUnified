@@ -925,7 +925,7 @@ public sealed class MainShellViewModelTests
 
         Assert.Equal("en-us", fixture.ViewModel.SettingsPage.Language);
         Assert.Equal("10.8.0.1:5555", fixture.ViewModel.ConnectionGameSharedState.ConnectAddress);
-        Assert.Equal("Mumu", fixture.ViewModel.ConnectionGameSharedState.ConnectConfig);
+        Assert.Equal("MuMuEmulator12", fixture.ViewModel.ConnectionGameSharedState.ConnectConfig);
         Assert.Equal("/tmp/adb-imported", fixture.ViewModel.ConnectionGameSharedState.AdbPath);
         Assert.Contains(
             fixture.ViewModel.TaskQueuePage.Tasks,

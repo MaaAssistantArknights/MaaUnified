@@ -459,7 +459,7 @@ public sealed class TaskQueueG2FeatureTests
     }
 
     [Fact]
-    public async Task Callback_StageDrops_ShouldAppendToCurrentCardAndAttachThumbnail()
+    public async Task Callback_StageDrops_ShouldUseSeparateLogCardAndRequestThumbnail()
     {
         await using var fixture = await TestFixture.CreateAsync();
         Assert.True((await fixture.TaskQueue.AddTaskAsync("Fight", "fight-a")).Success);
@@ -481,10 +481,57 @@ public sealed class TaskQueueG2FeatureTests
 
         Assert.True(await WaitForConditionAsync(() => fixture.Bridge.GetImageCallCount > 0));
 
+        Assert.Equal(2, vm.LogCards.Count);
+        Assert.Equal("开始任务: fight-a", vm.LogCards[0].PrimaryContent);
+        Assert.Contains("1-7", vm.LogCards[1].PrimaryContent, StringComparison.Ordinal);
+        Assert.Contains("源岩", vm.LogCards[1].PrimaryContent, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AppendSystemLog_WithTimestampedMultilineText_ShouldCreateSingleCard()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        vm.AppendSystemLog("""
+            10:31:01
+            开始任务：信用收支
+            10:32:22
+            完成任务：访问好友
+            """);
+
         var card = Assert.Single(vm.LogCards);
-        Assert.Equal(2, card.Items.Count);
-        Assert.Equal("开始任务: fight-a", card.Items[0].Content);
-        Assert.Contains("1-7", card.Items[1].Content, StringComparison.Ordinal);
+        Assert.Contains("10:31:01", card.PrimaryContent, StringComparison.Ordinal);
+        Assert.Contains("开始任务：信用收支", card.PrimaryContent, StringComparison.Ordinal);
+        Assert.Contains("10:32:22", card.PrimaryContent, StringComparison.Ordinal);
+        Assert.Contains("完成任务：访问好友", card.PrimaryContent, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Callback_MallCompletedLogs_ShouldNotStickToPreviousCard()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Mall", "信用收支")).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        await InvokeCallbackAsync(vm, new CoreCallbackEvent(
+            10001,
+            "TaskChainStart",
+            """{"task_chain":"Mall","task_index":0,"run_id":"run-g2-mall-split"}""",
+            DateTimeOffset.UtcNow));
+        await InvokeCallbackAsync(vm, new CoreCallbackEvent(
+            10002,
+            "SubTaskCompleted",
+            """{"task_chain":"Mall","task_index":0,"sub_task":"ProcessTask","details":{"task":"VisitNextBlack"}}""",
+            DateTimeOffset.UtcNow));
+
+        Assert.Equal(2, vm.LogCards.Count);
+        Assert.Contains("开始任务: 信用收支", vm.LogCards[0].PrimaryContent, StringComparison.Ordinal);
+        Assert.Contains("完成任务: 访问好友", vm.LogCards[1].PrimaryContent, StringComparison.Ordinal);
     }
 
     [Fact]
