@@ -26,39 +26,49 @@
             controls:SettingsLabelWidthCoordinator.GroupKey="ConfigurationManager.Main"
             ColumnDefinitions="Auto,*">
         <controls:SettingsLabel Text="{Binding RootTexts[Settings.ConfigurationManager.ProfileName]}" />
-        <controls:AppSelect Grid.Column="1"
-                  Classes="settings-select configuration-manager-profile-picker"
-                  Width="{DynamicResource MAA.Size.Settings.ColumnWidth}"
-                  HorizontalAlignment="Left"
-                  ItemsSource="{Binding ConfigurationProfiles}"
-                  SelectedValueBinding="{Binding .}"
-                  SelectedValue="{Binding ConfigurationManagerSelectedProfile}"
-                  SelectionChanged="OnConfigurationProfileSelectionChanged">
-          <controls:AppSelect.ItemTemplate>
-            <DataTemplate>
-              <Border Classes="settings-dropdown-item-shell">
-                <Grid ColumnDefinitions="*,Auto">
-                  <TextBlock Grid.Column="0"
-                             Classes="settings-dropdown-item-text"
-                             Margin="0,0,10,0"
-                             Text="{Binding .}" />
-                  <Button Grid.Column="1"
-                          Classes="settings-dropdown-delete-button"
-                          Tag="{Binding .}"
-                          Content="×"
-                          PointerPressed="OnDropdownDeleteButtonPointerPressed"
-                          PointerReleased="OnDropdownDeleteButtonPointerReleased"
-                          Click="OnDeleteProfileEntryClick" />
-                </Grid>
-              </Border>
-            </DataTemplate>
-          </controls:AppSelect.ItemTemplate>
-          <controls:AppSelect.SelectionBoxItemTemplate>
-            <DataTemplate>
-              <TextBlock Text="{Binding .}" />
-            </DataTemplate>
-          </controls:AppSelect.SelectionBoxItemTemplate>
-        </controls:AppSelect>
+        <Grid Grid.Column="1"
+              HorizontalAlignment="Left"
+              ColumnDefinitions="Auto,Auto">
+          <controls:AppSelect Classes="settings-select configuration-manager-profile-picker"
+                    Width="{DynamicResource MAA.Size.Settings.ColumnWidth}"
+                    HorizontalAlignment="Left"
+                    ItemsSource="{Binding ConfigurationProfiles}"
+                    SelectedValueBinding="{Binding .}"
+                    SelectedValue="{Binding ConfigurationManagerSelectedProfile}"
+                    SelectionChanged="OnConfigurationProfileSelectionChanged">
+            <controls:AppSelect.ItemTemplate>
+              <DataTemplate>
+                <Border Classes="settings-dropdown-item-shell">
+                  <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Grid.Column="0"
+                               Classes="settings-dropdown-item-text"
+                               Margin="0,0,10,0"
+                               Text="{Binding .}" />
+                    <Button Grid.Column="1"
+                            Classes="settings-dropdown-delete-button"
+                            Tag="{Binding .}"
+                            Content="×"
+                            PointerPressed="OnDropdownDeleteButtonPointerPressed"
+                            PointerReleased="OnDropdownDeleteButtonPointerReleased"
+                            Click="OnDeleteProfileEntryClick" />
+                  </Grid>
+                </Border>
+              </DataTemplate>
+            </controls:AppSelect.ItemTemplate>
+            <controls:AppSelect.SelectionBoxItemTemplate>
+              <DataTemplate>
+                <TextBlock Text="{Binding .}" />
+              </DataTemplate>
+            </controls:AppSelect.SelectionBoxItemTemplate>
+          </controls:AppSelect>
+          <TextBlock Grid.Column="1"
+                     Margin="8,0,0,0"
+                     VerticalAlignment="Center"
+                     Classes="app-caption state-success"
+                     Text="{Binding ConfigurationManagerSwitchSucceededText}"
+                     IsVisible="{Binding HasConfigurationManagerSwitchSucceeded}"
+                     TextWrapping="NoWrap" />
+        </Grid>
       </Grid>
 
       <Grid Classes="settings-page-labeled-action-row"

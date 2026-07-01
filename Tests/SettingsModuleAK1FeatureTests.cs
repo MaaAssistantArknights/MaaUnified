@@ -163,24 +163,25 @@ public sealed class SettingsModuleAK1FeatureTests
     public void MacBundledAdbConsentService_GetTexts_ShouldLocalizeSupportedLanguages(
         string language)
     {
-        var (expectedTitle, expectedConfirm, expectedLicenseLink) = ExpectedMacBundledAdbConsentTexts(language);
+        var (expectedTitle, expectedConfirm, expectedCancel, expectedLicenseLink) = ExpectedMacBundledAdbConsentTexts(language);
         var texts = MacBundledAdbConsentService.GetTexts(language);
 
         Assert.Equal(expectedTitle, texts.Title);
         Assert.Equal(expectedConfirm, texts.ConfirmText);
+        Assert.Equal(expectedCancel, texts.CancelText);
         Assert.Equal(expectedLicenseLink, texts.AndroidSdkLicenseLinkText);
     }
 
-    private static (string Title, string ConfirmText, string LicenseLinkText) ExpectedMacBundledAdbConsentTexts(
+    private static (string Title, string ConfirmText, string CancelText, string LicenseLinkText) ExpectedMacBundledAdbConsentTexts(
         string language)
         => language switch
         {
-            "zh-cn" => ("Android SDK Platform-Tools 条款", "同意并继续", "Android SDK 许可协议"),
-            "zh-tw" => ("Android SDK Platform-Tools 條款", "同意並繼續", "Android SDK 授權協議"),
-            "en-us" => ("Android SDK Platform-Tools Terms", "Accept and continue", "Android SDK License Agreement"),
-            "ja-jp" => ("Android SDK Platform-Tools の利用規約", "同意して続行", "Android SDK ライセンス契約"),
-            "ko-kr" => ("Android SDK Platform-Tools 약관", "동의하고 계속", "Android SDK 라이선스 계약"),
-            "pallas" => ("Android SDK Platform-Tools Terms", "Accept and continue", "Android SDK License Agreement"),
+            "zh-cn" => ("Android SDK Platform-Tools 条款", "同意并继续", "拒绝", "Android SDK 许可协议"),
+            "zh-tw" => ("Android SDK Platform-Tools 條款", "同意並繼續", "拒絕", "Android SDK 授權協議"),
+            "en-us" => ("Android SDK Platform-Tools Terms", "Accept and continue", "Reject", "Android SDK License Agreement"),
+            "ja-jp" => ("Android SDK Platform-Tools の利用規約", "同意して続行", "拒否", "Android SDK ライセンス契約"),
+            "ko-kr" => ("Android SDK Platform-Tools 약관", "동의하고 계속", "거부", "Android SDK 라이선스 계약"),
+            "pallas" => ("Android SDK Platform-Tools Terms", "Accept and continue", "Reject", "Android SDK License Agreement"),
             _ => throw new InvalidOperationException($"Missing bundled ADB consent text expectations for `{language}`."),
         };
 

@@ -410,6 +410,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
     private string _configurationManagerSaveAsNewSucceededText = string.Empty;
     private string _configurationManagerSaveAsNewFailedText = string.Empty;
     private string _configurationManagerImportSucceededText = string.Empty;
+    private string _configurationManagerSwitchSucceededText = string.Empty;
     private string _configurationManagerStatusMessage = string.Empty;
     private string _configurationManagerErrorMessage = string.Empty;
     private bool _achievementPopupDisabled;
@@ -1945,7 +1946,13 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
     public string ConfigurationManagerSelectedProfile
     {
         get => _configurationManagerSelectedProfile;
-        set => SetProperty(ref _configurationManagerSelectedProfile, value?.Trim() ?? string.Empty);
+        set
+        {
+            if (SetProperty(ref _configurationManagerSelectedProfile, value?.Trim() ?? string.Empty))
+            {
+                ConfigurationManagerSwitchSucceededText = string.Empty;
+            }
+        }
     }
 
     public string ConfigurationManagerNewProfileName
@@ -2000,6 +2007,18 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         }
     }
 
+    public string ConfigurationManagerSwitchSucceededText
+    {
+        get => _configurationManagerSwitchSucceededText;
+        private set
+        {
+            if (SetProperty(ref _configurationManagerSwitchSucceededText, value))
+            {
+                OnPropertyChanged(nameof(HasConfigurationManagerSwitchSucceeded));
+            }
+        }
+    }
+
     public string ConfigurationManagerStatusMessage
     {
         get => _configurationManagerStatusMessage;
@@ -2028,6 +2047,9 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
 
     public bool HasConfigurationManagerImportSucceeded =>
         !string.IsNullOrWhiteSpace(ConfigurationManagerImportSucceededText);
+
+    public bool HasConfigurationManagerSwitchSucceeded =>
+        !string.IsNullOrWhiteSpace(ConfigurationManagerSwitchSucceededText);
 
     public string VersionUpdateProxy
     {
@@ -3819,6 +3841,10 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
             ApplyConfigurationProfileState(payload);
             LoadConnectionSharedStateFromConfig();
             ConfigurationManagerStatusMessage = switchMessage;
+            ConfigurationManagerSwitchSucceededText = FormatSettingsText(
+                "Settings.ConfigurationManager.SwitchSucceededInline",
+                "已切换到{0}",
+                target);
             ConfigurationManagerErrorMessage = string.Empty;
             StatusMessage = switchMessage;
             LastErrorMessage = string.Empty;
@@ -5866,6 +5892,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         ConfigurationManagerSaveAsNewSucceededText = string.Empty;
         ConfigurationManagerSaveAsNewFailedText = string.Empty;
         ConfigurationManagerImportSucceededText = string.Empty;
+        ConfigurationManagerSwitchSucceededText = string.Empty;
         ConfigurationManagerStatusMessage = string.Empty;
         ConfigurationManagerErrorMessage = string.Empty;
     }

@@ -1060,6 +1060,8 @@ public sealed class MainShellViewModelTests
                 fixture.Runtime.ConfigurationService.CurrentConfig.CurrentProfile,
                 "Alt",
                 StringComparison.OrdinalIgnoreCase)));
+        Assert.Equal("已切换到Alt", fixture.ViewModel.SettingsPage.ConfigurationManagerSwitchSucceededText);
+        Assert.True(fixture.ViewModel.SettingsPage.HasConfigurationManagerSwitchSucceeded);
         Assert.True(await WaitUntilAsync(
             () => string.Equals(
                       fixture.ViewModel.ConnectionGameSharedState.ConnectAddress,

@@ -2859,6 +2859,9 @@ With save file: farm points through crafting (advanced).
   <data name="Settings.ConfigurationManager.SaveAsNewSucceededInline" xml:space="preserve">
     <value>Saved successfully</value>
   </data>
+  <data name="Settings.ConfigurationManager.SwitchSucceededInline" xml:space="preserve">
+    <value>Switched to {0}</value>
+  </data>
   <data name="Settings.ConfigurationManager.ImportSucceededInline" xml:space="preserve">
     <value>Imported successfully</value>
   </data>

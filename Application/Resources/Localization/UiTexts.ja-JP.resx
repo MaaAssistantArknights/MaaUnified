@@ -1786,6 +1786,9 @@
   <data name="Settings.ConfigurationManager.SaveAsNewSucceededInline" xml:space="preserve">
     <value>保存しました</value>
   </data>
+  <data name="Settings.ConfigurationManager.SwitchSucceededInline" xml:space="preserve">
+    <value>{0} に切り替えました</value>
+  </data>
   <data name="Settings.ConfigurationManager.ImportSucceededInline" xml:space="preserve">
     <value>インポートしました</value>
   </data>

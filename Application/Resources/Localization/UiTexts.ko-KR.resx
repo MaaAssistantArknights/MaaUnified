@@ -1787,6 +1787,9 @@ OF-1 스테이지가 개방되지 않은 경우에는 선택하지 마세요.</v
   <data name="Settings.ConfigurationManager.SaveAsNewSucceededInline" xml:space="preserve">
     <value>저장되었습니다</value>
   </data>
+  <data name="Settings.ConfigurationManager.SwitchSucceededInline" xml:space="preserve">
+    <value>{0}(으)로 전환되었습니다</value>
+  </data>
   <data name="Settings.ConfigurationManager.ImportSucceededInline" xml:space="preserve">
     <value>가져오기에 성공했습니다</value>
   </data>
