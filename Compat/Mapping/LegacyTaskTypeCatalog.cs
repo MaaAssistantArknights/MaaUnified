@@ -13,6 +13,7 @@ public static class LegacyTaskTypeCatalog
         "RoguelikeTask",
         "ReclamationTask",
         "UserDataUpdateTask",
+        "SingleStepTask",
         "CustomTask",
         "CopilotTask",
         "ParadoxCopilotTask",

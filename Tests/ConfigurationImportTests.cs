@@ -614,13 +614,16 @@ public sealed class ConfigurationImportTests
                       "$type": "ReclamationTask",
                       "Name": "ReclamationUnsupported",
                       "IsEnable": true,
+                      "Theme": "RelaunchAnchor",
                       "Mode": 16
                     },
                     {
                       "$type": "RecruitTask",
                       "Name": "Recruit",
                       "IsEnable": true,
-                      "Level6Choose": true
+                      "Level6Choose": true,
+                      "PreserveTagEnabled": true,
+                      "PreserveTagList": ["支援机械", "高级资深干员"]
                     },
                     {
                       "$type": "CustomTask",
@@ -672,12 +675,14 @@ public sealed class ConfigurationImportTests
             ReadStringArray((JsonArray)reclamationArchive.Params["tools_to_craft"]!));
 
         var reclamationUnsupported = tasks.Single(task => task.Name == "ReclamationUnsupported");
-        Assert.Equal(1, reclamationUnsupported.Params["mode"]?.GetValue<int>());
-        Assert.Contains(report.Warnings, warning => warning.Contains("RA/RelaunchAnchor", StringComparison.Ordinal));
+        Assert.Equal("RelaunchAnchor", reclamationUnsupported.Params["theme"]?.GetValue<string>());
+        Assert.Equal(16, reclamationUnsupported.Params["mode"]?.GetValue<int>());
+        Assert.DoesNotContain(report.Warnings, warning => warning.Contains("RA/RelaunchAnchor", StringComparison.Ordinal));
 
         var recruit = tasks.Single(task => task.Name == "Recruit");
         Assert.Contains(6, ((JsonArray)recruit.Params["select"]!).Select(item => item?.GetValue<int>()));
         Assert.Contains(6, ((JsonArray)recruit.Params["confirm"]!).Select(item => item?.GetValue<int>()));
+        Assert.Equal(["支援机械", "高级资深干员"], ReadStringArray((JsonArray)recruit.Params["preserve_tags"]!));
 
         var custom = tasks.Single(task => task.Name == "Custom");
         Assert.Equal(
@@ -781,6 +786,82 @@ public sealed class ConfigurationImportTests
     }
 
     [Fact]
+    public async Task GuiNewImport_SingleStepTaskMarker_ShouldImportButValidateAsMissingRuntimeParams()
+    {
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.new.json"),
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": {
+                  "TaskQueue": [
+                    {
+                      "$type": "SingleStepTask",
+                      "Name": "Single step",
+                      "IsEnable": true
+                    },
+                    {
+                      "$type": "SingleStepTask",
+                      "Name": "Single step explicit",
+                      "IsEnable": true,
+                      "type": "copilot",
+                      "subtype": "stage",
+                      "details": {
+                        "stage_name": "1-7"
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+            """);
+
+        var service = CreateService(root);
+        var report = await service.ImportLegacyAsync(ImportSource.GuiNewOnly, manualImport: false);
+
+        Assert.True(report.Success);
+        Assert.Empty(report.Errors);
+        var tasks = service.CurrentConfig.Profiles["Default"].TaskQueue;
+        Assert.Equal(2, tasks.Count);
+
+        var task = tasks.Single(task => task.Name == "Single step");
+        Assert.Equal(TaskModuleTypes.SingleStep, task.Type);
+        Assert.True(task.IsEnabled);
+        Assert.Empty(task.Params);
+
+        var compiled = TaskParamCompiler.CompileTask(
+            task,
+            service.CurrentConfig.Profiles["Default"],
+            service.CurrentConfig,
+            strict: true);
+
+        Assert.Equal(TaskModuleTypes.SingleStep, compiled.NormalizedType);
+        Assert.True(compiled.HasBlockingIssues);
+        Assert.Contains(compiled.Issues, issue => issue.Code == "SingleStepTypeMissing");
+
+        var explicitTask = tasks.Single(task => task.Name == "Single step explicit");
+        Assert.Equal(TaskModuleTypes.SingleStep, explicitTask.Type);
+        Assert.Equal("copilot", explicitTask.Params["type"]?.GetValue<string>());
+        Assert.Equal("stage", explicitTask.Params["subtype"]?.GetValue<string>());
+        Assert.Equal("1-7", explicitTask.Params["details"]?["stage_name"]?.GetValue<string>());
+
+        var explicitCompiled = TaskParamCompiler.CompileTask(
+            explicitTask,
+            service.CurrentConfig.Profiles["Default"],
+            service.CurrentConfig,
+            strict: true);
+
+        Assert.False(explicitCompiled.HasBlockingIssues);
+        Assert.Equal("copilot", explicitCompiled.Params["type"]?.GetValue<string>());
+        Assert.Equal("stage", explicitCompiled.Params["subtype"]?.GetValue<string>());
+        Assert.Equal("1-7", explicitCompiled.Params["details"]?["stage_name"]?.GetValue<string>());
+    }
+
+    [Fact]
     public async Task GuiNewImport_FightMedicineExpireDays_ShouldPreserveExpiringMedicineValue()
     {
         var root = CreateTempRoot();
@@ -821,6 +902,144 @@ public sealed class ConfigurationImportTests
 
         var compiled = TaskParamCompiler.CompileFight(dto, service.CurrentConfig.Profiles["Default"], service.CurrentConfig);
         Assert.Equal(3, compiled.Params["expiring_medicine"]?.GetValue<int>());
+        Assert.Equal(3, compiled.Params["medicine_expire_days"]?.GetValue<int>());
+    }
+
+    [Fact]
+    public async Task GuiNewImport_FightInventoryTargetAndActivityMedicine_ShouldPreserveParityMetadata()
+    {
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.new.json"),
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": {
+                  "TaskQueue": [
+                    {
+                      "$type": "FightTask",
+                      "Name": "Fight",
+                      "IsEnable": true,
+                      "EnableTargetDrop": true,
+                      "DropId": "30012",
+                      "DropCount": 300,
+                      "IsInventoryTarget": true,
+                      "UseExpireMedicineForActivity": true
+                    }
+                  ]
+                }
+              }
+            }
+            """);
+
+        var service = CreateService(root);
+        var report = await service.ImportLegacyAsync(ImportSource.GuiNewOnly, manualImport: false);
+
+        Assert.True(report.Success);
+        var task = Assert.Single(service.CurrentConfig.Profiles["Default"].TaskQueue);
+        Assert.True(task.Params["_ui_is_inventory_target"]?.GetValue<bool>());
+        Assert.True(task.Params["_ui_use_expire_medicine_for_activity"]?.GetValue<bool>());
+
+        var (dto, issues) = TaskParamCompiler.ReadFight(task, strict: true);
+        Assert.Empty(issues);
+        Assert.True(dto.IsInventoryTarget);
+        Assert.True(dto.UseExpireMedicineForActivity);
+        Assert.Equal("30012", dto.DropId);
+        Assert.Equal(300, dto.DropCount);
+    }
+
+    [Fact]
+    public async Task GuiNewImport_ReclamationRelaunchAnchorModes_ShouldPreserveRaThemeAndModes()
+    {
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.new.json"),
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": {
+                  "TaskQueue": [
+                    {
+                      "$type": "ReclamationTask",
+                      "Name": "RA1",
+                      "IsEnable": true,
+                      "Theme": "RelaunchAnchor",
+                      "Mode": 16
+                    },
+                    {
+                      "$type": "ReclamationTask",
+                      "Name": "RA15",
+                      "IsEnable": true,
+                      "Theme": "RelaunchAnchor",
+                      "Mode": 32
+                    },
+                    {
+                      "$type": "ReclamationTask",
+                      "Name": "RA4",
+                      "IsEnable": true,
+                      "Theme": "RelaunchAnchor",
+                      "Mode": 48
+                    }
+                  ]
+                }
+              }
+            }
+            """);
+
+        var service = CreateService(root);
+        var report = await service.ImportLegacyAsync(ImportSource.GuiNewOnly, manualImport: false);
+
+        Assert.True(report.Success);
+        Assert.DoesNotContain(report.Warnings, warning => warning.Contains("RA/RelaunchAnchor", StringComparison.Ordinal));
+
+        var tasks = service.CurrentConfig.Profiles["Default"].TaskQueue;
+        Assert.Equal(16, AssertRaTask(tasks, "RA1").Params["mode"]?.GetValue<int>());
+        Assert.Equal(32, AssertRaTask(tasks, "RA15").Params["mode"]?.GetValue<int>());
+        Assert.Equal(48, AssertRaTask(tasks, "RA4").Params["mode"]?.GetValue<int>());
+    }
+
+    [Fact]
+    public async Task GuiNewImport_RecruitSkipRobotDoesNotEnablePreserveTagsWhenPreserveDisabled()
+    {
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.new.json"),
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": {
+                  "TaskQueue": [
+                    {
+                      "$type": "RecruitTask",
+                      "Name": "Recruit",
+                      "IsEnable": true,
+                      "Level1NotChoose": true,
+                      "PreserveTagEnabled": false,
+                      "PreserveTagList": ["支援机械", "高级资深干员"]
+                    }
+                  ]
+                }
+              }
+            }
+            """);
+
+        var service = CreateService(root);
+        var report = await service.ImportLegacyAsync(ImportSource.GuiNewOnly, manualImport: false);
+
+        Assert.True(report.Success);
+        var task = Assert.Single(service.CurrentConfig.Profiles["Default"].TaskQueue);
+        Assert.True(task.Params["skip_robot"]?.GetValue<bool>());
+        Assert.False(task.Params["_ui_preserve_tags_enabled"]?.GetValue<bool>());
+        Assert.Empty(ReadStringArray((JsonArray)task.Params["preserve_tags"]!));
     }
 
     [Fact]
@@ -865,9 +1084,17 @@ public sealed class ConfigurationImportTests
                   "MainFunction.TimesLimited.Quantity": 12,
                   "MainFunction.Series.Quantity": 3,
                   "Fight.UseExpiringMedicine": true,
+                  "MainFunction.Drops.Enable": true,
+                  "MainFunction.Drops.ItemId": "30012",
+                  "MainFunction.Drops.Quantity": 300,
+                  "Fight.IsInventoryTarget": true,
+                  "Fight.UseExpireMedicineForActivity": true,
                   "AutoRecruit.MaxTimes": 2,
                   "AutoRecruit.ChooseLevel5": true,
                   "AutoRecruit.AutoRecruitFirstList": "资深干员;高级资深干员",
+                  "AutoRecruit.NotChooseLevel1": true,
+                  "AutoRecruit.PreserveTagEnabled": true,
+                  "AutoRecruit.PreserveTagList": ["支援机械", "高级资深干员"],
                   "Infrast.InfrastMode": "Custom",
                   "Infrast.CustomInfrastFile": "/tmp/infrast.json",
                   "Infrast.CustomInfrastPlanSelect": 1
@@ -899,12 +1126,17 @@ public sealed class ConfigurationImportTests
         Assert.Equal(12, fight.Params["times"]?.GetValue<int>());
         Assert.Equal(3, fight.Params["series"]?.GetValue<int>());
         Assert.Equal(9999, fight.Params["expiring_medicine"]?.GetValue<int>());
+        Assert.True(fight.Params["_ui_is_inventory_target"]?.GetValue<bool>());
+        Assert.True(fight.Params["_ui_use_expire_medicine_for_activity"]?.GetValue<bool>());
+        Assert.Equal("30012", fight.Params["_ui_drop_id"]?.GetValue<string>());
+        Assert.Equal(300, fight.Params["_ui_drop_count"]?.GetValue<int>());
 
         var recruit = tasks.Single(task => task.Type == TaskModuleTypes.Recruit);
         Assert.True(recruit.IsEnabled);
         Assert.Equal(2, recruit.Params["times"]?.GetValue<int>());
         Assert.Contains(5, ((JsonArray)recruit.Params["select"]!).Select(item => item?.GetValue<int>()));
         Assert.Equal(["资深干员", "高级资深干员"], ReadStringArray((JsonArray)recruit.Params["first_tags"]!));
+        Assert.Equal(["支援机械", "高级资深干员"], ReadStringArray((JsonArray)recruit.Params["preserve_tags"]!));
 
         var infrast = tasks.Single(task => task.Type == TaskModuleTypes.Infrast);
         Assert.True(infrast.IsEnabled);
@@ -2032,6 +2264,14 @@ public sealed class ConfigurationImportTests
         return array
             .Select(item => item?.GetValue<string>() ?? string.Empty)
             .ToArray();
+    }
+
+    private static UnifiedTaskItem AssertRaTask(IReadOnlyList<UnifiedTaskItem> tasks, string name)
+    {
+        var task = tasks.Single(task => task.Name == name);
+        Assert.Equal(TaskModuleTypes.Reclamation, task.Type);
+        Assert.Equal("RelaunchAnchor", task.Params["theme"]?.GetValue<string>());
+        return task;
     }
 
     private sealed class CountingConfigStore : IUnifiedConfigStore

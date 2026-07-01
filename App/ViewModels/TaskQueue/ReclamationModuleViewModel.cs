@@ -12,12 +12,20 @@ public sealed class ReclamationModuleViewModel : TypedTaskModuleViewModelBase<Re
     [
         ("Fire", "Reclamation.Option.Theme.FireClosed", "沙中之火（活动未开放）"),
         ("Tales", "Reclamation.Option.Theme.Tales", "沙洲遗闻"),
+        ("RelaunchAnchor", "Reclamation.Option.Theme.RelaunchAnchor", "重启锚点"),
     ];
 
-    private static readonly (int Value, string TextKey, string Fallback)[] ModeOptionSpecs =
+    private static readonly (int Value, string TextKey, string Fallback)[] ProsperityModeOptionSpecs =
     [
         (0, "Reclamation.Option.Mode.NoArchive", "无存档，通过进出关卡刷生息点数"),
         (1, "Reclamation.Option.Mode.Archive", "有存档，通过组装支援道具刷生息点数"),
+    ];
+
+    private static readonly (int Value, string TextKey, string Fallback)[] RelaunchAnchorModeOptionSpecs =
+    [
+        (16, "Reclamation.Option.Mode.RA1", "RA-1"),
+        (48, "Reclamation.Option.Mode.RA4", "RA-4"),
+        (32, "Reclamation.Option.Mode.RA15", "RA-15"),
     ];
 
     private static readonly (int Value, string TextKey, string Fallback)[] IncrementModeOptionSpecs =
@@ -60,7 +68,7 @@ public sealed class ReclamationModuleViewModel : TypedTaskModuleViewModelBase<Re
     public IntOption? SelectedModeOption
     {
         get => ResolveSelectedOption(ModeOptions, Mode);
-        set => Mode = value?.Value ?? 1;
+        set => Mode = value?.Value ?? GetFallbackMode();
     }
 
     public IntOption? SelectedIncrementModeOption
@@ -69,11 +77,13 @@ public sealed class ReclamationModuleViewModel : TypedTaskModuleViewModelBase<Re
         set => IncrementMode = value?.Value ?? 0;
     }
 
-    public bool IsArchiveMode => Mode == 1;
+    public bool IsRelaunchAnchorTheme => string.Equals(Theme, "RelaunchAnchor", StringComparison.OrdinalIgnoreCase);
+
+    public bool IsArchiveMode => !IsRelaunchAnchorTheme && Mode == 1;
 
     public bool IsArchiveSettingsEnabled => IsArchiveMode;
 
-    public bool ShowClearStore => Mode == 0;
+    public bool ShowClearStore => !IsRelaunchAnchorTheme && Mode == 0;
 
     public string Theme
     {
@@ -86,7 +96,22 @@ public sealed class ReclamationModuleViewModel : TypedTaskModuleViewModelBase<Re
                 return;
             }
 
+            RebuildModeOptions();
+            if (!ModeOptions.Any(option => option.Value == Mode))
+            {
+                Mode = GetFallbackMode();
+            }
+
+            if (IsRelaunchAnchorTheme && ClearStore)
+            {
+                ClearStore = false;
+            }
+
             OnPropertyChanged(nameof(SelectedThemeOption));
+            OnPropertyChanged(nameof(IsRelaunchAnchorTheme));
+            OnPropertyChanged(nameof(IsArchiveMode));
+            OnPropertyChanged(nameof(IsArchiveSettingsEnabled));
+            OnPropertyChanged(nameof(ShowClearStore));
         }
     }
 
@@ -95,7 +120,7 @@ public sealed class ReclamationModuleViewModel : TypedTaskModuleViewModelBase<Re
         get => _mode;
         set
         {
-            var normalized = value is 0 or 1 ? value : 1;
+            var normalized = IsModeAllowedForCurrentTheme(value) ? value : GetFallbackMode();
             if (!SetTrackedProperty(ref _mode, normalized))
             {
                 return;
@@ -175,7 +200,7 @@ public sealed class ReclamationModuleViewModel : TypedTaskModuleViewModelBase<Re
     protected override ReclamationTaskParamsDto BuildDto()
     {
         var toolsToCraft = ParseTextLines(ToolsToCraftText);
-        if (Mode == 1 && toolsToCraft.Count == 0)
+        if (IsArchiveMode && toolsToCraft.Count == 0)
         {
             toolsToCraft = [Texts.GetOrDefault("Reclamation.ToolToCraftPlaceholder", "荧光棒")];
         }
@@ -187,7 +212,7 @@ public sealed class ReclamationModuleViewModel : TypedTaskModuleViewModelBase<Re
             IncrementMode = IncrementMode,
             NumCraftBatches = Math.Clamp(NumCraftBatches, 0, 99999),
             ToolsToCraft = toolsToCraft,
-            ClearStore = Mode == 1 ? false : ClearStore,
+            ClearStore = ShowClearStore ? ClearStore : false,
         };
     }
 
@@ -224,19 +249,26 @@ public sealed class ReclamationModuleViewModel : TypedTaskModuleViewModelBase<Re
         _themeOptions = ThemeOptionSpecs
             .Select(spec => new TaskModuleOption(spec.Value, Texts.GetOrDefault(spec.TextKey, spec.Fallback)))
             .ToArray();
-        _modeOptions = ModeOptionSpecs
-            .Select(spec => new IntOption(spec.Value, Texts.GetOrDefault(spec.TextKey, spec.Fallback)))
-            .ToArray();
+        RebuildModeOptions();
         _incrementModeOptions = IncrementModeOptionSpecs
             .Select(spec => new IntOption(spec.Value, Texts.GetOrDefault(spec.TextKey, spec.Fallback)))
             .ToArray();
 
         OnPropertyChanged(nameof(ThemeOptions));
-        OnPropertyChanged(nameof(ModeOptions));
         OnPropertyChanged(nameof(IncrementModeOptions));
         OnPropertyChanged(nameof(SelectedThemeOption));
-        OnPropertyChanged(nameof(SelectedModeOption));
         OnPropertyChanged(nameof(SelectedIncrementModeOption));
+    }
+
+    private void RebuildModeOptions()
+    {
+        var specs = IsRelaunchAnchorTheme ? RelaunchAnchorModeOptionSpecs : ProsperityModeOptionSpecs;
+        _modeOptions = specs
+            .Select(spec => new IntOption(spec.Value, Texts.GetOrDefault(spec.TextKey, spec.Fallback)))
+            .ToArray();
+
+        OnPropertyChanged(nameof(ModeOptions));
+        OnPropertyChanged(nameof(SelectedModeOption));
     }
 
     private static List<string> ParseTextLines(string value)
@@ -251,6 +283,18 @@ public sealed class ReclamationModuleViewModel : TypedTaskModuleViewModelBase<Re
     private static bool ContainsStructuredMarkers(string value)
     {
         return !string.IsNullOrWhiteSpace(value) && value.IndexOfAny(['[', ']', '{', '}', ':', '"']) >= 0;
+    }
+
+    private int GetFallbackMode()
+    {
+        return IsRelaunchAnchorTheme ? 16 : 1;
+    }
+
+    private bool IsModeAllowedForCurrentTheme(int value)
+    {
+        return IsRelaunchAnchorTheme
+            ? value is 16 or 32 or 48
+            : value is 0 or 1;
     }
 
     private static TaskModuleOption? ResolveSelectedOption(

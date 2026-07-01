@@ -224,10 +224,12 @@ public sealed class GuiJsonConfigImporter : IConfigImporter
         AddIfPresent(source, "MainFunction.Drops.Enable", task, "EnableTargetDrop");
         AddIfPresent(source, "MainFunction.Drops.ItemId", task, "DropId");
         AddIfPresent(source, "MainFunction.Drops.Quantity", task, "DropCount");
+        AddIfPresent(source, "Fight.IsInventoryTarget", task, "IsInventoryTarget");
         AddIfPresent(source, "Penguin.IsDrGrandet", task, "IsDrGrandet");
         AddIfPresent(source, "GUI.AllowUseStoneSave", task, "UseStoneAllowSave");
         AddIfPresent(source, "GUI.HideSeries", task, "HideSeries");
         AddIfPresent(source, "Fight.UseExpiringMedicine", task, "UseExpiringMedicine");
+        AddIfPresent(source, "Fight.UseExpireMedicineForActivity", task, "UseExpireMedicineForActivity");
         AddIfPresent(source, "MainFunction.Annihilation.Stage", task, "AnnihilationStage");
         AddIfPresent(source, "MainFunction.Annihilation.UseCustom", task, "UseCustomAnnihilation");
         AddIfPresent(source, "GUI.HideUnavailableStage", task, "HideUnavailableStage");
@@ -261,6 +263,8 @@ public sealed class GuiJsonConfigImporter : IConfigImporter
         AddIfPresent(source, "AutoRecruit.ChooseLevel4.Time", task, "Level4Time");
         AddIfPresent(source, "AutoRecruit.ChooseLevel5", task, "Level5Choose");
         AddIfPresent(source, "AutoRecruit.ChooseLevel5.Time", task, "Level5Time");
+        AddIfPresent(source, "AutoRecruit.PreserveTagEnabled", task, "PreserveTagEnabled");
+        AddIfPresent(source, "AutoRecruit.PreserveTagList", task, "PreserveTagList");
 
         if (TryReadString(source, "AutoRecruit.AutoRecruitFirstList", out var firstTags))
         {
@@ -271,6 +275,17 @@ public sealed class GuiJsonConfigImporter : IConfigImporter
             }
 
             task["Level3PreferTags"] = tags;
+        }
+
+        if (TryReadString(source, "AutoRecruit.PreserveTags", out var preserveTags))
+        {
+            var tags = new JsonArray();
+            foreach (var tag in LegacyConfigValueMappings.SplitLegacyList(preserveTags))
+            {
+                tags.Add(tag);
+            }
+
+            task["PreserveTags"] = tags;
         }
 
         return task;

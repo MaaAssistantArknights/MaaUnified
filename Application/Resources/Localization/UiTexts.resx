@@ -826,6 +826,12 @@
   <data name="Fight.DropCount" xml:space="preserve">
     <value>目标数量</value>
   </data>
+  <data name="Fight.DropQuantityMode" xml:space="preserve">
+    <value>数量</value>
+  </data>
+  <data name="Fight.DropTargetMode" xml:space="preserve">
+    <value>目标模式</value>
+  </data>
   <data name="Fight.DropId" xml:space="preserve">
     <value>掉落物 ID</value>
   </data>
@@ -867,7 +873,9 @@
 不调整游戏内代理倍率设定</value>
   </data>
   <data name="Fight.SpecifiedDropsTip" xml:space="preserve">
-    <value>该选项不会自动计算最优关卡</value>
+    <value>进入的关卡仍由上方关卡设置决定。
+数量：以当前理智作战任务中该材料的掉落数量为目标，达到设定数量后停止。
+目标库存：参考工具箱仓库识别保存的库存数据，只补到设定库存为止。库存数据可能滞后，可通过用户数据更新或仓库识别同步。</value>
   </data>
   <data name="Fight.Stage" xml:space="preserve">
     <value>关卡</value>
@@ -904,6 +912,12 @@
   </data>
   <data name="Fight.UseExpiringMedicine" xml:space="preserve">
     <value>无限吃 48 小时内过期的理智药</value>
+  </data>
+  <data name="Fight.TargetInventory" xml:space="preserve">
+    <value>目标库存</value>
+  </data>
+  <data name="Fight.UseExpireMedicineForActivity" xml:space="preserve">
+    <value>活动结束前 48H 吃当周过期理智药</value>
   </data>
   <data name="Fight.UseMedicine" xml:space="preserve">
     <value>使用药剂</value>
@@ -1891,8 +1905,20 @@
   <data name="Reclamation.Option.Mode.NoArchive" xml:space="preserve">
     <value>无存档，通过进出关卡刷生息点数</value>
   </data>
+  <data name="Reclamation.Option.Mode.RA1" xml:space="preserve">
+    <value>RA-1</value>
+  </data>
+  <data name="Reclamation.Option.Mode.RA4" xml:space="preserve">
+    <value>RA-4</value>
+  </data>
+  <data name="Reclamation.Option.Mode.RA15" xml:space="preserve">
+    <value>RA-15</value>
+  </data>
   <data name="Reclamation.Option.Theme.FireClosed" xml:space="preserve">
     <value>沙中之火 (活动未开放)</value>
+  </data>
+  <data name="Reclamation.Option.Theme.RelaunchAnchor" xml:space="preserve">
+    <value>重启锚点</value>
   </data>
   <data name="Reclamation.Option.Theme.Tales" xml:space="preserve">
     <value>沙洲遗闻</value>
@@ -1968,6 +1994,12 @@
   </data>
   <data name="Recruit.Option.ExtraTags.SelectAll" xml:space="preserve">
     <value>选择高星时总是选择三个 Tag</value>
+  </data>
+  <data name="Recruit.PreserveTags" xml:space="preserve">
+    <value>保留指定词条</value>
+  </data>
+  <data name="Recruit.PreserveTagsTip" xml:space="preserve">
+    <value>识别到任一已选词条时跳过该次招募并保留该栏位；留空时不保留任何词条。</value>
   </data>
   <data name="Recruit.Refresh" xml:space="preserve">
     <value>自动刷新</value>
@@ -4393,6 +4425,33 @@
   </data>
   <data name="TaskQueue.Module.UserDataUpdate" xml:space="preserve">
     <value>更新数据</value>
+  </data>
+  <data name="TaskQueue.Module.SingleStep" xml:space="preserve">
+    <value>单步任务</value>
+  </data>
+  <data name="TaskQueue.SingleStep.Body" xml:space="preserve">
+    <value>SingleStep 是 Core 的单步 Copilot 入口。导入的 marker 任务需要运行时单步参数后才能执行。</value>
+  </data>
+  <data name="TaskQueue.SingleStep.Type" xml:space="preserve">
+    <value>类型</value>
+  </data>
+  <data name="TaskQueue.SingleStep.Subtype" xml:space="preserve">
+    <value>子类型</value>
+  </data>
+  <data name="TaskQueue.SingleStep.Subtype.Start" xml:space="preserve">
+    <value>开始</value>
+  </data>
+  <data name="TaskQueue.SingleStep.Subtype.Stage" xml:space="preserve">
+    <value>关卡</value>
+  </data>
+  <data name="TaskQueue.SingleStep.Subtype.Action" xml:space="preserve">
+    <value>动作</value>
+  </data>
+  <data name="TaskQueue.SingleStep.Details" xml:space="preserve">
+    <value>details JSON</value>
+  </data>
+  <data name="TaskQueue.SingleStep.DetailsPlaceholder" xml:space="preserve">
+    <value>{"stage_name":"..."}</value>
   </data>
   <data name="TaskQueue.UserDataUpdate.TriggerInterval" xml:space="preserve">
     <value>更新数据触发间隔</value>

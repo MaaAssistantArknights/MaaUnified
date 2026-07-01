@@ -16,6 +16,10 @@ public sealed class RecruitTaskParamsDto
 
     public List<string> FirstTags { get; set; } = [];
 
+    public bool PreserveTagsEnabled { get; set; }
+
+    public List<string> PreserveTags { get; set; } = [];
+
     public bool ChooseLevel3 { get; set; } = true;
 
     public bool ChooseLevel4 { get; set; } = true;

@@ -542,6 +542,12 @@ public sealed class UnifiedSessionService
                 _logService.Warn($"Task warning `{task.Name}`: {warning.Code}:{warning.Field}:{warning.Message}");
             }
 
+            if (compiled.Issues.Any(i => string.Equals(i.Code, "TaskCompileSkipAppend", StringComparison.Ordinal)))
+            {
+                _logService.Info($"Skipped task `{task.Name}` because compile-time parameters resolved to no runnable task.");
+                continue;
+            }
+
             task.Type = compiled.NormalizedType;
             if (!string.Equals(compiled.NormalizedType, TaskModuleTypes.Mall, StringComparison.OrdinalIgnoreCase))
             {

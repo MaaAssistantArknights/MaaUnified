@@ -369,7 +369,7 @@
         <Border Classes="app-surface app-card fight-settings-card">
           <controls:SettingsInlineRow Classes="task-settings-card-content"
                                       FieldWidth="{DynamicResource MAA.Size.Settings.FieldWideWidth}"
-                                      RowDefinitions="Auto,Auto"
+                                      RowDefinitions="Auto,Auto,Auto"
                                       controls:SettingsLabelWidthCoordinator.GroupKey="TaskQueue.Fields">
             <controls:NullableCheckBox Classes="fight-compact"
                                        Text="{Binding Texts[Fight.AssignedMaterial]}"
@@ -390,8 +390,26 @@
             <TextBlock Grid.Row="1"
                        Margin="0,8,0,0"
                        Classes="fight-settings-field-label"
-                       Text="{Binding Texts[Fight.DropCount]}" />
-            <controls:AppNumberInput Grid.Row="1"
+                       Text="{Binding Texts[Fight.DropTargetMode]}" />
+            <controls:AppSelect Grid.Row="1"
+                                Grid.Column="2"
+                                Margin="0,8,0,0"
+                                Classes="fight-settings-inline-select"
+                                IsEnabled="{Binding IsDropControlsEnabled}"
+                                ItemsSource="{Binding DropTargetModeOptions}"
+                                SelectedValueBinding="{Binding Value}"
+                                SelectedValue="{Binding DropTargetMode}">
+              <controls:AppSelect.ItemTemplate>
+                <DataTemplate x:DataType="vm:FightTaskModuleViewModel+StringOption">
+                  <TextBlock Text="{Binding DisplayName}" />
+                </DataTemplate>
+              </controls:AppSelect.ItemTemplate>
+            </controls:AppSelect>
+            <TextBlock Grid.Row="2"
+                       Margin="0,8,0,0"
+                       Classes="fight-settings-field-label"
+                       Text="{Binding DropCountLabelText}" />
+            <controls:AppNumberInput Grid.Row="2"
                                      Grid.Column="2"
                                      Margin="0,8,0,0"
                                      Classes="fight-settings-count-input"
@@ -438,6 +456,14 @@
                         HorizontalAlignment="Stretch"
                         IsChecked="{Binding UseExpiringMedicine}">
                 <TextBlock Text="{Binding Texts[Fight.UseExpiringMedicine]}"
+                           TextWrapping="Wrap" />
+              </CheckBox>
+            </controls:SettingsDependentRow>
+            <controls:SettingsDependentRow>
+              <CheckBox Classes="app-checkbox"
+                        HorizontalAlignment="Stretch"
+                        IsChecked="{Binding UseExpireMedicineForActivity}">
+                <TextBlock Text="{Binding Texts[Fight.UseExpireMedicineForActivity]}"
                            TextWrapping="Wrap" />
               </CheckBox>
             </controls:SettingsDependentRow>

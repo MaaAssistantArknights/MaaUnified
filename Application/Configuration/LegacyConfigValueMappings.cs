@@ -375,7 +375,12 @@ internal static class LegacyConfigValueMappings
     {
         if (TryReadInt(value, out var number))
         {
-            return number == 0 ? "Fire" : "Tales";
+            return number switch
+            {
+                0 => "Fire",
+                2 => "RelaunchAnchor",
+                _ => "Tales",
+            };
         }
 
         if (!TryReadString(value, out var text) || string.IsNullOrWhiteSpace(text))
@@ -392,6 +397,7 @@ internal static class LegacyConfigValueMappings
         {
             "fire" or "沙中之火" => "Fire",
             "tales" or "沙洲遗闻" or "沙洲遺聞" => "Tales",
+            "relaunchanchor" or "ra" or "重启锚点" or "重啟錨點" => "RelaunchAnchor",
             _ => "Tales",
         };
     }
@@ -400,7 +406,7 @@ internal static class LegacyConfigValueMappings
     {
         if (TryReadInt(value, out var number))
         {
-            return number is 0 or 1 ? number : fallback;
+            return number is 0 or 1 or 16 or 32 or 48 ? number : fallback;
         }
 
         if (!TryReadString(value, out var text))
@@ -410,38 +416,19 @@ internal static class LegacyConfigValueMappings
 
         if (int.TryParse(text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out number))
         {
-            return number is 0 or 1 ? number : fallback;
+            return number is 0 or 1 or 16 or 32 or 48 ? number : fallback;
         }
 
         return NormalizeToken(text) switch
         {
             "prosperitynosave" => 0,
             "prosperityinsave" => 1,
-            "ra" or "relaunchanchor" => fallback,
+            "ra1" => 16,
+            "ra4" => 48,
+            "ra15" => 32,
+            "ra" or "relaunchanchor" => 16,
             _ => fallback,
         };
-    }
-
-    public static bool IsUnsupportedReclamationMode(JsonNode? value)
-    {
-        if (TryReadInt(value, out var number))
-        {
-            return number is 16 or 32 or 48;
-        }
-
-        if (!TryReadString(value, out var text))
-        {
-            return false;
-        }
-
-        if (int.TryParse(text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out number))
-        {
-            return number is 16 or 32 or 48;
-        }
-
-        var token = NormalizeToken(text);
-        return token is "ra" or "relaunchanchor"
-            || (token.StartsWith("ra", StringComparison.Ordinal) && token[2..].All(char.IsDigit));
     }
 
     public static int NormalizeReclamationIncrementMode(JsonNode? value, int fallback = 0)

@@ -133,6 +133,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         TaskModuleTypes.Award,
         TaskModuleTypes.Roguelike,
         TaskModuleTypes.Reclamation,
+        TaskModuleTypes.SingleStep,
         TaskModuleTypes.UserDataUpdate,
         TaskModuleTypes.Custom,
     ];
@@ -225,6 +226,14 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 "ユーザーデータ更新",
                 "사용자 데이터 업데이트",
             ],
+            [TaskModuleTypes.SingleStep] =
+            [
+                "SingleStep",
+                "Single Step",
+                "SingleStepTask",
+                "单步任务",
+                "單步任務",
+            ],
             [TaskModuleTypes.Custom] =
             [
                 "Custom",
@@ -279,6 +288,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     private readonly RoguelikeModuleViewModel _fallbackRoguelikeModule;
     private readonly ReclamationModuleViewModel _fallbackReclamationModule;
     private readonly UserDataUpdateModuleViewModel _fallbackUserDataUpdateModule;
+    private readonly SingleStepModuleViewModel _fallbackSingleStepModule;
     private readonly CustomModuleViewModel _fallbackCustomModule;
     private Task _pendingBindingTask = Task.CompletedTask;
     private Task _stopStartRequestTask = Task.CompletedTask;
@@ -395,6 +405,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         _fallbackRoguelikeModule = new RoguelikeModuleViewModel(runtime, Texts);
         _fallbackReclamationModule = new ReclamationModuleViewModel(runtime, Texts);
         _fallbackUserDataUpdateModule = new UserDataUpdateModuleViewModel(runtime, Texts);
+        _fallbackSingleStepModule = new SingleStepModuleViewModel(runtime, Texts);
         _fallbackCustomModule = new CustomModuleViewModel(runtime, Texts);
         PostActionModule = new PostActionModuleViewModel(runtime, Texts);
         ApplySettingsModeToTaskModules();
@@ -476,6 +487,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     public ReclamationModuleViewModel ReclamationModule => ResolveModuleForProjection<ReclamationModuleViewModel>() ?? _fallbackReclamationModule;
 
     public UserDataUpdateModuleViewModel UserDataUpdateModule => ResolveModuleForProjection<UserDataUpdateModuleViewModel>() ?? _fallbackUserDataUpdateModule;
+
+    public SingleStepModuleViewModel SingleStepModule => ResolveModuleForProjection<SingleStepModuleViewModel>() ?? _fallbackSingleStepModule;
 
     public CustomModuleViewModel CustomModule => ResolveModuleForProjection<CustomModuleViewModel>() ?? _fallbackCustomModule;
 
@@ -560,6 +573,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     public bool IsReclamationTaskSelected => IsSelectedTaskType(TaskModuleTypes.Reclamation);
 
     public bool IsUserDataUpdateTaskSelected => IsSelectedTaskType(TaskModuleTypes.UserDataUpdate);
+
+    public bool IsSingleStepTaskSelected => IsSelectedTaskType(TaskModuleTypes.SingleStep);
 
     public bool IsCustomTaskSelected => IsSelectedTaskType(TaskModuleTypes.Custom);
 
@@ -937,6 +952,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
     public string AddTaskMenuUserDataUpdateText => ResolveModuleDisplayName(TaskModuleTypes.UserDataUpdate);
 
+    public string AddTaskMenuSingleStepText => ResolveModuleDisplayName(TaskModuleTypes.SingleStep);
+
     public string AddTaskMenuCustomText => ResolveModuleDisplayName(TaskModuleTypes.Custom);
 
     public bool IsGeneralSettingsSelected
@@ -971,7 +988,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         && SelectedTask is not null
         && !IsStartUpTaskSelected
         && !IsAwardTaskSelected
-        && !IsUserDataUpdateTaskSelected;
+        && !IsUserDataUpdateTaskSelected
+        && !IsSingleStepTaskSelected;
 
     public bool ShowTaskConfigHint => !IsPostActionPanelSelected && IsNoTaskSelected;
 
@@ -1253,6 +1271,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         OnPropertyChanged(nameof(AddTaskMenuRoguelikeText));
         OnPropertyChanged(nameof(AddTaskMenuReclamationText));
         OnPropertyChanged(nameof(AddTaskMenuUserDataUpdateText));
+        OnPropertyChanged(nameof(AddTaskMenuSingleStepText));
         OnPropertyChanged(nameof(AddTaskMenuCustomText));
     }
 
@@ -1773,6 +1792,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             TaskModuleTypes.Roguelike => new RoguelikeModuleViewModel(Runtime, Texts),
             TaskModuleTypes.Reclamation => new ReclamationModuleViewModel(Runtime, Texts),
             TaskModuleTypes.UserDataUpdate => new UserDataUpdateModuleViewModel(Runtime, Texts),
+            TaskModuleTypes.SingleStep => new SingleStepModuleViewModel(Runtime, Texts),
             TaskModuleTypes.Custom => new CustomModuleViewModel(Runtime, Texts),
             _ => new CustomModuleViewModel(Runtime, Texts),
         };
@@ -2292,6 +2312,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         OnPropertyChanged(nameof(RoguelikeModule));
         OnPropertyChanged(nameof(ReclamationModule));
         OnPropertyChanged(nameof(UserDataUpdateModule));
+        OnPropertyChanged(nameof(SingleStepModule));
         OnPropertyChanged(nameof(CustomModule));
     }
 
@@ -2309,6 +2330,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         OnPropertyChanged(nameof(IsRoguelikeTaskSelected));
         OnPropertyChanged(nameof(IsReclamationTaskSelected));
         OnPropertyChanged(nameof(IsUserDataUpdateTaskSelected));
+        OnPropertyChanged(nameof(IsSingleStepTaskSelected));
         OnPropertyChanged(nameof(IsCustomTaskSelected));
         OnPropertyChanged(nameof(IsPostActionTaskSelected));
         OnPropertyChanged(nameof(ShowPostActionSettingsPanel));
@@ -2362,6 +2384,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         _fallbackRoguelikeModule.IsAdvancedMode = _isAdvancedSettingsSelected;
         _fallbackReclamationModule.IsAdvancedMode = _isAdvancedSettingsSelected;
         _fallbackUserDataUpdateModule.IsAdvancedMode = _isAdvancedSettingsSelected;
+        _fallbackSingleStepModule.IsAdvancedMode = _isAdvancedSettingsSelected;
         _fallbackCustomModule.IsAdvancedMode = _isAdvancedSettingsSelected;
 
         foreach (var panel in TaskPanels)
@@ -4375,6 +4398,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         _fallbackRoguelikeModule.ClearBinding();
         _fallbackReclamationModule.ClearBinding();
         _fallbackUserDataUpdateModule.ClearBinding();
+        _fallbackSingleStepModule.ClearBinding();
         _fallbackCustomModule.ClearBinding();
         ResetSelectedTaskValidationSummary();
     }

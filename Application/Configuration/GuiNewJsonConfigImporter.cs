@@ -418,13 +418,6 @@ public sealed class GuiNewJsonConfigImporter : IConfigImporter
                 continue;
             }
 
-            if (IsUnsupportedReclamationMode(taskNode))
-            {
-                var taskName = ReadString(taskNode["Name"]) ?? "Reclamation";
-                report.Warnings.Add(
-                    $"Reclamation task `{taskName}` uses legacy RA/RelaunchAnchor mode, which is not supported by current schema; imported as archive mode.");
-            }
-
             if (!LegacyTaskSchemaConverter.TryConvertLegacyTask(taskNode, profile, config, out var convertedTask, out var error))
             {
                 if (!string.IsNullOrWhiteSpace(error))
@@ -436,26 +429,6 @@ public sealed class GuiNewJsonConfigImporter : IConfigImporter
             profile.TaskQueue.Add(convertedTask);
             report.MappedFieldCount += 1;
         }
-    }
-
-    private static bool IsUnsupportedReclamationMode(JsonObject task)
-    {
-        var type = ReadString(task["$type"]) ?? ReadString(task["Type"]);
-        if (string.IsNullOrWhiteSpace(type))
-        {
-            return false;
-        }
-
-        var normalizedType = type.Split(',')[0].Trim();
-        var lastDot = normalizedType.LastIndexOf('.');
-        if (lastDot >= 0)
-        {
-            normalizedType = normalizedType[(lastDot + 1)..];
-        }
-
-        return (string.Equals(normalizedType, "ReclamationTask", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(normalizedType, "Reclamation", StringComparison.OrdinalIgnoreCase))
-            && LegacyConfigValueMappings.IsUnsupportedReclamationMode(task["Mode"]);
     }
 
     private static string? ReadString(JsonNode? node)

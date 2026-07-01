@@ -142,7 +142,9 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
     private bool _isDrGrandet;
     private bool _useExpiringMedicine;
     private int _expiringMedicine = 9999;
+    private bool _useExpireMedicineForActivity;
     private bool? _enableTargetDrop = false;
+    private bool _isInventoryTarget;
     private string _dropId = string.Empty;
     private int _dropCount = 1;
     private bool _useCustomAnnihilation;
@@ -162,6 +164,7 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
     private bool _allowUseStoneSave;
     private bool _autoRestartOnDrop = true;
     private IReadOnlyList<IntOption> _seriesOptions = [];
+    private IReadOnlyList<StringOption> _dropTargetModeOptions = [];
     private IReadOnlyList<StringOption> _stageResetModeOptions = [];
     private IReadOnlyList<StringOption> _annihilationStageOptions = [];
     private IReadOnlyList<DropOption> _dropOptions = [];
@@ -185,6 +188,14 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
     {
         get => SeriesOptions.FirstOrDefault(option => option.Value == Series);
         set => Series = value?.Value ?? 1;
+    }
+
+    public IReadOnlyList<StringOption> DropTargetModeOptions => _dropTargetModeOptions;
+
+    public string DropTargetMode
+    {
+        get => IsInventoryTarget ? "Inventory" : "Quantity";
+        set => IsInventoryTarget = string.Equals(value, "Inventory", StringComparison.OrdinalIgnoreCase);
     }
 
     public IReadOnlyList<StringOption> StageResetModeOptions => _stageResetModeOptions;
@@ -327,6 +338,10 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
     public string UseWeeklyScheduleTip => Texts.GetOrDefault(
         "Fight.UseWeeklyScheduleTip",
         "The day of week here follows in-game reset time rather than local clock time.");
+
+    public string DropCountLabelText => IsInventoryTarget
+        ? Texts.GetOrDefault("Fight.TargetInventory", "Target inventory")
+        : Texts.GetOrDefault("Fight.DropCount", "Drop count");
 
     public string WeeklyScheduleSundayText => Texts.GetOrDefault("Fight.WeeklySchedule.Sunday", "Sun");
 
@@ -501,6 +516,12 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
         set => SetTrackedProperty(ref _useExpiringMedicine, value);
     }
 
+    public bool UseExpireMedicineForActivity
+    {
+        get => _useExpireMedicineForActivity;
+        set => SetTrackedProperty(ref _useExpireMedicineForActivity, value);
+    }
+
     public bool? EnableTargetDrop
     {
         get => _enableTargetDrop;
@@ -512,6 +533,21 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
             }
 
             OnPropertyChanged(nameof(IsDropControlsEnabled));
+        }
+    }
+
+    public bool IsInventoryTarget
+    {
+        get => _isInventoryTarget;
+        set
+        {
+            if (!SetTrackedProperty(ref _isInventoryTarget, value))
+            {
+                return;
+            }
+
+            OnPropertyChanged(nameof(DropTargetMode));
+            OnPropertyChanged(nameof(DropCountLabelText));
         }
     }
 
@@ -790,7 +826,9 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
         IsDrGrandet = dto.IsDrGrandet;
         UseExpiringMedicine = dto.UseExpiringMedicine;
         _expiringMedicine = Math.Max(1, dto.ExpiringMedicine);
+        UseExpireMedicineForActivity = dto.UseExpireMedicineForActivity;
         EnableTargetDrop = dto.EnableTargetDrop;
+        IsInventoryTarget = dto.IsInventoryTarget;
         DropId = dto.DropId;
         DropCount = dto.DropCount;
         UseCustomAnnihilation = dto.UseCustomAnnihilation;
@@ -830,9 +868,11 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
             IsDrGrandet = IsDrGrandet,
             UseExpiringMedicine = UseExpiringMedicine,
             ExpiringMedicine = UseExpiringMedicine ? Math.Max(1, _expiringMedicine) : 0,
+            UseExpireMedicineForActivity = UseExpireMedicineForActivity,
             EnableTargetDrop = EnableTargetDrop,
             DropId = DropId.Trim(),
             DropCount = Math.Max(1, DropCount),
+            IsInventoryTarget = IsInventoryTarget,
             UseCustomAnnihilation = UseCustomAnnihilation,
             AnnihilationStage = string.IsNullOrWhiteSpace(AnnihilationStage) ? "Annihilation" : AnnihilationStage.Trim(),
             UseWeeklySchedule = UseWeeklySchedule,
@@ -876,6 +916,11 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
             new IntOption(1, "1"),
             new IntOption(-1, Texts.GetOrDefault("Fight.NotSwitch", "Don't Switch")),
         ];
+        _dropTargetModeOptions =
+        [
+            new StringOption("Quantity", Texts.GetOrDefault("Fight.DropQuantityMode", "Drop count")),
+            new StringOption("Inventory", Texts.GetOrDefault("Fight.TargetInventory", "Target inventory")),
+        ];
         _stageResetModeOptions =
         [
             new StringOption("Current", Texts.GetOrDefault("Fight.StageReset.Current", Texts.GetOrDefault("Fight.DefaultStage", "Cur/Last"))),
@@ -891,6 +936,8 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
 
         OnPropertyChanged(nameof(SeriesOptions));
         OnPropertyChanged(nameof(SelectedSeriesOption));
+        OnPropertyChanged(nameof(DropTargetModeOptions));
+        OnPropertyChanged(nameof(DropTargetMode));
         OnPropertyChanged(nameof(StageResetModeOptions));
         OnPropertyChanged(nameof(SelectedStageResetModeOption));
         OnPropertyChanged(nameof(AnnihilationStageOptions));
@@ -912,6 +959,9 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
         OnPropertyChanged(nameof(WeeklyScheduleThursdayText));
         OnPropertyChanged(nameof(WeeklyScheduleFridayText));
         OnPropertyChanged(nameof(WeeklyScheduleSaturdayText));
+        OnPropertyChanged(nameof(DropTargetModeOptions));
+        OnPropertyChanged(nameof(DropTargetMode));
+        OnPropertyChanged(nameof(DropCountLabelText));
         OnPropertyChanged(nameof(MoveStagePlanEntryUpText));
         OnPropertyChanged(nameof(MoveStagePlanEntryDownText));
         OnPropertyChanged(nameof(RemoveStagePlanEntryText));

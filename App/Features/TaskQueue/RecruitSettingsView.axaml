@@ -98,6 +98,42 @@
                     IsEnabled="{Binding Refresh}" />
 
           <Border Classes="app-surface app-card">
+            <controls:AdaptiveSpacingStackPanel Classes="recruit-card-content">
+              <CheckBox Classes="app-checkbox"
+                        Content="{Binding Texts[Recruit.PreserveTags]}"
+                        IsChecked="{Binding PreserveTagsEnabled}" />
+              <TextBlock Classes="subtle"
+                         Text="{Binding Texts[Recruit.PreserveTagsTip]}"
+                         TextWrapping="Wrap" />
+              <controls:SettingsInlineRow FieldWidth="{DynamicResource MAA.Size.Settings.FieldWideWidth}"
+                                          IsEnabled="{Binding PreserveTagsEnabled}">
+                <TextBlock Classes="subtle"
+                           Text="{Binding Texts[Recruit.PreserveTags]}"
+                           TextWrapping="Wrap" />
+                <controls:AppMultiSelect HeaderText="{Binding PreserveTagsSummary}">
+                  <controls:AppMultiSelect.DropDownContent>
+                    <ItemsControl ItemsSource="{Binding PreserveTagOptions}">
+                      <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                          <StackPanel Spacing="4" />
+                        </ItemsPanelTemplate>
+                      </ItemsControl.ItemsPanel>
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:RecruitTaskModuleViewModel+RecruitTagOption">
+                          <ToggleButton Classes="app-multi-select-option"
+                                        IsChecked="{Binding IsSelected}">
+                            <TextBlock Text="{Binding DisplayName}" />
+                          </ToggleButton>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </controls:AppMultiSelect.DropDownContent>
+                </controls:AppMultiSelect>
+              </controls:SettingsInlineRow>
+            </controls:AdaptiveSpacingStackPanel>
+          </Border>
+
+          <Border Classes="app-surface app-card">
             <controls:AppHintedCheckBox Text="{Binding Texts[Recruit.NotChooseLevel1]}"
                                          Tip="{Binding Texts[Recruit.NotChooseLevel1Tip]}"
                                          IsChecked="{Binding NotChooseLevel1}" />

@@ -11,7 +11,7 @@ public static class WpfFeatureBaseline
 
     public static readonly string[] TaskModules =
     [
-        "StartUp", "Fight", "Recruit", "Infrast", "Mall", "Award", "Roguelike", "Reclamation", "Custom", "PostAction",
+        "StartUp", "Fight", "Recruit", "Infrast", "Mall", "Award", "Roguelike", "Reclamation", "SingleStep", "Custom", "PostAction",
     ];
 
     public static readonly string[] AdvancedModules =

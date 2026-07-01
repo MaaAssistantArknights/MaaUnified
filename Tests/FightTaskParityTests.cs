@@ -3,6 +3,7 @@ using System.Threading.Channels;
 using Avalonia.Threading;
 using MAAUnified.App.ViewModels.TaskQueue;
 using MAAUnified.Application.Configuration;
+using MAAUnified.Application.Models;
 using MAAUnified.Application.Models.TaskParams;
 using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Features;
@@ -12,6 +13,7 @@ using MAAUnified.Application.Orchestration;
 using MAAUnified.Compat.Constants;
 using MAAUnified.CoreBridge;
 using MAAUnified.Platform;
+using LegacyConfigurationKeys = MAAUnified.Compat.Constants.ConfigurationKeys;
 
 namespace MAAUnified.Tests;
 
@@ -83,6 +85,150 @@ public sealed class FightTaskParityTests
         Assert.Equal("Ignore", roundTrip.Value.StageResetMode);
         Assert.True(roundTrip.Value.UseWeeklySchedule);
         Assert.False(roundTrip.Value.WeeklyScheduleMonday);
+    }
+
+    [Fact]
+    public void CompileFight_TargetDropQuantityMode_ShouldKeepConfiguredDropCount()
+    {
+        var config = new UnifiedConfig();
+        config.GlobalValues[LegacyConfigurationKeys.DepotResult] = JsonValue.Create("""{"data":"{\"30012\":240}"}""");
+
+        var compiled = TaskParamCompiler.CompileFight(new FightTaskParamsDto
+        {
+            EnableTargetDrop = true,
+            DropId = "30012",
+            DropCount = 300,
+            IsInventoryTarget = false,
+        }, new UnifiedProfile(), config);
+
+        Assert.Empty(compiled.Issues.Where(issue => issue.Blocking));
+        var drops = Assert.IsType<JsonObject>(compiled.Params["drops"]);
+        Assert.Equal(300, drops["30012"]?.GetValue<int>());
+        Assert.False(compiled.Params["_ui_is_inventory_target"]?.GetValue<bool>());
+    }
+
+    [Fact]
+    public void CompileFight_TargetInventoryMode_ShouldUseDepotDelta()
+    {
+        var config = new UnifiedConfig();
+        config.GlobalValues[LegacyConfigurationKeys.DepotResult] = JsonValue.Create("""{"data":"{\"30012\":240}"}""");
+
+        var compiled = TaskParamCompiler.CompileFight(new FightTaskParamsDto
+        {
+            EnableTargetDrop = true,
+            DropId = "30012",
+            DropCount = 300,
+            IsInventoryTarget = true,
+        }, new UnifiedProfile(), config);
+
+        Assert.Empty(compiled.Issues.Where(issue => issue.Blocking));
+        var drops = Assert.IsType<JsonObject>(compiled.Params["drops"]);
+        Assert.Equal(60, drops["30012"]?.GetValue<int>());
+        Assert.True(compiled.Params["_ui_is_inventory_target"]?.GetValue<bool>());
+    }
+
+    [Fact]
+    public void CompileFight_TargetInventoryModeWithoutDepot_ShouldWarnAndOmitDrops()
+    {
+        var compiled = TaskParamCompiler.CompileFight(new FightTaskParamsDto
+        {
+            EnableTargetDrop = true,
+            DropId = "30012",
+            DropCount = 300,
+            IsInventoryTarget = true,
+        }, new UnifiedProfile(), new UnifiedConfig());
+
+        Assert.DoesNotContain(compiled.Issues, issue => issue.Blocking);
+        Assert.Contains(compiled.Issues, issue => issue.Code == "FightInventoryTargetDepotMissing");
+        Assert.Contains(compiled.Issues, issue => issue.Code == "TaskCompileSkipAppend");
+        Assert.Null(compiled.Params["drops"]);
+        Assert.Equal(int.MaxValue, compiled.Params["times"]?.GetValue<int>());
+        Assert.Equal("30012", compiled.Params["_ui_drop_id"]?.GetValue<string>());
+        Assert.Equal(300, compiled.Params["_ui_drop_count"]?.GetValue<int>());
+        Assert.True(compiled.Params["_ui_is_inventory_target"]?.GetValue<bool>());
+    }
+
+    [Fact]
+    public void CompileFight_TargetInventoryModeMissingItem_ShouldTreatInventoryAsZero()
+    {
+        var config = new UnifiedConfig();
+        config.GlobalValues[LegacyConfigurationKeys.DepotResult] = JsonValue.Create("""{"data":"{\"30011\":240}"}""");
+
+        var compiled = TaskParamCompiler.CompileFight(new FightTaskParamsDto
+        {
+            EnableTargetDrop = true,
+            DropId = "30012",
+            DropCount = 300,
+            IsInventoryTarget = true,
+        }, new UnifiedProfile(), config);
+
+        Assert.DoesNotContain(compiled.Issues, issue => issue.Blocking);
+        Assert.DoesNotContain(compiled.Issues, issue => issue.Code == "FightInventoryTargetItemMissing");
+        var drops = Assert.IsType<JsonObject>(compiled.Params["drops"]);
+        Assert.Equal(300, drops["30012"]?.GetValue<int>());
+    }
+
+    [Fact]
+    public void CompileFight_TargetInventoryAlreadyReached_ShouldWarnAndOmitDrops()
+    {
+        var config = new UnifiedConfig();
+        config.GlobalValues[LegacyConfigurationKeys.DepotResult] = JsonValue.Create("""{"data":"{\"30012\":300}"}""");
+
+        var compiled = TaskParamCompiler.CompileFight(new FightTaskParamsDto
+        {
+            EnableTargetDrop = true,
+            DropId = "30012",
+            DropCount = 300,
+            IsInventoryTarget = true,
+        }, new UnifiedProfile(), config);
+
+        Assert.DoesNotContain(compiled.Issues, issue => issue.Blocking);
+        Assert.Contains(compiled.Issues, issue => issue.Code == "FightInventoryTargetReached");
+        Assert.Contains(compiled.Issues, issue => issue.Code == "TaskCompileSkipAppend");
+        Assert.Null(compiled.Params["drops"]);
+        Assert.Equal(int.MaxValue, compiled.Params["times"]?.GetValue<int>());
+    }
+
+    [Fact]
+    public void CompileFight_UseExpireMedicineForActivity_ShouldExpandMedicineExpireDaysNearActivityEnd()
+    {
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "resource", "gui"));
+        File.WriteAllText(
+            Path.Combine(root, "resource", "gui", "StageActivityV2.json"),
+            """
+            {
+              "Official": {
+                "sideStoryStage": {
+                  "act": {
+                    "Activity": {
+                      "UtcExpireTime": "2026/07/03 00:00:00",
+                      "TimeZone": 0
+                    },
+                    "Stages": []
+                  }
+                }
+              }
+            }
+            """);
+
+        var originalDirectory = Environment.CurrentDirectory;
+        try
+        {
+            Environment.CurrentDirectory = root;
+            var compiled = TaskParamCompiler.CompileFight(new FightTaskParamsDto
+            {
+                UseExpireMedicineForActivity = true,
+            }, new UnifiedProfile(), new UnifiedConfig(), new DateTime(2026, 7, 1, 12, 0, 0, DateTimeKind.Utc));
+
+            Assert.Equal(5, compiled.Params["medicine_expire_days"]?.GetValue<int>());
+            Assert.Equal(5, compiled.Params["expiring_medicine"]?.GetValue<int>());
+            Assert.True(compiled.Params["_ui_use_expire_medicine_for_activity"]?.GetValue<bool>());
+        }
+        finally
+        {
+            Environment.CurrentDirectory = originalDirectory;
+        }
     }
 
     [Fact]
