@@ -148,7 +148,7 @@ public sealed class OverlayParityTests
     }
 
     [Fact]
-    public async Task TaskQueuePage_AppendSystemLog_ShouldSplitTimestampedMultilineMessagesIntoCards()
+    public async Task TaskQueuePage_AppendSystemLog_ShouldKeepTimestampedMultilineMessageInOneCard()
     {
         await using var fixture = await OverlayFixture.CreateAsync();
         var vm = fixture.Shell.TaskQueuePage;
@@ -159,11 +159,11 @@ public sealed class OverlayParityTests
             [12:00:03] adb connect failed again
             """);
 
-        Assert.Equal(3, vm.LogCards.Count);
-        Assert.All(vm.LogCards, card => Assert.Single(card.Items));
-        Assert.Equal("adb connect failed", vm.LogCards[0].PrimaryContent);
-        Assert.Equal("retry adb connect", vm.LogCards[1].PrimaryContent);
-        Assert.Equal("adb connect failed again", vm.LogCards[2].PrimaryContent);
+        var card = Assert.Single(vm.LogCards);
+        Assert.Single(card.Items);
+        Assert.Contains("[12:00:01] adb connect failed", card.PrimaryContent, StringComparison.Ordinal);
+        Assert.Contains("[12:00:02] retry adb connect", card.PrimaryContent, StringComparison.Ordinal);
+        Assert.Contains("[12:00:03] adb connect failed again", card.PrimaryContent, StringComparison.Ordinal);
     }
 
     [Fact]

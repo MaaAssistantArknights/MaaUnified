@@ -28,11 +28,17 @@ public sealed class FightTaskParamsDto
 
     public bool UseExpiringMedicine { get; set; }
 
+    public int ExpiringMedicine { get; set; } = 9999;
+
+    public bool UseExpireMedicineForActivity { get; set; }
+
     public bool? EnableTargetDrop { get; set; } = false;
 
     public string DropId { get; set; } = string.Empty;
 
     public int DropCount { get; set; } = 1;
+
+    public bool IsInventoryTarget { get; set; }
 
     public bool UseCustomAnnihilation { get; set; }
 

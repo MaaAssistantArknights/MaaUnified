@@ -200,6 +200,32 @@ public sealed class TaskQueueG1FeatureTests
     }
 
     [Fact]
+    public async Task ReclamationModule_RelaunchAnchorTheme_ShouldExposeRaModesOnly()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.Reclamation, "reclamation")).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        vm.SelectedTask = Assert.Single(vm.Tasks);
+        await vm.WaitForPendingBindingAsync();
+
+        vm.ReclamationModule.Theme = "RelaunchAnchor";
+
+        Assert.Equal(16, vm.ReclamationModule.Mode);
+        Assert.Equal([16, 48, 32], vm.ReclamationModule.ModeOptions.Select(option => option.Value).ToArray());
+        Assert.False(vm.ReclamationModule.IsArchiveSettingsEnabled);
+        Assert.False(vm.ReclamationModule.ShowClearStore);
+
+        vm.ReclamationModule.Mode = 48;
+        Assert.Equal(48, vm.ReclamationModule.Mode);
+
+        vm.ReclamationModule.Theme = "Tales";
+        Assert.Equal(1, vm.ReclamationModule.Mode);
+        Assert.Equal([0, 1], vm.ReclamationModule.ModeOptions.Select(option => option.Value).ToArray());
+    }
+
+    [Fact]
     public async Task TaskQueuePage_SetLanguage_ShouldForceOpenTaskSettingsHostToRecreateWithNewTexts()
     {
         await using var fixture = await TestFixture.CreateAsync(language: "zh-cn");

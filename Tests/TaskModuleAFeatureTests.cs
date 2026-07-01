@@ -25,11 +25,12 @@ public sealed class TaskModuleAFeatureTests
         Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUpTask", "startup")).Success);
         Assert.True((await fixture.TaskQueue.AddTaskAsync("FightTask", "fight")).Success);
         Assert.True((await fixture.TaskQueue.AddTaskAsync("RecruitTask", "recruit")).Success);
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("SingleStepTask", "single-step")).Success);
 
         var queue = await fixture.TaskQueue.GetCurrentTaskQueueAsync();
         Assert.True(queue.Success);
         var tasks = Assert.IsAssignableFrom<IReadOnlyList<UnifiedTaskItem>>(queue.Value);
-        Assert.Equal(3, tasks.Count);
+        Assert.Equal(4, tasks.Count);
 
         Assert.Equal("StartUp", tasks[0].Type);
         Assert.Equal("Official", tasks[0].Params["client_type"]?.GetValue<string>());
@@ -45,6 +46,65 @@ public sealed class TaskModuleAFeatureTests
         Assert.True(tasks[2].Params["refresh"]?.GetValue<bool>());
         Assert.True(tasks[2].Params["force_refresh"]?.GetValue<bool>());
         Assert.True(tasks[2].Params["skip_robot"]?.GetValue<bool>());
+
+        Assert.Equal(TaskModuleTypes.SingleStep, tasks[3].Type);
+        Assert.Empty(tasks[3].Params);
+    }
+
+    [Fact]
+    public async Task QueueEnabledTasks_SingleStepMarkerWithoutRuntimeParams_ShouldBlockAppend()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.SingleStep, "single-step")).Success);
+
+        var queueResult = await fixture.TaskQueue.QueueEnabledTasksAsync();
+
+        Assert.False(queueResult.Success);
+        Assert.Contains("SingleStepTypeMissing", queueResult.Error?.Message ?? string.Empty, StringComparison.Ordinal);
+        Assert.Empty(fixture.Bridge.AppendedTasks);
+    }
+
+    [Fact]
+    public async Task QueueEnabledTasks_SingleStepWithCoreParams_ShouldAppendSingleStep()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.SingleStep, "single-step")).Success);
+        Assert.True((await fixture.TaskQueue.UpdateTaskParamsAsync(
+            0,
+            new JsonObject
+            {
+                ["type"] = "copilot",
+                ["subtype"] = "start",
+            })).Success);
+
+        var queueResult = await fixture.TaskQueue.QueueEnabledTasksAsync();
+
+        Assert.True(queueResult.Success);
+        var appended = Assert.Single(fixture.Bridge.AppendedTasks);
+        Assert.Equal(TaskModuleTypes.SingleStep, appended.Type);
+        var json = Assert.IsType<JsonObject>(JsonNode.Parse(appended.ParamsJson));
+        Assert.Equal("copilot", json["type"]?.GetValue<string>());
+        Assert.Equal("start", json["subtype"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task QueueEnabledTasks_FightInventoryTargetWithoutDepot_ShouldSkipAppend()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.Fight, "fight")).Success);
+        Assert.True((await fixture.TaskQueue.SaveFightParamsAsync(0, new FightTaskParamsDto
+        {
+            EnableTargetDrop = true,
+            DropId = "30012",
+            DropCount = 300,
+            IsInventoryTarget = true,
+        })).Success);
+
+        var queueResult = await fixture.TaskQueue.QueueEnabledTasksAsync();
+
+        Assert.True(queueResult.Success);
+        Assert.Equal(0, queueResult.Value);
+        Assert.Empty(fixture.Bridge.AppendedTasks);
     }
 
     [Fact]
@@ -369,6 +429,7 @@ public sealed class TaskModuleAFeatureTests
         Assert.Equal(2, json["medicine"]?.GetValue<int>());
         Assert.Equal(1, json["stone"]?.GetValue<int>());
         Assert.Equal(9999, json["expiring_medicine"]?.GetValue<int>());
+        Assert.Equal(9999, json["medicine_expire_days"]?.GetValue<int>());
         Assert.Equal(6, json["times"]?.GetValue<int>());
         Assert.Equal(3, json["series"]?.GetValue<int>());
         Assert.True(json["DrGrandet"]?.GetValue<bool>());
@@ -427,6 +488,8 @@ public sealed class TaskModuleAFeatureTests
             ChooseLevel5 = false,
             ChooseLevel6 = true,
             SetTime = true,
+            PreserveTagsEnabled = true,
+            PreserveTags = ["支援机械", "高级资深干员"],
             Level3Time = 540,
             Level4Time = 530,
             Level5Time = 520,
@@ -445,6 +508,9 @@ public sealed class TaskModuleAFeatureTests
         Assert.Equal(4, json["expedite_times"]?.GetValue<int>());
         Assert.True(json["skip_robot"]?.GetValue<bool>());
 
+        var preserveTags = Assert.IsType<JsonArray>(json["preserve_tags"]);
+        Assert.Equal(["支援机械", "高级资深干员"], ReadStringArray(preserveTags));
+
         var confirm = Assert.IsType<JsonArray>(json["confirm"]);
         Assert.Contains(confirm, item => item?.GetValue<int>() == 1);
         Assert.Contains(confirm, item => item?.GetValue<int>() == 3);
@@ -462,6 +528,28 @@ public sealed class TaskModuleAFeatureTests
         Assert.Equal(530, recruitmentTime["4"]?.GetValue<int>());
         Assert.Equal(520, recruitmentTime["5"]?.GetValue<int>());
         Assert.DoesNotContain("6", recruitmentTime.Select(pair => pair.Key), StringComparer.Ordinal);
+    }
+
+    [Fact]
+    public async Task QueueEnabledTasks_RecruitSkipRobotDoesNotImplyPreserveTags()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Recruit", "recruit")).Success);
+        Assert.True((await fixture.TaskQueue.SaveRecruitParamsAsync(0, new RecruitTaskParamsDto
+        {
+            SkipRobot = true,
+            PreserveTagsEnabled = false,
+            PreserveTags = ["支援机械"],
+        })).Success);
+
+        var queueResult = await fixture.TaskQueue.QueueEnabledTasksAsync();
+
+        Assert.True(queueResult.Success);
+        var appended = Assert.Single(fixture.Bridge.AppendedTasks);
+        var json = Assert.IsType<JsonObject>(JsonNode.Parse(appended.ParamsJson));
+        Assert.True(json["skip_robot"]?.GetValue<bool>());
+        var preserveTags = Assert.IsType<JsonArray>(json["preserve_tags"]);
+        Assert.Empty(preserveTags);
     }
 
     [Fact]
@@ -521,6 +609,9 @@ public sealed class TaskModuleAFeatureTests
             ChooseLevel5 = true,
             ChooseLevel6 = true,
             SetTime = true,
+            FirstTags = ["先锋干员"],
+            PreserveTagsEnabled = true,
+            PreserveTags = ["支援机械", "高级资深干员"],
             Level3Time = 540,
             Level4Time = 530,
             Level5Time = 520,
@@ -573,6 +664,9 @@ public sealed class TaskModuleAFeatureTests
         Assert.False(recruit.Value.ChooseLevel4);
         Assert.True(recruit.Value.ChooseLevel5);
         Assert.True(recruit.Value.ChooseLevel6);
+        Assert.Equal(["先锋干员"], recruit.Value.FirstTags);
+        Assert.True(recruit.Value.PreserveTagsEnabled);
+        Assert.Equal(["支援机械", "高级资深干员"], recruit.Value.PreserveTags);
         Assert.Equal(540, recruit.Value.Level3Time);
         Assert.Equal(530, recruit.Value.Level4Time);
         Assert.Equal(520, recruit.Value.Level5Time);
@@ -862,10 +956,14 @@ public sealed class TaskModuleAFeatureTests
         var startUpView = File.ReadAllText(Path.Combine(root, "App", "Features", "TaskQueue", "StartUpTaskView.axaml"));
         var fightView = File.ReadAllText(Path.Combine(root, "App", "Features", "TaskQueue", "FightSettingsView.axaml"));
         var recruitView = File.ReadAllText(Path.Combine(root, "App", "Features", "TaskQueue", "RecruitSettingsView.axaml"));
+        var singleStepView = File.ReadAllText(Path.Combine(root, "App", "Features", "TaskQueue", "SingleStepSettingsView.axaml"));
 
         Assert.Contains("DynamicResource", startUpView);
         Assert.Contains("DynamicResource", fightView);
         Assert.Contains("DynamicResource", recruitView);
+        Assert.Contains("SelectedValue=\"{Binding Subtype}\"", singleStepView);
+        Assert.Contains("Text=\"{Binding Type, UpdateSourceTrigger=LostFocus}\"", singleStepView);
+        Assert.Contains("Text=\"{Binding DetailsText, UpdateSourceTrigger=LostFocus}\"", singleStepView);
         Assert.Contains("IsVisible=\"{Binding IsMacBundledAdbSupported}\"", startUpView);
         Assert.Contains("IsChecked=\"{Binding MacUseBundledAdb}\"", startUpView);
         Assert.Contains("IsVisible=\"{Binding ShowManualAdbPathControls}\"", startUpView);
@@ -873,12 +971,20 @@ public sealed class TaskModuleAFeatureTests
         Assert.DoesNotContain("SelectedAttachWindowMouseOption", startUpView);
         Assert.DoesNotContain("SelectedAttachWindowKeyboardOption", startUpView);
         Assert.Contains("IsChecked=\"{Binding ChooseLevel6}\"", recruitView);
+        Assert.Contains("IsChecked=\"{Binding PreserveTagsEnabled}\"", recruitView);
+        Assert.Contains("HeaderText=\"{Binding PreserveTagsSummary}\"", recruitView);
+        Assert.Contains("ItemsSource=\"{Binding PreserveTagOptions}\"", recruitView);
         Assert.DoesNotContain("AutoSelectLevel6Notice", recruitView);
     }
 
     private static string ResolveRepoRoot()
     {
         return TestRepoLayout.GetMaaUnifiedRoot();
+    }
+
+    private static string[] ReadStringArray(JsonArray array)
+    {
+        return array.Select(item => item?.GetValue<string>() ?? string.Empty).ToArray();
     }
 
     private static string[] GetRequiredLocalizationKeys()
@@ -917,6 +1023,8 @@ public sealed class TaskModuleAFeatureTests
             "Issue.RecruitTimeOutOfRange",
             "Recruit.AutoSelectLevel6",
             "Recruit.AutoSelectLevel6FixedTime",
+            "Recruit.PreserveTags",
+            "Recruit.PreserveTagsTip",
             "Issue.TaskFieldMissing",
             "TaskQueue.Status.ParamsLoaded",
         ];

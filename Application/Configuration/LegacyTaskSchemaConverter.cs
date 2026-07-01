@@ -17,6 +17,8 @@ internal static class LegacyTaskSchemaConverter
         ["AwardTask"] = "Award",
         ["RoguelikeTask"] = "Roguelike",
         ["ReclamationTask"] = "Reclamation",
+        ["UserDataUpdateTask"] = "UserDataUpdate",
+        ["SingleStepTask"] = "SingleStep",
         ["CustomTask"] = "Custom",
         // Accept already migrated type names.
         ["StartUp"] = "StartUp",
@@ -28,6 +30,8 @@ internal static class LegacyTaskSchemaConverter
         ["Award"] = "Award",
         ["Roguelike"] = "Roguelike",
         ["Reclamation"] = "Reclamation",
+        ["UserDataUpdate"] = "UserDataUpdate",
+        ["SingleStep"] = "SingleStep",
         ["Custom"] = "Custom",
     };
 
@@ -76,6 +80,8 @@ internal static class LegacyTaskSchemaConverter
                 "Award" => ConvertAward(legacyTask),
                 "Roguelike" => ConvertRoguelike(legacyTask),
                 "Reclamation" => ConvertReclamation(legacyTask),
+                "UserDataUpdate" => ConvertUserDataUpdate(legacyTask),
+                "SingleStep" => ConvertSingleStep(legacyTask),
                 "Custom" => ConvertCustom(legacyTask),
                 _ => [],
             };
@@ -202,8 +208,13 @@ internal static class LegacyTaskSchemaConverter
         var useMedicine = GetNullableBool(task, "UseMedicine") ?? false;
         var useStone = GetNullableBool(task, "UseStone") ?? false;
         var useExpiringMedicine = GetBool(task, "UseExpiringMedicine", false);
+        var expiringMedicine = GetInt(task, "MedicineExpireDays", 9999);
+        var useExpireMedicineForActivity = GetBool(task, "UseExpireMedicineForActivity", false);
         var enableTimesLimit = GetNullableBool(task, "EnableTimesLimit") ?? false;
         var enableTargetDrop = GetNullableBool(task, "EnableTargetDrop") ?? false;
+        var dropId = GetString(task, "DropId") ?? string.Empty;
+        var dropCount = GetInt(task, "DropCount", 1);
+        var isInventoryTarget = GetBool(task, "IsInventoryTarget", false);
         var useCustomAnnihilation = GetBool(task, "UseCustomAnnihilation", false);
         var annihilationStage = GetString(task, "AnnihilationStage") ?? string.Empty;
         var useAlternateStage = GetBool(task, "UseOptionalStage", false);
@@ -234,15 +245,17 @@ internal static class LegacyTaskSchemaConverter
         {
             ["stage"] = stage,
             ["medicine"] = useMedicine ? GetInt(task, "MedicineCount", 0) : 0,
-            ["expiring_medicine"] = useExpiringMedicine ? 9999 : 0,
+            ["expiring_medicine"] = useExpiringMedicine ? Math.Max(1, expiringMedicine) : 0,
+            ["medicine_expire_days"] = useExpiringMedicine ? Math.Max(1, expiringMedicine) : 0,
             ["stone"] = useStone ? GetInt(task, "StoneCount", 0) : 0,
             ["times"] = enableTimesLimit ? GetInt(task, "TimesLimit", int.MaxValue) : int.MaxValue,
-            ["series"] = Math.Max(1, GetInt(task, "Series", 1)),
+            ["series"] = LegacyConfigValueMappings.NormalizeFightSeries(task["Series"]),
             ["DrGrandet"] = GetBool(task, "IsDrGrandet", false),
             ["report_to_penguin"] = ResolveBooleanSetting(profile, config, "EnablePenguin"),
             ["report_to_yituliu"] = ResolveBooleanSetting(profile, config, "EnableYituliu"),
             ["penguin_id"] = ResolveStringSetting(profile, config, "PenguinId"),
-            ["yituliu_id"] = ResolveStringSetting(profile, config, "YituliuId"),
+            ["yituliu_id"] = ResolveStringSetting(profile, config, "YituliuId")
+                ?? ResolveStringSetting(profile, config, "PenguinId"),
             ["server"] = ResolveServerType(profile, config),
             ["client_type"] = ResolveClientType(profile, config),
             ["_ui_stage_plan"] = ToJsonArray(stagePlan),
@@ -251,6 +264,10 @@ internal static class LegacyTaskSchemaConverter
             ["_ui_use_stone"] = JsonValue.Create(GetNullableBool(task, "UseStone")),
             ["_ui_enable_times_limit"] = JsonValue.Create(GetNullableBool(task, "EnableTimesLimit")),
             ["_ui_enable_target_drop"] = JsonValue.Create(GetNullableBool(task, "EnableTargetDrop")),
+            ["_ui_drop_id"] = dropId.Trim(),
+            ["_ui_drop_count"] = Math.Max(1, dropCount),
+            ["_ui_is_inventory_target"] = isInventoryTarget,
+            ["_ui_use_expire_medicine_for_activity"] = useExpireMedicineForActivity,
             ["_ui_use_alternate_stage"] = useAlternateStage,
             ["_ui_hide_unavailable_stage"] = hideUnavailableStage,
             ["_ui_stage_reset_mode"] = stageResetMode,
@@ -270,12 +287,11 @@ internal static class LegacyTaskSchemaConverter
 
         if (enableTargetDrop)
         {
-            var dropId = GetString(task, "DropId");
             if (!string.IsNullOrWhiteSpace(dropId))
             {
                 var drops = new JsonObject
                 {
-                    [dropId] = GetInt(task, "DropCount", 1),
+                    [dropId] = Math.Max(1, dropCount),
                 };
                 result["drops"] = drops;
             }
@@ -291,6 +307,7 @@ internal static class LegacyTaskSchemaConverter
         var level3Choose = GetBool(task, "Level3Choose", true);
         var level4Choose = GetBool(task, "Level4Choose", true);
         var level5Choose = GetBool(task, "Level5Choose", false);
+        var level6Choose = GetBool(task, "Level6Choose", false);
         var useExpedited = GetBool(task, "UseExpedited", true);
 
         var selectList = new JsonArray();
@@ -318,23 +335,16 @@ internal static class LegacyTaskSchemaConverter
             confirmList.Add(5);
         }
 
-        var firstTags = new JsonArray();
-        if (task["Level3PreferTags"] is JsonArray tagsArray)
+        if (level6Choose)
         {
-            foreach (var tag in tagsArray)
-            {
-                if (tag is null)
-                {
-                    continue;
-                }
-
-                var tagText = tag.GetValue<string?>();
-                if (!string.IsNullOrWhiteSpace(tagText))
-                {
-                    firstTags.Add(tagText.Trim());
-                }
-            }
+            selectList.Add(6);
+            confirmList.Add(6);
         }
+
+        var firstTags = ToJsonArray(ReadStringArray(task, "Level3PreferTags"));
+        var preserveTagEnabled = GetBool(task, "PreserveTagEnabled", false)
+            || (!task.ContainsKey("PreserveTagEnabled") && ReadStringArray(task, "PreserveTags").Count > 0);
+        var preserveTags = ToJsonArray(preserveTagEnabled ? ReadLegacyRecruitPreserveTags(task) : []);
 
         var result = new JsonObject
         {
@@ -348,6 +358,8 @@ internal static class LegacyTaskSchemaConverter
             ["skip_robot"] = level1NotChoose,
             ["extra_tags_mode"] = GetInt(task, "ExtraTagMode", 0),
             ["first_tags"] = firstTags,
+            ["preserve_tags"] = preserveTags,
+            ["_ui_preserve_tags_enabled"] = preserveTagEnabled,
             ["recruitment_time"] = new JsonObject
             {
                 ["3"] = GetInt(task, "Level3Time", 540),
@@ -357,13 +369,63 @@ internal static class LegacyTaskSchemaConverter
             ["report_to_penguin"] = ResolveBooleanSetting(profile, config, "EnablePenguin"),
             ["report_to_yituliu"] = ResolveBooleanSetting(profile, config, "EnableYituliu"),
             ["penguin_id"] = ResolveStringSetting(profile, config, "PenguinId"),
-            ["yituliu_id"] = ResolveStringSetting(profile, config, "YituliuId"),
+            ["yituliu_id"] = ResolveStringSetting(profile, config, "YituliuId")
+                ?? ResolveStringSetting(profile, config, "PenguinId"),
             ["server"] = ResolveServerType(profile, config),
         };
 
         if (useExpedited)
         {
             result["expedite_times"] = maxTimes;
+        }
+
+        return result;
+    }
+
+    private static List<string> ReadLegacyRecruitPreserveTags(JsonObject task)
+    {
+        if (GetBool(task, "PreserveTagEnabled", false))
+        {
+            var explicitTags = ReadStringArray(task, "PreserveTagList");
+            if (explicitTags.Count == 0)
+            {
+                explicitTags = ReadStringArray(task, "PreserveTags");
+            }
+
+            if (explicitTags.Count > 0)
+            {
+                return explicitTags;
+            }
+        }
+
+        if (!task.ContainsKey("PreserveTagEnabled"))
+        {
+            var explicitTags = ReadStringArray(task, "PreserveTags");
+            if (explicitTags.Count > 0)
+            {
+                return explicitTags;
+            }
+        }
+
+        return [];
+    }
+
+    private static List<string> ReadStringArray(JsonObject obj, string key)
+    {
+        if (obj[key] is not JsonArray array)
+        {
+            return [];
+        }
+
+        var result = new List<string>();
+        foreach (var item in array)
+        {
+            if (item is JsonValue value
+                && value.TryGetValue(out string? tagText)
+                && !string.IsNullOrWhiteSpace(tagText))
+            {
+                result.Add(tagText.Trim());
+            }
         }
 
         return result;
@@ -394,7 +456,7 @@ internal static class LegacyTaskSchemaConverter
             }
         }
 
-        var mode = GetInt(task, "Mode", 0);
+        var mode = LegacyConfigValueMappings.NormalizeInfrastMode(task["Mode"]);
         var result = new JsonObject
         {
             ["facility"] = facilities,
@@ -413,7 +475,7 @@ internal static class LegacyTaskSchemaConverter
         if (mode == 10000)
         {
             result["filename"] = GetString(task, "Filename") ?? string.Empty;
-            result["plan_index"] = Math.Max(0, GetInt(task, "PlanSelect", 0));
+            result["plan_index"] = Math.Max(-1, GetInt(task, "PlanSelect", 0));
         }
 
         return result;
@@ -452,11 +514,20 @@ internal static class LegacyTaskSchemaConverter
         };
     }
 
+    private static JsonObject ConvertSingleStep(JsonObject task)
+    {
+        var result = new JsonObject();
+        CopyFirstPresent(task, result, "type", "type", "StepType");
+        CopyFirstPresent(task, result, "subtype", "subtype", "Subtype", "StepSubtype");
+        CopyFirstPresent(task, result, "details", "details", "Details", "StepDetails");
+        return result;
+    }
+
     private static JsonObject ConvertRoguelike(JsonObject task)
     {
-        var mode = GetInt(task, "Mode", 0);
+        var mode = LegacyConfigValueMappings.NormalizeRoguelikeMode(task["Mode"]);
         var theme = ResolveRoguelikeTheme(task["Theme"]);
-        var collectibleAwardsMask = GetInt(task, "CollectibleStartAwards", 0);
+        var collectibleAwardsMask = LegacyConfigValueMappings.NormalizeRoguelikeCollectibleAwardsMask(task["CollectibleStartAwards"]);
 
         var result = new JsonObject
         {
@@ -524,7 +595,7 @@ internal static class LegacyTaskSchemaConverter
 
         if (mode == 20001)
         {
-            result["find_playTime_target"] = GetInt(task, "FindPlaytimeTarget", 1);
+            result["find_playTime_target"] = LegacyConfigValueMappings.NormalizeFindPlaytimeTarget(task["FindPlaytimeTarget"]);
         }
 
         if (GetBool(task, "SamiFirstFloorFoldartal", false))
@@ -563,11 +634,18 @@ internal static class LegacyTaskSchemaConverter
 
     private static JsonObject ConvertReclamation(JsonObject task)
     {
+        var mode = LegacyConfigValueMappings.NormalizeReclamationMode(task["Mode"]);
+        var theme = ResolveReclamationTheme(task["Theme"]);
+        if (task["Theme"] is null && mode is 16 or 32 or 48)
+        {
+            theme = "RelaunchAnchor";
+        }
+
         return new JsonObject
         {
-            ["theme"] = ResolveReclamationTheme(task["Theme"]),
-            ["mode"] = GetInt(task, "Mode", 1),
-            ["increment_mode"] = GetInt(task, "IncrementMode", 0),
+            ["theme"] = theme,
+            ["mode"] = mode,
+            ["increment_mode"] = LegacyConfigValueMappings.NormalizeReclamationIncrementMode(task["IncrementMode"]),
             ["num_craft_batches"] = GetInt(task, "MaxCraftCountPerRound", 16),
             ["tools_to_craft"] = ToJsonArray(SplitNonEmpty(GetString(task, "ToolToCraft"), ';')),
             ["clear_store"] = GetBool(task, "ClearStore", true),
@@ -580,6 +658,63 @@ internal static class LegacyTaskSchemaConverter
         {
             ["task_names"] = ToJsonArray(SplitNonEmpty(GetString(task, "CustomTaskName"), ',')),
         };
+    }
+
+    private static JsonObject ConvertUserDataUpdate(JsonObject task)
+    {
+        return new JsonObject
+        {
+            ["update_oper_box"] = GetBool(task, "UpdateOperBox", true),
+            ["update_depot"] = GetBool(task, "UpdateDepot", true),
+            ["trigger_interval"] = NormalizeUserDataUpdateTriggerInterval(task["TriggerInterval"]),
+        };
+    }
+
+    private static string NormalizeUserDataUpdateTriggerInterval(JsonNode? value)
+    {
+        if (value is JsonValue jsonValue)
+        {
+            if (jsonValue.TryGetValue(out int number))
+            {
+                return number switch
+                {
+                    1 => UserDataUpdateTaskParamsDto.TriggerDaily,
+                    2 => UserDataUpdateTaskParamsDto.TriggerWeekly,
+                    _ => UserDataUpdateTaskParamsDto.TriggerEveryTime,
+                };
+            }
+
+            if (jsonValue.TryGetValue(out long number64))
+            {
+                return number64 switch
+                {
+                    1 => UserDataUpdateTaskParamsDto.TriggerDaily,
+                    2 => UserDataUpdateTaskParamsDto.TriggerWeekly,
+                    _ => UserDataUpdateTaskParamsDto.TriggerEveryTime,
+                };
+            }
+
+            if (jsonValue.TryGetValue(out string? text))
+            {
+                var trimmed = text?.Trim() ?? string.Empty;
+                if (int.TryParse(trimmed, out var parsed))
+                {
+                    return NormalizeUserDataUpdateTriggerInterval(JsonValue.Create(parsed));
+                }
+
+                if (string.Equals(trimmed, UserDataUpdateTaskParamsDto.TriggerDaily, StringComparison.OrdinalIgnoreCase))
+                {
+                    return UserDataUpdateTaskParamsDto.TriggerDaily;
+                }
+
+                if (string.Equals(trimmed, UserDataUpdateTaskParamsDto.TriggerWeekly, StringComparison.OrdinalIgnoreCase))
+                {
+                    return UserDataUpdateTaskParamsDto.TriggerWeekly;
+                }
+            }
+        }
+
+        return UserDataUpdateTaskParamsDto.TriggerEveryTime;
     }
 
     private static JsonObject BuildCollectibleStartList(int mask)
@@ -608,6 +743,14 @@ internal static class LegacyTaskSchemaConverter
                 stagePlan.Select(stageNode => stageNode?.GetValue<string?>()));
         }
 
+        if (task["StagePlan"] is JsonValue stagePlanValue
+            && stagePlanValue.TryGetValue(out string? stagePlanText)
+            && !string.IsNullOrWhiteSpace(stagePlanText))
+        {
+            return FightStageSelection.NormalizeStagePlan(
+                LegacyConfigValueMappings.SplitLegacyList(stagePlanText));
+        }
+
         return [FightStageSelection.CurrentOrLast];
     }
 
@@ -626,19 +769,7 @@ internal static class LegacyTaskSchemaConverter
 
     private static string ResolveFightStageResetMode(JsonObject task)
     {
-        var raw = GetString(task, "StageResetMode");
-        if (string.Equals(raw, "Ignore", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(raw, "1", StringComparison.OrdinalIgnoreCase))
-        {
-            return "Ignore";
-        }
-
-        if (GetInt(task, "StageResetMode", 0) == 1)
-        {
-            return "Ignore";
-        }
-
-        return "Current";
+        return LegacyConfigValueMappings.NormalizeFightStageResetMode(task["StageResetMode"]);
     }
 
     private static bool ResolveLegacyWeeklySchedule(JsonObject task, DayOfWeek dayOfWeek)
@@ -683,53 +814,19 @@ internal static class LegacyTaskSchemaConverter
 
     private static string ResolveRoguelikeTheme(JsonNode? themeNode)
     {
-        if (themeNode is JsonValue value)
-        {
-            if (value.TryGetValue(out string? themeText) && !string.IsNullOrWhiteSpace(themeText))
-            {
-                return themeText;
-            }
-
-            if (value.TryGetValue(out int themeNumber))
-            {
-                return themeNumber switch
-                {
-                    0 => "Phantom",
-                    1 => "Mizuki",
-                    2 => "Sami",
-                    3 => "Sarkaz",
-                    4 => "JieGarden",
-                    _ => "JieGarden",
-                };
-            }
-        }
-
-        return "JieGarden";
+        return LegacyConfigValueMappings.NormalizeRoguelikeTheme(themeNode);
     }
 
     private static string ResolveReclamationTheme(JsonNode? themeNode)
     {
-        if (themeNode is JsonValue value)
-        {
-            if (value.TryGetValue(out string? themeText) && !string.IsNullOrWhiteSpace(themeText))
-            {
-                return themeText;
-            }
-
-            if (value.TryGetValue(out int themeNumber))
-            {
-                return themeNumber == 0 ? "Fire" : "Tales";
-            }
-        }
-
-        return "Tales";
+        return LegacyConfigValueMappings.NormalizeReclamationTheme(themeNode);
     }
 
     private static string ResolveClientType(UnifiedProfile profile, UnifiedConfig config)
     {
-        return ResolveStringSetting(profile, config, "ClientType", "Start.ClientType")
+        return LegacyConfigValueNormalizer.NormalizeClientType(ResolveStringSetting(profile, config, "ClientType", "Start.ClientType")
             ?? ResolveStringSetting(profile, config, "GameSettings.ClientType")
-            ?? "Official";
+            ?? "Official");
     }
 
     private static string ResolveServerType(UnifiedProfile profile, UnifiedConfig config)
@@ -943,14 +1040,8 @@ internal static class LegacyTaskSchemaConverter
 
     private static IEnumerable<string> SplitNonEmpty(string? input, char separator)
     {
-        if (string.IsNullOrWhiteSpace(input))
-        {
-            return [];
-        }
-
-        return input
-            .Split(separator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Where(s => !string.IsNullOrWhiteSpace(s));
+        _ = separator;
+        return LegacyConfigValueMappings.SplitLegacyList(input);
     }
 
     private static JsonArray ToJsonArray(IEnumerable<string> values)
@@ -962,5 +1053,27 @@ internal static class LegacyTaskSchemaConverter
         }
 
         return array;
+    }
+
+    private static void CopyIfPresent(JsonObject source, JsonObject target, string key)
+    {
+        if (source.TryGetPropertyValue(key, out var value) && value is not null)
+        {
+            target[key] = value.DeepClone();
+        }
+    }
+
+    private static void CopyFirstPresent(JsonObject source, JsonObject target, string targetKey, params string[] sourceKeys)
+    {
+        foreach (var sourceKey in sourceKeys)
+        {
+            if (!source.TryGetPropertyValue(sourceKey, out var value) || value is null)
+            {
+                continue;
+            }
+
+            target[targetKey] = value.DeepClone();
+            return;
+        }
     }
 }

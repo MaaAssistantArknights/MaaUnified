@@ -1,0 +1,58 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:MAAUnified.App.Controls"
+             xmlns:vm="clr-namespace:MAAUnified.App.ViewModels.TaskQueue"
+             x:Class="MAAUnified.App.Features.TaskQueue.SingleStepSettingsView">
+  <UserControl.Styles>
+    <Style Selector="StackPanel.single-step-content">
+      <Setter Property="Spacing" Value="{DynamicResource MAA.App.Settings.PageCompactFlowSpacing}" />
+    </Style>
+
+    <Style Selector="StackPanel.single-step-card-content">
+      <Setter Property="Spacing" Value="{DynamicResource MAA.App.Settings.PageToggleStackSpacing}" />
+    </Style>
+  </UserControl.Styles>
+
+  <controls:AdaptiveSpacingStackPanel Margin="4" Classes="single-step-content">
+    <Border Classes="app-surface app-card">
+      <controls:AdaptiveSpacingStackPanel Classes="single-step-card-content">
+        <TextBlock Classes="app-section-title"
+                   Text="{Binding TitleText}" />
+        <TextBlock MaxWidth="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
+                   Classes="app-caption"
+                   TextWrapping="Wrap"
+                   Text="{Binding BodyText}" />
+        <controls:SettingsInlineRow FieldWidth="{DynamicResource MAA.Size.Settings.FieldWideWidth}">
+          <TextBlock Classes="subtle"
+                     Text="{Binding Texts[TaskQueue.SingleStep.Type]}"
+                     TextWrapping="Wrap" />
+          <controls:AppTextInput Text="{Binding Type, UpdateSourceTrigger=LostFocus}" />
+        </controls:SettingsInlineRow>
+        <controls:SettingsInlineRow FieldWidth="{DynamicResource MAA.Size.Settings.FieldWideWidth}">
+          <TextBlock Classes="subtle"
+                     Text="{Binding Texts[TaskQueue.SingleStep.Subtype]}"
+                     TextWrapping="Wrap" />
+          <controls:AppSelect ItemsSource="{Binding SubtypeOptions}"
+                              SelectedValueBinding="{Binding Value}"
+                              SelectedValue="{Binding Subtype}">
+            <controls:AppSelect.ItemTemplate>
+              <DataTemplate x:DataType="vm:SingleStepModuleViewModel+StringOption">
+                <TextBlock Text="{Binding DisplayName}" />
+              </DataTemplate>
+            </controls:AppSelect.ItemTemplate>
+          </controls:AppSelect>
+        </controls:SettingsInlineRow>
+        <TextBlock Classes="subtle"
+                   Text="{Binding Texts[TaskQueue.SingleStep.Details]}"
+                   TextWrapping="Wrap" />
+        <controls:AppTextInput Width="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
+                               Classes="settings-input-block"
+                               AcceptsReturn="True"
+                               DismissFocusOnEnter="False"
+                               Height="120"
+                               Watermark="{Binding Texts[TaskQueue.SingleStep.DetailsPlaceholder]}"
+                               Text="{Binding DetailsText, UpdateSourceTrigger=LostFocus}" />
+      </controls:AdaptiveSpacingStackPanel>
+    </Border>
+  </controls:AdaptiveSpacingStackPanel>
+</UserControl>

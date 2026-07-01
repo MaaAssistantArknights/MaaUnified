@@ -51,6 +51,7 @@ public sealed class RecruitTaskModuleViewModel : TypedTaskModuleViewModelBase<Re
     private bool _useExpedited;
     private bool _skipRobot = true;
     private int _extraTagsMode;
+    private bool _preserveTagsEnabled;
     private bool _chooseLevel3 = true;
     private bool _chooseLevel4 = true;
     private bool _chooseLevel5;
@@ -72,7 +73,25 @@ public sealed class RecruitTaskModuleViewModel : TypedTaskModuleViewModelBase<Re
 
     public ObservableCollection<RecruitTagOption> FirstTagOptions { get; } = [];
 
+    public ObservableCollection<RecruitTagOption> PreserveTagOptions { get; } = [];
+
     public string FirstTagsSummary => BuildFirstTagsSummary();
+
+    public string PreserveTagsSummary => BuildPreserveTagsSummary();
+
+    public bool PreserveTagsEnabled
+    {
+        get => _preserveTagsEnabled;
+        set
+        {
+            if (!SetTrackedProperty(ref _preserveTagsEnabled, value))
+            {
+                return;
+            }
+
+            OnPropertyChanged(nameof(PreserveTagsSummary));
+        }
+    }
 
     public int Times
     {
@@ -291,16 +310,15 @@ public sealed class RecruitTaskModuleViewModel : TypedTaskModuleViewModelBase<Re
         Level3Time = dto.Level3Time;
         Level4Time = dto.Level4Time;
         Level5Time = dto.Level5Time;
+        PreserveTagsEnabled = dto.PreserveTagsEnabled;
         ApplyFirstTags(dto.FirstTags);
+        ApplyPreserveTags(dto.PreserveTags);
     }
 
     protected override RecruitTaskParamsDto BuildDto()
     {
-        var firstTags = FirstTagOptions
-            .Where(option => option.IsSelected)
-            .Select(option => option.Value)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
+        var firstTags = BuildSelectedTagValues(FirstTagOptions);
+        var preserveTags = BuildSelectedTagValues(PreserveTagOptions);
 
         return new RecruitTaskParamsDto
         {
@@ -311,6 +329,8 @@ public sealed class RecruitTaskModuleViewModel : TypedTaskModuleViewModelBase<Re
             SkipRobot = SkipRobot,
             ExtraTagsMode = ExtraTagsMode,
             FirstTags = firstTags,
+            PreserveTagsEnabled = PreserveTagsEnabled,
+            PreserveTags = preserveTags,
             ChooseLevel3 = ChooseLevel3,
             ChooseLevel4 = ChooseLevel4,
             ChooseLevel5 = ChooseLevel5,
@@ -359,8 +379,14 @@ public sealed class RecruitTaskModuleViewModel : TypedTaskModuleViewModelBase<Re
             .Where(option => option.IsSelected)
             .Select(option => option.Value)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var preserveSelected = PreserveTagOptions
+            .Where(option => option is not null)
+            .Where(option => option.IsSelected)
+            .Select(option => option.Value)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        var recruitTags = ResolveRecruitTags();
+        var firstTags = ResolveRecruitTags(firstTagsOnly: true);
+        var preserveTags = ResolveRecruitTags(firstTagsOnly: false);
 
         foreach (var option in FirstTagOptions)
         {
@@ -368,7 +394,7 @@ public sealed class RecruitTaskModuleViewModel : TypedTaskModuleViewModelBase<Re
         }
 
         FirstTagOptions.Clear();
-        foreach (var (display, value) in recruitTags)
+        foreach (var (display, value) in firstTags)
         {
             var option = new RecruitTagOption(display, value)
             {
@@ -378,16 +404,45 @@ public sealed class RecruitTaskModuleViewModel : TypedTaskModuleViewModelBase<Re
             FirstTagOptions.Add(option);
         }
 
+        foreach (var option in PreserveTagOptions)
+        {
+            option.PropertyChanged -= OnRecruitTagOptionChanged;
+        }
+
+        PreserveTagOptions.Clear();
+        foreach (var (display, value) in preserveTags)
+        {
+            var option = new RecruitTagOption(display, value)
+            {
+                IsSelected = preserveSelected.Contains(value),
+            };
+            option.PropertyChanged += OnRecruitTagOptionChanged;
+            PreserveTagOptions.Add(option);
+        }
+
         OnPropertyChanged(nameof(FirstTagsSummary));
+        OnPropertyChanged(nameof(PreserveTagsSummary));
     }
 
     private void ApplyFirstTags(IReadOnlyList<string> tags)
+    {
+        ApplyTags(FirstTagOptions, tags);
+        OnPropertyChanged(nameof(FirstTagsSummary));
+    }
+
+    private void ApplyPreserveTags(IReadOnlyList<string> tags)
+    {
+        ApplyTags(PreserveTagOptions, tags);
+        OnPropertyChanged(nameof(PreserveTagsSummary));
+    }
+
+    private void ApplyTags(IEnumerable<RecruitTagOption> options, IReadOnlyList<string> tags)
     {
         var selected = tags.ToHashSet(StringComparer.OrdinalIgnoreCase);
         _suppressTagSelectionChanged = true;
         try
         {
-            foreach (var option in FirstTagOptions)
+            foreach (var option in options)
             {
                 option.IsSelected = selected.Contains(option.Value);
             }
@@ -396,8 +451,6 @@ public sealed class RecruitTaskModuleViewModel : TypedTaskModuleViewModelBase<Re
         {
             _suppressTagSelectionChanged = false;
         }
-
-        OnPropertyChanged(nameof(FirstTagsSummary));
     }
 
     private void OnRecruitTagOptionChanged(object? sender, PropertyChangedEventArgs e)
@@ -408,6 +461,7 @@ public sealed class RecruitTaskModuleViewModel : TypedTaskModuleViewModelBase<Re
         }
 
         OnPropertyChanged(nameof(FirstTagsSummary));
+        OnPropertyChanged(nameof(PreserveTagsSummary));
         MarkDirty();
     }
 
@@ -427,7 +481,32 @@ public sealed class RecruitTaskModuleViewModel : TypedTaskModuleViewModelBase<Re
         return string.Join(", ", selected);
     }
 
-    private IReadOnlyList<(string Display, string Value)> ResolveRecruitTags()
+    private string BuildPreserveTagsSummary()
+    {
+        var selected = PreserveTagOptions
+            .Where(option => option.IsSelected)
+            .Select(option => option.DisplayName)
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .ToList();
+
+        if (selected.Count == 0)
+        {
+            return Texts.GetOrDefault("Recruit.PreserveTags", "Preserve tags");
+        }
+
+        return string.Join(", ", selected);
+    }
+
+    private static List<string> BuildSelectedTagValues(IEnumerable<RecruitTagOption> options)
+    {
+        return options
+            .Where(option => option.IsSelected)
+            .Select(option => option.Value)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private IReadOnlyList<(string Display, string Value)> ResolveRecruitTags(bool firstTagsOnly)
     {
         var clientType = ResolveCurrentClientType();
         var displayLanguage = UiLanguageCatalog.Normalize(Texts.Language);
@@ -435,7 +514,10 @@ public sealed class RecruitTaskModuleViewModel : TypedTaskModuleViewModelBase<Re
         var displayTags = ParseRecruitTags(ResolveRecruitmentPathByDisplayLanguage(displayLanguage));
 
         var list = new List<(string Display, string Value)>();
-        foreach (var key in AutoRecruitTagKeys)
+        var tagKeys = firstTagsOnly
+            ? AutoRecruitTagKeys
+            : clientTags.Keys.OrderBy(key => key, StringComparer.Ordinal).ToArray();
+        foreach (var key in tagKeys)
         {
             if (!clientTags.TryGetValue(key, out var clientValue) || string.IsNullOrWhiteSpace(clientValue))
             {

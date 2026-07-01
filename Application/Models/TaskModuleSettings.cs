@@ -14,6 +14,7 @@ public static class TaskModuleTypes
     public const string Roguelike = "Roguelike";
     public const string Reclamation = "Reclamation";
     public const string UserDataUpdate = "UserDataUpdate";
+    public const string SingleStep = "SingleStep";
     public const string Custom = "Custom";
     public const string PostAction = "PostAction";
 

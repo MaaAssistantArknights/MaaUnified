@@ -313,6 +313,12 @@
   <data name="Fight.DropCount" xml:space="preserve">
     <value>목표 수량</value>
   </data>
+  <data name="Fight.DropQuantityMode" xml:space="preserve">
+    <value>수량</value>
+  </data>
+  <data name="Fight.DropTargetMode" xml:space="preserve">
+    <value>목표 모드</value>
+  </data>
   <data name="Fight.DropId" xml:space="preserve">
     <value>드랍 ID</value>
   </data>
@@ -354,7 +360,9 @@
 연속 대리 지휘 횟수를 조정하지 않습니다。</value>
   </data>
   <data name="Fight.SpecifiedDropsTip" xml:space="preserve">
-    <value>이 기능은 최적의 스테이지를 자동으로 계산하지 않습니다</value>
+    <value>스테이지는 위의 스테이지 설정을 따릅니다.
+수량: 이 전투 작업에서 해당 재료를 설정한 수량만큼 획득하면 중지합니다.
+목표 보유량: 도구함 창고 인식에 저장된 보유량을 참고하여 설정 보유량까지 부족분만 파밍합니다. 창고 데이터는 오래되었을 수 있으므로 사용자 데이터 업데이트 또는 창고 인식으로 동기화하세요.</value>
   </data>
   <data name="Fight.Stage" xml:space="preserve">
     <value>스테이지</value>
@@ -391,6 +399,12 @@
   </data>
   <data name="Fight.UseExpiringMedicine" xml:space="preserve">
     <value>만료 임박 이성약 사용</value>
+  </data>
+  <data name="Fight.TargetInventory" xml:space="preserve">
+    <value>목표 보유량</value>
+  </data>
+  <data name="Fight.UseExpireMedicineForActivity" xml:space="preserve">
+    <value>이벤트 종료 48시간 전, 이번 주 만료되는 이성 회복제 사용</value>
   </data>
   <data name="Fight.UseMedicine" xml:space="preserve">
     <value>이성약 사용</value>
@@ -999,8 +1013,20 @@ OF-1 스테이지가 개방되지 않은 경우에는 선택하지 마세요.</v
   <data name="Reclamation.Option.Mode.NoArchive" xml:space="preserve">
     <value>세이브 X, 스테이지 반복으로 번영의 선물 획득</value>
   </data>
+  <data name="Reclamation.Option.Mode.RA1" xml:space="preserve">
+    <value>RA-1</value>
+  </data>
+  <data name="Reclamation.Option.Mode.RA4" xml:space="preserve">
+    <value>RA-4</value>
+  </data>
+  <data name="Reclamation.Option.Mode.RA15" xml:space="preserve">
+    <value>RA-15</value>
+  </data>
   <data name="Reclamation.Option.Theme.FireClosed" xml:space="preserve">
     <value>모래 속의 불 (이벤트 미개방)</value>
+  </data>
+  <data name="Reclamation.Option.Theme.RelaunchAnchor" xml:space="preserve">
+    <value>Relaunch Anchor</value>
   </data>
   <data name="Reclamation.Option.Theme.Tales" xml:space="preserve">
     <value>사막 이야기</value>
@@ -1061,6 +1087,12 @@ OF-1 스테이지가 개방되지 않은 경우에는 선택하지 마세요.</v
   </data>
   <data name="Recruit.Option.ExtraTags.SelectAll" xml:space="preserve">
     <value>항상 3개의 태그를 선택</value>
+  </data>
+  <data name="Recruit.PreserveTags" xml:space="preserve">
+    <value>지정 태그 보류</value>
+  </data>
+  <data name="Recruit.PreserveTagsTip" xml:space="preserve">
+    <value>선택한 태그 중 하나라도 인식되면 해당 모집을 건너뛰고 슬롯을 유지합니다. 비워 두면 어떤 태그도 보류하지 않습니다.</value>
   </data>
   <data name="Recruit.Refresh" xml:space="preserve">
     <value>자동 새로고침</value>
@@ -1754,6 +1786,9 @@ OF-1 스테이지가 개방되지 않은 경우에는 선택하지 마세요.</v
   </data>
   <data name="Settings.ConfigurationManager.SaveAsNewSucceededInline" xml:space="preserve">
     <value>저장되었습니다</value>
+  </data>
+  <data name="Settings.ConfigurationManager.SwitchSucceededInline" xml:space="preserve">
+    <value>{0}(으)로 전환되었습니다</value>
   </data>
   <data name="Settings.ConfigurationManager.ImportSucceededInline" xml:space="preserve">
     <value>가져오기에 성공했습니다</value>
@@ -2888,6 +2923,33 @@ OF-1 스테이지가 개방되지 않은 경우에는 선택하지 마세요.</v
   </data>
   <data name="TaskQueue.Module.UserDataUpdate" xml:space="preserve">
     <value>사용자 데이터 업데이트</value>
+  </data>
+  <data name="TaskQueue.Module.SingleStep" xml:space="preserve">
+    <value>단일 단계</value>
+  </data>
+  <data name="TaskQueue.SingleStep.Body" xml:space="preserve">
+    <value>SingleStep은 Core의 단일 단계 Copilot 진입점입니다. 가져온 marker 작업을 실행하려면 런타임 단계 매개변수가 필요합니다.</value>
+  </data>
+  <data name="TaskQueue.SingleStep.Type" xml:space="preserve">
+    <value>유형</value>
+  </data>
+  <data name="TaskQueue.SingleStep.Subtype" xml:space="preserve">
+    <value>하위 유형</value>
+  </data>
+  <data name="TaskQueue.SingleStep.Subtype.Start" xml:space="preserve">
+    <value>시작</value>
+  </data>
+  <data name="TaskQueue.SingleStep.Subtype.Stage" xml:space="preserve">
+    <value>스테이지</value>
+  </data>
+  <data name="TaskQueue.SingleStep.Subtype.Action" xml:space="preserve">
+    <value>동작</value>
+  </data>
+  <data name="TaskQueue.SingleStep.Details" xml:space="preserve">
+    <value>details JSON</value>
+  </data>
+  <data name="TaskQueue.SingleStep.DetailsPlaceholder" xml:space="preserve">
+    <value>{"stage_name":"..."}</value>
   </data>
   <data name="TaskQueue.UserDataUpdate.TriggerInterval" xml:space="preserve">
     <value>데이터 업데이트 실행 간격</value>

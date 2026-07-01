@@ -77,6 +77,10 @@ Windows GPU 探测会跳过明显不适合 OCR 的虚拟或间接显示适配器
 
 非 Windows 平台 GPU OCR 选择不可编辑，显示为不支持，并使用 CPU OCR。
 
+在 macOS publish 版的 CPU OCR 路径下，观察到任务完成后仍保留较高进程 footprint。一次实测中，`publish/bin/MAAUnified` 空闲基线约 `570 MB`，执行一次 Link Start 并等待任务完成后约 `689 MB`，peak 约 `859 MB`；`vmmap` 中 `DefaultMallocZone` allocated 从约 `93.1 MB` 增至约 `238.9 MB`。现有证据更符合 FastDeploy / ONNX Runtime 模型、session、arena 或中间 buffer 在任务完成后继续驻留，而不是 Avalonia UI 本身占用。其他平台尚未测试，暂不确认是否存在同类现象。
+
+曾尝试在任务全部完成或停止后调用 FastDeploy OCR detector / recognizer 的 `ReleaseReusedBuffer()`，可以降低峰值和部分 native heap，但对稳定 footprint 改善有限：footprint 约 `689 MB` -> `658 MB`，peak 约 `859 MB` -> `694 MB`，`DefaultMallocZone` allocated 约 `238.9 MB` -> `196.1 MB`。由于收益有限，该修改未保留。后续如继续优化，应优先评估任务完成后的 OCR session / model idle unload，或调研 FastDeploy / ONNX Runtime macOS CPU 后端 allocator、arena、memory pattern 和 session 生命周期配置；不应在每次 OCR 推理后释放资源。
+
 ## 诊断日志
 
 平台能力相关日志位于运行目录的 `debug/`：

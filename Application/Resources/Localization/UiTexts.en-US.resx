@@ -826,6 +826,12 @@ Remaining credits: </value>
   <data name="Fight.DropCount" xml:space="preserve">
     <value>Drop count</value>
   </data>
+  <data name="Fight.DropQuantityMode" xml:space="preserve">
+    <value>Quantity</value>
+  </data>
+  <data name="Fight.DropTargetMode" xml:space="preserve">
+    <value>Target mode</value>
+  </data>
   <data name="Fight.DropId" xml:space="preserve">
     <value>Drop ID</value>
   </data>
@@ -867,7 +873,9 @@ If the number of battles is not enough to complete the set multiplier (such as o
 Do not adjust the proxy multiplier setting in the game</value>
   </data>
   <data name="Fight.SpecifiedDropsTip" xml:space="preserve">
-    <value>This feature does not auto-calculate optimal stage.</value>
+    <value>The stage still follows the stage setting above.
+Quantity: stop after this Fight task gets the configured number of drops.
+Target inventory: use saved Toolbox depot data and only farm the missing amount up to the configured inventory. Depot data may be stale; sync it with User Data Update or Depot Recognition.</value>
   </data>
   <data name="Fight.Stage" xml:space="preserve">
     <value>Stage</value>
@@ -904,6 +912,12 @@ Do not adjust the proxy multiplier setting in the game</value>
   </data>
   <data name="Fight.UseExpiringMedicine" xml:space="preserve">
     <value>Unlimited use of expiring (&lt;48h) sanity potion</value>
+  </data>
+  <data name="Fight.TargetInventory" xml:space="preserve">
+    <value>Target inventory</value>
+  </data>
+  <data name="Fight.UseExpireMedicineForActivity" xml:space="preserve">
+    <value>Use sanity potions expiring this week within 48h before activity ends</value>
   </data>
   <data name="Fight.UseMedicine" xml:space="preserve">
     <value>Use Sanity Potion</value>
@@ -1891,8 +1905,20 @@ With save file: farm points through crafting (advanced).
   <data name="Reclamation.Option.Mode.NoArchive" xml:space="preserve">
     <value>I do not have a save, let's farm prosperity points by repeatedly entering and exiting stages.</value>
   </data>
+  <data name="Reclamation.Option.Mode.RA1" xml:space="preserve">
+    <value>RA-1</value>
+  </data>
+  <data name="Reclamation.Option.Mode.RA4" xml:space="preserve">
+    <value>RA-4</value>
+  </data>
+  <data name="Reclamation.Option.Mode.RA15" xml:space="preserve">
+    <value>RA-15</value>
+  </data>
   <data name="Reclamation.Option.Theme.FireClosed" xml:space="preserve">
     <value>Fire Within the Sand (The event is not open)</value>
+  </data>
+  <data name="Reclamation.Option.Theme.RelaunchAnchor" xml:space="preserve">
+    <value>Relaunch Anchor</value>
   </data>
   <data name="Reclamation.Option.Theme.Tales" xml:space="preserve">
     <value>Tales Within the Sand</value>
@@ -1968,6 +1994,12 @@ With save file: farm points through crafting (advanced).
   </data>
   <data name="Recruit.Option.ExtraTags.SelectAll" xml:space="preserve">
     <value>If higher ★ tags appear, always select 3 tags</value>
+  </data>
+  <data name="Recruit.PreserveTags" xml:space="preserve">
+    <value>Preserve selected tags</value>
+  </data>
+  <data name="Recruit.PreserveTagsTip" xml:space="preserve">
+    <value>Skip recruitment and keep the slot when any selected tag is identified. Leave empty to preserve none.</value>
   </data>
   <data name="Recruit.Refresh" xml:space="preserve">
     <value>Refresh</value>
@@ -2826,6 +2858,9 @@ With save file: farm points through crafting (advanced).
   </data>
   <data name="Settings.ConfigurationManager.SaveAsNewSucceededInline" xml:space="preserve">
     <value>Saved successfully</value>
+  </data>
+  <data name="Settings.ConfigurationManager.SwitchSucceededInline" xml:space="preserve">
+    <value>Switched to {0}</value>
   </data>
   <data name="Settings.ConfigurationManager.ImportSucceededInline" xml:space="preserve">
     <value>Imported successfully</value>
@@ -4392,6 +4427,33 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
   </data>
   <data name="TaskQueue.Module.UserDataUpdate" xml:space="preserve">
     <value>Update user data</value>
+  </data>
+  <data name="TaskQueue.Module.SingleStep" xml:space="preserve">
+    <value>Single Step</value>
+  </data>
+  <data name="TaskQueue.SingleStep.Body" xml:space="preserve">
+    <value>SingleStep is a Core single-step copilot entry. Imported marker tasks need runtime step parameters before they can run.</value>
+  </data>
+  <data name="TaskQueue.SingleStep.Type" xml:space="preserve">
+    <value>Type</value>
+  </data>
+  <data name="TaskQueue.SingleStep.Subtype" xml:space="preserve">
+    <value>Subtype</value>
+  </data>
+  <data name="TaskQueue.SingleStep.Subtype.Start" xml:space="preserve">
+    <value>Start</value>
+  </data>
+  <data name="TaskQueue.SingleStep.Subtype.Stage" xml:space="preserve">
+    <value>Stage</value>
+  </data>
+  <data name="TaskQueue.SingleStep.Subtype.Action" xml:space="preserve">
+    <value>Action</value>
+  </data>
+  <data name="TaskQueue.SingleStep.Details" xml:space="preserve">
+    <value>details JSON</value>
+  </data>
+  <data name="TaskQueue.SingleStep.DetailsPlaceholder" xml:space="preserve">
+    <value>{"stage_name":"..."}</value>
   </data>
   <data name="TaskQueue.UserDataUpdate.TriggerInterval" xml:space="preserve">
     <value>Update trigger interval</value>

@@ -9,6 +9,7 @@ using MAAUnified.Application.Orchestration;
 using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Features;
 using MAAUnified.Application.Services.Localization;
+using MAAUnified.Application.Services.TaskParams;
 using MAAUnified.CoreBridge;
 
 namespace MAAUnified.Tests;
@@ -358,6 +359,49 @@ public sealed class TaskModuleCFeatureTests
     }
 
     [Fact]
+    public async Task SaveReclamation_RelaunchAnchorModes_ShouldCompileCoreParams()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Reclamation", "reclamation")).Success);
+
+        var save = await fixture.TaskQueue.SaveReclamationParamsAsync(0, new ReclamationTaskParamsDto
+        {
+            Theme = "RelaunchAnchor",
+            Mode = 32,
+            IncrementMode = 1,
+            NumCraftBatches = 12,
+            ToolsToCraft = ["tool-a"],
+            ClearStore = true,
+        });
+        Assert.True(save.Success, save.Message);
+
+        var parameters = (await fixture.TaskQueue.GetTaskParamsAsync(0)).Value!;
+        Assert.Equal("RelaunchAnchor", parameters["theme"]?.GetValue<string>());
+        Assert.Equal(32, parameters["mode"]?.GetValue<int>());
+        Assert.Equal(1, parameters["increment_mode"]?.GetValue<int>());
+        Assert.Equal(12, parameters["num_craft_batches"]?.GetValue<int>());
+        Assert.False(parameters["clear_store"]?.GetValue<bool>());
+        Assert.Empty((JsonArray)parameters["tools_to_craft"]!);
+
+        var compiled = TaskParamCompiler.CompileReclamation(
+            new ReclamationTaskParamsDto { Theme = "RelaunchAnchor", Mode = 48 },
+            fixture.Config.CurrentConfig.Profiles["Default"],
+            fixture.Config.CurrentConfig);
+
+        Assert.Equal("RelaunchAnchor", compiled.Params["theme"]?.GetValue<string>());
+        Assert.Equal(48, compiled.Params["mode"]?.GetValue<int>());
+        Assert.DoesNotContain(compiled.Issues, issue => issue.Code == "ReclamationModeInvalid");
+
+        var fallback = TaskParamCompiler.CompileReclamation(
+            new ReclamationTaskParamsDto { Theme = "RelaunchAnchor", Mode = 1 },
+            fixture.Config.CurrentConfig.Profiles["Default"],
+            fixture.Config.CurrentConfig);
+
+        Assert.Equal(16, fallback.Params["mode"]?.GetValue<int>());
+        Assert.Contains(fallback.Issues, issue => issue.Code == "ReclamationModeInvalid" && !issue.Blocking);
+    }
+
+    [Fact]
     public async Task SaveConfig_NormalizesReclamationParamsAcrossProfiles()
     {
         await using var fixture = await TestFixture.CreateAsync();
@@ -518,6 +562,8 @@ public sealed class TaskModuleCFeatureTests
             "Reclamation.Title",
             "Reclamation.ToolsToCraft",
             "Reclamation.Option.Mode.Archive",
+            "Reclamation.Option.Mode.RA1",
+            "Reclamation.Option.Theme.RelaunchAnchor",
             "Custom.Title",
             "Custom.TaskNamesPreview",
             "Common.LoadingTaskHint",

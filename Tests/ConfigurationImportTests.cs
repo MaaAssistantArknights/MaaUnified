@@ -373,6 +373,779 @@ public sealed class ConfigurationImportTests
     }
 
     [Fact]
+    public async Task LegacyGuiImport_ShouldNormalizeHighConfidenceProfileValues()
+    {
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.json"),
+            """
+            {
+              "Current": "MuMu",
+              "Configurations": {
+                "MuMu": {
+                  "Connect.ConnectConfig": "mumu",
+                  "Connect.TouchMode": "MaaFramework",
+                  "Connect.AttachWindow.ScreencapMethod": 2,
+                  "Connect.AttachWindow.MouseMethod": 32,
+                  "Connect.AttachWindow.KeyboardMethod": 2,
+                  "Connect.MuMu12Index": 3,
+                  "Connect.LdPlayerIndex": 4,
+                  "Connect.AddressHistory": "[\"127.0.0.1:5555\",\"10.0.0.1:7555\"]"
+                },
+                "Androws": {
+                  "Connect.ConnectConfig": "Androws",
+                  "Connect.TouchMode": "ADB Input",
+                  "Connect.AttachWindow.KeyboardMethod": 4
+                }
+              }
+            }
+            """);
+
+        var service = CreateService(root);
+        var report = await service.ImportLegacyAsync(ImportSource.GuiOnly, manualImport: false);
+
+        Assert.True(report.Success);
+        var mumu = service.CurrentConfig.Profiles["MuMu"];
+        Assert.Equal("MuMuEmulator12", mumu.Values["ConnectConfig"]?.GetValue<string>());
+        Assert.Equal("MaaFwAdb", mumu.Values["TouchMode"]?.GetValue<string>());
+        Assert.Equal("2", mumu.Values["AttachWindowScreencapMethod"]?.GetValue<string>());
+        Assert.Equal("32", mumu.Values["AttachWindowMouseMethod"]?.GetValue<string>());
+        Assert.Equal("2", mumu.Values["AttachWindowKeyboardMethod"]?.GetValue<string>());
+        Assert.Equal("3", mumu.Values["MuMu12Index"]?.GetValue<string>());
+        Assert.Equal("4", mumu.Values["LdPlayerIndex"]?.GetValue<string>());
+        var history = Assert.IsType<JsonArray>(mumu.Values["ConnectAddressHistory"]);
+        Assert.Equal(["127.0.0.1:5555", "10.0.0.1:7555"], ReadStringArray(history));
+
+        var androws = service.CurrentConfig.Profiles["Androws"];
+        Assert.Equal("Androws", androws.Values["ConnectConfig"]?.GetValue<string>());
+        Assert.Equal("adb", androws.Values["TouchMode"]?.GetValue<string>());
+        Assert.Equal("4", androws.Values["AttachWindowKeyboardMethod"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task LegacyGuiImport_ShouldNormalizeLocalizedClientTypeValues()
+    {
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.json"),
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": {
+                  "Start.ClientType": "官服"
+                },
+                "BAccount": {
+                  "Start.ClientType": "b服"
+                },
+                "EnAccount": {
+                  "Start.ClientType": "Official (CN)"
+                }
+              }
+            }
+            """);
+
+        var service = CreateService(root);
+        var report = await service.ImportLegacyAsync(ImportSource.GuiOnly, manualImport: false);
+
+        Assert.True(report.Success);
+        Assert.Equal("Official", service.CurrentConfig.Profiles["Default"].Values["ClientType"]?.GetValue<string>());
+        Assert.Equal("Bilibili", service.CurrentConfig.Profiles["BAccount"].Values["ClientType"]?.GetValue<string>());
+        Assert.Equal("Official", service.CurrentConfig.Profiles["EnAccount"].Values["ClientType"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task GuiNewImport_FightSeriesAuto_ShouldPreserveAutoValue()
+    {
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.new.json"),
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": {
+                  "Start.ClientType": "BILIBILI",
+                  "TaskQueue": [
+                    {
+                      "$type": "FightTask",
+                      "Name": "Fight",
+                      "IsEnable": true,
+                      "StagePlan": ["1-7"],
+                      "Series": "auto"
+                    }
+                  ]
+                }
+              }
+            }
+            """);
+
+        var service = CreateService(root);
+        var report = await service.ImportLegacyAsync(ImportSource.GuiNewOnly, manualImport: false);
+
+        Assert.True(report.Success);
+        var profile = service.CurrentConfig.Profiles["Default"];
+        Assert.Equal("Bilibili", profile.Values["ClientType"]?.GetValue<string>());
+        var task = Assert.Single(profile.TaskQueue);
+        Assert.Equal(0, task.Params["series"]?.GetValue<int>());
+        Assert.Equal("Bilibili", task.Params["client_type"]?.GetValue<string>());
+
+        var (dto, issues) = TaskParamCompiler.ReadFight(task, strict: true);
+        Assert.Empty(issues);
+        Assert.Equal(0, dto.Series);
+    }
+
+    [Fact]
+    public async Task GuiNewImport_FightSeriesNumericZeroAndMinusOne_ShouldPreserveValues()
+    {
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.new.json"),
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": {
+                  "TaskQueue": [
+                    {
+                      "$type": "FightTask",
+                      "Name": "FightAutoSeries",
+                      "IsEnable": true,
+                      "StagePlan": ["1-7"],
+                      "Series": 0
+                    },
+                    {
+                      "$type": "FightTask",
+                      "Name": "FightNoSwitchSeries",
+                      "IsEnable": true,
+                      "StagePlan": ["1-7"],
+                      "Series": -1
+                    }
+                  ]
+                }
+              }
+            }
+            """);
+
+        var service = CreateService(root);
+        var report = await service.ImportLegacyAsync(ImportSource.GuiNewOnly, manualImport: false);
+
+        Assert.True(report.Success);
+        var tasks = service.CurrentConfig.Profiles["Default"].TaskQueue;
+        Assert.Equal(2, tasks.Count);
+        Assert.Equal(0, tasks[0].Params["series"]?.GetValue<int>());
+        Assert.Equal(-1, tasks[1].Params["series"]?.GetValue<int>());
+    }
+
+    [Fact]
+    public async Task GuiNewImport_ShouldNormalizeHighConfidenceLegacyTaskValues()
+    {
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.new.json"),
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": {
+                  "TaskQueue": [
+                    {
+                      "$type": "FightTask",
+                      "Name": "Fight",
+                      "IsEnable": true,
+                      "StagePlan": "1-7; CE-6|AP-5",
+                      "StageResetMode": "Invalid",
+                      "Series": "auto"
+                    },
+                    {
+                      "$type": "InfrastTask",
+                      "Name": "Infrast",
+                      "IsEnable": true,
+                      "Mode": "Custom",
+                      "PlanSelect": -1
+                    },
+                    {
+                      "$type": "RoguelikeTask",
+                      "Name": "RoguelikeCollapse",
+                      "IsEnable": true,
+                      "Theme": "3",
+                      "Mode": "CLP_PDS"
+                    },
+                    {
+                      "$type": "RoguelikeTask",
+                      "Name": "RoguelikeCollectible",
+                      "IsEnable": true,
+                      "Theme": "Mizuki",
+                      "Mode": "Collectible",
+                      "CollectibleStartAwards": "hot_water|shield;Idea;ticket"
+                    },
+                    {
+                      "$type": "RoguelikeTask",
+                      "Name": "RoguelikeFindPlaytime",
+                      "IsEnable": true,
+                      "Theme": "JieGarden",
+                      "Mode": "FindPlaytime",
+                      "FindPlaytimeTarget": "Shu"
+                    },
+                    {
+                      "$type": "ReclamationTask",
+                      "Name": "ReclamationNoSave",
+                      "IsEnable": true,
+                      "Theme": 0,
+                      "Mode": "ProsperityNoSave",
+                      "IncrementMode": "长按"
+                    },
+                    {
+                      "$type": "ReclamationTask",
+                      "Name": "ReclamationArchive",
+                      "IsEnable": true,
+                      "Mode": "ProsperityInSave",
+                      "ToolToCraft": "荧光棒\r\n工具A；工具B,工具C|工具D"
+                    },
+                    {
+                      "$type": "ReclamationTask",
+                      "Name": "ReclamationUnsupported",
+                      "IsEnable": true,
+                      "Theme": "RelaunchAnchor",
+                      "Mode": 16
+                    },
+                    {
+                      "$type": "RecruitTask",
+                      "Name": "Recruit",
+                      "IsEnable": true,
+                      "Level6Choose": true,
+                      "PreserveTagEnabled": true,
+                      "PreserveTagList": ["支援机械", "高级资深干员"]
+                    },
+                    {
+                      "$type": "CustomTask",
+                      "Name": "Custom",
+                      "IsEnable": true,
+                      "CustomTaskName": "Fight\r\nRecruit；Roguelike|Reclamation"
+                    }
+                  ]
+                }
+              }
+            }
+            """);
+
+        var service = CreateService(root);
+        var report = await service.ImportLegacyAsync(ImportSource.GuiNewOnly, manualImport: false);
+
+        Assert.True(report.Success);
+        var tasks = service.CurrentConfig.Profiles["Default"].TaskQueue;
+        var fight = tasks.Single(task => task.Name == "Fight");
+        Assert.Equal("Ignore", fight.Params["_ui_stage_reset_mode"]?.GetValue<string>());
+        Assert.Equal(["1-7", "CE-6", "AP-5"], ReadStringArray((JsonArray)fight.Params["_ui_stage_plan"]!));
+
+        var infrast = tasks.Single(task => task.Name == "Infrast");
+        Assert.Equal(10000, infrast.Params["mode"]?.GetValue<int>());
+        Assert.Equal(-1, infrast.Params["plan_index"]?.GetValue<int>());
+
+        var roguelikeCollapse = tasks.Single(task => task.Name == "RoguelikeCollapse");
+        Assert.Equal("Sarkaz", roguelikeCollapse.Params["theme"]?.GetValue<string>());
+        Assert.Equal(5, roguelikeCollapse.Params["mode"]?.GetValue<int>());
+
+        var roguelikeCollectible = tasks.Single(task => task.Name == "RoguelikeCollectible");
+        Assert.Equal("Mizuki", roguelikeCollectible.Params["theme"]?.GetValue<string>());
+        Assert.Equal(4, roguelikeCollectible.Params["mode"]?.GetValue<int>());
+        Assert.Equal(["hot_water", "shield", "ideas", "ticket"], ReadEnabledCollectibleAwards(roguelikeCollectible.Params["collectible_mode_start_list"]));
+
+        var roguelikeFindPlaytime = tasks.Single(task => task.Name == "RoguelikeFindPlaytime");
+        Assert.Equal(20001, roguelikeFindPlaytime.Params["mode"]?.GetValue<int>());
+        Assert.Equal(2, roguelikeFindPlaytime.Params["find_playTime_target"]?.GetValue<int>());
+
+        var reclamationNoSave = tasks.Single(task => task.Name == "ReclamationNoSave");
+        Assert.Equal("Fire", reclamationNoSave.Params["theme"]?.GetValue<string>());
+        Assert.Equal(0, reclamationNoSave.Params["mode"]?.GetValue<int>());
+        Assert.Equal(1, reclamationNoSave.Params["increment_mode"]?.GetValue<int>());
+
+        var reclamationArchive = tasks.Single(task => task.Name == "ReclamationArchive");
+        Assert.Equal(1, reclamationArchive.Params["mode"]?.GetValue<int>());
+        Assert.Equal(
+            ["荧光棒", "工具A", "工具B", "工具C", "工具D"],
+            ReadStringArray((JsonArray)reclamationArchive.Params["tools_to_craft"]!));
+
+        var reclamationUnsupported = tasks.Single(task => task.Name == "ReclamationUnsupported");
+        Assert.Equal("RelaunchAnchor", reclamationUnsupported.Params["theme"]?.GetValue<string>());
+        Assert.Equal(16, reclamationUnsupported.Params["mode"]?.GetValue<int>());
+        Assert.DoesNotContain(report.Warnings, warning => warning.Contains("RA/RelaunchAnchor", StringComparison.Ordinal));
+
+        var recruit = tasks.Single(task => task.Name == "Recruit");
+        Assert.Contains(6, ((JsonArray)recruit.Params["select"]!).Select(item => item?.GetValue<int>()));
+        Assert.Contains(6, ((JsonArray)recruit.Params["confirm"]!).Select(item => item?.GetValue<int>()));
+        Assert.Equal(["支援机械", "高级资深干员"], ReadStringArray((JsonArray)recruit.Params["preserve_tags"]!));
+
+        var custom = tasks.Single(task => task.Name == "Custom");
+        Assert.Equal(
+            ["Fight", "Recruit", "Roguelike", "Reclamation"],
+            ReadStringArray((JsonArray)custom.Params["task_names"]!));
+    }
+
+    [Fact]
+    public async Task GuiNewImport_PenguinAndYituliuLegacyKeys_ShouldFeedTaskReportParams()
+    {
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.new.json"),
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": {
+                  "Penguin.Id": "penguin-user",
+                  "Penguin.EnablePenguin": true,
+                  "Yituliu.EnableYituliu": true,
+                  "TaskQueue": [
+                    {
+                      "$type": "FightTask",
+                      "Name": "Fight",
+                      "IsEnable": true,
+                      "StagePlan": ["1-7"]
+                    },
+                    {
+                      "$type": "RecruitTask",
+                      "Name": "Recruit",
+                      "IsEnable": true
+                    }
+                  ]
+                }
+              }
+            }
+            """);
+
+        var service = CreateService(root);
+        var report = await service.ImportLegacyAsync(ImportSource.GuiNewOnly, manualImport: false);
+
+        Assert.True(report.Success);
+        var profile = service.CurrentConfig.Profiles["Default"];
+        Assert.True(profile.Values["EnablePenguin"]?.GetValue<bool>());
+        Assert.True(profile.Values["EnableYituliu"]?.GetValue<bool>());
+        Assert.Equal("penguin-user", profile.Values["PenguinId"]?.GetValue<string>());
+
+        var fight = profile.TaskQueue.Single(task => task.Name == "Fight");
+        Assert.True(fight.Params["report_to_penguin"]?.GetValue<bool>());
+        Assert.True(fight.Params["report_to_yituliu"]?.GetValue<bool>());
+        Assert.Equal("penguin-user", fight.Params["penguin_id"]?.GetValue<string>());
+        Assert.Equal("penguin-user", fight.Params["yituliu_id"]?.GetValue<string>());
+
+        var recruit = profile.TaskQueue.Single(task => task.Name == "Recruit");
+        Assert.True(recruit.Params["report_to_penguin"]?.GetValue<bool>());
+        Assert.True(recruit.Params["report_to_yituliu"]?.GetValue<bool>());
+        Assert.Equal("penguin-user", recruit.Params["penguin_id"]?.GetValue<string>());
+        Assert.Equal("penguin-user", recruit.Params["yituliu_id"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task GuiNewImport_UserDataUpdateTask_ShouldMapExistingTaskSchema()
+    {
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.new.json"),
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": {
+                  "TaskQueue": [
+                    {
+                      "$type": "UserDataUpdateTask",
+                      "Name": "UpdateData",
+                      "IsEnable": true,
+                      "UpdateOperBox": false,
+                      "UpdateDepot": true,
+                      "TriggerInterval": 2
+                    }
+                  ]
+                }
+              }
+            }
+            """);
+
+        var service = CreateService(root);
+        var report = await service.ImportLegacyAsync(ImportSource.GuiNewOnly, manualImport: false);
+
+        Assert.True(report.Success);
+        var task = Assert.Single(service.CurrentConfig.Profiles["Default"].TaskQueue);
+        Assert.Equal(TaskModuleTypes.UserDataUpdate, task.Type);
+        Assert.False(task.Params["update_oper_box"]?.GetValue<bool>());
+        Assert.True(task.Params["update_depot"]?.GetValue<bool>());
+        Assert.Equal(UserDataUpdateTaskParamsDto.TriggerWeekly, task.Params["trigger_interval"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task GuiNewImport_SingleStepTaskMarker_ShouldImportButValidateAsMissingRuntimeParams()
+    {
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.new.json"),
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": {
+                  "TaskQueue": [
+                    {
+                      "$type": "SingleStepTask",
+                      "Name": "Single step",
+                      "IsEnable": true
+                    },
+                    {
+                      "$type": "SingleStepTask",
+                      "Name": "Single step explicit",
+                      "IsEnable": true,
+                      "type": "copilot",
+                      "subtype": "stage",
+                      "details": {
+                        "stage_name": "1-7"
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+            """);
+
+        var service = CreateService(root);
+        var report = await service.ImportLegacyAsync(ImportSource.GuiNewOnly, manualImport: false);
+
+        Assert.True(report.Success);
+        Assert.Empty(report.Errors);
+        var tasks = service.CurrentConfig.Profiles["Default"].TaskQueue;
+        Assert.Equal(2, tasks.Count);
+
+        var task = tasks.Single(task => task.Name == "Single step");
+        Assert.Equal(TaskModuleTypes.SingleStep, task.Type);
+        Assert.True(task.IsEnabled);
+        Assert.Empty(task.Params);
+
+        var compiled = TaskParamCompiler.CompileTask(
+            task,
+            service.CurrentConfig.Profiles["Default"],
+            service.CurrentConfig,
+            strict: true);
+
+        Assert.Equal(TaskModuleTypes.SingleStep, compiled.NormalizedType);
+        Assert.True(compiled.HasBlockingIssues);
+        Assert.Contains(compiled.Issues, issue => issue.Code == "SingleStepTypeMissing");
+
+        var explicitTask = tasks.Single(task => task.Name == "Single step explicit");
+        Assert.Equal(TaskModuleTypes.SingleStep, explicitTask.Type);
+        Assert.Equal("copilot", explicitTask.Params["type"]?.GetValue<string>());
+        Assert.Equal("stage", explicitTask.Params["subtype"]?.GetValue<string>());
+        Assert.Equal("1-7", explicitTask.Params["details"]?["stage_name"]?.GetValue<string>());
+
+        var explicitCompiled = TaskParamCompiler.CompileTask(
+            explicitTask,
+            service.CurrentConfig.Profiles["Default"],
+            service.CurrentConfig,
+            strict: true);
+
+        Assert.False(explicitCompiled.HasBlockingIssues);
+        Assert.Equal("copilot", explicitCompiled.Params["type"]?.GetValue<string>());
+        Assert.Equal("stage", explicitCompiled.Params["subtype"]?.GetValue<string>());
+        Assert.Equal("1-7", explicitCompiled.Params["details"]?["stage_name"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task GuiNewImport_FightMedicineExpireDays_ShouldPreserveExpiringMedicineValue()
+    {
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.new.json"),
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": {
+                  "TaskQueue": [
+                    {
+                      "$type": "FightTask",
+                      "Name": "Fight",
+                      "IsEnable": true,
+                      "UseExpiringMedicine": true,
+                      "MedicineExpireDays": 3
+                    }
+                  ]
+                }
+              }
+            }
+            """);
+
+        var service = CreateService(root);
+        var report = await service.ImportLegacyAsync(ImportSource.GuiNewOnly, manualImport: false);
+
+        Assert.True(report.Success);
+        var task = Assert.Single(service.CurrentConfig.Profiles["Default"].TaskQueue);
+        Assert.Equal(3, task.Params["expiring_medicine"]?.GetValue<int>());
+
+        var (dto, issues) = TaskParamCompiler.ReadFight(task, strict: true);
+        Assert.Empty(issues);
+        Assert.True(dto.UseExpiringMedicine);
+        Assert.Equal(3, dto.ExpiringMedicine);
+
+        var compiled = TaskParamCompiler.CompileFight(dto, service.CurrentConfig.Profiles["Default"], service.CurrentConfig);
+        Assert.Equal(3, compiled.Params["expiring_medicine"]?.GetValue<int>());
+        Assert.Equal(3, compiled.Params["medicine_expire_days"]?.GetValue<int>());
+    }
+
+    [Fact]
+    public async Task GuiNewImport_FightInventoryTargetAndActivityMedicine_ShouldPreserveParityMetadata()
+    {
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.new.json"),
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": {
+                  "TaskQueue": [
+                    {
+                      "$type": "FightTask",
+                      "Name": "Fight",
+                      "IsEnable": true,
+                      "EnableTargetDrop": true,
+                      "DropId": "30012",
+                      "DropCount": 300,
+                      "IsInventoryTarget": true,
+                      "UseExpireMedicineForActivity": true
+                    }
+                  ]
+                }
+              }
+            }
+            """);
+
+        var service = CreateService(root);
+        var report = await service.ImportLegacyAsync(ImportSource.GuiNewOnly, manualImport: false);
+
+        Assert.True(report.Success);
+        var task = Assert.Single(service.CurrentConfig.Profiles["Default"].TaskQueue);
+        Assert.True(task.Params["_ui_is_inventory_target"]?.GetValue<bool>());
+        Assert.True(task.Params["_ui_use_expire_medicine_for_activity"]?.GetValue<bool>());
+
+        var (dto, issues) = TaskParamCompiler.ReadFight(task, strict: true);
+        Assert.Empty(issues);
+        Assert.True(dto.IsInventoryTarget);
+        Assert.True(dto.UseExpireMedicineForActivity);
+        Assert.Equal("30012", dto.DropId);
+        Assert.Equal(300, dto.DropCount);
+    }
+
+    [Fact]
+    public async Task GuiNewImport_ReclamationRelaunchAnchorModes_ShouldPreserveRaThemeAndModes()
+    {
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.new.json"),
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": {
+                  "TaskQueue": [
+                    {
+                      "$type": "ReclamationTask",
+                      "Name": "RA1",
+                      "IsEnable": true,
+                      "Theme": "RelaunchAnchor",
+                      "Mode": 16
+                    },
+                    {
+                      "$type": "ReclamationTask",
+                      "Name": "RA15",
+                      "IsEnable": true,
+                      "Theme": "RelaunchAnchor",
+                      "Mode": 32
+                    },
+                    {
+                      "$type": "ReclamationTask",
+                      "Name": "RA4",
+                      "IsEnable": true,
+                      "Theme": "RelaunchAnchor",
+                      "Mode": 48
+                    }
+                  ]
+                }
+              }
+            }
+            """);
+
+        var service = CreateService(root);
+        var report = await service.ImportLegacyAsync(ImportSource.GuiNewOnly, manualImport: false);
+
+        Assert.True(report.Success);
+        Assert.DoesNotContain(report.Warnings, warning => warning.Contains("RA/RelaunchAnchor", StringComparison.Ordinal));
+
+        var tasks = service.CurrentConfig.Profiles["Default"].TaskQueue;
+        Assert.Equal(16, AssertRaTask(tasks, "RA1").Params["mode"]?.GetValue<int>());
+        Assert.Equal(32, AssertRaTask(tasks, "RA15").Params["mode"]?.GetValue<int>());
+        Assert.Equal(48, AssertRaTask(tasks, "RA4").Params["mode"]?.GetValue<int>());
+    }
+
+    [Fact]
+    public async Task GuiNewImport_RecruitSkipRobotDoesNotEnablePreserveTagsWhenPreserveDisabled()
+    {
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.new.json"),
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": {
+                  "TaskQueue": [
+                    {
+                      "$type": "RecruitTask",
+                      "Name": "Recruit",
+                      "IsEnable": true,
+                      "Level1NotChoose": true,
+                      "PreserveTagEnabled": false,
+                      "PreserveTagList": ["支援机械", "高级资深干员"]
+                    }
+                  ]
+                }
+              }
+            }
+            """);
+
+        var service = CreateService(root);
+        var report = await service.ImportLegacyAsync(ImportSource.GuiNewOnly, manualImport: false);
+
+        Assert.True(report.Success);
+        var task = Assert.Single(service.CurrentConfig.Profiles["Default"].TaskQueue);
+        Assert.True(task.Params["skip_robot"]?.GetValue<bool>());
+        Assert.False(task.Params["_ui_preserve_tags_enabled"]?.GetValue<bool>());
+        Assert.Empty(ReadStringArray((JsonArray)task.Params["preserve_tags"]!));
+    }
+
+    [Fact]
+    public async Task GuiImport_FlatLegacyTaskKeys_ShouldBuildTaskQueueWhenMissing()
+    {
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.new.json"),
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": {
+                  "Connect.Address": "127.0.0.1:7555"
+                }
+              }
+            }
+            """);
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.json"),
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": {
+                  "TaskQueue.WakeUp.IsChecked": true,
+                  "TaskQueue.Order.WakeUp": 0,
+                  "TaskQueue.Combat.IsChecked": true,
+                  "TaskQueue.Order.Combat": 1,
+                  "TaskQueue.Recruiting.IsChecked": true,
+                  "TaskQueue.Order.Recruiting": 2,
+                  "TaskQueue.Base.IsChecked": true,
+                  "TaskQueue.Order.Base": 3,
+                  "Start.AccountName": "doctor",
+                  "MainFunction.Stage1": "1-7",
+                  "MainFunction.UseMedicine": true,
+                  "MainFunction.UseMedicine.Quantity": 4,
+                  "MainFunction.TimesLimited": true,
+                  "MainFunction.TimesLimited.Quantity": 12,
+                  "MainFunction.Series.Quantity": 3,
+                  "Fight.UseExpiringMedicine": true,
+                  "MainFunction.Drops.Enable": true,
+                  "MainFunction.Drops.ItemId": "30012",
+                  "MainFunction.Drops.Quantity": 300,
+                  "Fight.IsInventoryTarget": true,
+                  "Fight.UseExpireMedicineForActivity": true,
+                  "AutoRecruit.MaxTimes": 2,
+                  "AutoRecruit.ChooseLevel5": true,
+                  "AutoRecruit.AutoRecruitFirstList": "资深干员;高级资深干员",
+                  "AutoRecruit.NotChooseLevel1": true,
+                  "AutoRecruit.PreserveTagEnabled": true,
+                  "AutoRecruit.PreserveTagList": ["支援机械", "高级资深干员"],
+                  "Infrast.InfrastMode": "Custom",
+                  "Infrast.CustomInfrastFile": "/tmp/infrast.json",
+                  "Infrast.CustomInfrastPlanSelect": 1
+                }
+              }
+            }
+            """);
+
+        var service = CreateService(root);
+        var report = await service.ImportLegacyAsync(ImportSource.Auto, manualImport: false);
+
+        Assert.True(report.Success);
+        Assert.Contains(report.Warnings, warning => warning.Contains("flat task settings", StringComparison.OrdinalIgnoreCase));
+
+        var tasks = service.CurrentConfig.Profiles["Default"].TaskQueue;
+        Assert.Contains(tasks, task => task.Type == TaskModuleTypes.StartUp);
+        Assert.Contains(tasks, task => task.Type == TaskModuleTypes.Fight);
+        Assert.Contains(tasks, task => task.Type == TaskModuleTypes.Recruit);
+        Assert.Contains(tasks, task => task.Type == TaskModuleTypes.Infrast);
+
+        var startUp = tasks.Single(task => task.Type == TaskModuleTypes.StartUp);
+        Assert.True(startUp.IsEnabled);
+        Assert.Equal("doctor", startUp.Params["account_name"]?.GetValue<string>());
+
+        var fight = tasks.Single(task => task.Type == TaskModuleTypes.Fight);
+        Assert.True(fight.IsEnabled);
+        Assert.Equal("1-7", fight.Params["stage"]?.GetValue<string>());
+        Assert.Equal(4, fight.Params["medicine"]?.GetValue<int>());
+        Assert.Equal(12, fight.Params["times"]?.GetValue<int>());
+        Assert.Equal(3, fight.Params["series"]?.GetValue<int>());
+        Assert.Equal(9999, fight.Params["expiring_medicine"]?.GetValue<int>());
+        Assert.True(fight.Params["_ui_is_inventory_target"]?.GetValue<bool>());
+        Assert.True(fight.Params["_ui_use_expire_medicine_for_activity"]?.GetValue<bool>());
+        Assert.Equal("30012", fight.Params["_ui_drop_id"]?.GetValue<string>());
+        Assert.Equal(300, fight.Params["_ui_drop_count"]?.GetValue<int>());
+
+        var recruit = tasks.Single(task => task.Type == TaskModuleTypes.Recruit);
+        Assert.True(recruit.IsEnabled);
+        Assert.Equal(2, recruit.Params["times"]?.GetValue<int>());
+        Assert.Contains(5, ((JsonArray)recruit.Params["select"]!).Select(item => item?.GetValue<int>()));
+        Assert.Equal(["资深干员", "高级资深干员"], ReadStringArray((JsonArray)recruit.Params["first_tags"]!));
+        Assert.Equal(["支援机械", "高级资深干员"], ReadStringArray((JsonArray)recruit.Params["preserve_tags"]!));
+
+        var infrast = tasks.Single(task => task.Type == TaskModuleTypes.Infrast);
+        Assert.True(infrast.IsEnabled);
+        Assert.Equal(10000, infrast.Params["mode"]?.GetValue<int>());
+        Assert.Equal("/tmp/infrast.json", infrast.Params["filename"]?.GetValue<string>());
+        Assert.Equal(1, infrast.Params["plan_index"]?.GetValue<int>());
+    }
+
+    [Fact]
     public async Task AutoImport_StartUpRead_ShouldUseGuiLegacyClientTypeWhenTaskParamsAreStale()
     {
         var root = CreateTempRoot();
@@ -1371,6 +2144,38 @@ public sealed class ConfigurationImportTests
     }
 
     [Fact]
+    public async Task GuiNewImport_CopilotTaskMarker_ShouldRemainDisabledRawAndReported()
+    {
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.new.json"),
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": {
+                  "TaskQueue": [
+                    { "$type": "CopilotTask", "Name": "Copilot", "IsEnable": true }
+                  ]
+                }
+              }
+            }
+            """);
+
+        var service = CreateService(root);
+        var report = await service.ImportLegacyAsync(ImportSource.GuiNewOnly, manualImport: false);
+
+        Assert.False(report.Success);
+        Assert.Contains(report.Errors, error => error.Contains("Unsupported legacy task type `CopilotTask`", StringComparison.Ordinal));
+        var task = Assert.Single(service.CurrentConfig.Profiles["Default"].TaskQueue);
+        Assert.False(task.IsEnabled);
+        Assert.Equal("Copilot", task.Type);
+        Assert.NotNull(task.LegacyRawTask);
+    }
+
+    [Fact]
     public async Task CorruptedGuiFile_FallsBackToDefaultsWithErrorInReport()
     {
         var root = CreateTempRoot();
@@ -1443,6 +2248,30 @@ public sealed class ConfigurationImportTests
         var root = Path.Combine(Path.GetTempPath(), "maa-unified-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
         return root;
+    }
+
+    private static string[] ReadEnabledCollectibleAwards(JsonNode? node)
+    {
+        var obj = Assert.IsType<JsonObject>(node);
+        return obj
+            .Where(prop => prop.Value?.GetValue<bool>() == true)
+            .Select(prop => prop.Key)
+            .ToArray();
+    }
+
+    private static string[] ReadStringArray(JsonArray array)
+    {
+        return array
+            .Select(item => item?.GetValue<string>() ?? string.Empty)
+            .ToArray();
+    }
+
+    private static UnifiedTaskItem AssertRaTask(IReadOnlyList<UnifiedTaskItem> tasks, string name)
+    {
+        var task = tasks.Single(task => task.Name == name);
+        Assert.Equal(TaskModuleTypes.Reclamation, task.Type);
+        Assert.Equal("RelaunchAnchor", task.Params["theme"]?.GetValue<string>());
+        return task;
     }
 
     private sealed class CountingConfigStore : IUnifiedConfigStore

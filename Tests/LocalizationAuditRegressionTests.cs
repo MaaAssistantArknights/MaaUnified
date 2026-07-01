@@ -456,6 +456,8 @@ public sealed class LocalizationAuditRegressionTests
         "Recruit.Option.ExtraTags.Default",
         "Recruit.Option.ExtraTags.SelectAll",
         "Recruit.Option.ExtraTags.RareOnly",
+        "Recruit.PreserveTags",
+        "Recruit.PreserveTagsTip",
         "Infrast.Title",
         "Infrast.Advanced",
         "Infrast.Facility",
@@ -534,14 +536,26 @@ public sealed class LocalizationAuditRegressionTests
         "Reclamation.Title",
         "Reclamation.Option.Mode.Archive",
         "Reclamation.Option.Mode.NoArchive",
+        "Reclamation.Option.Mode.RA1",
+        "Reclamation.Option.Mode.RA4",
+        "Reclamation.Option.Mode.RA15",
         "Reclamation.Option.IncrementMode.Click",
         "Reclamation.Option.IncrementMode.Hold",
         "Reclamation.Option.Theme.FireClosed",
         "Reclamation.Option.Theme.Tales",
+        "Reclamation.Option.Theme.RelaunchAnchor",
         "Reclamation.ToolToCraftTip",
         "Reclamation.ToolToCraftPlaceholder",
         "Reclamation.EarlyTip",
     ];
+
+    private static readonly HashSet<string> TaskQueueInvariantLabelKeys = new(StringComparer.Ordinal)
+    {
+        "Reclamation.Option.Mode.RA1",
+        "Reclamation.Option.Mode.RA4",
+        "Reclamation.Option.Mode.RA15",
+        "Reclamation.Option.Theme.RelaunchAnchor",
+    };
 
     private static readonly string[] RoguelikeNoFallbackKeys =
     [
@@ -755,9 +769,15 @@ public sealed class LocalizationAuditRegressionTests
             map.Language = language;
             foreach (var key in TaskQueueCriticalKeys)
             {
-                Assert.NotEqual(
-                    enUsBaseline[key],
-                    map[key]);
+                var localized = map[key];
+                Assert.False(string.IsNullOrWhiteSpace(localized));
+                Assert.NotEqual(key, localized);
+                if (TaskQueueInvariantLabelKeys.Contains(key))
+                {
+                    continue;
+                }
+
+                Assert.NotEqual(enUsBaseline[key], localized);
             }
         }
     }

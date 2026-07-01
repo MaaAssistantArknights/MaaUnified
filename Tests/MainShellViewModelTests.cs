@@ -925,7 +925,7 @@ public sealed class MainShellViewModelTests
 
         Assert.Equal("en-us", fixture.ViewModel.SettingsPage.Language);
         Assert.Equal("10.8.0.1:5555", fixture.ViewModel.ConnectionGameSharedState.ConnectAddress);
-        Assert.Equal("Mumu", fixture.ViewModel.ConnectionGameSharedState.ConnectConfig);
+        Assert.Equal("MuMuEmulator12", fixture.ViewModel.ConnectionGameSharedState.ConnectConfig);
         Assert.Equal("/tmp/adb-imported", fixture.ViewModel.ConnectionGameSharedState.AdbPath);
         Assert.Contains(
             fixture.ViewModel.TaskQueuePage.Tasks,
@@ -1060,6 +1060,8 @@ public sealed class MainShellViewModelTests
                 fixture.Runtime.ConfigurationService.CurrentConfig.CurrentProfile,
                 "Alt",
                 StringComparison.OrdinalIgnoreCase)));
+        Assert.Equal("已切换到Alt", fixture.ViewModel.SettingsPage.ConfigurationManagerSwitchSucceededText);
+        Assert.True(fixture.ViewModel.SettingsPage.HasConfigurationManagerSwitchSucceeded);
         Assert.True(await WaitUntilAsync(
             () => string.Equals(
                       fixture.ViewModel.ConnectionGameSharedState.ConnectAddress,

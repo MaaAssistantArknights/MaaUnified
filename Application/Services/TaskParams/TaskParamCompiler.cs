@@ -1,8 +1,11 @@
+using System.Globalization;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using MAAUnified.Application.Models;
 using MAAUnified.Application.Models.TaskParams;
 using MAAUnified.Application.Services.Features;
+using MAAUnified.Compat.Runtime;
+using LegacyConfigurationKeys = MAAUnified.Compat.Constants.ConfigurationKeys;
 
 namespace MAAUnified.Application.Services.TaskParams;
 
@@ -25,6 +28,10 @@ public static class TaskParamCompiler
     private const string UiUseStone = "_ui_use_stone";
     private const string UiEnableTimesLimit = "_ui_enable_times_limit";
     private const string UiEnableTargetDrop = "_ui_enable_target_drop";
+    private const string UiDropId = "_ui_drop_id";
+    private const string UiDropCount = "_ui_drop_count";
+    private const string UiIsInventoryTarget = "_ui_is_inventory_target";
+    private const string UiUseExpireMedicineForActivity = "_ui_use_expire_medicine_for_activity";
     private const string UiUseAlternateStage = "_ui_use_alternate_stage";
     private const string UiHideUnavailableStage = "_ui_hide_unavailable_stage";
     private const string UiStageResetMode = "_ui_stage_reset_mode";
@@ -45,11 +52,15 @@ public static class TaskParamCompiler
     private const string UserDataUpdateOperBox = "update_oper_box";
     private const string UserDataUpdateDepot = "update_depot";
     private const string UserDataUpdateTriggerInterval = "trigger_interval";
+    private const string UiRecruitPreserveTagsEnabled = "_ui_preserve_tags_enabled";
+    private const string SkipAppendIssueCode = "TaskCompileSkipAppend";
     private static readonly Regex RoguelikeSeedRegex = new("^[0-9A-Za-z]+,rogue_\\d+,\\d+$", RegexOptions.Compiled);
     private static readonly HashSet<int> RoguelikeModes = [0, 1, 4, 5, 6, 7, 20001];
     private static readonly HashSet<string> RoguelikeThemes = new(StringComparer.OrdinalIgnoreCase) { "JieGarden", "Phantom", "Mizuki", "Sami", "Sarkaz" };
-    private static readonly HashSet<string> ReclamationThemes = new(StringComparer.OrdinalIgnoreCase) { "Tales", "Fire" };
-    private static readonly HashSet<int> ReclamationModes = [0, 1];
+    private static readonly HashSet<string> ReclamationThemes = new(StringComparer.OrdinalIgnoreCase) { "Tales", "Fire", "RelaunchAnchor" };
+    private static readonly HashSet<int> ReclamationModes = [0, 1, 16, 32, 48];
+    private static readonly HashSet<int> ReclamationProsperityModes = [0, 1];
+    private static readonly HashSet<int> ReclamationRelaunchAnchorModes = [16, 32, 48];
     private static readonly HashSet<string> RoguelikeProfessionalSquads = new(StringComparer.Ordinal)
     {
         "突击战术分队",
@@ -69,6 +80,7 @@ public static class TaskParamCompiler
         "Roguelike",
         "Reclamation",
         "UserDataUpdate",
+        "SingleStep",
         "Custom",
         "PostAction",
     };
@@ -108,6 +120,7 @@ public static class TaskParamCompiler
             "Roguelike" => "Roguelike",
             "Reclamation" => "Reclamation",
             "UserDataUpdate" => "UserDataUpdate",
+            "SingleStep" => "SingleStep",
             "Custom" => "Custom",
             "PostAction" => "PostAction",
             _ => normalized,
@@ -129,6 +142,7 @@ public static class TaskParamCompiler
             "Roguelike" => (normalizedType, CompileRoguelike(new RoguelikeTaskParamsDto(), profile, config).Params),
             "Reclamation" => (normalizedType, CompileReclamation(new ReclamationTaskParamsDto(), profile, config).Params),
             "UserDataUpdate" => (normalizedType, CompileUserDataUpdate(new UserDataUpdateTaskParamsDto()).Params),
+            "SingleStep" => (normalizedType, CompileSingleStep(new SingleStepTaskParamsDto()).Params),
             "Custom" => (normalizedType, CompileCustom(new CustomTaskParamsDto(), profile, config).Params),
             _ => (normalizedType, new JsonObject()),
         };
@@ -220,6 +234,9 @@ public static class TaskParamCompiler
             ReadString(parameters, "stage", strict, issues, "fight.stage", FightStageSelection.CurrentOrLast));
         var medicine = ReadInt(parameters, "medicine", strict, issues, "fight.medicine", 0);
         var stone = ReadInt(parameters, "stone", strict, issues, "fight.stone", 0);
+        var medicineExpireDays = ReadInt(parameters, "medicine_expire_days", false, issues, "fight.medicine_expire_days", 0);
+        var legacyExpiringMedicine = ReadInt(parameters, "expiring_medicine", false, issues, "fight.expiring_medicine", 0);
+        var expiringMedicine = medicineExpireDays > 0 ? medicineExpireDays : legacyExpiringMedicine;
         var times = ReadInt(parameters, "times", strict, issues, "fight.times", int.MaxValue);
         var series = ReadInt(parameters, "series", strict, issues, "fight.series", 1);
 
@@ -233,6 +250,18 @@ public static class TaskParamCompiler
             {
                 dropCount = count;
             }
+        }
+
+        if (string.IsNullOrWhiteSpace(dropId))
+        {
+            dropId = ReadString(parameters, UiDropId, false, issues, "fight.drop_id", string.Empty);
+        }
+
+        if (parameters.TryGetPropertyValue(UiDropCount, out var uiDropCountNode)
+            && uiDropCountNode is JsonValue uiDropCountValue
+            && uiDropCountValue.TryGetValue(out int uiDropCount))
+        {
+            dropCount = uiDropCount;
         }
 
         var useCustomAnnihilation = ReadBool(parameters, UiUseCustomAnnihilation, false);
@@ -254,10 +283,13 @@ public static class TaskParamCompiler
             EnableTimesLimit = ReadNullableBool(parameters, UiEnableTimesLimit, times != int.MaxValue, issues, "fight.enable_times_limit"),
             Series = series,
             IsDrGrandet = ReadBool(parameters, "DrGrandet", false),
-            UseExpiringMedicine = ReadInt(parameters, "expiring_medicine", false, issues, "fight.expiring_medicine", 0) > 0,
+            UseExpiringMedicine = expiringMedicine > 0,
+            ExpiringMedicine = expiringMedicine > 0 ? expiringMedicine : 9999,
+            UseExpireMedicineForActivity = ReadBool(parameters, UiUseExpireMedicineForActivity, false),
             EnableTargetDrop = ReadNullableBool(parameters, UiEnableTargetDrop, !string.IsNullOrWhiteSpace(dropId), issues, "fight.enable_target_drop"),
             DropId = dropId,
             DropCount = Math.Max(1, dropCount),
+            IsInventoryTarget = ReadBool(parameters, UiIsInventoryTarget, false),
             UseCustomAnnihilation = useCustomAnnihilation,
             AnnihilationStage = annihilationStage,
             UseAlternateStage = ReadBool(parameters, UiUseAlternateStage, false),
@@ -281,7 +313,8 @@ public static class TaskParamCompiler
     public static TaskCompileOutput CompileFight(
         FightTaskParamsDto dto,
         UnifiedProfile profile,
-        UnifiedConfig config)
+        UnifiedConfig config,
+        DateTime? nowUtc = null)
     {
         var issues = new List<TaskValidationIssue>();
 
@@ -366,11 +399,16 @@ public static class TaskParamCompiler
             stage = dto.AnnihilationStage.Trim();
         }
 
+        var expiringMedicine = dto.UseExpiringMedicine ? Math.Max(1, dto.ExpiringMedicine) : 0;
+        var activityExpireDays = ResolveActivityExpireMedicineDays(dto, profile, config, nowUtc);
+        var effectiveMedicineExpireDays = Math.Max(expiringMedicine, activityExpireDays);
+
         var parameters = new JsonObject
         {
             ["stage"] = stage,
             ["medicine"] = useMedicine != false ? Math.Max(0, dto.Medicine) : 0,
-            ["expiring_medicine"] = dto.UseExpiringMedicine ? 9999 : 0,
+            ["expiring_medicine"] = effectiveMedicineExpireDays,
+            ["medicine_expire_days"] = effectiveMedicineExpireDays,
             ["stone"] = useStone != false ? Math.Max(0, dto.Stone) : 0,
             ["times"] = enableTimesLimit != false ? Math.Max(0, dto.Times) : int.MaxValue,
             ["series"] = dto.Series,
@@ -378,7 +416,7 @@ public static class TaskParamCompiler
             ["report_to_penguin"] = ResolveBooleanSetting(profile, config, "EnablePenguin"),
             ["report_to_yituliu"] = ResolveBooleanSetting(profile, config, "EnableYituliu"),
             ["penguin_id"] = ResolveStringSetting(profile, config, "PenguinId") ?? string.Empty,
-            ["yituliu_id"] = ResolveStringSetting(profile, config, "YituliuId") ?? string.Empty,
+            ["yituliu_id"] = ResolveYituliuId(profile, config),
             ["server"] = ResolveStringSetting(profile, config, "ServerType") ?? "CN",
             ["client_type"] = ResolveStringSetting(profile, config, "ClientType", "Start.ClientType") ?? "Official",
             [UiStagePlan] = ToJsonArray(stagePlan),
@@ -387,6 +425,10 @@ public static class TaskParamCompiler
             [UiUseStone] = JsonValue.Create(useStone),
             [UiEnableTimesLimit] = JsonValue.Create(enableTimesLimit),
             [UiEnableTargetDrop] = JsonValue.Create(enableTargetDrop),
+            [UiDropId] = dto.DropId.Trim(),
+            [UiDropCount] = Math.Max(1, dto.DropCount),
+            [UiIsInventoryTarget] = dto.IsInventoryTarget,
+            [UiUseExpireMedicineForActivity] = dto.UseExpireMedicineForActivity,
             [UiUseAlternateStage] = useAlternateStage,
             [UiHideUnavailableStage] = hideUnavailableStage,
             [UiStageResetMode] = stageResetMode,
@@ -406,10 +448,54 @@ public static class TaskParamCompiler
 
         if (enableTargetDrop != false && !string.IsNullOrWhiteSpace(dto.DropId))
         {
-            parameters["drops"] = new JsonObject
+            var dropId = dto.DropId.Trim();
+            var dropCount = Math.Max(1, dto.DropCount);
+            if (dto.IsInventoryTarget)
             {
-                [dto.DropId.Trim()] = Math.Max(1, dto.DropCount),
-            };
+                var depotCounts = ReadDepotCounts(config);
+                if (depotCounts.Count == 0)
+                {
+                    issues.Add(new TaskValidationIssue(
+                        "FightInventoryTargetDepotMissing",
+                        "fight.drops",
+                        "Target inventory mode requires depot data. Update depot recognition before starting.",
+                        Blocking: false));
+                    dropCount = 0;
+                }
+                else
+                {
+                    if (!depotCounts.TryGetValue(dropId, out var currentInventory) || currentInventory < 0)
+                    {
+                        currentInventory = 0;
+                    }
+
+                    dropCount = Math.Max(dropCount - currentInventory, 0);
+                    if (dropCount <= 0)
+                    {
+                        issues.Add(new TaskValidationIssue(
+                            "FightInventoryTargetReached",
+                            "fight.drops",
+                            $"Target inventory for drop `{dropId}` is already reached.",
+                            Blocking: false));
+                    }
+                }
+            }
+
+            if (dropCount > 0)
+            {
+                parameters["drops"] = new JsonObject
+                {
+                    [dropId] = dropCount,
+                };
+            }
+            else if (dto.IsInventoryTarget)
+            {
+                issues.Add(new TaskValidationIssue(
+                    SkipAppendIssueCode,
+                    "fight.drops",
+                    "Target inventory mode resolved to no runnable fight task.",
+                    Blocking: false));
+            }
         }
 
         return new TaskCompileOutput
@@ -462,6 +548,343 @@ public static class TaskParamCompiler
         }
 
         return FightStageSelection.NormalizeStagePlan(list);
+    }
+
+    private static int ResolveActivityExpireMedicineDays(
+        FightTaskParamsDto dto,
+        UnifiedProfile profile,
+        UnifiedConfig config,
+        DateTime? nowUtc = null)
+    {
+        if (!dto.UseExpireMedicineForActivity)
+        {
+            return 0;
+        }
+
+        var timestamp = nowUtc ?? DateTime.UtcNow;
+        var clientType = ResolveStringSetting(profile, config, "ClientType", "Start.ClientType") ?? "Official";
+        if (!IsAnyActivityExpiringWithin48Hours(clientType, timestamp))
+        {
+            return 0;
+        }
+
+        var yjDate = MallDailyResetHelper.GetYjDate(timestamp, clientType);
+        return ((7 - (int)yjDate.DayOfWeek + 7) % 7) + 1;
+    }
+
+    private static bool IsAnyActivityExpiringWithin48Hours(string clientType, DateTime nowUtc)
+    {
+        foreach (var path in ResolveStageActivityCandidatePaths())
+        {
+            if (!File.Exists(path))
+            {
+                continue;
+            }
+
+            try
+            {
+                if (JsonNode.Parse(File.ReadAllText(path)) is not JsonObject root)
+                {
+                    continue;
+                }
+
+                if (TryResolveStageActivityClientNode(root, clientType, out var clientNode)
+                    && IsActivityCollectionExpiringWithin48Hours(clientNode["sideStoryStage"], nowUtc))
+                {
+                    return true;
+                }
+
+                if (!string.Equals(clientType, "Official", StringComparison.OrdinalIgnoreCase)
+                    && TryResolveStageActivityClientNode(root, "Official", out clientNode)
+                    && IsActivityCollectionExpiringWithin48Hours(clientNode["sideStoryStage"], nowUtc))
+                {
+                    return true;
+                }
+            }
+            catch
+            {
+                continue;
+            }
+        }
+
+        return false;
+    }
+
+    private static IEnumerable<string> ResolveStageActivityCandidatePaths()
+    {
+        foreach (var root in EnumerateRuntimeRoots())
+        {
+            yield return Path.Combine(root, "cache", "gui", "StageActivityV2.json");
+            yield return Path.Combine(root, "gui", "StageActivityV2.json");
+            yield return Path.Combine(root, "resource", "gui", "StageActivityV2.json");
+        }
+    }
+
+    private static IEnumerable<string> EnumerateRuntimeRoots()
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var candidates = new[]
+        {
+            RuntimeLayout.ResolveRuntimeBaseDirectory(),
+            Environment.CurrentDirectory,
+            Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..")),
+        };
+
+        foreach (var candidate in candidates.Where(static value => !string.IsNullOrWhiteSpace(value)))
+        {
+            var current = new DirectoryInfo(Path.GetFullPath(candidate));
+            while (current is not null)
+            {
+                if (seen.Add(current.FullName))
+                {
+                    yield return current.FullName;
+                }
+
+                current = current.Parent;
+            }
+        }
+    }
+
+    private static bool TryResolveStageActivityClientNode(JsonObject root, string clientType, out JsonObject clientNode)
+    {
+        clientNode = null!;
+        foreach (var pair in root)
+        {
+            if (string.Equals(NormalizeFightClientType(pair.Key), NormalizeFightClientType(clientType), StringComparison.OrdinalIgnoreCase)
+                && pair.Value is JsonObject node)
+            {
+                clientNode = node;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsActivityCollectionExpiringWithin48Hours(JsonNode? sideStoryNode, DateTime nowUtc)
+    {
+        if (sideStoryNode is not JsonObject sideStoryObject)
+        {
+            return false;
+        }
+
+        foreach (var group in sideStoryObject)
+        {
+            if (group.Value is not JsonObject groupObject)
+            {
+                continue;
+            }
+
+            var activity = groupObject["Activity"] ?? groupObject["activity"];
+            if (IsActivityExpiringWithin48Hours(activity, nowUtc))
+            {
+                return true;
+            }
+
+            var stageArray = groupObject["Stages"] as JsonArray ?? groupObject["stages"] as JsonArray;
+            if (stageArray is null)
+            {
+                continue;
+            }
+
+            foreach (var stageNode in stageArray)
+            {
+                if (stageNode is JsonObject stage
+                    && IsActivityExpiringWithin48Hours(stage["Activity"] ?? stage["activity"] ?? activity, nowUtc))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsActivityExpiringWithin48Hours(JsonNode? activityNode, DateTime nowUtc)
+    {
+        if (activityNode is not JsonObject activity
+            || !TryReadActivityTime(activity, "UtcExpireTime", out var expireTime))
+        {
+            return false;
+        }
+
+        var remaining = expireTime - nowUtc;
+        return remaining > TimeSpan.Zero && remaining <= TimeSpan.FromHours(48);
+    }
+
+    private static bool TryReadActivityTime(JsonObject activity, string key, out DateTime utcTime)
+    {
+        utcTime = default;
+        if (!TryReadString(activity[key], out var raw) || string.IsNullOrWhiteSpace(raw))
+        {
+            return false;
+        }
+
+        var timezone = 0;
+        if (activity["TimeZone"] is JsonValue timezoneValue)
+        {
+            _ = timezoneValue.TryGetValue(out timezone);
+        }
+
+        if (DateTime.TryParseExact(
+                raw,
+                "yyyy/MM/dd HH:mm:ss",
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.None,
+                out var parsed))
+        {
+            utcTime = DateTime.SpecifyKind(parsed.AddHours(-timezone), DateTimeKind.Utc);
+            return true;
+        }
+
+        if (DateTime.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out parsed))
+        {
+            utcTime = parsed.ToUniversalTime();
+            return true;
+        }
+
+        return false;
+    }
+
+    private static IReadOnlyDictionary<string, int> ReadDepotCounts(UnifiedConfig? config)
+    {
+        var result = new Dictionary<string, int>(StringComparer.Ordinal);
+        if (config is null
+            || !config.GlobalValues.TryGetValue(LegacyConfigurationKeys.DepotResult, out JsonNode? node)
+            || node is null)
+        {
+            return result;
+        }
+
+        var raw = ExtractRawDepotPayload(node);
+        if (!string.IsNullOrWhiteSpace(raw))
+        {
+            TryReadDepotCountsFromPayload(raw, result);
+        }
+
+        return result;
+    }
+
+    private static string ExtractRawDepotPayload(JsonNode node)
+    {
+        if (node is JsonValue value && value.TryGetValue(out string? text))
+        {
+            return text ?? string.Empty;
+        }
+
+        return node.ToJsonString();
+    }
+
+    private static void TryReadDepotCountsFromPayload(string payload, IDictionary<string, int> counts)
+    {
+        JsonNode? parsed;
+        try
+        {
+            parsed = JsonNode.Parse(payload);
+        }
+        catch
+        {
+            return;
+        }
+
+        if (parsed is not JsonObject root)
+        {
+            return;
+        }
+
+        ReadFlatDepotCountMap(root, counts);
+
+        if (root["data"] is JsonObject dataObject)
+        {
+            ReadFlatDepotCountMap(dataObject, counts);
+        }
+        else if (root["data"] is JsonValue dataValue && dataValue.TryGetValue(out string? dataText))
+        {
+            TryReadDepotCountsFromPayload(dataText ?? string.Empty, counts);
+        }
+
+        if (root["items"] is JsonArray itemsArray)
+        {
+            ReadDepotItemsArray(itemsArray, counts);
+        }
+
+        if (root["arkplanner"]?["object"]?["items"] is JsonArray arkPlannerItems)
+        {
+            ReadDepotItemsArray(arkPlannerItems, counts);
+        }
+    }
+
+    private static void ReadFlatDepotCountMap(JsonObject source, IDictionary<string, int> counts)
+    {
+        foreach (var pair in source)
+        {
+            if (!int.TryParse(pair.Key, out _))
+            {
+                continue;
+            }
+
+            if (TryReadDepotCount(pair.Value, out var count))
+            {
+                counts[pair.Key] = count;
+            }
+        }
+    }
+
+    private static void ReadDepotItemsArray(JsonArray items, IDictionary<string, int> counts)
+    {
+        foreach (var node in items)
+        {
+            if (node is not JsonObject item
+                || !TryReadString(item["id"], out var id)
+                || string.IsNullOrWhiteSpace(id))
+            {
+                continue;
+            }
+
+            if (TryReadDepotCount(item["have"], out var have))
+            {
+                counts[id] = have;
+                continue;
+            }
+
+            if (TryReadDepotCount(item["count"], out var count))
+            {
+                counts[id] = count;
+            }
+        }
+    }
+
+    private static bool TryReadDepotCount(JsonNode? node, out int count)
+    {
+        count = 0;
+        if (node is JsonValue value)
+        {
+            if (value.TryGetValue(out int intValue))
+            {
+                count = intValue;
+                return true;
+            }
+
+            if (value.TryGetValue(out string? text) && int.TryParse(text, out intValue))
+            {
+                count = intValue;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool TryReadString(JsonNode? node, out string value)
+    {
+        value = string.Empty;
+        if (node is not JsonValue jsonValue || !jsonValue.TryGetValue(out string? parsed) || string.IsNullOrWhiteSpace(parsed))
+        {
+            return false;
+        }
+
+        value = parsed;
+        return true;
     }
 
     private static string ResolveFightDisplayStage(string storedStage)
@@ -587,6 +1010,8 @@ public static class TaskParamCompiler
             SkipRobot = ReadBool(parameters, "skip_robot", false, issues, "recruit.skip_robot", true),
             ExtraTagsMode = ReadInt(parameters, "extra_tags_mode", false, issues, "recruit.extra_tags_mode", 0),
             FirstTags = ReadStringArray(parameters, "first_tags"),
+            PreserveTagsEnabled = ReadRecruitPreserveTagsEnabled(parameters),
+            PreserveTags = ReadRecruitPreserveTags(parameters),
             ChooseLevel3 = confirm.Contains(3),
             ChooseLevel4 = confirm.Contains(4),
             ChooseLevel5 = confirm.Contains(5),
@@ -608,6 +1033,17 @@ public static class TaskParamCompiler
         }
 
         return (dto, issues);
+    }
+
+    private static List<string> ReadRecruitPreserveTags(JsonObject parameters)
+    {
+        var preserveTags = ReadStringArray(parameters, "preserve_tags");
+        if (preserveTags.Count > 0)
+        {
+            return preserveTags;
+        }
+
+        return ReadStringArray(parameters, "PreserveTags");
     }
 
     public static TaskCompileOutput CompileRecruit(
@@ -664,6 +1100,7 @@ public static class TaskParamCompiler
             confirm.Add(6);
         }
 
+        var preserveTags = dto.PreserveTagsEnabled ? NormalizeRecruitPreserveTags(dto.PreserveTags) : [];
         var parameters = new JsonObject
         {
             ["refresh"] = refresh,
@@ -676,6 +1113,8 @@ public static class TaskParamCompiler
             ["skip_robot"] = dto.SkipRobot,
             ["extra_tags_mode"] = dto.ExtraTagsMode,
             ["first_tags"] = ToJsonArray(dto.FirstTags),
+            ["preserve_tags"] = ToJsonArray(preserveTags),
+            [UiRecruitPreserveTagsEnabled] = dto.PreserveTagsEnabled,
             ["recruitment_time"] = new JsonObject
             {
                 ["3"] = ClampRecruitTime(dto.Level3Time),
@@ -685,7 +1124,7 @@ public static class TaskParamCompiler
             ["report_to_penguin"] = ResolveBooleanSetting(profile, config, "EnablePenguin"),
             ["report_to_yituliu"] = ResolveBooleanSetting(profile, config, "EnableYituliu"),
             ["penguin_id"] = ResolveStringSetting(profile, config, "PenguinId") ?? string.Empty,
-            ["yituliu_id"] = ResolveStringSetting(profile, config, "YituliuId") ?? string.Empty,
+            ["yituliu_id"] = ResolveYituliuId(profile, config),
             ["server"] = ResolveStringSetting(profile, config, "ServerType") ?? "CN",
         };
 
@@ -700,6 +1139,28 @@ public static class TaskParamCompiler
             Params = parameters,
             Issues = issues,
         };
+    }
+
+    private static bool ReadRecruitPreserveTagsEnabled(JsonObject parameters)
+    {
+        if (parameters.TryGetPropertyValue(UiRecruitPreserveTagsEnabled, out var enabledNode)
+            && enabledNode is JsonValue enabledValue
+            && enabledValue.TryGetValue(out bool enabled))
+        {
+            return enabled;
+        }
+
+        return ReadRecruitPreserveTags(parameters).Count > 0;
+    }
+
+    private static List<string> NormalizeRecruitPreserveTags(IEnumerable<string> tags)
+    {
+        return tags
+            .Where(tag => !string.IsNullOrWhiteSpace(tag))
+            .Select(tag => tag.Trim())
+            .Where(tag => !string.IsNullOrWhiteSpace(tag))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
     }
 
     public static (RoguelikeTaskParamsDto Dto, IReadOnlyList<TaskValidationIssue> Issues) ReadRoguelike(
@@ -983,10 +1444,14 @@ public static class TaskParamCompiler
         }
 
         var mode = dto.Mode;
-        if (!ReclamationModes.Contains(mode))
+        var allowedModes = string.Equals(theme, "RelaunchAnchor", StringComparison.OrdinalIgnoreCase)
+            ? ReclamationRelaunchAnchorModes
+            : ReclamationProsperityModes;
+        var fallbackMode = string.Equals(theme, "RelaunchAnchor", StringComparison.OrdinalIgnoreCase) ? 16 : 1;
+        if (!ReclamationModes.Contains(mode) || !allowedModes.Contains(mode))
         {
-            issues.Add(new TaskValidationIssue("ReclamationModeInvalid", "reclamation.mode", "Reclamation mode is not supported by current schema."));
-            mode = 1;
+            issues.Add(new TaskValidationIssue("ReclamationModeInvalid", "reclamation.mode", "Reclamation mode is not supported by current schema.", Blocking: false));
+            mode = fallbackMode;
         }
 
         var incrementMode = dto.IncrementMode;
@@ -1009,14 +1474,14 @@ public static class TaskParamCompiler
             issues.Add(new TaskValidationIssue("ReclamationToolNameInvalid", "reclamation.tools_to_craft", "ToolsToCraft contains unparseable structured tokens."));
         }
 
-        if (mode == 0 && toolsToCraft.Count > 0)
+        if (mode != 1 && toolsToCraft.Count > 0)
         {
             issues.Add(new TaskValidationIssue("ReclamationToolsIgnoredInNoArchive", "reclamation.tools_to_craft", "ToolsToCraft is ignored in no-archive mode and will be cleared.", Blocking: false));
             toolsToCraft = [];
         }
 
         var clearStore = dto.ClearStore;
-        if (mode == 1 && clearStore)
+        if (mode != 0 && clearStore)
         {
             issues.Add(new TaskValidationIssue(
                 "ReclamationClearStoreIgnoredInArchive",
@@ -1164,6 +1629,82 @@ public static class TaskParamCompiler
         };
     }
 
+    public static (SingleStepTaskParamsDto Dto, IReadOnlyList<TaskValidationIssue> Issues) ReadSingleStep(
+        UnifiedTaskItem task,
+        bool strict)
+    {
+        var issues = new List<TaskValidationIssue>();
+        var parameters = task.Params ?? new JsonObject();
+
+        var dto = new SingleStepTaskParamsDto
+        {
+            Type = ReadString(parameters, "type", strict, issues, "single_step.type", string.Empty),
+            Subtype = ReadString(parameters, "subtype", strict, issues, "single_step.subtype", string.Empty),
+            Details = parameters["details"]?.DeepClone(),
+        };
+
+        return (dto, issues);
+    }
+
+    public static TaskCompileOutput CompileSingleStep(SingleStepTaskParamsDto dto)
+    {
+        var issues = new List<TaskValidationIssue>();
+        var type = (dto.Type ?? string.Empty).Trim();
+        var subtype = (dto.Subtype ?? string.Empty).Trim();
+
+        if (!string.Equals(type, "copilot", StringComparison.OrdinalIgnoreCase))
+        {
+            issues.Add(new TaskValidationIssue(
+                "SingleStepTypeMissing",
+                "single_step.type",
+                "SingleStep requires type `copilot` and a supported subtype."));
+        }
+
+        if (string.IsNullOrWhiteSpace(subtype)
+            || (!string.Equals(subtype, "stage", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(subtype, "start", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(subtype, "action", StringComparison.OrdinalIgnoreCase)))
+        {
+            issues.Add(new TaskValidationIssue(
+                "SingleStepSubtypeMissing",
+                "single_step.subtype",
+                "SingleStep requires subtype `stage`, `start`, or `action`."));
+        }
+
+        if ((string.Equals(subtype, "stage", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(subtype, "action", StringComparison.OrdinalIgnoreCase))
+            && dto.Details is null)
+        {
+            issues.Add(new TaskValidationIssue(
+                "SingleStepDetailsMissing",
+                "single_step.details",
+                "SingleStep stage/action tasks require a details payload."));
+        }
+
+        var parameters = new JsonObject();
+        if (!string.IsNullOrWhiteSpace(type))
+        {
+            parameters["type"] = type;
+        }
+
+        if (!string.IsNullOrWhiteSpace(subtype))
+        {
+            parameters["subtype"] = subtype;
+        }
+
+        if (dto.Details is not null)
+        {
+            parameters["details"] = dto.Details.DeepClone();
+        }
+
+        return new TaskCompileOutput
+        {
+            NormalizedType = TaskModuleTypes.SingleStep,
+            Params = parameters,
+            Issues = issues,
+        };
+    }
+
     public static TaskCompileOutput CompileTask(
         UnifiedTaskItem task,
         UnifiedProfile profile,
@@ -1181,6 +1722,7 @@ public static class TaskParamCompiler
             "Roguelike" => CompileRoguelikeFromTask(task, profile, config, strict),
             "Reclamation" => CompileReclamationFromTask(task, profile, config, strict),
             "UserDataUpdate" => CompileUserDataUpdateFromTask(task, strict),
+            "SingleStep" => CompileSingleStepFromTask(task, strict),
             "Custom" => CompileCustomFromTask(task, profile, config, strict),
             _ => new TaskCompileOutput
             {
@@ -1263,6 +1805,20 @@ public static class TaskParamCompiler
     {
         var (dto, readIssues) = ReadUserDataUpdate(task, strict);
         var compiled = CompileUserDataUpdate(dto);
+        return new TaskCompileOutput
+        {
+            NormalizedType = compiled.NormalizedType,
+            Params = compiled.Params,
+            Issues = readIssues.Concat(compiled.Issues).ToList(),
+        };
+    }
+
+    private static TaskCompileOutput CompileSingleStepFromTask(
+        UnifiedTaskItem task,
+        bool strict)
+    {
+        var (dto, readIssues) = ReadSingleStep(task, strict);
+        var compiled = CompileSingleStep(dto);
         return new TaskCompileOutput
         {
             NormalizedType = compiled.NormalizedType,
@@ -1926,6 +2482,13 @@ public static class TaskParamCompiler
         }
 
         return null;
+    }
+
+    private static string ResolveYituliuId(UnifiedProfile profile, UnifiedConfig config)
+    {
+        return ResolveStringSetting(profile, config, "YituliuId")
+            ?? ResolveStringSetting(profile, config, "PenguinId")
+            ?? string.Empty;
     }
 
     private static bool ResolveBooleanSetting(UnifiedProfile profile, UnifiedConfig config, bool fallback = false, params string[] keys)

@@ -468,6 +468,7 @@ public partial class TaskQueueView : UserControl
             new(VM.AddTaskMenuRoguelikeText, TaskQueuePopupAction.AddTask, TaskType: "Roguelike"),
             new(VM.AddTaskMenuReclamationText, TaskQueuePopupAction.AddTask, TaskType: "Reclamation"),
             new(VM.AddTaskMenuUserDataUpdateText, TaskQueuePopupAction.AddTask, TaskType: "UserDataUpdate"),
+            new(VM.AddTaskMenuSingleStepText, TaskQueuePopupAction.AddTask, TaskType: "SingleStep"),
             new(VM.AddTaskMenuCustomText, TaskQueuePopupAction.AddTask, TaskType: "Custom"),
         ];
     }

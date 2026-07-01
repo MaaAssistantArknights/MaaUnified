@@ -431,37 +431,16 @@ public sealed class GuiNewJsonConfigImporter : IConfigImporter
         }
     }
 
+    private static string? ReadString(JsonNode? node)
+    {
+        return node is JsonValue value && value.TryGetValue(out string? text)
+            ? text
+            : null;
+    }
+
     private static string NormalizeProfileKey(string key)
     {
-        return key switch
-        {
-            var value when string.Equals(value, "Connect.Address", StringComparison.OrdinalIgnoreCase) => "ConnectAddress",
-            var value when string.Equals(value, "Connect.ConnectConfig", StringComparison.OrdinalIgnoreCase) => "ConnectConfig",
-            var value when string.Equals(value, "Connect.AdbPath", StringComparison.OrdinalIgnoreCase) => "AdbPath",
-            var value when string.Equals(value, "Connect.TouchMode", StringComparison.OrdinalIgnoreCase) => "TouchMode",
-            var value when string.Equals(value, "Connect.AutoDetect", StringComparison.OrdinalIgnoreCase) => "AutoDetect",
-            var value when string.Equals(value, "Connect.AlwaysAutoDetect", StringComparison.OrdinalIgnoreCase) => "AlwaysAutoDetect",
-            var value when string.Equals(value, "Connect.RetryOnDisconnected", StringComparison.OrdinalIgnoreCase) => "RetryOnDisconnected",
-            var value when string.Equals(value, "Connect.AllowADBRestart", StringComparison.OrdinalIgnoreCase) => "AllowAdbRestart",
-            var value when string.Equals(value, "Connect.AllowADBHardRestart", StringComparison.OrdinalIgnoreCase) => "AllowAdbHardRestart",
-            var value when string.Equals(value, "Connect.AdbLiteEnabled", StringComparison.OrdinalIgnoreCase) => "AdbLiteEnabled",
-            var value when string.Equals(value, "Connect.KillAdbOnExit", StringComparison.OrdinalIgnoreCase) => "KillAdbOnExit",
-            var value when string.Equals(value, "Connect.AdbReplaced", StringComparison.OrdinalIgnoreCase) => "AdbReplaced",
-            var value when string.Equals(value, "Connect.MuMu12Extras.Enabled", StringComparison.OrdinalIgnoreCase) => "MuMu12ExtrasEnabled",
-            var value when string.Equals(value, "Connect.MuMu12EmulatorPath", StringComparison.OrdinalIgnoreCase) => "MuMu12EmulatorPath",
-            var value when string.Equals(value, "Connect.MumuBridgeConnection", StringComparison.OrdinalIgnoreCase) => "MuMuBridgeConnection",
-            var value when string.Equals(value, "Connect.MuMu12Index", StringComparison.OrdinalIgnoreCase) => "MuMu12Index",
-            var value when string.Equals(value, "Connect.LdPlayerExtras.Enabled", StringComparison.OrdinalIgnoreCase) => "LdPlayerExtrasEnabled",
-            var value when string.Equals(value, "Connect.LdPlayerEmulatorPath", StringComparison.OrdinalIgnoreCase) => "LdPlayerEmulatorPath",
-            var value when string.Equals(value, "Connect.LdPlayerManualSetIndex", StringComparison.OrdinalIgnoreCase) => "LdPlayerManualSetIndex",
-            var value when string.Equals(value, "Connect.LdPlayerIndex", StringComparison.OrdinalIgnoreCase) => "LdPlayerIndex",
-            var value when string.Equals(value, "Connect.AttachWindow.ScreencapMethod", StringComparison.OrdinalIgnoreCase) => "AttachWindowScreencapMethod",
-            var value when string.Equals(value, "Connect.AttachWindow.MouseMethod", StringComparison.OrdinalIgnoreCase) => "AttachWindowMouseMethod",
-            var value when string.Equals(value, "Connect.AttachWindow.KeyboardMethod", StringComparison.OrdinalIgnoreCase) => "AttachWindowKeyboardMethod",
-            var value when string.Equals(value, "Start.ClientType", StringComparison.OrdinalIgnoreCase) => "ClientType",
-            var value when string.Equals(value, "Start.StartGame", StringComparison.OrdinalIgnoreCase) => "StartGame",
-            _ => key,
-        };
+        return LegacyConfigValueMappings.NormalizeProfileKey(key);
     }
 
     private static void AppendUnique(ICollection<string> collection, string value)

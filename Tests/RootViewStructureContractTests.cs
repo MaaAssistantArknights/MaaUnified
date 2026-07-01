@@ -75,6 +75,7 @@ public sealed class RootViewStructureContractTests
         Assert.Contains("DataType=\"taskVm:StartUpTaskModuleViewModel\"", text, StringComparison.Ordinal);
         Assert.Contains("DataType=\"taskVm:FightTaskModuleViewModel\"", text, StringComparison.Ordinal);
         Assert.Contains("DataType=\"taskVm:InfrastModuleViewModel\"", text, StringComparison.Ordinal);
+        Assert.Contains("DataType=\"taskVm:SingleStepModuleViewModel\"", text, StringComparison.Ordinal);
         Assert.Contains("DataType=\"taskVm:PostActionModuleViewModel\"", text, StringComparison.Ordinal);
         Assert.Contains("<taskViews:PostActionSettingsView />", text, StringComparison.Ordinal);
         Assert.DoesNotContain("ItemsSource=\"{Binding TaskPanels}\"", text, StringComparison.Ordinal);

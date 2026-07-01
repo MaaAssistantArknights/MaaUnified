@@ -90,6 +90,33 @@
   <data name="TaskQueue.Module.UserDataUpdate" xml:space="preserve">
     <value>[!! Ûþďåţé Đåţå !!]</value>
   </data>
+  <data name="TaskQueue.Module.SingleStep" xml:space="preserve">
+    <value>[!! Şîñĝļé Şţéþ !!]</value>
+  </data>
+  <data name="TaskQueue.SingleStep.Body" xml:space="preserve">
+    <value>[!! ŞîñĝļéŞţéþ îş å Çöŕé şîñĝļé-şţéþ çöþîļöţ éñţŕý. Îmþöŕţéď måŕķéŕ ţåşķş ñééď ŕûñţîmé şţéþ þåŕåméţéŕş ƀéƒöŕé ţĥéý çåñ ŕûñ. !!]</value>
+  </data>
+  <data name="TaskQueue.SingleStep.Type" xml:space="preserve">
+    <value>[!! Ţýþé !!]</value>
+  </data>
+  <data name="TaskQueue.SingleStep.Subtype" xml:space="preserve">
+    <value>[!! Şûƀţýþé !!]</value>
+  </data>
+  <data name="TaskQueue.SingleStep.Subtype.Start" xml:space="preserve">
+    <value>[!! Şţåŕţ !!]</value>
+  </data>
+  <data name="TaskQueue.SingleStep.Subtype.Stage" xml:space="preserve">
+    <value>[!! Şţåĝé !!]</value>
+  </data>
+  <data name="TaskQueue.SingleStep.Subtype.Action" xml:space="preserve">
+    <value>[!! Åçţîöñ !!]</value>
+  </data>
+  <data name="TaskQueue.SingleStep.Details" xml:space="preserve">
+    <value>[!! ďéţåîļş ĴŞÖÑ !!]</value>
+  </data>
+  <data name="TaskQueue.SingleStep.DetailsPlaceholder" xml:space="preserve">
+    <value>{"stage_name":"..."}</value>
+  </data>
   <data name="TaskQueue.Status.ParamsLoaded" xml:space="preserve">
     <value>[!! Łöåđéď þåřåɱş ƒöř `{0}`. !!]</value>
   </data>
