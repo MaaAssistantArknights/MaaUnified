@@ -118,7 +118,7 @@ public sealed class AppUpdateWorkflowService
                     releaseValue,
                     httpClient,
                     cancellationToken).ConfigureAwait(false);
-                if (ShouldFallbackToGitHubRelease(release.Source, resolvedPackage))
+                if (ShouldFallbackToGitHubRelease(release.Source, policy.VersionType, resolvedPackage))
                 {
                     var githubRelease = await ResolveGitHubReleaseAsync(
                         httpClient,
@@ -472,29 +472,12 @@ public sealed class AppUpdateWorkflowService
         HttpClient httpClient,
         CancellationToken cancellationToken)
     {
-        if (_platform.IsWindows && allowWindowsRelay)
+        if (_platform.IsWindows)
         {
-            var relayPackage = await TryResolveWindowsRelayPackageAsync(
-                resourceApi,
-                channel,
-                targetVersion,
-                httpClient,
-                cancellationToken).ConfigureAwait(false);
-            if (relayPackage is not null)
-            {
-                return relayPackage;
-            }
-
-            var releaseAsset = SelectPackageAsset(release);
-            if (releaseAsset is not null)
-            {
-                return allowMirrorUrls ? releaseAsset : releaseAsset with { MirrorUrls = null };
-            }
-
             return new ResolvedPackage(
-                Status: PackageResolutionStatus.WindowsManualUpdateRequired,
+                Status: PackageResolutionStatus.Unavailable,
                 SourceKind: PackageSourceKind.None,
-                FailureMessageKey: WindowsManualUpdateMessageKey);
+                FailureMessageKey: PackageUnavailableMessageKey);
         }
 
         var asset = SelectPackageAsset(release);
@@ -805,14 +788,10 @@ public sealed class AppUpdateWorkflowService
 
         var normalized = packageName.Trim().ToLowerInvariant();
         var extensionScore = _platform.IsWindows
-            ? normalized.EndsWith(".zip", StringComparison.Ordinal) ? 10 : 0
+            ? 0
             : _platform.IsMacOS
                 ? normalized.EndsWith(".dmg", StringComparison.Ordinal) ? 10 : 0
-                : normalized.EndsWith(".zip", StringComparison.Ordinal)
-                    ? 20
-                    : normalized.EndsWith(".appimage", StringComparison.Ordinal)
-                        ? 10
-                        : normalized.EndsWith(".tar.gz", StringComparison.Ordinal) || normalized.EndsWith(".tgz", StringComparison.Ordinal) ? 5 : 0;
+                : normalized.EndsWith(".zip", StringComparison.Ordinal) ? 10 : 0;
         if (extensionScore == 0)
         {
             return 0;
@@ -838,8 +817,7 @@ public sealed class AppUpdateWorkflowService
     {
         return IsMaaUnifiedPackageName(packageName)
             || (Uri.TryCreate(packageUrl, UriKind.Absolute, out var uri)
-                && IsMaaUnifiedPackageName(Path.GetFileName(uri.AbsolutePath)))
-            || packageUrl.Contains("MAAUnified", StringComparison.OrdinalIgnoreCase);
+                && IsMaaUnifiedPackageName(Path.GetFileName(uri.AbsolutePath)));
     }
 
     private static bool IsMaaUnifiedPackageName(string? packageName)
@@ -1063,9 +1041,14 @@ public sealed class AppUpdateWorkflowService
         return SelectRelease(releases, channel);
     }
 
-    private static bool ShouldFallbackToGitHubRelease(ReleaseResolutionSource source, ResolvedPackage? package)
+    private static bool ShouldFallbackToGitHubRelease(ReleaseResolutionSource source, string channel, ResolvedPackage? package)
     {
         if (source != ReleaseResolutionSource.MaaApi)
+        {
+            return false;
+        }
+
+        if (string.Equals(channel, "Stable", StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }
@@ -1256,6 +1239,11 @@ public sealed class AppUpdateWorkflowService
             }
 
             if (!IsMaaUnifiedPackageName(packageName))
+            {
+                return null;
+            }
+
+            if (ScorePackageName(packageName) <= 0)
             {
                 return null;
             }

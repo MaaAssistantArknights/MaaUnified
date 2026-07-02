@@ -287,8 +287,8 @@ public sealed class VersionUpdateFeatureServiceTests
                                 "prerelease": false,
                                 "assets": [
                                   {
-                                    "name": "MAAUnified-v6.7.0-linux-x64.AppImage",
-                                    "browser_download_url": "https://example.com/MAAUnified-v6.7.0-linux-x64.AppImage",
+                                    "name": "MAAUnified-v6.7.0-linux-x64.zip",
+                                    "browser_download_url": "https://example.com/MAAUnified-v6.7.0-linux-x64.zip",
                                     "size": 4321
                                   }
                                 ]
@@ -322,7 +322,7 @@ public sealed class VersionUpdateFeatureServiceTests
             Assert.NotNull(result.Value);
             Assert.Equal("v6.7.0", result.Value!.TargetVersion);
             Assert.Equal("v6.7.0", result.Value.ReleaseName);
-            Assert.Equal("MAAUnified-v6.7.0-linux-x64.AppImage", result.Value.PackageName);
+            Assert.Equal("MAAUnified-v6.7.0-linux-x64.zip", result.Value.PackageName);
             Assert.True(result.Value.IsNewVersion);
         }
         finally
@@ -552,10 +552,119 @@ public sealed class VersionUpdateFeatureServiceTests
     }
 
     [Fact]
-    public async Task CheckForUpdatesAsync_WhenMaaApiHasOnlyLegacyPackage_FallsBackToGithubUnifiedPackage()
+    public async Task CheckForUpdatesAsync_WhenBetaMaaApiHasOnlyLegacyPackage_FallsBackToGithubUnifiedPackage()
     {
         const string maaApiBaseUrl = "https://api.example.com/MaaAssistantArknights/api/";
         var root = Path.Combine(Path.GetTempPath(), $"maa-unified-github-package-fallback-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(root);
+
+        try
+        {
+            using var httpClient = new HttpClient(new StubHttpMessageHandler(static request =>
+            {
+                var url = request.RequestUri?.AbsoluteUri ?? string.Empty;
+                if (url == $"{maaApiBaseUrl}version/summary.json")
+                {
+                    return new HttpResponseMessage(HttpStatusCode.OK)
+                    {
+                        Content = new StringContent("""
+                            {
+                              "beta": {
+                                "version": "v2.0.0-beta.1",
+                                "detail": "beta.json"
+                              }
+                            }
+                            """),
+                    };
+                }
+
+                if (url == $"{maaApiBaseUrl}beta.json")
+                {
+                    return new HttpResponseMessage(HttpStatusCode.OK)
+                    {
+                        Content = new StringContent("""
+                            {
+                              "details": {
+                                "tag_name": "v2.0.0-beta.1",
+                                "name": "Release v2.0.0-beta.1",
+                                "body": "MAA API body.",
+                                "prerelease": true,
+                                "assets": [
+                                  {
+                                    "name": "MAA-v2.0.0-beta.1-linux-x64.zip",
+                                    "browser_download_url": "https://example.com/MAA-v2.0.0-beta.1-linux-x64.zip"
+                                  }
+                                ]
+                              }
+                            }
+                            """),
+                    };
+                }
+
+                if (url == "https://api.github.com/repos/MaaAssistantArknights/MaaAssistantArknights/releases")
+                {
+                    return new HttpResponseMessage(HttpStatusCode.OK)
+                    {
+                        Content = new StringContent("""
+                            [
+                              {
+                                "tag_name": "v2.0.0-beta.1",
+                                "name": "Release v2.0.0-beta.1",
+                                "body": "GitHub fallback body.",
+                                "prerelease": true,
+                                "assets": [
+                                  {
+                                    "name": "MAAUnified-v2.0.0-beta.1-linux-x64.zip",
+                                    "browser_download_url": "https://example.com/MAAUnified-v2.0.0-beta.1-linux-x64.zip"
+                                  }
+                                ]
+                              }
+                            ]
+                            """),
+                    };
+                }
+
+                return new HttpResponseMessage(HttpStatusCode.NotFound);
+            }));
+            var service = CreateLinuxVersionUpdateFeatureService(root, httpClient);
+
+            var result = await service.CheckForUpdatesAsync(
+                VersionUpdatePolicy.Default with
+                {
+                    ResourceApi = maaApiBaseUrl,
+                    VersionType = "Beta",
+                    AutoDownloadUpdatePackage = false,
+                },
+                "v1.0.0");
+
+            Assert.True(result.Success);
+            Assert.NotNull(result.Value);
+            Assert.True(result.Value!.HasPackage);
+            Assert.Equal("v2.0.0-beta.1", result.Value.TargetVersion);
+            Assert.Equal("MAAUnified-v2.0.0-beta.1-linux-x64.zip", result.Value.PackageName);
+            Assert.Equal("GitHub fallback body.", result.Value.Body);
+            Assert.Equal(PackageResolutionStatus.Available, result.Value.PackageResolutionStatus);
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    [Fact]
+    public async Task CheckForUpdatesAsync_WhenStableMaaApiHasOnlyNonUnifiedPackages_DoesNotReportActionableUpdate()
+    {
+        const string maaApiBaseUrl = "https://api.example.com/MaaAssistantArknights/api/";
+        var root = Path.Combine(Path.GetTempPath(), $"maa-unified-stable-quiet-{Guid.NewGuid():N}");
         Directory.CreateDirectory(root);
 
         try
@@ -587,12 +696,16 @@ public sealed class VersionUpdateFeatureServiceTests
                               "details": {
                                 "tag_name": "v2.0.0",
                                 "name": "Release v2.0.0",
-                                "body": "MAA API body.",
+                                "body": "Stable body.",
                                 "prerelease": false,
                                 "assets": [
                                   {
                                     "name": "MAA-v2.0.0-linux-x64.zip",
                                     "browser_download_url": "https://example.com/MAA-v2.0.0-linux-x64.zip"
+                                  },
+                                  {
+                                    "name": "MAAComponent-OTA-v2.0.0-linux-x64.zip",
+                                    "browser_download_url": "https://example.com/MAAComponent-OTA-v2.0.0-linux-x64.zip"
                                   }
                                 ]
                               }
@@ -603,23 +716,95 @@ public sealed class VersionUpdateFeatureServiceTests
 
                 if (url == "https://api.github.com/repos/MaaAssistantArknights/MaaAssistantArknights/releases")
                 {
+                    throw new InvalidOperationException("Stable should stay quiet instead of falling back to GitHub for MAAUnified assets.");
+                }
+
+                return new HttpResponseMessage(HttpStatusCode.NotFound);
+            }));
+            var service = CreateLinuxVersionUpdateFeatureService(root, httpClient);
+
+            var result = await service.CheckForUpdatesAsync(
+                VersionUpdatePolicy.Default with
+                {
+                    ResourceApi = maaApiBaseUrl,
+                    VersionType = "Stable",
+                    AutoDownloadUpdatePackage = false,
+                },
+                "v1.0.0");
+
+            Assert.True(result.Success);
+            Assert.NotNull(result.Value);
+            Assert.False(result.Value!.IsNewVersion);
+            Assert.False(result.Value.HasPackage);
+            Assert.Equal("v2.0.0", result.Value.TargetVersion);
+            Assert.Equal(PackageResolutionStatus.Unavailable, result.Value.PackageResolutionStatus);
+            Assert.Contains("当前已是最新", result.Message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    [Fact]
+    public async Task CheckForUpdatesAsync_WithNightlyChannel_UsesAlphaMaaApiAndSelectsUnifiedPackage()
+    {
+        const string maaApiBaseUrl = "https://api.example.com/MaaAssistantArknights/api/";
+        var root = Path.Combine(Path.GetTempPath(), $"maa-unified-nightly-alpha-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(root);
+
+        try
+        {
+            using var httpClient = new HttpClient(new StubHttpMessageHandler(static request =>
+            {
+                var url = request.RequestUri?.AbsoluteUri ?? string.Empty;
+                if (url == $"{maaApiBaseUrl}version/summary.json")
+                {
                     return new HttpResponseMessage(HttpStatusCode.OK)
                     {
                         Content = new StringContent("""
-                            [
-                              {
-                                "tag_name": "v2.0.0",
-                                "name": "Release v2.0.0",
-                                "body": "GitHub fallback body.",
-                                "prerelease": false,
+                            {
+                              "alpha": {
+                                "version": "v2.0.0-alpha.1",
+                                "detail": "alpha.json"
+                              }
+                            }
+                            """),
+                    };
+                }
+
+                if (url == $"{maaApiBaseUrl}alpha.json")
+                {
+                    return new HttpResponseMessage(HttpStatusCode.OK)
+                    {
+                        Content = new StringContent("""
+                            {
+                              "details": {
+                                "tag_name": "v2.0.0-alpha.1",
+                                "name": "Release v2.0.0-alpha.1",
+                                "body": "Alpha body.",
+                                "prerelease": true,
                                 "assets": [
                                   {
-                                    "name": "MAAUnified-v2.0.0-linux-x64.zip",
-                                    "browser_download_url": "https://example.com/MAAUnified-v2.0.0-linux-x64.zip"
+                                    "name": "MAA-v2.0.0-alpha.1-linux-x64.zip",
+                                    "browser_download_url": "https://example.com/MAA-v2.0.0-alpha.1-linux-x64.zip"
+                                  },
+                                  {
+                                    "name": "MAAUnified-v2.0.0-alpha.1-linux-x64.zip",
+                                    "browser_download_url": "https://example.com/MAAUnified-v2.0.0-alpha.1-linux-x64.zip"
                                   }
                                 ]
                               }
-                            ]
+                            }
                             """),
                     };
                 }
@@ -632,15 +817,18 @@ public sealed class VersionUpdateFeatureServiceTests
                 VersionUpdatePolicy.Default with
                 {
                     ResourceApi = maaApiBaseUrl,
+                    VersionType = "Nightly",
+                    AllowNightlyUpdates = true,
                     AutoDownloadUpdatePackage = false,
                 },
                 "v1.0.0");
 
             Assert.True(result.Success);
             Assert.NotNull(result.Value);
-            Assert.True(result.Value!.HasPackage);
-            Assert.Equal("MAAUnified-v2.0.0-linux-x64.zip", result.Value.PackageName);
-            Assert.Equal("GitHub fallback body.", result.Value.Body);
+            Assert.True(result.Value!.IsNewVersion);
+            Assert.True(result.Value.HasPackage);
+            Assert.Equal("v2.0.0-alpha.1", result.Value.TargetVersion);
+            Assert.Equal("MAAUnified-v2.0.0-alpha.1-linux-x64.zip", result.Value.PackageName);
             Assert.Equal(PackageResolutionStatus.Available, result.Value.PackageResolutionStatus);
         }
         finally
@@ -659,7 +847,7 @@ public sealed class VersionUpdateFeatureServiceTests
     }
 
     [Fact]
-    public async Task CheckForUpdatesAsync_ReleaseAssets_SkipsLegacyMaaPackages()
+    public async Task CheckForUpdatesAsync_ReleaseAssets_SelectsMaaUnifiedPlatformPackageOnly()
     {
         var root = Path.Combine(Path.GetTempPath(), $"maa-unified-release-asset-filter-{Guid.NewGuid():N}");
         Directory.CreateDirectory(root);
@@ -679,8 +867,8 @@ public sealed class VersionUpdateFeatureServiceTests
                     {
                         new
                         {
-                            name = "MAA-v2.0.0-linux-x64.AppImage",
-                            browser_download_url = "https://example.com/MAA-v2.0.0-linux-x64.AppImage",
+                            name = "MAA-v2.0.0-linux-x64.zip",
+                            browser_download_url = "https://example.com/MAA-v2.0.0-linux-x64.zip",
                             size = 100,
                         },
                         new
@@ -688,6 +876,24 @@ public sealed class VersionUpdateFeatureServiceTests
                             name = "MAAUnified-v2.0.0-linux-x64.AppImage",
                             browser_download_url = "https://example.com/MAAUnified-v2.0.0-linux-x64.AppImage",
                             size = 200,
+                        },
+                        new
+                        {
+                            name = "MAAComponent-OTA-v2.0.0-linux-x64.zip",
+                            browser_download_url = "https://example.com/MAAComponent-OTA-v2.0.0-linux-x64.zip",
+                            size = 300,
+                        },
+                        new
+                        {
+                            name = "MAAUnified-v2.0.0-win-x64.zip",
+                            browser_download_url = "https://example.com/MAAUnified-v2.0.0-win-x64.zip",
+                            size = 400,
+                        },
+                        new
+                        {
+                            name = "MAAUnified-v2.0.0-linux-x64.zip",
+                            browser_download_url = "https://example.com/MAAUnified-v2.0.0-linux-x64.zip",
+                            size = 500,
                         },
                     },
                 },
@@ -708,8 +914,8 @@ public sealed class VersionUpdateFeatureServiceTests
                 CancellationToken.None);
 
             Assert.True(result.HasPackage);
-            Assert.Equal("MAAUnified-v2.0.0-linux-x64.AppImage", result.PackageName);
-            Assert.Equal(new Uri("https://example.com/MAAUnified-v2.0.0-linux-x64.AppImage"), result.PackageDownloadUrl);
+            Assert.Equal("MAAUnified-v2.0.0-linux-x64.zip", result.PackageName);
+            Assert.Equal(new Uri("https://example.com/MAAUnified-v2.0.0-linux-x64.zip"), result.PackageDownloadUrl);
         }
         finally
         {
@@ -727,7 +933,7 @@ public sealed class VersionUpdateFeatureServiceTests
     }
 
     [Fact]
-    public async Task CheckForUpdatesAsync_ReleaseAssets_WithOnlyLegacyMaaPackage_DoesNotReportUpdate()
+    public async Task CheckForUpdatesAsync_ReleaseAssets_WithOnlyNonMaaUnifiedPackages_DoesNotReportUpdate()
     {
         var root = Path.Combine(Path.GetTempPath(), $"maa-unified-release-asset-legacy-only-{Guid.NewGuid():N}");
         Directory.CreateDirectory(root);
@@ -747,9 +953,15 @@ public sealed class VersionUpdateFeatureServiceTests
                     {
                         new
                         {
-                            name = "MAA-v2.0.0-linux-x64.AppImage",
-                            browser_download_url = "https://example.com/MAA-v2.0.0-linux-x64.AppImage",
+                            name = "MAA-v2.0.0-linux-x64.zip",
+                            browser_download_url = "https://example.com/MAA-v2.0.0-linux-x64.zip",
                             size = 100,
+                        },
+                        new
+                        {
+                            name = "MAAComponent-OTA-v2.0.0-linux-x64.zip",
+                            browser_download_url = "https://example.com/MAAComponent-OTA-v2.0.0-linux-x64.zip",
+                            size = 200,
                         },
                     },
                 },
@@ -789,7 +1001,7 @@ public sealed class VersionUpdateFeatureServiceTests
     }
 
     [Fact]
-    public async Task CheckForUpdatesAsync_OnWindowsRelayManifest_UsesExactArchitecturePackage()
+    public async Task CheckForUpdatesAsync_OnWindowsRelayManifest_DoesNotReportActionableUpdate()
     {
         var root = Path.Combine(Path.GetTempPath(), $"maa-unified-windows-relay-{Guid.NewGuid():N}");
         Directory.CreateDirectory(root);
@@ -845,10 +1057,11 @@ public sealed class VersionUpdateFeatureServiceTests
 
             Assert.True(result.Success);
             Assert.NotNull(result.Value);
-            Assert.True(result.Value!.HasPackage);
-            Assert.Equal(PackageResolutionStatus.Available, result.Value.PackageResolutionStatus);
-            Assert.Equal(PackageSourceKind.WindowsRelayManifest, result.Value.PackageSourceKind);
-            Assert.Equal("MAAUnified-v2.0.0-win-x64.zip", result.Value.PackageName);
+            Assert.False(result.Value!.IsNewVersion);
+            Assert.False(result.Value.HasPackage);
+            Assert.Equal(PackageResolutionStatus.Unavailable, result.Value.PackageResolutionStatus);
+            Assert.Equal(PackageSourceKind.None, result.Value.PackageSourceKind);
+            Assert.Null(result.Value.PackageName);
         }
         finally
         {
@@ -866,7 +1079,7 @@ public sealed class VersionUpdateFeatureServiceTests
     }
 
     [Fact]
-    public async Task CheckForUpdatesAsync_OnWindowsRelayManifest_SkipsLegacyMaaPackage()
+    public async Task CheckForUpdatesAsync_OnWindowsRelayManifest_IgnoresLegacyAndUnifiedWindowsPackages()
     {
         var root = Path.Combine(Path.GetTempPath(), $"maa-unified-windows-relay-filter-{Guid.NewGuid():N}");
         Directory.CreateDirectory(root);
@@ -926,10 +1139,11 @@ public sealed class VersionUpdateFeatureServiceTests
 
             Assert.True(result.Success);
             Assert.NotNull(result.Value);
-            Assert.True(result.Value!.HasPackage);
-            Assert.Equal(PackageSourceKind.WindowsRelayManifest, result.Value.PackageSourceKind);
-            Assert.Equal("MAAUnified-v2.0.0-win-x64.zip", result.Value.PackageName);
-            Assert.Equal(new Uri("https://example.com/MAAUnified-v2.0.0-win-x64.zip"), result.Value.PackageDownloadUrl);
+            Assert.False(result.Value!.IsNewVersion);
+            Assert.False(result.Value.HasPackage);
+            Assert.Equal(PackageResolutionStatus.Unavailable, result.Value.PackageResolutionStatus);
+            Assert.Equal(PackageSourceKind.None, result.Value.PackageSourceKind);
+            Assert.Null(result.Value.PackageDownloadUrl);
         }
         finally
         {
@@ -1002,7 +1216,7 @@ public sealed class VersionUpdateFeatureServiceTests
             Assert.NotNull(result.Value);
             Assert.False(result.Value!.IsNewVersion);
             Assert.False(result.Value!.HasPackage);
-            Assert.Equal(PackageResolutionStatus.WindowsManualUpdateRequired, result.Value.PackageResolutionStatus);
+            Assert.Equal(PackageResolutionStatus.Unavailable, result.Value.PackageResolutionStatus);
             Assert.Contains("当前已是最新", result.Message, StringComparison.Ordinal);
         }
         finally
@@ -1021,7 +1235,7 @@ public sealed class VersionUpdateFeatureServiceTests
     }
 
     [Fact]
-    public async Task CheckForUpdatesAsync_OnWindowsDownload404_ReturnsManualUpdateRequired()
+    public async Task CheckForUpdatesAsync_OnWindowsDownload404_DoesNotAttemptDownload()
     {
         var root = Path.Combine(Path.GetTempPath(), $"maa-unified-windows-download-{Guid.NewGuid():N}");
         Directory.CreateDirectory(root);
@@ -1077,8 +1291,10 @@ public sealed class VersionUpdateFeatureServiceTests
 
             Assert.True(result.Success);
             Assert.NotNull(result.Value);
-            Assert.Equal(PackageResolutionStatus.WindowsManualUpdateRequired, result.Value!.PackageResolutionStatus);
-            Assert.Contains("手动更新", result.Message, StringComparison.Ordinal);
+            Assert.False(result.Value!.IsNewVersion);
+            Assert.False(result.Value.HasPackage);
+            Assert.Equal(PackageResolutionStatus.Unavailable, result.Value.PackageResolutionStatus);
+            Assert.Contains("当前已是最新", result.Message, StringComparison.Ordinal);
             Assert.True(string.IsNullOrWhiteSpace(result.Value.PreparedPackagePath));
         }
         finally
@@ -1414,8 +1630,8 @@ public sealed class VersionUpdateFeatureServiceTests
                     {
                         new
                         {
-                            name = "MAAUnified-v2.0.0-linux-x64.AppImage",
-                            browser_download_url = "https://example.com/MAAUnified-v2.0.0-linux-x64.AppImage",
+                            name = "MAAUnified-v2.0.0-linux-x64.zip",
+                            browser_download_url = "https://example.com/MAAUnified-v2.0.0-linux-x64.zip",
                             size = 1024,
                         },
                     },
@@ -1481,7 +1697,7 @@ public sealed class VersionUpdateFeatureServiceTests
                               "data": {
                                 "version_name": "v2.0.0",
                                 "release_note": "MirrorChyan note",
-                                "url": "https://mirror.example.com/MAAUnified-v2.0.0-linux-x64.AppImage"
+                                "url": "https://mirror.example.com/MAAUnified-v2.0.0-linux-x64.zip"
                               }
                             }
                             """),
@@ -1514,7 +1730,7 @@ public sealed class VersionUpdateFeatureServiceTests
             Assert.True(result.Value!.IsNewVersion);
             Assert.True(result.Value.HasPackage);
             Assert.Equal("v2.0.0", result.Value.TargetVersion);
-            Assert.Equal(new Uri("https://mirror.example.com/MAAUnified-v2.0.0-linux-x64.AppImage"), result.Value.PackageDownloadUrl);
+            Assert.Equal(new Uri("https://mirror.example.com/MAAUnified-v2.0.0-linux-x64.zip"), result.Value.PackageDownloadUrl);
             Assert.Equal(PackageResolutionStatus.Available, result.Value.PackageResolutionStatus);
         }
         finally
@@ -1550,10 +1766,10 @@ public sealed class VersionUpdateFeatureServiceTests
                     "prerelease": false,
                     "assets": [
                       {
-                        "name": "MAAUnified-v2.0.0-linux-x64.AppImage",
-                        "browser_download_url": "https://global.example.com/MAAUnified-v2.0.0-linux-x64.AppImage",
+                        "name": "MAAUnified-v2.0.0-linux-x64.zip",
+                        "browser_download_url": "https://global.example.com/MAAUnified-v2.0.0-linux-x64.zip",
                         "mirrors": [
-                          "https://mirror.example.com/MAAUnified-v2.0.0-linux-x64.AppImage"
+                          "https://mirror.example.com/MAAUnified-v2.0.0-linux-x64.zip"
                         ],
                         "size": 5
                       }
@@ -1567,8 +1783,8 @@ public sealed class VersionUpdateFeatureServiceTests
                 var url = request.RequestUri?.AbsoluteUri ?? string.Empty;
                 return url switch
                 {
-                    "https://global.example.com/MAAUnified-v2.0.0-linux-x64.AppImage" => new HttpResponseMessage(HttpStatusCode.NotFound),
-                    "https://mirror.example.com/MAAUnified-v2.0.0-linux-x64.AppImage" => new HttpResponseMessage(HttpStatusCode.OK)
+                    "https://global.example.com/MAAUnified-v2.0.0-linux-x64.zip" => new HttpResponseMessage(HttpStatusCode.NotFound),
+                    "https://mirror.example.com/MAAUnified-v2.0.0-linux-x64.zip" => new HttpResponseMessage(HttpStatusCode.OK)
                     {
                         Content = new ByteArrayContent([1, 2, 3, 4, 5]),
                     },
@@ -1600,8 +1816,8 @@ public sealed class VersionUpdateFeatureServiceTests
             Assert.False(string.IsNullOrWhiteSpace(result.Value!.PreparedPackagePath));
             Assert.True(File.Exists(result.Value.PreparedPackagePath));
             Assert.Equal([1, 2, 3, 4, 5], await File.ReadAllBytesAsync(result.Value.PreparedPackagePath));
-            Assert.Equal(PackageResolutionStatus.AppImageManualInstallRequired, result.Value.PackageResolutionStatus);
-            Assert.Contains("AppImage", result.Message, StringComparison.Ordinal);
+            Assert.Equal(PackageResolutionStatus.LinuxPortableZipManualInstallRequired, result.Value.PackageResolutionStatus);
+            Assert.Contains("便携包", result.Message, StringComparison.Ordinal);
         }
         finally
         {
@@ -1636,10 +1852,10 @@ public sealed class VersionUpdateFeatureServiceTests
                     "prerelease": false,
                     "assets": [
                       {
-                        "name": "MAAUnified-v2.0.0-linux-x64.AppImage",
-                        "browser_download_url": "https://global.example.com/MAAUnified-v2.0.0-linux-x64.AppImage",
+                        "name": "MAAUnified-v2.0.0-linux-x64.zip",
+                        "browser_download_url": "https://global.example.com/MAAUnified-v2.0.0-linux-x64.zip",
                         "mirrors": [
-                          "https://mirror.example.com/MAAUnified-v2.0.0-linux-x64.AppImage"
+                          "https://mirror.example.com/MAAUnified-v2.0.0-linux-x64.zip"
                         ],
                         "size": 5
                       }
@@ -1653,8 +1869,8 @@ public sealed class VersionUpdateFeatureServiceTests
                 var url = request.RequestUri?.AbsoluteUri ?? string.Empty;
                 return url switch
                 {
-                    "https://global.example.com/MAAUnified-v2.0.0-linux-x64.AppImage" => new HttpResponseMessage(HttpStatusCode.NotFound),
-                    "https://mirror.example.com/MAAUnified-v2.0.0-linux-x64.AppImage" => new HttpResponseMessage(HttpStatusCode.OK)
+                    "https://global.example.com/MAAUnified-v2.0.0-linux-x64.zip" => new HttpResponseMessage(HttpStatusCode.NotFound),
+                    "https://mirror.example.com/MAAUnified-v2.0.0-linux-x64.zip" => new HttpResponseMessage(HttpStatusCode.OK)
                     {
                         Content = new ByteArrayContent([1, 2, 3, 4, 5]),
                     },

@@ -81,8 +81,8 @@ public sealed class SettingsModuleCM1FeatureTests
                     "prerelease": false,
                     "assets": [
                       {
-                        "name": "MAAUnified-v2.0.0-linux-x64.AppImage",
-                        "browser_download_url": "https://example.com/MAAUnified-v2.0.0-linux-x64.AppImage",
+                        "name": "MAAUnified-v2.0.0-linux-x64.zip",
+                        "browser_download_url": "https://example.com/MAAUnified-v2.0.0-linux-x64.zip",
                         "size": 1234
                       }
                     ]
@@ -139,8 +139,8 @@ public sealed class SettingsModuleCM1FeatureTests
                     "prerelease": false,
                     "assets": [
                       {
-                        "name": "MAAUnified-v2.0.0-linux-x64.AppImage",
-                        "browser_download_url": "https://example.com/MAAUnified-v2.0.0-linux-x64.AppImage",
+                        "name": "MAAUnified-v2.0.0-linux-x64.zip",
+                        "browser_download_url": "https://example.com/MAAUnified-v2.0.0-linux-x64.zip",
                         "size": 1234
                       }
                     ]
@@ -429,7 +429,8 @@ public sealed class SettingsModuleCM1FeatureTests
         }
 
         Assert.False(vm.HasVersionUpdateErrorMessage);
-        Assert.Contains("v2.0.0", vm.VersionUpdateStatusMessage, StringComparison.Ordinal);
+        Assert.False(vm.HasPendingVersionUpdateAvailability);
+        Assert.Contains("当前已是最新", vm.VersionUpdateStatusMessage, StringComparison.Ordinal);
         Assert.False(dialogRaised);
     }
 

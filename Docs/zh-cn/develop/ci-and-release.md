@@ -9,8 +9,9 @@
 主仓以这些 workflow 为准：
 
 - `.github/workflows/ci-avalonia.yml`：调试包和合并前验证
-- `.github/workflows/ci.yml`：官方 Release Pipeline，tag 发布时一并生成并上传 MAAUnified Linux GUI 包
-- `.github/workflows/release-maaunified.yml`：手动补发 MAAUnified Release 包
+- `.github/workflows/ci.yml`：官方 WPF/main Release Pipeline，负责普通版发布和 `MAARuntime-*` runtime artifacts，不直接正式发布 MAAUnified
+- `.github/workflows/release-maaunified.yml`：正式 MAAUnified 附加/补发入口；beta release event 自动或手动从成功的 `ci.yml` run 下载 `MAARuntime-*` 后打包上传
+- `.github/workflows/release-nightly-ota.yml`：复用普通 nightly alpha tag，构建并上传 runtime artifacts 后调用 `release-maaunified.yml` 上传 alpha MAAUnified 到 MaaRelease，再触发 mirrors
 
 `src/MAAUnified/CI/` 下的文件只当模板或同步副本看，不作为实际入口。
 
@@ -19,23 +20,28 @@
 | 名称 | Runner | RID | MaaDeps triplet | CMake preset | Debug | Release |
 | --- | --- | --- | --- | --- | --- | --- |
 | `windows-x64` | `windows-latest` | `win-x64` | `x64-windows` | `windows-unified-publish-x64` | 完整调试包 | 暂不发布 |
-| `linux-x64` | `ubuntu-latest` | `linux-x64` | `x64-linux` | `linux-publish-x64` | 桌面便携 `.zip` | 桌面便携 `.zip` |
-| `macos-x64` | `macos-latest` | `osx-x64` | `x64-osx` | `macos-publish-x64` | 完整调试包 | 暂不发布 |
-| `macos-arm64` | `macos-latest` | `osx-arm64` | `arm64-osx` | `macos-publish-arm64` | 完整调试包 | 暂不发布 |
+| `linux-x64` | `ubuntu-latest` | `linux-x64` | `x64-linux` | `linux-publish-x64` | 桌面便携 `.zip` | alpha/beta 桌面便携 `.zip` |
+| `macos-x64` | `macos-latest` | `osx-x64` | `x64-osx` | `macos-publish-x64` | 完整调试包 | alpha/beta `.dmg` |
+| `macos-arm64` | `macos-latest` | `osx-arm64` | `arm64-osx` | `macos-publish-arm64` | 完整调试包 | alpha/beta `.dmg` |
 
 调试包保留日志和符号，用来复现和排障。正式包面向分发。
 
-当前 MAAUnified 随主仓 tag 发布 Linux 桌面便携包。`.github/workflows/ci.yml` 的 `Build MAAUnified Linux GUI` job 会在 `vX.Y.Z` 和 `vX.Y.Z-beta...` tag 上产出 `MAAUnified-<tag>-linux-x64.zip`，最终由 `Publish Release` job 和主仓 `MAA-*` 包一起上传到同一个 GitHub Release。Windows 和 macOS 也暂不加入 release。
+当前 MAAUnified 是普通版 alpha/beta release 的附加产物，不创建 MAAUnified-only release 或 channel。`ci.yml` 只产出普通版发布和 `MAARuntime-*` runtime artifacts；正式 MAAUnified 包由 `release-maaunified.yml` 从成功的 `ci.yml` run 下载 runtime artifacts 后打包上传。Beta 通过 beta release event 自动触发，也可手动补发；alpha/nightly 由 `release-nightly-ota.yml` 复用普通 nightly alpha tag，构建并上传 runtime artifacts 后调用 `release-maaunified.yml` 上传到 MaaRelease，再触发 mirrors。Stable 暂不附带 MAAUnified 包，Windows 也暂不加入 release。
 
-当前 Beta 包形态固定为：
+当前 MAAUnified release 包形态固定为：
 
 - Linux Release：`.zip` 便携包，解压根目录直接看到 `MAAUnified.AppImage`
+- macOS Release：`.dmg` 安装镜像，按架构区分 x64/arm64
 
 Linux Debug 包也使用同样的桌面便携 `.zip` 布局。`MAAUnified.AppImage` 是便携目录的桌面启动入口，不是单文件自包含包；必须先解压完整 `.zip`，再从解压后的根目录运行。
 
 ## 软件更新产物
 
-MAAUnified 软件更新当前发布 Linux 包。更新检查只接受 `MAAUnified-*` 包名；Beta 通道和 Stable 通道都可从 GitHub Release 下载 Linux 桌面便携 `.zip`，并在下次启动时解压覆盖运行时文件并保留 `config/`、`data/` 等可写目录。Windows 和 macOS 更新能力保留在代码中，但对应包暂不上传到 release。
+MAAUnified 软件更新只接受 `MAAUnified-*` 包名，并按当前平台选择包：Linux 只选择 `.zip`，macOS 只选择 `.dmg`。不会把 `MAAComponent-OTA-*`、普通版 `MAA-*` 包或 Windows 包当作 MAAUnified 软件更新。
+
+Stable 暂不发布 MAAUnified 包；当 stable release/version API 存在但没有当前平台的 `MAAUnified-*` 包时，MAAUnified 更新检查会返回无可用更新的安静状态，不提示用户安装普通版产物。Beta 可从普通版 beta release 选择对应平台的 `MAAUnified-*` 包。Nightly 继续映射到普通版 alpha API/tag，并继续受 `AllowNightlyUpdates` 显式开关控制，默认不暴露 nightly 选项。
+
+这些约定只影响 MAAUnified 的 Avalonia 更新检查。WPF 更新逻辑和 WPF 产物命名不使用这套筛选规则，不受 MAAUnified 附加产物发布策略影响。
 
 Mirror酱目前只支持资源更新；选择 Mirror酱作为软件更新源时，界面会提示 MAAUnified 暂未支持 Mirror酱软件更新，并要求切换到海外源/GitHub。
 ### macOS 签名与 ad-hoc fallback
@@ -58,7 +64,7 @@ CI 产物需要满足这些约定：
 
 - CI 组装目录位于 runner 临时目录 `${RUNNER_TEMP}/maaunified-staging`
 - Linux / macOS 托管应用和依赖在 `${RUNNER_TEMP}/maaunified-staging/bin/`
-- MaaCore runtime、原生库和 `resource/` 在 `${RUNNER_TEMP}/maaunified-staging/` 根目录
+- MaaCore runtime、原生库和 `resource/` 在 `${RUNNER_TEMP}/maaunified-staging/` 根目录；MAAUnified release 包复用主仓构建出的 MaaCore runtime artifacts，不重新定义 WPF 或普通版 runtime 产物。
 - macOS staging 根目录必须同时包含 `libMaaCore.dylib` 和 `libMaaAdbControlUnit.dylib`；后者来自 MaaFramework macOS 包的 `bin/libMaaAdbControlUnit.dylib`，需要与 `libMaaCore.dylib` 同目录。
 - Windows 根目录入口是 `${RUNNER_TEMP}/maaunified-staging/MAAUnified.exe`
 - Linux 根目录保留 `MAAUnified.AppImage`、`resource/`、原生库，以及 `config/`、`data/`、`cache/`、`debug/`、`update-packages/` 等便携目录
@@ -66,7 +72,7 @@ CI 产物需要满足这些约定：
 
 ### macOS MaaFramework control unit
 
-临时操作：真实 workflow 在 `Build MaaCore runtime` 后、`Publish MAAUnified app` 前下载 MaaFramework macOS 包，并把 `bin/*AdbControlUnit*` 复制到 `install/`。
+真实 MAAUnified release workflow 会在打包前准备 MaaCore runtime artifacts，并下载 MaaFramework macOS 包，把 `bin/*AdbControlUnit*` 复制到 `install/`。
 
 本地手工处理时，打开 MaaFramework latest release，找到对应架构的 macOS 包：
 
@@ -150,9 +156,10 @@ Windows GPU 探测遇到 `Indirect`、`Virtual`、`IDD` 一类 adapter 时，应
 3. 跑 Debug workflow，看调试包和测试结果。
 4. 确认目标平台启动、布局和日志都正常。
 5. 创建或确认 GitHub Release。
-6. 跑官方 Release Pipeline。所有 tag 都会让 `Build MAAUnified Linux GUI` job 生成 Linux 桌面便携 `.zip`，`Publish Release` job 会和主仓包一起上传。
-7. 需要手动补发 MAAUnified 包时，再跑 `.github/workflows/release-maaunified.yml`。
-8. Windows/macOS 加入 release 前，需要重新启用对应 matrix，并检查 macOS 签名与 notarization 状态。
+6. 跑官方 `ci.yml` Release Pipeline，确认普通版发布和对应平台的 `MAARuntime-*` runtime artifacts 已成功产出；`ci.yml` 不直接正式发布 MAAUnified。
+7. Beta MAAUnified 由 beta release event 自动触发 `.github/workflows/release-maaunified.yml`，也可手动指定成功的 `ci.yml` run 补发 Linux `.zip` 和 macOS `.dmg`。
+8. Alpha/nightly MAAUnified 由 `.github/workflows/release-nightly-ota.yml` 复用普通 nightly alpha tag，上传 runtime artifacts 后调用 `release-maaunified.yml` 上传到 MaaRelease 并触发 mirrors。
+9. Stable 暂不发布 MAAUnified。Windows 加入 release 前，需要重新启用对应 matrix；macOS 继续检查签名与 notarization 状态。
 
 Windows GUI 启动或 GPU 问题，优先看发布目录下的 `debug/windows-gpu-probe.log` 和 `debug/avalonia-ui-startup.log`。
 
