@@ -524,9 +524,11 @@
     <Style Selector="Image.task-queue-log-thumbnail">
       <Setter Property="Width" Value="68" />
       <Setter Property="Height" Value="40" />
-      <Setter Property="Margin" Value="0,8,8,0" />
-      <Setter Property="HorizontalAlignment" Value="Left" />
+      <Setter Property="Margin" Value="8,0,0,0" />
+      <Setter Property="HorizontalAlignment" Value="Right" />
+      <Setter Property="VerticalAlignment" Value="Center" />
       <Setter Property="Stretch" Value="Uniform" />
+      <Setter Property="IsHitTestVisible" Value="True" />
     </Style>
 
     <Style Selector="Popup.task-queue-log-image-popup">
@@ -893,38 +895,18 @@
             <ItemsControl.ItemTemplate>
               <DataTemplate>
                 <Border Classes="app-surface app-card task-queue-log-card">
-                  <Grid ColumnDefinitions="3,80,*">
+                  <Grid ColumnDefinitions="3,80,*,80">
                     <Border Classes="task-queue-log-accent" />
-                    <Grid RowDefinitions="Auto,Auto,Auto"
-                          Grid.Column="1"
-                          Margin="10,0,0,0"
+                    <Grid Grid.Column="3"
+                          Margin="0,0,10,0"
+                          VerticalAlignment="Center"
                           IsVisible="{Binding ShowThumbnail}">
-                      <TextBlock Classes="app-caption task-queue-log-time align-top"
-                                 Text="{Binding StartTime}"
-                                 IsVisible="{Binding ShowStartTime}" />
-                      <Image Grid.Row="1"
-                             x:Name="LogThumbnail"
+                      <Image x:Name="LogThumbnail"
                              Classes="task-queue-log-thumbnail"
                              Source="{Binding Thumbnail}"
                              PointerEntered="OnLogThumbnailPointerEntered"
                              PointerExited="OnLogThumbnailPointerExited"
                              IsVisible="{Binding ShowThumbnail}" />
-                      <Popup Grid.Row="1"
-                             Classes="task-queue-log-image-popup"
-                             controls:PopupUiScale.UseTopLevelUiScale="True"
-                             PlacementTarget="{Binding ElementName=LogThumbnail}"
-                             Placement="Left"
-                             HorizontalOffset="-8"
-                             IsHitTestVisible="False"
-                             IsOpen="False">
-                        <Image Classes="task-queue-log-image-popup-preview"
-                               Source="{Binding Thumbnail}" />
-                      </Popup>
-                      <TextBlock Grid.Row="2"
-                                 Classes="app-caption task-queue-log-time"
-                                 Margin="{DynamicResource MAA.Thickness.MarginTopSection}"
-                                 Text="{Binding EndTime}"
-                                 IsVisible="{Binding ShowEndTime}" />
                     </Grid>
 
                     <controls:AdaptiveSpacingStackPanel HorizontalAlignment="Center"
@@ -932,6 +914,19 @@
                                 Margin="10,0,0,0"
                                 VerticalAlignment="Center"
                                 IsVisible="{Binding ShowTimeOnlyLayout}">
+                      <TextBlock Classes="app-caption task-queue-log-time"
+                                 Text="{Binding StartTime}"
+                                 IsVisible="{Binding ShowStartTime}" />
+                      <TextBlock Classes="app-caption task-queue-log-time"
+                                 Margin="{DynamicResource MAA.Thickness.MarginTopSection}"
+                                 Text="{Binding EndTime}"
+                                 IsVisible="{Binding ShowEndTime}" />
+                    </controls:AdaptiveSpacingStackPanel>
+
+                    <controls:AdaptiveSpacingStackPanel Grid.Column="1"
+                                                        Margin="10,0,0,0"
+                                                        VerticalAlignment="Center"
+                                                        IsVisible="{Binding ShowThumbnail}">
                       <TextBlock Classes="app-caption task-queue-log-time"
                                  Text="{Binding StartTime}"
                                  IsVisible="{Binding ShowStartTime}" />
@@ -975,5 +970,16 @@
                            VerticalOffset="4"
                            ItemInvoked="OnTaskQueueActionPopupItemInvoked"
                            Closed="OnTaskQueueActionPopupClosed" />
+    <Popup x:Name="LogThumbnailPreviewPopup"
+           Classes="task-queue-log-image-popup"
+           controls:PopupUiScale.UseTopLevelUiScale="True"
+           Placement="Right"
+           HorizontalOffset="8"
+           IsHitTestVisible="False"
+           IsLightDismissEnabled="False"
+           IsOpen="False">
+      <Image x:Name="LogThumbnailPreviewImage"
+             Classes="task-queue-log-image-popup-preview" />
+    </Popup>
   </Grid>
 </UserControl>

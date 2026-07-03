@@ -53,6 +53,7 @@ public partial class TaskQueueView : UserControl
     private double _taskSelectionIndicatorTop = double.NaN;
     private Control? _openTaskQueuePopupOwner;
     private Control? _suppressNextTaskQueuePopupOpenOwner;
+    private Control? _activeLogThumbnailPreviewTarget;
 
     public TaskQueueView()
     {
@@ -148,68 +149,56 @@ public partial class TaskQueueView : UserControl
         return state;
     }
 
-    private static bool TryResolveLogThumbnailPreview(Control thumbnail, out Popup popup, out Control preview)
+    private void ShowLogThumbnailPreview(Control thumbnail, LogThumbnailPreviewState state)
     {
-        popup = null!;
-        preview = null!;
-
-        if (thumbnail.Parent is not Panel panel)
-        {
-            return false;
-        }
-
-        foreach (var child in panel.Children)
-        {
-            if (child is Popup candidate && candidate.Classes.Contains("task-queue-log-image-popup"))
-            {
-                popup = candidate;
-                preview = candidate.Child as Control ?? candidate;
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private static void ShowLogThumbnailPreview(Control thumbnail, LogThumbnailPreviewState state)
-    {
-        if (!TryResolveLogThumbnailPreview(thumbnail, out var popup, out var preview))
+        if (thumbnail.DataContext is not TaskQueueLogCardViewModel { Thumbnail: { } bitmap })
         {
             return;
         }
 
         state.CloseVersion++;
-        if (!popup.IsOpen)
+        _activeLogThumbnailPreviewTarget = thumbnail;
+        LogThumbnailPreviewPopup.PlacementTarget = thumbnail;
+        LogThumbnailPreviewImage.Source = bitmap;
+
+        if (!LogThumbnailPreviewPopup.IsOpen)
         {
-            preview.Opacity = 0d;
-            popup.IsOpen = true;
+            LogThumbnailPreviewImage.Opacity = 0d;
+            LogThumbnailPreviewPopup.IsOpen = true;
             Dispatcher.UIThread.Post(() =>
             {
-                if (popup.IsOpen && state.PointerOverThumbnail)
+                if (LogThumbnailPreviewPopup.IsOpen
+                    && state.PointerOverThumbnail
+                    && ReferenceEquals(_activeLogThumbnailPreviewTarget, thumbnail))
                 {
-                    preview.Opacity = 1d;
+                    LogThumbnailPreviewImage.Opacity = 1d;
                 }
             }, DispatcherPriority.Render);
             return;
         }
 
-        preview.Opacity = 1d;
+        LogThumbnailPreviewImage.Opacity = 1d;
     }
 
-    private static async void ScheduleLogThumbnailPreviewClose(Control thumbnail, LogThumbnailPreviewState state)
+    private async void ScheduleLogThumbnailPreviewClose(Control thumbnail, LogThumbnailPreviewState state)
     {
-        if (!TryResolveLogThumbnailPreview(thumbnail, out var popup, out var preview) || !popup.IsOpen)
+        if (!LogThumbnailPreviewPopup.IsOpen || !ReferenceEquals(_activeLogThumbnailPreviewTarget, thumbnail))
         {
             return;
         }
 
-        preview.Opacity = 0d;
+        LogThumbnailPreviewImage.Opacity = 0d;
         var closeVersion = ++state.CloseVersion;
 
         await Task.Delay(LogThumbnailPreviewFadeDuration);
-        if (closeVersion == state.CloseVersion && !state.PointerOverThumbnail)
+        if (closeVersion == state.CloseVersion
+            && !state.PointerOverThumbnail
+            && ReferenceEquals(_activeLogThumbnailPreviewTarget, thumbnail))
         {
-            popup.IsOpen = false;
+            LogThumbnailPreviewPopup.IsOpen = false;
+            LogThumbnailPreviewImage.Source = null;
+            LogThumbnailPreviewPopup.PlacementTarget = null;
+            _activeLogThumbnailPreviewTarget = null;
         }
     }
 
@@ -221,15 +210,13 @@ public partial class TaskQueueView : UserControl
             state.OpenVersion++;
             state.CloseVersion++;
 
-            if (!TryResolveLogThumbnailPreview(thumbnail, out var popup, out var preview))
-            {
-                continue;
-            }
-
-            preview.Opacity = 0d;
-            popup.IsOpen = false;
+            LogThumbnailPreviewImage.Opacity = 0d;
         }
 
+        LogThumbnailPreviewPopup.IsOpen = false;
+        LogThumbnailPreviewImage.Source = null;
+        LogThumbnailPreviewPopup.PlacementTarget = null;
+        _activeLogThumbnailPreviewTarget = null;
         _logThumbnailPreviewStates.Clear();
     }
 
