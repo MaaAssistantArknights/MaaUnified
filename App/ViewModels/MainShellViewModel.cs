@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
+using System.Reflection;
 using System.Text.Json.Nodes;
 using Avalonia;
 using Avalonia.Controls;
@@ -31,6 +32,11 @@ namespace MAAUnified.App.ViewModels;
 public sealed class MainShellViewModel : ObservableObject
 {
     public const string AppDisplayName = "MaaAssistantArknights Unified";
+    public static readonly string WindowDisplayName = MaaUnifiedBuildFlavor.BuildTitle(
+        AppDisplayName,
+        typeof(MainShellViewModel).Assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
+            ?.InformationalVersion);
     private const string DeveloperModeConfigKey = "GUI.DeveloperMode";
     private const string DefaultLogItemDateFormat = "HH:mm:ss";
     private const int WindowTitleScrollThreshold = 24;
@@ -71,7 +77,7 @@ public sealed class MainShellViewModel : ObservableObject
     private int _selectedRootTabIndex;
     private bool _isWindowTopMost;
     private bool _isCoreReady = true;
-    private string _windowTitle = AppDisplayName;
+    private string _windowTitle = WindowDisplayName;
     private string _windowVersionUpdateInfo = string.Empty;
     private string _windowResourceUpdateInfo = string.Empty;
     private bool _isWindowUpdateActionRunning;
@@ -93,7 +99,7 @@ public sealed class MainShellViewModel : ObservableObject
     private int _blockingConfigIssueCount;
     private SessionState _currentSessionState;
     private string _appliedTheme = "Light";
-    private string _windowTitleSource = AppDisplayName;
+    private string _windowTitleSource = WindowDisplayName;
     private string _rootLogTimeFormat = DefaultLogItemDateFormat;
     private bool _windowTitleScrollable;
     private int _windowTitleScrollOffset;
@@ -2372,8 +2378,8 @@ public sealed class MainShellViewModel : ObservableObject
         }
 
         _windowTitleSource = updateMessages.Count == 0
-            ? AppDisplayName
-            : $"{AppDisplayName} - {string.Join(" / ", updateMessages)}";
+            ? WindowDisplayName
+            : $"{WindowDisplayName} - {string.Join(" / ", updateMessages)}";
         _windowTitleScrollOffset = 0;
         UpdateWindowTitleDisplay();
     }
@@ -3821,7 +3827,7 @@ public sealed class MainShellViewModel : ObservableObject
         var loopText = _windowTitleSource + WindowTitleScrollSpacer;
         if (loopText.Length == 0)
         {
-            WindowTitle = AppDisplayName;
+            WindowTitle = WindowDisplayName;
             return;
         }
 

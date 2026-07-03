@@ -25,6 +25,27 @@ namespace MAAUnified.Tests;
 public sealed class MainShellViewModelTests
 {
     [Theory]
+    [InlineData("1.2.3-beta.1", true, MaaUnifiedBuildFlavor.BetaTitleSuffix)]
+    [InlineData("1.2.3-alpha.1+build.5", true, MaaUnifiedBuildFlavor.AlphaTitleSuffix)]
+    [InlineData("1.2.3", true, "")]
+    [InlineData("1.2.3-beta.1", false, MaaUnifiedBuildFlavor.DebugTitleSuffix)]
+    public void ResolveTitleSuffix_ShouldReflectBuildChannel(
+        string informationalVersion,
+        bool isFormalRelease,
+        string expected)
+    {
+        Assert.Equal(expected, MaaUnifiedBuildFlavor.ResolveTitleSuffix(informationalVersion, isFormalRelease));
+    }
+
+    [Fact]
+    public async Task WindowTitle_ShouldUseBuildFlavorDisplayName()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+
+        Assert.Equal(MainShellViewModel.WindowDisplayName, fixture.ViewModel.WindowTitle);
+    }
+
+    [Theory]
     [InlineData(SessionState.Connected, false, true, false)]
     [InlineData(SessionState.Connected, true, false, false)]
     [InlineData(SessionState.Running, false, false, true)]

@@ -557,7 +557,7 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
             return true;
         }
 
-        return packageName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase);
+        return false;
     }
 
     private static bool IsMacOSDmgPackage(VersionUpdateCheckResult workflowResult)

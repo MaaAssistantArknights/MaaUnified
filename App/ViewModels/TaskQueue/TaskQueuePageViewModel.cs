@@ -4981,6 +4981,11 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
     private void AppendWpfCallbackLog(CoreCallbackEvent callback, CallbackPayload payload, int? taskIndex)
     {
+        if (IsSuppressedWpfTaskChainLog(callback.MsgName, payload.TaskChain))
+        {
+            return;
+        }
+
         TaskQueueCallbackUserLog? log = callback.MsgName switch
         {
             "TaskChainStart" => BuildTaskChainStartLog(taskIndex, payload.TaskChain),
@@ -5012,6 +5017,13 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             level: value.Level,
             updateThumbnail: value.UpdateThumbnail,
             forceScreenshot: value.ForceScreenshot);
+    }
+
+    private static bool IsSuppressedWpfTaskChainLog(string? msgName, string? taskChain)
+    {
+        return !string.IsNullOrWhiteSpace(msgName)
+            && msgName.StartsWith("TaskChain", StringComparison.Ordinal)
+            && string.Equals(TaskModuleTypes.Normalize(taskChain), "CloseDown", StringComparison.OrdinalIgnoreCase);
     }
 
     private TaskQueueCallbackUserLog BuildTaskChainStartLog(int? taskIndex, string? taskChain)
@@ -5999,6 +6011,60 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         return node as JsonArray;
     }
 
+    private static List<int> GetIntArrayValue(JsonObject? obj, string key)
+    {
+        var array = GetArrayValue(obj, key);
+        if (array is null)
+        {
+            return [];
+        }
+
+        var values = new List<int>();
+        foreach (var node in array)
+        {
+            if (TryReadIntValue(node, out var value))
+            {
+                values.Add(value);
+            }
+        }
+
+        return values;
+    }
+
+    private static bool TryReadIntValue(JsonNode? node, out int value)
+    {
+        value = 0;
+        if (node is not JsonValue jsonValue)
+        {
+            return false;
+        }
+
+        if (jsonValue.TryGetValue(out int parsedInt))
+        {
+            value = parsedInt;
+            return true;
+        }
+
+        if (jsonValue.TryGetValue(out string? raw) && int.TryParse(raw, out parsedInt))
+        {
+            value = parsedInt;
+            return true;
+        }
+
+        return false;
+    }
+
+    private bool IsMainTaskQueueCompletion(CallbackPayload payload)
+    {
+        if (payload.FinishedTaskIds.Count == 0)
+        {
+            return true;
+        }
+
+        return payload.FinishedTaskIds.Any(taskId =>
+            Runtime.SessionService.TryResolveTaskIndexByCoreTaskId(taskId, out _));
+    }
+
     private async Task HandleCallbackAsync(CoreCallbackEvent callback)
     {
         await Dispatcher.UIThread.InvokeAsync(() => HandleCallbackCoreAsync(callback));
@@ -6147,7 +6213,6 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 break;
             case "AllTasksCompleted":
                 MarkRunningTasks(TaskQueueItemStatus.Success);
-                AppendWpfCallbackLog(callback, metadata, taskIndex);
                 await RecordRuntimeStatusAsync(
                     runId,
                     taskIndex,
@@ -6156,11 +6221,15 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                     TaskQueueItemStatus.Success,
                     callback.PayloadJson,
                     resolveSource: resolveSource);
-                QueueAutomaticNotifications(callback, metadata, taskIndex, runId);
-                if (!string.Equals(_lastPostActionRunId, runId, StringComparison.Ordinal))
+                if (IsMainTaskQueueCompletion(metadata))
                 {
-                    _lastPostActionRunId = runId;
-                    await ExecutePostActionAfterCompletionAsync(callback, runId, taskIndex);
+                    AppendWpfCallbackLog(callback, metadata, taskIndex);
+                    QueueAutomaticNotifications(callback, metadata, taskIndex, runId);
+                    if (!string.Equals(_lastPostActionRunId, runId, StringComparison.Ordinal))
+                    {
+                        _lastPostActionRunId = runId;
+                        await ExecutePostActionAfterCompletionAsync(callback, runId, taskIndex);
+                    }
                 }
 
                 CompleteTaskQueueRunOwnership();
@@ -6654,7 +6723,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         {
             if (JsonNode.Parse(payloadJson) is not JsonObject root)
             {
-                return new CallbackPayload(null, null, null, null, null, null, null, null, null, "payload is not a JSON object");
+                return new CallbackPayload(null, null, null, null, null, [], null, null, null, null, "payload is not a JSON object");
             }
 
             var taskChain = GetStringValue(root, "task_chain") ?? GetStringValue(root, "taskchain");
@@ -6665,15 +6734,16 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                         ?? GetStringValue(root, "id");
             var taskIndex = GetIntValue(root, "task_index") ?? GetIntValue(root, "taskindex");
             var taskId = GetIntValue(root, "task_id") ?? GetIntValue(root, "taskid");
+            var finishedTaskIds = GetIntArrayValue(root, "finished_tasks");
             var what = GetStringValue(root, "what");
             var why = GetStringValue(root, "why");
             var details = GetObjectValue(root, "details");
 
-            return new CallbackPayload(taskChain, subTask, runId, taskIndex, taskId, what, why, details, root, null);
+            return new CallbackPayload(taskChain, subTask, runId, taskIndex, taskId, finishedTaskIds, what, why, details, root, null);
         }
         catch (JsonException ex)
         {
-            return new CallbackPayload(null, null, null, null, null, null, null, null, null, $"payload parse failed: {ex.Message}");
+            return new CallbackPayload(null, null, null, null, null, [], null, null, null, null, $"payload parse failed: {ex.Message}");
         }
     }
 
@@ -6683,13 +6753,14 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         string? RunId,
         int? TaskIndex,
         int? TaskId,
+        IReadOnlyList<int> FinishedTaskIds,
         string? What,
         string? Why,
         JsonObject? Details,
         JsonObject? Root,
         string? ParseError = null)
     {
-        public static CallbackPayload Empty { get; } = new(null, null, null, null, null, null, null, null, null, null);
+        public static CallbackPayload Empty { get; } = new(null, null, null, null, null, [], null, null, null, null, null);
 
         public bool HasParseError => !string.IsNullOrWhiteSpace(ParseError);
     }
