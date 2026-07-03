@@ -828,6 +828,49 @@ public sealed class TaskQueueG2FeatureTests
     }
 
     [Fact]
+    public async Task Callback_AllTasksCompleted_ForPostActionCloseDown_ShouldNotRepeatCompletionLogOrPostAction()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Fight", "fight-a")).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(fixture.Runtime.ConnectFeatureService, fixture.ReadyAdbPath)).Success);
+        await vm.StartAsync();
+        Assert.Equal(1, fixture.Bridge.StartCallCount);
+
+        await InvokeCallbackAsync(vm, new CoreCallbackEvent(
+            3,
+            "AllTasksCompleted",
+            """{"finished_tasks":[1],"run_id":"run-g2-main"}""",
+            DateTimeOffset.UtcNow));
+
+        var completionLogText = vm.RootTexts.GetOrDefault("AllTasksComplete", "All task(s) completed!\n(in {0})")
+            .Split('{')[0]
+            .Trim();
+        var completionLogCount = CountTaskQueueLogs(vm, completionLogText);
+        Assert.Equal(1, completionLogCount);
+        Assert.Equal(1, fixture.PostAction.ExecuteCount);
+
+        await InvokeCallbackAsync(vm, new CoreCallbackEvent(
+            10000,
+            "TaskChainStart",
+            """{"task_chain":"CloseDown","task_id":999,"run_id":"run-g2-close-down"}""",
+            DateTimeOffset.UtcNow));
+        await InvokeCallbackAsync(vm, new CoreCallbackEvent(
+            3,
+            "AllTasksCompleted",
+            """{"finished_tasks":[999],"run_id":"run-g2-close-down"}""",
+            DateTimeOffset.UtcNow));
+
+        completionLogCount = CountTaskQueueLogs(vm, completionLogText);
+        Assert.Equal(1, completionLogCount);
+        Assert.Equal(1, fixture.PostAction.ExecuteCount);
+        Assert.Equal(0, CountTaskQueueLogs(vm, "CloseDown"));
+    }
+
+    [Fact]
     public async Task StopAsync_ManualStop_ShouldClearAllTaskStatuses()
     {
         await using var fixture = await TestFixture.CreateAsync();
@@ -931,6 +974,13 @@ public sealed class TaskQueueG2FeatureTests
         }
 
         return false;
+    }
+
+    private static int CountTaskQueueLogs(TaskQueuePageViewModel vm, string content)
+    {
+        return vm.LogCards
+            .SelectMany(card => card.Items)
+            .Count(log => log.Content.Contains(content, StringComparison.OrdinalIgnoreCase));
     }
 
     private sealed class TestFixture : IAsyncDisposable
