@@ -104,7 +104,11 @@ public sealed class UnifiedConfigurationService
                     var normalizedFightStageCount = NormalizeFightStageSelections(CurrentConfig);
                     var normalizedTaskParamCount = NormalizeTaskQueueParams(CurrentConfig);
                     var repairedAchievementPopupAutoCloseCount = RepairAchievementPopupAutoCloseDefault(CurrentConfig);
-                    var normalizedConfigChanged = normalizedFightStageCount > 0 || normalizedTaskParamCount > 0 || repairedAchievementPopupAutoCloseCount > 0;
+                    var clearedRecruitExpeditedCount = ClearOneShotRecruitExpedited(CurrentConfig);
+                    var normalizedConfigChanged = normalizedFightStageCount > 0
+                        || normalizedTaskParamCount > 0
+                        || repairedAchievementPopupAutoCloseCount > 0
+                        || clearedRecruitExpeditedCount > 0;
                     var persistedNormalizedConfig = false;
                     if (normalizedFightStageCount > 0)
                     {
@@ -121,6 +125,12 @@ public sealed class UnifiedConfigurationService
                     {
                         LogService.Info(
                             $"Repaired {repairedAchievementPopupAutoCloseCount} achievement popup auto-close setting(s) to True.");
+                    }
+
+                    if (clearedRecruitExpeditedCount > 0)
+                    {
+                        LogService.Info(
+                            $"Cleared {clearedRecruitExpeditedCount} one-shot Recruit expedited setting(s).");
                     }
 
                     if (normalizedConfigChanged && CurrentConfig.SchemaVersion == UnifiedConfig.LatestSchemaVersion)
@@ -469,7 +479,8 @@ public sealed class UnifiedConfigurationService
 
             config.SchemaVersion = UnifiedConfig.LatestSchemaVersion;
             var normalizedTaskParamCount = NormalizeTaskQueueParams(config);
-            var configSnapshot = SerializeConfigSnapshot(config);
+            var configToPersist = CreatePersistentConfigSnapshot(config);
+            var configSnapshot = SerializeConfigSnapshot(configToPersist);
             if (string.Equals(_lastPersistedConfigSnapshot, configSnapshot, StringComparison.Ordinal))
             {
                 CurrentConfig = config;
@@ -481,7 +492,7 @@ public sealed class UnifiedConfigurationService
                 LogService.Info($"Normalized {normalizedTaskParamCount} task parameter set(s) before saving config/avalonia.json");
             }
 
-            await _store.SaveAsync(config, cancellationToken);
+            await _store.SaveAsync(configToPersist, cancellationToken);
             _lastPersistedConfigSnapshot = configSnapshot;
             CurrentConfig = config;
             var issues = RefreshValidationState(validationMode, logIssues: true);
@@ -503,6 +514,41 @@ public sealed class UnifiedConfigurationService
     private static string SerializeConfigSnapshot(UnifiedConfig config)
     {
         return JsonSerializer.Serialize(config, _configSnapshotOptions);
+    }
+
+    private static UnifiedConfig CreatePersistentConfigSnapshot(UnifiedConfig config)
+    {
+        var json = JsonSerializer.Serialize(config, _configSnapshotOptions);
+        var copy = JsonSerializer.Deserialize<UnifiedConfig>(json, _configSnapshotOptions) ?? new UnifiedConfig();
+        ClearOneShotRecruitExpedited(copy);
+        return copy;
+    }
+
+    private static int ClearOneShotRecruitExpedited(UnifiedConfig config)
+    {
+        var cleared = 0;
+        foreach (var profile in config.Profiles.Values)
+        {
+            foreach (var task in profile.TaskQueue)
+            {
+                if (!string.Equals(TaskParamCompiler.NormalizeTaskType(task.Type), TaskModuleTypes.Recruit, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (task.Params.Remove("expedite"))
+                {
+                    cleared += 1;
+                }
+
+                if (task.Params.Remove("expedite_times"))
+                {
+                    cleared += 1;
+                }
+            }
+        }
+
+        return cleared;
     }
 
     private List<(IConfigImporter Importer, bool FillMissingOnly)> BuildImportPlan(ImportSource source)

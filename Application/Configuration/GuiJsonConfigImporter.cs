@@ -229,6 +229,7 @@ public sealed class GuiJsonConfigImporter : IConfigImporter
         AddIfPresent(source, "GUI.AllowUseStoneSave", task, "UseStoneAllowSave");
         AddIfPresent(source, "GUI.HideSeries", task, "HideSeries");
         AddIfPresent(source, "Fight.UseExpiringMedicine", task, "UseExpiringMedicine");
+        AddIfPresent(source, "Fight.MedicineExpireDays", task, "MedicineExpireDays");
         AddIfPresent(source, "Fight.UseExpireMedicineForActivity", task, "UseExpireMedicineForActivity");
         AddIfPresent(source, "MainFunction.Annihilation.Stage", task, "AnnihilationStage");
         AddIfPresent(source, "MainFunction.Annihilation.UseCustom", task, "UseCustomAnnihilation");
@@ -255,6 +256,7 @@ public sealed class GuiJsonConfigImporter : IConfigImporter
         AddIfPresent(source, "AutoRecruit.SelectExtraTags", task, "ExtraTagMode");
         AddIfPresent(source, "AutoRecruit.RefreshLevel3", task, "RefreshLevel3");
         AddIfPresent(source, "AutoRecruit.ForceRefresh", task, "ForceRefresh");
+        AddIfPresent(source, "AutoRecruit.UseExpedited", task, "UseExpedited");
         AddIfPresent(source, "AutoRecruit.NotChooseLevel1", task, "Level1NotChoose");
         AddIfPresent(source, "AutoRecruit.MaxTimes", task, "MaxTimes");
         AddIfPresent(source, "AutoRecruit.ChooseLevel3", task, "Level3Choose");

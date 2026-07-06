@@ -925,6 +925,176 @@ public sealed class TaskModuleBFeatureTests
     }
 
     [Fact]
+    public async Task TaskQueuePage_InfrastCompleted_AdvancesCustomPlanAndPersistsUiState()
+    {
+        await using var fixture = await TestFixture.CreateAsync("en-us");
+
+        var customPlanPath = Path.Combine(fixture.Root, "config", "infrast.autonext.json");
+        await File.WriteAllTextAsync(
+            customPlanPath,
+            """
+            {
+              "plans": [
+                { "name": "Day", "period": [] },
+                { "name": "Night", "period": [] }
+              ]
+            }
+            """);
+
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Infrast", "infra")).Success);
+        var parameters = new InfrastParams
+        {
+            Mode = InfrastModuleViewModel.InfrastModeCustom,
+            Facility = ["Mfg"],
+            Filename = customPlanPath,
+            PlanIndex = 5,
+        }.ToJson();
+        Assert.True((await fixture.TaskQueue.UpdateTaskParamsAsync(0, parameters, persistImmediately: true)).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        await vm.ReloadTasksAsync();
+        await vm.WaitForPendingBindingAsync();
+        Assert.Equal(0, vm.InfrastModule.SelectedPlanIndex);
+        var normalized = await fixture.TaskQueue.GetTaskParamsAsync(0);
+        Assert.True(normalized.Success);
+        Assert.Equal(0, normalized.Value?["plan_index"]?.GetValue<int>());
+
+        await InvokeCallbackAsync(
+            vm,
+            new CoreCallbackEvent(
+                10002,
+                "TaskChainCompleted",
+                """{"task_chain":"Infrast","run_id":"run-infra-1","task_index":0}""",
+                DateTimeOffset.UtcNow));
+
+        var advanced = await fixture.TaskQueue.GetTaskParamsAsync(0);
+        Assert.True(advanced.Success);
+        Assert.Equal(1, advanced.Value?["plan_index"]?.GetValue<int>());
+        Assert.Equal(1, vm.InfrastModule.SelectedPlanIndex);
+        Assert.Equal("Night", vm.InfrastModule.SelectedPlan?.Display);
+
+        await InvokeCallbackAsync(
+            vm,
+            new CoreCallbackEvent(
+                10002,
+                "TaskChainCompleted",
+                """{"task_chain":"Infrast","run_id":"run-infra-2","task_index":0}""",
+                DateTimeOffset.UtcNow));
+
+        var wrapped = await fixture.TaskQueue.GetTaskParamsAsync(0);
+        Assert.True(wrapped.Success);
+        Assert.Equal(0, wrapped.Value?["plan_index"]?.GetValue<int>());
+        Assert.Equal(0, vm.InfrastModule.SelectedPlanIndex);
+        Assert.Equal("Day", vm.InfrastModule.SelectedPlan?.Display);
+
+        var log = new UiLogService();
+        var reloaded = new UnifiedConfigurationService(
+            new AvaloniaJsonConfigStore(fixture.Root),
+            new GuiNewJsonConfigImporter(),
+            new GuiJsonConfigImporter(),
+            log,
+            fixture.Root);
+        await reloaded.LoadOrBootstrapAsync();
+        var profile = reloaded.CurrentConfig.Profiles[reloaded.CurrentConfig.CurrentProfile];
+        Assert.Equal(0, profile.TaskQueue[0].Params["plan_index"]?.GetValue<int>());
+    }
+
+    [Fact]
+    public async Task AdvanceInfrastCustomPlan_NormalizesBoundaryIndexesBeforeAdvancing()
+    {
+        await using var fixture = await TestFixture.CreateAsync("en-us");
+
+        var onePlanPath = Path.Combine(fixture.Root, "config", "infrast.one-plan.json");
+        await File.WriteAllTextAsync(
+            onePlanPath,
+            """{"plans":[{"name":"Only","period":[]}]}""");
+        var twoPlanPath = Path.Combine(fixture.Root, "config", "infrast.two-plan.json");
+        await File.WriteAllTextAsync(
+            twoPlanPath,
+            """
+            {
+              "plans": [
+                { "name": "Day", "period": [] },
+                { "name": "Night", "period": [] }
+              ]
+            }
+            """);
+
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Infrast", "one-plan-overflow")).Success);
+        Assert.True((await fixture.TaskQueue.UpdateTaskParamsAsync(
+            0,
+            new InfrastParams
+            {
+                Mode = InfrastModuleViewModel.InfrastModeCustom,
+                Filename = onePlanPath,
+                PlanIndex = 5,
+            }.ToJson(),
+            persistImmediately: true)).Success);
+
+        var onePlanAdvance = await fixture.TaskQueue.AdvanceInfrastCustomPlanAsync(0);
+        Assert.True(onePlanAdvance.Success);
+        Assert.Equal(0, onePlanAdvance.Value);
+        var onePlanParams = await fixture.TaskQueue.GetTaskParamsAsync(0);
+        Assert.True(onePlanParams.Success);
+        Assert.Equal(0, onePlanParams.Value?["plan_index"]?.GetValue<int>());
+
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Infrast", "negative-overflow")).Success);
+        Assert.True((await fixture.TaskQueue.UpdateTaskParamsAsync(
+            1,
+            new InfrastParams
+            {
+                Mode = InfrastModuleViewModel.InfrastModeCustom,
+                Filename = twoPlanPath,
+                PlanIndex = -2,
+            }.ToJson(),
+            persistImmediately: true)).Success);
+
+        var negativeAdvance = await fixture.TaskQueue.AdvanceInfrastCustomPlanAsync(1);
+        Assert.True(negativeAdvance.Success);
+        Assert.Null(negativeAdvance.Value);
+        var negativeParams = await fixture.TaskQueue.GetTaskParamsAsync(1);
+        Assert.True(negativeParams.Success);
+        Assert.Equal(-1, negativeParams.Value?["plan_index"]?.GetValue<int>());
+
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Infrast", "time-rotation")).Success);
+        Assert.True((await fixture.TaskQueue.UpdateTaskParamsAsync(
+            2,
+            new InfrastParams
+            {
+                Mode = InfrastModuleViewModel.InfrastModeCustom,
+                Filename = twoPlanPath,
+                PlanIndex = -1,
+            }.ToJson(),
+            persistImmediately: true)).Success);
+
+        var rotationAdvance = await fixture.TaskQueue.AdvanceInfrastCustomPlanAsync(2);
+        Assert.True(rotationAdvance.Success);
+        Assert.Null(rotationAdvance.Value);
+        var rotationParams = await fixture.TaskQueue.GetTaskParamsAsync(2);
+        Assert.True(rotationParams.Success);
+        Assert.Equal(-1, rotationParams.Value?["plan_index"]?.GetValue<int>());
+
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Infrast", "normal-mode")).Success);
+        Assert.True((await fixture.TaskQueue.UpdateTaskParamsAsync(
+            3,
+            new InfrastParams
+            {
+                Mode = InfrastModuleViewModel.InfrastModeNormal,
+                Filename = twoPlanPath,
+                PlanIndex = 0,
+            }.ToJson(),
+            persistImmediately: true)).Success);
+
+        var normalModeAdvance = await fixture.TaskQueue.AdvanceInfrastCustomPlanAsync(3);
+        Assert.True(normalModeAdvance.Success);
+        Assert.Null(normalModeAdvance.Value);
+        var normalModeParams = await fixture.TaskQueue.GetTaskParamsAsync(3);
+        Assert.True(normalModeParams.Success);
+        Assert.Equal(0, normalModeParams.Value?["plan_index"]?.GetValue<int>());
+    }
+
+    [Fact]
     public async Task Infrast_Parse_SuccessAndRotation()
     {
         await using var fixture = await TestFixture.CreateAsync("en-us");
@@ -990,7 +1160,7 @@ public sealed class TaskModuleBFeatureTests
     }
 
     [Fact]
-    public async Task Infrast_Parse_FailureAndOutOfRange_LogErrorCode()
+    public async Task Infrast_Parse_FailureLogsAndOutOfRangeNormalizes()
     {
         await using var fixture = await TestFixture.CreateAsync("en-us");
         var module = new InfrastModuleViewModel(fixture.Runtime, new LocalizedTextMap { Language = "en-us" });
@@ -1010,15 +1180,15 @@ public sealed class TaskModuleBFeatureTests
         module.CustomFilePath = validPath;
         module.SelectedPlanIndex = 5;
         await module.ReloadPlansAsync();
-        Assert.Contains("out of range", module.LastErrorMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(0, module.SelectedPlanIndex);
+        Assert.Equal(string.Empty, module.LastErrorMessage);
 
         var errorLog = await File.ReadAllTextAsync(Path.Combine(fixture.Root, "debug", "avalonia-ui-errors.log"));
         Assert.Contains(UiErrorCode.InfrastPlanParseFailed, errorLog);
-        Assert.Contains(UiErrorCode.InfrastPlanOutOfRange, errorLog);
     }
 
     [Fact]
-    public async Task Infrast_ReloadPlans_OutOfRange_ReportsErrorAndLogsCode()
+    public async Task Infrast_ReloadPlans_OutOfRange_NormalizesToFirstPlan()
     {
         await using var fixture = await TestFixture.CreateAsync();
         var module = new InfrastModuleViewModel(fixture.Runtime, new LocalizedTextMap { Language = "en-us" });
@@ -1033,9 +1203,9 @@ public sealed class TaskModuleBFeatureTests
         module.SelectedPlanIndex = 5;
         await module.ReloadPlansAsync();
 
-        Assert.Contains("out of range", module.LastErrorMessage, StringComparison.OrdinalIgnoreCase);
-        var errorLog = await File.ReadAllTextAsync(Path.Combine(fixture.Root, "debug", "avalonia-ui-errors.log"));
-        Assert.Contains(UiErrorCode.InfrastPlanOutOfRange, errorLog);
+        Assert.Equal(0, module.SelectedPlanIndex);
+        Assert.Equal("PlanA", module.SelectedPlan?.Display);
+        Assert.Equal(string.Empty, module.LastErrorMessage);
     }
 
     [Fact]

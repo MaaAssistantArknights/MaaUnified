@@ -8,6 +8,7 @@ using MAAUnified.App.ViewModels.Settings;
 using MAAUnified.App.ViewModels.TaskQueue;
 using MAAUnified.Application.Configuration;
 using MAAUnified.Application.Models;
+using MAAUnified.Application.Models.TaskParams;
 using MAAUnified.Application.Orchestration;
 using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Features;
@@ -22,6 +23,49 @@ public sealed class TaskQueueG2FeatureTests
 {
     private static readonly byte[] SinglePixelPng = Convert.FromBase64String(
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO7+W0cAAAAASUVORK5CYII=");
+
+    [Fact]
+    public async Task StartUpModule_ClientTypeEmptySelectionDuringUiAttach_ShouldNotClearAccountName()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup-a")).Success);
+        Assert.True((await fixture.TaskQueue.SaveStartUpParamsAsync(0, new StartUpTaskParamsDto
+        {
+            AccountName = "doctor-a",
+            ClientType = "Official",
+            StartGameEnabled = true,
+            ConnectConfig = "General",
+            ConnectAddress = TestConnectionFixtureSupport.ReadyConnectAddress,
+            AdbPath = fixture.ReadyAdbPath,
+            TouchMode = "MaaFwAdb",
+            AutoDetectConnection = false,
+            AttachWindowScreencapMethod = "2",
+            AttachWindowMouseMethod = "64",
+            AttachWindowKeyboardMethod = "64",
+        })).Success);
+
+        var shared = new ConnectionGameSharedStateViewModel
+        {
+            ClientType = "Official",
+        };
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, shared);
+        await vm.InitializeAsync();
+        vm.SelectedTask = Assert.Single(vm.Tasks);
+        await vm.WaitForPendingBindingAsync();
+
+        Assert.Equal("doctor-a", vm.StartUpModule.AccountName);
+
+        vm.StartUpModule.SelectedClientTypeValue = string.Empty;
+        vm.StartUpModule.SelectedClientTypeOption = null;
+
+        Assert.Equal("Official", vm.StartUpModule.ClientType);
+        Assert.Equal("doctor-a", vm.StartUpModule.AccountName);
+
+        vm.StartUpModule.SelectedClientTypeValue = "YoStarEN";
+
+        Assert.Equal("YoStarEN", vm.StartUpModule.ClientType);
+        Assert.Equal(string.Empty, vm.StartUpModule.AccountName);
+    }
 
     [Fact]
     public async Task StartAsync_ShouldFlushDirtyBoundModulesBeforeQueueAndStart()

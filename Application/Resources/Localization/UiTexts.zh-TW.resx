@@ -726,6 +726,9 @@
   <data name="Mall.OnlyOnceADay" xml:space="preserve">
     <value>一日只執行一次</value>
   </data>
+  <data name="Mall.OnlyOnceADayTip" xml:space="preserve">
+    <value>按遊戲日限制執行次數。當天執行過後，同日再次執行佇列會跳過，次日重置後恢復。</value>
+  </data>
   <data name="Mall.Reserve" xml:space="preserve">
     <value>300 以下信用點數停止購買商品</value>
   </data>
@@ -1002,7 +1005,10 @@
     <value>自動公招</value>
   </data>
   <data name="Recruit.UseExpedited" xml:space="preserve">
-    <value>使用加急</value>
+    <value>自動使用加急許可*</value>
+  </data>
+  <data name="Recruit.UseExpeditedTip" xml:space="preserve">
+    <value>該選項僅生效一次。招募券取得速度低於消耗速度，通常下一輪公招任務時自然已到招募時間，僅在招募券嚴重溢出等緊急情況下使用</value>
   </data>
   <data name="Roguelike.Collectible.Dice" xml:space="preserve">
     <value>骰子</value>

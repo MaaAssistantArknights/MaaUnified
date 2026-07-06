@@ -242,6 +242,9 @@ public interface ITaskQueueFeatureService
 {
     Task<CoreResult<int>> QueueEnabledTasksAsync(CancellationToken cancellationToken = default);
 
+    Task<CoreResult<int>> ConsumeCompletedOneShotTaskEnabledStatesAsync(CancellationToken cancellationToken = default)
+        => Task.FromResult(CoreResult<int>.Ok(0));
+
     Task<UiOperationResult<IReadOnlyList<TaskQueuePrecheckWarning>>> GetStartPrecheckWarningsAsync(CancellationToken cancellationToken = default);
 
     Task<UiOperationResult<IReadOnlyList<TaskQueuePrecheckWarning>>> ApplyStartPrecheckDowngradesAsync(CancellationToken cancellationToken = default);
@@ -269,6 +272,8 @@ public interface ITaskQueueFeatureService
         JsonObject parameters,
         bool persistImmediately = false,
         CancellationToken cancellationToken = default);
+
+    Task<UiOperationResult<int?>> AdvanceInfrastCustomPlanAsync(int index, CancellationToken cancellationToken = default);
 
     Task<UiOperationResult<StartUpTaskParamsDto>> GetStartUpParamsAsync(int index, CancellationToken cancellationToken = default);
 

@@ -624,12 +624,31 @@ public sealed class TaskQueueG1FeatureTests
     }
 
     [Fact]
-    public async Task TaskQueueFeatureService_SetAllAndInvertEnabled_ShouldUpdateWholeQueue()
+    public async Task TaskQueueFeatureService_SetAllAndInvertEnabled_ShouldMatchWpfBatchSelectionRules()
     {
         await using var fixture = await TestFixture.CreateAsync();
-        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup-a", enabled: true)).Success);
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup-a", enabled: false)).Success);
         Assert.True((await fixture.TaskQueue.AddTaskAsync("Fight", "fight-b", enabled: false)).Success);
         Assert.True((await fixture.TaskQueue.AddTaskAsync("Recruit", "recruit-c", enabled: true)).Success);
+        Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.Roguelike, "rogue-d", enabled: false)).Success);
+        Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.Reclamation, "reclamation-e", enabled: true)).Success);
+        Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.Custom, "custom-f", enabled: false)).Success);
+        Assert.True((await fixture.TaskQueue.SetTaskEnabledAsync(4, null)).Success);
+
+        var enableAll = await fixture.TaskQueue.SetAllTasksEnabledAsync(true);
+        Assert.True(enableAll.Success);
+
+        var selectedAll = await fixture.TaskQueue.GetCurrentTaskQueueAsync();
+        Assert.True(selectedAll.Success);
+        Assert.NotNull(selectedAll.Value);
+        Assert.Collection(
+            selectedAll.Value!,
+            task => Assert.True(task.IsEnabled),
+            task => Assert.True(task.IsEnabled),
+            task => Assert.True(task.IsEnabled),
+            task => Assert.False(task.IsEnabled),
+            task => Assert.Null(task.IsEnabled),
+            task => Assert.False(task.IsEnabled));
 
         var disableAll = await fixture.TaskQueue.SetAllTasksEnabledAsync(false);
         Assert.True(disableAll.Success);
@@ -639,13 +658,113 @@ public sealed class TaskQueueG1FeatureTests
         Assert.NotNull(allDisabled.Value);
         Assert.All(allDisabled.Value!, task => Assert.False(task.IsEnabled));
 
+        Assert.True((await fixture.TaskQueue.SetTaskEnabledAsync(0, true)).Success);
+        Assert.True((await fixture.TaskQueue.SetTaskEnabledAsync(1, false)).Success);
+        Assert.True((await fixture.TaskQueue.SetTaskEnabledAsync(2, null)).Success);
+        Assert.True((await fixture.TaskQueue.SetTaskEnabledAsync(3, false)).Success);
+        Assert.True((await fixture.TaskQueue.SetTaskEnabledAsync(4, null)).Success);
+        Assert.True((await fixture.TaskQueue.SetTaskEnabledAsync(5, true)).Success);
+
         var invert = await fixture.TaskQueue.InvertTasksEnabledAsync();
         Assert.True(invert.Success);
 
-        var allEnabled = await fixture.TaskQueue.GetCurrentTaskQueueAsync();
-        Assert.True(allEnabled.Success);
-        Assert.NotNull(allEnabled.Value);
-        Assert.All(allEnabled.Value!, task => Assert.True(task.IsEnabled));
+        var inverted = await fixture.TaskQueue.GetCurrentTaskQueueAsync();
+        Assert.True(inverted.Success);
+        Assert.NotNull(inverted.Value);
+        Assert.Collection(
+            inverted.Value!,
+            task => Assert.False(task.IsEnabled),
+            task => Assert.True(task.IsEnabled),
+            task => Assert.False(task.IsEnabled),
+            task => Assert.False(task.IsEnabled),
+            task => Assert.Null(task.IsEnabled),
+            task => Assert.True(task.IsEnabled));
+    }
+
+    [Fact]
+    public async Task TaskQueuePage_RightClickOneShot_DefaultMode_ShouldSetRunOnceState()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.SingleStep, "single-step", enabled: false)).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        var task = Assert.Single(vm.Tasks);
+        await vm.ToggleTaskEnabledOneShotAsync(task);
+
+        Assert.Null(task.IsEnabled);
+        Assert.Contains("Run once", task.ToolTipText, StringComparison.Ordinal);
+        var queue = await fixture.TaskQueue.GetCurrentTaskQueueAsync();
+        Assert.True(queue.Success);
+        Assert.Null(Assert.Single(queue.Value!).IsEnabled);
+    }
+
+    [Fact]
+    public async Task TaskQueuePage_RightClickOneShot_InvertMode_ShouldSetSkipOnceState()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        fixture.Config.CurrentConfig.GlobalValues[TaskQueueEnabledState.MainTasksInvertNullFunctionKey] = JsonValue.Create(true);
+        Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.SingleStep, "single-step", enabled: true)).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        var task = Assert.Single(vm.Tasks);
+        await vm.ToggleTaskEnabledOneShotAsync(task);
+
+        Assert.Null(task.IsEnabled);
+        Assert.Contains("Skip once", task.ToolTipText, StringComparison.Ordinal);
+        var queue = await fixture.TaskQueue.GetCurrentTaskQueueAsync();
+        Assert.True(queue.Success);
+        Assert.Null(Assert.Single(queue.Value!).IsEnabled);
+    }
+
+    [Fact]
+    public async Task TaskQueuePage_AllTasksCompleted_DefaultMode_ShouldResetOneShotRunOnceToDisabled()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.SingleStep, "single-step", enabled: false)).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        var task = Assert.Single(vm.Tasks);
+        await vm.ToggleTaskEnabledOneShotAsync(task);
+        Assert.Null(task.IsEnabled);
+
+        await InvokeCallbackAsync(
+            vm,
+            new CoreCallbackEvent(0, "AllTasksCompleted", "{}", DateTimeOffset.UtcNow));
+
+        Assert.False(task.IsEnabled);
+        Assert.False(fixture.Config.CurrentConfig.Profiles["Default"].TaskQueue[0].IsEnabled);
+        var persistedTask = await ReadPersistedTaskAsync(fixture);
+        Assert.False(persistedTask["IsEnabled"]?.GetValue<bool>());
+    }
+
+    [Fact]
+    public async Task TaskQueuePage_AllTasksCompleted_InvertMode_ShouldResetOneShotSkipOnceToEnabled()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        fixture.Config.CurrentConfig.GlobalValues[TaskQueueEnabledState.MainTasksInvertNullFunctionKey] = JsonValue.Create(true);
+        Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.SingleStep, "single-step", enabled: true)).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        var task = Assert.Single(vm.Tasks);
+        await vm.ToggleTaskEnabledOneShotAsync(task);
+        Assert.Null(task.IsEnabled);
+
+        await InvokeCallbackAsync(
+            vm,
+            new CoreCallbackEvent(0, "AllTasksCompleted", "{}", DateTimeOffset.UtcNow));
+
+        Assert.True(task.IsEnabled);
+        Assert.True(fixture.Config.CurrentConfig.Profiles["Default"].TaskQueue[0].IsEnabled);
+        var persistedTask = await ReadPersistedTaskAsync(fixture);
+        Assert.True(persistedTask["IsEnabled"]?.GetValue<bool>());
     }
 
     [Fact]
@@ -999,7 +1118,7 @@ public sealed class TaskQueueG1FeatureTests
         var synced = await WaitForConditionAsync(async () =>
         {
             var queue = await fixture.TaskQueue.GetCurrentTaskQueueAsync();
-            return queue.Success && queue.Value is not null && !queue.Value[0].IsEnabled;
+            return queue.Success && queue.Value is not null && queue.Value[0].IsEnabled is not true;
         });
         Assert.True(synced);
     }
@@ -1283,6 +1402,32 @@ public sealed class TaskQueueG1FeatureTests
     private static string ResolveRepoRoot()
     {
         return TestRepoLayout.GetHostRepoRoot();
+    }
+
+    private static async Task InvokeCallbackAsync(TaskQueuePageViewModel vm, CoreCallbackEvent callback)
+    {
+        var method = typeof(TaskQueuePageViewModel).GetMethod(
+            "HandleCallbackCoreAsync",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(method);
+
+        var task = method.Invoke(vm, [callback]) as Task;
+        if (task is null)
+        {
+            throw new InvalidOperationException("HandleCallbackCoreAsync invocation returned null.");
+        }
+
+        await task;
+    }
+
+    private static async Task<JsonObject> ReadPersistedTaskAsync(TestFixture fixture)
+    {
+        var persistedPath = Path.Combine(fixture.Root, "config", "avalonia.json");
+        var persisted = Assert.IsType<JsonObject>(JsonNode.Parse(await File.ReadAllTextAsync(persistedPath)));
+        var persistedProfiles = Assert.IsType<JsonObject>(persisted["Profiles"]);
+        var persistedDefault = Assert.IsType<JsonObject>(persistedProfiles["Default"]);
+        var persistedQueue = Assert.IsType<JsonArray>(persistedDefault["TaskQueue"]);
+        return Assert.IsType<JsonObject>(persistedQueue[0]);
     }
 
     private sealed class TestFixture : IAsyncDisposable

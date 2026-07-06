@@ -418,7 +418,13 @@ public sealed class GuiNewJsonConfigImporter : IConfigImporter
                 continue;
             }
 
-            if (!LegacyTaskSchemaConverter.TryConvertLegacyTask(taskNode, profile, config, out var convertedTask, out var error))
+            if (!LegacyTaskSchemaConverter.TryConvertLegacyTask(
+                    taskNode,
+                    profile,
+                    config,
+                    out var convertedTask,
+                    out var error,
+                    LegacyTaskSchemaConversionOptions.GuiNewJson))
             {
                 if (!string.IsNullOrWhiteSpace(error))
                 {

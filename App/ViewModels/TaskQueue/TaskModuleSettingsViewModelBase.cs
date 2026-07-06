@@ -16,6 +16,7 @@ public abstract class TaskModuleSettingsViewModelBase : ObservableObject, ITaskM
     private string _lastErrorMessage = string.Empty;
     private int _boundTaskIndex = -1;
     private bool _suppressPersist = true;
+    private bool _persistAfterBindRequested;
 
     protected TaskModuleSettingsViewModelBase(MAAUnifiedRuntime runtime, LocalizedTextMap texts, string moduleType)
     {
@@ -83,16 +84,23 @@ public abstract class TaskModuleSettingsViewModelBase : ObservableObject, ITaskM
     {
         _boundTaskIndex = taskIndex;
         _suppressPersist = true;
+        _persistAfterBindRequested = false;
         IsTaskBound = true;
         LastErrorMessage = string.Empty;
         await LoadFromParametersAsync(parameters, cancellationToken);
         _suppressPersist = false;
+        if (_persistAfterBindRequested)
+        {
+            _persistAfterBindRequested = false;
+            await PersistNowAsync(cancellationToken);
+        }
     }
 
     public virtual void ClearBinding()
     {
         _boundTaskIndex = -1;
         _suppressPersist = true;
+        _persistAfterBindRequested = false;
         IsTaskBound = false;
     }
 
@@ -134,6 +142,14 @@ public abstract class TaskModuleSettingsViewModelBase : ObservableObject, ITaskM
     protected abstract Task LoadFromParametersAsync(JsonObject parameters, CancellationToken cancellationToken);
 
     protected abstract JsonObject BuildParameters();
+
+    protected void RequestPersistAfterBind()
+    {
+        if (_boundTaskIndex >= 0)
+        {
+            _persistAfterBindRequested = true;
+        }
+    }
 
     private async Task PersistDebouncedAsync(CancellationToken cancellationToken)
     {

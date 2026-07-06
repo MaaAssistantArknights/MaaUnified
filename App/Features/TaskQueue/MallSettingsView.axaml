@@ -60,9 +60,9 @@
                       IsVisible="{Binding ShowVisitFriendsDetails}">
                 <controls:AdaptiveSpacingStackPanel Classes="mall-card-stack">
                   <controls:SettingsDependentRow>
-                    <CheckBox Classes="app-checkbox"
-                              Content="{Binding Texts[Mall.OnlyOnceADay]}"
-                              IsChecked="{Binding VisitFriendsOnceADay}" />
+                    <controls:AppHintedCheckBox Text="{Binding Texts[Mall.OnlyOnceADay]}"
+                                                 Tip="{Binding Texts[Mall.OnlyOnceADayTip]}"
+                                                 IsChecked="{Binding VisitFriendsOnceADay}" />
                   </controls:SettingsDependentRow>
                 </controls:AdaptiveSpacingStackPanel>
               </Border>
@@ -79,9 +79,9 @@
                       IsVisible="{Binding ShowCreditFightDetails}">
                 <controls:AdaptiveSpacingStackPanel Classes="mall-card-stack">
                   <controls:SettingsDependentRow Glyph="├">
-                    <CheckBox Classes="app-checkbox"
-                              Content="{Binding Texts[Mall.OnlyOnceADay]}"
-                              IsChecked="{Binding CreditFightOnceADay}" />
+                    <controls:AppHintedCheckBox Text="{Binding Texts[Mall.OnlyOnceADay]}"
+                                                 Tip="{Binding Texts[Mall.OnlyOnceADayTip]}"
+                                                 IsChecked="{Binding CreditFightOnceADay}" />
                   </controls:SettingsDependentRow>
 
                   <controls:SettingsDependentRow>

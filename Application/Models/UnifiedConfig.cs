@@ -34,7 +34,7 @@ public sealed class UnifiedTaskItem
 
     public string Name { get; set; } = "UnnamedTask";
 
-    public bool IsEnabled { get; set; } = true;
+    public bool? IsEnabled { get; set; } = true;
 
     public JsonObject Params { get; set; } = [];
 

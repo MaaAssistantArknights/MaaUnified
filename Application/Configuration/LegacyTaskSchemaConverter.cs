@@ -4,6 +4,19 @@ using MAAUnified.Application.Models.TaskParams;
 
 namespace MAAUnified.Application.Configuration;
 
+internal sealed class LegacyTaskSchemaConversionOptions
+{
+    public static readonly LegacyTaskSchemaConversionOptions GuiJsonFlat = new(false);
+    public static readonly LegacyTaskSchemaConversionOptions GuiNewJson = new(true);
+
+    private LegacyTaskSchemaConversionOptions(bool missingRoguelikeIterationFlagsDefault)
+    {
+        MissingRoguelikeIterationFlagsDefault = missingRoguelikeIterationFlagsDefault;
+    }
+
+    public bool MissingRoguelikeIterationFlagsDefault { get; }
+}
+
 internal static class LegacyTaskSchemaConverter
 {
     private static readonly Dictionary<string, string> _legacyTypeMap = new(StringComparer.OrdinalIgnoreCase)
@@ -40,8 +53,11 @@ internal static class LegacyTaskSchemaConverter
         UnifiedProfile profile,
         UnifiedConfig config,
         out UnifiedTaskItem taskItem,
-        out string? error)
+        out string? error,
+        LegacyTaskSchemaConversionOptions? options = null)
     {
+        options ??= LegacyTaskSchemaConversionOptions.GuiJsonFlat;
+
         var rawLegacyType = GetString(legacyTask, "$type")
             ?? GetString(legacyTask, "Type")
             ?? "Unknown";
@@ -78,7 +94,7 @@ internal static class LegacyTaskSchemaConverter
                 "Infrast" => ConvertInfrast(legacyTask),
                 "Mall" => ConvertMall(legacyTask),
                 "Award" => ConvertAward(legacyTask),
-                "Roguelike" => ConvertRoguelike(legacyTask),
+                "Roguelike" => ConvertRoguelike(legacyTask, options),
                 "Reclamation" => ConvertReclamation(legacyTask),
                 "UserDataUpdate" => ConvertUserDataUpdate(legacyTask),
                 "SingleStep" => ConvertSingleStep(legacyTask),
@@ -208,7 +224,7 @@ internal static class LegacyTaskSchemaConverter
         var useMedicine = GetNullableBool(task, "UseMedicine") ?? false;
         var useStone = GetNullableBool(task, "UseStone") ?? false;
         var useExpiringMedicine = GetBool(task, "UseExpiringMedicine", false);
-        var expiringMedicine = GetInt(task, "MedicineExpireDays", 9999);
+        var expiringMedicine = GetInt(task, "MedicineExpireDays", 2);
         var useExpireMedicineForActivity = GetBool(task, "UseExpireMedicineForActivity", false);
         var enableTimesLimit = GetNullableBool(task, "EnableTimesLimit") ?? false;
         var enableTargetDrop = GetNullableBool(task, "EnableTargetDrop") ?? false;
@@ -260,10 +276,10 @@ internal static class LegacyTaskSchemaConverter
             ["client_type"] = ResolveClientType(profile, config),
             ["_ui_stage_plan"] = ToJsonArray(stagePlan),
             ["_ui_is_stage_manually"] = GetBool(task, "IsStageManually", false),
-            ["_ui_use_medicine"] = JsonValue.Create(GetNullableBool(task, "UseMedicine")),
-            ["_ui_use_stone"] = JsonValue.Create(GetNullableBool(task, "UseStone")),
-            ["_ui_enable_times_limit"] = JsonValue.Create(GetNullableBool(task, "EnableTimesLimit")),
-            ["_ui_enable_target_drop"] = JsonValue.Create(GetNullableBool(task, "EnableTargetDrop")),
+            ["_ui_use_medicine"] = CreateLegacyNullableBoolUiValue(task, "UseMedicine"),
+            ["_ui_use_stone"] = CreateLegacyNullableBoolUiValue(task, "UseStone"),
+            ["_ui_enable_times_limit"] = CreateLegacyNullableBoolUiValue(task, "EnableTimesLimit"),
+            ["_ui_enable_target_drop"] = CreateLegacyNullableBoolUiValue(task, "EnableTargetDrop"),
             ["_ui_drop_id"] = dropId.Trim(),
             ["_ui_drop_count"] = Math.Max(1, dropCount),
             ["_ui_is_inventory_target"] = isInventoryTarget,
@@ -308,7 +324,7 @@ internal static class LegacyTaskSchemaConverter
         var level4Choose = GetBool(task, "Level4Choose", true);
         var level5Choose = GetBool(task, "Level5Choose", false);
         var level6Choose = GetBool(task, "Level6Choose", false);
-        var useExpedited = GetBool(task, "UseExpedited", true);
+        var useExpedited = GetBool(task, "UseExpedited", false);
 
         var selectList = new JsonArray();
         var confirmList = new JsonArray();
@@ -523,11 +539,12 @@ internal static class LegacyTaskSchemaConverter
         return result;
     }
 
-    private static JsonObject ConvertRoguelike(JsonObject task)
+    private static JsonObject ConvertRoguelike(JsonObject task, LegacyTaskSchemaConversionOptions options)
     {
         var mode = LegacyConfigValueMappings.NormalizeRoguelikeMode(task["Mode"]);
         var theme = ResolveRoguelikeTheme(task["Theme"]);
         var collectibleAwardsMask = LegacyConfigValueMappings.NormalizeRoguelikeCollectibleAwardsMask(task["CollectibleStartAwards"]);
+        var missingIterationFlagsDefault = options.MissingRoguelikeIterationFlagsDefault;
 
         var result = new JsonObject
         {
@@ -584,13 +601,13 @@ internal static class LegacyTaskSchemaConverter
 
         if (mode == 6)
         {
-            result["monthly_squad_auto_iterate"] = GetBool(task, "MonthlySquadAutoIterate", true);
-            result["monthly_squad_check_comms"] = GetBool(task, "MonthlySquadCheckComms", true);
+            result["monthly_squad_auto_iterate"] = GetBool(task, "MonthlySquadAutoIterate", missingIterationFlagsDefault);
+            result["monthly_squad_check_comms"] = GetBool(task, "MonthlySquadCheckComms", missingIterationFlagsDefault);
         }
 
         if (mode == 7)
         {
-            result["deep_exploration_auto_iterate"] = GetBool(task, "DeepExplorationAutoIterate", true);
+            result["deep_exploration_auto_iterate"] = GetBool(task, "DeepExplorationAutoIterate", missingIterationFlagsDefault);
         }
 
         if (mode == 20001)
@@ -1008,6 +1025,13 @@ internal static class LegacyTaskSchemaConverter
         }
 
         return null;
+    }
+
+    private static JsonNode? CreateLegacyNullableBoolUiValue(JsonObject obj, string key)
+    {
+        return obj.ContainsKey(key)
+            ? JsonValue.Create(GetNullableBool(obj, key))
+            : JsonValue.Create(false);
     }
 
     private static int GetInt(JsonObject obj, string key, int fallback)

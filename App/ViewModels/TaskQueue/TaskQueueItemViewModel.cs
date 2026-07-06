@@ -14,15 +14,16 @@ public static class TaskQueueItemStatus
 
 public sealed class TaskQueueItemViewModel : ObservableObject
 {
-    private bool _isEnabled;
+    private bool? _isEnabled;
     private string _name;
     private string _status = TaskQueueItemStatus.Idle;
     private string _moduleDisplayName;
     private string _statusDisplayName = TaskQueueItemStatus.Idle;
     private string _displayName;
     private string _toolTipText;
+    private string _oneShotDisplayName = string.Empty;
 
-    public TaskQueueItemViewModel(string type, string name, bool isEnabled)
+    public TaskQueueItemViewModel(string type, string name, bool? isEnabled)
     {
         Type = TaskModuleTypes.Normalize(type);
         _name = name;
@@ -41,10 +42,17 @@ public sealed class TaskQueueItemViewModel : ObservableObject
         set => SetProperty(ref _name, value);
     }
 
-    public bool IsEnabled
+    public bool? IsEnabled
     {
         get => _isEnabled;
-        set => SetProperty(ref _isEnabled, value);
+        set
+        {
+            if (SetProperty(ref _isEnabled, value))
+            {
+                OnPropertyChanged(nameof(IsOneShot));
+                RefreshToolTipText();
+            }
+        }
     }
 
     public string Status
@@ -100,6 +108,20 @@ public sealed class TaskQueueItemViewModel : ObservableObject
         private set => SetProperty(ref _toolTipText, value);
     }
 
+    public string OneShotDisplayName
+    {
+        get => _oneShotDisplayName;
+        set
+        {
+            if (SetProperty(ref _oneShotDisplayName, value))
+            {
+                RefreshToolTipText();
+            }
+        }
+    }
+
+    public bool IsOneShot => IsEnabled is null;
+
     public bool IsStatusRunning => IsStatus(TaskQueueItemStatus.Running);
 
     public bool IsStatusSuccess => IsStatus(TaskQueueItemStatus.Success);
@@ -134,9 +156,12 @@ public sealed class TaskQueueItemViewModel : ObservableObject
             title = ModuleDisplayName;
         }
 
-        ToolTipText = string.IsNullOrWhiteSpace(StatusDisplayName)
+        var statusText = string.IsNullOrWhiteSpace(StatusDisplayName)
             ? title
             : $"{title} ({StatusDisplayName})";
+        ToolTipText = IsOneShot && !string.IsNullOrWhiteSpace(OneShotDisplayName)
+            ? $"{statusText}\n{OneShotDisplayName}"
+            : statusText;
     }
 
     private bool IsStatus(string expected)

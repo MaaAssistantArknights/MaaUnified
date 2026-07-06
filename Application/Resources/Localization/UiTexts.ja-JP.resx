@@ -834,6 +834,9 @@
   <data name="Mall.OnlyOnceADay" xml:space="preserve">
     <value>一日一回だけ</value>
   </data>
+  <data name="Mall.OnlyOnceADayTip" xml:space="preserve">
+    <value>この動作をアークナイツ内の1日につき1回までに制限します。当日実行後は、次の日次リセットまで同じキュー実行ではスキップされます。</value>
+  </data>
   <data name="Mall.Reserve" xml:space="preserve">
     <value>FPが300未満になった場合、アイテムの購入を停止します</value>
   </data>
@@ -1110,7 +1113,10 @@
     <value>公開求人</value>
   </data>
   <data name="Recruit.UseExpedited" xml:space="preserve">
-    <value>即時完了を使用</value>
+    <value>緊急招集票を自動的に使用*</value>
+  </data>
+  <data name="Recruit.UseExpeditedTip" xml:space="preserve">
+    <value>一度のみ有効です。求人票の入手速度は消費速度より遅いため、通常は次回の公開求人タスク時には自然に完了しています。求人票が大きくあふれる緊急時のみ使用してください</value>
   </data>
   <data name="Roguelike.Collectible.Dice" xml:space="preserve">
     <value>サイコロ</value>

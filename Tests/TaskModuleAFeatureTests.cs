@@ -88,6 +88,55 @@ public sealed class TaskModuleAFeatureTests
     }
 
     [Fact]
+    public async Task QueueEnabledTasks_OneShotEnabledTask_ShouldAppendAndKeepOneShotState()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.SingleStep, "single-step", enabled: false)).Success);
+        Assert.True((await fixture.TaskQueue.UpdateTaskParamsAsync(
+            0,
+            new JsonObject
+            {
+                ["type"] = "copilot",
+                ["subtype"] = "start",
+            })).Success);
+        Assert.True((await fixture.TaskQueue.SetTaskEnabledAsync(0, null)).Success);
+        Assert.True((await fixture.TaskQueue.SaveAsync()).Success);
+
+        var queueResult = await fixture.TaskQueue.QueueEnabledTasksAsync();
+
+        Assert.True(queueResult.Success);
+        Assert.Single(fixture.Bridge.AppendedTasks);
+        Assert.Null(fixture.Config.CurrentConfig.Profiles["Default"].TaskQueue[0].IsEnabled);
+        var persistedTask = await ReadPersistedTaskAsync(fixture);
+        Assert.Null(persistedTask["IsEnabled"]);
+    }
+
+    [Fact]
+    public async Task QueueEnabledTasks_OneShotSkippedTask_ShouldSkipAndKeepOneShotState()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        fixture.Config.CurrentConfig.GlobalValues[TaskQueueEnabledState.MainTasksInvertNullFunctionKey] = JsonValue.Create(true);
+        Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.SingleStep, "single-step", enabled: true)).Success);
+        Assert.True((await fixture.TaskQueue.UpdateTaskParamsAsync(
+            0,
+            new JsonObject
+            {
+                ["type"] = "copilot",
+                ["subtype"] = "start",
+            })).Success);
+        Assert.True((await fixture.TaskQueue.SetTaskEnabledAsync(0, null)).Success);
+        Assert.True((await fixture.TaskQueue.SaveAsync()).Success);
+
+        var queueResult = await fixture.TaskQueue.QueueEnabledTasksAsync();
+
+        Assert.True(queueResult.Success);
+        Assert.Empty(fixture.Bridge.AppendedTasks);
+        Assert.Null(fixture.Config.CurrentConfig.Profiles["Default"].TaskQueue[0].IsEnabled);
+        var persistedTask = await ReadPersistedTaskAsync(fixture);
+        Assert.Null(persistedTask["IsEnabled"]);
+    }
+
+    [Fact]
     public async Task QueueEnabledTasks_FightInventoryTargetWithoutDepot_ShouldSkipAppend()
     {
         await using var fixture = await TestFixture.CreateAsync();
@@ -218,6 +267,50 @@ public sealed class TaskModuleAFeatureTests
         Assert.False(taskParams["refresh"]?.GetValue<bool>());
         Assert.False(taskParams["force_refresh"]?.GetValue<bool>());
         Assert.Equal(3, taskParams["expedite_times"]?.GetValue<int>());
+    }
+
+    [Fact]
+    public async Task QueueEnabledTasks_RecruitUseExpedited_ShouldBeOneShotAndNotPersisted()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.Recruit, "recruit")).Success);
+        Assert.True((await fixture.TaskQueue.SaveRecruitParamsAsync(0, new RecruitTaskParamsDto
+        {
+            Times = 2,
+            Refresh = true,
+            ForceRefresh = true,
+            UseExpedited = true,
+            SkipRobot = true,
+            SetTime = true,
+            Level3Time = 540,
+            Level4Time = 540,
+            Level5Time = 540,
+        })).Success);
+
+        var flush = await fixture.TaskQueue.FlushTaskParamWritesAsync();
+        Assert.True(flush.Success);
+
+        var persistedPath = Path.Combine(fixture.Root, "config", "avalonia.json");
+        var persisted = Assert.IsType<JsonObject>(JsonNode.Parse(await File.ReadAllTextAsync(persistedPath)));
+        var persistedProfiles = Assert.IsType<JsonObject>(persisted["Profiles"]);
+        var persistedDefault = Assert.IsType<JsonObject>(persistedProfiles["Default"]);
+        var persistedQueue = Assert.IsType<JsonArray>(persistedDefault["TaskQueue"]);
+        var persistedTask = Assert.IsType<JsonObject>(persistedQueue[0]);
+        var persistedParams = Assert.IsType<JsonObject>(persistedTask["Params"]);
+        Assert.False(persistedParams.ContainsKey("expedite"));
+        Assert.False(persistedParams.ContainsKey("expedite_times"));
+
+        var queueResult = await fixture.TaskQueue.QueueEnabledTasksAsync();
+
+        Assert.True(queueResult.Success);
+        var appended = Assert.Single(fixture.Bridge.AppendedTasks);
+        var appendedJson = Assert.IsType<JsonObject>(JsonNode.Parse(appended.ParamsJson));
+        Assert.True(appendedJson["expedite"]?.GetValue<bool>());
+        Assert.Equal(2, appendedJson["expedite_times"]?.GetValue<int>());
+
+        var taskParams = (await fixture.TaskQueue.GetTaskParamsAsync(0)).Value!;
+        Assert.False(taskParams["expedite"]?.GetValue<bool>());
+        Assert.Null(taskParams["expedite_times"]);
     }
 
     [Fact]
@@ -364,7 +457,8 @@ public sealed class TaskModuleAFeatureTests
         Assert.False(legacy.Value!.ChooseLevel6);
         Assert.True(legacy.Value.ChooseLevel4);
         Assert.False(legacy.Value.Refresh);
-        Assert.True(legacy.Value.UseExpedited);
+        Assert.False(legacy.Value.UseExpedited);
+        Assert.False(service.CurrentConfig.Profiles["Default"].TaskQueue[1].Params.ContainsKey("expedite"));
     }
 
     [Fact]
@@ -659,7 +753,7 @@ public sealed class TaskModuleAFeatureTests
         Assert.Equal(3, recruit.Value!.Times);
         Assert.False(recruit.Value.Refresh);
         Assert.False(recruit.Value.ForceRefresh);
-        Assert.True(recruit.Value.UseExpedited);
+        Assert.False(recruit.Value.UseExpedited);
         Assert.True(recruit.Value.ChooseLevel3);
         Assert.False(recruit.Value.ChooseLevel4);
         Assert.True(recruit.Value.ChooseLevel5);
@@ -956,6 +1050,7 @@ public sealed class TaskModuleAFeatureTests
         var startUpView = File.ReadAllText(Path.Combine(root, "App", "Features", "TaskQueue", "StartUpTaskView.axaml"));
         var fightView = File.ReadAllText(Path.Combine(root, "App", "Features", "TaskQueue", "FightSettingsView.axaml"));
         var recruitView = File.ReadAllText(Path.Combine(root, "App", "Features", "TaskQueue", "RecruitSettingsView.axaml"));
+        var mallView = File.ReadAllText(Path.Combine(root, "App", "Features", "TaskQueue", "MallSettingsView.axaml"));
         var singleStepView = File.ReadAllText(Path.Combine(root, "App", "Features", "TaskQueue", "SingleStepSettingsView.axaml"));
 
         Assert.Contains("DynamicResource", startUpView);
@@ -970,11 +1065,16 @@ public sealed class TaskModuleAFeatureTests
         Assert.DoesNotContain("SelectedAttachWindowScreencapOption", startUpView);
         Assert.DoesNotContain("SelectedAttachWindowMouseOption", startUpView);
         Assert.DoesNotContain("SelectedAttachWindowKeyboardOption", startUpView);
+        Assert.Contains("Text=\"{Binding Texts[Recruit.UseExpedited]}\"", recruitView);
+        Assert.Contains("Tip=\"{Binding Texts[Recruit.UseExpeditedTip]}\"", recruitView);
         Assert.Contains("IsChecked=\"{Binding ChooseLevel6}\"", recruitView);
         Assert.Contains("IsChecked=\"{Binding PreserveTagsEnabled}\"", recruitView);
         Assert.Contains("HeaderText=\"{Binding PreserveTagsSummary}\"", recruitView);
         Assert.Contains("ItemsSource=\"{Binding PreserveTagOptions}\"", recruitView);
         Assert.DoesNotContain("AutoSelectLevel6Notice", recruitView);
+        Assert.Equal(2, CountOccurrences(mallView, "Tip=\"{Binding Texts[Mall.OnlyOnceADayTip]}\""));
+        Assert.Contains("IsChecked=\"{Binding VisitFriendsOnceADay}\"", mallView);
+        Assert.Contains("IsChecked=\"{Binding CreditFightOnceADay}\"", mallView);
     }
 
     private static string ResolveRepoRoot()
@@ -1023,11 +1123,41 @@ public sealed class TaskModuleAFeatureTests
             "Issue.RecruitTimeOutOfRange",
             "Recruit.AutoSelectLevel6",
             "Recruit.AutoSelectLevel6FixedTime",
+            "Recruit.UseExpedited",
+            "Recruit.UseExpeditedTip",
             "Recruit.PreserveTags",
             "Recruit.PreserveTagsTip",
+            "Mall.OnlyOnceADayTip",
             "Issue.TaskFieldMissing",
             "TaskQueue.Status.ParamsLoaded",
         ];
+    }
+
+    private static int CountOccurrences(string text, string value)
+    {
+        var count = 0;
+        var startIndex = 0;
+        while (true)
+        {
+            var index = text.IndexOf(value, startIndex, StringComparison.Ordinal);
+            if (index < 0)
+            {
+                return count;
+            }
+
+            count++;
+            startIndex = index + value.Length;
+        }
+    }
+
+    private static async Task<JsonObject> ReadPersistedTaskAsync(TestFixture fixture)
+    {
+        var persistedPath = Path.Combine(fixture.Root, "config", "avalonia.json");
+        var persisted = Assert.IsType<JsonObject>(JsonNode.Parse(await File.ReadAllTextAsync(persistedPath)));
+        var persistedProfiles = Assert.IsType<JsonObject>(persisted["Profiles"]);
+        var persistedDefault = Assert.IsType<JsonObject>(persistedProfiles["Default"]);
+        var persistedQueue = Assert.IsType<JsonArray>(persistedDefault["TaskQueue"]);
+        return Assert.IsType<JsonObject>(persistedQueue[0]);
     }
 
     private sealed class TestFixture : IAsyncDisposable

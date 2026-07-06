@@ -628,6 +628,23 @@ public partial class TaskQueueView : UserControl
         await VM.PickOverlayTargetWithDialogAsync();
     }
 
+    private async void OnTaskEnabledCheckBoxPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (VM is null || sender is not Control control || control.DataContext is not TaskQueueItemViewModel task)
+        {
+            return;
+        }
+
+        var point = e.GetCurrentPoint(control);
+        if (!point.Properties.IsRightButtonPressed)
+        {
+            return;
+        }
+
+        e.Handled = true;
+        await VM.ToggleTaskEnabledOneShotAsync(task);
+    }
+
     private void OnTaskRowPointerPressed(object? sender, PointerPressedEventArgs e)
     {
         if (sender is not Control control || control.DataContext is not TaskQueueItemViewModel source)

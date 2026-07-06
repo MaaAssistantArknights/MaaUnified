@@ -630,6 +630,7 @@
                                 IsChecked="{Binding IsEnabled}"
                                 VerticalAlignment="Center"
                                 Margin="8,0,0,0"
+                                PointerPressed="OnTaskEnabledCheckBoxPointerPressed"
                                 IsEnabled="{Binding DataContext.CanEdit, RelativeSource={RelativeSource AncestorType=UserControl}}" />
                       <TextBlock Grid.Column="2"
                                  Classes="long-ellipsis"

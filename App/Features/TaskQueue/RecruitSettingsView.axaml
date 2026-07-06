@@ -18,9 +18,9 @@
     <Border
             IsVisible="{Binding IsGeneralMode}">
       <controls:AdaptiveSpacingStackPanel Classes="recruit-section-content">
-        <CheckBox Classes="app-checkbox"
-                  Content="{Binding Texts[Recruit.UseExpedited]}"
-                  IsChecked="{Binding UseExpedited}" />
+        <controls:AppHintedCheckBox Text="{Binding Texts[Recruit.UseExpedited]}"
+                                     Tip="{Binding Texts[Recruit.UseExpeditedTip]}"
+                                     IsChecked="{Binding UseExpedited}" />
 
         <Border Classes="app-surface app-card">
           <controls:SettingsInlineRow Classes="recruit-card-content">
