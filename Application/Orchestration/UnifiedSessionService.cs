@@ -519,7 +519,8 @@ public sealed class UnifiedSessionService
         for (var queueIndex = 0; queueIndex < profile.TaskQueue.Count; queueIndex++)
         {
             var task = profile.TaskQueue[queueIndex];
-            if (!task.IsEnabled)
+            var effectiveEnabled = TaskQueueEnabledState.IsEffectivelyEnabled(task, _configService.CurrentConfig);
+            if (!effectiveEnabled)
             {
                 continue;
             }
@@ -584,7 +585,7 @@ public sealed class UnifiedSessionService
 
             var appendParams = TaskParamCompiler.BuildCoreParams(compiled.NormalizedType, compiled.Params);
             var appendResult = await _bridge.AppendTaskAsync(
-                new CoreTaskRequest(compiled.NormalizedType, task.Name, task.IsEnabled, appendParams.ToJsonString()),
+                new CoreTaskRequest(compiled.NormalizedType, task.Name, effectiveEnabled, appendParams.ToJsonString()),
                 cancellationToken);
             if (!appendResult.Success)
             {

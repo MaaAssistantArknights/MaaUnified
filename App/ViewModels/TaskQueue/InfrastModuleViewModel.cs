@@ -512,8 +512,9 @@ public sealed class InfrastModuleViewModel : TaskModuleSettingsViewModelBase
         return parsedPlans;
     }
 
-    private async Task ApplyParsedPlansAsync(IReadOnlyList<ParsedPlan> parsedPlans, CancellationToken cancellationToken)
+    private Task ApplyParsedPlansAsync(IReadOnlyList<ParsedPlan> parsedPlans, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         _parsedPlans.Clear();
         _parsedPlans.AddRange(parsedPlans.Select(
             plan => new ParsedPlan(plan.Index, plan.Name, [.. plan.Periods])));
@@ -529,34 +530,25 @@ public sealed class InfrastModuleViewModel : TaskModuleSettingsViewModelBase
             PlanOptions.Add(new PlanOption(plan.Index, plan.Name));
         }
 
+        var normalizedPlanIndex = NormalizeCustomPlanIndex(SelectedPlanIndex, _parsedPlans.Count);
+        if (normalizedPlanIndex != SelectedPlanIndex)
+        {
+            SelectedPlanIndex = normalizedPlanIndex;
+            RequestPersistAfterBind();
+        }
+
         SelectedPlan = PlanOptions.FirstOrDefault(option => option.Index == SelectedPlanIndex);
-        if (SelectedPlan is null && SelectedPlanIndex >= 0)
-        {
-            await ReportPlanOutOfRangeAsync(cancellationToken);
-        }
-        else
-        {
-            LastErrorMessage = string.Empty;
-        }
+        LastErrorMessage = string.Empty;
 
         StatusMessage = string.Format(
             CultureInfo.CurrentCulture,
             Texts.GetOrDefault("Infrast.Status.LoadedPlans", "Loaded {0} plans."),
             _parsedPlans.Count);
+        return Task.CompletedTask;
     }
 
-    private async Task ReportPlanOutOfRangeAsync(CancellationToken cancellationToken)
-    {
-        var message = string.Format(
-            Texts.GetOrDefault("Infrast.Error.PlanOutOfRange", "Plan index {0} is out of range for `{1}`."),
-            SelectedPlanIndex,
-            CustomFilePath);
-        LastErrorMessage = message;
-        await Runtime.DiagnosticsService.RecordFailedResultAsync(
-            "Infrast.ParsePlan",
-            UiOperationResult.Fail(UiErrorCode.InfrastPlanOutOfRange, message),
-            cancellationToken);
-    }
+    private static int NormalizeCustomPlanIndex(int planIndex, int planCount)
+        => planIndex < -1 ? -1 : planIndex >= planCount ? 0 : planIndex;
 
     protected override async Task LoadFromParametersAsync(JsonObject parameters, CancellationToken cancellationToken)
     {

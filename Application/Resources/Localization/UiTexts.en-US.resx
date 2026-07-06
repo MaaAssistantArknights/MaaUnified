@@ -1618,6 +1618,9 @@ Do not enable this when OF-1 is locked.</value>
   <data name="Mall.OnlyOnceADay" xml:space="preserve">
     <value>Only once a day</value>
   </data>
+  <data name="Mall.OnlyOnceADayTip" xml:space="preserve">
+    <value>Limits this action to once per Arknights day. After it runs today, later queue runs skip it until the next daily reset.</value>
+  </data>
   <data name="Mall.ReceptionOptionsRequireInfrast" xml:space="preserve">
     <value>The following functions require configuration and execution in Infrast.</value>
   </data>

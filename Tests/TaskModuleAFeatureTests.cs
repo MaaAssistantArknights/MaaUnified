@@ -88,6 +88,55 @@ public sealed class TaskModuleAFeatureTests
     }
 
     [Fact]
+    public async Task QueueEnabledTasks_OneShotEnabledTask_ShouldAppendAndKeepOneShotState()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.SingleStep, "single-step", enabled: false)).Success);
+        Assert.True((await fixture.TaskQueue.UpdateTaskParamsAsync(
+            0,
+            new JsonObject
+            {
+                ["type"] = "copilot",
+                ["subtype"] = "start",
+            })).Success);
+        Assert.True((await fixture.TaskQueue.SetTaskEnabledAsync(0, null)).Success);
+        Assert.True((await fixture.TaskQueue.SaveAsync()).Success);
+
+        var queueResult = await fixture.TaskQueue.QueueEnabledTasksAsync();
+
+        Assert.True(queueResult.Success);
+        Assert.Single(fixture.Bridge.AppendedTasks);
+        Assert.Null(fixture.Config.CurrentConfig.Profiles["Default"].TaskQueue[0].IsEnabled);
+        var persistedTask = await ReadPersistedTaskAsync(fixture);
+        Assert.Null(persistedTask["IsEnabled"]);
+    }
+
+    [Fact]
+    public async Task QueueEnabledTasks_OneShotSkippedTask_ShouldSkipAndKeepOneShotState()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        fixture.Config.CurrentConfig.GlobalValues[TaskQueueEnabledState.MainTasksInvertNullFunctionKey] = JsonValue.Create(true);
+        Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.SingleStep, "single-step", enabled: true)).Success);
+        Assert.True((await fixture.TaskQueue.UpdateTaskParamsAsync(
+            0,
+            new JsonObject
+            {
+                ["type"] = "copilot",
+                ["subtype"] = "start",
+            })).Success);
+        Assert.True((await fixture.TaskQueue.SetTaskEnabledAsync(0, null)).Success);
+        Assert.True((await fixture.TaskQueue.SaveAsync()).Success);
+
+        var queueResult = await fixture.TaskQueue.QueueEnabledTasksAsync();
+
+        Assert.True(queueResult.Success);
+        Assert.Empty(fixture.Bridge.AppendedTasks);
+        Assert.Null(fixture.Config.CurrentConfig.Profiles["Default"].TaskQueue[0].IsEnabled);
+        var persistedTask = await ReadPersistedTaskAsync(fixture);
+        Assert.Null(persistedTask["IsEnabled"]);
+    }
+
+    [Fact]
     public async Task QueueEnabledTasks_FightInventoryTargetWithoutDepot_ShouldSkipAppend()
     {
         await using var fixture = await TestFixture.CreateAsync();
@@ -1001,6 +1050,7 @@ public sealed class TaskModuleAFeatureTests
         var startUpView = File.ReadAllText(Path.Combine(root, "App", "Features", "TaskQueue", "StartUpTaskView.axaml"));
         var fightView = File.ReadAllText(Path.Combine(root, "App", "Features", "TaskQueue", "FightSettingsView.axaml"));
         var recruitView = File.ReadAllText(Path.Combine(root, "App", "Features", "TaskQueue", "RecruitSettingsView.axaml"));
+        var mallView = File.ReadAllText(Path.Combine(root, "App", "Features", "TaskQueue", "MallSettingsView.axaml"));
         var singleStepView = File.ReadAllText(Path.Combine(root, "App", "Features", "TaskQueue", "SingleStepSettingsView.axaml"));
 
         Assert.Contains("DynamicResource", startUpView);
@@ -1015,11 +1065,16 @@ public sealed class TaskModuleAFeatureTests
         Assert.DoesNotContain("SelectedAttachWindowScreencapOption", startUpView);
         Assert.DoesNotContain("SelectedAttachWindowMouseOption", startUpView);
         Assert.DoesNotContain("SelectedAttachWindowKeyboardOption", startUpView);
+        Assert.Contains("Text=\"{Binding Texts[Recruit.UseExpedited]}\"", recruitView);
+        Assert.Contains("Tip=\"{Binding Texts[Recruit.UseExpeditedTip]}\"", recruitView);
         Assert.Contains("IsChecked=\"{Binding ChooseLevel6}\"", recruitView);
         Assert.Contains("IsChecked=\"{Binding PreserveTagsEnabled}\"", recruitView);
         Assert.Contains("HeaderText=\"{Binding PreserveTagsSummary}\"", recruitView);
         Assert.Contains("ItemsSource=\"{Binding PreserveTagOptions}\"", recruitView);
         Assert.DoesNotContain("AutoSelectLevel6Notice", recruitView);
+        Assert.Equal(2, CountOccurrences(mallView, "Tip=\"{Binding Texts[Mall.OnlyOnceADayTip]}\""));
+        Assert.Contains("IsChecked=\"{Binding VisitFriendsOnceADay}\"", mallView);
+        Assert.Contains("IsChecked=\"{Binding CreditFightOnceADay}\"", mallView);
     }
 
     private static string ResolveRepoRoot()
@@ -1068,11 +1123,41 @@ public sealed class TaskModuleAFeatureTests
             "Issue.RecruitTimeOutOfRange",
             "Recruit.AutoSelectLevel6",
             "Recruit.AutoSelectLevel6FixedTime",
+            "Recruit.UseExpedited",
+            "Recruit.UseExpeditedTip",
             "Recruit.PreserveTags",
             "Recruit.PreserveTagsTip",
+            "Mall.OnlyOnceADayTip",
             "Issue.TaskFieldMissing",
             "TaskQueue.Status.ParamsLoaded",
         ];
+    }
+
+    private static int CountOccurrences(string text, string value)
+    {
+        var count = 0;
+        var startIndex = 0;
+        while (true)
+        {
+            var index = text.IndexOf(value, startIndex, StringComparison.Ordinal);
+            if (index < 0)
+            {
+                return count;
+            }
+
+            count++;
+            startIndex = index + value.Length;
+        }
+    }
+
+    private static async Task<JsonObject> ReadPersistedTaskAsync(TestFixture fixture)
+    {
+        var persistedPath = Path.Combine(fixture.Root, "config", "avalonia.json");
+        var persisted = Assert.IsType<JsonObject>(JsonNode.Parse(await File.ReadAllTextAsync(persistedPath)));
+        var persistedProfiles = Assert.IsType<JsonObject>(persisted["Profiles"]);
+        var persistedDefault = Assert.IsType<JsonObject>(persistedProfiles["Default"]);
+        var persistedQueue = Assert.IsType<JsonArray>(persistedDefault["TaskQueue"]);
+        return Assert.IsType<JsonObject>(persistedQueue[0]);
     }
 
     private sealed class TestFixture : IAsyncDisposable

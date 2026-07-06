@@ -2023,6 +2023,8 @@ public sealed class ShellFeatureService : IShellFeatureService
 
 public sealed class TaskQueueFeatureService : ITaskQueueFeatureService
 {
+    private const int InfrastModeCustom = 10000;
+
     private readonly UnifiedSessionService _sessionService;
     private readonly UnifiedConfigurationService _configService;
 
@@ -2032,16 +2034,33 @@ public sealed class TaskQueueFeatureService : ITaskQueueFeatureService
         _configService = configService;
     }
 
-    public Task<CoreResult<int>> QueueEnabledTasksAsync(CancellationToken cancellationToken = default)
+    public async Task<CoreResult<int>> QueueEnabledTasksAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         if (!TryGetProfile(out var profile, out var error))
         {
-            return Task.FromResult(CoreResult<int>.Fail(new CoreError(CoreErrorCode.InvalidRequest, error)));
+            return CoreResult<int>.Fail(new CoreError(CoreErrorCode.InvalidRequest, error));
         }
 
         ApplyMallCreditFightGuard(profile);
-        return _sessionService.AppendTasksFromCurrentProfileAsync(cancellationToken);
+        return await _sessionService.AppendTasksFromCurrentProfileAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<CoreResult<int>> ConsumeCompletedOneShotTaskEnabledStatesAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!TryGetProfile(out var profile, out var error))
+        {
+            return CoreResult<int>.Fail(new CoreError(CoreErrorCode.InvalidRequest, error));
+        }
+
+        var affected = ResetOneShotTaskEnabledStates(profile);
+        if (affected > 0)
+        {
+            await _configService.SaveAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        return CoreResult<int>.Ok(affected);
     }
 
     public Task<UiOperationResult<IReadOnlyList<TaskQueuePrecheckWarning>>> GetStartPrecheckWarningsAsync(CancellationToken cancellationToken = default)
@@ -2187,7 +2206,7 @@ public sealed class TaskQueueFeatureService : ITaskQueueFeatureService
             return Task.FromResult(UiOperationResult.Fail(UiErrorCode.TaskNotFound, error));
         }
 
-        task.IsEnabled = enabled ?? false;
+        task.IsEnabled = enabled;
         return Task.FromResult(UiOperationResult.Ok(BuildTaskEnabledMessage(task)));
     }
 
@@ -2202,6 +2221,11 @@ public sealed class TaskQueueFeatureService : ITaskQueueFeatureService
         var affected = 0;
         foreach (var task in profile.TaskQueue)
         {
+            if (enabled && IsSkippedByBatchSelection(task))
+            {
+                continue;
+            }
+
             if (task.IsEnabled == enabled)
             {
                 continue;
@@ -2222,12 +2246,19 @@ public sealed class TaskQueueFeatureService : ITaskQueueFeatureService
             return Task.FromResult(UiOperationResult.Fail(UiErrorCode.ProfileMissing, error));
         }
 
+        var affected = 0;
         foreach (var task in profile.TaskQueue)
         {
-            task.IsEnabled = !task.IsEnabled;
+            if (IsSkippedByBatchSelection(task))
+            {
+                continue;
+            }
+
+            task.IsEnabled = !(task.IsEnabled ?? true);
+            affected++;
         }
 
-        return Task.FromResult(UiOperationResult.Ok(BuildTasksEnabledInvertedMessage(profile.TaskQueue.Count)));
+        return Task.FromResult(UiOperationResult.Ok(BuildTasksEnabledInvertedMessage(affected)));
     }
 
     public Task<UiOperationResult<JsonObject>> GetTaskParamsAsync(int index, CancellationToken cancellationToken = default)
@@ -2267,6 +2298,85 @@ public sealed class TaskQueueFeatureService : ITaskQueueFeatureService
         }
 
         return UiOperationResult.Ok(BuildTaskParamsUpdatedMessage(task, persisted: false));
+    }
+
+    public async Task<UiOperationResult<int?>> AdvanceInfrastCustomPlanAsync(
+        int index,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!TryGetTaskByIndex(index, out var task, out var error))
+        {
+            return UiOperationResult<int?>.Fail(UiErrorCode.TaskNotFound, error);
+        }
+
+        if (!IsTaskType(task, TaskModuleTypes.Infrast))
+        {
+            return UiOperationResult<int?>.Fail(UiErrorCode.TaskTypeMismatch, BuildTaskTypeMismatchMessage(TaskModuleTypes.Infrast));
+        }
+
+        var parameters = InfrastParams.FromJson(task.Params);
+        if (parameters.Mode != InfrastModeCustom)
+        {
+            return UiOperationResult<int?>.Ok(null, BuildInfrastPlanAdvanceSkippedMessage(task));
+        }
+
+        int planCount;
+        try
+        {
+            planCount = await ReadCustomInfrastPlanCountAsync(parameters.Filename, cancellationToken);
+        }
+        catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
+        {
+            return UiOperationResult<int?>.Fail(
+                UiErrorCode.InfrastPlanParseFailed,
+                "Failed to parse custom infrast file.",
+                ex.Message);
+        }
+
+        var normalizedPlanIndex = NormalizeInfrastCustomPlanIndex(parameters.PlanIndex, planCount);
+        var planIndexChanged = normalizedPlanIndex != parameters.PlanIndex;
+        parameters.PlanIndex = normalizedPlanIndex;
+
+        if (planCount <= 0 || parameters.PlanIndex < 0)
+        {
+            if (planIndexChanged)
+            {
+                task.Params = parameters.ToJson();
+                await _configService.SaveAsync(cancellationToken);
+            }
+
+            return UiOperationResult<int?>.Ok(null, BuildInfrastPlanAdvanceSkippedMessage(task));
+        }
+
+        parameters.PlanIndex++;
+        if (parameters.PlanIndex >= planCount)
+        {
+            parameters.PlanIndex = 0;
+        }
+
+        task.Params = parameters.ToJson();
+        await _configService.SaveAsync(cancellationToken);
+        return UiOperationResult<int?>.Ok(parameters.PlanIndex, BuildInfrastPlanAdvancedMessage(task, parameters.PlanIndex));
+    }
+
+    private static int NormalizeInfrastCustomPlanIndex(int planIndex, int planCount)
+        => planIndex < -1 ? -1 : planIndex >= planCount ? 0 : planIndex;
+
+    private static async Task<int> ReadCustomInfrastPlanCountAsync(
+        string filename,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(filename) || !File.Exists(filename))
+        {
+            return 0;
+        }
+
+        var json = await File.ReadAllTextAsync(filename, cancellationToken);
+        return JsonNode.Parse(json) is JsonObject root
+            && root["plans"] is JsonArray plansArray
+            ? plansArray.OfType<JsonObject>().Count()
+            : 0;
     }
 
     public Task<UiOperationResult<StartUpTaskParamsDto>> GetStartUpParamsAsync(int index, CancellationToken cancellationToken = default)
@@ -2701,6 +2811,24 @@ public sealed class TaskQueueFeatureService : ITaskQueueFeatureService
         };
     }
 
+    private int ResetOneShotTaskEnabledStates(UnifiedProfile profile)
+    {
+        var resetValue = TaskQueueEnabledState.ResetOneShotValue(_configService.CurrentConfig);
+        var affected = 0;
+        foreach (var task in profile.TaskQueue)
+        {
+            if (task.IsEnabled is not null)
+            {
+                continue;
+            }
+
+            task.IsEnabled = resetValue;
+            affected++;
+        }
+
+        return affected;
+    }
+
     private string BuildTaskParamsLoadedMessage(UnifiedTaskItem task)
     {
         var localizer = CreateTaskQueueLocalizer();
@@ -2709,6 +2837,27 @@ public sealed class TaskQueueFeatureService : ITaskQueueFeatureService
             "TaskQueue.Status.ParamsLoaded",
             "Loaded params for `{0}`.",
             ResolveTaskDisplayName(task, localizer));
+    }
+
+    private string BuildInfrastPlanAdvanceSkippedMessage(UnifiedTaskItem task)
+    {
+        var localizer = CreateTaskQueueLocalizer();
+        return FormatTaskQueueMessage(
+            localizer,
+            "TaskQueue.Status.InfrastPlanAdvanceSkipped",
+            "Custom infrast plan advance skipped for `{0}`.",
+            ResolveTaskDisplayName(task, localizer));
+    }
+
+    private string BuildInfrastPlanAdvancedMessage(UnifiedTaskItem task, int planIndex)
+    {
+        var localizer = CreateTaskQueueLocalizer();
+        return FormatTaskQueueMessage(
+            localizer,
+            "TaskQueue.Status.InfrastPlanAdvanced",
+            "Advanced custom infrast plan for `{0}` to {1}.",
+            ResolveTaskDisplayName(task, localizer),
+            planIndex);
     }
 
     private string BuildPrecheckStatusMessage(int warningCount)
@@ -2821,8 +2970,22 @@ public sealed class TaskQueueFeatureService : ITaskQueueFeatureService
     private string BuildTaskEnabledMessage(UnifiedTaskItem task)
     {
         var localizer = CreateTaskQueueLocalizer();
-        var key = task.IsEnabled ? "TaskQueue.Status.TaskEnabled.True" : "TaskQueue.Status.TaskEnabled.False";
-        var fallback = task.IsEnabled ? "Task `{0}` enabled." : "Task `{0}` disabled.";
+        var oneShotSkips = task.IsEnabled is null
+            && TaskQueueEnabledState.UsesInvertedNullSemantics(_configService.CurrentConfig);
+        var key = task.IsEnabled switch
+        {
+            true => "TaskQueue.Status.TaskEnabled.True",
+            false => "TaskQueue.Status.TaskEnabled.False",
+            _ when oneShotSkips => "TaskQueue.Status.TaskEnabled.SkipOnce",
+            _ => "TaskQueue.Status.TaskEnabled.Once",
+        };
+        var fallback = task.IsEnabled switch
+        {
+            true => "Task `{0}` enabled.",
+            false => "Task `{0}` disabled.",
+            _ when oneShotSkips => "Task `{0}` will be skipped once.",
+            _ => "Task `{0}` will run once.",
+        };
         return FormatTaskQueueMessage(localizer, key, fallback, ResolveTaskDisplayName(task, localizer));
     }
 
@@ -3076,7 +3239,8 @@ public sealed class TaskQueueFeatureService : ITaskQueueFeatureService
         var localizer = CreateTaskQueueLocalizer();
         var fightDisplayName = ResolveModuleDisplayName(TaskModuleTypes.Fight, localizer);
         var enabledFightTasks = profile.TaskQueue
-            .Where(t => t.IsEnabled && string.Equals(TaskModuleTypes.Normalize(t.Type), TaskModuleTypes.Fight, StringComparison.OrdinalIgnoreCase))
+            .Where(t => TaskQueueEnabledState.IsEffectivelyEnabled(t, _configService.CurrentConfig)
+                        && string.Equals(TaskModuleTypes.Normalize(t.Type), TaskModuleTypes.Fight, StringComparison.OrdinalIgnoreCase))
             .ToList();
         if (enabledFightTasks.Count == 0)
         {
@@ -3090,7 +3254,8 @@ public sealed class TaskQueueFeatureService : ITaskQueueFeatureService
         }
 
         foreach (var mallTask in profile.TaskQueue.Where(t =>
-                     t.IsEnabled && string.Equals(TaskModuleTypes.Normalize(t.Type), TaskModuleTypes.Mall, StringComparison.OrdinalIgnoreCase)))
+                     TaskQueueEnabledState.IsEffectivelyEnabled(t, _configService.CurrentConfig)
+                     && string.Equals(TaskModuleTypes.Normalize(t.Type), TaskModuleTypes.Mall, StringComparison.OrdinalIgnoreCase)))
         {
             var mallParams = mallTask.Params;
             if (!TryReadBool(mallParams, "credit_fight", out var enabledCreditFight) || !enabledCreditFight)
@@ -3169,6 +3334,14 @@ public sealed class TaskQueueFeatureService : ITaskQueueFeatureService
             TaskParamCompiler.NormalizeTaskType(task.Type),
             expectedType,
             StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsSkippedByBatchSelection(UnifiedTaskItem task)
+    {
+        var type = TaskParamCompiler.NormalizeTaskType(task.Type);
+        return string.Equals(type, TaskModuleTypes.Roguelike, StringComparison.OrdinalIgnoreCase)
+               || string.Equals(type, TaskModuleTypes.Reclamation, StringComparison.OrdinalIgnoreCase)
+               || string.Equals(type, TaskModuleTypes.Custom, StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsManagedType(string type)

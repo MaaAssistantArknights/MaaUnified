@@ -229,6 +229,7 @@ public sealed class GuiJsonConfigImporter : IConfigImporter
         AddIfPresent(source, "GUI.AllowUseStoneSave", task, "UseStoneAllowSave");
         AddIfPresent(source, "GUI.HideSeries", task, "HideSeries");
         AddIfPresent(source, "Fight.UseExpiringMedicine", task, "UseExpiringMedicine");
+        AddIfPresent(source, "Fight.MedicineExpireDays", task, "MedicineExpireDays");
         AddIfPresent(source, "Fight.UseExpireMedicineForActivity", task, "UseExpireMedicineForActivity");
         AddIfPresent(source, "MainFunction.Annihilation.Stage", task, "AnnihilationStage");
         AddIfPresent(source, "MainFunction.Annihilation.UseCustom", task, "UseCustomAnnihilation");

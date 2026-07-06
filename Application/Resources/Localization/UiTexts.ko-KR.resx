@@ -834,6 +834,9 @@ OF-1 스테이지가 개방되지 않은 경우에는 선택하지 마세요.</v
   <data name="Mall.OnlyOnceADay" xml:space="preserve">
     <value>하루에 한 번만 실행</value>
   </data>
+  <data name="Mall.OnlyOnceADayTip" xml:space="preserve">
+    <value>이 동작을 명일방주 게임 날짜 기준 하루 한 번으로 제한합니다. 오늘 실행된 뒤에는 다음 일일 초기화 전까지 같은 큐 실행에서 건너뜁니다.</value>
+  </data>
   <data name="Mall.Reserve" xml:space="preserve">
     <value>크레딧 300 미만 시 구매 제한</value>
   </data>

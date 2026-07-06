@@ -834,6 +834,9 @@
   <data name="Mall.OnlyOnceADay" xml:space="preserve">
     <value>一日一回だけ</value>
   </data>
+  <data name="Mall.OnlyOnceADayTip" xml:space="preserve">
+    <value>この動作をアークナイツ内の1日につき1回までに制限します。当日実行後は、次の日次リセットまで同じキュー実行ではスキップされます。</value>
+  </data>
   <data name="Mall.Reserve" xml:space="preserve">
     <value>FPが300未満になった場合、アイテムの購入を停止します</value>
   </data>

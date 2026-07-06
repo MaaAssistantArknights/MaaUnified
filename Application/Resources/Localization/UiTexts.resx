@@ -1618,6 +1618,9 @@
   <data name="Mall.OnlyOnceADay" xml:space="preserve">
     <value>一日只执行一次</value>
   </data>
+  <data name="Mall.OnlyOnceADayTip" xml:space="preserve">
+    <value>按游戏日限制执行次数。当天执行过后，同日再次运行队列会跳过，次日刷新后恢复。</value>
+  </data>
   <data name="Mall.ReceptionOptionsRequireInfrast" xml:space="preserve">
     <value>以下功能需在基建中设置并执行</value>
   </data>

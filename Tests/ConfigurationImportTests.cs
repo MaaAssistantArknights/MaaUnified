@@ -562,6 +562,7 @@ public sealed class ConfigurationImportTests
                       "Name": "Fight",
                       "IsEnable": true,
                       "StagePlan": "1-7; CE-6|AP-5",
+                      "UseOptionalStage": true,
                       "StageResetMode": "Invalid",
                       "Series": "auto"
                     },
@@ -688,6 +689,96 @@ public sealed class ConfigurationImportTests
         Assert.Equal(
             ["Fight", "Recruit", "Roguelike", "Reclamation"],
             ReadStringArray((JsonArray)custom.Params["task_names"]!));
+    }
+
+    [Fact]
+    public async Task GuiImport_FlatRoguelikeIterationFlagsMissing_ShouldDefaultFalse()
+    {
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.json"),
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Monthly": {
+                  "TaskQueue.AutoRoguelike.IsChecked": true,
+                  "TaskQueue.Order.AutoRoguelike": 0,
+                  "Roguelike.Mode": "MonthlySquad"
+                },
+                "Deep": {
+                  "TaskQueue.AutoRoguelike.IsChecked": true,
+                  "TaskQueue.Order.AutoRoguelike": 0,
+                  "Roguelike.Mode": "DeepExploration"
+                }
+              }
+            }
+            """);
+
+        var service = CreateService(root);
+        var report = await service.ImportLegacyAsync(ImportSource.GuiOnly, manualImport: false);
+
+        Assert.True(report.Success);
+        var monthly = service.CurrentConfig.Profiles["Monthly"].TaskQueue.Single(task => task.Type == TaskModuleTypes.Roguelike);
+        Assert.Equal(6, monthly.Params["mode"]?.GetValue<int>());
+        Assert.False(monthly.Params["monthly_squad_auto_iterate"]?.GetValue<bool>());
+        Assert.False(monthly.Params["monthly_squad_check_comms"]?.GetValue<bool>());
+
+        var deep = service.CurrentConfig.Profiles["Deep"].TaskQueue.Single(task => task.Type == TaskModuleTypes.Roguelike);
+        Assert.Equal(7, deep.Params["mode"]?.GetValue<int>());
+        Assert.False(deep.Params["deep_exploration_auto_iterate"]?.GetValue<bool>());
+    }
+
+    [Fact]
+    public async Task GuiNewImport_RoguelikeIterationFlagsMissing_ShouldDefaultTrue()
+    {
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.new.json"),
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Monthly": {
+                  "TaskQueue": [
+                    {
+                      "$type": "RoguelikeTask",
+                      "Name": "MonthlySquad",
+                      "IsEnable": true,
+                      "Mode": "MonthlySquad"
+                    }
+                  ]
+                },
+                "Deep": {
+                  "TaskQueue": [
+                    {
+                      "$type": "RoguelikeTask",
+                      "Name": "DeepExploration",
+                      "IsEnable": true,
+                      "Mode": "DeepExploration"
+                    }
+                  ]
+                }
+              }
+            }
+            """);
+
+        var service = CreateService(root);
+        var report = await service.ImportLegacyAsync(ImportSource.GuiNewOnly, manualImport: false);
+
+        Assert.True(report.Success);
+        var monthly = service.CurrentConfig.Profiles["Monthly"].TaskQueue.Single(task => task.Type == TaskModuleTypes.Roguelike);
+        Assert.Equal(6, monthly.Params["mode"]?.GetValue<int>());
+        Assert.True(monthly.Params["monthly_squad_auto_iterate"]?.GetValue<bool>());
+        Assert.True(monthly.Params["monthly_squad_check_comms"]?.GetValue<bool>());
+
+        var deep = service.CurrentConfig.Profiles["Deep"].TaskQueue.Single(task => task.Type == TaskModuleTypes.Roguelike);
+        Assert.Equal(7, deep.Params["mode"]?.GetValue<int>());
+        Assert.True(deep.Params["deep_exploration_auto_iterate"]?.GetValue<bool>());
     }
 
     [Fact]
@@ -892,7 +983,7 @@ public sealed class ConfigurationImportTests
         var report = await service.ImportLegacyAsync(ImportSource.GuiNewOnly, manualImport: false);
 
         Assert.True(report.Success);
-        var task = Assert.Single(service.CurrentConfig.Profiles["Default"].TaskQueue);
+        var task = service.CurrentConfig.Profiles["Default"].TaskQueue.Single(task => task.Type == TaskModuleTypes.Fight);
         Assert.Equal(3, task.Params["expiring_medicine"]?.GetValue<int>());
 
         var (dto, issues) = TaskParamCompiler.ReadFight(task, strict: true);
@@ -903,6 +994,85 @@ public sealed class ConfigurationImportTests
         var compiled = TaskParamCompiler.CompileFight(dto, service.CurrentConfig.Profiles["Default"], service.CurrentConfig);
         Assert.Equal(3, compiled.Params["expiring_medicine"]?.GetValue<int>());
         Assert.Equal(3, compiled.Params["medicine_expire_days"]?.GetValue<int>());
+    }
+
+    [Fact]
+    public async Task GuiNewImport_FightMedicineExpireDaysMissing_ShouldDefaultToTwoDays()
+    {
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.new.json"),
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": {
+                  "TaskQueue": [
+                    {
+                      "$type": "FightTask",
+                      "Name": "Fight",
+                      "IsEnable": true,
+                      "UseExpiringMedicine": true
+                    }
+                  ]
+                }
+              }
+            }
+            """);
+
+        var service = CreateService(root);
+        var report = await service.ImportLegacyAsync(ImportSource.GuiNewOnly, manualImport: false);
+
+        Assert.True(report.Success);
+        var task = Assert.Single(service.CurrentConfig.Profiles["Default"].TaskQueue);
+        Assert.Equal(2, task.Params["expiring_medicine"]?.GetValue<int>());
+        Assert.Equal(2, task.Params["medicine_expire_days"]?.GetValue<int>());
+    }
+
+    [Fact]
+    public async Task GuiNewImport_FightNullableTriStateFieldsMissing_ShouldUseFalseUiFlags()
+    {
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.new.json"),
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": {
+                  "TaskQueue": [
+                    {
+                      "$type": "FightTask",
+                      "Name": "Fight",
+                      "IsEnable": true,
+                      "StagePlan": ["1-7"]
+                    }
+                  ]
+                }
+              }
+            }
+            """);
+
+        var service = CreateService(root);
+        var report = await service.ImportLegacyAsync(ImportSource.GuiNewOnly, manualImport: false);
+
+        Assert.True(report.Success);
+        var task = service.CurrentConfig.Profiles["Default"].TaskQueue.Single(task => task.Type == TaskModuleTypes.Fight);
+        Assert.False(task.Params["_ui_use_medicine"]?.GetValue<bool>());
+        Assert.False(task.Params["_ui_use_stone"]?.GetValue<bool>());
+        Assert.False(task.Params["_ui_enable_times_limit"]?.GetValue<bool>());
+        Assert.False(task.Params["_ui_enable_target_drop"]?.GetValue<bool>());
+
+        var (dto, issues) = TaskParamCompiler.ReadFight(task, strict: true);
+        Assert.Empty(issues);
+        Assert.Equal(false, dto.UseMedicine);
+        Assert.Equal(false, dto.UseStone);
+        Assert.Equal(false, dto.EnableTimesLimit);
+        Assert.Equal(false, dto.EnableTargetDrop);
     }
 
     [Fact]
@@ -939,7 +1109,7 @@ public sealed class ConfigurationImportTests
         var report = await service.ImportLegacyAsync(ImportSource.GuiNewOnly, manualImport: false);
 
         Assert.True(report.Success);
-        var task = Assert.Single(service.CurrentConfig.Profiles["Default"].TaskQueue);
+        var task = service.CurrentConfig.Profiles["Default"].TaskQueue.Single(task => task.Type == TaskModuleTypes.Fight);
         Assert.True(task.Params["_ui_is_inventory_target"]?.GetValue<bool>());
         Assert.True(task.Params["_ui_use_expire_medicine_for_activity"]?.GetValue<bool>());
 
@@ -1036,7 +1206,7 @@ public sealed class ConfigurationImportTests
         var report = await service.ImportLegacyAsync(ImportSource.GuiNewOnly, manualImport: false);
 
         Assert.True(report.Success);
-        var task = Assert.Single(service.CurrentConfig.Profiles["Default"].TaskQueue);
+        var task = service.CurrentConfig.Profiles["Default"].TaskQueue.Single(task => task.Type == TaskModuleTypes.Recruit);
         Assert.True(task.Params["skip_robot"]?.GetValue<bool>());
         Assert.False(task.Params["_ui_preserve_tags_enabled"]?.GetValue<bool>());
         Assert.Empty(ReadStringArray((JsonArray)task.Params["preserve_tags"]!));
@@ -1087,6 +1257,20 @@ public sealed class ConfigurationImportTests
         var expeditedRecruit = tasks.Single(task => task.Name == "Recruit expedited");
         Assert.True(expeditedRecruit.Params["expedite"]?.GetValue<bool>());
         Assert.Equal(3, expeditedRecruit.Params["expedite_times"]?.GetValue<int>());
+
+        var persisted = Assert.IsType<JsonObject>(
+            JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(root, "config", "avalonia.json"))));
+        var persistedProfiles = Assert.IsType<JsonObject>(persisted["Profiles"]);
+        var persistedDefault = Assert.IsType<JsonObject>(persistedProfiles["Default"]);
+        var persistedQueue = Assert.IsType<JsonArray>(persistedDefault["TaskQueue"]);
+        var persistedDefaultRecruit = Assert.IsType<JsonObject>(persistedQueue[0]);
+        var persistedDefaultParams = Assert.IsType<JsonObject>(persistedDefaultRecruit["Params"]);
+        Assert.False(persistedDefaultParams.ContainsKey("expedite"));
+        Assert.False(persistedDefaultParams.ContainsKey("expedite_times"));
+        var persistedExpeditedRecruit = Assert.IsType<JsonObject>(persistedQueue[1]);
+        var persistedExpeditedParams = Assert.IsType<JsonObject>(persistedExpeditedRecruit["Params"]);
+        Assert.False(persistedExpeditedParams.ContainsKey("expedite"));
+        Assert.False(persistedExpeditedParams.ContainsKey("expedite_times"));
     }
 
     [Fact]
@@ -1172,7 +1356,7 @@ public sealed class ConfigurationImportTests
         Assert.Equal(4, fight.Params["medicine"]?.GetValue<int>());
         Assert.Equal(12, fight.Params["times"]?.GetValue<int>());
         Assert.Equal(3, fight.Params["series"]?.GetValue<int>());
-        Assert.Equal(9999, fight.Params["expiring_medicine"]?.GetValue<int>());
+        Assert.Equal(2, fight.Params["expiring_medicine"]?.GetValue<int>());
         Assert.True(fight.Params["_ui_is_inventory_target"]?.GetValue<bool>());
         Assert.True(fight.Params["_ui_use_expire_medicine_for_activity"]?.GetValue<bool>());
         Assert.Equal("30012", fight.Params["_ui_drop_id"]?.GetValue<string>());
@@ -1190,6 +1374,110 @@ public sealed class ConfigurationImportTests
         Assert.Equal(10000, infrast.Params["mode"]?.GetValue<int>());
         Assert.Equal("/tmp/infrast.json", infrast.Params["filename"]?.GetValue<string>());
         Assert.Equal(1, infrast.Params["plan_index"]?.GetValue<int>());
+    }
+
+    [Fact]
+    public async Task GuiImport_FlatFightMedicineExpireDays_ShouldMapExplicitValue()
+    {
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.json"),
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": {
+                  "TaskQueue.Combat.IsChecked": true,
+                  "TaskQueue.Order.Combat": 0,
+                  "MainFunction.Stage1": "1-7",
+                  "Fight.UseExpiringMedicine": true,
+                  "Fight.MedicineExpireDays": 5
+                }
+              }
+            }
+            """);
+
+        var service = CreateService(root);
+        var report = await service.ImportLegacyAsync(ImportSource.GuiOnly, manualImport: false);
+
+        Assert.True(report.Success);
+        var task = service.CurrentConfig.Profiles["Default"].TaskQueue.Single(task => task.Type == TaskModuleTypes.Fight);
+        Assert.Equal(5, task.Params["expiring_medicine"]?.GetValue<int>());
+        Assert.Equal(5, task.Params["medicine_expire_days"]?.GetValue<int>());
+    }
+
+    [Fact]
+    public async Task GuiImport_FlatFightNullableTriStateFieldsMissing_ShouldUseFalseUiFlags()
+    {
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.json"),
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": {
+                  "TaskQueue.Combat.IsChecked": true,
+                  "TaskQueue.Order.Combat": 0,
+                  "MainFunction.Stage1": "1-7"
+                }
+              }
+            }
+            """);
+
+        var service = CreateService(root);
+        var report = await service.ImportLegacyAsync(ImportSource.GuiOnly, manualImport: false);
+
+        Assert.True(report.Success);
+        var task = service.CurrentConfig.Profiles["Default"].TaskQueue.Single(task => task.Type == TaskModuleTypes.Fight);
+        Assert.False(task.Params["_ui_use_medicine"]?.GetValue<bool>());
+        Assert.False(task.Params["_ui_use_stone"]?.GetValue<bool>());
+        Assert.False(task.Params["_ui_enable_times_limit"]?.GetValue<bool>());
+        Assert.False(task.Params["_ui_enable_target_drop"]?.GetValue<bool>());
+
+        var (dto, issues) = TaskParamCompiler.ReadFight(task, strict: true);
+        Assert.Empty(issues);
+        Assert.Equal(false, dto.UseMedicine);
+        Assert.Equal(false, dto.UseStone);
+        Assert.Equal(false, dto.EnableTimesLimit);
+        Assert.Equal(false, dto.EnableTargetDrop);
+    }
+
+    [Fact]
+    public async Task GuiImport_FlatRecruitNotChooseLevel1_ShouldControlSkipRobotOnly()
+    {
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.json"),
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": {
+                  "TaskQueue.Recruiting.IsChecked": true,
+                  "TaskQueue.Order.Recruiting": 0,
+                  "AutoRecruit.NotChooseLevel1": false,
+                  "AutoRecruit.PreserveTagEnabled": true,
+                  "AutoRecruit.PreserveTagList": ["支援机械"]
+                }
+              }
+            }
+            """);
+
+        var service = CreateService(root);
+        var report = await service.ImportLegacyAsync(ImportSource.GuiOnly, manualImport: false);
+
+        Assert.True(report.Success);
+        var task = service.CurrentConfig.Profiles["Default"].TaskQueue.Single(task => task.Type == TaskModuleTypes.Recruit);
+        Assert.False(task.Params["skip_robot"]?.GetValue<bool>());
+        Assert.True(task.Params["_ui_preserve_tags_enabled"]?.GetValue<bool>());
+        Assert.Equal(["支援机械"], ReadStringArray((JsonArray)task.Params["preserve_tags"]!));
     }
 
     [Fact]

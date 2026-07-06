@@ -726,6 +726,9 @@
   <data name="Mall.OnlyOnceADay" xml:space="preserve">
     <value>一日只執行一次</value>
   </data>
+  <data name="Mall.OnlyOnceADayTip" xml:space="preserve">
+    <value>按遊戲日限制執行次數。當天執行過後，同日再次執行佇列會跳過，次日重置後恢復。</value>
+  </data>
   <data name="Mall.Reserve" xml:space="preserve">
     <value>300 以下信用點數停止購買商品</value>
   </data>

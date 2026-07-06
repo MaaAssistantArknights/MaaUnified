@@ -1366,6 +1366,9 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     {
         item.RefreshLocalizedText(ResolveModuleDisplayName, ResolveStatusDisplayName);
         item.DisplayName = ResolveTaskDisplayName(item);
+        item.OneShotDisplayName = TaskQueueEnabledState.UsesInvertedNullSemantics(Runtime.ConfigurationService.CurrentConfig)
+            ? RootTexts.GetOrDefault("TaskQueue.Status.TaskEnabled.SkipOnce", "Skip once")
+            : RootTexts.GetOrDefault("TaskQueue.Status.TaskEnabled.Once", "Run once");
         item.RefreshToolTipText();
         if (ReferenceEquals(item, SelectedTask))
         {
@@ -1891,12 +1894,19 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     private async Task PersistTaskEnabledStateAsync(TaskQueueItemViewModel task, CancellationToken cancellationToken = default)
     {
         var desiredEnabled = task.IsEnabled;
+        var revertEnabled = desiredEnabled is null ? (bool?)false : !desiredEnabled.Value;
+        await PersistTaskEnabledStateAsync(task, revertEnabled, cancellationToken);
+    }
+
+    private async Task PersistTaskEnabledStateAsync(TaskQueueItemViewModel task, bool? revertEnabled, CancellationToken cancellationToken = default)
+    {
+        var desiredEnabled = task.IsEnabled;
         if (!await EnsureEditableAsync("TaskQueue.SetTaskEnabled", cancellationToken))
         {
             _suppressTaskEnabledSync = true;
             try
             {
-                task.IsEnabled = !desiredEnabled;
+                task.IsEnabled = revertEnabled;
             }
             finally
             {
@@ -1927,7 +1937,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 _suppressTaskEnabledSync = true;
                 try
                 {
-                    task.IsEnabled = !desiredEnabled;
+                    task.IsEnabled = revertEnabled;
                 }
                 finally
                 {
@@ -1939,6 +1949,23 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         {
             _queueMutationLock.Release();
         }
+    }
+
+    public async Task ToggleTaskEnabledOneShotAsync(TaskQueueItemViewModel task, CancellationToken cancellationToken = default)
+    {
+        var previousEnabled = task.IsEnabled;
+        var nextEnabled = TaskQueueEnabledState.ToggleOneShotValue(previousEnabled);
+        _suppressTaskEnabledSync = true;
+        try
+        {
+            task.IsEnabled = nextEnabled;
+        }
+        finally
+        {
+            _suppressTaskEnabledSync = false;
+        }
+
+        await PersistTaskEnabledStateAsync(task, previousEnabled, cancellationToken);
     }
 
     public async Task AddTaskAsync(string? taskType = null, CancellationToken cancellationToken = default)
@@ -2153,14 +2180,14 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         await ExecuteTaskEnabledBatchAsync(
             "TaskQueue.InverseSelection",
             ct => Runtime.TaskQueueFeatureService.InvertTasksEnabledAsync(ct),
-            current => !current,
+            current => !(current ?? true),
             cancellationToken: cancellationToken);
     }
 
     private async Task<bool> ExecuteTaskEnabledBatchAsync(
         string scope,
         Func<CancellationToken, Task<UiOperationResult>> mutationAsync,
-        Func<bool, bool> resolveEnabled,
+        Func<bool?, bool> resolveEnabled,
         CancellationToken cancellationToken = default)
     {
         if (!await EnsureEditableAsync(scope, cancellationToken))
@@ -2187,7 +2214,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         }
     }
 
-    private void ApplyLocalTaskEnabledBatch(Func<bool, bool> resolveEnabled)
+    private void ApplyLocalTaskEnabledBatch(Func<bool?, bool> resolveEnabled)
     {
         _suppressTaskEnabledSync = true;
         try
@@ -2204,6 +2231,57 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         finally
         {
             _suppressTaskEnabledSync = false;
+        }
+    }
+
+    private void ApplyLocalOneShotTaskEnabledReset()
+    {
+        var resetValue = TaskQueueEnabledState.ResetOneShotValue(Runtime.ConfigurationService.CurrentConfig);
+        _suppressTaskEnabledSync = true;
+        try
+        {
+            foreach (var task in Tasks)
+            {
+                if (task.IsEnabled is null)
+                {
+                    task.IsEnabled = resetValue;
+                    RefreshTaskItemLocalization(task);
+                }
+            }
+        }
+        finally
+        {
+            _suppressTaskEnabledSync = false;
+        }
+    }
+
+    private async Task ConsumeCompletedOneShotTaskEnabledStatesAsync()
+    {
+        CoreResult<int> result;
+        try
+        {
+            result = await Runtime.TaskQueueFeatureService.ConsumeCompletedOneShotTaskEnabledStatesAsync();
+        }
+        catch (Exception ex)
+        {
+            await RecordErrorAsync(
+                "TaskQueue.OneShotReset",
+                "Failed to consume one-shot task enabled states after task queue completion.",
+                ex);
+            return;
+        }
+
+        if (!result.Success)
+        {
+            await RecordErrorAsync(
+                "TaskQueue.OneShotReset",
+                result.Error?.Message ?? "Failed to consume one-shot task enabled states after task queue completion.");
+            return;
+        }
+
+        if (result.Value > 0)
+        {
+            ApplyLocalOneShotTaskEnabledReset();
         }
     }
 
@@ -4286,7 +4364,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     {
         for (var index = 0; index < Tasks.Count; index++)
         {
-            if (!Tasks[index].IsEnabled)
+            if (!IsTaskEffectivelyEnabled(Tasks[index]))
             {
                 continue;
             }
@@ -4365,7 +4443,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
         for (var index = 0; index < Tasks.Count; index++)
         {
-            if (!Tasks[index].IsEnabled)
+            if (!IsTaskEffectivelyEnabled(Tasks[index]))
             {
                 continue;
             }
@@ -4377,6 +4455,13 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 return;
             }
         }
+    }
+
+    private bool IsTaskEffectivelyEnabled(TaskQueueItemViewModel task)
+    {
+        return task.IsEnabled is true
+            || (task.IsEnabled is null
+                && !TaskQueueEnabledState.UsesInvertedNullSemantics(Runtime.ConfigurationService.CurrentConfig));
     }
 
     private async Task BindSelectedTaskAsync(CancellationToken cancellationToken = default)
@@ -6165,6 +6250,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             case "TaskChainCompleted":
                 UpdateTaskStatus(taskIndex, taskChain, TaskQueueItemStatus.Success);
                 ClearRoguelikeCombatStateIfTaskCompleted(taskChain);
+                await AdvanceInfrastCustomPlanAfterCompletionAsync(metadata, taskIndex);
                 TrackAchievementsFromCallback(metadata, callback.MsgName);
                 AppendWpfCallbackLog(callback, metadata, taskIndex);
                 await RecordRuntimeStatusAsync(
@@ -6236,6 +6322,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                     resolveSource: resolveSource);
                 if (IsMainTaskQueueCompletion(metadata))
                 {
+                    await ConsumeCompletedOneShotTaskEnabledStatesAsync();
                     AppendWpfCallbackLog(callback, metadata, taskIndex);
                     QueueAutomaticNotifications(callback, metadata, taskIndex, runId);
                     if (!string.Equals(_lastPostActionRunId, runId, StringComparison.Ordinal))
@@ -6272,6 +6359,60 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                     resolveSource: resolveSource);
                 break;
         }
+    }
+
+    private async Task AdvanceInfrastCustomPlanAfterCompletionAsync(CallbackPayload payload, int? taskIndex)
+    {
+        if (!string.Equals(TaskModuleTypes.Normalize(payload.TaskChain), TaskModuleTypes.Infrast, StringComparison.OrdinalIgnoreCase)
+            || !IsValidTaskIndex(taskIndex, Tasks.Count))
+        {
+            return;
+        }
+
+        var index = taskIndex!.Value;
+        var result = await Runtime.TaskQueueFeatureService.AdvanceInfrastCustomPlanAsync(index);
+        if (!result.Success)
+        {
+            await RecordFailedResultAsync("TaskQueue.Infrast.AdvancePlan", ToFailureResult(result));
+            return;
+        }
+
+        if (!result.Value.HasValue)
+        {
+            return;
+        }
+
+        await RefreshInfrastTaskPanelAsync(index);
+    }
+
+    private async Task RefreshInfrastTaskPanelAsync(int taskIndex)
+    {
+        var panel = TaskPanels.FirstOrDefault(candidate => candidate.TaskIndex == taskIndex);
+        if (panel?.ModuleViewModel is not InfrastModuleViewModel module)
+        {
+            return;
+        }
+
+        var paramsResult = await Runtime.TaskQueueFeatureService.GetTaskParamsAsync(taskIndex);
+        if (!paramsResult.Success || paramsResult.Value is null)
+        {
+            LastErrorMessage = paramsResult.Message;
+            panel.ApplyLoadError(paramsResult.Message);
+            await RecordFailedResultAsync("TaskQueue.Infrast.RefreshPlan", ToFailureResult(paramsResult));
+            return;
+        }
+
+        await module.BindAsync(taskIndex, paramsResult.Value);
+        await RefreshTaskPanelValidationSummaryAsync(panel, CancellationToken.None);
+        OnPropertyChanged(nameof(InfrastModule));
+    }
+
+    private static UiOperationResult ToFailureResult<T>(UiOperationResult<T> result)
+    {
+        return UiOperationResult.Fail(
+            result.Error?.Code ?? UiErrorCode.UiOperationFailed,
+            result.Message,
+            result.Error?.Details);
     }
 
     private async Task UpdateMallDailyExecutionMarkerAsync(CallbackPayload payload, int? taskIndex)
