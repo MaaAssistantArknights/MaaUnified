@@ -109,13 +109,29 @@ public sealed class StartUpTaskModuleViewModel : TypedTaskModuleViewModelBase<St
 
             return ResolveSelectedOption(ClientTypeOptions, ClientType);
         }
-        set => ClientType = value?.Type ?? string.Empty;
+        set
+        {
+            if (string.IsNullOrWhiteSpace(value?.Type))
+            {
+                return;
+            }
+
+            ClientType = value.Type;
+        }
     }
 
     public string SelectedClientTypeValue
     {
         get => NormalizeClientTypeAlias(ClientType);
-        set => ClientType = value ?? string.Empty;
+        set
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return;
+            }
+
+            ClientType = value;
+        }
     }
 
     public TaskModuleOption? SelectedConnectConfigOption
@@ -203,7 +219,8 @@ public sealed class StartUpTaskModuleViewModel : TypedTaskModuleViewModelBase<St
             OnPropertyChanged(nameof(SelectedClientTypeValue));
             OnPropertyChanged(nameof(ShowAccountSwitch));
             OnPropertyChanged(nameof(CanRunAccountSwitchNow));
-            if (!IsAccountSwitchSupportedClient(normalized))
+            if (!string.IsNullOrWhiteSpace(normalized)
+                && !IsAccountSwitchSupportedClient(normalized))
             {
                 SetTrackedProperty(ref _accountName, string.Empty, nameof(AccountName));
                 OnPropertyChanged(nameof(CanRunAccountSwitchNow));

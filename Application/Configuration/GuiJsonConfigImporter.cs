@@ -255,6 +255,7 @@ public sealed class GuiJsonConfigImporter : IConfigImporter
         AddIfPresent(source, "AutoRecruit.SelectExtraTags", task, "ExtraTagMode");
         AddIfPresent(source, "AutoRecruit.RefreshLevel3", task, "RefreshLevel3");
         AddIfPresent(source, "AutoRecruit.ForceRefresh", task, "ForceRefresh");
+        AddIfPresent(source, "AutoRecruit.UseExpedited", task, "UseExpedited");
         AddIfPresent(source, "AutoRecruit.NotChooseLevel1", task, "Level1NotChoose");
         AddIfPresent(source, "AutoRecruit.MaxTimes", task, "MaxTimes");
         AddIfPresent(source, "AutoRecruit.ChooseLevel3", task, "Level3Choose");

@@ -515,6 +515,7 @@ public sealed class UnifiedSessionService
         ClearTaskIdMappings();
 
         int appended = 0;
+        var resetOneShotRecruitExpedited = false;
         for (var queueIndex = 0; queueIndex < profile.TaskQueue.Count; queueIndex++)
         {
             var task = profile.TaskQueue[queueIndex];
@@ -595,7 +596,17 @@ public sealed class UnifiedSessionService
             SetTaskIdMapping(appendResult.Value, queueIndex);
 
             appended += 1;
+            if (ResetOneShotRecruitExpedited(task))
+            {
+                resetOneShotRecruitExpedited = true;
+            }
+
             _logService.Info($"Appended task #{appendResult.Value}: {task.Name}");
+        }
+
+        if (resetOneShotRecruitExpedited)
+        {
+            await _configService.SaveAsync(cancellationToken).ConfigureAwait(false);
         }
 
         if (appended == 0)
@@ -604,6 +615,21 @@ public sealed class UnifiedSessionService
         }
 
         return CoreResult<int>.Ok(appended);
+    }
+
+    private static bool ResetOneShotRecruitExpedited(UnifiedTaskItem task)
+    {
+        if (!string.Equals(TaskParamCompiler.NormalizeTaskType(task.Type), TaskModuleTypes.Recruit, StringComparison.OrdinalIgnoreCase)
+            || task.Params["expedite"] is not JsonValue expediteValue
+            || !expediteValue.TryGetValue(out bool expedite)
+            || !expedite)
+        {
+            return false;
+        }
+
+        task.Params["expedite"] = false;
+        task.Params.Remove("expedite_times");
+        return true;
     }
 
     public async Task<CoreResult<int>> AppendCoreTasksAsync(
@@ -971,8 +997,7 @@ public sealed class UnifiedSessionService
             return;
         }
 
-        if (string.Equals(callback.MsgName, "TaskChainCompleted", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(callback.MsgName, "TaskChainStopped", StringComparison.OrdinalIgnoreCase)
+        if (string.Equals(callback.MsgName, "TaskChainStopped", StringComparison.OrdinalIgnoreCase)
             || string.Equals(callback.MsgName, "AllTasksCompleted", StringComparison.OrdinalIgnoreCase))
         {
             MoveToState(SessionState.Connected, "Session.Callback", callback.MsgName);

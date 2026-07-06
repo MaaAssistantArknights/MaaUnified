@@ -1214,6 +1214,26 @@ public sealed class MainShellViewModelTests
     }
 
     [Fact]
+    public async Task SettingsProfileSwitch_StartUpClientTypeUiInitialization_ShouldKeepLoadedAccountName()
+    {
+        await using var fixture = await TestFixture.CreateAsync(
+            existingAvaloniaJson: CreateNoTaskSelectionSwitchConfigJson());
+        await fixture.ViewModel.InitializeAsync();
+
+        fixture.ViewModel.SettingsPage.ConfigurationManagerSelectedProfile = "Alt";
+        await fixture.ViewModel.SettingsPage.SwitchConfigurationProfileAsync();
+        await fixture.ViewModel.TaskQueuePage.WaitForPendingBindingAsync();
+
+        Assert.Equal("alt-account", fixture.ViewModel.TaskQueuePage.StartUpModule.AccountName);
+
+        fixture.ViewModel.TaskQueuePage.StartUpModule.SelectedClientTypeValue = string.Empty;
+        fixture.ViewModel.TaskQueuePage.StartUpModule.SelectedClientTypeOption = null;
+
+        Assert.Equal("Official", fixture.ViewModel.TaskQueuePage.StartUpModule.ClientType);
+        Assert.Equal("alt-account", fixture.ViewModel.TaskQueuePage.StartUpModule.AccountName);
+    }
+
+    [Fact]
     public async Task RuntimeFactory_ShouldInjectShellFeatureService()
     {
         var root = Path.Combine(Path.GetTempPath(), "maa-unified-tests", Guid.NewGuid().ToString("N"));

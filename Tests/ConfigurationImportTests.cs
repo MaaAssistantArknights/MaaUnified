@@ -1043,6 +1043,53 @@ public sealed class ConfigurationImportTests
     }
 
     [Fact]
+    public async Task GuiNewImport_RecruitUseExpedited_ShouldDefaultFalseAndPreserveExplicitTrue()
+    {
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.new.json"),
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": {
+                  "TaskQueue": [
+                    {
+                      "$type": "RecruitTask",
+                      "Name": "Recruit default",
+                      "IsEnable": true,
+                      "MaxTimes": 2
+                    },
+                    {
+                      "$type": "RecruitTask",
+                      "Name": "Recruit expedited",
+                      "IsEnable": true,
+                      "MaxTimes": 3,
+                      "UseExpedited": true
+                    }
+                  ]
+                }
+              }
+            }
+            """);
+
+        var service = CreateService(root);
+        var report = await service.ImportLegacyAsync(ImportSource.GuiNewOnly, manualImport: false);
+
+        Assert.True(report.Success);
+        var tasks = service.CurrentConfig.Profiles["Default"].TaskQueue;
+        var defaultRecruit = tasks.Single(task => task.Name == "Recruit default");
+        Assert.False(defaultRecruit.Params["expedite"]?.GetValue<bool>());
+        Assert.Null(defaultRecruit.Params["expedite_times"]);
+
+        var expeditedRecruit = tasks.Single(task => task.Name == "Recruit expedited");
+        Assert.True(expeditedRecruit.Params["expedite"]?.GetValue<bool>());
+        Assert.Equal(3, expeditedRecruit.Params["expedite_times"]?.GetValue<int>());
+    }
+
+    [Fact]
     public async Task GuiImport_FlatLegacyTaskKeys_ShouldBuildTaskQueueWhenMissing()
     {
         var root = CreateTempRoot();
@@ -1143,6 +1190,37 @@ public sealed class ConfigurationImportTests
         Assert.Equal(10000, infrast.Params["mode"]?.GetValue<int>());
         Assert.Equal("/tmp/infrast.json", infrast.Params["filename"]?.GetValue<string>());
         Assert.Equal(1, infrast.Params["plan_index"]?.GetValue<int>());
+    }
+
+    [Fact]
+    public async Task GuiImport_FlatRecruitUseExpedited_ShouldImportExplicitTrue()
+    {
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.json"),
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": {
+                  "TaskQueue.Recruiting.IsChecked": true,
+                  "TaskQueue.Order.Recruiting": 0,
+                  "AutoRecruit.MaxTimes": 3,
+                  "AutoRecruit.UseExpedited": true
+                }
+              }
+            }
+            """);
+
+        var service = CreateService(root);
+        var report = await service.ImportLegacyAsync(ImportSource.GuiOnly, manualImport: false);
+
+        Assert.True(report.Success);
+        var task = service.CurrentConfig.Profiles["Default"].TaskQueue.Single(task => task.Type == TaskModuleTypes.Recruit);
+        Assert.True(task.Params["expedite"]?.GetValue<bool>());
+        Assert.Equal(3, task.Params["expedite_times"]?.GetValue<int>());
     }
 
     [Fact]
@@ -1610,6 +1688,38 @@ public sealed class ConfigurationImportTests
         Assert.Equal(0, store.SaveCount);
         Assert.Equal(0, configChangedCount);
         Assert.False(service.CurrentConfig.Profiles["Default"].TaskQueue[0].Params["clear_store"]?.GetValue<bool>());
+    }
+
+    [Fact]
+    public async Task LoadOrBootstrapAsync_ShouldClearPersistedRecruitUseExpedited()
+    {
+        var root = CreateTempRoot();
+        var loadedConfig = new UnifiedConfig();
+        loadedConfig.Profiles["Default"].TaskQueue.Add(new UnifiedTaskItem
+        {
+            Type = TaskModuleTypes.Recruit,
+            Name = "Recruit",
+            Params = new JsonObject
+            {
+                ["times"] = 2,
+                ["expedite"] = true,
+                ["expedite_times"] = 2,
+            },
+        });
+
+        var store = new CountingConfigStore(root, loadedConfig);
+        var service = CreateService(root, store);
+
+        var load = await service.LoadOrBootstrapAsync();
+
+        Assert.True(load.LoadedFromExistingConfig);
+        Assert.Equal(1, store.SaveCount);
+        var task = Assert.Single(service.CurrentConfig.Profiles["Default"].TaskQueue);
+        Assert.False(task.Params.ContainsKey("expedite"));
+        Assert.False(task.Params.ContainsKey("expedite_times"));
+        var recruit = TaskParamCompiler.ReadRecruit(task, strict: true).Dto;
+        Assert.False(recruit.UseExpedited);
+        Assert.Equal(2, recruit.Times);
     }
 
     [Fact]

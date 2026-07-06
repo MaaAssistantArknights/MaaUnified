@@ -36,6 +36,16 @@ public sealed class SessionStateSyncTests
         bridge.Publish(new CoreCallbackEvent(10001, "TaskChainStart", "{}", DateTimeOffset.UtcNow));
         await WaitUntilAsync(() => session.CurrentState == SessionState.Running);
 
+        bridge.Publish(new CoreCallbackEvent(10002, "TaskChainCompleted", "{}", DateTimeOffset.UtcNow));
+        await Task.Delay(50);
+        Assert.Equal(SessionState.Running, session.CurrentState);
+
+        bridge.Publish(new CoreCallbackEvent(10003, "AllTasksCompleted", "{}", DateTimeOffset.UtcNow));
+        await WaitUntilAsync(() => session.CurrentState == SessionState.Connected);
+
+        bridge.Publish(new CoreCallbackEvent(10001, "TaskChainStart", "{}", DateTimeOffset.UtcNow));
+        await WaitUntilAsync(() => session.CurrentState == SessionState.Running);
+
         bridge.Publish(new CoreCallbackEvent(10004, "TaskChainStopped", "{}", DateTimeOffset.UtcNow));
         await WaitUntilAsync(() => session.CurrentState == SessionState.Connected);
 

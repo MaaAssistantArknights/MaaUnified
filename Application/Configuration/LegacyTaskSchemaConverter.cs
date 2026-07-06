@@ -308,7 +308,7 @@ internal static class LegacyTaskSchemaConverter
         var level4Choose = GetBool(task, "Level4Choose", true);
         var level5Choose = GetBool(task, "Level5Choose", false);
         var level6Choose = GetBool(task, "Level6Choose", false);
-        var useExpedited = GetBool(task, "UseExpedited", true);
+        var useExpedited = GetBool(task, "UseExpedited", false);
 
         var selectList = new JsonArray();
         var confirmList = new JsonArray();

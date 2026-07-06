@@ -2020,10 +2020,10 @@
     <value>公开招募</value>
   </data>
   <data name="Recruit.UseExpedited" xml:space="preserve">
-    <value>使用加急</value>
+    <value>自动使用加急许可*</value>
   </data>
   <data name="Recruit.UseExpeditedTip" xml:space="preserve">
-    <value>该开关与 WPF 保持一致：勾选后会优先消耗加急许可。</value>
+    <value>该选项仅生效一次。招募券获取速度低于消耗速度，正常情况下下一轮公招任务时自然已到招募时间，仅在招募券严重溢出等应急场景下使用</value>
   </data>
   <data name="RecruitConfirm" xml:space="preserve">
     <value>已确认招募</value>

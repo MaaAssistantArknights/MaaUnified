@@ -2690,6 +2690,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                     return;
                 }
 
+                ResetRecruitExpeditedOncePanels();
+
                 if (!await ApplyResultAsync(
                         await Runtime.ConnectFeatureService.StartAsync(startCancellationToken),
                         "TaskQueue.Start",
@@ -2836,6 +2838,17 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         var zh = $"会话状态 `{state}` 不允许 LinkStart。请先前往“设置 > 连接设置”完成连接。";
         var en = $"Session state `{state}` does not allow LinkStart. Go to Settings > Connection and connect first.";
         return BuildLocalizedMessage(zh, en);
+    }
+
+    private void ResetRecruitExpeditedOncePanels()
+    {
+        foreach (var panel in TaskPanels)
+        {
+            if (panel.ModuleViewModel is RecruitTaskModuleViewModel { UseExpedited: true } recruit)
+            {
+                recruit.UseExpedited = false;
+            }
+        }
     }
 
     private async Task<bool> EnsureConnectedForLinkStartAsync(string scope, CancellationToken cancellationToken)

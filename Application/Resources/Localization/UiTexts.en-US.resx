@@ -2020,10 +2020,10 @@ With save file: farm points through crafting (advanced).
     <value>Recruit</value>
   </data>
   <data name="Recruit.UseExpedited" xml:space="preserve">
-    <value>Use expedited</value>
+    <value>Auto use Expedited Plan*</value>
   </data>
   <data name="Recruit.UseExpeditedTip" xml:space="preserve">
-    <value>Same behavior as WPF: expedited permit is preferred when enabled.</value>
+    <value>Effective once only. Recruitment permits are normally gained slower than they are consumed; in ordinary runs the next recruit task should be ready naturally. Use this only for emergency overflow cases.</value>
   </data>
   <data name="RecruitConfirm" xml:space="preserve">
     <value>Recruit confirm</value>

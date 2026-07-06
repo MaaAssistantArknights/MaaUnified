@@ -221,6 +221,50 @@ public sealed class TaskModuleAFeatureTests
     }
 
     [Fact]
+    public async Task QueueEnabledTasks_RecruitUseExpedited_ShouldBeOneShotAndNotPersisted()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.Recruit, "recruit")).Success);
+        Assert.True((await fixture.TaskQueue.SaveRecruitParamsAsync(0, new RecruitTaskParamsDto
+        {
+            Times = 2,
+            Refresh = true,
+            ForceRefresh = true,
+            UseExpedited = true,
+            SkipRobot = true,
+            SetTime = true,
+            Level3Time = 540,
+            Level4Time = 540,
+            Level5Time = 540,
+        })).Success);
+
+        var flush = await fixture.TaskQueue.FlushTaskParamWritesAsync();
+        Assert.True(flush.Success);
+
+        var persistedPath = Path.Combine(fixture.Root, "config", "avalonia.json");
+        var persisted = Assert.IsType<JsonObject>(JsonNode.Parse(await File.ReadAllTextAsync(persistedPath)));
+        var persistedProfiles = Assert.IsType<JsonObject>(persisted["Profiles"]);
+        var persistedDefault = Assert.IsType<JsonObject>(persistedProfiles["Default"]);
+        var persistedQueue = Assert.IsType<JsonArray>(persistedDefault["TaskQueue"]);
+        var persistedTask = Assert.IsType<JsonObject>(persistedQueue[0]);
+        var persistedParams = Assert.IsType<JsonObject>(persistedTask["Params"]);
+        Assert.False(persistedParams.ContainsKey("expedite"));
+        Assert.False(persistedParams.ContainsKey("expedite_times"));
+
+        var queueResult = await fixture.TaskQueue.QueueEnabledTasksAsync();
+
+        Assert.True(queueResult.Success);
+        var appended = Assert.Single(fixture.Bridge.AppendedTasks);
+        var appendedJson = Assert.IsType<JsonObject>(JsonNode.Parse(appended.ParamsJson));
+        Assert.True(appendedJson["expedite"]?.GetValue<bool>());
+        Assert.Equal(2, appendedJson["expedite_times"]?.GetValue<int>());
+
+        var taskParams = (await fixture.TaskQueue.GetTaskParamsAsync(0)).Value!;
+        Assert.False(taskParams["expedite"]?.GetValue<bool>());
+        Assert.Null(taskParams["expedite_times"]);
+    }
+
+    [Fact]
     public async Task RecruitModule_TimeSetters_ShouldNormalizeHourMinuteCombinationWithWraparoundSemantics()
     {
         await using var fixture = await TestFixture.CreateAsync();
@@ -364,7 +408,8 @@ public sealed class TaskModuleAFeatureTests
         Assert.False(legacy.Value!.ChooseLevel6);
         Assert.True(legacy.Value.ChooseLevel4);
         Assert.False(legacy.Value.Refresh);
-        Assert.True(legacy.Value.UseExpedited);
+        Assert.False(legacy.Value.UseExpedited);
+        Assert.False(service.CurrentConfig.Profiles["Default"].TaskQueue[1].Params.ContainsKey("expedite"));
     }
 
     [Fact]
@@ -659,7 +704,7 @@ public sealed class TaskModuleAFeatureTests
         Assert.Equal(3, recruit.Value!.Times);
         Assert.False(recruit.Value.Refresh);
         Assert.False(recruit.Value.ForceRefresh);
-        Assert.True(recruit.Value.UseExpedited);
+        Assert.False(recruit.Value.UseExpedited);
         Assert.True(recruit.Value.ChooseLevel3);
         Assert.False(recruit.Value.ChooseLevel4);
         Assert.True(recruit.Value.ChooseLevel5);
