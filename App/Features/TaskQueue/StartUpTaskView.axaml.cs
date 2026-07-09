@@ -84,4 +84,9 @@ public partial class StartUpTaskView : UserControl
 
         VM.ConnectAddress = e.Text;
     }
+
+    private void OnRequestPlayCoverScreenRecordingPermissionClick(object? sender, RoutedEventArgs e)
+    {
+        VM?.RequestPlayCoverScreenRecordingPermission();
+    }
 }

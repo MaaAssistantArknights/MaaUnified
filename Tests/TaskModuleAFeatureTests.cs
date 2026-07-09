@@ -1062,6 +1062,9 @@ public sealed class TaskModuleAFeatureTests
         Assert.Contains("IsVisible=\"{Binding ShowMacBundledAdbControls}\"", startUpView);
         Assert.Contains("IsChecked=\"{Binding MacUseBundledAdb}\"", startUpView);
         Assert.Contains("IsVisible=\"{Binding ShowManualAdbPathControls}\"", startUpView);
+        Assert.Contains("ShowPlayCoverScreenRecordingPermission", startUpView);
+        Assert.Contains("PlayCoverScreenRecordingPermissionStatusText", startUpView);
+        Assert.Contains("OnRequestPlayCoverScreenRecordingPermissionClick", startUpView);
         Assert.DoesNotContain("SelectedAttachWindowScreencapOption", startUpView);
         Assert.DoesNotContain("SelectedAttachWindowMouseOption", startUpView);
         Assert.DoesNotContain("SelectedAttachWindowKeyboardOption", startUpView);

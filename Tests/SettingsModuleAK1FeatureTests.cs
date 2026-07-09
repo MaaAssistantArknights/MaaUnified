@@ -377,6 +377,98 @@ public sealed class SettingsModuleAK1FeatureTests
     }
 
     [Fact]
+    public void ConnectionGameSharedState_PlayCoverMacSck_ShouldExposeScreenRecordingPermissionOnSupportedMac()
+    {
+        var permission = new FakeMacScreenRecordingPermissionService
+        {
+            IsSupported = true,
+        };
+        var state = new ConnectionGameSharedStateViewModel(permission)
+        {
+            ConnectConfig = "MacPlayTools",
+            PlayCoverScreencapMode = "MacSCK",
+        };
+        state.SetLanguage("en-us");
+
+        Assert.True(state.ShowPlayCoverScreenRecordingPermission);
+        Assert.True(state.PlayCoverScreenRecordingPermissionMissing);
+        Assert.True(state.PlayCoverScreenRecordingPermissionStatusIsWarning);
+        Assert.True(state.ShowPlayCoverScreenRecordingPermissionAction);
+        Assert.Contains(
+            "Screen Recording",
+            state.PlayCoverScreenRecordingPermissionStatusText,
+            StringComparison.OrdinalIgnoreCase);
+
+        permission.HasPermission = true;
+        Assert.True(state.PlayCoverScreenRecordingPermissionGranted);
+        Assert.True(state.PlayCoverScreenRecordingPermissionStatusIsSuccess);
+        Assert.False(state.ShowPlayCoverScreenRecordingPermissionAction);
+        Assert.Contains(
+            "enabled",
+            state.PlayCoverScreenRecordingPermissionStatusText,
+            StringComparison.OrdinalIgnoreCase);
+
+        state.PlayCoverScreencapMode = "BGR";
+        Assert.False(state.ShowPlayCoverScreenRecordingPermission);
+
+        state.PlayCoverScreencapMode = "MacSCK";
+        state.ConnectConfig = "General";
+        Assert.False(state.ShowPlayCoverScreenRecordingPermission);
+    }
+
+    [Fact]
+    public void ConnectionGameSharedState_PlayCoverScreenRecordingPermission_ShouldOpenSettingsWhenRequestIsNotGranted()
+    {
+        var permission = new FakeMacScreenRecordingPermissionService
+        {
+            IsSupported = true,
+            HasPermission = false,
+            RequestResult = false,
+            OpenSettingsResult = UiOperationResult.Ok("opened"),
+        };
+        var state = new ConnectionGameSharedStateViewModel(permission)
+        {
+            ConnectConfig = "MacPlayTools",
+            PlayCoverScreencapMode = "MacSCK",
+        };
+        state.SetLanguage("en-us");
+
+        state.RequestPlayCoverScreenRecordingPermission();
+
+        Assert.Equal(1, permission.RequestCallCount);
+        Assert.Equal(1, permission.OpenSettingsCallCount);
+        Assert.Contains(
+            "opened",
+            state.PlayCoverScreenRecordingPermissionStatusText,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.True(state.PlayCoverScreenRecordingPermissionStatusIsWarning);
+    }
+
+    [Fact]
+    public void ConnectionGameSharedState_PlayCoverScreenRecordingPermission_ShouldSkipSettingsWhenRequestGrantsPermission()
+    {
+        var permission = new FakeMacScreenRecordingPermissionService
+        {
+            IsSupported = true,
+            HasPermission = false,
+            RequestResult = true,
+        };
+        var state = new ConnectionGameSharedStateViewModel(permission)
+        {
+            ConnectConfig = "MacPlayTools",
+            PlayCoverScreencapMode = "MacSCK",
+        };
+        state.SetLanguage("en-us");
+
+        state.RequestPlayCoverScreenRecordingPermission();
+
+        Assert.Equal(1, permission.RequestCallCount);
+        Assert.Equal(0, permission.OpenSettingsCallCount);
+        Assert.True(state.PlayCoverScreenRecordingPermissionGranted);
+        Assert.True(state.PlayCoverScreenRecordingPermissionStatusIsSuccess);
+    }
+
+    [Fact]
     public void ConnectionGameSharedState_PlayCover_ShouldUsePlayToolsDefaultAddressCandidate()
     {
         var state = new ConnectionGameSharedStateViewModel
@@ -1449,6 +1541,39 @@ public sealed class SettingsModuleAK1FeatureTests
                 WarningConfirmReturn,
                 WarningConfirmReturn == DialogReturnSemantic.Confirm ? new WarningConfirmDialogPayload(true) : null,
                 "captured"));
+        }
+    }
+
+    private sealed class FakeMacScreenRecordingPermissionService : IMacScreenRecordingPermissionService
+    {
+        public bool IsSupported { get; init; }
+
+        public bool HasPermission { get; set; }
+
+        public bool RequestResult { get; init; }
+
+        public UiOperationResult OpenSettingsResult { get; init; } = UiOperationResult.Ok("opened");
+
+        public int RequestCallCount { get; private set; }
+
+        public int OpenSettingsCallCount { get; private set; }
+
+        public bool HasScreenRecordingPermission()
+        {
+            return HasPermission;
+        }
+
+        public bool RequestScreenRecordingPermission()
+        {
+            RequestCallCount++;
+            HasPermission = RequestResult;
+            return RequestResult;
+        }
+
+        public UiOperationResult OpenScreenRecordingSettings()
+        {
+            OpenSettingsCallCount++;
+            return OpenSettingsResult;
         }
     }
 

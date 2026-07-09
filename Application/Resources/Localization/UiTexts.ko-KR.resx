@@ -2882,6 +2882,21 @@ OF-1 스테이지가 개방되지 않은 경우에는 선택하지 마세요.</v
   <data name="Settings.Connect.PlayCover.Mode.SCK" xml:space="preserve">
     <value>시스템 화면 캡처</value>
   </data>
+  <data name="Settings.Connect.PlayCover.ScreenRecording.Granted" xml:space="preserve">
+    <value>화면 기록 권한이 켜져 있습니다</value>
+  </data>
+  <data name="Settings.Connect.PlayCover.ScreenRecording.Missing" xml:space="preserve">
+    <value>시스템 화면 캡처에는 화면 기록 권한이 필요합니다. MAAUnified에 권한을 허용하세요.</value>
+  </data>
+  <data name="Settings.Connect.PlayCover.ScreenRecording.OpenSettings" xml:space="preserve">
+    <value>화면 기록 권한 설정 열기</value>
+  </data>
+  <data name="Settings.Connect.PlayCover.ScreenRecording.SettingsOpened" xml:space="preserve">
+    <value>화면 기록 권한이 꺼져 있어 시스템 설정을 열었습니다. 권한을 허용한 뒤 다시 연결하세요.</value>
+  </data>
+  <data name="Settings.Connect.PlayCover.ScreenRecording.OpenSettingsFailed" xml:space="preserve">
+    <value>화면 기록 권한 설정을 열지 못했습니다: {0}</value>
+  </data>
   <data name="StartUp.Option.ConnectConfig.GeneralWithoutScreencapErr" xml:space="preserve">
     <value>일반 모드 (예외 출력 차단)</value>
   </data>

@@ -78,6 +78,7 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
     private string _testLinkInfo = string.Empty;
     private TestLinkInfoSeverity _testLinkInfoSeverity;
     private string _screencapCost = string.Empty;
+    private string _playCoverScreenRecordingPermissionStatusOverride = string.Empty;
     private long? _lastScreencapCostMin;
     private long? _lastScreencapCostAvg;
     private long? _lastScreencapCostMax;
@@ -89,9 +90,12 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
     private IReadOnlyList<ConnectionGameOptionItem> _attachWindowScreencapOptions = [];
     private IReadOnlyList<ConnectionGameOptionItem> _attachWindowInputOptions = [];
     private readonly ObservableCollection<string> _connectAddressHistory = [];
+    private readonly IMacScreenRecordingPermissionService _macScreenRecordingPermissionService;
 
-    public ConnectionGameSharedStateViewModel()
+    public ConnectionGameSharedStateViewModel(
+        IMacScreenRecordingPermissionService? macScreenRecordingPermissionService = null)
     {
+        _macScreenRecordingPermissionService = macScreenRecordingPermissionService ?? new MacScreenRecordingPermissionService();
         RootTexts.Language = _language;
         RebuildOptions();
         ScreencapCost = BuildCurrentScreencapCostText();
@@ -292,6 +296,7 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
         OnPropertyChanged(nameof(MacUseBundledAdbText));
         RebuildOptions();
         RefreshLocalizedConnectTexts();
+        NotifyPlayCoverScreenRecordingPermissionChanged();
     }
 
     public string ConnectAddress
@@ -332,6 +337,8 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
             OnPropertyChanged(nameof(IsPlayCoverConnection));
             OnPropertyChanged(nameof(ShowConnectAddressField));
             OnPropertyChanged(nameof(ShowPlayCoverScreencapMode));
+            _playCoverScreenRecordingPermissionStatusOverride = string.Empty;
+            NotifyPlayCoverScreenRecordingPermissionChanged();
             OnPropertyChanged(nameof(EffectiveConnectConfig));
             OnPropertyChanged(nameof(IsMuMuEmulator12Mode));
             OnPropertyChanged(nameof(IsLdPlayerMode));
@@ -428,6 +435,52 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
 
     public bool ShowPlayCoverScreencapMode => IsPlayCoverConnection;
 
+    public bool ShowPlayCoverScreenRecordingPermission =>
+        _macScreenRecordingPermissionService.IsSupported
+        && IsPlayCoverConnection
+        && string.Equals(
+            NormalizePlayCoverScreencapModeAlias(PlayCoverScreencapMode),
+            "MacSCK",
+            StringComparison.Ordinal);
+
+    public bool PlayCoverScreenRecordingPermissionGranted =>
+        ShowPlayCoverScreenRecordingPermission
+        && _macScreenRecordingPermissionService.HasScreenRecordingPermission();
+
+    public bool PlayCoverScreenRecordingPermissionMissing =>
+        ShowPlayCoverScreenRecordingPermission
+        && !PlayCoverScreenRecordingPermissionGranted;
+
+    public bool ShowPlayCoverScreenRecordingPermissionAction =>
+        PlayCoverScreenRecordingPermissionMissing;
+
+    public bool PlayCoverScreenRecordingPermissionStatusIsSuccess =>
+        ShowPlayCoverScreenRecordingPermission
+        && PlayCoverScreenRecordingPermissionGranted;
+
+    public bool PlayCoverScreenRecordingPermissionStatusIsWarning =>
+        PlayCoverScreenRecordingPermissionMissing;
+
+    public string PlayCoverScreenRecordingPermissionStatusText
+    {
+        get
+        {
+            if (!ShowPlayCoverScreenRecordingPermission)
+            {
+                return string.Empty;
+            }
+
+            if (PlayCoverScreenRecordingPermissionGranted)
+            {
+                return RootTexts["Settings.Connect.PlayCover.ScreenRecording.Granted"];
+            }
+
+            return string.IsNullOrWhiteSpace(_playCoverScreenRecordingPermissionStatusOverride)
+                ? RootTexts["Settings.Connect.PlayCover.ScreenRecording.Missing"]
+                : _playCoverScreenRecordingPermissionStatusOverride;
+        }
+    }
+
     public string EffectiveConnectConfig =>
         PlayCoverConnectConfigResolver.ResolveEffectiveConnectConfig(ConnectConfig, PlayCoverScreencapMode);
 
@@ -503,6 +556,8 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
                 OnPropertyChanged(nameof(SelectedPlayCoverScreencapModeOption));
                 OnPropertyChanged(nameof(SelectedPlayCoverScreencapModeValue));
                 OnPropertyChanged(nameof(EffectiveConnectConfig));
+                _playCoverScreenRecordingPermissionStatusOverride = string.Empty;
+                NotifyPlayCoverScreenRecordingPermissionChanged();
             }
         }
     }
@@ -1009,6 +1064,31 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
         }
     }
 
+    public void RequestPlayCoverScreenRecordingPermission()
+    {
+        if (!ShowPlayCoverScreenRecordingPermission)
+        {
+            return;
+        }
+
+        _playCoverScreenRecordingPermissionStatusOverride = string.Empty;
+        if (_macScreenRecordingPermissionService.HasScreenRecordingPermission()
+            || _macScreenRecordingPermissionService.RequestScreenRecordingPermission())
+        {
+            NotifyPlayCoverScreenRecordingPermissionChanged();
+            return;
+        }
+
+        var openResult = _macScreenRecordingPermissionService.OpenScreenRecordingSettings();
+        _playCoverScreenRecordingPermissionStatusOverride = openResult.Success
+            ? RootTexts["Settings.Connect.PlayCover.ScreenRecording.SettingsOpened"]
+            : string.Format(
+                CultureInfo.CurrentCulture,
+                RootTexts["Settings.Connect.PlayCover.ScreenRecording.OpenSettingsFailed"],
+                openResult.Message);
+        NotifyPlayCoverScreenRecordingPermissionChanged();
+    }
+
     public bool AutoDetectMuMu12EmulatorPathIfNeeded()
     {
         if (!MuMu12ExtrasEnabled || !string.IsNullOrWhiteSpace(MuMu12EmulatorPath))
@@ -1244,6 +1324,18 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
         OnPropertyChanged(nameof(SelectedAttachWindowMouseValue));
         OnPropertyChanged(nameof(SelectedAttachWindowKeyboardOption));
         OnPropertyChanged(nameof(SelectedAttachWindowKeyboardValue));
+        NotifyPlayCoverScreenRecordingPermissionChanged();
+    }
+
+    private void NotifyPlayCoverScreenRecordingPermissionChanged()
+    {
+        OnPropertyChanged(nameof(ShowPlayCoverScreenRecordingPermission));
+        OnPropertyChanged(nameof(PlayCoverScreenRecordingPermissionGranted));
+        OnPropertyChanged(nameof(PlayCoverScreenRecordingPermissionMissing));
+        OnPropertyChanged(nameof(ShowPlayCoverScreenRecordingPermissionAction));
+        OnPropertyChanged(nameof(PlayCoverScreenRecordingPermissionStatusIsSuccess));
+        OnPropertyChanged(nameof(PlayCoverScreenRecordingPermissionStatusIsWarning));
+        OnPropertyChanged(nameof(PlayCoverScreenRecordingPermissionStatusText));
     }
 
     private static ConnectionGameOptionItem? ResolveSelectedOption(

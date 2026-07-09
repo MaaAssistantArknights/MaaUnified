@@ -284,6 +284,7 @@ public sealed class StartUpTaskModuleViewModel : TypedTaskModuleViewModelBase<St
             OnPropertyChanged(nameof(SelectedConnectConfigOption));
             OnPropertyChanged(nameof(SelectedConnectConfigValue));
             OnPropertyChanged(nameof(ShowPlayCoverScreencapMode));
+            NotifyPlayCoverScreenRecordingPermissionChanged();
             OnPropertyChanged(nameof(IsAdbConnectionMode));
             OnPropertyChanged(nameof(ShowMacBundledAdbControls));
             OnPropertyChanged(nameof(ShowManualAdbPathControls));
@@ -381,10 +382,25 @@ public sealed class StartUpTaskModuleViewModel : TypedTaskModuleViewModelBase<St
             OnPropertyChanged();
             OnPropertyChanged(nameof(SelectedPlayCoverScreencapModeOption));
             OnPropertyChanged(nameof(SelectedPlayCoverScreencapModeValue));
+            NotifyPlayCoverScreenRecordingPermissionChanged();
         }
     }
 
     public bool ShowPlayCoverScreencapMode => _sharedState.ShowPlayCoverScreencapMode;
+
+    public bool ShowPlayCoverScreenRecordingPermission => _sharedState.ShowPlayCoverScreenRecordingPermission;
+
+    public bool PlayCoverScreenRecordingPermissionStatusIsSuccess =>
+        _sharedState.PlayCoverScreenRecordingPermissionStatusIsSuccess;
+
+    public bool PlayCoverScreenRecordingPermissionStatusIsWarning =>
+        _sharedState.PlayCoverScreenRecordingPermissionStatusIsWarning;
+
+    public bool ShowPlayCoverScreenRecordingPermissionAction =>
+        _sharedState.ShowPlayCoverScreenRecordingPermissionAction;
+
+    public string PlayCoverScreenRecordingPermissionStatusText =>
+        _sharedState.PlayCoverScreenRecordingPermissionStatusText;
 
     public bool IsAdbConnectionMode => _sharedState.IsAdbConnectionMode;
 
@@ -492,6 +508,11 @@ public sealed class StartUpTaskModuleViewModel : TypedTaskModuleViewModelBase<St
         _sharedState.RemoveAddressFromHistory(address);
     }
 
+    public void RequestPlayCoverScreenRecordingPermission()
+    {
+        _sharedState.RequestPlayCoverScreenRecordingPermission();
+    }
+
     protected override Task<UiOperationResult<StartUpTaskParamsDto>> LoadDtoAsync(int index, CancellationToken cancellationToken)
     {
         return Runtime.TaskQueueFeatureService.GetStartUpParamsAsync(index, cancellationToken);
@@ -542,6 +563,7 @@ public sealed class StartUpTaskModuleViewModel : TypedTaskModuleViewModelBase<St
             return;
         }
 
+        var shouldMarkDirty = true;
         switch (e.PropertyName)
         {
             case nameof(ConnectionGameSharedStateViewModel.ConnectConfig):
@@ -550,6 +572,7 @@ public sealed class StartUpTaskModuleViewModel : TypedTaskModuleViewModelBase<St
                 OnPropertyChanged(nameof(SelectedConnectConfigValue));
                 OnPropertyChanged(nameof(CanEditStartGameEnabled));
                 OnPropertyChanged(nameof(ShowPlayCoverScreencapMode));
+                NotifyPlayCoverScreenRecordingPermissionChanged();
                 OnPropertyChanged(nameof(IsAdbConnectionMode));
                 OnPropertyChanged(nameof(ShowMacBundledAdbControls));
                 OnPropertyChanged(nameof(ShowManualAdbPathControls));
@@ -592,6 +615,17 @@ public sealed class StartUpTaskModuleViewModel : TypedTaskModuleViewModelBase<St
                 OnPropertyChanged(nameof(PlayCoverScreencapMode));
                 OnPropertyChanged(nameof(SelectedPlayCoverScreencapModeOption));
                 OnPropertyChanged(nameof(SelectedPlayCoverScreencapModeValue));
+                NotifyPlayCoverScreenRecordingPermissionChanged();
+                break;
+            case nameof(ConnectionGameSharedStateViewModel.ShowPlayCoverScreenRecordingPermission):
+            case nameof(ConnectionGameSharedStateViewModel.PlayCoverScreenRecordingPermissionGranted):
+            case nameof(ConnectionGameSharedStateViewModel.PlayCoverScreenRecordingPermissionMissing):
+            case nameof(ConnectionGameSharedStateViewModel.ShowPlayCoverScreenRecordingPermissionAction):
+            case nameof(ConnectionGameSharedStateViewModel.PlayCoverScreenRecordingPermissionStatusIsSuccess):
+            case nameof(ConnectionGameSharedStateViewModel.PlayCoverScreenRecordingPermissionStatusIsWarning):
+            case nameof(ConnectionGameSharedStateViewModel.PlayCoverScreenRecordingPermissionStatusText):
+                NotifyPlayCoverScreenRecordingPermissionChanged();
+                shouldMarkDirty = false;
                 break;
             case nameof(ConnectionGameSharedStateViewModel.AutoDetect):
                 OnPropertyChanged(nameof(AutoDetectConnection));
@@ -613,7 +647,7 @@ public sealed class StartUpTaskModuleViewModel : TypedTaskModuleViewModelBase<St
                 break;
         }
 
-        if (!IsApplyingDto && IsTaskBound)
+        if (shouldMarkDirty && !IsApplyingDto && IsTaskBound)
         {
             IsDirty = true;
         }
@@ -655,9 +689,19 @@ public sealed class StartUpTaskModuleViewModel : TypedTaskModuleViewModelBase<St
         OnPropertyChanged(nameof(SelectedTouchModeValue));
         OnPropertyChanged(nameof(SelectedPlayCoverScreencapModeOption));
         OnPropertyChanged(nameof(SelectedPlayCoverScreencapModeValue));
+        NotifyPlayCoverScreenRecordingPermissionChanged();
         OnPropertyChanged(nameof(SelectedAttachWindowScreencapOption));
         OnPropertyChanged(nameof(SelectedAttachWindowMouseOption));
         OnPropertyChanged(nameof(SelectedAttachWindowKeyboardOption));
+    }
+
+    private void NotifyPlayCoverScreenRecordingPermissionChanged()
+    {
+        OnPropertyChanged(nameof(ShowPlayCoverScreenRecordingPermission));
+        OnPropertyChanged(nameof(PlayCoverScreenRecordingPermissionStatusIsSuccess));
+        OnPropertyChanged(nameof(PlayCoverScreenRecordingPermissionStatusIsWarning));
+        OnPropertyChanged(nameof(ShowPlayCoverScreenRecordingPermissionAction));
+        OnPropertyChanged(nameof(PlayCoverScreenRecordingPermissionStatusText));
     }
 
     private IReadOnlyList<TaskModuleOption> BuildOptions(

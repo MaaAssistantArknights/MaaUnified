@@ -105,6 +105,11 @@ public partial class ConnectSettingsView : UserControl
         VM.ConnectAddress = e.Text;
     }
 
+    private void OnRequestPlayCoverScreenRecordingPermissionClick(object? sender, RoutedEventArgs e)
+    {
+        VM?.RequestPlayCoverScreenRecordingPermission();
+    }
+
     private void OnMuMuExtrasChecked(object? sender, RoutedEventArgs e)
     {
         var vm = VM;

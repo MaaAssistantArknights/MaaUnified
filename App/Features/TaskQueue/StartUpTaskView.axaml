@@ -105,6 +105,21 @@
           </controls:SettingsInlineRow>
         </Border>
 
+        <Border Classes="app-surface app-card"
+                IsVisible="{Binding ShowPlayCoverScreenRecordingPermission}">
+          <controls:AdaptiveSpacingStackPanel Classes="startup-card-content">
+            <TextBlock Classes="startup-field-label long-wrap"
+                       Classes.state-warning="{Binding PlayCoverScreenRecordingPermissionStatusIsWarning}"
+                       Classes.state-success="{Binding PlayCoverScreenRecordingPermissionStatusIsSuccess}"
+                       Text="{Binding PlayCoverScreenRecordingPermissionStatusText}" />
+            <Button Classes="app-button app-secondary"
+                    HorizontalAlignment="Left"
+                    Content="{Binding Texts[Settings.Connect.PlayCover.ScreenRecording.OpenSettings]}"
+                    IsVisible="{Binding ShowPlayCoverScreenRecordingPermissionAction}"
+                    Click="OnRequestPlayCoverScreenRecordingPermissionClick" />
+          </controls:AdaptiveSpacingStackPanel>
+        </Border>
+
         <Border Classes="app-surface app-card">
           <controls:SettingsInlineRow Classes="startup-card-content"
                                       FieldWidth="{DynamicResource MAA.Size.Settings.FieldInputWidth}"
