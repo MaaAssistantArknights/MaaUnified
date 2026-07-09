@@ -888,7 +888,8 @@
           </ContentControl.ContentTemplate>
         </ContentControl>
 
-        <ScrollViewer Grid.Row="2"
+        <ScrollViewer x:Name="LogScrollViewer"
+                      Grid.Row="2"
                       Margin="0,2,0,0"
                       HorizontalScrollBarVisibility="Disabled">
           <ItemsControl Margin="0,4,0,8"
@@ -896,10 +897,10 @@
             <ItemsControl.ItemTemplate>
               <DataTemplate>
                 <Border Classes="app-surface app-card task-queue-log-card">
-                  <Grid ColumnDefinitions="3,80,*,80">
+                  <Grid ColumnDefinitions="3,80,*,Auto">
                     <Border Classes="task-queue-log-accent" />
                     <Grid Grid.Column="3"
-                          Margin="0,0,10,0"
+                          Width="80"
                           VerticalAlignment="Center"
                           IsVisible="{Binding ShowThumbnail}">
                       <Image x:Name="LogThumbnail"

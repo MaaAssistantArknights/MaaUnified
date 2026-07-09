@@ -532,6 +532,26 @@ public sealed class TaskQueueG2FeatureTests
     }
 
     [Fact]
+    public async Task Callback_EnterFacility_ShouldLocalizeFacilityNameLikeWpf()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Infrast", "base-a")).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        vm.SetLanguage("zh-cn");
+
+        await InvokeCallbackAsync(vm, new CoreCallbackEvent(
+            10002,
+            "SubTaskExtraInfo",
+            """{"task_chain":"Infrast","task_index":0,"what":"EnterFacility","details":{"facility":"Mfg","index":0}}""",
+            DateTimeOffset.UtcNow));
+
+        var content = Assert.Single(vm.LogCards).PrimaryContent;
+        Assert.Equal("当前设施: 制造站 01", content);
+    }
+
+    [Fact]
     public async Task AppendSystemLog_WithTimestampedMultilineText_ShouldCreateSingleCard()
     {
         await using var fixture = await TestFixture.CreateAsync();

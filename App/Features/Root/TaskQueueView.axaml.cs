@@ -8,6 +8,7 @@ using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using System.Collections.Specialized;
 using System.ComponentModel;
 using MAAUnified.App.Controls;
 using MAAUnified.App.ViewModels;
@@ -36,6 +37,7 @@ public partial class TaskQueueView : UserControl
     private static readonly TimeSpan LogThumbnailPreviewFadeDuration = TimeSpan.FromSeconds(0.5);
 
     private readonly Dictionary<Control, LogThumbnailPreviewState> _logThumbnailPreviewStates = [];
+    private readonly HashSet<TaskQueueLogCardViewModel> _observedLogCards = [];
     private readonly AppSlidingSegmentController _settingsModeSlider;
     private readonly TranslateTransform _taskSelectionIndicatorTransform = new();
     private TaskQueuePageViewModel? _observedVm;
@@ -49,6 +51,9 @@ public partial class TaskQueueView : UserControl
     private bool _taskRowDragInProgress;
     private bool _taskSelectionIndicatorUpdateQueued;
     private bool _taskSelectionIndicatorPendingAnimation;
+    private bool _logAutoFollowEnd = true;
+    private bool _logScrollToEndQueued;
+    private bool _updatingLogScrollOffset;
     private double _taskSelectionIndicatorLeft = double.NaN;
     private double _taskSelectionIndicatorTop = double.NaN;
     private Control? _openTaskQueuePopupOwner;
@@ -67,6 +72,7 @@ public partial class TaskQueueView : UserControl
         TaskListBox.ContainerPrepared += OnTaskListContainerPrepared;
         TaskListBox.ContainerClearing += OnTaskListContainerClearing;
         TaskListBox.SizeChanged += OnTaskListMetricChanged;
+        LogScrollViewer.ScrollChanged += OnLogScrollChanged;
         AttachedToVisualTree += OnAttachedToVisualTree;
         DataContextChanged += OnDataContextChanged;
         DetachedFromVisualTree += OnDetachedFromVisualTree;
@@ -235,12 +241,17 @@ public partial class TaskQueueView : UserControl
         if (_observedVm is not null)
         {
             _observedVm.PropertyChanged -= OnVmPropertyChanged;
+            DetachAllLogCards();
+            _observedVm.LogCards.CollectionChanged -= OnLogCardsCollectionChanged;
         }
 
         _observedVm = nextVm;
         if (_observedVm is not null)
         {
             _observedVm.PropertyChanged += OnVmPropertyChanged;
+            _observedVm.LogCards.CollectionChanged += OnLogCardsCollectionChanged;
+            AttachLogCards(_observedVm.LogCards);
+            QueueLogScrollToEnd();
         }
     }
 
@@ -299,6 +310,129 @@ public partial class TaskQueueView : UserControl
     private void OnTaskListScrollChanged(object? sender, ScrollChangedEventArgs e)
     {
         QueueTaskSelectionIndicatorUpdate(animate: false);
+    }
+
+    private void OnLogScrollChanged(object? sender, ScrollChangedEventArgs e)
+    {
+        if (_updatingLogScrollOffset)
+        {
+            _logAutoFollowEnd = true;
+            return;
+        }
+
+        _logAutoFollowEnd = IsLogScrollAtEnd();
+    }
+
+    private void OnLogCardsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        var shouldFollowEnd = _logAutoFollowEnd || IsLogScrollAtEnd();
+
+        if (e.Action == NotifyCollectionChangedAction.Reset)
+        {
+            DetachAllLogCards();
+            AttachLogCards(_observedVm?.LogCards ?? []);
+        }
+
+        if (e.OldItems is not null)
+        {
+            foreach (var item in e.OldItems.OfType<TaskQueueLogCardViewModel>())
+            {
+                DetachLogCard(item);
+            }
+        }
+
+        if (e.NewItems is not null)
+        {
+            foreach (var item in e.NewItems.OfType<TaskQueueLogCardViewModel>())
+            {
+                AttachLogCard(item);
+            }
+        }
+
+        if (shouldFollowEnd)
+        {
+            QueueLogScrollToEnd();
+        }
+    }
+
+    private void OnLogCardItemsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (_logAutoFollowEnd || IsLogScrollAtEnd())
+        {
+            QueueLogScrollToEnd();
+        }
+    }
+
+    private void AttachLogCards(IEnumerable<TaskQueueLogCardViewModel> cards)
+    {
+        foreach (var card in cards)
+        {
+            AttachLogCard(card);
+        }
+    }
+
+    private void AttachLogCard(TaskQueueLogCardViewModel card)
+    {
+        if (_observedLogCards.Add(card))
+        {
+            card.Items.CollectionChanged += OnLogCardItemsCollectionChanged;
+        }
+    }
+
+    private void DetachLogCard(TaskQueueLogCardViewModel card)
+    {
+        if (_observedLogCards.Remove(card))
+        {
+            card.Items.CollectionChanged -= OnLogCardItemsCollectionChanged;
+        }
+    }
+
+    private void DetachAllLogCards()
+    {
+        foreach (var card in _observedLogCards)
+        {
+            card.Items.CollectionChanged -= OnLogCardItemsCollectionChanged;
+        }
+
+        _observedLogCards.Clear();
+    }
+
+    private bool IsLogScrollAtEnd()
+    {
+        var maxOffset = Math.Max(0d, LogScrollViewer.Extent.Height - LogScrollViewer.Viewport.Height);
+        return maxOffset <= 0d || LogScrollViewer.Offset.Y >= maxOffset - 1d;
+    }
+
+    private void QueueLogScrollToEnd()
+    {
+        _logAutoFollowEnd = true;
+        if (_logScrollToEndQueued)
+        {
+            return;
+        }
+
+        _logScrollToEndQueued = true;
+        Dispatcher.UIThread.Post(() =>
+        {
+            _logScrollToEndQueued = false;
+            ScrollLogToEnd();
+        }, DispatcherPriority.Background);
+    }
+
+    private void ScrollLogToEnd()
+    {
+        var maxOffset = Math.Max(0d, LogScrollViewer.Extent.Height - LogScrollViewer.Viewport.Height);
+        _updatingLogScrollOffset = true;
+        try
+        {
+            LogScrollViewer.Offset = new Vector(LogScrollViewer.Offset.X, maxOffset);
+        }
+        finally
+        {
+            _updatingLogScrollOffset = false;
+        }
+
+        _logAutoFollowEnd = true;
     }
 
     private void OnOpenButtonContextMenuClick(object? sender, RoutedEventArgs e)

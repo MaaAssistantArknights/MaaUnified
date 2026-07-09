@@ -5821,9 +5821,10 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         }
 
         var facility = GetStringValue(details, "facility") ?? string.Empty;
+        var facilityName = RootTexts.GetOrDefault(facility, facility);
         var index = (GetIntValue(details, "index") ?? -1) + 1;
         return new(
-            $"{GetRootText("ThisFacility", "Current Facility: ")}{facility} {index:D2}");
+            $"{GetRootText("ThisFacility", "Current Facility: ")}{facilityName} {index:D2}");
     }
 
     private TaskQueueCallbackUserLog? BuildRecruitTagsDetectedLog(JsonObject? details)
