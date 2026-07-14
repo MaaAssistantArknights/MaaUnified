@@ -8,7 +8,9 @@
     </Style>
 
     <Style Selector="Border.custom-settings-card">
-      <Setter Property="Padding" Value="14" />
+      <Setter Property="MaxWidth" Value="308" />
+      <Setter Property="HorizontalAlignment" Value="Left" />
+      <Setter Property="Padding" Value="12" />
     </Style>
 
     <Style Selector="StackPanel.custom-settings-card-content">
@@ -29,20 +31,17 @@
       <Border Classes="app-surface app-card custom-settings-card">
         <controls:AdaptiveSpacingStackPanel Classes="custom-settings-card-content">
           <TextBlock Classes="app-caption" Text="{Binding Texts[Custom.TaskNames]}" />
-          <controls:AppTextInput Width="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
+          <controls:AppTextInput Width="{DynamicResource MAA.Size.Settings.FieldWideWidth}"
                                  Classes="settings-input-block"
                                  AcceptsReturn="True"
                                  DismissFocusOnEnter="False"
-                                 Height="120"
+                                 Height="76"
+                                 MinHeight="0"
                                  Text="{Binding TaskNamesText, UpdateSourceTrigger=LostFocus}" />
-        </controls:AdaptiveSpacingStackPanel>
-      </Border>
-
-      <Border Classes="app-surface app-card custom-settings-card">
-        <controls:AdaptiveSpacingStackPanel Classes="custom-settings-card-content">
           <TextBlock Classes="app-caption" Text="{Binding Texts[Custom.TaskNamesPreview]}" />
-          <TextBlock MaxWidth="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
+          <TextBlock MaxWidth="{DynamicResource MAA.Size.Settings.FieldWideWidth}"
                      Classes="app-body"
+                     TextWrapping="Wrap"
                      Text="{Binding TaskNamesPreview}" />
         </controls:AdaptiveSpacingStackPanel>
       </Border>
@@ -54,15 +53,16 @@
                       IsVisible="{Binding HasValidationIssues}">
             <TextBlock Classes="app-body custom-settings-title"
                        Text="{Binding Texts[Common.ValidationIssues]}" />
-            <ListBox Width="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
-                     MaxHeight="96"
+            <ListBox Width="{DynamicResource MAA.Size.Settings.FieldWideWidth}"
+                     MaxHeight="72"
                      ItemsSource="{Binding ValidationMessages}" />
           </controls:AdaptiveSpacingStackPanel>
         </controls:AdaptiveSpacingStackPanel>
       </Border>
 
       <TextBlock Classes="settings-note settings-centered-text long-wrap"
-                 MaxWidth="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
+                 MaxWidth="308"
+                 HorizontalAlignment="Left"
                  Text="{Binding StatusMessage}" />
     </controls:AdaptiveSpacingStackPanel>
   </controls:AdaptiveSpacingStackPanel>

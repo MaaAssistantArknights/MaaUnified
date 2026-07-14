@@ -256,6 +256,57 @@ public sealed class ToolboxModuleO3FeatureTests
     }
 
     [Fact]
+    public async Task ApplyRuntimeCallback_TaskQueueOperBoxRuns_ShouldRefreshToolboxEveryTime()
+    {
+        await using var fixture = await ToolboxTestFixture.CreateAsync();
+        var vm = new ToolboxPageViewModel(fixture.Runtime, fixture.ConnectionState);
+        await vm.InitializeAsync();
+
+        ApplyExternalOperBoxRun(vm, "char_003_kalts", "凯尔希");
+        await WaitForSettingAsync(fixture, LegacyConfigurationKeys.OperBoxData, expectedSubstring: "char_003_kalts");
+        Assert.Equal("char_003_kalts", Assert.Single(vm.OperBoxHaveList).Id);
+
+        ApplyExternalOperBoxRun(vm, "char_102_texas", "德克萨斯");
+        await WaitForSettingAsync(fixture, LegacyConfigurationKeys.OperBoxData, expectedSubstring: "char_102_texas");
+
+        var oper = Assert.Single(vm.OperBoxHaveList);
+        Assert.Equal("char_102_texas", oper.Id);
+        Assert.DoesNotContain(vm.OperBoxHaveList, item => item.Id == "char_003_kalts");
+    }
+
+    [Fact]
+    public async Task ApplyRuntimeCallback_TaskQueueDepotRun_ShouldRefreshToolboxWithoutToolboxOwner()
+    {
+        await using var fixture = await ToolboxTestFixture.CreateAsync();
+        var vm = new ToolboxPageViewModel(fixture.Runtime, fixture.ConnectionState);
+        await vm.InitializeAsync();
+
+        vm.ApplyRuntimeCallback(CreateCallback(
+            "TaskChainStart",
+            new JsonObject
+            {
+                ["task_chain"] = "Depot",
+            }));
+        vm.ApplyRuntimeCallback(CreateCallback(
+            "SubTaskExtraInfo",
+            new JsonObject
+            {
+                ["task_chain"] = "Depot",
+                ["what"] = "DepotResult",
+                ["details"] = new JsonObject
+                {
+                    ["done"] = true,
+                    ["data"] = "{\"2001\":9}",
+                },
+            }));
+
+        var depotItem = Assert.Single(vm.DepotResult);
+        Assert.Equal("2001", depotItem.Id);
+        Assert.Equal(9, depotItem.Count);
+        await WaitForSettingAsync(fixture, LegacyConfigurationKeys.DepotResult, expectedSubstring: "2001");
+    }
+
+    [Fact]
     public async Task ApplyRuntimeCallback_DepotDone_ShouldUseSpecificDepotGroupTitles()
     {
         await using var fixture = await ToolboxTestFixture.CreateAsync();
@@ -560,6 +611,39 @@ public sealed class ToolboxModuleO3FeatureTests
     private static CoreCallbackEvent CreateCallback(string msgName, JsonObject? payload = null)
     {
         return new CoreCallbackEvent(0, msgName, (payload ?? new JsonObject()).ToJsonString(), DateTimeOffset.Now);
+    }
+
+    private static void ApplyExternalOperBoxRun(ToolboxPageViewModel vm, string id, string name)
+    {
+        vm.ApplyRuntimeCallback(CreateCallback(
+            "TaskChainStart",
+            new JsonObject
+            {
+                ["task_chain"] = "OperBox",
+            }));
+        vm.ApplyRuntimeCallback(CreateCallback(
+            "SubTaskExtraInfo",
+            new JsonObject
+            {
+                ["task_chain"] = "OperBox",
+                ["what"] = "OperBoxResult",
+                ["details"] = new JsonObject
+                {
+                    ["own_opers"] = new JsonArray
+                    {
+                        new JsonObject
+                        {
+                            ["id"] = id,
+                            ["name"] = name,
+                            ["rarity"] = 6,
+                            ["elite"] = 2,
+                            ["level"] = 90,
+                            ["potential"] = 1,
+                        },
+                    },
+                    ["done"] = true,
+                },
+            }));
     }
 
     private static string ReadAdvancedView(string root, string fileName)

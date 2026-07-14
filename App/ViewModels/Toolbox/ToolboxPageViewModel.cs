@@ -1501,16 +1501,20 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
     internal void ApplyRuntimeCallback(SessionCallbackEnvelope callbackEnvelope)
     {
         var callback = callbackEnvelope.Callback;
-        var payload = callbackEnvelope.Payload;
         if (!string.IsNullOrWhiteSpace(callbackEnvelope.ParseError))
         {
             Runtime.LogService.Warn(
                 $"Toolbox callback payload parse failed: msgName={callback.MsgName}; msgId={callback.MsgId}; error={callbackEnvelope.ParseError}");
         }
 
+        if (string.Equals(callback.MsgName, "TaskChainStart", StringComparison.OrdinalIgnoreCase))
+        {
+            PrepareExternalRecognitionForStart(callbackEnvelope.TaskChain);
+        }
+
         if (string.Equals(callback.MsgName, "SubTaskExtraInfo", StringComparison.OrdinalIgnoreCase))
         {
-            HandleSubTaskExtraInfo(payload);
+            HandleSubTaskExtraInfo(callbackEnvelope);
             return;
         }
 
@@ -2253,32 +2257,41 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         candidates.Add(normalized);
     }
 
-    private void HandleSubTaskExtraInfo(JsonObject? payload)
+    private void PrepareExternalRecognitionForStart(string? taskChain)
     {
+        if (Runtime.SessionService.IsRunOwner(ToolboxRunOwner) || _activeTool is not null)
+        {
+            return;
+        }
+
+        if (string.Equals(taskChain, OperBoxTaskChain, StringComparison.OrdinalIgnoreCase))
+        {
+            PrepareOperBoxForStart();
+            return;
+        }
+
+        if (string.Equals(taskChain, DepotTaskChain, StringComparison.OrdinalIgnoreCase))
+        {
+            PrepareDepotForStart();
+            LastDepotSyncTime = null;
+        }
+    }
+
+    private void HandleSubTaskExtraInfo(SessionCallbackEnvelope callback)
+    {
+        var payload = callback.Payload;
         if (payload is null)
         {
             return;
         }
 
-        var taskChain = ReadString(payload, "taskchain");
-        var what = ReadString(payload, "what");
+        var taskChain = callback.TaskChain;
+        var what = callback.What ?? string.Empty;
         var details = payload["details"] as JsonObject;
 
         if (string.Equals(what, "StageDrops", StringComparison.OrdinalIgnoreCase) && details is not null)
         {
             UpdateDepotFromDrops(details);
-        }
-
-        if (!Runtime.SessionService.IsRunOwner(ToolboxRunOwner) && _activeTool is null)
-        {
-            return;
-        }
-
-        if (string.Equals(taskChain, RecruitTaskChain, StringComparison.OrdinalIgnoreCase))
-        {
-            HandleRecruitCallback(what, details);
-            TryCompleteRecognitionToolFromSubTask(ToolboxToolKind.Recruit, what, details);
-            return;
         }
 
         if (string.Equals(taskChain, DepotTaskChain, StringComparison.OrdinalIgnoreCase) && details is not null)
@@ -2292,6 +2305,18 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         {
             ApplyOperBoxRecognition(details);
             TryCompleteRecognitionToolFromSubTask(ToolboxToolKind.OperBox, what, details);
+            return;
+        }
+
+        if (!Runtime.SessionService.IsRunOwner(ToolboxRunOwner) && _activeTool is null)
+        {
+            return;
+        }
+
+        if (string.Equals(taskChain, RecruitTaskChain, StringComparison.OrdinalIgnoreCase))
+        {
+            HandleRecruitCallback(what, details);
+            TryCompleteRecognitionToolFromSubTask(ToolboxToolKind.Recruit, what, details);
         }
     }
 

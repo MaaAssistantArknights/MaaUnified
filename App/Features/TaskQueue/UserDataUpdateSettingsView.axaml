@@ -20,34 +20,28 @@
   </UserControl.Styles>
 
   <controls:AdaptiveSpacingStackPanel Margin="4" Classes="user-data-update-content">
-    <controls:AdaptiveSpacingStackPanel Classes="user-data-update-content">
-      <Border Classes="app-surface app-card">
-        <controls:AdaptiveSpacingStackPanel Classes="user-data-update-card-content">
-          <CheckBox Classes="app-checkbox"
-                    Content="{Binding UpdateOperBoxText}"
-                    IsChecked="{Binding UpdateOperBox}" />
-          <TextBlock MaxWidth="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
-                     Classes="app-caption"
-                     Text="{Binding LastOperBoxSyncDisplayText}"
-                     IsVisible="{Binding HasLastOperBoxSyncTime}" />
-        </controls:AdaptiveSpacingStackPanel>
-      </Border>
-
-      <Border Classes="app-surface app-card">
-        <controls:AdaptiveSpacingStackPanel Classes="user-data-update-card-content">
-          <CheckBox Classes="app-checkbox"
-                    Content="{Binding UpdateDepotText}"
-                    IsChecked="{Binding UpdateDepot}" />
-          <TextBlock MaxWidth="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
-                     Classes="app-caption"
-                     Text="{Binding LastDepotSyncDisplayText}"
-                     IsVisible="{Binding HasLastDepotSyncTime}" />
-        </controls:AdaptiveSpacingStackPanel>
-      </Border>
-
-      <Border Classes="app-surface app-card">
-        <controls:SettingsInlineRow Classes="user-data-update-card-content"
-                                    FieldWidth="{DynamicResource MAA.Size.Settings.FieldWideWidth}">
+    <Border Classes="app-surface app-card">
+      <controls:AdaptiveSpacingStackPanel Classes="user-data-update-card-content">
+        <CheckBox Classes="app-checkbox"
+                  Content="{Binding UpdateOperBoxText}"
+                  IsChecked="{Binding UpdateOperBox}" />
+        <TextBlock MaxWidth="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
+                   Margin="24,0,0,4"
+                   Classes="app-caption"
+                   Text="{Binding LastOperBoxSyncDisplayText}"
+                   IsVisible="{Binding HasLastOperBoxSyncTime}" />
+        <CheckBox Classes="app-checkbox"
+                  Content="{Binding UpdateDepotText}"
+                  IsChecked="{Binding UpdateDepot}" />
+        <TextBlock MaxWidth="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
+                   Margin="24,0,0,4"
+                   Classes="app-caption"
+                   Text="{Binding LastDepotSyncDisplayText}"
+                   IsVisible="{Binding HasLastDepotSyncTime}" />
+        <Border Height="1"
+                Margin="0,2"
+                Background="{DynamicResource MAA.Brush.App.Border.Card}" />
+        <controls:SettingsInlineRow FieldWidth="{DynamicResource MAA.Size.Settings.FieldNarrowWidth}">
           <TextBlock Classes="app-body user-data-update-card-title"
                      Text="{Binding TriggerIntervalText}" />
           <controls:AppSelect ItemsSource="{Binding TriggerIntervalOptions}"
@@ -60,7 +54,7 @@
             </controls:AppSelect.ItemTemplate>
           </controls:AppSelect>
         </controls:SettingsInlineRow>
-      </Border>
-    </controls:AdaptiveSpacingStackPanel>
+      </controls:AdaptiveSpacingStackPanel>
+    </Border>
   </controls:AdaptiveSpacingStackPanel>
 </UserControl>

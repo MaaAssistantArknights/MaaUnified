@@ -1,3 +1,5 @@
+using MAAUnified.App.ViewModels.TaskQueue;
+
 namespace MAAUnified.Tests;
 
 public sealed class RootViewStructureContractTests
@@ -478,9 +480,65 @@ public sealed class RootViewStructureContractTests
         Assert.Contains("MAA.App.Interaction.FloatingMenuItemMinHeight", interactionStyles, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void TaskQueueView_AddMenu_ShouldMatchWpfReleaseTaskTypes()
+    {
+        var root = GetMaaUnifiedRoot();
+        var codeBehind = File.ReadAllText(Path.Combine(root, "App", "Features", "Root", "TaskQueueView.axaml.cs"));
+
+        Assert.Contains("TaskType: \"UserDataUpdate\"", codeBehind, StringComparison.Ordinal);
+        Assert.DoesNotContain("TaskType: \"SingleStep\"", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("TaskType: \"Custom\", IsVisible: VM.ShowDebugTask", codeBehind, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TaskQueueView_DebugTaskVisibility_ShouldMatchWpfRules()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "maa-unified-debug-task-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            Assert.False(TaskQueuePageViewModel.ShouldShowDebugTask(root, isDebugBuild: false));
+            Assert.True(TaskQueuePageViewModel.ShouldShowDebugTask(root, isDebugBuild: true));
+
+            File.WriteAllText(Path.Combine(root, "DEBUG"), string.Empty);
+            Assert.True(TaskQueuePageViewModel.ShouldShowDebugTask(root, isDebugBuild: false));
+
+            File.Delete(Path.Combine(root, "DEBUG"));
+            File.WriteAllText(Path.Combine(root, "DEBUG.txt"), string.Empty);
+            Assert.True(TaskQueuePageViewModel.ShouldShowDebugTask(root, isDebugBuild: false));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void TaskQueueDebugSettingsViews_ShouldKeepCompactInputBounds()
+    {
+        var root = GetMaaUnifiedRoot();
+        var custom = File.ReadAllText(Path.Combine(root, "App", "Features", "TaskQueue", "CustomSettingsView.axaml"));
+        var singleStep = File.ReadAllText(Path.Combine(root, "App", "Features", "TaskQueue", "SingleStepSettingsView.axaml"));
+        var userData = File.ReadAllText(Path.Combine(root, "App", "Features", "TaskQueue", "UserDataUpdateSettingsView.axaml"));
+
+        Assert.Contains("FieldWideWidth", custom, StringComparison.Ordinal);
+        Assert.Contains("Height=\"76\"", custom, StringComparison.Ordinal);
+        Assert.Contains("MinHeight=\"0\"", custom, StringComparison.Ordinal);
+        Assert.Equal(2, CountOccurrences(custom, "custom-settings-card\">"));
+        Assert.Contains("FieldWideWidth", singleStep, StringComparison.Ordinal);
+        Assert.Contains("Height=\"76\"", singleStep, StringComparison.Ordinal);
+        Assert.Equal(1, CountOccurrences(userData, "Classes=\"app-surface app-card\""));
+    }
+
     private static string GetMaaUnifiedRoot()
     {
         return TestRepoLayout.GetMaaUnifiedRoot();
+    }
+
+    private static int CountOccurrences(string text, string value)
+    {
+        return text.Split(value, StringSplitOptions.None).Length - 1;
     }
 
 }

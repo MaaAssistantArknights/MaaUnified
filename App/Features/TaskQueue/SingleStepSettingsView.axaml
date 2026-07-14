@@ -45,11 +45,12 @@
         <TextBlock Classes="subtle"
                    Text="{Binding Texts[TaskQueue.SingleStep.Details]}"
                    TextWrapping="Wrap" />
-        <controls:AppTextInput Width="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
+        <controls:AppTextInput Width="{DynamicResource MAA.Size.Settings.FieldWideWidth}"
                                Classes="settings-input-block"
                                AcceptsReturn="True"
                                DismissFocusOnEnter="False"
-                               Height="120"
+                               Height="76"
+                               MinHeight="0"
                                Watermark="{Binding Texts[TaskQueue.SingleStep.DetailsPlaceholder]}"
                                Text="{Binding DetailsText, UpdateSourceTrigger=LostFocus}" />
       </controls:AdaptiveSpacingStackPanel>

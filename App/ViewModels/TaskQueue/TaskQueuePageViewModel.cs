@@ -956,6 +956,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
     public string AddTaskMenuCustomText => ResolveModuleDisplayName(TaskModuleTypes.Custom);
 
+    public bool ShowDebugTask => ResolveDebugTaskVisibility();
+
     public bool IsGeneralSettingsSelected
     {
         get => !_isAdvancedSettingsSelected;
@@ -966,6 +968,31 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 SetAdvancedSettingsSelected(false);
             }
         }
+    }
+
+    internal static bool ShouldShowDebugTask(string baseDirectory, bool isDebugBuild)
+    {
+        if (isDebugBuild)
+        {
+            return true;
+        }
+
+        return File.Exists(Path.Combine(baseDirectory, "DEBUG"))
+            || File.Exists(Path.Combine(baseDirectory, "DEBUG.txt"));
+    }
+
+    private static bool ResolveDebugTaskVisibility()
+    {
+        if (global::MAAUnified.Platform.MaaUnifiedBuildFlavor.ExposesDeveloperTools)
+        {
+            return true;
+        }
+
+        return ShouldShowDebugTask(
+                   global::MAAUnified.Compat.Runtime.RuntimeLayout.ResolveRuntimeBaseDirectory(),
+                   isDebugBuild: false)
+            || ShouldShowDebugTask(AppContext.BaseDirectory, isDebugBuild: false)
+            || ShouldShowDebugTask(Environment.CurrentDirectory, isDebugBuild: false);
     }
 
     public bool IsAdvancedSettingsSelected
