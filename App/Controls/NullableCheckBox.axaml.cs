@@ -1,6 +1,8 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Data;
+using Avalonia.Input;
+using MAAUnified.App.Infrastructure;
 
 namespace MAAUnified.App.Controls;
 
@@ -67,5 +69,16 @@ public partial class NullableCheckBox : UserControl
         {
             SettingsLabelWidthCoordinator.InvalidateNearestGroup(this);
         }
+    }
+
+    private void OnCheckBoxPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (sender is not Control control || !PointerPressedGestures.IsSecondaryClick(control, e))
+        {
+            return;
+        }
+
+        e.Handled = true;
+        IsChecked = IsChecked is null ? false : null;
     }
 }

@@ -2654,7 +2654,7 @@ public sealed class MainShellViewModel : ObservableObject
 
             foreach (var slot in SettingsPage.Timers.OrderBy(static slot => slot.Index))
             {
-                if (!slot.Enabled)
+                if (slot.Enabled == false)
                 {
                     continue;
                 }
@@ -2698,39 +2698,70 @@ public sealed class MainShellViewModel : ObservableObject
         string minuteKey,
         CancellationToken cancellationToken)
     {
-        CurrentSessionState = _runtime.SessionService.CurrentState;
-        var sessionRunning = CurrentSessionState is SessionState.Running or SessionState.Stopping;
-        var triggerMessage =
-            $"slot={slot.Index}; time={slot.Time}; minute={minuteKey}; session={CurrentSessionState}; force={SettingsPage.ForceScheduledStart}";
-        await RecordEventAsync("Timer.Schedule.Trigger", triggerMessage, cancellationToken);
-
-        if (sessionRunning && !SettingsPage.ForceScheduledStart)
+        var resetOneShot = slot.Enabled is null;
+        var resetOneShotAfterAttempt = false;
+        try
         {
-            await RecordEventAsync(
-                "Timer.Schedule.Skip",
-                $"slot={slot.Index}; reason=running-without-force",
-                cancellationToken);
-            return;
-        }
+            CurrentSessionState = _runtime.SessionService.CurrentState;
+            var sessionRunning = CurrentSessionState is SessionState.Running or SessionState.Stopping;
+            var triggerMessage =
+                $"slot={slot.Index}; time={slot.Time}; minute={minuteKey}; session={CurrentSessionState}; force={SettingsPage.ForceScheduledStart}";
+            await RecordEventAsync("Timer.Schedule.Trigger", triggerMessage, cancellationToken);
 
-        if (sessionRunning && SettingsPage.ForceScheduledStart)
-        {
-            if (SettingsPage.ShowWindowBeforeForceScheduledStart)
+            if (sessionRunning && !SettingsPage.ForceScheduledStart)
             {
-                await Dispatcher.UIThread.InvokeAsync(
-                    ShowAndActivateMainWindow,
-                    DispatcherPriority.Send,
+                await RecordEventAsync(
+                    "Timer.Schedule.Skip",
+                    $"slot={slot.Index}; reason=running-without-force",
                     cancellationToken);
-                PushGrowl("定时触发：强制执行前显示窗口。");
+                return;
             }
 
-            await StopAsync(cancellationToken, userInitiated: false);
-            CurrentSessionState = _runtime.SessionService.CurrentState;
-            if (CurrentSessionState is SessionState.Running or SessionState.Stopping)
+            resetOneShotAfterAttempt = true;
+
+            if (sessionRunning && SettingsPage.ForceScheduledStart)
             {
-                await RecordTimerScheduleErrorAsync(
-                    $"slot={slot.Index}; stop failed before force scheduled restart; lastError={LastError}",
-                    cancellationToken: cancellationToken);
+                if (SettingsPage.ShowWindowBeforeForceScheduledStart)
+                {
+                    await Dispatcher.UIThread.InvokeAsync(
+                        ShowAndActivateMainWindow,
+                        DispatcherPriority.Send,
+                        cancellationToken);
+                    PushGrowl("定时触发：强制执行前显示窗口。");
+                }
+
+                await StopAsync(cancellationToken, userInitiated: false);
+                CurrentSessionState = _runtime.SessionService.CurrentState;
+                if (CurrentSessionState is SessionState.Running or SessionState.Stopping)
+                {
+                    await RecordTimerScheduleErrorAsync(
+                        $"slot={slot.Index}; stop failed before force scheduled restart; lastError={LastError}",
+                        cancellationToken: cancellationToken);
+                    return;
+                }
+
+                if (!await SwitchTimerProfileIfNeededAsync(slot, cancellationToken))
+                {
+                    return;
+                }
+
+                await StartAsync(cancellationToken);
+                CurrentSessionState = _runtime.SessionService.CurrentState;
+                if (CurrentSessionState == SessionState.Running)
+                {
+                    _ = _runtime.AchievementTrackerService.AddProgressToGroup("ScheduleMaster");
+                    await RecordEventAsync(
+                        "Timer.Schedule.StopAndStart",
+                        $"slot={slot.Index}; profile={_runtime.ConfigurationService.CurrentConfig.CurrentProfile}",
+                        cancellationToken);
+                }
+                else
+                {
+                    await RecordTimerScheduleErrorAsync(
+                        $"slot={slot.Index}; start failed after forced stop; lastError={LastError}",
+                        cancellationToken: cancellationToken);
+                }
+
                 return;
             }
 
@@ -2745,40 +2776,24 @@ public sealed class MainShellViewModel : ObservableObject
             {
                 _ = _runtime.AchievementTrackerService.AddProgressToGroup("ScheduleMaster");
                 await RecordEventAsync(
-                    "Timer.Schedule.StopAndStart",
+                    "Timer.Schedule.Start",
                     $"slot={slot.Index}; profile={_runtime.ConfigurationService.CurrentConfig.CurrentProfile}",
                     cancellationToken);
+                return;
             }
-            else
+
+            await RecordTimerScheduleErrorAsync(
+                $"slot={slot.Index}; start failed; lastError={LastError}",
+                cancellationToken: cancellationToken);
+        }
+        finally
+        {
+            if (resetOneShotAfterAttempt && resetOneShot && slot.Enabled is null)
             {
-                await RecordTimerScheduleErrorAsync(
-                    $"slot={slot.Index}; start failed after forced stop; lastError={LastError}",
-                    cancellationToken: cancellationToken);
+                slot.Enabled = false;
+                await SettingsPage.SaveTimerSettingsAsync(cancellationToken);
             }
-
-            return;
         }
-
-        if (!await SwitchTimerProfileIfNeededAsync(slot, cancellationToken))
-        {
-            return;
-        }
-
-        await StartAsync(cancellationToken);
-        CurrentSessionState = _runtime.SessionService.CurrentState;
-        if (CurrentSessionState == SessionState.Running)
-        {
-            _ = _runtime.AchievementTrackerService.AddProgressToGroup("ScheduleMaster");
-            await RecordEventAsync(
-                "Timer.Schedule.Start",
-                $"slot={slot.Index}; profile={_runtime.ConfigurationService.CurrentConfig.CurrentProfile}",
-                cancellationToken);
-            return;
-        }
-
-        await RecordTimerScheduleErrorAsync(
-            $"slot={slot.Index}; start failed; lastError={LastError}",
-            cancellationToken: cancellationToken);
     }
 
     private async Task<bool> SwitchTimerProfileIfNeededAsync(TimerSlotViewModel slot, CancellationToken cancellationToken)

@@ -213,6 +213,42 @@ public sealed class RootViewStructureContractTests
     }
 
     [Fact]
+    public void TaskQueueCheckboxes_ShouldMatchWpfNullableAndPostActionRightClickContracts()
+    {
+        var root = GetMaaUnifiedRoot();
+        var nullableCheckBox = File.ReadAllText(Path.Combine(root, "App", "Controls", "NullableCheckBox.axaml"));
+        var nullableCheckBoxCode = File.ReadAllText(Path.Combine(root, "App", "Controls", "NullableCheckBox.axaml.cs"));
+        var postActionText = File.ReadAllText(Path.Combine(root, "App", "Features", "TaskQueue", "PostActionSettingsView.axaml"));
+        var postActionCode = File.ReadAllText(Path.Combine(root, "App", "Features", "TaskQueue", "PostActionSettingsView.axaml.cs"));
+        var postActionViewModel = File.ReadAllText(Path.Combine(root, "App", "ViewModels", "TaskQueue", "PostActionModuleViewModel.cs"));
+
+        Assert.DoesNotContain("IsThreeState=\"True\"", nullableCheckBox, StringComparison.Ordinal);
+        Assert.Contains("PointerPressed=\"OnCheckBoxPointerPressed\"", nullableCheckBox, StringComparison.Ordinal);
+        Assert.Contains("PointerPressedGestures.IsSecondaryClick", nullableCheckBoxCode, StringComparison.Ordinal);
+        Assert.Contains("IsChecked = IsChecked is null ? false : null", nullableCheckBoxCode, StringComparison.Ordinal);
+
+        foreach (var action in new[]
+                 {
+                     "BackToAndroidHome",
+                     "ExitArknights",
+                     "ExitEmulator",
+                     "ExitSelf",
+                     "Sleep",
+                     "Hibernate",
+                     "Shutdown",
+                 })
+        {
+            Assert.Contains($"Tag=\"{action}\"", postActionText, StringComparison.Ordinal);
+        }
+
+        Assert.Equal(7, System.Text.RegularExpressions.Regex.Matches(postActionText, "OnPostActionTogglePointerPressed").Count);
+        Assert.Contains("PointerPressed=\"OnClearPointerPressed\"", postActionText, StringComparison.Ordinal);
+        Assert.Contains("VM.ToggleActionOnce(actionName)", postActionCode, StringComparison.Ordinal);
+        Assert.Contains("VM.ClearActionsOnce()", postActionCode, StringComparison.Ordinal);
+        Assert.DoesNotContain("ExitEmulator = SupportsExitEmulator", postActionViewModel, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void TaskQueueRemainingViews_ShouldUseSharedInputControls()
     {
         var root = GetMaaUnifiedRoot();

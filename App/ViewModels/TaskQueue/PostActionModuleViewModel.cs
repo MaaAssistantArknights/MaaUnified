@@ -188,7 +188,6 @@ public sealed class PostActionModuleViewModel : ObservableObject
             if (value)
             {
                 ExitSelf = true;
-                ExitEmulator = SupportsExitEmulator;
             }
 
             QueuePersist();
@@ -417,6 +416,69 @@ public sealed class PostActionModuleViewModel : ObservableObject
         Sleep = false;
         Once = false;
         QueuePersist();
+    }
+
+    public void ToggleActionOnce(string actionName)
+    {
+        var nextValue = !GetActionValue(actionName);
+        Once = nextValue;
+        SetActionValue(actionName, nextValue);
+    }
+
+    public void ClearActionsOnce()
+    {
+        Once = true;
+        ExitArknights = false;
+        BackToAndroidHome = false;
+        ExitEmulator = false;
+        ExitSelf = false;
+        IfNoOtherMaa = false;
+        Hibernate = false;
+        Shutdown = false;
+        Sleep = false;
+    }
+
+    private bool GetActionValue(string actionName)
+    {
+        return actionName switch
+        {
+            nameof(BackToAndroidHome) => BackToAndroidHome,
+            nameof(ExitArknights) => ExitArknights,
+            nameof(ExitEmulator) => ExitEmulator,
+            nameof(ExitSelf) => ExitSelf,
+            nameof(Sleep) => Sleep,
+            nameof(Hibernate) => Hibernate,
+            nameof(Shutdown) => Shutdown,
+            _ => false,
+        };
+    }
+
+    private void SetActionValue(string actionName, bool value)
+    {
+        switch (actionName)
+        {
+            case nameof(BackToAndroidHome):
+                BackToAndroidHome = value;
+                break;
+            case nameof(ExitArknights):
+                ExitArknights = value;
+                break;
+            case nameof(ExitEmulator):
+                ExitEmulator = value;
+                break;
+            case nameof(ExitSelf):
+                ExitSelf = value;
+                break;
+            case nameof(Sleep):
+                Sleep = value;
+                break;
+            case nameof(Hibernate):
+                Hibernate = value;
+                break;
+            case nameof(Shutdown):
+                Shutdown = value;
+                break;
+        }
     }
 
     private void QueuePersist(bool forcePersist = false)

@@ -799,7 +799,7 @@ public sealed class TaskModuleBFeatureTests
     }
 
     [Fact]
-    public async Task PostActionModule_IfNoOtherMaa_RuntimeConfig_OnlyAppliesWithPowerActions_AndUnixDoesNotEnableExitEmulator()
+    public async Task PostActionModule_IfNoOtherMaa_RuntimeConfig_OnlyAppliesWithPowerActions_AndDoesNotEnableExitEmulator()
     {
         var supported = new PlatformCapabilityStatus(true, "supported", Provider: "test");
         var executor = new TestPostActionExecutorService(new PostActionCapabilityMatrix(
@@ -824,15 +824,10 @@ public sealed class TaskModuleBFeatureTests
 
         vm.Sleep = true;
         vm.IfNoOtherMaa = true;
+        Assert.False(vm.ExitEmulator);
         var withPower = vm.BuildRuntimeConfig();
         Assert.True(withPower.IfNoOtherMaa);
         Assert.True(withPower.ExitSelf);
-        if (OperatingSystem.IsWindows())
-        {
-            Assert.True(withPower.ExitEmulator);
-            return;
-        }
-
         Assert.False(withPower.ExitEmulator);
     }
 

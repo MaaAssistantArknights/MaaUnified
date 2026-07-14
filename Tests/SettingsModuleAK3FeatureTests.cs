@@ -152,6 +152,32 @@ public sealed class SettingsModuleAK3FeatureTests
     }
 
     [Fact]
+    public async Task Timer_SaveOneShotNullSlot_RoundTripsWpfRightClickState()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync();
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        vm.CustomTimerConfig = true;
+        vm.Timers[0].Enabled = null;
+        vm.Timers[0].Time = "11:20";
+        vm.Timers[0].Profile = "Default";
+
+        await vm.SaveTimerSettingsAsync();
+
+        Assert.False(vm.HasPendingTimerChanges, vm.TimerValidationMessage);
+        Assert.Equal(string.Empty, ReadGlobalString(fixture.Config, TimerEnabledKey(1)));
+
+        var reloaded = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await reloaded.InitializeAsync();
+
+        Assert.Null(reloaded.Timers[0].Enabled);
+        Assert.True(reloaded.Timers[0].IsEffectivelyEnabled);
+        Assert.Equal("11:20", reloaded.Timers[0].Time);
+        Assert.Equal("Default", reloaded.Timers[0].Profile);
+    }
+
+    [Fact]
     public async Task Timer_ViewCompositionTransientEmptyProfile_IsRepairedBeforeAutoSaveResumes()
     {
         await using var fixture = await RuntimeFixture.CreateAsync();

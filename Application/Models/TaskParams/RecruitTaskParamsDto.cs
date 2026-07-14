@@ -8,7 +8,7 @@ public sealed class RecruitTaskParamsDto
 
     public bool ForceRefresh { get; set; } = true;
 
-    public bool UseExpedited { get; set; }
+    public bool? UseExpedited { get; set; } = false;
 
     public bool SkipRobot { get; set; } = true;
 

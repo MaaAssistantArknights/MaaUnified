@@ -48,7 +48,7 @@ public sealed class RecruitTaskModuleViewModel : TypedTaskModuleViewModelBase<Re
     private int _times = 4;
     private bool _refresh = true;
     private bool _forceRefresh = true;
-    private bool _useExpedited;
+    private bool? _useExpedited = false;
     private bool _skipRobot = true;
     private int _extraTagsMode;
     private bool _preserveTagsEnabled;
@@ -122,10 +122,10 @@ public sealed class RecruitTaskModuleViewModel : TypedTaskModuleViewModelBase<Re
         set => SetTrackedProperty(ref _forceRefresh, Refresh && value);
     }
 
-    public bool UseExpedited
+    public bool? UseExpedited
     {
         get => _useExpedited;
-        set => SetTrackedProperty(ref _useExpedited, value);
+        set => SetTrackedProperty(ref _useExpedited, value == true ? null : value);
     }
 
     public bool SkipRobot

@@ -31,17 +31,25 @@
     <controls:AdaptiveSpacingStackPanel Classes="post-action-toggle-stack">
       <CheckBox Classes="app-checkbox"
                 Content="{Binding Texts[PostAction.BackToHome]}"
-                IsChecked="{Binding BackToAndroidHome}" />
+                IsChecked="{Binding BackToAndroidHome}"
+                Tag="BackToAndroidHome"
+                PointerPressed="OnPostActionTogglePointerPressed" />
       <CheckBox Classes="app-checkbox"
                 Content="{Binding Texts[PostAction.ExitArknights]}"
-                IsChecked="{Binding ExitArknights}" />
+                IsChecked="{Binding ExitArknights}"
+                Tag="ExitArknights"
+                PointerPressed="OnPostActionTogglePointerPressed" />
       <CheckBox Classes="app-checkbox"
                 Content="{Binding Texts[PostAction.ExitEmulator]}"
                 IsChecked="{Binding ExitEmulator}"
-                IsVisible="{Binding ShowExitEmulator}" />
+                IsVisible="{Binding ShowExitEmulator}"
+                Tag="ExitEmulator"
+                PointerPressed="OnPostActionTogglePointerPressed" />
       <CheckBox Classes="app-checkbox"
                 Content="{Binding Texts[PostAction.ExitSelf]}"
-                IsChecked="{Binding ExitSelf}" />
+                IsChecked="{Binding ExitSelf}"
+                Tag="ExitSelf"
+                PointerPressed="OnPostActionTogglePointerPressed" />
       <CheckBox Classes="app-checkbox"
                 Content="{Binding Texts[PostAction.IfNoOther]}"
                 IsChecked="{Binding IfNoOtherMaa}"
@@ -51,22 +59,29 @@
     <controls:AdaptiveSpacingStackPanel Classes="post-action-toggle-stack">
       <CheckBox Classes="app-checkbox"
                 Content="{Binding Texts[PostAction.Sleep]}"
-                IsChecked="{Binding Sleep}" />
+                IsChecked="{Binding Sleep}"
+                Tag="Sleep"
+                PointerPressed="OnPostActionTogglePointerPressed" />
 
       <controls:AppHintedCheckBox Text="{Binding Texts[PostAction.Hibernate]}"
                                    Tip="{Binding Texts[PostAction.HibernateTip]}"
                                    IsChecked="{Binding Hibernate}"
-                                   IsVisible="{Binding ShowHibernate}" />
+                                   IsVisible="{Binding ShowHibernate}"
+                                   Tag="Hibernate"
+                                   PointerPressed="OnPostActionTogglePointerPressed" />
 
       <CheckBox Classes="app-checkbox"
                 Content="{Binding Texts[PostAction.Shutdown]}"
-                IsChecked="{Binding Shutdown}" />
+                IsChecked="{Binding Shutdown}"
+                Tag="Shutdown"
+                PointerPressed="OnPostActionTogglePointerPressed" />
     </controls:AdaptiveSpacingStackPanel>
 
     <Button Classes="app-button app-secondary"
             HorizontalAlignment="Left"
             Content="{Binding Texts[PostAction.Clear]}"
-            Click="OnClearClick" />
+            Click="OnClearClick"
+            PointerPressed="OnClearPointerPressed" />
 
     <Border Classes="post-action-status-block">
       <controls:AdaptiveSpacingStackPanel Classes="post-action-status-list">

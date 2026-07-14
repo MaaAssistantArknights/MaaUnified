@@ -30,7 +30,7 @@
               Classes="app-checkbox nullable-checkbox-check"
               Content="{Binding Text, ElementName=Root}"
               IsChecked="{Binding IsChecked, ElementName=Root}"
-              IsThreeState="True" />
+              PointerPressed="OnCheckBoxPointerPressed" />
 
     <controls:TooltipHint Classes="nullable-checkbox-tip"
                           IsVisible="{Binding HasTip, ElementName=Root}"

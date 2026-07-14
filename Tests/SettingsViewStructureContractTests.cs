@@ -205,6 +205,9 @@ public sealed class SettingsViewStructureContractTests
         Assert.Contains("SelectedItem=\"{Binding Profile, Mode=TwoWay}\"", timer, StringComparison.Ordinal);
         Assert.DoesNotContain("SelectedValue=\"{Binding Profile}\"", timer, StringComparison.Ordinal);
         Assert.DoesNotContain("SelectedValueBinding=\"{Binding .}\"", timer, StringComparison.Ordinal);
+        Assert.Equal(8, System.Text.RegularExpressions.Regex.Matches(timer, "PointerPressed=\"OnTimerSlotEnabledPointerPressed\"").Count);
+        Assert.Equal(8, System.Text.RegularExpressions.Regex.Matches(timer, "IsChecked=\"\\{Binding Enabled\\}\"").Count);
+        Assert.Equal(16, System.Text.RegularExpressions.Regex.Matches(timer, "IsEnabled=\"\\{Binding IsEffectivelyEnabled\\}\"").Count);
 
         var configManager = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "ConfigurationManagerView.axaml"));
         Assert.Contains("SelectedValueBinding=\"{Binding .}\"", configManager, StringComparison.Ordinal);

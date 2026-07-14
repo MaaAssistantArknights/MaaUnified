@@ -1109,7 +1109,7 @@ public static class TaskParamCompiler
             ["confirm"] = confirm,
             ["times"] = Math.Max(0, dto.Times),
             ["set_time"] = dto.SetTime,
-            ["expedite"] = dto.UseExpedited,
+            ["expedite"] = dto.UseExpedited != false,
             ["skip_robot"] = dto.SkipRobot,
             ["extra_tags_mode"] = dto.ExtraTagsMode,
             ["first_tags"] = ToJsonArray(dto.FirstTags),
@@ -1128,7 +1128,7 @@ public static class TaskParamCompiler
             ["server"] = ResolveStringSetting(profile, config, "ServerType") ?? "CN",
         };
 
-        if (dto.UseExpedited)
+        if (dto.UseExpedited != false)
         {
             parameters["expedite_times"] = Math.Max(0, dto.Times);
         }

@@ -11,6 +11,7 @@ using Avalonia.VisualTree;
 using System.Collections.Specialized;
 using System.ComponentModel;
 using MAAUnified.App.Controls;
+using MAAUnified.App.Infrastructure;
 using MAAUnified.App.ViewModels;
 using MAAUnified.App.ViewModels.TaskQueue;
 
@@ -746,8 +747,7 @@ public partial class TaskQueueView : UserControl
             return;
         }
 
-        var point = e.GetCurrentPoint(control);
-        if (!point.Properties.IsRightButtonPressed)
+        if (!PointerPressedGestures.IsSecondaryClick(control, e))
         {
             return;
         }
@@ -769,8 +769,7 @@ public partial class TaskQueueView : UserControl
             return;
         }
 
-        var point = e.GetCurrentPoint(control);
-        if (!point.Properties.IsRightButtonPressed)
+        if (!PointerPressedGestures.IsSecondaryClick(control, e))
         {
             return;
         }

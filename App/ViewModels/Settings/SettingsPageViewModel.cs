@@ -5092,10 +5092,10 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         {
             foreach (var slot in Timers)
             {
-                if (!slot.Enabled
+                if (slot.Enabled == false
                     || !string.IsNullOrWhiteSpace(slot.Profile)
                     || !persistedSlots.TryGetValue(slot.Index, out var persistedSlot)
-                    || !persistedSlot.Enabled
+                    || persistedSlot.Enabled == false
                     || string.IsNullOrWhiteSpace(persistedSlot.Profile))
                 {
                     continue;
@@ -5800,7 +5800,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
     {
         ArgumentNullException.ThrowIfNull(slot);
 
-        if (!CustomTimerConfig || !slot.Enabled || !string.IsNullOrWhiteSpace(slot.Profile))
+        if (!CustomTimerConfig || slot.Enabled == false || !string.IsNullOrWhiteSpace(slot.Profile))
         {
             return false;
         }
@@ -9145,14 +9145,14 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
                     BuildTimerSlotIndexOutOfRangeMessage(slot.Index));
             }
 
-            if (slot.Enabled && !TryParseTimerTime(slot.Time, out _, out _))
+            if (slot.Enabled != false && !TryParseTimerTime(slot.Time, out _, out _))
             {
                 return UiOperationResult.Fail(
                     UiErrorCode.TimerTimeInvalid,
                     BuildTimerTimeInvalidMessage(slot.Index));
             }
 
-            if (!snapshot.CustomTimerConfig || !slot.Enabled)
+            if (!snapshot.CustomTimerConfig || slot.Enabled == false)
             {
                 continue;
             }
@@ -9194,7 +9194,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
             var minuteKey = BuildTimerMinuteKey(index);
             var profileKey = BuildTimerProfileKey(index);
 
-            var enabled = ReadGlobalBoolFlexible(config, enabledKey, false);
+            var enabled = ReadGlobalNullableBoolFlexible(config, enabledKey, false);
 
             var rawHour = ReadGlobalIntFlexible(config, hourKey, DefaultTimerHour, out var parsedHour);
             if (!parsedHour && HasConfigKey(config, hourKey, ConfigValuePreference.GlobalFirst))
@@ -9440,6 +9440,65 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
 
     private static bool ReadGlobalBoolFlexible(UnifiedConfig config, string key, bool fallback)
         => ReadBoolFlexible(config, key, fallback, ConfigValuePreference.GlobalFirst);
+
+    private static bool? ReadGlobalNullableBoolFlexible(UnifiedConfig config, string key, bool? fallback)
+        => ReadNullableBoolFlexible(config, key, fallback, ConfigValuePreference.GlobalFirst);
+
+    private static bool? ReadNullableBoolFlexible(
+        UnifiedConfig config,
+        string key,
+        bool? fallback,
+        ConfigValuePreference preference)
+    {
+        if (!TryGetConfigNode(config, key, preference, out var node) || node is null)
+        {
+            return fallback;
+        }
+
+        if (node is JsonValue value)
+        {
+            if (value.TryGetValue(out bool parsedBool))
+            {
+                return parsedBool;
+            }
+
+            if (value.TryGetValue(out int parsedInt))
+            {
+                return parsedInt != 0;
+            }
+
+            if (value.TryGetValue(out string? text))
+            {
+                if (string.IsNullOrWhiteSpace(text))
+                {
+                    return null;
+                }
+
+                if (bool.TryParse(text, out var parsedText))
+                {
+                    return parsedText;
+                }
+
+                if (int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedIntText))
+                {
+                    return parsedIntText != 0;
+                }
+            }
+        }
+
+        var serialized = node.ToString();
+        if (string.IsNullOrWhiteSpace(serialized))
+        {
+            return null;
+        }
+
+        if (bool.TryParse(serialized, out var parsed))
+        {
+            return parsed;
+        }
+
+        return fallback;
+    }
 
     private static bool ReadBoolFlexible(
         UnifiedConfig config,
@@ -9767,7 +9826,7 @@ public sealed class DisplayValueOption : IEquatable<DisplayValueOption>
 
 public sealed record TimerSlotSettingsSnapshot(
     int Index,
-    bool Enabled,
+    bool? Enabled,
     string Time,
     string Profile);
 
@@ -9787,7 +9846,7 @@ public sealed record TimerSettingsSnapshot(
         foreach (var slot in Slots.OrderBy(static s => s.Index))
         {
             var index = Math.Clamp(slot.Index, 1, 8);
-            updates[$"Timer.Timer{index}"] = slot.Enabled.ToString();
+            updates[$"Timer.Timer{index}"] = slot.Enabled?.ToString() ?? string.Empty;
 
             var hour = 7;
             var minute = 0;
@@ -9881,7 +9940,7 @@ public sealed class TimerSlotViewModel : ObservableObject
     private const int MinuteMin = 0;
     private const int MinuteMax = 59;
 
-    private bool _enabled;
+    private bool? _enabled;
     private string _time = "07:00";
     private string _profile = "Default";
 
@@ -9892,11 +9951,21 @@ public sealed class TimerSlotViewModel : ObservableObject
 
     public int Index { get; }
 
-    public bool Enabled
+    public bool? Enabled
     {
         get => _enabled;
-        set => SetProperty(ref _enabled, value);
+        set
+        {
+            if (!SetProperty(ref _enabled, value))
+            {
+                return;
+            }
+
+            OnPropertyChanged(nameof(IsEffectivelyEnabled));
+        }
     }
+
+    public bool IsEffectivelyEnabled => Enabled != false;
 
     public string Time
     {

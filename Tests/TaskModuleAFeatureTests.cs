@@ -350,6 +350,12 @@ public sealed class TaskModuleAFeatureTests
         };
         var module = new RecruitTaskModuleViewModel(runtime, new LocalizedTextMap { Language = "en-us" });
 
+        Assert.False(module.UseExpedited);
+        module.UseExpedited = true;
+        Assert.Null(module.UseExpedited);
+        module.UseExpedited = false;
+        Assert.False(module.UseExpedited);
+
         module.Level3Time = 90;
         module.Level3Hour = 9;
         Assert.Equal(510, module.Level3Time);
@@ -1067,6 +1073,7 @@ public sealed class TaskModuleAFeatureTests
         Assert.DoesNotContain("SelectedAttachWindowKeyboardOption", startUpView);
         Assert.Contains("Text=\"{Binding Texts[Recruit.UseExpedited]}\"", recruitView);
         Assert.Contains("Tip=\"{Binding Texts[Recruit.UseExpeditedTip]}\"", recruitView);
+        Assert.Contains("IsChecked=\"{Binding UseExpedited}\"", recruitView);
         Assert.Contains("IsChecked=\"{Binding ChooseLevel6}\"", recruitView);
         Assert.Contains("IsChecked=\"{Binding PreserveTagsEnabled}\"", recruitView);
         Assert.Contains("HeaderText=\"{Binding PreserveTagsSummary}\"", recruitView);

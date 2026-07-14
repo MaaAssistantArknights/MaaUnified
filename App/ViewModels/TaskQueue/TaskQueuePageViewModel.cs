@@ -2922,7 +2922,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     {
         foreach (var panel in TaskPanels)
         {
-            if (panel.ModuleViewModel is RecruitTaskModuleViewModel { UseExpedited: true } recruit)
+            if (panel.ModuleViewModel is RecruitTaskModuleViewModel { UseExpedited: null } recruit)
             {
                 recruit.UseExpedited = false;
             }
