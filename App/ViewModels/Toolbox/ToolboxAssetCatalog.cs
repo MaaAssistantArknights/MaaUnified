@@ -15,6 +15,40 @@ internal static class ToolboxAssetCatalog
     private static readonly object ItemGate = new();
     private static readonly object ImageGate = new();
     private static readonly object MiniGameGate = new();
+    private static readonly HashSet<string> VirtualOperatorIds = new(StringComparer.Ordinal)
+    {
+        "char_504_rguard",
+        "char_505_rcast",
+        "char_506_rmedic",
+        "char_507_rsnipe",
+        "char_508_aguard",
+        "char_509_acast",
+        "char_510_amedic",
+        "char_511_asnipe",
+        "char_512_aprot",
+        "char_513_apionr",
+        "char_514_rdfend",
+        "char_600_cpione",
+        "char_601_cguard",
+        "char_602_cdfend",
+        "char_603_csnipe",
+        "char_604_ccast",
+        "char_605_cmedic",
+        "char_606_csuppo",
+        "char_607_cspec",
+        "char_608_acpion",
+        "char_609_acguad",
+        "char_610_acfend",
+        "char_611_acnipe",
+        "char_612_accast",
+        "char_613_acmedc",
+        "char_614_acsupo",
+        "char_615_acspec",
+        "char_616_pithst",
+        "char_617_sharp2",
+        "char_1001_amiya2",
+        "char_1037_amiya3",
+    };
     private static IReadOnlyList<string>? _testBaseDirectories;
     private static IReadOnlyDictionary<string, ToolboxOperatorAsset>? _characters;
     private static readonly Dictionary<string, IReadOnlyDictionary<string, ToolboxItemAsset>> ItemAssetsByLanguage = new(StringComparer.OrdinalIgnoreCase);
@@ -318,12 +352,6 @@ internal static class ToolboxAssetCatalog
                     continue;
                 }
 
-                var isOperator = pair.Key.StartsWith("char_", StringComparison.Ordinal);
-                if (!isOperator)
-                {
-                    continue;
-                }
-
                 _ = TryReadString(node["name_tw"], out var nameTw);
                 _ = TryReadString(node["name_en"], out var nameEn);
                 _ = TryReadString(node["name_jp"], out var nameJp);
@@ -335,6 +363,10 @@ internal static class ToolboxAssetCatalog
                 _ = TryReadInt(node["rarity"], out var rarity);
                 _ = TryReadString(node["profession"], out var profession);
                 _ = TryReadString(node["position"], out var position);
+                if (!IsPlayerObtainableOperator(pair.Key, profession))
+                {
+                    continue;
+                }
 
                 result[pair.Key] = new ToolboxOperatorAsset(
                     pair.Key,
@@ -358,6 +390,24 @@ internal static class ToolboxAssetCatalog
         {
             return new Dictionary<string, ToolboxOperatorAsset>(StringComparer.Ordinal);
         }
+    }
+
+    private static bool IsPlayerObtainableOperator(string id, string? profession)
+    {
+        if (VirtualOperatorIds.Contains(id))
+        {
+            return false;
+        }
+
+        return (profession ?? string.Empty).Trim().ToUpperInvariant() is
+            "CASTER" or
+            "MEDIC" or
+            "PIONEER" or
+            "SNIPER" or
+            "SPECIAL" or
+            "SUPPORT" or
+            "TANK" or
+            "WARRIOR";
     }
 
     private static string ResolveOperatorProfessionAssetName(string? profession)

@@ -537,6 +537,37 @@ public sealed class ToolboxModuleO2FeatureTests
         Assert.DoesNotContain(vm.MiniGameTaskList, item => item.Value == "MiniGame@Official@Begin");
     }
 
+    [Fact]
+    public async Task OperatorCatalog_ShouldExcludeWpfVirtualOperators()
+    {
+        await using var fixture = await ToolboxTestFixture.CreateAsync();
+        var resourceDirectory = Path.Combine(fixture.Root, "resource");
+        Directory.CreateDirectory(resourceDirectory);
+        await File.WriteAllTextAsync(
+            Path.Combine(resourceDirectory, "battle_data.json"),
+            """
+            {
+              "chars": {
+                "char_003_kalts": { "name": "凯尔希", "profession": "MEDIC", "rarity": 6 },
+                "char_504_rguard": { "name": "预备干员-近战", "profession": "PIONEER", "rarity": 3 },
+                "char_508_aguard": { "name": "Sharp", "profession": "WARRIOR", "rarity": 5 },
+                "char_1001_amiya2": { "name": "阿米娅-WARRIOR", "profession": "WARRIOR", "rarity": 5 },
+                "token_test": { "name": "测试召唤物", "profession": "TOKEN", "rarity": 0 }
+              }
+            }
+            """);
+
+        using var _ = ToolboxAssetCatalog.PushTestBaseDirectoriesForTests(fixture.Root);
+
+        var operators = ToolboxAssetCatalog.GetOperators();
+
+        Assert.Equal("凯尔希", Assert.Single(operators).Value.Name);
+        Assert.DoesNotContain("char_504_rguard", operators.Keys);
+        Assert.DoesNotContain("char_508_aguard", operators.Keys);
+        Assert.DoesNotContain("char_1001_amiya2", operators.Keys);
+        Assert.DoesNotContain("token_test", operators.Keys);
+    }
+
     private static void AssertHeaderMatchesLocalizedTemplate(string template, string actual)
     {
         const string placeholder = "{0}";
