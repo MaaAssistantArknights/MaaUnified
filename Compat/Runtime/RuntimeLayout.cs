@@ -223,11 +223,6 @@ public static class RuntimeLayout
             return false;
         }
 
-        if (IsRunningInFlatpak())
-        {
-            return true;
-        }
-
         var normalized = NormalizeDirectory(path);
         if (!IsPackagedBinDirectory(normalized))
         {
@@ -240,13 +235,6 @@ public static class RuntimeLayout
         }
 
         return IsRunningFromLinuxAppImageMount(normalized, linuxAppDirPath);
-    }
-
-    private static bool IsRunningInFlatpak()
-    {
-        return !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("FLATPAK_ID"))
-            || !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("FLATPAK_SANDBOX_DIR"))
-            || File.Exists("/.flatpak-info");
     }
 
     public static bool IsRunningFromLinuxAppImageMount(string path, string? linuxAppDirPath = null)
