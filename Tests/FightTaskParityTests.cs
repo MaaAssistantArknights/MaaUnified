@@ -371,7 +371,7 @@ public sealed class FightTaskParityTests
     }
 
     [Fact]
-    public async Task FightModule_StageOptions_ShouldIncludeActiveTaskStageFallbacks()
+    public async Task FightModule_StageOptions_ShouldNotInferActivityStagesFromTaskResources()
     {
         await using var fixture = await TestFixture.CreateAsync();
         Directory.CreateDirectory(Path.Combine(fixture.Root, "resource", "tasks", "Stages"));
@@ -400,16 +400,14 @@ public sealed class FightTaskParityTests
         module.RefreshStageOptions(forceReload: true);
 
         var values = module.StageOptions.Select(option => option.Value).ToArray();
-        Assert.Contains("MT-10", values);
-        Assert.Contains("MT-4", values);
+        Assert.DoesNotContain("MT-10", values);
+        Assert.DoesNotContain("MT-4", values);
         Assert.DoesNotContain("MT-OpenOpt", values);
         Assert.DoesNotContain("GT-5", values);
-        Assert.True(Array.IndexOf(values, "MT-10") < Array.IndexOf(values, "1-7"));
-        Assert.True(Array.IndexOf(values, "MT-10") < Array.IndexOf(values, "MT-4"));
     }
 
     [Fact]
-    public async Task FightModule_ClosedStageOptions_ShouldKeepSelectedStageVisibleWhenUnavailableStagesAreHidden()
+    public async Task FightModule_ClosedStageOptions_ShouldKeepSelectedStageButHideItFromTheDropdown()
     {
         await using var fixture = await TestFixture.CreateAsync();
         var module = new FightTaskModuleViewModel(fixture.Runtime, new LocalizedTextMap { Language = "en-us" });
@@ -431,9 +429,27 @@ public sealed class FightTaskParityTests
 
         module.HideUnavailableStage = true;
 
-        Assert.Contains(
+        var hiddenOption = Assert.Single(
             module.StageOptions,
             option => string.Equals(option.Value, closedStage, StringComparison.OrdinalIgnoreCase));
+        Assert.False(hiddenOption.IsVisible);
+    }
+
+    [Fact]
+    public async Task FightModule_ClosedStageOptions_ShouldKeepUnselectedStageInSourceButHideIt()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var module = new FightTaskModuleViewModel(fixture.Runtime, new LocalizedTextMap { Language = "en-us" });
+        var closedStage = ResolveClosedWeeklyStage();
+
+        Assert.NotEqual(closedStage, module.Stage);
+
+        var hiddenOption = Assert.Single(
+            module.StageOptions,
+            option => string.Equals(option.Value, closedStage, StringComparison.OrdinalIgnoreCase));
+        Assert.False(hiddenOption.IsOpen);
+        Assert.False(hiddenOption.IsOutdated);
+        Assert.False(hiddenOption.IsVisible);
     }
 
     [Fact]
@@ -640,9 +656,10 @@ public sealed class FightTaskParityTests
         Assert.True(entry.IsClosed);
         Assert.False(entry.IsOutdated);
         Assert.Equal(string.Empty, entry.StatusText);
-        Assert.Contains(
+        var hiddenOption = Assert.Single(
             module.StageOptions,
             option => string.Equals(option.Value, closedStage, StringComparison.OrdinalIgnoreCase));
+        Assert.False(hiddenOption.IsVisible);
     }
 
     [Fact]
@@ -665,6 +682,7 @@ public sealed class FightTaskParityTests
         Assert.Same(option, module.SelectedStageOption);
         Assert.True(option.IsOutdated);
         Assert.False(option.IsOpen);
+        Assert.False(option.IsVisible);
         Assert.Equal(outdatedStage, option.DisplayName);
         Assert.True(entry.IsOutdated);
         Assert.Equal("(Outdated)", entry.StatusText);

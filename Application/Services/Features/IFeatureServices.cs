@@ -483,6 +483,12 @@ public interface IStageManagerFeatureService
 
     IReadOnlyList<string> GetStageCodes(string? clientType = null, bool forceReload = false);
 
+    StageActivityState GetStageActivityState(string? clientType = null, bool forceReload = false);
+
+    Task<UiOperationResult<StageActivityState>> RefreshStageActivityWebAsync(
+        string? clientType = null,
+        CancellationToken cancellationToken = default);
+
     Task<UiOperationResult<StageManagerConfig>> LoadConfigAsync(CancellationToken cancellationToken = default);
 
     Task<UiOperationResult> SaveConfigAsync(StageManagerConfig config, CancellationToken cancellationToken = default);

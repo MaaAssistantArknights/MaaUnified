@@ -5,8 +5,10 @@ using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Avalonia.Threading;
+using MAAUnified.App.Controls;
 using MAAUnified.App.Services;
 using MAAUnified.App.ViewModels.Infrastructure;
+using MAAUnified.App.ViewModels.Toolbox;
 using MAAUnified.Application.Models;
 using MAAUnified.Application.Models.TaskParams;
 using MAAUnified.Application.Services;
@@ -94,19 +96,6 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
     private static readonly IReadOnlyList<string> StageJsonCandidateRelativePaths =
     [
         Path.Combine("resource", "stages.json"),
-    ];
-
-    private static readonly IReadOnlyList<(string StageCode, string ZhTip, string EnTip, IReadOnlyList<string[]>? InventoryGroups)> DailyHintSpecs =
-    [
-        ("CE-6", "CE-6: 龙门币", "CE-6: LMD", null),
-        ("AP-5", "AP-5: 红票", "AP-5: Purchase Certificate", null),
-        ("CA-5", "CA-5: 技能", "CA-5: Skill Summary", null),
-        ("LS-6", "LS-6: 经验", "LS-6: Battle Record", null),
-        ("SK-5", "SK-5: 碳", "SK-5: Carbon", null),
-        ("PR-A-1", "PR-A-1/2: 奶&盾芯片", "PR-A-1/2: Med&Def Chip", [["3231", "3261"], ["3232", "3262"]]),
-        ("PR-B-1", "PR-B-1/2: 术&狙芯片", "PR-B-1/2: Cst&Sni Chip", [["3251", "3241"], ["3252", "3242"]]),
-        ("PR-C-1", "PR-C-1/2: 先&辅芯片", "PR-C-1/2: Pio&Sup Chip", [["3211", "3271"], ["3212", "3272"]]),
-        ("PR-D-1", "PR-D-1/2: 近&特芯片", "PR-D-1/2: Grd&Spc Chip", [["3221", "3281"], ["3222", "3282"]]),
     ];
 
     private static readonly IReadOnlyDictionary<string, string> ManualStageAliasMap =
@@ -1105,26 +1094,72 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
         UnifiedConfig? config = null,
         DateTime? nowUtc = null)
     {
+        return BuildDailyResourceHint(
+            language,
+            clientType,
+            config,
+            StageActivityState.Empty(NormalizeClientType(clientType)),
+            nowUtc);
+    }
+
+    public static string BuildDailyResourceHint(
+        string language,
+        string? clientType,
+        UnifiedConfig? config,
+        StageActivityState stageState,
+        DateTime? nowUtc = null)
+    {
         var zhCn = IsChineseLanguage(language);
         var normalizedClientType = NormalizeClientType(clientType);
         var timestamp = nowUtc ?? DateTime.UtcNow;
         var dayOfWeek = MallDailyResetHelper.GetYjDate(timestamp, normalizedClientType).DayOfWeek;
         var depotCounts = ReadDepotCounts(config);
+        var itemNames = ToolboxAssetCatalog.GetItemNames(language);
         var lines = new List<string>();
-        foreach (var spec in DailyHintSpecs)
+        var shownActivityNames = new HashSet<string>(StringComparer.Ordinal);
+        var resourceTipShown = false;
+
+        foreach (var stage in stageState.Stages.Where(stage => stage.IsOpen(timestamp, dayOfWeek)))
         {
-            if (!IsStageOpen(spec.StageCode, dayOfWeek))
+            var activity = stage.Activity;
+            if (!resourceTipShown
+                && activity is { IsResourceCollection: true }
+                && activity.IsBeingOpen(timestamp)
+                && !string.IsNullOrWhiteSpace(activity.Tip))
             {
-                continue;
+                lines.Insert(0, BuildActivityLine(activity.Tip, activity.UtcExpireTime, timestamp, language));
+                resourceTipShown = true;
             }
 
-            lines.Add(zhCn ? spec.ZhTip : spec.EnTip);
-            if (spec.InventoryGroups is null)
+            if (activity is { IsResourceCollection: false }
+                && !string.IsNullOrWhiteSpace(activity.StageName)
+                && shownActivityNames.Add(activity.StageName))
             {
-                continue;
+                lines.Add(BuildActivityLine(activity.StageName, activity.UtcExpireTime, timestamp, language));
             }
 
-            var inventoryHint = BuildInventoryHint(spec.InventoryGroups, depotCounts, zhCn);
+            var drop = stage.IsCoreVersionSupported
+                ? stage.Drop
+                : BuildUnsupportedStageDrop(stage.MinimumRequired, language);
+            if (!string.IsNullOrWhiteSpace(drop))
+            {
+                var dropName = stage.IsCoreVersionSupported && itemNames.TryGetValue(drop, out var name) ? name : drop;
+                var dropLine = $"{stage.Value}: {dropName}";
+                if (stage.IsCoreVersionSupported && depotCounts.TryGetValue(drop, out var count) && count >= 0)
+                {
+                    var inventory = AchievementTextCatalog.GetString("Inventory", language, zhCn ? "库存" : "Inventory");
+                    dropLine += $" ({inventory} {count.ToString(CultureInfo.InvariantCulture)})";
+                }
+
+                lines.Add(dropLine);
+            }
+
+            if (!string.IsNullOrWhiteSpace(stage.Tip))
+            {
+                lines.Add(AchievementTextCatalog.GetString(stage.Tip, language, stage.Tip));
+            }
+
+            var inventoryHint = BuildInventoryHint(stage.DropGroups, depotCounts, language, zhCn);
             if (!string.IsNullOrWhiteSpace(inventoryHint))
             {
                 lines.Add(inventoryHint);
@@ -1141,30 +1176,60 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
         return string.Join(Environment.NewLine, lines);
     }
 
+    private static string BuildActivityLine(string value, DateTime expireTime, DateTime nowUtc, string language)
+    {
+        var daysLeft = (expireTime - nowUtc).Days;
+        var remaining = daysLeft > 0
+            ? daysLeft.ToString(CultureInfo.InvariantCulture)
+            : AchievementTextCatalog.GetString("LessThanOneDay", language, "Less than 1 day");
+        var daysLeftLabel = AchievementTextCatalog.GetString("DaysLeftOpen", language, "Days left open: ");
+        return $"｢{value}｣ {daysLeftLabel}{remaining}";
+    }
+
+    private static string BuildUnsupportedStageDrop(string? minimumRequired, string language)
+    {
+        var lowVersion = AchievementTextCatalog.GetString("LowVersion", language, "Low version");
+        var minimumRequirements = AchievementTextCatalog.GetString("MinimumRequirements", language, "Minimum requirements: ");
+        return string.IsNullOrWhiteSpace(minimumRequired)
+            ? lowVersion
+            : $"{lowVersion}\n{minimumRequirements}{minimumRequired}";
+    }
+
     private static string? BuildInventoryHint(
-        IReadOnlyList<string[]> inventoryGroups,
+        IReadOnlyList<IReadOnlyList<string>>? inventoryGroups,
         IReadOnlyDictionary<string, int> depotCounts,
+        string language,
         bool zhCn)
     {
+        if (inventoryGroups is null || inventoryGroups.Count == 0)
+        {
+            return null;
+        }
+
+        if (!inventoryGroups
+                .SelectMany(static group => group)
+                .Select(itemId => depotCounts.TryGetValue(itemId, out var count) ? count : -1)
+                .Any(count => count >= 0))
+        {
+            return null;
+        }
+
         var groupTexts = new List<string>(inventoryGroups.Count);
         foreach (var group in inventoryGroups)
         {
-            var itemCounts = new List<string>(group.Length);
+            var itemCounts = new List<string>(group.Count);
             foreach (var itemId in group)
             {
-                if (!depotCounts.TryGetValue(itemId, out var count) || count < 0)
-                {
-                    return null;
-                }
-
-                itemCounts.Add(count.ToString());
+                itemCounts.Add(depotCounts.TryGetValue(itemId, out var count) && count >= 0
+                    ? count.ToString(CultureInfo.InvariantCulture)
+                    : "--");
             }
 
             groupTexts.Add(string.Join(" & ", itemCounts));
         }
 
-        var prefix = zhCn ? "(库存 " : "(Inventory ";
-        return $"{prefix}{string.Join(" / ", groupTexts)})";
+        var inventory = AchievementTextCatalog.GetString("Inventory", language, zhCn ? "库存" : "Inventory");
+        return $"({inventory} {string.Join(" / ", groupTexts)})";
     }
 
     private static IReadOnlyDictionary<string, int> ReadDepotCounts(UnifiedConfig? config)
@@ -1300,8 +1365,10 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
     private void RebuildStageOptions(string? clientTypeOverride = null, bool forceReload = false)
     {
         var normalizedClientType = NormalizeClientType(clientTypeOverride ?? ResolveClientTypeFromConfig());
-        var dayOfWeek = MallDailyResetHelper.GetYjDate(DateTime.UtcNow, normalizedClientType).DayOfWeek;
-        var stageCodes = ResolveStageSelectionCodes(normalizedClientType, forceReload);
+        var nowUtc = DateTime.UtcNow;
+        var dayOfWeek = MallDailyResetHelper.GetYjDate(nowUtc, normalizedClientType).DayOfWeek;
+        var stageState = ResolveStageActivityState(normalizedClientType, forceReload);
+        var stageCodes = ResolveStageSelectionCodes(stageState, nowUtc);
         var knownStageCodes = stageCodes.ToHashSet(StringComparer.OrdinalIgnoreCase);
         var defaultStageDisplay = Texts.GetOrDefault("Fight.DefaultStage", "Cur/Last");
         var annihilationDisplay = ResolveAnnihilationStageDisplay();
@@ -1324,19 +1391,21 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
                 continue;
             }
 
-            var isOpen = IsStageOpen(normalizedStage, dayOfWeek);
-            if (HideUnavailableStage && !isOpen)
-            {
-                continue;
-            }
-
+            var stage = stageState.Find(normalizedStage);
+            var isOpen = stage?.IsOpen(nowUtc, dayOfWeek) ?? true;
             var display = string.Equals(normalizedStage, "Annihilation", StringComparison.OrdinalIgnoreCase)
                 ? annihilationDisplay
-                : ResolveStageDisplayName(normalizedStage);
-            list.Add(ReuseStageOption(previousOptions, display, normalizedStage, isOpen, isOutdated: false));
+                : ResolveStageDisplayName(stage ?? new StageActivityStage(normalizedStage, normalizedStage));
+            list.Add(ReuseStageOption(
+                previousOptions,
+                display,
+                normalizedStage,
+                isOpen,
+                isOutdated: false,
+                isVisible: !HideUnavailableStage || isOpen));
         }
 
-        AppendMissingStagePlanOptions(list, knownStageCodes, previousOptions, dayOfWeek);
+        AppendMissingStagePlanOptions(list, knownStageCodes, previousOptions, stageState, nowUtc, dayOfWeek);
 
         ApplyStageOptions(list);
 
@@ -1392,25 +1461,19 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
         return -1;
     }
 
-    private IReadOnlyList<string> ResolveStageSelectionCodes(string clientType, bool forceReload = false)
+    private StageActivityState ResolveStageActivityState(string clientType, bool forceReload = false)
     {
-        var ordered = new List<string>();
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        return Runtime.StageManagerFeatureService.GetStageActivityState(clientType, forceReload);
+    }
 
-        _ = forceReload;
-        if (TryLoadStageActivityStageCodes(clientType, out var activityCodes))
-        {
-            AddStageCodes(activityCodes, ordered, seen);
-        }
-
-        if (TryLoadActiveTaskStageCodes(clientType, out var taskStageCodes))
-        {
-            AddStageCodes(taskStageCodes, ordered, seen);
-        }
-
-        AddStageCodes(FallbackStageCodes, ordered, seen);
-
-        return ordered;
+    private static IReadOnlyList<string> ResolveStageSelectionCodes(StageActivityState state, DateTime nowUtc)
+    {
+        return state.Stages
+            .Where(stage => !stage.IsHidden
+                && !string.IsNullOrWhiteSpace(stage.Value)
+                && stage.IsOpenOrWillOpen(nowUtc))
+            .Select(stage => stage.Value)
+            .ToList();
     }
 
     private string ResolveAnnihilationStageDisplay()
@@ -1445,15 +1508,19 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
             : $"{trimmed}@Annihilation";
     }
 
-    private string ResolveStageDisplayName(string stageCode)
+    private string ResolveStageDisplayName(StageActivityStage stage)
     {
-        return AchievementTextCatalog.GetString(stageCode, Texts.Language, stageCode);
+        return stage.Activity is { IsResourceCollection: false }
+            ? stage.Display
+            : AchievementTextCatalog.GetString(stage.Value, Texts.Language, stage.Display);
     }
 
     private void AppendMissingStagePlanOptions(
         ICollection<StageOption> target,
         ISet<string> knownStageCodes,
         IReadOnlyList<StageOption> previousOptions,
+        StageActivityState stageState,
+        DateTime nowUtc,
         DayOfWeek dayOfWeek)
     {
         var seen = target
@@ -1469,12 +1536,14 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
             }
 
             var isKnown = knownStageCodes.Contains(stage);
+            var stageInfo = stageState.Find(stage);
             target.Add(ReuseStageOption(
                 previousOptions,
-                isKnown ? ResolveStageDisplayName(stage) : stage,
+                isKnown && stageInfo is not null ? ResolveStageDisplayName(stageInfo) : stage,
                 stage,
-                isOpen: IsStageManually || (isKnown && IsStageOpen(stage, dayOfWeek)),
-                isOutdated: !isKnown && !IsStageManually));
+                isOpen: IsStageManually || (isKnown && (stageInfo?.IsOpen(nowUtc, dayOfWeek) ?? true)),
+                isOutdated: !isKnown && !IsStageManually,
+                isVisible: false));
         }
     }
 
@@ -1483,15 +1552,17 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
         string displayName,
         string value,
         bool isOpen,
-        bool isOutdated)
+        bool isOutdated,
+        bool isVisible = true)
     {
         var existing = previousOptions.FirstOrDefault(option =>
             string.Equals(option.Value, value, StringComparison.OrdinalIgnoreCase)
             && string.Equals(option.DisplayName, displayName, StringComparison.Ordinal)
             && option.IsOpen == isOpen
-            && option.IsOutdated == isOutdated);
+            && option.IsOutdated == isOutdated
+            && option.IsVisible == isVisible);
 
-        return existing ?? new StageOption(displayName, value, isOpen, isOutdated);
+        return existing ?? new StageOption(displayName, value, isOpen, isOutdated, isVisible);
     }
 
     private static void AddStageCodes(IEnumerable<string> source, ICollection<string> target, ISet<string> seen)
@@ -2159,7 +2230,10 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
 
     private void NormalizeStagePlanAgainstKnownStages()
     {
-        var knownStageCodes = ResolveStageSelectionCodes(ResolveClientTypeFromConfig())
+        var clientType = NormalizeClientType(ResolveClientTypeFromConfig());
+        var knownStageCodes = ResolveStageSelectionCodes(
+                ResolveStageActivityState(clientType),
+                DateTime.UtcNow)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         var updated = false;
@@ -2213,6 +2287,13 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
         if (ManualStageAliasMap.TryGetValue(upper, out var alias))
         {
             return alias;
+        }
+
+        var stageActivityMatch = ResolveStageActivityState(ResolveClientTypeFromConfig())
+            .Find(trimmed)?.Value;
+        if (!string.IsNullOrWhiteSpace(stageActivityMatch))
+        {
+            return stageActivityMatch;
         }
 
         var matchedStage = Runtime.StageManagerFeatureService
@@ -2278,8 +2359,10 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
     private void RefreshStagePlanPresentation()
     {
         var normalizedClientType = NormalizeClientType(ResolveClientTypeFromConfig());
-        var dayOfWeek = MallDailyResetHelper.GetYjDate(DateTime.UtcNow, normalizedClientType).DayOfWeek;
-        var knownStageCodes = ResolveStageSelectionCodes(normalizedClientType)
+        var nowUtc = DateTime.UtcNow;
+        var dayOfWeek = MallDailyResetHelper.GetYjDate(nowUtc, normalizedClientType).DayOfWeek;
+        var stageState = ResolveStageActivityState(normalizedClientType);
+        var knownStageCodes = ResolveStageSelectionCodes(stageState, nowUtc)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         foreach (var entry in StagePlan)
         {
@@ -2300,12 +2383,12 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
 
             if (knownStageCodes.Contains(stage))
             {
-                var knownStageIsOpen = IsStageManually || IsStageOpen(stage, dayOfWeek);
+                var knownStageIsOpen = IsStageManually || (stageState.Find(stage)?.IsOpen(nowUtc, dayOfWeek) ?? true);
                 entry.UpdateAvailability(knownStageIsOpen, isOutdated: false, BuildStageStatusText(knownStageIsOpen, isOutdated: false));
                 continue;
             }
 
-            var fallbackIsOpen = IsStageManually || IsStageOpen(stage, dayOfWeek);
+            var fallbackIsOpen = IsStageManually || (stageState.Find(stage)?.IsOpen(nowUtc, dayOfWeek) ?? true);
             entry.UpdateAvailability(fallbackIsOpen, isOutdated: !IsStageManually, BuildStageStatusText(fallbackIsOpen, isOutdated: !IsStageManually));
         }
     }
@@ -2518,7 +2601,8 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
         public override string ToString() => FightStageSelection.IsCurrentOrLast(Stage) ? string.Empty : Stage;
     }
 
-    public sealed record StageOption(string DisplayName, string Value, bool IsOpen, bool IsOutdated)
+    public sealed record StageOption(string DisplayName, string Value, bool IsOpen, bool IsOutdated, bool IsVisible)
+        : IAppSelectItemVisibility
     {
         public bool IsClosed => !IsOpen;
     }

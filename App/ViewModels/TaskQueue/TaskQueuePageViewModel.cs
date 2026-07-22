@@ -310,6 +310,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     private bool _showBatchModeToggle;
     private bool _clearTaskStatusesWhenStopped;
     private string _dailyStageHint = string.Empty;
+    private string _lastStageRefreshSlot = string.Empty;
+    private int _stageActivityWebRefreshInProgress;
     private string _selectedTaskModule = TaskModuleTypes.StartUp;
     private TaskModuleOption? _selectedTaskModuleOption;
     private string _renameTargetName = string.Empty;
@@ -1196,6 +1198,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         await WaitForPendingBindingAsync(cancellationToken);
         await ReloadTaskPanelPersistentConfigAsync(cancellationToken);
         RefreshStagePresentation();
+        _ = RefreshStageActivityWebAsync(cancellationToken);
         await ReloadOverlayTargetsAsync(cancellationToken);
         await PostActionModule.InitializeAsync(cancellationToken);
         UpdatePostActionSummary();
@@ -1235,7 +1238,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         DailyStageHint = FightTaskModuleViewModel.BuildDailyResourceHint(
             Texts.Language,
             _connectionGameSharedState.ClientType,
-            Runtime.ConfigurationService.CurrentConfig);
+            Runtime.ConfigurationService.CurrentConfig,
+            Runtime.StageManagerFeatureService.GetStageActivityState(_connectionGameSharedState.ClientType));
         NoTaskSelectedHint = RootTexts.GetOrDefault(
             "TaskQueue.SelectionHint",
             "Select a task from the left list to edit its settings.");
@@ -1333,7 +1337,75 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         DailyStageHint = FightTaskModuleViewModel.BuildDailyResourceHint(
             Texts.Language,
             _connectionGameSharedState.ClientType,
-            Runtime.ConfigurationService.CurrentConfig);
+            Runtime.ConfigurationService.CurrentConfig,
+            Runtime.StageManagerFeatureService.GetStageActivityState(
+                _connectionGameSharedState.ClientType,
+                forceReloadStageOptions));
+    }
+
+    public void RefreshStagePresentationForClock(DateTime utcNow)
+    {
+        var clientType = _connectionGameSharedState.ClientType;
+        var yjNow = MallDailyResetHelper.GetYjDateTime(utcNow, clientType);
+        var slot = $"{yjNow:yyyyMMdd}:{(yjNow.Hour < 12 ? 0 : 1)}";
+        if (string.Equals(slot, _lastStageRefreshSlot, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _lastStageRefreshSlot = slot;
+        RefreshStagePresentation(forceReloadStageOptions: true);
+        _ = RefreshStageActivityWebAsync();
+    }
+
+    private async Task RefreshStageActivityWebAsync(CancellationToken cancellationToken = default)
+    {
+        if (Interlocked.Exchange(ref _stageActivityWebRefreshInProgress, 1) == 1)
+        {
+            return;
+        }
+
+        try
+        {
+            var clientType = _connectionGameSharedState.ClientType;
+            var result = await Runtime.StageManagerFeatureService
+                .RefreshStageActivityWebAsync(clientType, cancellationToken);
+            if (!result.Success || result.Value is null)
+            {
+                Runtime.LogService.Warn($"[stage] {result.Message}");
+                return;
+            }
+
+            RefreshStagePresentation(forceReloadStageOptions: true);
+            if (!result.Value.ResourceTasksUpdated)
+            {
+                return;
+            }
+
+            var reload = await Runtime.SessionService.ReloadResourceWhenIdleAsync(
+                clientType,
+                waitTimeout: TimeSpan.FromSeconds(30),
+                cancellationToken);
+            if (!reload.Success
+                && reload.Error?.Code is not CoreErrorCode.NotInitialized
+                    and not CoreErrorCode.NotSupported
+                    and not CoreErrorCode.Disposed)
+            {
+                Runtime.LogService.Warn($"[stage] Cached activity task resources were not reloaded: {reload.Error?.Message}");
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Startup cancellation should not surface a stale stage refresh error.
+        }
+        catch (Exception ex)
+        {
+            Runtime.LogService.Warn($"[stage] Failed to refresh stage activity resources: {ex.Message}");
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _stageActivityWebRefreshInProgress, 0);
+        }
     }
 
     private void OnConnectionGameSharedStateChanged(object? sender, PropertyChangedEventArgs e)
@@ -1343,7 +1415,9 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             return;
         }
 
+        _lastStageRefreshSlot = string.Empty;
         RefreshStagePresentation();
+        _ = RefreshStageActivityWebAsync();
     }
 
     private void RebuildTaskModuleOptions()

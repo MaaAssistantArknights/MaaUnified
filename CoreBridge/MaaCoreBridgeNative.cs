@@ -83,6 +83,50 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge, IMaaCoreBridgeRecovery
 
     public bool SupportsStartCloseDown => true;
 
+    public static string? TryReadInstalledVersion(string baseDirectory)
+    {
+        if (string.IsNullOrWhiteSpace(baseDirectory))
+        {
+            return null;
+        }
+
+        var libraryName = ResolveLibraryName();
+        if (!libraryName.Success || string.IsNullOrWhiteSpace(libraryName.Value))
+        {
+            return null;
+        }
+
+        var libraryPath = Path.Combine(RuntimeLayout.NormalizeDirectory(baseDirectory), libraryName.Value);
+        if (!File.Exists(libraryPath))
+        {
+            return null;
+        }
+
+        nint library = nint.Zero;
+        try
+        {
+            library = NativeLibrary.Load(libraryPath);
+            if (!NativeLibrary.TryGetExport(library, "AsstGetVersion", out var export) || export == nint.Zero)
+            {
+                return null;
+            }
+
+            var getVersion = Marshal.GetDelegateForFunctionPointer<AsstGetVersionDelegate>(export);
+            return Marshal.PtrToStringUTF8(getVersion())?.Trim();
+        }
+        catch
+        {
+            return null;
+        }
+        finally
+        {
+            if (library != nint.Zero)
+            {
+                NativeLibrary.Free(library);
+            }
+        }
+    }
+
     public async Task<CoreResult<CoreInitializeInfo>> InitializeAsync(
         CoreInitializeRequest request,
         CancellationToken cancellationToken = default)
@@ -182,6 +226,13 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge, IMaaCoreBridgeRecovery
                             "AsstLoadResource(baseDir) returned false.");
                     }
 
+                    var cachedCommonLoad = LoadCachedCommonResource(runtimeBaseDirectory, exports);
+                    if (!cachedCommonLoad.Success)
+                    {
+                        NativeLibrary.Free(loadedLibrary);
+                        return CoreResult<NativeInitializeResult>.Fail(cachedCommonLoad.Error!);
+                    }
+
                     if (!string.IsNullOrWhiteSpace(request.ClientType))
                     {
                         var clientLoad = LoadClientResource(request.ClientType, runtimeBaseDirectory, exports);
@@ -189,6 +240,13 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge, IMaaCoreBridgeRecovery
                         {
                             NativeLibrary.Free(loadedLibrary);
                             return CoreResult<NativeInitializeResult>.Fail(clientLoad.Error!);
+                        }
+
+                        var cachedClientLoad = LoadCachedClientResource(request.ClientType, runtimeBaseDirectory, exports);
+                        if (!cachedClientLoad.Success)
+                        {
+                            NativeLibrary.Free(loadedLibrary);
+                            return CoreResult<NativeInitializeResult>.Fail(cachedClientLoad.Error!);
                         }
                     }
 
@@ -492,12 +550,24 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge, IMaaCoreBridgeRecovery
                                 "AsstLoadResource(baseDir) returned false during abandoned stop recovery.");
                         }
 
+                        var cachedCommonLoad = LoadCachedCommonResource(baseDirectory, exports);
+                        if (!cachedCommonLoad.Success)
+                        {
+                            return CoreResult<nint>.Fail(cachedCommonLoad.Error!);
+                        }
+
                         if (!string.IsNullOrWhiteSpace(clientType))
                         {
                             var clientLoad = LoadClientResource(clientType, baseDirectory, exports);
                             if (!clientLoad.Success)
                             {
                                 return CoreResult<nint>.Fail(clientLoad.Error!);
+                            }
+
+                            var cachedClientLoad = LoadCachedClientResource(clientType, baseDirectory, exports);
+                            if (!cachedClientLoad.Success)
+                            {
+                                return CoreResult<nint>.Fail(cachedClientLoad.Error!);
                             }
                         }
 
@@ -997,6 +1067,12 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge, IMaaCoreBridgeRecovery
                             "AsstLoadResource(baseDir) returned false during resource reload.");
                     }
 
+                    var cachedCommonLoad = LoadCachedCommonResource(baseDirectory, exports);
+                    if (!cachedCommonLoad.Success)
+                    {
+                        return CoreResult<bool>.Fail(cachedCommonLoad.Error!);
+                    }
+
                     var effectiveClientType = string.IsNullOrWhiteSpace(clientType)
                         ? _loadedClientType
                         : clientType;
@@ -1006,6 +1082,12 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge, IMaaCoreBridgeRecovery
                         if (!clientLoad.Success)
                         {
                             return CoreResult<bool>.Fail(clientLoad.Error!);
+                        }
+
+                        var cachedClientLoad = LoadCachedClientResource(effectiveClientType, baseDirectory, exports);
+                        if (!cachedClientLoad.Success)
+                        {
+                            return CoreResult<bool>.Fail(cachedClientLoad.Error!);
                         }
                     }
 
@@ -1805,6 +1887,57 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge, IMaaCoreBridgeRecovery
 
         _loadedClientType = resolvedClientType;
         return CoreResult<bool>.Ok(true);
+    }
+
+    private static CoreResult<bool> LoadCachedCommonResource(string baseDirectory, AsstExports exports)
+    {
+        var cacheResourcePath = Path.Combine(baseDirectory, "cache", "resource");
+        if (!Directory.Exists(cacheResourcePath))
+        {
+            return CoreResult<bool>.Ok(true);
+        }
+
+        var cacheBaseDirectory = Path.Combine(baseDirectory, "cache");
+        return AsBool(exports.AsstLoadResource(cacheBaseDirectory))
+            ? CoreResult<bool>.Ok(true)
+            : CoreResult<bool>.Fail(new CoreError(
+                CoreErrorCode.ResourceLoadFailed,
+                $"AsstLoadResource failed for cached resource: {cacheResourcePath}"));
+    }
+
+    private static CoreResult<bool> LoadCachedClientResource(string clientType, string baseDirectory, AsstExports exports)
+    {
+        var normalizedClientType = NormalizeClientType(clientType);
+        if (DefaultClientTypes.Contains(normalizedClientType))
+        {
+            return CoreResult<bool>.Ok(true);
+        }
+
+        var cacheClientResourcePath = Path.Combine(
+            baseDirectory,
+            "cache",
+            "resource",
+            "global",
+            normalizedClientType,
+            "resource");
+        if (!Directory.Exists(cacheClientResourcePath))
+        {
+            return CoreResult<bool>.Ok(true);
+        }
+
+        var cacheClientBaseDirectory = Directory.GetParent(cacheClientResourcePath)?.FullName;
+        if (string.IsNullOrWhiteSpace(cacheClientBaseDirectory))
+        {
+            return CoreResult<bool>.Fail(new CoreError(
+                CoreErrorCode.ResourceLoadFailed,
+                $"Cached client resource path is invalid: {cacheClientResourcePath}"));
+        }
+
+        return AsBool(exports.AsstLoadResource(cacheClientBaseDirectory))
+            ? CoreResult<bool>.Ok(true)
+            : CoreResult<bool>.Fail(new CoreError(
+                CoreErrorCode.ResourceLoadFailed,
+                $"AsstLoadResource failed for cached client resource: {cacheClientResourcePath}"));
     }
 
     private static string NormalizeClientType(string? clientType)

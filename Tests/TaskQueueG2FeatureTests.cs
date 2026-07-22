@@ -972,13 +972,13 @@ public sealed class TaskQueueG2FeatureTests
         Assert.Contains("AP-5: 红票", hint);
         Assert.Contains("LS-6: 经验", hint);
         Assert.Contains("PR-A-1/2: 奶&盾芯片", hint);
-        Assert.Contains("(库存 8 & 7 / 5 & 4)", hint);
+        Assert.Contains("(库存 7 & 8 / 4 & 5)", hint);
         Assert.DoesNotContain("今日资源关卡：", hint);
         Assert.DoesNotContain("周一了", hint);
     }
 
     [Fact]
-    public void DailyStageHint_ShouldOmitDepotCountsWhenInventoryIsIncomplete()
+    public void DailyStageHint_ShouldUseWpfPlaceholdersWhenInventoryIsIncomplete()
     {
         var config = new UnifiedConfig();
         config.GlobalValues[LegacyConfigurationKeys.DepotResult] = JsonValue.Create("""{"data":"{\"3231\":8}"}""");
@@ -990,7 +990,7 @@ public sealed class TaskQueueG2FeatureTests
             new DateTime(2026, 03, 12, 0, 0, 0, DateTimeKind.Utc));
 
         Assert.Contains("PR-A-1/2: 奶&盾芯片", hint);
-        Assert.DoesNotContain("(库存", hint);
+        Assert.Contains("(库存 -- & 8 / -- & --)", hint);
     }
 
     private static async Task InvokeCallbackAsync(TaskQueuePageViewModel vm, CoreCallbackEvent callback)

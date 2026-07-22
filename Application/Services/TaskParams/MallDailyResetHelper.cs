@@ -35,8 +35,13 @@ public static class MallDailyResetHelper
 
     public static DateTime GetYjDate(DateTime utcNow, string clientType)
     {
+        return GetYjDateTime(utcNow, clientType).Date;
+    }
+
+    public static DateTime GetYjDateTime(DateTime utcNow, string clientType)
+    {
         var offset = ResolveTimezoneOffset(clientType);
-        return utcNow.AddHours(offset - YjDayStartHour).Date;
+        return utcNow.AddHours(offset - YjDayStartHour);
     }
 
     public static string GetCurrentYjDateString(DateTime utcNow, string clientType)

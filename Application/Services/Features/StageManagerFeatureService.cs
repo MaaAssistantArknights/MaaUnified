@@ -1,35 +1,57 @@
 using System.Reflection;
 using System.Globalization;
+using System.Net;
+using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using MAAUnified.Application.Configuration;
 using MAAUnified.Application.Models;
 using MAAUnified.Application.Services.Localization;
 using MAAUnified.Compat.Runtime;
+using MAAUnified.CoreBridge;
 
 namespace MAAUnified.Application.Services.Features;
 
 public sealed class StageManagerFeatureService : IStageManagerFeatureService
 {
     private const string DefaultClientType = "Official";
+    private const string StageActivityApi = "gui/StageActivityV2.json";
+    private const string TasksApi = "resource/tasks.json";
+    private const string MaaApiBaseUrl = "https://api.maa.plus/MaaAssistantArknights/api/";
+    private const string MaaApiFallbackBaseUrl = "https://api2.maa.plus/MaaAssistantArknights/api/";
     private static readonly string[] WebRootNames = ["publish", "install"];
+    private static readonly HttpClient DefaultHttpClient = new() { Timeout = TimeSpan.FromSeconds(20) };
     private readonly UnifiedConfigurationService? _configService;
     private readonly string _baseDirectory;
+    private readonly HttpClient _httpClient;
+    private readonly Func<string?> _coreVersionResolver;
     private readonly object _snapshotGate = new();
+    private readonly object _activitySnapshotGate = new();
+    private readonly object _coreVersionGate = new();
     private readonly object _resourceCacheGate = new();
     private readonly Dictionary<string, StageSnapshot> _localSnapshots = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, StageSnapshot> _webSnapshots = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, StageActivityState> _activitySnapshots = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, ResourceJsonCacheEntry> _resourceJsonCache = new(StringComparer.OrdinalIgnoreCase);
+    private bool _coreVersionResolved;
+    private string? _resolvedCoreVersion;
 
     public StageManagerFeatureService()
         : this(configService: null, baseDirectory: RuntimeLayout.ResolveRuntimeBaseDirectory())
     {
     }
 
-    public StageManagerFeatureService(UnifiedConfigurationService? configService, string? baseDirectory = null)
+    public StageManagerFeatureService(
+        UnifiedConfigurationService? configService,
+        string? baseDirectory = null,
+        HttpClient? httpClient = null,
+        Func<string?>? coreVersionResolver = null)
     {
         _configService = configService;
         _baseDirectory = ResolveBaseDirectory(configService, baseDirectory);
+        _httpClient = httpClient ?? DefaultHttpClient;
+        _coreVersionResolver = coreVersionResolver ?? (() => MaaCoreBridgeNative.TryReadInstalledVersion(_baseDirectory));
     }
 
     public Task<UiOperationResult<StageManagerState>> LoadStateAsync(CancellationToken cancellationToken = default)
@@ -102,6 +124,80 @@ public sealed class StageManagerFeatureService : IStageManagerFeatureService
         return BuildState(normalizedClientType, localSnapshot, webSnapshot).ActiveStageCodes;
     }
 
+    public StageActivityState GetStageActivityState(string? clientType = null, bool forceReload = false)
+    {
+        var normalizedClientType = NormalizeClientType(clientType ?? ReadConfiguredClientType());
+        var coreVersion = ResolveCoreVersion(forceReload);
+        var isDebugVersion = IsDebugVersion(coreVersion);
+        if (!forceReload)
+        {
+            lock (_activitySnapshotGate)
+            {
+                if (_activitySnapshots.TryGetValue(normalizedClientType, out var cached)
+                    && string.Equals(cached.CoreVersion, coreVersion, StringComparison.Ordinal))
+                {
+                    return cached;
+                }
+            }
+        }
+
+        var loaded = LoadStageActivityStateFromCache(
+            normalizedClientType,
+            resourceTasksUpdated: false,
+            coreVersion,
+            isDebugVersion);
+        lock (_activitySnapshotGate)
+        {
+            _activitySnapshots[normalizedClientType] = loaded;
+        }
+
+        return loaded;
+    }
+
+    public async Task<UiOperationResult<StageActivityState>> RefreshStageActivityWebAsync(
+        string? clientType = null,
+        CancellationToken cancellationToken = default)
+    {
+        var normalizedClientType = NormalizeClientType(clientType ?? ReadConfiguredClientType());
+        var activityTask = FetchMaaApiResourceAsync(StageActivityApi, cancellationToken);
+        var tasksTask = FetchMaaApiResourceAsync(TasksApi, cancellationToken);
+        await Task.WhenAll(activityTask, tasksTask).ConfigureAwait(false);
+        var activity = await activityTask.ConfigureAwait(false);
+        var tasks = await tasksTask.ConfigureAwait(false);
+        var clientTasks = FetchResult.Empty;
+        if (!string.Equals(normalizedClientType, DefaultClientType, StringComparison.OrdinalIgnoreCase) && tasks.Success)
+        {
+            clientTasks = await FetchMaaApiResourceAsync(
+                $"resource/global/{NormalizeClientDirectory(normalizedClientType)}/resource/tasks.json",
+                cancellationToken).ConfigureAwait(false);
+        }
+
+        if (!activity.Success
+            || !tasks.Success
+            || (!string.Equals(normalizedClientType, DefaultClientType, StringComparison.OrdinalIgnoreCase)
+                && !clientTasks.Success))
+        {
+            return UiOperationResult<StageActivityState>.Fail(
+                UiErrorCode.StageManagerServiceUnavailable,
+                BuildStageActivityApiUnavailableMessage(normalizedClientType));
+        }
+
+        var coreVersion = ResolveCoreVersion(forceReload: true);
+        var state = LoadStageActivityStateFromCache(
+            normalizedClientType,
+            resourceTasksUpdated: tasks.Updated || clientTasks.Updated,
+            coreVersion,
+            IsDebugVersion(coreVersion));
+        lock (_activitySnapshotGate)
+        {
+            _activitySnapshots[normalizedClientType] = state;
+        }
+
+        return UiOperationResult<StageActivityState>.Ok(
+            state,
+            BuildStageActivityResourcesLoadedMessage(normalizedClientType, activity.Updated));
+    }
+
     public Task<UiOperationResult<StageManagerConfig>> LoadConfigAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -156,6 +252,449 @@ public sealed class StageManagerFeatureService : IStageManagerFeatureService
         }
 
         return Task.FromResult(UiOperationResult<IReadOnlyList<string>>.Ok(codes, BuildStageCodesValidatedMessage(codes.Length)));
+    }
+
+    private StageActivityState LoadStageActivityStateFromCache(
+        string clientType,
+        bool resourceTasksUpdated,
+        string? coreVersion,
+        bool isDebugVersion)
+    {
+        if (!TryLoadStageActivityJson(out var root) || root is null
+            || !TryGetStageActivityClientNode(root, clientType, out var clientNode))
+        {
+            return StageActivityState.Empty(clientType, coreVersion) with { ResourceTasksUpdated = resourceTasksUpdated };
+        }
+
+        var resourceCollection = ParseActivityWindow(clientNode["resourceCollection"], isResourceCollection: true);
+        var permanentStages = StageActivityStage.CreatePermanentStages()
+            .Select(stage => IsResourceStage(stage.Value)
+                ? stage with { Activity = resourceCollection }
+                : stage)
+            .ToList();
+
+        // WPF still loads side-story stages for debug builds without a parseable Core version.
+        var isCoreVersionParsed = SemanticVersion.TryParse(coreVersion, out var currentCoreVersion);
+        if (!isCoreVersionParsed && !isDebugVersion)
+        {
+            return new StageActivityState(clientType, permanentStages, DateTimeOffset.UtcNow, resourceTasksUpdated, coreVersion);
+        }
+
+        // WPF inserts active stages between its default entries and permanent stages.
+        var stages = permanentStages.Where(IsDefaultStage).ToList();
+        var stageKeys = new HashSet<string>(StringComparer.Ordinal)
+        {
+            string.Empty,
+            "Pormpt1",
+            "Pormpt2",
+        };
+
+        if (clientNode["sideStoryStage"] is JsonObject sideStoryStage)
+        {
+            foreach (var groupPair in sideStoryStage)
+            {
+                if (groupPair.Value is not JsonObject group)
+                {
+                    continue;
+                }
+
+                var groupActivity = group["Activity"] ?? group["activity"];
+                _ = TryReadString(group["MinimumRequired"] ?? group["minimumRequired"], out var groupMinimumRequired);
+                if ((group["Stages"] ?? group["stages"]) is not JsonArray stageArray)
+                {
+                    continue;
+                }
+
+                foreach (var stageNode in stageArray)
+                {
+                    if (stageNode is not JsonObject stageObject
+                        || !TryReadString(stageObject["Value"] ?? stageObject["value"], out var value))
+                    {
+                        continue;
+                    }
+
+                    if (!TryReadString(stageObject["MinimumRequired"] ?? stageObject["minimumRequired"], out var minimumRequired))
+                    {
+                        minimumRequired = groupMinimumRequired;
+                    }
+
+                    if (!SemanticVersion.TryParse(minimumRequired, out var requiredCoreVersion))
+                    {
+                        continue;
+                    }
+
+                    var display = TryReadString(stageObject["Display"] ?? stageObject["display"], out var parsedDisplay)
+                        ? parsedDisplay
+                        : value;
+                    if (!stageKeys.Add(display))
+                    {
+                        continue;
+                    }
+
+                    var drop = TryReadString(stageObject["Drop"] ?? stageObject["drop"], out var parsedDrop)
+                        ? parsedDrop
+                        : null;
+                    var activity = ParseActivityWindow(
+                        stageObject["Activity"] ?? stageObject["activity"] ?? groupActivity,
+                        isResourceCollection: false);
+                    stages.Add(new StageActivityStage(
+                        display,
+                        value,
+                        Activity: activity,
+                        Drop: drop,
+                        MinimumRequired: minimumRequired,
+                        IsCoreVersionSupported: isDebugVersion
+                            || (isCoreVersionParsed && currentCoreVersion.CompareTo(requiredCoreVersion) >= 0)));
+                }
+            }
+        }
+
+        foreach (var stage in permanentStages.Where(stage => !IsDefaultStage(stage)))
+        {
+            // WPF appends permanent stages with Dictionary.TryAdd after activity stages.
+            if (stageKeys.Add(stage.Value))
+            {
+                stages.Add(stage);
+            }
+        }
+
+        return new StageActivityState(clientType, stages, DateTimeOffset.UtcNow, resourceTasksUpdated, coreVersion);
+    }
+
+    private string? ResolveCoreVersion(bool forceReload = false)
+    {
+        lock (_coreVersionGate)
+        {
+            if (!forceReload && _coreVersionResolved)
+            {
+                return _resolvedCoreVersion;
+            }
+        }
+
+        string? resolved;
+        try
+        {
+            var version = _coreVersionResolver.Invoke()?.Trim();
+            resolved = string.IsNullOrWhiteSpace(version) ? null : version;
+        }
+        catch
+        {
+            resolved = null;
+        }
+
+        lock (_coreVersionGate)
+        {
+            _resolvedCoreVersion = resolved;
+            _coreVersionResolved = true;
+            return _resolvedCoreVersion;
+        }
+    }
+
+    private static bool IsDebugVersion(string? version)
+    {
+        return !string.IsNullOrWhiteSpace(version)
+            && Regex.IsMatch(
+                version.Trim(),
+                @"^(.*DEBUG.*|v\d+(\.\d+){1,3}-\d+-g[0-9a-f]{6,}|[^v][0-9a-f]{6,})$",
+                RegexOptions.CultureInvariant);
+    }
+
+    private static bool IsDefaultStage(StageActivityStage stage)
+    {
+        return string.IsNullOrEmpty(stage.Value)
+            || stage.Value is "Pormpt1" or "Pormpt2";
+    }
+
+    private bool TryLoadStageActivityJson(out JsonObject? root)
+    {
+        root = null;
+        foreach (var path in EnumerateStageActivityCachePaths())
+        {
+            if (!File.Exists(path))
+            {
+                continue;
+            }
+
+            try
+            {
+                if (JsonNode.Parse(File.ReadAllText(path)) is JsonObject parsed)
+                {
+                    root = parsed;
+                    return true;
+                }
+            }
+            catch
+            {
+                // Try the next compatible cache location.
+            }
+        }
+
+        return false;
+    }
+
+    private IEnumerable<string> EnumerateStageActivityCachePaths()
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var baseDirectory in EnumerateBaseDirectories())
+        {
+            foreach (var relativePath in new[]
+            {
+                Path.Combine("cache", "gui", "StageActivityV2.json"),
+                Path.Combine("gui", "StageActivityV2.json"),
+                Path.Combine("resource", "gui", "StageActivityV2.json"),
+            })
+            {
+                var path = Path.Combine(baseDirectory, relativePath);
+                if (seen.Add(path))
+                {
+                    yield return path;
+                }
+            }
+        }
+    }
+
+    private static bool TryGetStageActivityClientNode(JsonObject root, string clientType, out JsonObject clientNode)
+    {
+        foreach (var pair in root)
+        {
+            if (string.Equals(NormalizeClientType(pair.Key), clientType, StringComparison.OrdinalIgnoreCase)
+                && pair.Value is JsonObject value)
+            {
+                clientNode = value;
+                return true;
+            }
+        }
+
+        clientNode = null!;
+        return false;
+    }
+
+    private static StageActivityWindow ParseActivityWindow(JsonNode? node, bool isResourceCollection)
+    {
+        if (node is not JsonObject activity)
+        {
+            return new StageActivityWindow(string.Empty, string.Empty, DateTime.MinValue, DateTime.MinValue, isResourceCollection);
+        }
+
+        var timezone = activity["TimeZone"] is JsonValue timezoneValue
+            && timezoneValue.TryGetValue(out int timezoneOffset)
+            ? timezoneOffset
+            : 0;
+        var start = ParseActivityTime(activity["UtcStartTime"], timezone);
+        var expire = ParseActivityTime(activity["UtcExpireTime"], timezone);
+        _ = TryReadString(activity["Tip"], out var tip);
+        _ = TryReadString(activity["StageName"], out var stageName);
+        return new StageActivityWindow(tip, stageName, start, expire, isResourceCollection);
+    }
+
+    private static DateTime ParseActivityTime(JsonNode? node, int timezoneOffset)
+    {
+        if (!TryReadString(node, out var text))
+        {
+            return DateTime.MinValue;
+        }
+
+        if (DateTime.TryParseExact(
+                text,
+                "yyyy/MM/dd HH:mm:ss",
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.None,
+                out var parsed))
+        {
+            return DateTime.SpecifyKind(parsed.AddHours(-timezoneOffset), DateTimeKind.Utc);
+        }
+
+        return DateTime.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out parsed)
+            ? parsed.ToUniversalTime()
+            : DateTime.MinValue;
+    }
+
+    private static bool IsResourceStage(string stageCode)
+    {
+        return stageCode is "CE-6" or "AP-5" or "CA-5" or "LS-6" or "SK-5"
+            or "PR-A-1" or "PR-A-2" or "PR-B-1" or "PR-B-2"
+            or "PR-C-1" or "PR-C-2" or "PR-D-1" or "PR-D-2";
+    }
+
+    private sealed record SemanticVersion(int Major, int Minor, int Patch, IReadOnlyList<string> PreRelease)
+        : IComparable<SemanticVersion>
+    {
+        public static bool TryParse(string? value, out SemanticVersion version)
+        {
+            version = null!;
+            var normalized = value?.Trim();
+            if (string.IsNullOrWhiteSpace(normalized))
+            {
+                return false;
+            }
+
+            if (normalized.StartsWith('v'))
+            {
+                normalized = normalized[1..];
+            }
+
+            var buildSeparator = normalized.IndexOf('+');
+            if (buildSeparator >= 0)
+            {
+                normalized = normalized[..buildSeparator];
+            }
+
+            var prereleaseSeparator = normalized.IndexOf('-');
+            var core = prereleaseSeparator >= 0 ? normalized[..prereleaseSeparator] : normalized;
+            var prerelease = prereleaseSeparator >= 0 ? normalized[(prereleaseSeparator + 1)..] : string.Empty;
+            var components = core.Split('.');
+            if (components.Length != 3
+                || !int.TryParse(components[0], NumberStyles.None, CultureInfo.InvariantCulture, out var major)
+                || !int.TryParse(components[1], NumberStyles.None, CultureInfo.InvariantCulture, out var minor)
+                || !int.TryParse(components[2], NumberStyles.None, CultureInfo.InvariantCulture, out var patch))
+            {
+                return false;
+            }
+
+            var identifiers = string.IsNullOrEmpty(prerelease) ? [] : prerelease.Split('.');
+            if (identifiers.Any(static identifier => string.IsNullOrWhiteSpace(identifier)
+                || identifier.Any(static character => !char.IsAsciiLetterOrDigit(character) && character != '-')))
+            {
+                return false;
+            }
+
+            version = new SemanticVersion(major, minor, patch, identifiers);
+            return true;
+        }
+
+        public int CompareTo(SemanticVersion? other)
+        {
+            if (other is null)
+            {
+                return 1;
+            }
+
+            var coreComparison = Major.CompareTo(other.Major);
+            coreComparison = coreComparison != 0 ? coreComparison : Minor.CompareTo(other.Minor);
+            coreComparison = coreComparison != 0 ? coreComparison : Patch.CompareTo(other.Patch);
+            if (coreComparison != 0)
+            {
+                return coreComparison;
+            }
+
+            if (PreRelease.Count == 0 || other.PreRelease.Count == 0)
+            {
+                return PreRelease.Count == other.PreRelease.Count ? 0 : (PreRelease.Count == 0 ? 1 : -1);
+            }
+
+            for (var index = 0; index < Math.Min(PreRelease.Count, other.PreRelease.Count); index++)
+            {
+                var left = PreRelease[index];
+                var right = other.PreRelease[index];
+                var leftIsNumber = int.TryParse(left, NumberStyles.None, CultureInfo.InvariantCulture, out var leftNumber);
+                var rightIsNumber = int.TryParse(right, NumberStyles.None, CultureInfo.InvariantCulture, out var rightNumber);
+                var comparison = leftIsNumber && rightIsNumber
+                    ? leftNumber.CompareTo(rightNumber)
+                    : leftIsNumber ? -1 : rightIsNumber ? 1 : string.CompareOrdinal(left, right);
+                if (comparison != 0)
+                {
+                    return comparison;
+                }
+            }
+
+            return PreRelease.Count.CompareTo(other.PreRelease.Count);
+        }
+    }
+
+    private async Task<FetchResult> FetchMaaApiResourceAsync(string relativePath, CancellationToken cancellationToken)
+    {
+        var cachePath = Path.Combine(_baseDirectory, "cache", relativePath.Replace('/', Path.DirectorySeparatorChar));
+        var etagPath = cachePath + ".etag";
+        var etag = TryReadText(etagPath);
+
+        foreach (var baseUrl in new[] { MaaApiBaseUrl, MaaApiFallbackBaseUrl })
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(new Uri(baseUrl), relativePath));
+            if (!string.IsNullOrWhiteSpace(etag) && EntityTagHeaderValue.TryParse(etag, out var entityTag))
+            {
+                request.Headers.IfNoneMatch.Add(entityTag);
+            }
+
+            try
+            {
+                using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+                if (response.StatusCode == HttpStatusCode.NotModified)
+                {
+                    return File.Exists(cachePath) ? new FetchResult(true, false) : FetchResult.Empty;
+                }
+
+                if (response.StatusCode != HttpStatusCode.OK)
+                {
+                    continue;
+                }
+
+                var content = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+                if (JsonNode.Parse(content) is null)
+                {
+                    continue;
+                }
+
+                var directory = Path.GetDirectoryName(cachePath);
+                if (!string.IsNullOrWhiteSpace(directory))
+                {
+                    Directory.CreateDirectory(directory);
+                }
+
+                await File.WriteAllTextAsync(cachePath, content, cancellationToken).ConfigureAwait(false);
+                if (relativePath.EndsWith("resource/tasks.json", StringComparison.OrdinalIgnoreCase))
+                {
+                    var tasksDirectory = Path.Combine(Path.GetDirectoryName(cachePath)!, "tasks");
+                    Directory.CreateDirectory(tasksDirectory);
+                    await File.WriteAllTextAsync(
+                        Path.Combine(tasksDirectory, "tasks.json"),
+                        content,
+                        cancellationToken).ConfigureAwait(false);
+                }
+
+                var receivedEtag = response.Headers.ETag?.ToString();
+                if (!string.IsNullOrWhiteSpace(receivedEtag))
+                {
+                    await File.WriteAllTextAsync(etagPath, receivedEtag, cancellationToken).ConfigureAwait(false);
+                }
+
+                return new FetchResult(true, true);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (OperationCanceledException)
+            {
+                // Try the mirror endpoint.
+            }
+            catch (HttpRequestException)
+            {
+                // Try the mirror endpoint.
+            }
+            catch (IOException)
+            {
+                // Try the mirror endpoint.
+            }
+            catch (JsonException)
+            {
+                // Invalid API data is treated like an unavailable response.
+            }
+        }
+
+        // StageManager.UpdateStageWeb disables cache fallback for these resources.
+        return FetchResult.Empty;
+    }
+
+    private static string? TryReadText(string path)
+    {
+        try
+        {
+            return File.Exists(path) ? File.ReadAllText(path).Trim() : null;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private StageManagerState BuildState(
@@ -656,6 +1195,18 @@ public sealed class StageManagerFeatureService : IStageManagerFeatureService
             clientType);
     }
 
+    private string BuildStageActivityResourcesLoadedMessage(string clientType, bool updated)
+    {
+        return updated
+            ? $"Updated stage activity resources for `{clientType}`."
+            : $"Loaded cached stage activity resources for `{clientType}`.";
+    }
+
+    private string BuildStageActivityApiUnavailableMessage(string clientType)
+    {
+        return $"Unable to load stage activity resources for `{clientType}` from the MAA API or local cache.";
+    }
+
     private string BuildStageManagerConfigLoadedMessage()
     {
         return FormatStageManagerMessage(
@@ -776,4 +1327,9 @@ public sealed class StageManagerFeatureService : IStageManagerFeatureService
         IReadOnlyList<string> StageCodes,
         string SourceUrl,
         DateTimeOffset RefreshedAt);
+
+    private sealed record FetchResult(bool Success, bool Updated)
+    {
+        public static FetchResult Empty { get; } = new(false, false);
+    }
 }

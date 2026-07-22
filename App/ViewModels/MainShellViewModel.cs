@@ -2636,6 +2636,7 @@ public sealed class MainShellViewModel : ObservableObject
 
     private void OnTimerScheduleTick(object? sender, EventArgs e)
     {
+        TaskQueuePage.RefreshStagePresentationForClock(DateTime.UtcNow);
         _ = EvaluateTimerScheduleAsync(DateTimeOffset.Now);
     }
 

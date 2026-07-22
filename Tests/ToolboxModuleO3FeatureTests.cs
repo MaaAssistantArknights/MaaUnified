@@ -475,7 +475,7 @@ public sealed class ToolboxModuleO3FeatureTests
             new DateTime(2026, 3, 15, 0, 0, 0, DateTimeKind.Utc));
 
         Assert.Contains("PR-A-1/2", hint, StringComparison.Ordinal);
-        Assert.DoesNotContain("(库存", hint, StringComparison.Ordinal);
+        Assert.Contains("(库存 -- & 7 / -- & --)", hint, StringComparison.Ordinal);
     }
 
     [Fact]
