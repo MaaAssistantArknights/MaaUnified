@@ -54,6 +54,7 @@ public static class TaskParamCompiler
     private const string UserDataUpdateTriggerInterval = "trigger_interval";
     private const string UiRecruitPreserveTagsEnabled = "_ui_preserve_tags_enabled";
     private const string SkipAppendIssueCode = "TaskCompileSkipAppend";
+    private static readonly Regex ExpiredActivityStageCodeRegex = new("^[A-Za-z]{2}-\\d{1,2}$", RegexOptions.Compiled);
     private static readonly Regex RoguelikeSeedRegex = new("^[0-9A-Za-z]+,rogue_\\d+,\\d+$", RegexOptions.Compiled);
     private static readonly HashSet<int> RoguelikeModes = [0, 1, 4, 5, 6, 7, 20001];
     private static readonly HashSet<string> RoguelikeThemes = new(StringComparer.OrdinalIgnoreCase) { "JieGarden", "Phantom", "Mizuki", "Sami", "Sarkaz" };
@@ -268,6 +269,9 @@ public static class TaskParamCompiler
         var annihilationStage = ReadString(parameters, UiAnnihilationStage, false, issues, "fight.annihilation_stage", "Annihilation");
         var stagePlan = ReadFightStagePlan(parameters, strict, issues, storedStage);
         var isStageManually = ReadBool(parameters, UiIsStageManually, false);
+        var hideUnavailableStage = ReadBool(parameters, UiHideUnavailableStage, true);
+        var stageResetModeFallback = hideUnavailableStage ? "Current" : "Ignore";
+        var stageResetMode = ReadString(parameters, UiStageResetMode, false, issues, "fight.stage_reset_mode", stageResetModeFallback);
         var stage = ResolveFightDisplayStage(storedStage);
 
         var dto = new FightTaskParamsDto
@@ -293,8 +297,8 @@ public static class TaskParamCompiler
             UseCustomAnnihilation = useCustomAnnihilation,
             AnnihilationStage = annihilationStage,
             UseAlternateStage = ReadBool(parameters, UiUseAlternateStage, false),
-            HideUnavailableStage = ReadBool(parameters, UiHideUnavailableStage, true),
-            StageResetMode = ReadString(parameters, UiStageResetMode, false, issues, "fight.stage_reset_mode", "Current"),
+            HideUnavailableStage = hideUnavailableStage,
+            StageResetMode = stageResetMode,
             HideSeries = ReadBool(parameters, UiHideSeries, false),
             AllowUseStoneSave = ReadBool(parameters, UiAllowUseStoneSave, false),
             UseWeeklySchedule = ReadBool(parameters, UiUseWeeklySchedule, false),
@@ -320,11 +324,12 @@ public static class TaskParamCompiler
 
         var useAlternateStage = dto.UseAlternateStage;
         var hideUnavailableStage = dto.HideUnavailableStage;
-        var stageResetMode = string.IsNullOrWhiteSpace(dto.StageResetMode) ? "Current" : dto.StageResetMode;
+        var stageResetModeFallback = hideUnavailableStage ? "Current" : "Ignore";
+        var stageResetMode = string.IsNullOrWhiteSpace(dto.StageResetMode) ? stageResetModeFallback : dto.StageResetMode;
         if (!string.Equals(stageResetMode, "Current", StringComparison.OrdinalIgnoreCase)
             && !string.Equals(stageResetMode, "Ignore", StringComparison.OrdinalIgnoreCase))
         {
-            stageResetMode = "Current";
+            stageResetMode = stageResetModeFallback;
         }
 
         if (useAlternateStage)
@@ -359,14 +364,15 @@ public static class TaskParamCompiler
             stagePlan = [stagePlan[0]];
         }
 
-        var stage = ResolveFightExecutionStage(
+        var stageSelectionTime = nowUtc ?? DateTime.UtcNow;
+        var selectedStage = ResolveFightExecutionStage(
             stagePlan,
             dto.IsStageManually,
-            useAlternateStage,
             stageResetMode,
-            dto.UseCustomAnnihilation,
-            dto.AnnihilationStage,
-            ResolveStringSetting(profile, config, "ClientType", "Start.ClientType") ?? "Official");
+            ResolveStringSetting(profile, config, "ClientType", "Start.ClientType") ?? "Official",
+            stageSelectionTime);
+        var skipAppendForNoRunnableStage = selectedStage is null;
+        var stage = selectedStage ?? stagePlan[0];
 
         if (dto.Series is < -1 or > 6)
         {
@@ -389,6 +395,15 @@ public static class TaskParamCompiler
                 "FightTimesMayNotExhausted",
                 "fight.times",
                 "Fight times may not be fully exhausted under current series.",
+                Blocking: false));
+        }
+
+        if (skipAppendForNoRunnableStage)
+        {
+            issues.Add(new TaskValidationIssue(
+                SkipAppendIssueCode,
+                "fight.stage_plan",
+                "No configured fight stage is open today.",
                 Blocking: false));
         }
 
@@ -892,26 +907,25 @@ public static class TaskParamCompiler
         return storedStage;
     }
 
-    private static string ResolveFightExecutionStage(
+    private static string? ResolveFightExecutionStage(
         IReadOnlyList<string> stagePlan,
         bool isStageManually,
-        bool useAlternateStage,
         string stageResetMode,
-        bool useCustomAnnihilation,
-        string annihilationStage,
-        string clientType)
+        string clientType,
+        DateTime utcNow)
     {
         var normalizedPlan = FightStageSelection.NormalizeStagePlan(stagePlan);
         var normalizedClientType = NormalizeFightClientType(clientType);
-        var currentDay = MallDailyResetHelper.GetYjDate(DateTime.UtcNow, normalizedClientType).DayOfWeek;
+        var currentDay = MallDailyResetHelper.GetYjDate(utcNow, normalizedClientType).DayOfWeek;
 
+        // WPF preserves manual values during resource refresh, but still checks whether they are open before appending.
         if (isStageManually)
         {
-            return FightStageSelection.NormalizeStoredValue(normalizedPlan[0]);
+            stageResetMode = "Ignore";
         }
 
         var stageManager = new StageManagerFeatureService();
-        var availableStageCodes = stageManager.GetStageCodes(normalizedClientType).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var stageState = stageManager.GetStageActivityState(normalizedClientType);
 
         foreach (var candidate in normalizedPlan)
         {
@@ -925,40 +939,40 @@ public static class TaskParamCompiler
                 return "Annihilation";
             }
 
-            if (!availableStageCodes.Contains(candidate))
+            var stage = stageState.Find(candidate);
+            if (stage is null)
             {
-                if (useAlternateStage)
+                if (string.Equals(stageResetMode, "Current", StringComparison.OrdinalIgnoreCase))
                 {
-                    continue;
+                    return FightStageSelection.CurrentOrLast;
                 }
 
-                return string.Equals(stageResetMode, "Current", StringComparison.OrdinalIgnoreCase)
-                    ? FightStageSelection.CurrentOrLast
-                    : candidate;
+                // Keep WPF's fallback: only two-letter activity codes are treated as expired.
+                if (!ExpiredActivityStageCodeRegex.IsMatch(candidate))
+                {
+                    return candidate;
+                }
+
+                continue;
             }
 
-            if (IsFightStageOpenToday(candidate, currentDay))
+            // WPF resets Current only when the stage is no longer in GetStageList().
+            // A weekly closed stage and a future activity remain in that list and must be skipped instead.
+            var isInStageList = !stage.IsHidden && stage.IsOpenOrWillOpen(utcNow);
+            if (!isInStageList
+                && string.Equals(stageResetMode, "Current", StringComparison.OrdinalIgnoreCase))
+            {
+                return FightStageSelection.CurrentOrLast;
+            }
+
+            if (stage.IsOpen(utcNow, currentDay))
             {
                 return candidate;
             }
 
-            if (!useAlternateStage)
-            {
-                return string.Equals(stageResetMode, "Current", StringComparison.OrdinalIgnoreCase)
-                    ? FightStageSelection.CurrentOrLast
-                    : candidate;
-            }
         }
 
-        var fallback = normalizedPlan[0];
-        if (string.Equals(fallback, "Annihilation", StringComparison.OrdinalIgnoreCase)
-            && useCustomAnnihilation
-            && !string.IsNullOrWhiteSpace(annihilationStage))
-        {
-            return "Annihilation";
-        }
-
-        return FightStageSelection.NormalizeStoredValue(fallback);
+        return null;
     }
 
     private static string NormalizeFightClientType(string? clientType)
@@ -971,22 +985,6 @@ public static class TaskParamCompiler
         }
 
         return clientType.Trim();
-    }
-
-    private static bool IsFightStageOpenToday(string stageCode, DayOfWeek dayOfWeek)
-    {
-        return stageCode switch
-        {
-            "CE-6" => dayOfWeek is DayOfWeek.Tuesday or DayOfWeek.Thursday or DayOfWeek.Saturday or DayOfWeek.Sunday,
-            "AP-5" => dayOfWeek is DayOfWeek.Monday or DayOfWeek.Thursday or DayOfWeek.Saturday or DayOfWeek.Sunday,
-            "CA-5" => dayOfWeek is DayOfWeek.Tuesday or DayOfWeek.Wednesday or DayOfWeek.Friday or DayOfWeek.Sunday,
-            "SK-5" => dayOfWeek is DayOfWeek.Monday or DayOfWeek.Wednesday or DayOfWeek.Friday or DayOfWeek.Saturday,
-            "PR-A-1" or "PR-A-2" => dayOfWeek is DayOfWeek.Monday or DayOfWeek.Thursday or DayOfWeek.Friday or DayOfWeek.Sunday,
-            "PR-B-1" or "PR-B-2" => dayOfWeek is DayOfWeek.Monday or DayOfWeek.Tuesday or DayOfWeek.Friday or DayOfWeek.Saturday,
-            "PR-C-1" or "PR-C-2" => dayOfWeek is DayOfWeek.Wednesday or DayOfWeek.Thursday or DayOfWeek.Saturday or DayOfWeek.Sunday,
-            "PR-D-1" or "PR-D-2" => dayOfWeek is DayOfWeek.Tuesday or DayOfWeek.Wednesday or DayOfWeek.Saturday or DayOfWeek.Sunday,
-            _ => true,
-        };
     }
 
     public static (RecruitTaskParamsDto Dto, IReadOnlyList<TaskValidationIssue> Issues) ReadRecruit(
