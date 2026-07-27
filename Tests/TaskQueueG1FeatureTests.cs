@@ -732,10 +732,11 @@ public sealed class TaskQueueG1FeatureTests
         var task = Assert.Single(vm.Tasks);
         await vm.ToggleTaskEnabledOneShotAsync(task);
         Assert.Null(task.IsEnabled);
+        MapCoreTaskId(fixture.Runtime.SessionService, 1, 0);
 
         await InvokeCallbackAsync(
             vm,
-            new CoreCallbackEvent(0, "AllTasksCompleted", "{}", DateTimeOffset.UtcNow));
+            new CoreCallbackEvent(0, "AllTasksCompleted", """{"finished_tasks":[1]}""", DateTimeOffset.UtcNow));
 
         Assert.False(task.IsEnabled);
         Assert.False(fixture.Config.CurrentConfig.Profiles["Default"].TaskQueue[0].IsEnabled);
@@ -756,10 +757,11 @@ public sealed class TaskQueueG1FeatureTests
         var task = Assert.Single(vm.Tasks);
         await vm.ToggleTaskEnabledOneShotAsync(task);
         Assert.Null(task.IsEnabled);
+        MapCoreTaskId(fixture.Runtime.SessionService, 1, 0);
 
         await InvokeCallbackAsync(
             vm,
-            new CoreCallbackEvent(0, "AllTasksCompleted", "{}", DateTimeOffset.UtcNow));
+            new CoreCallbackEvent(0, "AllTasksCompleted", """{"finished_tasks":[1]}""", DateTimeOffset.UtcNow));
 
         Assert.True(task.IsEnabled);
         Assert.True(fixture.Config.CurrentConfig.Profiles["Default"].TaskQueue[0].IsEnabled);
@@ -1418,6 +1420,15 @@ public sealed class TaskQueueG1FeatureTests
         }
 
         await task;
+    }
+
+    private static void MapCoreTaskId(UnifiedSessionService sessionService, int taskId, int taskIndex)
+    {
+        var method = typeof(UnifiedSessionService).GetMethod(
+            "SetTaskIdMapping",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(method);
+        method.Invoke(sessionService, [taskId, taskIndex]);
     }
 
     private static async Task<JsonObject> ReadPersistedTaskAsync(TestFixture fixture)

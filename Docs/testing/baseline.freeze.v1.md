@@ -9,7 +9,7 @@
 - Locales: `zh-cn, zh-tw, en-us, ja-jp, ko-kr, pallas`
 - Feature items: `38`
 - System items: `12`
-- Config keys: `297`
+- Config keys: `300`
 - Fallback records: `15`
 
 ## Feature Parity
@@ -75,7 +75,7 @@
 | `System.PageErrorChannel` | Aligned | `App/ViewModels/Infrastructure/PageViewModelBase.cs` |
 
 ## Config Key Mapping Summary
-- Aligned: `297`
+- Aligned: `300`
 - Gap: `0`
 - Waived: `0`
 

@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Controls.Notifications;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
@@ -8,6 +9,7 @@ using Avalonia.Platform;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json.Nodes;
 using MAAUnified.App.Controls;
@@ -147,6 +149,8 @@ public partial class MainWindow : Window
     private bool _settingsSectionWarmupStarted;
     private MainShellViewModel? _shellBackgroundVm;
     private BlurEffect? _shellBackgroundBlurEffect;
+    private readonly WindowNotificationManager _inAppNotificationManager;
+    private readonly INotificationInteractionSource? _notificationInteractionSource;
 
     private readonly record struct ResponsiveDoubleResourceRange(string ResourceKey, double Minimum, double Maximum);
 
@@ -165,6 +169,17 @@ public partial class MainWindow : Window
         InitializeComponent();
         WindowVisuals.ApplyDefaultIcon(this);
         ApplyPlatformDefaultWindowSize(OperatingSystem.IsMacOS());
+        _inAppNotificationManager = new WindowNotificationManager(this)
+        {
+            Position = NotificationPosition.TopRight,
+            MaxItems = 3,
+        };
+        _notificationInteractionSource = App.Runtime.Platform.NotificationService as INotificationInteractionSource;
+        if (_notificationInteractionSource is not null)
+        {
+            _notificationInteractionSource.ActionActivated += OnNotificationActionActivated;
+            _notificationInteractionSource.InAppNotificationRequested += OnInAppNotificationRequested;
+        }
         _dialogService = Avalonia.Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime
             ? new AvaloniaDialogService(App.Runtime)
             : NoOpAppDialogService.Instance;
@@ -283,6 +298,7 @@ public partial class MainWindow : Window
         vm.PlatformCapabilityService.GlobalHotkeyTriggered += OnGlobalHotkeyTriggered;
         vm.PlatformCapabilityService.OverlayStateChanged += OnPlatformOverlayStateChanged;
         _platformBound = true;
+        ShowNotificationAvailabilityWarningIfNeeded(vm);
 
         await RunPlatformStartupStepAsync(
             "PlatformCapability.Hotkey.ConfigureHost",
@@ -448,7 +464,102 @@ public partial class MainWindow : Window
 
         AvaloniaDialogService.OwnerModalStateChanged -= OnOwnerModalStateChanged;
         App.Runtime.UiLanguageCoordinator.LanguageChanged -= OnUiLanguageChanged;
+        if (_notificationInteractionSource is not null)
+        {
+            _notificationInteractionSource.ActionActivated -= OnNotificationActionActivated;
+            _notificationInteractionSource.InAppNotificationRequested -= OnInAppNotificationRequested;
+        }
+        _inAppNotificationManager.CloseAll();
     });
+
+    private void OnInAppNotificationRequested(object? sender, InAppNotificationRequestedEventArgs e)
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            ShowInAppNotification(e.Notification);
+        });
+    }
+
+    private void OnNotificationActionActivated(object? sender, NotificationActionActivatedEventArgs e)
+    {
+        if (!SystemNotificationAction.TryGetOpenUrl(e.Argument, out var url))
+        {
+            return;
+        }
+
+        Dispatcher.UIThread.Post(() => _ = App.RunUiTaskAsync("MainWindow.NotificationAction.OpenUrl", async () =>
+        {
+            try
+            {
+                _ = Process.Start(new ProcessStartInfo(url)
+                {
+                    UseShellExecute = true,
+                });
+            }
+            catch (Exception ex)
+            {
+                await App.Runtime.DiagnosticsService.RecordErrorAsync(
+                    "MainWindow.NotificationAction.OpenUrl",
+                    $"Failed to open notification URL: {url}",
+                    ex);
+                VM?.PushGrowl(ex.Message);
+            }
+        }));
+    }
+
+    private void ShowNotificationAvailabilityWarningIfNeeded(MainShellViewModel vm)
+    {
+        if (!vm.SettingsPage.UseNotify)
+        {
+            return;
+        }
+
+        var availability = App.Runtime.Platform.NotificationService.GetAvailability();
+        if (availability.IsAvailable)
+        {
+            return;
+        }
+
+        var title = PlatformCapabilityTextMap.GetCapabilityName(
+            vm.CurrentShellLanguage,
+            PlatformCapabilityId.Notification,
+            vm.ReportLocalizationFallback);
+        var template = PlatformCapabilityTextMap.GetUiText(
+            vm.CurrentShellLanguage,
+            "Notification.Unavailable",
+            "Toast notifications are unavailable: {0}",
+            vm.ReportLocalizationFallback);
+        ShowInAppNotification(
+            new SystemNotificationRequest(
+                title,
+                string.Format(
+                    CultureInfo.CurrentCulture,
+                    template,
+                    PlatformCapabilityTextMap.GetNotificationAvailabilityDetail(
+                        vm.CurrentShellLanguage,
+                        availability,
+                        vm.ReportLocalizationFallback)),
+                [],
+                InAppSeverity: InAppNotificationSeverity.Error));
+    }
+
+    private void ShowInAppNotification(SystemNotificationRequest notification)
+    {
+        _inAppNotificationManager.Show(new Avalonia.Controls.Notifications.Notification(
+            notification.Title,
+            notification.Message,
+            ResolveInAppNotificationType(notification.InAppSeverity),
+            TimeSpan.FromSeconds(10)));
+    }
+
+    internal static NotificationType ResolveInAppNotificationType(InAppNotificationSeverity severity)
+        => severity switch
+        {
+            InAppNotificationSeverity.Information => NotificationType.Information,
+            InAppNotificationSeverity.Warning => NotificationType.Warning,
+            InAppNotificationSeverity.Error => NotificationType.Error,
+            _ => NotificationType.Information,
+        };
 
     private async Task RunWindowCleanupStepAsync(string scope, Func<Task> action)
     {

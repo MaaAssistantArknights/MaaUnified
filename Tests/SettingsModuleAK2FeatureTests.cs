@@ -17,6 +17,19 @@ namespace MAAUnified.Tests;
 public sealed class SettingsModuleAK2FeatureTests
 {
     [Fact]
+    public async Task Initialize_StallDetectionDefaults_MatchWpfAndIgnoreRetiredTimeoutSetting()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync(gpuCapabilityService: new ScriptedWindowsGpuCapabilityService());
+        fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.TaskTimeoutMinutes] = JsonValue.Create("90");
+
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        Assert.True(vm.StallTimeoutEnabled);
+        Assert.Equal(25, vm.StallTimeoutMinutes);
+    }
+
+    [Fact]
     public async Task SaveStartPerformanceSettings_WindowsGpuSelection_WritesExpectedKeys_AndReadBackMatchesVm()
     {
         await using var fixture = await RuntimeFixture.CreateAsync(gpuCapabilityService: new ScriptedWindowsGpuCapabilityService());
@@ -45,7 +58,8 @@ public sealed class SettingsModuleAK2FeatureTests
         vm.EnablePenguin = false;
         vm.EnableYituliu = true;
         vm.PenguinId = "  penguin-001  ";
-        vm.TaskTimeoutMinutes = 180;
+        vm.StallTimeoutEnabled = false;
+        vm.StallTimeoutMinutes = 180;
         vm.ReminderIntervalMinutes = 45;
 
         await vm.SaveStartPerformanceSettingsAsync();
@@ -70,7 +84,8 @@ public sealed class SettingsModuleAK2FeatureTests
         Assert.Equal("False", ReadScopedString(fixture.Config, ConfigurationKeys.EnablePenguin));
         Assert.Equal("True", ReadScopedString(fixture.Config, ConfigurationKeys.EnableYituliu));
         Assert.Equal("penguin-001", ReadScopedString(fixture.Config, ConfigurationKeys.PenguinId));
-        Assert.Equal("180", ReadScopedString(fixture.Config, ConfigurationKeys.TaskTimeoutMinutes));
+        Assert.Equal("False", ReadScopedString(fixture.Config, ConfigurationKeys.StallTimeoutEnabled));
+        Assert.Equal("180", ReadScopedString(fixture.Config, ConfigurationKeys.StallTimeoutMinutes));
         Assert.Equal("45", ReadScopedString(fixture.Config, ConfigurationKeys.ReminderIntervalMinutes));
 
         Assert.True(vm.RunDirectly);
@@ -93,7 +108,8 @@ public sealed class SettingsModuleAK2FeatureTests
         Assert.False(vm.EnablePenguin);
         Assert.True(vm.EnableYituliu);
         Assert.Equal("penguin-001", vm.PenguinId);
-        Assert.Equal(180, vm.TaskTimeoutMinutes);
+        Assert.False(vm.StallTimeoutEnabled);
+        Assert.Equal(180, vm.StallTimeoutMinutes);
         Assert.Equal(45, vm.ReminderIntervalMinutes);
         Assert.False(vm.HasPendingStartPerformanceChanges);
     }
@@ -418,8 +434,9 @@ public sealed class SettingsModuleAK2FeatureTests
         fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.EnablePenguin] = JsonValue.Create("false");
         fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.EnableYituliu] = JsonValue.Create(1);
         fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.PenguinId] = JsonValue.Create("  pid  ");
-        fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.TaskTimeoutMinutes] = JsonValue.Create("90");
-        fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.ReminderIntervalMinutes] = JsonValue.Create("0");
+        fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.StallTimeoutEnabled] = JsonValue.Create("false");
+        fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.StallTimeoutMinutes] = JsonValue.Create("99999");
+        fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.ReminderIntervalMinutes] = JsonValue.Create("99999");
 
         var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
         await vm.InitializeAsync();
@@ -445,8 +462,9 @@ public sealed class SettingsModuleAK2FeatureTests
         Assert.False(vm.EnablePenguin);
         Assert.True(vm.EnableYituliu);
         Assert.Equal("pid", vm.PenguinId);
-        Assert.Equal(90, vm.TaskTimeoutMinutes);
-        Assert.Equal(1, vm.ReminderIntervalMinutes);
+        Assert.False(vm.StallTimeoutEnabled);
+        Assert.Equal(11451, vm.StallTimeoutMinutes);
+        Assert.Equal(11451, vm.ReminderIntervalMinutes);
         var expectedWarning = string.Format(
             CultureInfo.InvariantCulture,
             vm.RootTexts["Settings.StartPerformance.Warning.EmulatorWaitSecondsClamped"],
@@ -527,7 +545,8 @@ public sealed class SettingsModuleAK2FeatureTests
                 vm.EnablePenguin = true;
                 vm.EnableYituliu = false;
                 vm.PenguinId = "penguin-roundtrip";
-                vm.TaskTimeoutMinutes = 240;
+                vm.StallTimeoutEnabled = false;
+                vm.StallTimeoutMinutes = 240;
                 vm.ReminderIntervalMinutes = 60;
 
                 await vm.SaveStartPerformanceSettingsAsync();
@@ -556,7 +575,8 @@ public sealed class SettingsModuleAK2FeatureTests
             Assert.True(reloaded.EnablePenguin);
             Assert.False(reloaded.EnableYituliu);
             Assert.Equal("penguin-roundtrip", reloaded.PenguinId);
-            Assert.Equal(240, reloaded.TaskTimeoutMinutes);
+            Assert.False(reloaded.StallTimeoutEnabled);
+            Assert.Equal(240, reloaded.StallTimeoutMinutes);
             Assert.Equal(60, reloaded.ReminderIntervalMinutes);
         }
         finally

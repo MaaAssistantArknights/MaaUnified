@@ -13,6 +13,7 @@ using MAAUnified.Application.Orchestration;
 using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Localization;
 using MAAUnified.CoreBridge;
+using MAAUnified.Platform;
 using LegacyConfigurationKeys = MAAUnified.Compat.Constants.ConfigurationKeys;
 
 namespace MAAUnified.App.ViewModels.Copilot;
@@ -1406,8 +1407,15 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
                 active.Status = "Running";
                 break;
             case "TaskChainCompleted":
+                active.Status = "Success";
+                _ = Runtime.AchievementTrackerService.AddProgressToGroup("UseCopilot");
+                break;
             case "AllTasksCompleted":
                 active.Status = "Success";
+                QueueWpfSystemNotification(
+                    GetRootText("CompleteTask", "Complete task: ")
+                    + GetRootText(metadata.TaskChain ?? _activeTaskChain ?? "Copilot", metadata.TaskChain ?? _activeTaskChain ?? "Copilot"),
+                    "copilot completion");
                 _ = Runtime.AchievementTrackerService.AddProgressToGroup("UseCopilot");
                 CompleteActiveRun();
                 break;
@@ -1416,12 +1424,91 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
                 CompleteActiveRun();
                 break;
             case "TaskChainError":
+                active.Status = "Error";
+                LastErrorMessage = $"{callback.MsgName}: {callback.PayloadJson}";
+                QueueWpfSystemNotification(
+                    GetRootText("TaskError", "Task error: ")
+                    + GetRootText(metadata.TaskChain ?? _activeTaskChain ?? "Copilot", metadata.TaskChain ?? _activeTaskChain ?? "Copilot"),
+                    "copilot task failure");
+                QueueWpfExternalErrorNotification(
+                    GetRootText("TaskError", "Task error: ")
+                    + GetRootText(metadata.TaskChain ?? _activeTaskChain ?? "Copilot", metadata.TaskChain ?? _activeTaskChain ?? "Copilot"));
+                CompleteActiveRun();
+                break;
             case "SubTaskError":
                 active.Status = "Error";
                 LastErrorMessage = $"{callback.MsgName}: {callback.PayloadJson}";
                 CompleteActiveRun();
                 break;
         }
+    }
+
+    private void QueueWpfSystemNotification(string title, string reason)
+    {
+        var useSystemNotification = ReadUseSystemNotificationSetting();
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Runtime.PlatformCapabilityService.SendSystemNotificationAsync(
+                    new SystemNotificationRequest(title, string.Empty, [], UseSystemNotification: useSystemNotification));
+            }
+            catch (Exception ex)
+            {
+                Runtime.LogService.Error($"Failed to dispatch {reason} notification: {ex.Message}");
+            }
+        });
+    }
+
+    private bool ReadUseSystemNotificationSetting()
+    {
+        var values = Runtime.ConfigurationService.CurrentConfig.GlobalValues;
+        if (!values.TryGetValue(LegacyConfigurationKeys.UseNotify, out var node) || node is not JsonValue value)
+        {
+            return true;
+        }
+
+        if (value.TryGetValue(out bool boolean))
+        {
+            return boolean;
+        }
+
+        return !value.TryGetValue(out string? text) || !bool.TryParse(text, out boolean) || boolean;
+    }
+
+    private void QueueWpfExternalErrorNotification(string message)
+    {
+        var requests = TaskQueuePageViewModel.BuildAutomaticExternalNotificationRequests(
+            "TaskChainError",
+            new TaskQueuePageViewModel.TaskQueueSystemNotification(
+                message,
+                message,
+                "Copilot.Notification.Error",
+                "copilot task failure"),
+            Runtime.ConfigurationService.CurrentConfig);
+        if (requests.Count == 0)
+        {
+            return;
+        }
+
+        _ = Task.Run(async () =>
+        {
+            foreach (var request in requests)
+            {
+                try
+                {
+                    var result = await Runtime.NotificationProviderFeatureService.SendTestAsync(request);
+                    if (!result.Success)
+                    {
+                        Runtime.LogService.Warn($"Failed to dispatch Copilot external notification via {request.Provider}: {result.Message}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Runtime.LogService.Warn($"Failed to dispatch Copilot external notification via {request.Provider}: {ex.Message}");
+                }
+            }
+        });
     }
 
     private void AppendWpfCallbackLog(CoreCallbackEvent callback, CopilotCallbackPayload payload)

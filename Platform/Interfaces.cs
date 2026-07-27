@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace MAAUnified.Platform;
 
 public sealed record PlatformOperationResult(
@@ -116,6 +118,90 @@ public sealed record TrayMenuRequestEvent(
     int? AnchorRight = null,
     int? AnchorBottom = null);
 
+public sealed record SystemNotificationAction(string Label, string Tag)
+{
+    private static readonly string OpenUrlPrefix = $"OpenUrl:{Guid.NewGuid():N}:";
+
+    public static SystemNotificationAction ForOpenUrl(string label, string url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)
+            || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+        {
+            throw new ArgumentException("URL must start with http:// or https://", nameof(url));
+        }
+
+        return new SystemNotificationAction(label, OpenUrlPrefix + uri.AbsoluteUri);
+    }
+
+    public static bool TryGetOpenUrl(string argument, [NotNullWhen(true)] out string? url)
+    {
+        url = null;
+        if (string.IsNullOrWhiteSpace(argument)
+            || !argument.StartsWith(OpenUrlPrefix, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var candidate = argument[OpenUrlPrefix.Length..];
+        if (!Uri.TryCreate(candidate, UriKind.Absolute, out var uri)
+            || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+        {
+            return false;
+        }
+
+        url = uri.AbsoluteUri;
+        return true;
+    }
+}
+
+public sealed record SystemNotificationRequest(
+    string Title,
+    string Message,
+    IReadOnlyList<SystemNotificationAction> Actions,
+    bool UseSystemNotification = true,
+    InAppNotificationSeverity InAppSeverity = InAppNotificationSeverity.Information)
+{
+    public SystemNotificationRequest(string title, string message)
+        : this(title, message, [], true, InAppNotificationSeverity.Information)
+    {
+    }
+}
+
+public enum InAppNotificationSeverity
+{
+    Information = 0,
+    Warning = 1,
+    Error = 2,
+}
+
+public enum NotificationAvailabilityReason
+{
+    None = 0,
+    DisabledForApplication = 1,
+    DisabledForUser = 2,
+    DisabledByGroupPolicy = 3,
+    DisabledByManifest = 4,
+    BackendUnavailable = 5,
+    Unknown = 6,
+}
+
+public sealed record NotificationAvailabilityStatus(
+    bool IsAvailable,
+    string Detail,
+    NotificationAvailabilityReason Reason = NotificationAvailabilityReason.None);
+
+public sealed class NotificationActionActivatedEventArgs(string argument) : EventArgs
+{
+    public string Argument { get; } = System.Net.WebUtility.UrlDecode(argument ?? string.Empty);
+}
+
+public sealed class InAppNotificationRequestedEventArgs(SystemNotificationRequest notification, string reason) : EventArgs
+{
+    public SystemNotificationRequest Notification { get; } = notification;
+
+    public string Reason { get; } = reason;
+}
+
 public sealed record GlobalHotkeyTriggeredEvent(
     string Name,
     string Gesture,
@@ -196,7 +282,23 @@ public interface INotificationService
 {
     PlatformCapabilityStatus Capability { get; }
 
+    NotificationAvailabilityStatus GetAvailability()
+        => new(Capability.Supported, Capability.Message);
+
     Task<PlatformOperationResult> NotifyAsync(string title, string message, CancellationToken cancellationToken = default);
+
+    Task<PlatformOperationResult> NotifyAsync(SystemNotificationRequest notification, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(notification);
+        return NotifyAsync(notification.Title, notification.Message, cancellationToken);
+    }
+}
+
+public interface INotificationInteractionSource
+{
+    event EventHandler<NotificationActionActivatedEventArgs>? ActionActivated;
+
+    event EventHandler<InAppNotificationRequestedEventArgs>? InAppNotificationRequested;
 }
 
 public interface IGlobalHotkeyService

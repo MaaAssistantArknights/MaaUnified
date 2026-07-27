@@ -12,6 +12,9 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
+  <data name="AllTaskCompleteContent" xml:space="preserve">
+    <value>MAA 已在 {DateTime} 完成了 {Preset} 配置下所有預設的任務（耗時 {TimeDiff}）。</value>
+  </data>
   <data name="AsYourHeartDesires" xml:space="preserve">
     <value>隨心所欲（三張隨機）</value>
   </data>
@@ -1963,6 +1966,9 @@
   <data name="Settings.ExternalNotification.SendWhenTimeout" xml:space="preserve">
     <value>任務逾時時發送通知</value>
   </data>
+  <data name="Settings.ExternalNotification.SendWhenStalled" xml:space="preserve">
+    <value>任務日誌輸出停滯時發送通知</value>
+  </data>
   <data name="Settings.ExternalNotification.Status.OperationFailed" xml:space="preserve">
     <value>外部通知操作失敗。</value>
   </data>
@@ -2070,6 +2076,12 @@
   </data>
   <data name="Settings.Game.TaskTimeoutMinutes" xml:space="preserve">
     <value>任務逾時時間（分鐘）</value>
+  </data>
+  <data name="Settings.Game.StallTimeoutEnabled" xml:space="preserve">
+    <value>啟用停滯偵測</value>
+  </data>
+  <data name="Settings.Game.StallTimeoutMinutes" xml:space="preserve">
+    <value>日誌輸出停滯超時時間（分鐘）</value>
   </data>
   <data name="Settings.Game.UseScriptOnCopilot" xml:space="preserve">
     <value>自動戰鬥時啟用上述腳本</value>
@@ -4712,5 +4724,20 @@
   </data>
   <data name="MacRawByNcRisk.Dialog.DefaultTouchMode" xml:space="preserve">
     <value>預設觸控方式</value>
+  </data>
+  <data name="PlatformCapability.Notification.Unavailable.DisabledForApplication" xml:space="preserve">
+    <value>使用者已在 Windows 設定中關閉此應用程式的通知</value>
+  </data>
+  <data name="PlatformCapability.Notification.Unavailable" xml:space="preserve">
+    <value>無法使用 Toast 通知，{0}</value>
+  </data>
+  <data name="PlatformCapability.Notification.Unavailable.DisabledForUser" xml:space="preserve">
+    <value>使用者已在 Windows 設定中關閉所有應用程式通知</value>
+  </data>
+  <data name="PlatformCapability.Notification.Unavailable.DisabledByGroupPolicy" xml:space="preserve">
+    <value>被 Windows 群組原則停用</value>
+  </data>
+  <data name="PlatformCapability.Notification.Unavailable.DisabledByManifest" xml:space="preserve">
+    <value>被應用程式資訊清單 (Package.appxmanifest) 停用</value>
   </data>
 </root>

@@ -29,7 +29,7 @@ public sealed class NoOpTrayService : ITrayService
         => Task.FromResult(PlatformOperation.FallbackSuccess(Capability.Provider, Capability.Message, "tray.setVisible", PlatformErrorCodes.TrayUnsupported));
 }
 
-public sealed class NoOpNotificationService : INotificationService
+public sealed class NoOpNotificationService : INotificationService, INotificationInteractionSource
 {
     public PlatformCapabilityStatus Capability => new(
         false,
@@ -38,8 +38,33 @@ public sealed class NoOpNotificationService : INotificationService
         HasFallback: true,
         FallbackMode: "in-app");
 
+    public event EventHandler<NotificationActionActivatedEventArgs>? ActionActivated
+    {
+        add { }
+        remove { }
+    }
+
+    public event EventHandler<InAppNotificationRequestedEventArgs>? InAppNotificationRequested;
+
+    public NotificationAvailabilityStatus GetAvailability()
+        => new(false, Capability.Message, NotificationAvailabilityReason.BackendUnavailable);
+
     public Task<PlatformOperationResult> NotifyAsync(string title, string message, CancellationToken cancellationToken = default)
-        => Task.FromResult(PlatformOperation.FallbackSuccess(Capability.Provider, Capability.Message, "notification.notify", PlatformErrorCodes.NotificationUnsupported));
+        => NotifyAsync(new SystemNotificationRequest(title, message), cancellationToken);
+
+    public Task<PlatformOperationResult> NotifyAsync(
+        SystemNotificationRequest notification,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(notification);
+        cancellationToken.ThrowIfCancellationRequested();
+        InAppNotificationRequested?.Invoke(this, new InAppNotificationRequestedEventArgs(notification, Capability.Message));
+        return Task.FromResult(PlatformOperation.FallbackSuccess(
+            Capability.Provider,
+            Capability.Message,
+            "notification.notify",
+            PlatformErrorCodes.NotificationUnsupported));
+    }
 }
 
 public sealed class NoOpGlobalHotkeyService : IGlobalHotkeyService

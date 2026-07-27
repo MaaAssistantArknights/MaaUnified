@@ -800,11 +800,12 @@ public sealed class TaskQueueG2FeatureTests
         var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
         await vm.InitializeAsync();
         vm.Tasks[0].Status = TaskQueueItemStatus.Running;
+        MapCoreTaskId(fixture.Runtime.SessionService, 3, 0);
 
         var callback = new CoreCallbackEvent(
             3,
             "AllTasksCompleted",
-            """{"task_chain":"Fight","task_index":0,"run_id":"run-g2-notify"}""",
+            """{"task_chain":"Fight","task_index":0,"run_id":"run-g2-notify","finished_tasks":[3]}""",
             DateTimeOffset.UtcNow);
 
         await InvokeCallbackAsync(vm, callback);
@@ -813,11 +814,11 @@ public sealed class TaskQueueG2FeatureTests
         Assert.True(await WaitForConditionAsync(() => fixture.NotificationTracker.NotificationCallCount == 1));
         Assert.Equal(1, fixture.NotificationTracker.NotificationCallCount);
         Assert.False(string.IsNullOrWhiteSpace(fixture.NotificationTracker.LastTitle));
-        Assert.False(string.IsNullOrWhiteSpace(fixture.NotificationTracker.LastMessage));
+        Assert.True(string.IsNullOrEmpty(fixture.NotificationTracker.LastMessage));
     }
 
     [Fact]
-    public async Task Callback_TaskChainError_WithUseNotifyDisabled_ShouldNotSendSystemNotification()
+    public async Task Callback_TaskChainError_WithUseNotifyDisabled_ShouldUseInAppFallback()
     {
         await using var fixture = await TestFixture.CreateAsync();
         fixture.Runtime.ConfigurationService.CurrentConfig.GlobalValues[LegacyConfigurationKeys.UseNotify] = JsonValue.Create("False");
@@ -832,9 +833,8 @@ public sealed class TaskQueueG2FeatureTests
             """{"task_chain":"Fight","task_index":0,"run_id":"run-g2-no-notify"}""",
             DateTimeOffset.UtcNow));
 
-        await Task.Delay(50);
-
-        Assert.Equal(0, fixture.NotificationTracker.NotificationCallCount);
+        Assert.True(await WaitForConditionAsync(() => fixture.NotificationTracker.NotificationCallCount == 1));
+        Assert.False(fixture.NotificationTracker.LastNotification?.UseSystemNotification);
     }
 
     [Fact]
@@ -877,11 +877,12 @@ public sealed class TaskQueueG2FeatureTests
         var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
         await vm.InitializeAsync();
         vm.Tasks[0].Status = TaskQueueItemStatus.Running;
+        MapCoreTaskId(fixture.Runtime.SessionService, 3, 0);
 
         var callback = new CoreCallbackEvent(
             3,
             "AllTasksCompleted",
-            """{"task_chain":"Fight","task_index":0,"run_id":"run-g2"}""",
+            """{"task_chain":"Fight","task_index":0,"run_id":"run-g2","finished_tasks":[3]}""",
             DateTimeOffset.UtcNow);
 
         await InvokeCallbackAsync(vm, callback);
@@ -1006,6 +1007,15 @@ public sealed class TaskQueueG2FeatureTests
         }
 
         await task;
+    }
+
+    private static void MapCoreTaskId(UnifiedSessionService sessionService, int taskId, int taskIndex)
+    {
+        var method = typeof(UnifiedSessionService).GetMethod(
+            "SetTaskIdMapping",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(method);
+        method!.Invoke(sessionService, [taskId, taskIndex]);
     }
 
     private static async Task<string> ReadEventLogAsync(string root)

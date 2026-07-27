@@ -42,8 +42,9 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
     private const int EmulatorWaitSecondsMax = 600;
     private const int DefaultEmulatorWaitSeconds = 60;
     private const int DefaultRemotePollIntervalMs = 1000;
-    private const int DefaultTaskTimeoutMinutes = 60;
+    private const int DefaultStallTimeoutMinutes = 25;
     private const int DefaultReminderIntervalMinutes = 30;
+    private const int MaxTimeoutMinutes = 11451;
     private const int BackgroundOpacityMin = 0;
     private const int BackgroundOpacityMax = 100;
     private const int BackgroundBlurMin = 0;
@@ -337,7 +338,8 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
     private bool _enablePenguin = true;
     private bool _enableYituliu = true;
     private string _penguinId = string.Empty;
-    private int _taskTimeoutMinutes = DefaultTaskTimeoutMinutes;
+    private bool _stallTimeoutEnabled = true;
+    private int _stallTimeoutMinutes = DefaultStallTimeoutMinutes;
     private int _reminderIntervalMinutes = DefaultReminderIntervalMinutes;
     private bool _hasPendingStartPerformanceChanges;
     private string _startPerformanceValidationMessage = string.Empty;
@@ -352,7 +354,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
     private bool _externalNotificationEnabled;
     private bool _externalNotificationSendWhenComplete = true;
     private bool _externalNotificationSendWhenError = true;
-    private bool _externalNotificationSendWhenTimeout = true;
+    private bool _externalNotificationSendWhenStalled;
     private bool _externalNotificationEnableDetails;
     private string _externalNotificationStatusMessage = string.Empty;
     private string _externalNotificationWarningMessage = string.Empty;
@@ -943,7 +945,44 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
             {
                 MarkGuiSettingsDirty();
                 NotifyGuiSettingsPreviewChanged();
+                if (value && !_suppressPageAutoSave)
+                {
+                    _ = VerifySystemNotificationAfterEnabledAsync();
+                }
             }
+        }
+    }
+
+    private async Task VerifySystemNotificationAfterEnabledAsync()
+    {
+        try
+        {
+            var availability = Runtime.Platform.NotificationService.GetAvailability();
+            await Runtime.PlatformCapabilityService.SendSystemNotificationAsync("Test test", string.Empty);
+            if (availability.IsAvailable)
+            {
+                return;
+            }
+
+            await Runtime.PlatformCapabilityService.SendSystemNotificationAsync(
+                new SystemNotificationRequest(
+                    LocalizeSettingsText("Settings.GUI.UseNotify", "Notification"),
+                    FormatSettingsText(
+                        "PlatformCapability.Notification.Unavailable",
+                        "Toast notifications are unavailable: {0}",
+                        PlatformCapabilityTextMap.GetNotificationAvailabilityDetail(
+                            Language,
+                            availability)),
+                    [],
+                    UseSystemNotification: false,
+                    InAppSeverity: InAppNotificationSeverity.Error));
+        }
+        catch (Exception ex)
+        {
+            await RecordErrorAsync(
+                "Settings.GUI.NotificationAvailability",
+                "Failed to verify system notification availability.",
+                ex);
         }
     }
 
@@ -1340,10 +1379,10 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         set => SetProperty(ref _externalNotificationSendWhenError, value);
     }
 
-    public bool ExternalNotificationSendWhenTimeout
+    public bool ExternalNotificationSendWhenStalled
     {
-        get => _externalNotificationSendWhenTimeout;
-        set => SetProperty(ref _externalNotificationSendWhenTimeout, value);
+        get => _externalNotificationSendWhenStalled;
+        set => SetProperty(ref _externalNotificationSendWhenStalled, value);
     }
 
     public bool ExternalNotificationEnableDetails
@@ -3139,13 +3178,25 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         }
     }
 
-    public int TaskTimeoutMinutes
+    public bool StallTimeoutEnabled
     {
-        get => _taskTimeoutMinutes;
+        get => _stallTimeoutEnabled;
         set
         {
-            var normalized = Math.Max(0, value);
-            if (SetProperty(ref _taskTimeoutMinutes, normalized))
+            if (SetProperty(ref _stallTimeoutEnabled, value))
+            {
+                MarkStartPerformanceDirty();
+            }
+        }
+    }
+
+    public int StallTimeoutMinutes
+    {
+        get => _stallTimeoutMinutes;
+        set
+        {
+            var normalized = Math.Clamp(value, 0, MaxTimeoutMinutes);
+            if (SetProperty(ref _stallTimeoutMinutes, normalized))
             {
                 MarkStartPerformanceDirty();
             }
@@ -3157,7 +3208,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         get => _reminderIntervalMinutes;
         set
         {
-            var normalized = Math.Max(1, value);
+            var normalized = Math.Clamp(value, 1, MaxTimeoutMinutes);
             if (SetProperty(ref _reminderIntervalMinutes, normalized))
             {
                 MarkStartPerformanceDirty();
@@ -5513,7 +5564,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
             case nameof(ExternalNotificationEnabled):
             case nameof(ExternalNotificationSendWhenComplete):
             case nameof(ExternalNotificationSendWhenError):
-            case nameof(ExternalNotificationSendWhenTimeout):
+            case nameof(ExternalNotificationSendWhenStalled):
             case nameof(ExternalNotificationEnableDetails):
             case nameof(SelectedNotificationProvider):
             case nameof(NotificationProviderParametersText):
@@ -7234,7 +7285,10 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
             ExternalNotificationEnabled = false;
             ExternalNotificationSendWhenComplete = ReadProfileBool(config, ConfigurationKeys.ExternalNotificationSendWhenComplete, true);
             ExternalNotificationSendWhenError = ReadProfileBool(config, ConfigurationKeys.ExternalNotificationSendWhenError, true);
-            ExternalNotificationSendWhenTimeout = ReadProfileBool(config, ConfigurationKeys.ExternalNotificationSendWhenTimeout, true);
+            ExternalNotificationSendWhenStalled = ReadProfileBool(
+                config,
+                ConfigurationKeys.ExternalNotificationSendWhenStalled,
+                ReadProfileBool(config, ConfigurationKeys.ExternalNotificationSendWhenTimeout, false));
             ExternalNotificationEnableDetails = ReadProfileBool(config, ConfigurationKeys.ExternalNotificationEnableDetails, false);
             HotkeyShowGui = loadedShowGui;
             HotkeyLinkStart = loadedLinkStart;
@@ -8009,7 +8063,10 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
             ExternalNotificationEnabled = false;
             ExternalNotificationSendWhenComplete = ReadProfileBool(config, ConfigurationKeys.ExternalNotificationSendWhenComplete, true);
             ExternalNotificationSendWhenError = ReadProfileBool(config, ConfigurationKeys.ExternalNotificationSendWhenError, true);
-            ExternalNotificationSendWhenTimeout = ReadProfileBool(config, ConfigurationKeys.ExternalNotificationSendWhenTimeout, true);
+            ExternalNotificationSendWhenStalled = ReadProfileBool(
+                config,
+                ConfigurationKeys.ExternalNotificationSendWhenStalled,
+                ReadProfileBool(config, ConfigurationKeys.ExternalNotificationSendWhenTimeout, false));
             ExternalNotificationEnableDetails = ReadProfileBool(config, ConfigurationKeys.ExternalNotificationEnableDetails, false);
             LoadExternalNotificationProviderParametersFromConfig(config);
             configurationSummary = BuildExternalNotificationConfigurationSummary(
@@ -9749,7 +9806,8 @@ public sealed record StartPerformanceSettingsSnapshot(
     bool EnablePenguin,
     bool EnableYituliu,
     string PenguinId,
-    int TaskTimeoutMinutes,
+    bool StallTimeoutEnabled,
+    int StallTimeoutMinutes,
     int ReminderIntervalMinutes)
 {
     public IReadOnlyDictionary<string, string> ToGlobalSettingUpdates()
@@ -9783,7 +9841,8 @@ public sealed record StartPerformanceSettingsSnapshot(
             [ConfigurationKeys.EnablePenguin] = EnablePenguin.ToString(),
             [ConfigurationKeys.EnableYituliu] = EnableYituliu.ToString(),
             [ConfigurationKeys.PenguinId] = PenguinId,
-            [ConfigurationKeys.TaskTimeoutMinutes] = TaskTimeoutMinutes.ToString(),
+            [ConfigurationKeys.StallTimeoutEnabled] = StallTimeoutEnabled.ToString(),
+            [ConfigurationKeys.StallTimeoutMinutes] = StallTimeoutMinutes.ToString(),
             [ConfigurationKeys.ReminderIntervalMinutes] = ReminderIntervalMinutes.ToString(),
         };
 

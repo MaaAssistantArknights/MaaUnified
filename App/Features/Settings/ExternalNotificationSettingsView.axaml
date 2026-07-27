@@ -94,8 +94,8 @@
                     Content="{Binding RootTexts[Settings.ExternalNotification.SendWhenError]}"
                     IsChecked="{Binding ExternalNotificationSendWhenError}" />
           <CheckBox Classes="app-checkbox"
-                    Content="{Binding RootTexts[Settings.ExternalNotification.SendWhenTimeout]}"
-                    IsChecked="{Binding ExternalNotificationSendWhenTimeout}" />
+                    Content="{Binding RootTexts[Settings.ExternalNotification.SendWhenStalled]}"
+                    IsChecked="{Binding ExternalNotificationSendWhenStalled}" />
         </controls:AdaptiveSpacingStackPanel>
       </controls:AdaptiveSpacingStackPanel>
 

@@ -143,6 +143,33 @@ public static class PlatformCapabilityTextMap
             WrapFallbackReporter(key, fallbackReporter));
     }
 
+    public static string GetNotificationAvailabilityDetail(
+        string language,
+        NotificationAvailabilityStatus availability,
+        Action<LocalizationFallbackInfo>? fallbackReporter = null)
+    {
+        var (key, fallback) = availability.Reason switch
+        {
+            NotificationAvailabilityReason.DisabledForApplication => (
+                "Notification.Unavailable.DisabledForApplication",
+                "The user has disabled notifications for this app in Windows Settings."),
+            NotificationAvailabilityReason.DisabledForUser => (
+                "Notification.Unavailable.DisabledForUser",
+                "The user has disabled all app notifications in Windows Settings."),
+            NotificationAvailabilityReason.DisabledByGroupPolicy => (
+                "Notification.Unavailable.DisabledByGroupPolicy",
+                "Disabled by Windows Group Policy"),
+            NotificationAvailabilityReason.DisabledByManifest => (
+                "Notification.Unavailable.DisabledByManifest",
+                "Disabled by app manifest (Package.appxmanifest)"),
+            _ => (string.Empty, availability.Detail),
+        };
+
+        return string.IsNullOrEmpty(key)
+            ? fallback
+            : GetUiText(language, key, fallback, fallbackReporter);
+    }
+
     private static Action<LocalizationFallbackInfo>? WrapFallbackReporter(
         string key,
         Action<LocalizationFallbackInfo>? fallbackReporter)

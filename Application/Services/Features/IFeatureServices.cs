@@ -538,6 +538,10 @@ public interface IPlatformCapabilityService
 
     Task<UiOperationResult> SendSystemNotificationAsync(string title, string message, CancellationToken cancellationToken = default);
 
+    Task<UiOperationResult> SendSystemNotificationAsync(
+        SystemNotificationRequest notification,
+        CancellationToken cancellationToken = default);
+
     Task<UiOperationResult> RegisterGlobalHotkeyAsync(string name, string gesture, CancellationToken cancellationToken = default);
 
     Task<UiOperationResult<IReadOnlyList<HotkeyRegistrationOutcome>>> RegisterGlobalHotkeysAsync(

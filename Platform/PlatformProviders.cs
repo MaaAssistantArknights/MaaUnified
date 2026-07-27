@@ -1379,25 +1379,51 @@ public sealed class AvaloniaTrayIconTrayService : ITrayService, IDisposable
     }
 }
 
-public sealed class DesktopNotificationService : INotificationService, IDisposable
+public sealed class DesktopNotificationService : INotificationService, INotificationInteractionSource, IDisposable
 {
+    private const int PendingActivationLimit = 8;
     private readonly CommandNotificationService _fallback = new();
     private readonly object _nativeAdapterGate = new();
+    private readonly object _activationGate = new();
+    private readonly BufferedNotificationActivationSource _activationSource = new(PendingActivationLimit);
     private readonly string _appName;
-    private DesktopNotificationAdapter? _nativeAdapter;
+    private INotificationPoster? _nativeAdapter;
     private bool _nativeAdapterInitialized;
+    private bool _disposed;
 
     public DesktopNotificationService()
     {
         _appName = "MaaAssistantArknights";
     }
 
-    public PlatformCapabilityStatus Capability => new(
-        Supported: true,
-        Message: "System notification uses DesktopNotifications backend when available.",
-        Provider: "desktop-notifications",
-        HasFallback: true,
-        FallbackMode: "command-or-in-app");
+    internal DesktopNotificationService(INotificationPoster nativeAdapter)
+        : this()
+    {
+        AttachNativeAdapter(nativeAdapter);
+        _nativeAdapterInitialized = true;
+    }
+
+    public event EventHandler<NotificationActionActivatedEventArgs>? ActionActivated
+    {
+        add => _activationSource.ActionActivated += value;
+        remove => _activationSource.ActionActivated -= value;
+    }
+
+    public event EventHandler<InAppNotificationRequestedEventArgs>? InAppNotificationRequested;
+
+    public PlatformCapabilityStatus Capability => OperatingSystem.IsWindowsVersionAtLeast(10, 0, 10240)
+        ? new PlatformCapabilityStatus(
+            Supported: true,
+            Message: "System notification uses the Windows Toast backend.",
+            Provider: "windows-toast",
+            HasFallback: true,
+            FallbackMode: "in-app")
+        : new PlatformCapabilityStatus(
+            Supported: true,
+            Message: "System notification uses DesktopNotifications backend when available.",
+            Provider: "desktop-notifications",
+            HasFallback: true,
+            FallbackMode: "command-or-in-app");
 
     public static bool TryCreate([NotNullWhen(true)] out DesktopNotificationService? service)
     {
@@ -1405,6 +1431,17 @@ public sealed class DesktopNotificationService : INotificationService, IDisposab
         if (!(OperatingSystem.IsWindows() || OperatingSystem.IsLinux() || OperatingSystem.IsMacOS()))
         {
             return false;
+        }
+
+        if (OperatingSystem.IsWindowsVersionAtLeast(10, 0, 10240))
+        {
+            if (!WindowsToastNotificationPoster.TryCreate(out var windowsToast))
+            {
+                return false;
+            }
+
+            service = new DesktopNotificationService(windowsToast);
+            return true;
         }
 
         if (!PlatformNativeDependencyProbe.HasAssembly("DesktopNotifications"))
@@ -1416,37 +1453,97 @@ public sealed class DesktopNotificationService : INotificationService, IDisposab
         return true;
     }
 
-    public async Task<PlatformOperationResult> NotifyAsync(string title, string message, CancellationToken cancellationToken = default)
+    public NotificationAvailabilityStatus GetAvailability()
     {
-        cancellationToken.ThrowIfCancellationRequested();
         try
         {
             var nativeAdapter = EnsureNativeAdapter();
             if (nativeAdapter is null)
             {
-                return await NotifyFallbackAsync(title, message, "Native notification backend is unavailable.", cancellationToken);
+                return new NotificationAvailabilityStatus(
+                    false,
+                    "Native notification backend is unavailable.",
+                    NotificationAvailabilityReason.BackendUnavailable);
             }
 
-            await nativeAdapter.NotifyAsync(title, message, cancellationToken);
-            return PlatformOperation.NativeSuccess(Capability.Provider, "System notification dispatched.", "notification.notify");
+            return nativeAdapter.GetAvailability();
+        }
+        catch (Exception ex)
+        {
+            return new NotificationAvailabilityStatus(
+                false,
+                ex.Message,
+                NotificationAvailabilityReason.BackendUnavailable);
+        }
+    }
+
+    public async Task<PlatformOperationResult> NotifyAsync(string title, string message, CancellationToken cancellationToken = default)
+        => await NotifyAsync(new SystemNotificationRequest(title, message), cancellationToken);
+
+    public async Task<PlatformOperationResult> NotifyAsync(
+        SystemNotificationRequest notification,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(notification);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!notification.UseSystemNotification)
+        {
+            return await NotifyFallbackAsync(
+                notification,
+                "System notifications are disabled in application settings.",
+                cancellationToken,
+                forceInApp: true);
+        }
+
+        try
+        {
+            var nativeAdapter = EnsureNativeAdapter();
+            if (nativeAdapter is null)
+            {
+                return await NotifyFallbackAsync(notification, "Native notification backend is unavailable.", cancellationToken);
+            }
+
+            var availability = nativeAdapter.GetAvailability();
+            if (!availability.IsAvailable)
+            {
+                return await NotifyFallbackAsync(
+                    notification,
+                    $"Native notification backend is unavailable: {availability.Detail}",
+                    cancellationToken);
+            }
+
+            await nativeAdapter.ShowAsync(notification, cancellationToken);
+            return PlatformOperation.NativeSuccess(nativeAdapter.Capability.Provider, "System notification dispatched.", "notification.notify");
         }
         catch (Exception ex)
         {
             return await NotifyFallbackAsync(
-                title,
-                message,
+                notification,
                 $"Native notification dispatch failed: {ex.Message}",
                 cancellationToken);
         }
     }
 
     private async Task<PlatformOperationResult> NotifyFallbackAsync(
-        string title,
-        string message,
+        SystemNotificationRequest notification,
         string reason,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool forceInApp = false)
     {
-        var fallbackResult = await _fallback.NotifyAsync(title, message, cancellationToken);
+        if (forceInApp
+            || OperatingSystem.IsWindows()
+            || string.Equals(_nativeAdapter?.Capability.Provider, "windows-toast", StringComparison.Ordinal))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            InvokeInAppNotificationRequestedSafely(new InAppNotificationRequestedEventArgs(notification, reason));
+            return PlatformOperation.FallbackSuccess(
+                Capability.Provider,
+                $"{reason} Switched to in-app notification.",
+                "notification.notify",
+                PlatformErrorCodes.NotificationFallback);
+        }
+
+        var fallbackResult = await _fallback.NotifyAsync(notification, cancellationToken);
         if (!fallbackResult.Success)
         {
             return PlatformOperation.Failed(
@@ -1466,7 +1563,18 @@ public sealed class DesktopNotificationService : INotificationService, IDisposab
 
     public void Dispose()
     {
-        DesktopNotificationAdapter? nativeAdapter;
+        lock (_activationGate)
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            _disposed = true;
+            _activationSource.Dispose();
+        }
+
+        INotificationPoster? nativeAdapter;
         lock (_nativeAdapterGate)
         {
             nativeAdapter = _nativeAdapter;
@@ -1474,11 +1582,23 @@ public sealed class DesktopNotificationService : INotificationService, IDisposab
             _nativeAdapterInitialized = true;
         }
 
-        nativeAdapter?.Dispose();
+        if (nativeAdapter is not null)
+        {
+            nativeAdapter.ActionActivated -= OnNativeActionActivated;
+            nativeAdapter.Dispose();
+        }
     }
 
-    private DesktopNotificationAdapter? EnsureNativeAdapter()
+    private INotificationPoster? EnsureNativeAdapter()
     {
+        lock (_activationGate)
+        {
+            if (_disposed)
+            {
+                return null;
+            }
+        }
+
         if (_nativeAdapterInitialized)
         {
             return _nativeAdapter;
@@ -1486,9 +1606,23 @@ public sealed class DesktopNotificationService : INotificationService, IDisposab
 
         lock (_nativeAdapterGate)
         {
+            lock (_activationGate)
+            {
+                if (_disposed)
+                {
+                    return null;
+                }
+            }
+
             if (!_nativeAdapterInitialized)
             {
-                _nativeAdapter = DesktopNotificationAdapter.TryCreate(_appName);
+                INotificationPoster? nativeAdapter = OperatingSystem.IsWindows()
+                    ? WindowsToastNotificationPoster.TryCreate(out var windowsToast) ? windowsToast : null
+                    : DesktopNotificationAdapter.TryCreate(_appName);
+                if (nativeAdapter is not null)
+                {
+                    AttachNativeAdapter(nativeAdapter);
+                }
                 _nativeAdapterInitialized = true;
             }
 
@@ -1496,7 +1630,37 @@ public sealed class DesktopNotificationService : INotificationService, IDisposab
         }
     }
 
-    private sealed class DesktopNotificationAdapter : IDisposable
+    private void AttachNativeAdapter(INotificationPoster nativeAdapter)
+    {
+        _nativeAdapter = nativeAdapter;
+        nativeAdapter.ActionActivated += OnNativeActionActivated;
+    }
+
+    private void OnNativeActionActivated(object? sender, NotificationActionActivatedEventArgs e)
+        => _activationSource.Publish(this, e);
+
+    private void InvokeInAppNotificationRequestedSafely(InAppNotificationRequestedEventArgs eventArgs)
+    {
+        var handlers = InAppNotificationRequested;
+        if (handlers is null)
+        {
+            return;
+        }
+
+        foreach (EventHandler<InAppNotificationRequestedEventArgs> handler in handlers.GetInvocationList())
+        {
+            try
+            {
+                handler(this, eventArgs);
+            }
+            catch
+            {
+                // Notification fallback must remain successful if a UI consumer fails.
+            }
+        }
+    }
+
+    private sealed class DesktopNotificationAdapter : INotificationPoster
     {
         private readonly object _manager;
         private readonly MethodInfo _showMethod;
@@ -1513,6 +1677,19 @@ public sealed class DesktopNotificationService : INotificationService, IDisposab
             _showMethod = showMethod;
             _notificationType = notificationType;
             _notificationCtor = notificationCtor;
+        }
+
+        public PlatformCapabilityStatus Capability => new(
+            Supported: true,
+            Message: "System notification uses DesktopNotifications backend when available.",
+            Provider: "desktop-notifications",
+            HasFallback: true,
+            FallbackMode: "command-or-in-app");
+
+        public event EventHandler<NotificationActionActivatedEventArgs>? ActionActivated
+        {
+            add { }
+            remove { }
         }
 
         public static DesktopNotificationAdapter? TryCreate(string appName)
@@ -1563,10 +1740,13 @@ public sealed class DesktopNotificationService : INotificationService, IDisposab
             }
         }
 
-        public async Task NotifyAsync(string title, string message, CancellationToken cancellationToken)
+        public NotificationAvailabilityStatus GetAvailability() => new(true, string.Empty);
+
+        public async Task ShowAsync(SystemNotificationRequest notification, CancellationToken cancellationToken)
         {
-            var notification = CreateNotification(title, message);
-            var result = _showMethod.Invoke(_manager, new[] { notification });
+            cancellationToken.ThrowIfCancellationRequested();
+            var nativeNotification = CreateNotification(notification.Title, notification.Message);
+            var result = _showMethod.Invoke(_manager, new[] { nativeNotification });
             if (result is Task task)
             {
                 await task.WaitAsync(cancellationToken);
@@ -2322,38 +2502,69 @@ public sealed class WindowMenuTrayService : ITrayService
     }
 }
 
-public sealed class CommandNotificationService : INotificationService
+public sealed class CommandNotificationService : INotificationService, INotificationInteractionSource
 {
     private readonly PlatformCapabilityStatus _capability;
+    private readonly bool _useInAppOnly;
 
     public CommandNotificationService()
+        : this(BuildCapability(), OperatingSystem.IsWindows())
     {
-        _capability = BuildCapability();
+    }
+
+    internal CommandNotificationService(PlatformCapabilityStatus capability, bool useInAppOnly)
+    {
+        _capability = capability ?? throw new ArgumentNullException(nameof(capability));
+        _useInAppOnly = useInAppOnly;
     }
 
     public PlatformCapabilityStatus Capability => _capability;
 
-    public async Task<PlatformOperationResult> NotifyAsync(string title, string message, CancellationToken cancellationToken = default)
+    public event EventHandler<NotificationActionActivatedEventArgs>? ActionActivated
     {
+        add { }
+        remove { }
+    }
+
+    public event EventHandler<InAppNotificationRequestedEventArgs>? InAppNotificationRequested;
+
+    public NotificationAvailabilityStatus GetAvailability()
+        => _useInAppOnly
+            ? new NotificationAvailabilityStatus(
+                false,
+                _capability.Message,
+                NotificationAvailabilityReason.BackendUnavailable)
+            : new NotificationAvailabilityStatus(_capability.Supported, _capability.Message);
+
+    public async Task<PlatformOperationResult> NotifyAsync(string title, string message, CancellationToken cancellationToken = default)
+        => await NotifyAsync(new SystemNotificationRequest(title, message), cancellationToken);
+
+    public async Task<PlatformOperationResult> NotifyAsync(
+        SystemNotificationRequest notification,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(notification);
         cancellationToken.ThrowIfCancellationRequested();
+
+        if (!notification.UseSystemNotification)
+        {
+            return RequestInAppFallback(notification, "System notifications are disabled in application settings.");
+        }
+
+        if (_useInAppOnly)
+        {
+            return RequestInAppFallback(notification, _capability.Message);
+        }
 
         if (!_capability.Supported)
         {
-            return PlatformOperation.FallbackSuccess(
-                _capability.Provider,
-                _capability.Message,
-                operationId: "notification.notify",
-                errorCode: PlatformErrorCodes.NotificationFallback);
+            return RequestInAppFallback(notification, _capability.Message);
         }
 
-        var command = BuildCommand(title, message);
+        var command = BuildCommand(notification.Title, notification.Message);
         if (command is null)
         {
-            return PlatformOperation.FallbackSuccess(
-                _capability.Provider,
-                "Notification command is not available, switched to in-app fallback.",
-                operationId: "notification.notify",
-                errorCode: PlatformErrorCodes.NotificationFallback);
+            return RequestInAppFallback(notification, "Notification command is unavailable.");
         }
 
         var result = await ExecuteCommandAsync(command.Value.fileName, command.Value.arguments, cancellationToken);
@@ -2366,9 +2577,15 @@ public sealed class CommandNotificationService : INotificationService
                 errorCode: PlatformErrorCodes.NotificationFallback);
         }
 
+        return RequestInAppFallback(notification, $"System notification failed (exit={result.exitCode}).");
+    }
+
+    private PlatformOperationResult RequestInAppFallback(SystemNotificationRequest notification, string reason)
+    {
+        InAppNotificationRequested?.Invoke(this, new InAppNotificationRequestedEventArgs(notification, reason));
         return PlatformOperation.FallbackSuccess(
             _capability.Provider,
-            $"System notification failed (exit={result.exitCode}), switched to in-app fallback.",
+            $"{reason} Switched to in-app notification.",
             operationId: "notification.notify",
             errorCode: PlatformErrorCodes.NotificationFallback);
     }
@@ -2398,9 +2615,9 @@ public sealed class CommandNotificationService : INotificationService
         if (OperatingSystem.IsWindows())
         {
             return new PlatformCapabilityStatus(
-                Supported: IsCommandAvailable("where", "powershell"),
-                Message: "Windows notifications use PowerShell toast command.",
-                Provider: "powershell-toast",
+                Supported: true,
+                Message: "Windows notification fallback uses in-app notifications.",
+                Provider: "in-app",
                 HasFallback: true,
                 FallbackMode: "in-app");
         }

@@ -136,33 +136,39 @@
                  Text="{Binding PenguinId, UpdateSourceTrigger=LostFocus}" />
       </Grid>
 
-      <Grid Classes="settings-page-two-column"
-            ColumnDefinitions="Auto,24,Auto">
-        <Grid Classes="settings-page-labeled-row"
-              controls:SettingsLabelWidthCoordinator.GroupKey="Game.Timeouts"
-              ColumnDefinitions="Auto,*">
-          <controls:SettingsLabel Text="{Binding RootTexts[Settings.Game.TaskTimeoutMinutes]}" />
-          <controls:AppNumberInput Grid.Column="1"
-                                          Width="{DynamicResource MAA.Size.Settings.FieldNarrowWidth}"
-                                          HorizontalAlignment="Left"
-                                          Minimum="0"
-                                          Maximum="1440"
-                                          Value="{Binding TaskTimeoutMinutes}" />
-        </Grid>
+      <CheckBox Classes="app-checkbox"
+                Content="{Binding RootTexts[Settings.Game.StallTimeoutEnabled]}"
+                IsChecked="{Binding StallTimeoutEnabled}" />
 
-        <Grid Grid.Column="2"
-              Classes="settings-page-labeled-row"
-              controls:SettingsLabelWidthCoordinator.GroupKey="Game.Timeouts"
-              ColumnDefinitions="Auto,*">
-          <controls:SettingsLabel Text="{Binding RootTexts[Settings.Game.ReminderIntervalMinutes]}" />
-          <controls:AppNumberInput Grid.Column="1"
-                                          Width="{DynamicResource MAA.Size.Settings.FieldNarrowWidth}"
-                                          HorizontalAlignment="Left"
-                                          Minimum="1"
-                                          Maximum="1440"
-                                          Value="{Binding ReminderIntervalMinutes}" />
+      <controls:SettingsDependentRow IsVisible="{Binding StallTimeoutEnabled}">
+        <Grid Classes="settings-page-two-column"
+              ColumnDefinitions="Auto,24,Auto">
+          <Grid Classes="settings-page-labeled-row"
+                controls:SettingsLabelWidthCoordinator.GroupKey="Game.Timeouts"
+                ColumnDefinitions="Auto,*">
+            <controls:SettingsLabel Text="{Binding RootTexts[Settings.Game.StallTimeoutMinutes]}" />
+            <controls:AppNumberInput Grid.Column="1"
+                                     Width="{DynamicResource MAA.Size.Settings.FieldNarrowWidth}"
+                                     HorizontalAlignment="Left"
+                                     Minimum="1"
+                                     Maximum="11451"
+                                     Value="{Binding StallTimeoutMinutes}" />
+          </Grid>
+
+          <Grid Grid.Column="2"
+                Classes="settings-page-labeled-row"
+                controls:SettingsLabelWidthCoordinator.GroupKey="Game.Timeouts"
+                ColumnDefinitions="Auto,*">
+            <controls:SettingsLabel Text="{Binding RootTexts[Settings.Game.ReminderIntervalMinutes]}" />
+            <controls:AppNumberInput Grid.Column="1"
+                                     Width="{DynamicResource MAA.Size.Settings.FieldNarrowWidth}"
+                                     HorizontalAlignment="Left"
+                                     Minimum="1"
+                                     Maximum="11451"
+                                     Value="{Binding ReminderIntervalMinutes}" />
+          </Grid>
         </Grid>
-      </Grid>
+      </controls:SettingsDependentRow>
     </controls:AdaptiveSpacingStackPanel>
   </Grid>
 </UserControl>

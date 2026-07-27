@@ -5371,6 +5371,32 @@
       "write_path": "Application/Services/Features/FeatureServices.cs::SettingsFeatureService.SaveGlobalSettingsAsync"
     },
     {
+      "key": "TimeOut.Timer.StallTimeoutMinutes",
+      "owner_item_id": "Settings.Game",
+      "parity_status": "Aligned",
+      "priority": "P0",
+      "notes": "Aligned mapping implemented in Avalonia runtime; see evidence and validation tests.",
+      "evidence": {
+        "ui_path": "App/ViewModels/TaskQueue/TaskQueuePageViewModel.cs",
+        "log_path": "debug/avalonia-ui-events.log",
+        "scope": "Config.TimeOut.Timer.StallTimeoutMinutes",
+        "case_id": "CFG-298"
+      }
+    },
+    {
+      "key": "TimeOut.Timer.StallTimeoutEnabled",
+      "owner_item_id": "Settings.Game",
+      "parity_status": "Aligned",
+      "priority": "P0",
+      "notes": "Aligned mapping implemented in Avalonia runtime; see evidence and validation tests.",
+      "evidence": {
+        "ui_path": "App/ViewModels/TaskQueue/TaskQueuePageViewModel.cs",
+        "log_path": "debug/avalonia-ui-events.log",
+        "scope": "Config.TimeOut.Timer.StallTimeoutEnabled",
+        "case_id": "CFG-299"
+      }
+    },
+    {
       "key": "Bluestacks.Config.Path",
       "owner_item_id": "Settings.Connect",
       "parity_status": "Aligned",
@@ -5799,6 +5825,19 @@
         "log_path": "debug/avalonia-ui-events.log",
         "scope": "Config.ExternalNotification.SendWhenTimeout",
         "case_id": "CFG-237"
+      }
+    },
+    {
+      "key": "ExternalNotification.SendWhenStalled",
+      "owner_item_id": "Settings.ExternalNotification",
+      "parity_status": "Aligned",
+      "priority": "P0",
+      "notes": "Aligned mapping implemented in Avalonia runtime; see evidence and validation tests.",
+      "evidence": {
+        "ui_path": "App/ViewModels/TaskQueue/TaskQueuePageViewModel.cs",
+        "log_path": "debug/avalonia-ui-events.log",
+        "scope": "Config.ExternalNotification.SendWhenStalled",
+        "case_id": "CFG-300"
       }
     },
     {
@@ -6882,7 +6921,7 @@
 	  "metadata": {
 	    "feature_item_count": 38,
 	    "system_item_count": 12,
-	    "config_key_count": 297,
+	    "config_key_count": 300,
 	    "fallback_record_count": 15
 	  }
 	}

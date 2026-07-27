@@ -5444,6 +5444,14 @@ public sealed class PlatformCapabilityFeatureService : IPlatformCapabilityServic
         return await ToUiResultAsync(PlatformCapabilityId.Notification, "notify", result, cancellationToken);
     }
 
+    public async Task<UiOperationResult> SendSystemNotificationAsync(
+        SystemNotificationRequest notification,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await _platform.NotificationService.NotifyAsync(notification, cancellationToken);
+        return await ToUiResultAsync(PlatformCapabilityId.Notification, "notify", result, cancellationToken);
+    }
+
     public async Task<UiOperationResult> RegisterGlobalHotkeyAsync(string name, string gesture, CancellationToken cancellationToken = default)
     {
         var batch = await RegisterGlobalHotkeysAsync(

@@ -463,8 +463,9 @@ public sealed partial class SettingsPageViewModel
             EnablePenguin: EnablePenguin,
             EnableYituliu: EnableYituliu,
             PenguinId: (PenguinId ?? string.Empty).Trim(),
-            TaskTimeoutMinutes: Math.Max(0, TaskTimeoutMinutes),
-            ReminderIntervalMinutes: Math.Max(1, ReminderIntervalMinutes));
+            StallTimeoutEnabled: StallTimeoutEnabled,
+            StallTimeoutMinutes: Math.Clamp(StallTimeoutMinutes, 0, MaxTimeoutMinutes),
+            ReminderIntervalMinutes: Math.Clamp(ReminderIntervalMinutes, 1, MaxTimeoutMinutes));
     }
 
     private UiOperationResult ValidateStartPerformanceSnapshot(StartPerformanceSettingsSnapshot snapshot)
@@ -557,8 +558,15 @@ public sealed partial class SettingsPageViewModel
             EnablePenguin: ReadProfileBoolFlexible(config, ConfigurationKeys.EnablePenguin, true),
             EnableYituliu: ReadProfileBoolFlexible(config, ConfigurationKeys.EnableYituliu, true),
             PenguinId: ReadProfileString(config, ConfigurationKeys.PenguinId, string.Empty).Trim(),
-            TaskTimeoutMinutes: Math.Max(0, ReadProfileInt(config, ConfigurationKeys.TaskTimeoutMinutes, DefaultTaskTimeoutMinutes)),
-            ReminderIntervalMinutes: Math.Max(1, ReadProfileInt(config, ConfigurationKeys.ReminderIntervalMinutes, DefaultReminderIntervalMinutes)));
+            StallTimeoutEnabled: ReadProfileBoolFlexible(config, ConfigurationKeys.StallTimeoutEnabled, true),
+            StallTimeoutMinutes: Math.Clamp(
+                ReadProfileInt(config, ConfigurationKeys.StallTimeoutMinutes, DefaultStallTimeoutMinutes),
+                0,
+                MaxTimeoutMinutes),
+            ReminderIntervalMinutes: Math.Clamp(
+                ReadProfileInt(config, ConfigurationKeys.ReminderIntervalMinutes, DefaultReminderIntervalMinutes),
+                1,
+                MaxTimeoutMinutes));
     }
 
     private static bool HasExplicitStartPerformanceConfigValues(
@@ -746,7 +754,8 @@ public sealed partial class SettingsPageViewModel
             EnablePenguin = snapshot.EnablePenguin;
             EnableYituliu = snapshot.EnableYituliu;
             PenguinId = snapshot.PenguinId;
-            TaskTimeoutMinutes = snapshot.TaskTimeoutMinutes;
+            StallTimeoutEnabled = snapshot.StallTimeoutEnabled;
+            StallTimeoutMinutes = snapshot.StallTimeoutMinutes;
             ReminderIntervalMinutes = snapshot.ReminderIntervalMinutes;
         }
         finally

@@ -123,6 +123,20 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         TaskModuleTypes.Reclamation,
     ];
 
+    // Keep AllTasksCompleted notification eligibility aligned with WPF's _mainTaskTypes.
+    private static readonly HashSet<string> MainTaskModules = new(StringComparer.OrdinalIgnoreCase)
+    {
+        TaskModuleTypes.StartUp,
+        TaskModuleTypes.Fight,
+        TaskModuleTypes.Recruit,
+        TaskModuleTypes.Infrast,
+        TaskModuleTypes.Mall,
+        TaskModuleTypes.Award,
+        TaskModuleTypes.Roguelike,
+        TaskModuleTypes.Reclamation,
+        TaskModuleTypes.UserDataUpdate,
+    };
+
     private static readonly string[] AddableTaskModules =
     [
         TaskModuleTypes.StartUp,
@@ -265,6 +279,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
     private const int MaxLogCards = 180;
     private const int MaxOverlayLogs = 200;
+    private const int MaxTimeoutMinutes = 11451;
     private const string UiMallCreditFightLastTime = "_ui_mall_credit_fight_last_time";
     private const string UiMallVisitFriendsLastTime = "_ui_mall_visit_friends_last_time";
     private readonly SemaphoreSlim _logThumbnailSemaphore = new(1, 1);
@@ -295,6 +310,9 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     private CancellationTokenSource? _moduleAutoSaveCts;
     private int _pendingBindingVersion;
     private CancellationTokenSource? _startRequestCts;
+    private CancellationTokenSource? _stallReminderCts;
+    private int _stallAccumulatedCount;
+    private CancellationTokenSource? _sanityReminderCts;
     private bool _suppressTaskEnabledSync;
     private bool _suppressModuleAutoSave;
     private SessionState _currentSessionState;
@@ -343,7 +361,6 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     private string _logTimestampFormat = DefaultLogItemDateFormat;
     private bool _useSystemNotifications = true;
     private string _lastCompletionNotificationRunId = string.Empty;
-    private string _lastFailureNotificationRunId = string.Empty;
     private bool _selectedTaskSettingsHostResetPending;
     private bool _isSelectedTaskBindingPending;
     private TaskQueueTaskPanelViewModel? _selectedTaskPanel;
@@ -2885,6 +2902,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 _currentRunId = Guid.NewGuid().ToString("N");
                 _lastPostActionRunId = string.Empty;
                 TrackAchievementsAfterStart(appendResult.Value);
+                StartOrResetStallReminder();
                 keepRunOwner = true;
                 SetStartRequestActive(false);
             }
@@ -4831,8 +4849,14 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         string content,
         string level,
         bool updateThumbnail,
-        bool forceScreenshot = false)
+        bool forceScreenshot = false,
+        bool notifyActivity = true)
     {
+        if (notifyActivity && _stallReminderCts is not null)
+        {
+            StartOrResetStallReminder();
+        }
+
         var logTime = FormatLogTimestamp(timestamp);
         if (string.IsNullOrWhiteSpace(content) && !updateThumbnail)
         {
@@ -5221,7 +5245,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     private static bool IsSuppressedWpfTaskChainLog(string? msgName, string? taskChain)
     {
         return !string.IsNullOrWhiteSpace(msgName)
-            && msgName.StartsWith("TaskChain", StringComparison.Ordinal)
+            && (msgName.StartsWith("TaskChain", StringComparison.Ordinal)
+                || string.Equals(msgName, "AllTasksCompleted", StringComparison.Ordinal))
             && string.Equals(TaskModuleTypes.Normalize(taskChain), "CloseDown", StringComparison.OrdinalIgnoreCase);
     }
 
@@ -5282,16 +5307,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
     private TaskQueueCallbackUserLog BuildAllTasksCompletedLog(DateTimeOffset timestamp)
     {
-        var startedAt = _runStartedAt ?? timestamp;
-        var duration = timestamp.ToLocalTime() - startedAt.ToLocalTime();
-        if (duration < TimeSpan.Zero)
-        {
-            duration = TimeSpan.Zero;
-        }
-
-        var content = string.Format(
-            GetRootText("AllTasksComplete", "All task(s) completed!\n(in {0})"),
-            duration.ToString(@"h\h\ m\m\ s\s"));
+        var content = BuildAllTasksCompletedTitle(timestamp);
         var sanityReport = BuildSanityRecoveryReport(timestamp);
         if (!string.IsNullOrWhiteSpace(sanityReport))
         {
@@ -5303,6 +5319,55 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             Level: "SUCCESS",
             UpdateThumbnail: true,
             ForceScreenshot: true);
+    }
+
+    private string BuildAllTasksCompletedTitle(DateTimeOffset timestamp)
+    {
+        var startedAt = _runStartedAt ?? timestamp;
+        var duration = timestamp.ToLocalTime() - startedAt.ToLocalTime();
+        if (duration < TimeSpan.Zero)
+        {
+            duration = TimeSpan.Zero;
+        }
+
+        return string.Format(
+            GetRootText("AllTasksComplete", "All task(s) completed!\n(in {0})"),
+            duration.ToString(@"h\h\ m\m\ s\s"));
+    }
+
+    private string BuildAllTasksCompletedExternalMessage(DateTimeOffset timestamp)
+    {
+        var startedAt = _runStartedAt ?? timestamp;
+        var duration = timestamp.ToLocalTime() - startedAt.ToLocalTime();
+        if (duration < TimeSpan.Zero)
+        {
+            duration = TimeSpan.Zero;
+        }
+
+        var message = GetRootText(
+                "AllTaskCompleteContent",
+                "MAA has completed all tasks under the {Preset} configuration on {DateTime} (in {TimeDiff})")
+            .Replace("{DateTime}", timestamp.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss"), StringComparison.Ordinal)
+            .Replace("{Preset}", Runtime.ConfigurationService.CurrentConfig.CurrentProfile, StringComparison.Ordinal)
+            .Replace("{TimeDiff}", duration.ToString(@"h\h\ m\m\ s\s"), StringComparison.Ordinal);
+
+        var details = TryReadProfileBool(
+            Runtime.ConfigurationService.CurrentConfig,
+            ConfigurationKeys.ExternalNotificationEnableDetails,
+            false)
+            ? BuildExternalLogDetails(OverlayLogs)
+            : string.Empty;
+        var sanityReport = BuildSanityRecoveryReport(timestamp);
+
+        var builder = new StringBuilder(details);
+        builder.Append(message);
+        if (!string.IsNullOrWhiteSpace(sanityReport))
+        {
+            builder.AppendLine();
+            builder.Append(sanityReport);
+        }
+
+        return builder.ToString();
     }
 
     private TaskQueueCallbackUserLog? BuildSubTaskErrorLog(CallbackPayload payload, int? taskIndex)
@@ -5327,30 +5392,226 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         int? taskIndex,
         string runId)
     {
-        var request = TryBuildAutomaticSystemNotification(callback, payload, taskIndex, runId);
+        if (IsSuppressedWpfTaskChainLog(callback.MsgName, payload.TaskChain))
+        {
+            return;
+        }
+
+        if (string.Equals(callback.MsgName, "TaskChainError", StringComparison.Ordinal)
+            && string.Equals(TaskModuleTypes.Normalize(payload.TaskChain), TaskModuleTypes.Recruit, StringComparison.OrdinalIgnoreCase))
+        {
+            var recognitionError = NormalizeNotificationText(
+                GetRootText("IdentifyTheMistakes", "Recognition error"),
+                "Recognition error");
+            QueueAutomaticSystemNotification(new TaskQueueSystemNotification(
+                recognitionError,
+                string.Empty,
+                "TaskQueue.Notification.RecruitRecognitionError",
+                "recruit recognition failure"),
+                _useSystemNotifications);
+        }
+
+        var request = TryBuildAutomaticSystemNotification(callback, payload, runId);
         if (!request.HasValue)
         {
             return;
         }
 
         var notification = request.Value;
-        if (_useSystemNotifications)
-        {
-            QueueAutomaticSystemNotification(notification);
-        }
-
-        QueueAutomaticExternalNotification(callback, notification);
+        QueueAutomaticSystemNotification(notification, _useSystemNotifications);
+        QueueAutomaticExternalNotification(callback.MsgName, notification);
     }
 
-    private void QueueAutomaticSystemNotification(TaskQueueSystemNotification notification)
+    private void QueueSpecialCallbackNotification(string callbackName, CallbackPayload payload)
+    {
+        TaskQueueSystemNotification? notification = null;
+        if (string.Equals(callbackName, "SubTaskStart", StringComparison.Ordinal)
+            && string.Equals(payload.SubTask, "ProcessTask", StringComparison.OrdinalIgnoreCase))
+        {
+            var task = GetStringValue(payload.Details, "task");
+            if (string.Equals(task, "FightMissionFailedAndStop", StringComparison.Ordinal))
+            {
+                var text = GetRootText("FightMissionFailedAndStop", "Proxy failed too many times, task stopped");
+                notification = new(text, string.Empty, "TaskQueue.Notification.FightStopped", "fight mission failure");
+            }
+            else if (string.Equals(task, "OfflineConfirm", StringComparison.Ordinal)
+                     && !IsAutoRestartOnDropEnabled())
+            {
+                var text = GetRootText("GameDropNoRestart", "Game disconnected, not restarting, stopping");
+                notification = new(text, string.Empty, "TaskQueue.Notification.Offline", "game disconnect without restart");
+                _ = StopAsync(userInitiated: false);
+            }
+        }
+        else if (string.Equals(callbackName, "SubTaskExtraInfo", StringComparison.Ordinal))
+        {
+            var title = GetRootText("RecruitingTips", "Recruitment Tips");
+            switch (payload.What)
+            {
+                case "RecruitSpecialTag":
+                case "RecruitPreservedTag":
+                case "RecruitRobotTag":
+                    var tag = GetStringValue(payload.Details, "tag");
+                    if (!string.IsNullOrWhiteSpace(tag))
+                    {
+                        notification = new(title, tag, "TaskQueue.Notification.RecruitTag", "recruitment tag");
+                    }
+
+                    break;
+                case "RecruitResult":
+                    var level = GetIntValue(payload.Details, "level") ?? 0;
+                    if (level >= 5)
+                    {
+                        notification = new(
+                            string.Format(GetRootText("RecruitmentOfStar", "Recruitment of {0}-star Operator"), level),
+                            new string('\u2605', level),
+                            "TaskQueue.Notification.RecruitResult",
+                            "high-rarity recruitment result");
+                    }
+
+                    break;
+            }
+        }
+
+        if (notification.HasValue)
+        {
+            QueueAutomaticSystemNotification(notification.Value, _useSystemNotifications);
+        }
+    }
+
+    private void StartOrResetStallReminder()
+    {
+        CancelStallReminder();
+        _stallAccumulatedCount = 0;
+        var config = Runtime.ConfigurationService.CurrentConfig;
+        var enabled = TryReadProfileBool(config, ConfigurationKeys.StallTimeoutEnabled, true);
+        var timeoutMinutes = Math.Clamp(
+            TryReadProfileInt(config, ConfigurationKeys.StallTimeoutMinutes, 25),
+            0,
+            MaxTimeoutMinutes);
+        if (!enabled || timeoutMinutes <= 0)
+        {
+            return;
+        }
+
+        var reminderMinutes = Math.Clamp(
+            TryReadProfileInt(config, ConfigurationKeys.ReminderIntervalMinutes, 30),
+            1,
+            MaxTimeoutMinutes);
+        _stallReminderCts = new CancellationTokenSource();
+        _ = RunStallReminderLoopAsync(timeoutMinutes, reminderMinutes, _stallReminderCts.Token);
+    }
+
+    private async Task RunStallReminderLoopAsync(int timeoutMinutes, int reminderMinutes, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromMinutes(timeoutMinutes), cancellationToken);
+            while (true)
+            {
+                _stallAccumulatedCount++;
+                var accumulatedMinutes = timeoutMinutes + ((_stallAccumulatedCount - 1) * reminderMinutes);
+                var message = string.Format(
+                    GetRootText(
+                        "TaskStallWarning",
+                        "Task log output has not been updated for {0} minutes (currently stalled for {1} minutes). Please check whether the task is still running."),
+                    timeoutMinutes,
+                    accumulatedMinutes);
+                await Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    AppendLogEntry(DateTimeOffset.Now, message, "WARN", updateThumbnail: false, notifyActivity: false);
+                    var systemNotification = new TaskQueueSystemNotification(
+                        message,
+                        string.Empty,
+                        "TaskQueue.Notification.Stalled",
+                        "task output stalled",
+                        BuildExternalLogDetails(OverlayLogs.TakeLast(5)));
+                    QueueAutomaticSystemNotification(systemNotification, _useSystemNotifications);
+                    QueueAutomaticExternalNotification("TaskStalled", systemNotification);
+                });
+                _ = Runtime.AchievementTrackerService.Unlock("LongTaskTimeout");
+
+                await Task.Delay(TimeSpan.FromMinutes(reminderMinutes), cancellationToken);
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+    }
+
+    private void CancelStallReminder()
+    {
+        _stallReminderCts?.Cancel();
+        _stallReminderCts?.Dispose();
+        _stallReminderCts = null;
+    }
+
+    private void ScheduleSanityRecoveryReminder(DateTimeOffset now)
+    {
+        _sanityReminderCts?.Cancel();
+        _sanityReminderCts?.Dispose();
+        _sanityReminderCts = null;
+        if (!_fightSanityReportTime.HasValue || !_fightSanityCurrent.HasValue || !_fightSanityMax.HasValue)
+        {
+            return;
+        }
+
+        var delay = CalculateSanityReminderDelay(
+            _fightSanityReportTime.Value,
+            _fightSanityCurrent.Value,
+            _fightSanityMax.Value,
+            now);
+        if (!delay.HasValue)
+        {
+            return;
+        }
+
+        _sanityReminderCts = new CancellationTokenSource();
+        _ = RunSanityRecoveryReminderAsync(delay.Value, _sanityReminderCts.Token);
+    }
+
+    internal static TimeSpan? CalculateSanityReminderDelay(
+        DateTimeOffset reportTime,
+        int currentSanity,
+        int maxSanity,
+        DateTimeOffset now)
+    {
+        var recoveryTime = reportTime.AddMinutes(Math.Max(0, maxSanity - currentSanity) * 6);
+        var delay = recoveryTime - now.AddMinutes(6);
+        return delay > TimeSpan.Zero ? delay : null;
+    }
+
+    private async Task RunSanityRecoveryReminderAsync(TimeSpan delay, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(delay, cancellationToken);
+            var report = BuildSanityRecoveryReport(DateTimeOffset.Now);
+            if (!string.IsNullOrWhiteSpace(report))
+            {
+                QueueAutomaticSystemNotification(
+                    new TaskQueueSystemNotification(report, string.Empty, "TaskQueue.Notification.Sanity", "sanity recovery"),
+                    _useSystemNotifications);
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+    }
+
+    private void QueueAutomaticSystemNotification(
+        TaskQueueSystemNotification notification,
+        bool useSystemNotification)
     {
         _ = Task.Run(async () =>
         {
             try
             {
                 await Runtime.PlatformCapabilityService.SendSystemNotificationAsync(
-                    notification.Title,
-                    notification.Message);
+                    new SystemNotificationRequest(
+                        notification.Title,
+                        notification.Message,
+                        [],
+                        UseSystemNotification: useSystemNotification));
             }
             catch (Exception ex)
             {
@@ -5363,10 +5624,13 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     }
 
     private void QueueAutomaticExternalNotification(
-        CoreCallbackEvent callback,
+        string callbackName,
         TaskQueueSystemNotification notification)
     {
-        var requests = BuildAutomaticExternalNotificationRequests(callback.MsgName, notification);
+        var requests = BuildAutomaticExternalNotificationRequests(
+            callbackName,
+            notification,
+            Runtime.ConfigurationService.CurrentConfig);
         if (requests.Count == 0)
         {
             return;
@@ -5397,11 +5661,11 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         });
     }
 
-    private IReadOnlyList<NotificationProviderTestRequest> BuildAutomaticExternalNotificationRequests(
+    internal static IReadOnlyList<NotificationProviderTestRequest> BuildAutomaticExternalNotificationRequests(
         string callbackName,
-        TaskQueueSystemNotification notification)
+        TaskQueueSystemNotification notification,
+        UnifiedConfig config)
     {
-        var config = Runtime.ConfigurationService.CurrentConfig;
         var enabledProviders = ResolveExternalNotificationProviders(config);
         if (enabledProviders.Count == 0)
         {
@@ -5414,10 +5678,11 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 config,
                 ConfigurationKeys.ExternalNotificationSendWhenComplete,
                 true),
-            "TaskChainError" or "SubTaskError" => TryReadProfileBool(
+            "TaskChainError" => TryReadProfileBool(
                 config,
                 ConfigurationKeys.ExternalNotificationSendWhenError,
                 true),
+            "TaskStalled" => ReadStalledExternalNotificationEnabled(config),
             _ => false,
         };
         if (!shouldSend)
@@ -5433,10 +5698,63 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 provider,
                 parametersText,
                 notification.Title,
-                notification.Message));
+                NormalizeExternalNotificationMessage(notification)));
         }
 
         return requests;
+    }
+
+    private static string NormalizeExternalNotificationMessage(TaskQueueSystemNotification notification)
+    {
+        if (!string.IsNullOrWhiteSpace(notification.ExternalMessage))
+        {
+            return notification.ExternalMessage;
+        }
+
+        return string.IsNullOrWhiteSpace(notification.Message)
+            ? notification.Title
+            : notification.Message;
+    }
+
+    private static string BuildExternalLogDetails(IEnumerable<TaskQueueLogEntryViewModel> entries)
+    {
+        var builder = new StringBuilder();
+        foreach (var entry in entries)
+        {
+            builder.Append('[')
+                .Append(entry.Time)
+                .Append("][")
+                .Append(MapExternalLogColor(entry.Level))
+                .Append(']')
+                .Append(entry.Content)
+                .Append('\n');
+        }
+
+        return builder.ToString();
+    }
+
+    private static string MapExternalLogColor(string level)
+    {
+        return level.ToUpperInvariant() switch
+        {
+            "ERROR" => "ErrorLogBrush",
+            "WARN" or "WARNING" => "WarningLogBrush",
+            "INFO" => "InfoLogBrush",
+            "SUCCESS" => "SuccessLogBrush",
+            "TRACE" => "TraceLogBrush",
+            _ => "MessageLogBrush",
+        };
+    }
+
+    private static bool ReadStalledExternalNotificationEnabled(UnifiedConfig config)
+    {
+        if (config.Profiles.TryGetValue(config.CurrentProfile, out var profile)
+            && profile.Values.ContainsKey(ConfigurationKeys.ExternalNotificationSendWhenStalled))
+        {
+            return TryReadProfileBool(config, ConfigurationKeys.ExternalNotificationSendWhenStalled, false);
+        }
+
+        return TryReadProfileBool(config, ConfigurationKeys.ExternalNotificationSendWhenTimeout, false);
     }
 
     private static List<string> ResolveExternalNotificationProviders(UnifiedConfig config)
@@ -5483,7 +5801,6 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     private TaskQueueSystemNotification? TryBuildAutomaticSystemNotification(
         CoreCallbackEvent callback,
         CallbackPayload payload,
-        int? taskIndex,
         string runId)
     {
         switch (callback.MsgName)
@@ -5495,49 +5812,21 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 }
 
                 _lastCompletionNotificationRunId = runId;
-                var completionLog = BuildAllTasksCompletedLog(callback.Timestamp);
+                var completionTitle = BuildAllTasksCompletedTitle(callback.Timestamp);
                 return new TaskQueueSystemNotification(
-                    NormalizeNotificationText(
-                        RootTexts.GetOrDefault("TaskQueue.Log.AllCompleted", "All tasks completed"),
-                        "All tasks completed"),
-                    NormalizeNotificationText(completionLog.Content, "All tasks completed"),
+                    NormalizeNotificationText(completionTitle, "All tasks completed"),
+                    BuildSanityRecoveryReport(callback.Timestamp) ?? string.Empty,
                     "TaskQueue.Notification.Complete",
-                    "task completion");
+                    "task completion",
+                    BuildAllTasksCompletedExternalMessage(callback.Timestamp));
             case "TaskChainError":
-                if (string.Equals(_lastFailureNotificationRunId, runId, StringComparison.Ordinal))
-                {
-                    return null;
-                }
-
-                _lastFailureNotificationRunId = runId;
                 var taskFailureLog = BuildTaskChainErrorLog(payload.TaskChain);
                 return new TaskQueueSystemNotification(
-                    NormalizeNotificationText(
-                        string.Format(
-                            RootTexts.GetOrDefault("TaskQueue.Log.TaskError", "{0} failed"),
-                            ResolveTaskLogName(taskIndex, payload.TaskChain)),
-                        "Task failed"),
                     NormalizeNotificationText(taskFailureLog.Content, "Task failed"),
+                    string.Empty,
                     "TaskQueue.Notification.Error",
-                    "task failure");
-            case "SubTaskError":
-                if (string.Equals(_lastFailureNotificationRunId, runId, StringComparison.Ordinal))
-                {
-                    return null;
-                }
-
-                _lastFailureNotificationRunId = runId;
-                var subTaskFailureLog = BuildSubTaskErrorLog(payload, taskIndex) ?? BuildTaskChainErrorLog(payload.TaskChain);
-                return new TaskQueueSystemNotification(
-                    NormalizeNotificationText(
-                        string.Format(
-                            RootTexts.GetOrDefault("TaskQueue.Log.SubTaskError", "{0}: {1} failed"),
-                            ResolveTaskLogName(taskIndex, payload.TaskChain),
-                            payload.SubTask ?? "SubTask"),
-                        "Task failed"),
-                    NormalizeNotificationText(subTaskFailureLog.Content, "Task failed"),
-                    "TaskQueue.Notification.Error",
-                    "sub-task failure");
+                    "task failure",
+                    taskFailureLog.Content);
             default:
                 return null;
         }
@@ -6074,6 +6363,9 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
     private void ResetRuntimeLogState()
     {
+        _sanityReminderCts?.Cancel();
+        _sanityReminderCts?.Dispose();
+        _sanityReminderCts = null;
         _runStartedAt = DateTimeOffset.Now;
         _fightSanityReportTime = null;
         _fightSanityCurrent = null;
@@ -6258,11 +6550,13 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     {
         if (payload.FinishedTaskIds.Count == 0)
         {
-            return true;
+            return false;
         }
 
         return payload.FinishedTaskIds.Any(taskId =>
-            Runtime.SessionService.TryResolveTaskIndexByCoreTaskId(taskId, out _));
+            Runtime.SessionService.TryResolveTaskIndexByCoreTaskId(taskId, out var taskIndex)
+            && IsValidTaskIndex(taskIndex, Tasks.Count)
+            && MainTaskModules.Contains(TaskModuleTypes.Normalize(Tasks[taskIndex].Type)));
     }
 
     private async Task HandleCallbackAsync(CoreCallbackEvent callback)
@@ -6325,6 +6619,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 UpdateTaskStatus(taskIndex, taskChain, TaskQueueItemStatus.Running);
                 StatusMessage = $"{taskChain ?? "Task"}::{metadata.SubTask ?? "SubTask"} running.";
                 AppendWpfCallbackLog(callback, metadata, taskIndex);
+                QueueSpecialCallbackNotification(callback.MsgName, metadata);
                 await RecordRuntimeStatusAsync(
                     runId,
                     taskIndex,
@@ -6387,6 +6682,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 CompleteTaskQueueRunOwnership();
                 break;
             case "TaskChainStopped":
+                CancelStallReminder();
                 if (_clearTaskStatusesWhenStopped)
                 {
                     ResetAllTaskStatuses();
@@ -6422,11 +6718,12 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                     TaskQueueItemStatus.Success,
                     callback.PayloadJson,
                     resolveSource: resolveSource);
+                await ConsumeCompletedOneShotTaskEnabledStatesAsync();
                 if (IsMainTaskQueueCompletion(metadata))
                 {
-                    await ConsumeCompletedOneShotTaskEnabledStatesAsync();
                     AppendWpfCallbackLog(callback, metadata, taskIndex);
                     QueueAutomaticNotifications(callback, metadata, taskIndex, runId);
+                    ScheduleSanityRecoveryReminder(callback.Timestamp);
                     if (!string.Equals(_lastPostActionRunId, runId, StringComparison.Ordinal))
                     {
                         _lastPostActionRunId = runId;
@@ -6434,6 +6731,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                     }
                 }
 
+                CancelStallReminder();
                 CompleteTaskQueueRunOwnership();
 
                 break;
@@ -6441,6 +6739,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             case "SubTaskExtraInfo":
                 TrackAchievementsFromCallback(metadata, callback.MsgName);
                 AppendWpfCallbackLog(callback, metadata, taskIndex);
+                QueueSpecialCallbackNotification(callback.MsgName, metadata);
                 await RecordRuntimeStatusAsync(
                     runId,
                     taskIndex,
@@ -6947,11 +7246,12 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
     private readonly record struct CallbackTaskResolution(int? TaskIndex, string ResolveSource, string? WarningDetail = null);
 
-    private readonly record struct TaskQueueSystemNotification(
+    internal readonly record struct TaskQueueSystemNotification(
         string Title,
         string Message,
         string Scope,
-        string Reason);
+        string Reason,
+        string? ExternalMessage = null);
 
     private string ResolveRunId(string? callbackRunId)
     {
@@ -7573,6 +7873,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
             _roguelikeInCombat = false;
             IsWaitingForStop = false;
+            CancelStallReminder();
             SyncStoppedUiStateIfSessionNotActive();
         }
 

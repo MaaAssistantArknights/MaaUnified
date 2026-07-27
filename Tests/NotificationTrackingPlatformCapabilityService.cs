@@ -24,6 +24,8 @@ internal sealed class NotificationTrackingPlatformCapabilityService : IPlatformC
 
     public string? LastMessage { get; private set; }
 
+    public SystemNotificationRequest? LastNotification { get; private set; }
+
     public event EventHandler<TrayCommandEvent>? TrayCommandInvoked
     {
         add => _inner.TrayCommandInvoked += value;
@@ -71,7 +73,19 @@ internal sealed class NotificationTrackingPlatformCapabilityService : IPlatformC
         NotificationCallCount++;
         LastTitle = title;
         LastMessage = message;
+        LastNotification = new SystemNotificationRequest(title, message);
         return _inner.SendSystemNotificationAsync(title, message, cancellationToken);
+    }
+
+    public Task<UiOperationResult> SendSystemNotificationAsync(
+        SystemNotificationRequest notification,
+        CancellationToken cancellationToken = default)
+    {
+        NotificationCallCount++;
+        LastTitle = notification.Title;
+        LastMessage = notification.Message;
+        LastNotification = notification;
+        return _inner.SendSystemNotificationAsync(notification, cancellationToken);
     }
 
     public Task<UiOperationResult> RegisterGlobalHotkeyAsync(string name, string gesture, CancellationToken cancellationToken = default)

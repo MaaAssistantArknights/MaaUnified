@@ -28,6 +28,9 @@
     <value>All task(s) completed!
 (in {0})</value>
   </data>
+  <data name="AllTaskCompleteContent" xml:space="preserve">
+    <value>MAA has completed all tasks under the {Preset} configuration on {DateTime} (in {TimeDiff})</value>
+  </data>
   <data name="AsYourHeartDesires" xml:space="preserve">
     <value>As Your Heart Desires (Random)</value>
   </data>
@@ -1732,6 +1735,21 @@ Do not enable this when OF-1 is locked.</value>
   <data name="PlatformCapability.Error.NotificationUnsupported" xml:space="preserve">
     <value>Notifications are unsupported in the current environment</value>
   </data>
+  <data name="PlatformCapability.Notification.Unavailable" xml:space="preserve">
+    <value>Toast notifications are unavailable: {0}</value>
+  </data>
+  <data name="PlatformCapability.Notification.Unavailable.DisabledForApplication" xml:space="preserve">
+    <value>The user has disabled notifications for this app in Windows Settings.</value>
+  </data>
+  <data name="PlatformCapability.Notification.Unavailable.DisabledForUser" xml:space="preserve">
+    <value>The user has disabled all app notifications in Windows Settings.</value>
+  </data>
+  <data name="PlatformCapability.Notification.Unavailable.DisabledByGroupPolicy" xml:space="preserve">
+    <value>Disabled by Windows Group Policy</value>
+  </data>
+  <data name="PlatformCapability.Notification.Unavailable.DisabledByManifest" xml:space="preserve">
+    <value>Disabled by app manifest (Package.appxmanifest)</value>
+  </data>
   <data name="PlatformCapability.Error.OverlayStartFailed" xml:space="preserve">
     <value>Failed to start overlay</value>
   </data>
@@ -3147,6 +3165,9 @@ With save file: farm points through crafting (advanced).
   <data name="Settings.ExternalNotification.SendWhenTimeout" xml:space="preserve">
     <value>Notify on timeout</value>
   </data>
+  <data name="Settings.ExternalNotification.SendWhenStalled" xml:space="preserve">
+    <value>Send notification when task log output stalls</value>
+  </data>
   <data name="Settings.ExternalNotification.Status.OperationFailed" xml:space="preserve">
     <value>External notification operation failed.</value>
   </data>
@@ -3275,6 +3296,12 @@ With save file: farm points through crafting (advanced).
   </data>
   <data name="Settings.Game.TaskTimeoutMinutes" xml:space="preserve">
     <value>Task timeout (minutes)</value>
+  </data>
+  <data name="Settings.Game.StallTimeoutEnabled" xml:space="preserve">
+    <value>Enable stall detection</value>
+  </data>
+  <data name="Settings.Game.StallTimeoutMinutes" xml:space="preserve">
+    <value>Log output stall timeout (min)</value>
   </data>
   <data name="Settings.Game.UseScriptOnCopilot" xml:space="preserve">
     <value>Run scripts during Copilot</value>

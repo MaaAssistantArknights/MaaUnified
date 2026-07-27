@@ -22,6 +22,26 @@ namespace MAAUnified.Tests;
 public sealed class SettingsGuiBackgroundFeatureTests
 {
     [Fact]
+    public async Task UseNotifyEnabled_WhenSystemNotificationsUnavailable_ShouldEmitErrorDiagnosticAfterInfoFallback()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync();
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        var notifications = new List<SystemNotificationRequest>();
+        var interactionSource = Assert.IsAssignableFrom<INotificationInteractionSource>(
+            fixture.Runtime.Platform.NotificationService);
+        interactionSource.InAppNotificationRequested += (_, args) => notifications.Add(args.Notification);
+
+        vm.UseNotify = false;
+        vm.UseNotify = true;
+
+        await WaitUntilAsync(() => notifications.Count == 2);
+        Assert.Equal(InAppNotificationSeverity.Information, notifications[0].InAppSeverity);
+        Assert.Equal(InAppNotificationSeverity.Error, notifications[1].InAppSeverity);
+        Assert.False(notifications[1].UseSystemNotification);
+    }
+
+    [Fact]
     public async Task SaveGuiSettingsAsync_WritesAllKeysInSingleBatch()
     {
         await using var fixture = await RuntimeFixture.CreateAsync();

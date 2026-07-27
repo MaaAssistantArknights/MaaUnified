@@ -20,6 +20,8 @@ public sealed class PlatformWindowsNativeSmokeTests
 
             Assert.IsType<WindowsNotifyIconTrayService>(bundle.TrayService);
             Assert.IsType<DesktopNotificationService>(bundle.NotificationService);
+            Assert.True(WindowsToastNotificationPoster.TryCreate(out var notificationPoster));
+            notificationPoster.Dispose();
             Assert.True(bundle.HotkeyService is SharpHookGlobalHotkeyService or CompositeGlobalHotkeyService);
             Assert.IsType<CrossPlatformAutostartService>(bundle.AutostartService);
             Assert.IsType<WindowsOverlayCapabilityService>(bundle.OverlayService);
@@ -27,7 +29,7 @@ public sealed class PlatformWindowsNativeSmokeTests
             var snapshot = PlatformCapabilitySnapshotFactory.FromBundle(bundle);
             Assert.True(snapshot.Tray.Supported);
             Assert.Equal("windows-shell-notifyicon", snapshot.Tray.Provider);
-            Assert.Equal("desktop-notifications", snapshot.Notification.Provider);
+            Assert.Equal("windows-toast", snapshot.Notification.Provider);
             Assert.True(snapshot.Notification.HasFallback);
             Assert.True(snapshot.Hotkey.Supported);
             Assert.True(snapshot.Autostart.Supported);
@@ -61,12 +63,17 @@ public sealed class PlatformWindowsNativeSmokeTests
 
             var snapshot = PlatformCapabilitySnapshotFactory.FromBundle(bundle);
             Assert.True(snapshot.Tray.HasFallback);
+            Assert.True(snapshot.Notification.Supported);
             Assert.True(snapshot.Notification.HasFallback);
             Assert.True(snapshot.Hotkey.HasFallback);
             Assert.True(snapshot.Autostart.Supported);
             Assert.False(snapshot.Autostart.HasFallback);
             Assert.Equal("registry-run", snapshot.Autostart.Provider);
             Assert.True(snapshot.Overlay.HasFallback);
+
+            var notificationAvailability = bundle.NotificationService.GetAvailability();
+            Assert.False(notificationAvailability.IsAvailable);
+            Assert.Equal(NotificationAvailabilityReason.BackendUnavailable, notificationAvailability.Reason);
         }
         finally
         {

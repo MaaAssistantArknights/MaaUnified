@@ -12,6 +12,18 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
+  <data name="AllTaskCompleteContent" xml:space="preserve">
+    <value>[!! MÅÅ ħåş çöɱþļéţéď åļļ ţåşķş üñďéř ţħé {Preset} çöñƒîĝüřåţîöñ öñ {DateTime} (îñ {TimeDiff}) !!]</value>
+  </data>
+  <data name="Settings.ExternalNotification.SendWhenStalled" xml:space="preserve">
+    <value>[!! Şéñď ñöţîƒîçåţîöñ ŵħéñ ţåşķ ļöĝ öüţþüţ şţåļļş !!]</value>
+  </data>
+  <data name="Settings.Game.StallTimeoutEnabled" xml:space="preserve">
+    <value>[!! Éñåƀļé şţåļļ ďéţéçţîöñ !!]</value>
+  </data>
+  <data name="Settings.Game.StallTimeoutMinutes" xml:space="preserve">
+    <value>[!! Ļöĝ öüţþüţ şţåļļ ţîɱéöüţ (ɱîñ) !!]</value>
+  </data>
   <data name="Copilot.List.Button.ClearAll" xml:space="preserve">
     <value>[!! Çļéåř åļļ !!]</value>
   </data>
@@ -279,5 +291,20 @@
   </data>
   <data name="MacRawByNcRisk.Dialog.DefaultTouchMode" xml:space="preserve">
     <value>[!! ďéƒåüļţ ţöüçĥ ɱöďé !!]</value>
+  </data>
+  <data name="PlatformCapability.Notification.Unavailable.DisabledForApplication" xml:space="preserve">
+    <value>[!! Ţħé üşéř ħåş ďîşåƀļéď ñöţîƒîçåţîöñş ƒöř ţħîş åþþ îñ Windows Şéţţîñĝş. !!]</value>
+  </data>
+  <data name="PlatformCapability.Notification.Unavailable" xml:space="preserve">
+    <value>[!! Ţöåşţ ñöţîƒîçåţîöñş åřé üñåvåîļåƀļé: {0} !!]</value>
+  </data>
+  <data name="PlatformCapability.Notification.Unavailable.DisabledForUser" xml:space="preserve">
+    <value>[!! Ţħé üşéř ħåş ďîşåƀļéď åļļ åþþ ñöţîƒîçåţîöñş îñ Windows Şéţţîñĝş. !!]</value>
+  </data>
+  <data name="PlatformCapability.Notification.Unavailable.DisabledByGroupPolicy" xml:space="preserve">
+    <value>[!! Ďîşåƀļéď ƀý Windows Ĝřöüþ Þöļîçý !!]</value>
+  </data>
+  <data name="PlatformCapability.Notification.Unavailable.DisabledByManifest" xml:space="preserve">
+    <value>[!! Ďîşåƀļéď ƀý åþþ ɱåñîƒéşţ (Package.appxmanifest) !!]</value>
   </data>
 </root>

@@ -140,6 +140,94 @@ public sealed class CopilotN3ExecutionTests
     }
 
     [Fact]
+    public async Task AllTasksCompleted_ShouldSendWpfStyleCompletionNotification()
+    {
+        await using var fixture = await CopilotN3Fixture.CreateAsync();
+        fixture.ViewModel.SetLanguage("en-US");
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(
+            fixture.Runtime.ConnectFeatureService,
+            fixture.ReadyAdbPath)).Success);
+        fixture.ViewModel.FilePath = fixture.CreateCopilotFile();
+        await fixture.ViewModel.ImportFromFileAsync();
+        await fixture.ViewModel.StartAsync();
+        var taskId = fixture.Bridge.LastAppendedTaskId;
+
+        fixture.ViewModel.ApplyRuntimeCallback(new CoreCallbackEvent(
+            3,
+            "AllTasksCompleted",
+            $$"""{"task_chain":"Copilot","task_id":{{taskId}}}""",
+            DateTimeOffset.UtcNow));
+
+        Assert.True(await WaitForConditionAsync(() => fixture.NotificationTracker.NotificationCallCount == 1));
+        Assert.Contains("Complete", fixture.NotificationTracker.LastTitle, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task AllTasksCompleted_ShouldUseInAppFallback_WhenUseNotifyDisabled()
+    {
+        await using var fixture = await CopilotN3Fixture.CreateAsync();
+        fixture.Runtime.ConfigurationService.CurrentConfig.GlobalValues["GUI.UseNotify"] = JsonValue.Create(false);
+        fixture.ViewModel.SetLanguage("en-US");
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(
+            fixture.Runtime.ConnectFeatureService,
+            fixture.ReadyAdbPath)).Success);
+        fixture.ViewModel.FilePath = fixture.CreateCopilotFile();
+        await fixture.ViewModel.ImportFromFileAsync();
+        await fixture.ViewModel.StartAsync();
+        var taskId = fixture.Bridge.LastAppendedTaskId;
+
+        fixture.ViewModel.ApplyRuntimeCallback(new CoreCallbackEvent(
+            3,
+            "AllTasksCompleted",
+            $$"""{"task_chain":"Copilot","task_id":{{taskId}}}""",
+            DateTimeOffset.UtcNow));
+
+        Assert.True(await WaitForConditionAsync(() => fixture.NotificationTracker.NotificationCallCount == 1));
+        Assert.False(fixture.NotificationTracker.LastNotification?.UseSystemNotification);
+    }
+
+    [Fact]
+    public async Task TaskChainError_ButNotSubTaskError_ShouldSendNotification()
+    {
+        await using var fixture = await CopilotN3Fixture.CreateAsync();
+        fixture.ViewModel.SetLanguage("en-US");
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(
+            fixture.Runtime.ConnectFeatureService,
+            fixture.ReadyAdbPath)).Success);
+        fixture.ViewModel.FilePath = fixture.CreateCopilotFile();
+        await fixture.ViewModel.ImportFromFileAsync();
+        await fixture.ViewModel.StartAsync();
+        var taskId = fixture.Bridge.LastAppendedTaskId;
+
+        fixture.ViewModel.ApplyRuntimeCallback(new CoreCallbackEvent(
+            10000,
+            "TaskChainError",
+            $$"""{"task_chain":"Copilot","task_id":{{taskId}}}""",
+            DateTimeOffset.UtcNow));
+
+        Assert.True(await WaitForConditionAsync(() => fixture.NotificationTracker.NotificationCallCount == 1));
+        Assert.Contains("error", fixture.NotificationTracker.LastTitle, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static async Task<bool> WaitForConditionAsync(
+        Func<bool> predicate,
+        int retry = 60,
+        int delayMs = 20)
+    {
+        for (var attempt = 0; attempt < retry; attempt++)
+        {
+            if (predicate())
+            {
+                return true;
+            }
+
+            await Task.Delay(delayMs);
+        }
+
+        return predicate();
+    }
+
+    [Fact]
     public async Task StartAsync_ShouldAppendWpfStyleStartLogs_WithoutRawCallbackDump()
     {
         await using var fixture = await CopilotN3Fixture.CreateAsync();
@@ -442,11 +530,13 @@ public sealed class CopilotN3ExecutionTests
             string root,
             MAAUnifiedRuntime runtime,
             Bridge bridge,
+            NotificationTrackingPlatformCapabilityService notificationTracker,
             string readyAdbPath)
         {
             Root = root;
             Runtime = runtime;
             Bridge = bridge;
+            NotificationTracker = notificationTracker;
             ReadyAdbPath = readyAdbPath;
             ViewModel = new CopilotPageViewModel(runtime);
             _pumpTask = runtime.SessionService.StartCallbackPumpAsync(_ => Task.CompletedTask, _pumpCts.Token);
@@ -457,6 +547,8 @@ public sealed class CopilotN3ExecutionTests
         public MAAUnifiedRuntime Runtime { get; }
 
         public Bridge Bridge { get; }
+
+        public NotificationTrackingPlatformCapabilityService NotificationTracker { get; }
 
         public string ReadyAdbPath { get; }
 
@@ -506,6 +598,7 @@ public sealed class CopilotN3ExecutionTests
             };
 
             var capability = new PlatformCapabilityFeatureService(platform, diagnostics);
+            var notificationTracker = new NotificationTrackingPlatformCapabilityService(capability);
             var connect = new ConnectFeatureService(session, config, log, bridge, root);
             var achievementTracker = new AchievementTrackerService(config, root);
             var runtime = new MAAUnifiedRuntime
@@ -523,10 +616,10 @@ public sealed class CopilotN3ExecutionTests
                 CopilotFeatureService = new CopilotFeatureService(new HttpClient(new SuccessfulFeedbackHandler())),
                 ToolboxFeatureService = new ToolboxFeatureService(),
                 RemoteControlFeatureService = new RemoteControlFeatureService(),
-                PlatformCapabilityService = capability,
-                OverlayFeatureService = new OverlayFeatureService(capability),
+                PlatformCapabilityService = notificationTracker,
+                OverlayFeatureService = new OverlayFeatureService(notificationTracker),
                 NotificationProviderFeatureService = new NotificationProviderFeatureService(),
-                SettingsFeatureService = new SettingsFeatureService(config, capability, diagnostics),
+                SettingsFeatureService = new SettingsFeatureService(config, notificationTracker, diagnostics),
                 AchievementTrackerService = achievementTracker,
                 DialogFeatureService = new DialogFeatureService(diagnostics),
                 PostActionFeatureService = new PostActionFeatureService(
@@ -535,7 +628,7 @@ public sealed class CopilotN3ExecutionTests
                     platform.PostActionExecutorService),
             };
 
-            return new CopilotN3Fixture(root, runtime, bridge, readyAdbPath);
+            return new CopilotN3Fixture(root, runtime, bridge, notificationTracker, readyAdbPath);
         }
 
         public async ValueTask DisposeAsync()

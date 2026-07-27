@@ -431,7 +431,7 @@ public sealed class SettingsRemoteExternalNotificationFeatureTests
                 vm.ExternalNotificationEnabled = true;
                 vm.ExternalNotificationSendWhenComplete = true;
                 vm.ExternalNotificationSendWhenError = true;
-                vm.ExternalNotificationSendWhenTimeout = false;
+                vm.ExternalNotificationSendWhenStalled = false;
                 vm.ExternalNotificationEnableDetails = true;
 
                 vm.NotificationProviderSelections.Single(
@@ -456,6 +456,12 @@ public sealed class SettingsRemoteExternalNotificationFeatureTests
                 Assert.Equal(
                     "SMTP,Telegram,Custom Webhook",
                     ReadCurrentProfileString(first.Config, ConfigurationKeys.ExternalNotificationEnabled));
+                Assert.Equal(
+                    "False",
+                    ReadCurrentProfileString(first.Config, ConfigurationKeys.ExternalNotificationSendWhenStalled));
+                Assert.Equal(
+                    string.Empty,
+                    ReadCurrentProfileString(first.Config, ConfigurationKeys.ExternalNotificationSendWhenTimeout));
             }
 
             await using var second = await RuntimeFixture.CreateAsync(
@@ -472,7 +478,7 @@ public sealed class SettingsRemoteExternalNotificationFeatureTests
             Assert.True(reloaded.ExternalNotificationEnabled);
             Assert.True(reloaded.ExternalNotificationSendWhenComplete);
             Assert.True(reloaded.ExternalNotificationSendWhenError);
-            Assert.False(reloaded.ExternalNotificationSendWhenTimeout);
+            Assert.False(reloaded.ExternalNotificationSendWhenStalled);
             Assert.True(reloaded.ExternalNotificationEnableDetails);
 
             reloaded.SelectedNotificationProvider = "Smtp";

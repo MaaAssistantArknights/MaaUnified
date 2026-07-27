@@ -1,6 +1,8 @@
 using MAAUnified.App.Views;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Notifications;
+using MAAUnified.Platform;
 using System.Text.Json.Nodes;
 using LegacyConfigurationKeys = MAAUnified.Compat.Constants.ConfigurationKeys;
 
@@ -8,6 +10,17 @@ namespace MAAUnified.Tests;
 
 public sealed class MainWindowSizingTests
 {
+    [Theory]
+    [InlineData(InAppNotificationSeverity.Information, NotificationType.Information)]
+    [InlineData(InAppNotificationSeverity.Warning, NotificationType.Warning)]
+    [InlineData(InAppNotificationSeverity.Error, NotificationType.Error)]
+    public void ResolveInAppNotificationType_ShouldPreservePlatformSeverity(
+        InAppNotificationSeverity severity,
+        NotificationType expected)
+    {
+        Assert.Equal(expected, MainWindow.ResolveInAppNotificationType(severity));
+    }
+
     [Theory]
     [InlineData(false, 1380)]
     [InlineData(true, 1104)]

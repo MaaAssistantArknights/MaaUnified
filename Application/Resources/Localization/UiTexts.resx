@@ -28,6 +28,9 @@
     <value>任务已全部完成！
 (用时 {0})</value>
   </data>
+  <data name="AllTaskCompleteContent" xml:space="preserve">
+    <value>MAA 已在 {DateTime} 完成了 {Preset} 配置下所有预设的任务。(用时 {TimeDiff})</value>
+  </data>
   <data name="AsYourHeartDesires" xml:space="preserve">
     <value>随心所欲（三张随机）</value>
   </data>
@@ -1732,6 +1735,21 @@
   <data name="PlatformCapability.Error.NotificationUnsupported" xml:space="preserve">
     <value>当前环境不支持通知</value>
   </data>
+  <data name="PlatformCapability.Notification.Unavailable" xml:space="preserve">
+    <value>Toast 通知不可用：{0}</value>
+  </data>
+  <data name="PlatformCapability.Notification.Unavailable.DisabledForApplication" xml:space="preserve">
+    <value>用户在 Windows 设置中关闭了该应用的通知</value>
+  </data>
+  <data name="PlatformCapability.Notification.Unavailable.DisabledForUser" xml:space="preserve">
+    <value>用户在 Windows 设置中关闭了所有应用通知</value>
+  </data>
+  <data name="PlatformCapability.Notification.Unavailable.DisabledByGroupPolicy" xml:space="preserve">
+    <value>被 Windows 组策略禁用</value>
+  </data>
+  <data name="PlatformCapability.Notification.Unavailable.DisabledByManifest" xml:space="preserve">
+    <value>被应用清单 (Package.appxmanifest) 禁用</value>
+  </data>
   <data name="PlatformCapability.Error.OverlayStartFailed" xml:space="preserve">
     <value>Overlay 启动失败</value>
   </data>
@@ -3148,6 +3166,9 @@
   <data name="Settings.ExternalNotification.SendWhenTimeout" xml:space="preserve">
     <value>超时时通知</value>
   </data>
+  <data name="Settings.ExternalNotification.SendWhenStalled" xml:space="preserve">
+    <value>任务日志输出停滞时发送通知</value>
+  </data>
   <data name="Settings.ExternalNotification.Status.OperationFailed" xml:space="preserve">
     <value>外部通知操作失败。</value>
   </data>
@@ -3276,6 +3297,12 @@
   </data>
   <data name="Settings.Game.TaskTimeoutMinutes" xml:space="preserve">
     <value>任务超时（分钟）</value>
+  </data>
+  <data name="Settings.Game.StallTimeoutEnabled" xml:space="preserve">
+    <value>启用停滞检测</value>
+  </data>
+  <data name="Settings.Game.StallTimeoutMinutes" xml:space="preserve">
+    <value>日志输出停滞超时时间（分钟）</value>
   </data>
   <data name="Settings.Game.UseScriptOnCopilot" xml:space="preserve">
     <value>自动战斗时执行脚本</value>
