@@ -6,6 +6,7 @@ using MAAUnified.App.Features.Dialogs;
 using MAAUnified.App.ViewModels.Infrastructure;
 using MAAUnified.App.ViewModels.Toolbox;
 using MAAUnified.Application.Models;
+using MAAUnified.Application.Services;
 using MAAUnified.CoreBridge;
 using LegacyConfigurationKeys = MAAUnified.Compat.Constants.ConfigurationKeys;
 
@@ -222,6 +223,47 @@ public sealed class ToolboxModuleO2FeatureTests
         Assert.Equal("500", fixture.Config.CurrentConfig.GlobalValues[LegacyConfigurationKeys.ToolBoxChooseLevel3Time]?.ToString());
         Assert.Equal("520", fixture.Config.CurrentConfig.GlobalValues[LegacyConfigurationKeys.ToolBoxChooseLevel5Time]?.ToString());
         Assert.Equal("Toolbox", fixture.Runtime.SessionService.CurrentRunOwner);
+    }
+
+    [Fact]
+    public async Task StartRecruitAsync_PlayCoverConnection_ShouldUseEffectiveConnectConfig()
+    {
+        await using var fixture = await ToolboxTestFixture.CreateAsync();
+        fixture.ConnectionState.ConnectConfig = "MacPlayTools";
+        fixture.ConnectionState.PlayCoverScreencapMode = "BGR";
+        fixture.ConnectionState.ConnectAddress = "127.0.0.1:1717";
+        var vm = new ToolboxPageViewModel(fixture.Runtime, fixture.ConnectionState);
+        await vm.InitializeAsync();
+
+        await vm.StartRecruitAsync();
+
+        Assert.Equal(1, fixture.Bridge.ConnectCallCount);
+        Assert.NotNull(fixture.Bridge.LastConnectionInfo);
+        Assert.Equal("MacBGR", fixture.Bridge.LastConnectionInfo!.ConnectConfig);
+        Assert.Equal("127.0.0.1:1717", fixture.Bridge.LastConnectionInfo.Address);
+        Assert.Null(fixture.Bridge.LastConnectionInfo.AdbPath);
+    }
+
+    [Fact]
+    public async Task StartRecruitAsync_PlayCoverProfileWithoutSharedState_ShouldUsePlayToolsDefaultAddress()
+    {
+        await using var fixture = await ToolboxTestFixture.CreateAsync(
+            profileSeeds: new Dictionary<string, JsonNode?>
+            {
+                ["ConnectAddress"] = null,
+                ["ConnectConfig"] = JsonValue.Create("MacPlayTools"),
+                ["PlayCoverScreencapMode"] = JsonValue.Create("MacSCK"),
+            });
+        var vm = new ToolboxPageViewModel(fixture.Runtime);
+        await vm.InitializeAsync();
+
+        await vm.StartRecruitAsync();
+
+        Assert.Equal(1, fixture.Bridge.ConnectCallCount);
+        Assert.NotNull(fixture.Bridge.LastConnectionInfo);
+        Assert.Equal("MacSCK", fixture.Bridge.LastConnectionInfo!.ConnectConfig);
+        Assert.Equal(PlayCoverConnectConfigResolver.DefaultPlayToolsAddress, fixture.Bridge.LastConnectionInfo.Address);
+        Assert.Null(fixture.Bridge.LastConnectionInfo.AdbPath);
     }
 
     [Fact]

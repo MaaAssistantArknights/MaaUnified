@@ -97,6 +97,20 @@ public sealed class SettingsUiAuditRegressionTests
         Assert.DoesNotContain("ColumnDefinitions=\"132,*,Auto\"", versionUpdate, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void ConnectSettingsView_ShouldWirePlayCoverScreenRecordingPermissionUx()
+    {
+        var root = GetMaaUnifiedRoot();
+        var xaml = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "ConnectSettingsView.axaml"));
+        var codeBehind = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "ConnectSettingsView.axaml.cs"));
+
+        Assert.Contains("ShowPlayCoverScreenRecordingPermission", xaml, StringComparison.Ordinal);
+        Assert.Contains("PlayCoverScreenRecordingPermissionStatusText", xaml, StringComparison.Ordinal);
+        Assert.Contains("Settings.Connect.PlayCover.ScreenRecording.OpenSettings", xaml, StringComparison.Ordinal);
+        Assert.Contains("Click=\"OnRequestPlayCoverScreenRecordingPermissionClick\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("RequestPlayCoverScreenRecordingPermission()", codeBehind, StringComparison.Ordinal);
+    }
+
     private static string GetMaaUnifiedRoot()
     {
         return TestRepoLayout.GetMaaUnifiedRoot();

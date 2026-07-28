@@ -1087,7 +1087,8 @@ public sealed class UnifiedSessionService
         }
 
         if (string.Equals(what, "ScreencapCost", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(what, "FastestWayToScreencap", StringComparison.OrdinalIgnoreCase))
+            || string.Equals(what, "FastestWayToScreencap", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(what, "ResolutionInfo", StringComparison.OrdinalIgnoreCase))
         {
             return;
         }

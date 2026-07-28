@@ -4315,6 +4315,33 @@
   <data name="StartUp.Option.ConnectConfig.General" xml:space="preserve">
     <value>通用模式</value>
   </data>
+  <data name="StartUp.Option.ConnectConfig.MacPlayTools" xml:space="preserve">
+    <value>PlayCover（macOS）</value>
+  </data>
+  <data name="Settings.Connect.PlayCover.Mode.Compatible" xml:space="preserve">
+    <value>默认兼容模式</value>
+  </data>
+  <data name="Settings.Connect.PlayCover.Mode.BGR" xml:space="preserve">
+    <value>优化加速模式</value>
+  </data>
+  <data name="Settings.Connect.PlayCover.Mode.SCK" xml:space="preserve">
+    <value>系统屏幕捕捉</value>
+  </data>
+  <data name="Settings.Connect.PlayCover.ScreenRecording.Granted" xml:space="preserve">
+    <value>屏幕录制权限已开启</value>
+  </data>
+  <data name="Settings.Connect.PlayCover.ScreenRecording.Missing" xml:space="preserve">
+    <value>系统屏幕捕捉需要屏幕录制权限。请为 MAAUnified 开启权限。</value>
+  </data>
+  <data name="Settings.Connect.PlayCover.ScreenRecording.OpenSettings" xml:space="preserve">
+    <value>打开录屏权限设置</value>
+  </data>
+  <data name="Settings.Connect.PlayCover.ScreenRecording.SettingsOpened" xml:space="preserve">
+    <value>屏幕录制权限未开启，已打开系统设置。授权后请重新尝试连接。</value>
+  </data>
+  <data name="Settings.Connect.PlayCover.ScreenRecording.OpenSettingsFailed" xml:space="preserve">
+    <value>打开录屏权限设置失败：{0}</value>
+  </data>
   <data name="StartUp.Option.ConnectConfig.GeneralWithoutScreencapErr" xml:space="preserve">
     <value>通用模式（屏蔽异常输出）</value>
   </data>

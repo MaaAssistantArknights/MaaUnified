@@ -105,6 +105,11 @@ public partial class ConnectSettingsView : UserControl
         VM.ConnectAddress = e.Text;
     }
 
+    private void OnRequestPlayCoverScreenRecordingPermissionClick(object? sender, RoutedEventArgs e)
+    {
+        VM?.RequestPlayCoverScreenRecordingPermission();
+    }
+
     private void OnMuMuExtrasChecked(object? sender, RoutedEventArgs e)
     {
         var vm = VM;
@@ -227,7 +232,7 @@ public partial class ConnectSettingsView : UserControl
             var max = elapsedSamples.Max();
             var avg = (long)Math.Round(elapsedSamples.Average(), MidpointRounding.AwayFromZero);
             vm.UpdateScreencapCost(min, avg, max, DateTimeOffset.Now);
-            vm.TestLinkInfo = vm.ScreencapCost;
+            vm.TestLinkInfo = string.Empty;
             LogScreenshotTestEvent(
                 "summary",
                 vm,
@@ -324,7 +329,7 @@ public partial class ConnectSettingsView : UserControl
         var effectiveAdbPath = vm.ResolveEffectiveAdbPath(updateStateWhenResolved: true);
         var candidatesResult = App.Runtime.ConnectFeatureService.BuildConnectionCandidates(
             vm.ConnectAddress,
-            vm.ConnectConfig,
+            vm.EffectiveConnectConfig,
             effectiveAdbPath,
             vm.BuildCoreConnectionExtras(),
             vm.AutoDetect,
