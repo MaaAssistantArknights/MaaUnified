@@ -31,4 +31,20 @@ public partial class RemoteControlSettingsView : UserControl
         VM.RemoteDeviceIdentity = Guid.NewGuid().ToString("N");
         await VM.SaveRemoteControlAsync();
     }
+
+    private async void OnRetrySecureStorageClick(object? sender, RoutedEventArgs e)
+    {
+        if (VM is not null)
+        {
+            await VM.RetrySecureStorageAsync();
+        }
+    }
+
+    private async void OnDiscardUnreadableSensitiveValuesClick(object? sender, RoutedEventArgs e)
+    {
+        if (VM is not null)
+        {
+            await VM.ConfirmDiscardUnreadableSensitiveValuesAsync();
+        }
+    }
 }

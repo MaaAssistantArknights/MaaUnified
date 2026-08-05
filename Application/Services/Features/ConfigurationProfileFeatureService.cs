@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using MAAUnified.Application.Models;
+using MAAUnified.Application.Security;
 
 namespace MAAUnified.Application.Services.Features;
 
@@ -48,6 +49,13 @@ public sealed class ConfigurationProfileFeatureService : IConfigurationProfileFe
         if (!TryValidateConfig(config, out var invalid))
         {
             return invalid;
+        }
+
+        if (_configService?.SensitiveStorageState is SensitiveStorageState.Unavailable or SensitiveStorageState.Corrupt)
+        {
+            return UiOperationResult<ConfigurationProfileState>.Fail(
+                UiErrorCode.ConfigurationProfileSaveFailed,
+                "Profiles cannot be copied while sensitive storage is unavailable.");
         }
 
         if (!TryNormalizeProfileName(profileName, out var normalizedName, out var nameInvalid))
@@ -280,7 +288,7 @@ public sealed class ConfigurationProfileFeatureService : IConfigurationProfileFe
     private static ConfigSnapshot CaptureSnapshot(UnifiedConfig config)
     {
         var profiles = config.Profiles
-            .Select(pair => new KeyValuePair<string, UnifiedProfile>(pair.Key, CloneProfile(pair.Value)))
+            .Select(pair => new KeyValuePair<string, UnifiedProfile>(pair.Key, pair.Value))
             .ToList();
         return new ConfigSnapshot(config.CurrentProfile, profiles);
     }

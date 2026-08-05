@@ -77,4 +77,12 @@ public partial class VersionUpdateSettingsView : UserControl
 
         await topLevel.Clipboard.SetTextAsync(VM.VersionUpdateMirrorChyanCdk);
     }
+
+    private async void OnDiscardUnreadableSensitiveValuesClick(object? sender, RoutedEventArgs e)
+    {
+        if (VM is not null)
+        {
+            await VM.ConfirmDiscardUnreadableSensitiveValuesAsync();
+        }
+    }
 }

@@ -2045,10 +2045,10 @@
     <value>パラメータ検証またはテスト通知の送信前に、少なくとも 1 つの通知プロバイダーを有効にしてください。</value>
   </data>
   <data name="Settings.ExternalNotification.Error.ParameterFormatLine" xml:space="preserve">
-    <value>パラメータ形式エラー（{0} 行目）。key=value 形式で入力してください: `{1}`</value>
+    <value>パラメータ形式エラー（{0} 行目）。key=value 形式で入力してください</value>
   </data>
   <data name="Settings.ExternalNotification.Error.ParameterKeyEmpty" xml:space="preserve">
-    <value>パラメータ形式エラー（{0} 行目）。key を空にできません。</value>
+    <value>パラメータ形式エラー（{0} 行目）。key=value 形式で入力してください</value>
   </data>
   <data name="Settings.ExternalNotification.Error.ParseFailed" xml:space="preserve">
     <value>通知サービスパラメータの解析に失敗しました。</value>
@@ -2720,7 +2720,7 @@
     <value>更新に失敗しました。</value>
   </data>
   <data name="Settings.VersionUpdate.Status.WindowsManualUpdateRequired" xml:space="preserve">
-    <value>Windows 版はまだ release で公開されていません。手動で更新してください。</value>
+    <value>Windows 版はアプリ内の自動更新にまだ対応していません。リリースページから手動で更新してください。</value>
   </data>
   <data name="Settings.VersionUpdate.Status.LinuxPortableZipManualInstallRequired" xml:space="preserve">
     <value>Linux のポータブルパッケージをダウンロードしました。新しいフォルダに展開し、その中の AppImage を起動してください。</value>

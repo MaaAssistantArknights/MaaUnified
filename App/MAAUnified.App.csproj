@@ -11,10 +11,14 @@
     <ApplicationIcon>Assets\Brand\newlogo.ico</ApplicationIcon>
     <MaaUnifiedWindowsToastBuild>false</MaaUnifiedWindowsToastBuild>
     <MaaUnifiedWindowsToastBuild Condition="$([MSBuild]::IsOSPlatform('Windows')) Or '$(RuntimeIdentifier)' == 'win-x64' Or '$(RuntimeIdentifier)' == 'win-arm64' Or '$(RuntimeIdentifier)' == 'win-x86'">true</MaaUnifiedWindowsToastBuild>
+    <DefineConstants Condition="($([MSBuild]::IsOSPlatform('Linux')) And '$(RuntimeIdentifier)' == '') Or '$(RuntimeIdentifier)' == 'linux-x64' Or '$(RuntimeIdentifier)' == 'linux-arm64'">$(DefineConstants);MAA_UNIFIED_LINUX_SECURE_STORAGE</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Application\MAAUnified.Application.csproj" />
+    <ProjectReference Include="..\SecureStorage.System\MAAUnified.SecureStorage.System.csproj" />
+    <ProjectReference Include="..\SecureStorage.Linux\MAAUnified.SecureStorage.Linux.csproj"
+                      Condition="($([MSBuild]::IsOSPlatform('Linux')) And '$(RuntimeIdentifier)' == '') Or '$(RuntimeIdentifier)' == 'linux-x64' Or '$(RuntimeIdentifier)' == 'linux-arm64'" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(MaaUnifiedWindowsToastBuild)' == 'true'">

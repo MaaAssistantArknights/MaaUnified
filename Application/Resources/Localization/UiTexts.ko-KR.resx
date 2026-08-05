@@ -2046,10 +2046,10 @@ OF-1 스테이지가 개방되지 않은 경우에는 선택하지 마세요.</v
     <value>파라미터를 검증하거나 테스트 알림을 보내기 전에 알림 공급자를 하나 이상 사용하도록 설정하세요.</value>
   </data>
   <data name="Settings.ExternalNotification.Error.ParameterFormatLine" xml:space="preserve">
-    <value>파라미터 형식 오류({0}행). key=value 형식이어야 합니다: `{1}`</value>
+    <value>파라미터 형식 오류({0}행). key=value 형식이어야 합니다</value>
   </data>
   <data name="Settings.ExternalNotification.Error.ParameterKeyEmpty" xml:space="preserve">
-    <value>파라미터 형식 오류({0}행). key는 비워 둘 수 없습니다.</value>
+    <value>파라미터 형식 오류({0}행). key=value 형식이어야 합니다</value>
   </data>
   <data name="Settings.ExternalNotification.Error.ParseFailed" xml:space="preserve">
     <value>알림 서비스 파라미터를 해석하지 못했습니다.</value>
@@ -2721,7 +2721,7 @@ OF-1 스테이지가 개방되지 않은 경우에는 선택하지 마세요.</v
     <value>업데이트에 실패했습니다.</value>
   </data>
   <data name="Settings.VersionUpdate.Status.WindowsManualUpdateRequired" xml:space="preserve">
-    <value>Windows 버전은 아직 release에 게시되지 않았습니다. 수동으로 업데이트해 주세요.</value>
+    <value>Windows 버전은 아직 앱 내 자동 업데이트를 지원하지 않습니다. 릴리스 페이지에서 수동으로 업데이트해 주세요.</value>
   </data>
   <data name="Settings.VersionUpdate.Status.LinuxPortableZipManualInstallRequired" xml:space="preserve">
     <value>Linux 휴대용 패키지가 다운로드되었습니다. 새 디렉터리에 압축을 풀고 그 안의 AppImage를 실행해 주세요.</value>

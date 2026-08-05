@@ -104,8 +104,12 @@ jobs:
         run: dotnet restore src/MAAUnified/App/MAAUnified.App.csproj
 
       - name: Restore tests
-        if: runner.os != 'macOS'
         run: dotnet restore src/MAAUnified/Tests/MAAUnified.Tests.csproj
+
+      - name: Run system storage construction smoke
+        run: >
+          dotnet test src/MAAUnified/Tests/MAAUnified.Tests.csproj -c Release --no-restore --disable-build-servers -m:1
+          --filter "FullyQualifiedName=MAAUnified.Tests.SensitiveSettingsSecurityTests.SystemBackendStorageResourcesCanBeCreated"
 
       - name: Run Linux baseline consistency gate
         if: matrix.name == 'linux-x64'
@@ -229,11 +233,15 @@ jobs:
           cp -f "${control_units[@]}" install/
           test -f install/libMaaAdbControlUnit.dylib
 
+      - name: Restore RID-specific app graph
+        run: dotnet restore src/MAAUnified/App/MAAUnified.App.csproj -p:RuntimeIdentifier=${{ matrix.rid }}
+
       - name: Publish MAAUnified app (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: >
           dotnet publish src/MAAUnified/App/MAAUnified.App.csproj -c Release -r ${{ matrix.rid }}
+          --no-restore
           --self-contained ${{ matrix.self_contained }} -o "$env:MAAUNIFIED_STAGING_DIR"
           -p:PublishSingleFile=true
           -p:IncludeNativeLibrariesForSelfExtract=true
@@ -250,6 +258,7 @@ jobs:
         shell: bash
         run: >
           dotnet publish src/MAAUnified/App/MAAUnified.App.csproj -c Release -r ${{ matrix.rid }}
+          --no-restore
           --self-contained ${{ matrix.self_contained }} -o "$MAAUNIFIED_STAGING_DIR/bin"
           -p:VersionPrefix=1.0.0
           -p:VersionSuffix=${{ needs.meta.outputs.version_suffix }}
@@ -291,6 +300,10 @@ jobs:
         if: runner.os == 'Linux'
         shell: bash
         run: bash src/MAAUnified/CI/create-unix-launchers.sh "$MAAUNIFIED_STAGING_DIR" linux
+
+      - name: Verify sensitive storage artifact isolation
+        shell: bash
+        run: bash src/MAAUnified/CI/verify-sensitive-storage-artifact.sh "$MAAUNIFIED_STAGING_DIR" "$(printf '%s' "$RUNNER_OS" | tr '[:upper:]' '[:lower:]')"
 
       - name: Validate staging layout (Windows)
         if: runner.os == 'Windows'

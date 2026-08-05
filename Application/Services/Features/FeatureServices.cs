@@ -5851,6 +5851,67 @@ public sealed class SettingsFeatureService : ISettingsFeatureService
         }
     }
 
+    public async Task<UiOperationResult> SaveProfileSettingsAsync(
+        IReadOnlyDictionary<string, string> updates,
+        CancellationToken cancellationToken = default)
+    {
+        if (updates.Count == 0)
+        {
+            return UiOperationResult.Fail(UiErrorCode.SettingBatchEmpty, "No settings were provided.");
+        }
+
+        if (!_configService.TryGetCurrentProfile(out var profile))
+        {
+            return UiOperationResult.Fail(
+                UiErrorCode.ProfileMissing,
+                $"Current profile `{_configService.CurrentConfig.CurrentProfile}` not found.");
+        }
+
+        var oldValues = new Dictionary<string, JsonNode?>(StringComparer.OrdinalIgnoreCase);
+        var existedKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (key, value) in updates)
+        {
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                return UiOperationResult.Fail(UiErrorCode.SettingKeyMissing, "Setting key cannot be empty.");
+            }
+
+            if (profile.Values.TryGetValue(key, out var oldValue))
+            {
+                existedKeys.Add(key);
+            }
+
+            oldValues[key] = oldValue?.DeepClone();
+            profile.Values[key] = JsonValue.Create(value);
+        }
+
+        try
+        {
+            await _configService.SaveAsync(cancellationToken);
+            await _diagnostics.RecordEventAsync(
+                "Settings",
+                $"Saved profile settings batch: {string.Join(", ", updates.Keys.OrderBy(static k => k, StringComparer.Ordinal))}",
+                cancellationToken);
+            return UiOperationResult.Ok($"Saved {updates.Count} profile settings.");
+        }
+        catch (Exception ex)
+        {
+            foreach (var (key, oldValue) in oldValues)
+            {
+                if (!existedKeys.Contains(key))
+                {
+                    profile.Values.Remove(key);
+                    continue;
+                }
+
+                profile.Values[key] = oldValue?.DeepClone();
+            }
+
+            await _diagnostics.RecordErrorAsync("Settings.SaveProfileBatch", "Failed to save profile settings batch.", ex, cancellationToken);
+            return UiOperationResult.Fail(UiErrorCode.SettingsSaveFailed, $"Failed to save settings: {ex.Message}");
+        }
+    }
+
     public async Task<UiOperationResult> TestNotificationAsync(string title, string message, CancellationToken cancellationToken = default)
     {
         return await _platformCapabilities.SendSystemNotificationAsync(title, message, cancellationToken);

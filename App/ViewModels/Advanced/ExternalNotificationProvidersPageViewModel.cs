@@ -1,13 +1,15 @@
 using System.Collections.ObjectModel;
+using Avalonia.Threading;
 using MAAUnified.App.ViewModels.Infrastructure;
 using MAAUnified.App.ViewModels.Toolbox;
 using MAAUnified.Application.Models;
 using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Localization;
+using MAAUnified.Application.Security;
 
 namespace MAAUnified.App.ViewModels.Advanced;
 
-public sealed class ExternalNotificationProvidersPageViewModel : PageViewModelBase
+public sealed class ExternalNotificationProvidersPageViewModel : PageViewModelBase, IDisposable
 {
     private readonly ToolboxLocalizationTextMap _texts = new();
     private string _defaultTitle = string.Empty;
@@ -16,17 +18,30 @@ public sealed class ExternalNotificationProvidersPageViewModel : PageViewModelBa
     private string _parametersText = string.Empty;
     private string _title = string.Empty;
     private string _message = string.Empty;
+    private bool _disposed;
 
     public ExternalNotificationProvidersPageViewModel(MAAUnifiedRuntime runtime)
         : base(runtime)
     {
         Providers = new ObservableCollection<string>();
+        runtime.ConfigurationService.SensitiveStorageStateChanged += HandleSensitiveStorageStateChanged;
         RefreshLocalizedUiState();
     }
 
     public ToolboxLocalizationTextMap Texts => _texts;
 
     public ObservableCollection<string> Providers { get; }
+
+    public bool CanUseSensitiveSettings => Runtime.ConfigurationService.SensitiveStorageState
+        is SensitiveStorageState.Uninitialized or SensitiveStorageState.Available or SensitiveStorageState.PlaintextWarning;
+
+    public bool HasSensitiveStorageWarning => !CanUseSensitiveSettings;
+
+    public string SensitiveStorageWarningMessage => CanUseSensitiveSettings
+        ? string.Empty
+        : T(
+            "Settings.SensitiveStorage.Unavailable",
+            "Sensitive storage is unavailable. External notification settings and operations are disabled until storage is restored.");
 
     public string SelectedProvider
     {
@@ -59,6 +74,12 @@ public sealed class ExternalNotificationProvidersPageViewModel : PageViewModelBa
 
     public async Task RefreshProvidersAsync(CancellationToken cancellationToken = default)
     {
+        if (!CanUseSensitiveSettings)
+        {
+            LastErrorMessage = SensitiveStorageWarningMessage;
+            return;
+        }
+
         try
         {
             var providers = await Runtime.NotificationProviderFeatureService.GetAvailableProvidersAsync(cancellationToken);
@@ -111,6 +132,12 @@ public sealed class ExternalNotificationProvidersPageViewModel : PageViewModelBa
 
     public async Task ValidateAsync(CancellationToken cancellationToken = default)
     {
+        if (!CanUseSensitiveSettings)
+        {
+            LastErrorMessage = SensitiveStorageWarningMessage;
+            return;
+        }
+
         var result = await Runtime.NotificationProviderFeatureService.ValidateProviderParametersAsync(
             new NotificationProviderRequest(SelectedProvider, ParametersText),
             cancellationToken);
@@ -119,6 +146,12 @@ public sealed class ExternalNotificationProvidersPageViewModel : PageViewModelBa
 
     public async Task SendTestAsync(CancellationToken cancellationToken = default)
     {
+        if (!CanUseSensitiveSettings)
+        {
+            LastErrorMessage = SensitiveStorageWarningMessage;
+            return;
+        }
+
         var result = await Runtime.NotificationProviderFeatureService.SendTestAsync(
             new NotificationProviderTestRequest(SelectedProvider, ParametersText, Title, Message),
             cancellationToken);
@@ -140,6 +173,7 @@ public sealed class ExternalNotificationProvidersPageViewModel : PageViewModelBa
     private void RefreshLocalizedUiState()
     {
         OnPropertyChanged(nameof(Texts));
+        OnPropertyChanged(nameof(SensitiveStorageWarningMessage));
 
         var previousTitle = _defaultTitle;
         var previousMessage = _defaultMessage;
@@ -162,5 +196,44 @@ public sealed class ExternalNotificationProvidersPageViewModel : PageViewModelBa
     private string T(string key, string fallback)
     {
         return _texts.GetOrDefault(key, fallback);
+    }
+
+    private void HandleSensitiveStorageStateChanged()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        if (!Dispatcher.UIThread.CheckAccess())
+        {
+            Dispatcher.UIThread.Post(NotifySensitiveStorageStateChanged);
+            return;
+        }
+
+        NotifySensitiveStorageStateChanged();
+    }
+
+    private void NotifySensitiveStorageStateChanged()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        OnPropertyChanged(nameof(CanUseSensitiveSettings));
+        OnPropertyChanged(nameof(HasSensitiveStorageWarning));
+        OnPropertyChanged(nameof(SensitiveStorageWarningMessage));
+    }
+
+    public void Dispose()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+        Runtime.ConfigurationService.SensitiveStorageStateChanged -= HandleSensitiveStorageStateChanged;
     }
 }

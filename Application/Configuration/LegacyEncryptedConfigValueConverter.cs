@@ -1,93 +1,19 @@
 using System.Text;
 using System.Text.Json.Nodes;
 using MAAUnified.Application.Models;
+using MAAUnified.Application.Security;
 using MAAUnified.Compat.Constants;
 
 namespace MAAUnified.Application.Configuration;
 
 internal static class LegacyEncryptedConfigValueConverter
 {
-    private const string ExternalNotificationCustomWebhookHeaders = "ExternalNotification.CustomWebhook.Headers";
     private const string GlobalConfigurationName = "Global";
-
-    private static readonly HashSet<string> ProfileEncryptedKeys = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ConfigurationKeys.RemoteControlGetTaskEndpointUri,
-        ConfigurationKeys.RemoteControlReportStatusUri,
-        ConfigurationKeys.RemoteControlUserIdentity,
-        ConfigurationKeys.RemoteControlDeviceIdentity,
-        ConfigurationKeys.ExternalNotificationServerChanSendKey,
-        ConfigurationKeys.ExternalNotificationBarkSendKey,
-        ConfigurationKeys.ExternalNotificationBarkServer,
-        ConfigurationKeys.ExternalNotificationSmtpServer,
-        ConfigurationKeys.ExternalNotificationSmtpPort,
-        ConfigurationKeys.ExternalNotificationSmtpUser,
-        ConfigurationKeys.ExternalNotificationSmtpPassword,
-        ConfigurationKeys.ExternalNotificationSmtpFrom,
-        ConfigurationKeys.ExternalNotificationSmtpTo,
-        ConfigurationKeys.ExternalNotificationDiscordBotToken,
-        ConfigurationKeys.ExternalNotificationDiscordUserId,
-        ConfigurationKeys.ExternalNotificationDiscordWebhookUrl,
-        ConfigurationKeys.ExternalNotificationDingTalkAccessToken,
-        ConfigurationKeys.ExternalNotificationDingTalkSecret,
-        ConfigurationKeys.ExternalNotificationTelegramBotToken,
-        ConfigurationKeys.ExternalNotificationTelegramChatId,
-        ConfigurationKeys.ExternalNotificationTelegramTopicId,
-        ConfigurationKeys.ExternalNotificationQmsgServer,
-        ConfigurationKeys.ExternalNotificationQmsgKey,
-        ConfigurationKeys.ExternalNotificationQmsgUser,
-        ConfigurationKeys.ExternalNotificationQmsgBot,
-        ConfigurationKeys.ExternalNotificationGotifyServer,
-        ConfigurationKeys.ExternalNotificationGotifyToken,
-        ConfigurationKeys.ExternalNotificationCustomWebhookUrl,
-        ConfigurationKeys.ExternalNotificationCustomWebhookBody,
-        ExternalNotificationCustomWebhookHeaders,
-    };
-
-    private static readonly HashSet<string> GlobalEncryptedKeys = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ConfigurationKeys.MirrorChyanCdk,
-    };
-
-    private static readonly IReadOnlyDictionary<string, (string DisplayName, string ResourceKey)> DisplayNames =
-        new Dictionary<string, (string DisplayName, string ResourceKey)>(StringComparer.OrdinalIgnoreCase)
-        {
-            [ConfigurationKeys.RemoteControlGetTaskEndpointUri] = ("远程控制获取任务地址", string.Empty),
-            [ConfigurationKeys.RemoteControlReportStatusUri] = ("远程控制上报地址", string.Empty),
-            [ConfigurationKeys.RemoteControlUserIdentity] = ("远程控制用户标识", string.Empty),
-            [ConfigurationKeys.RemoteControlDeviceIdentity] = ("远程控制设备标识", string.Empty),
-            [ConfigurationKeys.ExternalNotificationServerChanSendKey] = ("Server Chan 发送密钥", "ExternalNotificationServerChanSendKey"),
-            [ConfigurationKeys.ExternalNotificationBarkSendKey] = ("Bark 发送密钥", "ExternalNotificationBarkSendKey"),
-            [ConfigurationKeys.ExternalNotificationBarkServer] = ("Bark 服务器", "ExternalNotificationBarkServer"),
-            [ConfigurationKeys.ExternalNotificationSmtpServer] = ("SMTP 服务器", "ExternalNotificationSmtpServer"),
-            [ConfigurationKeys.ExternalNotificationSmtpPort] = ("SMTP 端口", "ExternalNotificationSmtpPort"),
-            [ConfigurationKeys.ExternalNotificationSmtpUser] = ("SMTP 用户名", "ExternalNotificationSmtpUser"),
-            [ConfigurationKeys.ExternalNotificationSmtpPassword] = ("SMTP 密码", "ExternalNotificationSmtpPassword"),
-            [ConfigurationKeys.ExternalNotificationSmtpFrom] = ("SMTP 发件人", "ExternalNotificationSmtpFrom"),
-            [ConfigurationKeys.ExternalNotificationSmtpTo] = ("SMTP 收件人", "ExternalNotificationSmtpTo"),
-            [ConfigurationKeys.ExternalNotificationDiscordBotToken] = ("Discord 机器人 Token", "ExternalNotificationDiscordBotToken"),
-            [ConfigurationKeys.ExternalNotificationDiscordUserId] = ("Discord 用户 ID", "ExternalNotificationDiscordUserId"),
-            [ConfigurationKeys.ExternalNotificationDiscordWebhookUrl] = ("Discord Webhook URL", "ExternalNotificationDiscordWebhookUrl"),
-            [ConfigurationKeys.ExternalNotificationDingTalkAccessToken] = ("钉钉 Access Token", "ExternalNotificationDingTalkAccessToken"),
-            [ConfigurationKeys.ExternalNotificationDingTalkSecret] = ("钉钉加签密钥", "ExternalNotificationDingTalkSecret"),
-            [ConfigurationKeys.ExternalNotificationTelegramBotToken] = ("Telegram 机器人 Token", "ExternalNotificationTelegramBotToken"),
-            [ConfigurationKeys.ExternalNotificationTelegramChatId] = ("Telegram 聊天 ID", "ExternalNotificationTelegramChatId"),
-            [ConfigurationKeys.ExternalNotificationTelegramTopicId] = ("Telegram 话题 ID", "ExternalNotificationTelegramTopicId"),
-            [ConfigurationKeys.ExternalNotificationQmsgServer] = ("Qmsg Server", "ExternalNotificationQmsgServer"),
-            [ConfigurationKeys.ExternalNotificationQmsgKey] = ("Qmsg Key", "ExternalNotificationQmsgKey"),
-            [ConfigurationKeys.ExternalNotificationQmsgUser] = ("Qmsg 用户 QQ", "ExternalNotificationQmsgUser"),
-            [ConfigurationKeys.ExternalNotificationQmsgBot] = ("Qmsg 机器人 QQ", "ExternalNotificationQmsgBot"),
-            [ConfigurationKeys.ExternalNotificationGotifyServer] = ("Gotify 服务器 URL", "ExternalNotificationGotifyServer"),
-            [ConfigurationKeys.ExternalNotificationGotifyToken] = ("Gotify 应用程序令牌", "ExternalNotificationGotifyToken"),
-            [ConfigurationKeys.ExternalNotificationCustomWebhookUrl] = ("自定义 Webhook URL", "ExternalNotificationCustomWebhookUrl"),
-            [ConfigurationKeys.ExternalNotificationCustomWebhookBody] = ("自定义 Webhook 消息体模板", "ExternalNotificationCustomWebhookBody"),
-            [ExternalNotificationCustomWebhookHeaders] = ("自定义 Webhook 请求头", "ExternalNotificationCustomWebhookHeaders"),
-            [ConfigurationKeys.MirrorChyanCdk] = ("Mirror 酱 CDK", string.Empty),
-        };
 
     public static JsonNode? ConvertProfileValue(string profileName, string key, JsonNode? value, ImportReport report)
     {
-        if (!ProfileEncryptedKeys.Contains(key))
+        if (!SensitiveSettingKeyRegistry.TryGet(key, out var definition)
+            || definition.Scope != SensitiveSettingScope.Profile)
         {
             return value;
         }
@@ -97,7 +23,8 @@ internal static class LegacyEncryptedConfigValueConverter
 
     public static JsonNode? ConvertGlobalValue(string key, JsonNode? value, ImportReport report)
     {
-        if (!GlobalEncryptedKeys.Contains(key))
+        if (!SensitiveSettingKeyRegistry.TryGet(key, out var definition)
+            || definition.Scope != SensitiveSettingScope.Global)
         {
             return value;
         }
@@ -254,14 +181,14 @@ internal static class LegacyEncryptedConfigValueConverter
             return;
         }
 
-        var display = DisplayNames.TryGetValue(key, out var known)
-            ? known
-            : (DisplayName: key, ResourceKey: string.Empty);
+        var display = SensitiveSettingKeyRegistry.TryGet(key, out var known)
+            ? (known.DisplayName, known.LocalizationKey)
+            : (DisplayName: key, LocalizationKey: string.Empty);
         report.UnreadableValues.Add(new ImportUnreadableConfigValue(
             configurationName,
             key,
             display.DisplayName,
-            display.ResourceKey,
+            display.LocalizationKey,
             isGlobal,
             reason));
     }

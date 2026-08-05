@@ -2,6 +2,7 @@ using System.Runtime.CompilerServices;
 using System.Net;
 using System.Net.Http;
 using System.Reflection;
+using System.IO.Compression;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using MAAUnified.App.ViewModels.Settings;
@@ -263,6 +264,35 @@ public sealed class SettingsRemoteExternalNotificationFeatureTests
                 "message"));
         Assert.False(failure.Success);
         Assert.Equal(UiErrorCode.NotificationProviderNetworkFailure, failure.Error?.Code);
+        Assert.DoesNotContain("network down", failure.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("network down", failure.Error?.Details ?? string.Empty, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task RemoteControlConnectivity_DoesNotPersistEndpointOrProbeMessage()
+    {
+        var ctor = typeof(RemoteControlFeatureService).GetConstructor(
+            BindingFlags.Instance | BindingFlags.NonPublic,
+            binder: null,
+            [typeof(UnifiedConfigurationService), typeof(UnifiedSessionService), typeof(IConnectFeatureService), typeof(ITaskQueueFeatureService), typeof(IToolboxFeatureService), typeof(IMaaCoreBridge), typeof(UiLogService), typeof(Func<string, Uri, CancellationToken, Task<EndpointProbeResult>>)],
+            modifiers: null);
+        Assert.NotNull(ctor);
+        var endpointSentinel = "https://user:REMOTE_SECRET@example.test/path?token=REMOTE_SECRET";
+        var probeMessage = $"HTTP 500 body={endpointSentinel}";
+        var remote = (RemoteControlFeatureService)ctor!.Invoke([
+            null, null, null, null, null, null, null,
+            (Func<string, Uri, CancellationToken, Task<EndpointProbeResult>>)((name, _, _) => Task.FromResult(
+                new EndpointProbeResult(name, endpointSentinel, false, 500, probeMessage, UiErrorCode.RemoteControlNetworkFailure)))
+        ]);
+
+        var result = await remote.TestConnectivityAsync(new RemoteControlConnectivityRequest(endpointSentinel, endpointSentinel, 1000));
+
+        Assert.False(result.Success);
+        var serialized = JsonSerializer.Serialize(result);
+        Assert.DoesNotContain(endpointSentinel, serialized, StringComparison.Ordinal);
+        Assert.DoesNotContain("REMOTE_SECRET", serialized, StringComparison.Ordinal);
+        Assert.DoesNotContain("body=", serialized, StringComparison.Ordinal);
+        Assert.Contains("operation=GetTask", result.Error?.Details, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -318,6 +348,37 @@ public sealed class SettingsRemoteExternalNotificationFeatureTests
 
         Assert.Equal("Bark 通道参数校验通过。", vm.ExternalNotificationStatusMessage);
         Assert.DoesNotContain("Provider", vm.ExternalNotificationStatusMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ExternalNotification_InvalidUnsavedLine_DoesNotReachDiagnosticsOrIssueReport()
+    {
+        const string sentinel = "UNSAVED/NOTIFY?token=raw+sentinel";
+        const string encodedSentinel = "UNSAVED%2FNOTIFY%3Ftoken%3Draw%2Bsentinel";
+        await using var fixture = await RuntimeFixture.CreateAsync();
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        vm.ExternalNotificationEnabled = true;
+        vm.SelectedNotificationProvider = "CustomWebhook";
+        vm.NotificationProviderParametersText = sentinel;
+
+        await vm.ValidateExternalNotificationParametersAsync();
+
+        Assert.True(vm.HasExternalNotificationErrorMessage);
+        Assert.DoesNotContain(sentinel, vm.ExternalNotificationErrorMessage, StringComparison.Ordinal);
+        var errorLog = await File.ReadAllTextAsync(fixture.Diagnostics.ErrorLogPath);
+        Assert.DoesNotContain(sentinel, errorLog, StringComparison.Ordinal);
+        Assert.DoesNotContain(encodedSentinel, errorLog, StringComparison.Ordinal);
+
+        var bundlePath = await fixture.Diagnostics.BuildIssueReportBundleAsync(fixture.Root);
+        using var archive = ZipFile.OpenRead(bundlePath);
+        foreach (var entry in archive.Entries)
+        {
+            using var reader = new StreamReader(entry.Open());
+            var content = await reader.ReadToEndAsync();
+            Assert.DoesNotContain(sentinel, content, StringComparison.Ordinal);
+            Assert.DoesNotContain(encodedSentinel, content, StringComparison.Ordinal);
+        }
     }
 
     [Fact]

@@ -8,4 +8,5 @@ public sealed record LegacyImportRequest(
     ImportSource Source,
     bool ManualImport,
     bool AllowPartialImport = true,
-    IReadOnlyDictionary<string, JsonNode?>? FallbackGlobalValues = null);
+    IReadOnlyDictionary<string, JsonNode?>? FallbackGlobalValues = null,
+    bool AllowDiscardUnreadableSensitiveValues = false);

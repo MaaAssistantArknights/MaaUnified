@@ -4,6 +4,7 @@ using System.Net.Http;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.IO.Compression;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using MAAUnified.App.Features.Dialogs;
 using MAAUnified.App.Features.Settings;
@@ -11,6 +12,7 @@ using MAAUnified.App.ViewModels.Settings;
 using MAAUnified.Application.Configuration;
 using MAAUnified.Application.Models;
 using MAAUnified.Application.Orchestration;
+using MAAUnified.Application.Security;
 using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Features;
 using MAAUnified.Application.Services.VersionUpdate;
@@ -646,6 +648,125 @@ public sealed class SettingsModuleCM1FeatureTests
     }
 
     [Fact]
+    public async Task ImportConfigurations_ConfigStoreFailure_DoesNotMutateCurrentConfig()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "maa-unified-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+        var store = new FailNextSaveStore(new AvaloniaJsonConfigStore(root));
+        await using var fixture = await RuntimeFixture.CreateAsync(root: root, configStore: store);
+        var originalConfig = fixture.Config.CurrentConfig;
+        var originalMetadata = originalConfig.SensitiveStorage;
+        var importPath = await WriteSensitiveUnifiedImportAsync(root, "store-failure-secret");
+        store.FailNextSave = true;
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+
+        await vm.ImportConfigurationsAsync(importPath);
+
+        Assert.Same(originalConfig, fixture.Config.CurrentConfig);
+        Assert.Single(originalConfig.Profiles);
+        Assert.False(originalConfig.Profiles.ContainsKey("Imported"));
+        Assert.DoesNotContain(
+            "store-failure-secret",
+            SensitiveSettingKeyRegistry.GetPlaintextValues(originalConfig));
+        Assert.Same(originalMetadata, originalConfig.SensitiveStorage);
+        Assert.Equal(SensitiveStorageBackendKind.Uninitialized, originalConfig.SensitiveStorage.Backend);
+    }
+
+    [Fact]
+    public async Task ImportConfigurations_SecureBackendUnavailable_DoesNotMutateCurrentConfig()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "maa-unified-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+        var sensitiveSettings = new SensitiveSettingsService(
+            [new UnavailableSensitiveSettingsBackend()],
+            new RejectPlaintextConsent(),
+            isLinux: false);
+        await using var fixture = await RuntimeFixture.CreateAsync(
+            root: root,
+            sensitiveSettingsService: sensitiveSettings);
+        var originalConfig = fixture.Config.CurrentConfig;
+        var importPath = await WriteSensitiveUnifiedImportAsync(root, "backend-unavailable-secret");
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+
+        await vm.ImportConfigurationsAsync(importPath);
+
+        Assert.Same(originalConfig, fixture.Config.CurrentConfig);
+        Assert.Single(originalConfig.Profiles);
+        Assert.False(originalConfig.Profiles.ContainsKey("Imported"));
+        Assert.DoesNotContain(
+            "backend-unavailable-secret",
+            SensitiveSettingKeyRegistry.GetPlaintextValues(originalConfig));
+        Assert.Equal(SensitiveStorageBackendKind.Uninitialized, originalConfig.SensitiveStorage.Backend);
+        Assert.Equal(SensitiveStorageState.Unavailable, fixture.Config.SensitiveStorageState);
+        Assert.Equal(SensitiveStorageErrorCode.Unavailable, fixture.Config.SensitiveStorageErrorCode);
+    }
+
+    [Fact]
+    public async Task ConfigurationExports_ShouldRedactRegisteredSensitiveValuesAcrossScopes()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync();
+        var config = fixture.Config.CurrentConfig;
+        config.Profiles["Alt"] = new UnifiedProfile
+        {
+            Values = new Dictionary<string, JsonNode?>(StringComparer.OrdinalIgnoreCase),
+        };
+        config.Profiles["Default"].Values["NonSensitive.Default"] = JsonValue.Create("keep-default");
+        config.Profiles["Alt"].Values["NonSensitive.Alt"] = JsonValue.Create("keep-alt");
+        config.GlobalValues["NonSensitive.Global"] = JsonValue.Create("keep-global");
+
+        const string sentinel = "export-sensitive-sentinel";
+        foreach (var definition in SensitiveSettingKeyRegistry.Definitions)
+        {
+            if (definition.Scope == SensitiveSettingScope.Global)
+            {
+                config.GlobalValues[definition.Key] = JsonValue.Create($"{sentinel}-global-{definition.Key}");
+                continue;
+            }
+
+            config.Profiles["Default"].Values[definition.Key] = JsonValue.Create($"{sentinel}-default-{definition.Key}");
+            config.Profiles["Alt"].Values[definition.Key] = JsonValue.Create($"{sentinel}-alt-{definition.Key}");
+        }
+
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        var allPath = Path.Combine(fixture.Root, "export-all.json");
+        var currentPath = Path.Combine(fixture.Root, "export-current.json");
+
+        await vm.ExportAllConfigurationsAsync(allPath);
+        await vm.ExportCurrentConfigurationAsync(currentPath);
+
+        foreach (var definition in SensitiveSettingKeyRegistry.Definitions)
+        {
+            var retainedValue = definition.Scope == SensitiveSettingScope.Global
+                ? config.GlobalValues[definition.Key]
+                : config.Profiles["Default"].Values[definition.Key];
+            Assert.Contains(sentinel, retainedValue!.ToString(), StringComparison.Ordinal);
+        }
+
+        var allJson = await File.ReadAllTextAsync(allPath);
+        var currentJson = await File.ReadAllTextAsync(currentPath);
+        Assert.DoesNotContain(sentinel, allJson, StringComparison.Ordinal);
+        Assert.DoesNotContain(sentinel, currentJson, StringComparison.Ordinal);
+
+        var allExport = JsonSerializer.Deserialize<UnifiedConfig>(allJson)!;
+        var currentExport = JsonSerializer.Deserialize<UnifiedConfig>(currentJson)!;
+        Assert.Equal(2, allExport.Profiles.Count);
+        Assert.Single(currentExport.Profiles);
+        Assert.Equal("keep-default", currentExport.Profiles["Default"].Values["NonSensitive.Default"]!.ToString());
+        Assert.Equal("keep-global", currentExport.GlobalValues["NonSensitive.Global"]!.ToString());
+        AssertExportContainsNoSensitiveKeys(allExport);
+        AssertExportContainsNoSensitiveKeys(currentExport);
+    }
+
+    private static void AssertExportContainsNoSensitiveKeys(UnifiedConfig export)
+    {
+        Assert.DoesNotContain(export.GlobalValues.Keys, SensitiveSettingKeyRegistry.IsSensitive);
+        foreach (var profile in export.Profiles.Values)
+        {
+            Assert.DoesNotContain(profile.Values.Keys, SensitiveSettingKeyRegistry.IsSensitive);
+        }
+    }
+
+    [Fact]
     public async Task ImportLegacyConfigurations_ShouldRefreshTimerProfileSelection()
     {
         await using var fixture = await RuntimeFixture.CreateAsync();
@@ -1132,6 +1253,33 @@ public sealed class SettingsModuleCM1FeatureTests
             root);
     }
 
+    private static async Task<string> WriteSensitiveUnifiedImportAsync(string root, string sentinel)
+    {
+        var importPath = Path.Combine(root, $"import-{Guid.NewGuid():N}.json");
+        var imported = new UnifiedConfig
+        {
+            CurrentProfile = "Imported",
+            Profiles = new Dictionary<string, UnifiedProfile>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Imported"] = new UnifiedProfile
+                {
+                    Values = new Dictionary<string, JsonNode?>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        [ConfigurationKeys.RemoteControlUserIdentity] = JsonValue.Create(sentinel),
+                    },
+                },
+            },
+            SensitiveStorage = new SensitiveStorageMetadata
+            {
+                Backend = SensitiveStorageBackendKind.SystemProtected,
+                StoreId = "stale-import-metadata",
+                Revision = 99,
+            },
+        };
+        await File.WriteAllTextAsync(importPath, JsonSerializer.Serialize(imported));
+        return importPath;
+    }
+
     private static IVersionUpdateFeatureService CreateLinuxVersionUpdateFeatureService(
         UnifiedConfigurationService config,
         string root)
@@ -1206,6 +1354,78 @@ public sealed class SettingsModuleCM1FeatureTests
         }
     }
 
+    private sealed class FailNextSaveStore(IUnifiedConfigStore inner) : IUnifiedConfigStore
+    {
+        public bool FailNextSave { get; set; }
+
+        public string ConfigPath => inner.ConfigPath;
+
+        public bool Exists() => inner.Exists();
+
+        public Task<UnifiedConfig?> LoadAsync(CancellationToken cancellationToken = default)
+            => inner.LoadAsync(cancellationToken);
+
+        public Task SaveAsync(UnifiedConfig config, CancellationToken cancellationToken = default)
+        {
+            if (FailNextSave)
+            {
+                FailNextSave = false;
+                return Task.FromException(new IOException("Simulated save failure."));
+            }
+
+            return inner.SaveAsync(config, cancellationToken);
+        }
+
+        public Task BackupAsync(string suffix, CancellationToken cancellationToken = default)
+            => inner.BackupAsync(suffix, cancellationToken);
+
+        public Task BackupSanitizedAsync(
+            UnifiedConfig config,
+            string suffix,
+            CancellationToken cancellationToken = default)
+            => inner.BackupSanitizedAsync(config, suffix, cancellationToken);
+    }
+
+    private sealed class UnavailableSensitiveSettingsBackend : ISensitiveSettingsBackend
+    {
+        public SensitiveStorageBackendKind Kind => SensitiveStorageBackendKind.SystemProtected;
+
+        public Task VerifyPersistenceAsync(CancellationToken cancellationToken = default)
+            => Task.FromException(new SensitiveStorageException(
+                SensitiveStorageErrorCode.Unavailable,
+                "Simulated secure backend unavailability."));
+
+        public Task<SensitiveSettingsDocument> ReadAsync(
+            string storeId,
+            long revision,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<SensitiveSettingsDocument> ReadCurrentAsync(
+            string storeId,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task WriteAsync(
+            SensitiveSettingsDocument document,
+            long expectedRevision,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task ReplaceCurrentAsync(
+            SensitiveSettingsDocument document,
+            SensitiveSettingsDocument expectedCurrent,
+            SensitiveSettingsDocument expectedPrevious,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+    }
+
+    private sealed class RejectPlaintextConsent : IPlaintextSensitiveStorageConsent
+    {
+        public Task<bool> ConfirmAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(false);
+    }
+
     private sealed class RuntimeFixture : IAsyncDisposable
     {
         private readonly bool _cleanupRoot;
@@ -1231,7 +1451,9 @@ public sealed class SettingsModuleCM1FeatureTests
         public static async Task<RuntimeFixture> CreateAsync(
             Func<UnifiedConfigurationService, string, IVersionUpdateFeatureService>? versionUpdateFeatureServiceFactory = null,
             string? root = null,
-            bool cleanupRoot = true)
+            bool cleanupRoot = true,
+            IUnifiedConfigStore? configStore = null,
+            SensitiveSettingsService? sensitiveSettingsService = null)
         {
             root ??= Path.Combine(Path.GetTempPath(), "maa-unified-tests", Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(Path.Combine(root, "config"));
@@ -1239,11 +1461,12 @@ public sealed class SettingsModuleCM1FeatureTests
             var log = new UiLogService();
             var diagnostics = new UiDiagnosticsService(root, log);
             var config = new UnifiedConfigurationService(
-                new AvaloniaJsonConfigStore(root),
+                configStore ?? new AvaloniaJsonConfigStore(root),
                 new GuiNewJsonConfigImporter(),
                 new GuiJsonConfigImporter(),
                 log,
-                root);
+                root,
+                sensitiveSettingsService);
             await config.LoadOrBootstrapAsync();
 
             var bridge = new FakeBridge();

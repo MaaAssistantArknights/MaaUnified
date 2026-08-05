@@ -110,6 +110,31 @@ public sealed class StartupProgramTests
     }
 
     [Fact]
+    public void RecordStartupStage_RedactsUserPathBeforeWritingStderr()
+    {
+        var originalError = Console.Error;
+        var userHome = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        using var stderr = new StringWriter();
+        try
+        {
+            Console.SetError(stderr);
+
+            Program.RecordStartupStage(
+                "Main.PortablePackage.Invalid",
+                $"packageLayout=invalid path={Path.Combine(userHome, "portable")}");
+        }
+        finally
+        {
+            Console.SetError(originalError);
+        }
+
+        var output = stderr.ToString();
+        Assert.Contains("packageLayout=invalid", output, StringComparison.Ordinal);
+        Assert.DoesNotContain(userHome, output, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(Path.GetFileName(userHome), output, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void ResolveSoftwareRenderingPreference_WhenAvaloniaConfigExists_ReturnsConfiguredValue()
     {
         var root = CreateTempConfigDirectory(

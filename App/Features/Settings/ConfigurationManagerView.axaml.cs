@@ -351,10 +351,14 @@ public partial class ConfigurationManagerView : UserControl
             ManualImport: true,
             AllowPartialImport: allowPartialImport,
             FallbackGlobalValues: BuildLegacyImportFallbackGlobalValues(vm));
-        var report = await vm.ImportLegacyConfigurationsAsync(request);
+        var report = await ImportWithUnreadableValueConfirmationAsync(vm, request, language, text);
+        if (report is null)
+        {
+            return false;
+        }
+
         if (report.AppliedConfig)
         {
-            await ShowUnreadableImportedValuesDialogAsync(report, language, text);
             return true;
         }
 
@@ -375,10 +379,18 @@ public partial class ConfigurationManagerView : UserControl
                 return false;
             }
 
-            var retriedReport = await vm.ImportLegacyConfigurationsAsync(request with { AllowPartialImport = true });
+            var retriedReport = await ImportWithUnreadableValueConfirmationAsync(
+                vm,
+                request with { AllowPartialImport = true },
+                language,
+                text);
+            if (retriedReport is null)
+            {
+                return false;
+            }
+
             if (retriedReport.AppliedConfig)
             {
-                await ShowUnreadableImportedValuesDialogAsync(retriedReport, language, text);
                 return true;
             }
 
@@ -418,24 +430,33 @@ public partial class ConfigurationManagerView : UserControl
         return true;
     }
 
-    private static async Task ShowUnreadableImportedValuesDialogAsync(
-        ImportReport report,
+    private static async Task<ImportReport?> ImportWithUnreadableValueConfirmationAsync(
+        SettingsPageViewModel vm,
+        LegacyImportRequest request,
         string? language,
         Func<string, string> text)
     {
-        if (report.UnreadableValues.Count == 0)
+        var report = await vm.ImportLegacyConfigurationsAsync(request);
+        if (report.UnreadableValues.Count == 0
+            || report.DamagedFiles.Count > 0 && !request.AllowPartialImport)
         {
-            return;
+            return report;
         }
 
-        await ShowWarningDialogAsync(
+        var discardAndImport = await ShowWarningDialogAsync(
             language,
             text("Settings.ConfigurationManager.Dialog.ImportUnreadableValuesTitle"),
             BuildUnreadableImportedValuesMessage(report, language, text),
-            confirmText: text("Settings.Action.GotIt"),
-            cancelText: string.Empty,
-            sourceScope: "Settings.ConfigurationManager.ImportUnreadableValues.Dialog",
-            showCancelButton: false);
+            confirmText: text("Settings.Action.ImportAnyway"),
+            cancelText: text("Settings.Action.Cancel"),
+            sourceScope: "Settings.ConfigurationManager.ImportUnreadableValues.Dialog");
+        if (!discardAndImport)
+        {
+            return null;
+        }
+
+        return await vm.ImportLegacyConfigurationsAsync(
+            request with { AllowDiscardUnreadableSensitiveValues = true });
     }
 
     private static string BuildUnreadableImportedValuesMessage(

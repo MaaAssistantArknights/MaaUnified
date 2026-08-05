@@ -11,6 +11,7 @@ using MAAUnified.App.ViewModels.TaskQueue;
 using MAAUnified.Application.Configuration;
 using MAAUnified.Application.Models;
 using MAAUnified.Application.Orchestration;
+using MAAUnified.Application.Security;
 using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Features;
 using MAAUnified.Application.Services.Localization;
@@ -24,6 +25,40 @@ namespace MAAUnified.Tests;
 [Collection("MainShellSerial")]
 public sealed class MainShellViewModelTests
 {
+    [Fact]
+    public async Task RuntimeLogs_ShouldSanitizePrivatePathsBeforeVmProjection()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        const string secret = "UI/PROJECTION?SECRET+SENTINEL";
+        const string unixUserSentinel = "UI_LOG_UNIX_USER_SENTINEL";
+        const string macUserSentinel = "UI_LOG_MAC_USER_SENTINEL";
+        const string windowsUserSentinel = "UI_LOG_WINDOWS_USER_SENTINEL";
+        var privatePath = Path.Combine(fixture.Root, "private", "emulator", "adb");
+        fixture.Runtime.LogService.SetSensitiveValueProvider(() => [secret]);
+        var encodedSecret = Uri.EscapeDataString(secret);
+
+        fixture.Runtime.LogService.Info(
+            $"[update] secret={secret}; encoded={encodedSecret}; paths={privatePath}; unix=/home/{unixUserSentinel}/adb; mac=/Users/{macUserSentinel}/adb; windows=C:\\Users\\{windowsUserSentinel}\\adb; relative=cache/adb; system=/usr/bin/adb");
+
+        Assert.True(await WaitUntilAsync(
+            () =>
+            {
+                Dispatcher.UIThread.RunJobs();
+                return fixture.ViewModel.RootLogs.Count > 0 && fixture.ViewModel.TaskQueuePage.HasDownloadLog;
+            },
+            retry: 80,
+            delayMs: 25));
+        var projected = string.Join('\n', fixture.ViewModel.RootLogs.Append(fixture.ViewModel.TaskQueuePage.DownloadLogEntry.Content));
+        Assert.DoesNotContain(secret, projected, StringComparison.Ordinal);
+        Assert.DoesNotContain(encodedSecret, projected, StringComparison.Ordinal);
+        Assert.DoesNotContain(fixture.Root, projected, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(unixUserSentinel, projected, StringComparison.Ordinal);
+        Assert.DoesNotContain(macUserSentinel, projected, StringComparison.Ordinal);
+        Assert.DoesNotContain(windowsUserSentinel, projected, StringComparison.Ordinal);
+        Assert.Contains("relative=cache/adb", projected, StringComparison.Ordinal);
+        Assert.Contains("system=/usr/bin/adb", projected, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData("1.2.3-beta.1", true, MaaUnifiedBuildFlavor.BetaTitleSuffix)]
     [InlineData("1.2.3-alpha.1+build.5", true, MaaUnifiedBuildFlavor.AlphaTitleSuffix)]
@@ -317,7 +352,7 @@ public sealed class MainShellViewModelTests
     }
 
     [Fact]
-    public async Task InitializeAsync_OutdatedSchema_ShowsMigrationDialog()
+    public async Task InitializeAsync_OutdatedSchema_MigratesBeforeShellAndSkipsDialog()
     {
         var dialogService = new CapturingDialogService();
         await using var fixture = await TestFixture.CreateAsync(
@@ -326,25 +361,15 @@ public sealed class MainShellViewModelTests
 
         await fixture.ViewModel.InitializeAsync();
 
-        Assert.Equal(1, dialogService.ShowTextCallCount);
-        Assert.NotNull(dialogService.LastTextRequest);
-        Assert.Equal("App.Shell.Config.SchemaMigration", dialogService.LastTextScope);
-        Assert.Equal(
-            fixture.ViewModel.RootTexts["Main.SchemaMigration.Dialog.Title"],
-            dialogService.LastTextRequest!.Title);
-        Assert.Equal(
-            fixture.ViewModel.RootTexts["Main.SchemaMigration.Dialog.Confirm"],
-            dialogService.LastTextRequest.ConfirmText);
-        Assert.Equal(
-            fixture.ViewModel.RootTexts["Main.SchemaMigration.Dialog.Cancel"],
-            dialogService.LastTextRequest.CancelText);
-        Assert.True(dialogService.LastTextRequest.ReadOnlyContent);
-        Assert.True(dialogService.LastTextRequest.MultiLine);
-        Assert.Contains("当前版本: v1", dialogService.LastTextRequest.DefaultText, StringComparison.Ordinal);
+        Assert.Equal(0, dialogService.ShowTextCallCount);
+        Assert.Equal(UnifiedConfig.LatestSchemaVersion, fixture.Runtime.ConfigurationService.CurrentConfig.SchemaVersion);
+        Assert.True(Directory.EnumerateFiles(
+            Path.Combine(fixture.Root, "config"),
+            "avalonia.json.schema-v1.bak.*").Any());
     }
 
     [Fact]
-    public async Task InitializeAsync_OutdatedSchema_DialogUnavailable_DoesNotBlockStartup()
+    public async Task InitializeAsync_OutdatedSchema_AutomaticMigrationDoesNotRequireDialogService()
     {
         await using var fixture = await TestFixture.CreateAsync(
             existingAvaloniaJson: CreateOutdatedSchemaConfigJson(),
@@ -353,18 +378,13 @@ public sealed class MainShellViewModelTests
         await fixture.ViewModel.InitializeAsync();
 
         Assert.NotEqual("Initializing...", fixture.ViewModel.GlobalStatus);
-        Assert.True(await WaitForLogContainsAsync(
-            fixture.Runtime.DiagnosticsService.EventLogPath,
-            "Config.SchemaMigration.DialogUnavailable"));
+        Assert.Equal(UnifiedConfig.LatestSchemaVersion, fixture.Runtime.ConfigurationService.CurrentConfig.SchemaVersion);
     }
 
     [Fact]
-    public async Task InitializeAsync_OutdatedSchema_DialogOpen_ShouldNotBlockDeferredStartupOrVersionChecks()
+    public async Task InitializeAsync_OutdatedSchema_AutomaticMigrationDoesNotBlockDeferredStartupOrVersionChecks()
     {
-        var dialogService = new CapturingDialogService
-        {
-            TextTask = new TaskCompletionSource<DialogCompletion<TextDialogPayload>>(TaskCreationOptions.RunContinuationsAsynchronously),
-        };
+        var dialogService = new CapturingDialogService();
         var versionUpdate = new ScriptedVersionUpdateFeatureService();
         await using var fixture = await TestFixture.CreateAsync(
             existingAvaloniaJson: CreateOutdatedSchemaConfigJson(),
@@ -373,10 +393,6 @@ public sealed class MainShellViewModelTests
 
         var startupTask = fixture.ViewModel.InitializeAsync();
 
-        Assert.True(await WaitUntilAsync(
-            () => dialogService.ShowTextCallCount == 1,
-            retry: 240,
-            delayMs: 50));
         Assert.True(await WaitUntilAsync(
             () =>
                 fixture.ViewModel.SettingsRootPage.IsLoaded
@@ -388,12 +404,7 @@ public sealed class MainShellViewModelTests
             delayMs: 50));
 
         await startupTask.WaitAsync(TimeSpan.FromSeconds(10));
-
-        dialogService.TextTask.TrySetResult(
-            new DialogCompletion<TextDialogPayload>(
-                DialogReturnSemantic.Confirm,
-                new TextDialogPayload(dialogService.LastTextRequest?.DefaultText ?? string.Empty),
-                "released"));
+        Assert.Equal(0, dialogService.ShowTextCallCount);
     }
 
     [Fact]
@@ -1238,7 +1249,7 @@ public sealed class MainShellViewModelTests
     {
         var root = Path.Combine(Path.GetTempPath(), "maa-unified-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
-        var runtime = MAAUnifiedRuntimeFactory.Create(root);
+        var runtime = MAAUnifiedRuntimeFactory.Create(root, SensitiveSettingsService.CreateEphemeralForTests());
         try
         {
             Assert.IsType<ShellFeatureService>(runtime.ShellFeatureService);
@@ -2302,7 +2313,7 @@ public sealed class MainShellViewModelTests
                     existingAvaloniaJson);
             }
 
-            var log = new UiLogService();
+            var log = new UiLogService([root]);
             var diagnostics = new UiDiagnosticsService(root, log);
             var config = new UnifiedConfigurationService(
                 new AvaloniaJsonConfigStore(root),

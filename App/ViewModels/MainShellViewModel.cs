@@ -709,13 +709,13 @@ public sealed class MainShellViewModel : ObservableObject
                 var loadResult = await _runtime.ConfigurationService.LoadOrBootstrapAsync(
                     ConfigValidationMode.Minimal,
                     cancellationToken);
-                if (loadResult.LoadedFromExistingConfig)
-                {
-                    ImportStatus = string.Empty;
-                }
-                else if (loadResult.ImportReport is not null)
+                if (loadResult.ImportReport is not null)
                 {
                     ImportStatus = ImportReportTextFormatter.BuildStatusMessage(loadResult.ImportReport, manualImport: false);
+                }
+                else if (loadResult.LoadedFromExistingConfig)
+                {
+                    ImportStatus = string.Empty;
                 }
 
                 await ReportValidationIssuesIfAnyAsync(

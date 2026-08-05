@@ -1,9 +1,12 @@
 using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using MAAUnified.Application.Configuration;
 using MAAUnified.Application.Models;
 using MAAUnified.Application.Models.TaskParams;
+using MAAUnified.Application.Security;
 using MAAUnified.Application.Services.TaskParams;
 using MAAUnified.Compat.Constants;
 
@@ -31,26 +34,38 @@ public sealed class UnifiedConfigurationService
     private const string ParseNullWarningCode = "ConfigRepair.DeserializeNull";
     private const string ParseExceptionWarningCode = "ConfigRepair.DeserializeException";
     private const string AchievementAutoCloseDefaultRepairMarker = "ConfigRepair.AchievementPopupAutoCloseDefault.True.V1";
+    private const string SensitivePendingCommitFileName = ".sensitive-settings.pending.json";
+    private const string ConfigBackupFilePrefix = "avalonia.json.bak.";
+    private const string SchemaConfigBackupFilePrefix = "avalonia.json.schema-v";
+    private const string ConfigBackupTimestampFormat = "yyyyMMddHHmmss";
+    private const int ConfigBackupTimestampLength = 14;
+    private const int ConfigBackupCollisionIdLength = 32;
 
     private readonly IUnifiedConfigStore _store;
     private readonly IConfigImporter _guiNewImporter;
     private readonly IConfigImporter _guiImporter;
     private readonly string _baseDirectory;
+    private readonly SensitiveSettingsService _sensitiveSettingsService;
     private readonly SemaphoreSlim _saveSemaphore = new(1, 1);
     private List<ConfigValidationIssue> _currentValidationIssues = [];
     private string? _lastPersistedConfigSnapshot;
+    private IReadOnlyList<ImportUnreadableConfigValue> _pendingUnreadableLegacySensitiveValues = [];
 
     public UnifiedConfigurationService(
         IUnifiedConfigStore store,
         IConfigImporter guiNewImporter,
         IConfigImporter guiImporter,
         UiLogService logService,
-        string baseDirectory)
+        string baseDirectory,
+        SensitiveSettingsService? sensitiveSettingsService = null)
     {
         _store = store;
         _guiNewImporter = guiNewImporter;
         _guiImporter = guiImporter;
         _baseDirectory = baseDirectory;
+        _sensitiveSettingsService = sensitiveSettingsService
+            ?? SensitiveSettingsService.CreatePersistentFileForTests(baseDirectory);
+        _sensitiveSettingsService.StateChanged += () => SensitiveStorageStateChanged?.Invoke();
         LogService = logService;
     }
 
@@ -62,7 +77,38 @@ public sealed class UnifiedConfigurationService
 
     public bool HasBlockingValidationIssues => _currentValidationIssues.Any(i => i.Blocking);
 
+    public SensitiveStorageState SensitiveStorageState => _sensitiveSettingsService.State;
+
+    public SensitiveStorageErrorCode? SensitiveStorageErrorCode => _sensitiveSettingsService.LastErrorCode;
+
+    public bool CanRetryInitialSensitiveStorageSelection => _sensitiveSettingsService.CanRetryInitialBackendSelection;
+
+    public bool HasUnreadableLegacySensitiveValuesPending => _pendingUnreadableLegacySensitiveValues.Count > 0;
+
     public event Action<UnifiedConfig>? ConfigChanged;
+
+    public event Action? SensitiveStorageStateChanged;
+
+    public async Task ConfirmDiscardUnreadableLegacySensitiveValuesAsync(CancellationToken cancellationToken = default)
+    {
+        await _saveSemaphore.WaitAsync(cancellationToken);
+        try
+        {
+            if (_pendingUnreadableLegacySensitiveValues.Count == 0)
+            {
+                throw new InvalidOperationException("There are no unreadable legacy sensitive values awaiting confirmation.");
+            }
+
+            _sensitiveSettingsService.ConfirmDiscardUnreadableLegacySensitiveValues();
+            _pendingUnreadableLegacySensitiveValues = [];
+            LogService.Warn("The user confirmed discarding unreadable legacy sensitive values; re-entry is now enabled.");
+            ConfigChanged?.Invoke(CurrentConfig);
+        }
+        finally
+        {
+            _saveSemaphore.Release();
+        }
+    }
 
     public IReadOnlyList<ConfigValidationIssue> RevalidateCurrentConfig(bool logIssues = false)
     {
@@ -86,6 +132,79 @@ public sealed class UnifiedConfigurationService
         await SaveCoreAsync(CurrentConfig, logSavedConfig: true, cancellationToken);
     }
 
+    public async Task SaveReplacementAsync(
+        UnifiedConfig replacement,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(replacement);
+        await SaveCoreAsync(replacement, logSavedConfig: true, cancellationToken);
+    }
+
+    public async Task RetrySecureStorageAsync(CancellationToken cancellationToken = default)
+    {
+        if (CurrentConfig.SensitiveStorage.Backend == SensitiveStorageBackendKind.Uninitialized)
+        {
+            await SaveCoreAsync(
+                CurrentConfig,
+                logSavedConfig: true,
+                cancellationToken,
+                allowInitialBackendSelectionRetry: true);
+            return;
+        }
+
+        await _saveSemaphore.WaitAsync(cancellationToken);
+        try
+        {
+            await using var commitLock = await _store.AcquireCommitLockAsync(cancellationToken);
+            await EnsurePersistedPlaintextMetadataIsCurrentAsync(cancellationToken);
+            var configToPersist = CreatePersistentConfigSnapshot(CurrentConfig);
+            await _sensitiveSettingsService.PrepareSecureStorageMigrationAsync(configToPersist, cancellationToken);
+            await EnsurePersistedPlaintextMetadataIsCurrentAsync(cancellationToken);
+            await _store.SaveAsync(configToPersist, cancellationToken);
+            CurrentConfig.SensitiveStorage = CloneSensitiveStorageMetadata(configToPersist.SensitiveStorage);
+            _lastPersistedConfigSnapshot = SerializeConfigSnapshot(configToPersist);
+            _sensitiveSettingsService.MarkBackendActive(configToPersist.SensitiveStorage.Backend);
+            try
+            {
+                await _sensitiveSettingsService.DeletePlaintextStoreAsync(CancellationToken.None);
+            }
+            catch (SensitiveStorageException ex)
+            {
+                LogService.Warn($"Obsolete plaintext sensitive storage cleanup failed: errorCode={ex.ErrorCode}.");
+            }
+
+            ConfigChanged?.Invoke(CurrentConfig);
+            LogService.Info(
+                $"Sensitive storage migration completed: backend={configToPersist.SensitiveStorage.Backend}, revision={configToPersist.SensitiveStorage.Revision}.");
+        }
+        finally
+        {
+            _saveSemaphore.Release();
+        }
+    }
+
+    private async Task EnsurePersistedPlaintextMetadataIsCurrentAsync(CancellationToken cancellationToken)
+    {
+        if (!_store.Exists())
+        {
+            return;
+        }
+
+        var persisted = await _store.LoadAsync(cancellationToken);
+        var expected = CurrentConfig.SensitiveStorage;
+        var actual = persisted?.SensitiveStorage;
+        if (expected.Backend != SensitiveStorageBackendKind.Plaintext
+            || actual is null
+            || actual.Backend != SensitiveStorageBackendKind.Plaintext
+            || !string.Equals(actual.StoreId, expected.StoreId, StringComparison.Ordinal)
+            || actual.Revision != expected.Revision)
+        {
+            throw new SensitiveStorageException(
+                MAAUnified.Application.Security.SensitiveStorageErrorCode.ActionRequired,
+                "Plaintext sensitive settings metadata changed concurrently. Reload before retrying migration.");
+        }
+    }
+
     public Task<ConfigLoadResult> LoadOrBootstrapAsync(CancellationToken cancellationToken = default)
         => LoadOrBootstrapAsync(ConfigValidationMode.Full, cancellationToken);
 
@@ -101,14 +220,55 @@ public sealed class UnifiedConfigurationService
                 if (loaded is not null)
                 {
                     CurrentConfig = loaded;
+                    var removedPersistedSensitiveValues = await _sensitiveSettingsService.LoadAsync(CurrentConfig, cancellationToken);
+                    await RetryObsoletePlaintextCleanupAsync(cancellationToken);
+                    if (_sensitiveSettingsService.State is SensitiveStorageState.Unavailable or SensitiveStorageState.Corrupt)
+                    {
+                        LogService.Warn(
+                            $"Sensitive storage unavailable: backend={CurrentConfig.SensitiveStorage.Backend}, errorCode={_sensitiveSettingsService.LastErrorCode}, revision={CurrentConfig.SensitiveStorage.Revision}.");
+                    }
+
                     var normalizedFightStageCount = NormalizeFightStageSelections(CurrentConfig);
                     var normalizedTaskParamCount = NormalizeTaskQueueParams(CurrentConfig);
                     var repairedAchievementPopupAutoCloseCount = RepairAchievementPopupAutoCloseDefault(CurrentConfig);
                     var clearedRecruitExpeditedCount = ClearOneShotRecruitExpedited(CurrentConfig);
+                    var legacyConversionReport = new ImportReport
+                    {
+                        Source = ImportSource.Auto,
+                        StartedAt = DateTimeOffset.UtcNow,
+                        OutputConfigPath = "config/avalonia.json",
+                    };
+                    var decryptedLegacySensitiveValueCount = CurrentConfig.SensitiveStorage.Backend == SensitiveStorageBackendKind.Uninitialized
+                        ? ConvertLegacyEncryptedSensitiveValues(CurrentConfig, legacyConversionReport)
+                        : 0;
+                    var normalizedSensitiveScopeCount = SensitiveSettingKeyRegistry.NormalizeMisplacedProfileValues(CurrentConfig);
+                    var hasUnreadableLegacySensitiveValues = legacyConversionReport.UnreadableValues.Count > 0;
+                    _pendingUnreadableLegacySensitiveValues = hasUnreadableLegacySensitiveValues
+                        ? legacyConversionReport.UnreadableValues.ToArray()
+                        : [];
+                    var hasUnmigratableMisplacedValues = !CurrentConfig.Profiles.ContainsKey(CurrentConfig.CurrentProfile)
+                                                        && SensitiveSettingKeyRegistry.HasMisplacedProfileValues(CurrentConfig);
+                    if (hasUnreadableLegacySensitiveValues || hasUnmigratableMisplacedValues)
+                    {
+                        _sensitiveSettingsService.RecordFailure(new SensitiveStorageException(
+                            MAAUnified.Application.Security.SensitiveStorageErrorCode.ActionRequired,
+                            hasUnreadableLegacySensitiveValues
+                                ? "Legacy encrypted sensitive settings must be re-entered before configuration can be saved."
+                                : "Profile-scoped sensitive settings cannot be migrated because the current profile is missing."));
+                    }
+
+                    var requiresSensitiveMigration = CurrentConfig.SensitiveStorage.Backend == SensitiveStorageBackendKind.Uninitialized
+                                                     && HasLegacySensitiveValues(CurrentConfig);
+                    var requiresSchemaMigration = CurrentConfig.SchemaVersion < UnifiedConfig.LatestSchemaVersion;
                     var normalizedConfigChanged = normalizedFightStageCount > 0
                         || normalizedTaskParamCount > 0
                         || repairedAchievementPopupAutoCloseCount > 0
-                        || clearedRecruitExpeditedCount > 0;
+                        || clearedRecruitExpeditedCount > 0
+                        || decryptedLegacySensitiveValueCount > 0
+                        || normalizedSensitiveScopeCount > 0
+                        || removedPersistedSensitiveValues
+                        || requiresSensitiveMigration
+                        || requiresSchemaMigration;
                     var persistedNormalizedConfig = false;
                     if (normalizedFightStageCount > 0)
                     {
@@ -133,23 +293,49 @@ public sealed class UnifiedConfigurationService
                             $"Cleared {clearedRecruitExpeditedCount} one-shot Recruit expedited setting(s).");
                     }
 
-                    if (normalizedConfigChanged && CurrentConfig.SchemaVersion == UnifiedConfig.LatestSchemaVersion)
+                    if (decryptedLegacySensitiveValueCount > 0)
+                    {
+                        LogService.Info($"Converted {decryptedLegacySensitiveValueCount} legacy encrypted sensitive value(s) before secure storage migration.");
+                    }
+
+                    if (normalizedSensitiveScopeCount > 0)
+                    {
+                        LogService.Info($"Moved {normalizedSensitiveScopeCount} misplaced profile-scoped sensitive value(s) out of global configuration.");
+                    }
+
+                    if (normalizedConfigChanged && !hasUnreadableLegacySensitiveValues && !hasUnmigratableMisplacedValues)
                     {
                         try
                         {
-                            await _store.SaveAsync(CurrentConfig, cancellationToken);
+                            await SaveCoreAsync(CurrentConfig, logSavedConfig: false, cancellationToken, validationMode);
                             persistedNormalizedConfig = true;
-                            LogService.Info("Persisted normalized config values to config/avalonia.json");
+                            LogService.Info("Persisted normalized and redacted config values to config/avalonia.json");
+                        }
+                        catch (SensitiveStorageException ex)
+                        {
+                            _sensitiveSettingsService.RecordFailure(ex);
+                            LogService.Warn(
+                                $"Sensitive settings migration requires action: backend={CurrentConfig.SensitiveStorage.Backend}, errorCode={ex.ErrorCode}, revision={CurrentConfig.SensitiveStorage.Revision}.");
                         }
                         catch (Exception ex)
                         {
-                            LogService.Warn($"Failed to persist normalized config values: {ex.Message}");
+                            LogService.Warn($"Failed to persist normalized config values: errorType={ex.GetType().Name}.");
                         }
+                    }
+                    else if (normalizedConfigChanged)
+                    {
+                        LogService.Warn(
+                            "Skipped automatic config persistence because sensitive settings require user action; the original config remains authoritative.");
+                    }
+
+                    if (clearedRecruitExpeditedCount > 0)
+                    {
+                        ClearOneShotRecruitExpedited(CurrentConfig);
                     }
 
                     if (!normalizedConfigChanged || persistedNormalizedConfig)
                     {
-                        _lastPersistedConfigSnapshot = SerializeConfigSnapshot(CurrentConfig);
+                        _lastPersistedConfigSnapshot = SerializeConfigSnapshot(CreateRedactedConfigSnapshot(CurrentConfig));
                     }
                     else
                     {
@@ -168,11 +354,17 @@ public sealed class UnifiedConfigurationService
                     LogService.Info("Loaded config/avalonia.json and skipped legacy auto import");
                     ConfigChanged?.Invoke(CurrentConfig);
 
+                    legacyConversionReport.FinishedAt = DateTimeOffset.UtcNow;
+                    legacyConversionReport.Success = !hasUnreadableLegacySensitiveValues;
+                    legacyConversionReport.AppliedConfig = !hasUnreadableLegacySensitiveValues;
                     return new ConfigLoadResult {
                         Config = CurrentConfig,
                         LoadedFromExistingConfig = true,
+                        ImportReport = hasUnreadableLegacySensitiveValues ? legacyConversionReport : null,
                         ValidationIssues = validationIssues,
                         SchemaMigrationNotice = schemaMigrationNotice,
+                        SensitiveStorageState = _sensitiveSettingsService.State,
+                        SensitiveStorageErrorCode = _sensitiveSettingsService.LastErrorCode,
                     };
                 }
 
@@ -182,28 +374,34 @@ public sealed class UnifiedConfigurationService
                     new UnifiedConfig(),
                     logSavedConfig: false,
                     cancellationToken,
-                    validationMode);
+                    validationMode,
+                    replaceInvalidPersistedConfig: true);
                 return new ConfigLoadResult {
                     Config = CurrentConfig,
                     LoadedFromExistingConfig = true,
                     ValidationIssues = rebuildIssues,
                     SchemaMigrationNotice = BuildSchemaMigrationNotice(),
+                    SensitiveStorageState = _sensitiveSettingsService.State,
+                    SensitiveStorageErrorCode = _sensitiveSettingsService.LastErrorCode,
                 };
             }
-            catch (Exception ex)
+            catch (Exception ex) when (IsConfigParseFailure(ex))
             {
                 LogService.Warn(
-                    $"[{ParseExceptionWarningCode}] failed to load config/avalonia.json ({ex.GetType().Name}: {ex.Message}); rebuilding defaults and skipping legacy import");
+                    $"[{ParseExceptionWarningCode}] failed to parse config/avalonia.json (errorType={ex.GetType().Name}); rebuilding defaults and skipping legacy import");
                 var fallbackIssues = await SaveCoreAsync(
                     new UnifiedConfig(),
                     logSavedConfig: false,
                     cancellationToken,
-                    validationMode);
+                    validationMode,
+                    replaceInvalidPersistedConfig: true);
                 return new ConfigLoadResult {
                     Config = CurrentConfig,
                     LoadedFromExistingConfig = true,
                     ValidationIssues = fallbackIssues,
                     SchemaMigrationNotice = BuildSchemaMigrationNotice(),
+                    SensitiveStorageState = _sensitiveSettingsService.State,
+                    SensitiveStorageErrorCode = _sensitiveSettingsService.LastErrorCode,
                 };
             }
         }
@@ -217,6 +415,8 @@ public sealed class UnifiedConfigurationService
             ImportReport = report,
             ValidationIssues = importValidationIssues,
             SchemaMigrationNotice = BuildSchemaMigrationNotice(),
+            SensitiveStorageState = _sensitiveSettingsService.State,
+            SensitiveStorageErrorCode = _sensitiveSettingsService.LastErrorCode,
         };
     }
 
@@ -241,13 +441,18 @@ public sealed class UnifiedConfigurationService
         var report = new ImportReport {
             Source = request.Source,
             StartedAt = DateTimeOffset.UtcNow,
-            OutputConfigPath = _store.ConfigPath,
-            ReportPath = Path.Combine(_baseDirectory, "debug", "config-import-report.json"),
+            OutputConfigPath = "config/avalonia.json",
+            ReportPath = "debug/config-import-report.json",
         };
 
         try
         {
             var config = new UnifiedConfig();
+            if (request.ManualImport && _store.Exists())
+            {
+                config.SensitiveStorage = CloneSensitiveStorageMetadata(CurrentConfig.SensitiveStorage);
+            }
+
             AppendUnselectedMissingFiles(request, report);
 
             var importPlan = BuildImportPlan(request.Source);
@@ -295,11 +500,24 @@ public sealed class UnifiedConfigurationService
             };
             RepairAchievementPopupAutoCloseDefault(config);
 
+            if (request.ManualImport
+                && report.UnreadableValues.Count > 0
+                && !request.AllowDiscardUnreadableSensitiveValues)
+            {
+                report.Warnings.Add(
+                    "Legacy import requires confirmation before unreadable encrypted sensitive values can be discarded.");
+                report.Success = false;
+                report.AppliedConfig = false;
+                LogImportReport(report, request.ManualImport);
+                return report;
+            }
+
             if (request.ManualImport && _store.Exists())
             {
                 var suffix = $".bak.{DateTimeOffset.UtcNow:yyyyMMddHHmmss}";
-                await _store.BackupAsync(suffix, cancellationToken);
-                LogService.Info($"Backed up current config to {_store.ConfigPath}{suffix}");
+                var sanitizedBackup = CreateRedactedConfigSnapshot(CurrentConfig);
+                await _store.BackupSanitizedAsync(sanitizedBackup, suffix, cancellationToken);
+                LogService.Info("Backed up the current config using a redacted snapshot.");
             }
 
             await SaveCoreAsync(config, logSavedConfig: false, cancellationToken);
@@ -310,10 +528,10 @@ public sealed class UnifiedConfigurationService
         }
         catch (Exception ex)
         {
-            report.Errors.Add(ex.Message);
+            report.Errors.Add($"Legacy import failed (errorType={ex.GetType().Name}).");
             report.Success = false;
             report.AppliedConfig = false;
-            LogService.Error($"Legacy import failed: {ex.Message}");
+            LogService.Error($"Legacy import failed: errorType={ex.GetType().Name}.");
         }
         finally
         {
@@ -322,6 +540,26 @@ public sealed class UnifiedConfigurationService
         }
 
         return report;
+    }
+
+    private async Task RetryObsoletePlaintextCleanupAsync(CancellationToken cancellationToken)
+    {
+        if (CurrentConfig.SensitiveStorage.Backend is SensitiveStorageBackendKind.Uninitialized
+            or SensitiveStorageBackendKind.Plaintext
+            || _sensitiveSettingsService.State != SensitiveStorageState.Available)
+        {
+            return;
+        }
+
+        try
+        {
+            await _sensitiveSettingsService.DeletePlaintextStoreAsync(cancellationToken);
+        }
+        catch (SensitiveStorageException ex)
+        {
+            LogService.Warn(
+                $"Obsolete plaintext sensitive storage remains after cleanup retry: errorCode={ex.ErrorCode}.");
+        }
     }
 
     private IReadOnlyList<ConfigValidationIssue> ValidateCurrentConfig(ConfigValidationMode validationMode)
@@ -463,23 +701,51 @@ public sealed class UnifiedConfigurationService
         UnifiedConfig config,
         bool logSavedConfig,
         CancellationToken cancellationToken,
-        ConfigValidationMode validationMode = ConfigValidationMode.Full)
+        ConfigValidationMode validationMode = ConfigValidationMode.Full,
+        bool replaceInvalidPersistedConfig = false,
+        bool allowInitialBackendSelectionRetry = false)
     {
         await _saveSemaphore.WaitAsync(cancellationToken);
         try
         {
+            await using var commitLock = await _store.AcquireCommitLockAsync(cancellationToken);
             var sourceSchemaVersion = config.SchemaVersion;
             if (sourceSchemaVersion != UnifiedConfig.LatestSchemaVersion && _store.Exists())
             {
                 var suffix = $".schema-v{sourceSchemaVersion}.bak.{DateTimeOffset.UtcNow:yyyyMMddHHmmss}";
-                await _store.BackupAsync(suffix, cancellationToken);
+                var sanitizedBackup = CreateRedactedConfigSnapshot(config);
+                await _store.BackupSanitizedAsync(sanitizedBackup, suffix, cancellationToken);
                 LogService.Warn(
-                    $"Schema migration write detected: v{sourceSchemaVersion} -> v{UnifiedConfig.LatestSchemaVersion}. Backup created at {_store.ConfigPath}{suffix}");
+                    $"Schema migration write detected: v{sourceSchemaVersion} -> v{UnifiedConfig.LatestSchemaVersion}. Redacted backup created.");
             }
 
             config.SchemaVersion = UnifiedConfig.LatestSchemaVersion;
             var normalizedTaskParamCount = NormalizeTaskQueueParams(config);
+            var persistedMetadataBaseline = CloneSensitiveStorageMetadata(config.SensitiveStorage);
+            if (!replaceInvalidPersistedConfig)
+            {
+                await EnsurePersistedSensitiveMetadataIsCurrentAsync(persistedMetadataBaseline, cancellationToken);
+            }
+
+            _sensitiveSettingsService.ValidateRedactedSaveSource(config);
             var configToPersist = CreatePersistentConfigSnapshot(config);
+            if (allowInitialBackendSelectionRetry)
+            {
+                _sensitiveSettingsService.BeginInitialBackendSelectionRetry(configToPersist.SensitiveStorage);
+            }
+
+            var pendingCommit = await ReadPendingSensitiveCommitAsync(cancellationToken);
+            var preparedDocument = await _sensitiveSettingsService
+                .PrepareSaveAsync(configToPersist, pendingCommit, cancellationToken)
+                .ConfigureAwait(false);
+            if (preparedDocument is not null)
+            {
+                await WritePendingSensitiveCommitAsync(
+                    persistedMetadataBaseline,
+                    configToPersist.SensitiveStorage.Backend,
+                    preparedDocument,
+                    cancellationToken);
+            }
             var configSnapshot = SerializeConfigSnapshot(configToPersist);
             if (string.Equals(_lastPersistedConfigSnapshot, configSnapshot, StringComparison.Ordinal))
             {
@@ -492,8 +758,16 @@ public sealed class UnifiedConfigurationService
                 LogService.Info($"Normalized {normalizedTaskParamCount} task parameter set(s) before saving config/avalonia.json");
             }
 
+            if (!replaceInvalidPersistedConfig)
+            {
+                await EnsurePersistedSensitiveMetadataIsCurrentAsync(persistedMetadataBaseline, cancellationToken);
+            }
             await _store.SaveAsync(configToPersist, cancellationToken);
+            TryDeletePendingSensitiveCommit();
+            await SanitizeKnownConfigBackupsAsync(cancellationToken);
             _lastPersistedConfigSnapshot = configSnapshot;
+            SensitiveSettingKeyRegistry.NormalizeMisplacedProfileValues(config);
+            config.SensitiveStorage = CloneSensitiveStorageMetadata(configToPersist.SensitiveStorage);
             CurrentConfig = config;
             var issues = RefreshValidationState(validationMode, logIssues: true);
             ConfigChanged?.Invoke(CurrentConfig);
@@ -523,6 +797,484 @@ public sealed class UnifiedConfigurationService
         ClearOneShotRecruitExpedited(copy);
         return copy;
     }
+
+    private static UnifiedConfig CreateRedactedConfigSnapshot(UnifiedConfig config)
+    {
+        var copy = CreatePersistentConfigSnapshot(config);
+        _ = SensitiveSettingKeyRegistry.ExtractAndRemove(
+            copy,
+            string.IsNullOrWhiteSpace(copy.SensitiveStorage.StoreId) ? "redacted" : copy.SensitiveStorage.StoreId,
+            Math.Max(1, copy.SensitiveStorage.Revision));
+        return copy;
+    }
+
+    private static bool HasLegacySensitiveValues(UnifiedConfig config)
+    {
+        var copy = CreatePersistentConfigSnapshot(config);
+        var document = SensitiveSettingKeyRegistry.ExtractAndRemove(copy, "migration-probe", 1);
+        return SensitiveSettingKeyRegistry.HasNonDefaultValues(document);
+    }
+
+    private static int ConvertLegacyEncryptedSensitiveValues(UnifiedConfig config, ImportReport report)
+    {
+        var converted = 0;
+        foreach (var definition in SensitiveSettingKeyRegistry.Definitions)
+        {
+            if (definition.Scope == SensitiveSettingScope.Global)
+            {
+                if (!config.GlobalValues.TryGetValue(definition.Key, out var value))
+                {
+                    continue;
+                }
+
+                var replacement = LegacyEncryptedConfigValueConverter.ConvertGlobalValue(definition.Key, value, report);
+                if (!JsonNode.DeepEquals(value, replacement))
+                {
+                    config.GlobalValues[definition.Key] = replacement;
+                    converted++;
+                }
+
+                continue;
+            }
+
+            foreach (var (profileName, profile) in config.Profiles)
+            {
+                if (!profile.Values.TryGetValue(definition.Key, out var value))
+                {
+                    continue;
+                }
+
+                var replacement = LegacyEncryptedConfigValueConverter.ConvertProfileValue(profileName, definition.Key, value, report);
+                if (!JsonNode.DeepEquals(value, replacement))
+                {
+                    profile.Values[definition.Key] = replacement;
+                    converted++;
+                }
+            }
+        }
+
+        return converted;
+    }
+
+    private static void RemoveSensitiveValues(UnifiedConfig config)
+    {
+        _ = SensitiveSettingKeyRegistry.ExtractAndRemove(
+            config,
+            string.IsNullOrWhiteSpace(config.SensitiveStorage.StoreId) ? "redacted" : config.SensitiveStorage.StoreId,
+            Math.Max(1, config.SensitiveStorage.Revision));
+    }
+
+    private static bool IsConfigParseFailure(Exception exception)
+        => exception is JsonException or NotSupportedException;
+
+    private async Task EnsurePersistedSensitiveMetadataIsCurrentAsync(
+        SensitiveStorageMetadata expected,
+        CancellationToken cancellationToken)
+    {
+        if (!_store.Exists())
+        {
+            return;
+        }
+
+        var persisted = await _store.LoadAsync(cancellationToken);
+        var actual = persisted?.SensitiveStorage;
+        if (actual is null
+            || actual.FormatVersion != expected.FormatVersion
+            || actual.Backend != expected.Backend
+            || !string.Equals(actual.StoreId, expected.StoreId, StringComparison.Ordinal)
+            || actual.Revision != expected.Revision)
+        {
+            var exception = new SensitiveStorageException(
+                MAAUnified.Application.Security.SensitiveStorageErrorCode.ActionRequired,
+                "Sensitive settings metadata changed concurrently. Reload before saving again.");
+            _sensitiveSettingsService.RecordFailure(exception);
+            throw exception;
+        }
+    }
+
+    private async Task<SensitiveSettingsPendingCommit?> ReadPendingSensitiveCommitAsync(
+        CancellationToken cancellationToken)
+    {
+        var path = GetPendingSensitiveCommitPath();
+        if (!File.Exists(path))
+        {
+            return null;
+        }
+
+        try
+        {
+            await using var stream = new FileStream(
+                path,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.Read,
+                bufferSize: 4096,
+                FileOptions.Asynchronous);
+            var pending = await JsonSerializer.DeserializeAsync<SensitiveSettingsPendingCommit>(
+                stream,
+                _configSnapshotOptions,
+                cancellationToken);
+            return pending is not null
+                   && string.Equals(pending.ConfigPathId, GetConfigPathId(), StringComparison.Ordinal)
+                ? pending
+                : null;
+        }
+        catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
+        {
+            LogService.Warn($"Ignored invalid sensitive settings pending state: errorType={ex.GetType().Name}.");
+            return null;
+        }
+    }
+
+    private async Task WritePendingSensitiveCommitAsync(
+        SensitiveStorageMetadata baseline,
+        SensitiveStorageBackendKind backend,
+        SensitiveSettingsDocument document,
+        CancellationToken cancellationToken)
+    {
+        var path = GetPendingSensitiveCommitPath();
+        var directory = Path.GetDirectoryName(path)!;
+        Directory.CreateDirectory(directory);
+        var tempPath = Path.Combine(directory, $".{Path.GetFileName(path)}.{Guid.NewGuid():N}.tmp");
+        var pending = new SensitiveSettingsPendingCommit
+        {
+            ConfigPathId = GetConfigPathId(),
+            Backend = backend,
+            BaseStoreId = baseline.StoreId,
+            BaseRevision = baseline.Revision,
+            TargetStoreId = document.StoreId,
+            TargetRevision = document.Revision,
+            TargetCommitId = document.CommitId,
+        };
+
+        try
+        {
+            var options = FileOptions.Asynchronous | FileOptions.WriteThrough;
+            await using (var stream = OperatingSystem.IsWindows()
+                             ? new FileStream(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, options)
+                             : new FileStream(tempPath, new FileStreamOptions
+                             {
+                                 Mode = FileMode.CreateNew,
+                                 Access = FileAccess.Write,
+                                 Share = FileShare.None,
+                                 BufferSize = 4096,
+                                 Options = options,
+                                 UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite,
+                             }))
+            {
+                await JsonSerializer.SerializeAsync(stream, pending, _configSnapshotOptions, cancellationToken);
+                await stream.FlushAsync(cancellationToken);
+                stream.Flush(flushToDisk: true);
+            }
+
+            File.Move(tempPath, path, overwrite: true);
+        }
+        finally
+        {
+            if (File.Exists(tempPath))
+            {
+                File.Delete(tempPath);
+            }
+        }
+    }
+
+    private void TryDeletePendingSensitiveCommit()
+    {
+        try
+        {
+            File.Delete(GetPendingSensitiveCommitPath());
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            LogService.Warn($"Sensitive settings pending state cleanup failed: errorType={ex.GetType().Name}.");
+        }
+    }
+
+    private string GetPendingSensitiveCommitPath()
+        => Path.Combine(Path.GetDirectoryName(_store.ConfigPath)!, SensitivePendingCommitFileName);
+
+    private string GetConfigPathId()
+        => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(Path.GetFullPath(_store.ConfigPath))));
+
+    private static SensitiveStorageMetadata CloneSensitiveStorageMetadata(SensitiveStorageMetadata metadata)
+        => new()
+        {
+            FormatVersion = metadata.FormatVersion,
+            Backend = metadata.Backend,
+            StoreId = metadata.StoreId,
+            Revision = metadata.Revision,
+        };
+
+    private async Task SanitizeKnownConfigBackupsAsync(CancellationToken cancellationToken)
+    {
+        var configDirectory = Path.GetDirectoryName(_store.ConfigPath);
+        if (string.IsNullOrWhiteSpace(configDirectory) || !Directory.Exists(configDirectory))
+        {
+            return;
+        }
+
+        if (!DiagnosticFileSecurity.IsSafeDirectoryRoot(configDirectory))
+        {
+            LogConfigBackupSanitizationFailure("UnsafeDirectory");
+            return;
+        }
+
+        string[] backupPaths;
+        try
+        {
+            backupPaths = Directory
+                .EnumerateFiles(configDirectory, "avalonia.json*", SearchOption.TopDirectoryOnly)
+                .Where(path => IsKnownConfigBackupFileName(Path.GetFileName(path)))
+                .OrderBy(static path => path, StringComparer.Ordinal)
+                .ToArray();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            LogConfigBackupSanitizationFailure("EnumerationFailed");
+            return;
+        }
+
+        foreach (var backupPath in backupPaths)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            await SanitizeKnownConfigBackupAsync(configDirectory, backupPath, cancellationToken);
+        }
+    }
+
+    private async Task SanitizeKnownConfigBackupAsync(
+        string configDirectory,
+        string backupPath,
+        CancellationToken cancellationToken)
+    {
+        if (!DiagnosticFileSecurity.TryOpenRegularFile(configDirectory, backupPath, out var input))
+        {
+            LogConfigBackupSanitizationFailure("UnsafeFile");
+            return;
+        }
+
+        JsonObject? backup;
+        UnixFileMode? originalUnixMode = null;
+        try
+        {
+            await using (input)
+            {
+                if (!OperatingSystem.IsWindows())
+                {
+                    originalUnixMode = File.GetUnixFileMode(backupPath);
+                }
+
+                backup = await JsonSerializer.DeserializeAsync<JsonObject>(
+                    input,
+                    _configSnapshotOptions,
+                    cancellationToken);
+            }
+        }
+        catch (JsonException)
+        {
+            LogConfigBackupSanitizationFailure("InvalidJson");
+            return;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException)
+        {
+            LogConfigBackupSanitizationFailure("ReadFailed");
+            return;
+        }
+
+        if (backup is null)
+        {
+            LogConfigBackupSanitizationFailure("InvalidJson");
+            return;
+        }
+
+        if (RemoveAllRegisteredSensitiveValues(backup) == 0)
+        {
+            return;
+        }
+
+        var tempPath = Path.Combine(
+            configDirectory,
+            $".{Path.GetFileName(backupPath)}.{Guid.NewGuid():N}.tmp");
+        try
+        {
+            await using (var output = CreateConfigBackupTempFile(tempPath, originalUnixMode))
+            {
+                await JsonSerializer.SerializeAsync(output, backup, _configSnapshotOptions, cancellationToken);
+                await output.FlushAsync(cancellationToken);
+                output.Flush(flushToDisk: true);
+            }
+
+            if (!OperatingSystem.IsWindows() && originalUnixMode is { } unixMode)
+            {
+                File.SetUnixFileMode(tempPath, unixMode);
+            }
+
+            if (!DiagnosticFileSecurity.TryOpenRegularFile(configDirectory, backupPath, out var verificationStream))
+            {
+                LogConfigBackupSanitizationFailure("UnsafeFile");
+                return;
+            }
+
+            verificationStream.Dispose();
+            ReplaceConfigBackupAtomically(tempPath, backupPath);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException)
+        {
+            LogConfigBackupSanitizationFailure("WriteFailed");
+        }
+        finally
+        {
+            try
+            {
+                File.Delete(tempPath);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+            }
+        }
+    }
+
+    private static FileStream CreateConfigBackupTempFile(string tempPath, UnixFileMode? unixMode)
+    {
+        const FileOptions options = FileOptions.Asynchronous | FileOptions.WriteThrough;
+        if (OperatingSystem.IsWindows())
+        {
+            return new FileStream(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, options);
+        }
+
+        return new FileStream(tempPath, new FileStreamOptions
+        {
+            Mode = FileMode.CreateNew,
+            Access = FileAccess.Write,
+            Share = FileShare.None,
+            BufferSize = 4096,
+            Options = options,
+            UnixCreateMode = unixMode ?? (UnixFileMode.UserRead | UnixFileMode.UserWrite),
+        });
+    }
+
+    private static void ReplaceConfigBackupAtomically(string tempPath, string backupPath)
+    {
+        try
+        {
+            File.Replace(tempPath, backupPath, destinationBackupFileName: null, ignoreMetadataErrors: true);
+        }
+        catch (PlatformNotSupportedException)
+        {
+            File.Move(tempPath, backupPath, overwrite: true);
+        }
+        catch (UnauthorizedAccessException) when (!OperatingSystem.IsWindows())
+        {
+            File.Move(tempPath, backupPath, overwrite: true);
+        }
+    }
+
+    private static int RemoveAllRegisteredSensitiveValues(JsonObject backup)
+    {
+        var removed = 0;
+        foreach (var (propertyName, value) in backup.ToArray())
+        {
+            if (string.Equals(propertyName, nameof(UnifiedConfig.GlobalValues), StringComparison.OrdinalIgnoreCase)
+                && value is JsonObject globalValues)
+            {
+                removed += RemoveRegisteredSensitiveKeys(globalValues);
+                continue;
+            }
+
+            if (!string.Equals(propertyName, nameof(UnifiedConfig.Profiles), StringComparison.OrdinalIgnoreCase)
+                || value is not JsonObject profiles)
+            {
+                continue;
+            }
+
+            foreach (var (_, profileValue) in profiles)
+            {
+                if (profileValue is not JsonObject profile)
+                {
+                    continue;
+                }
+
+                foreach (var (profilePropertyName, profilePropertyValue) in profile.ToArray())
+                {
+                    if (string.Equals(profilePropertyName, nameof(UnifiedProfile.Values), StringComparison.OrdinalIgnoreCase)
+                        && profilePropertyValue is JsonObject profileValues)
+                    {
+                        removed += RemoveRegisteredSensitiveKeys(profileValues);
+                    }
+                }
+            }
+        }
+
+        return removed;
+    }
+
+    private static int RemoveRegisteredSensitiveKeys(JsonObject values)
+    {
+        var sensitiveKeys = values
+            .Select(static property => property.Key)
+            .Where(SensitiveSettingKeyRegistry.IsSensitive)
+            .ToArray();
+        foreach (var key in sensitiveKeys)
+        {
+            values.Remove(key);
+        }
+
+        return sensitiveKeys.Length;
+    }
+
+    private static bool IsKnownConfigBackupFileName(string fileName)
+    {
+        if (fileName.StartsWith(ConfigBackupFilePrefix, StringComparison.Ordinal))
+        {
+            return IsCanonicalConfigBackupTimestamp(fileName.AsSpan(ConfigBackupFilePrefix.Length));
+        }
+
+        if (!fileName.StartsWith(SchemaConfigBackupFilePrefix, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var schemaAndTimestamp = fileName.AsSpan(SchemaConfigBackupFilePrefix.Length);
+        var backupMarkerIndex = schemaAndTimestamp.IndexOf(".bak.", StringComparison.Ordinal);
+        if (backupMarkerIndex <= 0)
+        {
+            return false;
+        }
+
+        var schemaVersionText = schemaAndTimestamp[..backupMarkerIndex];
+        if (!int.TryParse(schemaVersionText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var schemaVersion)
+            || !schemaVersionText.SequenceEqual(schemaVersion.ToString(CultureInfo.InvariantCulture)))
+        {
+            return false;
+        }
+
+        return IsCanonicalConfigBackupTimestamp(schemaAndTimestamp[(backupMarkerIndex + ".bak.".Length)..]);
+    }
+
+    private static bool IsCanonicalConfigBackupTimestamp(ReadOnlySpan<char> value)
+    {
+        if (value.Length is not ConfigBackupTimestampLength
+            && (value.Length != ConfigBackupTimestampLength + 1 + ConfigBackupCollisionIdLength
+                || value[ConfigBackupTimestampLength] != '.'))
+        {
+            return false;
+        }
+
+        if (!DateTime.TryParseExact(
+                value[..ConfigBackupTimestampLength],
+                ConfigBackupTimestampFormat,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.None,
+                out _))
+        {
+            return false;
+        }
+
+        return value.Length == ConfigBackupTimestampLength
+               || Guid.TryParseExact(value[(ConfigBackupTimestampLength + 1)..], "N", out _);
+    }
+
+    private void LogConfigBackupSanitizationFailure(string errorCode)
+        => LogService.Warn($"Known config backup sanitization skipped: errorCode={errorCode}.");
 
     private static int ClearOneShotRecruitExpedited(UnifiedConfig config)
     {
@@ -585,13 +1337,16 @@ public sealed class UnifiedConfigurationService
 
     private async Task WriteReportAsync(ImportReport report, CancellationToken cancellationToken)
     {
-        var reportDir = Path.GetDirectoryName(report.ReportPath);
+        var reportPath = Path.IsPathRooted(report.ReportPath)
+            ? report.ReportPath
+            : Path.Combine(_baseDirectory, report.ReportPath);
+        var reportDir = Path.GetDirectoryName(reportPath);
         if (!string.IsNullOrEmpty(reportDir))
         {
             Directory.CreateDirectory(reportDir);
         }
 
-        await using var stream = File.Create(report.ReportPath);
+        await using var stream = File.Create(reportPath);
         await JsonSerializer.SerializeAsync(stream, report, _reportOptions, cancellationToken);
     }
 

@@ -91,7 +91,16 @@
           <controls:AdaptiveSpacingStackPanel Classes="settings-page-column-stack settings-page-meta-block"
                       Spacing="8"
                       IsVisible="{Binding IsVersionUpdateMirrorChyanSource}">
+            <TextBlock Classes="app-caption state-warning"
+                       Text="{Binding SensitiveStorageStatusText}"
+                       TextWrapping="Wrap" />
+            <Button HorizontalAlignment="Left"
+                    Classes="app-button app-secondary"
+                    Content="Discard unreadable value and re-enter"
+                    IsVisible="{Binding CanDiscardUnreadableSensitiveValues}"
+                    Click="OnDiscardUnreadableSensitiveValuesClick" />
             <Grid Classes="settings-page-labeled-action-row"
+                  IsEnabled="{Binding CanUseSensitiveSettings}"
                   controls:SettingsLabelWidthCoordinator.GroupKey="VersionUpdate.Main"
                   ColumnDefinitions="Auto,*">
               <controls:SettingsLabel Text="{Binding RootTexts[Settings.VersionUpdate.MirrorCdk]}" />

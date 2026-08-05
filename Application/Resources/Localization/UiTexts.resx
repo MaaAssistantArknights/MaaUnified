@@ -3137,10 +3137,10 @@
     <value>请先至少启用一个通知服务，再校验参数或发送测试通知。</value>
   </data>
   <data name="Settings.ExternalNotification.Error.ParameterFormatLine" xml:space="preserve">
-    <value>参数格式错误（第 {0} 行），应为 key=value：`{1}`</value>
+    <value>参数格式错误（第 {0} 行），应为 key=value</value>
   </data>
   <data name="Settings.ExternalNotification.Error.ParameterKeyEmpty" xml:space="preserve">
-    <value>参数格式错误（第 {0} 行），key 不能为空。</value>
+    <value>参数格式错误（第 {0} 行），应为 key=value</value>
   </data>
   <data name="Settings.ExternalNotification.Error.ParseFailed" xml:space="preserve">
     <value>解析通知服务参数失败。</value>
@@ -4061,7 +4061,7 @@
     <value>更新失败。</value>
   </data>
   <data name="Settings.VersionUpdate.Status.WindowsManualUpdateRequired" xml:space="preserve">
-    <value>Windows 版目前暂未在 release 发布，请手动更新。</value>
+    <value>Windows 版暂不支持应用内自动更新，请从发布页手动更新。</value>
   </data>
   <data name="Settings.VersionUpdate.Status.LinuxPortableZipManualInstallRequired" xml:space="preserve">
     <value>Linux 便携包已下载，请解压到新目录并启动其中的 AppImage。</value>

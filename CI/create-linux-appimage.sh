@@ -29,6 +29,11 @@ if [[ ! -d "$staging_dir/resource" ]]; then
   exit 1
 fi
 
+if ! find "$staging_dir/bin" -type f -name 'libe_sqlcipher.so' | grep -q .; then
+  echo "SQLCipher native library not found in Linux staging: $staging_dir/bin" >&2
+  exit 1
+fi
+
 mkdir -p "$release_dir"
 
 work_dir="$release_dir/appimage-build"
@@ -37,10 +42,13 @@ output_path="$release_dir/$package_name.AppImage"
 
 rm -rf "$work_dir" "$output_path"
 mkdir -p \
+  "$app_dir/usr/lib/maaunified" \
   "$app_dir/usr/share/applications" \
   "$app_dir/usr/share/icons/hicolor/256x256/apps" \
   "$app_dir/usr/share/pixmaps" \
   "$app_dir/usr/share/metainfo"
+
+cp -a "$staging_dir/." "$app_dir/usr/lib/maaunified/"
 
 desktop_entry_path="$app_dir/usr/share/applications/$desktop_id"
 root_desktop_entry_path="$app_dir/$desktop_id"
@@ -133,7 +141,8 @@ show_error() {
   printf '%s: %s\n' "$title" "$message" >&2
 }
 
-package_root="$(cd -- "$(dirname -- "${APPIMAGE:-$0}")" && pwd)"
+app_dir="$(cd -- "$(dirname -- "$0")" && pwd)"
+package_root="$app_dir/usr/lib/maaunified"
 
 has_core_library=0
 if compgen -G "$package_root/libMaaCore.so*" >/dev/null; then
@@ -143,7 +152,7 @@ fi
 if [[ ! -x "$package_root/bin/MAAUnified" || ! -d "$package_root/resource" || "$has_core_library" -ne 1 ]]; then
   show_error \
     "MAAUnified" \
-    "The Linux portable package is incomplete. Please extract the full package and launch MAAUnified.AppImage from that directory."
+    "The AppImage is incomplete. Please download the package again."
   exit 1
 fi
 
@@ -166,5 +175,15 @@ chmod a+x "$appimagetool"
 ARCH="$appimage_arch" "$appimagetool" --runtime-file "$runtime_file" "$app_dir" "$output_path"
 chmod a+x "$output_path"
 test -f "$output_path"
+
+absolute_output_path="$(cd "$(dirname "$output_path")" && pwd)/$(basename "$output_path")"
+mkdir -p "$work_dir/extracted"
+(
+  cd "$work_dir/extracted"
+  "$absolute_output_path" --appimage-extract >/dev/null
+)
+bash src/MAAUnified/CI/verify-sensitive-storage-artifact.sh \
+  "$work_dir/extracted/squashfs-root/usr/lib/maaunified" \
+  linux
 
 rm -rf "$work_dir"

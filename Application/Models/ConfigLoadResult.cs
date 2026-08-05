@@ -1,5 +1,7 @@
 namespace MAAUnified.Application.Models;
 
+using MAAUnified.Application.Security;
+
 public sealed class ConfigLoadResult
 {
     public required UnifiedConfig Config { get; init; }
@@ -11,6 +13,10 @@ public sealed class ConfigLoadResult
     public required IReadOnlyList<ConfigValidationIssue> ValidationIssues { get; init; }
 
     public SchemaMigrationNotice? SchemaMigrationNotice { get; init; }
+
+    public SensitiveStorageState SensitiveStorageState { get; init; }
+
+    public SensitiveStorageErrorCode? SensitiveStorageErrorCode { get; init; }
 
     public bool HasBlockingValidationIssues => ValidationIssues.Any(i => i.Blocking);
 }

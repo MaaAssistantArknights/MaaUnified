@@ -11,6 +11,7 @@
                 Classes="settings-form"
                 Margin="{DynamicResource MAA.Thickness.Settings.SectionTopMargin}">
       <Border Classes="app-surface app-section"
+              IsEnabled="{Binding CanUseSensitiveSettings}"
               Padding="22">
         <StackPanel Spacing="16">
           <Border Classes="app-surface app-card"
@@ -57,6 +58,12 @@
             </StackPanel>
           </Border>
         </StackPanel>
+      </Border>
+
+      <Border Classes="app-highlight app-warning-highlight"
+              IsVisible="{Binding HasSensitiveStorageWarning}">
+        <TextBlock Classes="app-body state-warning long-wrap"
+                   Text="{Binding SensitiveStorageWarningMessage}" />
       </Border>
 
       <Border Classes="app-highlight app-warning-highlight"

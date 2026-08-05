@@ -3136,10 +3136,10 @@ With save file: farm points through crafting (advanced).
     <value>Select at least one notification provider before validating or sending a test notification.</value>
   </data>
   <data name="Settings.ExternalNotification.Error.ParameterFormatLine" xml:space="preserve">
-    <value>Invalid parameter format (line {0}). Expected key=value: `{1}`</value>
+    <value>Invalid parameter line {0}; expected key=value</value>
   </data>
   <data name="Settings.ExternalNotification.Error.ParameterKeyEmpty" xml:space="preserve">
-    <value>Invalid parameter format (line {0}). Key cannot be empty.</value>
+    <value>Invalid parameter line {0}; expected key=value</value>
   </data>
   <data name="Settings.ExternalNotification.Error.ParseFailed" xml:space="preserve">
     <value>Failed to parse provider parameters.</value>
@@ -4060,7 +4060,7 @@ With save file: farm points through crafting (advanced).
     <value>Update failed.</value>
   </data>
   <data name="Settings.VersionUpdate.Status.WindowsManualUpdateRequired" xml:space="preserve">
-    <value>The Windows release is not published yet. Please update manually.</value>
+    <value>In-app automatic updates are not yet supported on Windows. Please update manually from the releases page.</value>
   </data>
   <data name="Settings.VersionUpdate.Status.LinuxPortableZipManualInstallRequired" xml:space="preserve">
     <value>The Linux portable package has been downloaded. Extract it to a new directory and launch the AppImage there.</value>

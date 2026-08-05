@@ -9,6 +9,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using MAAUnified.Application.Configuration;
 using MAAUnified.Application.Models;
+using MAAUnified.Application.Security;
 using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Features;
 using MAAUnified.Application.Services.VersionUpdate;
@@ -19,6 +20,95 @@ namespace MAAUnified.Tests;
 
 public sealed class VersionUpdateFeatureServiceTests
 {
+    [Theory]
+    [InlineData(SensitiveStorageErrorCode.Unavailable)]
+    [InlineData(SensitiveStorageErrorCode.Corrupt)]
+    public async Task CheckForUpdatesAsync_WithMirrorChyanResourceSourceAndUnavailableSensitiveStorage_StillChecksSoftwareUpdates(
+        SensitiveStorageErrorCode errorCode)
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"maa-unified-sensitive-update-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(root);
+
+        try
+        {
+            var requestCount = 0;
+            using var httpClient = new HttpClient(new StubHttpMessageHandler(_ =>
+            {
+                Interlocked.Increment(ref requestCount);
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("[]"),
+                };
+            }));
+            var sensitiveSettings = SensitiveSettingsService.CreateEphemeralForTests();
+            sensitiveSettings.RecordFailure(new SensitiveStorageException(errorCode, "selected backend failed"));
+            var workflow = new AppUpdateWorkflowService(
+                new NoOpAppLifecycleService(),
+                httpClient,
+                OSPlatform.Linux,
+                Architecture.X64);
+            var service = new VersionUpdateFeatureService(
+                CreateConfigurationService(root, sensitiveSettings),
+                appUpdateWorkflowService: workflow,
+                runtimeBaseDirectory: root);
+
+            var result = await service.CheckForUpdatesAsync(
+                VersionUpdatePolicy.Default with
+                {
+                    ResourceUpdateSource = "MirrorChyan",
+                    MirrorChyanCdk = "in-memory-secret",
+                    AutoDownloadUpdatePackage = false,
+                },
+                "v1.0.0");
+
+            Assert.True(result.Success);
+            Assert.True(Volatile.Read(ref requestCount) > 0);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task CheckForUpdatesAsync_WithGithubAndUnavailableSensitiveStorage_StillChecksForUpdates()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"maa-unified-nonsensitive-update-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(root);
+        var feedPath = Path.Combine(root, "release-feed.json");
+
+        try
+        {
+            await File.WriteAllTextAsync(feedPath, "[]");
+            var sensitiveSettings = SensitiveSettingsService.CreateEphemeralForTests();
+            sensitiveSettings.RecordFailure(new SensitiveStorageException(
+                SensitiveStorageErrorCode.Unavailable,
+                "selected backend failed"));
+            var service = new VersionUpdateFeatureService(
+                CreateConfigurationService(root, sensitiveSettings),
+                appUpdateWorkflowService: new AppUpdateWorkflowService(
+                    new NoOpAppLifecycleService(),
+                    operatingSystem: OSPlatform.Linux,
+                    architecture: Architecture.X64),
+                runtimeBaseDirectory: root);
+
+            var result = await service.CheckForUpdatesAsync(
+                VersionUpdatePolicy.Default with
+                {
+                    ResourceUpdateSource = "Github",
+                    ResourceApi = feedPath,
+                    AutoDownloadUpdatePackage = false,
+                },
+                "v1.0.0");
+
+            Assert.True(result.Success);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     [Fact]
     public async Task CheckForUpdatesAsync_ReadsLocalReleaseFeed()
     {
@@ -1749,6 +1839,73 @@ public sealed class VersionUpdateFeatureServiceTests
     }
 
     [Fact]
+    public async Task MirrorChyanResourceLogsDoNotContainCdkOrSignedUrl()
+    {
+        const string cdk = "ROUND8-CDK-+/=SENTINEL";
+        const string signedToken = "ROUND8-SIGNED-+/=SENTINEL";
+        var signedUrl = $"https://download.example.com/resource.zip?token={Uri.EscapeDataString(signedToken)}";
+        var root = Path.Combine(Path.GetTempPath(), $"maa-unified-mirrorchyan-log-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(root);
+
+        try
+        {
+            using var httpClient = new HttpClient(new StubHttpMessageHandler(request =>
+            {
+                if (request.RequestUri?.AbsoluteUri.StartsWith(
+                        "https://mirrorchyan.com/api/resources/MaaResource/latest",
+                        StringComparison.Ordinal) == true)
+                {
+                    Assert.Contains(Uri.EscapeDataString(cdk), request.RequestUri.AbsoluteUri, StringComparison.Ordinal);
+                    return new HttpResponseMessage(HttpStatusCode.OK)
+                    {
+                        Content = new StringContent(JsonSerializer.Serialize(new
+                        {
+                            code = 0,
+                            data = new
+                            {
+                                url = signedUrl,
+                            },
+                        })),
+                    };
+                }
+
+                throw new HttpRequestException($"simulated failure for {request.RequestUri}");
+            }));
+            var uiLog = new UiLogService();
+            var diagnostics = new UiDiagnosticsService(root, uiLog);
+            var service = new VersionUpdateFeatureService(
+                CreateConfigurationService(root),
+                diagnosticsService: diagnostics,
+                uiLogService: uiLog,
+                runtimeBaseDirectory: root,
+                resourceHttpClient: httpClient);
+
+            var result = await service.UpdateResourceAsync(
+                VersionUpdatePolicy.Default with
+                {
+                    ResourceUpdateSource = "MirrorChyan",
+                    MirrorChyanCdk = cdk,
+                },
+                "Official");
+
+            Assert.False(result.Success);
+            var captured = string.Join('\n', uiLog.Snapshot.Select(log => log.Message));
+            if (File.Exists(diagnostics.EventLogPath)) captured += await File.ReadAllTextAsync(diagnostics.EventLogPath);
+            if (File.Exists(diagnostics.ErrorLogPath)) captured += await File.ReadAllTextAsync(diagnostics.ErrorLogPath);
+            Assert.Contains("endpoint=https://mirrorchyan.com/api/resources/MaaResource/latest", captured, StringComparison.Ordinal);
+            Assert.DoesNotContain(cdk, captured, StringComparison.Ordinal);
+            Assert.DoesNotContain(Uri.EscapeDataString(cdk), captured, StringComparison.Ordinal);
+            Assert.DoesNotContain(signedUrl, captured, StringComparison.Ordinal);
+            Assert.DoesNotContain(signedToken, captured, StringComparison.Ordinal);
+            Assert.DoesNotContain(Uri.EscapeDataString(signedToken), captured, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task CheckForUpdatesAsync_WithGithubMirrorsAndGlobalSourceDisabled_DownloadsFromMirror()
     {
         var root = Path.Combine(Path.GetTempPath(), $"maa-unified-github-mirror-{Guid.NewGuid():N}");
@@ -2335,14 +2492,115 @@ public sealed class VersionUpdateFeatureServiceTests
         }
     }
 
-    private static UnifiedConfigurationService CreateConfigurationService(string root)
+    [Fact]
+    public async Task TryApplyPendingUpdatePackage_WhenAtomicConfigSaveFails_PreservesOriginalConfig()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"maa-unified-pending-update-save-failure-{Guid.NewGuid():N}");
+        try
+        {
+            var config = new UnifiedConfig();
+            config.GlobalValues[ConfigurationKeys.VersionUpdatePackage] = JsonValue.Create("missing-update.zip");
+            config.GlobalValues["ordinary"] = JsonValue.Create("preserved-value");
+            config.SensitiveStorage = new SensitiveStorageMetadata
+            {
+                Backend = SensitiveStorageBackendKind.SystemProtected,
+                StoreId = "preserved-store-id",
+                Revision = 17,
+            };
+            var innerStore = new AvaloniaJsonConfigStore(root);
+            await innerStore.SaveAsync(config);
+            var original = await File.ReadAllTextAsync(innerStore.ConfigPath);
+            var failingStore = new FailingPendingUpdateConfigStore(innerStore);
+
+            await Assert.ThrowsAsync<IOException>(() => Task.Run(() =>
+                PendingAppUpdateService.TryApplyPendingUpdatePackage(root, failingStore)));
+
+            Assert.Equal(original, await File.ReadAllTextAsync(innerStore.ConfigPath));
+            var reloaded = await innerStore.LoadAsync();
+            Assert.NotNull(reloaded);
+            Assert.Equal("preserved-value", ReadGlobalString(reloaded!, "ordinary"));
+            Assert.Equal("preserved-store-id", reloaded.SensitiveStorage.StoreId);
+            Assert.Equal(17, reloaded.SensitiveStorage.Revision);
+            Assert.Equal(1, failingStore.SaveCount);
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    [Fact]
+    public async Task TryApplyPendingUpdatePackage_WaitsForCommitLockAndLoadsLatestConfigAfterAcquiringIt()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"maa-unified-pending-update-commit-lock-{Guid.NewGuid():N}");
+        try
+        {
+            var config = new UnifiedConfig();
+            config.GlobalValues[ConfigurationKeys.VersionUpdatePackage] = JsonValue.Create("missing-update.zip");
+            config.GlobalValues["ordinary"] = JsonValue.Create("initial");
+            IUnifiedConfigStore innerStore = new AvaloniaJsonConfigStore(root);
+            await innerStore.SaveAsync(config);
+            var trackingStore = new CommitLockTrackingStore(innerStore);
+            var heldLease = await innerStore.AcquireCommitLockAsync();
+            try
+            {
+                var applyTask = Task.Run(() =>
+                    PendingAppUpdateService.TryApplyPendingUpdatePackage(root, trackingStore));
+                await trackingStore.AcquireCalled.WaitAsync(TimeSpan.FromSeconds(5));
+                Assert.False(applyTask.IsCompleted);
+
+                config.GlobalValues["ordinary"] = JsonValue.Create("latest");
+                await innerStore.SaveAsync(config);
+                await heldLease.DisposeAsync();
+                var result = await applyTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+                Assert.Equal(PendingAppUpdateStatus.Failed, result.Status);
+            }
+            finally
+            {
+                await heldLease.DisposeAsync();
+            }
+
+            var reloaded = await innerStore.LoadAsync();
+            Assert.NotNull(reloaded);
+            Assert.Equal("latest", ReadGlobalString(reloaded!, "ordinary"));
+            Assert.Equal(string.Empty, ReadGlobalString(reloaded, ConfigurationKeys.VersionUpdatePackage));
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    private static UnifiedConfigurationService CreateConfigurationService(
+        string root,
+        SensitiveSettingsService? sensitiveSettingsService = null)
     {
         return new UnifiedConfigurationService(
             new AvaloniaJsonConfigStore(root),
             new GuiNewJsonConfigImporter(),
             new GuiJsonConfigImporter(),
             new UiLogService(),
-            root);
+            root,
+            sensitiveSettingsService);
     }
 
     private static VersionUpdateFeatureService CreateLinuxVersionUpdateFeatureService(string root, HttpClient? httpClient = null)
@@ -2425,5 +2683,52 @@ public sealed class VersionUpdateFeatureServiceTests
             cancellationToken.ThrowIfCancellationRequested();
             return Task.FromResult(_handler(request));
         }
+    }
+
+    private sealed class FailingPendingUpdateConfigStore(IUnifiedConfigStore inner) : IUnifiedConfigStore
+    {
+        public string ConfigPath => inner.ConfigPath;
+
+        public int SaveCount { get; private set; }
+
+        public bool Exists() => inner.Exists();
+
+        public Task<UnifiedConfig?> LoadAsync(CancellationToken cancellationToken = default)
+            => inner.LoadAsync(cancellationToken);
+
+        public Task SaveAsync(UnifiedConfig config, CancellationToken cancellationToken = default)
+        {
+            SaveCount++;
+            return Task.FromException(new IOException("simulated atomic publish failure"));
+        }
+
+        public Task BackupAsync(string suffix, CancellationToken cancellationToken = default)
+            => inner.BackupAsync(suffix, cancellationToken);
+    }
+
+    private sealed class CommitLockTrackingStore(IUnifiedConfigStore inner) : IUnifiedConfigStore
+    {
+        private readonly TaskCompletionSource _acquireCalled = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task AcquireCalled => _acquireCalled.Task;
+
+        public string ConfigPath => inner.ConfigPath;
+
+        public bool Exists() => inner.Exists();
+
+        public Task<UnifiedConfig?> LoadAsync(CancellationToken cancellationToken = default)
+            => inner.LoadAsync(cancellationToken);
+
+        public Task SaveAsync(UnifiedConfig config, CancellationToken cancellationToken = default)
+            => inner.SaveAsync(config, cancellationToken);
+
+        public ValueTask<IAsyncDisposable> AcquireCommitLockAsync(CancellationToken cancellationToken = default)
+        {
+            _acquireCalled.TrySetResult();
+            return inner.AcquireCommitLockAsync(cancellationToken);
+        }
+
+        public Task BackupAsync(string suffix, CancellationToken cancellationToken = default)
+            => inner.BackupAsync(suffix, cancellationToken);
     }
 }

@@ -389,6 +389,10 @@ public interface ISettingsFeatureService
         IReadOnlyDictionary<string, string> updates,
         CancellationToken cancellationToken = default);
 
+    Task<UiOperationResult> SaveProfileSettingsAsync(
+        IReadOnlyDictionary<string, string> updates,
+        CancellationToken cancellationToken = default);
+
     Task<UiOperationResult> TestNotificationAsync(string title, string message, CancellationToken cancellationToken = default);
 
     Task<UiOperationResult> RegisterHotkeyAsync(string name, string gesture, CancellationToken cancellationToken = default);

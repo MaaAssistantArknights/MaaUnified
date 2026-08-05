@@ -13,6 +13,7 @@ using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using MAAUnified.Application.Configuration;
 using MAAUnified.Application.Models;
+using MAAUnified.Application.Security;
 using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Localization;
 using MAAUnified.CoreBridge;
@@ -58,18 +59,24 @@ public sealed class NotificationProviderFeatureService : INotificationProviderFe
     };
 
     private readonly bool _supported;
+    private readonly UnifiedConfigurationService? _configService;
     private readonly Func<string, IReadOnlyDictionary<string, string>, string, string, CancellationToken, Task<UiOperationResult>> _sendAsync;
     private readonly Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> _sendHttpAsync;
 
     public NotificationProviderFeatureService()
-        : this(supported: true, sendAsync: null, sendHttpAsync: null)
+        : this(configService: null, supported: true, sendAsync: null, sendHttpAsync: null)
+    {
+    }
+
+    public NotificationProviderFeatureService(UnifiedConfigurationService configService)
+        : this(configService, supported: true, sendAsync: null, sendHttpAsync: null)
     {
     }
 
     internal NotificationProviderFeatureService(
         bool supported,
         Func<string, IReadOnlyDictionary<string, string>, string, string, CancellationToken, Task<UiOperationResult>>? sendAsync)
-        : this(supported, sendAsync, sendHttpAsync: null)
+        : this(configService: null, supported, sendAsync, sendHttpAsync: null)
     {
     }
 
@@ -77,7 +84,17 @@ public sealed class NotificationProviderFeatureService : INotificationProviderFe
         bool supported,
         Func<string, IReadOnlyDictionary<string, string>, string, string, CancellationToken, Task<UiOperationResult>>? sendAsync,
         Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>>? sendHttpAsync)
+        : this(configService: null, supported, sendAsync, sendHttpAsync)
     {
+    }
+
+    internal NotificationProviderFeatureService(
+        UnifiedConfigurationService? configService,
+        bool supported,
+        Func<string, IReadOnlyDictionary<string, string>, string, string, CancellationToken, Task<UiOperationResult>>? sendAsync,
+        Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>>? sendHttpAsync)
+    {
+        _configService = configService;
         _supported = supported;
         _sendHttpAsync = sendHttpAsync ?? DefaultSendHttpAsync;
         _sendAsync = sendAsync ?? SendByDefaultAsync;
@@ -94,6 +111,11 @@ public sealed class NotificationProviderFeatureService : INotificationProviderFe
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        if (!CanUseSensitiveSettings)
+        {
+            return Task.FromResult(SensitiveStorageUnavailable());
+        }
+
         if (!_supported)
         {
             return Task.FromResult(UiOperationResult.Fail(
@@ -110,6 +132,11 @@ public sealed class NotificationProviderFeatureService : INotificationProviderFe
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        if (!CanUseSensitiveSettings)
+        {
+            return SensitiveStorageUnavailable();
+        }
+
         if (!_supported)
         {
             return UiOperationResult.Fail(
@@ -140,6 +167,14 @@ public sealed class NotificationProviderFeatureService : INotificationProviderFe
             request.Message.Trim(),
             cancellationToken);
     }
+
+    private bool CanUseSensitiveSettings => _configService?.SensitiveStorageState
+        is not (SensitiveStorageState.Unavailable or SensitiveStorageState.Corrupt);
+
+    private static UiOperationResult SensitiveStorageUnavailable()
+        => UiOperationResult.Fail(
+            UiErrorCode.NotificationProviderUnsupported,
+            "External notifications are disabled while sensitive storage is unavailable.");
 
     private static UiOperationResult ValidateRequest(
         NotificationProviderRequest request,
@@ -334,7 +369,7 @@ public sealed class NotificationProviderFeatureService : INotificationProviderFe
             var equalIndex = line.IndexOf('=');
             if (equalIndex <= 0)
             {
-                error = $"Invalid parameter line {i + 1}: `{line}`. Expected `key=value`.";
+                error = $"Invalid parameter line {i + 1}; expected key=value";
                 return parameters;
             }
 
@@ -342,7 +377,7 @@ public sealed class NotificationProviderFeatureService : INotificationProviderFe
             var value = line[(equalIndex + 1)..].Trim();
             if (key.Length == 0)
             {
-                error = $"Invalid parameter line {i + 1}: key cannot be empty.";
+                error = $"Invalid parameter line {i + 1}; expected key=value";
                 return parameters;
             }
 
@@ -446,9 +481,7 @@ public sealed class NotificationProviderFeatureService : INotificationProviderFe
         }
         catch (Exception ex)
         {
-            return UiOperationResult.Fail(
-                UiErrorCode.NotificationProviderNetworkFailure,
-                $"Notification network failure for `Smtp`: {ex.Message}");
+            return NetworkFailure("Smtp", ex);
         }
     }
 
@@ -702,9 +735,7 @@ public sealed class NotificationProviderFeatureService : INotificationProviderFe
         }
         catch (HttpRequestException ex)
         {
-            return UiOperationResult.Fail(
-                UiErrorCode.NotificationProviderNetworkFailure,
-                $"Notification network failure for `DingTalk`: {ex.Message}");
+            return NetworkFailure("DingTalk", ex);
         }
     }
 
@@ -767,9 +798,7 @@ public sealed class NotificationProviderFeatureService : INotificationProviderFe
         }
         catch (Exception ex) when (ex is HttpRequestException or JsonException)
         {
-            return UiOperationResult.Fail(
-                UiErrorCode.NotificationProviderNetworkFailure,
-                $"Notification network failure for `Discord`: {ex.Message}");
+            return NetworkFailure("Discord", ex);
         }
     }
 
@@ -823,7 +852,7 @@ public sealed class NotificationProviderFeatureService : INotificationProviderFe
                 {
                     return UiOperationResult.Fail(
                         UiErrorCode.NotificationProviderNetworkFailure,
-                        $"Notification test failed via `{provider}`: {jsonFailure}");
+                        $"Notification test failed via `{provider}`: providerCode={jsonFailure}.");
                 }
             }
 
@@ -837,11 +866,15 @@ public sealed class NotificationProviderFeatureService : INotificationProviderFe
         }
         catch (Exception ex) when (ex is HttpRequestException or JsonException)
         {
-            return UiOperationResult.Fail(
-                UiErrorCode.NotificationProviderNetworkFailure,
-                $"Notification network failure for `{provider}`: {ex.Message}");
+            return NetworkFailure(provider, ex);
         }
     }
+
+    private static UiOperationResult NetworkFailure(string provider, Exception exception)
+        => UiOperationResult.Fail(
+            UiErrorCode.NotificationProviderNetworkFailure,
+            $"Notification network failure for `{provider}`.",
+            $"errorType={exception.GetType().Name}");
 
     private static Uri BuildDingTalkWebhookUri(string accessToken, string? secret)
     {
@@ -885,19 +918,13 @@ public sealed class NotificationProviderFeatureService : INotificationProviderFe
             && codeElement.TryGetInt32(out var code)
             && code is not (0 or 200))
         {
-            var message = root.TryGetProperty("message", out var messageElement)
-                ? messageElement.GetString()
-                : null;
-            return string.IsNullOrWhiteSpace(message) ? $"code={code}" : $"{message} (code={code})";
+            return code.ToString(CultureInfo.InvariantCulture);
         }
 
         if (root.TryGetProperty("success", out var successElement)
             && successElement.ValueKind == JsonValueKind.False)
         {
-            var message = root.TryGetProperty("message", out var messageElement)
-                ? messageElement.GetString()
-                : null;
-            return string.IsNullOrWhiteSpace(message) ? "success=false" : message;
+            return "success_false";
         }
 
         return null;

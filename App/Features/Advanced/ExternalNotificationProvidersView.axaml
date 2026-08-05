@@ -23,7 +23,7 @@
   </UserControl.Styles>
 
   <Grid Margin="4"
-        RowDefinitions="Auto,Auto,Auto">
+        RowDefinitions="Auto,Auto,Auto,Auto">
     <Border Classes="app-surface app-section"
             Padding="22">
       <StackPanel Classes="external-notification-providers-stack">
@@ -33,12 +33,20 @@
     </Border>
 
     <Border Grid.Row="1"
+            Classes="app-highlight app-warning-highlight external-notification-providers-section"
+            IsVisible="{Binding HasSensitiveStorageWarning}">
+      <TextBlock Classes="app-body state-warning long-wrap"
+                 Text="{Binding SensitiveStorageWarningMessage}" />
+    </Border>
+
+    <Border Grid.Row="2"
             Classes="app-surface app-section external-notification-providers-section">
       <StackPanel Classes="external-notification-providers-stack">
         <TextBlock Classes="app-body external-notification-providers-card-title"
                    Text="{Binding Texts[Toolbox.Advanced.ExternalNotification.Title]}" />
 
-        <Border Classes="app-surface app-card external-notification-providers-card">
+        <Border Classes="app-surface app-card external-notification-providers-card"
+                IsEnabled="{Binding CanUseSensitiveSettings}">
           <StackPanel Classes="external-notification-providers-stack">
             <StackPanel Spacing="8">
               <TextBlock Classes="app-caption"
@@ -76,8 +84,9 @@
       </StackPanel>
     </Border>
 
-    <Border Grid.Row="2"
-            Classes="app-surface app-section external-notification-providers-section">
+    <Border Grid.Row="3"
+            Classes="app-surface app-section external-notification-providers-section"
+            IsEnabled="{Binding CanUseSensitiveSettings}">
       <StackPanel Classes="external-notification-providers-stack">
         <StackPanel Orientation="Horizontal"
                     Spacing="{DynamicResource MAA.Spacing.Small}">

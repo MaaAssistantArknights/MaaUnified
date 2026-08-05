@@ -36,4 +36,12 @@ public partial class ExternalNotificationSettingsView : UserControl
             await VM.TestExternalNotificationAsync();
         }
     }
+
+    private async void OnDiscardUnreadableSensitiveValuesClick(object? sender, RoutedEventArgs e)
+    {
+        if (VM is not null)
+        {
+            await VM.ConfirmDiscardUnreadableSensitiveValuesAsync();
+        }
+    }
 }

@@ -10,6 +10,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using MAAUnified.Application.Configuration;
 using MAAUnified.Application.Models;
+using MAAUnified.Application.Security;
 using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.VersionUpdate;
 using MAAUnified.Application.Services.Localization;
@@ -59,11 +60,13 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
     private readonly IAchievementTrackerService? _achievementTrackerService;
     private readonly UiLogService? _uiLogService;
     private readonly AppUpdateWorkflowService _appUpdateWorkflowService;
+    private readonly HttpClient _resourceHttpClient;
     private readonly string? _runtimeBaseDirectory;
 
     public VersionUpdateFeatureService()
     {
         _appUpdateWorkflowService = new AppUpdateWorkflowService(new NoOpAppLifecycleService());
+        _resourceHttpClient = ResourceHttpClient;
     }
 
     public VersionUpdateFeatureService(
@@ -72,13 +75,15 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
         IAchievementTrackerService? achievementTrackerService = null,
         UiLogService? uiLogService = null,
         AppUpdateWorkflowService? appUpdateWorkflowService = null,
-        string? runtimeBaseDirectory = null)
+        string? runtimeBaseDirectory = null,
+        HttpClient? resourceHttpClient = null)
     {
         _configService = configService;
         _diagnosticsService = diagnosticsService;
         _achievementTrackerService = achievementTrackerService;
         _uiLogService = uiLogService;
         _appUpdateWorkflowService = appUpdateWorkflowService ?? new AppUpdateWorkflowService(new NoOpAppLifecycleService());
+        _resourceHttpClient = resourceHttpClient ?? ResourceHttpClient;
         _runtimeBaseDirectory = NormalizeRuntimeBaseDirectory(runtimeBaseDirectory);
     }
 
@@ -96,7 +101,7 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
             VersionType: ReadString(config, ConfigurationKeys.VersionType, "Stable"),
             ResourceUpdateSource: ReadString(config, ConfigurationKeys.UpdateSource, "Github"),
             ForceGithubGlobalSource: ReadBool(config, ConfigurationKeys.ForceGithubGlobalSource, false),
-            MirrorChyanCdk: DecryptMirrorChyanCdk(ReadString(config, ConfigurationKeys.MirrorChyanCdk, string.Empty)),
+            MirrorChyanCdk: ReadString(config, ConfigurationKeys.MirrorChyanCdk, string.Empty),
             MirrorChyanCdkExpired: ReadString(config, ConfigurationKeys.MirrorChyanCdkExpiredTime, string.Empty),
             StartupUpdateCheck: ReadBool(config, ConfigurationKeys.StartupUpdateCheck, true),
             ScheduledUpdateCheck: ReadBool(config, ConfigurationKeys.UpdateAutoCheck, false),
@@ -201,6 +206,13 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
         var source = normalizedPolicy.ResourceUpdateSource;
         if (string.Equals(source, "MirrorChyan", StringComparison.OrdinalIgnoreCase))
         {
+            if (!CanUseSensitiveSettings)
+            {
+                return UiOperationResult<string>.Fail(
+                    UiErrorCode.VersionUpdateServiceUnavailable,
+                    "MirrorChyan operations are disabled while sensitive storage is unavailable.");
+            }
+
             return await UpdateResourceFromMirrorChyanAsync(normalizedPolicy, clientType, progress, cancellationToken);
         }
 
@@ -223,6 +235,14 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
                 validation.Error?.Details);
         }
 
+        if (string.Equals(normalizedPolicy.ResourceUpdateSource, "MirrorChyan", StringComparison.OrdinalIgnoreCase)
+            && !CanUseSensitiveSettings)
+        {
+            return UiOperationResult<ResourceUpdateCheckResult>.Fail(
+                UiErrorCode.VersionUpdateServiceUnavailable,
+                "MirrorChyan operations are disabled while sensitive storage is unavailable.");
+        }
+
         var scope = "VersionUpdate.Resource.Check";
         var cdk = normalizedPolicy.MirrorChyanCdk.Trim();
         var runtimeBaseDirectory = ResolveRuntimeBaseDirectory();
@@ -238,8 +258,8 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
                     "正在检查资源更新。源={0}，客户端={1}",
                     normalizedPolicy.ResourceUpdateSource,
                     clientType ?? "<default>"));
-            await TraceVersionUpdateAsync(scope, $"Query begin url={requestUrl}", cancellationToken).ConfigureAwait(false);
-            using var response = await ResourceHttpClient.GetAsync(requestUrl, cancellationToken).ConfigureAwait(false);
+            await TraceVersionUpdateAsync(scope, $"Query begin endpoint={MirrorChyanResourceApiUrl}", cancellationToken).ConfigureAwait(false);
+            using var response = await _resourceHttpClient.GetAsync(requestUrl, cancellationToken).ConfigureAwait(false);
             var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
             await TraceVersionUpdateAsync(
                 scope,
@@ -247,16 +267,18 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
                 cancellationToken).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode)
             {
+                var status = (int)response.StatusCode;
+                var failureMessage = FormatUpdateLogText(
+                    "VersionUpdate.Log.Resource.CheckFailedHttp",
+                    "资源更新检查失败，HTTP 状态码 {0}。",
+                    status);
                 PublishUpdateLog(
-                    FormatUpdateLogText(
-                        "VersionUpdate.Log.Resource.CheckFailedHttp",
-                        "资源更新检查失败，HTTP 状态码 {0}。",
-                        (int)response.StatusCode),
+                    failureMessage,
                     "WARN");
                 return UiOperationResult<ResourceUpdateCheckResult>.Fail(
                     UiErrorCode.UiOperationFailed,
-                    $"MirrorChyan request failed with status {(int)response.StatusCode}.",
-                    body);
+                    failureMessage,
+                    $"status={status}");
             }
 
             var payload = ParseMirrorChyanPayload(body);
@@ -273,20 +295,16 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
             if (payload.Code != 0)
             {
                 PublishUpdateLog(
-                    string.IsNullOrWhiteSpace(payload.Message)
-                        ? LocalizeUpdateText(
-                            "VersionUpdate.Log.Resource.CheckFailed",
-                            "资源更新检查失败。")
-                        : FormatUpdateLogText(
-                            "VersionUpdate.Log.Resource.CheckFailedWithMessage",
-                            "资源更新检查失败：{0}",
-                            payload.Message),
+                    LocalizeUpdateText(
+                        "VersionUpdate.Log.Resource.CheckFailed",
+                        "资源更新检查失败。"),
                     "WARN");
                 return UiOperationResult<ResourceUpdateCheckResult>.Fail(
                     UiErrorCode.VersionUpdateInvalidParameters,
-                    string.IsNullOrWhiteSpace(payload.Message)
-                        ? "MirrorChyan request failed."
-                        : payload.Message);
+                    LocalizeUpdateText(
+                        "VersionUpdate.Log.Resource.CheckFailed",
+                        "资源更新检查失败。"),
+                    $"code={payload.Code}");
             }
 
             if (payload.VersionTimestamp.HasValue
@@ -338,17 +356,35 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
         }
         catch (Exception ex)
         {
+            var isMirrorChyan = string.Equals(
+                normalizedPolicy.ResourceUpdateSource,
+                "MirrorChyan",
+                StringComparison.OrdinalIgnoreCase);
             PublishUpdateLog(
-                FormatUpdateLogText(
-                    "VersionUpdate.Log.Resource.CheckFailedWithMessage",
-                    "资源更新检查失败：{0}",
-                    ex.Message),
+                isMirrorChyan
+                    ? LocalizeUpdateText("VersionUpdate.Log.Resource.CheckFailed", "资源更新检查失败。")
+                    : FormatUpdateLogText(
+                        "VersionUpdate.Log.Resource.CheckFailedWithMessage",
+                        "资源更新检查失败：{0}",
+                        ex.Message),
                 "ERROR");
-            await TraceVersionUpdateErrorAsync(scope, "Resource update check failed.", ex, cancellationToken).ConfigureAwait(false);
+            if (isMirrorChyan)
+            {
+                await TraceVersionUpdateFailureAsync(
+                    scope,
+                    $"MirrorChyan query failed endpoint={MirrorChyanResourceApiUrl}",
+                    ex,
+                    cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                await TraceVersionUpdateErrorAsync(scope, "Resource update check failed.", ex, cancellationToken).ConfigureAwait(false);
+            }
+
             return UiOperationResult<ResourceUpdateCheckResult>.Fail(
                 UiErrorCode.UiOperationFailed,
-                $"Failed to check resource updates: {ex.Message}",
-                ex.Message);
+                isMirrorChyan ? "Failed to check MirrorChyan resource updates." : $"Failed to check resource updates: {ex.Message}",
+                isMirrorChyan ? $"errorType={ex.GetType().Name}" : ex.Message);
         }
     }
 
@@ -609,7 +645,7 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
         return result.PackageResolutionStatus switch
         {
             PackageResolutionStatus.WindowsManualUpdateRequired
-                => $"发现新版本：{result.TargetVersion}。Windows 版目前暂未在 release 发布，请手动更新。",
+                => $"发现新版本：{result.TargetVersion}。Windows 版暂不支持应用内自动更新，请从发布页手动更新。",
             PackageResolutionStatus.MacOSManualInstallRequired
                 => $"发现新版本：{result.TargetVersion}。macOS 安装镜像已下载，请打开 dmg 手动安装。",
             PackageResolutionStatus.LinuxPortableZipManualInstallRequired
@@ -849,8 +885,8 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
         MirrorChyanUpdateResponse payload;
         try
         {
-            await TraceVersionUpdateAsync(scope, $"Query begin url={requestUrl}", cancellationToken).ConfigureAwait(false);
-            using var response = await ResourceHttpClient.GetAsync(requestUrl, cancellationToken).ConfigureAwait(false);
+            await TraceVersionUpdateAsync(scope, $"Query begin endpoint={MirrorChyanResourceApiUrl}", cancellationToken).ConfigureAwait(false);
+            using var response = await _resourceHttpClient.GetAsync(requestUrl, cancellationToken).ConfigureAwait(false);
             var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
             await TraceVersionUpdateAsync(
                 scope,
@@ -860,8 +896,10 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
             {
                 return UiOperationResult<string>.Fail(
                     UiErrorCode.UiOperationFailed,
-                    $"MirrorChyan request failed with status {(int)response.StatusCode}.",
-                    body);
+                    LocalizeUpdateText(
+                        "VersionUpdate.Log.Resource.MirrorChyanFailed",
+                        "MirrorChyan 资源更新失败。"),
+                    $"status={(int)response.StatusCode}");
             }
 
             payload = ParseMirrorChyanPayload(body);
@@ -876,11 +914,15 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
         }
         catch (Exception ex)
         {
-            await TraceVersionUpdateErrorAsync(scope, "MirrorChyan resource query failed.", ex, cancellationToken).ConfigureAwait(false);
+            await TraceVersionUpdateFailureAsync(
+                scope,
+                $"MirrorChyan resource query failed endpoint={MirrorChyanResourceApiUrl}",
+                ex,
+                cancellationToken).ConfigureAwait(false);
             return UiOperationResult<string>.Fail(
                 UiErrorCode.UiOperationFailed,
-                $"Failed to query MirrorChyan update endpoint: {ex.Message}",
-                ex.Message);
+                "Failed to query MirrorChyan update endpoint.",
+                $"errorType={ex.GetType().Name}");
         }
 
         if (payload.CdkExpiredEpoch.HasValue)
@@ -892,9 +934,10 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
         {
             return UiOperationResult<string>.Fail(
                 UiErrorCode.VersionUpdateInvalidParameters,
-                string.IsNullOrWhiteSpace(payload.Message)
-                    ? "MirrorChyan request failed."
-                    : payload.Message);
+                LocalizeUpdateText(
+                    "VersionUpdate.Log.Resource.MirrorChyanFailed",
+                    "MirrorChyan 资源更新失败。"),
+                $"code={payload.Code}");
         }
 
         if (payload.VersionTimestamp.HasValue
@@ -934,7 +977,7 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
         {
             await TraceVersionUpdateAsync(
                 scope,
-                $"Download begin url={payload.DownloadUrl}",
+                "Download begin source=MirrorChyan",
                 cancellationToken).ConfigureAwait(false);
             await DownloadToFileAsync(
                 payload.DownloadUrl,
@@ -1005,16 +1048,15 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
         catch (Exception ex)
         {
             PublishUpdateLog(
-                FormatUpdateLogText(
-                    "VersionUpdate.Log.Resource.MirrorChyanFailedWithMessage",
-                    "MirrorChyan 资源更新失败：{0}",
-                    ex.Message),
+                LocalizeUpdateText(
+                    "VersionUpdate.Log.Resource.MirrorChyanFailed",
+                    "MirrorChyan 资源更新失败。"),
                 "ERROR");
-            await TraceVersionUpdateErrorAsync(scope, "MirrorChyan resource update failed.", ex, cancellationToken).ConfigureAwait(false);
+            await TraceVersionUpdateFailureAsync(scope, "MirrorChyan resource update failed", ex, cancellationToken).ConfigureAwait(false);
             return UiOperationResult<string>.Fail(
                 UiErrorCode.UiOperationFailed,
-                $"Failed to update resources from MirrorChyan: {ex.Message}",
-                ex.Message);
+                "Failed to update resources from MirrorChyan.",
+                $"errorType={ex.GetType().Name}");
         }
         finally
         {
@@ -1134,7 +1176,7 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
         return extractDirectory;
     }
 
-    private static async Task DownloadToFileAsync(
+    private async Task DownloadToFileAsync(
         string url,
         string destinationPath,
         VersionUpdateProgressOperation operation,
@@ -1142,7 +1184,7 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
         IProgress<VersionUpdateProgressInfo>? progress,
         CancellationToken cancellationToken)
     {
-        using var response = await ResourceHttpClient.GetAsync(
+        using var response = await _resourceHttpClient.GetAsync(
             url,
             HttpCompletionOption.ResponseHeadersRead,
             cancellationToken).ConfigureAwait(false);
@@ -1325,6 +1367,31 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
                 scope,
                 $"{message} | thread={Environment.CurrentManagedThreadId}",
                 exception,
+                CancellationToken.None).ConfigureAwait(false);
+        }
+        catch
+        {
+            // Best-effort diagnostics must not block resource updates.
+        }
+    }
+
+    private async Task TraceVersionUpdateFailureAsync(
+        string scope,
+        string message,
+        Exception exception,
+        CancellationToken cancellationToken = default)
+    {
+        if (_diagnosticsService is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await _diagnosticsService.RecordErrorAsync(
+                scope,
+                $"{message}; errorType={exception.GetType().Name} | thread={Environment.CurrentManagedThreadId}",
+                exception: null,
                 CancellationToken.None).ConfigureAwait(false);
         }
         catch
@@ -1534,11 +1601,27 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
         }
 
         var config = _configService.CurrentConfig;
+        var updatesToPersist = updates;
+        if (!CanUseSensitiveSettings && updates.Keys.Any(SensitiveSettingKeyRegistry.IsSensitive))
+        {
+            if (updates.Any(pair =>
+                    SensitiveSettingKeyRegistry.IsSensitive(pair.Key)
+                    && !MatchesCurrentGlobalValue(config, pair.Key, pair.Value)))
+            {
+                return UiOperationResult.Fail(
+                    UiErrorCode.VersionUpdateServiceUnavailable,
+                    "Sensitive version update settings cannot be changed while sensitive storage is unavailable.");
+            }
+
+            updatesToPersist = updates
+                .Where(pair => !SensitiveSettingKeyRegistry.IsSensitive(pair.Key))
+                .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+        }
+
         var snapshot = CloneGlobalSettings(config);
-        var persistedUpdates = PrepareSettingsForPersistence(updates);
         try
         {
-            foreach (var (key, value) in persistedUpdates)
+            foreach (var (key, value) in updatesToPersist)
             {
                 config.GlobalValues[key] = JsonValue.Create(value);
             }
@@ -1557,18 +1640,15 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
         }
     }
 
-    private static IReadOnlyDictionary<string, string> PrepareSettingsForPersistence(
-        IReadOnlyDictionary<string, string> updates)
+    private static bool MatchesCurrentGlobalValue(UnifiedConfig config, string key, string proposedValue)
     {
-        var persisted = new Dictionary<string, string>(updates.Count, StringComparer.Ordinal);
-        foreach (var (key, value) in updates)
+        if (config.GlobalValues.TryGetValue(key, out var currentValue))
         {
-            persisted[key] = string.Equals(key, ConfigurationKeys.MirrorChyanCdk, StringComparison.Ordinal)
-                ? EncryptMirrorChyanCdk(value)
-                : value;
+            return string.Equals(currentValue?.ToString() ?? string.Empty, proposedValue, StringComparison.Ordinal);
         }
 
-        return persisted;
+        return SensitiveSettingKeyRegistry.TryGet(key, out var definition)
+               && string.Equals(definition.DefaultPlaintextValue, proposedValue, StringComparison.Ordinal);
     }
 
     private static Dictionary<string, JsonNode?> CloneGlobalSettings(UnifiedConfig config)
@@ -1600,6 +1680,9 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
         return true;
     }
 
+    private bool CanUseSensitiveSettings => _configService?.SensitiveStorageState
+        is not (SensitiveStorageState.Unavailable or SensitiveStorageState.Corrupt);
+
     private static string ReadString(UnifiedConfig config, string key, string fallback)
     {
         if (config.GlobalValues.TryGetValue(key, out var node) && node is not null)
@@ -1612,72 +1695,6 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
         }
 
         return fallback;
-    }
-
-    private static string EncryptMirrorChyanCdk(string value)
-    {
-        if (string.IsNullOrWhiteSpace(value) || !OperatingSystem.IsWindows())
-        {
-            return value;
-        }
-
-        try
-        {
-            var bytes = Encoding.UTF8.GetBytes(value);
-            var encrypted = InvokeWindowsProtectedData("Protect", bytes);
-            return encrypted is null ? value : Convert.ToBase64String(encrypted);
-        }
-        catch
-        {
-            return value;
-        }
-    }
-
-    private static string DecryptMirrorChyanCdk(string value)
-    {
-        if (string.IsNullOrWhiteSpace(value) || !OperatingSystem.IsWindows())
-        {
-            return value;
-        }
-
-        try
-        {
-            var bytes = Convert.FromBase64String(value);
-            var decrypted = InvokeWindowsProtectedData("Unprotect", bytes);
-            if (decrypted is null)
-            {
-                return value;
-            }
-
-            return Encoding.UTF8.GetString(decrypted);
-        }
-        catch
-        {
-            return value;
-        }
-    }
-
-    private static byte[]? InvokeWindowsProtectedData(string methodName, byte[] data)
-    {
-        var protectedDataType = Type.GetType(
-            "System.Security.Cryptography.ProtectedData, System.Security.Cryptography.ProtectedData");
-        var dataProtectionScopeType = Type.GetType(
-            "System.Security.Cryptography.DataProtectionScope, System.Security.Cryptography.ProtectedData");
-        if (protectedDataType is null || dataProtectionScopeType is null)
-        {
-            return null;
-        }
-
-        var method = protectedDataType.GetMethod(
-            methodName,
-            [typeof(byte[]), typeof(byte[]), dataProtectionScopeType]);
-        if (method is null)
-        {
-            return null;
-        }
-
-        var currentUserScope = Enum.Parse(dataProtectionScopeType, "CurrentUser");
-        return method.Invoke(null, [data, null, currentUserScope]) as byte[];
     }
 
     private static bool ReadBool(UnifiedConfig config, string key, bool fallback)

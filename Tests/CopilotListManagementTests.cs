@@ -671,6 +671,11 @@ public sealed class CopilotListManagementTests
                 UiErrorCode.CopilotListPersistenceFailed,
                 "Copilot 列表持久化失败（模拟）。"));
 
+        public Task<UiOperationResult> SaveProfileSettingsAsync(
+            IReadOnlyDictionary<string, string> updates,
+            CancellationToken cancellationToken = default)
+            => _inner.SaveProfileSettingsAsync(updates, cancellationToken);
+
         public Task<UiOperationResult> TestNotificationAsync(string title, string message, CancellationToken cancellationToken = default)
             => _inner.TestNotificationAsync(title, message, cancellationToken);
 

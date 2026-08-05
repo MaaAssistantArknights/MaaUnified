@@ -18,5 +18,6 @@
   <ItemGroup>
     <ProjectReference Include="..\App\MAAUnified.App.csproj" />
     <ProjectReference Include="..\Application\MAAUnified.Application.csproj" />
+    <ProjectReference Include="..\SecureStorage.Linux\MAAUnified.SecureStorage.Linux.csproj" />
   </ItemGroup>
 </Project>

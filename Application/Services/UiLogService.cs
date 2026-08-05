@@ -1,4 +1,5 @@
 using MAAUnified.Application.Models;
+using MAAUnified.Application.Security;
 
 namespace MAAUnified.Application.Services;
 
@@ -12,6 +13,17 @@ public sealed class UiLogService
     private int _bufferCapacity = DefaultBufferCapacity;
     private int _dispatchBatchSize;
     private int _dispatchScheduled;
+    private Func<IEnumerable<string>> _sensitiveValueProvider = static () => [];
+    private readonly string[] _privateRoots;
+
+    public UiLogService(IEnumerable<string>? privateRoots = null)
+    {
+        _privateRoots = (privateRoots ?? [])
+            .Where(static root => !string.IsNullOrWhiteSpace(root))
+            .Select(Path.GetFullPath)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
 
     public event Action<UiLogMessage>? LogReceived;
 
@@ -77,6 +89,9 @@ public sealed class UiLogService
         Push("INFO", enabled ? "Developer mode enabled: verbose diagnostics active." : "Developer mode disabled: verbose diagnostics inactive.");
     }
 
+    public void SetSensitiveValueProvider(Func<IEnumerable<string>> provider)
+        => _sensitiveValueProvider = provider ?? throw new ArgumentNullException(nameof(provider));
+
     public void Info(string message) => Push("INFO", message);
 
     public void Debug(string message)
@@ -93,7 +108,10 @@ public sealed class UiLogService
 
     private void Push(string level, string message)
     {
-        var log = new UiLogMessage(DateTimeOffset.UtcNow, level, message);
+        var log = new UiLogMessage(
+            DateTimeOffset.UtcNow,
+            level,
+            DiagnosticDataSanitizer.Sanitize(message, _sensitiveValueProvider(), _privateRoots));
         Action<UiLogMessage>? handlers;
         bool shouldScheduleBatchDispatch;
         var shouldDispatchImmediately = false;

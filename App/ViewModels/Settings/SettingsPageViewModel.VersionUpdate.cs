@@ -678,7 +678,7 @@ public sealed partial class SettingsPageViewModel
     {
         return status switch
         {
-            PackageResolutionStatus.WindowsManualUpdateRequired => "Windows 版目前暂未在 release 发布，请手动更新。",
+            PackageResolutionStatus.WindowsManualUpdateRequired => "Windows 版暂不支持应用内自动更新，请从发布页手动更新。",
             PackageResolutionStatus.MacOSManualInstallRequired => "macOS 安装镜像已下载，请打开 dmg 手动安装。",
             PackageResolutionStatus.LinuxPortableZipManualInstallRequired => "Linux 便携包已下载，请解压到新目录并启动其中的 AppImage。",
             PackageResolutionStatus.AppImageManualInstallRequired => "Linux AppImage 已下载，请手动替换或启动新的 AppImage。",

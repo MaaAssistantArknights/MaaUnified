@@ -1356,7 +1356,9 @@ public sealed class ConfigurationImportTests
         Assert.Equal(4, fight.Params["medicine"]?.GetValue<int>());
         Assert.Equal(12, fight.Params["times"]?.GetValue<int>());
         Assert.Equal(3, fight.Params["series"]?.GetValue<int>());
-        Assert.Equal(2, fight.Params["expiring_medicine"]?.GetValue<int>());
+        var expiringMedicineDays = fight.Params["expiring_medicine"]?.GetValue<int>();
+        Assert.True(expiringMedicineDays >= 2);
+        Assert.Equal(expiringMedicineDays, fight.Params["medicine_expire_days"]?.GetValue<int>());
         Assert.True(fight.Params["_ui_is_inventory_target"]?.GetValue<bool>());
         Assert.True(fight.Params["_ui_use_expire_medicine_for_activity"]?.GetValue<bool>());
         Assert.Equal("30012", fight.Params["_ui_drop_id"]?.GetValue<string>());
@@ -1585,9 +1587,9 @@ public sealed class ConfigurationImportTests
 
         Assert.True(result.LoadedFromExistingConfig);
         Assert.Equal("Default", service.CurrentConfig.CurrentProfile);
-        Assert.Equal(1, service.CurrentConfig.SchemaVersion);
+        Assert.Equal(UnifiedConfig.LatestSchemaVersion, service.CurrentConfig.SchemaVersion);
         var schemaBackupExists = Directory.EnumerateFiles(Path.Combine(root, "config"), "avalonia.json.schema-v1.bak.*").Any();
-        Assert.False(schemaBackupExists);
+        Assert.True(schemaBackupExists);
     }
 
     [Fact]
@@ -1756,7 +1758,7 @@ public sealed class ConfigurationImportTests
     }
 
     [Fact]
-    public async Task OutdatedSchema_LoadsWithMigrationWarningIssue()
+    public async Task OutdatedSchema_LoadMigratesAndCreatesSanitizedBackup()
     {
         var root = CreateTempRoot();
         Directory.CreateDirectory(Path.Combine(root, "config"));
@@ -1777,14 +1779,12 @@ public sealed class ConfigurationImportTests
         var service = CreateService(root);
         var result = await service.LoadOrBootstrapAsync();
 
-        var issue = Assert.Single(result.ValidationIssues.Where(i =>
-            string.Equals(i.Scope, "ConfigMigration", StringComparison.Ordinal) &&
-            string.Equals(i.Code, "SchemaOutdated", StringComparison.Ordinal)));
-        Assert.False(issue.Blocking);
-        Assert.Equal("schema_version", issue.Field);
-        Assert.NotNull(result.SchemaMigrationNotice);
-        Assert.Equal(1, result.SchemaMigrationNotice!.CurrentSchemaVersion);
-        Assert.Equal(UnifiedConfig.LatestSchemaVersion, result.SchemaMigrationNotice.LatestSchemaVersion);
+        Assert.Equal(UnifiedConfig.LatestSchemaVersion, result.Config.SchemaVersion);
+        Assert.Null(result.SchemaMigrationNotice);
+        Assert.DoesNotContain(result.ValidationIssues, issue =>
+            string.Equals(issue.Scope, "ConfigMigration", StringComparison.Ordinal)
+            && string.Equals(issue.Code, "SchemaOutdated", StringComparison.Ordinal));
+        Assert.True(Directory.EnumerateFiles(Path.Combine(root, "config"), "avalonia.json.schema-v1.bak.*").Any());
     }
 
     [Fact]

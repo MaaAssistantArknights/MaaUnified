@@ -100,7 +100,9 @@ public partial class App : Avalonia.Application
             Program.RecordStartupStage(
                 "FrameworkInit.RuntimeCreate.Begin",
                 $"executableBaseDir={AppContext.BaseDirectory}; runtimeBaseDir={runtimeBaseDirectory}");
-            Runtime = MAAUnifiedRuntimeFactory.Create(runtimeBaseDirectory);
+            Runtime = MAAUnifiedRuntimeFactory.Create(
+                runtimeBaseDirectory,
+                SensitiveStorageComposition.Create(runtimeBaseDirectory));
             Program.RecordStartupStage("FrameworkInit.RuntimeCreate.End", "MAAUnified runtime created.");
             ConfigureUiFontFamilyResource();
             ConfigureLegacyLocalizationResources();

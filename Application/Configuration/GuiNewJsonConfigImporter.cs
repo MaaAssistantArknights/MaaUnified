@@ -92,7 +92,7 @@ public sealed class GuiNewJsonConfigImporter : IConfigImporter
         catch (Exception ex)
         {
             AppendUnique(report.DamagedFiles, FileName);
-            report.Errors.Add($"Failed to import gui.new.json: {ex.Message}");
+            report.Errors.Add($"Failed to import gui.new.json (errorType={ex.GetType().Name}).");
         }
     }
 

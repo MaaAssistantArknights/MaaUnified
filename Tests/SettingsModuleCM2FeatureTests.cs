@@ -36,8 +36,8 @@ public sealed class SettingsModuleCM2FeatureTests
         Assert.Contains(archive.Entries, entry => entry.FullName == "debug/avalonia-ui-errors.log");
         Assert.Contains(archive.Entries, entry => entry.FullName == "debug/avalonia-ui-events.log");
         Assert.Contains(archive.Entries, entry => entry.FullName == "debug/avalonia-platform-events.log");
-        Assert.Contains(archive.Entries, entry => entry.FullName == "config/gui.new.json");
-        Assert.Contains(archive.Entries, entry => entry.FullName == "cache/images/sample.png");
+        Assert.DoesNotContain(archive.Entries, entry => entry.FullName == "config/gui.new.json");
+        Assert.DoesNotContain(archive.Entries, entry => entry.FullName == "cache/images/sample.png");
         Assert.Contains(archive.Entries, entry => entry.FullName == "resource/foo_custom.json");
     }
 

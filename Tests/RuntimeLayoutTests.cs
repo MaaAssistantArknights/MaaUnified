@@ -126,6 +126,110 @@ public sealed class RuntimeLayoutTests
     }
 
     [Fact]
+    public void IsLinuxPortablePackageLaunchInvalid_WhenMountedStandaloneAppImage_ReturnsFalse()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+
+        var originalAppDir = Environment.GetEnvironmentVariable("APPDIR");
+        var originalAppImage = Environment.GetEnvironmentVariable("APPIMAGE");
+        var root = Path.Combine(Path.GetTempPath(), "maa-unified-runtime-layout", Guid.NewGuid().ToString("N"));
+        var appDir = Path.Combine(root, ".mount_MAAUnified");
+        var appImagePath = Path.Combine(root, "standalone", "MAAUnified.AppImage");
+        var executableBaseDirectory = Path.Combine(appDir, "usr", "lib", "maaunified", "bin");
+
+        try
+        {
+            Directory.CreateDirectory(executableBaseDirectory);
+            Directory.CreateDirectory(Path.GetDirectoryName(appImagePath)!);
+            File.WriteAllText(appImagePath, "standalone-appimage");
+            Environment.SetEnvironmentVariable("APPDIR", appDir);
+            Environment.SetEnvironmentVariable("APPIMAGE", appImagePath);
+
+            var invalid = RuntimeLayout.IsLinuxPortablePackageLaunchInvalid(
+                executableBaseDirectory,
+                linuxAppImagePath: null,
+                out var packageRoot);
+
+            Assert.False(invalid);
+            Assert.Equal(string.Empty, packageRoot);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("APPDIR", originalAppDir);
+            Environment.SetEnvironmentVariable("APPIMAGE", originalAppImage);
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void ResolveRuntimeBaseDirectory_WhenMountedAppImageHasLegacyPortableRoot_PreservesConfigDatabaseAndXdgKeyLocations()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+
+        var originalAppDir = Environment.GetEnvironmentVariable("APPDIR");
+        var originalAppImage = Environment.GetEnvironmentVariable("APPIMAGE");
+        var originalXdgDataHome = Environment.GetEnvironmentVariable("XDG_DATA_HOME");
+        var root = Path.Combine(Path.GetTempPath(), "maa-unified-runtime-layout", Guid.NewGuid().ToString("N"));
+        var portableRoot = Path.Combine(root, "portable");
+        var appImagePath = Path.Combine(portableRoot, "MAAUnified.AppImage");
+        var appDir = Path.Combine(root, ".mount_MAAUnified");
+        var executableBaseDirectory = Path.Combine(appDir, "usr", "lib", "maaunified", "bin");
+        var xdgDataHome = Path.Combine(root, "xdg-data");
+        var legacyConfigPath = Path.Combine(portableRoot, "config", "avalonia.json");
+        var legacyDatabasePath = Path.Combine(portableRoot, "data", "sensitive-settings.db");
+        var xdgKeyPath = Path.Combine(xdgDataHome, "MAAUnified", "secure", "sqlcipher.key");
+
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(portableRoot, "bin"));
+            Directory.CreateDirectory(Path.Combine(portableRoot, "resource"));
+            Directory.CreateDirectory(Path.GetDirectoryName(legacyConfigPath)!);
+            Directory.CreateDirectory(Path.GetDirectoryName(legacyDatabasePath)!);
+            Directory.CreateDirectory(Path.GetDirectoryName(xdgKeyPath)!);
+            Directory.CreateDirectory(executableBaseDirectory);
+            File.WriteAllText(appImagePath, "launcher");
+            File.WriteAllText(Path.Combine(portableRoot, "bin", "MAAUnified"), "app");
+            File.WriteAllText(Path.Combine(portableRoot, "libMaaCore.so"), "core");
+            File.WriteAllText(legacyConfigPath, "legacy-config");
+            File.WriteAllText(legacyDatabasePath, "legacy-sqlcipher-db");
+            File.WriteAllText(xdgKeyPath, "existing-xdg-key");
+            Environment.SetEnvironmentVariable("APPDIR", appDir);
+            Environment.SetEnvironmentVariable("APPIMAGE", appImagePath);
+            Environment.SetEnvironmentVariable("XDG_DATA_HOME", xdgDataHome);
+
+            var resolved = RuntimeLayout.ResolveRuntimeBaseDirectory(executableBaseDirectory);
+
+            Assert.Equal(Path.GetFullPath(portableRoot), resolved);
+            Assert.False(RuntimeLayout.IsLinuxPortablePackageLaunchInvalid(
+                executableBaseDirectory,
+                linuxAppImagePath: null,
+                out _));
+            Assert.Equal("legacy-config", File.ReadAllText(Path.Combine(resolved, "config", "avalonia.json")));
+            Assert.Equal("legacy-sqlcipher-db", File.ReadAllText(Path.Combine(resolved, "data", "sensitive-settings.db")));
+            Assert.Equal("existing-xdg-key", File.ReadAllText(xdgKeyPath));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("APPDIR", originalAppDir);
+            Environment.SetEnvironmentVariable("APPIMAGE", originalAppImage);
+            Environment.SetEnvironmentVariable("XDG_DATA_HOME", originalXdgDataHome);
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public void IsLinuxPortablePackageLaunchInvalid_WhenResourceIsMissing_ReturnsTrue()
     {
         if (!OperatingSystem.IsLinux())

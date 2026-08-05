@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Net;
 using System.Text.Json.Nodes;
 using Avalonia.Controls;
 using Avalonia.Threading;
@@ -492,6 +493,78 @@ public sealed class SettingsGuiBackgroundFeatureTests
         Assert.Contains("CDK", vm.VersionUpdateStatusMessage, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Theory]
+    [InlineData("check-http")]
+    [InlineData("check-code")]
+    [InlineData("update-http")]
+    [InlineData("update-code")]
+    public async Task ManualMirrorChyanFailure_DoesNotRecordResponseSecrets(string failureKind)
+    {
+        const string sentinel = "ROUND8-VM-SECRET-+/=SENTINEL";
+        var encodedSentinel = Uri.EscapeDataString(sentinel);
+        var root = Path.Combine(Path.GetTempPath(), "maa-unified-tests", Guid.NewGuid().ToString("N"));
+        var requestCount = 0;
+        using var httpClient = new HttpClient(new CallbackHttpMessageHandler(_ =>
+        {
+            requestCount++;
+            if (failureKind.StartsWith("update", StringComparison.Ordinal) && requestCount == 1)
+            {
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("""
+                        {
+                          "code": 0,
+                          "data": {
+                            "version_name": "2099-01-01",
+                            "url": "https://download.example.com/resource.zip"
+                          }
+                        }
+                        """),
+                };
+            }
+
+            if (failureKind.EndsWith("http", StringComparison.Ordinal))
+            {
+                return new HttpResponseMessage(HttpStatusCode.BadGateway)
+                {
+                    Content = new StringContent($"response={sentinel}; encoded={encodedSentinel}"),
+                };
+            }
+
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent($"{{\"code\":403,\"msg\":\"{sentinel} {encodedSentinel}\"}}"),
+            };
+        }));
+        await using var fixture = await RuntimeFixture.CreateAsync(
+            root: root,
+            versionUpdateFeatureServiceFactory: (config, diagnostics, log) => new VersionUpdateFeatureService(
+                config,
+                diagnosticsService: diagnostics,
+                uiLogService: log,
+                runtimeBaseDirectory: root,
+                resourceHttpClient: httpClient));
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        vm.VersionUpdateResourceSource = "MirrorChyan";
+        vm.VersionUpdateMirrorChyanCdk = "test-cdk";
+
+        await vm.ManualUpdateResourceAsync();
+
+        var uiLogs = string.Join('\n', fixture.Runtime.LogService.Snapshot.Select(log => log.Message));
+        var diagnosticLogs = File.Exists(fixture.Diagnostics.ErrorLogPath)
+            ? await File.ReadAllTextAsync(fixture.Diagnostics.ErrorLogPath)
+            : string.Empty;
+        Assert.DoesNotContain(sentinel, uiLogs, StringComparison.Ordinal);
+        Assert.DoesNotContain(encodedSentinel, uiLogs, StringComparison.Ordinal);
+        Assert.DoesNotContain(sentinel, diagnosticLogs, StringComparison.Ordinal);
+        Assert.DoesNotContain(encodedSentinel, diagnosticLogs, StringComparison.Ordinal);
+        Assert.Contains(
+            failureKind.EndsWith("http", StringComparison.Ordinal) ? "status=502" : "code=403",
+            diagnosticLogs,
+            StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task ManualUpdateResource_WhenAlreadyLatest_ShouldSkipDownload()
     {
@@ -970,7 +1043,9 @@ public sealed class SettingsGuiBackgroundFeatureTests
             ITrayService? trayService = null,
             IAutostartService? autostartService = null,
             IUiLanguageCoordinator? uiLanguageCoordinator = null,
-            IVersionUpdateFeatureService? versionUpdateFeatureService = null)
+            IVersionUpdateFeatureService? versionUpdateFeatureService = null,
+            Func<UnifiedConfigurationService, UiDiagnosticsService, UiLogService, IVersionUpdateFeatureService>?
+                versionUpdateFeatureServiceFactory = null)
         {
             root ??= Path.Combine(Path.GetTempPath(), "maa-unified-tests", Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(Path.Combine(root, "config"));
@@ -1021,7 +1096,9 @@ public sealed class SettingsGuiBackgroundFeatureTests
                 OverlayFeatureService = new OverlayFeatureService(capability),
                 NotificationProviderFeatureService = new NotificationProviderFeatureService(),
                 SettingsFeatureService = new SettingsFeatureService(config, capability, diagnostics),
-                VersionUpdateFeatureService = versionUpdateFeatureService ?? new VersionUpdateFeatureService(config, runtimeBaseDirectory: root),
+                VersionUpdateFeatureService = versionUpdateFeatureService
+                    ?? versionUpdateFeatureServiceFactory?.Invoke(config, diagnostics, log)
+                    ?? new VersionUpdateFeatureService(config, runtimeBaseDirectory: root),
                 UiLanguageCoordinator = uiLanguageCoordinator ?? new UiLanguageCoordinator(config),
                 DialogFeatureService = new DialogFeatureService(diagnostics),
                 PostActionFeatureService = new PostActionFeatureService(
@@ -1196,6 +1273,17 @@ public sealed class SettingsGuiBackgroundFeatureTests
             CurrentLanguage = normalized;
             LanguageChanged?.Invoke(this, new UiLanguageChangedEventArgs(previous, normalized));
             return Task.FromResult(UiOperationResult<string>.Ok(normalized, $"Language switched to {normalized}."));
+        }
+    }
+
+    private sealed class CallbackHttpMessageHandler(Func<HttpRequestMessage, HttpResponseMessage> handler) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(handler(request));
         }
     }
 

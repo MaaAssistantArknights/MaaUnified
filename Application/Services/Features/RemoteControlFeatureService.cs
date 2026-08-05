@@ -5,6 +5,7 @@ using System.Text.Json.Nodes;
 using MAAUnified.Application.Configuration;
 using MAAUnified.Application.Models;
 using MAAUnified.Application.Orchestration;
+using MAAUnified.Application.Security;
 using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.RemoteControl;
 using MAAUnified.Compat.Constants;
@@ -118,6 +119,12 @@ public sealed class RemoteControlFeatureService : IRemoteControlFeatureService, 
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        if (!CanUseSensitiveSettings)
+        {
+            return UiOperationResult<RemoteControlConnectivityResult>.Fail(
+                UiErrorCode.RemoteControlUnsupported,
+                "Remote control is disabled while sensitive storage is unavailable.");
+        }
 
         var validationError = ValidateRequest(request, out var getTaskUri, out var reportUri);
         if (validationError is not null)
@@ -127,8 +134,8 @@ public sealed class RemoteControlFeatureService : IRemoteControlFeatureService, 
                 validationError);
         }
 
-        var getTaskProbe = await _probeAsync("GetTask", getTaskUri!, cancellationToken);
-        var reportProbe = await _probeAsync("Report", reportUri!, cancellationToken);
+        var getTaskProbe = NormalizeProbe("GetTask", await _probeAsync("GetTask", getTaskUri!, cancellationToken));
+        var reportProbe = NormalizeProbe("Report", await _probeAsync("Report", reportUri!, cancellationToken));
         var result = new RemoteControlConnectivityResult(request.PollIntervalMs, getTaskProbe, reportProbe);
 
         if (getTaskProbe.Success && reportProbe.Success)
@@ -146,7 +153,21 @@ public sealed class RemoteControlFeatureService : IRemoteControlFeatureService, 
         return UiOperationResult<RemoteControlConnectivityResult>.Fail(
             errorCode,
             $"Remote control connectivity failed. GetTask={getTaskProbe.Message}; Report={reportProbe.Message}",
-            JsonSerializer.Serialize(result));
+            $"operation={firstFailure.Name}; status={firstFailure.StatusCode?.ToString() ?? "none"}; errorCode={errorCode}");
+    }
+
+    private static EndpointProbeResult NormalizeProbe(string operation, EndpointProbeResult probe)
+    {
+        var message = probe.StatusCode is int statusCode
+            ? $"HTTP {statusCode}"
+            : probe.Success ? "completed" : "network failure";
+        return new EndpointProbeResult(
+            operation,
+            operation,
+            probe.Success,
+            probe.StatusCode,
+            message,
+            probe.ErrorCode);
     }
 
     private bool HasPollingDependencies =>
@@ -197,7 +218,7 @@ public sealed class RemoteControlFeatureService : IRemoteControlFeatureService, 
                 }
                 catch (Exception ex)
                 {
-                    _logService?.Warn($"Remote control polling iteration failed: {ex.Message}");
+                    _logService?.Warn($"Remote control polling iteration failed: errorType={ex.GetType().Name}.");
                 }
 
                 await DelayAsync(snapshot.PollIntervalMs, cancellationToken);
@@ -208,7 +229,7 @@ public sealed class RemoteControlFeatureService : IRemoteControlFeatureService, 
         }
         catch (Exception ex)
         {
-            _logService?.Error($"Remote control polling crashed: {ex.Message}");
+            _logService?.Error($"Remote control polling crashed: errorType={ex.GetType().Name}.");
         }
         finally
         {
@@ -243,8 +264,7 @@ public sealed class RemoteControlFeatureService : IRemoteControlFeatureService, 
 
         if (!response.IsSuccessStatusCode)
         {
-            var body = await SafeReadBodyAsync(response, cancellationToken);
-            throw new HttpRequestException($"GetTask request failed with HTTP {(int)response.StatusCode}: {body}");
+            throw new HttpRequestException($"GetTask request failed with HTTP {(int)response.StatusCode}.");
         }
 
         var payloadText = await SafeReadBodyAsync(response, cancellationToken);
@@ -297,14 +317,13 @@ public sealed class RemoteControlFeatureService : IRemoteControlFeatureService, 
         using var response = await HttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
-            var body = await SafeReadBodyAsync(response, cancellationToken);
-            _logService?.Warn($"Remote control report failed: HTTP {(int)response.StatusCode}; {body}");
+            _logService?.Warn($"Remote control report failed: HTTP {(int)response.StatusCode}.");
         }
     }
 
     private RemoteControlPollingSnapshot ReadSnapshot()
     {
-        if (_configService is null)
+        if (_configService is null || !CanUseSensitiveSettings)
         {
             return new RemoteControlPollingSnapshot(null, null, Environment.UserName, Environment.MachineName, 5000);
         }
@@ -317,6 +336,9 @@ public sealed class RemoteControlFeatureService : IRemoteControlFeatureService, 
         var pollIntervalMs = ReadInt(config, ConfigurationKeys.RemoteControlPollIntervalMs, 5000);
         return new RemoteControlPollingSnapshot(getTaskEndpoint, reportEndpoint, userIdentity, deviceIdentity, pollIntervalMs);
     }
+
+    private bool CanUseSensitiveSettings => _configService?.SensitiveStorageState
+        is not (SensitiveStorageState.Unavailable or SensitiveStorageState.Corrupt);
 
     private static Uri? ReadUri(UnifiedConfig config, string key)
     {
@@ -335,7 +357,10 @@ public sealed class RemoteControlFeatureService : IRemoteControlFeatureService, 
 
     private static string ReadString(UnifiedConfig config, string key, string fallback)
     {
-        if (config.GlobalValues.TryGetValue(key, out var node) && node is not null)
+        if (!string.IsNullOrWhiteSpace(config.CurrentProfile)
+            && config.Profiles.TryGetValue(config.CurrentProfile, out var profile)
+            && profile.Values.TryGetValue(key, out var node)
+            && node is not null)
         {
             var raw = node.ToString();
             if (!string.IsNullOrWhiteSpace(raw))
@@ -349,7 +374,10 @@ public sealed class RemoteControlFeatureService : IRemoteControlFeatureService, 
 
     private static int ReadInt(UnifiedConfig config, string key, int fallback)
     {
-        if (!config.GlobalValues.TryGetValue(key, out var node) || node is null)
+        if (string.IsNullOrWhiteSpace(config.CurrentProfile)
+            || !config.Profiles.TryGetValue(config.CurrentProfile, out var profile)
+            || !profile.Values.TryGetValue(key, out var node)
+            || node is null)
         {
             return fallback;
         }
@@ -373,12 +401,12 @@ public sealed class RemoteControlFeatureService : IRemoteControlFeatureService, 
 
         if (!TryParseHttpUri(request.GetTaskEndpoint, out getTaskUri))
         {
-            return $"GetTask endpoint is invalid: `{request.GetTaskEndpoint}`";
+            return "GetTask endpoint is invalid.";
         }
 
         if (!TryParseHttpUri(request.ReportEndpoint, out reportUri))
         {
-            return $"Report endpoint is invalid: `{request.ReportEndpoint}`";
+            return "Report endpoint is invalid.";
         }
 
         if (request.PollIntervalMs < 500 || request.PollIntervalMs > 60000)
@@ -551,18 +579,18 @@ public sealed class RemoteControlFeatureService : IRemoteControlFeatureService, 
             var statusCode = (int)response.StatusCode;
             if (response.IsSuccessStatusCode)
             {
-                return new EndpointProbeResult(name, endpoint.ToString(), true, statusCode, $"HTTP {statusCode}");
+                return new EndpointProbeResult(name, name, true, statusCode, $"HTTP {statusCode}");
             }
 
-            return new EndpointProbeResult(name, endpoint.ToString(), false, statusCode, $"HTTP {statusCode}", UiErrorCode.RemoteControlNetworkFailure);
+            return new EndpointProbeResult(name, name, false, statusCode, $"HTTP {statusCode}", UiErrorCode.RemoteControlNetworkFailure);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            return new EndpointProbeResult(name, endpoint.ToString(), false, null, "Request timed out", UiErrorCode.RemoteControlNetworkFailure);
+            return new EndpointProbeResult(name, name, false, null, "Request timed out", UiErrorCode.RemoteControlNetworkFailure);
         }
-        catch (HttpRequestException ex)
+        catch (HttpRequestException)
         {
-            return new EndpointProbeResult(name, endpoint.ToString(), false, null, $"Network error: {ex.Message}", UiErrorCode.RemoteControlNetworkFailure);
+            return new EndpointProbeResult(name, name, false, null, "Network failure", UiErrorCode.RemoteControlNetworkFailure);
         }
     }
 }

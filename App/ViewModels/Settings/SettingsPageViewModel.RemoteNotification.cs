@@ -89,6 +89,55 @@ public sealed partial class SettingsPageViewModel
 
     public ObservableCollection<NotificationProviderSelectionItem> NotificationProviderSelections { get; } = [];
 
+    public async Task RetrySecureStorageAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await Runtime.ConfigurationService.RetrySecureStorageAsync(cancellationToken);
+            OnPropertyChanged(nameof(CanUseSensitiveSettings));
+            OnPropertyChanged(nameof(HasSensitiveStorageWarning));
+            OnPropertyChanged(nameof(CanRetrySecureStorage));
+            OnPropertyChanged(nameof(SensitiveStorageStatusText));
+        }
+        catch (Exception ex)
+        {
+            Runtime.LogService.Warn($"Sensitive storage retry failed: errorType={ex.GetType().Name}.");
+        }
+    }
+
+    public async Task ConfirmDiscardUnreadableSensitiveValuesAsync(CancellationToken cancellationToken = default)
+    {
+        if (!CanDiscardUnreadableSensitiveValues)
+        {
+            return;
+        }
+
+        var chrome = CreateSettingsDialogChrome(texts => new DialogChromeSnapshot(
+            title: "Discard unreadable sensitive value?",
+            confirmText: "Discard and re-enter",
+            cancelText: "Keep original config"));
+        var result = await _dialogService.ShowWarningConfirmAsync(
+            new WarningConfirmDialogRequest(
+                Title: "Discard unreadable sensitive value?",
+                Message: "The encrypted legacy value cannot be recovered on this system. Confirming permanently discards that unreadable value on the next save and enables the affected fields so you can re-enter it. Until then, the original config file remains unchanged.",
+                ConfirmText: "Discard and re-enter",
+                CancelText: "Keep original config",
+                Language: Language,
+                Chrome: chrome),
+            "Settings.SensitiveStorage.DiscardUnreadable.Dialog",
+            cancellationToken);
+        if (result.Return != DialogReturnSemantic.Confirm)
+        {
+            return;
+        }
+
+        await Runtime.ConfigurationService.ConfirmDiscardUnreadableLegacySensitiveValuesAsync(cancellationToken);
+        OnPropertyChanged(nameof(CanUseSensitiveSettings));
+        OnPropertyChanged(nameof(HasSensitiveStorageWarning));
+        OnPropertyChanged(nameof(CanDiscardUnreadableSensitiveValues));
+        OnPropertyChanged(nameof(SensitiveStorageStatusText));
+    }
+
     public async Task SaveRemoteControlAsync(CancellationToken cancellationToken = default)
     {
         await RunSettingsSaveTargetAsync(
@@ -713,9 +762,8 @@ public sealed partial class SettingsPageViewModel
                 error = string.Format(
                     RootTexts.GetOrDefault(
                         "Settings.ExternalNotification.Error.ParameterFormatLine",
-                        "Invalid parameter format (line {0}). Expected key=value: `{1}`"),
-                    i + 1,
-                    line);
+                        "Invalid parameter line {0}; expected key=value"),
+                    i + 1);
                 return false;
             }
 
@@ -726,7 +774,7 @@ public sealed partial class SettingsPageViewModel
                 error = string.Format(
                     RootTexts.GetOrDefault(
                         "Settings.ExternalNotification.Error.ParameterKeyEmpty",
-                        "Invalid parameter format (line {0}). Key cannot be empty."),
+                        "Invalid parameter line {0}; expected key=value"),
                     i + 1);
                 return false;
             }

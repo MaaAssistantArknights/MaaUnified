@@ -1,8 +1,8 @@
 using System.Formats.Tar;
 using System.IO.Compression;
 using System.Linq;
-using System.Text.Json;
 using System.Text.Json.Nodes;
+using MAAUnified.Application.Configuration;
 using MAAUnified.Application.Models;
 using MAAUnified.Compat.Constants;
 
@@ -26,20 +26,19 @@ public sealed record PendingAppUpdateApplyResult(
 
 public static class PendingAppUpdateService
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new()
-    {
-        WriteIndented = true,
-        PropertyNameCaseInsensitive = true,
-    };
-
     public static PendingAppUpdateInfo? ResolvePendingUpdate(string baseDirectory)
     {
-        var config = TryLoadConfig(baseDirectory);
+        var config = TryLoadConfig(MAAUnifiedRuntimeFactory.CreateConfigStore(baseDirectory));
         if (config is null)
         {
             return null;
         }
 
+        return ResolvePendingUpdate(baseDirectory, config);
+    }
+
+    private static PendingAppUpdateInfo? ResolvePendingUpdate(string baseDirectory, UnifiedConfig config)
+    {
         var configuredPackagePath = ReadGlobalString(config, ConfigurationKeys.VersionUpdatePackage);
         if (string.IsNullOrWhiteSpace(configuredPackagePath))
         {
@@ -55,8 +54,28 @@ public static class PendingAppUpdateService
     }
 
     public static PendingAppUpdateApplyResult TryApplyPendingUpdatePackage(string baseDirectory)
+        => TryApplyPendingUpdatePackage(baseDirectory, MAAUnifiedRuntimeFactory.CreateConfigStore(baseDirectory));
+
+    internal static PendingAppUpdateApplyResult TryApplyPendingUpdatePackage(
+        string baseDirectory,
+        IUnifiedConfigStore configStore)
     {
-        var config = TryLoadConfig(baseDirectory);
+        var commitLock = configStore.AcquireCommitLockAsync().AsTask().GetAwaiter().GetResult();
+        try
+        {
+            return TryApplyPendingUpdatePackageCore(baseDirectory, configStore);
+        }
+        finally
+        {
+            commitLock.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        }
+    }
+
+    private static PendingAppUpdateApplyResult TryApplyPendingUpdatePackageCore(
+        string baseDirectory,
+        IUnifiedConfigStore configStore)
+    {
+        var config = TryLoadConfig(configStore);
         if (config is null)
         {
             return new PendingAppUpdateApplyResult(
@@ -64,7 +83,7 @@ public static class PendingAppUpdateService
                 "No Avalonia config was found.");
         }
 
-        var pendingUpdate = ResolvePendingUpdate(baseDirectory);
+        var pendingUpdate = ResolvePendingUpdate(baseDirectory, config);
         if (pendingUpdate is null)
         {
             return new PendingAppUpdateApplyResult(
@@ -75,7 +94,7 @@ public static class PendingAppUpdateService
         if (!File.Exists(pendingUpdate.PackagePath))
         {
             ClearPendingPackageState(config);
-            SaveConfig(baseDirectory, config);
+            SaveConfig(configStore, config);
             return new PendingAppUpdateApplyResult(
                 PendingAppUpdateStatus.Failed,
                 $"Pending software update package is missing: {pendingUpdate.PackagePath}",
@@ -85,7 +104,7 @@ public static class PendingAppUpdateService
         if (IsManualInstallPackage(pendingUpdate.PackagePath))
         {
             ClearPendingPackageState(config);
-            SaveConfig(baseDirectory, config);
+            SaveConfig(configStore, config);
             return new PendingAppUpdateApplyResult(
                 PendingAppUpdateStatus.Failed,
                 $"Pending manual install packages cannot be applied automatically: {pendingUpdate.PackagePath}",
@@ -171,7 +190,7 @@ public static class PendingAppUpdateService
 
             ClearPendingPackageState(config);
             config.GlobalValues[ConfigurationKeys.VersionUpdateIsFirstBoot] = JsonValue.Create(bool.TrueString);
-            SaveConfig(baseDirectory, config);
+            SaveConfig(configStore, config);
 
             return new PendingAppUpdateApplyResult(
                 PendingAppUpdateStatus.Applied,
@@ -182,7 +201,7 @@ public static class PendingAppUpdateService
         {
             TryDeleteFile(pendingUpdate.PackagePath);
             ClearPendingPackageState(config);
-            SaveConfig(baseDirectory, config);
+            SaveConfig(configStore, config);
             return new PendingAppUpdateApplyResult(
                 PendingAppUpdateStatus.Failed,
                 $"Pending software update package is invalid: {pendingUpdate.PackagePath}",
@@ -201,17 +220,11 @@ public static class PendingAppUpdateService
         }
     }
 
-    private static UnifiedConfig? TryLoadConfig(string baseDirectory)
+    private static UnifiedConfig? TryLoadConfig(IUnifiedConfigStore configStore)
     {
-        var configPath = Path.Combine(baseDirectory, "config", "avalonia.json");
-        if (!File.Exists(configPath))
-        {
-            return null;
-        }
-
         try
         {
-            return JsonSerializer.Deserialize<UnifiedConfig>(File.ReadAllText(configPath), SerializerOptions);
+            return configStore.LoadAsync().GetAwaiter().GetResult();
         }
         catch
         {
@@ -219,13 +232,8 @@ public static class PendingAppUpdateService
         }
     }
 
-    private static void SaveConfig(string baseDirectory, UnifiedConfig config)
-    {
-        var configDirectory = Path.Combine(baseDirectory, "config");
-        var configPath = Path.Combine(configDirectory, "avalonia.json");
-        Directory.CreateDirectory(configDirectory);
-        File.WriteAllText(configPath, JsonSerializer.Serialize(config, SerializerOptions));
-    }
+    private static void SaveConfig(IUnifiedConfigStore configStore, UnifiedConfig config)
+        => configStore.SaveAsync(config).GetAwaiter().GetResult();
 
     private static string ReadGlobalString(UnifiedConfig config, string key)
     {

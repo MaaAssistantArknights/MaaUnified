@@ -14,6 +14,7 @@ using MAAUnified.App.Services;
 using MAAUnified.App.ViewModels.Infrastructure;
 using MAAUnified.Application.Configuration;
 using MAAUnified.Application.Models;
+using MAAUnified.Application.Security;
 using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Localization;
 using MAAUnified.Compat.Constants;
@@ -23,7 +24,7 @@ using MAAUnified.Platform;
 
 namespace MAAUnified.App.ViewModels.Settings;
 
-public sealed partial class SettingsPageViewModel : PageViewModelBase
+public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposable
 {
     private const string ThemeModeKey = "Theme.Mode";
     private const string DefaultTheme = "Light";
@@ -449,6 +450,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
     private Task _pendingUnifiedLanguageApplyTask = Task.CompletedTask;
     private int _blockingOperationOverlayDepth;
     private bool _isBlockingOperationOverlayVisible;
+    private bool _disposed;
 
     public SettingsPageViewModel(
         MAAUnifiedRuntime runtime,
@@ -471,6 +473,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
             ? timeout
             : DefaultAboutAnnouncementTimeout;
         _uiLanguageCoordinator.LanguageChanged += OnUnifiedLanguageChanged;
+        runtime.ConfigurationService.SensitiveStorageStateChanged += HandleSensitiveStorageStateChanged;
         _versionUpdateSchedulerTimer.Tick += OnVersionUpdateSchedulerTick;
         RootTexts = new RootLocalizationTextMap("Root.Localization.Settings");
         RootTexts.FallbackReported += info => _localizationFallbackReporter?.Invoke(info);
@@ -506,6 +509,49 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         SelectedSection = Sections[0];
         PropertyChanged += OnSettingsPropertyChanged;
         ConnectionGameSharedState.PropertyChanged += OnConnectionGameSharedStateChanged;
+    }
+
+    private void HandleSensitiveStorageStateChanged()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        if (!Dispatcher.UIThread.CheckAccess())
+        {
+            Dispatcher.UIThread.Post(NotifySensitiveStorageStateChanged);
+            return;
+        }
+
+        NotifySensitiveStorageStateChanged();
+    }
+
+    private void NotifySensitiveStorageStateChanged()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        OnPropertyChanged(nameof(CanUseSensitiveSettings));
+        OnPropertyChanged(nameof(HasSensitiveStorageWarning));
+        OnPropertyChanged(nameof(CanRetrySecureStorage));
+        OnPropertyChanged(nameof(CanDiscardUnreadableSensitiveValues));
+        OnPropertyChanged(nameof(SensitiveStorageStatusText));
+        OnPropertyChanged(nameof(CanEditExternalNotification));
+        OnPropertyChanged(nameof(CanEditExternalNotificationDetails));
+    }
+
+    public void Dispose()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+        Runtime.ConfigurationService.SensitiveStorageStateChanged -= HandleSensitiveStorageStateChanged;
     }
 
     public RootLocalizationTextMap RootTexts { get; }
@@ -1042,6 +1088,39 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
 
     public bool CanUseDeveloperMode => global::MAAUnified.Platform.MaaUnifiedBuildFlavor.ExposesDeveloperTools;
 
+    public bool CanUseSensitiveSettings => Runtime.ConfigurationService.SensitiveStorageState
+        is SensitiveStorageState.Uninitialized or SensitiveStorageState.Available or SensitiveStorageState.PlaintextWarning;
+
+    public bool HasSensitiveStorageWarning => Runtime.ConfigurationService.SensitiveStorageState
+        is SensitiveStorageState.PlaintextWarning or SensitiveStorageState.Unavailable or SensitiveStorageState.Corrupt;
+
+    public bool CanRetrySecureStorage
+        => Runtime.ConfigurationService.SensitiveStorageState == SensitiveStorageState.PlaintextWarning
+           || (Runtime.ConfigurationService.SensitiveStorageState == SensitiveStorageState.Unavailable
+               && Runtime.ConfigurationService.CurrentConfig.SensitiveStorage.Backend == SensitiveStorageBackendKind.Uninitialized
+               && Runtime.ConfigurationService.CanRetryInitialSensitiveStorageSelection
+               && !CanDiscardUnreadableSensitiveValues);
+
+    public bool CanDiscardUnreadableSensitiveValues => Runtime.ConfigurationService.HasUnreadableLegacySensitiveValuesPending;
+
+    public string SensitiveStorageStatusText
+    {
+        get
+        {
+            var metadata = Runtime.ConfigurationService.CurrentConfig.SensitiveStorage;
+            return Runtime.ConfigurationService.SensitiveStorageState switch
+            {
+                SensitiveStorageState.PlaintextWarning =>
+                    $"Sensitive storage: {metadata.Backend}. Plaintext mode remains active; copying the configuration directory can expose sensitive settings.",
+                SensitiveStorageState.Unavailable or SensitiveStorageState.Corrupt =>
+                    CanDiscardUnreadableSensitiveValues
+                        ? "A legacy encrypted sensitive value cannot be decrypted. The original config is preserved until you confirm discarding it and re-enter the value."
+                        : $"Sensitive storage: {metadata.Backend}. Unavailable ({Runtime.ConfigurationService.SensitiveStorageErrorCode}); sensitive operations are disabled.",
+                _ => $"Sensitive storage: {metadata.Backend}.",
+            };
+        }
+    }
+
     public bool CanOpenRuntimeLogWindow => true;
 
     public bool CanUseIssueReportMaintenanceTools => true;
@@ -1391,7 +1470,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         set => SetProperty(ref _externalNotificationEnableDetails, CanEditExternalNotificationDetails && value);
     }
 
-    public bool CanEditExternalNotification => ExternalNotificationEnabled;
+    public bool CanEditExternalNotification => ExternalNotificationEnabled && CanUseSensitiveSettings;
 
     public bool CanSelectExternalNotificationProvider => NotificationProviderSelections.Count > 0;
 
@@ -3511,6 +3590,10 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
             }
 
             RestoreExternalNotificationStatusSummaryIfIdle();
+            OnPropertyChanged(nameof(CanUseSensitiveSettings));
+            OnPropertyChanged(nameof(HasSensitiveStorageWarning));
+            OnPropertyChanged(nameof(CanRetrySecureStorage));
+            OnPropertyChanged(nameof(SensitiveStorageStatusText));
             await RecordEventAsync("Settings", "Settings page initialized.", cancellationToken);
             initialized = true;
         }
@@ -4067,7 +4150,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
                 return;
             }
 
-            var currentConfig = Runtime.ConfigurationService.CurrentConfig;
+            var currentConfig = CloneConfigForImport(Runtime.ConfigurationService.CurrentConfig);
             var existingNames = new HashSet<string>(currentConfig.Profiles.Keys, StringComparer.OrdinalIgnoreCase);
             var importedCount = 0;
             var renamedCount = 0;
@@ -4108,21 +4191,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
                 currentConfig.CurrentProfile = currentConfig.Profiles.Keys.First();
             }
 
-            var saved = await ConfigurationSaveTracker.Instance.RunTrackedAsync(
-                "Settings.ConfigurationManager.Import",
-                LocalizeSettingsText("Settings.ConfigurationManager.Title", "配置管理"),
-                "Settings.ConfigurationManager.Import.Save",
-                Runtime.DiagnosticsService,
-                async ct =>
-                {
-                    await Runtime.ConfigurationService.SaveAsync(ct);
-                    return true;
-                },
-                cancellationToken);
-            if (!saved)
-            {
-                return;
-            }
+            await Runtime.ConfigurationService.SaveReplacementAsync(currentConfig, cancellationToken);
 
             var importSuccessMessage = renamedCount > 0
                 ? FormatSettingsText(
@@ -5367,13 +5436,27 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
         Func<CancellationToken, Task> saveAsync,
         CancellationToken cancellationToken)
     {
-        return await ConfigurationSaveTracker.Instance.RunTrackedAsync(
-            scope,
-            ResolveSettingsSaveDisplayName(scope),
-            scope,
-            Runtime.DiagnosticsService,
-            CreateSettingsSaveRetry(scope, saveAsync),
-            cancellationToken);
+        var previousSensitiveStorageState = Runtime.ConfigurationService.SensitiveStorageState;
+        try
+        {
+            return await ConfigurationSaveTracker.Instance.RunTrackedAsync(
+                scope,
+                ResolveSettingsSaveDisplayName(scope),
+                scope,
+                Runtime.DiagnosticsService,
+                CreateSettingsSaveRetry(scope, saveAsync),
+                cancellationToken);
+        }
+        finally
+        {
+            if (Runtime.ConfigurationService.SensitiveStorageState != previousSensitiveStorageState)
+            {
+                OnPropertyChanged(nameof(CanUseSensitiveSettings));
+                OnPropertyChanged(nameof(HasSensitiveStorageWarning));
+                OnPropertyChanged(nameof(CanRetrySecureStorage));
+                OnPropertyChanged(nameof(SensitiveStorageStatusText));
+            }
+        }
     }
 
     private Func<CancellationToken, Task<bool>> CreateSettingsSaveRetry(
@@ -6219,6 +6302,8 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
 
     private static async Task WriteConfigFileAsync(UnifiedConfig config, string filePath, CancellationToken cancellationToken)
     {
+        _ = SensitiveSettingKeyRegistry.ExtractAndRemove(config, "configuration-export", revision: 1);
+
         var directory = Path.GetDirectoryName(filePath);
         if (!string.IsNullOrWhiteSpace(directory))
         {
@@ -6272,6 +6357,19 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
             GlobalValues = CloneJsonNodeMap(source.GlobalValues),
             Migration = CloneMigration(source.Migration),
         };
+    }
+
+    private static UnifiedConfig CloneConfigForImport(UnifiedConfig source)
+    {
+        var clone = CloneConfig(source);
+        clone.SensitiveStorage = new SensitiveStorageMetadata
+        {
+            FormatVersion = source.SensitiveStorage.FormatVersion,
+            Backend = source.SensitiveStorage.Backend,
+            StoreId = source.SensitiveStorage.StoreId,
+            Revision = source.SensitiveStorage.Revision,
+        };
+        return clone;
     }
 
     private static UnifiedProfile CloneProfile(UnifiedProfile source)

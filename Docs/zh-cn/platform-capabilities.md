@@ -21,7 +21,7 @@ macOS 发布包优先使用 Developer ID 签名和 Apple notarization。签名�
 
 ## 软件更新
 
-海外源/GitHub 软件更新代码支持 Windows、Linux、macOS 的 MAAUnified 发布包；当前实际发布 Linux 包。Linux 桌面便携 `.zip` 会下载到 `update-packages/`，并在重启后应用；应用时保留 `config/`、`data/`、`cache/`、`debug/` 等用户目录。Beta 通道和 Stable 通道都发布 MAAUnified Linux 包。Windows `.zip` 和 macOS `.dmg` 的更新处理保留在代码中，但对应包暂不上传到 release。
+海外源/GitHub 软件更新代码支持 Windows、Linux、macOS 的 MAAUnified 发布信息。Linux 桌面便携 `.zip` 会下载到 `update-packages/`，并在重启后应用；应用时保留 `config/`、`data/`、`cache/`、`debug/` 等用户目录。Windows、Linux 和 macOS 均发布 alpha/beta MAAUnified 包；Windows `.zip` 当前只提示用户从发布页手动更新，Linux `.zip` 支持应用内更新，macOS `.dmg` 进入对应的平台安装流程。
 
 Mirror酱目前仅作为资源更新源使用。选择 Mirror酱检查软件更新时，程序会提示 MAAUnified 暂未支持 Mirror酱软件更新，并引导切换到海外源/GitHub。
 ## 托盘与通知

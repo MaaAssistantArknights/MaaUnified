@@ -355,7 +355,9 @@ public static class RuntimeLayout
         }
 
         var packagedRuntimeBaseDirectory = ResolvePackagedRuntimeBaseDirectory(normalized);
-        if (!PathsEqual(packagedRuntimeBaseDirectory, appImageDirectory))
+        if (!PathsEqual(packagedRuntimeBaseDirectory, appImageDirectory)
+            && (!IsRunningFromLinuxAppImageMount(normalized)
+                || !IsLinuxPortablePackageRoot(appImageDirectory)))
         {
             return false;
         }

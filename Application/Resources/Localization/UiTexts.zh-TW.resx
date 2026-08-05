@@ -1937,10 +1937,10 @@
     <value>請先至少啟用一個通知服務，再驗證參數或發送測試通知。</value>
   </data>
   <data name="Settings.ExternalNotification.Error.ParameterFormatLine" xml:space="preserve">
-    <value>參數格式錯誤（第 {0} 行），應為 key=value：`{1}`</value>
+    <value>參數格式錯誤（第 {0} 行），應為 key=value</value>
   </data>
   <data name="Settings.ExternalNotification.Error.ParameterKeyEmpty" xml:space="preserve">
-    <value>參數格式錯誤（第 {0} 行），key 不能為空。</value>
+    <value>參數格式錯誤（第 {0} 行），應為 key=value</value>
   </data>
   <data name="Settings.ExternalNotification.Error.ParseFailed" xml:space="preserve">
     <value>解析通知服務參數失敗。</value>
@@ -2612,7 +2612,7 @@
     <value>更新失敗。</value>
   </data>
   <data name="Settings.VersionUpdate.Status.WindowsManualUpdateRequired" xml:space="preserve">
-    <value>Windows 版目前尚未在 release 發佈，請手動更新。</value>
+    <value>Windows 版暫不支援應用程式內自動更新，請從發佈頁面手動更新。</value>
   </data>
   <data name="Settings.VersionUpdate.Status.LinuxPortableZipManualInstallRequired" xml:space="preserve">
     <value>Linux 可攜式套件已下載，請解壓到新目錄後啟動其中的 AppImage。</value>

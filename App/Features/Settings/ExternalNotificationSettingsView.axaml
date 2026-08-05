@@ -51,6 +51,15 @@
     <controls:AdaptiveSpacingStackPanel Grid.Row="1"
                 Margin="{DynamicResource MAA.Thickness.Settings.SectionTopMargin}"
                 Classes="settings-page-flow">
+      <TextBlock Classes="app-caption state-warning"
+                 Text="{Binding SensitiveStorageStatusText}"
+                 TextWrapping="Wrap" />
+      <Button Classes="app-button app-secondary"
+              HorizontalAlignment="Left"
+              Content="Discard unreadable value and re-enter"
+              IsVisible="{Binding CanDiscardUnreadableSensitiveValues}"
+              Click="OnDiscardUnreadableSensitiveValuesClick" />
+
       <controls:AdaptiveSpacingStackPanel Classes="settings-page-column-stack external-notification-provider">
         <TextBlock MaxWidth="{DynamicResource MAA.Size.Settings.ContentMaxWidth}"
                    Classes="app-caption long-wrap"
@@ -59,7 +68,8 @@
 
       <Border Classes="settings-page-subtle-divider" />
 
-      <controls:AdaptiveSpacingStackPanel Classes="settings-page-column-stack settings-page-branch-block external-notification-provider">
+      <controls:AdaptiveSpacingStackPanel Classes="settings-page-column-stack settings-page-branch-block external-notification-provider"
+                  IsEnabled="{Binding CanUseSensitiveSettings}">
         <TextBlock Classes="app-body external-notification-section-title"
                    Text="{Binding RootTexts[Settings.ExternalNotification.Enabled]}" />
 

@@ -1,5 +1,6 @@
 using MAAUnified.Application.Configuration;
 using MAAUnified.Application.Orchestration;
+using MAAUnified.Application.Security;
 using MAAUnified.Application.Services.Features;
 using MAAUnified.Application.Services.Localization;
 using MAAUnified.Compat.Runtime;
@@ -183,18 +184,29 @@ public sealed class MAAUnifiedRuntime : IAsyncDisposable
 
 public static class MAAUnifiedRuntimeFactory
 {
-    public static MAAUnifiedRuntime Create(string baseDirectory)
+    internal static IUnifiedConfigStore CreateConfigStore(string baseDirectory)
+        => new AvaloniaJsonConfigStore(RuntimeLayout.NormalizeDirectory(baseDirectory));
+
+    public static MAAUnifiedRuntime Create(
+        string baseDirectory,
+        SensitiveSettingsService sensitiveSettingsService)
     {
+        ArgumentNullException.ThrowIfNull(sensitiveSettingsService);
         var runtimeBaseDirectory = RuntimeLayout.NormalizeDirectory(baseDirectory);
-        var logService = new UiLogService();
+        var logService = new UiLogService([runtimeBaseDirectory]);
         var diagnosticsService = new UiDiagnosticsService(runtimeBaseDirectory, logService);
-        var store = new AvaloniaJsonConfigStore(runtimeBaseDirectory);
+        var store = CreateConfigStore(runtimeBaseDirectory);
         var configService = new UnifiedConfigurationService(
             store,
             new GuiNewJsonConfigImporter(),
             new GuiJsonConfigImporter(),
             logService,
-            runtimeBaseDirectory);
+            runtimeBaseDirectory,
+            sensitiveSettingsService);
+        Func<IEnumerable<string>> sensitiveValueProvider = () =>
+            SensitiveSettingKeyRegistry.GetPlaintextValues(configService.CurrentConfig);
+        logService.SetSensitiveValueProvider(sensitiveValueProvider);
+        diagnosticsService.SetSensitiveValueProvider(sensitiveValueProvider);
         var bridge = new MaaCoreBridgeNative();
         var stateMachine = new SessionStateMachine();
         var sessionService = new UnifiedSessionService(bridge, configService, logService, stateMachine);
@@ -225,7 +237,7 @@ public static class MAAUnifiedRuntimeFactory
             logService);
         var platformCapabilityService = new PlatformCapabilityFeatureService(platform, diagnosticsService);
         var overlayFeatureService = new OverlayFeatureService(platformCapabilityService);
-        var notificationProviderFeatureService = new NotificationProviderFeatureService();
+        var notificationProviderFeatureService = new NotificationProviderFeatureService(configService);
         var settingsFeatureService = new SettingsFeatureService(configService, platformCapabilityService, diagnosticsService);
         var configurationProfileFeatureService = new ConfigurationProfileFeatureService(configService);
         var uiLanguageCoordinator = new UiLanguageCoordinator(configService);

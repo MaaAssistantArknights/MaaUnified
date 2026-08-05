@@ -14,6 +14,7 @@ using MAAUnified.Compat.Runtime;
 using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Localization;
 using MAAUnified.Application.Services.VersionUpdate;
+using MAAUnified.Application.Security;
 
 namespace MAAUnified.App;
 
@@ -35,6 +36,13 @@ internal static class Program
     [STAThread]
     public static int Main(string[] args)
     {
+#if MAA_UNIFIED_LINUX_SECURE_STORAGE
+        if (SensitiveStorageComposition.IsSqlCipherSmokeTest(args))
+        {
+            return SensitiveStorageComposition.RunSqlCipherSmokeTest(args[1], args[2]);
+        }
+#endif
+
         var runtimeBaseDirectory = RuntimeLayout.ResolveRuntimeBaseDirectory();
         RecordStartupStage("Main.Entry", BuildStartupEnvironmentSnapshot(args));
         if (!ValidateLinuxPortablePackageLayout(runtimeBaseDirectory))
@@ -51,17 +59,13 @@ internal static class Program
         var macSeedResult = MacAppRuntimeSeed.EnsureSeeded(AppContext.BaseDirectory, runtimeBaseDirectory);
         if (macSeedResult.Status == MacAppRuntimeSeedStatus.Ready)
         {
-            RecordStartupStage(
-                "Main.MacAppRuntimeSeed.Ready",
-                $"runtimeBaseDir={macSeedResult.RuntimeBaseDirectory}; resourceSeeded={macSeedResult.ResourceSeeded}; resourceSeedReason={macSeedResult.ResourceSeedReason}; nativeLibraries={macSeedResult.NativeLibraryCount}; seededMaaFrameworkRuntimeLibraries={FormatStartupList(macSeedResult.SeededMaaFrameworkRuntimeLibraries)}; missingMaaFrameworkRuntimeLibraries={FormatStartupList(macSeedResult.MissingMaaFrameworkRuntimeLibraries)}; bundleResourceDir={macSeedResult.BundleResourceDirectory}");
+            RecordStartupStage("Main.MacAppRuntimeSeed.Ready", $"resourceSeeded={macSeedResult.ResourceSeeded}; resourceSeedReason={macSeedResult.ResourceSeedReason}; nativeLibraries={macSeedResult.NativeLibraryCount}; seededMaaFrameworkRuntimeLibraries={FormatStartupList(macSeedResult.SeededMaaFrameworkRuntimeLibraries)}; missingMaaFrameworkRuntimeLibraries={FormatStartupList(macSeedResult.MissingMaaFrameworkRuntimeLibraries)}");
         }
 
         var linuxSeedResult = LinuxPackagedRuntimeSeed.EnsureSeeded(AppContext.BaseDirectory, runtimeBaseDirectory);
         if (linuxSeedResult.Status == LinuxPackagedRuntimeSeedStatus.Ready)
         {
-            RecordStartupStage(
-                "Main.LinuxPackagedRuntimeSeed.Ready",
-                $"runtimeBaseDir={linuxSeedResult.RuntimeBaseDirectory}; resourceSeeded={linuxSeedResult.ResourceSeeded}; resourceSeedReason={linuxSeedResult.ResourceSeedReason}; nativeLibraries={linuxSeedResult.NativeLibraryCount}; packagedRuntimeDir={linuxSeedResult.PackagedRuntimeBaseDirectory}");
+            RecordStartupStage("Main.LinuxPackagedRuntimeSeed.Ready", $"resourceSeeded={linuxSeedResult.ResourceSeeded}; resourceSeedReason={linuxSeedResult.ResourceSeedReason}; nativeLibraries={linuxSeedResult.NativeLibraryCount}");
         }
 
         var pendingUpdateResult = PendingAppUpdateService.TryApplyPendingUpdatePackage(runtimeBaseDirectory);
@@ -124,7 +128,7 @@ internal static class Program
         var useSoftwareRendering = ResolveSoftwareRenderingPreference(runtimeBaseDirectory);
         RecordStartupStage(
             "Main.RenderingPreference",
-            $"softwareRendering={useSoftwareRendering}; executableBaseDir={AppContext.BaseDirectory}; runtimeBaseDir={runtimeBaseDirectory}");
+            $"softwareRendering={useSoftwareRendering}");
 
         var builder = AppBuilder.Configure<App>()
             .UsePlatformDetect()
@@ -172,14 +176,17 @@ internal static class Program
 
     internal static string BuildStartupEnvironmentSnapshot(string[] args)
     {
+        var runtimeBaseDirectory = RuntimeLayout.ResolveRuntimeBaseDirectory();
         var commandLine = args.Length == 0
             ? "<none>"
-            : string.Join(' ', args.Select(static arg => arg.Contains(' ', StringComparison.Ordinal) ? $"\"{arg}\"" : arg));
-        var processPath = Environment.ProcessPath ?? "<unknown>";
-        var runtimeBaseDirectory = RuntimeLayout.ResolveRuntimeBaseDirectory();
+            : string.Join(' ', args.Select(static arg =>
+                Path.IsPathRooted(arg)
+                    ? "<path>"
+                    : arg.Contains(' ', StringComparison.Ordinal) ? $"\"{arg}\"" : arg));
+        var processPath = Environment.ProcessPath;
         return string.Create(
             CultureInfo.InvariantCulture,
-            $"framework={RuntimeInformation.FrameworkDescription}; os={RuntimeInformation.OSDescription}; osArch={RuntimeInformation.OSArchitecture}; processArch={RuntimeInformation.ProcessArchitecture}; executableBaseDir={AppContext.BaseDirectory}; runtimeBaseDir={runtimeBaseDirectory}; currentDir={Environment.CurrentDirectory}; processPath={processPath}; args={commandLine}");
+            $"framework={RuntimeInformation.FrameworkDescription}; os={RuntimeInformation.OSDescription}; osArch={RuntimeInformation.OSArchitecture}; processArch={RuntimeInformation.ProcessArchitecture}; processPath={(string.IsNullOrWhiteSpace(processPath) ? "<unknown>" : "<path>")}; args={commandLine}; argsCount={args.Length}; runtimeLayoutAvailable={!string.IsNullOrWhiteSpace(runtimeBaseDirectory)}");
     }
 
     internal static string BuildStartupTracePayload(string stage, string message, Exception? exception = null)
@@ -197,7 +204,8 @@ internal static class Program
 
         if (exception is not null)
         {
-            line.Append(" | ").Append(exception.GetType().Name).Append(": ").Append(exception.Message);
+            line.Append(" | ").Append(exception.GetType().Name).Append(": ")
+                .Append(DiagnosticDataSanitizer.Sanitize(exception.Message));
         }
 
         return line.ToString();
@@ -205,7 +213,9 @@ internal static class Program
 
     internal static void RecordStartupStage(string stage, string message, Exception? exception = null)
     {
-        var payload = BuildStartupTracePayload(stage, message, exception);
+        var payload = DiagnosticDataSanitizer.Sanitize(
+            BuildStartupTracePayload(stage, message, exception),
+            privateRoots: [RuntimeLayout.ResolveRuntimeBaseDirectory()]);
 
         try
         {
@@ -218,7 +228,7 @@ internal static class Program
 
         if (exception is not null)
         {
-            payload += Environment.NewLine + exception;
+            payload += Environment.NewLine + $"errorType={exception.GetType().Name}";
         }
 
         if (exception is not null || global::MAAUnified.Platform.MaaUnifiedBuildFlavor.CapturesVerboseDiagnostics)
@@ -321,7 +331,7 @@ internal static class Program
         }
         catch (Exception ex)
         {
-            RecordStartupStage("Main.RenderingPreference.AvaloniaConfigError", $"path={path}", ex);
+            RecordStartupStage("Main.RenderingPreference.AvaloniaConfigError", "file=avalonia.json", ex);
             return false;
         }
     }
@@ -343,7 +353,7 @@ internal static class Program
         }
         catch (Exception ex)
         {
-            RecordStartupStage("Main.RenderingPreference.GuiNewConfigError", $"path={path}", ex);
+            RecordStartupStage("Main.RenderingPreference.GuiNewConfigError", "file=gui.new.json", ex);
             return false;
         }
     }
@@ -429,7 +439,7 @@ internal static class Program
     internal static bool ValidateLinuxPortablePackageLayout(string runtimeBaseDirectory)
     {
         if (!OperatingSystem.IsLinux()
-            || !RuntimeLayout.IsLinuxPortablePackageLaunchInvalid(AppContext.BaseDirectory, linuxAppImagePath: null, out var packageRoot))
+            || !RuntimeLayout.IsLinuxPortablePackageLaunchInvalid(AppContext.BaseDirectory, linuxAppImagePath: null, out _))
         {
             return true;
         }
@@ -444,10 +454,10 @@ internal static class Program
             "Error");
         RecordStartupStage(
             "Main.PortablePackage.Invalid",
-            $"packageRoot={packageRoot}; runtimeBaseDir={runtimeBaseDirectory}");
+            "packageLayout=invalid");
         ReportStartupFailure(
             StartupPortablePackageMissingCode,
-            $"{message} packageRoot={packageRoot}");
+            $"{message} packageLayout=invalid");
         StartupPrompt.Show(title, message, StartupPromptSeverity.Error);
         return false;
     }
@@ -458,7 +468,7 @@ internal static class Program
         var identityPath = RuntimeLayout.ResolveSingleInstanceIdentityPath();
         if (PackageInstanceGuard.TryAcquire(identityPath, out guard))
         {
-            RecordStartupStage("Main.SingleInstance.Acquired", $"identityPath={identityPath}");
+            RecordStartupStage("Main.SingleInstance.Acquired", "identityFile=instance.lock");
             return true;
         }
 
@@ -470,8 +480,8 @@ internal static class Program
             runtimeBaseDirectory,
             "Common.WarningPrefix",
             "Warning");
-        RecordStartupStage("Main.SingleInstance.Duplicate", $"identityPath={identityPath}");
-        ReportStartupFailure(StartupDuplicateInstanceCode, $"{message} identityPath={identityPath}");
+        RecordStartupStage("Main.SingleInstance.Duplicate", "identityFile=instance.lock");
+        ReportStartupFailure(StartupDuplicateInstanceCode, message);
         StartupPrompt.Show(title, message, StartupPromptSeverity.Warning);
         return false;
     }
@@ -491,15 +501,19 @@ internal static class Program
 
         if (exception is not null)
         {
-            line.Append(" | ").Append(exception.GetType().Name).Append(": ").Append(exception.Message);
+            line.Append(" | ").Append(exception.GetType().Name).Append(": ")
+                .Append(DiagnosticDataSanitizer.Sanitize(exception.Message));
         }
 
-        Console.Error.WriteLine(line.ToString());
+        var safeLine = DiagnosticDataSanitizer.Sanitize(
+            line.ToString(),
+            privateRoots: [RuntimeLayout.ResolveRuntimeBaseDirectory()]);
+        Console.Error.WriteLine(safeLine);
 
-        var payload = line.ToString();
+        var payload = safeLine;
         if (exception is not null)
         {
-            payload += Environment.NewLine + exception;
+            payload += Environment.NewLine + $"errorType={exception.GetType().Name}";
         }
 
         TryAppendDebugLog(StartupErrorLogName, payload);
@@ -512,7 +526,8 @@ internal static class Program
             var debugDirectory = Path.Combine(RuntimeLayout.ResolveRuntimeBaseDirectory(), "debug");
             Directory.CreateDirectory(debugDirectory);
             var path = Path.Combine(debugDirectory, fileName);
-            File.AppendAllText(path, payload + Environment.NewLine);
+            var sanitized = DiagnosticDataSanitizer.Sanitize(payload, privateRoots: [RuntimeLayout.ResolveRuntimeBaseDirectory()]);
+            File.AppendAllText(path, sanitized + Environment.NewLine);
         }
         catch
         {

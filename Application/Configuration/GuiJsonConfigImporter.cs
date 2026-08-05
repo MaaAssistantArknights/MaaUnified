@@ -100,7 +100,7 @@ public sealed class GuiJsonConfigImporter : IConfigImporter
         catch (Exception ex)
         {
             AppendUnique(report.DamagedFiles, FileName);
-            report.Errors.Add($"Failed to import gui.json: {ex.Message}");
+            report.Errors.Add($"Failed to import gui.json (errorType={ex.GetType().Name}).");
         }
     }
 

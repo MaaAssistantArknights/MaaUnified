@@ -2,13 +2,17 @@ using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 using System.Text.Json.Nodes;
+using Avalonia.Threading;
 using MAAUnified.App.ViewModels.Advanced;
+using MAAUnified.App.ViewModels.Settings;
 using MAAUnified.Application.Configuration;
 using MAAUnified.Application.Models;
 using MAAUnified.Application.Orchestration;
 using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Features;
 using MAAUnified.Application.Services.Localization;
+using MAAUnified.Application.Security;
+using MAAUnified.Compat.Constants;
 using MAAUnified.CoreBridge;
 using MAAUnified.Platform;
 
@@ -90,6 +94,32 @@ public sealed class AdvancedModuleP2FeatureTests
         Assert.True(await WaitForLogContainsAsync(
             fixture.Runtime.DiagnosticsService.ErrorLogPath,
             $"code={UiErrorCode.RemoteControlInvalidParameters}"));
+    }
+
+    [Fact]
+    public async Task RemoteControlCenter_SaveUsesCurrentProfileAndRedactsSensitiveEndpoints()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync();
+        fixture.Runtime.ConfigurationService.CurrentConfig.GlobalValues[ConfigurationKeys.RemoteControlGetTaskEndpointUri] =
+            JsonValue.Create("https://stale-global.example/task");
+        var vm = new RemoteControlCenterPageViewModel(fixture.Runtime)
+        {
+            GetTaskEndpoint = "https://profile.example/task",
+            ReportEndpoint = "https://profile.example/report",
+            PollIntervalMs = 3200,
+        };
+
+        await vm.SaveAsync();
+
+        var config = fixture.Runtime.ConfigurationService.CurrentConfig;
+        var profile = config.Profiles[config.CurrentProfile];
+        Assert.Equal("https://profile.example/task", profile.Values[ConfigurationKeys.RemoteControlGetTaskEndpointUri]!.ToString());
+        Assert.Equal("https://profile.example/report", profile.Values[ConfigurationKeys.RemoteControlReportStatusUri]!.ToString());
+        Assert.Equal("3200", profile.Values[ConfigurationKeys.RemoteControlPollIntervalMs]!.ToString());
+        Assert.False(config.GlobalValues.ContainsKey(ConfigurationKeys.RemoteControlGetTaskEndpointUri));
+        var persisted = await File.ReadAllTextAsync(Path.Combine(fixture.Root, "config", "avalonia.json"));
+        Assert.DoesNotContain("profile.example", persisted, StringComparison.Ordinal);
+        Assert.DoesNotContain("stale-global.example", persisted, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -401,6 +431,101 @@ public sealed class AdvancedModuleP2FeatureTests
         Assert.InRange(webApi.Port, 1, 65535);
     }
 
+    [Fact]
+    public async Task AdvancedSensitivePagesReactToStorageFailureAndBlockOperations()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync();
+        var providers = new ExternalNotificationProvidersPageViewModel(fixture.Runtime);
+        var remoteControl = new RemoteControlCenterPageViewModel(fixture.Runtime)
+        {
+            GetTaskEndpoint = "bad-uri",
+            ReportEndpoint = "bad-uri",
+        };
+        var providerStateNotifications = 0;
+        var remoteStateNotifications = 0;
+        providers.PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName == nameof(providers.CanUseSensitiveSettings)) providerStateNotifications++;
+        };
+        remoteControl.PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName == nameof(remoteControl.CanUseSensitiveSettings)) remoteStateNotifications++;
+        };
+
+        fixture.SensitiveSettingsService.RecordFailure(
+            new SensitiveStorageException(SensitiveStorageErrorCode.PermissionDenied, "locked"));
+
+        Assert.False(providers.CanUseSensitiveSettings);
+        Assert.False(remoteControl.CanUseSensitiveSettings);
+        Assert.True(providers.HasSensitiveStorageWarning);
+        Assert.True(remoteControl.HasSensitiveStorageWarning);
+        Assert.Equal(1, providerStateNotifications);
+        Assert.Equal(1, remoteStateNotifications);
+
+        await providers.RefreshProvidersAsync();
+        await providers.ValidateAsync();
+        await providers.SendTestAsync();
+        await remoteControl.SaveAsync();
+        await remoteControl.TestConnectivityAsync();
+
+        Assert.Empty(providers.Providers);
+        Assert.Contains("Sensitive storage", providers.LastErrorMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Sensitive storage", remoteControl.WarningMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task AdvancedSensitivePagesMarshalBackgroundStorageEventsAndUnsubscribeOnDispose()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync();
+        using var providers = new ExternalNotificationProvidersPageViewModel(fixture.Runtime);
+        using var remoteControl = new RemoteControlCenterPageViewModel(fixture.Runtime);
+        using var settings = new SettingsPageViewModel(
+            fixture.Runtime,
+            new ConnectionGameSharedStateViewModel());
+        var providerNotifications = 0;
+        var remoteNotifications = 0;
+        var settingsNotifications = 0;
+        var callbacksUsedUiThread = true;
+        providers.PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName != nameof(providers.CanUseSensitiveSettings)) return;
+            providerNotifications++;
+            callbacksUsedUiThread &= Dispatcher.UIThread.CheckAccess();
+        };
+        remoteControl.PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName != nameof(remoteControl.CanUseSensitiveSettings)) return;
+            remoteNotifications++;
+            callbacksUsedUiThread &= Dispatcher.UIThread.CheckAccess();
+        };
+        settings.PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName != nameof(settings.CanUseSensitiveSettings)) return;
+            settingsNotifications++;
+            callbacksUsedUiThread &= Dispatcher.UIThread.CheckAccess();
+        };
+
+        await Task.Run(() => fixture.SensitiveSettingsService.RecordFailure(
+            new SensitiveStorageException(SensitiveStorageErrorCode.PermissionDenied, "locked")));
+        Dispatcher.UIThread.RunJobs(null);
+
+        Assert.True(callbacksUsedUiThread);
+        Assert.Equal(1, providerNotifications);
+        Assert.Equal(1, remoteNotifications);
+        Assert.Equal(1, settingsNotifications);
+        Assert.False(settings.CanUseSensitiveSettings);
+
+        providers.Dispose();
+        remoteControl.Dispose();
+        settings.Dispose();
+        await Task.Run(() => fixture.SensitiveSettingsService.RecordFailure(
+            new SensitiveStorageException(SensitiveStorageErrorCode.Corrupt, "corrupt")));
+        Dispatcher.UIThread.RunJobs(null);
+        Assert.Equal(1, providerNotifications);
+        Assert.Equal(1, remoteNotifications);
+        Assert.Equal(1, settingsNotifications);
+    }
+
     private static async Task<bool> WaitForLogContainsAsync(string path, string expected, int retry = 30, int delayMs = 25)
     {
         for (var i = 0; i < retry; i++)
@@ -453,15 +578,21 @@ public sealed class AdvancedModuleP2FeatureTests
 
     private sealed class RuntimeFixture : IAsyncDisposable
     {
-        private RuntimeFixture(string root, MAAUnifiedRuntime runtime)
+        private RuntimeFixture(
+            string root,
+            MAAUnifiedRuntime runtime,
+            SensitiveSettingsService sensitiveSettingsService)
         {
             Root = root;
             Runtime = runtime;
+            SensitiveSettingsService = sensitiveSettingsService;
         }
 
         public string Root { get; }
 
         public MAAUnifiedRuntime Runtime { get; }
+
+        public SensitiveSettingsService SensitiveSettingsService { get; }
 
         public static async Task<RuntimeFixture> CreateAsync(
             IRemoteControlFeatureService? remoteControlFeatureService = null,
@@ -476,12 +607,14 @@ public sealed class AdvancedModuleP2FeatureTests
 
             var log = new UiLogService();
             var diagnostics = new UiDiagnosticsService(root, log);
+            var sensitiveSettingsService = SensitiveSettingsService.CreateEphemeralForTests();
             var config = new UnifiedConfigurationService(
                 new AvaloniaJsonConfigStore(root),
                 new GuiNewJsonConfigImporter(),
                 new GuiJsonConfigImporter(),
                 log,
-                root);
+                root,
+                sensitiveSettingsService);
             await config.LoadOrBootstrapAsync();
 
             var bridge = new NullBridge();
@@ -524,7 +657,7 @@ public sealed class AdvancedModuleP2FeatureTests
                 PostActionFeatureService = new PostActionFeatureService(config, diagnostics, platform.PostActionExecutorService),
             };
 
-            return new RuntimeFixture(root, runtime);
+            return new RuntimeFixture(root, runtime, sensitiveSettingsService);
         }
 
         public async ValueTask DisposeAsync()
