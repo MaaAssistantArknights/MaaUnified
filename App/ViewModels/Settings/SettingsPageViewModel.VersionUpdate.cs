@@ -244,6 +244,19 @@ public sealed partial class SettingsPageViewModel
             }
 
             SetPendingResourceUpdateState(availability);
+
+            // StageActivityV2.json is fetched independently from MaaApi (mirrors WPF
+            // MaaApiService), not from MaaResource. Refresh it regardless of whether
+            // the MaaResource itself needs updating.
+            try
+            {
+                await Runtime.VersionUpdateFeatureService.TryUpdateStageActivityAsync(cancellationToken);
+            }
+            catch
+            {
+                // Non-critical: mini-game entries fall back to hardcoded defaults.
+            }
+
             if (!availability.IsUpdateAvailable)
             {
                 ClearVersionUpdateActivityMessage();

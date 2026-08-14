@@ -448,6 +448,12 @@ public interface IVersionUpdateFeatureService
         string? clientType,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Download StageActivityV2.json from MaaApi (mirrors WPF MaaApiService).
+    /// Independent of MaaResource updates — call after resource check regardless of result.
+    /// </summary>
+    Task TryUpdateStageActivityAsync(CancellationToken cancellationToken = default);
+
     Task<UiOperationResult<VersionUpdateCheckResult>> CheckForUpdatesAsync(
         VersionUpdatePolicy policy,
         string currentVersion,

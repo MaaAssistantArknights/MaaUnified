@@ -1181,6 +1181,8 @@ public sealed class SettingsGuiBackgroundFeatureTests
 
     private sealed class SpyVersionUpdateFeatureService : IVersionUpdateFeatureService
     {
+        public Task TryUpdateStageActivityAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
         public int SaveChannelCallCount { get; private set; }
 
         public int SaveProxyCallCount { get; private set; }

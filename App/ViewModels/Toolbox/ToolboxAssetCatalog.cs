@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json.Nodes;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
@@ -447,7 +448,16 @@ internal static class ToolboxAssetCatalog
 
             if (TryResolveMiniGameClientNode(root, clientType, out var clientNode))
             {
-                AppendMiniGameEntries(entries, clientNode["miniGame"], language);
+                // Parse activity entries into a separate list (mirrors WPF ParseMiniGameEntries:
+                // collect into parsedEntries, filter by BeingOpen, then InsertRange at 0).
+                var activityEntries = new List<ToolboxMiniGameEntry>();
+                AppendMiniGameEntries(activityEntries, clientNode["miniGame"], language);
+
+                // Only keep currently open entries (mirrors WPF: if (entry.BeingOpen) parsedEntries.Add).
+                var openEntries = activityEntries.Where(entry => entry.BeingOpen).ToList();
+
+                // Activity entries go before permanent defaults (mirrors WPF InsertRange(0, ...)).
+                entries.InsertRange(0, openEntries);
             }
         }
         catch
@@ -539,6 +549,7 @@ internal static class ToolboxAssetCatalog
         _ = TryReadString(obj["value"], out var lowerValue);
         _ = TryReadString(obj["Tip"], out var tip);
         _ = TryReadString(obj["TipKey"], out var tipKey);
+        _ = TryReadString(obj["MinimumRequired"], out var minimumRequired);
 
         var finalValue = FirstNonEmpty(explicitValue, lowerValue, display, displayKey);
         if (string.IsNullOrWhiteSpace(finalValue))
@@ -548,7 +559,33 @@ internal static class ToolboxAssetCatalog
 
         var finalDisplay = FirstNonEmpty(display, ResolveMiniGameText(displayKey, language), finalValue);
         var finalTip = FirstNonEmpty(ResolveMiniGameText(tipKey, language), tip, ResolveMiniGameText(displayKey + "Tip", language), string.Empty);
-        target.Add(new ToolboxMiniGameEntry(finalDisplay!, finalValue!, finalTip!));
+
+        // Parse activity time fields (mirrors WPF StageManager.ParseMiniGameEntry + ParseDateTime).
+        var utcStart = TryParseActivityTime(obj, "UtcStartTime");
+        var utcExpire = TryParseActivityTime(obj, "UtcExpireTime");
+
+        target.Add(new ToolboxMiniGameEntry(finalDisplay!, finalValue!, finalTip!, utcStart, utcExpire, minimumRequired));
+    }
+
+    /// <summary>
+    /// Parse a local-time string with TimeZone offset into UTC.
+    /// Mirrors WPF StageManager.ParseDateTime: ParseExact("yyyy/MM/dd HH:mm:ss").AddHours(-TimeZone).
+    /// </summary>
+    private static DateTime TryParseActivityTime(JsonObject obj, string key)
+    {
+        var timeStr = obj[key]?.ToString();
+        if (string.IsNullOrEmpty(timeStr))
+        {
+            return default;
+        }
+
+        if (DateTime.TryParseExact(timeStr, "yyyy/MM/dd HH:mm:ss", CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed))
+        {
+            var timeZone = obj["TimeZone"]?.GetValue<int>() ?? 0;
+            return parsed.AddHours(-timeZone);
+        }
+
+        return default;
     }
 
     private static Bitmap? ResolveEmbeddedBitmap(string cacheKey, string assetUri)
@@ -697,6 +734,12 @@ internal static class ToolboxAssetCatalog
     {
         foreach (var root in EnumerateBaseDirectories())
         {
+            var cached = Path.Combine(root, "cache", "gui", "StageActivityV2.json");
+            if (File.Exists(cached))
+            {
+                return cached;
+            }
+
             var direct = Path.Combine(root, "gui", "StageActivityV2.json");
             if (File.Exists(direct))
             {
@@ -928,4 +971,26 @@ public sealed record ToolboxItemAsset(
     string ClassifyType,
     int SortId);
 
-public sealed record ToolboxMiniGameEntry(string Display, string Value, string Tip);
+public sealed record ToolboxMiniGameEntry(
+    string Display,
+    string Value,
+    string Tip,
+    DateTime UtcStartTime = default,
+    DateTime UtcExpireTime = default,
+    string? MinimumRequired = null)
+{
+    /// <summary>
+    /// Whether the activity is currently open (started and not expired).
+    /// Mirrors WPF MiniGameEntry.BeingOpen.
+    /// </summary>
+    public bool BeingOpen => !NotOpenYet && !IsExpired;
+
+    public bool IsExpired => UtcExpireTime != default && DateTime.UtcNow >= UtcExpireTime;
+
+    public bool NotOpenYet => UtcStartTime != default && DateTime.UtcNow <= UtcStartTime;
+
+    /// <summary>
+    /// Whether this is a permanent entry (no time constraints), i.e. a hardcoded default.
+    /// </summary>
+    public bool IsPermanent => UtcStartTime == default && UtcExpireTime == default;
+}
