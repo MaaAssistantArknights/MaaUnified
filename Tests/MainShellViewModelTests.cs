@@ -2157,6 +2157,8 @@ public sealed class MainShellViewModelTests
 
     private sealed class ScriptedVersionUpdateFeatureService : IVersionUpdateFeatureService
     {
+        public Task TryUpdateStageActivityAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
         public VersionUpdatePolicy LoadedPolicy { get; set; } = VersionUpdatePolicy.Default;
 
         public int CheckForUpdatesCallCount { get; private set; }

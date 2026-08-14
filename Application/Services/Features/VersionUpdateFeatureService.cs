@@ -30,6 +30,9 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
     private const string PackageDownloadFailedMessageKey = "Settings.VersionUpdate.Status.PackageDownloadFailed";
     private const string GithubResourceArchiveUrl = "https://github.com/MaaAssistantArknights/MaaResource/archive/refs/heads/main.zip";
     private const string MirrorChyanResourceApiUrl = "https://mirrorchyan.com/api/resources/MaaResource/latest";
+    private const string MaaApiBaseUrl = "https://api.maa.plus/MaaAssistantArknights/api/";
+    private const string MaaApiFallbackBaseUrl = "https://api2.maa.plus/MaaAssistantArknights/api/";
+    private const string StageActivityRelativeApiPath = "gui/StageActivityV2.json";
     private static readonly HashSet<string> AllowedVersionTypes = new(StringComparer.OrdinalIgnoreCase)
     {
         "Stable",
@@ -199,12 +202,17 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
         }
 
         var source = normalizedPolicy.ResourceUpdateSource;
+        UiOperationResult<string> result;
         if (string.Equals(source, "MirrorChyan", StringComparison.OrdinalIgnoreCase))
         {
-            return await UpdateResourceFromMirrorChyanAsync(normalizedPolicy, clientType, progress, cancellationToken);
+            result = await UpdateResourceFromMirrorChyanAsync(normalizedPolicy, clientType, progress, cancellationToken);
+        }
+        else
+        {
+            result = await UpdateResourceFromGithubAsync(progress, cancellationToken);
         }
 
-        return await UpdateResourceFromGithubAsync(progress, cancellationToken);
+        return result;
     }
 
     public async Task<UiOperationResult<ResourceUpdateCheckResult>> CheckResourceUpdateAsync(
@@ -1099,6 +1107,57 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
     {
         return _runtimeBaseDirectory
             ?? global::MAAUnified.Compat.Runtime.RuntimeLayout.ResolveRuntimeBaseDirectory();
+    }
+
+    /// <summary>
+    /// Download StageActivityV2.json from MaaApi (mirrors WPF
+    /// MaaApiService.RequestMaaApiWithCache for gui/StageActivityV2.json).
+    /// Caches to {runtimeBase}/cache/gui/StageActivityV2.json.
+    /// Failure does not block — callers fall back to hardcoded default mini-game entries.
+    /// </summary>
+    public async Task TryUpdateStageActivityAsync(CancellationToken cancellationToken = default)
+    {
+        var runtimeBase = ResolveRuntimeBaseDirectory();
+        var cacheDir = Path.Combine(runtimeBase, "cache", "gui");
+        var destPath = Path.Combine(cacheDir, "StageActivityV2.json");
+
+        foreach (var baseUrl in new[] { MaaApiBaseUrl, MaaApiFallbackBaseUrl })
+        {
+            try
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var url = baseUrl + StageActivityRelativeApiPath;
+                using var response = await ResourceHttpClient
+                    .GetAsync(url, HttpCompletionOption.ResponseContentRead, cancellationToken)
+                    .ConfigureAwait(false);
+                if (!response.IsSuccessStatusCode)
+                {
+                    continue;
+                }
+
+                var content = await response.Content
+                    .ReadAsByteArrayAsync(cancellationToken)
+                    .ConfigureAwait(false);
+                Directory.CreateDirectory(cacheDir);
+                await File.WriteAllBytesAsync(destPath, content, cancellationToken)
+                    .ConfigureAwait(false);
+
+                await TraceVersionUpdateAsync(
+                    "VersionUpdate.Resource.StageActivity",
+                    $"StageActivityV2.json downloaded to {destPath} from {url}",
+                    cancellationToken).ConfigureAwait(false);
+
+                return;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch
+            {
+                // Try fallback URL or give up silently.
+            }
+        }
     }
 
     private static string? NormalizeRuntimeBaseDirectory(string? runtimeBaseDirectory)
