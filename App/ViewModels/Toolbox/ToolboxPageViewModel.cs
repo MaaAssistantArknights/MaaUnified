@@ -1663,9 +1663,11 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         // path instead of appending a duplicate task (mirrors WPF LinkStart's post-wait
         // idle re-check). Only applies when this dispatch has not transitioned yet — a
         // transitionBeforeConnect dispatch is itself the busy state being observed.
+        // No EndRun here: reaching this branch means another toolbox flow owns the run
+        // (this dispatch never set any busy state of its own), so ending the run would
+        // prematurely release the other flow's ownership.
         if (!transitionBeforeConnect && IsToolboxBusy)
         {
-            Runtime.SessionService.EndRun(ToolboxRunOwner);
             await ApplyToolboxBusyAsync(
                 tool,
                 UiOperationResult.Fail(
@@ -1948,15 +1950,20 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
     /// </summary>
     private async Task WaitForSessionToLeaveConnectingAsync(CancellationToken cancellationToken)
     {
-        var deadline = DateTime.UtcNow + InFlightConnectSettleTimeout;
+        using var settleCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        settleCts.CancelAfter(InFlightConnectSettleTimeout);
         while (Runtime.SessionService.CurrentState == SessionState.Connecting)
         {
-            if (DateTime.UtcNow >= deadline)
+            try
             {
+                await Task.Delay(InFlightConnectPollInterval, settleCts.Token);
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                // Settle timeout reached: stop waiting; the caller falls back to its
+                // own connect attempt (previous behavior).
                 return;
             }
-
-            await Task.Delay(InFlightConnectPollInterval, cancellationToken);
         }
     }
 
