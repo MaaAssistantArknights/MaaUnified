@@ -503,8 +503,10 @@ internal static class ToolboxAssetCatalog
                 var activityEntries = new List<ToolboxMiniGameEntry>();
                 AppendMiniGameEntries(activityEntries, clientNode["miniGame"], language);
 
-                // Only keep currently open entries (mirrors WPF: if (entry.BeingOpen) parsedEntries.Add).
-                var openEntries = activityEntries.Where(entry => entry.BeingOpen).ToList();
+                // Only keep currently open entries (mirrors WPF: if (entry.BeingOpen) parsedEntries.Add),
+                // evaluated against a single captured timestamp for consistent boundary behavior.
+                var utcNow = DateTime.UtcNow;
+                var openEntries = activityEntries.Where(entry => entry.IsOpenAt(utcNow)).ToList();
 
                 // Activity entries go before permanent defaults (mirrors WPF InsertRange(0, ...)).
                 entries.InsertRange(0, openEntries);
@@ -631,11 +633,30 @@ internal static class ToolboxAssetCatalog
 
         if (DateTime.TryParseExact(timeStr, "yyyy/MM/dd HH:mm:ss", CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed))
         {
-            var timeZone = obj["TimeZone"]?.GetValue<int>() ?? 0;
-            return parsed.AddHours(-timeZone);
+            var timeZone = TryReadTimeZone(obj);
+            return DateTime.SpecifyKind(parsed.AddHours(-timeZone), DateTimeKind.Utc);
         }
 
         return default;
+    }
+
+    /// <summary>
+    /// Read the TimeZone offset without throwing on unexpected JSON types
+    /// (e.g. a string "8" instead of a number).
+    /// </summary>
+    private static int TryReadTimeZone(JsonObject obj)
+    {
+        if (obj["TimeZone"] is not JsonValue value)
+        {
+            return 0;
+        }
+
+        if (value.TryGetValue<int>(out var timeZone))
+        {
+            return timeZone;
+        }
+
+        return value.TryGetValue<string>(out var timeZoneStr) && int.TryParse(timeZoneStr, out timeZone) ? timeZone : 0;
     }
 
     private static Bitmap? ResolveEmbeddedBitmap(string cacheKey, string assetUri)
@@ -785,7 +806,7 @@ internal static class ToolboxAssetCatalog
         foreach (var root in EnumerateBaseDirectories())
         {
             var cached = Path.Combine(root, "cache", "gui", "StageActivityV2.json");
-            if (File.Exists(cached))
+            if (File.Exists(cached) && LooksLikeValidStageActivityFile(cached))
             {
                 return cached;
             }
@@ -804,6 +825,23 @@ internal static class ToolboxAssetCatalog
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Basic sanity check for a cached StageActivityV2.json: non-empty and parseable JSON.
+    /// An invalid cache is skipped so lookup falls back to the non-cached candidates
+    /// instead of locking in stale or corrupted data.
+    /// </summary>
+    private static bool LooksLikeValidStageActivityFile(string path)
+    {
+        try
+        {
+            return new FileInfo(path).Length > 0 && JsonNode.Parse(File.ReadAllText(path)) is not null;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private static IEnumerable<string> EnumerateBaseDirectories()
@@ -1033,7 +1071,7 @@ public sealed record ToolboxMiniGameEntry(
     /// Whether the activity is currently open (started and not expired).
     /// Mirrors WPF MiniGameEntry.BeingOpen.
     /// </summary>
-    public bool BeingOpen => !NotOpenYet && !IsExpired;
+    public bool BeingOpen => IsOpenAt(DateTime.UtcNow);
 
     public bool IsExpired => UtcExpireTime != default && DateTime.UtcNow >= UtcExpireTime;
 
@@ -1043,4 +1081,12 @@ public sealed record ToolboxMiniGameEntry(
     /// Whether this is a permanent entry (no time constraints), i.e. a hardcoded default.
     /// </summary>
     public bool IsPermanent => UtcStartTime == default && UtcExpireTime == default;
+
+    /// <summary>
+    /// Evaluate openness against a single captured timestamp so boundary checks
+    /// cannot straddle a clock tick mid-evaluation.
+    /// </summary>
+    public bool IsOpenAt(DateTime utcNow) =>
+        !(UtcStartTime != default && utcNow <= UtcStartTime)
+        && !(UtcExpireTime != default && utcNow >= UtcExpireTime);
 }
