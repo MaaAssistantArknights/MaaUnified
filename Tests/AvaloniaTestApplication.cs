@@ -19,56 +19,43 @@ internal static class AvaloniaTestApplication
         app.Initialize();
     }
 
+    private static void RegisterCursorFactory()
+    {
+        // Cursor values in app XAML need a platform factory, but these tests only load and measure controls.
+        var registry = GetLocatorRegistry();
+        registry[typeof(ICursorFactory)] = () => NoOpCursorFactoryProxy.Create();
+    }
+
     private static void RegisterAssetLoader()
     {
         // Without an AppBuilder setup the locator has no runtime IAssetLoader,
         // and avares:// icon loads (e.g. the tray brand icon) fail even though
         // the App assembly is loaded.
-        var locatorType = typeof(global::Avalonia.AvaloniaLocator);
-        var currentMutable = locatorType.GetProperty(
-            "CurrentMutable",
-            BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
-        var locator = currentMutable?.GetValue(null);
-        if (locator is null)
-        {
-            return;
-        }
-
-        var registryField = locatorType.GetField(
-            "_registry",
-            BindingFlags.NonPublic | BindingFlags.Instance);
-        var registry = registryField?.GetValue(locator) as IDictionary<Type, Func<object>>;
-        if (registry is null)
-        {
-            throw new InvalidOperationException("Unable to register Avalonia test asset loader.");
-        }
-
+        var registry = GetLocatorRegistry();
         registry[typeof(IAssetLoader)] = () => new StandardAssetLoader();
     }
 
-    private static void RegisterCursorFactory()
+    private static IDictionary<Type, Func<object>> GetLocatorRegistry()
     {
-        // Cursor values in app XAML need a platform factory, but these tests only load and measure controls.
+        // Avalonia 11.3 exposes no public mutation entry point for the locator,
+        // so both registrations share this reflection path; if an Avalonia
+        // upgrade renames these members, fail here with one clear message
+        // instead of breaking cursor/asset loading in obscure ways.
         var locatorType = typeof(global::Avalonia.AvaloniaLocator);
-        var currentMutable = locatorType.GetProperty(
-            "CurrentMutable",
-            BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
-        var locator = currentMutable?.GetValue(null);
-        if (locator is null)
+        if (locatorType.GetProperty(
+                "CurrentMutable",
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)?
+                .GetValue(null) is not { } locator
+            || locatorType.GetField(
+                "_registry",
+                BindingFlags.NonPublic | BindingFlags.Instance)?
+                .GetValue(locator) is not IDictionary<Type, Func<object>> registry)
         {
-            return;
+            throw new InvalidOperationException(
+                "Unable to access the Avalonia locator registry; the Avalonia version in use likely changed its internals. Update the test locator registration helpers accordingly.");
         }
 
-        var registryField = locatorType.GetField(
-            "_registry",
-            BindingFlags.NonPublic | BindingFlags.Instance);
-        var registry = registryField?.GetValue(locator) as IDictionary<Type, Func<object>>;
-        if (registry is null)
-        {
-            throw new InvalidOperationException("Unable to register Avalonia test cursor factory.");
-        }
-
-        registry[typeof(ICursorFactory)] = () => NoOpCursorFactoryProxy.Create();
+        return registry;
     }
 
     private class NoOpCursorFactoryProxy : DispatchProxy
