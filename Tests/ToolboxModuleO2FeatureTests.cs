@@ -37,6 +37,8 @@ public sealed class ToolboxModuleO2FeatureTests
         };
 
         await using var fixture = await ToolboxTestFixture.CreateAsync(globalSeeds);
+        ToolboxTestResourceFiles.WriteTo(fixture.Root);
+        using var _ = ToolboxAssetCatalog.PushTestBaseDirectoriesForTests(fixture.Root);
         var vm = new ToolboxPageViewModel(fixture.Runtime, fixture.ConnectionState);
 
         await vm.InitializeAsync();

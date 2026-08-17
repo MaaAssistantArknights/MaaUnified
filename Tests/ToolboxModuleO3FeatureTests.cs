@@ -93,6 +93,8 @@ public sealed class ToolboxModuleO3FeatureTests
     public async Task SetLanguage_AfterRecruitResult_ShouldRelocalizeRecruitOperatorText()
     {
         await using var fixture = await ToolboxTestFixture.CreateAsync();
+        ToolboxTestResourceFiles.WriteTo(fixture.Root);
+        using var _ = ToolboxAssetCatalog.PushTestBaseDirectoriesForTests(fixture.Root);
         var vm = new ToolboxPageViewModel(fixture.Runtime, fixture.ConnectionState);
         await vm.InitializeAsync();
 
@@ -137,6 +139,8 @@ public sealed class ToolboxModuleO3FeatureTests
     public async Task LanguageSwitch_ShouldKeepExecutionHistorySnapshotWhileRelocalizingLiveRecruitResult()
     {
         await using var fixture = await ToolboxTestFixture.CreateAsync();
+        ToolboxTestResourceFiles.WriteTo(fixture.Root);
+        using var _ = ToolboxAssetCatalog.PushTestBaseDirectoriesForTests(fixture.Root);
         var vm = new ToolboxPageViewModel(fixture.Runtime, fixture.ConnectionState);
         await vm.InitializeAsync();
         vm.SetLanguage("zh-cn");
@@ -310,6 +314,8 @@ public sealed class ToolboxModuleO3FeatureTests
     public async Task ApplyRuntimeCallback_DepotDone_ShouldUseSpecificDepotGroupTitles()
     {
         await using var fixture = await ToolboxTestFixture.CreateAsync();
+        ToolboxTestResourceFiles.WriteTo(fixture.Root);
+        using var _ = ToolboxAssetCatalog.PushTestBaseDirectoriesForTests(fixture.Root);
         var vm = new ToolboxPageViewModel(fixture.Runtime, fixture.ConnectionState);
         await vm.InitializeAsync();
 
@@ -337,6 +343,8 @@ public sealed class ToolboxModuleO3FeatureTests
     public async Task ApplyRuntimeCallback_DepotDone_ShouldGroupDepotItemsByMaterialFamilies()
     {
         await using var fixture = await ToolboxTestFixture.CreateAsync();
+        ToolboxTestResourceFiles.WriteTo(fixture.Root);
+        using var _ = ToolboxAssetCatalog.PushTestBaseDirectoriesForTests(fixture.Root);
         var vm = new ToolboxPageViewModel(fixture.Runtime, fixture.ConnectionState);
         await vm.InitializeAsync();
 
