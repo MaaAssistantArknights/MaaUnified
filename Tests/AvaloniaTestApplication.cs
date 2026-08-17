@@ -13,9 +13,37 @@ internal static class AvaloniaTestApplication
         }
 
         RegisterCursorFactory();
+        RegisterAssetLoader();
 
         var app = new MAAUnified.App.App();
         app.Initialize();
+    }
+
+    private static void RegisterAssetLoader()
+    {
+        // Without an AppBuilder setup the locator has no runtime IAssetLoader,
+        // and avares:// icon loads (e.g. the tray brand icon) fail even though
+        // the App assembly is loaded.
+        var locatorType = typeof(global::Avalonia.AvaloniaLocator);
+        var currentMutable = locatorType.GetProperty(
+            "CurrentMutable",
+            BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+        var locator = currentMutable?.GetValue(null);
+        if (locator is null)
+        {
+            return;
+        }
+
+        var registryField = locatorType.GetField(
+            "_registry",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        var registry = registryField?.GetValue(locator) as IDictionary<Type, Func<object>>;
+        if (registry is null)
+        {
+            throw new InvalidOperationException("Unable to register Avalonia test asset loader.");
+        }
+
+        registry[typeof(IAssetLoader)] = () => new StandardAssetLoader();
     }
 
     private static void RegisterCursorFactory()
