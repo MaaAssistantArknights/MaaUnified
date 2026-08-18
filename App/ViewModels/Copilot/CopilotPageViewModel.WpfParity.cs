@@ -17,6 +17,8 @@ namespace MAAUnified.App.ViewModels.Copilot;
 public sealed partial class CopilotPageViewModel
 {
     private const string CopilotIdPrefix = "maa://";
+    private const string CopilotNewIdPrefix = "prts://"; // 作业站新格式前缀，prts://12345 为作业，prts://s12345 为作业集
+    private const string CopilotNewSetIdPrefix = "prts://s"; // 新格式作业集前缀
     private const string PrtsPlusUrl = "https://prts.plus";
     private const string MapPrtsUrl = "https://map.ark-nights.com/areas?coord_override=maa";
     private static readonly Regex InvalidNavigationStageNameRegex = new(
@@ -1692,6 +1694,9 @@ public sealed partial class CopilotPageViewModel
         return Path.Combine(RuntimeLayout.ResolveRuntimeBaseDirectory(), raw);
     }
 
+    /// <summary>
+    /// 判断输入是否为作业站神秘代码（对齐 WPF：maa://、prts://、prts://s 前缀、s12345 或纯数字）。
+    /// </summary>
     private static bool LooksLikeCopilotCodeSource(string source)
     {
         if (string.IsNullOrWhiteSpace(source))
@@ -1705,12 +1710,26 @@ public sealed partial class CopilotPageViewModel
             return true;
         }
 
-        if (!normalized.StartsWith(CopilotIdPrefix, StringComparison.OrdinalIgnoreCase))
+        // s12345 格式作业集
+        if (normalized.Length > 1 && (normalized[0] is 's' or 'S') && int.TryParse(normalized[1..], out _))
+        {
+            return true;
+        }
+
+        // 带前缀的格式（从长到短匹配，避免 prts://s 被 prts:// 抢先）
+        return MatchesCodePrefix(normalized, CopilotNewSetIdPrefix)
+            || MatchesCodePrefix(normalized, CopilotNewIdPrefix)
+            || MatchesCodePrefix(normalized, CopilotIdPrefix);
+    }
+
+    private static bool MatchesCodePrefix(string normalized, string prefix)
+    {
+        if (!normalized.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }
 
-        var remainder = normalized[CopilotIdPrefix.Length..].TrimStart('/');
+        var remainder = normalized[prefix.Length..].TrimStart('/');
         return int.TryParse(remainder, out _);
     }
 
