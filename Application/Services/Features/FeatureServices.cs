@@ -3364,9 +3364,10 @@ public sealed class TaskQueueFeatureService : ITaskQueueFeatureService
 
 public sealed class CopilotFeatureService : ICopilotFeatureService
 {
-    private const string CopilotIdPrefix = "maa://";
-    private const string CopilotNewIdPrefix = "prts://"; // 作业站新格式前缀，prts://12345 为作业，prts://s12345 为作业集
-    private const string CopilotNewSetIdPrefix = "prts://s"; // 新格式作业集前缀
+    // 作业码前缀常量的唯一定义处（CopilotPageViewModel 的输入预判与本解析服务共享，格式再变化只改这里）
+    public const string CopilotIdPrefix = "maa://";
+    public const string CopilotNewIdPrefix = "prts://"; // 作业站新格式前缀，prts://12345 为作业，prts://s12345 为作业集
+    public const string CopilotNewSetIdPrefix = "prts://s"; // 新格式作业集前缀
     private const string PrtsPlusCopilotGet = "https://prts.maa.plus/copilot/get/";
     private const string PrtsPlusCopilotSetGet = "https://prts.maa.plus/set/get?id=";
     private const string PrtsPlusCopilotRating = "https://prts.maa.plus/copilot/rating";
@@ -3904,8 +3905,8 @@ public sealed class CopilotFeatureService : ICopilotFeatureService
     {
         type = CopilotCodeType.None;
         copilotId = 0;
-        var normalized = (source ?? string.Empty).Trim();
-        if (string.IsNullOrWhiteSpace(normalized))
+        var normalized = source?.Trim() ?? string.Empty;
+        if (normalized.Length == 0)
         {
             return false;
         }

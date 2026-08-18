@@ -10,15 +10,17 @@ using MAAUnified.Application.Models;
 using MAAUnified.App.ViewModels.Infrastructure;
 using MAAUnified.CoreBridge;
 using MAAUnified.Compat.Runtime;
+using CopilotCodePrefixes = MAAUnified.Application.Services.Features.CopilotFeatureService;
 using LegacyConfigurationKeys = MAAUnified.Compat.Constants.ConfigurationKeys;
 
 namespace MAAUnified.App.ViewModels.Copilot;
 
 public sealed partial class CopilotPageViewModel
 {
-    private const string CopilotIdPrefix = "maa://";
-    private const string CopilotNewIdPrefix = "prts://"; // 作业站新格式前缀，prts://12345 为作业，prts://s12345 为作业集
-    private const string CopilotNewSetIdPrefix = "prts://s"; // 新格式作业集前缀
+    // 作业码前缀常量统一引用 CopilotFeatureService（唯一定义处，格式变化时解析服务与输入预判同步更新）
+    private const string CopilotIdPrefix = CopilotCodePrefixes.CopilotIdPrefix;
+    private const string CopilotNewIdPrefix = CopilotCodePrefixes.CopilotNewIdPrefix;
+    private const string CopilotNewSetIdPrefix = CopilotCodePrefixes.CopilotNewSetIdPrefix;
     private const string PrtsPlusUrl = "https://prts.plus";
     private const string MapPrtsUrl = "https://map.ark-nights.com/areas?coord_override=maa";
     private static readonly Regex InvalidNavigationStageNameRegex = new(
