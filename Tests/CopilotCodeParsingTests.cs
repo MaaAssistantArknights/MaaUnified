@@ -50,13 +50,16 @@ public sealed class CopilotCodeParsingTests
         Assert.Contains($"id={expectedId}", handler.Requests[0].Query, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public async Task LoadFromCodeAsync_SetCodeOnSingleCopilotEntry_ReturnsActionableGuidance()
+    [Theory]
+    [InlineData("prts://s12345")]
+    [InlineData("s12345")]
+    [InlineData("S12345")]
+    public async Task LoadFromCodeAsync_SetCodeOnSingleCopilotEntry_ReturnsActionableGuidance(string source)
     {
         var handler = new CapturingHandler(_ => CopilotJson(200, "1-7"));
         var service = new CopilotFeatureService(new HttpClient(handler));
 
-        var result = await service.LoadFromCodeAsync("prts://s12345");
+        var result = await service.LoadFromCodeAsync(source);
 
         Assert.False(result.Success);
         Assert.Empty(handler.Requests);
