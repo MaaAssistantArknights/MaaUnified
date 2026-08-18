@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json.Nodes;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
@@ -497,7 +498,18 @@ internal static class ToolboxAssetCatalog
 
             if (TryResolveMiniGameClientNode(root, clientType, out var clientNode))
             {
-                AppendMiniGameEntries(entries, clientNode["miniGame"], language);
+                // Parse activity entries into a separate list (mirrors WPF ParseMiniGameEntries:
+                // collect into parsedEntries, filter by BeingOpen, then InsertRange at 0).
+                var activityEntries = new List<ToolboxMiniGameEntry>();
+                AppendMiniGameEntries(activityEntries, clientNode["miniGame"], language);
+
+                // Only keep currently open entries (mirrors WPF: if (entry.BeingOpen) parsedEntries.Add),
+                // evaluated against a single captured timestamp for consistent boundary behavior.
+                var utcNow = DateTime.UtcNow;
+                var openEntries = activityEntries.Where(entry => entry.IsOpenAt(utcNow)).ToList();
+
+                // Activity entries go before permanent defaults (mirrors WPF InsertRange(0, ...)).
+                entries.InsertRange(0, openEntries);
             }
         }
         catch
@@ -589,6 +601,7 @@ internal static class ToolboxAssetCatalog
         _ = TryReadString(obj["value"], out var lowerValue);
         _ = TryReadString(obj["Tip"], out var tip);
         _ = TryReadString(obj["TipKey"], out var tipKey);
+        _ = TryReadString(obj["MinimumRequired"], out var minimumRequired);
 
         var finalValue = FirstNonEmpty(explicitValue, lowerValue, display, displayKey);
         if (string.IsNullOrWhiteSpace(finalValue))
@@ -598,7 +611,52 @@ internal static class ToolboxAssetCatalog
 
         var finalDisplay = FirstNonEmpty(display, ResolveMiniGameText(displayKey, language), finalValue);
         var finalTip = FirstNonEmpty(ResolveMiniGameText(tipKey, language), tip, ResolveMiniGameText(displayKey + "Tip", language), string.Empty);
-        target.Add(new ToolboxMiniGameEntry(finalDisplay!, finalValue!, finalTip!));
+
+        // Parse activity time fields (mirrors WPF StageManager.ParseMiniGameEntry + ParseDateTime).
+        var utcStart = TryParseActivityTime(obj, "UtcStartTime");
+        var utcExpire = TryParseActivityTime(obj, "UtcExpireTime");
+
+        target.Add(new ToolboxMiniGameEntry(finalDisplay!, finalValue!, finalTip!, utcStart, utcExpire, minimumRequired));
+    }
+
+    /// <summary>
+    /// Parse a local-time string with TimeZone offset into UTC.
+    /// Mirrors WPF StageManager.ParseDateTime: ParseExact("yyyy/MM/dd HH:mm:ss").AddHours(-TimeZone).
+    /// </summary>
+    private static DateTime TryParseActivityTime(JsonObject obj, string key)
+    {
+        var timeStr = obj[key]?.ToString();
+        if (string.IsNullOrEmpty(timeStr))
+        {
+            return default;
+        }
+
+        if (DateTime.TryParseExact(timeStr, "yyyy/MM/dd HH:mm:ss", CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed))
+        {
+            var timeZone = TryReadTimeZone(obj);
+            return DateTime.SpecifyKind(parsed.AddHours(-timeZone), DateTimeKind.Utc);
+        }
+
+        return default;
+    }
+
+    /// <summary>
+    /// Read the TimeZone offset without throwing on unexpected JSON types
+    /// (e.g. a string "8" instead of a number).
+    /// </summary>
+    private static int TryReadTimeZone(JsonObject obj)
+    {
+        if (obj["TimeZone"] is not JsonValue value)
+        {
+            return 0;
+        }
+
+        if (value.TryGetValue<int>(out var timeZone))
+        {
+            return timeZone;
+        }
+
+        return value.TryGetValue<string>(out var timeZoneStr) && int.TryParse(timeZoneStr, out timeZone) ? timeZone : 0;
     }
 
     private static Bitmap? ResolveEmbeddedBitmap(string cacheKey, string assetUri)
@@ -747,6 +805,12 @@ internal static class ToolboxAssetCatalog
     {
         foreach (var root in EnumerateBaseDirectories())
         {
+            var cached = Path.Combine(root, "cache", "gui", "StageActivityV2.json");
+            if (File.Exists(cached) && LooksLikeValidStageActivityFile(cached))
+            {
+                return cached;
+            }
+
             var direct = Path.Combine(root, "gui", "StageActivityV2.json");
             if (File.Exists(direct))
             {
@@ -761,6 +825,23 @@ internal static class ToolboxAssetCatalog
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Basic sanity check for a cached StageActivityV2.json: non-empty and parseable JSON.
+    /// An invalid cache is skipped so lookup falls back to the non-cached candidates
+    /// instead of locking in stale or corrupted data.
+    /// </summary>
+    private static bool LooksLikeValidStageActivityFile(string path)
+    {
+        try
+        {
+            return new FileInfo(path).Length > 0 && JsonNode.Parse(File.ReadAllText(path)) is not null;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private static IEnumerable<string> EnumerateBaseDirectories()
@@ -978,4 +1059,34 @@ public sealed record ToolboxItemAsset(
     string ClassifyType,
     int SortId);
 
-public sealed record ToolboxMiniGameEntry(string Display, string Value, string Tip);
+public sealed record ToolboxMiniGameEntry(
+    string Display,
+    string Value,
+    string Tip,
+    DateTime UtcStartTime = default,
+    DateTime UtcExpireTime = default,
+    string? MinimumRequired = null)
+{
+    /// <summary>
+    /// Whether the activity is currently open (started and not expired).
+    /// Mirrors WPF MiniGameEntry.BeingOpen.
+    /// </summary>
+    public bool BeingOpen => IsOpenAt(DateTime.UtcNow);
+
+    public bool IsExpired => UtcExpireTime != default && DateTime.UtcNow >= UtcExpireTime;
+
+    public bool NotOpenYet => UtcStartTime != default && DateTime.UtcNow <= UtcStartTime;
+
+    /// <summary>
+    /// Whether this is a permanent entry (no time constraints), i.e. a hardcoded default.
+    /// </summary>
+    public bool IsPermanent => UtcStartTime == default && UtcExpireTime == default;
+
+    /// <summary>
+    /// Evaluate openness against a single captured timestamp so boundary checks
+    /// cannot straddle a clock tick mid-evaluation.
+    /// </summary>
+    public bool IsOpenAt(DateTime utcNow) =>
+        !(UtcStartTime != default && utcNow <= UtcStartTime)
+        && !(UtcExpireTime != default && utcNow >= UtcExpireTime);
+}
