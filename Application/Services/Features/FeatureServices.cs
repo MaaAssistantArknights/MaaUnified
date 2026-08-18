@@ -3364,7 +3364,10 @@ public sealed class TaskQueueFeatureService : ITaskQueueFeatureService
 
 public sealed class CopilotFeatureService : ICopilotFeatureService
 {
-    private const string CopilotIdPrefix = "maa://";
+    // 作业码前缀常量的唯一定义处（CopilotPageViewModel 的输入预判与本解析服务共享，格式再变化只改这里）
+    public const string CopilotIdPrefix = "maa://";
+    public const string CopilotNewIdPrefix = "prts://"; // 作业站新格式前缀，prts://12345 为作业，prts://s12345 为作业集
+    public const string CopilotNewSetIdPrefix = "prts://s"; // 新格式作业集前缀
     private const string PrtsPlusCopilotGet = "https://prts.maa.plus/copilot/get/";
     private const string PrtsPlusCopilotSetGet = "https://prts.maa.plus/set/get?id=";
     private const string PrtsPlusCopilotRating = "https://prts.maa.plus/copilot/rating";
@@ -3381,11 +3384,18 @@ public sealed class CopilotFeatureService : ICopilotFeatureService
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (!TryParseCopilotCode(source, out var copilotId))
+        if (!TryParseCopilotCode(source, out var codeType, out var copilotId))
         {
             return UiOperationResult<CopilotRemotePayload>.Fail(
                 UiErrorCode.CopilotIdMissing,
-                "作业码无效。请输入 `maa:///123456` 或纯数字作业码。");
+                "作业码无效。请输入 `prts://123456`、`maa://123456` 或纯数字作业码。");
+        }
+
+        if (codeType == CopilotCodeType.CopilotSet)
+        {
+            return UiOperationResult<CopilotRemotePayload>.Fail(
+                UiErrorCode.CopilotIdMissing,
+                "这是作业集码（`prts://s` 或 `s` 前缀）。请使用作业集入口加载。");
         }
 
         var remote = await GetRemoteJsonObjectAsync($"{PrtsPlusCopilotGet}{copilotId}", cancellationToken);
@@ -3446,11 +3456,11 @@ public sealed class CopilotFeatureService : ICopilotFeatureService
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (!TryParseCopilotCode(source, out var setId))
+        if (!TryParseCopilotCode(source, out _, out var setId))
         {
             return UiOperationResult<CopilotRemoteSetPayload>.Fail(
                 UiErrorCode.CopilotIdMissing,
-                "作业集码无效。请输入 `maa:///123456` 或纯数字作业集码。");
+                "作业集码无效。请输入 `prts://s123456`、`s123456`、`maa://123456` 或纯数字作业集码。");
         }
 
         var remote = await GetRemoteJsonObjectAsync($"{PrtsPlusCopilotSetGet}{setId}", cancellationToken);
@@ -3608,11 +3618,11 @@ public sealed class CopilotFeatureService : ICopilotFeatureService
             return UiOperationResult.Fail(UiErrorCode.CopilotIdMissing, "Copilot id cannot be empty.");
         }
 
-        if (!TryParseCopilotCode(normalized, out var resolvedId))
+        if (!TryParseCopilotCode(normalized, out _, out var resolvedId))
         {
             return UiOperationResult.Fail(
                 UiErrorCode.CopilotIdMissing,
-                "作业码无效。请输入 `maa:///123456` 或纯数字作业码。");
+                "作业码无效。请输入 `prts://123456`、`maa://123456` 或纯数字作业码。");
         }
 
         var body = JsonSerializer.Serialize(new
@@ -3877,21 +3887,66 @@ public sealed class CopilotFeatureService : ICopilotFeatureService
         return client;
     }
 
-    private static bool TryParseCopilotCode(string source, out int copilotId)
+    /// <summary>
+    /// 作业站代码类型（对齐 WPF CopilotViewModel.CopilotCodeType）。
+    /// </summary>
+    private enum CopilotCodeType
     {
+        None,
+        Copilot,
+        CopilotSet,
+    }
+
+    /// <summary>
+    /// 解析作业站代码，识别所有已知格式并提取数字 ID（对齐 WPF CopilotViewModel.TryParseCopilotCode：
+    /// prts://s12345、prts://12345、maa://12345、s12345、12345；从长到短匹配，避免 prts://s 被 prts:// 抢先）。
+    /// </summary>
+    private static bool TryParseCopilotCode(string source, out CopilotCodeType type, out int copilotId)
+    {
+        type = CopilotCodeType.None;
         copilotId = 0;
-        var normalized = (source ?? string.Empty).Trim();
-        if (string.IsNullOrWhiteSpace(normalized))
+        var normalized = source?.Trim() ?? string.Empty;
+        if (normalized.Length == 0)
         {
             return false;
         }
 
-        if (normalized.StartsWith(CopilotIdPrefix, StringComparison.OrdinalIgnoreCase))
+        if (normalized.StartsWith(CopilotNewSetIdPrefix, StringComparison.OrdinalIgnoreCase))
         {
-            normalized = normalized[CopilotIdPrefix.Length..].TrimStart('/');
+            type = CopilotCodeType.CopilotSet;
+            normalized = normalized[CopilotNewSetIdPrefix.Length..].TrimStart('/');
+            return int.TryParse(normalized, out copilotId) && copilotId > 0;
         }
 
-        return int.TryParse(normalized, out copilotId) && copilotId > 0;
+        if (normalized.StartsWith(CopilotNewIdPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            type = CopilotCodeType.Copilot;
+            normalized = normalized[CopilotNewIdPrefix.Length..].TrimStart('/');
+            return int.TryParse(normalized, out copilotId) && copilotId > 0;
+        }
+
+        if (normalized.StartsWith(CopilotIdPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            type = CopilotCodeType.Copilot;
+            normalized = normalized[CopilotIdPrefix.Length..].TrimStart('/');
+            return int.TryParse(normalized, out copilotId) && copilotId > 0;
+        }
+
+        // s12345 格式作业集
+        if (normalized.Length > 1 && (normalized[0] is 's' or 'S') && int.TryParse(normalized[1..], out copilotId) && copilotId > 0)
+        {
+            type = CopilotCodeType.CopilotSet;
+            return true;
+        }
+
+        // 纯数字，默认当单个作业
+        if (int.TryParse(normalized, out copilotId) && copilotId > 0)
+        {
+            type = CopilotCodeType.Copilot;
+            return true;
+        }
+
+        return false;
     }
 
     private async Task<UiOperationResult<JsonObject>> GetRemoteJsonObjectAsync(string url, CancellationToken cancellationToken)

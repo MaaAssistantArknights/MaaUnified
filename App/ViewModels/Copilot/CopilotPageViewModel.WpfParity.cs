@@ -10,13 +10,17 @@ using MAAUnified.Application.Models;
 using MAAUnified.App.ViewModels.Infrastructure;
 using MAAUnified.CoreBridge;
 using MAAUnified.Compat.Runtime;
+using CopilotCodePrefixes = MAAUnified.Application.Services.Features.CopilotFeatureService;
 using LegacyConfigurationKeys = MAAUnified.Compat.Constants.ConfigurationKeys;
 
 namespace MAAUnified.App.ViewModels.Copilot;
 
 public sealed partial class CopilotPageViewModel
 {
-    private const string CopilotIdPrefix = "maa://";
+    // 作业码前缀常量统一引用 CopilotFeatureService（唯一定义处，格式变化时解析服务与输入预判同步更新）
+    private const string CopilotIdPrefix = CopilotCodePrefixes.CopilotIdPrefix;
+    private const string CopilotNewIdPrefix = CopilotCodePrefixes.CopilotNewIdPrefix;
+    private const string CopilotNewSetIdPrefix = CopilotCodePrefixes.CopilotNewSetIdPrefix;
     private const string PrtsPlusUrl = "https://prts.plus";
     private const string MapPrtsUrl = "https://map.ark-nights.com/areas?coord_override=maa";
     private static readonly Regex InvalidNavigationStageNameRegex = new(
@@ -1692,6 +1696,9 @@ public sealed partial class CopilotPageViewModel
         return Path.Combine(RuntimeLayout.ResolveRuntimeBaseDirectory(), raw);
     }
 
+    /// <summary>
+    /// 判断输入是否为作业站神秘代码（对齐 WPF：maa://、prts://、prts://s 前缀、s12345 或纯数字）。
+    /// </summary>
     private static bool LooksLikeCopilotCodeSource(string source)
     {
         if (string.IsNullOrWhiteSpace(source))
@@ -1705,12 +1712,26 @@ public sealed partial class CopilotPageViewModel
             return true;
         }
 
-        if (!normalized.StartsWith(CopilotIdPrefix, StringComparison.OrdinalIgnoreCase))
+        // s12345 格式作业集
+        if (normalized.Length > 1 && (normalized[0] is 's' or 'S') && int.TryParse(normalized[1..], out _))
+        {
+            return true;
+        }
+
+        // 带前缀的格式（从长到短匹配，避免 prts://s 被 prts:// 抢先）
+        return MatchesCodePrefix(normalized, CopilotNewSetIdPrefix)
+            || MatchesCodePrefix(normalized, CopilotNewIdPrefix)
+            || MatchesCodePrefix(normalized, CopilotIdPrefix);
+    }
+
+    private static bool MatchesCodePrefix(string normalized, string prefix)
+    {
+        if (!normalized.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }
 
-        var remainder = normalized[CopilotIdPrefix.Length..].TrimStart('/');
+        var remainder = normalized[prefix.Length..].TrimStart('/');
         return int.TryParse(remainder, out _);
     }
 
