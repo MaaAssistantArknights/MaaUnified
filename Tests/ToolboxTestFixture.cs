@@ -171,6 +171,13 @@ internal sealed class ToolboxTestFixture : IAsyncDisposable
 
         public bool ForceConnectFailure { get; set; }
 
+        public bool BlockConnect { get; set; }
+
+        public TaskCompletionSource<bool> ConnectStarted { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource<CoreResult<bool>>? ConnectCompletion { get; private set; }
+
         public CoreErrorCode ConnectFailureCode { get; set; } = CoreErrorCode.ConnectFailed;
 
         public string ConnectFailureMessage { get; set; } = "Connection command failed to exec";
@@ -178,15 +185,22 @@ internal sealed class ToolboxTestFixture : IAsyncDisposable
         public Task<CoreResult<CoreInitializeInfo>> InitializeAsync(CoreInitializeRequest request, CancellationToken cancellationToken = default)
             => Task.FromResult(CoreResult<CoreInitializeInfo>.Ok(new CoreInitializeInfo(request.BaseDirectory, "fake", "fake", request.ClientType)));
 
-        public Task<CoreResult<bool>> ConnectAsync(CoreConnectionInfo connectionInfo, CancellationToken cancellationToken = default)
+        public async Task<CoreResult<bool>> ConnectAsync(CoreConnectionInfo connectionInfo, CancellationToken cancellationToken = default)
         {
             ConnectCallCount++;
+            ConnectStarted.TrySetResult(true);
             if (ForceConnectFailure)
             {
-                return Task.FromResult(CoreResult<bool>.Fail(new CoreError(ConnectFailureCode, ConnectFailureMessage)));
+                return CoreResult<bool>.Fail(new CoreError(ConnectFailureCode, ConnectFailureMessage));
             }
 
-            return Task.FromResult(CoreResult<bool>.Ok(true));
+            if (BlockConnect)
+            {
+                ConnectCompletion ??= new TaskCompletionSource<CoreResult<bool>>(TaskCreationOptions.RunContinuationsAsynchronously);
+                return await ConnectCompletion.Task.WaitAsync(cancellationToken);
+            }
+
+            return CoreResult<bool>.Ok(true);
         }
 
         public Task<CoreResult<int>> AppendTaskAsync(CoreTaskRequest task, CancellationToken cancellationToken = default)

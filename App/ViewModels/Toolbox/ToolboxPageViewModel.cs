@@ -1658,6 +1658,25 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
             return;
         }
 
+        // EnsureConnectedAsync may have awaited an in-flight connect, during which another
+        // dispatch could have started executing. Re-check and route to the normal busy
+        // path instead of appending a duplicate task (mirrors WPF LinkStart's post-wait
+        // idle re-check). Only applies when this dispatch has not transitioned yet — a
+        // transitionBeforeConnect dispatch is itself the busy state being observed.
+        // No EndRun here: reaching this branch means another toolbox flow owns the run
+        // (this dispatch never set any busy state of its own), so ending the run would
+        // prematurely release the other flow's ownership.
+        if (!transitionBeforeConnect && IsToolboxBusy)
+        {
+            await ApplyToolboxBusyAsync(
+                tool,
+                UiOperationResult.Fail(
+                    UiErrorCode.ToolboxExecutionFailed,
+                    T("Toolbox.Error.ToolboxBusy", "Toolbox already has a running task. Stop it first.")),
+                cancellationToken);
+            return;
+        }
+
         await PersistBridgeSettingsForToolAsync(tool, cancellationToken);
 
         if (!transitionBeforeConnect)
@@ -1892,6 +1911,16 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
             return UiOperationResult.Ok("Session already connected.");
         }
 
+        // A connect is already in flight (startup auto-connect, settings page, or another
+        // dispatch). Wait for it to settle instead of starting a competing connect that
+        // fails the lifecycle lease with "Connect already running" — WPF never surfaces
+        // that state as a user-facing error (LinkStart waits; Toolbox treats a repeat
+        // click as stop).
+        if (Runtime.SessionService.CurrentState == SessionState.Connecting)
+        {
+            await WaitForSessionToLeaveConnectingAsync(cancellationToken);
+        }
+
         if (Runtime.SessionService.CurrentState == SessionState.Connected)
         {
             var currentConnection = BuildCurrentConnectionInfo();
@@ -1905,6 +1934,37 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         }
 
         return await TryConnectWithCurrentSettingsAsync(cancellationToken);
+    }
+
+    // Bounds for waiting out an in-flight connect: the core connect budget defaults to
+    // 30s plus quick-precheck time, so 45s covers the settle window; on timeout the
+    // caller falls back to its own connect attempt (previous behavior).
+    private static readonly TimeSpan InFlightConnectSettleTimeout = TimeSpan.FromSeconds(45);
+
+    private static readonly TimeSpan InFlightConnectPollInterval = TimeSpan.FromMilliseconds(250);
+
+    /// <summary>
+    /// Wait until the session leaves the <see cref="SessionState.Connecting"/> state (an
+    /// in-flight connect settled) or the bounded timeout elapses. Cancellation propagates
+    /// to the caller's dispatch flow.
+    /// </summary>
+    private async Task WaitForSessionToLeaveConnectingAsync(CancellationToken cancellationToken)
+    {
+        using var settleCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        settleCts.CancelAfter(InFlightConnectSettleTimeout);
+        while (Runtime.SessionService.CurrentState == SessionState.Connecting)
+        {
+            try
+            {
+                await Task.Delay(InFlightConnectPollInterval, settleCts.Token);
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                // Settle timeout reached: stop waiting; the caller falls back to its
+                // own connect attempt (previous behavior).
+                return;
+            }
+        }
     }
 
     private CoreConnectionInfo BuildCurrentConnectionInfo()
