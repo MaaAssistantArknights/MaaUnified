@@ -1,7 +1,6 @@
 using System;
 using System.IO;
 using System.Linq;
-using System.Net;
 using System.Net.Http;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -336,8 +335,7 @@ public sealed class AppUpdateWorkflowService
 
     private static HttpClient BuildDefaultHttpClient(VersionUpdatePolicy? policy = null)
     {
-        var handler = BuildHttpClientHandler(policy);
-        var client = new HttpClient(handler, disposeHandler: true) { Timeout = TimeSpan.FromSeconds(60) };
+        var client = UpdateHttpClientFactory.Create(policy, TimeSpan.FromSeconds(60));
         client.DefaultRequestHeaders.UserAgent.ParseAdd("MAAUnified-VersionUpdate/1.0");
         return client;
     }
@@ -349,52 +347,20 @@ public sealed class AppUpdateWorkflowService
             return (_httpClient, false);
         }
 
-        if (policy is null || string.IsNullOrWhiteSpace(policy.Proxy))
+        // None must take precedence over the empty legacy address fallback.
+        if (policy is not null && string.Equals(policy.ProxyType, "none", StringComparison.OrdinalIgnoreCase))
+        {
+            return (BuildDefaultHttpClient(policy), true);
+        }
+
+        if (policy is null
+            || string.Equals(policy.ProxyType, "system", StringComparison.OrdinalIgnoreCase)
+            || string.IsNullOrWhiteSpace(policy.Proxy))
         {
             return (DefaultHttpClient, false);
         }
 
         return (BuildDefaultHttpClient(policy), true);
-    }
-
-    private static HttpClientHandler BuildHttpClientHandler(VersionUpdatePolicy? policy)
-    {
-        var handler = new HttpClientHandler();
-        if (policy is null || !TryBuildProxy(policy, out var proxy))
-        {
-            return handler;
-        }
-
-        handler.UseProxy = true;
-        handler.Proxy = proxy;
-        return handler;
-    }
-
-    private static bool TryBuildProxy(VersionUpdatePolicy policy, out IWebProxy? proxy)
-    {
-        proxy = null;
-        var rawProxy = policy.Proxy?.Trim();
-        if (string.IsNullOrWhiteSpace(rawProxy))
-        {
-            return false;
-        }
-
-        if (string.Equals(policy.ProxyType, "system", StringComparison.OrdinalIgnoreCase))
-        {
-            proxy = WebRequest.DefaultWebProxy;
-            return proxy is not null;
-        }
-
-        var candidate = rawProxy.Contains("://", StringComparison.Ordinal)
-            ? rawProxy
-            : $"{policy.ProxyType}://{rawProxy}";
-        if (!Uri.TryCreate(candidate, UriKind.Absolute, out var proxyUri))
-        {
-            return false;
-        }
-
-        proxy = new WebProxy(proxyUri);
-        return true;
     }
 
     private async Task<ResolvedRelease?> ResolveReleaseAsync(

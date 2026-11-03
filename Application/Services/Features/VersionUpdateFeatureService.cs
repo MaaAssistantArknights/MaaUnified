@@ -42,16 +42,13 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
         "https",
         "socks5",
         "system",
+        "none",
     };
     private static readonly HashSet<string> DefaultClientTypes = new(StringComparer.OrdinalIgnoreCase)
     {
         string.Empty,
         "Official",
         "Bilibili",
-    };
-    private static readonly HttpClient ResourceHttpClient = new()
-    {
-        Timeout = TimeSpan.FromMinutes(15),
     };
 
     private readonly UnifiedConfigurationService? _configService;
@@ -92,7 +89,10 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
 
         var policy = NormalizePolicy(new VersionUpdatePolicy(
             Proxy: ReadString(config, ConfigurationKeys.UpdateProxy, string.Empty),
-            ProxyType: ReadString(config, ConfigurationKeys.ProxyType, "http"),
+            ProxyType: ReadString(config, ConfigurationKeys.ProxyType,
+                string.IsNullOrWhiteSpace(ReadString(config, ConfigurationKeys.UpdateProxy, string.Empty))
+                    ? "system"
+                    : "http"),
             VersionType: ReadString(config, ConfigurationKeys.VersionType, "Stable"),
             ResourceUpdateSource: ReadString(config, ConfigurationKeys.UpdateSource, "Github"),
             ForceGithubGlobalSource: ReadBool(config, ConfigurationKeys.ForceGithubGlobalSource, false),
@@ -204,7 +204,7 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
             return await UpdateResourceFromMirrorChyanAsync(normalizedPolicy, clientType, progress, cancellationToken);
         }
 
-        return await UpdateResourceFromGithubAsync(progress, cancellationToken);
+        return await UpdateResourceFromGithubAsync(normalizedPolicy, progress, cancellationToken);
     }
 
     public async Task<UiOperationResult<ResourceUpdateCheckResult>> CheckResourceUpdateAsync(
@@ -239,7 +239,8 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
                     normalizedPolicy.ResourceUpdateSource,
                     clientType ?? "<default>"));
             await TraceVersionUpdateAsync(scope, $"Query begin url={requestUrl}", cancellationToken).ConfigureAwait(false);
-            using var response = await ResourceHttpClient.GetAsync(requestUrl, cancellationToken).ConfigureAwait(false);
+            using var client = UpdateHttpClientFactory.Create(normalizedPolicy, TimeSpan.FromMinutes(15));
+            using var response = await client.GetAsync(requestUrl, cancellationToken).ConfigureAwait(false);
             var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
             await TraceVersionUpdateAsync(
                 scope,
@@ -664,32 +665,26 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
                 $"Proxy type `{policy.ProxyType}` is unsupported.");
         }
 
-        var proxy = policy.Proxy.Trim();
-        if (proxy.Length > 0)
+        if (string.Equals(policy.ProxyType, "system", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(policy.ProxyType, "none", StringComparison.OrdinalIgnoreCase)
+            || string.IsNullOrWhiteSpace(policy.Proxy)
+            || UpdateHttpClientFactory.TryBuildManualProxy(policy, out _))
         {
-            if (Uri.TryCreate(proxy, UriKind.Absolute, out _))
-            {
-                return UiOperationResult.Ok("Version update proxy validation passed.");
-            }
-
-            if (TryParseHostPortProxy(proxy))
-            {
-                return UiOperationResult.Ok("Version update proxy validation passed.");
-            }
-
-            return UiOperationResult.Fail(
-                UiErrorCode.VersionUpdateInvalidParameters,
-                $"Proxy `{policy.Proxy}` must be in `<host>:<port>` or absolute URI format.");
+            return UiOperationResult.Ok("Version update proxy validation passed.");
         }
 
-        return UiOperationResult.Ok("Version update proxy validation passed.");
+        return UiOperationResult.Fail(
+            UiErrorCode.VersionUpdateInvalidParameters,
+            "Proxy must be an HTTP, HTTPS or SOCKS5 address in `<host>:<port>` or absolute URI format.");
     }
 
     private async Task<UiOperationResult<string>> UpdateResourceFromGithubAsync(
+        VersionUpdatePolicy policy,
         IProgress<VersionUpdateProgressInfo>? progress,
         CancellationToken cancellationToken)
     {
         const string scope = "VersionUpdate.Resource.Github";
+        using var client = UpdateHttpClientFactory.Create(policy, TimeSpan.FromMinutes(15));
         var runtimeBaseDirectory = ResolveRuntimeBaseDirectory();
         var resourceDirectory = Path.Combine(runtimeBaseDirectory, "resource");
         PublishUpdateLog(LocalizeUpdateText(
@@ -729,6 +724,7 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
                 $"Download begin url={GithubResourceArchiveUrl}",
                 cancellationToken).ConfigureAwait(false);
             await DownloadToFileAsync(
+                client,
                 GithubResourceArchiveUrl,
                 zipPath,
                 VersionUpdateProgressOperation.ResourcePackage,
@@ -827,6 +823,7 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
         CancellationToken cancellationToken)
     {
         const string scope = "VersionUpdate.Resource.MirrorChyan";
+        using var client = UpdateHttpClientFactory.Create(policy, TimeSpan.FromMinutes(15));
         var cdk = policy.MirrorChyanCdk.Trim();
         PublishUpdateLog(LocalizeUpdateText(
             "VersionUpdate.Log.Resource.MirrorChyanStart",
@@ -850,7 +847,7 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
         try
         {
             await TraceVersionUpdateAsync(scope, $"Query begin url={requestUrl}", cancellationToken).ConfigureAwait(false);
-            using var response = await ResourceHttpClient.GetAsync(requestUrl, cancellationToken).ConfigureAwait(false);
+            using var response = await client.GetAsync(requestUrl, cancellationToken).ConfigureAwait(false);
             var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
             await TraceVersionUpdateAsync(
                 scope,
@@ -937,6 +934,7 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
                 $"Download begin url={payload.DownloadUrl}",
                 cancellationToken).ConfigureAwait(false);
             await DownloadToFileAsync(
+                client,
                 payload.DownloadUrl,
                 zipPath,
                 VersionUpdateProgressOperation.ResourcePackage,
@@ -1080,21 +1078,6 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
         return normalized;
     }
 
-    private static bool TryParseHostPortProxy(string proxy)
-    {
-        if (proxy.Contains("://", StringComparison.Ordinal))
-        {
-            return false;
-        }
-
-        if (!Uri.TryCreate($"tcp://{proxy}", UriKind.Absolute, out var uri))
-        {
-            return false;
-        }
-
-        return !string.IsNullOrWhiteSpace(uri.Host) && uri.Port > 0;
-    }
-
     private string ResolveRuntimeBaseDirectory()
     {
         return _runtimeBaseDirectory
@@ -1135,6 +1118,7 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
     }
 
     private static async Task DownloadToFileAsync(
+        HttpClient client,
         string url,
         string destinationPath,
         VersionUpdateProgressOperation operation,
@@ -1142,7 +1126,7 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
         IProgress<VersionUpdateProgressInfo>? progress,
         CancellationToken cancellationToken)
     {
-        using var response = await ResourceHttpClient.GetAsync(
+        using var response = await client.GetAsync(
             url,
             HttpCompletionOption.ResponseHeadersRead,
             cancellationToken).ConfigureAwait(false);

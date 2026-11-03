@@ -26,7 +26,7 @@ public sealed record VersionUpdatePolicy(
 {
     public static VersionUpdatePolicy Default { get; } = new(
         Proxy: string.Empty,
-        ProxyType: "http",
+        ProxyType: "system",
         VersionType: "Stable",
         ResourceUpdateSource: "Github",
         ForceGithubGlobalSource: false,

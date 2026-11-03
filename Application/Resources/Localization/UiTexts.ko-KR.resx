@@ -2660,6 +2660,24 @@ OF-1 스테이지가 개방되지 않은 경우에는 선택하지 마세요.</v
   <data name="Settings.VersionUpdate.PanelUiVersion" xml:space="preserve">
     <value>UI 버전</value>
   </data>
+  <data name="Settings.VersionUpdate.Proxy.Http" xml:space="preserve">
+    <value>HTTP 프록시</value>
+  </data>
+  <data name="Settings.VersionUpdate.Proxy.None" xml:space="preserve">
+    <value>프록시 없음</value>
+  </data>
+  <data name="Settings.VersionUpdate.Proxy.None.Tip" xml:space="preserve">
+    <value>시스템 또는 수동 프록시를 사용하지 않고 직접 연결합니다.</value>
+  </data>
+  <data name="Settings.VersionUpdate.Proxy.Socks5" xml:space="preserve">
+    <value>SOCKS5 프록시</value>
+  </data>
+  <data name="Settings.VersionUpdate.Proxy.System" xml:space="preserve">
+    <value>시스템 프록시 사용</value>
+  </data>
+  <data name="Settings.VersionUpdate.Proxy.System.Tip" xml:space="preserve">
+    <value>시스템 프록시 설정을 사용합니다. 프록시 주소를 직접 입력할 필요가 없습니다.</value>
+  </data>
   <data name="Settings.VersionUpdate.ProxyAddress" xml:space="preserve">
     <value>프록시 주소</value>
   </data>

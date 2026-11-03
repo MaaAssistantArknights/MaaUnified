@@ -3951,6 +3951,24 @@ With save file: farm points through crafting (advanced).
   <data name="Settings.VersionUpdate.PanelUiVersion" xml:space="preserve">
     <value>UI version</value>
   </data>
+  <data name="Settings.VersionUpdate.Proxy.Http" xml:space="preserve">
+    <value>HTTP Proxy</value>
+  </data>
+  <data name="Settings.VersionUpdate.Proxy.None" xml:space="preserve">
+    <value>No proxy</value>
+  </data>
+  <data name="Settings.VersionUpdate.Proxy.None.Tip" xml:space="preserve">
+    <value>Connect directly without using a system or manual proxy.</value>
+  </data>
+  <data name="Settings.VersionUpdate.Proxy.Socks5" xml:space="preserve">
+    <value>SOCKS5 Proxy</value>
+  </data>
+  <data name="Settings.VersionUpdate.Proxy.System" xml:space="preserve">
+    <value>Follow system proxy</value>
+  </data>
+  <data name="Settings.VersionUpdate.Proxy.System.Tip" xml:space="preserve">
+    <value>Use the system's proxy settings. No manual proxy address is required.</value>
+  </data>
   <data name="Settings.VersionUpdate.ProxyAddress" xml:space="preserve">
     <value>Proxy address</value>
   </data>
