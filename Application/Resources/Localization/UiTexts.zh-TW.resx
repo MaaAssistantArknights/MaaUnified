@@ -2551,6 +2551,24 @@
   <data name="Settings.VersionUpdate.PanelUiVersion" xml:space="preserve">
     <value>UI 版本</value>
   </data>
+  <data name="Settings.VersionUpdate.Proxy.Http" xml:space="preserve">
+    <value>HTTP 代理</value>
+  </data>
+  <data name="Settings.VersionUpdate.Proxy.None" xml:space="preserve">
+    <value>無代理</value>
+  </data>
+  <data name="Settings.VersionUpdate.Proxy.None.Tip" xml:space="preserve">
+    <value>直接連線，不使用系統或手動代理。</value>
+  </data>
+  <data name="Settings.VersionUpdate.Proxy.Socks5" xml:space="preserve">
+    <value>SOCKS5 代理</value>
+  </data>
+  <data name="Settings.VersionUpdate.Proxy.System" xml:space="preserve">
+    <value>跟隨系統代理</value>
+  </data>
+  <data name="Settings.VersionUpdate.Proxy.System.Tip" xml:space="preserve">
+    <value>使用系統的代理設定，無須手動填寫代理位址。</value>
+  </data>
   <data name="Settings.VersionUpdate.ProxyAddress" xml:space="preserve">
     <value>代理位址</value>
   </data>

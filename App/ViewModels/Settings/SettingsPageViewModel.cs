@@ -360,7 +360,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
     private string _selectedNotificationProvider = "Smtp";
     private string _notificationProviderParametersText = string.Empty;
     private string _versionUpdateProxy = string.Empty;
-    private string _versionUpdateProxyType = "http";
+    private string _versionUpdateProxyType = "system";
     private string _versionUpdateVersionType = "Stable";
     private string _versionUpdateResourceSource = "Github";
     private bool _versionUpdateForceGithubSource;
@@ -2065,9 +2065,22 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
             if (SetProperty(ref _versionUpdateProxyType, NormalizeVersionUpdateProxyType(value)))
             {
                 OnPropertyChanged(nameof(SelectedVersionUpdateProxyTypeOption));
+                OnPropertyChanged(nameof(IsVersionUpdateSystemProxy));
+                OnPropertyChanged(nameof(IsVersionUpdateNoProxy));
+                OnPropertyChanged(nameof(IsVersionUpdateManualProxy));
             }
         }
     }
+
+    public bool IsVersionUpdateSystemProxy =>
+        string.Equals(VersionUpdateProxyType, "system", StringComparison.OrdinalIgnoreCase);
+
+    public bool IsVersionUpdateNoProxy =>
+        string.Equals(VersionUpdateProxyType, "none", StringComparison.OrdinalIgnoreCase);
+
+    public bool IsVersionUpdateManualProxy =>
+        string.Equals(VersionUpdateProxyType, "http", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(VersionUpdateProxyType, "socks5", StringComparison.OrdinalIgnoreCase);
 
     public string VersionUpdateVersionType
     {
@@ -6735,6 +6748,16 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
     private static string NormalizeVersionUpdateProxyType(string? value)
     {
         var normalized = (value ?? string.Empty).Trim();
+        if (string.Equals(normalized, "system", StringComparison.OrdinalIgnoreCase))
+        {
+            return "system";
+        }
+
+        if (string.Equals(normalized, "none", StringComparison.OrdinalIgnoreCase))
+        {
+            return "none";
+        }
+
         if (string.Equals(normalized, "socks5", StringComparison.OrdinalIgnoreCase))
         {
             return "socks5";
@@ -6776,8 +6799,10 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase
 
         VersionUpdateProxyTypeOptions =
         [
-            new DisplayValueOption("HTTP Proxy", "http"),
-            new DisplayValueOption("SOCKS5 Proxy", "socks5"),
+            new DisplayValueOption(RootTexts["Settings.VersionUpdate.Proxy.System"], "system"),
+            new DisplayValueOption(RootTexts["Settings.VersionUpdate.Proxy.None"], "none"),
+            new DisplayValueOption(RootTexts["Settings.VersionUpdate.Proxy.Http"], "http"),
+            new DisplayValueOption(RootTexts["Settings.VersionUpdate.Proxy.Socks5"], "socks5"),
         ];
 
         VersionUpdateResourceSourceOptions = SettingsOptionCatalog.BuildVersionResourceSourceOptions(Language);

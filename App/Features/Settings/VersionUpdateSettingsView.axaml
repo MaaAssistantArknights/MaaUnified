@@ -119,7 +119,7 @@
             <controls:SettingsLabel Text="{Binding RootTexts[Settings.VersionUpdate.ProxyType]}" />
             <controls:AppSelect Grid.Column="1"
                       Classes="settings-select"
-                      Width="{DynamicResource MAA.Size.Settings.FieldNarrowWidth}"
+                      Width="{DynamicResource MAA.Size.Settings.FieldInputWidth}"
                       HorizontalAlignment="Left"
                       ItemsSource="{Binding VersionUpdateProxyTypeOptions}"
                       SelectedItem="{Binding SelectedVersionUpdateProxyTypeOption, Mode=TwoWay}">
@@ -139,9 +139,20 @@
                      Classes="settings-input"
                      Width="{DynamicResource MAA.Size.Settings.FieldInputWidth}"
                      HorizontalAlignment="Left"
+                     IsEnabled="{Binding IsVersionUpdateManualProxy}"
                      Watermark="{Binding RootTexts[Settings.VersionUpdate.ProxyAddressWatermark]}"
                      Text="{Binding VersionUpdateProxy, UpdateSourceTrigger=LostFocus}" />
           </Grid>
+
+          <TextBlock Classes="app-caption"
+                     IsVisible="{Binding IsVersionUpdateSystemProxy}"
+                     Text="{Binding RootTexts[Settings.VersionUpdate.Proxy.System.Tip]}"
+                     TextWrapping="Wrap" />
+
+          <TextBlock Classes="app-caption"
+                     IsVisible="{Binding IsVersionUpdateNoProxy}"
+                     Text="{Binding RootTexts[Settings.VersionUpdate.Proxy.None.Tip]}"
+                     TextWrapping="Wrap" />
 
           <Grid Classes="settings-page-labeled-row"
                 controls:SettingsLabelWidthCoordinator.GroupKey="VersionUpdate.Main"

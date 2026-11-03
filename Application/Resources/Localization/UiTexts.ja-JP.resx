@@ -2659,6 +2659,24 @@
   <data name="Settings.VersionUpdate.PanelUiVersion" xml:space="preserve">
     <value>UI バージョン</value>
   </data>
+  <data name="Settings.VersionUpdate.Proxy.Http" xml:space="preserve">
+    <value>HTTP プロキシ</value>
+  </data>
+  <data name="Settings.VersionUpdate.Proxy.None" xml:space="preserve">
+    <value>プロキシなし</value>
+  </data>
+  <data name="Settings.VersionUpdate.Proxy.None.Tip" xml:space="preserve">
+    <value>システムや手動のプロキシを使用せず、直接接続します。</value>
+  </data>
+  <data name="Settings.VersionUpdate.Proxy.Socks5" xml:space="preserve">
+    <value>SOCKS5 プロキシ</value>
+  </data>
+  <data name="Settings.VersionUpdate.Proxy.System" xml:space="preserve">
+    <value>システムのプロキシを使用</value>
+  </data>
+  <data name="Settings.VersionUpdate.Proxy.System.Tip" xml:space="preserve">
+    <value>システムのプロキシ設定を使用します。プロキシアドレスの手動入力は不要です。</value>
+  </data>
   <data name="Settings.VersionUpdate.ProxyAddress" xml:space="preserve">
     <value>プロキシアドレス</value>
   </data>
