@@ -9,7 +9,7 @@
 - Locales: `zh-cn, zh-tw, en-us, ja-jp, ko-kr, pallas`
 - Feature items: `38`
 - System items: `12`
-- Config keys: `300`
+- Config keys: `301`
 - Fallback records: `15`
 
 ## Feature Parity
@@ -76,7 +76,7 @@
 
 ## Config Key Mapping Summary
 - Aligned: `58`
-- Gap: `242`
+- Gap: `243`
 - Waived: `0`
 
 ### Aligned Config Keys

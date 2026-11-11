@@ -264,6 +264,15 @@ internal sealed class RemoteControlCommandDispatcher
             return Fail(request, command, UiErrorCode.RemoteControlUnsupported, "Toolbox service is unavailable.");
         }
 
+        if (IsSessionRunningOrStopping())
+        {
+            return Fail(
+                request,
+                command,
+                UiErrorCode.SessionStateNotAllowed,
+                $"Remote command `{command}` cannot start new tasks while session state is `{_sessionService!.CurrentState}`. Stop the current run first.");
+        }
+
         // WPF parity: gacha commands wait for the running state to become idle
         // before dispatching and again before the completion report.
         await WaitUntilIdleAsync(cancellationToken);

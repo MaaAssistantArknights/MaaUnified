@@ -56,6 +56,10 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
     private string? _activeTaskChain;
     private bool _hasActiveRun;
     private bool _isStartRequestActive;
+    private bool _isStopRequestActive;
+    private readonly object _startRequestGate = new();
+    private CancellationTokenSource? _startRequestCts;
+    private TaskCompletionSource? _startRequestCompletion;
     private CopilotItemViewModel? _selectedItem;
     private bool _suppressSelectionFeedback;
     private bool _suppressSelectedTypeListItemSync;
@@ -66,6 +70,7 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
     private readonly IUiLanguageCoordinator _uiLanguageCoordinator;
     private readonly IAppDialogService _dialogService;
     private readonly Func<string, CancellationToken, Task>? _stopRunOwnerAsync;
+    private readonly Func<CancellationToken, Task>? _stopActiveSessionOperationAsync;
     private readonly Func<CancellationToken, Task<UiOperationResult>>? _ensureConnectedAsync;
     private readonly ConcurrentQueue<SessionCallbackEnvelope> _pendingSessionCallbacks = new();
     private int _callbackDrainScheduled;
@@ -77,12 +82,14 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
         IAppDialogService? dialogService = null,
         Func<string, CancellationToken, Task>? stopRunOwnerAsync = null,
         Func<CancellationToken, Task<UiOperationResult>>? ensureConnectedAsync = null,
-        ConnectionGameSharedStateViewModel? connectionState = null)
+        ConnectionGameSharedStateViewModel? connectionState = null,
+        Func<CancellationToken, Task>? stopActiveSessionOperationAsync = null)
         : base(runtime)
     {
         _connectionState = connectionState;
         _dialogService = dialogService ?? NoOpAppDialogService.Instance;
         _stopRunOwnerAsync = stopRunOwnerAsync;
+        _stopActiveSessionOperationAsync = stopActiveSessionOperationAsync;
         _ensureConnectedAsync = ensureConnectedAsync;
         Types =
         [
@@ -176,6 +183,12 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
         get => _selectedItem;
         set
         {
+            if (_isStartRequestActive)
+            {
+                OnPropertyChanged(nameof(SelectedItem));
+                return;
+            }
+
             if (!SetProperty(ref _selectedItem, value))
             {
                 return;
@@ -271,20 +284,21 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
         }
     }
 
-    public bool ShowStartButton => !IsRunning;
+    public bool ShowStartButton => !ShowStopButton;
 
-    public bool ShowStopButton => IsRunning;
+    public bool ShowStopButton =>
+        _isStartRequestActive
+        || CurrentSessionState is SessionState.Connecting or SessionState.Running or SessionState.Stopping
+        || IsExternalSessionActivityActive;
 
     public bool CanStart =>
         !_isStartRequestActive
         && _connectionState?.IsSessionOperationActive != true
         && !IsExternalSessionActivityActive
         && (CurrentSessionState == SessionState.Connected
-            || (CurrentSessionState == SessionState.Idle && _ensureConnectedAsync is not null)
-            || CurrentSessionState is SessionState.Running or SessionState.Stopping
-            || IsExternalRunActive);
+            || (CurrentSessionState == SessionState.Idle && _ensureConnectedAsync is not null));
 
-    public bool CanStop => CurrentSessionState == SessionState.Running && IsOwnRunActive;
+    public bool CanStop => ShowStopButton && !_isStopRequestActive;
 
     public bool IsStartRequestActive => _isStartRequestActive;
 
@@ -865,16 +879,26 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
 
         var keepRunOwner = false;
         SetStartRequestActive(true);
+        CancellationTokenSource startRequestCts;
+        TaskCompletionSource startRequestCompletion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        lock (_startRequestGate)
+        {
+            startRequestCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            _startRequestCts = startRequestCts;
+            _startRequestCompletion = startRequestCompletion;
+        }
+
+        var startToken = startRequestCts.Token;
         try
         {
             // WPF 对齐：Start() 先 ValidateStartAsync，校验失败直接返回，不发起连接
-            var selection = await ValidateStartSelectionAsync(cancellationToken);
+            var selection = await ValidateStartSelectionAsync(startToken);
             if (selection is null)
             {
                 return;
             }
 
-            var connectResult = await EnsureConnectedForStartAsync(cancellationToken);
+            var connectResult = await EnsureConnectedForStartAsync(startToken);
             if (!connectResult.Success)
             {
                 StatusMessage = T("Copilot.Status.StartFailed", "启动失败。");
@@ -885,7 +909,7 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
 
             CurrentSessionState = Runtime.SessionService.CurrentState;
             AddLog(GetRootText("ConnectingToEmulator", "Connecting to emulator……"));
-            var appendPlan = await AppendConfiguredCopilotAsync(selection, cancellationToken);
+            var appendPlan = await AppendConfiguredCopilotAsync(selection, startToken);
             if (appendPlan is null)
             {
                 return;
@@ -896,8 +920,26 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
             SetStartRequestActive(false);
             keepRunOwner = true;
         }
+        catch (OperationCanceledException) when (startRequestCts.IsCancellationRequested || !cancellationToken.IsCancellationRequested)
+        {
+            if (_hasActiveRun)
+            {
+                CompleteActiveRun();
+            }
+
+            StatusMessage = string.Empty;
+            LastErrorMessage = string.Empty;
+        }
         finally
         {
+            lock (_startRequestGate)
+            {
+                _startRequestCts = null;
+                _startRequestCompletion = null;
+            }
+
+            startRequestCts.Dispose();
+            startRequestCompletion.TrySetResult();
             if (!keepRunOwner)
             {
                 ResetFailedStartState();
@@ -1004,8 +1046,26 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
 
     public async Task StopAsync(CancellationToken cancellationToken = default)
     {
-        if (!CanStop)
+        if (_isStopRequestActive)
         {
+            return;
+        }
+
+        CancellationTokenSource? startRequestCts;
+        Task? startRequestCompletionTask;
+        lock (_startRequestGate)
+        {
+            startRequestCts = _startRequestCts;
+            startRequestCompletionTask = _startRequestCompletion?.Task;
+        }
+
+        if (startRequestCts is null && !CanStop)
+        {
+            if (CurrentSessionState == SessionState.Stopping)
+            {
+                return;
+            }
+
             LastErrorMessage = BuildSessionStateNotAllowedMessage(
                 CurrentSessionState,
                 T("Copilot.Action.Stop", "停止"),
@@ -1017,29 +1077,129 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
             return;
         }
 
-        if (!Runtime.SessionService.IsRunOwner(CopilotRunOwner))
+        SetStopRequestActive(true);
+        try
         {
-            var owner = Runtime.SessionService.CurrentRunOwner ?? "Unknown";
-            StatusMessage = T("Copilot.Status.StopFailed", "停止失败。");
-            LastErrorMessage = string.Format(
-                T("Copilot.Error.StopRunOwnerBlocked", "Copilot 停止被拦截：当前运行所有者为 `{0}`。"),
-                owner);
-            await RecordFailedResultAsync(
-                "Copilot.Stop.RunOwner",
-                UiOperationResult.Fail(UiErrorCode.TaskQueueEditBlocked, LastErrorMessage),
-                cancellationToken);
-            return;
-        }
+            startRequestCts?.Cancel();
+            if (startRequestCompletionTask is not null)
+            {
+                await startRequestCompletionTask.WaitAsync(cancellationToken);
+            }
 
-        if (!await ApplyResultAsync(await Runtime.ConnectFeatureService.StopAsync(cancellationToken), "Copilot.Stop", cancellationToken))
+            CurrentSessionState = Runtime.SessionService.CurrentState;
+            if (IsExternalSessionActivityActive)
+            {
+                await StopExternalSessionActivityAsync(cancellationToken);
+                return;
+            }
+
+            if (CurrentSessionState is SessionState.Running or SessionState.Stopping)
+            {
+                var owner = Runtime.SessionService.CurrentRunOwner;
+                // Only a *different* feature's ownership blocks this Stop.  With no
+                // owner at all there is nothing to protect, and refusing here used
+                // to leave the enabled Stop inert while reporting a bogus
+                // `Unknown` owner; TaskQueue already stops an ownerless run.
+                if (!string.IsNullOrWhiteSpace(owner) && !Runtime.SessionService.IsRunOwner(CopilotRunOwner))
+                {
+                    StatusMessage = T("Copilot.Status.StopFailed", "停止失败。");
+                    LastErrorMessage = string.Format(
+                        T("Copilot.Error.StopRunOwnerBlocked", "Copilot 停止被拦截：当前运行所有者为 `{0}`。"),
+                        owner);
+                    await RecordFailedResultAsync(
+                        "Copilot.Stop.RunOwner",
+                        UiOperationResult.Fail(UiErrorCode.TaskQueueEditBlocked, LastErrorMessage),
+                        cancellationToken);
+                    return;
+                }
+
+                if (!await ApplyResultAsync(
+                        await Runtime.ConnectFeatureService.StopAsync(cancellationToken),
+                        "Copilot.Stop",
+                        cancellationToken))
+                {
+                    CurrentSessionState = Runtime.SessionService.CurrentState;
+                    SyncStoppedUiStateIfSessionNotActive();
+                    return;
+                }
+            }
+            else if (Runtime.SessionService.IsRunOwner(CopilotRunOwner))
+            {
+                Runtime.SessionService.EndRun(CopilotRunOwner);
+            }
+
+            CurrentSessionState = Runtime.SessionService.CurrentState;
+            SyncStoppedUiStateIfSessionNotActive();
+        }
+        finally
+        {
+            SetStopRequestActive(false);
+        }
+    }
+
+    private async Task StopExternalSessionActivityAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var owner = Runtime.SessionService.CurrentRunOwner;
+            if (CurrentSessionState is SessionState.Running or SessionState.Stopping
+                && !string.IsNullOrWhiteSpace(owner)
+                && !Runtime.SessionService.IsRunOwner(CopilotRunOwner)
+                && _stopRunOwnerAsync is not null)
+            {
+                // Route the external owner's own page first; the shared activity stop would
+                // call back into the shell, which then tries to stop the same owner again.
+                await _stopRunOwnerAsync(owner, cancellationToken);
+            }
+            else if (_stopActiveSessionOperationAsync is not null)
+            {
+                await _stopActiveSessionOperationAsync(cancellationToken);
+            }
+            else
+            {
+                if (!await ApplyResultAsync(
+                             await Runtime.ConnectFeatureService.StopAsync(cancellationToken),
+                             "Copilot.Stop",
+                             cancellationToken))
+                {
+                    return;
+                }
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            await RecordUnhandledExceptionAsync(
+                "Copilot.Stop.SessionActivity",
+                ex,
+                UiErrorCode.UiOperationFailed,
+                "Stopping the active session operation failed.",
+                cancellationToken);
+        }
+        finally
         {
             CurrentSessionState = Runtime.SessionService.CurrentState;
             SyncStoppedUiStateIfSessionNotActive();
+        }
+    }
+
+    private void SetStopRequestActive(bool value)
+    {
+        if (_isStopRequestActive == value)
+        {
             return;
         }
 
-        CurrentSessionState = Runtime.SessionService.CurrentState;
-        SyncStoppedUiStateIfSessionNotActive();
+        _isStopRequestActive = value;
+        OnPropertyChanged(nameof(CanStart));
+        OnPropertyChanged(nameof(CanStop));
+        OnPropertyChanged(nameof(ShowStartButton));
+        OnPropertyChanged(nameof(ShowStopButton));
+        OnPropertyChanged(nameof(StartButtonText));
+        OnPropertyChanged(nameof(StopButtonText));
     }
 
     private async Task<string?> ResolveExecutionFilePathAsync(CopilotItemViewModel item, CancellationToken cancellationToken)

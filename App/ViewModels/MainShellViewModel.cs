@@ -137,7 +137,9 @@ public sealed class MainShellViewModel : ObservableObject
             (Avalonia.Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime
                 ? new AvaloniaDialogService(runtime)
                 : NoOpAppDialogService.Instance);
-        if (runtime.ConnectFeatureService is ConnectFeatureService connectFeatureService)
+        if (dialogService is not null
+            && runtime.ConnectFeatureService is ConnectFeatureService connectFeatureService
+            && connectFeatureService.MacRawByNcRiskPromptService is NoOpMacRawByNcRiskConnectionPromptService)
         {
             connectFeatureService.MacRawByNcRiskPromptService = new MacRawByNcRiskConnectionPromptService(
                 _dialogService,
@@ -1417,12 +1419,17 @@ public sealed class MainShellViewModel : ObservableObject
             _dialogService,
             StopRunOwnerFromDialogAsync,
             EnsureConnectedForSecondaryRunAsync,
-            connectionState: _connectionGameSharedState);
+            connectionState: _connectionGameSharedState,
+            stopActiveSessionOperationAsync: StopActiveSessionOperationFromTaskQueueAsync);
         page.SetLanguage(CurrentShellLanguage);
         return page;
     }
 
     private static readonly TimeSpan ForcedScheduledStartActivityWaitTimeout = TimeSpan.FromSeconds(30);
+
+    // Central Stop cancels an in-flight forced scheduled start (including a profile switch
+    // blocked behind another session operation) so it cannot start after the block releases.
+    private CancellationTokenSource? _scheduledStartCancellation;
 
     private async Task<IDisposable?> AcquireExclusiveSessionOperationAsync(
         string operationName,
@@ -1444,6 +1451,7 @@ public sealed class MainShellViewModel : ObservableObject
 
     private async Task StopActiveSessionOperationFromTaskQueueAsync(CancellationToken cancellationToken)
     {
+        Volatile.Read(ref _scheduledStartCancellation)?.Cancel();
         var canceledLifecycle = _runtime.ConnectFeatureService.TryCancelActiveLifecycleOperation(
             "TaskQueue central Stop");
         if (!canceledLifecycle)
@@ -1554,9 +1562,50 @@ public sealed class MainShellViewModel : ObservableObject
         {
             await copilotPage.StopAsync(cancellationToken);
         }
+        else
+        {
+            // An owner without a UI page of its own (today the WebApi run owner) must
+            // still be stoppable from the UI, otherwise every enabled Stop button
+            // silently does nothing. Stopping the Core session is the common part of
+            // every owner's stop route; release the owner only after the session really
+            // left Running/Stopping so a failed stop cannot leave an anonymous run behind.
+            await StopRunSessionDirectlyAsync(normalizedOwner, cancellationToken);
+        }
 
         CurrentSessionState = _runtime.SessionService.CurrentState;
+        var remainingOwner = _runtime.SessionService.CurrentRunOwner;
+        if (!string.IsNullOrWhiteSpace(remainingOwner)
+            && CurrentSessionState is not (SessionState.Running or SessionState.Stopping))
+        {
+            // The session already left the running states; a leftover owner would block the
+            // next start with a phantom run-owner conflict.
+            _runtime.SessionService.EndRun(remainingOwner);
+            remainingOwner = _runtime.SessionService.CurrentRunOwner;
+        }
+
+        if (CurrentSessionState is SessionState.Running or SessionState.Stopping
+            && !string.IsNullOrWhiteSpace(remainingOwner))
+        {
+            // A page-level stop can be a no-op when its page is not driving the session;
+            // fall back to the common stop route so global Stop cannot silently do nothing.
+            await StopRunSessionDirectlyAsync(remainingOwner, cancellationToken);
+            CurrentSessionState = _runtime.SessionService.CurrentState;
+        }
+
         await SyncTrayMenuStateAsync(cancellationToken);
+    }
+
+    private async Task StopRunSessionDirectlyAsync(string owner, CancellationToken cancellationToken)
+    {
+        if (_runtime.SessionService.CurrentState is SessionState.Running or SessionState.Stopping)
+        {
+            await _runtime.ConnectFeatureService.StopAsync(cancellationToken);
+        }
+
+        if (_runtime.SessionService.CurrentState is not (SessionState.Running or SessionState.Stopping))
+        {
+            _runtime.SessionService.EndRun(owner);
+        }
     }
 
     private ToolboxPageViewModel CreateToolboxPage()
@@ -1896,7 +1945,20 @@ public sealed class MainShellViewModel : ObservableObject
             return;
         }
 
-        await TaskQueuePage.StopAsync(cancellationToken, userInitiated);
+        var runOwner = _runtime.SessionService.CurrentRunOwner;
+        if (!string.IsNullOrWhiteSpace(runOwner)
+            && !_runtime.SessionService.IsRunOwner("TaskQueue"))
+        {
+            // The tray/hotkey Stop is global: an owner without a TaskQueue run in flight
+            // (Copilot, Toolbox, WebApi) must be stopped through its own route instead of
+            // making TaskQueue report a run-owner conflict.
+            await StopRunOwnerFromDialogAsync(runOwner, cancellationToken);
+        }
+        else
+        {
+            await TaskQueuePage.StopAsync(cancellationToken, userInitiated);
+        }
+
         CurrentSessionState = _runtime.SessionService.CurrentState;
         await SyncTrayMenuStateAsync(cancellationToken);
     }
@@ -2182,6 +2244,17 @@ public sealed class MainShellViewModel : ObservableObject
                     }
 
                     await StopAsync(cancellationToken);
+                    CurrentSessionState = _runtime.SessionService.CurrentState;
+                    if (CurrentSessionState is SessionState.Running or SessionState.Stopping)
+                    {
+                        // Never report a successful stop while the session is still running.
+                        await RecordEventAsync(
+                            scope,
+                            $"source={source}; stop-failed; session={CurrentSessionState}",
+                            cancellationToken);
+                        return ShellUiAction.None;
+                    }
+
                     PushGrowl("停止执行");
                     await RecordEventAsync(
                         scope,
@@ -3594,19 +3667,28 @@ public sealed class MainShellViewModel : ObservableObject
     {
         var resetOneShot = slot.Enabled is null;
         var resetOneShotAfterAttempt = false;
+        CancellationTokenSource? scheduledStartCancellation = null;
         try
         {
             CurrentSessionState = _runtime.SessionService.CurrentState;
             var sessionRunning = CurrentSessionState is SessionState.Running or SessionState.Stopping;
+            var hasActiveSessionOperation = _connectionGameSharedState.IsSessionOperationActive;
+            // WPF parity (TaskQueueViewModel.HandleScheduledStart): an in-flight operation or a
+            // running/connecting session blocks an unforced scheduled start. A merely
+            // connected session is idle in WPF terms, so LinkStart can reuse it.
+            var sessionBlocked = hasActiveSessionOperation
+                || CurrentSessionState is SessionState.Connecting
+                    or SessionState.Running
+                    or SessionState.Stopping;
             var triggerMessage =
-                $"slot={slot.Index}; time={slot.Time}; minute={minuteKey}; session={CurrentSessionState}; force={SettingsPage.ForceScheduledStart}";
+                $"slot={slot.Index}; time={slot.Time}; minute={minuteKey}; session={CurrentSessionState}; activeOperation={hasActiveSessionOperation}; force={SettingsPage.ForceScheduledStart}";
             await RecordEventAsync("Timer.Schedule.Trigger", triggerMessage, cancellationToken);
 
-            if (sessionRunning && !SettingsPage.ForceScheduledStart)
+            if (sessionBlocked && !SettingsPage.ForceScheduledStart)
             {
                 await RecordEventAsync(
                     "Timer.Schedule.Skip",
-                    $"slot={slot.Index}; reason=running-without-force",
+                    $"slot={slot.Index}; reason=session-active-without-force; session={CurrentSessionState}; activeOperation={hasActiveSessionOperation}",
                     cancellationToken);
                 return;
             }
@@ -3618,7 +3700,7 @@ public sealed class MainShellViewModel : ObservableObject
             // WPF parity (TaskQueueViewModel.HandleScheduledStart): with ForceScheduledStart and
             // CustomConfig enabled, a mismatched current configuration skips the scheduled start.
             // The T-2 minute pre-switch is expected to have aligned the configuration already.
-            if (force && SettingsPage.CustomTimerConfig && !IsCurrentProfileMatchingSlot(slot))
+            if (force && sessionRunning && SettingsPage.CustomTimerConfig && !IsCurrentProfileMatchingSlot(slot))
             {
                 var currentProfile = _runtime.ConfigurationService.CurrentConfig.CurrentProfile;
                 await RecordEventAsync(
@@ -3658,19 +3740,42 @@ public sealed class MainShellViewModel : ObservableObject
             {
                 await StopAsync(cancellationToken, userInitiated: false);
                 CurrentSessionState = _runtime.SessionService.CurrentState;
-                if (CurrentSessionState is SessionState.Running or SessionState.Stopping)
+            }
+            else if (CurrentSessionState is SessionState.Connecting or SessionState.Connected)
+            {
+                // Forced scheduled start must restart from a clean idle session: stop the
+                // pending/active connection before switching profiles and starting.
+                var stopConnectingResult = await _runtime.ConnectFeatureService.StopAsync(cancellationToken);
+                if (!stopConnectingResult.Success)
                 {
                     await RecordTimerScheduleErrorAsync(
-                        $"slot={slot.Index}; stop failed before force scheduled restart; lastError={LastError}",
+                        $"slot={slot.Index}; failed to stop non-idle session before forced scheduled start: {stopConnectingResult.Message}",
                         cancellationToken: cancellationToken);
                     return;
                 }
+
+                CurrentSessionState = _runtime.SessionService.CurrentState;
             }
 
+            if (CurrentSessionState is SessionState.Connecting or SessionState.Running or SessionState.Stopping)
+            {
+                await RecordTimerScheduleErrorAsync(
+                    $"slot={slot.Index}; stop failed before force scheduled restart; lastError={LastError}",
+                    cancellationToken: cancellationToken);
+                return;
+            }
+
+            IDisposable? forcedStartLease = null;
             if (force)
             {
+                scheduledStartCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                Volatile.Write(ref _scheduledStartCancellation, scheduledStartCancellation);
+                await RecordEventAsync(
+                    "Timer.Schedule.WaitForIdle",
+                    $"slot={slot.Index}; waiting for active session operation before forced scheduled start",
+                    cancellationToken);
                 await AppendCloseDownForForceScheduledRestartAsync(slot, cancellationToken);
-                using var forcedStartLease = await AcquireExclusiveSessionOperationAsync(
+                forcedStartLease = await AcquireExclusiveSessionOperationAsync(
                     "Timer.ForceScheduledStart",
                     cancellationToken);
                 if (forcedStartLease is null)
@@ -3682,37 +3787,71 @@ public sealed class MainShellViewModel : ObservableObject
                 }
             }
 
-            var timerStartActivityLease = _connectionGameSharedState.TryBeginExclusiveSessionOperation(
-                "Timer.ScheduledStart");
-            using var timerStartLease = timerStartActivityLease;
 
             // WPF parity (TaskQueueViewModel.HandleScheduledStart): a non-forced scheduled start
             // goes straight to LinkStart without switching or validating the configuration; the
             // configuration switch only happens at the T-2 pre-switch (HandleConfigChange). In
-            // the force path the profile was already verified to match above (or CustomConfig is
-            // off), so this call is a defensive no-op that can never switch.
-            if (force && !await SwitchTimerProfileIfNeededAsync(slot, cancellationToken))
+            // the force path the switch happens here while the forced-start lease is held.
+            var timerStartLease = forcedStartLease;
+            var scheduledStartToken = scheduledStartCancellation?.Token ?? cancellationToken;
+            try
             {
-                return;
-            }
+                if (force && !await SwitchTimerProfileIfNeededAsync(slot, scheduledStartToken))
+                {
+                    return;
+                }
 
-            await StartAsync(cancellationToken);
-            CurrentSessionState = _runtime.SessionService.CurrentState;
+                if (scheduledStartToken.IsCancellationRequested)
+                {
+                    await RecordEventAsync(
+                        "Timer.Schedule.Canceled",
+                        $"slot={slot.Index}; reason=central-stop",
+                        CancellationToken.None);
+                    return;
+                }
+
+                timerStartLease ??= _connectionGameSharedState.TryBeginExclusiveSessionOperation(
+                    "Timer.ScheduledStart");
+                if (timerStartLease is null)
+                {
+                    await RecordTimerScheduleErrorAsync(
+                        $"slot={slot.Index}; another session operation became active before the scheduled start.",
+                        cancellationToken: cancellationToken);
+                    return;
+                }
+
+                await TaskQueuePage.StartAsyncUnderExclusiveSessionOperationAsync(timerStartLease, scheduledStartToken);
+                CurrentSessionState = _runtime.SessionService.CurrentState;
             if (CurrentSessionState == SessionState.Running)
             {
                 _ = _runtime.AchievementTrackerService.AddProgressToGroup("ScheduleMaster");
                 await RecordEventAsync(
-                    sessionRunning ? "Timer.Schedule.StopAndStart" : "Timer.Schedule.Start",
+                    sessionRunning || SettingsPage.ForceScheduledStart
+                        ? "Timer.Schedule.StopAndStart"
+                        : "Timer.Schedule.Start",
                     $"slot={slot.Index}; profile={_runtime.ConfigurationService.CurrentConfig.CurrentProfile}",
                     cancellationToken);
                 return;
             }
 
-            await RecordTimerScheduleErrorAsync(
-                sessionRunning
-                    ? $"slot={slot.Index}; start failed after forced stop; lastError={LastError}"
-                    : $"slot={slot.Index}; start failed; lastError={LastError}",
-                cancellationToken: cancellationToken);
+                await RecordTimerScheduleErrorAsync(
+                    sessionRunning
+                        ? $"slot={slot.Index}; start failed after forced stop; lastError={LastError}"
+                        : $"slot={slot.Index}; start failed; lastError={LastError}",
+                    cancellationToken: cancellationToken);
+            }
+            finally
+            {
+                // The page treats a supplied lease as caller-owned. A non-forced scheduled
+                // start creates its own lease here, so it must be released after the start;
+                // otherwise the next slot is permanently blocked by a stale exclusive lease.
+                if (!force)
+                {
+                    timerStartLease?.Dispose();
+                }
+
+                forcedStartLease?.Dispose();
+            }
         }
         finally
         {
@@ -3721,6 +3860,14 @@ public sealed class MainShellViewModel : ObservableObject
                 slot.Enabled = false;
                 await SettingsPage.SaveTimerSettingsAsync(cancellationToken);
             }
+
+            if (scheduledStartCancellation is not null
+                && ReferenceEquals(Volatile.Read(ref _scheduledStartCancellation), scheduledStartCancellation))
+            {
+                Volatile.Write(ref _scheduledStartCancellation, null);
+            }
+
+            scheduledStartCancellation?.Dispose();
         }
     }
 
@@ -5053,8 +5200,8 @@ public sealed class MainShellViewModel : ObservableObject
     {
         CurrentSessionState = _runtime.SessionService.CurrentState;
         var state = new TrayMenuState(
-            StartEnabled: true,
-            StopEnabled: true,
+            StartEnabled: CanStartExecution,
+            StopEnabled: CanStopExecution,
             OverlayEnabled: true,
             ForceShowEnabled: true,
             HideTrayEnabled: true,

@@ -35,21 +35,16 @@ public sealed class MainWindowHotkeyTrayBehaviorTests
         Assert.True(toggleStart >= 0, "ToggleMainWindowFromHotkeyAsync should exist.");
         var toggleBody = content.Substring(toggleStart);
 
-        // The hotkey must not hide the window (removing it from the taskbar)
-        // or force-show a temporary tray icon unless both tray settings allow
-        // minimizing to the tray.
-        Assert.Contains(
-            "ShouldHideWindowToTray(vm.SettingsPage.UseTray, vm.SettingsPage.MinimizeToTray)",
-            toggleBody,
-            StringComparison.Ordinal);
+        // The hotkey only minimizes; the WindowState pipeline hides to the tray when the
+        // tray settings allow it, so the hotkey itself never force-hides the window.
         Assert.Contains(
             "WindowState = WindowState.Minimized;",
             toggleBody,
             StringComparison.Ordinal);
-        Assert.True(
-            toggleBody.IndexOf("ShouldHideWindowToTray(", StringComparison.Ordinal)
-                < toggleBody.IndexOf("HideMainWindowToTrayAsync(", StringComparison.Ordinal),
-            "The hide-to-tray path must be gated by ShouldHideWindowToTray.");
+        Assert.DoesNotContain(
+            "HideMainWindowToTrayAsync(",
+            toggleBody,
+            StringComparison.Ordinal);
     }
 
     // WPF parity (frozen MaaHotKeyActionHandler.HandleLinkStart): the
@@ -93,10 +88,12 @@ public sealed class MainWindowHotkeyTrayBehaviorTests
         var path = Path.Combine(root, "App", "Views", "MainWindow.axaml.cs");
         var content = File.ReadAllText(path);
 
+        // The handler entry point dispatches to an async body so exceptions surface through
+        // the shared UI task runner; the LinkStart branch must use the toggle helper.
         var handlerStart = content.IndexOf(
-            "private async void OnGlobalHotkeyTriggered",
+            "private async Task HandleGlobalHotkeyTriggeredAsync",
             StringComparison.Ordinal);
-        Assert.True(handlerStart >= 0, "OnGlobalHotkeyTriggered should exist.");
+        Assert.True(handlerStart >= 0, "HandleGlobalHotkeyTriggeredAsync should exist.");
         var handlerBody = content.Substring(handlerStart);
 
         // The LinkStart hotkey must go through the start/stop toggle, not the
@@ -172,7 +169,11 @@ public sealed class MainWindowHotkeyTrayBehaviorTests
 
         var hotkeyBody = ExtractMethodBody(content, "private async Task ToggleMainWindowFromHotkeyAsync");
         Assert.Contains(
-            "HideMainWindowToTrayAsync(requireMinimizedState: false",
+            "WindowState = WindowState.Minimized;",
+            hotkeyBody,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "HideMainWindowToTrayAsync(",
             hotkeyBody,
             StringComparison.Ordinal);
 

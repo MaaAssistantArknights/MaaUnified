@@ -44,8 +44,8 @@ public sealed class BaselineCoverageTests
         var legacyKeys = BaselineTestSupport.GetLegacyConfigurationKeys();
         var baselineKeys = baseline.ConfigKeyMappings.Select(k => k.Key).ToList();
 
-        Assert.Equal(300, legacyKeys.Count);
-        Assert.Equal(300, baselineKeys.Count);
+        Assert.Equal(301, legacyKeys.Count);
+        Assert.Equal(301, baselineKeys.Count);
 
         var legacySet = legacyKeys.ToHashSet(StringComparer.Ordinal);
         var baselineSet = baselineKeys.ToHashSet(StringComparer.Ordinal);
@@ -69,7 +69,7 @@ public sealed class BaselineCoverageTests
         var keySetHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(serializedKeySet))).ToLowerInvariant();
 
         Assert.Equal(292, baseline.Metadata.WpfConfigKeyCount);
-        Assert.Equal(8, baseline.Metadata.AvaloniaExtensionConfigKeyCount);
+        Assert.Equal(9, baseline.Metadata.AvaloniaExtensionConfigKeyCount);
         Assert.Equal(baseline.Metadata.WpfConfigKeyCount, frozenWpfKeys.Count);
         Assert.Equal(baseline.Metadata.AvaloniaExtensionConfigKeyCount, avaloniaExtensions.Count);
         Assert.Equal("566082d9e031b813dd5806d73baa6c319b0e44db24a2a6001be3b16eae94a0cd", keySetHash);
@@ -117,7 +117,7 @@ public sealed class BaselineCoverageTests
                 AssertRuntimeLocator(mapping.Key, mapping.MappingTarget, mapping.WritePath!);
             });
         Assert.Equal(58, baseline.ConfigKeyMappings.Count(mapping => mapping.ParityStatus == "Aligned"));
-        Assert.Equal(242, baseline.ConfigKeyMappings.Count(mapping => mapping.ParityStatus == "Gap"));
+        Assert.Equal(243, baseline.ConfigKeyMappings.Count(mapping => mapping.ParityStatus == "Gap"));
     }
 
     [Fact]
@@ -158,7 +158,6 @@ public sealed class BaselineCoverageTests
             "Bluestacks.Config.Path",
             "Bluestacks.Config.Keyword",
             "Bluestacks.Config.Error",
-            "Guide.StepIndex",
             "Debug.TaskName",
         };
 

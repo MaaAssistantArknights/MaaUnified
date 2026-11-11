@@ -230,7 +230,12 @@ internal static class LegacyTaskSchemaConverter
     private static JsonObject ConvertFight(JsonObject task, UnifiedProfile profile, UnifiedConfig config)
     {
         var stagePlan = ResolveFightStagePlan(task);
-        var stage = FightStageSelection.NormalizeStoredValue(ResolveFightStage(task));
+        // WPF legacy import stores the empty/default stage as the `$CurrentOrLast` sentinel; the
+        // appended core JSON converts it back to an empty stage.
+        var resolvedStage = ResolveFightStage(task);
+        var stage = string.IsNullOrWhiteSpace(resolvedStage)
+            ? FightStageSelection.CurrentOrLast
+            : FightStageSelection.NormalizeStoredValue(resolvedStage);
         var useMedicine = GetNullableBool(task, "UseMedicine") ?? false;
         var allowUseStoneSave = GetBool(task, "UseStoneAllowSave", false);
         var useStone = allowUseStoneSave && (GetNullableBool(task, "UseStone") ?? false);

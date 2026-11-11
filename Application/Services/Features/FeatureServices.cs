@@ -2620,6 +2620,7 @@ public sealed class TaskQueueFeatureService : ITaskQueueFeatureService
             return CoreResult<int>.Fail(new CoreError(CoreErrorCode.InvalidRequest, error));
         }
 
+        NormalizeLegacyEmptyFightStages(profile);
         _ = CollectMallCreditFightWarnings(profile, mutate: true);
         return await _sessionService.AppendTasksFromCurrentProfileAsync(cancellationToken).ConfigureAwait(false);
     }
@@ -2635,8 +2636,33 @@ public sealed class TaskQueueFeatureService : ITaskQueueFeatureService
             return CoreResult<int>.Fail(new CoreError(CoreErrorCode.InvalidRequest, error));
         }
 
+        NormalizeLegacyEmptyFightStages(profile);
         _ = CollectMallCreditFightWarnings(profile, mutate: true);
         return await connectFeatureService.AppendProfileTasksAndStartAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    private static int NormalizeLegacyEmptyFightStages(UnifiedProfile profile)
+    {
+        var affected = 0;
+        foreach (var task in profile.TaskQueue)
+        {
+            if (!IsTaskType(task, TaskModuleTypes.Fight) || task.Params is null)
+            {
+                continue;
+            }
+
+            var stage = task.Params["stage"] is JsonValue stageValue
+                && stageValue.TryGetValue(out string? stageText)
+                    ? stageText
+                    : null;
+            if (string.IsNullOrWhiteSpace(stage))
+            {
+                task.Params["stage"] = FightStageSelection.CurrentOrLast;
+                affected++;
+            }
+        }
+
+        return affected;
     }
 
     public async Task<CoreResult<int>> ConsumeCompletedOneShotTaskEnabledStatesAsync(CancellationToken cancellationToken = default)
@@ -5502,7 +5528,7 @@ public sealed class PostActionFeatureService : IPostActionFeatureService
             summary.Add("Exiting MAA instead of the skipped system-level post actions.");
         }
 
-        if ((config.ExitSelf && !hasSystemActions) || exitSelfInsteadOfSystemAction)
+        if ((config.ExitSelf && (!hasSystemActions || persistentExitSelfRestored)) || exitSelfInsteadOfSystemAction)
         {
             await ExecuteActionAsync(PostActionType.ExitSelf, cancellationToken);
         }

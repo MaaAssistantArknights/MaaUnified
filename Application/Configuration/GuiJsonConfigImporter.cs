@@ -356,9 +356,16 @@ public sealed class GuiJsonConfigImporter : IConfigImporter
         var stagePlan = new JsonArray(ReadString(source, "MainFunction.Stage1", string.Empty));
         if (ReadBool(source, "GUI.UseAlternateStage", false))
         {
-            stagePlan.Add(ReadString(source, "MainFunction.Stage2", string.Empty));
-            stagePlan.Add(ReadString(source, "MainFunction.Stage3", string.Empty));
-            stagePlan.Add(ReadString(source, "MainFunction.Stage4", string.Empty));
+            // WPF only keeps configured alternate stages; storing the blank Stage3/Stage4
+            // placeholders would turn them into `$CurrentOrLast` fallbacks after import.
+            foreach (var key in new[] { "MainFunction.Stage2", "MainFunction.Stage3", "MainFunction.Stage4" })
+            {
+                var alternateStage = ReadString(source, key, string.Empty);
+                if (!string.IsNullOrWhiteSpace(alternateStage))
+                {
+                    stagePlan.Add(alternateStage);
+                }
+            }
         }
 
         task["StagePlan"] = stagePlan;

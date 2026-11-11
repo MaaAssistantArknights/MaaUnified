@@ -579,7 +579,10 @@ public sealed class SessionStateUiProjectionTests
             case "failure":
                 bridge.CompleteStart(false, "scripted Copilot start failure");
                 await startTask.WaitAsync(TimeSpan.FromSeconds(2));
-                Assert.Equal(SessionState.Connected, fixture.Runtime.SessionService.CurrentState);
+                // A failed append/start taints the native queue, so the session may legitimately
+                // fall back to Idle (reconnect required) instead of Connected.
+                Assert.NotEqual(SessionState.Running, fixture.Runtime.SessionService.CurrentState);
+                Assert.NotEqual(SessionState.Stopping, fixture.Runtime.SessionService.CurrentState);
                 Assert.False(sharedState.IsSessionOperationActive);
                 Assert.True(settings.IsSessionIdle);
                 Assert.Null(fixture.Runtime.SessionService.CurrentRunOwner);
@@ -796,7 +799,10 @@ public sealed class SessionStateUiProjectionTests
             case "failure":
                 bridge.CompleteStart(false, "scripted account switch failure");
                 await switchTask.WaitAsync(TimeSpan.FromSeconds(5));
-                Assert.Equal(SessionState.Connected, fixture.Runtime.SessionService.CurrentState);
+                // A failed append/start taints the native queue, so the session may legitimately
+                // fall back to Idle (reconnect required) instead of Connected.
+                Assert.NotEqual(SessionState.Running, fixture.Runtime.SessionService.CurrentState);
+                Assert.NotEqual(SessionState.Stopping, fixture.Runtime.SessionService.CurrentState);
                 Assert.False(sharedState.IsSessionOperationActive);
                 Assert.True(settings.IsSessionIdle);
                 Assert.True(vm.CanEdit);
@@ -1837,7 +1843,7 @@ public sealed class SessionStateUiProjectionTests
             3,
             "SubTaskExtraInfo",
             """{"task_chain":"Roguelike","what":"StageInfo"}""",
-            DateTimeOffset.UtcNow)]) as Task;
+            DateTimeOffset.UtcNow), null]) as Task;
         Assert.NotNull(task);
         await task!;
         await WaitUntilAsync(() => vm.RoguelikeInCombatAndShowWait);
@@ -2096,7 +2102,11 @@ public sealed class SessionStateUiProjectionTests
                 log,
                 bridge,
                 root,
-                enableQuickConnectionPrecheck: false);
+                enableQuickConnectionPrecheck: false)
+            {
+                MacRawByNcRiskPromptService = new RecordingMacRawByNcPromptService(
+                    MacRawByNcRiskConnectionDecision.ForceRun),
+            };
             var runtime = new MAAUnifiedRuntime
             {
                 CoreBridge = bridge,

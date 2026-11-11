@@ -2660,6 +2660,20 @@
       "mapping_target": "SettingsPageViewModel.UiScalePercent"
     },
     {
+      "key": "Announcement.LocalizedStates",
+      "owner_item_id": "Dialog.Announcement",
+      "parity_status": "Gap",
+      "priority": "P0",
+      "notes": "Avalonia extension: per-language announcement read/do-not-remind state persisted by the announcement dialog. No frozen WPF counterpart; the dialog round-trips it through AnnouncementState.",
+      "evidence": {
+        "ui_path": "App/Features/Dialogs/AnnouncementDialogView.axaml",
+        "log_path": "debug/avalonia-ui-events.log",
+        "scope": "Config.Announcement.LocalizedStates",
+        "case_id": "CFG-301"
+      },
+      "mapping_target": "AnnouncementState.LocalizedStates"
+    },
+    {
       "key": "GUI.HideCloseButton",
       "owner_item_id": "Settings.Gui",
       "parity_status": "Gap",
@@ -6919,10 +6933,10 @@
   "metadata": {
     "feature_item_count": 38,
     "system_item_count": 12,
-    "config_key_count": 300,
+    "config_key_count": 301,
     "fallback_record_count": 15,
     "wpf_config_key_count": 292,
-    "avalonia_extension_config_key_count": 8,
+    "avalonia_extension_config_key_count": 9,
     "wpf_config_key_set_sha256": "566082d9e031b813dd5806d73baa6c319b0e44db24a2a6001be3b16eae94a0cd"
   }
 }

@@ -368,7 +368,7 @@ public sealed class MainWindowTrayCloseConfirmTests
 
         var pageSource = ReadTaskQueuePageViewModelSource();
         Assert.Contains(
-            "public bool IsRunning => _isStartRequestActive || CurrentSessionState is SessionState.Running or SessionState.Stopping;",
+            "public bool IsRunning => _isStartRequestActive || _isCoreQueueCleanupRequired || CurrentSessionState is SessionState.Running or SessionState.Stopping;",
             pageSource,
             StringComparison.Ordinal);
     }

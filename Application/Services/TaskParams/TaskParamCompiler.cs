@@ -3063,9 +3063,9 @@ public static class TaskParamCompiler
     private static string ResolveYituliuId(UnifiedProfile profile, UnifiedConfig config)
     {
         // Frozen WPF has no separate Yituliu ID setting: Recruit ISerialize passes
-        // GameSettings.PenguinId for both penguin_id and yituliu_id.
-        return ResolveStringSetting(profile, config, "YituliuId")
-            ?? ResolveStringSetting(profile, config, "Penguin.Id", "PenguinId")
+        // GameSettings.PenguinId for both penguin_id and yituliu_id, so a legacy
+        // YituliuId value is not consulted here.
+        return ResolveStringSetting(profile, config, "Penguin.Id", "PenguinId")
             ?? string.Empty;
     }
 

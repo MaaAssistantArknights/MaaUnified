@@ -1692,8 +1692,23 @@ public sealed class ConnectionLifecycleRegressionTests
             bridge,
             new UiLogService());
 
-        var result = await dispatcher.DispatchAsync(
+        using var pumpCts = new CancellationTokenSource();
+        var pumpTask = fixture.Session.StartCallbackPumpAsync(_ => Task.CompletedTask, pumpCts.Token);
+        var dispatchTask = dispatcher.DispatchAsync(
             new MAAUnified.Application.Services.RemoteControl.RemoteControlCommandRequest("LinkStart-Recruiting", null, "user", "device"));
+        await WaitUntilAsync(() => fixture.Session.CurrentState == SessionState.Running);
+        // The remote control report is posted after the queue becomes idle (WPF parity),
+        // so the scripted bridge has to finish the run before DispatchAsync can return.
+        bridge.PublishCallback(new CoreCallbackEvent(1, "AllTasksCompleted", "{}", DateTimeOffset.Now));
+        var result = await dispatchTask.WaitAsync(TimeSpan.FromSeconds(10));
+        pumpCts.Cancel();
+        try
+        {
+            await pumpTask;
+        }
+        catch (OperationCanceledException)
+        {
+        }
 
         Assert.True(result.Success, result.Message);
         // In-memory enable states are always restored after the subset start.

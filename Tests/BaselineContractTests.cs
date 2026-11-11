@@ -325,7 +325,7 @@ internal static class BaselineTestSupport
 
     // Derived from the full frozen WPF configuration surface at the frozen SHA (legacy
     // MaaWpfGui/Constants/ConfigurationKeys.cs constants + ConfigFactory Configuration/** models
-    // persisted in gui.new.json + raw ConfigurationHelper string keys): these 8 keys have no frozen
+    // persisted in gui.new.json + raw ConfigurationHelper string keys): these 9 keys have no frozen
     // WPF counterpart and are explicit Avalonia extensions.
     // M01-R5-02: HotKeys (frozen Services/HotKeys/MaaHotKeyManager.cs persists the global "HotKeys"
     // key via ConfigurationHelper), GUI.UseNotify, and GUI.IgnoreBadModulesAndUseSoftwareRendering
@@ -335,6 +335,7 @@ internal static class BaselineTestSupport
     {
         "Connect.MacBundledAdbTermsAcceptedAtUtc",
         "Connect.MacBundledAdbTermsAcceptedVersion",
+        "Announcement.LocalizedStates",
         "ExternalNotification.SendWhenStalled",
         "GUI.UiScalePercent",
         "MainFunction.ActionAfterCompleted",

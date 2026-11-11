@@ -4196,7 +4196,7 @@ private sealed class CapturingTrayService : ITrayService
 
         public Task<CoreResult<CoreRuntimeStatus>> GetRuntimeStatusAsync(CancellationToken cancellationToken = default)
         {
-            return Task.FromResult(CoreResult<CoreRuntimeStatus>.Ok(new CoreRuntimeStatus(true, true, RuntimeRunning)));
+            return Task.FromResult(CoreResult<CoreRuntimeStatus>.Ok(new CoreRuntimeStatus(true, true, RuntimeRunning || RuntimeReportsRunning)));
         }
 
         public Task<CoreResult<bool>> ReloadResourceAsync(

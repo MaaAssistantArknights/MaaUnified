@@ -470,9 +470,13 @@ public sealed class WebApiFeatureService : IWebApiFeatureService
         var keepOwner = false;
         try
         {
-            var appendResult = await _connectFeatureService.AppendCoreTasksAndStartAsync(
-                _taskStore.List().Select(static task => task.ToCoreTaskRequest()),
-                cancellationToken).ConfigureAwait(false);
+            var coreTasks = _taskStore.List().Select(static task => task.ToCoreTaskRequest()).ToList();
+            var appendResult = _connectFeatureService is not null
+                ? await _connectFeatureService.AppendCoreTasksAndStartAsync(coreTasks, cancellationToken).ConfigureAwait(false)
+                : await _sessionService.AppendCoreTasksAndStartAsync(
+                    coreTasks,
+                    new CoreInstanceOptions(),
+                    cancellationToken).ConfigureAwait(false);
             if (!appendResult.Success)
             {
                 await WriteJsonAsync(

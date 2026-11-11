@@ -106,7 +106,12 @@ public sealed class WebApiHttpContractTests
     private static async Task<JsonObject> PostAsync(HttpClient client, string path, JsonObject payload)
     {
         using var response = await client.PostAsJsonAsync(path, payload);
-        response.EnsureSuccessStatusCode();
+        if (!response.IsSuccessStatusCode)
+        {
+            var body = await response.Content.ReadAsStringAsync();
+            throw new HttpRequestException($"POST {path} failed: {(int)response.StatusCode} body={body}", null, response.StatusCode);
+        }
+
         return (await JsonNode.ParseAsync(await response.Content.ReadAsStreamAsync()))!.AsObject();
     }
 
