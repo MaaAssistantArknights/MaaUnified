@@ -2292,6 +2292,31 @@ public sealed class MainShellViewModelTests
     }
 
     [Fact]
+    public async Task InitializeAsync_WithUnacknowledgedNightlyChannel_ShowsWarningWithoutChangingAcknowledgement()
+    {
+        var dialogService = new CapturingDialogService();
+        var versionUpdate = new ScriptedVersionUpdateFeatureService
+        {
+            LoadedPolicy = VersionUpdatePolicy.Default with
+            {
+                VersionType = "Nightly",
+                AllowNightlyUpdates = true,
+                HasAcknowledgedNightlyWarning = false,
+                StartupUpdateCheck = false,
+            },
+        };
+        await using var fixture = await TestFixture.CreateAsync(
+            versionUpdateFeatureService: versionUpdate,
+            dialogService: dialogService);
+
+        await fixture.ViewModel.InitializeAsync();
+
+        Assert.True(await WaitUntilAsync(() => dialogService.WarningConfirmCallCount == 1));
+        Assert.Equal("App.Initialize.NightlyWarning", dialogService.LastWarningConfirmScope);
+        Assert.False(fixture.ViewModel.SettingsPage.VersionUpdateAcknowledgedNightlyWarning);
+    }
+
+    [Fact]
     public async Task InitializeAsync_WhenFirstBootFlagSet_ShouldShowPersistedUpdateDialogWithoutBlockingChecks()
     {
         var dialogService = new CapturingDialogService
@@ -2445,6 +2470,168 @@ public sealed class MainShellViewModelTests
     }
 
     [Fact]
+    public async Task CheckVersionUpdateAsync_WhenTaskIsRunning_AutoInstallWaitsForIdleBeforeRestarting()
+    {
+        var lifecycle = new SpyAppLifecycleService(UiOperationResult.Ok("Restart process launched."));
+        var versionUpdate = new ScriptedVersionUpdateFeatureService
+        {
+            CheckForUpdatesResult = UiOperationResult<VersionUpdateCheckResult>.Ok(
+                CreatePreparedVersionUpdateCheckResult(),
+                "Prepared update package."),
+        };
+        await using var fixture = await TestFixture.CreateAsync(
+            versionUpdateFeatureService: versionUpdate,
+            appLifecycleService: lifecycle);
+        await fixture.ViewModel.SettingsPage.InitializeAsync();
+        fixture.ViewModel.SettingsPage.VersionUpdateAutoInstall = true;
+        await SetSessionStateAsync(fixture.Runtime.SessionService, SessionState.Running);
+
+        var checkTask = fixture.ViewModel.SettingsPage.CheckVersionUpdateAsync();
+
+        Assert.True(await WaitUntilAsync(() =>
+            versionUpdate.CheckForUpdatesCallCount == 1 && !checkTask.IsCompleted));
+        Assert.Equal(0, lifecycle.RestartCallCount);
+
+        Assert.True((await fixture.Runtime.SessionService.StopAsync()).Success);
+        await checkTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(1, lifecycle.RestartCallCount);
+    }
+
+    [Fact]
+    public async Task CheckVersionUpdateAsync_WhenTaskIsRunning_ManualRestartPromptWaitsForIdle()
+    {
+        var dialogService = new CapturingDialogService();
+        var versionUpdate = new ScriptedVersionUpdateFeatureService
+        {
+            CheckForUpdatesResult = UiOperationResult<VersionUpdateCheckResult>.Ok(
+                CreatePreparedVersionUpdateCheckResult(),
+                "Prepared update package."),
+        };
+        await using var fixture = await TestFixture.CreateAsync(
+            versionUpdateFeatureService: versionUpdate,
+            dialogService: dialogService);
+        await fixture.ViewModel.SettingsPage.InitializeAsync();
+        await SetSessionStateAsync(fixture.Runtime.SessionService, SessionState.Running);
+
+        var checkTask = fixture.ViewModel.SettingsPage.CheckVersionUpdateAsync();
+
+        Assert.True(await WaitUntilAsync(() =>
+            versionUpdate.CheckForUpdatesCallCount == 1 && !checkTask.IsCompleted));
+        Assert.Equal(0, dialogService.WarningConfirmCallCount);
+
+        Assert.True((await fixture.Runtime.SessionService.StopAsync()).Success);
+        await checkTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(1, dialogService.WarningConfirmCallCount);
+        Assert.Contains(".Prompt", dialogService.LastWarningConfirmScope, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task VersionUpdateMirrorChyanCdk_AtTwentyFourCharacters_StartsSoftwareAndResourceUpdateAndClearsExpiry()
+    {
+        var versionUpdate = new ScriptedVersionUpdateFeatureService
+        {
+            CheckResourceUpdateResult = UiOperationResult<ResourceUpdateCheckResult>.Ok(
+                new ResourceUpdateCheckResult(
+                    IsUpdateAvailable: true,
+                    DisplayVersion: "2026-08-30",
+                    ReleaseNote: "resource update",
+                    VersionTimestamp: null,
+                    RequiresMirrorChyanCdk: true,
+                    DownloadUrl: null),
+                "Resource update available."),
+        };
+        await using var fixture = await TestFixture.CreateAsync(versionUpdateFeatureService: versionUpdate);
+        await fixture.ViewModel.SettingsPage.InitializeAsync();
+        fixture.ViewModel.SettingsPage.VersionUpdateResourceSource = "MirrorChyan";
+
+        fixture.ViewModel.SettingsPage.VersionUpdateMirrorChyanCdk = "123456789012345678901234";
+
+        Assert.True(await WaitUntilAsync(() =>
+            versionUpdate.CheckForUpdatesCallCount == 1
+            && versionUpdate.CheckResourceCallCount == 1
+            && versionUpdate.UpdateResourceCallCount == 1
+            && !fixture.ViewModel.SettingsPage.IsVersionUpdateActionRunning));
+
+        fixture.ViewModel.SettingsPage.VersionUpdateMirrorChyanCdk = string.Empty;
+        await fixture.ViewModel.SettingsPage.SaveVersionUpdateSettingsAsync();
+
+        Assert.Equal("0", fixture.ViewModel.SettingsPage.VersionUpdateMirrorChyanCdkExpired);
+        Assert.Equal("0", versionUpdate.LoadedPolicy.MirrorChyanCdkExpired);
+    }
+
+    [Fact]
+    public async Task CheckVersionUpdateAsync_AppliesMirrorChyanSoftwareExpiryToSettings()
+    {
+        var versionUpdate = new ScriptedVersionUpdateFeatureService
+        {
+            LoadedPolicy = VersionUpdatePolicy.Default with
+            {
+                ResourceUpdateSource = "MirrorChyan",
+                MirrorChyanCdk = "valid-cdk",
+            },
+            CheckForUpdatesResult = UiOperationResult<VersionUpdateCheckResult>.Ok(
+                new VersionUpdateCheckResult(
+                    Channel: "Stable",
+                    CurrentVersion: "v1.0.0",
+                    TargetVersion: "v1.0.0",
+                    ReleaseName: string.Empty,
+                    Summary: string.Empty,
+                    Body: string.Empty,
+                    PackageName: string.Empty,
+                    PackageDownloadUrl: null,
+                    PackageSize: null,
+                    IsNewVersion: false,
+                    HasPackage: false,
+                    MirrorChyanCdkExpiryUnixSeconds: 1777776000),
+                "Checked."),
+        };
+        await using var fixture = await TestFixture.CreateAsync(versionUpdateFeatureService: versionUpdate);
+        await fixture.ViewModel.SettingsPage.InitializeAsync();
+
+        await fixture.ViewModel.SettingsPage.CheckVersionUpdateAsync();
+
+        Assert.Equal("1777776000", fixture.ViewModel.SettingsPage.VersionUpdateMirrorChyanCdkExpired);
+        Assert.Equal("1777776000", versionUpdate.LoadedPolicy.MirrorChyanCdkExpired);
+    }
+
+    [Fact]
+    public async Task ManualUpdateResourceAsync_ReloadsMirrorChyanExpiryIntoSettings()
+    {
+        var versionUpdate = new ScriptedVersionUpdateFeatureService
+        {
+            LoadedPolicy = VersionUpdatePolicy.Default with
+            {
+                ResourceUpdateSource = "MirrorChyan",
+                MirrorChyanCdk = "valid-cdk",
+                MirrorChyanCdkExpired = "100",
+            },
+            CheckResourceUpdateResult = UiOperationResult<ResourceUpdateCheckResult>.Ok(
+                new ResourceUpdateCheckResult(
+                    IsUpdateAvailable: true,
+                    DisplayVersion: "2026-08-30",
+                    ReleaseNote: "resource update",
+                    VersionTimestamp: null,
+                    RequiresMirrorChyanCdk: true,
+                    DownloadUrl: null),
+                "Resource update available."),
+            ResourceUpdatePolicyAfterUpdate = VersionUpdatePolicy.Default with
+            {
+                ResourceUpdateSource = "MirrorChyan",
+                MirrorChyanCdk = "valid-cdk",
+                MirrorChyanCdkExpired = "1777776000",
+            },
+        };
+        await using var fixture = await TestFixture.CreateAsync(versionUpdateFeatureService: versionUpdate);
+        await fixture.ViewModel.SettingsPage.InitializeAsync();
+
+        await fixture.ViewModel.SettingsPage.ManualUpdateResourceAsync();
+
+        Assert.Equal("1777776000", fixture.ViewModel.SettingsPage.VersionUpdateMirrorChyanCdkExpired);
+    }
+
+    [Fact]
     public async Task ToolboxPage_ShouldUseShellDialogService_ForGachaDisclaimerConfirmation()
     {
         var dialogService = new CapturingDialogService
@@ -2493,6 +2680,21 @@ public sealed class MainShellViewModelTests
             SuggestedAction = "Fix it",
         };
     }
+
+    private static VersionUpdateCheckResult CreatePreparedVersionUpdateCheckResult()
+        => new(
+            Channel: "Stable",
+            CurrentVersion: "v1.0.0",
+            TargetVersion: "v2.0.0",
+            ReleaseName: "Release v2.0.0",
+            Summary: "Summary",
+            Body: "Body",
+            PackageName: "pkg.zip",
+            PackageDownloadUrl: null,
+            PackageSize: null,
+            IsNewVersion: true,
+            HasPackage: true,
+            PreparedPackagePath: Path.Combine(Path.GetTempPath(), "pkg.zip"));
 
     private static string CreateBlockingConfigJson()
     {
@@ -3151,6 +3353,8 @@ public sealed class MainShellViewModelTests
 
         public int UpdateResourceCallCount { get; private set; }
 
+        public VersionUpdatePolicy? ResourceUpdatePolicyAfterUpdate { get; set; }
+
         public UiOperationResult<VersionUpdateCheckResult> CheckForUpdatesResult { get; set; } =
             UiOperationResult<VersionUpdateCheckResult>.Ok(
                 new VersionUpdateCheckResult(
@@ -3187,7 +3391,10 @@ public sealed class MainShellViewModelTests
             => Task.FromResult(UiOperationResult<ResourceVersionInfo>.Ok(ResourceVersionInfo.Empty, "Loaded."));
 
         public Task<UiOperationResult> SaveChannelAsync(VersionUpdatePolicy policy, CancellationToken cancellationToken = default)
-            => Task.FromResult(UiOperationResult.Ok("Saved."));
+        {
+            LoadedPolicy = policy;
+            return Task.FromResult(UiOperationResult.Ok("Saved."));
+        }
 
         public Task<UiOperationResult> SaveProxyAsync(VersionUpdatePolicy policy, CancellationToken cancellationToken = default)
             => Task.FromResult(UiOperationResult.Ok("Saved."));
@@ -3205,6 +3412,11 @@ public sealed class MainShellViewModelTests
             CancellationToken cancellationToken = default)
         {
             UpdateResourceCallCount++;
+            if (ResourceUpdatePolicyAfterUpdate is not null)
+            {
+                LoadedPolicy = ResourceUpdatePolicyAfterUpdate;
+            }
+
             return Task.FromResult(UiOperationResult<string>.Ok("Updated.", "Updated."));
         }
 

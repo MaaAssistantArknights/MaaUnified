@@ -16,6 +16,7 @@ using MAAUnified.Application.Configuration;
 using MAAUnified.Application.Models;
 using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Localization;
+using MAAUnified.Application.Services.VersionUpdate;
 using MAAUnified.Compat.Constants;
 using MAAUnified.CoreBridge;
 using MAAUnified.Platform;
@@ -25,7 +26,6 @@ namespace MAAUnified.App.ViewModels.Settings;
 public sealed partial class SettingsPageViewModel
 {
     private static readonly TimeSpan DefaultAboutAnnouncementTimeout = TimeSpan.FromSeconds(5);
-    private static readonly HttpClient SharedAboutAnnouncementHttpClient = CreateAboutAnnouncementHttpClient();
 
     private static readonly string[] AboutAnnouncementApiBaseUrls =
     [
@@ -81,14 +81,6 @@ public sealed partial class SettingsPageViewModel
 
     private readonly HashSet<string> _enabledNotificationProviders = new(StringComparer.OrdinalIgnoreCase);
     private bool _suppressNotificationProviderSelectionEvents;
-
-    private static HttpClient CreateAboutAnnouncementHttpClient()
-    {
-        return new HttpClient
-        {
-            Timeout = Timeout.InfiniteTimeSpan,
-        };
-    }
 
     public ObservableCollection<NotificationProviderSelectionItem> NotificationProviderSelections { get; } = [];
 
@@ -1153,7 +1145,7 @@ public sealed partial class SettingsPageViewModel
                 loadResult.Error?.Details);
         }
 
-        var state = loadResult.Value;
+        var state = loadResult.Value.ForLanguage(Language);
         var fetchResult = await FetchLatestAnnouncementInfoAsync(cancellationToken);
         if (fetchResult.Success
             && fetchResult.Value is AnnouncementFetchResult fetched
@@ -1247,6 +1239,7 @@ public sealed partial class SettingsPageViewModel
     {
         cancellationToken.ThrowIfCancellationRequested();
         var candidatePaths = BuildAnnouncementCandidatePaths();
+        using var httpClientLease = await ResolveAboutAnnouncementHttpClientAsync(cancellationToken);
         Exception? lastException = null;
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeoutCts.CancelAfter(_aboutAnnouncementTimeout);
@@ -1265,7 +1258,7 @@ public sealed partial class SettingsPageViewModel
                         NoCache = true,
                     };
 
-                    using var response = await _aboutAnnouncementHttpClient.SendAsync(
+                    using var response = await httpClientLease.Client.SendAsync(
                         request,
                         HttpCompletionOption.ResponseHeadersRead,
                         requestCancellationToken);
@@ -1312,10 +1305,10 @@ public sealed partial class SettingsPageViewModel
     {
         if (Language.StartsWith("zh", StringComparison.OrdinalIgnoreCase))
         {
-            return LegacyAnnouncementPaths;
+            return [LegacyAnnouncementPaths[0]];
         }
 
-        return [LegacyAnnouncementPaths[1], LegacyAnnouncementPaths[0]];
+        return [LegacyAnnouncementPaths[1]];
     }
 
     private static Uri BuildAnnouncementUri(string baseUrl, string relativePath)
@@ -1324,6 +1317,36 @@ public sealed partial class SettingsPageViewModel
             ? baseUrl
             : $"{baseUrl}/";
         return new Uri(new Uri(normalizedBaseUrl, UriKind.Absolute), relativePath);
+    }
+
+    private async Task<AboutAnnouncementHttpClientLease> ResolveAboutAnnouncementHttpClientAsync(
+        CancellationToken cancellationToken)
+    {
+        if (_aboutAnnouncementHttpClient is not null)
+        {
+            return new AboutAnnouncementHttpClientLease(_aboutAnnouncementHttpClient, disposeClient: false);
+        }
+
+        var policyResult = await Runtime.VersionUpdateFeatureService.LoadPolicyAsync(cancellationToken);
+        var policy = policyResult.Success && policyResult.Value is not null
+            ? policyResult.Value
+            : VersionUpdatePolicy.Default;
+        return new AboutAnnouncementHttpClientLease(
+            VersionUpdateHttpClientFactory.Create(policy, Timeout.InfiniteTimeSpan),
+            disposeClient: true);
+    }
+
+    private sealed class AboutAnnouncementHttpClientLease(HttpClient client, bool disposeClient) : IDisposable
+    {
+        public HttpClient Client { get; } = client;
+
+        public void Dispose()
+        {
+            if (disposeClient)
+            {
+                Client.Dispose();
+            }
+        }
     }
 
     private void OnNotificationProviderSelectionPropertyChanged(object? sender, PropertyChangedEventArgs e)

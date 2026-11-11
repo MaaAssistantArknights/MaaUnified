@@ -5738,4 +5738,16 @@ A backup named avalonia.json.schema-v{0}.bak.&lt;timestamp&gt; will be created b
   <data name="MacRawByNcRisk.Dialog.DefaultTouchMode" xml:space="preserve">
     <value>default touch mode</value>
   </data>
+  <data name="Settings.VersionUpdate.NightlyWarning.Title" xml:space="preserve">
+    <value>Nightly updates</value>
+  </data>
+  <data name="Settings.VersionUpdate.NightlyWarning.Message" xml:space="preserve">
+    <value>Nightly updates are enabled. Thank you for helping test MAA.</value>
+  </data>
+  <data name="Settings.VersionUpdate.NightlyWarning.Confirm" xml:space="preserve">
+    <value>OK</value>
+  </data>
+  <data name="Settings.VersionUpdate.NightlyWarning.Cancel" xml:space="preserve">
+    <value>Close</value>
+  </data>
 </root>

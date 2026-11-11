@@ -37,4 +37,7 @@ public sealed record VersionUpdateCheckResult(
     PackageResolutionStatus PackageResolutionStatus = PackageResolutionStatus.NotChecked,
     PackageSourceKind PackageSourceKind = PackageSourceKind.None,
     string? PackageFailureMessageKey = null,
-    IReadOnlyList<Uri>? PackageMirrorUrls = null);
+    IReadOnlyList<Uri>? PackageMirrorUrls = null,
+    bool CheckSucceeded = true,
+    string? CheckFailureMessage = null,
+    long? MirrorChyanCdkExpiryUnixSeconds = null);

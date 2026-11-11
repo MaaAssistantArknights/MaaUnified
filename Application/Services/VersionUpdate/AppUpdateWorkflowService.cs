@@ -16,7 +16,6 @@ public sealed class AppUpdateWorkflowService
 {
     private const string MaaApiBaseUrl = "https://api.maa.plus/MaaAssistantArknights/api/";
     private const string MaaApiFallbackBaseUrl = "https://api2.maa.plus/MaaAssistantArknights/api/";
-    private const string GitHubReleasesUrl = "https://api.github.com/repos/MaaAssistantArknights/MaaAssistantArknights/releases";
     private const string MirrorChyanAppUpdateUrl = "https://mirrorchyan.com/api/resources/MAAUnified/latest";
     private const string WindowsRelayManifestFileName = "windows-relay.json";
     private const string WindowsManualUpdateMessageKey = "Settings.VersionUpdate.Status.WindowsManualUpdateRequired";
@@ -64,24 +63,22 @@ public sealed class AppUpdateWorkflowService
                     HasPackage: false);
             }
 
-            var mirrorChyanResult = await TryResolveReleaseFromMirrorChyanAsync(
+            var mirrorChyanResolution = await TryResolveReleaseFromMirrorChyanAsync(
                 policy,
                 currentVersion,
                 httpClient,
                 cancellationToken).ConfigureAwait(false);
-            if (mirrorChyanResult is not null)
+            if (mirrorChyanResolution.Release is not null)
             {
-                return mirrorChyanResult;
+                return mirrorChyanResolution.Release;
             }
 
-            var release = await ResolveReleaseAsync(
+            var releaseResolution = await ResolveReleaseAsync(
                 policy.ResourceApi,
                 policy.VersionType,
-                preferGithub: string.Equals(policy.ResourceUpdateSource, "Github", StringComparison.OrdinalIgnoreCase)
-                    && string.IsNullOrWhiteSpace(policy.ResourceApi),
                 httpClient,
                 cancellationToken).ConfigureAwait(false);
-            if (release is null)
+            if (releaseResolution.Release is null)
             {
                 return new VersionUpdateCheckResult(
                     Channel: policy.VersionType,
@@ -94,10 +91,15 @@ public sealed class AppUpdateWorkflowService
                     PackageDownloadUrl: null,
                     PackageSize: null,
                     IsNewVersion: false,
-                    HasPackage: false);
+                    HasPackage: false,
+                    CheckSucceeded: releaseResolution.HasValidResponse,
+                    CheckFailureMessage: releaseResolution.HasValidResponse
+                        ? null
+                        : "Failed to get release information from Maa API.",
+                    MirrorChyanCdkExpiryUnixSeconds: mirrorChyanResolution.CdkExpiryUnixSeconds);
             }
 
-            var releaseValue = release.Release;
+            var releaseValue = releaseResolution.Release!.Release;
             var tag = TryGetString(releaseValue, "tag_name") ?? string.Empty;
             var releaseName = TryGetString(releaseValue, "name") ?? tag;
             var body = TryGetString(releaseValue, "body") ?? string.Empty;
@@ -113,53 +115,15 @@ public sealed class AppUpdateWorkflowService
                     policy.VersionType,
                     allowMirrorUrls: string.Equals(policy.ResourceUpdateSource, "Github", StringComparison.OrdinalIgnoreCase)
                         && !policy.ForceGithubGlobalSource,
-                    allowWindowsRelay: release.Source is not ReleaseResolutionSource.GitHub,
+                    allowWindowsRelay: true,
                     targetVersion,
                     releaseValue,
                     httpClient,
                     cancellationToken).ConfigureAwait(false);
-                if (ShouldFallbackToGitHubRelease(release.Source, policy.VersionType, resolvedPackage))
-                {
-                    var githubRelease = await ResolveGitHubReleaseAsync(
-                        httpClient,
-                        policy.VersionType,
-                        cancellationToken).ConfigureAwait(false);
-                    if (githubRelease.HasValue)
-                    {
-                        var githubTag = TryGetString(githubRelease.Value, "tag_name") ?? string.Empty;
-                        var githubIsNew = IsNewerVersion(githubTag, currentVersion);
-                        if (githubIsNew)
-                        {
-                            var githubPackage = await ResolvePackageAsync(
-                                resourceApi: null,
-                                policy.VersionType,
-                                allowMirrorUrls: string.Equals(policy.ResourceUpdateSource, "Github", StringComparison.OrdinalIgnoreCase)
-                                    && !policy.ForceGithubGlobalSource,
-                                allowWindowsRelay: false,
-                                githubTag,
-                                githubRelease.Value,
-                                httpClient,
-                                cancellationToken).ConfigureAwait(false);
-                            if (githubPackage.Status == PackageResolutionStatus.Available
-                                && githubPackage.DownloadUrl is not null)
-                            {
-                                releaseValue = githubRelease.Value;
-                                tag = githubTag;
-                                releaseName = TryGetString(releaseValue, "name") ?? tag;
-                                body = TryGetString(releaseValue, "body") ?? string.Empty;
-                                summary = string.IsNullOrWhiteSpace(body) ? releaseName : body;
-                                targetVersion = tag;
-                                isNew = true;
-                                resolvedPackage = githubPackage;
-                            }
-                        }
-                    }
-                }
             }
 
             var hasUsablePackage = resolvedPackage?.Status == PackageResolutionStatus.Available
                 && resolvedPackage.DownloadUrl is not null;
-            var effectiveIsNew = isNew && hasUsablePackage;
 
             return new VersionUpdateCheckResult(
                 Channel: policy.VersionType,
@@ -171,13 +135,17 @@ public sealed class AppUpdateWorkflowService
                 PackageName: resolvedPackage?.Name,
                 PackageDownloadUrl: resolvedPackage?.DownloadUrl,
                 PackageSize: resolvedPackage?.Size,
-                IsNewVersion: effectiveIsNew,
+                // A release can be newer even when no package is suitable for this
+                // installation. Keep that fact visible so the caller can surface the
+                // release notes/manual-update path instead of reporting "latest".
+                IsNewVersion: isNew,
                 HasPackage: hasUsablePackage,
                 PreparedPackagePath: null,
                 PackageResolutionStatus: resolvedPackage?.Status ?? PackageResolutionStatus.NotChecked,
                 PackageSourceKind: resolvedPackage?.SourceKind ?? PackageSourceKind.None,
                 PackageFailureMessageKey: resolvedPackage?.FailureMessageKey,
-                PackageMirrorUrls: resolvedPackage?.MirrorUrls);
+                PackageMirrorUrls: resolvedPackage?.MirrorUrls,
+                MirrorChyanCdkExpiryUnixSeconds: mirrorChyanResolution.CdkExpiryUnixSeconds);
         }
         finally
         {
@@ -211,6 +179,7 @@ public sealed class AppUpdateWorkflowService
             ? BuildFallbackPackageName(checkResult.TargetVersion)
             : checkResult.PackageName;
         var destinationPath = Path.Combine(targetDirectory, packageName);
+        var temporaryPath = $"{destinationPath}.temp";
 
         if (File.Exists(destinationPath) && !forceDownload)
         {
@@ -224,15 +193,16 @@ public sealed class AppUpdateWorkflowService
             UiOperationResult<string>? lastFailure = null;
             foreach (var candidate in candidates)
             {
-                TryDeleteFile(destinationPath);
+                TryDeleteFile(temporaryPath);
                 var downloadResult = await TryDownloadPackageFromCandidateAsync(
                     httpClient,
                     candidate,
-                    destinationPath,
+                    temporaryPath,
                     progress,
                     cancellationToken).ConfigureAwait(false);
                 if (downloadResult.Success)
                 {
+                    File.Move(temporaryPath, destinationPath, overwrite: true);
                     return UiOperationResult<string>.Ok(destinationPath, "Update package downloaded.");
                 }
 
@@ -255,6 +225,7 @@ public sealed class AppUpdateWorkflowService
         }
         finally
         {
+            TryDeleteFile(temporaryPath);
             if (disposeClient)
             {
                 httpClient.Dispose();
@@ -336,10 +307,7 @@ public sealed class AppUpdateWorkflowService
 
     private static HttpClient BuildDefaultHttpClient(VersionUpdatePolicy? policy = null)
     {
-        var handler = BuildHttpClientHandler(policy);
-        var client = new HttpClient(handler, disposeHandler: true) { Timeout = TimeSpan.FromSeconds(60) };
-        client.DefaultRequestHeaders.UserAgent.ParseAdd("MAAUnified-VersionUpdate/1.0");
-        return client;
+        return VersionUpdateHttpClientFactory.Create(policy, TimeSpan.FromSeconds(60));
     }
 
     private (HttpClient Client, bool DisposeClient) ResolveHttpClient(VersionUpdatePolicy? policy)
@@ -357,53 +325,13 @@ public sealed class AppUpdateWorkflowService
         return (BuildDefaultHttpClient(policy), true);
     }
 
-    private static HttpClientHandler BuildHttpClientHandler(VersionUpdatePolicy? policy)
-    {
-        var handler = new HttpClientHandler();
-        if (policy is null || !TryBuildProxy(policy, out var proxy))
-        {
-            return handler;
-        }
-
-        handler.UseProxy = true;
-        handler.Proxy = proxy;
-        return handler;
-    }
-
-    private static bool TryBuildProxy(VersionUpdatePolicy policy, out IWebProxy? proxy)
-    {
-        proxy = null;
-        var rawProxy = policy.Proxy?.Trim();
-        if (string.IsNullOrWhiteSpace(rawProxy))
-        {
-            return false;
-        }
-
-        if (string.Equals(policy.ProxyType, "system", StringComparison.OrdinalIgnoreCase))
-        {
-            proxy = WebRequest.DefaultWebProxy;
-            return proxy is not null;
-        }
-
-        var candidate = rawProxy.Contains("://", StringComparison.Ordinal)
-            ? rawProxy
-            : $"{policy.ProxyType}://{rawProxy}";
-        if (!Uri.TryCreate(candidate, UriKind.Absolute, out var proxyUri))
-        {
-            return false;
-        }
-
-        proxy = new WebProxy(proxyUri);
-        return true;
-    }
-
-    private async Task<ResolvedRelease?> ResolveReleaseAsync(
+    private async Task<ReleaseResolution> ResolveReleaseAsync(
         string? resourceApi,
         string channel,
-        bool preferGithub,
         HttpClient httpClient,
         CancellationToken cancellationToken)
     {
+        var hasValidResponse = false;
         if (!string.IsNullOrWhiteSpace(resourceApi))
         {
             var trimmed = resourceApi.Trim();
@@ -412,54 +340,50 @@ public sealed class AppUpdateWorkflowService
                 if (string.Equals(uri.Scheme, Uri.UriSchemeFile, StringComparison.OrdinalIgnoreCase))
                 {
                     var release = SelectRelease(LoadReleasesFromFileSync(uri.LocalPath), channel);
-                    return release.HasValue ? new ResolvedRelease(release.Value, ReleaseResolutionSource.LocalFeed) : null;
+                    return new ReleaseResolution(
+                        release.HasValue ? new ResolvedRelease(release.Value) : null,
+                        HasValidResponse: true);
                 }
 
                 var directRelease = await TryResolveReleaseFromDirectFeedAsync(httpClient, uri, channel, cancellationToken).ConfigureAwait(false);
-                if (directRelease.HasValue)
+                if (directRelease is not null)
                 {
-                    return new ResolvedRelease(directRelease.Value, ReleaseResolutionSource.DirectFeed);
+                    return directRelease;
                 }
 
                 foreach (var baseUrl in BuildMaaApiBaseUrlCandidates(uri))
                 {
                     var apiRelease = await TryResolveReleaseFromMaaApiBaseUrlAsync(httpClient, baseUrl, channel, cancellationToken).ConfigureAwait(false);
-                    if (apiRelease.HasValue)
+                    if (apiRelease.Release is not null)
                     {
-                        return new ResolvedRelease(apiRelease.Value, ReleaseResolutionSource.MaaApi);
+                        return apiRelease;
                     }
+
+                    hasValidResponse |= apiRelease.HasValidResponse;
                 }
             }
 
             if (File.Exists(trimmed))
             {
                 var release = SelectRelease(LoadReleasesFromFileSync(trimmed), channel);
-                return release.HasValue ? new ResolvedRelease(release.Value, ReleaseResolutionSource.LocalFeed) : null;
-            }
-        }
-
-        if (preferGithub)
-        {
-            var githubRelease = await ResolveGitHubReleaseAsync(httpClient, channel, cancellationToken).ConfigureAwait(false);
-            if (githubRelease.HasValue)
-            {
-                return new ResolvedRelease(githubRelease.Value, ReleaseResolutionSource.GitHub);
+                return new ReleaseResolution(
+                    release.HasValue ? new ResolvedRelease(release.Value) : null,
+                    HasValidResponse: true);
             }
         }
 
         foreach (var baseUrl in GetDefaultMaaApiBaseUrls())
         {
             var apiRelease = await TryResolveReleaseFromMaaApiBaseUrlAsync(httpClient, baseUrl, channel, cancellationToken).ConfigureAwait(false);
-            if (apiRelease.HasValue)
+            if (apiRelease.Release is not null)
             {
-                return new ResolvedRelease(apiRelease.Value, ReleaseResolutionSource.MaaApi);
+                return apiRelease;
             }
+
+            hasValidResponse |= apiRelease.HasValidResponse;
         }
 
-        var fallbackGithubRelease = await ResolveGitHubReleaseAsync(httpClient, channel, cancellationToken).ConfigureAwait(false);
-        return fallbackGithubRelease.HasValue
-            ? new ResolvedRelease(fallbackGithubRelease.Value, ReleaseResolutionSource.GitHub)
-            : null;
+        return new ReleaseResolution(null, hasValidResponse);
     }
 
     private async Task<ResolvedPackage> ResolvePackageAsync(
@@ -474,10 +398,24 @@ public sealed class AppUpdateWorkflowService
     {
         if (_platform.IsWindows)
         {
+            if (allowWindowsRelay)
+            {
+                var relayPackage = await TryResolveWindowsRelayPackageAsync(
+                    resourceApi,
+                    channel,
+                    targetVersion,
+                    httpClient,
+                    cancellationToken).ConfigureAwait(false);
+                if (relayPackage is not null)
+                {
+                    return relayPackage;
+                }
+            }
+
             return new ResolvedPackage(
-                Status: PackageResolutionStatus.Unavailable,
+                Status: PackageResolutionStatus.WindowsManualUpdateRequired,
                 SourceKind: PackageSourceKind.None,
-                FailureMessageKey: PackageUnavailableMessageKey);
+                FailureMessageKey: WindowsManualUpdateMessageKey);
         }
 
         var asset = SelectPackageAsset(release);
@@ -837,7 +775,7 @@ public sealed class AppUpdateWorkflowService
         return uri.AbsolutePath.EndsWith(".json", StringComparison.OrdinalIgnoreCase);
     }
 
-    private async Task<JsonElement?> TryResolveReleaseFromDirectFeedAsync(
+    private async Task<ReleaseResolution?> TryResolveReleaseFromDirectFeedAsync(
         HttpClient httpClient,
         Uri uri,
         string channel,
@@ -851,7 +789,10 @@ public sealed class AppUpdateWorkflowService
         try
         {
             var releases = await FetchReleasesFromUrlAsync(httpClient, uri.ToString(), cancellationToken).ConfigureAwait(false);
-            return SelectRelease(releases, channel);
+            var release = SelectRelease(releases, channel);
+            return new ReleaseResolution(
+                release.HasValue ? new ResolvedRelease(release.Value) : null,
+                HasValidResponse: true);
         }
         catch (OperationCanceledException)
         {
@@ -859,7 +800,7 @@ public sealed class AppUpdateWorkflowService
         }
         catch
         {
-            return null;
+            return new ReleaseResolution(null, HasValidResponse: false);
         }
     }
 
@@ -919,7 +860,7 @@ public sealed class AppUpdateWorkflowService
         return true;
     }
 
-    private async Task<JsonElement?> TryResolveReleaseFromMaaApiBaseUrlAsync(
+    private async Task<ReleaseResolution> TryResolveReleaseFromMaaApiBaseUrlAsync(
         HttpClient httpClient,
         string baseUrl,
         string channel,
@@ -931,25 +872,25 @@ public sealed class AppUpdateWorkflowService
             using var summaryDocument = await FetchJsonDocumentAsync(httpClient, summaryUri.ToString(), cancellationToken).ConfigureAwait(false);
             if (summaryDocument.RootElement.ValueKind != JsonValueKind.Object)
             {
-                return null;
+                return new ReleaseResolution(null, HasValidResponse: false);
             }
 
             var detailUri = ResolveMaaApiDetailUri(summaryDocument.RootElement, baseUrl, channel);
             using var detailDocument = await FetchJsonDocumentAsync(httpClient, detailUri, cancellationToken).ConfigureAwait(false);
             if (detailDocument.RootElement.ValueKind != JsonValueKind.Object)
             {
-                return null;
+                return new ReleaseResolution(null, HasValidResponse: false);
             }
 
             if (detailDocument.RootElement.TryGetProperty("details", out var details)
                 && details.ValueKind == JsonValueKind.Object)
             {
-                return details.Clone();
+                return new ReleaseResolution(new ResolvedRelease(details.Clone()), HasValidResponse: true);
             }
 
             return detailDocument.RootElement.TryGetProperty("tag_name", out _)
-                ? detailDocument.RootElement.Clone()
-                : null;
+                ? new ReleaseResolution(new ResolvedRelease(detailDocument.RootElement.Clone()), HasValidResponse: true)
+                : new ReleaseResolution(null, HasValidResponse: false);
         }
         catch (OperationCanceledException)
         {
@@ -957,7 +898,7 @@ public sealed class AppUpdateWorkflowService
         }
         catch
         {
-            return null;
+            return new ReleaseResolution(null, HasValidResponse: false);
         }
     }
 
@@ -1024,38 +965,15 @@ public sealed class AppUpdateWorkflowService
         return await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
-    private static async Task<JsonElement[]> FetchReleasesFromUrlAsync(HttpClient httpClient, string url, CancellationToken cancellationToken)
+    private static async Task<JsonElement[]> FetchReleasesFromUrlAsync(
+        HttpClient httpClient,
+        string url,
+        CancellationToken cancellationToken)
     {
         using var document = await FetchJsonDocumentAsync(httpClient, url, cancellationToken).ConfigureAwait(false);
         return document.RootElement.ValueKind == JsonValueKind.Array
             ? document.RootElement.EnumerateArray().Select(static element => element.Clone()).ToArray()
             : Array.Empty<JsonElement>();
-    }
-
-    private static async Task<JsonElement?> ResolveGitHubReleaseAsync(
-        HttpClient httpClient,
-        string channel,
-        CancellationToken cancellationToken)
-    {
-        var releases = await FetchReleasesFromUrlAsync(httpClient, GitHubReleasesUrl, cancellationToken).ConfigureAwait(false);
-        return SelectRelease(releases, channel);
-    }
-
-    private static bool ShouldFallbackToGitHubRelease(ReleaseResolutionSource source, string channel, ResolvedPackage? package)
-    {
-        if (source != ReleaseResolutionSource.MaaApi)
-        {
-            return false;
-        }
-
-        if (string.Equals(channel, "Stable", StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
-
-        return package is null
-            || package.DownloadUrl is null
-            || package.Status is PackageResolutionStatus.Unavailable or PackageResolutionStatus.WindowsManualUpdateRequired;
     }
 
     private static JsonElement? SelectRelease(JsonElement[] releases, string channel)
@@ -1162,7 +1080,7 @@ public sealed class AppUpdateWorkflowService
                 : null;
     }
 
-    private async Task<VersionUpdateCheckResult?> TryResolveReleaseFromMirrorChyanAsync(
+    private async Task<MirrorChyanReleaseResolution> TryResolveReleaseFromMirrorChyanAsync(
         VersionUpdatePolicy policy,
         string currentVersion,
         HttpClient httpClient,
@@ -1170,13 +1088,13 @@ public sealed class AppUpdateWorkflowService
     {
         if (!string.Equals(policy.ResourceUpdateSource, "MirrorChyan", StringComparison.OrdinalIgnoreCase))
         {
-            return null;
+            return new MirrorChyanReleaseResolution(null, null);
         }
 
         var cdk = policy.MirrorChyanCdk.Trim();
         if (cdk.Length == 0)
         {
-            return null;
+            return new MirrorChyanReleaseResolution(null, null);
         }
 
         var requestUrl =
@@ -1187,49 +1105,56 @@ public sealed class AppUpdateWorkflowService
             using var document = await FetchJsonDocumentAsync(httpClient, requestUrl, cancellationToken).ConfigureAwait(false);
             if (document.RootElement.ValueKind != JsonValueKind.Object)
             {
-                return null;
+                return new MirrorChyanReleaseResolution(null, null);
             }
 
             var root = document.RootElement;
             var code = root.TryGetProperty("code", out var codeNode) && codeNode.TryGetInt32(out var parsedCode)
                 ? parsedCode
                 : -1;
+            var cdkExpiryUnixSeconds = root.TryGetProperty("data", out var data)
+                && data.ValueKind == JsonValueKind.Object
+                ? TryGetInt64(data, "cdk_expired_time")
+                : null;
             if (code != 0)
             {
-                return null;
+                return new MirrorChyanReleaseResolution(null, cdkExpiryUnixSeconds);
             }
 
-            if (!root.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Object)
+            if (!root.TryGetProperty("data", out data) || data.ValueKind != JsonValueKind.Object)
             {
-                return null;
+                return new MirrorChyanReleaseResolution(null, cdkExpiryUnixSeconds);
             }
 
             var targetVersion = TryGetString(data, "version_name") ?? string.Empty;
             if (string.IsNullOrWhiteSpace(targetVersion))
             {
-                return null;
+                return new MirrorChyanReleaseResolution(null, cdkExpiryUnixSeconds);
             }
 
             if (!IsNewerVersion(targetVersion, currentVersion))
             {
-                return new VersionUpdateCheckResult(
-                    Channel: policy.VersionType,
-                    CurrentVersion: currentVersion,
-                    TargetVersion: targetVersion,
-                    ReleaseName: targetVersion,
-                    Summary: string.Empty,
-                    Body: string.Empty,
-                    PackageName: null,
-                    PackageDownloadUrl: null,
-                    PackageSize: null,
-                    IsNewVersion: false,
-                    HasPackage: false);
+                return new MirrorChyanReleaseResolution(
+                    new VersionUpdateCheckResult(
+                        Channel: policy.VersionType,
+                        CurrentVersion: currentVersion,
+                        TargetVersion: targetVersion,
+                        ReleaseName: targetVersion,
+                        Summary: string.Empty,
+                        Body: string.Empty,
+                        PackageName: null,
+                        PackageDownloadUrl: null,
+                        PackageSize: null,
+                        IsNewVersion: false,
+                        HasPackage: false,
+                        MirrorChyanCdkExpiryUnixSeconds: cdkExpiryUnixSeconds),
+                    cdkExpiryUnixSeconds);
             }
 
             var releaseNote = TryGetString(data, "release_note") ?? string.Empty;
             if (!Uri.TryCreate(TryGetString(data, "url"), UriKind.Absolute, out var downloadUrl))
             {
-                return null;
+                return new MirrorChyanReleaseResolution(null, cdkExpiryUnixSeconds);
             }
 
             var packageName = Path.GetFileName(downloadUrl.AbsolutePath);
@@ -1240,29 +1165,32 @@ public sealed class AppUpdateWorkflowService
 
             if (!IsMaaUnifiedPackageName(packageName))
             {
-                return null;
+                return new MirrorChyanReleaseResolution(null, cdkExpiryUnixSeconds);
             }
 
             if (ScorePackageName(packageName) <= 0)
             {
-                return null;
+                return new MirrorChyanReleaseResolution(null, cdkExpiryUnixSeconds);
             }
 
-            return new VersionUpdateCheckResult(
-                Channel: policy.VersionType,
-                CurrentVersion: currentVersion,
-                TargetVersion: targetVersion,
-                ReleaseName: targetVersion,
-                Summary: string.IsNullOrWhiteSpace(releaseNote) ? targetVersion : releaseNote,
-                Body: releaseNote,
-                PackageName: packageName,
-                PackageDownloadUrl: downloadUrl,
-                PackageSize: null,
-                IsNewVersion: true,
-                HasPackage: true,
-                PreparedPackagePath: null,
-                PackageResolutionStatus: PackageResolutionStatus.Available,
-                PackageSourceKind: PackageSourceKind.ReleaseAsset);
+            return new MirrorChyanReleaseResolution(
+                new VersionUpdateCheckResult(
+                    Channel: policy.VersionType,
+                    CurrentVersion: currentVersion,
+                    TargetVersion: targetVersion,
+                    ReleaseName: targetVersion,
+                    Summary: string.IsNullOrWhiteSpace(releaseNote) ? targetVersion : releaseNote,
+                    Body: releaseNote,
+                    PackageName: packageName,
+                    PackageDownloadUrl: downloadUrl,
+                    PackageSize: null,
+                    IsNewVersion: true,
+                    HasPackage: true,
+                    PreparedPackagePath: null,
+                    PackageResolutionStatus: PackageResolutionStatus.Available,
+                    PackageSourceKind: PackageSourceKind.ReleaseAsset,
+                    MirrorChyanCdkExpiryUnixSeconds: cdkExpiryUnixSeconds),
+                cdkExpiryUnixSeconds);
         }
         catch (OperationCanceledException)
         {
@@ -1270,7 +1198,7 @@ public sealed class AppUpdateWorkflowService
         }
         catch
         {
-            return null;
+            return new MirrorChyanReleaseResolution(null, null);
         }
     }
 
@@ -1658,15 +1586,15 @@ public sealed class AppUpdateWorkflowService
         IReadOnlyList<Uri>? MirrorUrls = null,
         int Score = 0);
 
-    private sealed record ResolvedRelease(JsonElement Release, ReleaseResolutionSource Source);
+    private sealed record ResolvedRelease(JsonElement Release);
 
-    private enum ReleaseResolutionSource
-    {
-        LocalFeed = 0,
-        DirectFeed = 1,
-        MaaApi = 2,
-        GitHub = 3,
-    }
+    private sealed record ReleaseResolution(
+        ResolvedRelease? Release,
+        bool HasValidResponse);
+
+    private sealed record MirrorChyanReleaseResolution(
+        VersionUpdateCheckResult? Release,
+        long? CdkExpiryUnixSeconds);
 
     private readonly record struct ComparableVersionIdentifier(
         string RawText,
@@ -1757,4 +1685,51 @@ public sealed class AppUpdateWorkflowService
         IReadOnlyList<string> ExactTokens,
         IReadOnlyList<string> OsTokens,
         IReadOnlyList<string> ArchitectureTokens);
+}
+
+public static class VersionUpdateHttpClientFactory
+{
+    public static HttpClient Create(VersionUpdatePolicy? policy, TimeSpan timeout)
+    {
+        var handler = new HttpClientHandler();
+        if (policy is not null && TryBuildProxy(policy, out var proxy))
+        {
+            handler.UseProxy = true;
+            handler.Proxy = proxy;
+        }
+
+        var client = new HttpClient(handler, disposeHandler: true)
+        {
+            Timeout = timeout,
+        };
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("MAAUnified-VersionUpdate/1.0");
+        return client;
+    }
+
+    private static bool TryBuildProxy(VersionUpdatePolicy policy, out IWebProxy? proxy)
+    {
+        proxy = null;
+        var rawProxy = policy.Proxy?.Trim();
+        if (string.IsNullOrWhiteSpace(rawProxy))
+        {
+            return false;
+        }
+
+        if (string.Equals(policy.ProxyType, "system", StringComparison.OrdinalIgnoreCase))
+        {
+            proxy = WebRequest.DefaultWebProxy;
+            return proxy is not null;
+        }
+
+        var candidate = rawProxy.Contains("://", StringComparison.Ordinal)
+            ? rawProxy
+            : $"{policy.ProxyType}://{rawProxy}";
+        if (!Uri.TryCreate(candidate, UriKind.Absolute, out var proxyUri))
+        {
+            return false;
+        }
+
+        proxy = new WebProxy(proxyUri);
+        return true;
+    }
 }

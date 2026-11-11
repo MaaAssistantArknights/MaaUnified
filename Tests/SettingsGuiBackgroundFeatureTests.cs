@@ -516,7 +516,7 @@ public sealed class SettingsGuiBackgroundFeatureTests
     }
 
     [Fact]
-    public async Task StartupVersionUpdateCheck_WhenGithubResourceUpdateAvailable_ShouldNotAutoApply()
+    public async Task StartupVersionUpdateCheck_WhenGithubResourceUpdateAvailable_DoesNotAutoApply()
     {
         var versionUpdate = new SpyVersionUpdateFeatureService
         {
@@ -538,11 +538,39 @@ public sealed class SettingsGuiBackgroundFeatureTests
         await vm.RunStartupVersionUpdateCheckAsync();
 
         Assert.True(vm.HasPendingResourceUpdateAvailability);
-        Assert.Contains("episode", vm.PendingResourceUpdateSummary, StringComparison.Ordinal);
         Assert.Equal(1, versionUpdate.CheckResourceCallCount);
         Assert.Equal(0, versionUpdate.UpdateResourceCallCount);
         var bridge = Assert.IsType<FakeBridge>(fixture.Runtime.CoreBridge);
         Assert.Equal(0, bridge.ReloadResourceCallCount);
+    }
+
+    [Fact]
+    public async Task StartupVersionUpdateCheck_WhenMirrorChyanResourceUpdateAvailable_AutoApplies()
+    {
+        var versionUpdate = new SpyVersionUpdateFeatureService
+        {
+            CheckResourceUpdateResult = UiOperationResult<ResourceUpdateCheckResult>.Ok(
+                new ResourceUpdateCheckResult(
+                    IsUpdateAvailable: true,
+                    DisplayVersion: "2026-04-22 08:48:01",
+                    ReleaseNote: "episode",
+                    VersionTimestamp: null,
+                    RequiresMirrorChyanCdk: false,
+                    DownloadUrl: "https://example.com/resource.zip"),
+                "检测到资源更新。"),
+        };
+        await using var fixture = await RuntimeFixture.CreateAsync(versionUpdateFeatureService: versionUpdate);
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        vm.VersionUpdateResourceSource = "MirrorChyan";
+
+        await vm.RunStartupVersionUpdateCheckAsync();
+
+        Assert.False(vm.HasPendingResourceUpdateAvailability);
+        Assert.Equal(1, versionUpdate.CheckResourceCallCount);
+        Assert.Equal(1, versionUpdate.UpdateResourceCallCount);
+        var bridge = Assert.IsType<FakeBridge>(fixture.Runtime.CoreBridge);
+        Assert.Equal(1, bridge.ReloadResourceCallCount);
     }
 
     [Fact]
@@ -559,6 +587,23 @@ public sealed class SettingsGuiBackgroundFeatureTests
 
         Assert.Equal(0, versionUpdate.CheckResourceCallCount);
         Assert.Contains("CDK", vm.VersionUpdateStatusMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task ManualSoftwareUpdateCheck_WhenMirrorChyanWithoutCdk_ShouldShortCircuitWithLocalizedGuidance()
+    {
+        var versionUpdate = new SpyVersionUpdateFeatureService();
+        await using var fixture = await RuntimeFixture.CreateAsync(versionUpdateFeatureService: versionUpdate);
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        vm.VersionUpdateResourceSource = "MirrorChyan";
+        vm.VersionUpdateMirrorChyanCdk = string.Empty;
+
+        await vm.CheckVersionUpdateAsync();
+
+        Assert.Equal(0, versionUpdate.CheckForUpdatesCallCount);
+        Assert.Contains("CDK", vm.VersionUpdateStatusMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.False(vm.HasVersionUpdateErrorMessage);
     }
 
     [Theory]
@@ -651,6 +696,7 @@ public sealed class SettingsGuiBackgroundFeatureTests
         await using var fixture = await RuntimeFixture.CreateAsync(versionUpdateFeatureService: versionUpdate);
         var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
         await vm.InitializeAsync();
+        vm.VersionUpdateResourceSource = "Github";
 
         await vm.ManualUpdateResourceAsync();
 
@@ -1744,6 +1790,8 @@ public sealed class SettingsGuiBackgroundFeatureTests
 
         public int CheckResourceCallCount { get; private set; }
 
+        public int CheckForUpdatesCallCount { get; private set; }
+
         public int UpdateResourceCallCount { get; private set; }
 
         public bool EmitSoftwareProgress { get; set; }
@@ -1857,6 +1905,7 @@ public sealed class SettingsGuiBackgroundFeatureTests
             IProgress<VersionUpdateProgressInfo>? progress = null,
             CancellationToken cancellationToken = default)
         {
+            CheckForUpdatesCallCount++;
             if (EmitSoftwareProgress)
             {
                 progress?.Report(new VersionUpdateProgressInfo(

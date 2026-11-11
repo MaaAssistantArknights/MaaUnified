@@ -39,8 +39,10 @@ public static class PendingAppUpdateService
 
     private static PendingAppUpdateInfo? ResolvePendingUpdate(string baseDirectory, UnifiedConfig config)
     {
+        var versionName = ReadGlobalString(config, ConfigurationKeys.VersionName);
         var configuredPackagePath = ReadGlobalString(config, ConfigurationKeys.VersionUpdatePackage);
-        if (string.IsNullOrWhiteSpace(configuredPackagePath))
+        if (string.IsNullOrWhiteSpace(versionName)
+            || string.IsNullOrWhiteSpace(configuredPackagePath))
         {
             return null;
         }
@@ -49,7 +51,7 @@ public static class PendingAppUpdateService
             ? configuredPackagePath
             : Path.Combine(baseDirectory, configuredPackagePath);
         return new PendingAppUpdateInfo(
-            ReadGlobalString(config, ConfigurationKeys.VersionName),
+            versionName,
             resolvedPackagePath);
     }
 
@@ -114,6 +116,8 @@ public static class PendingAppUpdateService
         var extractDirectory = Path.Combine(baseDirectory, "NewVersionExtract");
         var backupDirectory = Path.Combine(baseDirectory, ".old");
 
+        var rollbackActions = new List<PendingUpdateRollbackAction>();
+
         try
         {
             PrepareExtractionDirectory(extractDirectory);
@@ -138,6 +142,7 @@ public static class PendingAppUpdateService
                     }
 
                     MoveExistingEntryToBackup(currentPath, entry.BackupPath);
+                    rollbackActions.Add(new PendingUpdateRollbackAction(entry.BackupPath, currentPath));
                 }
             }
             else if (!isOtaPackage)
@@ -159,6 +164,7 @@ public static class PendingAppUpdateService
 
                     var currentBackupDirectory = ResolvePackagePathUnderRoot(backupDirectory, directoryName);
                     MoveDirectoryWithBackup(currentDirectory, currentBackupDirectory);
+                    rollbackActions.Add(new PendingUpdateRollbackAction(currentBackupDirectory, currentDirectory));
                 }
             }
 
@@ -176,6 +182,7 @@ public static class PendingAppUpdateService
                     DeleteFileWithBackup(file.BackupPath);
                     EnsureParentDirectoryExists(file.BackupPath);
                     File.Move(file.TargetPath, file.BackupPath);
+                    rollbackActions.Add(new PendingUpdateRollbackAction(file.BackupPath, file.TargetPath));
                 }
                 else
                 {
@@ -183,6 +190,7 @@ public static class PendingAppUpdateService
                 }
 
                 File.Move(file.SourcePath, file.TargetPath);
+                rollbackActions.Add(new PendingUpdateRollbackAction(file.TargetPath, file.SourcePath));
             }
 
             SafeDeleteDirectory(extractDirectory);
@@ -209,9 +217,13 @@ public static class PendingAppUpdateService
         }
         catch (Exception ex)
         {
+            var rollbackError = TryRollback(rollbackActions);
+            var message = rollbackError is null
+                ? $"Failed to apply pending software update package: {ex.Message}"
+                : $"Failed to apply pending software update package: {ex.Message} Rollback also failed: {rollbackError.Message}";
             return new PendingAppUpdateApplyResult(
                 PendingAppUpdateStatus.Failed,
-                $"Failed to apply pending software update package: {ex.Message}",
+                message,
                 pendingUpdate.PackagePath);
         }
         finally
@@ -489,16 +501,58 @@ public static class PendingAppUpdateService
 
     private static void MoveDirectoryWithBackup(string sourceDirectory, string backupDirectory)
     {
-        try
+        SafeDeleteDirectory(backupDirectory);
+        EnsureParentDirectoryExists(backupDirectory);
+        Directory.Move(sourceDirectory, backupDirectory);
+    }
+
+    private static Exception? TryRollback(IReadOnlyList<PendingUpdateRollbackAction> rollbackActions)
+    {
+        Exception? firstError = null;
+        for (var index = rollbackActions.Count - 1; index >= 0; index--)
         {
-            SafeDeleteDirectory(backupDirectory);
-            EnsureParentDirectoryExists(backupDirectory);
-            Directory.Move(sourceDirectory, backupDirectory);
+            var action = rollbackActions[index];
+            try
+            {
+                MovePathWithOverwrite(action.SourcePath, action.DestinationPath);
+            }
+            catch (Exception ex)
+            {
+                firstError ??= ex;
+            }
         }
-        catch
+
+        return firstError;
+    }
+
+    private static void MovePathWithOverwrite(string sourcePath, string destinationPath)
+    {
+        if (!File.Exists(sourcePath) && !Directory.Exists(sourcePath))
         {
-            SafeDeleteDirectory(backupDirectory);
-            SafeDeleteDirectory(sourceDirectory);
+            return;
+        }
+
+        DeleteEntryIfExists(destinationPath);
+        EnsureParentDirectoryExists(destinationPath);
+        if (Directory.Exists(sourcePath))
+        {
+            Directory.Move(sourcePath, destinationPath);
+        }
+        else
+        {
+            File.Move(sourcePath, destinationPath);
+        }
+    }
+
+    private static void DeleteEntryIfExists(string path)
+    {
+        if (File.Exists(path))
+        {
+            File.Delete(path);
+        }
+        else if (Directory.Exists(path))
+        {
+            Directory.Delete(path, recursive: true);
         }
     }
 
@@ -540,6 +594,10 @@ public static class PendingAppUpdateService
             // Best-effort cleanup.
         }
     }
+
+    private sealed record PendingUpdateRollbackAction(
+        string SourcePath,
+        string DestinationPath);
 
     private sealed record PendingUpdateBackupEntry(
         string TargetPath,

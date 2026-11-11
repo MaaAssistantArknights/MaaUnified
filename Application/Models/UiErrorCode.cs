@@ -108,6 +108,7 @@ public static class UiErrorCode
 
     public const string MallCreditFightDowngraded = "MallCreditFightDowngraded";
     public const string VersionUpdateInvalidParameters = "VersionUpdateInvalidParameters";
+    public const string VersionUpdateCheckFailed = "VersionUpdateCheckFailed";
     public const string VersionUpdateSaveFailed = "VersionUpdateSaveFailed";
     public const string IssueReportBundleBuildFailed = "IssueReportBundleBuildFailed";
     public const string IssueReportImageCacheClearFailed = "IssueReportImageCacheClearFailed";

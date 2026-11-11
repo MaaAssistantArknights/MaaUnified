@@ -50,23 +50,17 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
         "Official",
         "Bilibili",
     };
-    private static readonly HttpClient ResourceHttpClient = new()
-    {
-        Timeout = TimeSpan.FromMinutes(15),
-    };
-
     private readonly UnifiedConfigurationService? _configService;
     private readonly UiDiagnosticsService? _diagnosticsService;
     private readonly IAchievementTrackerService? _achievementTrackerService;
     private readonly UiLogService? _uiLogService;
     private readonly AppUpdateWorkflowService _appUpdateWorkflowService;
-    private readonly HttpClient _resourceHttpClient;
+    private readonly HttpClient? _resourceHttpClient;
     private readonly string? _runtimeBaseDirectory;
 
     public VersionUpdateFeatureService()
     {
         _appUpdateWorkflowService = new AppUpdateWorkflowService(new NoOpAppLifecycleService());
-        _resourceHttpClient = ResourceHttpClient;
     }
 
     public VersionUpdateFeatureService(
@@ -83,7 +77,7 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
         _achievementTrackerService = achievementTrackerService;
         _uiLogService = uiLogService;
         _appUpdateWorkflowService = appUpdateWorkflowService ?? new AppUpdateWorkflowService(new NoOpAppLifecycleService());
-        _resourceHttpClient = resourceHttpClient ?? ResourceHttpClient;
+        _resourceHttpClient = resourceHttpClient;
         _runtimeBaseDirectory = NormalizeRuntimeBaseDirectory(runtimeBaseDirectory);
     }
 
@@ -216,7 +210,7 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
             return await UpdateResourceFromMirrorChyanAsync(normalizedPolicy, clientType, progress, cancellationToken);
         }
 
-        return await UpdateResourceFromGithubAsync(progress, cancellationToken);
+        return await UpdateResourceFromGithubAsync(normalizedPolicy, progress, cancellationToken);
     }
 
     public async Task<UiOperationResult<ResourceUpdateCheckResult>> CheckResourceUpdateAsync(
@@ -249,6 +243,8 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
         var localVersion = LoadResourceVersionInfo(runtimeBaseDirectory, clientType);
         var requestUrl =
             $"{MirrorChyanResourceApiUrl}?current_version={Uri.EscapeDataString(BuildCurrentVersionQueryToken(localVersion))}&cdk={Uri.EscapeDataString(cdk)}&user_agent=MAAUnified&sp_id={Uri.EscapeDataString(BuildMirrorChyanSpId())}";
+        using var httpClientLease = ResolveResourceHttpClient(normalizedPolicy);
+        var resourceHttpClient = httpClientLease.Client;
 
         try
         {
@@ -259,7 +255,7 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
                     normalizedPolicy.ResourceUpdateSource,
                     clientType ?? "<default>"));
             await TraceVersionUpdateAsync(scope, $"Query begin endpoint={MirrorChyanResourceApiUrl}", cancellationToken).ConfigureAwait(false);
-            using var response = await _resourceHttpClient.GetAsync(requestUrl, cancellationToken).ConfigureAwait(false);
+            using var response = await resourceHttpClient.GetAsync(requestUrl, cancellationToken).ConfigureAwait(false);
             var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
             await TraceVersionUpdateAsync(
                 scope,
@@ -417,6 +413,30 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
                 normalizedPolicy,
                 string.IsNullOrWhiteSpace(currentVersion) ? "unknown" : currentVersion.Trim(),
                 cancellationToken).ConfigureAwait(false);
+            if (!workflowResult.CheckSucceeded)
+            {
+                var failureMessage = string.IsNullOrWhiteSpace(workflowResult.CheckFailureMessage)
+                    ? "Failed to get software update information."
+                    : workflowResult.CheckFailureMessage;
+                PublishUpdateLog(
+                    FormatUpdateLogText(
+                        "VersionUpdate.Log.Software.CheckFailedWithMessage",
+                        "软件更新检查失败：{0}",
+                        failureMessage),
+                    "ERROR");
+                return UiOperationResult<VersionUpdateCheckResult>.Fail(
+                    UiErrorCode.VersionUpdateCheckFailed,
+                    failureMessage,
+                    failureMessage);
+            }
+
+            if (workflowResult.MirrorChyanCdkExpiryUnixSeconds.HasValue)
+            {
+                await PersistMirrorChyanExpiryAsync(
+                    workflowResult.MirrorChyanCdkExpiryUnixSeconds.Value,
+                    cancellationToken).ConfigureAwait(false);
+            }
+
             var effectiveResult = workflowResult;
 
             if (workflowResult.IsNewVersion
@@ -565,6 +585,7 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
             return workflowResult with
             {
                 PreparedPackagePath = null,
+                HasPackage = false,
                 PackageResolutionStatus = PackageResolutionStatus.WindowsManualUpdateRequired,
                 PackageFailureMessageKey = WindowsManualUpdateMessageKey,
             };
@@ -573,6 +594,7 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
         return workflowResult with
         {
             PreparedPackagePath = null,
+            HasPackage = false,
             PackageResolutionStatus = PackageResolutionStatus.DownloadFailed,
             PackageFailureMessageKey = PackageDownloadFailedMessageKey,
         };
@@ -722,6 +744,7 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
     }
 
     private async Task<UiOperationResult<string>> UpdateResourceFromGithubAsync(
+        VersionUpdatePolicy policy,
         IProgress<VersionUpdateProgressInfo>? progress,
         CancellationToken cancellationToken)
     {
@@ -739,12 +762,7 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
             scope,
             $"Begin runtimeBaseDirectory={runtimeBaseDirectory}; resourceDirectory={resourceDirectory}",
             cancellationToken).ConfigureAwait(false);
-        if (!Directory.Exists(resourceDirectory))
-        {
-            return UiOperationResult<string>.Fail(
-                UiErrorCode.UiOperationFailed,
-                $"Resource directory was not found: {resourceDirectory}");
-        }
+        Directory.CreateDirectory(resourceDirectory);
 
         var tempRoot = Path.Combine(
             Path.GetTempPath(),
@@ -753,6 +771,8 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
         var zipPath = Path.Combine(tempRoot, "MaaResourceGithub.zip");
         var extractDirectory = Path.Combine(tempRoot, "extract");
         Directory.CreateDirectory(tempRoot);
+        using var httpClientLease = ResolveResourceHttpClient(policy);
+        var resourceHttpClient = httpClientLease.Client;
         await TraceVersionUpdateAsync(
             scope,
             $"Prepared tempRoot={tempRoot}; zipPath={zipPath}; extractDirectory={extractDirectory}",
@@ -765,6 +785,7 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
                 $"Download begin url={GithubResourceArchiveUrl}",
                 cancellationToken).ConfigureAwait(false);
             await DownloadToFileAsync(
+                resourceHttpClient,
                 GithubResourceArchiveUrl,
                 zipPath,
                 VersionUpdateProgressOperation.ResourcePackage,
@@ -881,12 +902,14 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
         var localVersion = LoadResourceVersionInfo(ResolveRuntimeBaseDirectory(), clientType);
         var requestUrl =
             $"{MirrorChyanResourceApiUrl}?current_version={Uri.EscapeDataString(BuildCurrentVersionQueryToken(localVersion))}&cdk={Uri.EscapeDataString(cdk)}&user_agent=MAAUnified&sp_id={Uri.EscapeDataString(BuildMirrorChyanSpId())}";
+        using var httpClientLease = ResolveResourceHttpClient(policy);
+        var resourceHttpClient = httpClientLease.Client;
 
         MirrorChyanUpdateResponse payload;
         try
         {
             await TraceVersionUpdateAsync(scope, $"Query begin endpoint={MirrorChyanResourceApiUrl}", cancellationToken).ConfigureAwait(false);
-            using var response = await _resourceHttpClient.GetAsync(requestUrl, cancellationToken).ConfigureAwait(false);
+            using var response = await resourceHttpClient.GetAsync(requestUrl, cancellationToken).ConfigureAwait(false);
             var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
             await TraceVersionUpdateAsync(
                 scope,
@@ -980,6 +1003,7 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
                 "Download begin source=MirrorChyan",
                 cancellationToken).ConfigureAwait(false);
             await DownloadToFileAsync(
+                resourceHttpClient,
                 payload.DownloadUrl,
                 zipPath,
                 VersionUpdateProgressOperation.ResourcePackage,
@@ -1177,6 +1201,7 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
     }
 
     private async Task DownloadToFileAsync(
+        HttpClient httpClient,
         string url,
         string destinationPath,
         VersionUpdateProgressOperation operation,
@@ -1184,7 +1209,7 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
         IProgress<VersionUpdateProgressInfo>? progress,
         CancellationToken cancellationToken)
     {
-        using var response = await _resourceHttpClient.GetAsync(
+        using var response = await httpClient.GetAsync(
             url,
             HttpCompletionOption.ResponseHeadersRead,
             cancellationToken).ConfigureAwait(false);
@@ -1277,6 +1302,28 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
         catch
         {
             // Ignore temporary cleanup failures.
+        }
+    }
+
+    private HttpClientLease ResolveResourceHttpClient(VersionUpdatePolicy policy)
+    {
+        return _resourceHttpClient is not null
+            ? new HttpClientLease(_resourceHttpClient, disposeClient: false)
+            : new HttpClientLease(
+                VersionUpdateHttpClientFactory.Create(policy, TimeSpan.FromMinutes(15)),
+                disposeClient: true);
+    }
+
+    private sealed class HttpClientLease(HttpClient client, bool disposeClient) : IDisposable
+    {
+        public HttpClient Client { get; } = client;
+
+        public void Dispose()
+        {
+            if (disposeClient)
+            {
+                Client.Dispose();
+            }
         }
     }
 

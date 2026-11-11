@@ -177,7 +177,7 @@ public sealed class SettingsModuleCM1FeatureTests
     }
 
     [Fact]
-    public async Task VersionUpdate_CheckForUpdates_WithOnlyLegacyMaaPackage_DoesNotShowAvailability()
+    public async Task VersionUpdate_CheckForUpdates_WithOnlyLegacyMaaPackage_ShowsManualUpdateAvailability()
     {
         await using var fixture = await RuntimeFixture.CreateAsync();
         var vm = new SettingsPageViewModel(
@@ -213,9 +213,9 @@ public sealed class SettingsModuleCM1FeatureTests
 
             await vm.CheckVersionUpdateAsync();
 
-            Assert.False(vm.HasPendingVersionUpdateAvailability);
+            Assert.True(vm.HasPendingVersionUpdateAvailability);
             Assert.False(vm.HasVersionUpdateErrorMessage);
-            Assert.Contains("当前已是最新", vm.VersionUpdateStatusMessage, StringComparison.Ordinal);
+            Assert.Contains("更新失败", vm.VersionUpdateStatusMessage, StringComparison.Ordinal);
             Assert.Equal("v1.0.0", vm.UpdatePanelCoreVersion);
         }
         finally
@@ -399,6 +399,109 @@ public sealed class SettingsModuleCM1FeatureTests
     }
 
     [Fact]
+    public async Task AnnouncementState_LocalizedCachesKeepContentAndRemindPreferenceSeparate()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync();
+        var service = fixture.Runtime.AnnouncementFeatureService;
+
+        var saveChinese = await service.SaveStateAsync(
+            new AnnouncementState(
+                AnnouncementInfo: "# Chinese announcement",
+                DoNotRemindThisAnnouncementAgain: true,
+                DoNotShowAnnouncement: false,
+                SelectedLanguage: "zh-CN"));
+        Assert.True(saveChinese.Success);
+
+        var missingEnglish = (await service.LoadStateAsync()).Value!.ForLanguage("en-US");
+        Assert.False(missingEnglish.HasAnnouncementInfo);
+        Assert.False(missingEnglish.DoNotRemindThisAnnouncementAgain);
+
+        var saveEnglish = await service.SaveStateAsync(
+            missingEnglish with
+            {
+                AnnouncementInfo = "# English announcement",
+                DoNotRemindThisAnnouncementAgain = true,
+            });
+        Assert.True(saveEnglish.Success);
+
+        var changedChinese = (await service.LoadStateAsync()).Value!
+            .ForLanguage("zh-CN")
+            .WithFetchedAnnouncement(
+                "# Chinese announcement v2",
+                new Uri("https://example.com/announcements/wpf.md"),
+                DateTimeOffset.UtcNow);
+        var saveChangedChinese = await service.SaveStateAsync(changedChinese);
+        Assert.True(saveChangedChinese.Success);
+
+        var reloaded = (await service.LoadStateAsync()).Value!;
+        var chinese = reloaded.ForLanguage("zh-CN");
+        var english = reloaded.ForLanguage("en-US");
+        Assert.Equal("# Chinese announcement v2", chinese.AnnouncementInfo);
+        Assert.False(chinese.DoNotRemindThisAnnouncementAgain);
+        Assert.Equal("# English announcement", english.AnnouncementInfo);
+        Assert.True(english.DoNotRemindThisAnnouncementAgain);
+    }
+
+    [Fact]
+    public async Task AnnouncementState_LegacyCacheMigratesToTheSelectedLanguage()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync();
+        var service = fixture.Runtime.AnnouncementFeatureService;
+        var legacy = new AnnouncementState("# Legacy announcement", true, false);
+
+        Assert.True((await service.SaveStateAsync(legacy)).Success);
+        var selected = (await service.LoadStateAsync()).Value!.ForLanguage("en-US");
+        Assert.Equal("# Legacy announcement", selected.AnnouncementInfo);
+        Assert.True(selected.DoNotRemindThisAnnouncementAgain);
+
+        Assert.True((await service.SaveStateAsync(selected)).Success);
+        var reloaded = (await service.LoadStateAsync()).Value!;
+        Assert.Equal("# Legacy announcement", reloaded.ForLanguage("en-US").AnnouncementInfo);
+        Assert.False(reloaded.ForLanguage("zh-CN").HasAnnouncementInfo);
+    }
+
+    [Fact]
+    public async Task AnnouncementState_AllowsLargeCachedContent()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync();
+        var content = new string('A', 32769);
+
+        var save = await fixture.Runtime.AnnouncementFeatureService.SaveStateAsync(
+            new AnnouncementState(content, false, false, SelectedLanguage: "en-US"));
+
+        Assert.True(save.Success);
+        var loaded = (await fixture.Runtime.AnnouncementFeatureService.LoadStateAsync()).Value!.ForLanguage("en-US");
+        Assert.Equal(content, loaded.AnnouncementInfo);
+    }
+
+    [Fact]
+    public async Task AnnouncementState_IgnoresMalformedLocalizedSlots()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync();
+        fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.AnnouncementLocalizedStates] = JsonNode.Parse("""
+            {
+              "zh": {
+                "announcementInfo": 42,
+                "doNotRemind": "not-a-boolean",
+                "sourceUrl": [],
+                "fetchedAtUtc": {}
+              },
+              "en": {
+                "announcementInfo": "# English announcement",
+                "doNotRemind": true
+              }
+            }
+            """)!;
+
+        var loaded = (await fixture.Runtime.AnnouncementFeatureService.LoadStateAsync()).Value!;
+
+        Assert.False(loaded.ForLanguage("zh-CN").HasAnnouncementInfo);
+        Assert.False(loaded.ForLanguage("zh-CN").DoNotRemindThisAnnouncementAgain);
+        Assert.Equal("# English announcement", loaded.ForLanguage("en-US").AnnouncementInfo);
+        Assert.True(loaded.ForLanguage("en-US").DoNotRemindThisAnnouncementAgain);
+    }
+
+    [Fact]
     public async Task VersionUpdate_CheckForUpdates_ShouldNotRaiseErrorDialog()
     {
         await using var fixture = await RuntimeFixture.CreateAsync(CreateLinuxVersionUpdateFeatureService);
@@ -449,8 +552,8 @@ public sealed class SettingsModuleCM1FeatureTests
         }
 
         Assert.False(vm.HasVersionUpdateErrorMessage);
-        Assert.False(vm.HasPendingVersionUpdateAvailability);
-        Assert.Contains("当前已是最新", vm.VersionUpdateStatusMessage, StringComparison.Ordinal);
+        Assert.True(vm.HasPendingVersionUpdateAvailability);
+        Assert.Contains("更新失败", vm.VersionUpdateStatusMessage, StringComparison.Ordinal);
         Assert.False(dialogRaised);
     }
 
@@ -1744,6 +1847,10 @@ public sealed class SettingsModuleCM1FeatureTests
         Assert.False(vm.HasIssueReportStatusMessage);
         Assert.True(string.IsNullOrEmpty(vm.IssueReportStatusMessage));
         Assert.False(vm.HasIssueReportErrorMessage);
+        Assert.True(vm.VersionUpdateAcknowledgedNightlyWarning);
+        Assert.Equal(
+            bool.TrueString,
+            ReadGlobalString(fixture.Config, ConfigurationKeys.HasAcknowledgedNightlyWarning));
     }
 
     [Fact]

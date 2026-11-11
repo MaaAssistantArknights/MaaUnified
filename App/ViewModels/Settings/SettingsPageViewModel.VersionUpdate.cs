@@ -104,6 +104,7 @@ public sealed partial class SettingsPageViewModel
         await RunVersionUpdateCheckInternalAsync(
             "Settings.VersionUpdate.Check.Manual",
             showDialog: false,
+            requireMirrorChyanCdk: true,
             cancellationToken);
     }
 
@@ -112,6 +113,7 @@ public sealed partial class SettingsPageViewModel
         await RunVersionUpdateCheckInternalAsync(
             "Settings.VersionUpdate.Check.ManualDialog",
             showDialog: true,
+            requireMirrorChyanCdk: true,
             cancellationToken);
     }
 
@@ -123,6 +125,7 @@ public sealed partial class SettingsPageViewModel
         }
 
         _versionUpdateStartupCheckTriggered = true;
+        await ShowNightlyUpdateWarningAsync(cancellationToken);
         var firstBootDialogRequest = await PrepareFirstBootVersionUpdateDialogRequestAsync(cancellationToken);
         if (firstBootDialogRequest is not null)
         {
@@ -139,7 +142,7 @@ public sealed partial class SettingsPageViewModel
 
         await RunAutomaticVersionAndResourceUpdateFlowAsync(
             "Settings.VersionUpdate.Check.Startup",
-            autoApplyResourceUpdate: false,
+            autoApplyResourceUpdate: ShouldAutomaticallyApplyResourceUpdate(),
             cancellationToken);
     }
 
@@ -152,7 +155,7 @@ public sealed partial class SettingsPageViewModel
 
         await RunAutomaticVersionAndResourceUpdateFlowAsync(
             "Settings.VersionUpdate.Check.Scheduled",
-            autoApplyResourceUpdate: false,
+            autoApplyResourceUpdate: ShouldAutomaticallyApplyResourceUpdate(),
             cancellationToken);
     }
 
@@ -419,29 +422,38 @@ public sealed partial class SettingsPageViewModel
 
     private void ApplyVersionUpdatePolicy(VersionUpdatePolicy policy)
     {
-        RunWithSuppressedSettingsBackfill(() =>
+        _suppressMirrorChyanCdkUpdateCheck = true;
+        try
         {
-            VersionUpdateProxy = policy.Proxy;
-            VersionUpdateProxyType = policy.ProxyType;
-            VersionUpdateVersionType = policy.VersionType;
-            VersionUpdateResourceSource = policy.ResourceUpdateSource;
-            VersionUpdateForceGithubSource = policy.ForceGithubGlobalSource;
-            VersionUpdateMirrorChyanCdk = policy.MirrorChyanCdk;
-            VersionUpdateMirrorChyanCdkExpired = policy.MirrorChyanCdkExpired;
-            VersionUpdateStartupCheck = policy.StartupUpdateCheck;
-            VersionUpdateScheduledCheck = policy.ScheduledUpdateCheck;
-            VersionUpdateResourceApi = policy.ResourceApi;
-            VersionUpdateAllowNightly = policy.AllowNightlyUpdates;
-            VersionUpdateAcknowledgedNightlyWarning = policy.HasAcknowledgedNightlyWarning;
-            VersionUpdateUseAria2 = policy.UseAria2;
-            VersionUpdateAutoDownload = policy.AutoDownloadUpdatePackage;
-            VersionUpdateAutoInstall = policy.AutoInstallUpdatePackage;
-            VersionUpdateName = policy.VersionName;
-            VersionUpdateBody = policy.VersionBody;
-            VersionUpdateIsFirstBoot = policy.IsFirstBoot;
-            VersionUpdatePackage = policy.VersionPackage;
-            VersionUpdateDoNotShow = policy.DoNotShowUpdate;
-        });
+            RunWithSuppressedSettingsBackfill(() =>
+            {
+                VersionUpdateProxy = policy.Proxy;
+                VersionUpdateProxyType = policy.ProxyType;
+                VersionUpdateVersionType = policy.VersionType;
+                VersionUpdateResourceSource = policy.ResourceUpdateSource;
+                VersionUpdateForceGithubSource = policy.ForceGithubGlobalSource;
+                VersionUpdateMirrorChyanCdk = policy.MirrorChyanCdk;
+                VersionUpdateMirrorChyanCdkExpired = policy.MirrorChyanCdkExpired;
+                VersionUpdateStartupCheck = policy.StartupUpdateCheck;
+                VersionUpdateScheduledCheck = policy.ScheduledUpdateCheck;
+                VersionUpdateResourceApi = policy.ResourceApi;
+                VersionUpdateAllowNightly = policy.AllowNightlyUpdates;
+                VersionUpdateAcknowledgedNightlyWarning = policy.HasAcknowledgedNightlyWarning;
+                VersionUpdateUseAria2 = policy.UseAria2;
+                VersionUpdateAutoDownload = policy.AutoDownloadUpdatePackage;
+                VersionUpdateAutoInstall = policy.AutoInstallUpdatePackage;
+                VersionUpdateName = policy.VersionName;
+                VersionUpdateBody = policy.VersionBody;
+                VersionUpdateIsFirstBoot = policy.IsFirstBoot;
+                VersionUpdatePackage = policy.VersionPackage;
+                VersionUpdateDoNotShow = policy.DoNotShowUpdate;
+            });
+        }
+        finally
+        {
+            _suppressMirrorChyanCdkUpdateCheck = false;
+        }
+
         RefreshVersionUpdateSchedulerState();
         SyncVersionUpdateAvailabilityFromState();
     }
@@ -449,8 +461,21 @@ public sealed partial class SettingsPageViewModel
     private async Task RunVersionUpdateCheckInternalAsync(
         string scope,
         bool showDialog,
+        bool requireMirrorChyanCdk,
         CancellationToken cancellationToken)
     {
+        if (requireMirrorChyanCdk
+            && string.Equals(VersionUpdateResourceSource, "MirrorChyan", StringComparison.OrdinalIgnoreCase)
+            && string.IsNullOrWhiteSpace(VersionUpdateMirrorChyanCdk))
+        {
+            ClearVersionUpdateActivityMessage();
+            VersionUpdateStatusMessage = LocalizeSettingsText(
+                "Settings.VersionUpdate.Status.MirrorChyanCdkRequired",
+                "请前往 设置 > Version Update 配置 Mirror酱 CDK 或切换更新源。");
+            VersionUpdateErrorMessage = string.Empty;
+            return;
+        }
+
         if (IsVersionUpdateActionRunning)
         {
             return;
@@ -518,6 +543,14 @@ public sealed partial class SettingsPageViewModel
         }
     }
 
+    private bool ShouldAutomaticallyApplyResourceUpdate()
+    {
+        return string.Equals(
+            VersionUpdateResourceSource,
+            "MirrorChyan",
+            StringComparison.OrdinalIgnoreCase);
+    }
+
     private async Task RunAutomaticVersionAndResourceUpdateFlowAsync(
         string scope,
         bool autoApplyResourceUpdate,
@@ -526,11 +559,39 @@ public sealed partial class SettingsPageViewModel
         await RunVersionUpdateCheckInternalAsync(
             $"{scope}.Software",
             showDialog: false,
+            requireMirrorChyanCdk: false,
             cancellationToken);
 
         await RunResourceUpdateInternalAsync(
             $"{scope}.Resource",
             autoApplyUpdate: autoApplyResourceUpdate,
+            cancellationToken);
+    }
+
+    private async Task ShowNightlyUpdateWarningAsync(CancellationToken cancellationToken)
+    {
+        if (!string.Equals(VersionUpdateVersionType, "Nightly", StringComparison.OrdinalIgnoreCase)
+            || VersionUpdateAcknowledgedNightlyWarning)
+        {
+            return;
+        }
+
+        await _dialogService.ShowWarningConfirmAsync(
+            new WarningConfirmDialogRequest(
+                Title: LocalizeSettingsText(
+                    "Settings.VersionUpdate.NightlyWarning.Title",
+                    "Nightly updates"),
+                Message: LocalizeSettingsText(
+                    "Settings.VersionUpdate.NightlyWarning.Message",
+                    "Nightly updates are enabled. Thank you for helping test MAA."),
+                ConfirmText: LocalizeSettingsText(
+                    "Settings.VersionUpdate.NightlyWarning.Confirm",
+                    "OK"),
+                CancelText: LocalizeSettingsText(
+                    "Settings.VersionUpdate.NightlyWarning.Cancel",
+                    "Close"),
+                Language: Language),
+            "App.Initialize.NightlyWarning",
             cancellationToken);
     }
 
@@ -564,6 +625,11 @@ public sealed partial class SettingsPageViewModel
         VersionUpdateCheckResult checkResult,
         CancellationToken cancellationToken)
     {
+        if (checkResult.MirrorChyanCdkExpiryUnixSeconds.HasValue)
+        {
+            VersionUpdateMirrorChyanCdkExpired = checkResult.MirrorChyanCdkExpiryUnixSeconds.Value.ToString(CultureInfo.InvariantCulture);
+        }
+
         var resolvedName = string.IsNullOrWhiteSpace(checkResult.ReleaseName)
             ? checkResult.TargetVersion
             : checkResult.ReleaseName;
@@ -709,7 +775,7 @@ public sealed partial class SettingsPageViewModel
                 "Settings.VersionUpdate.RestartPendingWhileRunning",
                 "更新包已下载完成。当前任务仍在运行，请在空闲时重启 MAA 以应用更新。");
             VersionUpdateErrorMessage = string.Empty;
-            return;
+            await WaitForTaskExecutionToFinishAsync(cancellationToken);
         }
 
         if (VersionUpdateAutoInstall)
@@ -719,6 +785,36 @@ public sealed partial class SettingsPageViewModel
         }
 
         await PromptForPreparedVersionUpdateRestartAsync(scope, cancellationToken);
+    }
+
+    private async Task WaitForTaskExecutionToFinishAsync(CancellationToken cancellationToken)
+    {
+        if (Runtime.SessionService.CurrentState is not (SessionState.Running or SessionState.Stopping))
+        {
+            return;
+        }
+
+        var executionFinished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        void HandleSessionStateChanged(SessionState state)
+        {
+            if (state is not (SessionState.Running or SessionState.Stopping))
+            {
+                executionFinished.TrySetResult();
+            }
+        }
+
+        Runtime.SessionService.SessionStateChanged += HandleSessionStateChanged;
+        try
+        {
+            if (Runtime.SessionService.CurrentState is SessionState.Running or SessionState.Stopping)
+            {
+                await executionFinished.Task.WaitAsync(cancellationToken);
+            }
+        }
+        finally
+        {
+            Runtime.SessionService.SessionStateChanged -= HandleSessionStateChanged;
+        }
     }
 
     private async Task PromptForPreparedVersionUpdateRestartAsync(
@@ -810,6 +906,12 @@ public sealed partial class SettingsPageViewModel
                 "Settings.VersionUpdate.Status.ResourceUpdateFailed",
                 "Resource update failed.");
             return false;
+        }
+
+        var refreshedPolicy = await Runtime.VersionUpdateFeatureService.LoadPolicyAsync(cancellationToken);
+        if (refreshedPolicy.Success && refreshedPolicy.Value is not null)
+        {
+            VersionUpdateMirrorChyanCdkExpired = refreshedPolicy.Value.MirrorChyanCdkExpired;
         }
 
         await ReloadUpdatedResourcesAsync(cancellationToken);

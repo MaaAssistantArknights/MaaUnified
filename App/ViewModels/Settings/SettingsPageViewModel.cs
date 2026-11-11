@@ -408,6 +408,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
     private bool _versionUpdateForceGithubSource;
     private string _versionUpdateMirrorChyanCdk = string.Empty;
     private string _versionUpdateMirrorChyanCdkExpired = string.Empty;
+    private bool _suppressMirrorChyanCdkUpdateCheck;
     private bool _versionUpdateStartupCheck = true;
     private bool _versionUpdateScheduledCheck;
     private string _versionUpdateResourceApi = string.Empty;
@@ -480,7 +481,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
     private readonly IAppDialogService _dialogService;
     private readonly IUiLanguageCoordinator _uiLanguageCoordinator;
     private readonly Func<string?> _coreVersionResolver;
-    private readonly HttpClient _aboutAnnouncementHttpClient;
+    private readonly HttpClient? _aboutAnnouncementHttpClient;
     private readonly TimeSpan _aboutAnnouncementTimeout;
     private readonly DispatcherTimer _versionUpdateSchedulerTimer = new()
     {
@@ -508,7 +509,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
         _dialogService = dialogService ?? NoOpAppDialogService.Instance;
         _uiLanguageCoordinator = runtime.UiLanguageCoordinator;
         _coreVersionResolver = coreVersionResolver ?? ResolveCurrentCoreVersion;
-        _aboutAnnouncementHttpClient = aboutAnnouncementHttpClient ?? SharedAboutAnnouncementHttpClient;
+        _aboutAnnouncementHttpClient = aboutAnnouncementHttpClient;
         _aboutAnnouncementTimeout = aboutAnnouncementTimeout is { } timeout && timeout > TimeSpan.Zero
             ? timeout
             : DefaultAboutAnnouncementTimeout;
@@ -2390,7 +2391,26 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
     public string VersionUpdateMirrorChyanCdk
     {
         get => _versionUpdateMirrorChyanCdk;
-        set => SetProperty(ref _versionUpdateMirrorChyanCdk, value?.Trim() ?? string.Empty);
+        set
+        {
+            var normalized = value?.Trim() ?? string.Empty;
+            if (string.IsNullOrEmpty(normalized))
+            {
+                VersionUpdateMirrorChyanCdkExpired = "0";
+            }
+
+            if (!SetProperty(ref _versionUpdateMirrorChyanCdk, normalized)
+                || _suppressMirrorChyanCdkUpdateCheck
+                || normalized.Length != 24)
+            {
+                return;
+            }
+
+            _ = RunAutomaticVersionAndResourceUpdateFlowAsync(
+                "Settings.VersionUpdate.MirrorChyanCdk",
+                autoApplyResourceUpdate: true,
+                CancellationToken.None);
+        }
     }
 
     public string VersionUpdateMirrorChyanCdkExpired
@@ -5167,9 +5187,30 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
         if (result.Success)
         {
             _ = Runtime.AchievementTrackerService.Unlock("ProblemFeedback");
+            await SetAcknowledgedNightlyWarningAsync(cancellationToken);
         }
 
         return result;
+    }
+
+    private async Task SetAcknowledgedNightlyWarningAsync(CancellationToken cancellationToken)
+    {
+        if (VersionUpdateAcknowledgedNightlyWarning)
+        {
+            return;
+        }
+
+        VersionUpdateAcknowledgedNightlyWarning = true;
+        var saveResult = await Runtime.VersionUpdateFeatureService.SavePolicyAsync(
+            BuildVersionUpdatePolicy(),
+            cancellationToken);
+        if (saveResult.Success)
+        {
+            return;
+        }
+
+        VersionUpdateAcknowledgedNightlyWarning = false;
+        Runtime.LogService.Warn($"[update] Failed to persist Nightly warning acknowledgement: {saveResult.Message}");
     }
 
     public async Task OpenIssueReportDebugDirectoryAsync(CancellationToken cancellationToken = default)
@@ -5353,6 +5394,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
             return;
         }
 
+        state = state.ForLanguage(Language);
         var fetchResult = await FetchLatestAnnouncementInfoAsync(cancellationToken);
         if (fetchResult.Success && fetchResult.Value is not null && !string.IsNullOrWhiteSpace(fetchResult.Value.Content))
         {

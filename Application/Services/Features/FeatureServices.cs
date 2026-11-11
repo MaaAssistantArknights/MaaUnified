@@ -7039,7 +7039,8 @@ public sealed class AnnouncementFeatureService : IAnnouncementFeatureService
         var state = new AnnouncementState(
             AnnouncementInfo: ReadString(config, ConfigurationKeys.AnnouncementInfo, string.Empty),
             DoNotRemindThisAnnouncementAgain: ReadBool(config, ConfigurationKeys.DoNotRemindThisAnnouncementAgain, false),
-            DoNotShowAnnouncement: ReadBool(config, ConfigurationKeys.DoNotShowAnnouncement, false));
+            DoNotShowAnnouncement: ReadBool(config, ConfigurationKeys.DoNotShowAnnouncement, false),
+            LocalizedStates: ReadLocalizedStates(config));
         return Task.FromResult(UiOperationResult<AnnouncementState>.Ok(state, "Loaded announcement state."));
     }
 
@@ -7051,16 +7052,18 @@ public sealed class AnnouncementFeatureService : IAnnouncementFeatureService
             return UiOperationResult.Fail(UiErrorCode.AnnouncementServiceUnavailable, "Announcement service is not initialized.");
         }
 
-        if (state.AnnouncementInfo.Length > 32768)
-        {
-            return UiOperationResult.Fail(
-                UiErrorCode.AnnouncementStateInvalid,
-                "Announcement payload is too large.");
-        }
-
         foreach (var (key, value) in state.ToGlobalSettingUpdates())
         {
             _configService.CurrentConfig.GlobalValues[key] = JsonValue.Create(value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(state.SelectedLanguage))
+        {
+            var localizedStates = ReadLocalizedStates(_configService.CurrentConfig)
+                .ToDictionary(static pair => pair.Key, static pair => pair.Value, StringComparer.OrdinalIgnoreCase);
+            localizedStates[AnnouncementState.NormalizeAnnouncementLanguage(state.SelectedLanguage)] = state.ToLocaleState();
+            _configService.CurrentConfig.GlobalValues[ConfigurationKeys.AnnouncementLocalizedStates] =
+                SerializeLocalizedStates(localizedStates);
         }
 
         await _configService.SaveAsync(cancellationToken);
@@ -7094,6 +7097,73 @@ public sealed class AnnouncementFeatureService : IAnnouncementFeatureService
         }
 
         return fallback;
+    }
+
+    private static IReadOnlyDictionary<string, AnnouncementLocaleState> ReadLocalizedStates(UnifiedConfig config)
+    {
+        if (!config.GlobalValues.TryGetValue(ConfigurationKeys.AnnouncementLocalizedStates, out var node)
+            || node is not JsonObject root)
+        {
+            return new Dictionary<string, AnnouncementLocaleState>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        var states = new Dictionary<string, AnnouncementLocaleState>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (language, value) in root)
+        {
+            if (value is not JsonObject item)
+            {
+                continue;
+            }
+
+            var info = ReadJsonString(item, "announcementInfo");
+            var doNotRemind = ReadJsonBool(item, "doNotRemind");
+            var sourceUrl = ReadJsonString(item, "sourceUrl");
+            DateTimeOffset? fetchedAtUtc = null;
+            if (DateTimeOffset.TryParse(ReadJsonString(item, "fetchedAtUtc"), out var parsed))
+            {
+                fetchedAtUtc = parsed;
+            }
+
+            states[AnnouncementState.NormalizeAnnouncementLanguage(language)] = new AnnouncementLocaleState(
+                info,
+                doNotRemind,
+                sourceUrl,
+                fetchedAtUtc);
+        }
+
+        return states;
+    }
+
+    private static string ReadJsonString(JsonObject item, string propertyName)
+    {
+        return item[propertyName] is JsonValue value
+            && value.TryGetValue<string>(out var text)
+            ? text ?? string.Empty
+            : string.Empty;
+    }
+
+    private static bool ReadJsonBool(JsonObject item, string propertyName)
+    {
+        return item[propertyName] is JsonValue value
+            && value.TryGetValue<bool>(out var parsed)
+            && parsed;
+    }
+
+    private static JsonObject SerializeLocalizedStates(IReadOnlyDictionary<string, AnnouncementLocaleState> states)
+    {
+        var root = new JsonObject();
+        foreach (var (language, state) in states)
+        {
+            root[AnnouncementState.NormalizeAnnouncementLanguage(language)] = new JsonObject
+            {
+                ["announcementInfo"] = state.AnnouncementInfo,
+                ["doNotRemind"] = state.DoNotRemindThisAnnouncementAgain,
+                ["sourceUrl"] = state.LastFetchedSourceUrl,
+                ["fetchedAtUtc"] = state.LastFetchedAtUtc?.ToString("O"),
+            };
+        }
+
+        return root;
     }
 }
 

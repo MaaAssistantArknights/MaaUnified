@@ -4891,4 +4891,16 @@ MAA を複数開くには、新しい MAA を他のフォルダにコピーし�
     <value>管理者権限での起動は、起動時の自動実行をサポートしていません。MAAを長時間管理者権限で実行することはお勧めしません。
 必要な場合は、「コントロールパネル > Windowsツール > タスクスケジューラ」に移動してカスタムタスクを作成してください。トリガーを設定する際に、「最も高い特権で実行」を必ず選択してください。</value>
   </data>
+  <data name="Settings.VersionUpdate.NightlyWarning.Title" xml:space="preserve">
+    <value>Nightly 更新</value>
+  </data>
+  <data name="Settings.VersionUpdate.NightlyWarning.Message" xml:space="preserve">
+    <value>Nightly 更新が有効です。MAA のテストにご協力いただきありがとうございます。</value>
+  </data>
+  <data name="Settings.VersionUpdate.NightlyWarning.Confirm" xml:space="preserve">
+    <value>OK</value>
+  </data>
+  <data name="Settings.VersionUpdate.NightlyWarning.Cancel" xml:space="preserve">
+    <value>閉じる</value>
+  </data>
 </root>

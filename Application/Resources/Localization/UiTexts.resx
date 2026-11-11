@@ -5718,4 +5718,16 @@
   <data name="MacRawByNcRisk.Dialog.DefaultTouchMode" xml:space="preserve">
     <value>默认触控方式</value>
   </data>
+  <data name="Settings.VersionUpdate.NightlyWarning.Title" xml:space="preserve">
+    <value>Nightly 版本警告</value>
+  </data>
+  <data name="Settings.VersionUpdate.NightlyWarning.Message" xml:space="preserve">
+    <value>已启用 Nightly 版本更新。感谢你帮助测试 MAA。</value>
+  </data>
+  <data name="Settings.VersionUpdate.NightlyWarning.Confirm" xml:space="preserve">
+    <value>确定</value>
+  </data>
+  <data name="Settings.VersionUpdate.NightlyWarning.Cancel" xml:space="preserve">
+    <value>关闭</value>
+  </data>
 </root>
