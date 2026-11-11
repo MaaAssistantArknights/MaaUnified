@@ -96,7 +96,7 @@ internal static class LegacyTaskSchemaConverter
                 "Mall" => ConvertMall(legacyTask, ResolveUiLanguage(config, uiLanguage)),
                 "Award" => ConvertAward(legacyTask),
                 "Roguelike" => ConvertRoguelike(legacyTask, options),
-                "Reclamation" => ConvertReclamation(legacyTask),
+                "Reclamation" => ConvertReclamation(legacyTask, profile, config),
                 "UserDataUpdate" => ConvertUserDataUpdate(legacyTask),
                 "SingleStep" => ConvertSingleStep(legacyTask),
                 "Custom" => ConvertCustom(legacyTask),
@@ -544,11 +544,29 @@ internal static class LegacyTaskSchemaConverter
     {
         var mode = LegacyConfigValueMappings.NormalizeRoguelikeMode(task["Mode"]);
         var theme = ResolveRoguelikeTheme(task["Theme"]);
-        var collectibleAwardsMask = task.ContainsKey("CollectibleStartAwards")
-            ? LegacyConfigValueMappings.NormalizeRoguelikeCollectibleAwardsMask(task["CollectibleStartAwards"])
-            : (1 << 0) | (1 << 3) | (1 << 7);
+        // Frozen WPF repairs a persisted collapse-paradigm mode back to the first mode
+        // whenever the stored theme is not Sami, so imported configs do the same.
+        var importedCollapseParadigms = mode == 5;
+        if (importedCollapseParadigms && !string.Equals(theme, "Sami", StringComparison.OrdinalIgnoreCase))
+        {
+            mode = 0;
+        }
+
+        // Frozen WPF likewise repairs FindPlaytime back to the first mode while keeping
+        // the stored theme when the theme is not JieGarden.
+        var importedFindPlaytime = mode == 20001;
+        if (importedFindPlaytime && !string.Equals(theme, "JieGarden", StringComparison.OrdinalIgnoreCase))
+        {
+            mode = 0;
+        }
+        var collectibleAwardsMask = task["CollectibleStartAwards"] is null
+            ? (1 << 0) | (1 << 3) | (1 << 7)
+            : LegacyConfigValueMappings.NormalizeRoguelikeCollectibleAwardsMask(task["CollectibleStartAwards"]);
         var missingIterationFlagsDefault = options.MissingRoguelikeIterationFlagsDefault;
 
+        // Frozen WPF stores every RoguelikeTask field per task unconditionally and
+        // gates only at serialization, so import the raw values and leave run-form
+        // gating to TaskParamCompiler.CompileRoguelike (theme/mode/investment gates).
         var result = new JsonObject
         {
             ["mode"] = mode,
@@ -558,16 +576,22 @@ internal static class LegacyTaskSchemaConverter
             ["investment_enabled"] = GetBool(task, "Investment", true),
             ["use_support"] = GetBool(task, "UseSupport", false),
             ["use_nonfriend_support"] = GetBool(task, "UseSupportNonFriend", false),
-            ["refresh_trader_with_dice"] = string.Equals(theme, "Mizuki", StringComparison.OrdinalIgnoreCase)
-                && GetBool(task, "RefreshTraderWithDice", false),
+            ["refresh_trader_with_dice"] = GetBool(task, "RefreshTraderWithDice", false),
+            ["investment_with_more_score"] = GetBool(task, "InvestWithMoreScore", false),
+            ["investments_count"] = GetInt(task, "InvestCount", 999),
+            ["stop_when_investment_full"] = GetBool(task, "StopWhenDepositFull", false),
+            ["stop_at_final_boss"] = GetBool(task, "StopAtFinalBoss", false),
+            ["stop_at_max_level"] = GetBool(task, "StopWhenLevelMax", false),
+            ["collectible_mode_shopping"] = GetBool(task, "CollectibleShopping", false),
+            ["collectible_mode_squad"] = GetString(task, "SquadCollectible") ?? string.Empty,
+            ["start_with_elite_two"] = GetBool(task, "StartWithEliteTwo", false),
+            ["only_start_with_elite_two"] = GetBool(task, "StartWithEliteTwoOnly", false),
+            ["collectible_mode_start_list"] = BuildCollectibleStartList(collectibleAwardsMask),
+            ["monthly_squad_auto_iterate"] = GetBool(task, "MonthlySquadAutoIterate", missingIterationFlagsDefault),
+            ["monthly_squad_check_comms"] = GetBool(task, "MonthlySquadCheckComms", missingIterationFlagsDefault),
+            ["deep_exploration_auto_iterate"] = GetBool(task, "DeepExplorationAutoIterate", missingIterationFlagsDefault),
+            ["find_playTime_target"] = LegacyConfigValueMappings.NormalizeFindPlaytimeTarget(task["FindPlaytimeTarget"]),
         };
-
-        if (GetBool(task, "Investment", true))
-        {
-            result["investment_with_more_score"] = GetBool(task, "InvestWithMoreScore", false) && mode == 1;
-            result["investments_count"] = GetInt(task, "InvestCount", 999);
-            result["stop_when_investment_full"] = GetBool(task, "StopWhenDepositFull", false);
-        }
 
         var squad = GetString(task, "Squad");
         if (!string.IsNullOrWhiteSpace(squad))
@@ -587,72 +611,47 @@ internal static class LegacyTaskSchemaConverter
             result["core_char"] = coreChar;
         }
 
-        if (mode == 0)
+        // Frozen WPF persists each foldartal/seed toggle independently of its
+        // content, so import both even when the toggle is off.
+        result["first_floor_foldartal_enabled"] = GetBool(task, "SamiFirstFloorFoldartal", false);
+        var firstFloorFoldartal = GetString(task, "SamiFirstFloorFoldartals");
+        if (!string.IsNullOrWhiteSpace(firstFloorFoldartal))
         {
-            result["stop_at_final_boss"] = GetBool(task, "StopAtFinalBoss", false);
-            result["stop_at_max_level"] = GetBool(task, "StopWhenLevelMax", false);
+            result["first_floor_foldartal"] = firstFloorFoldartal;
         }
 
-        if (mode == 4)
+        result["start_foldartal_list_enabled"] = GetBool(task, "SamiNewSquad2StartingFoldartal", false);
+        var foldartalList = SplitWpfSemicolonList(GetString(task, "SamiNewSquad2StartingFoldartals"), trimEntries: false, preserveEmptyEntries: false)
+            .Take(3)
+            .ToList();
+        if (foldartalList.Count > 0)
         {
-            result["collectible_mode_shopping"] = GetBool(task, "CollectibleShopping", false);
-            result["collectible_mode_squad"] = GetString(task, "SquadCollectible") ?? string.Empty;
-            result["start_with_elite_two"] = GetBool(task, "StartWithEliteTwo", false);
-            result["only_start_with_elite_two"] = GetBool(task, "StartWithEliteTwoOnly", false);
-            result["collectible_mode_start_list"] = BuildCollectibleStartList(collectibleAwardsMask);
-        }
-
-        if (mode == 6)
-        {
-            result["monthly_squad_auto_iterate"] = GetBool(task, "MonthlySquadAutoIterate", missingIterationFlagsDefault);
-            result["monthly_squad_check_comms"] = GetBool(task, "MonthlySquadCheckComms", missingIterationFlagsDefault);
-        }
-
-        if (mode == 7)
-        {
-            result["deep_exploration_auto_iterate"] = GetBool(task, "DeepExplorationAutoIterate", missingIterationFlagsDefault);
-        }
-
-        if (mode == 20001)
-        {
-            result["find_playTime_target"] = LegacyConfigValueMappings.NormalizeFindPlaytimeTarget(task["FindPlaytimeTarget"]);
-        }
-
-        if (GetBool(task, "SamiFirstFloorFoldartal", false))
-        {
-            var firstFloorFoldartal = GetString(task, "SamiFirstFloorFoldartals");
-            if (!string.IsNullOrWhiteSpace(firstFloorFoldartal))
-            {
-                result["first_floor_foldartal"] = firstFloorFoldartal;
-            }
-        }
-
-        if (GetBool(task, "SamiNewSquad2StartingFoldartal", false))
-        {
-            var foldartalList = SplitNonEmpty(GetString(task, "SamiNewSquad2StartingFoldartals"), ';')
-                .Take(3);
             result["start_foldartal_list"] = ToJsonArray(foldartalList);
         }
 
-        if (mode == 5)
+        if (importedCollapseParadigms)
         {
-            var paradigms = SplitNonEmpty(GetString(task, "ExpectedCollapsalParadigms"), ';');
-            result["expected_collapsal_paradigms"] = ToJsonArray(paradigms);
+            // Frozen WPF omits the key entirely when the paradigm text is empty and keeps
+            // the stored text in config even when the mode itself was repaired away.
+            var paradigms = SplitWpfSemicolonList(GetString(task, "ExpectedCollapsalParadigms"), trimEntries: false, preserveEmptyEntries: false)
+                .ToList();
+            if (paradigms.Count > 0)
+            {
+                result["expected_collapsal_paradigms"] = ToJsonArray(paradigms);
+            }
         }
 
-        if (GetBool(task, "StartWithSeed", false))
+        result["start_with_seed_enabled"] = GetBool(task, "StartWithSeed", false);
+        var seed = GetString(task, "Seed");
+        if (!string.IsNullOrWhiteSpace(seed))
         {
-            var seed = GetString(task, "Seed");
-            if (!string.IsNullOrWhiteSpace(seed))
-            {
-                result["start_with_seed"] = seed;
-            }
+            result["start_with_seed"] = seed;
         }
 
         return result;
     }
 
-    private static JsonObject ConvertReclamation(JsonObject task)
+    private static JsonObject ConvertReclamation(JsonObject task, UnifiedProfile profile, UnifiedConfig config)
     {
         var mode = LegacyConfigValueMappings.NormalizeReclamationMode(task["Mode"]);
         var theme = ResolveReclamationTheme(task["Theme"]);
@@ -661,13 +660,19 @@ internal static class LegacyTaskSchemaConverter
             theme = "RelaunchAnchor";
         }
 
+        var toolToCraft = GetString(task, "ToolToCraft");
+        if (string.IsNullOrEmpty(toolToCraft))
+        {
+            toolToCraft = ReclamationTaskParamsDto.ResolveDefaultToolToCraft(ResolveClientType(profile, config));
+        }
+
         return new JsonObject
         {
             ["theme"] = theme,
             ["mode"] = mode,
             ["increment_mode"] = LegacyConfigValueMappings.NormalizeReclamationIncrementMode(task["IncrementMode"]),
             ["num_craft_batches"] = GetInt(task, "MaxCraftCountPerRound", 16),
-            ["tools_to_craft"] = ToJsonArray(SplitNonEmpty(GetString(task, "ToolToCraft"), ';')),
+            ["tools_to_craft"] = ToJsonArray(SplitWpfSemicolonList(toolToCraft, trimEntries: true, preserveEmptyEntries: true)),
             ["clear_store"] = GetBool(task, "ClearStore", true),
         };
     }
@@ -1086,6 +1091,18 @@ internal static class LegacyTaskSchemaConverter
     {
         _ = separator;
         return LegacyConfigValueMappings.SplitLegacyList(input);
+    }
+
+    private static IEnumerable<string> SplitWpfSemicolonList(
+        string? input,
+        bool trimEntries,
+        bool preserveEmptyEntries)
+    {
+        var normalized = (input ?? string.Empty).Replace('；', ';').Trim();
+        return normalized
+            .Split(';')
+            .Select(item => trimEntries ? item.Trim() : item)
+            .Where(item => preserveEmptyEntries || !string.IsNullOrEmpty(item));
     }
 
     private static JsonArray ToJsonArray(IEnumerable<string> values)

@@ -102,11 +102,6 @@ public sealed class ReclamationModuleViewModel : TypedTaskModuleViewModelBase<Re
                 Mode = GetFallbackMode();
             }
 
-            if (IsRelaunchAnchorTheme && ClearStore)
-            {
-                ClearStore = false;
-            }
-
             OnPropertyChanged(nameof(SelectedThemeOption));
             OnPropertyChanged(nameof(IsRelaunchAnchorTheme));
             OnPropertyChanged(nameof(IsArchiveMode));
@@ -199,37 +194,15 @@ public sealed class ReclamationModuleViewModel : TypedTaskModuleViewModelBase<Re
 
     protected override ReclamationTaskParamsDto BuildDto()
     {
-        var toolsToCraft = ParseTextLines(ToolsToCraftText);
-        if (IsArchiveMode && toolsToCraft.Count == 0)
-        {
-            toolsToCraft = [Texts.GetOrDefault("Reclamation.ToolToCraftPlaceholder", "荧光棒")];
-        }
-
         return new ReclamationTaskParamsDto
         {
             Theme = string.IsNullOrWhiteSpace(Theme) ? "Tales" : Theme.Trim(),
             Mode = Mode,
             IncrementMode = IncrementMode,
-            NumCraftBatches = Math.Clamp(NumCraftBatches, 0, 99999),
-            ToolsToCraft = toolsToCraft,
-            ClearStore = ShowClearStore ? ClearStore : false,
+            NumCraftBatches = Math.Max(0, NumCraftBatches),
+            ToolsToCraft = ParseTextLines(ToolsToCraftText),
+            ClearStore = ClearStore,
         };
-    }
-
-    protected override IReadOnlyList<TaskValidationIssue> ValidateBeforeSave()
-    {
-        if (!ContainsStructuredMarkers(ToolsToCraftText))
-        {
-            return [];
-        }
-
-        return
-        [
-            new TaskValidationIssue(
-                "DelimitedInputParseFailed",
-                "reclamation.tools_to_craft",
-                "ToolsToCraft only supports plain delimiter-separated text."),
-        ];
     }
 
     private void OnTextsPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -273,16 +246,12 @@ public sealed class ReclamationModuleViewModel : TypedTaskModuleViewModelBase<Re
 
     private static List<string> ParseTextLines(string value)
     {
-        return value
-            .Split(new[] { '\r', '\n', ';', ',', '|' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Where(v => !string.IsNullOrWhiteSpace(v))
-            .Distinct(StringComparer.Ordinal)
-            .ToList();
-    }
+        if (string.IsNullOrEmpty(value))
+        {
+            return [];
+        }
 
-    private static bool ContainsStructuredMarkers(string value)
-    {
-        return !string.IsNullOrWhiteSpace(value) && value.IndexOfAny(['[', ']', '{', '}', ':', '"']) >= 0;
+        return value.Split(';').Select(item => item.Trim()).ToList();
     }
 
     private int GetFallbackMode()

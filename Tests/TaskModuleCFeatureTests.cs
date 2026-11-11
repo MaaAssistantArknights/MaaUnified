@@ -42,7 +42,8 @@ public sealed class TaskModuleCFeatureTests
         Assert.Equal(1, tasks[1].Params["mode"]?.GetValue<int>());
         Assert.Equal(0, tasks[1].Params["increment_mode"]?.GetValue<int>());
         Assert.Equal(16, tasks[1].Params["num_craft_batches"]?.GetValue<int>());
-        Assert.False(tasks[1].Params["clear_store"]?.GetValue<bool>());
+        Assert.Equal(["荧光棒"], ((JsonArray)tasks[1].Params["tools_to_craft"]!).Select(node => node!.GetValue<string>()));
+        Assert.True(tasks[1].Params["clear_store"]?.GetValue<bool>());
 
         Assert.Equal(TaskModuleTypes.Custom, tasks[2].Type);
         var taskNames = Assert.IsType<JsonArray>(tasks[2].Params["task_names"]);
@@ -113,7 +114,7 @@ public sealed class TaskModuleCFeatureTests
         Assert.True(rogue.Value.RefreshTraderWithDice);
         Assert.True(rogue.Value.CollectibleModeStartList.HotWater);
         Assert.True(rogue.Value.CollectibleModeStartList.Dice);
-        Assert.True(rogue.Value.CollectibleModeStartList.Ticket);
+        Assert.False(rogue.Value.CollectibleModeStartList.Ticket);
         Assert.Equal("seeda,rogue_1,3", rogue.Value.StartWithSeed);
 
         var reclamation = await fixture.TaskQueue.GetReclamationParamsAsync(1);
@@ -313,6 +314,7 @@ public sealed class TaskModuleCFeatureTests
         {
             Mode = 0,
             Theme = "JieGarden",
+            StartWithSeedEnabled = true,
             StartWithSeed = "invalid-seed-format",
         });
 
@@ -322,7 +324,7 @@ public sealed class TaskModuleCFeatureTests
     }
 
     [Fact]
-    public async Task SaveReclamation_DegradesRiskyFields_WithWarningsButNoBlocking()
+    public async Task SaveReclamation_DegradesRiskyFields_ButPreservesWpfClearStore()
     {
         await using var fixture = await TestFixture.CreateAsync();
         Assert.True((await fixture.TaskQueue.AddTaskAsync("Reclamation", "reclamation")).Success);
@@ -342,8 +344,9 @@ public sealed class TaskModuleCFeatureTests
         Assert.Equal("Tales", parameters["theme"]?.GetValue<string>());
         Assert.Equal(1, parameters["mode"]?.GetValue<int>());
         Assert.Equal(0, parameters["increment_mode"]?.GetValue<int>());
-        Assert.Equal(99999, parameters["num_craft_batches"]?.GetValue<int>());
-        Assert.False(parameters["clear_store"]?.GetValue<bool>());
+        // Frozen WPF sets no upper bound on the NumericUpDown, so large values persist.
+        Assert.Equal(200000, parameters["num_craft_batches"]?.GetValue<int>());
+        Assert.True(parameters["clear_store"]?.GetValue<bool>());
 
         parameters["clear_store"] = JsonValue.Create(true);
         parameters["mode"] = JsonValue.Create(1);
@@ -352,10 +355,10 @@ public sealed class TaskModuleCFeatureTests
         var validate = await fixture.TaskQueue.ValidateTaskAsync(0);
         Assert.True(validate.Success, validate.Message);
         Assert.NotNull(validate.Value);
-        Assert.Contains(
+        Assert.DoesNotContain(
             validate.Value!.Issues,
-            issue => issue.Code == "ReclamationClearStoreIgnoredInArchive" && !issue.Blocking);
-        Assert.False(validate.Value.CompiledParams["clear_store"]?.GetValue<bool>());
+            issue => issue.Code == "ReclamationClearStoreIgnoredInArchive");
+        Assert.True(validate.Value.CompiledParams["clear_store"]?.GetValue<bool>());
     }
 
     [Fact]
@@ -426,7 +429,8 @@ public sealed class TaskModuleCFeatureTests
         await fixture.Config.SaveAsync();
 
         var task = Assert.Single(config.Profiles["Default"].TaskQueue);
-        Assert.False(task.Params["clear_store"]?.GetValue<bool>());
+        Assert.True(task.Params["clear_store"]?.GetValue<bool>());
+        Assert.Equal(["荧光棒"], ((JsonArray)task.Params["tools_to_craft"]!).Select(node => node!.GetValue<string>()));
         Assert.DoesNotContain(
             fixture.Config.CurrentValidationIssues,
             issue => issue.Code == "ReclamationClearStoreIgnoredInArchive");
@@ -456,6 +460,439 @@ public sealed class TaskModuleCFeatureTests
         Assert.True(validate.Success, validate.Message);
         Assert.NotNull(validate.Value);
         Assert.DoesNotContain(validate.Value!.Issues, issue => issue.Code == "ReclamationNumCraftBatchesOutOfRange");
+    }
+
+    [Fact]
+    public async Task Reclamation_WpfSemicolonLists_PreserveDuplicatesAndLiteralCommas()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var compiled = TaskParamCompiler.CompileReclamation(
+            new ReclamationTaskParamsDto
+            {
+                Theme = "Tales",
+                Mode = 1,
+                ToolsToCraft = ["工具A", "工具A", "工具B,工具C", "工具D\n工具E"],
+            },
+            fixture.Config.CurrentConfig.Profiles["Default"],
+            fixture.Config.CurrentConfig);
+
+        Assert.Equal(
+            ["工具A", "工具A", "工具B,工具C", "工具D\n工具E"],
+            ((JsonArray)compiled.Params["tools_to_craft"]!).Select(node => node!.GetValue<string>()));
+        Assert.True(compiled.Params["clear_store"]?.GetValue<bool>());
+
+        fixture.Config.CurrentConfig.Profiles["Default"].Values["ClientType"] = "YoStarEN";
+        var localizedDefault = TaskParamCompiler.CompileReclamation(
+            new ReclamationTaskParamsDto(),
+            fixture.Config.CurrentConfig.Profiles["Default"],
+            fixture.Config.CurrentConfig);
+        Assert.Equal(
+            ["Glow Stick"],
+            ((JsonArray)localizedDefault.Params["tools_to_craft"]!).Select(node => node!.GetValue<string>()));
+    }
+
+    [Fact]
+    public async Task Roguelike_WpfDefaultsAndThemeRules_AreReflectedInCoreJson()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var profile = fixture.Config.CurrentConfig.Profiles["Default"];
+
+        var defaultCollectible = TaskParamCompiler.CompileRoguelike(
+            new RoguelikeTaskParamsDto { Mode = 4, Theme = "JieGarden" },
+            profile,
+            fixture.Config.CurrentConfig);
+        var defaultRewards = Assert.IsType<JsonObject>(defaultCollectible.Params["collectible_mode_start_list"]);
+        Assert.True(defaultRewards["hot_water"]?.GetValue<bool>());
+        Assert.False(defaultRewards["hope"]?.GetValue<bool>());
+        Assert.False(defaultRewards["ideas"]?.GetValue<bool>());
+
+        var onlyEliteTwo = TaskParamCompiler.CompileRoguelike(
+            new RoguelikeTaskParamsDto
+            {
+                Mode = 4,
+                Theme = "Mizuki",
+                Squad = "突击战术分队",
+                StartWithEliteTwo = true,
+                OnlyStartWithEliteTwo = true,
+            },
+            profile,
+            fixture.Config.CurrentConfig);
+        Assert.Empty(Assert.IsType<JsonObject>(onlyEliteTwo.Params["collectible_mode_start_list"]));
+
+        var invalidOnlyEliteTwo = TaskParamCompiler.CompileRoguelike(
+            new RoguelikeTaskParamsDto
+            {
+                Mode = 4,
+                Theme = "Mizuki",
+                OnlyStartWithEliteTwo = true,
+            },
+            profile,
+            fixture.Config.CurrentConfig);
+        Assert.False(invalidOnlyEliteTwo.Params["only_start_with_elite_two"]?.GetValue<bool>());
+        Assert.Equal(9, Assert.IsType<JsonObject>(invalidOnlyEliteTwo.Params["collectible_mode_start_list"]).Count);
+        Assert.Contains(invalidOnlyEliteTwo.Issues, issue => issue.Code == "RoguelikeOnlyEliteTwoRequiresEliteTwo");
+    }
+
+    [Fact]
+    public async Task Roguelike_CollapseModeWithoutSami_FallsBackToExpLikeFrozenWpf()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var profile = fixture.Config.CurrentConfig.Profiles["Default"];
+
+        var sami = TaskParamCompiler.CompileRoguelike(
+            new RoguelikeTaskParamsDto { Mode = 5, Theme = "Sami", ExpectedCollapsalParadigms = ["范式A"] },
+            profile,
+            fixture.Config.CurrentConfig);
+        Assert.Equal(5, sami.Params["mode"]?.GetValue<int>());
+        Assert.True(sami.Params.ContainsKey("expected_collapsal_paradigms"));
+        Assert.DoesNotContain(sami.Issues, issue => issue.Code == "RoguelikeCollapseModeThemeMismatch");
+
+        var sarkaz = TaskParamCompiler.CompileRoguelike(
+            new RoguelikeTaskParamsDto { Mode = 5, Theme = "Sarkaz", ExpectedCollapsalParadigms = ["范式A"] },
+            profile,
+            fixture.Config.CurrentConfig);
+        Assert.Equal(0, sarkaz.Params["mode"]?.GetValue<int>());
+        Assert.False(sarkaz.Params.ContainsKey("expected_collapsal_paradigms"));
+        var mismatch = Assert.Single(sarkaz.Issues, issue => issue.Code == "RoguelikeCollapseModeThemeMismatch");
+        Assert.False(mismatch.Blocking);
+    }
+
+    [Fact]
+    public async Task Roguelike_WpfSemicolonLists_PreserveDuplicatesCommasAndWhitespace()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var profile = fixture.Config.CurrentConfig.Profiles["Default"];
+
+        var foldartal = TaskParamCompiler.CompileRoguelike(
+            new RoguelikeTaskParamsDto
+            {
+                Mode = 4,
+                Theme = "Sami",
+                Squad = "生活至上分队",
+                StartFoldartalListEnabled = true,
+                StartFoldartalList = ["板子A", "板子A", "板子B,板子C"],
+            },
+            profile,
+            fixture.Config.CurrentConfig);
+        Assert.Equal(
+            ["板子A", "板子A", "板子B,板子C"],
+            ((JsonArray)foldartal.Params["start_foldartal_list"]!).Select(node => node!.GetValue<string>()));
+
+        var paradigms = TaskParamCompiler.CompileRoguelike(
+            new RoguelikeTaskParamsDto
+            {
+                Mode = 5,
+                Theme = "Sami",
+                ExpectedCollapsalParadigms = ["范式A", " 范式B", "范式A"],
+            },
+            profile,
+            fixture.Config.CurrentConfig);
+        Assert.Equal(
+            ["范式A", " 范式B", "范式A"],
+            ((JsonArray)paradigms.Params["expected_collapsal_paradigms"]!).Select(node => node!.GetValue<string>()));
+    }
+
+    [Fact]
+    public async Task Roguelike_CollapseModeEmptyParadigms_OmitsKeySoCoreKeepsRareDefaults()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var profile = fixture.Config.CurrentConfig.Profiles["Default"];
+
+        var empty = TaskParamCompiler.CompileRoguelike(
+            new RoguelikeTaskParamsDto { Mode = 5, Theme = "Sami" },
+            profile,
+            fixture.Config.CurrentConfig);
+        Assert.Equal(5, empty.Params["mode"]?.GetValue<int>());
+        Assert.False(empty.Params.ContainsKey("expected_collapsal_paradigms"));
+
+        var emptyEntriesOnly = TaskParamCompiler.CompileRoguelike(
+            new RoguelikeTaskParamsDto { Mode = 5, Theme = "Sami", ExpectedCollapsalParadigms = ["", ""] },
+            profile,
+            fixture.Config.CurrentConfig);
+        Assert.False(emptyEntriesOnly.Params.ContainsKey("expected_collapsal_paradigms"));
+
+        var filled = TaskParamCompiler.CompileRoguelike(
+            new RoguelikeTaskParamsDto { Mode = 5, Theme = "Sami", ExpectedCollapsalParadigms = ["范式A"] },
+            profile,
+            fixture.Config.CurrentConfig);
+        Assert.Equal(
+            ["范式A"],
+            ((JsonArray)filled.Params["expected_collapsal_paradigms"]!).Select(node => node!.GetValue<string>()));
+    }
+
+    [Fact]
+    public async Task Roguelike_FindPlaytimeWithoutJieGarden_ClampsModeAndKeepsThemeLikeFrozenWpf()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var profile = fixture.Config.CurrentConfig.Profiles["Default"];
+
+        var compiled = TaskParamCompiler.CompileRoguelike(
+            new RoguelikeTaskParamsDto { Mode = 20001, Theme = "Sami", FindPlayTimeTarget = 3 },
+            profile,
+            fixture.Config.CurrentConfig);
+        Assert.Equal(0, compiled.Params["mode"]?.GetValue<int>());
+        Assert.Equal("Sami", compiled.Params["theme"]?.GetValue<string>());
+        Assert.False(compiled.Params.ContainsKey("find_playTime_target"));
+        var mismatch = Assert.Single(compiled.Issues, issue => issue.Code == "RoguelikeFindPlaytimeThemeMismatch");
+        Assert.False(mismatch.Blocking);
+    }
+
+    [Fact]
+    public async Task Roguelike_StoredOnlyEliteTwoOnNonEliteTwoTheme_EmitsEmptyStartListLikeFrozenWpf()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var profile = fixture.Config.CurrentConfig.Profiles["Default"];
+
+        // Frozen WPF keys the reward skip on the stored flags for any non-Phantom
+        // professional squad, so Sarkaz/JieGarden also emit an empty start list.
+        var sarkaz = TaskParamCompiler.CompileRoguelike(
+            new RoguelikeTaskParamsDto
+            {
+                Mode = 4,
+                Theme = "Sarkaz",
+                Squad = "突击战术分队",
+                StartWithEliteTwo = true,
+                OnlyStartWithEliteTwo = true,
+                CollectibleModeStartList = new RoguelikeCollectibleStartListDto { HotWater = true, Ideas = true },
+            },
+            profile,
+            fixture.Config.CurrentConfig);
+        Assert.False(sarkaz.Params["start_with_elite_two"]?.GetValue<bool>());
+        Assert.False(sarkaz.Params["only_start_with_elite_two"]?.GetValue<bool>());
+        Assert.Empty(Assert.IsType<JsonObject>(sarkaz.Params["collectible_mode_start_list"]));
+
+        // Phantom is excluded from the frozen WPF predicate and keeps the full list.
+        var phantom = TaskParamCompiler.CompileRoguelike(
+            new RoguelikeTaskParamsDto
+            {
+                Mode = 4,
+                Theme = "Phantom",
+                Squad = "突击战术分队",
+                StartWithEliteTwo = true,
+                OnlyStartWithEliteTwo = true,
+            },
+            profile,
+            fixture.Config.CurrentConfig);
+        Assert.Equal(9, Assert.IsType<JsonObject>(phantom.Params["collectible_mode_start_list"]).Count);
+    }
+
+    [Fact]
+    public async Task SaveRoguelike_PersistsModeAndInvestmentGatedSettingsLikeFrozenWpf()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Roguelike", "rogue")).Success);
+
+        var collectibleSave = await fixture.TaskQueue.SaveRoguelikeParamsAsync(0, new RoguelikeTaskParamsDto
+        {
+            Mode = 4,
+            Theme = "Sami",
+            Squad = "突击战术分队",
+            InvestmentEnabled = true,
+            InvestmentWithMoreScore = true,
+            InvestmentsCount = 77,
+            StopWhenInvestmentFull = true,
+            CollectibleModeShopping = true,
+            CollectibleModeSquad = "生活至上分队",
+            StartWithEliteTwo = true,
+            OnlyStartWithEliteTwo = true,
+            CollectibleModeStartList = new RoguelikeCollectibleStartListDto { HotWater = true, Shield = true, Hope = false, Ideas = false },
+            MonthlySquadAutoIterate = false,
+            MonthlySquadCheckComms = false,
+            DeepExplorationAutoIterate = false,
+            FindPlayTimeTarget = 2,
+            StopAtFinalBoss = true,
+            StopAtMaxLevel = true,
+        });
+        Assert.True(collectibleSave.Success, collectibleSave.Message);
+
+        // Simulate the VM round-trip when the user switches to Exp mode and disables
+        // investment: hidden controls keep their values in the DTO like frozen WPF.
+        var switched = (await fixture.TaskQueue.GetRoguelikeParamsAsync(0)).Value!;
+        switched.Mode = 0;
+        switched.InvestmentEnabled = false;
+        var switchedSave = await fixture.TaskQueue.SaveRoguelikeParamsAsync(0, switched);
+        Assert.True(switchedSave.Success, switchedSave.Message);
+
+        var reloaded = (await fixture.TaskQueue.GetRoguelikeParamsAsync(0)).Value!;
+        Assert.Equal(0, reloaded.Mode);
+        Assert.False(reloaded.InvestmentEnabled);
+        Assert.True(reloaded.InvestmentWithMoreScore);
+        Assert.Equal(77, reloaded.InvestmentsCount);
+        Assert.True(reloaded.StopWhenInvestmentFull);
+        Assert.True(reloaded.StartWithEliteTwo);
+        Assert.True(reloaded.OnlyStartWithEliteTwo);
+        Assert.True(reloaded.CollectibleModeShopping);
+        Assert.Equal("生活至上分队", reloaded.CollectibleModeSquad);
+        Assert.True(reloaded.CollectibleModeStartList.Shield);
+        Assert.False(reloaded.CollectibleModeStartList.Hope);
+        Assert.False(reloaded.MonthlySquadAutoIterate);
+        Assert.False(reloaded.MonthlySquadCheckComms);
+        Assert.False(reloaded.DeepExplorationAutoIterate);
+        Assert.Equal(2, reloaded.FindPlayTimeTarget);
+        Assert.True(reloaded.StopAtFinalBoss);
+
+        // The Core-facing compiled form stays gated while mode 0 is active.
+        var validate = await fixture.TaskQueue.ValidateTaskAsync(0);
+        Assert.True(validate.Success, validate.Message);
+        var core = validate.Value!.CompiledParams;
+        Assert.False(core.ContainsKey("collectible_mode_start_list"));
+        Assert.False(core.ContainsKey("start_with_elite_two"));
+        Assert.False(core.ContainsKey("monthly_squad_auto_iterate"));
+        Assert.False(core.ContainsKey("deep_exploration_auto_iterate"));
+        Assert.False(core.ContainsKey("find_playTime_target"));
+        Assert.False(core.ContainsKey("investments_count"));
+        Assert.True(core["stop_at_final_boss"]?.GetValue<bool>());
+
+        // Switching back to collectible mode restores the preserved intent.
+        reloaded.Mode = 4;
+        reloaded.InvestmentEnabled = true;
+        var backSave = await fixture.TaskQueue.SaveRoguelikeParamsAsync(0, reloaded);
+        Assert.True(backSave.Success, backSave.Message);
+
+        var restored = await fixture.TaskQueue.ValidateTaskAsync(0);
+        var coreBack = restored.Value!.CompiledParams;
+        Assert.True(coreBack["start_with_elite_two"]?.GetValue<bool>());
+        Assert.True(coreBack["only_start_with_elite_two"]?.GetValue<bool>());
+        Assert.Empty(Assert.IsType<JsonObject>(coreBack["collectible_mode_start_list"]));
+        Assert.Equal(77, coreBack["investments_count"]?.GetValue<int>());
+        Assert.True(coreBack["stop_when_investment_full"]?.GetValue<bool>());
+        Assert.False(coreBack["investment_with_more_score"]?.GetValue<bool>());
+    }
+
+    [Fact]
+    public async Task SaveRoguelike_PreservesFoldartalAcrossThemeSwitchLikeFrozenWpf()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Roguelike", "rogue")).Success);
+
+        var save = await fixture.TaskQueue.SaveRoguelikeParamsAsync(0, new RoguelikeTaskParamsDto
+        {
+            Mode = 4,
+            Theme = "Sami",
+            Squad = "生活至上分队",
+            FirstFloorFoldartalEnabled = true,
+            FirstFloorFoldartal = "号角",
+            StartFoldartalListEnabled = true,
+            StartFoldartalList = ["火炬", "涟漪"],
+        });
+        Assert.True(save.Success, save.Message);
+
+        var samiValidate = await fixture.TaskQueue.ValidateTaskAsync(0);
+        Assert.Equal("号角", samiValidate.Value!.CompiledParams["first_floor_foldartal"]?.GetValue<string>());
+
+        var switched = (await fixture.TaskQueue.GetRoguelikeParamsAsync(0)).Value!;
+        switched.Theme = "Sarkaz";
+        switched.Squad = "指挥分队";
+        var sarkazSave = await fixture.TaskQueue.SaveRoguelikeParamsAsync(0, switched);
+        Assert.True(sarkazSave.Success, sarkazSave.Message);
+
+        // The stored form keeps the hidden Sami foldartal intent...
+        var sarkazParams = (await fixture.TaskQueue.GetTaskParamsAsync(0)).Value!;
+        Assert.Equal("号角", sarkazParams["first_floor_foldartal"]?.GetValue<string>());
+        Assert.Equal(
+            ["火炬", "涟漪"],
+            ((JsonArray)sarkazParams["start_foldartal_list"]!).Select(node => node!.GetValue<string>()));
+
+        // ...while the Core-facing compiled form gates emission like frozen WPF.
+        var sarkazValidate = await fixture.TaskQueue.ValidateTaskAsync(0);
+        Assert.False(sarkazValidate.Value!.CompiledParams.ContainsKey("first_floor_foldartal"));
+        Assert.False(sarkazValidate.Value.CompiledParams.ContainsKey("start_foldartal_list"));
+
+        var restored = (await fixture.TaskQueue.GetRoguelikeParamsAsync(0)).Value!;
+        Assert.Equal("号角", restored.FirstFloorFoldartal);
+        Assert.Equal(["火炬", "涟漪"], restored.StartFoldartalList);
+
+        restored.Theme = "Sami";
+        restored.Squad = "生活至上分队";
+        Assert.True((await fixture.TaskQueue.SaveRoguelikeParamsAsync(0, restored)).Success);
+        var samiAgain = await fixture.TaskQueue.ValidateTaskAsync(0);
+        Assert.Equal("号角", samiAgain.Value!.CompiledParams["first_floor_foldartal"]?.GetValue<string>());
+        Assert.Equal(
+            ["火炬", "涟漪"],
+            ((JsonArray)samiAgain.Value.CompiledParams["start_foldartal_list"]!).Select(node => node!.GetValue<string>()));
+    }
+
+    [Fact]
+    public async Task SaveRoguelike_DisabledFoldartalAndSeedToggles_PreserveContentLikeFrozenWpf()
+    {
+        // Frozen WPF stores each foldartal/seed toggle independently of its content
+        // (RoguelikeTask.cs), so disabling a toggle must not destroy the text.
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Roguelike", "rogue")).Success);
+
+        var save = await fixture.TaskQueue.SaveRoguelikeParamsAsync(0, new RoguelikeTaskParamsDto
+        {
+            Mode = 4,
+            Theme = "Sami",
+            Squad = "生活至上分队",
+            FirstFloorFoldartalEnabled = true,
+            FirstFloorFoldartal = "号角",
+            StartFoldartalListEnabled = true,
+            StartFoldartalList = ["火炬"],
+            StartWithSeedEnabled = true,
+            StartWithSeed = "seed,rogue_1,3",
+        });
+        Assert.True(save.Success, save.Message);
+
+        var enabled = await fixture.TaskQueue.ValidateTaskAsync(0);
+        Assert.Equal("号角", enabled.Value!.CompiledParams["first_floor_foldartal"]?.GetValue<string>());
+        Assert.Equal("seed,rogue_1,3", enabled.Value.CompiledParams["start_with_seed"]?.GetValue<string>());
+
+        var loaded = (await fixture.TaskQueue.GetRoguelikeParamsAsync(0)).Value!;
+        loaded.FirstFloorFoldartalEnabled = false;
+        loaded.StartFoldartalListEnabled = false;
+        loaded.StartWithSeedEnabled = false;
+        Assert.True((await fixture.TaskQueue.SaveRoguelikeParamsAsync(0, loaded)).Success);
+
+        // Stored form keeps toggle and content independently; Core JSON omits both.
+        var stored = (await fixture.TaskQueue.GetTaskParamsAsync(0)).Value!;
+        Assert.False(stored["first_floor_foldartal_enabled"]?.GetValue<bool>());
+        Assert.Equal("号角", stored["first_floor_foldartal"]?.GetValue<string>());
+        Assert.False(stored["start_foldartal_list_enabled"]?.GetValue<bool>());
+        Assert.Equal(["火炬"], ((JsonArray)stored["start_foldartal_list"]!).Select(node => node!.GetValue<string>()));
+        Assert.False(stored["start_with_seed_enabled"]?.GetValue<bool>());
+        Assert.Equal("seed,rogue_1,3", stored["start_with_seed"]?.GetValue<string>());
+
+        var disabled = await fixture.TaskQueue.ValidateTaskAsync(0);
+        Assert.False(disabled.Value!.CompiledParams.ContainsKey("first_floor_foldartal"));
+        Assert.False(disabled.Value.CompiledParams.ContainsKey("start_foldartal_list"));
+        Assert.False(disabled.Value.CompiledParams.ContainsKey("start_with_seed"));
+
+        // Re-enabling the toggles restores the stored content like frozen WPF.
+        var restored = (await fixture.TaskQueue.GetRoguelikeParamsAsync(0)).Value!;
+        Assert.False(restored.FirstFloorFoldartalEnabled);
+        Assert.Equal("号角", restored.FirstFloorFoldartal);
+        restored.FirstFloorFoldartalEnabled = true;
+        restored.StartFoldartalListEnabled = true;
+        restored.StartWithSeedEnabled = true;
+        Assert.True((await fixture.TaskQueue.SaveRoguelikeParamsAsync(0, restored)).Success);
+        var reenabled = await fixture.TaskQueue.ValidateTaskAsync(0);
+        Assert.Equal("号角", reenabled.Value!.CompiledParams["first_floor_foldartal"]?.GetValue<string>());
+        Assert.Equal("seed,rogue_1,3", reenabled.Value.CompiledParams["start_with_seed"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task SaveRoguelike_DisabledSeedToggle_AllowsPreservedInvalidSeedLikeFrozenWpf()
+    {
+        // A disabled seed is never emitted, so its stored text must not block saves.
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Roguelike", "rogue")).Success);
+
+        var save = await fixture.TaskQueue.SaveRoguelikeParamsAsync(0, new RoguelikeTaskParamsDto
+        {
+            Mode = 0,
+            Theme = "JieGarden",
+            StartWithSeedEnabled = false,
+            StartWithSeed = "invalid-seed-format",
+        });
+        Assert.True(save.Success, save.Message);
+
+        var stored = (await fixture.TaskQueue.GetTaskParamsAsync(0)).Value!;
+        Assert.False(stored["start_with_seed_enabled"]?.GetValue<bool>());
+        Assert.Equal("invalid-seed-format", stored["start_with_seed"]?.GetValue<string>());
+
+        var validated = await fixture.TaskQueue.ValidateTaskAsync(0);
+        Assert.False(validated.Value!.CompiledParams.ContainsKey("start_with_seed"));
     }
 
     [Fact]

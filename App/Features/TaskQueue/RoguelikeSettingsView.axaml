@@ -132,7 +132,7 @@
               <controls:SettingsInlineRow controls:SettingsLabelWidthCoordinator.GroupKey="TaskQueue.Fields">
                 <controls:SettingsLabel Text="{Binding Texts[Roguelike.StartsCount]}" />
                 <controls:AppNumberInput Minimum="0"
-                                         Maximum="9999999"
+                                         Maximum="99999"
                                          Value="{Binding StartsCount}" />
               </controls:SettingsInlineRow>
 
@@ -157,7 +157,7 @@
                                           controls:SettingsLabelWidthCoordinator.GroupKey="TaskQueue.Fields">
                 <controls:SettingsLabel Text="{Binding Texts[Roguelike.InvestmentsCount]}" />
                 <controls:AppNumberInput Minimum="0"
-                                         Maximum="999999"
+                                         Maximum="999"
                                          Value="{Binding InvestmentsCount}" />
               </controls:SettingsInlineRow>
 

@@ -91,7 +91,6 @@
               <controls:SettingsInlineRow controls:SettingsLabelWidthCoordinator.GroupKey="TaskQueue.Fields">
                 <controls:SettingsLabel Text="{Binding Texts[Reclamation.NumCraftBatches]}" />
                 <controls:AppNumberInput Minimum="0"
-                                         Maximum="99999"
                                          IsEnabled="{Binding IsArchiveSettingsEnabled}"
                                          Value="{Binding NumCraftBatches}" />
               </controls:SettingsInlineRow>

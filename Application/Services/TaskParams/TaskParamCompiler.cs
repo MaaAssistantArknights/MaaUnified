@@ -1159,6 +1159,10 @@ public static class TaskParamCompiler
 
         var mode = ReadInt(parameters, "mode", strict, issues, "roguelike.mode", 0);
 
+        var firstFloorFoldartal = ReadString(parameters, "first_floor_foldartal", false, issues, "roguelike.first_floor_foldartal", string.Empty);
+        var startFoldartalList = ReadWpfSemicolonListCompat(parameters, "start_foldartal_list", issues, "roguelike.start_foldartal_list", trimEntries: false);
+        var startWithSeed = ReadString(parameters, "start_with_seed", false, issues, "roguelike.start_with_seed", string.Empty);
+
         var dto = new RoguelikeTaskParamsDto
         {
             Mode = mode,
@@ -1192,10 +1196,13 @@ public static class TaskParamCompiler
                 issues,
                 "roguelike.find_playTime_target",
                 1),
-            FirstFloorFoldartal = ReadString(parameters, "first_floor_foldartal", false, issues, "roguelike.first_floor_foldartal", string.Empty),
-            StartFoldartalList = ReadStringArrayCompat(parameters, "start_foldartal_list", false, issues, "roguelike.start_foldartal_list"),
-            ExpectedCollapsalParadigms = ReadStringArrayCompat(parameters, "expected_collapsal_paradigms", false, issues, "roguelike.expected_collapsal_paradigms"),
-            StartWithSeed = ReadString(parameters, "start_with_seed", false, issues, "roguelike.start_with_seed", string.Empty),
+            FirstFloorFoldartalEnabled = ReadBool(parameters, "first_floor_foldartal_enabled", false, issues, "roguelike.first_floor_foldartal_enabled", !string.IsNullOrWhiteSpace(firstFloorFoldartal)),
+            FirstFloorFoldartal = firstFloorFoldartal,
+            StartFoldartalListEnabled = ReadBool(parameters, "start_foldartal_list_enabled", false, issues, "roguelike.start_foldartal_list_enabled", startFoldartalList.Count > 0),
+            StartFoldartalList = startFoldartalList,
+            ExpectedCollapsalParadigms = ReadWpfSemicolonListCompat(parameters, "expected_collapsal_paradigms", issues, "roguelike.expected_collapsal_paradigms", trimEntries: false),
+            StartWithSeedEnabled = ReadBool(parameters, "start_with_seed_enabled", false, issues, "roguelike.start_with_seed_enabled", !string.IsNullOrWhiteSpace(startWithSeed)),
+            StartWithSeed = startWithSeed,
         };
 
         return (dto, issues);
@@ -1225,6 +1232,12 @@ public static class TaskParamCompiler
             theme = "JieGarden";
         }
 
+        if (mode == 5 && !string.Equals(theme, "Sami", StringComparison.OrdinalIgnoreCase))
+        {
+            issues.Add(new TaskValidationIssue("RoguelikeCollapseModeThemeMismatch", "roguelike.mode", "Collapse paradigm mode requires the Sami theme, fallback to Exp mode.", Blocking: false));
+            mode = 0;
+        }
+
         var difficulty = dto.Difficulty;
         if (difficulty < -1)
         {
@@ -1249,8 +1262,10 @@ public static class TaskParamCompiler
 
         if (mode == 20001 && !string.Equals(theme, "JieGarden", StringComparison.OrdinalIgnoreCase))
         {
-            issues.Add(new TaskValidationIssue("RoguelikeFindPlaytimeThemeMismatch", "roguelike.theme", "FindPlaytime mode requires JieGarden theme, fallback applied.", Blocking: false));
-            theme = "JieGarden";
+            // Frozen WPF keeps the stored theme and clamps the mode back to the first
+            // list entry (Exp) when FindPlaytime is unavailable for that theme.
+            issues.Add(new TaskValidationIssue("RoguelikeFindPlaytimeThemeMismatch", "roguelike.mode", "FindPlaytime mode requires the JieGarden theme, fallback to Exp mode.", Blocking: false));
+            mode = 0;
         }
 
         var findPlayTimeTarget = dto.FindPlayTimeTarget;
@@ -1263,6 +1278,15 @@ public static class TaskParamCompiler
         var startWithEliteTwo = dto.StartWithEliteTwo;
         var onlyStartWithEliteTwo = dto.OnlyStartWithEliteTwo;
         var squad = (dto.Squad ?? string.Empty).Trim();
+        // Frozen WPF skips collectible reward serialization whenever the stored
+        // only-elite-two intent holds for a non-Phantom professional squad, even on
+        // themes where the elite-two flags themselves are gated off at serialization
+        // (Sarkaz/JieGarden), so the skip is keyed on the raw stored flags.
+        var skipCollectibleStartRewards = dto.StartWithEliteTwo
+            && dto.OnlyStartWithEliteTwo
+            && mode == 4
+            && !string.Equals(theme, "Phantom", StringComparison.OrdinalIgnoreCase)
+            && IsRoguelikeProfessionalSquad(squad);
         var modeAllowsEliteTwo = mode == 4
             && (string.Equals(theme, "Mizuki", StringComparison.OrdinalIgnoreCase) || string.Equals(theme, "Sami", StringComparison.OrdinalIgnoreCase))
             && IsRoguelikeProfessionalSquad(squad);
@@ -1285,17 +1309,17 @@ public static class TaskParamCompiler
             onlyStartWithEliteTwo = false;
         }
 
-        var startFoldartalList = ParseDelimitedList(dto.StartFoldartalList);
+        var startFoldartalList = NormalizeWpfSemicolonList(dto.StartFoldartalList, trimEntries: false, preserveEmptyEntries: false);
         if (startFoldartalList.Count > 3)
         {
             issues.Add(new TaskValidationIssue("RoguelikeStartFoldartalListTrimmed", "roguelike.start_foldartal_list", "Start foldartal list exceeds max size and will be trimmed to 3.", Blocking: false));
             startFoldartalList = startFoldartalList.Take(3).ToList();
         }
 
-        var expectedCollapsalParadigms = ParseDelimitedList(dto.ExpectedCollapsalParadigms);
+        var expectedCollapsalParadigms = NormalizeWpfSemicolonList(dto.ExpectedCollapsalParadigms, trimEntries: false, preserveEmptyEntries: false);
 
         var startWithSeed = (dto.StartWithSeed ?? string.Empty).Trim();
-        if (!string.IsNullOrWhiteSpace(startWithSeed) && !RoguelikeSeedRegex.IsMatch(startWithSeed))
+        if (dto.StartWithSeedEnabled && !string.IsNullOrWhiteSpace(startWithSeed) && !RoguelikeSeedRegex.IsMatch(startWithSeed))
         {
             issues.Add(new TaskValidationIssue("RoguelikeStartWithSeedInvalid", "roguelike.start_with_seed", "Seed format is invalid. Expected `<alnum>,rogue_<id>,<step>`."));
         }
@@ -1346,7 +1370,9 @@ public static class TaskParamCompiler
             parameters["collectible_mode_squad"] = dto.CollectibleModeSquad.Trim();
             parameters["start_with_elite_two"] = startWithEliteTwo;
             parameters["only_start_with_elite_two"] = onlyStartWithEliteTwo;
-            parameters["collectible_mode_start_list"] = CompileCollectibleStartList(dto.CollectibleModeStartList);
+            parameters["collectible_mode_start_list"] = skipCollectibleStartRewards
+                ? new JsonObject()
+                : CompileCollectibleStartList(dto.CollectibleModeStartList, theme);
         }
 
         if (mode == 6)
@@ -1365,22 +1391,33 @@ public static class TaskParamCompiler
             parameters["find_playTime_target"] = findPlayTimeTarget;
         }
 
-        if (!string.IsNullOrWhiteSpace(dto.FirstFloorFoldartal))
+        // Frozen WPF serializes foldartal fields only for the Sami collectible-mode
+        // combinations; Core reads them under the same restrictions.
+        if (dto.FirstFloorFoldartalEnabled
+            && mode == 4
+            && string.Equals(theme, "Sami", StringComparison.OrdinalIgnoreCase)
+            && !string.IsNullOrWhiteSpace(dto.FirstFloorFoldartal))
         {
             parameters["first_floor_foldartal"] = dto.FirstFloorFoldartal.Trim();
         }
 
-        if (startFoldartalList.Count > 0)
+        if (dto.StartFoldartalListEnabled
+            && mode == 4
+            && string.Equals(theme, "Sami", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(squad, "生活至上分队", StringComparison.Ordinal)
+            && startFoldartalList.Count > 0)
         {
-            parameters["start_foldartal_list"] = ToJsonArray(startFoldartalList);
+            parameters["start_foldartal_list"] = ToJsonArrayPreservingEntries(startFoldartalList);
         }
 
-        if (mode == 5)
+        // Frozen WPF omits the key for empty paradigm text; Core treats a present but
+        // empty array as an explicit empty expectation set and would never stop.
+        if (mode == 5 && expectedCollapsalParadigms.Count > 0)
         {
-            parameters["expected_collapsal_paradigms"] = ToJsonArray(expectedCollapsalParadigms);
+            parameters["expected_collapsal_paradigms"] = ToJsonArrayPreservingEntries(expectedCollapsalParadigms);
         }
 
-        if (!string.IsNullOrWhiteSpace(startWithSeed))
+        if (dto.StartWithSeedEnabled && !string.IsNullOrWhiteSpace(startWithSeed))
         {
             parameters["start_with_seed"] = startWithSeed;
         }
@@ -1391,6 +1428,105 @@ public static class TaskParamCompiler
             Params = parameters,
             Issues = issues,
         };
+    }
+
+    public static TaskCompileOutput CompileRoguelikeForPersistence(
+        UnifiedTaskItem task,
+        UnifiedProfile profile,
+        UnifiedConfig config,
+        bool strict)
+    {
+        var (dto, readIssues) = ReadRoguelike(task, strict);
+        var compiled = CompileRoguelike(dto, profile, config);
+        var persistedParams = BuildRoguelikePersistenceParams(dto, compiled.Params);
+        var allIssues = readIssues.Concat(compiled.Issues).ToList();
+        return new TaskCompileOutput
+        {
+            NormalizedType = compiled.NormalizedType,
+            Params = persistedParams,
+            Issues = allIssues,
+        };
+    }
+
+    public static JsonObject BuildRoguelikePersistenceParams(
+        RoguelikeTaskParamsDto dto,
+        JsonObject compiledParams)
+    {
+        // Frozen WPF persists every RoguelikeTask field per task and gates only at
+        // serialization, so the stored form keeps hidden mode-, investment-, and
+        // theme-gated user intent. Core-bound params are always recompiled from the
+        // stored form through CompileRoguelike, so preserved keys never leak into a
+        // run.
+        var parameters = compiledParams.DeepClone() as JsonObject ?? new JsonObject();
+        var theme = parameters["theme"]?.GetValue<string>() ?? string.Empty;
+
+        parameters["refresh_trader_with_dice"] = dto.RefreshTraderWithDice;
+        parameters["investment_with_more_score"] = dto.InvestmentWithMoreScore;
+        parameters["investments_count"] = Math.Max(0, dto.InvestmentsCount);
+        parameters["stop_when_investment_full"] = dto.StopWhenInvestmentFull;
+        parameters["stop_at_final_boss"] = dto.StopAtFinalBoss;
+        parameters["stop_at_max_level"] = dto.StopAtMaxLevel;
+        parameters["collectible_mode_shopping"] = dto.CollectibleModeShopping;
+        parameters["collectible_mode_squad"] = dto.CollectibleModeSquad.Trim();
+        parameters["start_with_elite_two"] = dto.StartWithEliteTwo;
+        parameters["only_start_with_elite_two"] = dto.OnlyStartWithEliteTwo;
+        parameters["collectible_mode_start_list"] = CompileCollectibleStartList(dto.CollectibleModeStartList, theme);
+        parameters["monthly_squad_auto_iterate"] = dto.MonthlySquadAutoIterate;
+        parameters["monthly_squad_check_comms"] = dto.MonthlySquadCheckComms;
+        parameters["deep_exploration_auto_iterate"] = dto.DeepExplorationAutoIterate;
+        parameters["find_playTime_target"] = dto.FindPlayTimeTarget;
+        parameters["first_floor_foldartal_enabled"] = dto.FirstFloorFoldartalEnabled;
+        parameters["start_foldartal_list_enabled"] = dto.StartFoldartalListEnabled;
+        parameters["start_with_seed_enabled"] = dto.StartWithSeedEnabled;
+
+        var firstFloorFoldartal = dto.FirstFloorFoldartal.Trim();
+        if (firstFloorFoldartal.Length > 0)
+        {
+            parameters["first_floor_foldartal"] = firstFloorFoldartal;
+        }
+        else
+        {
+            parameters.Remove("first_floor_foldartal");
+        }
+
+        var startFoldartalList = NormalizeWpfSemicolonList(dto.StartFoldartalList, trimEntries: false, preserveEmptyEntries: false);
+        if (startFoldartalList.Count > 3)
+        {
+            startFoldartalList = startFoldartalList.Take(3).ToList();
+        }
+
+        if (startFoldartalList.Count > 0)
+        {
+            parameters["start_foldartal_list"] = ToJsonArrayPreservingEntries(startFoldartalList);
+        }
+        else
+        {
+            parameters.Remove("start_foldartal_list");
+        }
+
+        var expectedCollapsalParadigms = NormalizeWpfSemicolonList(dto.ExpectedCollapsalParadigms, trimEntries: false, preserveEmptyEntries: false);
+        if (expectedCollapsalParadigms.Count > 0)
+        {
+            parameters["expected_collapsal_paradigms"] = ToJsonArrayPreservingEntries(expectedCollapsalParadigms);
+        }
+        else
+        {
+            parameters.Remove("expected_collapsal_paradigms");
+        }
+
+        // Frozen WPF keeps the stored seed when the toggle is off; the compiled
+        // form already gates emission on the toggle, so re-overlay the raw value.
+        var persistedSeed = (dto.StartWithSeed ?? string.Empty).Trim();
+        if (persistedSeed.Length > 0)
+        {
+            parameters["start_with_seed"] = persistedSeed;
+        }
+        else
+        {
+            parameters.Remove("start_with_seed");
+        }
+
+        return parameters;
     }
 
     public static (ReclamationTaskParamsDto Dto, IReadOnlyList<TaskValidationIssue> Issues) ReadReclamation(
@@ -1406,7 +1542,7 @@ public static class TaskParamCompiler
             Mode = ReadInt(parameters, "mode", strict, issues, "reclamation.mode", 1),
             IncrementMode = ReadInt(parameters, "increment_mode", strict, issues, "reclamation.increment_mode", 0),
             NumCraftBatches = ReadInt(parameters, "num_craft_batches", strict, issues, "reclamation.num_craft_batches", 16),
-            ToolsToCraft = ReadStringArrayCompat(parameters, "tools_to_craft", false, issues, "reclamation.tools_to_craft"),
+            ToolsToCraft = ReadWpfSemicolonListCompat(parameters, "tools_to_craft", issues, "reclamation.tools_to_craft", trimEntries: true),
             ClearStore = ReadBool(parameters, "clear_store", strict, issues, "reclamation.clear_store", true),
         };
 
@@ -1418,9 +1554,6 @@ public static class TaskParamCompiler
         UnifiedProfile profile,
         UnifiedConfig config)
     {
-        _ = profile;
-        _ = config;
-
         var issues = new List<TaskValidationIssue>();
 
         var theme = string.IsNullOrWhiteSpace(dto.Theme) ? "Tales" : dto.Theme.Trim();
@@ -1449,31 +1582,33 @@ public static class TaskParamCompiler
         }
 
         var numCraftBatches = dto.NumCraftBatches;
-        if (numCraftBatches is < 0 or > 99999)
+        if (numCraftBatches < 0)
         {
-            issues.Add(new TaskValidationIssue("ReclamationNumCraftBatchesOutOfRange", "reclamation.num_craft_batches", "NumCraftBatches must be between 0 and 99999.", Blocking: false));
-            numCraftBatches = Math.Clamp(numCraftBatches, 0, 99999);
+            issues.Add(new TaskValidationIssue("ReclamationNumCraftBatchesOutOfRange", "reclamation.num_craft_batches", "NumCraftBatches must be greater than or equal to zero.", Blocking: false));
+            numCraftBatches = 0;
         }
 
-        var toolsToCraft = ParseDelimitedList(dto.ToolsToCraft);
-        if (toolsToCraft.Any(ContainsStructuredToken))
+        var toolsToCraft = NormalizeWpfSemicolonList(dto.ToolsToCraft, trimEntries: true, preserveEmptyEntries: true);
+        if (toolsToCraft.Count == 0)
         {
-            issues.Add(new TaskValidationIssue("ReclamationToolNameInvalid", "reclamation.tools_to_craft", "ToolsToCraft contains unparseable structured tokens."));
+            var clientType = ResolveStringSetting(profile, config, "ClientType", "Start.ClientType");
+            toolsToCraft = [ReclamationTaskParamsDto.ResolveDefaultToolToCraft(clientType)];
         }
 
-        if (mode != 1 && toolsToCraft.Count > 0)
+        var isRelaunchAnchor = string.Equals(theme, "RelaunchAnchor", StringComparison.OrdinalIgnoreCase);
+        if (isRelaunchAnchor && toolsToCraft.Count > 0)
         {
-            issues.Add(new TaskValidationIssue("ReclamationToolsIgnoredInNoArchive", "reclamation.tools_to_craft", "ToolsToCraft is ignored in no-archive mode and will be cleared.", Blocking: false));
+            issues.Add(new TaskValidationIssue("ReclamationToolsIgnoredInNoArchive", "reclamation.tools_to_craft", "ToolsToCraft is ignored by RelaunchAnchor modes and will be cleared.", Blocking: false));
             toolsToCraft = [];
         }
 
         var clearStore = dto.ClearStore;
-        if (mode != 0 && clearStore)
+        if (isRelaunchAnchor && clearStore)
         {
             issues.Add(new TaskValidationIssue(
                 "ReclamationClearStoreIgnoredInArchive",
                 "reclamation.clear_store",
-                "ClearStore is ignored in archive mode and will be disabled.",
+                "ClearStore is ignored by RelaunchAnchor modes and will be disabled.",
                 Blocking: false));
             clearStore = false;
         }
@@ -1484,7 +1619,7 @@ public static class TaskParamCompiler
             ["mode"] = mode,
             ["increment_mode"] = incrementMode,
             ["num_craft_batches"] = numCraftBatches,
-            ["tools_to_craft"] = ToJsonArray(toolsToCraft),
+            ["tools_to_craft"] = ToJsonArrayPreservingEntries(toolsToCraft),
             ["clear_store"] = clearStore,
         };
 
@@ -1731,6 +1866,11 @@ public static class TaskParamCompiler
         if (string.Equals(normalized, TaskModuleTypes.Mall, StringComparison.OrdinalIgnoreCase))
         {
             return NormalizeMallForPersistence(task);
+        }
+
+        if (string.Equals(normalized, TaskModuleTypes.Roguelike, StringComparison.OrdinalIgnoreCase))
+        {
+            return CompileRoguelikeForPersistence(task, profile, config, strict);
         }
 
         return CompileTask(task, profile, config, strict);
@@ -2124,6 +2264,17 @@ public static class TaskParamCompiler
         return array;
     }
 
+    private static JsonArray ToJsonArrayPreservingEntries(IEnumerable<string> values)
+    {
+        var array = new JsonArray();
+        foreach (var value in values)
+        {
+            array.Add(value);
+        }
+
+        return array;
+    }
+
     private static List<string> ParseDelimitedList(IEnumerable<string> values)
     {
         return values
@@ -2132,6 +2283,26 @@ public static class TaskParamCompiler
             .Where(v => !string.IsNullOrWhiteSpace(v))
             .Distinct(StringComparer.Ordinal)
             .ToList();
+    }
+
+    private static List<string> NormalizeWpfSemicolonList(
+        IEnumerable<string> values,
+        bool trimEntries,
+        bool preserveEmptyEntries)
+    {
+        var result = new List<string>();
+        foreach (var value in values)
+        {
+            var normalized = trimEntries ? (value ?? string.Empty).Trim() : value ?? string.Empty;
+            if (!preserveEmptyEntries && string.IsNullOrEmpty(normalized))
+            {
+                continue;
+            }
+
+            result.Add(normalized);
+        }
+
+        return result;
     }
 
     private static bool IsRoguelikeProfessionalSquad(string squad)
@@ -2310,7 +2481,7 @@ public static class TaskParamCompiler
         return !ExpiredActivityStageCodeRegex.IsMatch(candidate);
     }
 
-    private static JsonObject CompileCollectibleStartList(RoguelikeCollectibleStartListDto? dto)
+    private static JsonObject CompileCollectibleStartList(RoguelikeCollectibleStartListDto? dto, string theme)
     {
         dto ??= new RoguelikeCollectibleStartListDto();
         return new JsonObject
@@ -2318,12 +2489,12 @@ public static class TaskParamCompiler
             ["hot_water"] = dto.HotWater,
             ["shield"] = dto.Shield,
             ["ingot"] = dto.Ingot,
-            ["hope"] = dto.Hope,
+            ["hope"] = !string.Equals(theme, "JieGarden", StringComparison.OrdinalIgnoreCase) && dto.Hope,
             ["random"] = dto.Random,
-            ["key"] = dto.Key,
-            ["dice"] = dto.Dice,
-            ["ideas"] = dto.Ideas,
-            ["ticket"] = dto.Ticket,
+            ["key"] = string.Equals(theme, "Mizuki", StringComparison.OrdinalIgnoreCase) && dto.Key,
+            ["dice"] = string.Equals(theme, "Mizuki", StringComparison.OrdinalIgnoreCase) && dto.Dice,
+            ["ideas"] = string.Equals(theme, "Sarkaz", StringComparison.OrdinalIgnoreCase) && dto.Ideas,
+            ["ticket"] = string.Equals(theme, "JieGarden", StringComparison.OrdinalIgnoreCase) && dto.Ticket,
         };
     }
 
@@ -2449,6 +2620,63 @@ public static class TaskParamCompiler
                 .Split(new[] { '\r', '\n', ';', ',', '|' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                 .Where(v => !string.IsNullOrWhiteSpace(v))
                 .Distinct(StringComparer.Ordinal)
+                .ToList();
+        }
+
+        issues.Add(new TaskValidationIssue("TaskFieldTypeInvalid", field, "Task field has incompatible type."));
+        return [];
+    }
+
+    private static List<string> ReadWpfSemicolonListCompat(
+        JsonObject obj,
+        string key,
+        ICollection<TaskValidationIssue> issues,
+        string field,
+        bool trimEntries)
+    {
+        if (!obj.TryGetPropertyValue(key, out var node) || node is null)
+        {
+            return [];
+        }
+
+        if (node is JsonArray array)
+        {
+            var result = new List<string>();
+            var hasInvalidEntry = false;
+            foreach (var item in array)
+            {
+                if (item is JsonValue jsonValue && jsonValue.TryGetValue(out string? parsed))
+                {
+                    result.Add(trimEntries ? (parsed ?? string.Empty).Trim() : parsed ?? string.Empty);
+                    continue;
+                }
+
+                if (item is not null)
+                {
+                    hasInvalidEntry = true;
+                }
+            }
+
+            if (hasInvalidEntry)
+            {
+                issues.Add(new TaskValidationIssue("TaskFieldTypeInvalid", field, "Task field has incompatible type."));
+            }
+
+            return result;
+        }
+
+        if (node is JsonValue value && value.TryGetValue(out string? text))
+        {
+            var normalized = (text ?? string.Empty).Replace('；', ';').Trim();
+            if (normalized.Length == 0)
+            {
+                return [];
+            }
+
+            return normalized
+                .Split(';')
+                .Select(item => trimEntries ? item.Trim() : item)
+                .Where(item => trimEntries || !string.IsNullOrEmpty(item))
                 .ToList();
         }
 

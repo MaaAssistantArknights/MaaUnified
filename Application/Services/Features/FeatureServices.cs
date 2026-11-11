@@ -3119,7 +3119,9 @@ public sealed class TaskQueueFeatureService : ITaskQueueFeatureService
         }
 
         task.Type = compiled.NormalizedType;
-        task.Params = compiled.Params;
+        // Store the full-fidelity form so hidden mode/investment-gated settings
+        // survive mode switches like frozen WPF; Core-bound params are recompiled.
+        task.Params = TaskParamCompiler.BuildRoguelikePersistenceParams(dto, compiled.Params);
         foreach (var warning in compiled.Issues.Where(i => !i.Blocking))
         {
             _configService.LogService.Warn($"{warning.Code}: {warning.Message}");

@@ -52,24 +52,33 @@ public sealed class RoguelikeTaskParamsDto
 
     public int FindPlayTimeTarget { get; set; } = 1;
 
+    // Frozen WPF persists each foldartal/seed toggle independently of its content
+    // (RoguelikeTask.cs), so the toggle is stored separately and gates only the
+    // Core-bound emission; content survives a disabled toggle.
+    public bool FirstFloorFoldartalEnabled { get; set; }
+
     public string FirstFloorFoldartal { get; set; } = string.Empty;
+
+    public bool StartFoldartalListEnabled { get; set; }
 
     public List<string> StartFoldartalList { get; set; } = [];
 
     public List<string> ExpectedCollapsalParadigms { get; set; } = [];
+
+    public bool StartWithSeedEnabled { get; set; }
 
     public string StartWithSeed { get; set; } = string.Empty;
 }
 
 public sealed class RoguelikeCollectibleStartListDto
 {
-    public bool HotWater { get; set; }
+    public bool HotWater { get; set; } = true;
 
     public bool Shield { get; set; }
 
     public bool Ingot { get; set; }
 
-    public bool Hope { get; set; }
+    public bool Hope { get; set; } = true;
 
     public bool Random { get; set; }
 
@@ -77,7 +86,7 @@ public sealed class RoguelikeCollectibleStartListDto
 
     public bool Dice { get; set; }
 
-    public bool Ideas { get; set; }
+    public bool Ideas { get; set; } = true;
 
     public bool Ticket { get; set; }
 }

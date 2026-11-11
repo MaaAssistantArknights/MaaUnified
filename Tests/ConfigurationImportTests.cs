@@ -614,6 +614,13 @@ public sealed class ConfigurationImportTests
                     },
                     {
                       "$type": "RoguelikeTask",
+                      "Name": "RoguelikeCollapseSami",
+                      "IsEnable": true,
+                      "Theme": "Sami",
+                      "Mode": "CLP_PDS"
+                    },
+                    {
+                      "$type": "RoguelikeTask",
                       "Name": "RoguelikeCollectible",
                       "IsEnable": true,
                       "Theme": "Mizuki",
@@ -641,7 +648,7 @@ public sealed class ConfigurationImportTests
                       "Name": "ReclamationArchive",
                       "IsEnable": true,
                       "Mode": "ProsperityInSave",
-                      "ToolToCraft": "荧光棒\r\n工具A；工具B,工具C|工具D"
+                      "ToolToCraft": "荧光棒;工具A;工具A;工具B,工具C|工具D"
                     },
                     {
                       "$type": "ReclamationTask",
@@ -685,12 +692,16 @@ public sealed class ConfigurationImportTests
 
         var roguelikeCollapse = tasks.Single(task => task.Name == "RoguelikeCollapse");
         Assert.Equal("Sarkaz", roguelikeCollapse.Params["theme"]?.GetValue<string>());
-        Assert.Equal(5, roguelikeCollapse.Params["mode"]?.GetValue<int>());
+        Assert.Equal(0, roguelikeCollapse.Params["mode"]?.GetValue<int>());
+
+        var roguelikeCollapseSami = tasks.Single(task => task.Name == "RoguelikeCollapseSami");
+        Assert.Equal("Sami", roguelikeCollapseSami.Params["theme"]?.GetValue<string>());
+        Assert.Equal(5, roguelikeCollapseSami.Params["mode"]?.GetValue<int>());
 
         var roguelikeCollectible = tasks.Single(task => task.Name == "RoguelikeCollectible");
         Assert.Equal("Mizuki", roguelikeCollectible.Params["theme"]?.GetValue<string>());
         Assert.Equal(4, roguelikeCollectible.Params["mode"]?.GetValue<int>());
-        Assert.Equal(["hot_water", "shield", "ideas", "ticket"], ReadEnabledCollectibleAwards(roguelikeCollectible.Params["collectible_mode_start_list"]));
+        Assert.Equal(["hot_water", "shield"], ReadEnabledCollectibleAwards(roguelikeCollectible.Params["collectible_mode_start_list"]));
 
         var roguelikeFindPlaytime = tasks.Single(task => task.Name == "RoguelikeFindPlaytime");
         Assert.Equal(20001, roguelikeFindPlaytime.Params["mode"]?.GetValue<int>());
@@ -700,11 +711,13 @@ public sealed class ConfigurationImportTests
         Assert.Equal("Fire", reclamationNoSave.Params["theme"]?.GetValue<string>());
         Assert.Equal(0, reclamationNoSave.Params["mode"]?.GetValue<int>());
         Assert.Equal(1, reclamationNoSave.Params["increment_mode"]?.GetValue<int>());
+        Assert.Equal(["荧光棒"], ReadStringArray((JsonArray)reclamationNoSave.Params["tools_to_craft"]!));
+        Assert.True(reclamationNoSave.Params["clear_store"]?.GetValue<bool>());
 
         var reclamationArchive = tasks.Single(task => task.Name == "ReclamationArchive");
         Assert.Equal(1, reclamationArchive.Params["mode"]?.GetValue<int>());
         Assert.Equal(
-            ["荧光棒", "工具A", "工具B", "工具C", "工具D"],
+            ["荧光棒", "工具A", "工具A", "工具B,工具C|工具D"],
             ReadStringArray((JsonArray)reclamationArchive.Params["tools_to_craft"]!));
 
         var reclamationUnsupported = tasks.Single(task => task.Name == "ReclamationUnsupported");
@@ -722,6 +735,74 @@ public sealed class ConfigurationImportTests
         Assert.Equal(
             ["Fight", "Recruit", "Roguelike", "Reclamation"],
             ReadStringArray((JsonArray)custom.Params["task_names"]!));
+    }
+
+    [Fact]
+    public async Task GuiNewImport_RoguelikeModeRepairsAndEmptyParadigms_MatchFrozenWpf()
+    {
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.new.json"),
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": {
+                  "TaskQueue": [
+                    {
+                      "$type": "RoguelikeTask",
+                      "Name": "CollapseEmpty",
+                      "IsEnable": true,
+                      "Theme": "Sami",
+                      "Mode": "CLP_PDS"
+                    },
+                    {
+                      "$type": "RoguelikeTask",
+                      "Name": "CollapseFilled",
+                      "IsEnable": true,
+                      "Theme": "Sami",
+                      "Mode": "CLP_PDS",
+                      "ExpectedCollapsalParadigms": "范式A;范式B"
+                    },
+                    {
+                      "$type": "RoguelikeTask",
+                      "Name": "FindPlaytimeSami",
+                      "IsEnable": true,
+                      "Theme": "Sami",
+                      "Mode": "FindPlaytime",
+                      "FindPlaytimeTarget": "Shu"
+                    }
+                  ]
+                }
+              }
+            }
+            """);
+
+        var service = CreateService(root);
+        var report = await service.ImportLegacyAsync(ImportSource.GuiNewOnly, manualImport: false);
+
+        Assert.True(report.Success);
+        var tasks = service.CurrentConfig.Profiles["Default"].TaskQueue;
+
+        // Frozen WPF omits expected_collapsal_paradigms for empty text; Core would
+        // otherwise treat a present-but-empty array as an explicit empty expectation.
+        var collapseEmpty = tasks.Single(task => task.Name == "CollapseEmpty");
+        Assert.Equal(5, collapseEmpty.Params["mode"]?.GetValue<int>());
+        Assert.False(collapseEmpty.Params.ContainsKey("expected_collapsal_paradigms"));
+
+        var collapseFilled = tasks.Single(task => task.Name == "CollapseFilled");
+        Assert.Equal(5, collapseFilled.Params["mode"]?.GetValue<int>());
+        Assert.Equal(
+            ["范式A", "范式B"],
+            ReadStringArray((JsonArray)collapseFilled.Params["expected_collapsal_paradigms"]!));
+
+        // Frozen WPF keeps the stored theme and clamps FindPlaytime back to Exp.
+        var findPlaytime = tasks.Single(task => task.Name == "FindPlaytimeSami");
+        Assert.Equal(0, findPlaytime.Params["mode"]?.GetValue<int>());
+        Assert.Equal("Sami", findPlaytime.Params["theme"]?.GetValue<string>());
+        Assert.Equal(2, findPlaytime.Params["find_playTime_target"]?.GetValue<int>());
     }
 
     [Fact]
@@ -812,6 +893,146 @@ public sealed class ConfigurationImportTests
         var deep = service.CurrentConfig.Profiles["Deep"].TaskQueue.Single(task => task.Type == TaskModuleTypes.Roguelike);
         Assert.Equal(7, deep.Params["mode"]?.GetValue<int>());
         Assert.True(deep.Params["deep_exploration_auto_iterate"]?.GetValue<bool>());
+    }
+
+    [Fact]
+    public async Task GuiNewImport_RoguelikeGatedFields_ImportUnconditionallyLikeFrozenWpf()
+    {
+        // Frozen WPF stores every RoguelikeTask field per task and gates only at
+        // serialization, so import must keep mode/investment/theme-gated intent even
+        // when the current mode/theme does not use it.
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.new.json"),
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": {
+                  "TaskQueue": [
+                    {
+                      "$type": "RoguelikeTask",
+                      "Name": "RoguelikeGated",
+                      "IsEnable": true,
+                      "Theme": "Sami",
+                      "Mode": "Investment",
+                      "Investment": false,
+                      "InvestCount": 50,
+                      "InvestWithMoreScore": true,
+                      "StopWhenDepositFull": true,
+                      "RefreshTraderWithDice": true,
+                      "StopAtFinalBoss": true,
+                      "StopWhenLevelMax": true,
+                      "CollectibleShopping": true,
+                      "SquadCollectible": "生活至上分队",
+                      "StartWithEliteTwo": true,
+                      "StartWithEliteTwoOnly": true,
+                      "CollectibleStartAwards": "shield",
+                      "MonthlySquadAutoIterate": false,
+                      "MonthlySquadCheckComms": false,
+                      "DeepExplorationAutoIterate": false,
+                      "FindPlaytimeTarget": "Shu"
+                    }
+                  ]
+                }
+              }
+            }
+            """);
+
+        var service = CreateService(root);
+        var report = await service.ImportLegacyAsync(ImportSource.GuiNewOnly, manualImport: false);
+
+        Assert.True(report.Success);
+        var task = service.CurrentConfig.Profiles["Default"].TaskQueue.Single(task => task.Type == TaskModuleTypes.Roguelike);
+        Assert.Equal(1, task.Params["mode"]?.GetValue<int>());
+        Assert.False(task.Params["investment_enabled"]?.GetValue<bool>());
+        Assert.True(task.Params["investment_with_more_score"]?.GetValue<bool>());
+        Assert.Equal(50, task.Params["investments_count"]?.GetValue<int>());
+        Assert.True(task.Params["stop_when_investment_full"]?.GetValue<bool>());
+        Assert.True(task.Params["refresh_trader_with_dice"]?.GetValue<bool>());
+        Assert.True(task.Params["stop_at_final_boss"]?.GetValue<bool>());
+        Assert.True(task.Params["stop_at_max_level"]?.GetValue<bool>());
+        Assert.True(task.Params["collectible_mode_shopping"]?.GetValue<bool>());
+        Assert.Equal("生活至上分队", task.Params["collectible_mode_squad"]?.GetValue<string>());
+        Assert.True(task.Params["start_with_elite_two"]?.GetValue<bool>());
+        Assert.True(task.Params["only_start_with_elite_two"]?.GetValue<bool>());
+        Assert.Equal(["shield"], ReadEnabledCollectibleAwards(task.Params["collectible_mode_start_list"]));
+        Assert.False(task.Params["monthly_squad_auto_iterate"]?.GetValue<bool>());
+        Assert.False(task.Params["monthly_squad_check_comms"]?.GetValue<bool>());
+        Assert.False(task.Params["deep_exploration_auto_iterate"]?.GetValue<bool>());
+        Assert.Equal(2, task.Params["find_playTime_target"]?.GetValue<int>());
+
+        // Run-form gating still lives in the compiler: investment is disabled, so
+        // its sub-params are withheld like frozen WPF serialization, and the
+        // mode-0/4/6/7 keys are omitted for the imported mode-1 task.
+        var (dto, _) = TaskParamCompiler.ReadRoguelike(task, strict: false);
+        var compiled = TaskParamCompiler.CompileRoguelike(dto, service.CurrentConfig.Profiles["Default"], service.CurrentConfig);
+        Assert.False(compiled.Params["investment_enabled"]?.GetValue<bool>());
+        Assert.False(compiled.Params.ContainsKey("investment_with_more_score"));
+        Assert.False(compiled.Params.ContainsKey("investments_count"));
+        Assert.False(compiled.Params.ContainsKey("stop_at_final_boss"));
+        Assert.False(compiled.Params.ContainsKey("collectible_mode_shopping"));
+        Assert.False(compiled.Params.ContainsKey("monthly_squad_auto_iterate"));
+        Assert.False(compiled.Params.ContainsKey("deep_exploration_auto_iterate"));
+        Assert.False(compiled.Params["refresh_trader_with_dice"]?.GetValue<bool>());
+    }
+
+    [Fact]
+    public async Task GuiNewImport_RoguelikeDisabledFoldartalAndSeedToggles_PreserveContentLikeFrozenWpf()
+    {
+        // Frozen WPF stores foldartal/seed toggles independently of their content, so
+        // import must keep toggle-off text instead of dropping it.
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.new.json"),
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": {
+                  "TaskQueue": [
+                    {
+                      "$type": "RoguelikeTask",
+                      "Name": "RoguelikeToggles",
+                      "IsEnable": true,
+                      "Theme": "Sami",
+                      "Mode": "Collectible",
+                      "Squad": "生活至上分队",
+                      "SamiFirstFloorFoldartal": false,
+                      "SamiFirstFloorFoldartals": "号角",
+                      "SamiNewSquad2StartingFoldartal": false,
+                      "SamiNewSquad2StartingFoldartals": "火炬;涟漪",
+                      "StartWithSeed": false,
+                      "Seed": "seed,rogue_1,3"
+                    }
+                  ]
+                }
+              }
+            }
+            """);
+
+        var service = CreateService(root);
+        var report = await service.ImportLegacyAsync(ImportSource.GuiNewOnly, manualImport: false);
+
+        Assert.True(report.Success);
+        var task = service.CurrentConfig.Profiles["Default"].TaskQueue.Single(task => task.Type == TaskModuleTypes.Roguelike);
+        Assert.False(task.Params["first_floor_foldartal_enabled"]?.GetValue<bool>());
+        Assert.Equal("号角", task.Params["first_floor_foldartal"]?.GetValue<string>());
+        Assert.False(task.Params["start_foldartal_list_enabled"]?.GetValue<bool>());
+        Assert.Equal(["火炬", "涟漪"], ReadStringArray((JsonArray)task.Params["start_foldartal_list"]!));
+        Assert.False(task.Params["start_with_seed_enabled"]?.GetValue<bool>());
+        Assert.Equal("seed,rogue_1,3", task.Params["start_with_seed"]?.GetValue<string>());
+
+        // Toggle-off content is never emitted to Core, matching frozen WPF serialize.
+        var (dto, _) = TaskParamCompiler.ReadRoguelike(task, strict: false);
+        var compiled = TaskParamCompiler.CompileRoguelike(dto, service.CurrentConfig.Profiles["Default"], service.CurrentConfig);
+        Assert.False(compiled.Params.ContainsKey("first_floor_foldartal"));
+        Assert.False(compiled.Params.ContainsKey("start_foldartal_list"));
+        Assert.False(compiled.Params.ContainsKey("start_with_seed"));
     }
 
     [Fact]
@@ -2361,8 +2582,7 @@ public sealed class ConfigurationImportTests
         Assert.Equal("en-us", service.CurrentConfig.GlobalValues["GUI.Localization"]?.GetValue<string>());
     }
 
-    [Fact]
-    public async Task SaveAsync_NormalizedToLoadedSnapshot_ShouldNotWriteOrRaiseConfigChanged()
+    public async Task SaveAsync_ReclamationArchiveClearStoreChange_ShouldPersist()
     {
         var root = CreateTempRoot();
         var loadedConfig = new UnifiedConfig();
@@ -2391,9 +2611,9 @@ public sealed class ConfigurationImportTests
 
         await service.SaveAsync();
 
-        Assert.Equal(0, store.SaveCount);
-        Assert.Equal(0, configChangedCount);
-        Assert.False(service.CurrentConfig.Profiles["Default"].TaskQueue[0].Params["clear_store"]?.GetValue<bool>());
+        Assert.Equal(1, store.SaveCount);
+        Assert.Equal(1, configChangedCount);
+        Assert.True(service.CurrentConfig.Profiles["Default"].TaskQueue[0].Params["clear_store"]?.GetValue<bool>());
     }
 
     [Fact]

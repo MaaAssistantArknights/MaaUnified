@@ -174,7 +174,7 @@ public sealed class TaskQueueG1FeatureTests
     }
 
     [Fact]
-    public async Task ReclamationModule_SaveArchiveMode_ShouldNormalizeHiddenClearStore()
+    public async Task ReclamationModule_SaveArchiveMode_ShouldPreserveHiddenClearStore()
     {
         await using var fixture = await TestFixture.CreateAsync();
         Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.Reclamation, "reclamation")).Success);
@@ -190,7 +190,7 @@ public sealed class TaskQueueG1FeatureTests
         Assert.True(await vm.ReclamationModule.SaveAsync(), vm.ReclamationModule.LastErrorMessage);
 
         var parameters = (await fixture.TaskQueue.GetTaskParamsAsync(0)).Value!;
-        Assert.False(parameters["clear_store"]?.GetValue<bool>());
+        Assert.True(parameters["clear_store"]?.GetValue<bool>());
 
         var validate = await fixture.TaskQueue.ValidateTaskAsync(0);
         Assert.True(validate.Success, validate.Message);
@@ -379,6 +379,112 @@ public sealed class TaskQueueG1FeatureTests
         Assert.True(vm.RecruitModule.IsTaskBound);
         Assert.True(vm.TaskPanels.All(panel => panel.Module.IsTaskBound));
         Assert.Single(vm.TaskPanels.Where(panel => panel.IsSelected));
+    }
+
+    [Fact]
+    public async Task RoguelikeModule_HiddenModeGatedSettings_PersistAcrossModeAndThemeSwitches()
+    {
+        await using var fixture = await TestFixture.CreateAsync(language: "zh-cn");
+        Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.Roguelike, "rogue")).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        vm.SelectedTask = Assert.Single(vm.Tasks);
+        await vm.WaitForPendingBindingAsync();
+
+        vm.RoguelikeModule.Theme = "Sami";
+        vm.RoguelikeModule.Mode = 4;
+        vm.RoguelikeModule.Squad = "突击战术分队";
+        vm.RoguelikeModule.StartWithEliteTwo = true;
+        vm.RoguelikeModule.OnlyStartWithEliteTwo = true;
+        vm.RoguelikeModule.FirstFloorFoldartalEnabled = true;
+        vm.RoguelikeModule.FirstFloorFoldartal = "号角";
+        vm.RoguelikeModule.ExpectedCollapsalParadigmsText = "范式A";
+        Assert.True(await vm.RoguelikeModule.SaveAsync());
+
+        // Switching to Exp mode hides the collectible-mode controls, exactly like WPF.
+        vm.RoguelikeModule.Mode = 0;
+        Assert.False(vm.RoguelikeModule.ShowStartWithEliteTwo);
+        Assert.False(vm.RoguelikeModule.ShowFirstFloorFoldartalToggle);
+        Assert.True(await vm.RoguelikeModule.SaveAsync());
+
+        var stored = (await fixture.TaskQueue.GetTaskParamsAsync(0)).Value!;
+        Assert.Equal(0, stored["mode"]?.GetValue<int>());
+        Assert.True(stored["start_with_elite_two"]?.GetValue<bool>());
+        Assert.True(stored["only_start_with_elite_two"]?.GetValue<bool>());
+        Assert.Equal("号角", stored["first_floor_foldartal"]?.GetValue<string>());
+        Assert.Equal(
+            ["范式A"],
+            ((JsonArray)stored["expected_collapsal_paradigms"]!).Select(node => node!.GetValue<string>()));
+
+        // The Core-facing compiled form stays gated while mode 0 is active.
+        var gated = await fixture.TaskQueue.ValidateTaskAsync(0);
+        Assert.False(gated.Value!.CompiledParams.ContainsKey("start_with_elite_two"));
+        Assert.False(gated.Value.CompiledParams.ContainsKey("first_floor_foldartal"));
+        Assert.False(gated.Value.CompiledParams.ContainsKey("expected_collapsal_paradigms"));
+
+        // Reloading and switching back restores the hidden intent like frozen WPF.
+        await vm.ReloadTasksAsync();
+        vm.SelectedTask = Assert.Single(vm.Tasks);
+        await vm.WaitForPendingBindingAsync();
+        Assert.True(vm.RoguelikeModule.StartWithEliteTwo);
+        Assert.True(vm.RoguelikeModule.OnlyStartWithEliteTwo);
+        Assert.True(vm.RoguelikeModule.FirstFloorFoldartalEnabled);
+        Assert.Equal("号角", vm.RoguelikeModule.FirstFloorFoldartal);
+        Assert.Equal("范式A", vm.RoguelikeModule.ExpectedCollapsalParadigmsText);
+
+        vm.RoguelikeModule.Mode = 4;
+        Assert.True(await vm.RoguelikeModule.SaveAsync());
+        var restored = await fixture.TaskQueue.ValidateTaskAsync(0);
+        Assert.True(restored.Value!.CompiledParams["start_with_elite_two"]?.GetValue<bool>());
+        Assert.True(restored.Value.CompiledParams["only_start_with_elite_two"]?.GetValue<bool>());
+        Assert.Empty(Assert.IsType<JsonObject>(restored.Value.CompiledParams["collectible_mode_start_list"]));
+        Assert.Equal("号角", restored.Value.CompiledParams["first_floor_foldartal"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task RoguelikeModule_HiddenFoldartalControls_PersistAcrossThemeSwitch()
+    {
+        await using var fixture = await TestFixture.CreateAsync(language: "zh-cn");
+        Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.Roguelike, "rogue")).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        vm.SelectedTask = Assert.Single(vm.Tasks);
+        await vm.WaitForPendingBindingAsync();
+
+        vm.RoguelikeModule.Theme = "Sami";
+        vm.RoguelikeModule.Mode = 4;
+        vm.RoguelikeModule.Squad = "生活至上分队";
+        vm.RoguelikeModule.FirstFloorFoldartalEnabled = true;
+        vm.RoguelikeModule.FirstFloorFoldartal = "号角";
+        vm.RoguelikeModule.StartFoldartalListEnabled = true;
+        vm.RoguelikeModule.StartFoldartalListText = "火炬;涟漪";
+        Assert.True(await vm.RoguelikeModule.SaveAsync());
+
+        // Switching the theme hides the Sami foldartal controls; WPF keeps the text.
+        vm.RoguelikeModule.Theme = "Sarkaz";
+        Assert.False(vm.RoguelikeModule.ShowFirstFloorFoldartalToggle);
+        Assert.True(await vm.RoguelikeModule.SaveAsync());
+
+        var stored = (await fixture.TaskQueue.GetTaskParamsAsync(0)).Value!;
+        Assert.Equal("Sarkaz", stored["theme"]?.GetValue<string>());
+        Assert.Equal("号角", stored["first_floor_foldartal"]?.GetValue<string>());
+        Assert.Equal(
+            ["火炬", "涟漪"],
+            ((JsonArray)stored["start_foldartal_list"]!).Select(node => node!.GetValue<string>()));
+
+        // Sarkaz runs must not receive the Sami-only foldartal parameters.
+        var gated = await fixture.TaskQueue.ValidateTaskAsync(0);
+        Assert.False(gated.Value!.CompiledParams.ContainsKey("first_floor_foldartal"));
+        Assert.False(gated.Value.CompiledParams.ContainsKey("start_foldartal_list"));
+
+        await vm.ReloadTasksAsync();
+        vm.SelectedTask = Assert.Single(vm.Tasks);
+        await vm.WaitForPendingBindingAsync();
+        vm.RoguelikeModule.Theme = "Sami";
+        Assert.Equal("号角", vm.RoguelikeModule.FirstFloorFoldartal);
+        Assert.Equal("火炬;涟漪", vm.RoguelikeModule.StartFoldartalListText);
     }
 
     [HostRepoFact]
@@ -1447,7 +1553,7 @@ public sealed class TaskQueueG1FeatureTests
     }
 
     [Fact]
-    public async Task RoguelikeModule_WhenCoreCharCleared_SupportFlagsAreNotPersisted()
+    public async Task RoguelikeModule_WhenCoreCharCleared_PreservesWpfSupportFlags()
     {
         await using var fixture = await TestFixture.CreateAsync();
         var vm = new RoguelikeModuleViewModel(fixture.Runtime, new LocalizedTextMap());
@@ -1462,12 +1568,40 @@ public sealed class TaskQueueG1FeatureTests
         vm.CoreChar = string.Empty;
 
         Assert.False(vm.CanUseSupport);
-        Assert.False(vm.UseSupport);
+        Assert.True(vm.UseSupport);
         Assert.False(vm.ShowUseNonfriendSupport);
 
         var dto = BuildRoguelikeDto(vm);
+        Assert.True(dto.UseSupport);
+        Assert.True(dto.UseNonfriendSupport);
+
+        vm.UseSupport = false;
+        dto = BuildRoguelikeDto(vm);
         Assert.False(dto.UseSupport);
-        Assert.False(dto.UseNonfriendSupport);
+        Assert.True(dto.UseNonfriendSupport);
+    }
+
+    [Fact]
+    public async Task RoguelikeModule_ThemeChanges_ClearUnavailableRewardsAndPreserveEnabledSeed()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var vm = new RoguelikeModuleViewModel(fixture.Runtime, new LocalizedTextMap());
+        Assert.True(vm.CollectibleHotWater);
+
+        vm.Mode = 4;
+        vm.Theme = "Mizuki";
+        vm.CollectibleDice = true;
+        vm.StartWithSeedEnabled = true;
+        vm.StartWithSeed = "seed,rogue_1,3";
+
+        vm.Theme = "Sami";
+        Assert.False(vm.ShowStartWithSeedToggle);
+        Assert.True(vm.ShowStartWithSeedInput);
+        Assert.False(vm.CollectibleDice);
+
+        vm.Theme = "Mizuki";
+        Assert.False(vm.CollectibleDice);
+        Assert.Equal("seed,rogue_1,3", BuildRoguelikeDto(vm).StartWithSeed);
     }
 
     private static RoguelikeTaskParamsDto BuildRoguelikeDto(RoguelikeModuleViewModel vm)

@@ -153,7 +153,7 @@ public sealed class RoguelikeModuleViewModel : TypedTaskModuleViewModelBase<Rogu
     private string _collectibleModeSquad = string.Empty;
     private bool _startWithEliteTwo;
     private bool _onlyStartWithEliteTwo;
-    private bool _collectibleHotWater;
+    private bool _collectibleHotWater = true;
     private bool _collectibleShield;
     private bool _collectibleIngot;
     private bool _collectibleHope;
@@ -192,6 +192,7 @@ public sealed class RoguelikeModuleViewModel : TypedTaskModuleViewModelBase<Rogu
         ApplyPersistentDelayAbortSetting(ResolveDelayAbortUntilCombatComplete());
         Texts.PropertyChanged += OnTextsPropertyChanged;
         RebuildOptionState();
+        ClearUnavailableCollectibleRewards();
     }
 
     public sealed record IntOption(int Value, string DisplayName);
@@ -233,7 +234,7 @@ public sealed class RoguelikeModuleViewModel : TypedTaskModuleViewModelBase<Rogu
 
             if (coreCharChanged)
             {
-                HandleCoreCharValueUpdated(normalizedCoreChar);
+                HandleCoreCharValueUpdated();
             }
         }
     }
@@ -370,7 +371,7 @@ public sealed class RoguelikeModuleViewModel : TypedTaskModuleViewModelBase<Rogu
 
     public bool ShowStartWithSeedToggle => IsThemeJieGarden;
 
-    public bool ShowStartWithSeedInput => ShowStartWithSeedToggle && StartWithSeedEnabled;
+    public bool ShowStartWithSeedInput => StartWithSeedEnabled;
 
     public string CollectibleStartRewardSummary => BuildCollectibleStartRewardSummary();
 
@@ -419,6 +420,7 @@ public sealed class RoguelikeModuleViewModel : TypedTaskModuleViewModelBase<Rogu
             if (!_suppressOptionRefresh)
             {
                 RebuildOptionState();
+                ClearUnavailableCollectibleRewards();
             }
             else
             {
@@ -553,7 +555,7 @@ public sealed class RoguelikeModuleViewModel : TypedTaskModuleViewModelBase<Rogu
             var clientType = ResolveCurrentClientType();
             var operNameLanguage = ResolveOperatorDisplayLanguage(clientType);
             UpdateCoreCharDisplayTextWithoutTracking(clientType, operNameLanguage, cache);
-            HandleCoreCharValueUpdated(normalized);
+            HandleCoreCharValueUpdated();
         }
     }
 
@@ -571,11 +573,6 @@ public sealed class RoguelikeModuleViewModel : TypedTaskModuleViewModelBase<Rogu
             if (!SetTrackedProperty(ref _useSupport, normalized))
             {
                 return;
-            }
-
-            if (!normalized && UseNonfriendSupport)
-            {
-                UseNonfriendSupport = false;
             }
 
             RaiseComputedPropertyChanges();
@@ -903,12 +900,15 @@ public sealed class RoguelikeModuleViewModel : TypedTaskModuleViewModelBase<Rogu
             MonthlySquadCheckComms = dto.MonthlySquadCheckComms;
             DeepExplorationAutoIterate = dto.DeepExplorationAutoIterate;
             FindPlayTimeTarget = dto.FindPlayTimeTarget;
-            FirstFloorFoldartalEnabled = !string.IsNullOrWhiteSpace(dto.FirstFloorFoldartal);
+            // Frozen WPF persists each toggle independently of its content, so the
+            // stored toggle wins; the compiler derives it from content for legacy
+            // configs that predate the toggle keys.
+            FirstFloorFoldartalEnabled = dto.FirstFloorFoldartalEnabled;
             FirstFloorFoldartal = dto.FirstFloorFoldartal;
-            StartFoldartalListEnabled = dto.StartFoldartalList.Count > 0;
+            StartFoldartalListEnabled = dto.StartFoldartalListEnabled;
             StartFoldartalListText = string.Join(";", dto.StartFoldartalList);
             ExpectedCollapsalParadigmsText = string.Join(";", dto.ExpectedCollapsalParadigms);
-            StartWithSeedEnabled = !string.IsNullOrWhiteSpace(dto.StartWithSeed);
+            StartWithSeedEnabled = dto.StartWithSeedEnabled;
             StartWithSeed = dto.StartWithSeed;
         }
         finally
@@ -917,27 +917,27 @@ public sealed class RoguelikeModuleViewModel : TypedTaskModuleViewModelBase<Rogu
         }
 
         RebuildOptionState();
+        ClearUnavailableCollectibleRewards();
     }
 
     protected override RoguelikeTaskParamsDto BuildDto()
     {
-        var startFoldartalList = ShowStartFoldartalListText
-            ? ParseDelimitedLines(StartFoldartalListText)
-            : [];
+        // Frozen WPF keeps foldartal text in config while the control is hidden or
+        // the toggle is off, and gates only at serialization, so persist the content
+        // alongside the toggle state instead of clearing it.
+        var startFoldartalList = ParseDelimitedLines(StartFoldartalListText);
         if (startFoldartalList.Count > 3)
         {
             startFoldartalList = [.. startFoldartalList.Take(3)];
         }
 
-        var expectedCollapsalParadigms = ShowExpectedCollapsalParadigms
-            ? ParseDelimitedLines(ExpectedCollapsalParadigmsText)
-            : [];
+        // Paradigm text persists across mode switches like frozen WPF config.
+        var expectedCollapsalParadigms = ParseDelimitedLines(ExpectedCollapsalParadigmsText);
 
         var normalizedCoreChar = NormalizeCoreCharValue(CoreChar, _coreCharOptions, GetBattleDataCache());
-        var effectiveStartWithEliteTwo = StartWithEliteTwo && ShowStartWithEliteTwo;
-        var effectiveOnlyStartWithEliteTwo = OnlyStartWithEliteTwo && effectiveStartWithEliteTwo;
-        var effectiveSupport = UseSupport && CanUseSupport;
-
+        // Hidden elite-two toggles keep their stored intent like frozen WPF config;
+        // the compiler gates the final Core JSON by mode/theme/squad.
+        var effectiveOnlyStartWithEliteTwo = OnlyStartWithEliteTwo && StartWithEliteTwo;
         return new RoguelikeTaskParamsDto
         {
             Mode = Mode,
@@ -951,14 +951,14 @@ public sealed class RoguelikeModuleViewModel : TypedTaskModuleViewModelBase<Rogu
             Squad = Squad.Trim(),
             Roles = Roles.Trim(),
             CoreChar = normalizedCoreChar,
-            UseSupport = effectiveSupport,
-            UseNonfriendSupport = effectiveSupport && UseNonfriendSupport,
+            UseSupport = UseSupport,
+            UseNonfriendSupport = UseNonfriendSupport,
             RefreshTraderWithDice = RefreshTraderWithDice,
             StopAtFinalBoss = StopAtFinalBoss,
             StopAtMaxLevel = StopAtMaxLevel,
             CollectibleModeShopping = CollectibleModeShopping,
             CollectibleModeSquad = CollectibleModeSquad.Trim(),
-            StartWithEliteTwo = effectiveStartWithEliteTwo,
+            StartWithEliteTwo = StartWithEliteTwo,
             OnlyStartWithEliteTwo = effectiveOnlyStartWithEliteTwo,
             CollectibleModeStartList = new RoguelikeCollectibleStartListDto
             {
@@ -976,10 +976,13 @@ public sealed class RoguelikeModuleViewModel : TypedTaskModuleViewModelBase<Rogu
             MonthlySquadCheckComms = MonthlySquadCheckComms,
             DeepExplorationAutoIterate = DeepExplorationAutoIterate,
             FindPlayTimeTarget = Math.Clamp(FindPlayTimeTarget, 1, 3),
-            FirstFloorFoldartal = ShowFirstFloorFoldartalText ? FirstFloorFoldartal.Trim() : string.Empty,
+            FirstFloorFoldartalEnabled = FirstFloorFoldartalEnabled,
+            FirstFloorFoldartal = FirstFloorFoldartal.Trim(),
+            StartFoldartalListEnabled = StartFoldartalListEnabled,
             StartFoldartalList = startFoldartalList,
             ExpectedCollapsalParadigms = expectedCollapsalParadigms,
-            StartWithSeed = ShowStartWithSeedInput ? StartWithSeed.Trim() : string.Empty,
+            StartWithSeedEnabled = StartWithSeedEnabled,
+            StartWithSeed = StartWithSeed.Trim(),
         };
     }
 
@@ -1275,13 +1278,8 @@ public sealed class RoguelikeModuleViewModel : TypedTaskModuleViewModelBase<Rogu
         return [.. optionsByType.Values];
     }
 
-    private void HandleCoreCharValueUpdated(string normalizedCoreChar)
+    private void HandleCoreCharValueUpdated()
     {
-        if (string.IsNullOrWhiteSpace(normalizedCoreChar) && UseSupport)
-        {
-            UseSupport = false;
-        }
-
         OnPropertyChanged(nameof(SelectedCoreCharOption));
         RaiseComputedPropertyChanges();
     }
@@ -1858,10 +1856,37 @@ public sealed class RoguelikeModuleViewModel : TypedTaskModuleViewModelBase<Rogu
     private static List<string> ParseDelimitedLines(string value)
     {
         return value
-            .Split(new[] { '\r', '\n', ';', ',', '|' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Where(v => !string.IsNullOrWhiteSpace(v))
-            .Distinct(StringComparer.Ordinal)
+            .Split(';')
+            .Where(v => !string.IsNullOrEmpty(v))
             .ToList();
+    }
+
+    private void ClearUnavailableCollectibleRewards()
+    {
+        if (!ShowCollectibleHope)
+        {
+            CollectibleHope = false;
+        }
+
+        if (!ShowCollectibleKey)
+        {
+            CollectibleKey = false;
+        }
+
+        if (!ShowCollectibleDice)
+        {
+            CollectibleDice = false;
+        }
+
+        if (!ShowCollectibleIdeas)
+        {
+            CollectibleIdeas = false;
+        }
+
+        if (!ShowCollectibleTicket)
+        {
+            CollectibleTicket = false;
+        }
     }
 
     private static bool ContainsStructuredMarkers(string value)
