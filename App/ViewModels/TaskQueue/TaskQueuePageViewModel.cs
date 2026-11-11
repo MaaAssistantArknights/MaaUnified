@@ -2878,7 +2878,9 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                     return;
                 }
 
-                var appendResult = await Runtime.TaskQueueFeatureService.QueueEnabledTasksAsync(startCancellationToken);
+                var appendResult = await Runtime.TaskQueueFeatureService.QueueEnabledTasksAndStartAsync(
+                    Runtime.ConnectFeatureService,
+                    startCancellationToken);
                 if (!appendResult.Success)
                 {
                     var error = UiOperationResult<int>.FromCore(appendResult, "Tasks queued.");
@@ -2887,14 +2889,6 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 }
 
                 ResetRecruitExpeditedOncePanels();
-
-                if (!await ApplyResultAsync(
-                        await Runtime.ConnectFeatureService.StartAsync(startCancellationToken),
-                        "TaskQueue.Start",
-                        startCancellationToken))
-                {
-                    return;
-                }
 
                 ResetRuntimeLogState();
                 ResetAllTaskStatuses();
@@ -3832,24 +3826,21 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                     return;
                 }
 
-                CoreResult<int> appendResult;
-                var enabledSnapshot = profile.TaskQueue.Select(task => task.IsEnabled).ToArray();
-                try
-                {
-                    for (var index = 0; index < profile.TaskQueue.Count; index++)
+                var appendResult = await TaskQueueEnableStateOverride.RunAsync(
+                    Runtime.ConfigurationService,
+                    profile,
+                    () =>
                     {
-                        profile.TaskQueue[index].IsEnabled = index == selectedIndex;
-                    }
-
-                    appendResult = await Runtime.TaskQueueFeatureService.QueueEnabledTasksAsync(cancellationToken);
-                }
-                finally
-                {
-                    for (var index = 0; index < profile.TaskQueue.Count && index < enabledSnapshot.Length; index++)
-                    {
-                        profile.TaskQueue[index].IsEnabled = enabledSnapshot[index];
-                    }
-                }
+                        for (var index = 0; index < profile.TaskQueue.Count; index++)
+                        {
+                            profile.TaskQueue[index].IsEnabled = index == selectedIndex;
+                        }
+                    },
+                    () => Runtime.TaskQueueFeatureService.QueueEnabledTasksAndStartAsync(
+                        Runtime.ConnectFeatureService,
+                        cancellationToken),
+                    Runtime.LogService,
+                    "Run-once start");
 
                 if (!appendResult.Success)
                 {
@@ -3868,14 +3859,6 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                         "TaskQueue.RunOnce.AppendEmpty",
                         UiOperationResult.Fail(UiErrorCode.TaskValidationFailed, LastErrorMessage),
                         cancellationToken);
-                    return;
-                }
-
-                if (!await ApplyResultAsync(
-                        await Runtime.ConnectFeatureService.StartAsync(cancellationToken),
-                        "TaskQueue.RunOnce.Start",
-                        cancellationToken))
-                {
                     return;
                 }
 
@@ -3961,35 +3944,25 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                     return;
                 }
 
-                var enabledSnapshot = profile.TaskQueue.Select(task => task.IsEnabled).ToArray();
-                try
-                {
-                    for (var index = 0; index < profile.TaskQueue.Count; index++)
+                var appendResult = await TaskQueueEnableStateOverride.RunAsync(
+                    Runtime.ConfigurationService,
+                    profile,
+                    () =>
                     {
-                        profile.TaskQueue[index].IsEnabled = index == startupIndex;
-                    }
-
-                    var appendResult = await Runtime.TaskQueueFeatureService.QueueEnabledTasksAsync(cancellationToken);
-                    if (!appendResult.Success)
-                    {
-                        var error = UiOperationResult<int>.FromCore(appendResult, "Task queued.");
-                        _ = await ApplyResultAsync(error, "TaskQueue.AccountSwitch.Append", cancellationToken);
-                        return;
-                    }
-                }
-                finally
+                        for (var index = 0; index < profile.TaskQueue.Count; index++)
+                        {
+                            profile.TaskQueue[index].IsEnabled = index == startupIndex;
+                        }
+                    },
+                    () => Runtime.TaskQueueFeatureService.QueueEnabledTasksAndStartAsync(
+                        Runtime.ConnectFeatureService,
+                        cancellationToken),
+                    Runtime.LogService,
+                    "Account switch start");
+                if (!appendResult.Success)
                 {
-                    for (var index = 0; index < profile.TaskQueue.Count && index < enabledSnapshot.Length; index++)
-                    {
-                        profile.TaskQueue[index].IsEnabled = enabledSnapshot[index];
-                    }
-                }
-
-                if (!await ApplyResultAsync(
-                        await Runtime.ConnectFeatureService.StartAsync(cancellationToken),
-                        "TaskQueue.AccountSwitch.Start",
-                        cancellationToken))
-                {
+                    var error = UiOperationResult<int>.FromCore(appendResult, "Task queued.");
+                    _ = await ApplyResultAsync(error, "TaskQueue.AccountSwitch.Append", cancellationToken);
                     return;
                 }
 
@@ -6658,7 +6631,6 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                     TaskQueueItemStatus.Success,
                     callback.PayloadJson,
                     resolveSource: resolveSource);
-                CompleteTaskQueueRunOwnership();
                 break;
             case "TaskChainError":
             case "SubTaskError":
@@ -6679,7 +6651,6 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                     UiErrorCode.TaskRuntimeCallbackError,
                     resolveSource);
                 QueueAutomaticNotifications(callback, metadata, taskIndex, runId);
-                CompleteTaskQueueRunOwnership();
                 break;
             case "TaskChainStopped":
                 CancelStallReminder();

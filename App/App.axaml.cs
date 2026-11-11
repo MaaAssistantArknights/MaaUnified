@@ -129,7 +129,8 @@ public partial class App : Avalonia.Application
                 Runtime.Platform.PostActionExecutorService,
                 Runtime.CoreBridge,
                 appLifecycleService,
-                new AvaloniaPostActionPromptService(desktop));
+                new AvaloniaPostActionPromptService(desktop),
+                Runtime.SessionService);
 
             MainShellViewModel vm;
             try

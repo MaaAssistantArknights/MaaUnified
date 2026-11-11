@@ -419,7 +419,7 @@ public sealed class WebApiFeatureService : IWebApiFeatureService
         var keepOwner = false;
         try
         {
-            var appendResult = await _sessionService.AppendCoreTasksAsync(
+            var appendResult = await _connectFeatureService.AppendCoreTasksAndStartAsync(
                 _taskStore.List().Select(static task => task.ToCoreTaskRequest()),
                 cancellationToken).ConfigureAwait(false);
             if (!appendResult.Success)
@@ -428,17 +428,6 @@ public sealed class WebApiFeatureService : IWebApiFeatureService
                     context.Response,
                     HttpStatusCode.OK,
                     BuildFailurePayload(ApiFailureCode, appendResult.Error?.Message ?? "Failed to append WebApi tasks."),
-                    cancellationToken).ConfigureAwait(false);
-                return;
-            }
-
-            var startResult = await _connectFeatureService.StartAsync(cancellationToken).ConfigureAwait(false);
-            if (!startResult.Success)
-            {
-                await WriteJsonAsync(
-                    context.Response,
-                    HttpStatusCode.OK,
-                    BuildFailurePayload(ApiFailureCode, startResult.Message),
                     cancellationToken).ConfigureAwait(false);
                 return;
             }

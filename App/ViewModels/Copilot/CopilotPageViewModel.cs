@@ -813,32 +813,10 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
             }
 
             CurrentSessionState = Runtime.SessionService.CurrentState;
+            AddLog(GetRootText("ConnectingToEmulator", "Connecting to emulator……"));
             var appendPlan = await AppendConfiguredCopilotAsync(cancellationToken);
             if (appendPlan is null)
             {
-                return;
-            }
-
-            _activeItemName = appendPlan.ActiveItemName;
-            _activeItemCoreTaskId = appendPlan.TaskId;
-            _activeTaskChain = appendPlan.TaskChain;
-            _hasActiveRun = true;
-            foreach (var item in Items.Where(item => item.IsChecked || string.Equals(item.Name, _activeItemName, StringComparison.Ordinal)))
-            {
-                item.Status = "Queued";
-            }
-
-            AddLog(GetRootText("ConnectingToEmulator", "Connecting to emulator……"));
-            if (!await ApplyResultAsync(await Runtime.ConnectFeatureService.StartAsync(cancellationToken), "Copilot.Start", cancellationToken))
-            {
-                _hasActiveRun = false;
-                _activeItemName = null;
-                _activeItemCoreTaskId = null;
-                _activeTaskChain = null;
-                foreach (var item in Items.Where(item => item.Status == "Queued"))
-                {
-                    item.Status = "Ready";
-                }
                 return;
             }
 
@@ -851,9 +829,34 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
         {
             if (!keepRunOwner)
             {
+                ResetFailedStartState();
                 Runtime.SessionService.EndRun(CopilotRunOwner);
                 SetStartRequestActive(false);
             }
+        }
+    }
+
+    private void PrepareCopilotStart(int taskId, string activeItemName, string taskChain)
+    {
+        _activeItemName = activeItemName;
+        _activeItemCoreTaskId = taskId;
+        _activeTaskChain = taskChain;
+        _hasActiveRun = true;
+        foreach (var item in Items.Where(item => item.IsChecked || string.Equals(item.Name, activeItemName, StringComparison.Ordinal)))
+        {
+            item.Status = "Queued";
+        }
+    }
+
+    private void ResetFailedStartState()
+    {
+        _hasActiveRun = false;
+        _activeItemName = null;
+        _activeItemCoreTaskId = null;
+        _activeTaskChain = null;
+        foreach (var item in Items.Where(item => item.Status == "Queued"))
+        {
+            item.Status = "Ready";
         }
     }
 
@@ -976,7 +979,11 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
         }
 
         var request = BuildCopilotTaskRequest(item, filePath);
-        var appendResult = await Runtime.CoreBridge.AppendTaskAsync(request, cancellationToken);
+        var taskChain = ResolveCopilotTaskChain(item.Type);
+        var appendResult = await Runtime.ConnectFeatureService.AppendAndStartCoreTaskAsync(
+            request,
+            cancellationToken,
+            taskId => PrepareCopilotStart(taskId, item.Name, taskChain));
         if (!appendResult.Success)
         {
             StatusMessage = T("Copilot.Status.StartFailed", "启动失败。");

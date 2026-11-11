@@ -157,6 +157,7 @@ public sealed class UnifiedSessionService
     private readonly object _connectionOperationGate = new();
     private readonly SemaphoreSlim _connectionOperationLock = new(1, 1);
     private readonly Dictionary<int, int> _taskIndexByCoreTaskId = new();
+    private bool _taskIndexMappingsBelongToProfileBatch;
     private CoreConnectionInfo? _lastSuccessfulConnectionInfo;
     private string? _currentRunOwner;
     private string? _currentRunOwnerDisplayName;
@@ -164,7 +165,23 @@ public sealed class UnifiedSessionService
     private CoreConnectionInfo? _activeConnectionTarget;
     private long _activeConnectionGeneration;
     private long _connectionOperationGeneration;
+    // Snapshot of the bridge's callback enqueue counter taken at the latest run
+    // boundary: immediately before a run start, and again when a run ends through a
+    // stop or a tainted-queue reset. TaskChainStart, terminal, and instance-lifecycle
+    // (InitFailed/Destroyed) callbacks carry the sequence they were enqueued with; such
+    // an event whose sequence is not newer than this watermark belongs to an earlier
+    // batch or a destroyed instance that is still waiting in the pump and must neither
+    // move the session out of the current run nor resurrect a run that already ended.
+    private long _runBoundaryCallbackWatermark;
     private bool _ignoreIdleConnectionCallbacks;
+    private bool _taskQueueTainted;
+
+    private sealed record OneShotRecruitExpediteSnapshot(
+        UnifiedTaskItem Task,
+        bool HadExpedite,
+        JsonNode? Expedite,
+        bool HadExpediteTimes,
+        JsonNode? ExpediteTimes);
 
     public UnifiedSessionService(
         IMaaCoreBridge bridge,
@@ -283,11 +300,85 @@ public sealed class UnifiedSessionService
         }
     }
 
+    public async Task<CoreResult<bool>> SetQueuedTaskParamsAsync(
+        int taskIndex,
+        string paramsJson,
+        string? previousParamsJson = null,
+        CancellationToken cancellationToken = default)
+    {
+        int[] coreTaskIds;
+        lock (_taskIndexMapGate)
+        {
+            // Only mappings registered by a profile append batch may be targeted by
+            // profile param edits. Ad-hoc runs (Copilot/Toolbox/WebApi) register
+            // their task ids under the same indices for callback resolution only;
+            // issuing AsstSetTaskParams on those ids would rewrite or spuriously
+            // fail against an unrelated native task. The edit still applies to the
+            // profile in memory and reaches the native queue at the next append.
+            if (!_taskIndexMappingsBelongToProfileBatch)
+            {
+                return CoreResult<bool>.Ok(true);
+            }
+
+            coreTaskIds = _taskIndexByCoreTaskId
+                .Where(pair => pair.Value == taskIndex)
+                .Select(pair => pair.Key)
+                .ToArray();
+        }
+
+        var appliedTaskIds = new List<int>(coreTaskIds.Length);
+        foreach (var coreTaskId in coreTaskIds)
+        {
+            var update = await _bridge.SetTaskParamsAsync(coreTaskId, paramsJson, cancellationToken).ConfigureAwait(false);
+            if (!update.Success)
+            {
+                await RollbackAppliedTaskParamsAsync(appliedTaskIds, previousParamsJson).ConfigureAwait(false);
+                return update;
+            }
+
+            appliedTaskIds.Add(coreTaskId);
+        }
+
+        return CoreResult<bool>.Ok(true);
+    }
+
+    private async Task RollbackAppliedTaskParamsAsync(
+        IReadOnlyList<int> appliedTaskIds,
+        string? previousParamsJson)
+    {
+        // MaaCore exposes no read/rollback API. One queue index can map to several
+        // native tasks (OperBox + Depot), so when a later update fails, restore the
+        // siblings already updated to keep the native queue aligned with the profile.
+        if (appliedTaskIds.Count == 0 || previousParamsJson is null)
+        {
+            return;
+        }
+
+        foreach (var appliedTaskId in appliedTaskIds)
+        {
+            var rollback = await _bridge.SetTaskParamsAsync(appliedTaskId, previousParamsJson, CancellationToken.None).ConfigureAwait(false);
+            if (!rollback.Success)
+            {
+                _logService.Warn($"Failed to roll back queued task params for core task #{appliedTaskId}: {rollback.Error?.Code} {rollback.Error?.Message}");
+            }
+        }
+    }
+
     private void ClearTaskIdMappings()
     {
         lock (_taskIndexMapGate)
         {
             _taskIndexByCoreTaskId.Clear();
+            _taskIndexMappingsBelongToProfileBatch = false;
+        }
+    }
+
+    private void BeginProfileTaskIdMappings()
+    {
+        lock (_taskIndexMapGate)
+        {
+            _taskIndexByCoreTaskId.Clear();
+            _taskIndexMappingsBelongToProfileBatch = true;
         }
     }
 
@@ -296,6 +387,14 @@ public sealed class UnifiedSessionService
         lock (_taskIndexMapGate)
         {
             _taskIndexByCoreTaskId[coreTaskId] = queueIndex;
+        }
+    }
+
+    private bool HasMappedCoreTasks()
+    {
+        lock (_taskIndexMapGate)
+        {
+            return _taskIndexByCoreTaskId.Count > 0;
         }
     }
 
@@ -352,6 +451,30 @@ public sealed class UnifiedSessionService
             }
 
             MoveToState(SessionState.Connecting, "Session.Connect", "begin");
+
+            // A previous interrupted append may have left the native queue
+            // tainted with recovery incomplete (e.g. the core was still
+            // running). Retry the reset before connecting so a successful
+            // reconnect also clears the taint instead of failing the next
+            // append with a stale reconnect-required error. Recovery failure
+            // must not block the connect itself: connecting is still required
+            // to stop a core that is still running.
+            var queueRecoveryPending = _taskQueueTainted;
+            if (queueRecoveryPending)
+            {
+                var queueRecovery = await RecoverTaintedTaskQueueCoreAsync(CancellationToken.None).ConfigureAwait(false);
+                if (queueRecovery.Success)
+                {
+                    queueRecoveryPending = false;
+                    _logService.Warn("Tainted task queue was reset during reconnect.");
+                }
+                else
+                {
+                    _logService.Warn(
+                        $"Tainted task queue recovery failed during reconnect; connecting anyway so a running core can be stopped: {queueRecovery.Error?.Code} {queueRecovery.Error?.Message}");
+                }
+            }
+
             CoreResult<bool> result;
             try
             {
@@ -371,6 +494,10 @@ public sealed class UnifiedSessionService
                         ObserveAbandonedConnectTask(bridgeConnectTask, operationCts, connectionInfo, generation);
                         if (IsCurrentConnectionGeneration(generation))
                         {
+                            // The canceled attempt may still complete inside the core
+                            // (the abort stop budget can expire before AsstStop runs);
+                            // ignore its late Connected callbacks while the session is idle.
+                            MarkIdleConnectionCallbacksStale();
                             var fallbackState = await ResolveFailureStateAsync("Session.Connect", SessionState.Idle, CancellationToken.None);
                             MoveToState(fallbackState, "Session.Connect", "connect-canceled-fallback");
                             throw new OperationCanceledException(operationToken);
@@ -404,6 +531,8 @@ public sealed class UnifiedSessionService
             {
                 if (IsCurrentConnectionGeneration(generation))
                 {
+                    // Same late-Connected protection as the cancellation branch above.
+                    MarkIdleConnectionCallbacksStale();
                     var fallbackState = await ResolveFailureStateAsync("Session.Connect", SessionState.Idle, CancellationToken.None);
                     MoveToState(fallbackState, "Session.Connect", "connect-canceled-fallback");
                     throw;
@@ -423,6 +552,7 @@ public sealed class UnifiedSessionService
 
             if (result.Success)
             {
+                _taskQueueTainted = queueRecoveryPending;
                 _lastSuccessfulConnectionInfo = connectionInfo;
                 MoveToState(SessionState.Connected, "Session.Connect", "connected");
                 _logService.Info($"Connected: {BuildConnectionSummary(connectionInfo)}");
@@ -430,7 +560,13 @@ public sealed class UnifiedSessionService
             else
             {
                 ClearActiveConnectionTarget(connectionInfo);
-                var fallbackState = await ResolveFailureStateAsync("Session.Connect", SessionState.Idle, cancellationToken);
+                // The failed attempt may still complete inside the core (the abort stop
+                // budget can expire before AsstStop runs); ignore its late Connected
+                // callbacks while the session is idle.
+                MarkIdleConnectionCallbacksStale();
+                // Probe with None: a caller/budget cancellation escaping here would
+                // strand the session in Connecting after a definitive connect failure.
+                var fallbackState = await ResolveFailureStateAsync("Session.Connect", SessionState.Idle, CancellationToken.None);
                 MoveToState(fallbackState, "Session.Connect", "connect-failed-fallback");
                 _logService.Warn(
                     $"Failed to connect: {BuildConnectionSummary(connectionInfo)}; error={result.Error?.Code} {result.Error?.Message}");
@@ -506,18 +642,68 @@ public sealed class UnifiedSessionService
 
     public async Task<CoreResult<int>> AppendTasksFromCurrentProfileAsync(CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+        await _connectionOperationLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var oneShotRecruitSnapshots = new List<OneShotRecruitExpediteSnapshot>();
+            try
+            {
+                var appendResult = await AppendTasksFromCurrentProfileCoreAsync(
+                    cancellationToken,
+                    oneShotRecruitSnapshots).ConfigureAwait(false);
+                if (!appendResult.Success)
+                {
+                    RestoreOneShotRecruitExpedited(oneShotRecruitSnapshots);
+                }
+
+                return appendResult;
+            }
+            catch
+            {
+                try
+                {
+                    if (HasMappedCoreTasks())
+                    {
+                        await ResetTaintedTaskQueueAsync("profile append preparation failed after append").ConfigureAwait(false);
+                    }
+                }
+                finally
+                {
+                    RestoreOneShotRecruitExpedited(oneShotRecruitSnapshots);
+                }
+
+                throw;
+            }
+        }
+        finally
+        {
+            _connectionOperationLock.Release();
+        }
+    }
+
+    private async Task<CoreResult<int>> AppendTasksFromCurrentProfileCoreAsync(
+        CancellationToken cancellationToken,
+        List<OneShotRecruitExpediteSnapshot> oneShotRecruitSnapshots)
+    {
+        if (_taskQueueTainted)
+        {
+            return CoreResult<int>.Fail(CreateReconnectRequiredError());
+        }
+
         if (!_configService.CurrentConfig.Profiles.TryGetValue(_configService.CurrentConfig.CurrentProfile, out var profile))
         {
             _logService.Warn($"Current profile `{_configService.CurrentConfig.CurrentProfile}` not found");
             return CoreResult<int>.Fail(new CoreError(CoreErrorCode.InvalidRequest, "Current profile was not found."));
         }
 
-        ClearTaskIdMappings();
+        BeginProfileTaskIdMappings();
 
         int appended = 0;
         var resetOneShotRecruitExpedited = false;
         for (var queueIndex = 0; queueIndex < profile.TaskQueue.Count; queueIndex++)
         {
+            await ThrowIfAppendCanceledAsync(appended, cancellationToken, "profile append canceled").ConfigureAwait(false);
             var task = profile.TaskQueue[queueIndex];
             var effectiveEnabled = TaskQueueEnabledState.IsEffectivelyEnabled(task, _configService.CurrentConfig);
             if (!effectiveEnabled)
@@ -533,10 +719,12 @@ public sealed class UnifiedSessionService
                     "; ",
                     blockingIssues.Select(i => $"{i.Code}:{i.Field}:{i.Message}"));
                 _logService.Warn($"Append task blocked `{task.Name}`: {details}");
-                ClearTaskIdMappings();
-                return CoreResult<int>.Fail(new CoreError(
+                var error = new CoreError(
                     CoreErrorCode.InvalidRequest,
-                    $"Task `{task.Name}` validation failed: {details}"));
+                    $"Task `{task.Name}` validation failed: {details}");
+                return appended > 0
+                    ? await FailAppendBatchAsync(error, "profile append validation failed").ConfigureAwait(false)
+                    : CoreResult<int>.Fail(error);
             }
 
             foreach (var warning in compiled.Issues.Where(i => !i.Blocking))
@@ -567,42 +755,64 @@ public sealed class UnifiedSessionService
                 var userDataTasks = BuildUserDataUpdateCoreTasks(task, profile, _configService.CurrentConfig);
                 foreach (var userDataTask in userDataTasks)
                 {
-                    var appendCoreResult = await _bridge.AppendTaskAsync(userDataTask, cancellationToken);
+                    // MaaCore exposes no remove/clear API. Once the first append is issued,
+                    // finish the batch so cancellation cannot leave a partial native queue.
+                    await ThrowIfAppendCanceledAsync(appended, cancellationToken, "profile append canceled").ConfigureAwait(false);
+                    CoreResult<int> appendCoreResult;
+                    try
+                    {
+                        appendCoreResult = await _bridge.AppendTaskAsync(userDataTask, CancellationToken.None).ConfigureAwait(false);
+                    }
+                    catch
+                    {
+                        await ResetTaintedTaskQueueAsync("profile append threw").ConfigureAwait(false);
+                        throw;
+                    }
                     if (!appendCoreResult.Success)
                     {
                         _logService.Warn($"Append task failed `{task.Name}`: {appendCoreResult.Error?.Code} {appendCoreResult.Error?.Message}");
-                        ClearTaskIdMappings();
-                        return CoreResult<int>.Fail(appendCoreResult.Error!);
+                        return await FailAppendBatchAsync(appendCoreResult.Error!, "profile append failed").ConfigureAwait(false);
                     }
 
                     SetTaskIdMapping(appendCoreResult.Value, queueIndex);
                     appended += 1;
                     _logService.Info($"Appended task #{appendCoreResult.Value}: {userDataTask.Name}");
+                    await ThrowIfAppendCanceledAsync(appended, cancellationToken, "profile append canceled").ConfigureAwait(false);
                 }
 
                 continue;
             }
 
             var appendParams = TaskParamCompiler.BuildCoreParams(compiled.NormalizedType, compiled.Params);
-            var appendResult = await _bridge.AppendTaskAsync(
-                new CoreTaskRequest(compiled.NormalizedType, task.Name, effectiveEnabled, appendParams.ToJsonString()),
-                cancellationToken);
+            await ThrowIfAppendCanceledAsync(appended, cancellationToken, "profile append canceled").ConfigureAwait(false);
+            CoreResult<int> appendResult;
+            try
+            {
+                appendResult = await _bridge.AppendTaskAsync(
+                    new CoreTaskRequest(compiled.NormalizedType, task.Name, effectiveEnabled, appendParams.ToJsonString()),
+                    CancellationToken.None).ConfigureAwait(false);
+            }
+            catch
+            {
+                await ResetTaintedTaskQueueAsync("profile append threw").ConfigureAwait(false);
+                throw;
+            }
             if (!appendResult.Success)
             {
                 _logService.Warn($"Append task failed `{task.Name}`: {appendResult.Error?.Code} {appendResult.Error?.Message}");
-                ClearTaskIdMappings();
-                return CoreResult<int>.Fail(appendResult.Error!);
+                return await FailAppendBatchAsync(appendResult.Error!, "profile append failed").ConfigureAwait(false);
             }
 
             SetTaskIdMapping(appendResult.Value, queueIndex);
 
             appended += 1;
-            if (ResetOneShotRecruitExpedited(task))
+            if (ResetOneShotRecruitExpedited(task, oneShotRecruitSnapshots))
             {
                 resetOneShotRecruitExpedited = true;
             }
 
             _logService.Info($"Appended task #{appendResult.Value}: {task.Name}");
+            await ThrowIfAppendCanceledAsync(appended, cancellationToken, "profile append canceled").ConfigureAwait(false);
         }
 
         if (resetOneShotRecruitExpedited)
@@ -618,7 +828,9 @@ public sealed class UnifiedSessionService
         return CoreResult<int>.Ok(appended);
     }
 
-    private static bool ResetOneShotRecruitExpedited(UnifiedTaskItem task)
+    private static bool ResetOneShotRecruitExpedited(
+        UnifiedTaskItem task,
+        List<OneShotRecruitExpediteSnapshot> oneShotRecruitSnapshots)
     {
         if (!string.Equals(TaskParamCompiler.NormalizeTaskType(task.Type), TaskModuleTypes.Recruit, StringComparison.OrdinalIgnoreCase)
             || task.Params["expedite"] is not JsonValue expediteValue
@@ -628,33 +840,264 @@ public sealed class UnifiedSessionService
             return false;
         }
 
+        oneShotRecruitSnapshots.Add(new OneShotRecruitExpediteSnapshot(
+            task,
+            HadExpedite: task.Params.ContainsKey("expedite"),
+            Expedite: task.Params["expedite"]?.DeepClone(),
+            HadExpediteTimes: task.Params.ContainsKey("expedite_times"),
+            ExpediteTimes: task.Params["expedite_times"]?.DeepClone()));
         task.Params["expedite"] = false;
         task.Params.Remove("expedite_times");
         return true;
+    }
+
+    private static void RestoreOneShotRecruitExpedited(
+        IReadOnlyList<OneShotRecruitExpediteSnapshot> oneShotRecruitSnapshots)
+    {
+        for (var index = oneShotRecruitSnapshots.Count - 1; index >= 0; index--)
+        {
+            var snapshot = oneShotRecruitSnapshots[index];
+            if (snapshot.HadExpedite)
+            {
+                snapshot.Task.Params["expedite"] = snapshot.Expedite?.DeepClone();
+            }
+            else
+            {
+                snapshot.Task.Params.Remove("expedite");
+            }
+
+            if (snapshot.HadExpediteTimes)
+            {
+                snapshot.Task.Params["expedite_times"] = snapshot.ExpediteTimes?.DeepClone();
+            }
+            else
+            {
+                snapshot.Task.Params.Remove("expedite_times");
+            }
+        }
     }
 
     public async Task<CoreResult<int>> AppendCoreTasksAsync(
         IEnumerable<CoreTaskRequest> coreTasks,
         CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(coreTasks);
         cancellationToken.ThrowIfCancellationRequested();
-        ClearTaskIdMappings();
-
-        var index = 0;
-        foreach (var task in coreTasks)
+        await _connectionOperationLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
         {
-            var appendResult = await _bridge.AppendTaskAsync(task, cancellationToken);
-            if (!appendResult.Success)
+            return await AppendCoreTasksCoreAsync(coreTasks, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _connectionOperationLock.Release();
+        }
+    }
+
+    public async Task<CoreResult<int>> AppendTasksFromCurrentProfileAndStartAsync(
+        CoreInstanceOptions instanceOptions,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        await _connectionOperationLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var oneShotRecruitSnapshots = new List<OneShotRecruitExpediteSnapshot>();
+            // Task-ID mappings survive a completed batch and are only cleared when
+            // the next append batch starts, so before this batch's append phase runs
+            // they may still belong to a previous batch. Track the phase boundary:
+            // an exception escaping the options phase must not taint a native queue
+            // this batch never touched.
+            var appendPhaseStarted = false;
+            try
             {
-                ClearTaskIdMappings();
-                return CoreResult<int>.Fail(appendResult.Error!);
+                var currentState = CurrentState;
+                if (currentState is SessionState.Running or SessionState.Stopping)
+                {
+                    return CreateAppendStartWhileRunningError(currentState);
+                }
+
+                if (_taskQueueTainted)
+                {
+                    return CoreResult<int>.Fail(CreateReconnectRequiredError());
+                }
+
+                var prepare = await ApplyStartInstanceOptionsCoreAsync(instanceOptions, cancellationToken).ConfigureAwait(false);
+                if (!prepare.Success)
+                {
+                    return CoreResult<int>.Fail(prepare.Error!);
+                }
+
+                appendPhaseStarted = true;
+                var appendResult = await AppendTasksFromCurrentProfileCoreAsync(
+                    cancellationToken,
+                    oneShotRecruitSnapshots).ConfigureAwait(false);
+                if (!appendResult.Success)
+                {
+                    RestoreOneShotRecruitExpedited(oneShotRecruitSnapshots);
+                    return appendResult;
+                }
+
+                var startResult = await StartAppendedTasksCoreAsync(
+                    appendResult.Value,
+                    "profile",
+                    cancellationToken).ConfigureAwait(false);
+                if (!startResult.Success)
+                {
+                    RestoreOneShotRecruitExpedited(oneShotRecruitSnapshots);
+                }
+
+                return startResult;
+            }
+            catch
+            {
+                try
+                {
+                    if (appendPhaseStarted && HasMappedCoreTasks())
+                    {
+                        await ResetTaintedTaskQueueAsync("profile start preparation failed after append").ConfigureAwait(false);
+                    }
+                }
+                finally
+                {
+                    RestoreOneShotRecruitExpedited(oneShotRecruitSnapshots);
+                }
+
+                throw;
+            }
+        }
+        finally
+        {
+            _connectionOperationLock.Release();
+        }
+    }
+
+    public async Task<CoreResult<int>> AppendCoreTasksAndStartAsync(
+        IEnumerable<CoreTaskRequest> coreTasks,
+        CoreInstanceOptions instanceOptions,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(coreTasks);
+        cancellationToken.ThrowIfCancellationRequested();
+        await _connectionOperationLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var currentState = CurrentState;
+            if (currentState is SessionState.Running or SessionState.Stopping)
+            {
+                return CreateAppendStartWhileRunningError(currentState);
             }
 
-            SetTaskIdMapping(appendResult.Value, index);
-            index += 1;
-        }
+            if (_taskQueueTainted)
+            {
+                return CoreResult<int>.Fail(CreateReconnectRequiredError());
+            }
 
-        return CoreResult<int>.Ok(index);
+            var prepare = await ApplyStartInstanceOptionsCoreAsync(instanceOptions, cancellationToken).ConfigureAwait(false);
+            if (!prepare.Success)
+            {
+                return CoreResult<int>.Fail(prepare.Error!);
+            }
+
+            var appendResult = await AppendCoreTasksCoreAsync(coreTasks, cancellationToken).ConfigureAwait(false);
+            return appendResult.Success
+                ? await StartAppendedTasksCoreAsync(appendResult.Value, "core batch", cancellationToken).ConfigureAwait(false)
+                : appendResult;
+        }
+        finally
+        {
+            _connectionOperationLock.Release();
+        }
+    }
+
+    public async Task<CoreResult<int>> AppendAndStartCoreTaskAsync(
+        CoreTaskRequest coreTask,
+        CancellationToken cancellationToken = default,
+        Action<int>? onAppended = null,
+        CoreInstanceOptions? instanceOptions = null)
+    {
+        ArgumentNullException.ThrowIfNull(coreTask);
+        cancellationToken.ThrowIfCancellationRequested();
+        await _connectionOperationLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var currentState = CurrentState;
+            if (currentState is SessionState.Running or SessionState.Stopping)
+            {
+                return CreateAppendStartWhileRunningError(currentState);
+            }
+
+            if (_taskQueueTainted)
+            {
+                return CoreResult<int>.Fail(CreateReconnectRequiredError());
+            }
+
+            if (instanceOptions is not null)
+            {
+                var prepare = await ApplyStartInstanceOptionsCoreAsync(instanceOptions, cancellationToken).ConfigureAwait(false);
+                if (!prepare.Success)
+                {
+                    return CoreResult<int>.Fail(prepare.Error!);
+                }
+            }
+
+            ClearTaskIdMappings();
+            CoreResult<int> appendResult;
+            try
+            {
+                appendResult = await _bridge.AppendTaskAsync(coreTask, CancellationToken.None).ConfigureAwait(false);
+            }
+            catch
+            {
+                await ResetTaintedTaskQueueAsync("core append threw").ConfigureAwait(false);
+                throw;
+            }
+            if (!appendResult.Success)
+            {
+                return await FailAppendBatchAsync(appendResult.Error!, "core append failed").ConfigureAwait(false);
+            }
+
+            // Ad-hoc runs reuse queue index 0 for callback task-id resolution only;
+            // the mapping is not marked as a profile batch, so param edits via
+            // SetQueuedTaskParamsAsync never target this task.
+            SetTaskIdMapping(appendResult.Value, 0);
+            try
+            {
+                onAppended?.Invoke(appendResult.Value);
+                cancellationToken.ThrowIfCancellationRequested();
+            }
+            catch
+            {
+                await ResetTaintedTaskQueueAsync("core start preparation failed after append").ConfigureAwait(false);
+                throw;
+            }
+
+            CoreResult<bool> startResult;
+            try
+            {
+                CaptureRunBoundaryCallbackWatermark();
+                startResult = await _bridge.StartAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch
+            {
+                await ResetTaintedTaskQueueAsync("core start threw after append").ConfigureAwait(false);
+                throw;
+            }
+
+            if (!startResult.Success)
+            {
+                await ResetTaintedTaskQueueAsync("core start failed after append").ConfigureAwait(false);
+                return CoreResult<int>.Fail(startResult.Error!);
+            }
+
+            MoveToState(SessionState.Running, "Session.AppendAndStart", "started");
+            _logService.Info($"Appended and started task #{appendResult.Value}: {coreTask.Name}");
+            return CoreResult<int>.Ok(appendResult.Value);
+        }
+        finally
+        {
+            _connectionOperationLock.Release();
+        }
     }
 
     private bool ShouldSkipTaskForToday(UnifiedTaskItem task, UnifiedProfile profile, UnifiedConfig config)
@@ -817,19 +1260,52 @@ public sealed class UnifiedSessionService
     public async Task<CoreResult<bool>> StartAsync(CancellationToken cancellationToken = default)
     {
         _logService.Debug($"Session.Start requested: state={CurrentState}");
-        var result = await _bridge.StartAsync(cancellationToken);
-        if (result.Success)
+        await _connectionOperationLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
         {
-            MoveToState(SessionState.Running, "Session.Start", "started");
-        }
-        else
-        {
-            var fallbackState = await ResolveFailureStateAsync("Session.Start", SessionState.Connected, cancellationToken);
-            MoveToState(fallbackState, "Session.Start", "start-failed-fallback");
-        }
+            if (_taskQueueTainted)
+            {
+                return CoreResult<bool>.Fail(CreateReconnectRequiredError());
+            }
 
-        _logService.Info(result.Success ? "Task execution started" : $"Task execution failed to start: {result.Error?.Code} {result.Error?.Message}");
-        return result;
+            CoreResult<bool> result;
+            try
+            {
+                CaptureRunBoundaryCallbackWatermark();
+                result = await _bridge.StartAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch when (HasMappedCoreTasks())
+            {
+                await ResetTaintedTaskQueueAsync("core start threw after append").ConfigureAwait(false);
+                throw;
+            }
+
+            if (result.Success)
+            {
+                MoveToState(SessionState.Running, "Session.Start", "started");
+            }
+            else
+            {
+                if (HasMappedCoreTasks())
+                {
+                    await ResetTaintedTaskQueueAsync("core start failed after append").ConfigureAwait(false);
+                }
+                else
+                {
+                    // Probe with None: a caller cancellation escaping here would skip
+                    // the failure-state resolution after a definitive start failure.
+                    var fallbackState = await ResolveFailureStateAsync("Session.Start", SessionState.Connected, CancellationToken.None);
+                    MoveToState(fallbackState, "Session.Start", "start-failed-fallback");
+                }
+            }
+
+            _logService.Info(result.Success ? "Task execution started" : $"Task execution failed to start: {result.Error?.Code} {result.Error?.Message}");
+            return result;
+        }
+        finally
+        {
+            _connectionOperationLock.Release();
+        }
     }
 
     public async Task<CoreResult<bool>> StopAsync(CancellationToken cancellationToken = default)
@@ -860,10 +1336,35 @@ public sealed class UnifiedSessionService
             var initialState = CurrentState;
             MoveToState(SessionState.Stopping, "Session.Stop", "begin-stop");
 
-            var result = await _bridge.StopAsync(cancellationToken);
+            CoreResult<bool> result;
+            try
+            {
+                result = await _bridge.StopAsync(cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                // The bridge re-checks the caller token in its post-stop not-running
+                // probe, so a cancellation landing after AsstStop already succeeded
+                // surfaces here with the batch already stopped. Never strand the
+                // session in Stopping: resolve the real core state exactly like a
+                // failed stop does. No run-boundary watermark is captured because the
+                // stop may not have been issued at all; a still-running batch's
+                // genuine callbacks must keep flowing.
+                var canceledFallback = await ResolveFailureStateAsync("Session.Stop", SessionState.Connected, CancellationToken.None);
+                MoveToState(canceledFallback, "Session.Stop", "stop-canceled-fallback");
+                throw;
+            }
+
             if (result.Success)
             {
-                var fallbackState = await ResolveFailureStateAsync("Session.Stop", SessionState.Connected, cancellationToken);
+                // Every callback of the stopped batch is enqueued before AsstStop
+                // returns; any of them still waiting in the pump must not resurrect
+                // the run this stop just ended.
+                CaptureRunBoundaryCallbackWatermark();
+                // Probe with None: a caller cancellation escaping here would strand the
+                // session in Stopping after the stop already succeeded, and the stopped
+                // batch's filtered terminal callbacks could not heal it.
+                var fallbackState = await ResolveFailureStateAsync("Session.Stop", SessionState.Connected, CancellationToken.None);
                 MoveToState(fallbackState == SessionState.Running ? SessionState.Connected : fallbackState, "Session.Stop", "stopped");
             }
             else if (IsAbandonedNativeStopFailure(result.Error))
@@ -871,17 +1372,83 @@ public sealed class UnifiedSessionService
                 _lastSuccessfulConnectionInfo = null;
                 ClearActiveConnectionTarget();
                 MarkIdleConnectionCallbacksStale();
+                CaptureRunBoundaryCallbackWatermark();
                 _logService.Warn(
                     $"Session.Stop stop-abandoned-invalidated: {result.Error?.Code} {result.Error?.Message}");
                 MoveToState(SessionState.Idle, "Session.Stop", "stop-abandoned-invalidated");
             }
             else
             {
-                var fallbackState = await ResolveFailureStateAsync("Session.Stop", SessionState.Connected, cancellationToken);
+                // Probe with None: same stranded-Stopping hazard as the success branch.
+                var fallbackState = await ResolveFailureStateAsync("Session.Stop", SessionState.Connected, CancellationToken.None);
                 MoveToState(fallbackState, "Session.Stop", "stop-failed-fallback");
             }
 
             _logService.Info(result.Success ? "Task execution stopped" : $"Task execution stop failed: {result.Error?.Code} {result.Error?.Message}");
+            return result;
+        }
+        finally
+        {
+            _connectionOperationLock.Release();
+        }
+    }
+
+    public async Task<CoreResult<bool>> StartCloseDownAsync(
+        string clientType,
+        CancellationToken cancellationToken = default)
+    {
+        await _connectionOperationLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var stop = await _bridge.StopAsync(cancellationToken).ConfigureAwait(false);
+            if (!stop.Success)
+            {
+                return stop;
+            }
+
+            var payload = JsonSerializer.Serialize(new Dictionary<string, string>
+            {
+                ["client_type"] = clientType?.Trim() ?? string.Empty,
+            });
+            CoreResult<int> append;
+            try
+            {
+                append = await _bridge.AppendTaskAsync(
+                    new CoreTaskRequest("CloseDown", "CloseDown", true, payload),
+                    CancellationToken.None).ConfigureAwait(false);
+            }
+            catch
+            {
+                await ResetTaintedTaskQueueAsync("CloseDown append threw").ConfigureAwait(false);
+                throw;
+            }
+            if (!append.Success)
+            {
+                return CoreResult<bool>.Fail(append.Error!);
+            }
+
+            CoreResult<bool> result;
+            try
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                CaptureRunBoundaryCallbackWatermark();
+                result = await _bridge.StartAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch
+            {
+                await ResetTaintedTaskQueueAsync("CloseDown start threw after append").ConfigureAwait(false);
+                throw;
+            }
+
+            if (!result.Success)
+            {
+                await ResetTaintedTaskQueueAsync("CloseDown start failed after append").ConfigureAwait(false);
+            }
+            else
+            {
+                MoveToState(SessionState.Running, "Session.CloseDown", "started");
+            }
+
             return result;
         }
         finally
@@ -911,26 +1478,55 @@ public sealed class UnifiedSessionService
 
         _logService.Debug(
             $"Session.ReloadResource requested: state={CurrentState}, client={clientType ?? "<current>"}, timeout={effectiveTimeout}");
-        var waitResult = await WaitUntilReloadSafeAsync(effectiveTimeout, cancellationToken);
-        if (!waitResult.Success)
+        var deadlineAt = DateTimeOffset.UtcNow + effectiveTimeout;
+        while (true)
         {
-            _logService.Warn(
-                $"Session.ReloadResource aborted: {waitResult.Error?.Code} {waitResult.Error?.Message}");
-            return waitResult;
-        }
+            var remaining = deadlineAt - DateTimeOffset.UtcNow;
+            if (remaining <= TimeSpan.Zero)
+            {
+                return ReloadTimeoutFailure();
+            }
 
-        var reloadResult = await _bridge.ReloadResourceAsync(clientType, cancellationToken);
-        if (reloadResult.Success)
-        {
-            _logService.Info($"Session resources reloaded. client={clientType ?? "<current>"}");
-        }
-        else
-        {
-            _logService.Warn(
-                $"Session resource reload failed: {reloadResult.Error?.Code} {reloadResult.Error?.Message}");
-        }
+            var waitResult = await WaitUntilReloadSafeAsync(remaining, cancellationToken).ConfigureAwait(false);
+            if (!waitResult.Success)
+            {
+                _logService.Warn(
+                    $"Session.ReloadResource aborted: {waitResult.Error?.Code} {waitResult.Error?.Message}");
+                return waitResult;
+            }
 
-        return reloadResult;
+            remaining = deadlineAt - DateTimeOffset.UtcNow;
+            if (remaining <= TimeSpan.Zero
+                || !await _connectionOperationLock.WaitAsync(remaining, cancellationToken).ConfigureAwait(false))
+            {
+                return ReloadTimeoutFailure();
+            }
+
+            try
+            {
+                if (!await IsReloadSafeSnapshotAsync(cancellationToken).ConfigureAwait(false))
+                {
+                    continue;
+                }
+
+                var reloadResult = await _bridge.ReloadResourceAsync(clientType, cancellationToken).ConfigureAwait(false);
+                if (reloadResult.Success)
+                {
+                    _logService.Info($"Session resources reloaded. client={clientType ?? "<current>"}");
+                }
+                else
+                {
+                    _logService.Warn(
+                        $"Session resource reload failed: {reloadResult.Error?.Code} {reloadResult.Error?.Message}");
+                }
+
+                return reloadResult;
+            }
+            finally
+            {
+                _connectionOperationLock.Release();
+            }
+        }
     }
 
     public async Task StartCallbackPumpAsync(Func<CoreCallbackEvent, Task> onEvent, CancellationToken cancellationToken = default)
@@ -994,6 +1590,11 @@ public sealed class UnifiedSessionService
         var callback = envelope.Callback;
         if (string.Equals(callback.MsgName, "TaskChainStart", StringComparison.OrdinalIgnoreCase))
         {
+            if (IsStaleRunBoundaryCallback(callback, "run-start"))
+            {
+                return;
+            }
+
             MoveToState(SessionState.Running, "Session.Callback", "TaskChainStart");
             return;
         }
@@ -1001,7 +1602,26 @@ public sealed class UnifiedSessionService
         if (string.Equals(callback.MsgName, "TaskChainStopped", StringComparison.OrdinalIgnoreCase)
             || string.Equals(callback.MsgName, "AllTasksCompleted", StringComparison.OrdinalIgnoreCase))
         {
+            if (IsStaleRunBoundaryCallback(callback, "terminal"))
+            {
+                return;
+            }
+
             MoveToState(SessionState.Connected, "Session.Callback", callback.MsgName);
+            return;
+        }
+
+        if (string.Equals(callback.MsgName, "InitFailed", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(callback.MsgName, "Destroyed", StringComparison.OrdinalIgnoreCase))
+        {
+            if (IsStaleRunBoundaryCallback(callback, "lifecycle"))
+            {
+                return;
+            }
+
+            _lastSuccessfulConnectionInfo = null;
+            ClearActiveConnectionTarget();
+            MoveToState(SessionState.Idle, "Session.Callback", callback.MsgName);
             return;
         }
 
@@ -1082,7 +1702,25 @@ public sealed class UnifiedSessionService
 
             _lastSuccessfulConnectionInfo = null;
             ClearActiveConnectionTarget();
+            if (CurrentState is SessionState.Running or SessionState.Stopping)
+            {
+                _ = StopAsync();
+            }
             MoveToState(SessionState.Idle, "Session.Callback", "ConnectionInfo:Disconnect");
+            return;
+        }
+
+        if (string.Equals(what, "UnsupportedResolution", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(what, "ResolutionError", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(what, "TouchModeNotAvailable", StringComparison.OrdinalIgnoreCase))
+        {
+            _lastSuccessfulConnectionInfo = null;
+            ClearActiveConnectionTarget();
+            if (CurrentState is SessionState.Running or SessionState.Stopping)
+            {
+                _ = StopAsync();
+            }
+            MoveToState(SessionState.Idle, "Session.Callback", $"ConnectionInfo:{what}");
             return;
         }
 
@@ -1112,6 +1750,37 @@ public sealed class UnifiedSessionService
 
         _logService.Warn(
             $"{scope} ignored invalid state transition: {previous} -> {state}; reason={reason}");
+    }
+
+    // Run-lifecycle callbacks enqueued before the latest run boundary (start, stop, or
+    // tainted-queue reset) are stale: terminal events of a stopped batch precede its
+    // AsstStop return, and tainted-queue recovery destroys the old instance before the
+    // bridge bumps its callback generation, so a Destroyed emitted by that AsstDestroy
+    // passes the generation filter of the bridge. A stale TaskChainStart processed after
+    // a stop or reset would likewise resurrect a phantom Running state. None of them may
+    // move the session out of a run that started after they were enqueued, nor back into
+    // a run that already ended. Bridges that do not tag sequences (Sequence 0) keep
+    // previous behavior.
+    private bool IsStaleRunBoundaryCallback(CoreCallbackEvent callback, string category)
+    {
+        var runBoundaryWatermark = Interlocked.Read(ref _runBoundaryCallbackWatermark);
+        if (callback.Sequence <= 0 || callback.Sequence > runBoundaryWatermark)
+        {
+            return false;
+        }
+
+        _logService.Warn(
+            $"Session.Callback ignored stale {category} callback {callback.MsgName}({callback.MsgId}) enqueued before the latest run boundary; seq={callback.Sequence}, watermark={runBoundaryWatermark}.");
+        return true;
+    }
+
+    private void CaptureRunBoundaryCallbackWatermark()
+    {
+        // All callbacks of a previously stopped batch are enqueued before its AsstStop
+        // returned, hence before this boundary; snapshotting the enqueue counter here lets
+        // the callback pump recognize those stale events even when pump latency delays
+        // their processing past the boundary's state transition.
+        Interlocked.Exchange(ref _runBoundaryCallbackWatermark, _bridge.EnqueuedCallbackSequence);
     }
 
     private async Task<SessionState> ResolveFailureStateAsync(
@@ -1279,21 +1948,9 @@ public sealed class UnifiedSessionService
         while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var currentState = CurrentState;
-            if (!IsReloadHardBlockedState(currentState))
+            if (await IsReloadSafeSnapshotAsync(cancellationToken).ConfigureAwait(false))
             {
-                var runtimeResult = await _bridge.GetRuntimeStatusAsync(cancellationToken);
-                if (runtimeResult.Success && runtimeResult.Value is { Running: false })
-                {
-                    return CoreResult<bool>.Ok(true);
-                }
-
-                if (!runtimeResult.Success && !IsReloadSoftBlockedState(currentState))
-                {
-                    // Runtime probe can fail transiently during reconnect/dispose windows.
-                    // When state machine is already idle/connected, proceed with best effort.
-                    return CoreResult<bool>.Ok(true);
-                }
+                return CoreResult<bool>.Ok(true);
             }
 
             var now = DateTimeOffset.UtcNow;
@@ -1313,6 +1970,30 @@ public sealed class UnifiedSessionService
             await Task.Delay(wait, cancellationToken);
         }
     }
+
+    private async Task<bool> IsReloadSafeSnapshotAsync(CancellationToken cancellationToken)
+    {
+        var currentState = CurrentState;
+        if (IsReloadHardBlockedState(currentState))
+        {
+            return false;
+        }
+
+        var runtimeResult = await _bridge.GetRuntimeStatusAsync(cancellationToken).ConfigureAwait(false);
+        if (runtimeResult.Success)
+        {
+            return runtimeResult.Value is { Running: false };
+        }
+
+        // Runtime probes can fail transiently during reconnect/dispose windows.
+        // Preserve the existing best-effort behavior only for idle/connected states.
+        return !IsReloadSoftBlockedState(currentState);
+    }
+
+    private CoreResult<bool> ReloadTimeoutFailure()
+        => CoreResult<bool>.Fail(new CoreError(
+            CoreErrorCode.ConnectTimeout,
+            $"Timed out waiting for session to become idle before resource reload. state={CurrentState}"));
 
     private static bool IsReloadHardBlockedState(SessionState state)
     {
@@ -1339,10 +2020,158 @@ public sealed class UnifiedSessionService
                || text.Contains("AsstStop did not return", StringComparison.OrdinalIgnoreCase);
     }
 
+    private async Task<CoreResult<int>> AppendCoreTasksCoreAsync(
+        IEnumerable<CoreTaskRequest> coreTasks,
+        CancellationToken cancellationToken)
+    {
+        if (_taskQueueTainted)
+        {
+            return CoreResult<int>.Fail(CreateReconnectRequiredError());
+        }
+
+        ClearTaskIdMappings();
+        var index = 0;
+        foreach (var task in coreTasks)
+        {
+            await ThrowIfAppendCanceledAsync(index, cancellationToken, "core append canceled").ConfigureAwait(false);
+            CoreResult<int> appendResult;
+            try
+            {
+                appendResult = await _bridge.AppendTaskAsync(task, CancellationToken.None).ConfigureAwait(false);
+            }
+            catch
+            {
+                await ResetTaintedTaskQueueAsync("core append threw").ConfigureAwait(false);
+                throw;
+            }
+            if (!appendResult.Success)
+            {
+                return await FailAppendBatchAsync(appendResult.Error!, "core append failed").ConfigureAwait(false);
+            }
+
+            // Batch ordinals double as queue indices for callback task-id
+            // resolution only; not marked as a profile batch (see
+            // AppendAndStartCoreTaskAsync).
+            SetTaskIdMapping(appendResult.Value, index);
+            index += 1;
+            await ThrowIfAppendCanceledAsync(index, cancellationToken, "core append canceled").ConfigureAwait(false);
+        }
+
+        return CoreResult<int>.Ok(index);
+    }
+
+    private async Task<CoreResult<bool>> ApplyStartInstanceOptionsCoreAsync(
+        CoreInstanceOptions instanceOptions,
+        CancellationToken cancellationToken)
+    {
+        if (instanceOptions.IsEmpty)
+        {
+            return CoreResult<bool>.Ok(true);
+        }
+
+        var apply = await ApplyInstanceOptionsAsync(instanceOptions, cancellationToken).ConfigureAwait(false);
+        return apply.Success || apply.Error?.Code is CoreErrorCode.NotSupported
+            ? CoreResult<bool>.Ok(true)
+            : apply;
+    }
+
+    private async Task<CoreResult<int>> StartAppendedTasksCoreAsync(
+        int appended,
+        string operation,
+        CancellationToken cancellationToken)
+    {
+        if (appended <= 0)
+        {
+            return CoreResult<int>.Fail(new CoreError(
+                CoreErrorCode.InvalidRequest,
+                "No runnable tasks were appended."));
+        }
+
+        CoreResult<bool> startResult;
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            CaptureRunBoundaryCallbackWatermark();
+            startResult = await _bridge.StartAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            await ResetTaintedTaskQueueAsync($"{operation} start threw after append").ConfigureAwait(false);
+            throw;
+        }
+
+        if (!startResult.Success)
+        {
+            await ResetTaintedTaskQueueAsync($"{operation} start failed after append").ConfigureAwait(false);
+            return CoreResult<int>.Fail(startResult.Error!);
+        }
+
+        MoveToState(SessionState.Running, "Session.AppendAndStart", $"{operation}-started");
+        return CoreResult<int>.Ok(appended);
+    }
+
+    private static CoreError CreateReconnectRequiredError()
+        => new(
+            CoreErrorCode.StartFailed,
+            "Task queue was reset after an interrupted append; reconnect before starting.");
+
+    private static CoreResult<int> CreateAppendStartWhileRunningError(SessionState state)
+        => CoreResult<int>.Fail(new CoreError(
+            CoreErrorCode.StartFailed,
+            $"Session state `{state}` cannot append and start new tasks; stop the current run first."));
+
+    private async Task ThrowIfAppendCanceledAsync(int appended, CancellationToken cancellationToken, string reason)
+    {
+        if (!cancellationToken.IsCancellationRequested)
+        {
+            return;
+        }
+
+        if (appended > 0)
+        {
+            await ResetTaintedTaskQueueAsync(reason).ConfigureAwait(false);
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+    }
+
+    private async Task<CoreResult<int>> FailAppendBatchAsync(CoreError error, string reason)
+    {
+        await ResetTaintedTaskQueueAsync(reason).ConfigureAwait(false);
+        return CoreResult<int>.Fail(error);
+    }
+
+    private async Task ResetTaintedTaskQueueAsync(string reason)
+    {
+        _taskQueueTainted = true;
+        ClearTaskIdMappings();
+        _lastSuccessfulConnectionInfo = null;
+        ClearActiveConnectionTarget();
+        MarkIdleConnectionCallbacksStale();
+        CaptureRunBoundaryCallbackWatermark();
+        MoveToState(SessionState.Idle, "Session.Append", reason);
+
+        var reset = await RecoverTaintedTaskQueueCoreAsync(CancellationToken.None).ConfigureAwait(false);
+        if (reset.Success)
+        {
+            _logService.Warn("Session append batch was reset; reconnect before starting tasks.");
+        }
+        else
+        {
+            _logService.Warn(
+                $"Session append batch remains tainted after cleanup failure: {reset.Error?.Code} {reset.Error?.Message}");
+        }
+    }
+
     private Task<CoreResult<bool>> RecoverAbandonedStopAsync(CancellationToken cancellationToken)
         => _bridge is IMaaCoreBridgeRecovery recovery
             ? recovery.RecoverAbandonedStopAsync(cancellationToken)
             : _bridge.RecoverFromAbandonedStopAsync(cancellationToken);
+
+    private Task<CoreResult<bool>> RecoverTaintedTaskQueueCoreAsync(CancellationToken cancellationToken)
+        => _bridge is IMaaCoreBridgeQueueRecovery recovery
+            ? recovery.RecoverTaintedTaskQueueAsync(cancellationToken)
+            : _bridge.RecoverFromTaintedTaskQueueAsync(cancellationToken);
 
     private void ClearActiveConnectionTarget(CoreConnectionInfo? expected = null)
     {

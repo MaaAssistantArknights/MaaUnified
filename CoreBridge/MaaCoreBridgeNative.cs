@@ -7,7 +7,7 @@ using MAAUnified.Compat.Runtime;
 
 namespace MAAUnified.CoreBridge;
 
-public sealed class MaaCoreBridgeNative : IMaaCoreBridge, IMaaCoreBridgeRecovery
+public sealed class MaaCoreBridgeNative : IMaaCoreBridge, IMaaCoreBridgeRecovery, IMaaCoreBridgeQueueRecovery
 {
     private const int MsgInitFailed = 1;
     private const int MsgConnectionInfo = 2;
@@ -74,10 +74,16 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge, IMaaCoreBridgeRecovery
     private CoreGpuInitializeInfo? _gpuInitializeInfo;
     private bool _disposed;
     private bool _nativeStopAbandoned;
+    private bool _taskQueueTainted;
+    private bool _requiresReconnectAfterQueueReset;
+    private long _instanceGeneration;
+    private long _callbackSequence;
     private AsstExports? _exports;
     private AsstApiCallbackDelegate? _callbackDelegate;
     private ConnectPendingState? _pendingConnect;
     private readonly List<nint> _abandonedInstances = [];
+    private Task<CoreResult<bool>>? _abandonedStopTask;
+    private nint _abandonedStopHandle;
 
     public bool SupportsBackToHome => true;
 
@@ -250,7 +256,8 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge, IMaaCoreBridgeRecovery
                         }
                     }
 
-                    var instance = exports.AsstCreateEx(_callbackDelegate, nint.Zero);
+                    var callbackGeneration = ++_instanceGeneration;
+                    var instance = exports.AsstCreateEx(_callbackDelegate, new nint(callbackGeneration));
                     if (instance == nint.Zero)
                     {
                         NativeLibrary.Free(loadedLibrary);
@@ -367,7 +374,13 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge, IMaaCoreBridgeRecovery
                     WaitForCancellationAsync(cancellationToken)).ConfigureAwait(false);
                 if (completed == pending.Completion.Task)
                 {
-                    return await pending.Completion.Task.ConfigureAwait(false);
+                    var connectResult = await pending.Completion.Task.ConfigureAwait(false);
+                    if (connectResult.Success)
+                    {
+                        _requiresReconnectAfterQueueReset = false;
+                    }
+
+                    return connectResult;
                 }
 
                 if (cancellationToken.IsCancellationRequested)
@@ -538,6 +551,7 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge, IMaaCoreBridgeRecovery
             var callbackDelegate = _callbackDelegate;
 
             await _nativeCallLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+            var releaseNativeLock = true;
             try
             {
                 var createResult = await Task.Run(
@@ -571,7 +585,8 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge, IMaaCoreBridgeRecovery
                             }
                         }
 
-                        var instance = exports.AsstCreateEx(callbackDelegate, nint.Zero);
+                        var callbackGeneration = ++_instanceGeneration;
+                        var instance = exports.AsstCreateEx(callbackDelegate, new nint(callbackGeneration));
                         return instance == nint.Zero
                             ? Fail<nint>(
                                 CoreErrorCode.CoreInstanceCreateFailed,
@@ -588,7 +603,102 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge, IMaaCoreBridgeRecovery
                 var abandonedInstance = _instance;
                 if (abandonedInstance != nint.Zero)
                 {
-                    _abandonedInstances.Add(abandonedInstance);
+                    var stopTask = _abandonedStopTask;
+                    var stopHandle = _abandonedStopHandle;
+                    _abandonedStopTask = null;
+                    _abandonedStopHandle = nint.Zero;
+
+                    if (stopHandle != abandonedInstance)
+                    {
+                        // The tracked stop belongs to an older instance; the
+                        // instance being replaced never had a tracked stop.
+                        stopTask = null;
+                    }
+
+                    // The native-call lock is retained until a timed out call completes.
+                    // At this point it is safe to inspect the saved stop result, but never
+                    // destroy the old instance unless the stop actually completed and it is idle.
+                    CoreResult<bool> stopResult;
+                    if (stopTask is not null)
+                    {
+                        stopResult = await stopTask.ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        // The abandonment left no tracked stop call for this instance
+                        // (e.g. a connect abort whose AsstStop never ran because the
+                        // native-call lock stayed busy past the abort stop budget). The
+                        // lock is held now, so every bridge native call on this instance
+                        // has completed and a late stop is safe to issue; when it
+                        // completes and the core is idle, the instance is provably safe
+                        // to destroy instead of being retained for the process lifetime.
+                        var lateStopTask = Task.Run(
+                            () => AsBool(exports.AsstStop(abandonedInstance))
+                                ? CoreResult<bool>.Ok(true)
+                                : Fail<bool>(CoreErrorCode.StopFailed, "AsstStop returned false during abandoned stop recovery."),
+                            CancellationToken.None);
+                        var completedLateStop = await Task.WhenAny(
+                            lateStopTask,
+                            Task.Delay(DefaultStopCallTimeout)).ConfigureAwait(false);
+                        if (completedLateStop != lateStopTask)
+                        {
+                            // The late stop is still in flight: retain the instance and
+                            // keep the native-call lock until the stop completes, matching
+                            // the abandoned-call ownership rules.
+                            TrackAbandonedStop(lateStopTask, abandonedInstance);
+                            _ = lateStopTask.ContinueWith(
+                                _ => _nativeCallLock.Release(),
+                                CancellationToken.None,
+                                TaskContinuationOptions.ExecuteSynchronously,
+                                TaskScheduler.Default);
+                            releaseNativeLock = false;
+                            stopResult = CoreResult<bool>.Fail(new CoreError(
+                                CoreErrorCode.StopFailed,
+                                $"AsstStop did not return within {DefaultStopCallTimeout.TotalSeconds:N1}s during abandoned stop recovery; native operation was abandoned."));
+                        }
+                        else
+                        {
+                            stopHandle = abandonedInstance;
+                            try
+                            {
+                                stopResult = await lateStopTask.ConfigureAwait(false);
+                            }
+                            catch (Exception ex)
+                            {
+                                stopResult = Fail<bool>(CoreErrorCode.StopFailed, "AsstStop threw during abandoned stop recovery.", ex: ex);
+                            }
+                        }
+                    }
+
+                    var isRunning = true;
+                    if (stopHandle == abandonedInstance && stopResult.Success)
+                    {
+                        try
+                        {
+                            isRunning = AsBool(exports.AsstRunning(abandonedInstance));
+                        }
+                        catch
+                        {
+                            isRunning = true;
+                        }
+                    }
+
+                    if (CanDestroyRecoveredAbandonedStop(stopHandle, abandonedInstance, stopResult, isRunning))
+                    {
+                        try
+                        {
+                            exports.AsstDestroy(abandonedInstance);
+                        }
+                        catch
+                        {
+                            // A failed destroy leaves ownership with MaaCore for process lifetime.
+                            _abandonedInstances.Add(abandonedInstance);
+                        }
+                    }
+                    else
+                    {
+                        _abandonedInstances.Add(abandonedInstance);
+                    }
                 }
 
                 _instance = createResult.Value;
@@ -597,7 +707,10 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge, IMaaCoreBridgeRecovery
             }
             finally
             {
-                _nativeCallLock.Release();
+                if (releaseNativeLock)
+                {
+                    _nativeCallLock.Release();
+                }
             }
         }
         finally
@@ -610,6 +723,270 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge, IMaaCoreBridgeRecovery
             _lifecycleLock.Release();
         }
     }
+
+    public async Task<CoreResult<bool>> RecoverTaintedTaskQueueAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        await _lifecycleLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        var connectLockTaken = false;
+        var nativeLockTaken = false;
+        try
+        {
+            if (_disposed)
+            {
+                return Fail<bool>(CoreErrorCode.Disposed, "Bridge is already disposed.");
+            }
+
+            if (_exports is null || _callbackDelegate is null || _baseDirectory is null || _instance == nint.Zero)
+            {
+                _taskQueueTainted = true;
+                return Fail<bool>(CoreErrorCode.NotInitialized, "Bridge cannot reset a tainted task queue before initialization.");
+            }
+
+            await _connectLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+            connectLockTaken = true;
+            await _nativeCallLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+            nativeLockTaken = true;
+
+            var exports = _exports;
+            var oldInstance = _instance;
+            if (AsBool(exports.AsstRunning(oldInstance)))
+            {
+                _taskQueueTainted = true;
+                return Fail<bool>(CoreErrorCode.StopFailed, "Cannot reset a tainted task queue while MaaCore is running.");
+            }
+
+            var stopTask = Task.Run(
+                () => AsBool(exports.AsstStop(oldInstance))
+                    ? CoreResult<bool>.Ok(true)
+                    : Fail<bool>(CoreErrorCode.StopFailed, "AsstStop returned false while resetting a tainted task queue."),
+                CancellationToken.None);
+            var completed = await Task.WhenAny(stopTask, Task.Delay(DefaultStopCallTimeout)).ConfigureAwait(false);
+            if (completed != stopTask)
+            {
+                MarkNativeStopAbandoned();
+                TrackAbandonedStop(stopTask, oldInstance);
+                _ = stopTask.ContinueWith(
+                    _ => _nativeCallLock.Release(),
+                    CancellationToken.None,
+                    TaskContinuationOptions.ExecuteSynchronously,
+                    TaskScheduler.Default);
+                nativeLockTaken = false;
+                _taskQueueTainted = true;
+                return Fail<bool>(CoreErrorCode.StopFailed, "AsstStop timed out while resetting a tainted task queue.");
+            }
+
+            CoreResult<bool> stopResult;
+            try
+            {
+                stopResult = await stopTask.ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _taskQueueTainted = true;
+                return Fail<bool>(CoreErrorCode.StopFailed, "AsstStop threw while resetting a tainted task queue.", ex: ex);
+            }
+            if (!stopResult.Success)
+            {
+                _taskQueueTainted = true;
+                return CoreResult<bool>.Fail(stopResult.Error!);
+            }
+
+            if (AsBool(exports.AsstRunning(oldInstance)))
+            {
+                _taskQueueTainted = true;
+                return Fail<bool>(CoreErrorCode.StopFailed, "MaaCore remained running after stop while resetting a tainted task queue.");
+            }
+
+            try
+            {
+                exports.AsstDestroy(oldInstance);
+            }
+            catch (Exception ex)
+            {
+                _taskQueueTainted = true;
+                return Fail<bool>(CoreErrorCode.NativeCallFailed, "AsstDestroy threw while resetting a tainted task queue.", ex: ex);
+            }
+
+            var createResult = await CreateRecoveryInstanceAsync(exports, _callbackDelegate, _baseDirectory, _loadedClientType)
+                .ConfigureAwait(false);
+            if (!createResult.Success)
+            {
+                _instance = nint.Zero;
+                _taskQueueTainted = true;
+                return CoreResult<bool>.Fail(createResult.Error!);
+            }
+
+            _instance = createResult.Value;
+            _taskQueueTainted = false;
+
+            // The native-call lock was reacquired before the old instance was
+            // destroyed, so every previously abandoned native call had already
+            // completed and any abandoned-stop tracking refers to the destroyed
+            // old instance. Consume it here. Leaving it set would fail the next
+            // connect with a stale "native stop timed out" error, and the
+            // follow-up abandoned-stop recovery would retain the healthy
+            // instance created above for the process lifetime. The dropped stop
+            // task is already completed; observe it so a faulted stop cannot
+            // surface as an unobserved task exception.
+            _ = _abandonedStopTask?.Exception;
+            _abandonedStopTask = null;
+            _abandonedStopHandle = nint.Zero;
+            _nativeStopAbandoned = false;
+            _requiresReconnectAfterQueueReset = true;
+            return CoreResult<bool>.Ok(true);
+        }
+        finally
+        {
+            if (nativeLockTaken)
+            {
+                _nativeCallLock.Release();
+            }
+
+            if (connectLockTaken)
+            {
+                _connectLock.Release();
+            }
+
+            _lifecycleLock.Release();
+        }
+    }
+
+    private async Task<CoreResult<nint>> CreateRecoveryInstanceAsync(
+        AsstExports exports,
+        AsstApiCallbackDelegate callbackDelegate,
+        string baseDirectory,
+        string? clientType)
+    {
+        return await Task.Run(
+            () =>
+            {
+                if (!AsBool(exports.AsstLoadResource(baseDirectory)))
+                {
+                    return Fail<nint>(
+                        CoreErrorCode.ResourceLoadFailed,
+                        "AsstLoadResource(baseDir) returned false during instance recovery.");
+                }
+
+                var cachedCommonLoad = LoadCachedCommonResource(baseDirectory, exports);
+                if (!cachedCommonLoad.Success)
+                {
+                    return CoreResult<nint>.Fail(cachedCommonLoad.Error!);
+                }
+
+                if (!string.IsNullOrWhiteSpace(clientType))
+                {
+                    var clientLoad = LoadClientResource(clientType, baseDirectory, exports);
+                    if (!clientLoad.Success)
+                    {
+                        return CoreResult<nint>.Fail(clientLoad.Error!);
+                    }
+
+                    var cachedClientLoad = LoadCachedClientResource(clientType, baseDirectory, exports);
+                    if (!cachedClientLoad.Success)
+                    {
+                        return CoreResult<nint>.Fail(cachedClientLoad.Error!);
+                    }
+                }
+
+                var callbackGeneration = ++_instanceGeneration;
+                var instance = exports.AsstCreateEx(callbackDelegate, new nint(callbackGeneration));
+                return instance == nint.Zero
+                    ? Fail<nint>(CoreErrorCode.CoreInstanceCreateFailed, "AsstCreateEx returned null during instance recovery.")
+                    : CoreResult<nint>.Ok(instance);
+            },
+            CancellationToken.None).ConfigureAwait(false);
+    }
+
+    internal static bool CanDestroyRecoveredAbandonedStopForTest(
+        nint stopHandle,
+        nint abandonedInstance,
+        CoreResult<bool> stopResult,
+        bool isRunning)
+        => CanDestroyRecoveredAbandonedStop(stopHandle, abandonedInstance, stopResult, isRunning);
+
+    private static bool CanDestroyRecoveredAbandonedStop(
+        nint stopHandle,
+        nint abandonedInstance,
+        CoreResult<bool> stopResult,
+        bool isRunning)
+        => stopHandle != nint.Zero
+           && stopHandle == abandonedInstance
+           && stopResult.Success
+           && !isRunning;
+
+    internal static bool CanDestroyAfterDisposeStopForTest(bool stopSucceeded, bool? isRunning)
+        => CanDestroyAfterDisposeStop(stopSucceeded, isRunning);
+
+    private static bool CanDestroyAfterDisposeStop(bool stopSucceeded, bool? isRunning)
+        => stopSucceeded && isRunning is false;
+
+    // Test seam: installs a minimal fake native state so instance recovery
+    // paths can be exercised without loading a real MaaCore library. Only the
+    // exports used by recovery are wired to the provided fakes; any other
+    // export throws when invoked.
+    internal void InstallFakeNativeStateForTest(
+        nint instance,
+        string baseDirectory,
+        Func<nint, bool> asstRunning,
+        Func<nint, bool> asstStop,
+        Action<nint> asstDestroy,
+        Func<string, bool> asstLoadResource,
+        Func<nint> asstCreateEx)
+    {
+        _callbackDelegate ??= OnNativeCallback;
+        _baseDirectory = baseDirectory;
+        _loadedClientType = null;
+        _instance = instance;
+        _exports = new AsstExports(
+            AsstSetStaticOption: null,
+            AsstSetInstanceOption: null,
+            AsstSetConnectionExtras: null,
+            AsstSetUserDir: _ => throw UnexpectedTestExportCall("AsstSetUserDir"),
+            AsstLoadResource: path => asstLoadResource(path) ? (byte)1 : (byte)0,
+            AsstCreateEx: (_, _) => asstCreateEx(),
+            AsstDestroy: handle => asstDestroy(handle),
+            AsstConnect: (_, _, _, _) => throw UnexpectedTestExportCall("AsstConnect"),
+            AsstAsyncConnect: (_, _, _, _, _) => throw UnexpectedTestExportCall("AsstAsyncConnect"),
+            AsstAppendTask: (_, _, _) => throw UnexpectedTestExportCall("AsstAppendTask"),
+            AsstSetTaskParams: null,
+            AsstStart: _ => throw UnexpectedTestExportCall("AsstStart"),
+            AsstBackToHome: _ => throw UnexpectedTestExportCall("AsstBackToHome"),
+            AsstStop: handle => asstStop(handle) ? (byte)1 : (byte)0,
+            AsstRunning: handle => asstRunning(handle) ? (byte)1 : (byte)0,
+            AsstConnected: _ => throw UnexpectedTestExportCall("AsstConnected"),
+            AsstAttachWindow: null,
+            AsstAsyncScreencap: null,
+            AsstGetImage: (_, _, _) => throw UnexpectedTestExportCall("AsstGetImage"),
+            AsstGetImageBgr: null,
+            AsstGetNullSize: () => throw UnexpectedTestExportCall("AsstGetNullSize"),
+            AsstGetVersion: () => throw UnexpectedTestExportCall("AsstGetVersion"));
+    }
+
+    // Test seam: puts the bridge into the state left behind by a timed out or
+    // canceled native call. The abandoned stop task must already be completed,
+    // matching production: the native-call lock can only be reacquired (and
+    // recovery can only run) after the abandoned call completed.
+    internal void MarkNativeStopAbandonedForTest(
+        Task<CoreResult<bool>>? abandonedStopTask,
+        nint abandonedStopHandle)
+    {
+        MarkNativeStopAbandoned();
+        if (abandonedStopTask is not null)
+        {
+            TrackAbandonedStop(abandonedStopTask, abandonedStopHandle);
+        }
+    }
+
+    internal bool NativeStopAbandonedForTest => _nativeStopAbandoned;
+
+    internal bool HasAbandonedStopTrackingForTest
+        => _abandonedStopTask is not null || _abandonedStopHandle != nint.Zero;
+
+    internal int AbandonedInstanceCountForTest => _abandonedInstances.Count;
+
+    private static InvalidOperationException UnexpectedTestExportCall(string exportName)
+        => new($"Unexpected native export call in installed test fake: {exportName}.");
 
     public async Task<CoreResult<bool>> SetConnectionExtrasAsync(
         string name,
@@ -890,6 +1267,13 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge, IMaaCoreBridgeRecovery
                     return CoreResult<int>.Fail(status.Error!);
                 }
 
+                if (_taskQueueTainted || _requiresReconnectAfterQueueReset)
+                {
+                    return Fail<int>(
+                        CoreErrorCode.AppendTaskFailed,
+                        "Task queue is tainted after an interrupted append; reconnect before appending more tasks.");
+                }
+
                 var taskId = _exports!.AsstAppendTask(_instance, task.Type, task.ParamsJson);
                 if (taskId <= 0)
                 {
@@ -897,6 +1281,48 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge, IMaaCoreBridgeRecovery
                 }
 
                 return CoreResult<int>.Ok(taskId);
+            },
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<CoreResult<bool>> SetTaskParamsAsync(
+        int taskId,
+        string paramsJson,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (taskId <= 0 || string.IsNullOrWhiteSpace(paramsJson))
+        {
+            return Fail<bool>(CoreErrorCode.InvalidRequest, "Task id and parameter json are required.");
+        }
+
+        try
+        {
+            using var _ = JsonDocument.Parse(paramsJson);
+        }
+        catch (Exception ex)
+        {
+            return Fail<bool>(CoreErrorCode.InvalidRequest, "Task params json is invalid.", ex: ex);
+        }
+
+        return await RunNativeCallAsync(
+            () =>
+            {
+                var status = EnsureReady();
+                if (!status.Success)
+                {
+                    return CoreResult<bool>.Fail(status.Error!);
+                }
+
+                var setTaskParams = _exports!.AsstSetTaskParams;
+                if (setTaskParams is null)
+                {
+                    return Fail<bool>(CoreErrorCode.NotSupported, "AsstSetTaskParams export is unavailable.");
+                }
+
+                return AsBool(setTaskParams(_instance, taskId, paramsJson))
+                    ? CoreResult<bool>.Ok(true)
+                    : Fail<bool>(CoreErrorCode.AppendTaskFailed, $"AsstSetTaskParams returned false for task #{taskId}.");
             },
             cancellationToken).ConfigureAwait(false);
     }
@@ -920,6 +1346,13 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge, IMaaCoreBridgeRecovery
                     return CoreResult<bool>.Fail(status.Error!);
                 }
 
+                if (_taskQueueTainted || _requiresReconnectAfterQueueReset)
+                {
+                    return Fail<bool>(
+                        CoreErrorCode.StartFailed,
+                        "Task queue is tainted after an interrupted append; reconnect before starting MaaCore.");
+                }
+
                 var ok = AsBool(_exports!.AsstStart(_instance));
                 if (!ok)
                 {
@@ -935,6 +1368,8 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge, IMaaCoreBridgeRecovery
     {
         cancellationToken.ThrowIfCancellationRequested();
 
+        var stopHandle = nint.Zero;
+
         var stopCall = await RunNativeCallWithTimeoutAsync(
             () =>
             {
@@ -944,14 +1379,16 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge, IMaaCoreBridgeRecovery
                     return CoreResult<bool>.Fail(status.Error!);
                 }
 
-                return AsBool(_exports!.AsstStop(_instance))
+                stopHandle = _instance;
+                return AsBool(_exports!.AsstStop(stopHandle))
                     ? CoreResult<bool>.Ok(true)
                     : Fail<bool>(CoreErrorCode.StopFailed, "AsstStop returned false.");
             },
             DefaultStopCallTimeout,
             "AsstStop",
             CoreErrorCode.StopFailed,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken,
+            nativeTask => TrackAbandonedStop(nativeTask, stopHandle)).ConfigureAwait(false);
         if (!stopCall.Success)
         {
             if (IsAsstStopTimeout(stopCall.Error))
@@ -1101,12 +1538,77 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge, IMaaCoreBridgeRecovery
         }
     }
 
-    public Task<CoreResult<bool>> AttachWindowAsync(
+    public async Task<CoreResult<bool>> AttachWindowAsync(
         CoreAttachWindowRequest request,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        return Task.FromResult(Fail<bool>(CoreErrorCode.NotSupported, "AttachWindow is not implemented in MAAUnified bridge yet."));
+        if (request.WindowHandle == nint.Zero)
+        {
+            return Fail<bool>(CoreErrorCode.InvalidRequest, "AttachWindow requires a non-zero window handle.");
+        }
+
+        return await RunNativeCallAsync(
+            () =>
+            {
+                var status = EnsureReady();
+                if (!status.Success)
+                {
+                    return CoreResult<bool>.Fail(status.Error!);
+                }
+
+                var attachWindow = _exports!.AsstAttachWindow;
+                if (attachWindow is null)
+                {
+                    return Fail<bool>(CoreErrorCode.NotSupported, "AsstAttachWindow export is unavailable.");
+                }
+
+                return AsBool(attachWindow(_instance, request.WindowHandle, request.ScreencapMethod, request.MouseMethod, request.KeyboardMethod))
+                    ? CoreResult<bool>.Ok(true)
+                    : Fail<bool>(CoreErrorCode.ConnectFailed, "AsstAttachWindow returned false.");
+            },
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<CoreResult<byte[]>> CaptureImageAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var connectReady = await WaitForPendingConnectReadyAsync(cancellationToken).ConfigureAwait(false);
+        if (!connectReady.Success)
+        {
+            return CoreResult<byte[]>.Fail(connectReady.Error!);
+        }
+
+        return await RunNativeCallWithTimeoutAsync(
+            () =>
+            {
+                var status = EnsureReady();
+                if (!status.Success)
+                {
+                    return CoreResult<byte[]>.Fail(status.Error!);
+                }
+
+                var exports = _exports!;
+                if (exports.AsstAsyncScreencap is null)
+                {
+                    return Fail<byte[]>(CoreErrorCode.NotSupported, "AsstAsyncScreencap is unavailable in current MaaCore.");
+                }
+
+                if (exports.AsstAsyncScreencap(_instance, 1) <= 0)
+                {
+                    return Fail<byte[]>(CoreErrorCode.GetImageFailed, "AsstAsyncScreencap returned an invalid call id.");
+                }
+
+                return ReadImageBytesWithDynamicBuffer(
+                    exports.AsstGetNullSize(),
+                    DefaultBgrFrameBufferSize,
+                    (buffer, bufferSize) => exports.AsstGetImage(_instance, buffer, bufferSize),
+                    "AsstAsyncScreencap/AsstGetImage");
+            },
+            DefaultScreencapTimeout,
+            "AsstAsyncScreencap/AsstGetImage",
+            CoreErrorCode.GetImageFailed,
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<CoreResult<byte[]>> GetImageAsync(CancellationToken cancellationToken = default)
@@ -1243,9 +1745,20 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge, IMaaCoreBridgeRecovery
                     return Fail<byte[]>(CoreErrorCode.NotSupported, "AsstGetImageBgr is unavailable in current MaaCore.");
                 }
 
-                if (forceScreencap && exports.AsstAsyncScreencap is not null)
+                if (forceScreencap)
                 {
-                    _ = exports.AsstAsyncScreencap(_instance, 1);
+                    if (exports.AsstAsyncScreencap is null)
+                    {
+                        return Fail<byte[]>(CoreErrorCode.NotSupported, "AsstAsyncScreencap is unavailable in current MaaCore.");
+                    }
+
+                    return ReadForcedImageBgr(
+                        () => exports.AsstAsyncScreencap(_instance, 1),
+                        () => ReadImageBytesWithDynamicBuffer(
+                            exports.AsstGetNullSize(),
+                            DefaultBgrFrameBufferSize,
+                            (buffer, bufferSize) => exports.AsstGetImageBgr(_instance, buffer, bufferSize),
+                            "AsstGetImageBgr"));
                 }
 
                 var nullSize = exports.AsstGetNullSize();
@@ -1261,6 +1774,25 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge, IMaaCoreBridgeRecovery
             cancellationToken).ConfigureAwait(false);
     }
 
+    internal static CoreResult<byte[]> ReadForcedImageBgrForTest(
+        Func<int> startScreencap,
+        Func<CoreResult<byte[]>> readImage)
+        => ReadForcedImageBgr(startScreencap, readImage);
+
+    private static CoreResult<byte[]> ReadForcedImageBgr(
+        Func<int> startScreencap,
+        Func<CoreResult<byte[]>> readImage)
+    {
+        if (startScreencap() <= 0)
+        {
+            return Fail<byte[]>(CoreErrorCode.GetImageFailed, "AsstAsyncScreencap returned an invalid call id.");
+        }
+
+        return readImage();
+    }
+
+    public long EnqueuedCallbackSequence => Interlocked.Read(ref _callbackSequence);
+
     public async IAsyncEnumerable<CoreCallbackEvent> CallbackStreamAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         await foreach (var callback in _callbackChannel.Reader.ReadAllAsync(cancellationToken))
@@ -1271,7 +1803,27 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge, IMaaCoreBridgeRecovery
 
     public async ValueTask DisposeAsync()
     {
-        await _lifecycleLock.WaitAsync();
+        if (!await _lifecycleLock.WaitAsync(DisposeWaitTimeout).ConfigureAwait(false))
+        {
+            // A lifecycle operation can stay queued forever behind the native-call lock
+            // retained for a never-returning native call; process exit must not block on
+            // it. Give up native cleanup the same way the connect/native lock timeouts
+            // below do: leak the instance rather than risk use-after-free.
+            Volatile.Write(ref _disposed, true);
+            ConnectPendingState? abandonedPending;
+            lock (_sync)
+            {
+                abandonedPending = _pendingConnect;
+                _pendingConnect = null;
+            }
+
+            abandonedPending?.TryComplete(
+                CoreResult<bool>.Fail(new CoreError(CoreErrorCode.Disposed, "Bridge disposed while waiting for connect.")));
+            MarkNativeStopAbandoned();
+            _callbackChannel.Writer.TryComplete();
+            return;
+        }
+
         var connectLockTaken = false;
         var nativeLockTaken = false;
         try
@@ -1304,6 +1856,7 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge, IMaaCoreBridgeRecovery
 
             if (_instance != nint.Zero && _exports is not null && !_nativeStopAbandoned)
             {
+                var safeToDestroy = false;
                 try
                 {
                     var stopCall = await InvokeAsstStopWithTimeoutAsync(_exports, _instance, TimeSpan.FromSeconds(1))
@@ -1315,7 +1868,7 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge, IMaaCoreBridgeRecovery
                         return;
                     }
 
-                    _ = await Task.Run(
+                    var stopped = await Task.Run(
                             async () => await WaitUntilNotRunningCoreAsync(
                                     _exports,
                                     _instance,
@@ -1324,25 +1877,37 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge, IMaaCoreBridgeRecovery
                                 .ConfigureAwait(false),
                             CancellationToken.None)
                         .ConfigureAwait(false);
+                    safeToDestroy = CanDestroyAfterDisposeStop(stopCall.Success, stopped ? false : true);
                 }
                 catch
                 {
-                    // ignored during dispose
+                    safeToDestroy = CanDestroyAfterDisposeStop(stopSucceeded: true, isRunning: null);
                 }
 
-                if (!_nativeStopAbandoned)
+                if (!_nativeStopAbandoned && safeToDestroy)
                 {
+                    var destroyed = false;
                     try
                     {
                         await Task.Run(() => _exports.AsstDestroy(_instance), CancellationToken.None)
                             .ConfigureAwait(false);
+                        destroyed = true;
                     }
                     catch
                     {
-                        // ignored during dispose
+                        _abandonedInstances.Add(_instance);
                     }
 
-                    _instance = nint.Zero;
+                    if (destroyed)
+                    {
+                        _instance = nint.Zero;
+                    }
+                }
+                else if (!_nativeStopAbandoned)
+                {
+                    // A returned stop call is not sufficient: retain the handle and library
+                    // whenever running cannot be proven false during shutdown.
+                    _abandonedInstances.Add(_instance);
                 }
             }
 
@@ -1387,8 +1952,14 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge, IMaaCoreBridgeRecovery
 
     private void OnNativeCallback(int msg, nint detailsJson, nint customArg)
     {
+        if (customArg != new nint(Volatile.Read(ref _instanceGeneration)))
+        {
+            return;
+        }
+
         var payloadJson = Marshal.PtrToStringUTF8(detailsJson) ?? "{}";
-        var callback = new CoreCallbackEvent(msg, ResolveMessageName(msg), payloadJson, DateTimeOffset.UtcNow);
+        var sequence = Interlocked.Increment(ref _callbackSequence);
+        var callback = new CoreCallbackEvent(msg, ResolveMessageName(msg), payloadJson, DateTimeOffset.UtcNow, sequence);
         _callbackChannel.Writer.TryWrite(callback);
         TryHandlePendingConnect(callback);
     }
@@ -1504,6 +2075,8 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge, IMaaCoreBridgeRecovery
 
             if (string.Equals(what, "ConnectFailed", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(what, "TouchModeNotAvailable", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(what, "UnsupportedResolution", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(what, "ResolutionError", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(what, "Disconnect", StringComparison.OrdinalIgnoreCase))
             {
                 pending.TryComplete(Fail<bool>(
@@ -1608,8 +2181,8 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge, IMaaCoreBridgeRecovery
         return await pending.Completion.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<T> RunNativeCallAsync<T>(
-        Func<T> nativeCall,
+    private async Task<CoreResult<T>> RunNativeCallAsync<T>(
+        Func<CoreResult<T>> nativeCall,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -1618,6 +2191,10 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge, IMaaCoreBridgeRecovery
         {
             cancellationToken.ThrowIfCancellationRequested();
             return await Task.Run(nativeCall, CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            return Fail<T>(CoreErrorCode.NativeCallFailed, "MaaCore native call threw an exception.", ex: ex);
         }
         finally
         {
@@ -1630,7 +2207,8 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge, IMaaCoreBridgeRecovery
         TimeSpan timeout,
         string apiName,
         CoreErrorCode timeoutCode,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Action<Task<CoreResult<T>>>? onAbandonedNativeCall = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         await _nativeCallLock.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -1645,7 +2223,17 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge, IMaaCoreBridgeRecovery
                 completed = await Task.WhenAny(nativeTask, WaitForCancellationAsync(cancellationToken)).ConfigureAwait(false);
                 if (completed != nativeTask)
                 {
-                    cancellationToken.ThrowIfCancellationRequested();
+                    MarkNativeStopAbandoned();
+                    onAbandonedNativeCall?.Invoke(nativeTask);
+                    _ = nativeTask.ContinueWith(
+                        _ => _nativeCallLock.Release(),
+                        CancellationToken.None,
+                        TaskContinuationOptions.ExecuteSynchronously,
+                        TaskScheduler.Default);
+                    releaseLock = false;
+                    return CoreResult<T>.Fail(new CoreError(
+                        timeoutCode,
+                        $"{apiName} was canceled while still executing; native instance was abandoned."));
                 }
             }
             else
@@ -1658,7 +2246,13 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge, IMaaCoreBridgeRecovery
             if (completed != nativeTask)
             {
                 MarkNativeStopAbandoned();
-                releaseLock = true;
+                onAbandonedNativeCall?.Invoke(nativeTask);
+                _ = nativeTask.ContinueWith(
+                    _ => _nativeCallLock.Release(),
+                    CancellationToken.None,
+                    TaskContinuationOptions.ExecuteSynchronously,
+                    TaskScheduler.Default);
+                releaseLock = false;
                 return CoreResult<T>.Fail(new CoreError(
                     timeoutCode,
                     $"{apiName} did not return within {timeout.TotalSeconds:N1}s; native instance was abandoned."));
@@ -1756,6 +2350,17 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge, IMaaCoreBridgeRecovery
         => error?.Code == CoreErrorCode.StopFailed
            && (error.Message.Contains("AsstStop did not return", StringComparison.Ordinal)
                || error.Message.Contains("AsstStop did not return within", StringComparison.Ordinal));
+
+    private void TrackAbandonedStop(Task<CoreResult<bool>> nativeTask, nint handle)
+    {
+        if (handle == nint.Zero)
+        {
+            return;
+        }
+
+        _abandonedStopTask = nativeTask;
+        _abandonedStopHandle = handle;
+    }
 
     private void MarkNativeStopAbandoned()
     {
@@ -1880,9 +2485,10 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge, IMaaCoreBridgeRecovery
             return Fail<bool>(CoreErrorCode.ResourceNotFound, $"Client resource directory was not found: {expectedPath}");
         }
 
-        if (!AsBool(exports.AsstLoadResource(clientResourcePath)))
+        var clientResourceRoot = Directory.GetParent(clientResourcePath)?.FullName;
+        if (string.IsNullOrWhiteSpace(clientResourceRoot) || !AsBool(exports.AsstLoadResource(clientResourceRoot)))
         {
-            return Fail<bool>(CoreErrorCode.ResourceLoadFailed, $"AsstLoadResource failed for client resource: {clientResourcePath}");
+            return Fail<bool>(CoreErrorCode.ResourceLoadFailed, $"AsstLoadResource failed for client resource: {clientResourceRoot ?? clientResourcePath}");
         }
 
         _loadedClientType = resolvedClientType;
@@ -2134,6 +2740,8 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge, IMaaCoreBridgeRecovery
             return false;
         }
 
+        _ = TryLoadExport<AsstSetTaskParamsDelegate>(library, "AsstSetTaskParams", out var asstSetTaskParams);
+
         if (!TryLoadExport<AsstStartDelegate>(library, "AsstStart", out var asstStart))
         {
             missingSymbol = "AsstStart";
@@ -2168,6 +2776,8 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge, IMaaCoreBridgeRecovery
             exports = null!;
             return false;
         }
+
+        _ = TryLoadExport<AsstAttachWindowDelegate>(library, "AsstAttachWindow", out var asstAttachWindow);
 
         if (!TryLoadExport<AsstGetImageDelegate>(library, "AsstGetImage", out var asstGetImage))
         {
@@ -2204,11 +2814,13 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge, IMaaCoreBridgeRecovery
             asstConnect!,
             asstAsyncConnect!,
             asstAppendTask!,
+            asstSetTaskParams,
             asstStart!,
             asstBackToHome!,
             asstStop!,
             asstRunning!,
             asstConnected!,
+            asstAttachWindow,
             asstAsyncScreencap,
             asstGetImage!,
             asstGetImageBgr,
@@ -2468,11 +3080,13 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge, IMaaCoreBridgeRecovery
         AsstConnectDelegate AsstConnect,
         AsstAsyncConnectDelegate AsstAsyncConnect,
         AsstAppendTaskDelegate AsstAppendTask,
+        AsstSetTaskParamsDelegate? AsstSetTaskParams,
         AsstStartDelegate AsstStart,
         AsstBackToHomeDelegate AsstBackToHome,
         AsstStopDelegate AsstStop,
         AsstRunningDelegate AsstRunning,
         AsstConnectedDelegate AsstConnected,
+        AsstAttachWindowDelegate? AsstAttachWindow,
         AsstAsyncScreencapDelegate? AsstAsyncScreencap,
         AsstGetImageDelegate AsstGetImage,
         AsstGetImageBgrDelegate? AsstGetImageBgr,
@@ -2527,6 +3141,12 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge, IMaaCoreBridgeRecovery
         [MarshalAs(UnmanagedType.LPUTF8Str)] string @params);
 
     [UnmanagedFunctionPointer(CallingConvention.Winapi)]
+    private delegate byte AsstSetTaskParamsDelegate(
+        nint handle,
+        int taskId,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string @params);
+
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     private delegate byte AsstStartDelegate(nint handle);
 
     [UnmanagedFunctionPointer(CallingConvention.Winapi)]
@@ -2540,6 +3160,14 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge, IMaaCoreBridgeRecovery
 
     [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     private delegate byte AsstConnectedDelegate(nint handle);
+
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
+    private delegate byte AsstAttachWindowDelegate(
+        nint handle,
+        nint windowHandle,
+        ulong screencapMethod,
+        ulong mouseMethod,
+        ulong keyboardMethod);
 
     [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     private delegate int AsstAsyncScreencapDelegate(nint handle, byte block);

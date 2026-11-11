@@ -20,6 +20,7 @@ public enum CoreErrorCode
     PlatformNotSupported = 16,
     NotSupported = 17,
     NotImplemented = 18,
+    NativeCallFailed = 19,
 }
 
 public sealed record CoreError(
@@ -148,4 +149,8 @@ public sealed record CoreCallbackEvent(
     int MsgId,
     string MsgName,
     string PayloadJson,
-    DateTimeOffset Timestamp);
+    DateTimeOffset Timestamp,
+    // Monotonic enqueue order assigned by the producing bridge; 0 means the
+    // bridge does not tag sequences (stubs/test fakes) and ordering-based
+    // staleness checks are disabled.
+    long Sequence = 0);

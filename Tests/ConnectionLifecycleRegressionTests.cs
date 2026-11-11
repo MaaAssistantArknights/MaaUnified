@@ -7,9 +7,11 @@ using System.Net.Sockets;
 using MAAUnified.App.ViewModels.TaskQueue;
 using MAAUnified.Application.Configuration;
 using MAAUnified.Application.Models;
+using MAAUnified.Application.Models.TaskParams;
 using MAAUnified.Application.Orchestration;
 using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Features;
+using MAAUnified.Application.Services.TaskParams;
 using MAAUnified.Compat.Runtime;
 using MAAUnified.CoreBridge;
 
@@ -172,6 +174,69 @@ public sealed class ConnectionLifecycleRegressionTests
     }
 
     [Fact]
+    public async Task ConnectAsync_WhenConnectFails_ShouldIgnoreLateMatchingConnectedCallbackWhileIdle()
+    {
+        var bridge = new ScriptedBridge();
+        await using var fixture = await SessionFixture.CreateAsync(bridge);
+        using var pumpCts = new CancellationTokenSource();
+        var pumpTask = RunCallbackPumpUntilCanceledAsync(fixture.Session, pumpCts.Token);
+
+        Assert.True((await fixture.Session.ConnectAsync("127.0.0.1:5555", "General", null)).Success);
+        Assert.Equal(SessionState.Connected, fixture.Session.CurrentState);
+
+        bridge.ConnectResults.Enqueue(CoreResult<bool>.Fail(new CoreError(
+            CoreErrorCode.ConnectTimeout,
+            "Connect timed out after 30s.")));
+        var reconnect = await fixture.Session.ConnectAsync("127.0.0.1:5555", "General", null);
+        Assert.False(reconnect.Success);
+        Assert.Equal(CoreErrorCode.ConnectTimeout, reconnect.Error?.Code);
+        Assert.Equal(SessionState.Idle, fixture.Session.CurrentState);
+
+        // A late Connected callback from the failed attempt (e.g. the abort stop
+        // budget expired before AsstStop could run) must not resurrect the failed
+        // connection while the session is idle.
+        bridge.PublishCallback(ConnectionCallback("Connected", "127.0.0.1:5555", "General"));
+        await Task.Delay(100);
+
+        Assert.Equal(SessionState.Idle, fixture.Session.CurrentState);
+
+        pumpCts.Cancel();
+        await pumpTask;
+    }
+
+    [Fact]
+    public async Task ConnectAsync_WhenCallerCancels_ShouldIgnoreLateMatchingConnectedCallbackWhileIdle()
+    {
+        var bridge = new ScriptedBridge();
+        await using var fixture = await SessionFixture.CreateAsync(bridge);
+        using var pumpCts = new CancellationTokenSource();
+        var pumpTask = RunCallbackPumpUntilCanceledAsync(fixture.Session, pumpCts.Token);
+
+        Assert.True((await fixture.Session.ConnectAsync("127.0.0.1:5555", "General", null)).Success);
+
+        bridge.BlockConnect = true;
+        bridge.ConnectCompletion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var connectCts = new CancellationTokenSource();
+        var reconnectTask = fixture.Session.ConnectAsync("127.0.0.1:5555", "General", null, null, connectCts.Token);
+        await WaitUntilAsync(() => bridge.ConnectCallCount >= 2);
+        connectCts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            async () => await reconnectTask.WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.Equal(SessionState.Idle, fixture.Session.CurrentState);
+
+        // Same protection as the failed-connect path: a late Connected callback
+        // from the canceled attempt must not move the session while idle.
+        bridge.PublishCallback(ConnectionCallback("Connected", "127.0.0.1:5555", "General"));
+        await Task.Delay(100);
+
+        Assert.Equal(SessionState.Idle, fixture.Session.CurrentState);
+
+        pumpCts.Cancel();
+        await pumpTask;
+    }
+
+    [Fact]
     public async Task CallbackStream_AfterAbandonedStop_ShouldIgnoreRepeatedStaleConnectedCallbacks()
     {
         var stopCompletion = new TaskCompletionSource<CoreResult<bool>>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -253,6 +318,100 @@ public sealed class ConnectionLifecycleRegressionTests
         Assert.Equal(CoreErrorCode.StopFailed, stopResult.Error?.Code);
         Assert.Equal(SessionState.Idle, fixture.Session.CurrentState);
         Assert.Null(fixture.Session.LastSuccessfulConnectionInfo);
+    }
+
+    [Fact]
+    public async Task StopAsync_WhenCallerTokenCancelsInsideBridgeStop_ShouldPropagateCancellationWithoutStrandingStopping()
+    {
+        var bridge = new ScriptedBridge();
+        await using var fixture = await SessionFixture.CreateAsync(bridge);
+        Assert.True((await fixture.Session.ConnectAsync("127.0.0.1:5555", "General", null)).Success);
+
+        // The bridge's post-stop not-running probe re-checks the caller token, so a
+        // cancellation landing after AsstStop already succeeded surfaces as an OCE out
+        // of the bridge stop; the session must still leave Stopping.
+        using var cts = new CancellationTokenSource();
+        bridge.StopCancellationToTrigger = cts;
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => fixture.Session.StopAsync(cts.Token));
+        Assert.Equal(SessionState.Connected, fixture.Session.CurrentState);
+    }
+
+    [Fact]
+    public async Task StopAsync_WhenCallerTokenCancelsInSessionProbeAfterSuccessfulStop_ShouldResolveStateWithoutStrandingStopping()
+    {
+        var bridge = new ScriptedBridge();
+        await using var fixture = await SessionFixture.CreateAsync(bridge);
+        Assert.True((await fixture.Session.ConnectAsync("127.0.0.1:5555", "General", null)).Success);
+
+        // The bridge stop succeeds, then the caller token is canceled exactly when the
+        // session runs its post-stop status probe; the probe must outlive the caller
+        // token so the session never strands in Stopping.
+        using var cts = new CancellationTokenSource();
+        bridge.StatusProbeCancellationToTrigger = cts;
+
+        var result = await fixture.Session.StopAsync(cts.Token);
+
+        Assert.True(result.Success);
+        Assert.Equal(SessionState.Connected, fixture.Session.CurrentState);
+    }
+
+    [Fact]
+    public async Task StopAsync_WhenCallerTokenCancelsInSessionProbeAfterFailedStop_ShouldResolveStateWithoutStrandingStopping()
+    {
+        var bridge = new ScriptedBridge
+        {
+            StopCompletion = new TaskCompletionSource<CoreResult<bool>>(TaskCreationOptions.RunContinuationsAsynchronously),
+        };
+        bridge.StopCompletion.SetResult(CoreResult<bool>.Fail(new CoreError(CoreErrorCode.StopFailed, "stop failed")));
+        await using var fixture = await SessionFixture.CreateAsync(bridge);
+        Assert.True((await fixture.Session.ConnectAsync("127.0.0.1:5555", "General", null)).Success);
+
+        using var cts = new CancellationTokenSource();
+        bridge.StatusProbeCancellationToTrigger = cts;
+
+        var result = await fixture.Session.StopAsync(cts.Token);
+
+        Assert.False(result.Success);
+        Assert.Equal(CoreErrorCode.StopFailed, result.Error?.Code);
+        Assert.Equal(SessionState.Connected, fixture.Session.CurrentState);
+    }
+
+    [Fact]
+    public async Task ConnectAsync_WhenCallerTokenCancelsInSessionProbeAfterFailedConnect_ShouldResolveStateWithoutStrandingConnecting()
+    {
+        var bridge = new ScriptedBridge
+        {
+            ConnectResult = CoreResult<bool>.Fail(new CoreError(CoreErrorCode.ConnectFailed, "connect failed")),
+        };
+        await using var fixture = await SessionFixture.CreateAsync(bridge);
+
+        using var cts = new CancellationTokenSource();
+        bridge.StatusProbeCancellationToTrigger = cts;
+
+        var result = await fixture.Session.ConnectAsync("127.0.0.1:5555", "General", null, null, cts.Token);
+
+        Assert.False(result.Success);
+        Assert.Equal(CoreErrorCode.ConnectFailed, result.Error?.Code);
+        Assert.Equal(SessionState.Idle, fixture.Session.CurrentState);
+    }
+
+    [Fact]
+    public async Task StartAsync_WhenCallerTokenCancelsInSessionProbeAfterFailedStart_ShouldResolveStateAndReturnFailure()
+    {
+        var bridge = new ScriptedBridge();
+        await using var fixture = await SessionFixture.CreateAsync(bridge);
+
+        // Legacy session StartAsync without appended tasks: the bridge start fails and
+        // the caller token is canceled exactly in the failure-state status probe.
+        using var cts = new CancellationTokenSource();
+        bridge.StatusProbeCancellationToTrigger = cts;
+
+        var result = await fixture.Session.StartAsync(cts.Token);
+
+        Assert.False(result.Success);
+        Assert.Equal(CoreErrorCode.StartFailed, result.Error?.Code);
+        Assert.Equal(SessionState.Idle, fixture.Session.CurrentState);
     }
 
     [Fact]
@@ -676,6 +835,155 @@ public sealed class ConnectionLifecycleRegressionTests
         Assert.Equal(candidate.ConnectConfig, used.ConnectConfig);
         Assert.Equal(candidate.AdbPath, used.AdbPath);
         Assert.Equal(candidate.Extras, used.Extras);
+    }
+
+    [Fact]
+    public async Task RemoteControlLinkStart_WhileSessionRunning_ShouldRejectWithoutConnectOrAppend()
+    {
+        var bridge = new ScriptedBridge();
+        await using var fixture = await SessionFixture.CreateAsync(bridge);
+
+        Assert.True((await fixture.Session.ConnectAsync("127.0.0.1:5555", "General", null)).Success);
+        var started = await fixture.Session.AppendAndStartCoreTaskAsync(new CoreTaskRequest("Fight", "running", true, "{}"));
+        Assert.True(started.Success);
+        Assert.Equal(SessionState.Running, fixture.Session.CurrentState);
+        Assert.True(fixture.Session.TryResolveTaskIndexByCoreTaskId(1, out _));
+
+        var connectFeature = new RecordingConnectFeature();
+        var dispatcher = new MAAUnified.Application.Services.RemoteControl.RemoteControlCommandDispatcher(
+            fixture.Config,
+            fixture.Session,
+            connectFeature,
+            new TaskQueueFeatureService(fixture.Session, fixture.Config),
+            toolboxFeatureService: null,
+            bridge,
+            new UiLogService());
+
+        var result = await dispatcher.DispatchAsync(
+            new MAAUnified.Application.Services.RemoteControl.RemoteControlCommandRequest("LinkStart", null, "user", "device"));
+
+        Assert.False(result.Success);
+        Assert.Equal(UiErrorCode.SessionStateNotAllowed, result.ErrorCode);
+        Assert.Equal(0, connectFeature.ConnectCallCount);
+        Assert.Equal(SessionState.Running, fixture.Session.CurrentState);
+        Assert.True(fixture.Session.TryResolveTaskIndexByCoreTaskId(1, out _));
+    }
+
+    [Fact]
+    public async Task RemoteControlLinkStartSubset_OneShotRecruitExpediteSave_PersistsOriginalEnabledStates()
+    {
+        var bridge = new ScriptedBridge();
+        await using var fixture = await SessionFixture.CreateAsync(bridge);
+        Assert.True(fixture.Config.TryGetCurrentProfile(out var profile));
+        profile.TaskQueue.Clear();
+        profile.TaskQueue.Add(new UnifiedTaskItem
+        {
+            Type = "Fight",
+            Name = "Fight",
+            IsEnabled = true,
+            Params = new JsonObject
+            {
+                ["stage"] = "1-7",
+                ["medicine"] = 0,
+                ["stone"] = 0,
+                ["times"] = 1,
+                ["series"] = 1,
+            },
+        });
+        profile.TaskQueue.Add(new UnifiedTaskItem
+        {
+            Type = TaskModuleTypes.Recruit,
+            Name = "Recruit",
+            IsEnabled = true,
+            Params = TaskParamCompiler.CompileRecruit(
+                new RecruitTaskParamsDto
+                {
+                    Times = 2,
+                    Refresh = true,
+                    ForceRefresh = false,
+                    UseExpedited = true,
+                    SkipRobot = true,
+                    SetTime = true,
+                },
+                profile,
+                fixture.Config.CurrentConfig).Params,
+        });
+        await fixture.Config.SaveAsync();
+
+        var currentConnection = new CoreConnectionInfo("127.0.0.1:5555", "General", null, new CoreConnectionExtras());
+        Assert.True((await fixture.Session.ConnectAsync(currentConnection)).Success);
+
+        var connectFeature = new RecordingConnectFeature([currentConnection])
+        {
+            AppendProfileTasksAndStartOverride = cancellationToken =>
+                fixture.Session.AppendTasksFromCurrentProfileAndStartAsync(new CoreInstanceOptions(), cancellationToken),
+        };
+        var dispatcher = new MAAUnified.Application.Services.RemoteControl.RemoteControlCommandDispatcher(
+            fixture.Config,
+            fixture.Session,
+            connectFeature,
+            new TaskQueueFeatureService(fixture.Session, fixture.Config),
+            toolboxFeatureService: null,
+            bridge,
+            new UiLogService());
+
+        var result = await dispatcher.DispatchAsync(
+            new MAAUnified.Application.Services.RemoteControl.RemoteControlCommandRequest("LinkStart-Recruiting", null, "user", "device"));
+
+        Assert.True(result.Success, result.Message);
+        // In-memory enable states are always restored after the subset start.
+        Assert.True(profile.TaskQueue[0].IsEnabled);
+        Assert.True(profile.TaskQueue[1].IsEnabled);
+        // The one-shot expedite was consumed in memory by the appended batch.
+        Assert.False(profile.TaskQueue[1].Params["expedite"]?.GetValue<bool>());
+
+        // The append transaction saved mid-window while the subset enable states were
+        // forced; the persisted file must still carry the original enable states (and
+        // keeps the existing contract of stripping the consumed one-shot expedite).
+        var persisted = new UnifiedConfigurationService(
+            new AvaloniaJsonConfigStore(fixture.Root),
+            new GuiNewJsonConfigImporter(),
+            new GuiJsonConfigImporter(),
+            new UiLogService(),
+            fixture.Root);
+        await persisted.LoadOrBootstrapAsync();
+        Assert.True(persisted.TryGetCurrentProfile(out var persistedProfile));
+        Assert.Equal(2, persistedProfile.TaskQueue.Count);
+        Assert.True(persistedProfile.TaskQueue[0].IsEnabled);
+        Assert.True(persistedProfile.TaskQueue[1].IsEnabled);
+        Assert.False(persistedProfile.TaskQueue[1].Params.ContainsKey("expedite"));
+        Assert.False(persistedProfile.TaskQueue[1].Params.ContainsKey("expedite_times"));
+    }
+
+    [Fact]
+    public async Task RemoteControlGacha_WhileSessionRunning_ShouldRejectWithoutDispatchingTool()
+    {
+        var bridge = new ScriptedBridge();
+        await using var fixture = await SessionFixture.CreateAsync(bridge);
+
+        Assert.True((await fixture.Session.ConnectAsync("127.0.0.1:5555", "General", null)).Success);
+        var started = await fixture.Session.AppendAndStartCoreTaskAsync(new CoreTaskRequest("Fight", "running", true, "{}"));
+        Assert.True(started.Success);
+        Assert.Equal(SessionState.Running, fixture.Session.CurrentState);
+
+        var toolboxFeature = new RecordingToolboxFeature();
+        var dispatcher = new MAAUnified.Application.Services.RemoteControl.RemoteControlCommandDispatcher(
+            fixture.Config,
+            fixture.Session,
+            connectFeatureService: null,
+            taskQueueFeatureService: null,
+            toolboxFeature,
+            bridge,
+            new UiLogService());
+
+        var result = await dispatcher.DispatchAsync(
+            new MAAUnified.Application.Services.RemoteControl.RemoteControlCommandRequest("Toolbox-GachaOnce", null, "user", "device"));
+
+        Assert.False(result.Success);
+        Assert.Equal(UiErrorCode.SessionStateNotAllowed, result.ErrorCode);
+        Assert.Equal(0, toolboxFeature.DispatchCallCount);
+        Assert.Equal(SessionState.Running, fixture.Session.CurrentState);
+        Assert.True(fixture.Session.TryResolveTaskIndexByCoreTaskId(1, out _));
     }
 
     [Fact]
@@ -1370,6 +1678,275 @@ public sealed class ConnectionLifecycleRegressionTests
         Assert.True(result.Value);
     }
 
+    [Theory]
+    [InlineData(true, false, true)]
+    [InlineData(true, true, false)]
+    [InlineData(false, false, false)]
+    public void AbandonedStopRecovery_ShouldDestroyOnlyAfterSuccessfulStoppedCall(
+        bool stopSucceeded,
+        bool isRunning,
+        bool expectedDestroy)
+    {
+        var result = stopSucceeded
+            ? CoreResult<bool>.Ok(true)
+            : CoreResult<bool>.Fail(new CoreError(CoreErrorCode.StopFailed, "AsstStop returned false."));
+
+        Assert.Equal(
+            expectedDestroy,
+            MaaCoreBridgeNative.CanDestroyRecoveredAbandonedStopForTest(
+                new nint(41),
+                new nint(41),
+                result,
+                isRunning));
+    }
+
+    [Fact]
+    public void AbandonedStopRecovery_ShouldNotDestroy_WhenHandleDoesNotMatch()
+    {
+        Assert.False(MaaCoreBridgeNative.CanDestroyRecoveredAbandonedStopForTest(
+            new nint(41),
+            new nint(42),
+            CoreResult<bool>.Ok(true),
+            isRunning: false));
+    }
+
+    [Fact]
+    public async Task AbandonedStopRecovery_ShouldLateStopAndDestroy_WhenAbandonmentLeftNoTrackedStop()
+    {
+        var oldInstance = new nint(41);
+        var newInstance = new nint(42);
+        var stoppedInstances = new List<nint>();
+        var destroyedInstances = new List<nint>();
+        var bridge = new MaaCoreBridgeNative();
+        bridge.InstallFakeNativeStateForTest(
+            oldInstance,
+            Path.Combine(Path.GetTempPath(), "maaunified-abandoned-stop-test"),
+            asstRunning: _ => false,
+            asstStop: handle =>
+            {
+                stoppedInstances.Add(handle);
+                return true;
+            },
+            asstDestroy: destroyedInstances.Add,
+            asstLoadResource: _ => true,
+            asstCreateEx: () => newInstance);
+
+        // Simulate a connect abort whose AsstStop never ran because the
+        // native-call lock stayed busy past the abort stop budget: the bridge
+        // is marked abandoned without any tracked stop call.
+        bridge.MarkNativeStopAbandonedForTest(null, nint.Zero);
+
+        var recovery = await bridge.RecoverAbandonedStopAsync();
+
+        Assert.True(recovery.Success);
+        Assert.Single(stoppedInstances);
+        Assert.Equal(oldInstance, stoppedInstances[0]);
+        Assert.Single(destroyedInstances);
+        Assert.Equal(oldInstance, destroyedInstances[0]);
+        Assert.Equal(0, bridge.AbandonedInstanceCountForTest);
+        Assert.False(bridge.NativeStopAbandonedForTest);
+        Assert.False(bridge.HasAbandonedStopTrackingForTest);
+    }
+
+    [Fact]
+    public async Task AbandonedStopRecovery_ShouldRetain_WhenLateStopLeavesCoreRunning()
+    {
+        var oldInstance = new nint(41);
+        var newInstance = new nint(42);
+        var stoppedInstances = new List<nint>();
+        var destroyedInstances = new List<nint>();
+        var bridge = new MaaCoreBridgeNative();
+        bridge.InstallFakeNativeStateForTest(
+            oldInstance,
+            Path.Combine(Path.GetTempPath(), "maaunified-abandoned-stop-test"),
+            asstRunning: _ => true,
+            asstStop: handle =>
+            {
+                stoppedInstances.Add(handle);
+                return true;
+            },
+            asstDestroy: destroyedInstances.Add,
+            asstLoadResource: _ => true,
+            asstCreateEx: () => newInstance);
+        bridge.MarkNativeStopAbandonedForTest(null, nint.Zero);
+
+        var recovery = await bridge.RecoverAbandonedStopAsync();
+
+        Assert.True(recovery.Success);
+        Assert.Single(stoppedInstances);
+        Assert.Empty(destroyedInstances);
+        Assert.Equal(1, bridge.AbandonedInstanceCountForTest);
+        Assert.False(bridge.NativeStopAbandonedForTest);
+    }
+
+    [Fact]
+    public async Task AbandonedStopRecovery_ShouldRetainLockUntilLateStopCompletes_WhenLateStopDoesNotReturnInTime()
+    {
+        var stopStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var stopGate = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var oldInstance = new nint(41);
+        var newInstance = new nint(42);
+        var destroyedInstances = new List<nint>();
+        var bridge = new MaaCoreBridgeNative();
+        bridge.InstallFakeNativeStateForTest(
+            oldInstance,
+            Path.Combine(Path.GetTempPath(), "maaunified-abandoned-stop-test"),
+            asstRunning: _ => false,
+            asstStop: _ =>
+            {
+                stopStarted.TrySetResult(true);
+                stopGate.Task.GetAwaiter().GetResult();
+                return true;
+            },
+            asstDestroy: destroyedInstances.Add,
+            asstLoadResource: _ => true,
+            asstCreateEx: () => newInstance);
+        bridge.MarkNativeStopAbandonedForTest(null, nint.Zero);
+
+        try
+        {
+            var recovery = await bridge.RecoverAbandonedStopAsync();
+
+            Assert.True(recovery.Success);
+            await stopStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+            Assert.Empty(destroyedInstances);
+            Assert.Equal(1, bridge.AbandonedInstanceCountForTest);
+            Assert.True(bridge.HasAbandonedStopTrackingForTest);
+
+            // The native-call lock stays retained until the in-flight late stop
+            // completes; afterwards ordinary native calls must proceed again.
+            stopGate.SetResult(true);
+            var probe = await bridge.ApplyInstanceOptionsAsync(
+                new CoreInstanceOptions(TouchMode: "maatouch")).WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.False(probe.Success);
+            Assert.Equal(CoreErrorCode.NotSupported, probe.Error?.Code);
+        }
+        finally
+        {
+            stopGate.TrySetResult(true);
+        }
+    }
+
+    [Fact]
+    public async Task TaintedQueueRecovery_ShouldConsumeTrackedAbandonedStop_WhenResetSucceeds()
+    {
+        var oldInstance = new nint(41);
+        var newInstance = new nint(42);
+        var destroyedInstances = new List<nint>();
+        var createdInstances = new List<nint>();
+        var bridge = new MaaCoreBridgeNative();
+        bridge.InstallFakeNativeStateForTest(
+            oldInstance,
+            Path.Combine(Path.GetTempPath(), "maaunified-tainted-queue-test"),
+            asstRunning: _ => false,
+            asstStop: _ => true,
+            asstDestroy: destroyedInstances.Add,
+            asstLoadResource: _ => true,
+            asstCreateEx: () =>
+            {
+                createdInstances.Add(newInstance);
+                return newInstance;
+            });
+
+        // Simulate an earlier AsstStop on the old instance that timed out and
+        // has since completed (the native-call lock is only reacquirable after
+        // the abandoned call completes).
+        bridge.MarkNativeStopAbandonedForTest(
+            Task.FromResult(CoreResult<bool>.Ok(true)),
+            oldInstance);
+
+        var reset = await bridge.RecoverTaintedTaskQueueAsync();
+
+        Assert.True(reset.Success);
+        Assert.Single(destroyedInstances);
+        Assert.Equal(oldInstance, destroyedInstances[0]);
+        Assert.Single(createdInstances);
+        Assert.False(bridge.NativeStopAbandonedForTest);
+        Assert.False(bridge.HasAbandonedStopTrackingForTest);
+
+        // Pre-fix the stale abandoned-stop state failed the next connect once
+        // and the follow-up abandoned-stop recovery retained the healthy new
+        // instance in the abandoned list for the process lifetime.
+        var recovery = await bridge.RecoverAbandonedStopAsync();
+        Assert.False(recovery.Success);
+        Assert.Equal(CoreErrorCode.InvalidRequest, recovery.Error?.Code);
+        Assert.Equal(0, bridge.AbandonedInstanceCountForTest);
+        Assert.Single(createdInstances);
+    }
+
+    [Fact]
+    public async Task TaintedQueueRecovery_ShouldClearAbandonedStopFlag_WhenAbandonedCallWasNotTrackedStop()
+    {
+        var oldInstance = new nint(41);
+        var newInstance = new nint(42);
+        var bridge = new MaaCoreBridgeNative();
+        bridge.InstallFakeNativeStateForTest(
+            oldInstance,
+            Path.Combine(Path.GetTempPath(), "maaunified-tainted-queue-test"),
+            asstRunning: _ => false,
+            asstStop: _ => true,
+            asstDestroy: _ => { },
+            asstLoadResource: _ => true,
+            asstCreateEx: () => newInstance);
+
+        // Simulate an abandoned native call that was not a tracked AsstStop
+        // (e.g. a screencap timeout): the flag is set without stop tracking.
+        bridge.MarkNativeStopAbandonedForTest(null, nint.Zero);
+
+        var reset = await bridge.RecoverTaintedTaskQueueAsync();
+
+        Assert.True(reset.Success);
+        Assert.False(bridge.NativeStopAbandonedForTest);
+        Assert.False(bridge.HasAbandonedStopTrackingForTest);
+        Assert.Equal(0, bridge.AbandonedInstanceCountForTest);
+
+        var recovery = await bridge.RecoverAbandonedStopAsync();
+        Assert.False(recovery.Success);
+        Assert.Equal(CoreErrorCode.InvalidRequest, recovery.Error?.Code);
+    }
+
+    [Fact]
+    public async Task TaintedQueueRecovery_ShouldKeepAbandonedStopState_WhenResetFails()
+    {
+        var oldInstance = new nint(41);
+        var destroyedInstances = new List<nint>();
+        var bridge = new MaaCoreBridgeNative();
+        bridge.InstallFakeNativeStateForTest(
+            oldInstance,
+            Path.Combine(Path.GetTempPath(), "maaunified-tainted-queue-test"),
+            asstRunning: _ => true,
+            asstStop: _ => true,
+            asstDestroy: destroyedInstances.Add,
+            asstLoadResource: _ => true,
+            asstCreateEx: () => new nint(42));
+        bridge.MarkNativeStopAbandonedForTest(
+            Task.FromResult(CoreResult<bool>.Ok(true)),
+            oldInstance);
+
+        var reset = await bridge.RecoverTaintedTaskQueueAsync();
+
+        Assert.False(reset.Success);
+        Assert.Equal(CoreErrorCode.StopFailed, reset.Error?.Code);
+        Assert.True(bridge.NativeStopAbandonedForTest);
+        Assert.True(bridge.HasAbandonedStopTrackingForTest);
+        Assert.Empty(destroyedInstances);
+    }
+
+    [Theory]
+    [InlineData(true, false, true)]
+    [InlineData(true, true, false)]
+    [InlineData(false, false, false)]
+    [InlineData(true, null, false)]
+    public void DisposeStop_ShouldDestroyOnlyWhenStoppedStateIsConfirmed(
+        bool stopSucceeded,
+        bool? isRunning,
+        bool expectedDestroy)
+    {
+        Assert.Equal(
+            expectedDestroy,
+            MaaCoreBridgeNative.CanDestroyAfterDisposeStopForTest(stopSucceeded, isRunning));
+    }
+
     [Fact]
     public async Task NativeScreencapWrapper_ShouldReturnTimeout_WhenNativeCallBlocks()
     {
@@ -1392,6 +1969,25 @@ public sealed class ConnectionLifecycleRegressionTests
         Assert.Equal(CoreErrorCode.GetImageFailed, result.Error?.Code);
         Assert.Contains("AsstAsyncScreencap", result.Error?.Message, StringComparison.Ordinal);
         Assert.Contains("did not return", result.Error?.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void NativeForcedBgrCapture_InvalidCallId_ShouldNotReadReadableStaleImage()
+    {
+        var readCount = 0;
+
+        var result = MaaCoreBridgeNative.ReadForcedImageBgrForTest(
+            () => 0,
+            () =>
+            {
+                readCount++;
+                return CoreResult<byte[]>.Ok([0x12, 0x34, 0x56]);
+            });
+
+        Assert.False(result.Success);
+        Assert.Equal(CoreErrorCode.GetImageFailed, result.Error?.Code);
+        Assert.Contains("invalid call id", result.Error?.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(0, readCount);
     }
 
     [Fact]
@@ -1596,22 +2192,32 @@ public sealed class ConnectionLifecycleRegressionTests
             ConnectCallCount++;
             LastConnectionInfo = connectionInfo;
             ConnectStarted.TrySetResult(true);
-            if (BlockConnect)
+            try
             {
-                if (ConnectCompletion is null)
+                if (BlockConnect)
                 {
-                    await Task.Delay(
-                        Timeout.InfiniteTimeSpan,
-                        IgnoreConnectCancellation ? CancellationToken.None : cancellationToken);
+                    if (ConnectCompletion is null)
+                    {
+                        await Task.Delay(
+                            Timeout.InfiniteTimeSpan,
+                            IgnoreConnectCancellation ? CancellationToken.None : cancellationToken);
+                    }
+                    else if (IgnoreConnectCancellation)
+                    {
+                        await ConnectCompletion.Task;
+                    }
+                    else
+                    {
+                        await ConnectCompletion.Task.WaitAsync(cancellationToken);
+                    }
                 }
-                else if (IgnoreConnectCancellation)
-                {
-                    await ConnectCompletion.Task;
-                }
-                else
-                {
-                    await ConnectCompletion.Task.WaitAsync(cancellationToken);
-                }
+            }
+            catch (OperationCanceledException)
+            {
+                // Mirror the real bridge: a canceled connect whose abort stop ran
+                // leaves the core disconnected.
+                _connected = false;
+                throw;
             }
 
             var result = ConnectResults.Count > 0
@@ -1653,20 +2259,42 @@ public sealed class ConnectionLifecycleRegressionTests
                 : CoreResult<bool>.Fail(new CoreError(CoreErrorCode.StartFailed, "not connected")));
         }
 
-        public Task<CoreResult<bool>> StopAsync(CancellationToken cancellationToken = default)
+        public CancellationTokenSource? StopCancellationToTrigger { get; set; }
+
+        public async Task<CoreResult<bool>> StopAsync(CancellationToken cancellationToken = default)
         {
             StopStarted.TrySetResult(true);
             if (StopCompletion is not null)
             {
-                return StopCompletion.Task;
+                return await StopCompletion.Task;
             }
 
             _running = false;
-            return Task.FromResult(CoreResult<bool>.Ok(true));
+            if (StopCancellationToTrigger is not null)
+            {
+                // Simulate the real bridge re-checking the caller token in its post-stop
+                // not-running probe after AsstStop already succeeded.
+                StopCancellationToTrigger.Cancel();
+                await Task.Delay(1, cancellationToken);
+            }
+
+            return CoreResult<bool>.Ok(true);
         }
 
+        public CancellationTokenSource? StatusProbeCancellationToTrigger { get; set; }
+
         public Task<CoreResult<CoreRuntimeStatus>> GetRuntimeStatusAsync(CancellationToken cancellationToken = default)
-            => Task.FromResult(CoreResult<CoreRuntimeStatus>.Ok(new CoreRuntimeStatus(true, _connected, _running)));
+        {
+            if (StatusProbeCancellationToTrigger is not null)
+            {
+                // Simulate a caller cancellation landing exactly in the session-side
+                // post-operation status probe; the real bridge re-checks the token.
+                StatusProbeCancellationToTrigger.Cancel();
+                cancellationToken.ThrowIfCancellationRequested();
+            }
+
+            return Task.FromResult(CoreResult<CoreRuntimeStatus>.Ok(new CoreRuntimeStatus(true, _connected, _running)));
+        }
 
         public Task<CoreResult<bool>> AttachWindowAsync(CoreAttachWindowRequest request, CancellationToken cancellationToken = default)
             => Task.FromResult(CoreResult<bool>.Fail(new CoreError(CoreErrorCode.NotSupported, "not supported")));
@@ -1714,12 +2342,38 @@ public sealed class ConnectionLifecycleRegressionTests
         }
     }
 
+    private sealed class RecordingToolboxFeature : IToolboxFeatureService
+    {
+        public int DispatchCallCount { get; private set; }
+
+        public Task<UiOperationResult<ToolboxDispatchResult>> DispatchToolAsync(
+            ToolboxDispatchRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            DispatchCallCount++;
+            return Task.FromResult(UiOperationResult<ToolboxDispatchResult>.Fail(
+                UiErrorCode.ToolboxExecutionFailed,
+                "not expected to run"));
+        }
+
+        public Task<UiOperationResult> StopAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(UiOperationResult.Ok("stopped"));
+    }
+
     private sealed class RecordingConnectFeature(
         IReadOnlyList<CoreConnectionInfo>? currentProfileCandidates = null)
         : IConnectFeatureService
     {
         public int ConnectCallCount { get; private set; }
         public IReadOnlyList<CoreConnectionInfo>? LastConnectCandidates { get; private set; }
+
+        public Func<CancellationToken, Task<CoreResult<int>>>? AppendProfileTasksAndStartOverride { get; init; }
+
+        public Task<CoreResult<int>> AppendProfileTasksAndStartAsync(CancellationToken cancellationToken = default)
+            => AppendProfileTasksAndStartOverride?.Invoke(cancellationToken)
+               ?? Task.FromResult(CoreResult<int>.Fail(new CoreError(
+                   CoreErrorCode.NotSupported,
+                   "Transactional profile task start is unsupported by current connect service.")));
 
         public UiOperationResult<IReadOnlyList<CoreConnectionInfo>> BuildCurrentProfileConnectionCandidates(
             bool includeConfiguredAddress = true)

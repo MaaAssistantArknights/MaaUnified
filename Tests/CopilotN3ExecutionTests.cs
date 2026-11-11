@@ -305,6 +305,56 @@ public sealed class CopilotN3ExecutionTests
     }
 
     [Fact]
+    public async Task CopilotStart_WhenNativeStartFails_ShouldRecoverQueueAndRequireReconnect()
+    {
+        await using var fixture = await CopilotN3Fixture.CreateAsync();
+        fixture.Bridge.StartResults.Enqueue(CoreResult<bool>.Fail(new CoreError(CoreErrorCode.StartFailed, "start failed")));
+        fixture.Bridge.StartResults.Enqueue(CoreResult<bool>.Ok(true));
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(
+            fixture.Runtime.ConnectFeatureService,
+            fixture.ReadyAdbPath)).Success);
+        fixture.ViewModel.FilePath = fixture.CreateCopilotFile();
+        await fixture.ViewModel.ImportFromFileAsync();
+
+        await fixture.ViewModel.StartAsync();
+
+        Assert.Equal(1, fixture.Bridge.RecoverTaintedTaskQueueCallCount);
+        Assert.Empty(fixture.Bridge.ActiveQueuedTasks);
+        Assert.Equal(SessionState.Idle, fixture.Runtime.SessionService.CurrentState);
+        Assert.Null(fixture.Runtime.SessionService.CurrentRunOwner);
+
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(
+            fixture.Runtime.ConnectFeatureService,
+            fixture.ReadyAdbPath)).Success);
+        await fixture.ViewModel.StartAsync();
+
+        Assert.Equal(2, fixture.Bridge.StartCallCount);
+        Assert.Single(fixture.Bridge.ActiveQueuedTasks);
+        Assert.Equal(SessionState.Running, fixture.Runtime.SessionService.CurrentState);
+    }
+
+    [Fact]
+    public async Task CopilotStart_ShouldApplyCurrentInstanceOptionsBeforeNativeStart()
+    {
+        await using var fixture = await CopilotN3Fixture.CreateAsync();
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(
+            fixture.Runtime.ConnectFeatureService,
+            fixture.ReadyAdbPath)).Success);
+        var profile = fixture.Runtime.ConfigurationService.CurrentConfig.Profiles[
+            fixture.Runtime.ConfigurationService.CurrentConfig.CurrentProfile];
+        profile.Values["TouchMode"] = "minitouch";
+        profile.Values["KillAdbOnExit"] = true;
+        fixture.ViewModel.FilePath = fixture.CreateCopilotFile();
+        await fixture.ViewModel.ImportFromFileAsync();
+
+        await fixture.ViewModel.StartAsync();
+
+        Assert.Equal("minitouch", fixture.Bridge.LastInstanceOptions?.TouchMode);
+        Assert.True(fixture.Bridge.LastInstanceOptions?.KillAdbOnExit is true);
+        Assert.Equal(1, fixture.Bridge.StartCallCount);
+    }
+
+    [Fact]
     public async Task TaskQueueStart_WhenCopilotOwnsRun_ShouldBeBlockedAndLogged()
     {
         await using var fixture = await CopilotN3Fixture.CreateAsync();
@@ -667,7 +717,7 @@ public sealed class CopilotN3ExecutionTests
         }
     }
 
-    private sealed class Bridge : IMaaCoreBridge
+    private sealed class Bridge : IMaaCoreBridge, IMaaCoreBridgeQueueRecovery
     {
         private readonly Channel<CoreCallbackEvent> _callbacks = Channel.CreateUnbounded<CoreCallbackEvent>();
         private int _nextTaskId = 1;
@@ -679,6 +729,14 @@ public sealed class CopilotN3ExecutionTests
         public int LastAppendedTaskId { get; private set; }
 
         public List<CoreTaskRequest> AppendedTasks { get; } = [];
+
+        public List<CoreTaskRequest> ActiveQueuedTasks { get; } = [];
+
+        public Queue<CoreResult<bool>> StartResults { get; } = new();
+
+        public CoreInstanceOptions? LastInstanceOptions { get; private set; }
+
+        public int RecoverTaintedTaskQueueCallCount { get; private set; }
 
         public void Publish(CoreCallbackEvent callback)
         {
@@ -701,13 +759,31 @@ public sealed class CopilotN3ExecutionTests
             CancellationToken cancellationToken = default)
         {
             AppendedTasks.Add(task);
+            ActiveQueuedTasks.Add(task);
             LastAppendedTaskId = _nextTaskId++;
             return Task.FromResult(CoreResult<int>.Ok(LastAppendedTaskId));
+        }
+
+        public Task<CoreResult<bool>> ApplyInstanceOptionsAsync(
+            CoreInstanceOptions options,
+            CancellationToken cancellationToken = default)
+        {
+            LastInstanceOptions = options;
+            return Task.FromResult(CoreResult<bool>.Ok(true));
         }
 
         public Task<CoreResult<bool>> StartAsync(CancellationToken cancellationToken = default)
         {
             StartCallCount++;
+            return Task.FromResult(StartResults.Count > 0
+                ? StartResults.Dequeue()
+                : CoreResult<bool>.Ok(true));
+        }
+
+        public Task<CoreResult<bool>> RecoverTaintedTaskQueueAsync(CancellationToken cancellationToken = default)
+        {
+            RecoverTaintedTaskQueueCallCount++;
+            ActiveQueuedTasks.Clear();
             return Task.FromResult(CoreResult<bool>.Ok(true));
         }
 

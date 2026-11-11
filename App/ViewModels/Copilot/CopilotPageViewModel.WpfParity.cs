@@ -2093,7 +2093,11 @@ public sealed partial class CopilotPageViewModel
             ? ResolveTypeDisplayNameForTab(CopilotTabIndex)
             : _loadedType;
         var request = BuildSingleTaskRequest(taskType, displayName, filePath);
-        var appendResult = await Runtime.CoreBridge.AppendTaskAsync(request, cancellationToken);
+        var taskChain = ResolveCopilotTaskChain(taskType);
+        var appendResult = await Runtime.ConnectFeatureService.AppendAndStartCoreTaskAsync(
+            request,
+            cancellationToken,
+            taskId => PrepareCopilotStart(taskId, displayName, taskChain));
         if (!appendResult.Success)
         {
             StatusMessage = T("Copilot.Status.StartFailed", "启动失败。");
@@ -2112,7 +2116,7 @@ public sealed partial class CopilotPageViewModel
             "Copilot.Append.Loaded",
             $"Appended current copilot task #{appendResult.Value}: {displayName}",
             cancellationToken);
-        return new AppendPlan(appendResult.Value, displayName, ResolveCopilotTaskChain(taskType));
+        return new AppendPlan(appendResult.Value, displayName, taskChain);
     }
 
     private async Task<AppendPlan?> AppendSingleItemAsync(CopilotItemViewModel item, CancellationToken cancellationToken)
@@ -2124,7 +2128,11 @@ public sealed partial class CopilotPageViewModel
         }
 
         var request = BuildSingleTaskRequest(item.Type, item.Name, filePath);
-        var appendResult = await Runtime.CoreBridge.AppendTaskAsync(request, cancellationToken);
+        var taskChain = ResolveCopilotTaskChain(item.Type);
+        var appendResult = await Runtime.ConnectFeatureService.AppendAndStartCoreTaskAsync(
+            request,
+            cancellationToken,
+            taskId => PrepareCopilotStart(taskId, item.Name, taskChain));
         if (!appendResult.Success)
         {
             StatusMessage = T("Copilot.Status.StartFailed", "启动失败。");
@@ -2143,7 +2151,7 @@ public sealed partial class CopilotPageViewModel
             "Copilot.Append",
             $"Appended copilot task #{appendResult.Value}: {item.Name}",
             cancellationToken);
-        return new AppendPlan(appendResult.Value, item.Name, ResolveCopilotTaskChain(item.Type));
+        return new AppendPlan(appendResult.Value, item.Name, taskChain);
     }
 
     private async Task<AppendPlan?> AppendCopilotListAsync(
@@ -2222,7 +2230,10 @@ public sealed partial class CopilotPageViewModel
         string taskChain,
         CancellationToken cancellationToken)
     {
-        var appendResult = await Runtime.CoreBridge.AppendTaskAsync(request, cancellationToken);
+        var appendResult = await Runtime.ConnectFeatureService.AppendAndStartCoreTaskAsync(
+            request,
+            cancellationToken,
+            taskId => PrepareCopilotStart(taskId, activeItemName, taskChain));
         if (!appendResult.Success)
         {
             StatusMessage = T("Copilot.Status.StartFailed", "启动失败。");

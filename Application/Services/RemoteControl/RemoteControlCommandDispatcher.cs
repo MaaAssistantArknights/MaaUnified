@@ -147,9 +147,18 @@ internal sealed class RemoteControlCommandDispatcher
         HashSet<string>? selectedTaskTypes,
         CancellationToken cancellationToken)
     {
-        if (_taskQueueFeatureService is null)
+        if (_taskQueueFeatureService is null || _connectFeatureService is null)
         {
-            return Fail(request, command, UiErrorCode.RemoteControlUnsupported, "Task queue service is unavailable.");
+            return Fail(request, command, UiErrorCode.RemoteControlUnsupported, "Task queue or connect service is unavailable.");
+        }
+
+        if (IsSessionRunningOrStopping())
+        {
+            return Fail(
+                request,
+                command,
+                UiErrorCode.SessionStateNotAllowed,
+                $"Remote command `{command}` cannot start new tasks while session state is `{_sessionService!.CurrentState}`. Stop the current run first.");
         }
 
         var connected = await EnsureConnectedAsync(cancellationToken);
@@ -161,7 +170,9 @@ internal sealed class RemoteControlCommandDispatcher
         CoreResult<int> appendResult;
         if (selectedTaskTypes is null)
         {
-            appendResult = await _taskQueueFeatureService.QueueEnabledTasksAsync(cancellationToken);
+            appendResult = await _taskQueueFeatureService.QueueEnabledTasksAndStartAsync(
+                _connectFeatureService,
+                cancellationToken);
         }
         else
         {
@@ -185,22 +196,6 @@ internal sealed class RemoteControlCommandDispatcher
                 command,
                 UiErrorCode.TaskNotFound,
                 $"Remote command `{command}` did not match any enabled task.");
-        }
-
-        if (_connectFeatureService is null)
-        {
-            return Fail(request, command, UiErrorCode.RemoteControlUnsupported, "Connect service is unavailable.");
-        }
-
-        var startResult = await _connectFeatureService.StartAsync(cancellationToken);
-        if (!startResult.Success)
-        {
-            return Fail(
-                request,
-                command,
-                startResult.Error?.Code ?? UiErrorCode.UiOperationFailed,
-                startResult.Message,
-                startResult.Error?.Details);
         }
 
         if (!string.IsNullOrWhiteSpace(commandId))
@@ -229,6 +224,15 @@ internal sealed class RemoteControlCommandDispatcher
         if (_toolboxFeatureService is null)
         {
             return Fail(request, command, UiErrorCode.RemoteControlUnsupported, "Toolbox service is unavailable.");
+        }
+
+        if (IsSessionRunningOrStopping())
+        {
+            return Fail(
+                request,
+                command,
+                UiErrorCode.SessionStateNotAllowed,
+                $"Remote command `{command}` cannot start new tasks while session state is `{_sessionService!.CurrentState}`. Stop the current run first.");
         }
 
         var result = await _toolboxFeatureService.DispatchToolAsync(
@@ -277,7 +281,7 @@ internal sealed class RemoteControlCommandDispatcher
             return Fail(request, command, connected.Error?.Code ?? UiErrorCode.RemoteControlUnsupported, connected.Message, connected.Error?.Details);
         }
 
-        var imageResult = await _coreBridge.GetImageAsync(cancellationToken);
+        var imageResult = await _coreBridge.CaptureImageAsync(cancellationToken);
         if (!imageResult.Success || imageResult.Value is null || imageResult.Value.Length == 0)
         {
             return Fail(
@@ -458,7 +462,7 @@ internal sealed class RemoteControlCommandDispatcher
         IReadOnlySet<string> selectedTaskTypes,
         CancellationToken cancellationToken)
     {
-        if (_configService is null || _taskQueueFeatureService is null)
+        if (_configService is null || _taskQueueFeatureService is null || _connectFeatureService is null)
         {
             return CoreResult<int>.Fail(new CoreError(CoreErrorCode.NotSupported, "Task queue dependencies are unavailable."));
         }
@@ -468,36 +472,35 @@ internal sealed class RemoteControlCommandDispatcher
             return CoreResult<int>.Fail(new CoreError(CoreErrorCode.InvalidRequest, "Current profile is missing."));
         }
 
-        var snapshot = profile.TaskQueue.Select(static task => task.IsEnabled).ToArray();
-        try
-        {
-            var enabledCount = 0;
-            for (var index = 0; index < profile.TaskQueue.Count; index++)
+        var enabledCount = 0;
+        return await TaskQueueEnableStateOverride.RunAsync(
+            _configService,
+            profile,
+            () =>
             {
-                var normalizedType = TaskModuleTypes.Normalize(profile.TaskQueue[index].Type);
-                var enable = selectedTaskTypes.Contains(normalizedType);
-                profile.TaskQueue[index].IsEnabled = enable;
-                if (enable)
+                for (var index = 0; index < profile.TaskQueue.Count; index++)
                 {
-                    enabledCount++;
+                    var normalizedType = TaskModuleTypes.Normalize(profile.TaskQueue[index].Type);
+                    var enable = selectedTaskTypes.Contains(normalizedType);
+                    profile.TaskQueue[index].IsEnabled = enable;
+                    if (enable)
+                    {
+                        enabledCount++;
+                    }
                 }
-            }
-
-            if (enabledCount == 0)
-            {
-                return CoreResult<int>.Ok(0);
-            }
-
-            return await _taskQueueFeatureService.QueueEnabledTasksAsync(cancellationToken);
-        }
-        finally
-        {
-            for (var index = 0; index < profile.TaskQueue.Count && index < snapshot.Length; index++)
-            {
-                profile.TaskQueue[index].IsEnabled = snapshot[index];
-            }
-        }
+            },
+            () => enabledCount == 0
+                ? Task.FromResult(CoreResult<int>.Ok(0))
+                : _taskQueueFeatureService.QueueEnabledTasksAndStartAsync(
+                    _connectFeatureService,
+                    cancellationToken),
+            _logService,
+            "Remote subset start");
     }
+
+    private bool IsSessionRunningOrStopping()
+        => _sessionService is not null
+           && _sessionService.CurrentState is SessionState.Running or SessionState.Stopping;
 
     private async Task<UiOperationResult> EnsureConnectedAsync(CancellationToken cancellationToken)
     {

@@ -1057,6 +1057,81 @@ public sealed class TaskQueueG2FeatureTests
             .Count(log => log.Content.Contains(content, StringComparison.OrdinalIgnoreCase));
     }
 
+    [Fact]
+    public async Task TaskQueuePage_RunOnce_OneShotRecruitExpediteSave_PersistsOriginalEnabledStates()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True(fixture.Runtime.ConfigurationService.TryGetCurrentProfile(out var profile));
+        profile.TaskQueue.Clear();
+        profile.TaskQueue.Add(new UnifiedTaskItem
+        {
+            Type = "Fight",
+            Name = "Fight",
+            IsEnabled = true,
+            Params = new JsonObject
+            {
+                ["stage"] = "1-7",
+                ["medicine"] = 0,
+                ["stone"] = 0,
+                ["times"] = 1,
+                ["series"] = 1,
+            },
+        });
+        profile.TaskQueue.Add(new UnifiedTaskItem
+        {
+            Type = TaskModuleTypes.Recruit,
+            Name = "Recruit",
+            IsEnabled = false,
+            Params = TaskParamCompiler.CompileRecruit(
+                new RecruitTaskParamsDto
+                {
+                    Times = 2,
+                    Refresh = true,
+                    ForceRefresh = false,
+                    UseExpedited = true,
+                    SkipRobot = true,
+                    SetTime = true,
+                },
+                profile,
+                fixture.Runtime.ConfigurationService.CurrentConfig).Params,
+        });
+        await fixture.Runtime.ConfigurationService.SaveAsync();
+        Assert.True((await fixture.Runtime.SessionService.ConnectAsync("127.0.0.1:5555", "General", null)).Success);
+
+        var vm = new TaskQueuePageViewModel(
+            fixture.Runtime,
+            new ConnectionGameSharedStateViewModel(),
+            ensureCoreReadyForExecutionAsync: _ => Task.FromResult(true));
+        await vm.InitializeAsync();
+        Assert.Equal(2, vm.Tasks.Count);
+        vm.SelectedTask = vm.Tasks[1];
+
+        await vm.RunSelectedTaskOnceAsync();
+
+        // In-memory enable states are always restored after the run-once window.
+        Assert.True(profile.TaskQueue[0].IsEnabled);
+        Assert.False(profile.TaskQueue[1].IsEnabled);
+        // The one-shot expedite was consumed in memory by the appended batch.
+        Assert.False(profile.TaskQueue[1].Params["expedite"]?.GetValue<bool>());
+
+        // The append transaction saved mid-window while the run-once enable states were
+        // forced; the persisted file must still carry the original enable states (and
+        // keeps the existing contract of stripping the consumed one-shot expedite).
+        var persisted = new UnifiedConfigurationService(
+            new AvaloniaJsonConfigStore(fixture.Root),
+            new GuiNewJsonConfigImporter(),
+            new GuiJsonConfigImporter(),
+            new UiLogService(),
+            fixture.Root);
+        await persisted.LoadOrBootstrapAsync();
+        Assert.True(persisted.TryGetCurrentProfile(out var persistedProfile));
+        Assert.Equal(2, persistedProfile.TaskQueue.Count);
+        Assert.True(persistedProfile.TaskQueue[0].IsEnabled);
+        Assert.False(persistedProfile.TaskQueue[1].IsEnabled);
+        Assert.False(persistedProfile.TaskQueue[1].Params.ContainsKey("expedite"));
+        Assert.False(persistedProfile.TaskQueue[1].Params.ContainsKey("expedite_times"));
+    }
+
     private sealed class TestFixture : IAsyncDisposable
     {
         private TestFixture(

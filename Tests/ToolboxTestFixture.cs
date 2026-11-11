@@ -111,7 +111,7 @@ internal sealed class ToolboxTestFixture : IAsyncDisposable
             ShellFeatureService = new ShellFeatureService(connect),
             TaskQueueFeatureService = new TaskQueueFeatureService(session, config),
             CopilotFeatureService = new CopilotFeatureService(),
-            ToolboxFeatureService = new ToolboxFeatureService(bridge, connect),
+            ToolboxFeatureService = new ToolboxFeatureService(session, connect),
             RemoteControlFeatureService = new RemoteControlFeatureService(),
             PlatformCapabilityService = capability,
             OverlayFeatureService = new OverlayFeatureService(capability),
@@ -150,7 +150,7 @@ internal sealed class ToolboxTestFixture : IAsyncDisposable
         }
     }
 
-    internal sealed class RecordingBridge : IMaaCoreBridge
+    internal sealed class RecordingBridge : IMaaCoreBridge, IMaaCoreBridgeQueueRecovery
     {
         private static readonly byte[] TinyPng =
             Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO7+W0cAAAAASUVORK5CYII=");
@@ -161,6 +161,8 @@ internal sealed class ToolboxTestFixture : IAsyncDisposable
 
         public List<CoreTaskRequest> AppendedTasks { get; } = [];
 
+        public List<CoreTaskRequest> ActiveQueuedTasks { get; } = [];
+
         public int ConnectCallCount { get; private set; }
 
         public int StartCallCount { get; private set; }
@@ -169,11 +171,19 @@ internal sealed class ToolboxTestFixture : IAsyncDisposable
 
         public int GetImageBgrCallCount { get; private set; }
 
+        public int RecoverTaintedTaskQueueCallCount { get; private set; }
+
         public bool ForceConnectFailure { get; set; }
 
         public CoreErrorCode ConnectFailureCode { get; set; } = CoreErrorCode.ConnectFailed;
 
         public string ConnectFailureMessage { get; set; } = "Connection command failed to exec";
+
+        public Queue<CoreResult<bool>> StartResults { get; } = new();
+
+        public Queue<CoreResult<bool>> ApplyInstanceOptionsResults { get; } = new();
+
+        public CoreInstanceOptions? LastInstanceOptions { get; private set; }
 
         public Task<CoreResult<CoreInitializeInfo>> InitializeAsync(CoreInitializeRequest request, CancellationToken cancellationToken = default)
             => Task.FromResult(CoreResult<CoreInitializeInfo>.Ok(new CoreInitializeInfo(request.BaseDirectory, "fake", "fake", request.ClientType)));
@@ -192,12 +202,32 @@ internal sealed class ToolboxTestFixture : IAsyncDisposable
         public Task<CoreResult<int>> AppendTaskAsync(CoreTaskRequest task, CancellationToken cancellationToken = default)
         {
             AppendedTasks.Add(task);
+            ActiveQueuedTasks.Add(task);
             return Task.FromResult(CoreResult<int>.Ok(_nextTaskId++));
+        }
+
+        public Task<CoreResult<bool>> ApplyInstanceOptionsAsync(
+            CoreInstanceOptions options,
+            CancellationToken cancellationToken = default)
+        {
+            LastInstanceOptions = options;
+            return Task.FromResult(ApplyInstanceOptionsResults.Count > 0
+                ? ApplyInstanceOptionsResults.Dequeue()
+                : CoreResult<bool>.Ok(true));
         }
 
         public Task<CoreResult<bool>> StartAsync(CancellationToken cancellationToken = default)
         {
             StartCallCount++;
+            return Task.FromResult(StartResults.Count > 0
+                ? StartResults.Dequeue()
+                : CoreResult<bool>.Ok(true));
+        }
+
+        public Task<CoreResult<bool>> RecoverTaintedTaskQueueAsync(CancellationToken cancellationToken = default)
+        {
+            RecoverTaintedTaskQueueCallCount++;
+            ActiveQueuedTasks.Clear();
             return Task.FromResult(CoreResult<bool>.Ok(true));
         }
 

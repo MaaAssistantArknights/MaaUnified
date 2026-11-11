@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.IO;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Channels;
@@ -17,6 +18,38 @@ namespace MAAUnified.Tests;
 
 public sealed class RuntimeDisposalTests
 {
+    [Fact]
+    public async Task BridgeDisposeAsync_ShouldNotBlockBehindLifecycleLockHeldByStuckLifecycleOperation()
+    {
+        var bridge = new MaaCoreBridgeNative();
+        var lifecycleLockField = typeof(MaaCoreBridgeNative).GetField("_lifecycleLock", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(lifecycleLockField);
+        var lifecycleLock = Assert.IsType<SemaphoreSlim>(lifecycleLockField.GetValue(bridge));
+
+        // Simulate a lifecycle operation stuck behind the native-call lock retained for
+        // a never-returning native call: it holds the lifecycle lock indefinitely.
+        await lifecycleLock.WaitAsync();
+        try
+        {
+            var disposeTask = bridge.DisposeAsync().AsTask();
+            var completed = await Task.WhenAny(disposeTask, Task.Delay(TimeSpan.FromSeconds(15)));
+            Assert.Same(disposeTask, completed);
+            await disposeTask;
+        }
+        finally
+        {
+            lifecycleLock.Release();
+        }
+
+        // The give-up path still marks the bridge disposed so later calls fail fast.
+        var status = await bridge.GetRuntimeStatusAsync();
+        Assert.False(status.Success);
+        Assert.Equal(CoreErrorCode.Disposed, status.Error?.Code);
+
+        // A second dispose after the stuck operation released the lock is a no-op.
+        await bridge.DisposeAsync();
+    }
+
     [Fact]
     public async Task DisposeAsync_ShouldDisposeNotificationService_WhenProviderIsDisposable()
     {

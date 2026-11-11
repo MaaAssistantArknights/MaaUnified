@@ -1441,6 +1441,38 @@ public sealed class TaskQueueG1FeatureTests
         return Assert.IsType<JsonObject>(persistedQueue[0]);
     }
 
+    [Fact]
+    public async Task TaskQueueFeatureService_UpdateTaskParams_WhenSecondMappedCoreTaskFails_ShouldRollBackProfileAndAppliedSibling()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var profile = fixture.Config.CurrentConfig.Profiles[fixture.Config.CurrentConfig.CurrentProfile];
+        profile.TaskQueue.Clear();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.UserDataUpdate, "user-data-update")).Success);
+        Assert.True((await fixture.Runtime.SessionService.ConnectAsync("127.0.0.1:5555", "General", null)).Success);
+        var appended = await fixture.Runtime.SessionService.AppendTasksFromCurrentProfileAsync();
+        Assert.True(appended.Success);
+        Assert.Equal(2, appended.Value);
+
+        fixture.Bridge.SetTaskParamsResults.Enqueue(CoreResult<bool>.Ok(true));
+        fixture.Bridge.SetTaskParamsResults.Enqueue(CoreResult<bool>.Fail(new CoreError(CoreErrorCode.NativeCallFailed, "second update failed")));
+
+        var previousParams = (await fixture.TaskQueue.GetTaskParamsAsync(0)).Value!;
+        var newParams = previousParams.DeepClone() as JsonObject ?? new JsonObject();
+        newParams["update_oper_box"] = false;
+
+        var result = await fixture.TaskQueue.UpdateTaskParamsAsync(0, newParams);
+
+        Assert.False(result.Success);
+        var currentParams = (await fixture.TaskQueue.GetTaskParamsAsync(0)).Value!;
+        Assert.True(currentParams["update_oper_box"]!.GetValue<bool>());
+        Assert.Equal(3, fixture.Bridge.SetTaskParamsCalls.Count);
+        Assert.Equal(fixture.Bridge.SetTaskParamsCalls[0].TaskId, fixture.Bridge.SetTaskParamsCalls[2].TaskId);
+        var expectedPreviousCoreParams = MAAUnified.Application.Services.TaskParams.TaskParamCompiler
+            .BuildCoreParams(TaskModuleTypes.UserDataUpdate, previousParams)
+            .ToJsonString();
+        Assert.Equal(expectedPreviousCoreParams, fixture.Bridge.SetTaskParamsCalls[2].ParamsJson);
+    }
+
     private sealed class TestFixture : IAsyncDisposable
     {
         private TestFixture(
@@ -1558,8 +1590,20 @@ public sealed class TaskQueueG1FeatureTests
         public Task<CoreResult<bool>> ConnectAsync(CoreConnectionInfo connectionInfo, CancellationToken cancellationToken = default)
             => Task.FromResult(CoreResult<bool>.Ok(true));
 
+        public List<(int TaskId, string ParamsJson)> SetTaskParamsCalls { get; } = new();
+
+        public Queue<CoreResult<bool>> SetTaskParamsResults { get; } = new();
+
         public Task<CoreResult<int>> AppendTaskAsync(CoreTaskRequest task, CancellationToken cancellationToken = default)
             => Task.FromResult(CoreResult<int>.Ok(Interlocked.Increment(ref _taskId)));
+
+        public Task<CoreResult<bool>> SetTaskParamsAsync(int taskId, string paramsJson, CancellationToken cancellationToken = default)
+        {
+            SetTaskParamsCalls.Add((taskId, paramsJson));
+            return Task.FromResult(SetTaskParamsResults.Count > 0
+                ? SetTaskParamsResults.Dequeue()
+                : CoreResult<bool>.Ok(true));
+        }
 
         public Task<CoreResult<bool>> StartAsync(CancellationToken cancellationToken = default)
             => Task.FromResult(CoreResult<bool>.Ok(true));

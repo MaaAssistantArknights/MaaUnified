@@ -1,7 +1,9 @@
 using System.Text.Json.Nodes;
 using MAAUnified.App.ViewModels.Toolbox;
 using MAAUnified.Application.Models;
+using MAAUnified.Application.Orchestration;
 using MAAUnified.Application.Services.Features;
+using MAAUnified.CoreBridge;
 using MAAUnified.Platform;
 
 namespace MAAUnified.Tests;
@@ -12,7 +14,7 @@ public sealed class ToolboxModuleO1FeatureTests
     public async Task ExecuteToolAsync_Recruit_ShouldAppendStructuredRecruitTask()
     {
         await using var fixture = await ToolboxTestFixture.CreateAsync();
-        var service = new ToolboxFeatureService(fixture.Bridge, fixture.Runtime.ConnectFeatureService);
+        var service = new ToolboxFeatureService(fixture.Runtime.SessionService, fixture.Runtime.ConnectFeatureService);
 
         var request = new ToolboxDispatchRequest(
             ToolboxToolKind.Recruit,
@@ -36,20 +38,26 @@ public sealed class ToolboxModuleO1FeatureTests
     public async Task ExecuteToolAsync_GachaAndMiniGame_ShouldAppendCustomTasks()
     {
         await using var fixture = await ToolboxTestFixture.CreateAsync();
-        var service = new ToolboxFeatureService(fixture.Bridge, fixture.Runtime.ConnectFeatureService);
+        var service = new ToolboxFeatureService(fixture.Runtime.SessionService, fixture.Runtime.ConnectFeatureService);
 
         var gachaResult = await service.DispatchToolAsync(
             new ToolboxDispatchRequest(
                 ToolboxToolKind.Gacha,
                 Gacha: new ToolboxGachaRequest(Once: false),
                 ParameterSummary: "drawCount=10"));
+        Assert.True(gachaResult.Success);
+
+        // Tool runs are mutually exclusive: stop the gacha run before
+        // dispatching the next tool (the toolbox UI enforces the same via
+        // the run-owner guard).
+        Assert.True((await fixture.Runtime.ConnectFeatureService.StopAsync()).Success);
+
         var miniGameResult = await service.DispatchToolAsync(
             new ToolboxDispatchRequest(
                 ToolboxToolKind.MiniGame,
                 MiniGame: new ToolboxMiniGameRequest("MiniGame@SecretFront@Begin@EndingC@游侠"),
                 ParameterSummary: "taskName=MiniGame@SecretFront@Begin@EndingC@游侠"));
 
-        Assert.True(gachaResult.Success);
         Assert.True(miniGameResult.Success);
         Assert.Equal(2, fixture.Bridge.AppendedTasks.Count);
 
@@ -65,13 +73,65 @@ public sealed class ToolboxModuleO1FeatureTests
     public async Task ExecuteToolAsync_Peep_ShouldFailAsNoCoreTaskIsRequired()
     {
         await using var fixture = await ToolboxTestFixture.CreateAsync();
-        var service = new ToolboxFeatureService(fixture.Bridge, fixture.Runtime.ConnectFeatureService);
+        var service = new ToolboxFeatureService(fixture.Runtime.SessionService, fixture.Runtime.ConnectFeatureService);
 
         var result = await service.DispatchToolAsync(new ToolboxDispatchRequest(ToolboxToolKind.VideoRecognition));
 
         Assert.False(result.Success);
         Assert.Equal(UiErrorCode.ToolNotSupported, result.Error?.Code);
         Assert.Empty(fixture.Bridge.AppendedTasks);
+    }
+
+    [Fact]
+    public async Task ExecuteToolAsync_StartFailure_ShouldRecoverQueueBeforeLaterDispatch()
+    {
+        await using var fixture = await ToolboxTestFixture.CreateAsync();
+        var service = new ToolboxFeatureService(fixture.Runtime.SessionService, fixture.Runtime.ConnectFeatureService);
+        fixture.Bridge.StartResults.Enqueue(CoreResult<bool>.Fail(new CoreError(CoreErrorCode.StartFailed, "start failed")));
+        fixture.Bridge.StartResults.Enqueue(CoreResult<bool>.Ok(true));
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(
+            fixture.Runtime.ConnectFeatureService,
+            fixture.ReadyAdbPath)).Success);
+
+        var failed = await service.DispatchToolAsync(new ToolboxDispatchRequest(
+            ToolboxToolKind.Gacha,
+            Gacha: new ToolboxGachaRequest(Once: true)));
+
+        Assert.False(failed.Success);
+        Assert.Equal(1, fixture.Bridge.RecoverTaintedTaskQueueCallCount);
+        Assert.Empty(fixture.Bridge.ActiveQueuedTasks);
+        Assert.Equal(SessionState.Idle, fixture.Runtime.SessionService.CurrentState);
+
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(
+            fixture.Runtime.ConnectFeatureService,
+            fixture.ReadyAdbPath)).Success);
+        var succeeded = await service.DispatchToolAsync(new ToolboxDispatchRequest(
+            ToolboxToolKind.MiniGame,
+            MiniGame: new ToolboxMiniGameRequest("MiniGame@SecretFront@Begin")));
+
+        Assert.True(succeeded.Success);
+        var active = Assert.Single(fixture.Bridge.ActiveQueuedTasks);
+        Assert.Contains("MiniGame@SecretFront@Begin", active.ParamsJson, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ExecuteToolAsync_ShouldApplyCurrentInstanceOptionsBeforeAppendAndStart()
+    {
+        await using var fixture = await ToolboxTestFixture.CreateAsync();
+        var profile = fixture.Runtime.ConfigurationService.CurrentConfig.Profiles[
+            fixture.Runtime.ConfigurationService.CurrentConfig.CurrentProfile];
+        profile.Values["TouchMode"] = "maatouch";
+        profile.Values["AdbLiteEnabled"] = true;
+        var service = new ToolboxFeatureService(fixture.Runtime.SessionService, fixture.Runtime.ConnectFeatureService);
+
+        var result = await service.DispatchToolAsync(new ToolboxDispatchRequest(
+            ToolboxToolKind.Gacha,
+            Gacha: new ToolboxGachaRequest(Once: true)));
+
+        Assert.True(result.Success);
+        Assert.Equal("maatouch", fixture.Bridge.LastInstanceOptions?.TouchMode);
+        Assert.True(fixture.Bridge.LastInstanceOptions?.AdbLiteEnabled);
+        Assert.Equal(1, fixture.Bridge.StartCallCount);
     }
 
     [Fact]

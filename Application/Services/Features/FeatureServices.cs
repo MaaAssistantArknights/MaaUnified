@@ -387,6 +387,56 @@ public sealed class ConnectFeatureService : IConnectFeatureService
         return UiOperationResult.FromCore(result, "Task execution started.");
     }
 
+    public Task<CoreResult<int>> AppendProfileTasksAndStartAsync(CancellationToken cancellationToken = default)
+        => RunAppendStartOperationAsync(
+            "Start",
+            (options, token) => _sessionService.AppendTasksFromCurrentProfileAndStartAsync(options, token),
+            cancellationToken);
+
+    public Task<CoreResult<int>> AppendCoreTasksAndStartAsync(
+        IEnumerable<CoreTaskRequest> coreTasks,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(coreTasks);
+        return RunAppendStartOperationAsync(
+            "Start",
+            (options, token) => _sessionService.AppendCoreTasksAndStartAsync(coreTasks, options, token),
+            cancellationToken);
+    }
+
+    public Task<CoreResult<int>> AppendAndStartCoreTaskAsync(
+        CoreTaskRequest coreTask,
+        CancellationToken cancellationToken = default,
+        Action<int>? onAppended = null)
+    {
+        ArgumentNullException.ThrowIfNull(coreTask);
+        return RunAppendStartOperationAsync(
+            "Start",
+            (options, token) => _sessionService.AppendAndStartCoreTaskAsync(
+                coreTask,
+                token,
+                onAppended,
+                options),
+            cancellationToken);
+    }
+
+    private async Task<CoreResult<int>> RunAppendStartOperationAsync(
+        string operationName,
+        Func<CoreInstanceOptions, CancellationToken, Task<CoreResult<int>>> operation,
+        CancellationToken cancellationToken)
+    {
+        using var lifecycleOperation = await TryBeginLifecycleOperationAsync(operationName, cancellationToken).ConfigureAwait(false);
+        if (lifecycleOperation is null)
+        {
+            return CoreResult<int>.Fail(new CoreError(
+                CoreErrorCode.InvalidRequest,
+                BuildLifecycleOperationBusyMessage(operationName)));
+        }
+
+        var options = ResolveEffectiveInstanceOptions(instanceOptions: null);
+        return await operation(options, lifecycleOperation.Token).ConfigureAwait(false);
+    }
+
     public async Task<UiOperationResult> StopAsync(CancellationToken cancellationToken = default)
     {
         if (_sessionService.CurrentState == SessionState.Connecting)
@@ -2046,6 +2096,21 @@ public sealed class TaskQueueFeatureService : ITaskQueueFeatureService
         return await _sessionService.AppendTasksFromCurrentProfileAsync(cancellationToken).ConfigureAwait(false);
     }
 
+    public async Task<CoreResult<int>> QueueEnabledTasksAndStartAsync(
+        IConnectFeatureService connectFeatureService,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(connectFeatureService);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!TryGetProfile(out var profile, out var error))
+        {
+            return CoreResult<int>.Fail(new CoreError(CoreErrorCode.InvalidRequest, error));
+        }
+
+        ApplyMallCreditFightGuard(profile);
+        return await connectFeatureService.AppendProfileTasksAndStartAsync(cancellationToken).ConfigureAwait(false);
+    }
+
     public async Task<CoreResult<int>> ConsumeCompletedOneShotTaskEnabledStatesAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -2290,7 +2355,26 @@ public sealed class TaskQueueFeatureService : ITaskQueueFeatureService
             return UiOperationResult.Fail(UiErrorCode.TaskNotFound, error);
         }
 
+        var previousParams = task.Params;
         task.Params = parameters.DeepClone() as JsonObject ?? new JsonObject();
+        var normalizedType = TaskParamCompiler.NormalizeTaskType(task.Type);
+        var coreParams = TaskParamCompiler.BuildCoreParams(
+            normalizedType,
+            task.Params);
+        var previousCoreParams = TaskParamCompiler.BuildCoreParams(
+            normalizedType,
+            previousParams);
+        var updateCore = await _sessionService.SetQueuedTaskParamsAsync(
+            index,
+            coreParams.ToJsonString(),
+            previousCoreParams.ToJsonString(),
+            cancellationToken).ConfigureAwait(false);
+        if (!updateCore.Success)
+        {
+            task.Params = previousParams;
+            return UiOperationResult.FromCore(updateCore, "Failed to update queued task parameters.");
+        }
+
         if (persistImmediately)
         {
             await _configService.SaveAsync(cancellationToken);
@@ -4058,7 +4142,7 @@ public sealed class CopilotFeatureService : ICopilotFeatureService
 
 public sealed class ToolboxFeatureService : IToolboxFeatureService
 {
-    private readonly IMaaCoreBridge? _bridge;
+    private readonly UnifiedSessionService? _sessionService;
     private readonly IConnectFeatureService? _connectFeatureService;
 
     public ToolboxFeatureService()
@@ -4066,9 +4150,9 @@ public sealed class ToolboxFeatureService : IToolboxFeatureService
     {
     }
 
-    public ToolboxFeatureService(IMaaCoreBridge? bridge, IConnectFeatureService? connectFeatureService = null)
+    public ToolboxFeatureService(UnifiedSessionService? sessionService, IConnectFeatureService? connectFeatureService = null)
     {
-        _bridge = bridge;
+        _sessionService = sessionService;
         _connectFeatureService = connectFeatureService;
     }
 
@@ -4090,11 +4174,11 @@ public sealed class ToolboxFeatureService : IToolboxFeatureService
                 $"Tool `{request.Tool}` dispatch cancelled by caller.");
         }
 
-        if (_bridge is null)
+        if (_sessionService is null || _connectFeatureService is null)
         {
             return UiOperationResult<ToolboxDispatchResult>.Fail(
                 UiErrorCode.ToolboxExecutionFailed,
-                "Toolbox core bridge is not configured.");
+                "Toolbox core session or connect service is not configured.");
         }
 
         if (!TryBuildCoreTask(request, out var coreTask, out var taskType, out var parameterSummary, out var validationError))
@@ -4105,34 +4189,22 @@ public sealed class ToolboxFeatureService : IToolboxFeatureService
                 validationError?.Details);
         }
 
-        var appendResult = await _bridge.AppendTaskAsync(coreTask, cancellationToken);
+        var appendResult = await _connectFeatureService.AppendAndStartCoreTaskAsync(coreTask, cancellationToken);
         if (!appendResult.Success)
         {
             return UiOperationResult<ToolboxDispatchResult>.Fail(
                 UiErrorCode.ToolboxExecutionFailed,
-                $"Tool `{request.Tool}` append failed: {appendResult.Error?.Message ?? "unknown error"}.",
+                $"Tool `{request.Tool}` dispatch failed: {appendResult.Error?.Message ?? "unknown error"}.",
                 JsonSerializer.Serialize(new
                 {
                     tool = request.Tool.ToString(),
                     taskType,
                     coreTask = coreTask.Name,
                     parameterSummary,
-                    appendError = appendResult.Error?.Code.ToString(),
+                    coreError = appendResult.Error?.Code.ToString(),
                     appendResult.Error?.Message,
                     appendResult.Error?.NativeDetails,
                 }));
-        }
-
-        if (_connectFeatureService is not null)
-        {
-            var startResult = await _connectFeatureService.StartAsync(cancellationToken);
-            if (!startResult.Success)
-            {
-                return UiOperationResult<ToolboxDispatchResult>.Fail(
-                    startResult.Error?.Code ?? UiErrorCode.ToolboxExecutionFailed,
-                    startResult.Message,
-                    startResult.Error?.Details);
-            }
         }
 
         return UiOperationResult<ToolboxDispatchResult>.Ok(
@@ -4336,6 +4408,7 @@ public sealed class PostActionFeatureService : IPostActionFeatureService
     private readonly UiDiagnosticsService _diagnostics;
     private readonly IPostActionExecutorService _executor;
     private readonly IMaaCoreBridge? _coreBridge;
+    private readonly UnifiedSessionService? _sessionService;
     private readonly IAppLifecycleService? _appLifecycleService;
     private readonly IPostActionPromptService _promptService;
 
@@ -4343,7 +4416,7 @@ public sealed class PostActionFeatureService : IPostActionFeatureService
         UnifiedConfigurationService configService,
         UiDiagnosticsService diagnostics,
         IPostActionExecutorService executor)
-        : this(configService, diagnostics, executor, null, null, null)
+        : this(configService, diagnostics, executor, null, null, null, null)
     {
     }
 
@@ -4353,12 +4426,14 @@ public sealed class PostActionFeatureService : IPostActionFeatureService
         IPostActionExecutorService executor,
         IMaaCoreBridge? coreBridge,
         IAppLifecycleService? appLifecycleService,
-        IPostActionPromptService? promptService)
+        IPostActionPromptService? promptService,
+        UnifiedSessionService? sessionService = null)
     {
         _configService = configService;
         _diagnostics = diagnostics;
         _executor = executor;
         _coreBridge = coreBridge;
+        _sessionService = sessionService;
         _appLifecycleService = appLifecycleService;
         _promptService = promptService ?? new NoOpPostActionPromptService();
     }
@@ -4823,7 +4898,9 @@ public sealed class PostActionFeatureService : IPostActionFeatureService
     {
         if (_coreBridge?.SupportsStartCloseDown == true)
         {
-            var result = await _coreBridge.StartCloseDownAsync(request.ClientType ?? string.Empty, cancellationToken);
+            var result = _sessionService is null
+                ? await _coreBridge.StartCloseDownAsync(request.ClientType ?? string.Empty, cancellationToken)
+                : await _sessionService.StartCloseDownAsync(request.ClientType ?? string.Empty, cancellationToken);
             if (result.Success)
             {
                 return PlatformOperation.NativeSuccess("maa-core", "Exit Arknights executed via MaaCore CloseDown.", "post-action.ExitArknights");

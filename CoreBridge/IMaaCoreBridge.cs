@@ -10,6 +10,13 @@ public interface IMaaCoreBridge : IAsyncDisposable
 
     bool SupportsStartCloseDown => false;
 
+    // Monotonic sequence number of the most recently enqueued callback.
+    // Session orchestration snapshots this at run start to recognize terminal
+    // callbacks that were enqueued by an earlier (already stopped) batch but
+    // are still waiting in the pump. Bridges that do not tag callback
+    // sequences return 0, which disables the staleness check.
+    long EnqueuedCallbackSequence => 0;
+
     Task<CoreResult<CoreInitializeInfo>> InitializeAsync(
         CoreInitializeRequest request,
         CancellationToken cancellationToken = default);
@@ -28,6 +35,11 @@ public interface IMaaCoreBridge : IAsyncDisposable
             ? recovery.RecoverAbandonedStopAsync(cancellationToken)
             : Task.FromResult(CoreResult<bool>.Fail(new CoreError(CoreErrorCode.NotSupported, "Abandoned native stop recovery is unsupported by current bridge.")));
 
+    Task<CoreResult<bool>> RecoverFromTaintedTaskQueueAsync(CancellationToken cancellationToken = default)
+        => this is IMaaCoreBridgeQueueRecovery recovery
+            ? recovery.RecoverTaintedTaskQueueAsync(cancellationToken)
+            : Task.FromResult(CoreResult<bool>.Fail(new CoreError(CoreErrorCode.NotSupported, "Tainted task queue recovery is unsupported by current bridge.")));
+
     Task<CoreResult<bool>> SetConnectionExtrasAsync(
         string name,
         string extrasJson,
@@ -37,6 +49,12 @@ public interface IMaaCoreBridge : IAsyncDisposable
     Task<CoreResult<int>> AppendTaskAsync(
         CoreTaskRequest task,
         CancellationToken cancellationToken = default);
+
+    Task<CoreResult<bool>> SetTaskParamsAsync(
+        int taskId,
+        string paramsJson,
+        CancellationToken cancellationToken = default)
+        => Task.FromResult(CoreResult<bool>.Fail(new CoreError(CoreErrorCode.NotSupported, "Task parameter updates are unsupported by current bridge.")));
 
     Task<CoreResult<bool>> StartAsync(CancellationToken cancellationToken = default);
 
@@ -61,6 +79,9 @@ public interface IMaaCoreBridge : IAsyncDisposable
 
     Task<CoreResult<byte[]>> GetImageAsync(CancellationToken cancellationToken = default);
 
+    Task<CoreResult<byte[]>> CaptureImageAsync(CancellationToken cancellationToken = default)
+        => GetImageAsync(cancellationToken);
+
     Task<CoreResult<byte[]>> GetImageBgrAsync(
         bool forceScreencap = false,
         CancellationToken cancellationToken = default)
@@ -72,4 +93,9 @@ public interface IMaaCoreBridge : IAsyncDisposable
 public interface IMaaCoreBridgeRecovery
 {
     Task<CoreResult<bool>> RecoverAbandonedStopAsync(CancellationToken cancellationToken = default);
+}
+
+public interface IMaaCoreBridgeQueueRecovery
+{
+    Task<CoreResult<bool>> RecoverTaintedTaskQueueAsync(CancellationToken cancellationToken = default);
 }

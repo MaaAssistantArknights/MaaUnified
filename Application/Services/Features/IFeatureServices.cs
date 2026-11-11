@@ -190,6 +190,26 @@ public interface IConnectFeatureService
 
     Task<UiOperationResult> StartAsync(CancellationToken cancellationToken = default);
 
+    Task<CoreResult<int>> AppendProfileTasksAndStartAsync(CancellationToken cancellationToken = default)
+        => Task.FromResult(CoreResult<int>.Fail(new CoreError(
+            CoreErrorCode.NotSupported,
+            "Transactional profile task start is unsupported by current connect service.")));
+
+    Task<CoreResult<int>> AppendCoreTasksAndStartAsync(
+        IEnumerable<CoreTaskRequest> coreTasks,
+        CancellationToken cancellationToken = default)
+        => Task.FromResult(CoreResult<int>.Fail(new CoreError(
+            CoreErrorCode.NotSupported,
+            "Transactional core task start is unsupported by current connect service.")));
+
+    Task<CoreResult<int>> AppendAndStartCoreTaskAsync(
+        CoreTaskRequest coreTask,
+        CancellationToken cancellationToken = default,
+        Action<int>? onAppended = null)
+        => Task.FromResult(CoreResult<int>.Fail(new CoreError(
+            CoreErrorCode.NotSupported,
+            "Transactional single task start is unsupported by current connect service.")));
+
     Task<UiOperationResult> StopAsync(CancellationToken cancellationToken = default);
 
     Task<UiOperationResult> WaitAndStopAsync(TimeSpan wait, CancellationToken cancellationToken = default);
@@ -241,6 +261,13 @@ public interface IShellFeatureService
 public interface ITaskQueueFeatureService
 {
     Task<CoreResult<int>> QueueEnabledTasksAsync(CancellationToken cancellationToken = default);
+
+    Task<CoreResult<int>> QueueEnabledTasksAndStartAsync(
+        IConnectFeatureService connectFeatureService,
+        CancellationToken cancellationToken = default)
+        => Task.FromResult(CoreResult<int>.Fail(new CoreError(
+            CoreErrorCode.NotSupported,
+            "Transactional task queue start is unsupported by current task queue service.")));
 
     Task<CoreResult<int>> ConsumeCompletedOneShotTaskEnabledStatesAsync(CancellationToken cancellationToken = default)
         => Task.FromResult(CoreResult<int>.Ok(0));

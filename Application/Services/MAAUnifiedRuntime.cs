@@ -244,7 +244,7 @@ public static class MAAUnifiedRuntimeFactory
         var shellFeatureService = new ShellFeatureService(connectFeatureService);
         var taskQueueFeatureService = new TaskQueueFeatureService(sessionService, configService);
         var copilotFeatureService = new CopilotFeatureService();
-        var toolboxFeatureService = new ToolboxFeatureService(bridge, connectFeatureService);
+        var toolboxFeatureService = new ToolboxFeatureService(sessionService, connectFeatureService);
         var remoteControlFeatureService = new RemoteControlFeatureServiceImpl(
             configService,
             sessionService,
@@ -282,7 +282,8 @@ public static class MAAUnifiedRuntimeFactory
             platform.PostActionExecutorService,
             bridge,
             appLifecycleService,
-            new NoOpPostActionPromptService());
+            new NoOpPostActionPromptService(),
+            sessionService);
 
         _ = remoteControlFeatureService.StartRemotePollingAsync();
 
