@@ -96,6 +96,7 @@ public sealed class MainShellViewModel : ObservableObject
     private ImportSource _selectedImportSource = ImportSource.Auto;
     private ImportSourceOptionItem? _selectedImportSourceOption;
     private bool _achievementToastWindowVisible = true;
+    private bool _mainWindowBackgrounded;
     private bool _achievementToastStartupCompleted;
     private bool _startupAchievementToastReleaseStarted;
     private bool _startupAchievementToastAnnouncementGatePrepared;
@@ -598,6 +599,12 @@ public sealed class MainShellViewModel : ObservableObject
             }
         }
     }
+
+    // Incremented when a stop is requested while a connect is in flight. A start
+    // that observes a version change across its own connect aborts instead of
+    // falling through to a fresh connect+start (WPF: LinkStart checks
+    // RunningState.GetStopping() after the connect and SetStopped() instead).
+    private int _connectStopRequestVersion;
 
     public bool CanStartExecution
         => CurrentSessionState is not (SessionState.Running or SessionState.Stopping) && !HasBlockingConfigIssues;
@@ -1638,9 +1645,23 @@ public sealed class MainShellViewModel : ObservableObject
 
         if (shouldConnect)
         {
+            var stopVersionBeforeConnect = Volatile.Read(ref _connectStopRequestVersion);
             var connectResult = await ConnectWithCurrentSettingsAsync(cancellationToken, requiredConnection);
             startConnectResult = connectResult;
             CurrentSessionState = _runtime.SessionService.CurrentState;
+            if (Volatile.Read(ref _connectStopRequestVersion) != stopVersionBeforeConnect
+                && CurrentSessionState != SessionState.Connected)
+            {
+                // WPF parity (TaskQueueViewModel.LinkStart): a stop requested while the
+                // connect was in flight aborts the start here instead of falling
+                // through to a fresh connect+start after the superseded connect.
+                await RecordEventAsync(
+                    "App.Shell.Start",
+                    "start aborted: stop requested during connect",
+                    cancellationToken);
+                return;
+            }
+
             if (connectResult.Success)
             {
                 GlobalStatus = connectResult.Message;
@@ -1860,12 +1881,78 @@ public sealed class MainShellViewModel : ObservableObject
             switch (command)
             {
                 case TrayCommandId.Start:
+                    CurrentSessionState = _runtime.SessionService.CurrentState;
+                    if (CurrentSessionState == SessionState.Connecting || TaskQueuePage.IsStartRequestActive)
+                    {
+                        // WPF parity (MaaHotKeyActionHandler.HandleLinkStart): WPF flips
+                        // RunningState.SetIdle(false) the moment LinkStart() is
+                        // dispatched, so pressing the LinkStart hotkey again after
+                        // dispatch and before Running dispatches TaskQueueViewModel.Stop()
+                        // instead of a second start. That covers both an in-flight
+                        // connect and the Connected start preamble
+                        // (TaskQueuePage.IsStartRequestActive), during which a second
+                        // dispatch must cancel the start request instead of re-running
+                        // the preamble and hitting a spurious already-running failure.
+                        // An in-flight task-queue start request is canceled through the
+                        // same path as the run button; any other in-flight connect is
+                        // stopped through the session's Connecting stop support. The
+                        // general CanStartExecution/CanStopExecution shell gating is
+                        // intentionally left unchanged.
+                        var canceledStartRequest = TaskQueuePage.IsStartRequestActive;
+                        if (canceledStartRequest)
+                        {
+                            await TaskQueuePage.ToggleRunAsync(cancellationToken);
+                        }
+                        else
+                        {
+                            Interlocked.Increment(ref _connectStopRequestVersion);
+                            _ = await _runtime.ConnectFeatureService.StopAsync(cancellationToken);
+                        }
+
+                        CurrentSessionState = _runtime.SessionService.CurrentState;
+                        if (ShouldSendBackgroundLinkFeedback(source))
+                        {
+                            // WPF parity (MaaHotKeyActionHandler.HandleLinkStart):
+                            // stopping from the LinkStart hotkey while the window is
+                            // minimized shows the BackgroundLinkStopped toast.
+                            await SendBackgroundLinkFeedbackAsync(started: false, cancellationToken);
+                        }
+
+                        await RecordEventAsync(
+                            scope,
+                            $"source={source}; {(canceledStartRequest ? "start-request-stop" : "connecting-stop")}",
+                            cancellationToken);
+                        return ShellUiAction.None;
+                    }
+
                     if (!CanStartExecution)
                     {
                         CurrentSessionState = _runtime.SessionService.CurrentState;
-                        if (CurrentSessionState is SessionState.Running or SessionState.Stopping)
+                        if (CurrentSessionState == SessionState.Stopping)
                         {
+                            // WPF parity (MaaHotKeyActionHandler.HandleLinkStart): while the
+                            // task queue is stopping, the LinkStart hotkey is a no-op instead
+                            // of a second stop request that would surface a false stop
+                            // failure diagnostic (OperationAlreadyStopped).
+                            await RecordEventAsync(
+                                scope,
+                                $"source={source}; stopping-noop",
+                                cancellationToken);
+                            return ShellUiAction.None;
+                        }
+
+                        if (CurrentSessionState == SessionState.Running)
+                        {
+                            var dispatchedStopForOwnRun = TaskQueuePage.IsOwnRunActive;
                             await TaskQueuePage.ToggleRunAsync(cancellationToken);
+                            if (dispatchedStopForOwnRun && ShouldSendBackgroundLinkFeedback(source))
+                            {
+                                // WPF parity (MaaHotKeyActionHandler.HandleLinkStart):
+                                // the LinkStart hotkey stops the queue and, while the
+                                // window is minimized, shows a background toast.
+                                await SendBackgroundLinkFeedbackAsync(started: false, cancellationToken);
+                            }
+
                             await RecordEventAsync(
                                 scope,
                                 $"source={source}; running-dialog",
@@ -1884,6 +1971,17 @@ public sealed class MainShellViewModel : ObservableObject
                         {
                             NavigateToSettingsSection("Connect");
                         }
+
+                        if (HasBlockingConfigIssues && ShouldSendBackgroundLinkFeedback(source))
+                        {
+                            // WPF parity (MaaHotKeyActionHandler.HandleLinkStart): from the
+                            // idle state the LinkStart hotkey dispatches LinkStart() and, while
+                            // the window is minimized, shows the BackgroundLinkStarted toast
+                            // unconditionally - even when the start is then rejected by
+                            // configuration validation.
+                            await SendBackgroundLinkFeedbackAsync(started: true, cancellationToken);
+                        }
+
                         await RecordEventAsync(
                             scope,
                             $"source={source}; blocked",
@@ -1891,9 +1989,21 @@ public sealed class MainShellViewModel : ObservableObject
                         return ShellUiAction.None;
                     }
 
+                    var stopVersionBeforeStart = Volatile.Read(ref _connectStopRequestVersion);
                     await StartAsync(cancellationToken);
                     CurrentSessionState = _runtime.SessionService.CurrentState;
-                    PushGrowl(CurrentSessionState == SessionState.Running ? "开始执行" : "启动被阻断，请先修复错误。");
+                    if (Volatile.Read(ref _connectStopRequestVersion) == stopVersionBeforeStart)
+                    {
+                        PushGrowl(CurrentSessionState == SessionState.Running ? "开始执行" : "启动被阻断，请先修复错误。");
+                    }
+                    if (ShouldSendBackgroundLinkFeedback(source))
+                    {
+                        // WPF parity (MaaHotKeyActionHandler.HandleLinkStart):
+                        // the LinkStart hotkey starts the queue and, while the
+                        // window is minimized, shows a background toast.
+                        await SendBackgroundLinkFeedbackAsync(started: true, cancellationToken);
+                    }
+
                     await RecordEventAsync(
                         scope,
                         $"source={source}; session={CurrentSessionState}",
@@ -2039,6 +2149,33 @@ public sealed class MainShellViewModel : ObservableObject
     {
         _achievementToastWindowVisible = visible;
         TryFlushPendingAchievementToasts();
+    }
+
+    public void SetMainWindowBackgrounded(bool backgrounded)
+    {
+        _mainWindowBackgrounded = backgrounded;
+    }
+
+    private bool ShouldSendBackgroundLinkFeedback(string source)
+        => _mainWindowBackgrounded && string.Equals(source, "hotkey-linkstart", StringComparison.Ordinal);
+
+    private async Task SendBackgroundLinkFeedbackAsync(bool started, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var text = AchievementTextCatalog.GetString(
+                started ? "BackgroundLinkStarted" : "BackgroundLinkStopped",
+                CurrentShellLanguage,
+                started ? "Tasks started" : "Tasks stopped");
+            await _runtime.PlatformCapabilityService.SendSystemNotificationAsync(text, string.Empty, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            await RecordErrorAsync(
+                "App.Shell.Tray.Start",
+                "Failed to send the LinkStart background feedback notification.",
+                ex);
+        }
     }
 
     public void DismissAchievementToast(string id)

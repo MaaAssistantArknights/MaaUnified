@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using System.Text.Json.Nodes;
+using Avalonia.Input;
 using MAAUnified.App.ViewModels.Settings;
 using MAAUnified.App.ViewModels.Infrastructure;
 using MAAUnified.Application.Configuration;
@@ -214,6 +215,432 @@ public sealed class SettingsHotkeyFeedbackFeatureTests
     }
 
     [Fact]
+    public void LoadHotkeysFromLegacyWpfJson_EnumStringsNumericKeyStringsAndNumericActions_AreNormalized()
+    {
+        var snapshot = HotkeyConfigurationCodec.Parse(
+            "{\"0\":{\"Key\":\"50\",\"Modifiers\":\"Control, Shift, Alt\"},\"1\":{\"Key\":\"Decimal\",\"Modifiers\":\"Windows, Control\"}}");
+
+        Assert.Equal("Ctrl+Shift+Alt+G", snapshot.ShowGui);
+        Assert.Equal("Ctrl+Meta+Decimal", snapshot.LinkStart);
+        Assert.Empty(snapshot.Warnings);
+
+        var oemSnapshot = HotkeyConfigurationCodec.Parse(
+            "{\"ShowGui\":{\"Key\":\"OemComma\",\"Modifiers\":\"Control, Shift\"},\"LinkStart\":null}");
+
+        Assert.Equal("Ctrl+Shift+OemComma", oemSnapshot.ShowGui);
+        Assert.Equal(string.Empty, oemSnapshot.LinkStart);
+        Assert.Empty(oemSnapshot.Warnings);
+
+        var pauseSnapshot = HotkeyConfigurationCodec.Parse(
+            "{\"ShowGui\":{\"Key\":7,\"Modifiers\":2},\"LinkStart\":{\"Key\":\"Pause\",\"Modifiers\":\"Control\"}}");
+
+        Assert.Equal("Ctrl+Pause", pauseSnapshot.ShowGui);
+        Assert.Equal("Ctrl+Pause", pauseSnapshot.LinkStart);
+        Assert.Empty(pauseSnapshot.Warnings);
+    }
+
+    [Theory]
+    [InlineData(Key.Escape)]
+    [InlineData(Key.Back)]
+    [InlineData(Key.Delete)]
+    [InlineData(Key.A)]
+    [InlineData(Key.Apps)]
+    public void HotkeyCapture_WithoutModifiers_ClearsLikeWpf(Key key)
+    {
+        // WPF parity (HotKeyEditorUserControl.HotKeyTextBox_PreviewKeyDown): the
+        // modifiers == None -> HotKey = null clear runs before the WPF exclusion
+        // list, so even the excluded Apps (Menu) key clears the binding when
+        // pressed without modifiers.
+        var result = HotkeyGestureCodec.Capture(key, KeyModifiers.None);
+
+        Assert.Equal(HotkeyCaptureResultKind.Cleared, result.Kind);
+    }
+
+    [Theory]
+    [InlineData(Key.LeftCtrl)]
+    [InlineData(Key.RightAlt)]
+    [InlineData(Key.LWin)]
+    public void HotkeyCapture_ModifierKeys_StayPending(Key key)
+    {
+        var result = HotkeyGestureCodec.Capture(key, KeyModifiers.Control);
+
+        Assert.Equal(HotkeyCaptureResultKind.Pending, result.Kind);
+    }
+
+    [Fact]
+    public void HotkeyCapture_AppsWithModifier_KeepsBindingUnchangedLikeWpf()
+    {
+        // WPF parity: with a modifier held, WPF hits the exclusion list and
+        // silently ignores Apps, leaving the binding unchanged. The unified
+        // capture reports the unmappable chord instead of binding it; the
+        // binding outcome matches WPF.
+        var capture = HotkeyGestureCodec.Capture(Key.Apps, KeyModifiers.Control);
+
+        Assert.Equal(HotkeyCaptureResultKind.Rejected, capture.Kind);
+        Assert.Null(capture.Gesture);
+    }
+
+    [Fact]
+    public void HotkeyCapture_AndWindowsReservation_SupportWpfPunctuationKeys()
+    {
+        var capture = HotkeyGestureCodec.Capture(Key.OemComma, KeyModifiers.Control);
+
+        Assert.Equal(HotkeyCaptureResultKind.Captured, capture.Kind);
+        Assert.Equal("OemComma", capture.Gesture!.Key);
+        Assert.True(HotkeyGestureCodec.TryGetWindowsVirtualKey("OemComma", out var comma));
+        Assert.Equal(0xBCu, comma);
+        Assert.True(HotkeyGestureCodec.TryGetWindowsVirtualKey("Decimal", out var decimalKey));
+        Assert.Equal(0x6Eu, decimalKey);
+    }
+
+    [Fact]
+    public void HotkeyCapture_AndWindowsReservation_SupportWpfPauseKey()
+    {
+        var capture = HotkeyGestureCodec.Capture(Key.Pause, KeyModifiers.Control);
+
+        Assert.Equal(HotkeyCaptureResultKind.Captured, capture.Kind);
+        Assert.Equal("Pause", capture.Gesture!.Key);
+        Assert.True(HotkeyGestureCodec.TryNormalize("Ctrl+Pause", out var normalized));
+        Assert.Equal("Ctrl+Pause", normalized);
+        Assert.True(HotkeyGestureCodec.TryGetWindowsVirtualKey("Pause", out var pause));
+        Assert.Equal(0x13u, pause);
+    }
+
+    // Numeric legacy keys are System.Windows.Input.Key enum values from the
+    // frozen net10.0-windows WPF runtime: browser keys are 122-128, volume keys
+    // 129-131, media keys 132-135, and launch keys 136-139. Avalonia.Key 11.3.14
+    // uses the identical numbering (verified against both assemblies).
+    [Theory]
+    [InlineData(1, "Ctrl+Cancel")]
+    [InlineData(8, "Ctrl+CapsLock")]
+    [InlineData(30, "Ctrl+PrintScreen")]
+    [InlineData(33, "Ctrl+Help")]
+    [InlineData(73, "Ctrl+Sleep")]
+    [InlineData(114, "Ctrl+NumLock")]
+    [InlineData(115, "Ctrl+ScrollLock")]
+    [InlineData(122, "Ctrl+BrowserBack")]
+    [InlineData(128, "Ctrl+BrowserHome")]
+    [InlineData(129, "Ctrl+VolumeMute")]
+    [InlineData(132, "Ctrl+MediaNextTrack")]
+    [InlineData(135, "Ctrl+MediaPlayPause")]
+    [InlineData(136, "Ctrl+LaunchMail")]
+    [InlineData(137, "Ctrl+SelectMedia")]
+    [InlineData(138, "Ctrl+LaunchApplication1")]
+    [InlineData(139, "Ctrl+LaunchApplication2")]
+    public void LoadHotkeysFromLegacyWpfJson_ExtendedWpfNumericKeys_AreNormalized(int key, string expected)
+    {
+        var snapshot = HotkeyConfigurationCodec.Parse(
+            $"{{\"ShowGui\":{{\"Key\":{key},\"Modifiers\":2}},\"LinkStart\":null}}");
+
+        Assert.Equal(expected, snapshot.ShowGui);
+        Assert.Equal(string.Empty, snapshot.LinkStart);
+        Assert.Empty(snapshot.Warnings);
+    }
+
+    [Theory]
+    [InlineData("Capital", "Ctrl+CapsLock")]
+    [InlineData("Snapshot", "Ctrl+PrintScreen")]
+    [InlineData("Scroll", "Ctrl+ScrollLock")]
+    [InlineData("BrowserBack", "Ctrl+BrowserBack")]
+    [InlineData("MediaPlayPause", "Ctrl+MediaPlayPause")]
+    [InlineData("LaunchApplication2", "Ctrl+LaunchApplication2")]
+    public void LoadHotkeysFromLegacyWpfJson_ExtendedWpfKeyNames_AreNormalized(string keyName, string expected)
+    {
+        var snapshot = HotkeyConfigurationCodec.Parse(
+            $"{{\"ShowGui\":{{\"Key\":\"{keyName}\",\"Modifiers\":\"Control\"}},\"LinkStart\":null}}");
+
+        Assert.Equal(expected, snapshot.ShowGui);
+        Assert.Empty(snapshot.Warnings);
+    }
+
+    [Theory]
+    [InlineData(140, "Oem1")]
+    [InlineData(141, "OemPlus")]
+    [InlineData(142, "OemComma")]
+    [InlineData(143, "OemMinus")]
+    [InlineData(144, "OemPeriod")]
+    [InlineData(145, "OemQuestion")]
+    [InlineData(146, "OemTilde")]
+    [InlineData(149, "OemOpenBrackets")]
+    [InlineData(150, "OemPipe")]
+    [InlineData(151, "Oem6")]
+    [InlineData(152, "OemQuotes")]
+    [InlineData(154, "Oem102")]
+    public void LoadHotkeysFromLegacyWpfJson_OemNumericKeys_UseWpfEnumOffsets(int key, string expectedToken)
+    {
+        var snapshot = HotkeyConfigurationCodec.Parse(
+            $"{{\"ShowGui\":{{\"Key\":{key},\"Modifiers\":2}},\"LinkStart\":null}}");
+
+        Assert.Equal($"Ctrl+{expectedToken}", snapshot.ShowGui);
+        Assert.Empty(snapshot.Warnings);
+    }
+
+    [Theory]
+    [InlineData(27)] // Select: WPF accepts it, but no SharpHook trigger code exists.
+    [InlineData(28)] // Print: no SharpHook trigger code.
+    [InlineData(153)] // Oem8: no SharpHook trigger code.
+    [InlineData(147)] // AbntC1: no portable trigger token.
+    [InlineData(148)] // AbntC2: no portable trigger token.
+    [InlineData(14)] // ImeConvert: IME key without a portable trigger code.
+    public void LoadHotkeysFromLegacyWpfJson_KeysWithoutTriggerSupport_MigrateToUnboundWithWarning(int key)
+    {
+        // WPF registers these keys successfully; without a SharpHook trigger code the
+        // unified app cannot fire them, so the explicitly listed action migrates to
+        // unbound with a warning rather than being replaced by the default chord.
+        var snapshot = HotkeyConfigurationCodec.Parse(
+            $"{{\"ShowGui\":{{\"Key\":{key},\"Modifiers\":2}},\"LinkStart\":null}}");
+
+        Assert.Equal(string.Empty, snapshot.ShowGui);
+        Assert.NotEmpty(snapshot.Warnings);
+    }
+
+    [Fact]
+    public void LoadHotkeysFromLegacyWpfJson_ExplicitEntryWithoutModifiers_MigratesToUnboundWithWarning()
+    {
+        // WPF would register the bare F1 (RegisterHotKey accepts fsModifiers=0), but
+        // the portable gesture format requires a modifier, so the explicitly listed
+        // action ends unbound instead of being replaced by the default chord.
+        var snapshot = HotkeyConfigurationCodec.Parse(
+            "{\"ShowGui\":{\"Key\":90,\"Modifiers\":0},\"LinkStart\":{\"Key\":55,\"Modifiers\":7}}");
+
+        Assert.Equal(string.Empty, snapshot.ShowGui);
+        Assert.Equal("Ctrl+Shift+Alt+L", snapshot.LinkStart);
+        Assert.Contains(snapshot.Warnings, warning => warning.Contains("ShowGui", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void LoadHotkeysFromLegacyWpfJson_MissingAction_StaysUnbound()
+    {
+        // WPF parity (MaaHotKeyManager.GetPersistentHotKeys): a persisted legacy
+        // payload that omits an action simply never registers it; only a completely
+        // absent config value yields the initial defaults.
+        var snapshot = HotkeyConfigurationCodec.Parse(
+            "{\"LinkStart\":{\"Key\":55,\"Modifiers\":7}}");
+
+        Assert.Equal(string.Empty, snapshot.ShowGui);
+        Assert.Equal("Ctrl+Shift+Alt+L", snapshot.LinkStart);
+
+        var emptyObjectSnapshot = HotkeyConfigurationCodec.Parse("{}");
+        Assert.Equal(string.Empty, emptyObjectSnapshot.ShowGui);
+        Assert.Equal(string.Empty, emptyObjectSnapshot.LinkStart);
+
+        var unsetSnapshot = HotkeyConfigurationCodec.Parse(null);
+        Assert.Equal(HotkeyConfigurationCodec.DefaultHotkeyShowGui, unsetSnapshot.ShowGui);
+        Assert.Equal(HotkeyConfigurationCodec.DefaultHotkeyLinkStart, unsetSnapshot.LinkStart);
+    }
+
+    [Fact]
+    public void LoadHotkeysFromLegacyWpfJson_MalformedJson_FallsBackToDefaults()
+    {
+        // A payload that cannot be parsed at all is treated like an unreadable
+        // config value: the initial defaults still apply.
+        var snapshot = HotkeyConfigurationCodec.Parse("{not-json");
+
+        Assert.Equal(HotkeyConfigurationCodec.DefaultHotkeyShowGui, snapshot.ShowGui);
+        Assert.Equal(HotkeyConfigurationCodec.DefaultHotkeyLinkStart, snapshot.LinkStart);
+        Assert.NotEmpty(snapshot.Warnings);
+    }
+
+    [Theory]
+    [InlineData(Key.Cancel, "Cancel", 0x03u)]
+    [InlineData(Key.CapsLock, "CapsLock", 0x14u)]
+    [InlineData(Key.PrintScreen, "PrintScreen", 0x2Cu)]
+    [InlineData(Key.NumLock, "NumLock", 0x90u)]
+    [InlineData(Key.Scroll, "ScrollLock", 0x91u)]
+    [InlineData(Key.Sleep, "Sleep", 0x5Fu)]
+    [InlineData(Key.Help, "Help", 0x2Fu)]
+    [InlineData(Key.BrowserBack, "BrowserBack", 0xA6u)]
+    [InlineData(Key.BrowserHome, "BrowserHome", 0xACu)]
+    [InlineData(Key.VolumeMute, "VolumeMute", 0xADu)]
+    [InlineData(Key.MediaNextTrack, "MediaNextTrack", 0xB0u)]
+    [InlineData(Key.MediaPlayPause, "MediaPlayPause", 0xB3u)]
+    [InlineData(Key.LaunchMail, "LaunchMail", 0xB4u)]
+    [InlineData(Key.SelectMedia, "SelectMedia", 0xB5u)]
+    [InlineData(Key.LaunchApplication1, "LaunchApplication1", 0xB6u)]
+    public void HotkeyCapture_AndWindowsReservation_SupportExtendedWpfKeys(
+        Key key,
+        string expectedToken,
+        uint expectedVirtualKey)
+    {
+        var capture = HotkeyGestureCodec.Capture(key, KeyModifiers.Control);
+
+        Assert.Equal(HotkeyCaptureResultKind.Captured, capture.Kind);
+        Assert.Equal(expectedToken, capture.Gesture!.Key);
+        Assert.True(HotkeyGestureCodec.TryGetWindowsVirtualKey(capture.Gesture.Key, out var virtualKey));
+        Assert.Equal(expectedVirtualKey, virtualKey);
+    }
+
+    [Theory]
+    [InlineData(Key.Oem1, "Oem1", 0xBAu)]
+    [InlineData(Key.Oem6, "Oem6", 0xDDu)]
+    [InlineData(Key.Oem102, "Oem102", 0xE2u)]
+    public void HotkeyCapture_OemKeysWithDuplicatedAvaloniaNames_CaptureByPhysicalKey(
+        Key key,
+        string expectedToken,
+        uint expectedVirtualKey)
+    {
+        // Avalonia.Key declares duplicate names for these values (OemSemicolon,
+        // OemCloseBrackets, OemBackslash); capture must still resolve the
+        // canonical WPF-compatible token.
+        var capture = HotkeyGestureCodec.Capture(key, KeyModifiers.Control);
+
+        Assert.Equal(HotkeyCaptureResultKind.Captured, capture.Kind);
+        Assert.Equal(expectedToken, capture.Gesture!.Key);
+        Assert.True(HotkeyGestureCodec.TryGetWindowsVirtualKey(capture.Gesture.Key, out var virtualKey));
+        Assert.Equal(expectedVirtualKey, virtualKey);
+    }
+
+    [Fact]
+    public void HotkeyCapture_AltModifiedLetter_CapturesRealKey()
+    {
+        // Avalonia reports Alt+M as Key.M with the Alt modifier: its Win32
+        // KeyInterop table has no Key.System entry, so the WPF Key.System
+        // masking never occurs here and the physical key is captured directly.
+        var capture = HotkeyGestureCodec.Capture(Key.M, KeyModifiers.Alt);
+
+        Assert.Equal(HotkeyCaptureResultKind.Captured, capture.Kind);
+        Assert.Equal("M", capture.Gesture!.Key);
+        Assert.True(capture.Gesture.Alt);
+        Assert.Equal("Alt+M", capture.Gesture.ToStorageString());
+    }
+
+    [Fact]
+    public void HotkeyCapture_SystemMaskingKey_IsRejectedInsteadOfMisbound()
+    {
+        // Key.System is a WPF masking key that no Avalonia 11.x backend produces
+        // from real input. If it ever arrives, reject it instead of binding an
+        // unmappable token.
+        var capture = HotkeyGestureCodec.Capture(Key.System, KeyModifiers.Alt);
+
+        Assert.Equal(HotkeyCaptureResultKind.Rejected, capture.Kind);
+    }
+
+    [Theory]
+    [InlineData(Key.NumPad0, "NumPad0", 0x60u)]
+    [InlineData(Key.NumPad1, "NumPad1", 0x61u)]
+    [InlineData(Key.NumPad9, "NumPad9", 0x69u)]
+    [InlineData(Key.Add, "Add", 0x6Bu)]
+    public void HotkeyCapture_AndWindowsReservation_PreserveKeypadKeys(
+        Key key,
+        string expectedToken,
+        uint expectedVirtualKey)
+    {
+        var capture = HotkeyGestureCodec.Capture(key, KeyModifiers.Control);
+
+        Assert.Equal(HotkeyCaptureResultKind.Captured, capture.Kind);
+        Assert.Equal(expectedToken, capture.Gesture!.Key);
+        Assert.True(HotkeyGestureCodec.TryGetWindowsVirtualKey(capture.Gesture.Key, out var virtualKey));
+        Assert.Equal(expectedVirtualKey, virtualKey);
+    }
+
+    [Fact]
+    public async Task ImportLegacyConfigurationsAsync_ReplacesRuntimeHotkeys()
+    {
+        var hotkeyService = new ScriptedHotkeyService();
+        await using var fixture = await RuntimeFixture.CreateAsync(hotkeyService: hotkeyService);
+        fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.HotKeys] = JsonValue.Create(
+            "ShowGui=Ctrl+1;LinkStart=Ctrl+2");
+        fixture.Config.CurrentConfig.GlobalValues[HotkeyConfigurationCodec.MacDefaultsVersionKey] = JsonValue.Create("1");
+        await fixture.Config.SaveAsync();
+
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        await vm.RegisterHotkeysAsync();
+
+        var legacyGuiPath = Path.Combine(fixture.Root, "config", "gui.json");
+        await File.WriteAllTextAsync(
+            legacyGuiPath,
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": {}
+              },
+              "Global": {
+                "HotKeys": "ShowGui=Ctrl+Alt+N;LinkStart="
+              }
+            }
+            """);
+
+        var report = await vm.ImportLegacyConfigurationsAsync(
+            new LegacyImportRequest(
+                LegacyConfigSnapshot.FromPaths(null, legacyGuiPath),
+                ImportSource.GuiOnly,
+                ManualImport: true,
+                AllowPartialImport: true));
+
+        Assert.True(report.AppliedConfig);
+        Assert.Equal("Ctrl+Alt+N", vm.HotkeyShowGui);
+        Assert.Equal(string.Empty, vm.HotkeyLinkStart);
+        Assert.Collection(
+            hotkeyService.RegisterCalls,
+            call => Assert.Equal(("ShowGui", "Ctrl+1"), call),
+            call => Assert.Equal(("LinkStart", "Ctrl+2"), call),
+            call => Assert.Equal(("ShowGui", "Ctrl+Alt+N"), call));
+        Assert.Contains("LinkStart", hotkeyService.UnregisterCalls);
+        Assert.True(hotkeyService.TryGetRegisteredHotkey("ShowGui", out var showGui));
+        Assert.Equal("Ctrl+Alt+N", showGui.Gesture);
+        Assert.False(hotkeyService.TryGetRegisteredHotkey("LinkStart", out _));
+    }
+
+    [Fact]
+    public async Task ImportLegacyConfigurationsAsync_RegistrationConflict_RestoresPersistedActiveHotkey()
+    {
+        var hotkeyService = new ScriptedHotkeyService();
+        await using var fixture = await RuntimeFixture.CreateAsync(hotkeyService: hotkeyService);
+        fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.HotKeys] = JsonValue.Create(
+            "ShowGui=Ctrl+1;LinkStart=Ctrl+2");
+        fixture.Config.CurrentConfig.GlobalValues[HotkeyConfigurationCodec.MacDefaultsVersionKey] = JsonValue.Create("1");
+        await fixture.Config.SaveAsync();
+
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        await vm.RegisterHotkeysAsync();
+        hotkeyService.EnqueueRegisterResult(
+            "ShowGui",
+            PlatformOperation.Failed("test", "conflict", PlatformErrorCodes.HotkeyConflict, "hotkey.register"));
+
+        var legacyGuiPath = Path.Combine(fixture.Root, "config", "gui.json");
+        await File.WriteAllTextAsync(
+            legacyGuiPath,
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": {}
+              },
+              "Global": {
+                "HotKeys": "ShowGui=Ctrl+Alt+N;LinkStart=Ctrl+Alt+L"
+              }
+            }
+            """);
+
+        var report = await vm.ImportLegacyConfigurationsAsync(
+            new LegacyImportRequest(
+                LegacyConfigSnapshot.FromPaths(null, legacyGuiPath),
+                ImportSource.GuiOnly,
+                ManualImport: true,
+                AllowPartialImport: true));
+
+        Assert.True(report.AppliedConfig);
+        Assert.Equal("Ctrl+1", vm.HotkeyShowGui);
+        Assert.Equal("Ctrl+1", vm.ShowGuiHotkeyState.GestureStorage);
+        Assert.Equal("Ctrl+Alt+L", vm.HotkeyLinkStart);
+        Assert.True(hotkeyService.TryGetRegisteredHotkey("ShowGui", out var showGui));
+        Assert.Equal("Ctrl+1", showGui.Gesture);
+        Assert.True(hotkeyService.TryGetRegisteredHotkey("LinkStart", out var linkStart));
+        Assert.Equal("Ctrl+Alt+L", linkStart.Gesture);
+
+        var persisted = ParseHotkeys(ReadGlobalString(fixture.Config, ConfigurationKeys.HotKeys));
+        Assert.Equal("Ctrl+1", persisted["ShowGui"]);
+        Assert.Equal("Ctrl+Alt+L", persisted["LinkStart"]);
+        Assert.Contains(
+            PlatformCapabilityTextMap.FormatErrorCode("zh-cn", PlatformErrorCodes.HotkeyConflict, "ignored"),
+            vm.HotkeyErrorMessage,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task RegisterHotkeysAsync_ClearBinding_UnregistersAndPersistsEmptyGesture()
     {
         var hotkeyService = new ScriptedHotkeyService();
@@ -280,7 +707,7 @@ public sealed class SettingsHotkeyFeedbackFeatureTests
 
         vm.Language = "zh-cn";
         Assert.Equal("[热键] 显示/收起 MAA", vm.ShowGuiHotkeyState.Title);
-        Assert.Equal("录入规则：至少按下一个修饰键与一个普通键才会提交；Esc 取消；Backspace/Delete 清空绑定。", vm.HotkeyCaptureGuideText);
+        Assert.Equal("录入规则：至少按下一个修饰键与一个普通键才会提交；无修饰键会清空绑定。", vm.HotkeyCaptureGuideText);
         Assert.Equal("全局", vm.ShowGuiHotkeyState.ScopeLabel);
         vm.HandleHotkeyCapture(
             "ShowGui",
@@ -291,7 +718,7 @@ public sealed class SettingsHotkeyFeedbackFeatureTests
 
         vm.Language = "en-us";
         Assert.Equal("[HotKey] Show/collapse MAA", vm.ShowGuiHotkeyState.Title);
-        Assert.Equal("Recording rules: press at least one modifier plus one non-modifier key. Esc cancels. Backspace/Delete clears the binding.", vm.HotkeyCaptureGuideText);
+        Assert.Equal("Recording rules: press at least one modifier plus one non-modifier key. Any unmodified key clears the binding.", vm.HotkeyCaptureGuideText);
         Assert.Equal("Global", vm.ShowGuiHotkeyState.ScopeLabel);
         vm.HandleHotkeyCapture(
             "ShowGui",

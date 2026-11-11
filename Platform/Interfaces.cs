@@ -348,6 +348,19 @@ public interface IGlobalHotkeyService
             if (string.IsNullOrWhiteSpace(request.Gesture))
             {
                 operation = await UnregisterAsync(request.Name, cancellationToken);
+                if (!operation.Success && string.Equals(operation.ErrorCode, PlatformErrorCodes.HotkeyNotFound, StringComparison.Ordinal))
+                {
+                    operation = operation.UsedFallback
+                        ? PlatformOperation.FallbackSuccess(
+                            Capability.Provider,
+                            $"Hotkey `{request.Name}` was already unregistered.",
+                            "hotkey.unregister",
+                            PlatformErrorCodes.HotkeyFallback)
+                        : PlatformOperation.NativeSuccess(
+                            Capability.Provider,
+                            $"Hotkey `{request.Name}` was already unregistered.",
+                            "hotkey.unregister");
+                }
                 displayGesture = string.Empty;
             }
             else

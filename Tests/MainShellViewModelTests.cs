@@ -1223,6 +1223,288 @@ public sealed class MainShellViewModelTests
     }
 
     [Fact]
+    public async Task ExecuteTrayCommandAsync_Start_WhileStopping_IsWpfNoOp()
+    {
+        var bridge = new BlockingStopBridge();
+        await using var fixture = await TestFixture.CreateAsync(
+            existingAvaloniaJson: CreateRunnableShellConfigJson(),
+            bridge: bridge);
+        await fixture.ViewModel.InitializeAsync();
+        await SetSessionStateAsync(fixture.Runtime.SessionService, SessionState.Running);
+
+        var stopTask = fixture.Runtime.SessionService.StopAsync();
+        Assert.True(await WaitUntilAsync(
+            () => fixture.Runtime.SessionService.CurrentState == SessionState.Stopping,
+            retry: 80,
+            delayMs: 25));
+
+        var errorBefore = fixture.ViewModel.TaskQueuePage.LastErrorMessage;
+        var action = await fixture.ViewModel.ExecuteTrayCommandAsync(TrayCommandId.Start, "hotkey-linkstart");
+
+        Assert.Equal(ShellUiAction.None, action);
+        Assert.Equal(SessionState.Stopping, fixture.Runtime.SessionService.CurrentState);
+        Assert.Equal(errorBefore, fixture.ViewModel.TaskQueuePage.LastErrorMessage);
+        Assert.Equal(1, bridge.StopCallCount);
+
+        bridge.ReleaseStop();
+        await stopTask;
+    }
+
+    [Fact]
+    public async Task ExecuteTrayCommandAsync_Start_WhileConnecting_RequestsStopInsteadOfSecondStart()
+    {
+        // WPF parity (MaaHotKeyActionHandler.HandleLinkStart): once LinkStart has been
+        // dispatched the RunningState is no longer idle, so a second hotkey press while
+        // the connect is still in flight stops instead of starting a second time.
+        var bridge = new BlockingConnectBridge();
+        await using var fixture = await TestFixture.CreateAsync(
+            existingAvaloniaJson: CreateRunnableShellConfigJson(),
+            bridge: bridge);
+        await fixture.ViewModel.InitializeAsync();
+        Assert.True(await WaitUntilAsync(() => fixture.ViewModel.IsCoreReady, retry: 160, delayMs: 25));
+
+        var firstStart = fixture.ViewModel.ExecuteTrayCommandAsync(TrayCommandId.Start, "hotkey-linkstart");
+        Assert.True(await WaitUntilAsync(
+            () => fixture.Runtime.SessionService.CurrentState == SessionState.Connecting,
+            retry: 160,
+            delayMs: 25));
+
+        var action = await fixture.ViewModel.ExecuteTrayCommandAsync(TrayCommandId.Start, "hotkey-linkstart");
+
+        Assert.Equal(ShellUiAction.None, action);
+        bridge.ReleaseConnect();
+        await firstStart;
+        Assert.Equal(1, bridge.ConnectCallCount);
+        Assert.Equal(0, bridge.StartCallCount);
+        Assert.Equal(SessionState.Idle, fixture.Runtime.SessionService.CurrentState);
+    }
+
+    [Fact]
+    public async Task ExecuteTrayCommandAsync_Start_WhileConnectingWithActiveStartRequest_CancelsStartRequest()
+    {
+        // Same WPF parity, but with the connect issued by the task queue start request:
+        // the hotkey cancels the in-flight start request exactly like the run button.
+        var bridge = new BlockingConnectBridge();
+        await using var fixture = await TestFixture.CreateAsync(
+            existingAvaloniaJson: CreateRunnableShellConfigJson(),
+            bridge: bridge);
+        await fixture.ViewModel.InitializeAsync();
+        Assert.True(await WaitUntilAsync(() => fixture.ViewModel.IsCoreReady, retry: 160, delayMs: 25));
+
+        var startTask = fixture.ViewModel.TaskQueuePage.StartAsync();
+        Assert.True(await WaitUntilAsync(
+            () => fixture.ViewModel.TaskQueuePage.IsStartRequestActive
+                && fixture.Runtime.SessionService.CurrentState == SessionState.Connecting,
+            retry: 160,
+            delayMs: 25));
+
+        var action = await fixture.ViewModel.ExecuteTrayCommandAsync(TrayCommandId.Start, "hotkey-linkstart");
+
+        Assert.Equal(ShellUiAction.None, action);
+        Assert.False(fixture.ViewModel.TaskQueuePage.IsStartRequestActive);
+        bridge.ReleaseConnect();
+        await startTask;
+        Assert.Equal(0, bridge.StartCallCount);
+        Assert.NotEqual(SessionState.Running, fixture.Runtime.SessionService.CurrentState);
+    }
+
+    [Fact]
+    public async Task ExecuteTrayCommandAsync_Start_WhileConnectedStartPreamble_CancelsStartRequestInsteadOfSecondStart()
+    {
+        // WPF parity (MaaHotKeyActionHandler.HandleLinkStart): RunningState.SetIdle(false)
+        // flips the moment LinkStart() is dispatched, so a hotkey press during the
+        // Connected start preamble (connect done, session not yet Running) stops the
+        // start instead of dispatching a second start that would re-run the preamble
+        // and hit a spurious already-running failure.
+        var bridge = new BlockingAppendBridge();
+        await using var fixture = await TestFixture.CreateAsync(
+            existingAvaloniaJson: CreateRunnableShellConfigJson(),
+            bridge: bridge);
+        await fixture.ViewModel.InitializeAsync();
+        Assert.True(await WaitUntilAsync(() => fixture.ViewModel.IsCoreReady, retry: 160, delayMs: 25));
+
+        var startTask = fixture.ViewModel.TaskQueuePage.StartAsync();
+        Assert.True(await WaitUntilAsync(
+            () => fixture.ViewModel.TaskQueuePage.IsStartRequestActive
+                && fixture.Runtime.SessionService.CurrentState == SessionState.Connected
+                && bridge.AppendCallCount >= 1,
+            retry: 160,
+            delayMs: 25));
+
+        var action = await fixture.ViewModel
+            .ExecuteTrayCommandAsync(TrayCommandId.Start, "hotkey-linkstart")
+            .WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal(ShellUiAction.None, action);
+        Assert.False(fixture.ViewModel.TaskQueuePage.IsStartRequestActive);
+        bridge.ReleaseAppend();
+        await startTask;
+        Assert.Equal(1, bridge.ConnectCallCount);
+        Assert.Equal(1, bridge.AppendCallCount);
+        Assert.Equal(0, bridge.StartCallCount);
+        Assert.Equal(SessionState.Connected, fixture.Runtime.SessionService.CurrentState);
+    }
+
+    [Fact]
+    public async Task ExecuteTrayCommandAsync_LinkStartHotkey_WhileConnectingAndBackgrounded_SendsStoppedNotification()
+    {
+        // WPF parity (MaaHotKeyActionHandler.HandleLinkStart): stopping from the
+        // LinkStart hotkey while the window is minimized shows BackgroundLinkStopped.
+        var bridge = new BlockingConnectBridge();
+        var notifications = new TrackingNotificationService();
+        await using var fixture = await TestFixture.CreateAsync(
+            existingAvaloniaJson: CreateRunnableShellConfigJson(),
+            bridge: bridge,
+            notificationService: notifications);
+        await fixture.ViewModel.InitializeAsync();
+        Assert.True(await WaitUntilAsync(() => fixture.ViewModel.IsCoreReady, retry: 160, delayMs: 25));
+        fixture.ViewModel.SetMainWindowBackgrounded(true);
+
+        var firstStart = fixture.ViewModel.ExecuteTrayCommandAsync(TrayCommandId.Start, "hotkey-linkstart");
+        Assert.True(await WaitUntilAsync(
+            () => fixture.Runtime.SessionService.CurrentState == SessionState.Connecting,
+            retry: 160,
+            delayMs: 25));
+
+        var action = await fixture.ViewModel.ExecuteTrayCommandAsync(TrayCommandId.Start, "hotkey-linkstart");
+
+        Assert.Equal(ShellUiAction.None, action);
+        bridge.ReleaseConnect();
+        await firstStart;
+        Assert.Contains(
+            AchievementTextCatalog.GetString("BackgroundLinkStopped", fixture.ViewModel.CurrentShellLanguage, "Tasks stopped"),
+            notifications.Titles);
+    }
+
+    [Fact]
+    public async Task ExecuteTrayCommandAsync_LinkStartHotkey_WhenBackgrounded_SendsStartedNotification()
+    {
+        var bridge = new FakeBridge();
+        var notifications = new TrackingNotificationService();
+        await using var fixture = await TestFixture.CreateAsync(
+            existingAvaloniaJson: CreateRunnableShellConfigJson(),
+            bridge: bridge,
+            notificationService: notifications);
+        await fixture.ViewModel.InitializeAsync();
+        Assert.True(await WaitUntilAsync(() => fixture.ViewModel.IsCoreReady, retry: 160, delayMs: 25));
+        fixture.ViewModel.SetMainWindowBackgrounded(true);
+
+        var action = await fixture.ViewModel.ExecuteTrayCommandAsync(TrayCommandId.Start, "hotkey-linkstart");
+
+        Assert.Equal(ShellUiAction.None, action);
+        Assert.Equal(SessionState.Running, fixture.Runtime.SessionService.CurrentState);
+        var title = Assert.Single(notifications.Titles);
+        Assert.Equal(
+            AchievementTextCatalog.GetString("BackgroundLinkStarted", fixture.ViewModel.CurrentShellLanguage, "Tasks started"),
+            title);
+    }
+
+    [Fact]
+    public async Task ExecuteTrayCommandAsync_LinkStartHotkey_WhenForegrounded_SendsNoNotification()
+    {
+        var bridge = new FakeBridge();
+        var notifications = new TrackingNotificationService();
+        await using var fixture = await TestFixture.CreateAsync(
+            existingAvaloniaJson: CreateRunnableShellConfigJson(),
+            bridge: bridge,
+            notificationService: notifications);
+        await fixture.ViewModel.InitializeAsync();
+        Assert.True(await WaitUntilAsync(() => fixture.ViewModel.IsCoreReady, retry: 160, delayMs: 25));
+
+        var action = await fixture.ViewModel.ExecuteTrayCommandAsync(TrayCommandId.Start, "hotkey-linkstart");
+
+        Assert.Equal(ShellUiAction.None, action);
+        Assert.Equal(SessionState.Running, fixture.Runtime.SessionService.CurrentState);
+        Assert.Empty(notifications.Titles);
+    }
+
+    [Fact]
+    public async Task ExecuteTrayCommandAsync_LinkStartHotkey_WhenBackgroundedAndConfigBlocked_SendsStartedNotification()
+    {
+        // WPF parity (MaaHotKeyActionHandler.HandleLinkStart): from the idle state the
+        // hotkey dispatches LinkStart() and, while minimized, shows BackgroundLinkStarted
+        // even when configuration validation then rejects the start.
+        var notifications = new TrackingNotificationService();
+        await using var fixture = await TestFixture.CreateAsync(
+            existingAvaloniaJson: CreateBlockingConfigJson(),
+            notificationService: notifications);
+        await fixture.ViewModel.InitializeAsync();
+        Assert.True(fixture.ViewModel.HasBlockingConfigIssues);
+        Assert.False(fixture.ViewModel.CanStartExecution);
+        fixture.ViewModel.SetMainWindowBackgrounded(true);
+
+        var action = await fixture.ViewModel.ExecuteTrayCommandAsync(TrayCommandId.Start, "hotkey-linkstart");
+
+        Assert.Equal(ShellUiAction.None, action);
+        Assert.NotEqual(SessionState.Running, fixture.Runtime.SessionService.CurrentState);
+        var title = Assert.Single(notifications.Titles);
+        Assert.Equal(
+            AchievementTextCatalog.GetString("BackgroundLinkStarted", fixture.ViewModel.CurrentShellLanguage, "Tasks started"),
+            title);
+    }
+
+    [Fact]
+    public async Task ExecuteTrayCommandAsync_LinkStartHotkey_WhenForegroundedAndConfigBlocked_SendsNoNotification()
+    {
+        var notifications = new TrackingNotificationService();
+        await using var fixture = await TestFixture.CreateAsync(
+            existingAvaloniaJson: CreateBlockingConfigJson(),
+            notificationService: notifications);
+        await fixture.ViewModel.InitializeAsync();
+        Assert.True(fixture.ViewModel.HasBlockingConfigIssues);
+
+        var action = await fixture.ViewModel.ExecuteTrayCommandAsync(TrayCommandId.Start, "hotkey-linkstart");
+
+        Assert.Equal(ShellUiAction.None, action);
+        Assert.Empty(notifications.Titles);
+    }
+
+    [Fact]
+    public async Task ExecuteTrayCommandAsync_LinkStartHotkey_WhenBackgroundedAndRunning_SendsStoppedNotification()
+    {
+        var bridge = new FakeBridge();
+        var notifications = new TrackingNotificationService();
+        await using var fixture = await TestFixture.CreateAsync(
+            existingAvaloniaJson: CreateRunnableShellConfigJson(),
+            bridge: bridge,
+            notificationService: notifications);
+        await fixture.ViewModel.InitializeAsync();
+        Assert.True(await WaitUntilAsync(() => fixture.ViewModel.IsCoreReady, retry: 160, delayMs: 25));
+        fixture.ViewModel.SetMainWindowBackgrounded(true);
+        await fixture.ViewModel.ExecuteTrayCommandAsync(TrayCommandId.Start, "hotkey-linkstart");
+        Assert.Equal(SessionState.Running, fixture.Runtime.SessionService.CurrentState);
+        notifications.Titles.Clear();
+
+        var action = await fixture.ViewModel.ExecuteTrayCommandAsync(TrayCommandId.Start, "hotkey-linkstart");
+
+        Assert.Equal(ShellUiAction.None, action);
+        var title = Assert.Single(notifications.Titles);
+        Assert.Equal(
+            AchievementTextCatalog.GetString("BackgroundLinkStopped", fixture.ViewModel.CurrentShellLanguage, "Tasks stopped"),
+            title);
+    }
+
+    [Fact]
+    public async Task ExecuteTrayCommandAsync_TrayStart_WhenBackgrounded_SendsNoNotification()
+    {
+        var bridge = new FakeBridge();
+        var notifications = new TrackingNotificationService();
+        await using var fixture = await TestFixture.CreateAsync(
+            existingAvaloniaJson: CreateRunnableShellConfigJson(),
+            bridge: bridge,
+            notificationService: notifications);
+        await fixture.ViewModel.InitializeAsync();
+        Assert.True(await WaitUntilAsync(() => fixture.ViewModel.IsCoreReady, retry: 160, delayMs: 25));
+        fixture.ViewModel.SetMainWindowBackgrounded(true);
+
+        var action = await fixture.ViewModel.ExecuteTrayCommandAsync(TrayCommandId.Start, "test-tray");
+
+        Assert.Equal(ShellUiAction.None, action);
+        Assert.Equal(SessionState.Running, fixture.Runtime.SessionService.CurrentState);
+        Assert.Empty(notifications.Titles);
+    }
+
+    [Fact]
     public async Task SetTrayVisibleAsync_ShouldRecordDiagnosticsAndPushGrowl()
     {
         await using var fixture = await TestFixture.CreateAsync();
@@ -2954,6 +3236,7 @@ public sealed class MainShellViewModelTests
             string? existingAvaloniaJson = null,
             IAppDialogService? dialogService = null,
             IMaaCoreBridge? bridge = null,
+            INotificationService? notificationService = null,
             bool preloadConfig = true)
         {
             var root = Path.Combine(Path.GetTempPath(), "maa-unified-tests", Guid.NewGuid().ToString("N"));
@@ -2988,7 +3271,7 @@ public sealed class MainShellViewModelTests
             var platform = new PlatformServiceBundle
             {
                 TrayService = tray,
-                NotificationService = new NoOpNotificationService(),
+                NotificationService = notificationService ?? new NoOpNotificationService(),
                 HotkeyService = hotkeyService ?? new NoOpGlobalHotkeyService(),
                 AutostartService = new NoOpAutostartService(),
                 FileDialogService = new NoOpFileDialogService(),
@@ -3400,7 +3683,20 @@ public sealed class MainShellViewModelTests
         }
     }
 
-    private sealed class CapturingTrayService : ITrayService
+        private sealed class TrackingNotificationService : INotificationService
+    {
+        public List<string> Titles { get; } = new();
+
+        public PlatformCapabilityStatus Capability { get; } = new(true, "tracking", "tracking", false, null);
+
+        public Task<PlatformOperationResult> NotifyAsync(string title, string message, CancellationToken cancellationToken = default)
+        {
+            Titles.Add(title);
+            return Task.FromResult(PlatformOperation.NativeSuccess("tracking", "sent", "notify"));
+        }
+    }
+
+private sealed class CapturingTrayService : ITrayService
     {
         public PlatformCapabilityStatus Capability { get; } = new(
             Supported: true,
@@ -3551,6 +3847,237 @@ public sealed class MainShellViewModelTests
         public ValueTask DisposeAsync()
         {
             _callbackChannel.Writer.TryComplete();
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    private sealed class BlockingStopBridge : IMaaCoreBridge
+    {
+        private readonly Channel<CoreCallbackEvent> _callbackChannel = Channel.CreateUnbounded<CoreCallbackEvent>();
+        private readonly TaskCompletionSource<bool> _stopGate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public int StopCallCount { get; private set; }
+
+        public void ReleaseStop()
+        {
+            _stopGate.TrySetResult(true);
+        }
+
+        public Task<CoreResult<CoreInitializeInfo>> InitializeAsync(
+            CoreInitializeRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(CoreResult<CoreInitializeInfo>.Ok(new CoreInitializeInfo(request.BaseDirectory, "fake", "fake", request.ClientType)));
+        }
+
+        public Task<CoreResult<bool>> ConnectAsync(CoreConnectionInfo connectionInfo, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(CoreResult<bool>.Ok(true));
+        }
+
+        public Task<CoreResult<int>> AppendTaskAsync(CoreTaskRequest task, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(CoreResult<int>.Ok(1));
+        }
+
+        public Task<CoreResult<bool>> StartAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(CoreResult<bool>.Ok(true));
+        }
+
+        public async Task<CoreResult<bool>> StopAsync(CancellationToken cancellationToken = default)
+        {
+            StopCallCount++;
+            await _stopGate.Task.WaitAsync(cancellationToken);
+            return CoreResult<bool>.Ok(true);
+        }
+
+        public Task<CoreResult<CoreRuntimeStatus>> GetRuntimeStatusAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(CoreResult<CoreRuntimeStatus>.Ok(new CoreRuntimeStatus(true, true, false)));
+        }
+
+        public Task<CoreResult<bool>> AttachWindowAsync(CoreAttachWindowRequest request, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(CoreResult<bool>.Fail(new CoreError(CoreErrorCode.NotSupported, "not supported")));
+        }
+
+        public Task<CoreResult<byte[]>> GetImageAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(CoreResult<byte[]>.Fail(new CoreError(CoreErrorCode.GetImageFailed, "not supported")));
+        }
+
+        public async IAsyncEnumerable<CoreCallbackEvent> CallbackStreamAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            await foreach (var callback in _callbackChannel.Reader.ReadAllAsync(cancellationToken))
+            {
+                yield return callback;
+            }
+        }
+
+        public ValueTask DisposeAsync()
+        {
+            _callbackChannel.Writer.TryComplete();
+            _stopGate.TrySetResult(true);
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    private sealed class BlockingConnectBridge : IMaaCoreBridge
+    {
+        private readonly Channel<CoreCallbackEvent> _callbackChannel = Channel.CreateUnbounded<CoreCallbackEvent>();
+        private readonly TaskCompletionSource<bool> _connectGate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _connected;
+
+        public int ConnectCallCount { get; private set; }
+
+        public int StartCallCount { get; private set; }
+
+        public void ReleaseConnect()
+        {
+            _connectGate.TrySetResult(true);
+        }
+
+        public Task<CoreResult<CoreInitializeInfo>> InitializeAsync(
+            CoreInitializeRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(CoreResult<CoreInitializeInfo>.Ok(new CoreInitializeInfo(request.BaseDirectory, "fake", "fake", request.ClientType)));
+        }
+
+        public async Task<CoreResult<bool>> ConnectAsync(CoreConnectionInfo connectionInfo, CancellationToken cancellationToken = default)
+        {
+            ConnectCallCount++;
+            await _connectGate.Task.WaitAsync(cancellationToken);
+            Interlocked.Exchange(ref _connected, 1);
+            return CoreResult<bool>.Ok(true);
+        }
+
+        public Task<CoreResult<int>> AppendTaskAsync(CoreTaskRequest task, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(CoreResult<int>.Ok(1));
+        }
+
+        public Task<CoreResult<bool>> StartAsync(CancellationToken cancellationToken = default)
+        {
+            StartCallCount++;
+            return Task.FromResult(CoreResult<bool>.Ok(true));
+        }
+
+        public Task<CoreResult<bool>> StopAsync(CancellationToken cancellationToken = default)
+        {
+            Interlocked.Exchange(ref _connected, 0);
+            return Task.FromResult(CoreResult<bool>.Ok(true));
+        }
+
+        // The runtime status mirrors the gate: while ConnectAsync is still blocked the
+        // core is not connected yet, so a superseded connect that resolves its failure
+        // state from the runtime status lands on Idle instead of a phantom Connected.
+        public Task<CoreResult<CoreRuntimeStatus>> GetRuntimeStatusAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(CoreResult<CoreRuntimeStatus>.Ok(new CoreRuntimeStatus(true, _connected == 1, false)));
+        }
+
+        public Task<CoreResult<bool>> AttachWindowAsync(CoreAttachWindowRequest request, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(CoreResult<bool>.Fail(new CoreError(CoreErrorCode.NotSupported, "not supported")));
+        }
+
+        public Task<CoreResult<byte[]>> GetImageAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(CoreResult<byte[]>.Fail(new CoreError(CoreErrorCode.GetImageFailed, "not supported")));
+        }
+
+        public async IAsyncEnumerable<CoreCallbackEvent> CallbackStreamAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            await foreach (var callback in _callbackChannel.Reader.ReadAllAsync(cancellationToken))
+            {
+                yield return callback;
+            }
+        }
+
+        public ValueTask DisposeAsync()
+        {
+            _callbackChannel.Writer.TryComplete();
+            _connectGate.TrySetResult(true);
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    private sealed class BlockingAppendBridge : IMaaCoreBridge
+    {
+        private readonly Channel<CoreCallbackEvent> _callbackChannel = Channel.CreateUnbounded<CoreCallbackEvent>();
+        private readonly TaskCompletionSource<bool> _appendGate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public int ConnectCallCount { get; private set; }
+
+        public int AppendCallCount { get; private set; }
+
+        public int StartCallCount { get; private set; }
+
+        public void ReleaseAppend()
+        {
+            _appendGate.TrySetResult(true);
+        }
+
+        public Task<CoreResult<CoreInitializeInfo>> InitializeAsync(
+            CoreInitializeRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(CoreResult<CoreInitializeInfo>.Ok(new CoreInitializeInfo(request.BaseDirectory, "fake", "fake", request.ClientType)));
+        }
+
+        public Task<CoreResult<bool>> ConnectAsync(CoreConnectionInfo connectionInfo, CancellationToken cancellationToken = default)
+        {
+            ConnectCallCount++;
+            return Task.FromResult(CoreResult<bool>.Ok(true));
+        }
+
+        public async Task<CoreResult<int>> AppendTaskAsync(CoreTaskRequest task, CancellationToken cancellationToken = default)
+        {
+            AppendCallCount++;
+            await _appendGate.Task.WaitAsync(cancellationToken);
+            return CoreResult<int>.Ok(1);
+        }
+
+        public Task<CoreResult<bool>> StartAsync(CancellationToken cancellationToken = default)
+        {
+            StartCallCount++;
+            return Task.FromResult(CoreResult<bool>.Ok(true));
+        }
+
+        public Task<CoreResult<bool>> StopAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(CoreResult<bool>.Ok(true));
+        }
+
+        public Task<CoreResult<CoreRuntimeStatus>> GetRuntimeStatusAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(CoreResult<CoreRuntimeStatus>.Ok(new CoreRuntimeStatus(true, true, false)));
+        }
+
+        public Task<CoreResult<bool>> AttachWindowAsync(CoreAttachWindowRequest request, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(CoreResult<bool>.Fail(new CoreError(CoreErrorCode.NotSupported, "not supported")));
+        }
+
+        public Task<CoreResult<byte[]>> GetImageAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(CoreResult<byte[]>.Fail(new CoreError(CoreErrorCode.GetImageFailed, "not supported")));
+        }
+
+        public async IAsyncEnumerable<CoreCallbackEvent> CallbackStreamAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            await foreach (var callback in _callbackChannel.Reader.ReadAllAsync(cancellationToken))
+            {
+                yield return callback;
+            }
+        }
+
+        public ValueTask DisposeAsync()
+        {
+            _callbackChannel.Writer.TryComplete();
+            _appendGate.TrySetResult(true);
             return ValueTask.CompletedTask;
         }
     }

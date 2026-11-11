@@ -2007,6 +2007,68 @@ public sealed class DesktopNotificationService : INotificationService, INotifica
     }
 }
 
+internal interface IWindowsHotkeyReservation
+{
+    bool TryReserve(HotkeyGesture gesture, nint windowHandle, out int errorCode);
+
+    void Release();
+}
+
+internal sealed class Win32HotkeyReservation : IWindowsHotkeyReservation
+{
+    private const uint ModAlt = 0x0001;
+    private const uint ModControl = 0x0002;
+    private const uint ModShift = 0x0004;
+    private const uint ModWin = 0x0008;
+    private static int _nextId = 0x4D20;
+    private readonly int _id = Interlocked.Increment(ref _nextId);
+    private nint _windowHandle;
+    private bool _reserved;
+
+    public bool TryReserve(HotkeyGesture gesture, nint windowHandle, out int errorCode)
+    {
+        errorCode = 0;
+        if (!HotkeyGestureCodec.TryGetWindowsVirtualKey(gesture.Key, out var virtualKey))
+        {
+            return false;
+        }
+
+        var modifiers = (gesture.Alt ? ModAlt : 0)
+            | (gesture.Ctrl ? ModControl : 0)
+            | (gesture.Shift ? ModShift : 0)
+            | (gesture.Meta ? ModWin : 0);
+        if (!RegisterHotKey(windowHandle, _id, modifiers, virtualKey))
+        {
+            errorCode = Marshal.GetLastWin32Error();
+            return false;
+        }
+
+        _reserved = true;
+        _windowHandle = windowHandle;
+        return true;
+    }
+
+    public void Release()
+    {
+        if (!_reserved)
+        {
+            return;
+        }
+
+        _ = UnregisterHotKey(_windowHandle, _id);
+        _reserved = false;
+        _windowHandle = nint.Zero;
+    }
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool RegisterHotKey(nint hWnd, int id, uint fsModifiers, uint vk);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool UnregisterHotKey(nint hWnd, int id);
+}
+
 public sealed class SharpHookGlobalHotkeyService : IGlobalHotkeyService, IDisposable
 {
     private static readonly TimeSpan DefaultStartupProbeWindow = TimeSpan.FromMilliseconds(250);
@@ -2014,7 +2076,10 @@ public sealed class SharpHookGlobalHotkeyService : IGlobalHotkeyService, IDispos
     private readonly Dictionary<string, RegisteredHotkey> _registeredByName = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, string> _registeredByChord = new(StringComparer.OrdinalIgnoreCase);
     private readonly Func<IGlobalKeyboardHook> _hookFactory;
+    private readonly Func<IWindowsHotkeyReservation>? _windowsReservationFactory;
     private readonly TimeSpan _startupProbeWindow;
+    private readonly Dictionary<string, IWindowsHotkeyReservation> _windowsReservationsByName = new(StringComparer.OrdinalIgnoreCase);
+    private HotkeyHostContext _hostContext = new(nint.Zero, string.Empty, string.Empty);
     private IGlobalKeyboardHook? _hook;
     private Task? _hookTask;
 
@@ -2029,10 +2094,16 @@ public sealed class SharpHookGlobalHotkeyService : IGlobalHotkeyService, IDispos
 
     internal SharpHookGlobalHotkeyService(
         Func<IGlobalKeyboardHook>? hookFactory = null,
-        TimeSpan? startupProbeWindow = null)
+        TimeSpan? startupProbeWindow = null,
+        Func<IWindowsHotkeyReservation>? windowsReservationFactory = null)
     {
         _hookFactory = hookFactory ?? (() => new SharpHookEventLoopKeyboardHook());
         _startupProbeWindow = startupProbeWindow ?? DefaultStartupProbeWindow;
+        _windowsReservationFactory = windowsReservationFactory;
+        if (_windowsReservationFactory is null && OperatingSystem.IsWindows())
+        {
+            _windowsReservationFactory = static () => new Win32HotkeyReservation();
+        }
     }
 
     public static bool TryCreate([NotNullWhen(true)] out SharpHookGlobalHotkeyService? service)
@@ -2073,11 +2144,23 @@ public sealed class SharpHookGlobalHotkeyService : IGlobalHotkeyService, IDispos
                 "hotkey.register");
         }
 
+        RegisteredHotkey? previous;
+        IWindowsHotkeyReservation? previousReservation;
+        nint hostWindowHandle;
         lock (_syncRoot)
         {
-            if (_registeredByName.TryGetValue(name, out var previous))
+            previous = _registeredByName.TryGetValue(name, out var existingPrevious)
+                ? existingPrevious
+                : null;
+            _windowsReservationsByName.TryGetValue(name, out previousReservation);
+            hostWindowHandle = _hostContext.WindowHandle;
+            if (previous.HasValue
+                && string.Equals(previous.Value.ChordKey, binding.ChordKey, StringComparison.Ordinal))
             {
-                _registeredByChord.Remove(previous.ChordKey);
+                return PlatformOperation.NativeSuccess(
+                    Capability.Provider,
+                    $"Global hotkey already registered: {name} => {binding.NormalizedGesture}",
+                    "hotkey.register");
             }
 
             if (_registeredByChord.TryGetValue(binding.ChordKey, out var existingName)
@@ -2090,13 +2173,44 @@ public sealed class SharpHookGlobalHotkeyService : IGlobalHotkeyService, IDispos
                     "hotkey.register");
             }
 
+        }
+
+        IWindowsHotkeyReservation? reservation = null;
+        if (_windowsReservationFactory is not null)
+        {
+            previousReservation?.Release();
+            reservation = _windowsReservationFactory();
+            if (!TryReserveWindowsHotkey(reservation, binding, hostWindowHandle, out var reservationError))
+            {
+                RestoreWindowsReservation(previousReservation, previous, hostWindowHandle);
+                return reservationError;
+            }
+        }
+
+        lock (_syncRoot)
+        {
+            if (previous.HasValue)
+            {
+                _registeredByChord.Remove(previous.Value.ChordKey);
+            }
+
             _registeredByName[name] = binding with { Name = name };
             _registeredByChord[binding.ChordKey] = name;
+            if (previousReservation is not null)
+            {
+                _windowsReservationsByName.Remove(name);
+            }
+
+            if (reservation is not null)
+            {
+                _windowsReservationsByName[name] = reservation;
+            }
         }
 
         var hookResult = await EnsureHookStartedAsync(cancellationToken);
         if (!hookResult.Success)
         {
+            reservation?.Release();
             lock (_syncRoot)
             {
                 if (_registeredByName.TryGetValue(name, out var rollback) && rollback.ChordKey == binding.ChordKey)
@@ -2104,7 +2218,21 @@ public sealed class SharpHookGlobalHotkeyService : IGlobalHotkeyService, IDispos
                     _registeredByName.Remove(name);
                     _registeredByChord.Remove(binding.ChordKey);
                 }
+
+                _windowsReservationsByName.Remove(name);
+                if (previous.HasValue)
+                {
+                    _registeredByName[name] = previous.Value;
+                    _registeredByChord[previous.Value.ChordKey] = name;
+                }
+
+                if (previousReservation is not null)
+                {
+                    _windowsReservationsByName[name] = previousReservation;
+                }
             }
+
+            RestoreWindowsReservation(previousReservation, previous, hostWindowHandle);
 
             return hookResult;
         }
@@ -2128,14 +2256,18 @@ public sealed class SharpHookGlobalHotkeyService : IGlobalHotkeyService, IDispos
         }
 
         bool removed;
+        IWindowsHotkeyReservation? reservation;
         lock (_syncRoot)
         {
             removed = _registeredByName.Remove(name, out var existing);
+            _windowsReservationsByName.Remove(name, out reservation);
             if (removed)
             {
                 _registeredByChord.Remove(existing.ChordKey);
             }
         }
+
+        reservation?.Release();
 
         if (!removed)
         {
@@ -2160,7 +2292,29 @@ public sealed class SharpHookGlobalHotkeyService : IGlobalHotkeyService, IDispos
             StopHookUnsafe();
             _registeredByName.Clear();
             _registeredByChord.Clear();
+            foreach (var reservation in _windowsReservationsByName.Values)
+            {
+                reservation.Release();
+            }
+
+            _windowsReservationsByName.Clear();
         }
+    }
+
+    public Task<PlatformOperationResult> ConfigureHostContextAsync(
+        HotkeyHostContext context,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_syncRoot)
+        {
+            _hostContext = context;
+        }
+
+        return Task.FromResult(PlatformOperation.NativeSuccess(
+            Capability.Provider,
+            "Captured hotkey host window context.",
+            "hotkey.configure-host"));
     }
 
     private async Task<PlatformOperationResult> EnsureHookStartedAsync(CancellationToken cancellationToken)
@@ -2433,6 +2587,14 @@ public sealed class SharpHookGlobalHotkeyService : IGlobalHotkeyService, IDispos
             return Enum.TryParse($"Vc{upper}", out keyCode);
         }
 
+        if (upper.StartsWith("NUMPAD", StringComparison.Ordinal)
+            && upper.Length == 7
+            && upper[6] is >= '0' and <= '9')
+        {
+            return Enum.TryParse($"VcNumPad{upper[6]}", out keyCode)
+                || Enum.TryParse($"VcNumpad{upper[6]}", out keyCode);
+        }
+
         if (upper.StartsWith("F", StringComparison.Ordinal)
             && int.TryParse(upper[1..], out var fn)
             && fn is >= 1 and <= 24)
@@ -2458,9 +2620,101 @@ public sealed class SharpHookGlobalHotkeyService : IGlobalHotkeyService, IDispos
             "RIGHT" => Enum.TryParse("VcRight", out keyCode),
             "DOWN" => Enum.TryParse("VcDown", out keyCode),
             "PLUS" => Enum.TryParse("VcEquals", out keyCode),
-            "MINUS" => Enum.TryParse("VcMinus", out keyCode),
+            "ADD" => Enum.TryParse("VcNumPadAdd", out keyCode),
+            "OEMPLUS" => Enum.TryParse("VcEquals", out keyCode),
+            "MINUS" or "OEMMINUS" => Enum.TryParse("VcMinus", out keyCode),
+            "SUBTRACT" => Enum.TryParse("VcNumPadSubtract", out keyCode),
+            "MULTIPLY" => Enum.TryParse("VcNumPadMultiply", out keyCode),
+            "DIVIDE" => Enum.TryParse("VcNumPadDivide", out keyCode),
+            "DECIMAL" => Enum.TryParse("VcNumPadDecimal", out keyCode),
+            "SEPARATOR" => Enum.TryParse("VcNumPadSeparator", out keyCode),
+            "OEM1" => Enum.TryParse("VcSemicolon", out keyCode),
+            "OEMCOMMA" => Enum.TryParse("VcComma", out keyCode),
+            "OEMPERIOD" => Enum.TryParse("VcPeriod", out keyCode),
+            "OEMQUESTION" => Enum.TryParse("VcSlash", out keyCode),
+            "OEMTILDE" => Enum.TryParse("VcBackQuote", out keyCode),
+            "OEMOPENBRACKETS" => Enum.TryParse("VcOpenBracket", out keyCode),
+            "OEMPIPE" => Enum.TryParse("VcBackslash", out keyCode),
+            "OEM6" => Enum.TryParse("VcCloseBracket", out keyCode),
+            "OEMQUOTES" => Enum.TryParse("VcQuote", out keyCode),
+            "OEM102" => Enum.TryParse("Vc102", out keyCode),
+            "PAUSE" => Enum.TryParse("VcPause", out keyCode),
+            "CANCEL" => Enum.TryParse("VcCancel", out keyCode),
+            "CAPSLOCK" or "CAPITAL" => Enum.TryParse("VcCapsLock", out keyCode),
+            "PRINTSCREEN" or "SNAPSHOT" => Enum.TryParse("VcPrintScreen", out keyCode),
+            "NUMLOCK" => Enum.TryParse("VcNumLock", out keyCode),
+            "SCROLL" or "SCROLLLOCK" => Enum.TryParse("VcScrollLock", out keyCode),
+            "SLEEP" => Enum.TryParse("VcSleep", out keyCode),
+            "HELP" => Enum.TryParse("VcHelp", out keyCode),
+            "BROWSERBACK" => Enum.TryParse("VcBrowserBack", out keyCode),
+            "BROWSERFORWARD" => Enum.TryParse("VcBrowserForward", out keyCode),
+            "BROWSERREFRESH" => Enum.TryParse("VcBrowserRefresh", out keyCode),
+            "BROWSERSTOP" => Enum.TryParse("VcBrowserStop", out keyCode),
+            "BROWSERSEARCH" => Enum.TryParse("VcBrowserSearch", out keyCode),
+            "BROWSERFAVORITES" => Enum.TryParse("VcBrowserFavorites", out keyCode),
+            "BROWSERHOME" => Enum.TryParse("VcBrowserHome", out keyCode),
+            "VOLUMEMUTE" => Enum.TryParse("VcVolumeMute", out keyCode),
+            "VOLUMEDOWN" => Enum.TryParse("VcVolumeDown", out keyCode),
+            "VOLUMEUP" => Enum.TryParse("VcVolumeUp", out keyCode),
+            "MEDIANEXTTRACK" => Enum.TryParse("VcMediaNext", out keyCode),
+            "MEDIAPREVIOUSTRACK" => Enum.TryParse("VcMediaPrevious", out keyCode),
+            "MEDIASTOP" => Enum.TryParse("VcMediaStop", out keyCode),
+            "MEDIAPLAYPAUSE" => Enum.TryParse("VcMediaPlay", out keyCode),
+            "LAUNCHMAIL" => Enum.TryParse("VcAppMail", out keyCode),
+            "SELECTMEDIA" => Enum.TryParse("VcMediaSelect", out keyCode),
+            "LAUNCHAPPLICATION1" => Enum.TryParse("VcApp1", out keyCode),
+            "LAUNCHAPPLICATION2" => Enum.TryParse("VcApp2", out keyCode),
             _ => false,
         };
+    }
+
+    private static bool TryReserveWindowsHotkey(
+        IWindowsHotkeyReservation reservation,
+        RegisteredHotkey binding,
+        nint hostWindowHandle,
+        out PlatformOperationResult error)
+    {
+        if (!HotkeyGestureCodec.TryParse(binding.NormalizedGesture, out var gesture))
+        {
+            error = PlatformOperation.Failed(
+                "sharp-hook",
+                "The hotkey cannot be represented by the Windows hotkey API.",
+                PlatformErrorCodes.HotkeyInvalidGesture,
+                "hotkey.register");
+            return false;
+        }
+
+        if (reservation.TryReserve(gesture, hostWindowHandle, out var nativeError))
+        {
+            error = default!;
+            return true;
+        }
+
+        var conflict = nativeError == 1409; // ERROR_HOTKEY_ALREADY_REGISTERED
+        error = PlatformOperation.Failed(
+            "sharp-hook",
+            conflict
+                ? $"Global hotkey is already registered by another application: {binding.NormalizedGesture}"
+                : $"Windows could not reserve global hotkey `{binding.NormalizedGesture}` (Win32 error {nativeError}).",
+            conflict ? PlatformErrorCodes.HotkeyConflict : PlatformErrorCodes.HotkeyNativeRegistrationFailed,
+            "hotkey.register");
+        return false;
+    }
+
+    private static void RestoreWindowsReservation(
+        IWindowsHotkeyReservation? reservation,
+        RegisteredHotkey? binding,
+        nint hostWindowHandle)
+    {
+        if (reservation is null || !binding.HasValue)
+        {
+            return;
+        }
+
+        if (HotkeyGestureCodec.TryParse(binding.Value.NormalizedGesture, out var gesture))
+        {
+            _ = reservation.TryReserve(gesture, hostWindowHandle, out _);
+        }
     }
 
     public bool TryGetRegisteredHotkey(string name, out RegisteredHotkeyState state)
@@ -2958,7 +3212,7 @@ public sealed class WindowScopedHotkeyService : IGlobalHotkeyService
 
 public sealed class CrossPlatformAutostartService : IAutostartService
 {
-    private const string WindowsRunKey = @"Software\\Microsoft\\Windows\\CurrentVersion\\Run";
+    private const string WindowsRunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
 
     private readonly PlatformCapabilityStatus _capability;
     private readonly string _processPath;
@@ -3038,6 +3292,18 @@ public sealed class CrossPlatformAutostartService : IAutostartService
             return PlatformOperation.Failed(_capability.Provider, _capability.Message, PlatformErrorCodes.AutostartUnsupported, "autostart.set");
         }
 
+        if (enabled && OperatingSystem.IsWindows() && IsRunningAsWindowsAdministratorWithUac())
+        {
+            // WPF parity (AutoStart.SetStart @23ddd271): the denial is surfaced through
+            // the localized LaunchOnSystemStartupAdminPrompt guidance; the dedicated
+            // error code lets the settings page resolve that localized text.
+            return PlatformOperation.Failed(
+                _capability.Provider,
+                "Autostart cannot be enabled while MAAUnified is running as administrator.",
+                PlatformErrorCodes.AutostartAdminDenied,
+                "autostart.set");
+        }
+
         if (string.IsNullOrWhiteSpace(_processPath) || !File.Exists(_processPath))
         {
             return PlatformOperation.Failed(_capability.Provider, "Executable path is unavailable for autostart.", PlatformErrorCodes.AutostartExecutableMissing, "autostart.set");
@@ -3084,14 +3350,25 @@ public sealed class CrossPlatformAutostartService : IAutostartService
     {
         if (OperatingSystem.IsWindows())
         {
-            using var key = Registry.CurrentUser.OpenSubKey(WindowsRunKey, false);
-            var value = key?.GetValue(_windowsValueName) as string;
-            if (string.IsNullOrWhiteSpace(value))
+            if (IsRunningAsWindowsAdministratorWithUac())
             {
+                // WPF removes the per-user Run entry while elevated because it
+                // would later relaunch unelevated. Preserve that visible state.
+                try
+                {
+                    using var elevatedKey = Registry.CurrentUser.OpenSubKey(WindowsRunKey, writable: true);
+                    elevatedKey?.DeleteValue(_windowsValueName, throwOnMissingValue: false);
+                }
+                catch
+                {
+                    // CheckStart in the frozen WPF build ignores this cleanup failure.
+                }
+
                 return false;
             }
 
-            return value.Contains(_processPath, StringComparison.OrdinalIgnoreCase);
+            using var key = Registry.CurrentUser.OpenSubKey(WindowsRunKey, false);
+            return key?.GetValue(_windowsValueName) is not null;
         }
 
         if (OperatingSystem.IsLinux())
@@ -3105,6 +3382,58 @@ public sealed class CrossPlatformAutostartService : IAutostartService
         }
 
         return false;
+    }
+
+    private static bool IsRunningAsWindowsAdministratorWithUac()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return false;
+        }
+
+        bool isAdministrator;
+        try
+        {
+            using var identity = System.Security.Principal.WindowsIdentity.GetCurrent();
+            var principal = new System.Security.Principal.WindowsPrincipal(identity);
+            isAdministrator = principal.IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator);
+        }
+        catch
+        {
+            return false;
+        }
+
+        return EvaluateAdministratorWithUacPolicy(isAdministrator, ReadWindowsUacPolicyValue);
+    }
+
+    private static object? ReadWindowsUacPolicyValue()
+    {
+        using var policy = Registry.LocalMachine.OpenSubKey(
+            @"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System",
+            writable: false);
+        return policy?.GetValue("EnableLUA");
+    }
+
+    // WPF parity (Bootstrapper.IsUacEnabled @23ddd271): a missing policy key, a
+    // non-int EnableLUA value, or an exception while reading the policy are all
+    // treated as "UAC enabled". Combined with an elevated identity this refuses
+    // autostart enablement instead of silently allowing an elevated install to
+    // relaunch unelevated at logon.
+    internal static bool EvaluateAdministratorWithUacPolicy(bool isAdministrator, Func<object?> readPolicyValue)
+    {
+        if (!isAdministrator)
+        {
+            return false;
+        }
+
+        try
+        {
+            return readPolicyValue() is not int enabled || enabled != 0;
+        }
+        catch
+        {
+            return true;
+        }
     }
 
     private void ApplyAutostart(bool enabled)

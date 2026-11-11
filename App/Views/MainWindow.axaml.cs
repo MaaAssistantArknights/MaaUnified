@@ -691,6 +691,7 @@ public partial class MainWindow : Window
     private void UpdateAchievementToastVisibility()
     {
         VM?.SetAchievementToastWindowVisible(IsVisible && WindowState != WindowState.Minimized);
+        VM?.SetMainWindowBackgrounded(!IsVisible || WindowState == WindowState.Minimized);
         TryStartPendingAchievementToastPresentations();
     }
 

@@ -180,6 +180,20 @@ public sealed class PlatformCapabilityContractTests
     }
 
     [Fact]
+    public void MainWindowShowGuiHotkey_MinimizesAndDefersTrayHidingToTheWindowPolicy()
+    {
+        var root = TestRepoLayout.GetMaaUnifiedRoot();
+        var code = File.ReadAllText(Path.Combine(root, "App", "Views", "MainWindow.axaml.cs"));
+        var start = code.IndexOf("private async Task ToggleMainWindowFromHotkeyAsync", StringComparison.Ordinal);
+        var end = code.IndexOf("private void ShowAndActivateMainWindow", start, StringComparison.Ordinal);
+        Assert.True(start >= 0 && end > start, "The ShowGui hotkey handler must be present.");
+
+        var handler = code[start..end];
+        Assert.Contains("WindowState = WindowState.Minimized;", handler, StringComparison.Ordinal);
+        Assert.DoesNotContain("HideMainWindowToTrayAsync", handler, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void AppExitDisposeRuntime_WrapsRuntimeDisposeBeforeWaiting()
     {
         var root = TestRepoLayout.GetMaaUnifiedRoot();
@@ -269,6 +283,119 @@ public sealed class PlatformCapabilityContractTests
         Assert.Contains("Accessibility API", result.Message, StringComparison.Ordinal);
         Assert.False(service.TryGetRegisteredHotkey("ShowGui", out _));
         Assert.True(hook.StopCallCount >= 1);
+    }
+
+    [Fact]
+    public async Task SharpHookGlobalHotkeyService_WhenWindowsReservesAnExternalConflict_ReturnsConflictWithoutStartingHook()
+    {
+        var hook = new ControlledKeyboardHook(Task.CompletedTask);
+        var reservation = new ScriptedWindowsHotkeyReservation(errorCode: 1409);
+        var service = new SharpHookGlobalHotkeyService(
+            () => hook,
+            TimeSpan.Zero,
+            () => reservation);
+
+        var result = await service.RegisterAsync("ShowGui", "Ctrl+Shift+Alt+M");
+
+        Assert.False(result.Success);
+        Assert.Equal(PlatformErrorCodes.HotkeyConflict, result.ErrorCode);
+        Assert.Equal(0, hook.StopCallCount);
+        Assert.False(service.TryGetRegisteredHotkey("ShowGui", out _));
+    }
+
+    [Fact]
+    public async Task GlobalHotkeyBatch_EmptyBindingIsIdempotentForFreshAndRepeatedStarts()
+    {
+        IGlobalHotkeyService service = new SharpHookGlobalHotkeyService(
+            () => new ControlledKeyboardHook(Task.CompletedTask),
+            TimeSpan.Zero);
+        var requests = new[] { new HotkeyBindingRequest("ShowGui", string.Empty) };
+
+        var first = await service.RegisterBatchAsync(requests);
+        var repeated = await service.RegisterBatchAsync(requests);
+
+        Assert.True(Assert.Single(first).Result.Success);
+        Assert.True(Assert.Single(repeated).Result.Success);
+        Assert.False(service.TryGetRegisteredHotkey("ShowGui", out _));
+    }
+
+    [Theory]
+    [InlineData("Ctrl+CapsLock")]
+    [InlineData("Ctrl+PrintScreen")]
+    [InlineData("Ctrl+NumLock")]
+    [InlineData("Ctrl+ScrollLock")]
+    [InlineData("Ctrl+Sleep")]
+    [InlineData("Ctrl+Help")]
+    [InlineData("Ctrl+BrowserBack")]
+    [InlineData("Ctrl+BrowserHome")]
+    [InlineData("Ctrl+VolumeMute")]
+    [InlineData("Ctrl+MediaNextTrack")]
+    [InlineData("Ctrl+MediaPlayPause")]
+    [InlineData("Ctrl+LaunchMail")]
+    [InlineData("Ctrl+SelectMedia")]
+    [InlineData("Ctrl+LaunchApplication2")]
+    [InlineData("Ctrl+Pause")]
+    // Keypad operators map to SharpHook VcNumPad* members; OemPipe maps to
+    // VcBackslash (lowercase s) and Oem102 to Vc102. These regressed once to
+    // nonexistent VcAdd / VcBackSlash member names that Enum.TryParse could never
+    // resolve, and Oem102 once aliased VcBackslash so the real 102 key never fired.
+    [InlineData("Ctrl+Add")]
+    [InlineData("Ctrl+Subtract")]
+    [InlineData("Ctrl+Multiply")]
+    [InlineData("Ctrl+Divide")]
+    [InlineData("Ctrl+Decimal")]
+    [InlineData("Ctrl+Separator")]
+    [InlineData("Ctrl+OemPipe")]
+    [InlineData("Ctrl+Oem102")]
+    public async Task SharpHookGlobalHotkeyService_RegistersExtendedWpfKeyVocabulary(string gesture)
+    {
+        var service = new SharpHookGlobalHotkeyService(
+            () => new ControlledKeyboardHook(Task.CompletedTask),
+            TimeSpan.Zero);
+
+        var result = await service.RegisterAsync("ShowGui", gesture);
+
+        Assert.True(result.Success, result.Message);
+        Assert.True(service.TryGetRegisteredHotkey("ShowGui", out _));
+    }
+
+    [Theory]
+    [InlineData("OemPipe", "VcBackslash")]
+    [InlineData("Oem102", "Vc102")]
+    public void SharpHookKeyCodeMapping_MatchesUiohookNativeTable(string token, string expectedKeyCode)
+    {
+        // Locked sharphook/7.1.1 runtimes/win-x64/native/uiohook.dll keycode_to_uiocode
+        // table: VK_OEM_5 (0xDC) -> 93 (VcBackslash), VK_OEM_102 (0xE2) -> 153 (Vc102).
+        // HotkeyGestures reserves VK 0xDC for OemPipe and 0xE2 for Oem102 on Windows, so
+        // the SharpHook trigger keycode must name the same physical key; aliasing Oem102
+        // to VcBackslash made the real 102 key never fire while the plain backslash key
+        // fired it instead.
+        var parse = typeof(SharpHookGlobalHotkeyService).GetMethod(
+            "TryParseKeyCode",
+            BindingFlags.NonPublic | BindingFlags.Static);
+        Assert.NotNull(parse);
+
+        var args = new object?[] { token, null };
+        var parsed = Assert.IsType<bool>(parse.Invoke(null, args));
+
+        Assert.True(parsed);
+        Assert.Equal(expectedKeyCode, args[1]?.ToString());
+    }
+
+    [Fact]
+    public async Task SharpHookGlobalHotkeyService_OemPipeAndOem102_CoexistWithoutFalseConflict()
+    {
+        var service = new SharpHookGlobalHotkeyService(
+            () => new ControlledKeyboardHook(Task.CompletedTask),
+            TimeSpan.Zero);
+
+        var pipe = await service.RegisterAsync("ShowGui", "Ctrl+OemPipe");
+        var oem102 = await service.RegisterAsync("LinkStart", "Ctrl+Oem102");
+
+        Assert.True(pipe.Success, pipe.Message);
+        Assert.True(oem102.Success, oem102.Message);
+        Assert.True(service.TryGetRegisteredHotkey("ShowGui", out _));
+        Assert.True(service.TryGetRegisteredHotkey("LinkStart", out _));
     }
 
     [Fact]
@@ -950,6 +1077,40 @@ public sealed class PlatformCapabilityContractTests
     }
 
     [Fact]
+    public void PlatformCapabilityTextMap_AutostartAdminDenied_ResolvesWpfGuidance_ForAllSupportedLanguages()
+    {
+        // WPF parity (AutoStart.SetStart @23ddd271): the administrator+UAC denial shows
+        // the localized LaunchOnSystemStartupAdminPrompt guidance, including the Task
+        // Scheduler instructions, instead of the provider's raw English message.
+        var providerMessage = "Autostart cannot be enabled while MAAUnified is running as administrator.";
+        var expectedFragments = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["zh-cn"] = "任务计划程序",
+            ["zh-tw"] = "工作排程器",
+            ["en-us"] = "Task Scheduler",
+            ["ja-jp"] = "タスクスケジューラ",
+            ["ko-kr"] = "작업 스케줄러",
+        };
+
+        foreach (var (language, fragment) in expectedFragments)
+        {
+            var localized = PlatformCapabilityTextMap.FormatErrorCode(
+                language,
+                PlatformErrorCodes.AutostartAdminDenied,
+                providerMessage);
+            Assert.Contains(fragment, localized, StringComparison.Ordinal);
+            Assert.DoesNotContain(providerMessage, localized, StringComparison.Ordinal);
+        }
+
+        var pallas = PlatformCapabilityTextMap.FormatErrorCode(
+            "pallas",
+            PlatformErrorCodes.AutostartAdminDenied,
+            providerMessage);
+        Assert.StartsWith("[!! ", pallas, StringComparison.Ordinal);
+        Assert.DoesNotContain(providerMessage, pallas, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void PlatformCapabilityTextMap_ContainsAllErrorAndMenuKeys_ForAllSupportedLanguages()
     {
         var languages = new[] { "zh-cn", "zh-tw", "en-us", "ja-jp", "ko-kr", "pallas" };
@@ -1066,6 +1227,57 @@ public sealed class PlatformCapabilityContractTests
 
         public Task<PlatformOperationResult> SetVisibleAsync(bool visible, CancellationToken cancellationToken = default)
             => throw new InvalidOperationException("TryCreate failed.");
+    }
+
+    [Theory]
+    [InlineData(1, true)]   // EnableLUA=1 -> admin+UAC, autostart refused.
+    [InlineData(0, false)]  // EnableLUA=0 -> UAC disabled, autostart allowed.
+    public void CrossPlatformAutostartService_AdminWithUacPolicy_MatchesWpfEvaluation(int enableLua, bool expected)
+    {
+        var result = CrossPlatformAutostartService.EvaluateAdministratorWithUacPolicy(
+            isAdministrator: true,
+            readPolicyValue: () => enableLua);
+
+        Assert.Equal(expected, result);
+    }
+
+    [Fact]
+    public void CrossPlatformAutostartService_WindowsRunKey_UsesSingleBackslashRegistryPath()
+    {
+        // WPF parity (AutoStart.cs @23ddd271): the HKCU Run subkey path uses single
+        // backslash separators. A verbatim literal with doubled backslashes would make
+        // every Windows autostart operation fail (RegOpenKeyEx does not collapse empty
+        // path segments), so pin the exact constant.
+        var field = typeof(CrossPlatformAutostartService).GetField(
+            "WindowsRunKey",
+            BindingFlags.Static | BindingFlags.NonPublic);
+        Assert.NotNull(field);
+
+        var value = Assert.IsType<string>(field!.GetRawConstantValue());
+        Assert.Equal(@"Software\Microsoft\Windows\CurrentVersion\Run", value);
+        Assert.Equal(45, value.Length);
+        Assert.DoesNotContain("\\\\", value, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void CrossPlatformAutostartService_AdminWithUnreadableUacPolicy_TreatedAsUacEnabled()
+    {
+        // WPF parity (Bootstrapper.IsUacEnabled): a missing policy key, a non-int
+        // value, or an exception while reading the policy all mean "UAC enabled".
+        Assert.True(CrossPlatformAutostartService.EvaluateAdministratorWithUacPolicy(true, () => null));
+        Assert.True(CrossPlatformAutostartService.EvaluateAdministratorWithUacPolicy(true, () => "1"));
+        Assert.True(CrossPlatformAutostartService.EvaluateAdministratorWithUacPolicy(
+            true,
+            () => throw new InvalidOperationException("registry unreadable")));
+    }
+
+    [Fact]
+    public void CrossPlatformAutostartService_NonAdministrator_NeverBlockedRegardlessOfPolicy()
+    {
+        Assert.False(CrossPlatformAutostartService.EvaluateAdministratorWithUacPolicy(false, () => 1));
+        Assert.False(CrossPlatformAutostartService.EvaluateAdministratorWithUacPolicy(
+            false,
+            () => throw new InvalidOperationException("registry unreadable")));
     }
 
     private sealed class FailingAutostartService : IAutostartService
@@ -1254,6 +1466,29 @@ public sealed class PlatformCapabilityContractTests
 
         public void Emit(string name, string gesture)
             => Triggered?.Invoke(this, new GlobalHotkeyTriggeredEvent(name, gesture, DateTimeOffset.UtcNow));
+    }
+
+    private sealed class ScriptedWindowsHotkeyReservation : IWindowsHotkeyReservation
+    {
+        private readonly int _errorCode;
+
+        public ScriptedWindowsHotkeyReservation(int errorCode)
+        {
+            _errorCode = errorCode;
+        }
+
+        public int ReleaseCalls { get; private set; }
+
+        public bool TryReserve(HotkeyGesture gesture, nint windowHandle, out int errorCode)
+        {
+            errorCode = _errorCode;
+            return _errorCode == 0;
+        }
+
+        public void Release()
+        {
+            ReleaseCalls++;
+        }
     }
 
     private sealed class ControlledKeyboardHook : IGlobalKeyboardHook

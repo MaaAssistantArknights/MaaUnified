@@ -302,6 +302,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
     private bool _startSelf;
     private string _autostartStatus = string.Empty;
     private DateTimeOffset? _lastAutostartToggleAt;
+    private bool _lastKnownAutostartEnabled;
     private string _autostartWarningMessage = string.Empty;
     private string _autostartErrorMessage = string.Empty;
     private string _hotkeyShowGui = DefaultHotkeyShowGui;
@@ -4607,6 +4608,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
         CancellationToken cancellationToken = default)
     {
         ClearConfigurationManagerStatus();
+        var activeHotkeysBeforeImport = CaptureActiveHotkeyBindings();
         var report = await Runtime.ConfigurationService.ImportLegacyAsync(request, cancellationToken);
         var statusMessage = ImportReportTextFormatter.BuildStatusMessage(report, manualImport: request.ManualImport);
         var errorMessage = report.Errors.Count == 0
@@ -4630,7 +4632,8 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
                 "Settings.ConfigurationManager.ImportLegacy.ContextRefresh",
                 statusMessage,
                 report,
-                cancellationToken);
+                cancellationToken,
+                activeHotkeysBeforeImport);
             ConfigurationManagerStatusMessage = statusMessage;
             ConfigurationManagerErrorMessage = errorMessage;
             StatusMessage = statusMessage;
@@ -4903,9 +4906,25 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
         AchievementDebugMedalColor = "#D4AF37";
     }
 
+    private IReadOnlyDictionary<string, string> CaptureActiveHotkeyBindings()
+    {
+        var bindings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var name in new[] { ShowGuiHotkeyName, LinkStartHotkeyName })
+        {
+            if (Runtime.Platform.HotkeyService.TryGetRegisteredHotkey(name, out var registered)
+                && HotkeyGestureCodec.TryNormalize(registered.Gesture, out var normalized))
+            {
+                bindings[name] = normalized;
+            }
+        }
+
+        return bindings;
+    }
+
     public async Task RegisterHotkeysAsync(
         HotkeyRegistrationSource source = HotkeyRegistrationSource.Manual,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        IReadOnlyDictionary<string, string>? failedRegistrationFallbacks = null)
     {
         ClearHotkeyStatus();
 
@@ -4959,12 +4978,27 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
             ApplyHotkeyOutcome(request.Name, request.Gesture, outcome);
         }
 
-        var persistedShowGui = outcomesByName.TryGetValue(ShowGuiHotkeyName, out var showOutcome) && showOutcome.Result.Success
+        var showGuiRegistrationSucceeded = outcomesByName.TryGetValue(ShowGuiHotkeyName, out var showOutcome) && showOutcome.Result.Success;
+        var linkStartRegistrationSucceeded = outcomesByName.TryGetValue(LinkStartHotkeyName, out var linkOutcome) && linkOutcome.Result.Success;
+        string? activeShowGuiFallback = null;
+        string? activeLinkStartFallback = null;
+        var restoreActiveShowGui = !showGuiRegistrationSucceeded
+            && failedRegistrationFallbacks is not null
+            && failedRegistrationFallbacks.TryGetValue(ShowGuiHotkeyName, out activeShowGuiFallback);
+        var restoreActiveLinkStart = !linkStartRegistrationSucceeded
+            && failedRegistrationFallbacks is not null
+            && failedRegistrationFallbacks.TryGetValue(LinkStartHotkeyName, out activeLinkStartFallback);
+
+        var persistedShowGui = showGuiRegistrationSucceeded
             ? requests[0].Gesture
-            : _persistedHotkeyShowGui;
-        var persistedLinkStart = outcomesByName.TryGetValue(LinkStartHotkeyName, out var linkOutcome) && linkOutcome.Result.Success
+            : restoreActiveShowGui
+                ? activeShowGuiFallback!
+                : _persistedHotkeyShowGui;
+        var persistedLinkStart = linkStartRegistrationSucceeded
             ? requests[1].Gesture
-            : _persistedHotkeyLinkStart;
+            : restoreActiveLinkStart
+                ? activeLinkStartFallback!
+                : _persistedHotkeyLinkStart;
         var serializedHotkeys = HotkeyConfigurationCodec.Serialize(
             persistedShowGui,
             persistedLinkStart);
@@ -4989,6 +5023,23 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
 
         _persistedHotkeyShowGui = persistedShowGui;
         _persistedHotkeyLinkStart = persistedLinkStart;
+        if (restoreActiveShowGui)
+        {
+            ApplyHotkeyDraft(
+                _showGuiHotkeyState,
+                persistedShowGui,
+                nameof(HotkeyShowGui),
+                clearFeedback: false);
+        }
+
+        if (restoreActiveLinkStart)
+        {
+            ApplyHotkeyDraft(
+                _linkStartHotkeyState,
+                persistedLinkStart,
+                nameof(HotkeyLinkStart),
+                clearFeedback: false);
+        }
 
         var failedOutcomes = batchResult.Value.Where(static outcome => !outcome.Result.Success).ToArray();
         var successCount = batchResult.Value.Count - failedOutcomes.Length;
@@ -5301,6 +5352,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
         var setResult = await Runtime.SettingsFeatureService.SetAutostartAsync(desired, cancellationToken);
         if (!setResult.Success)
         {
+            await RestoreAutostartStateAfterFailedSetAsync(cancellationToken);
             LastErrorMessage = setResult.Message;
             await RecordFailedResultAsync("Settings.Autostart.Set", setResult, cancellationToken);
             await ShowAutostartErrorWithDelayAsync(
@@ -5347,6 +5399,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
         }
 
         var enabled = result.Value;
+        _lastKnownAutostartEnabled = enabled;
         if (syncDesiredState)
         {
             _suppressPageAutoSave = true;
@@ -5380,6 +5433,16 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
         }
 
         var warningMessage = BuildAutostartMismatchMessage(enabled);
+        _suppressPageAutoSave = true;
+        try
+        {
+            StartSelf = enabled;
+        }
+        finally
+        {
+            _suppressPageAutoSave = false;
+        }
+
         LastErrorMessage = warningMessage;
         await RecordFailedResultAsync(
             "Settings.Autostart.Verify",
@@ -5389,6 +5452,30 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
         if (delayMismatchHint)
         {
             await ShowAutostartWarningWithDelayAsync(warningMessage, cancellationToken);
+        }
+    }
+
+    private async Task RestoreAutostartStateAfterFailedSetAsync(CancellationToken cancellationToken)
+    {
+        var current = await Runtime.SettingsFeatureService.GetAutostartStatusAsync(cancellationToken);
+        var actual = current.Success ? current.Value : _lastKnownAutostartEnabled;
+        if (current.Success)
+        {
+            _lastKnownAutostartEnabled = actual;
+            AutostartStatus = PlatformCapabilityTextMap.FormatAutostartStatus(
+                Language,
+                actual,
+                _localizationFallbackReporter);
+        }
+
+        _suppressPageAutoSave = true;
+        try
+        {
+            StartSelf = actual;
+        }
+        finally
+        {
+            _suppressPageAutoSave = false;
         }
     }
 
@@ -6685,10 +6772,18 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
         string scope,
         string message,
         ImportReport? report,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlyDictionary<string, string>? activeHotkeysBeforeImport = null)
     {
         await LoadConfigurationProfilesAsync(scope, cancellationToken, updateStatus: false);
         await LoadFromConfigAsync(Runtime.ConfigurationService.CurrentConfig, cancellationToken);
+        if (reason == ConfigurationContextChangeReason.LegacyImport)
+        {
+            await RegisterHotkeysAsync(
+                cancellationToken: cancellationToken,
+                failedRegistrationFallbacks: activeHotkeysBeforeImport);
+        }
+
         LoadConnectionSharedStateFromConfig();
         await RaiseConfigurationContextChangedAsync(reason, message, cancellationToken, report);
     }
@@ -7146,7 +7241,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
     {
         return LocalizeSettingsText(
             "Settings.Hotkey.Capture.Guide",
-            "录入规则：至少按下一个修饰键与一个普通键才会提交；Esc 取消；Backspace/Delete 清空绑定。");
+            "录入规则：至少按下一个修饰键与一个普通键才会提交；无修饰键会清空绑定。");
     }
 
     private string GetHotkeyUnboundText()
@@ -8189,6 +8284,14 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
             errorCode,
             fallbackMessage,
             _localizationFallbackReporter);
+
+        // WPF parity (StartSettingsUserControlModel @23ddd271): the administrator+UAC
+        // denial shows the localized LaunchOnSystemStartupAdminPrompt guidance as the
+        // complete message instead of prefixing the provider's raw error text.
+        if (string.Equals(errorCode, PlatformErrorCodes.AutostartAdminDenied, StringComparison.Ordinal))
+        {
+            return localized;
+        }
 
         return string.Equals(localized, fallbackMessage, StringComparison.Ordinal)
             ? fallbackMessage

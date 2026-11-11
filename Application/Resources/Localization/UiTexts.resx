@@ -1723,6 +1723,10 @@
   <data name="PlatformCapability.CapabilityName.Unknown" xml:space="preserve">
     <value>未知能力</value>
   </data>
+  <data name="PlatformCapability.Error.AutostartAdminDenied" xml:space="preserve">
+    <value>管理员权限启动不支持开机自启。不建议长期以管理员权限运行 MAA。
+如确有需要，请前往 控制面板 > Windows 工具 > 任务计划程序 创建自定义任务。设置触发器时，请确保勾选 ｢使用最高权限运行｣。</value>
+  </data>
   <data name="PlatformCapability.Error.AutostartDisableFailed" xml:space="preserve">
     <value>取消自启动失败</value>
   </data>
@@ -3380,7 +3384,7 @@
     <value>暂不支持该按键：{0}</value>
   </data>
   <data name="Settings.Hotkey.Capture.Guide" xml:space="preserve">
-    <value>录入规则：至少按下一个修饰键与一个普通键才会提交；Esc 取消；Backspace/Delete 清空绑定。</value>
+    <value>录入规则：至少按下一个修饰键与一个普通键才会提交；无修饰键会清空绑定。</value>
   </data>
   <data name="Settings.Hotkey.Capture.Prompt" xml:space="preserve">
     <value>请按下快捷键...</value>

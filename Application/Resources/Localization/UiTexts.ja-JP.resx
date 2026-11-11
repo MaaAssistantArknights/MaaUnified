@@ -2243,7 +2243,7 @@
     <value>このキーはまだサポートされていません: {0}</value>
   </data>
   <data name="Settings.Hotkey.Capture.Guide" xml:space="preserve">
-    <value>録入規則: 修飾キー 1 つ以上と通常キー 1 つで確定します。Esc で取消、Backspace/Delete で解除します。</value>
+    <value>録入規則: 修飾キー 1 つ以上と通常キー 1 つで確定します。修飾キーなしのキーはバインドを解除します。</value>
   </data>
   <data name="Settings.Hotkey.Capture.Prompt" xml:space="preserve">
     <value>ショートカットを入力...</value>
@@ -4868,5 +4868,9 @@ MAA を複数開くには、新しい MAA を他のフォルダにコピーし�
   </data>
   <data name="PlatformCapability.Notification.Unavailable.DisabledByManifest" xml:space="preserve">
     <value>アプリのマニフェスト (Package.appxmanifest) によって無効化されています</value>
+  </data>
+  <data name="PlatformCapability.Error.AutostartAdminDenied" xml:space="preserve">
+    <value>管理者権限での起動は、起動時の自動実行をサポートしていません。MAAを長時間管理者権限で実行することはお勧めしません。
+必要な場合は、「コントロールパネル > Windowsツール > タスクスケジューラ」に移動してカスタムタスクを作成してください。トリガーを設定する際に、「最も高い特権で実行」を必ず選択してください。</value>
   </data>
 </root>

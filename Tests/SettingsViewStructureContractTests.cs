@@ -67,6 +67,9 @@ public sealed class SettingsViewStructureContractTests
         Assert.Contains("<Setter Property=\"Margin\" Value=\"28,-3,0,0\" />", start, StringComparison.Ordinal);
         Assert.Contains("MAA.Brush.App.Action.DisabledForeground", start, StringComparison.Ordinal);
         Assert.DoesNotContain("settings-page-indented-note", start, StringComparison.Ordinal);
+        Assert.Contains("Text=\"{Binding AutostartErrorMessage}\"", start, StringComparison.Ordinal);
+        Assert.Contains("IsVisible=\"{Binding HasAutostartErrorMessage}\"", start, StringComparison.Ordinal);
+        Assert.Contains("Text=\"{Binding AutostartStatus}\"", start, StringComparison.Ordinal);
 
         var timer = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "TimerSettingsView.axaml"));
         Assert.Contains("IsVisible=\"{Binding ForceScheduledStart}\"", timer, StringComparison.Ordinal);

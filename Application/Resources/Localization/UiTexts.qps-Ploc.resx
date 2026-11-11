@@ -301,4 +301,8 @@
   <data name="PlatformCapability.Notification.Unavailable.DisabledByManifest" xml:space="preserve">
     <value>[!! Ďîşåƀļéď ƀý åþþ ɱåñîƒéşţ (Package.appxmanifest) !!]</value>
   </data>
+  <data name="PlatformCapability.Error.AutostartAdminDenied" xml:space="preserve">
+    <value>[!! Åďɱîñîşţřåţöř ɱöďé ďöéş ñöţ şüþþöřţ şţåřţüþ öñ ƀööţ. Îţ îş ñöţ řéçöɱɱéñďéď ţö řüñ MAA ŵîţħ åďɱîñîşţřåţöř þřîṽîļéĝéş ƒöř åñ éẋţéñďéď þéřîöď.
+Îƒ ñéçéşşåřý, þļéåşé ĝö ţö Çöñţřöļ Þåñéļ > Ŵîñďöŵş Ţööļş > Ţåşķ Şçħéďüļéř ţö çřéåţé å çüşţöɱ ţåşķ. Ŵĥéñ şéţţîñĝ ţĥé ţřîĝĝéř, ɱåķé şüřé ţö çĥéçķ ｢Řüñ ŵîţĥ ħîĝĥéşţ þřîṽîļéĝéş｣ !!]</value>
+  </data>
 </root>

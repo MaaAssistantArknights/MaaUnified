@@ -218,6 +218,7 @@ public static class PlatformCapabilityTextMap
             PlatformErrorCodes.AutostartUnsupported => ("PlatformCapability.Error.AutostartUnsupported", "Autostart is unsupported in the current environment"),
             PlatformErrorCodes.AutostartQueryFailed => ("PlatformCapability.Error.AutostartQueryFailed", "Failed to query autostart status"),
             PlatformErrorCodes.AutostartSetFailed => ("PlatformCapability.Error.AutostartSetFailed", "Failed to update autostart"),
+            PlatformErrorCodes.AutostartAdminDenied => ("PlatformCapability.Error.AutostartAdminDenied", "Administrator mode does not support startup on boot. It is not recommended to run MAA with administrator privileges for an extended period.\nIf necessary, please go to Control Panel > Windows Tools > Task Scheduler to create a custom task. When setting the trigger, make sure to check ｢Run with highest privileges｣"),
             PlatformErrorCodes.AutostartVerificationFailed => ("PlatformCapability.Error.AutostartVerificationFailed", "Autostart verification failed"),
             PlatformErrorCodes.AutostartExecutableMissing => ("PlatformCapability.Error.AutostartExecutableMissing", "Autostart target executable is missing"),
 

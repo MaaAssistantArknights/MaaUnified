@@ -29,6 +29,7 @@ public static class PlatformErrorCodes
     public const string AutostartUnsupported = "AutostartUnsupported";
     public const string AutostartQueryFailed = "AutostartQueryFailed";
     public const string AutostartSetFailed = "AutostartSetFailed";
+    public const string AutostartAdminDenied = "AutostartAdminDenied";
     public const string AutostartVerificationFailed = "AutostartVerificationFailed";
     public const string AutostartExecutableMissing = "AutostartExecutableMissing";
 

@@ -1259,7 +1259,7 @@ public sealed class SettingsGuiBackgroundFeatureTests
         Assert.False(vm.HasAutostartErrorMessage);
 
         await WaitUntilAsync(() => vm.HasAutostartWarningMessage, timeoutMs: 2500);
-        Assert.True(vm.StartSelf);
+        Assert.False(vm.StartSelf);
         Assert.Contains("未启用", vm.AutostartWarningMessage, StringComparison.Ordinal);
     }
 
@@ -1278,8 +1278,30 @@ public sealed class SettingsGuiBackgroundFeatureTests
         Assert.False(vm.HasAutostartErrorMessage);
 
         await WaitUntilAsync(() => vm.HasAutostartErrorMessage, timeoutMs: 2500);
-        Assert.True(vm.StartSelf);
+        Assert.False(vm.StartSelf);
         Assert.Contains("set failed", vm.AutostartErrorMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task StartSelf_AdminDenied_ShowsLocalizedWpfGuidanceError()
+    {
+        // WPF parity (AutoStart.SetStart @23ddd271): the administrator+UAC denial
+        // surfaces the localized LaunchOnSystemStartupAdminPrompt guidance instead of
+        // the provider's raw English message.
+        await using var fixture = await RuntimeFixture.CreateAsync(
+            autostartService: new ScriptedAutostartService(initialEnabled: false, adminDeniedOnSet: true));
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        vm.StartSelf = true;
+
+        await WaitUntilAsync(() => vm.HasAutostartErrorMessage, timeoutMs: 2500);
+        Assert.False(vm.StartSelf);
+        Assert.Contains("任务计划程序", vm.AutostartErrorMessage, StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "Autostart cannot be enabled while MAAUnified is running as administrator.",
+            vm.AutostartErrorMessage,
+            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -1534,15 +1556,18 @@ public sealed class SettingsGuiBackgroundFeatureTests
     {
         private readonly bool _keepExistingStateOnSet;
         private readonly bool _failOnSet;
+        private readonly bool _adminDeniedOnSet;
 
         public ScriptedAutostartService(
             bool initialEnabled,
             bool keepExistingStateOnSet = false,
-            bool failOnSet = false)
+            bool failOnSet = false,
+            bool adminDeniedOnSet = false)
         {
             Enabled = initialEnabled;
             _keepExistingStateOnSet = keepExistingStateOnSet;
             _failOnSet = failOnSet;
+            _adminDeniedOnSet = adminDeniedOnSet;
         }
 
         public PlatformCapabilityStatus Capability { get; } = new(
@@ -1571,6 +1596,16 @@ public sealed class SettingsGuiBackgroundFeatureTests
                         Capability.Provider,
                         "set failed",
                         PlatformErrorCodes.AutostartSetFailed,
+                        "autostart.set"));
+            }
+
+            if (_adminDeniedOnSet && enabled)
+            {
+                return Task.FromResult(
+                    PlatformOperation.Failed(
+                        Capability.Provider,
+                        "Autostart cannot be enabled while MAAUnified is running as administrator.",
+                        PlatformErrorCodes.AutostartAdminDenied,
                         "autostart.set"));
             }
 

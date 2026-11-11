@@ -1723,6 +1723,10 @@ Do not enable this when OF-1 is locked.</value>
   <data name="PlatformCapability.CapabilityName.Unknown" xml:space="preserve">
     <value>Unknown Capability</value>
   </data>
+  <data name="PlatformCapability.Error.AutostartAdminDenied" xml:space="preserve">
+    <value>Administrator mode does not support startup on boot. It is not recommended to run MAA with administrator privileges for an extended period.
+If necessary, please go to Control Panel > Windows Tools > Task Scheduler to create a custom task. When setting the trigger, make sure to check ｢Run with highest privileges｣</value>
+  </data>
   <data name="PlatformCapability.Error.AutostartDisableFailed" xml:space="preserve">
     <value>Failed to disable autostart</value>
   </data>
@@ -3379,7 +3383,7 @@ With save file: farm points through crafting (advanced).
     <value>Unsupported key {0}</value>
   </data>
   <data name="Settings.Hotkey.Capture.Guide" xml:space="preserve">
-    <value>Recording rules: press at least one modifier plus one non-modifier key. Esc cancels. Backspace/Delete clears the binding.</value>
+    <value>Recording rules: press at least one modifier plus one non-modifier key. Any unmodified key clears the binding.</value>
   </data>
   <data name="Settings.Hotkey.Capture.Prompt" xml:space="preserve">
     <value>Press shortcut...</value>

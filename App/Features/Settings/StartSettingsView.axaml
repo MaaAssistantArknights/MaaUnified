@@ -124,6 +124,11 @@
           <TextBlock Classes="state-warning"
                      Text="{Binding AutostartWarningMessage}"
                      IsVisible="{Binding HasAutostartWarningMessage}" />
+          <TextBlock Classes="state-error"
+                     Text="{Binding AutostartErrorMessage}"
+                     IsVisible="{Binding HasAutostartErrorMessage}" />
+          <TextBlock Classes="app-caption"
+                     Text="{Binding AutostartStatus}" />
         </controls:AdaptiveSpacingStackPanel>
       </Border>
     </controls:AdaptiveSpacingStackPanel>

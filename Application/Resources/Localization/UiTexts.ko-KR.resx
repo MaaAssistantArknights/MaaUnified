@@ -2244,7 +2244,7 @@ OF-1 스테이지가 개방되지 않은 경우에는 선택하지 마세요.</v
     <value>아직 지원하지 않는 키입니다: {0}</value>
   </data>
   <data name="Settings.Hotkey.Capture.Guide" xml:space="preserve">
-    <value>기록 규칙: 보조 키 1개 이상과 일반 키 1개를 함께 눌러야 합니다. Esc는 취소, Backspace/Delete는 해제입니다.</value>
+    <value>기록 규칙: 보조 키 1개 이상과 일반 키 1개를 함께 눌러야 합니다. 보조 키 없이 누른 키는 바인딩을 해제합니다.</value>
   </data>
   <data name="Settings.Hotkey.Capture.Prompt" xml:space="preserve">
     <value>단축키를 눌러 주세요...</value>
@@ -4869,5 +4869,9 @@ OF-1 스테이지가 개방되지 않은 경우에는 선택하지 마세요.</v
   </data>
   <data name="PlatformCapability.Notification.Unavailable.DisabledByManifest" xml:space="preserve">
     <value>앱 매니페스트(Package.appxmanifest)에 의해 비활성화됨</value>
+  </data>
+  <data name="PlatformCapability.Error.AutostartAdminDenied" xml:space="preserve">
+    <value>관리자 권한으로 실행 시 부팅 시 자동 실행이 지원되지 않습니다. MAA를 관리자 권한으로 장시간 실행하는 것은 권장하지 않습니다.
+필요할 경우 제어판 > Windows 도구 > 작업 스케줄러에서 커스텀 작업을 생성하세요. 트리거를 설정할 때 ｢가장 높은 권한으로 실행｣을 반드시 선택하세요.</value>
   </data>
 </root>

@@ -33,12 +33,13 @@ public static class HotkeyConfigurationCodec
     {
         var warnings = new List<string>();
         var parsed = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        var legacyAuthoritative = false;
 
         if (!string.IsNullOrWhiteSpace(raw))
         {
             if (LooksLikeLegacyJson(raw))
             {
-                ParseLegacyJson(raw, parsed, warnings);
+                legacyAuthoritative = ParseLegacyJson(raw, parsed, warnings);
             }
             else
             {
@@ -46,9 +47,14 @@ public static class HotkeyConfigurationCodec
             }
         }
 
+        // WPF parity (MaaHotKeyManager.GetPersistentHotKeys): the initial defaults
+        // apply only when no hotkey config value was ever persisted. A well-formed
+        // legacy payload is authoritative: an action it does not bind stays
+        // unbound instead of being replaced by a default chord the user never
+        // configured.
         return new HotkeyConfigurationSnapshot(
-            ShowGui: ResolveGesture(parsed, ShowGuiHotkeyName, DefaultHotkeyShowGui, warnings),
-            LinkStart: ResolveGesture(parsed, LinkStartHotkeyName, DefaultHotkeyLinkStart, warnings),
+            ShowGui: ResolveGesture(parsed, ShowGuiHotkeyName, legacyAuthoritative ? string.Empty : DefaultHotkeyShowGui, warnings),
+            LinkStart: ResolveGesture(parsed, LinkStartHotkeyName, legacyAuthoritative ? string.Empty : DefaultHotkeyLinkStart, warnings),
             Warnings: warnings);
     }
 
@@ -134,7 +140,7 @@ public static class HotkeyConfigurationCodec
         }
     }
 
-    private static void ParseLegacyJson(
+    private static bool ParseLegacyJson(
         string raw,
         IDictionary<string, string?> parsed,
         ICollection<string> warnings)
@@ -147,13 +153,13 @@ public static class HotkeyConfigurationCodec
         catch (JsonException ex)
         {
             warnings.Add($"Ignored malformed legacy hotkey json: {ex.Message}");
-            return;
+            return false;
         }
 
         if (node is not JsonObject root)
         {
             warnings.Add("Ignored unsupported legacy hotkey json payload.");
-            return;
+            return false;
         }
 
         foreach (var (rawKey, rawValue) in root)
@@ -188,7 +194,17 @@ public static class HotkeyConfigurationCodec
             {
                 parsed[canonicalKey] = gesture;
             }
+            else
+            {
+                // WPF parity: an action explicitly present in the legacy payload but
+                // not registrable here (no modifiers, or a key without a SharpHook
+                // trigger code) migrates to unbound with the warning above rather
+                // than being replaced by the default chord.
+                parsed[canonicalKey] = string.Empty;
+            }
         }
+
+        return true;
     }
 
     private static bool TryParseLegacyGesture(
@@ -198,7 +214,7 @@ public static class HotkeyConfigurationCodec
         out string gesture)
     {
         gesture = string.Empty;
-        if (!TryReadLegacyInt(hotkeyObject["Modifiers"], out var modifierMask))
+        if (!TryReadLegacyModifierMask(hotkeyObject["Modifiers"], out var modifierMask))
         {
             modifierMask = 0;
         }
@@ -260,12 +276,14 @@ public static class HotkeyConfigurationCodec
 
     private static string? CanonicalizeActionName(string? name)
     {
-        if (string.Equals(name, ShowGuiHotkeyName, StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(name, ShowGuiHotkeyName, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(name, "0", StringComparison.Ordinal))
         {
             return ShowGuiHotkeyName;
         }
 
-        if (string.Equals(name, LinkStartHotkeyName, StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(name, LinkStartHotkeyName, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(name, "1", StringComparison.Ordinal))
         {
             return LinkStartHotkeyName;
         }
@@ -343,6 +361,52 @@ public static class HotkeyConfigurationCodec
         return false;
     }
 
+    private static bool TryReadLegacyModifierMask(JsonNode? node, out int value)
+    {
+        if (TryReadLegacyInt(node, out value))
+        {
+            return true;
+        }
+
+        value = 0;
+        if (node is not JsonValue scalar
+            || !scalar.TryGetValue(out string? text)
+            || string.IsNullOrWhiteSpace(text))
+        {
+            return false;
+        }
+
+        foreach (var rawModifier in text.Split([',', '|'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            switch (rawModifier.Trim().ToLowerInvariant())
+            {
+                case "none":
+                    break;
+                case "control":
+                case "ctrl":
+                    value |= 0x2;
+                    break;
+                case "shift":
+                    value |= 0x4;
+                    break;
+                case "alt":
+                    value |= 0x1;
+                    break;
+                case "windows":
+                case "window":
+                case "win":
+                case "meta":
+                    value |= 0x8;
+                    break;
+                default:
+                    value = 0;
+                    return false;
+            }
+        }
+
+        return true;
+    }
+
     private static string? TryReadLegacyKey(JsonNode? node)
     {
         if (node is not JsonValue scalar)
@@ -369,7 +433,14 @@ public static class HotkeyConfigurationCodec
             return null;
         }
 
-        if (HotkeyGestureCodec.TryParse($"Ctrl+{stringValue.Trim()}", out var parsed))
+        var trimmed = stringValue.Trim();
+        if (int.TryParse(trimmed, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedValue)
+            && LegacyWpfKeyMap.TryGetValue(parsedValue, out mapped))
+        {
+            return mapped;
+        }
+
+        if (HotkeyGestureCodec.TryParse($"Ctrl+{trimmed}", out var parsed))
         {
             return parsed.Key;
         }
@@ -377,13 +448,22 @@ public static class HotkeyConfigurationCodec
         return null;
     }
 
+    // Numeric keys in legacy WPF payloads are System.Windows.Input.Key enum
+    // values (MaaHotKey.Key). The frozen WPF build targets net10.0-windows and
+    // Newtonsoft.Json serializes the Key enum as its numeric value. The net10
+    // WindowsBase Key enum is compact above 121 (BrowserBack=122 .. Oem102=154,
+    // ImeProcessed=155, System=156) and Avalonia.Key 11.3.14 uses the exact same
+    // numbering, so this table must use those values.
     private static IReadOnlyDictionary<int, string> BuildLegacyWpfKeyMap()
     {
         var map = new Dictionary<int, string>
         {
+            [1] = "Cancel",
             [2] = "Backspace",
             [3] = "Tab",
             [6] = "Enter",
+            [7] = "Pause",
+            [8] = "CapsLock",
             [13] = "Escape",
             [18] = "Space",
             [19] = "PageUp",
@@ -394,16 +474,43 @@ public static class HotkeyConfigurationCodec
             [24] = "Up",
             [25] = "Right",
             [26] = "Down",
+            [30] = "PrintScreen",
             [31] = "Insert",
             [32] = "Delete",
-            [85] = "Plus",
-            [87] = "Minus",
+            [33] = "Help",
+            [73] = "Sleep",
+            [84] = "Multiply",
+            [85] = "Add",
+            [86] = "Separator",
+            [87] = "Subtract",
+            [88] = "Decimal",
+            [89] = "Divide",
+            [114] = "NumLock",
+            [115] = "ScrollLock",
+            [122] = "BrowserBack",
+            [123] = "BrowserForward",
+            [124] = "BrowserRefresh",
+            [125] = "BrowserStop",
+            [126] = "BrowserSearch",
+            [127] = "BrowserFavorites",
+            [128] = "BrowserHome",
+            [129] = "VolumeMute",
+            [130] = "VolumeDown",
+            [131] = "VolumeUp",
+            [132] = "MediaNextTrack",
+            [133] = "MediaPreviousTrack",
+            [134] = "MediaStop",
+            [135] = "MediaPlayPause",
+            [136] = "LaunchMail",
+            [137] = "SelectMedia",
+            [138] = "LaunchApplication1",
+            [139] = "LaunchApplication2",
         };
 
         for (var i = 0; i <= 9; i++)
         {
             map[34 + i] = i.ToString(CultureInfo.InvariantCulture);
-            map[74 + i] = i.ToString(CultureInfo.InvariantCulture);
+            map[74 + i] = $"NumPad{i}";
         }
 
         for (var i = 0; i < 26; i++)
@@ -415,6 +522,21 @@ public static class HotkeyConfigurationCodec
         {
             map[89 + i] = $"F{i}";
         }
+
+        // AbntC1 (147), AbntC2 (148), and Oem8 (153) have no portable trigger
+        // token, so they intentionally fall back with a warning.
+        map[140] = "Oem1";
+        map[141] = "OemPlus";
+        map[142] = "OemComma";
+        map[143] = "OemMinus";
+        map[144] = "OemPeriod";
+        map[145] = "OemQuestion";
+        map[146] = "OemTilde";
+        map[149] = "OemOpenBrackets";
+        map[150] = "OemPipe";
+        map[151] = "Oem6";
+        map[152] = "OemQuotes";
+        map[154] = "Oem102";
 
         return map;
     }
