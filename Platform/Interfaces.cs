@@ -108,6 +108,14 @@ public sealed record TrayCommandEvent(
     string Source,
     DateTimeOffset Timestamp);
 
+/// <summary>
+/// Raised when the user activates the tray icon itself (left click / double click),
+/// matching the WPF NotifyIcon behavior of showing the main window.
+/// </summary>
+public sealed record TrayActivationEvent(
+    string Source,
+    DateTimeOffset Timestamp);
+
 public sealed record TrayMenuRequestEvent(
     int ScreenX,
     int ScreenY,
@@ -256,6 +264,19 @@ public sealed record OverlayTarget(
     string? ProcessName = null,
     string? WindowTitle = null);
 
+/// <summary>
+/// Windows taskbar progress projection (WPF parity: RootViewModel.TaskProgress ->
+/// TaskbarManager.SetProgressValue). Only supported on Windows; other platforms no-op.
+/// </summary>
+public interface ITaskbarProgressService
+{
+    PlatformCapabilityStatus Capability { get; }
+
+    Task<PlatformOperationResult> SetProgressAsync(nint windowHandle, int current, int maximum, CancellationToken cancellationToken = default);
+
+    Task<PlatformOperationResult> ClearProgressAsync(nint windowHandle, CancellationToken cancellationToken = default);
+}
+
 public interface ITrayService
 {
     PlatformCapabilityStatus Capability { get; }
@@ -263,6 +284,8 @@ public interface ITrayService
     event EventHandler<TrayCommandEvent>? CommandInvoked;
 
     event EventHandler<TrayMenuRequestEvent>? MenuRequested;
+
+    event EventHandler<TrayActivationEvent>? ActivationRequested;
 
     Task<PlatformOperationResult> InitializeAsync(string appTitle, TrayMenuText? menuText, CancellationToken cancellationToken = default);
 

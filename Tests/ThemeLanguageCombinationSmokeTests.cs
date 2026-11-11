@@ -284,6 +284,7 @@ public sealed class ThemeLanguageCombinationSmokeTests
         public event EventHandler<TrayCommandEvent>? CommandInvoked;
 
         public event EventHandler<TrayMenuRequestEvent>? MenuRequested;
+        public event EventHandler<TrayActivationEvent>? ActivationRequested;
 
         public TrayMenuText? LastMenuText { get; private set; }
 

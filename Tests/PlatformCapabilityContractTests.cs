@@ -1020,6 +1020,7 @@ public sealed class PlatformCapabilityContractTests
         public event EventHandler<TrayCommandEvent>? CommandInvoked;
 
         public event EventHandler<TrayMenuRequestEvent>? MenuRequested;
+        public event EventHandler<TrayActivationEvent>? ActivationRequested;
 
         public Task<PlatformOperationResult> InitializeAsync(string appTitle, TrayMenuText? menuText, CancellationToken cancellationToken = default)
             => Task.FromResult(PlatformOperation.Failed(Capability.Provider, "initialize failed", PlatformErrorCodes.TrayInitFailed, "tray.initialize"));
@@ -1049,6 +1050,7 @@ public sealed class PlatformCapabilityContractTests
         public event EventHandler<TrayCommandEvent>? CommandInvoked;
 
         public event EventHandler<TrayMenuRequestEvent>? MenuRequested;
+        public event EventHandler<TrayActivationEvent>? ActivationRequested;
 
         public Task<PlatformOperationResult> InitializeAsync(string appTitle, TrayMenuText? menuText, CancellationToken cancellationToken = default)
             => throw new InvalidOperationException("TryCreate failed.");
@@ -1155,6 +1157,45 @@ public sealed class PlatformCapabilityContractTests
             => OverlayStateChanged?.Invoke(this, e);
     }
 
+    [Fact]
+    public async Task PlatformCapabilityFeatureService_TrayActivation_ForwardsActivationEvent()
+    {
+        // WPF parity (NotifyIcon.Click -> MainWindowManager.Show): the tray activation
+        // event must flow from the platform tray service to shell subscribers.
+        var root = CreateTempRoot();
+        var diagnostics = new UiDiagnosticsService(root, new UiLogService());
+        var tray = new TriggerableTrayService();
+        var bundle = new PlatformServiceBundle
+        {
+            TrayService = tray,
+            NotificationService = new NoOpNotificationService(),
+            HotkeyService = new NoOpGlobalHotkeyService(),
+            AutostartService = new NoOpAutostartService(),
+            FileDialogService = new NoOpFileDialogService(),
+            OverlayService = new NoOpOverlayCapabilityService(),
+            PostActionExecutorService = new NoOpPostActionExecutorService(),
+        };
+
+        var service = new PlatformCapabilityFeatureService(bundle, diagnostics);
+        TrayActivationEvent? received = null;
+        service.TrayActivationRequested += (_, e) => received = e;
+
+        tray.EmitActivation("test-tray");
+
+        Assert.NotNull(received);
+        Assert.Equal("test-tray", received!.Source);
+        await WaitUntilAsync(async () =>
+        {
+            if (!File.Exists(diagnostics.EventLogPath))
+            {
+                return false;
+            }
+
+            var content = await File.ReadAllTextAsync(diagnostics.EventLogPath);
+            return content.Contains("PlatformCapability.TrayActivation", StringComparison.Ordinal);
+        });
+    }
+
     private sealed class TriggerableTrayService : ITrayService
     {
         public PlatformCapabilityStatus Capability { get; } = new(
@@ -1167,6 +1208,7 @@ public sealed class PlatformCapabilityContractTests
         public event EventHandler<TrayCommandEvent>? CommandInvoked;
 
         public event EventHandler<TrayMenuRequestEvent>? MenuRequested;
+        public event EventHandler<TrayActivationEvent>? ActivationRequested;
 
         public Task<PlatformOperationResult> InitializeAsync(string appTitle, TrayMenuText? menuText, CancellationToken cancellationToken = default)
             => Task.FromResult(PlatformOperation.NativeSuccess(Capability.Provider, "init", "tray.initialize"));
@@ -1188,6 +1230,9 @@ public sealed class PlatformCapabilityContractTests
 
         public void EmitMenu(int x, int y, string source)
             => MenuRequested?.Invoke(this, new TrayMenuRequestEvent(x, y, source, DateTimeOffset.UtcNow));
+
+        public void EmitActivation(string source)
+            => ActivationRequested?.Invoke(this, new TrayActivationEvent(source, DateTimeOffset.UtcNow));
     }
 
     private sealed class TriggerableHotkeyService : IGlobalHotkeyService

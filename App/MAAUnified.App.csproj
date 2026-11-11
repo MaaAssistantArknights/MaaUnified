@@ -15,6 +15,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <AssemblyAttribute Include="MAAUnified.App.Infrastructure.BuildDateTimeAttribute">
+      <_Parameter1>$([System.DateTime]::UtcNow.ToString("O"))</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Application\MAAUnified.Application.csproj" />
     <ProjectReference Include="..\SecureStorage.System\MAAUnified.SecureStorage.System.csproj" />
     <ProjectReference Include="..\SecureStorage.Linux\MAAUnified.SecureStorage.Linux.csproj"

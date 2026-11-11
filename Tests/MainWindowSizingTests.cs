@@ -22,6 +22,44 @@ public sealed class MainWindowSizingTests
     }
 
     [Theory]
+    [InlineData(59, false)]
+    [InlineData(60, true)]
+    [InlineData(90, true)]
+    public void ShouldUnlockAfkWatcherOnRestore_ShouldRequireAtLeastOneHourMinimized(
+        int minimizedMinutes,
+        bool expected)
+    {
+        var minimizedSince = new DateTime(2026, 10, 2, 12, 0, 0, DateTimeKind.Local);
+
+        var actual = MainWindow.ShouldUnlockAfkWatcherOnRestore(
+            minimizedSince,
+            minimizedSince.AddMinutes(minimizedMinutes));
+
+        Assert.Equal(expected, actual);
+    }
+
+    [Fact]
+    public void ResolveAfkWatcherMinimizedSince_ShouldStartClockWhenNotTracked()
+    {
+        var hiddenAt = new DateTime(2026, 10, 2, 12, 0, 0, DateTimeKind.Local);
+
+        var actual = MainWindow.ResolveAfkWatcherMinimizedSince(null, hiddenAt);
+
+        Assert.Equal(hiddenAt, actual);
+    }
+
+    [Fact]
+    public void ResolveAfkWatcherMinimizedSince_ShouldKeepWindowStatePipelineTimestamp()
+    {
+        var minimizedSince = new DateTime(2026, 10, 2, 12, 0, 0, DateTimeKind.Local);
+        var hiddenAt = minimizedSince.AddMinutes(5);
+
+        var actual = MainWindow.ResolveAfkWatcherMinimizedSince(minimizedSince, hiddenAt);
+
+        Assert.Equal(minimizedSince, actual);
+    }
+
+    [Theory]
     [InlineData(false, 1380)]
     [InlineData(true, 1104)]
     public void ComputeDefaultWindowWidth_ShouldMatchMacOSDefault(bool isMacOS, double expected)
@@ -159,6 +197,44 @@ public sealed class MainWindowSizingTests
         };
 
         Assert.False(MainWindow.TryReadPersistedWindowSize(values, "macOS", out _));
+    }
+
+    [Fact]
+    public void PersistedWindowPlacement_ShouldReadFrozenWpfSerializedValue()
+    {
+        var values = new Dictionary<string, JsonNode?>(StringComparer.OrdinalIgnoreCase)
+        {
+            [LegacyConfigurationKeys.WindowPlacement] = JsonValue.Create(
+                "{\"Length\":44,\"Flags\":0,\"ShowCmd\":3,\"MinPosition\":{\"X\":-1,\"Y\":-1},\"MaxPosition\":{\"X\":-1,\"Y\":-1},\"NormalPosition\":{\"Left\":120,\"Top\":80,\"Right\":1320,\"Bottom\":880}}"),
+        };
+
+        Assert.True(MainWindow.TryReadPersistedWindowPlacement(values, "Windows", out var placement));
+        Assert.Equal(new Size(1200, 800), placement.Size);
+        Assert.Equal(new PixelPoint(120, 80), placement.Position);
+        Assert.Equal(WindowState.Maximized, placement.State);
+    }
+
+    [Fact]
+    public void PersistedWindowPlacement_ShouldWritePositionAndStateWithoutWpfStringLoss()
+    {
+        var values = new Dictionary<string, JsonNode?>(StringComparer.OrdinalIgnoreCase)
+        {
+            [LegacyConfigurationKeys.WindowPlacement] = JsonValue.Create(
+                "{\"ShowCmd\":1,\"NormalPosition\":{\"Left\":10,\"Top\":20,\"Right\":810,\"Bottom\":620}}"),
+        };
+
+        MainWindow.WritePersistedWindowPlacement(
+            values,
+            "Windows",
+            new MainWindow.PersistedWindowPlacement(
+                new Size(1000, 700),
+                new PixelPoint(240, 160),
+                WindowState.Maximized));
+
+        Assert.True(MainWindow.TryReadPersistedWindowPlacement(values, "Windows", out var placement));
+        Assert.Equal(new Size(1000, 700), placement.Size);
+        Assert.Equal(new PixelPoint(240, 160), placement.Position);
+        Assert.Equal(WindowState.Maximized, placement.State);
     }
 
     [Theory]

@@ -84,7 +84,10 @@ public sealed class WindowsNotifyIconTrayService : ITrayService, IDisposable
     private const uint TpmReturnCmd = 0x00000100;
     private const uint WmNull = 0x0000;
     private const uint WmContextMenu = 0x007B;
+    private const uint WmLButtonUp = 0x0202;
+    private const uint WmLButtonDblClk = 0x0203;
     private const uint WmRButtonUp = 0x0205;
+    private const long ActivationDebounceMilliseconds = 500;
     private const int SmMenuDropAlignment = 40;
     private const uint NativeMenuStartId = 10_001;
     private readonly CommandNotificationService _notificationFallback = new();
@@ -101,6 +104,7 @@ public sealed class WindowsNotifyIconTrayService : ITrayService, IDisposable
     private bool _trackingNativeMenu;
     private ushort _windowClassAtom;
     private uint _taskbarCreatedMessage;
+    private long _lastActivationTicks;
     private TrayMenuState _menuState = new(true, true, true, true, true);
     private TrayMenuText _menuText = TrayMenuText.Default;
     private string _toolTip = "MAAUnified";
@@ -116,10 +120,13 @@ public sealed class WindowsNotifyIconTrayService : ITrayService, IDisposable
 
     public event EventHandler<TrayMenuRequestEvent>? MenuRequested;
 
+    public event EventHandler<TrayActivationEvent>? ActivationRequested;
+
     public WindowsNotifyIconTrayService()
     {
         _windowProc = WindowProc;
         _fallbackService.CommandInvoked += (_, e) => RaiseCommand(e.Command);
+        _fallbackService.ActivationRequested += (_, _) => RaiseActivation();
     }
 
     public static bool TryCreate([NotNullWhen(true)] out WindowsNotifyIconTrayService? service)
@@ -458,6 +465,27 @@ public sealed class WindowsNotifyIconTrayService : ITrayService, IDisposable
         }
     }
 
+    private void RaiseActivation()
+    {
+        // WPF parity (NotifyIcon Click/MouseDoubleClick debounce): a double click raises
+        // WmLButtonUp + WmLButtonDblClk + WmLButtonUp; collapse bursts into one activation.
+        var now = Environment.TickCount64;
+        if (now - _lastActivationTicks < ActivationDebounceMilliseconds)
+        {
+            return;
+        }
+
+        _lastActivationTicks = now;
+        try
+        {
+            ActivationRequested?.Invoke(this, new TrayActivationEvent(Capability.Provider, DateTimeOffset.UtcNow));
+        }
+        catch
+        {
+            // Ignore user event exceptions to avoid destabilizing tray message loop.
+        }
+    }
+
     private nint WindowProc(nint hWnd, uint msg, nuint wParam, nint lParam)
     {
         if (msg == _taskbarCreatedMessage)
@@ -493,6 +521,12 @@ public sealed class WindowsNotifyIconTrayService : ITrayService, IDisposable
             var eventMessage = unchecked((uint)lParam.ToInt64());
             switch (eventMessage)
             {
+                // WPF parity (NotifyIcon.Click/MouseDoubleClick -> MainWindowManager.Show):
+                // left click / double click on the tray icon shows the main window.
+                case WmLButtonUp:
+                case WmLButtonDblClk:
+                    RaiseActivation();
+                    break;
                 case WmRButtonUp:
                 case WmContextMenu:
                     if (!TryShowNativeContextMenu()
@@ -1003,9 +1037,12 @@ public sealed class AvaloniaTrayIconTrayService : ITrayService, IDisposable
 
     public event EventHandler<TrayMenuRequestEvent>? MenuRequested;
 
+    public event EventHandler<TrayActivationEvent>? ActivationRequested;
+
     public AvaloniaTrayIconTrayService()
     {
         _fallbackService.CommandInvoked += (_, e) => RaiseCommand(e.Command);
+        _fallbackService.ActivationRequested += (_, _) => RaiseActivation();
     }
 
     public static bool TryCreate([NotNullWhen(true)] out AvaloniaTrayIconTrayService? service)
@@ -1070,6 +1107,9 @@ public sealed class AvaloniaTrayIconTrayService : ITrayService, IDisposable
                 IsVisible = _visible,
                 Icon = BuildDefaultIcon(),
             };
+            // WPF parity (NotifyIcon.Click -> MainWindowManager.Show): left click on the
+            // tray icon shows the main window.
+            _trayIcon.Clicked += OnTrayIconClicked;
             RebuildMenu();
             _trayIcons = new Avalonia.Controls.TrayIcons
             {
@@ -1302,6 +1342,23 @@ public sealed class AvaloniaTrayIconTrayService : ITrayService, IDisposable
         }
     }
 
+    private void OnTrayIconClicked(object? sender, EventArgs e)
+    {
+        RaiseActivation();
+    }
+
+    private void RaiseActivation()
+    {
+        try
+        {
+            ActivationRequested?.Invoke(this, new TrayActivationEvent(Capability.Provider, DateTimeOffset.UtcNow));
+        }
+        catch
+        {
+            // Ignore user event exceptions to avoid destabilizing tray event dispatch.
+        }
+    }
+
     private async Task<PlatformOperationResult> SwitchToFallbackTrayAsync(
         string appTitle,
         Exception exception,
@@ -1365,7 +1422,11 @@ public sealed class AvaloniaTrayIconTrayService : ITrayService, IDisposable
 
         try
         {
-            _trayIcon?.Dispose();
+            if (_trayIcon is not null)
+            {
+                _trayIcon.Clicked -= OnTrayIconClicked;
+                _trayIcon.Dispose();
+            }
         }
         catch
         {
@@ -2441,6 +2502,9 @@ public sealed class WindowMenuTrayService : ITrayService
     public event EventHandler<TrayCommandEvent>? CommandInvoked;
 
     public event EventHandler<TrayMenuRequestEvent>? MenuRequested;
+
+    // Window-menu fallback has no clickable tray icon; activation is never raised.
+    public event EventHandler<TrayActivationEvent>? ActivationRequested;
 
     public PlatformCapabilityStatus Capability => new(
         Supported: false,
@@ -5359,4 +5423,195 @@ public sealed class CommandPostActionExecutorService : IPostActionExecutorServic
         string scriptPath,
         CancellationToken cancellationToken = default)
         => await PostActionExecutorSupport.ExecuteUserScriptAsync(scriptPath, cancellationToken);
+}
+/// <summary>
+/// Windows taskbar progress projection via ITaskbarList3 (WPF parity:
+/// RootViewModel.TaskProgress -> TaskbarManager.SetProgressValue).
+/// </summary>
+public sealed class WindowsTaskbarProgressService : ITaskbarProgressService
+{
+    private const int TbpfNoProgress = 0x0;
+    private const int TbpfNormal = 0x2;
+
+    private readonly object _sync = new();
+    private ITaskbarList3? _taskbarList;
+    private bool _initializationFailed;
+
+    public PlatformCapabilityStatus Capability => new(
+        Supported: true,
+        Message: "Windows taskbar progress is available via ITaskbarList3.",
+        Provider: "windows-taskbarlist",
+        HasFallback: false);
+
+    public static bool TryCreate([NotNullWhen(true)] out WindowsTaskbarProgressService? service)
+    {
+        service = OperatingSystem.IsWindows() ? new WindowsTaskbarProgressService() : null;
+        return service is not null;
+    }
+
+    public Task<PlatformOperationResult> SetProgressAsync(
+        nint windowHandle,
+        int current,
+        int maximum,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (maximum <= 0)
+        {
+            return ClearProgressAsync(windowHandle, cancellationToken);
+        }
+
+        var clamped = Math.Clamp(current, 0, maximum);
+        return ApplyProgress(
+            windowHandle,
+            list => list.SetProgressValue(windowHandle, (ulong)clamped, (ulong)maximum),
+            list => list.SetProgressState(windowHandle, TbpfNormal),
+            $"taskbar progress set to {clamped}/{maximum}.");
+    }
+
+    public Task<PlatformOperationResult> ClearProgressAsync(nint windowHandle, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return ApplyProgress(
+            windowHandle,
+            list => list.SetProgressValue(windowHandle, 0, 0),
+            list => list.SetProgressState(windowHandle, TbpfNoProgress),
+            "taskbar progress cleared.");
+    }
+
+    private Task<PlatformOperationResult> ApplyProgress(
+        nint windowHandle,
+        Func<ITaskbarList3, int> setValue,
+        Func<ITaskbarList3, int> setState,
+        string successMessage)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return Task.FromResult(PlatformOperation.FallbackSuccess(
+                Capability.Provider,
+                "Taskbar progress is only supported on Windows.",
+                operationId: "taskbarProgress.apply"));
+        }
+
+        if (windowHandle == nint.Zero)
+        {
+            return Task.FromResult(PlatformOperation.Failed(
+                Capability.Provider,
+                "Main window handle is unavailable for taskbar progress.",
+                PlatformErrorCodes.TrayMenuDispatchFailed,
+                "taskbarProgress.apply"));
+        }
+
+        try
+        {
+            var list = GetTaskbarList();
+            if (list is null)
+            {
+                return Task.FromResult(PlatformOperation.Failed(
+                    Capability.Provider,
+                    "ITaskbarList3 initialization failed.",
+                    PlatformErrorCodes.TrayMenuDispatchFailed,
+                    "taskbarProgress.apply"));
+            }
+
+            // WPF parity: value first, then state, mirroring TaskbarManager.SetProgressValue.
+            _ = setValue(list);
+            var stateHr = setState(list);
+            if (stateHr < 0)
+            {
+                return Task.FromResult(PlatformOperation.Failed(
+                    Capability.Provider,
+                    $"SetProgressState failed: 0x{stateHr:X8}",
+                    PlatformErrorCodes.TrayMenuDispatchFailed,
+                    "taskbarProgress.apply"));
+            }
+
+            return Task.FromResult(PlatformOperation.NativeSuccess(
+                Capability.Provider,
+                successMessage,
+                "taskbarProgress.apply"));
+        }
+        catch (Exception ex)
+        {
+            return Task.FromResult(PlatformOperation.Failed(
+                Capability.Provider,
+                $"Taskbar progress update failed: {ex.Message}",
+                PlatformErrorCodes.TrayMenuDispatchFailed,
+                "taskbarProgress.apply"));
+        }
+    }
+
+    private ITaskbarList3? GetTaskbarList()
+    {
+        lock (_sync)
+        {
+            if (_initializationFailed)
+            {
+                return null;
+            }
+
+            if (_taskbarList is not null)
+            {
+                return _taskbarList;
+            }
+
+            try
+            {
+                var list = (ITaskbarList3)new TaskbarListComClass();
+                if (list.HrInit() != 0)
+                {
+                    _initializationFailed = true;
+                    return null;
+                }
+
+                _taskbarList = list;
+                return list;
+            }
+            catch
+            {
+                _initializationFailed = true;
+                return null;
+            }
+        }
+    }
+
+    [ComImport]
+    [Guid("56FDF344-FD6D-11d0-958A-006097C9A090")]
+    [ClassInterface(ClassInterfaceType.None)]
+    private class TaskbarListComClass
+    {
+    }
+
+    [ComImport]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    [Guid("ea1afb91-9e28-4b86-90e9-9e9f8a5eefaf")]
+    private interface ITaskbarList3
+    {
+        // ITaskbarList
+        [PreserveSig]
+        int HrInit();
+
+        [PreserveSig]
+        int AddTab(nint hwnd);
+
+        [PreserveSig]
+        int DeleteTab(nint hwnd);
+
+        [PreserveSig]
+        int ActivateTab(nint hwnd);
+
+        [PreserveSig]
+        int SetActiveAlt(nint hwnd);
+
+        // ITaskbarList2
+        [PreserveSig]
+        int MarkFullscreenWindow([MarshalAs(UnmanagedType.Bool)] bool fFullscreen);
+
+        // ITaskbarList3
+        [PreserveSig]
+        int SetProgressValue(nint hwnd, ulong ullCompleted, ulong ullTotal);
+
+        [PreserveSig]
+        int SetProgressState(nint hwnd, int tbpFlags);
+    }
 }

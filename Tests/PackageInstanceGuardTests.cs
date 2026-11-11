@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using MAAUnified.Compat.Runtime;
@@ -37,42 +38,84 @@ public sealed class PackageInstanceGuardTests
     }
 
     [Fact]
-    public async Task TryAcquire_WithWaitBudget_AcquiresAfterAnotherThreadReleasesMutex()
+    public void TryAcquire_WhenMutexHeldExternally_WaitsForReleaseAndSucceeds()
+    {
+        // Restart flow spawns the successor process before the previous instance exits;
+        // the guard must wait for the previous holder to release instead of failing
+        // immediately (WPF Bootstrapper.HandleMultipleInstances waits 500ms).
+        var identity = $"maa-unified-instance-{Guid.NewGuid():N}";
+        using var externalMutex = new Mutex(initiallyOwned: false, BuildExpectedMutexName(identity));
+        using var acquired = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+
+        var holder = new Thread(() =>
+        {
+            externalMutex.WaitOne();
+            acquired.Set();
+            release.Wait(TimeSpan.FromSeconds(30));
+            externalMutex.ReleaseMutex();
+        });
+        holder.Start();
+        Assert.True(acquired.Wait(TimeSpan.FromSeconds(10)));
+
+        // The holder releases 200ms into the wait; acquisition must succeed instead of
+        // failing immediately on the still-held mutex.
+        var releaser = new Thread(() =>
+        {
+            Thread.Sleep(200);
+            release.Set();
+        });
+        releaser.Start();
+
+        Assert.True(PackageInstanceGuard.TryAcquire(identity, TimeSpan.FromSeconds(10), out var guard));
+        Assert.NotNull(guard);
+        guard!.Dispose();
+        holder.Join();
+    }
+
+    [Fact]
+    public void TryAcquire_WhenMutexHeldExternallyBeyondTimeout_ReturnsFalseAfterWaiting()
     {
         var identity = $"maa-unified-instance-{Guid.NewGuid():N}";
-        using var externallyHeldMutex = new Mutex(initiallyOwned: false, BuildMutexName(identity));
-        Assert.True(externallyHeldMutex.WaitOne());
+        using var externalMutex = new Mutex(initiallyOwned: false, BuildExpectedMutexName(identity));
+        using var acquired = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+
+        var holder = new Thread(() =>
+        {
+            externalMutex.WaitOne();
+            acquired.Set();
+            release.Wait(TimeSpan.FromSeconds(30));
+            externalMutex.ReleaseMutex();
+        });
+        holder.Start();
+        Assert.True(acquired.Wait(TimeSpan.FromSeconds(10)));
 
         try
         {
-            var acquireTask = Task.Run(() =>
-            {
-                var acquired = PackageInstanceGuard.TryAcquire(identity, TimeSpan.FromSeconds(2), out var guard);
-                return (acquired, guard);
-            });
-
-            Thread.Sleep(TimeSpan.FromMilliseconds(100));
-            Assert.False(acquireTask.IsCompleted);
-
-            externallyHeldMutex.ReleaseMutex();
-            var result = await acquireTask;
-            Assert.True(result.acquired);
-            result.guard!.Dispose();
+            var timeout = TimeSpan.FromMilliseconds(400);
+            var elapsed = Stopwatch.StartNew();
+            Assert.False(PackageInstanceGuard.TryAcquire(identity, timeout, out var guard));
+            elapsed.Stop();
+            Assert.Null(guard);
+            Assert.True(
+                elapsed.Elapsed >= TimeSpan.FromMilliseconds(300),
+                $"Expected the acquire attempt to wait for the timeout, but it returned after {elapsed.ElapsedMilliseconds}ms.");
         }
         finally
         {
-            try
-            {
-                externallyHeldMutex.ReleaseMutex();
-            }
-            catch (ApplicationException)
-            {
-                // The mutex was already released on the successful path.
-            }
+            release.Set();
+            holder.Join();
         }
     }
 
-    private static string BuildMutexName(string keyMaterial)
+    [Fact]
+    public void DefaultAcquireTimeout_MatchesWpfWaitWindow()
+    {
+        Assert.Equal(TimeSpan.FromMilliseconds(500), PackageInstanceGuard.DefaultAcquireTimeout);
+    }
+
+    private static string BuildExpectedMutexName(string keyMaterial)
     {
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(keyMaterial));
         return $"MAAUnified.Package.{Convert.ToHexString(hash)}";

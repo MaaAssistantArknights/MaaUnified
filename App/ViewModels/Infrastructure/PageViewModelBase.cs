@@ -184,6 +184,7 @@ public abstract class PageViewModelBase : ObservableObject
                     return true;
                 }
 
+                LastErrorMessage = result.Message;
                 await RecordFailedResultAsync(scope, result, ct);
                 return false;
             },

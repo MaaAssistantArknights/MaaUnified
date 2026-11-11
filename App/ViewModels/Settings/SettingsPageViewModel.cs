@@ -412,6 +412,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
     private string _updatePanelBuildTime = "unknown";
     private string _updatePanelResourceVersion = string.Empty;
     private string _updatePanelResourceTime = string.Empty;
+    private DateTime? _updatePanelResourceDateTime;
     private bool _isVersionUpdateActionRunning;
     private string _configurationManagerSelectedProfile = string.Empty;
     private string _configurationManagerNewProfileName = string.Empty;
@@ -2462,6 +2463,14 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
     {
         get => _updatePanelResourceTime;
         private set => SetProperty(ref _updatePanelResourceTime, value);
+    }
+
+    // Raw resource last-updated timestamp (same semantics as WPF VersionUpdateSettings.ResourceDateTime),
+    // used by the shell window title to render the localized resource date suffix.
+    public DateTime? UpdatePanelResourceDateTime
+    {
+        get => _updatePanelResourceDateTime;
+        private set => SetProperty(ref _updatePanelResourceDateTime, value);
     }
 
     public bool IsVersionUpdateActionRunning

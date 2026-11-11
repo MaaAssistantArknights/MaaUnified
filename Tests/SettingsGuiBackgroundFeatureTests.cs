@@ -181,6 +181,24 @@ public sealed class SettingsGuiBackgroundFeatureTests
         Assert.Equal(expected, snapshot.UiScalePercent);
     }
 
+    [Theory]
+    [InlineData(null, false)]
+    [InlineData("true", true)]
+    [InlineData("false", false)]
+    public void StartupShellSnapshot_FromConfig_ReadsHideCloseButton(string? rawValue, bool expected)
+    {
+        // WPF parity (RootViewModel.ShowCloseButton = !GUI.HideCloseButton).
+        var config = new UnifiedConfig();
+        if (rawValue is not null)
+        {
+            config.GlobalValues[ConfigurationKeys.HideCloseButton] = JsonValue.Create(rawValue);
+        }
+
+        var snapshot = StartupShellSnapshot.FromConfig(config);
+
+        Assert.Equal(expected, snapshot.HideCloseButton);
+    }
+
     [Fact]
     public async Task LanguageChange_KeepsSupportedLanguagesStable_AndDoesNotFallbackToZhCn()
     {
@@ -1245,6 +1263,7 @@ public sealed class SettingsGuiBackgroundFeatureTests
         public event EventHandler<TrayCommandEvent>? CommandInvoked;
 
         public event EventHandler<TrayMenuRequestEvent>? MenuRequested;
+        public event EventHandler<TrayActivationEvent>? ActivationRequested;
 
         public TrayMenuText? LastMenuText { get; private set; }
 

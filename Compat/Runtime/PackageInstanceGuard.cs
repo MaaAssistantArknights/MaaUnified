@@ -5,6 +5,10 @@ namespace MAAUnified.Compat.Runtime;
 
 public sealed class PackageInstanceGuard : IDisposable
 {
+    // WPF parity (Bootstrapper.HandleMultipleInstances): wait briefly so a restart
+    // successor process, which is spawned before the previous instance exits, can
+    // acquire the guard once the previous instance releases it.
+    internal static readonly TimeSpan DefaultAcquireTimeout = TimeSpan.FromMilliseconds(500);
     private static readonly Lock HeldKeysGate = new();
     private static readonly HashSet<string> HeldKeys = new(StringComparer.Ordinal);
     private readonly Mutex _mutex;
@@ -19,7 +23,7 @@ public sealed class PackageInstanceGuard : IDisposable
     public string KeyMaterial { get; }
 
     public static bool TryAcquire(string keyMaterial, out PackageInstanceGuard? guard)
-        => TryAcquire(keyMaterial, TimeSpan.Zero, out guard);
+        => TryAcquire(keyMaterial, DefaultAcquireTimeout, out guard);
 
     public static bool TryAcquire(string keyMaterial, TimeSpan timeout, out PackageInstanceGuard? guard)
     {

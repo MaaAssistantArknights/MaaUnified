@@ -382,6 +382,7 @@ public sealed class RuntimeDisposalTests
         public event EventHandler<TrayCommandEvent>? CommandInvoked;
 
         public event EventHandler<TrayMenuRequestEvent>? MenuRequested;
+        public event EventHandler<TrayActivationEvent>? ActivationRequested;
 
         public Task<PlatformOperationResult> InitializeAsync(string appTitle, TrayMenuText? menuText, CancellationToken cancellationToken = default)
             => Task.FromResult(PlatformOperation.NativeSuccess(Capability.Provider, "initialized", "tray.initialize"));

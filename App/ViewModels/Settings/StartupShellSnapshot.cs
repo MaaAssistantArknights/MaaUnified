@@ -21,7 +21,8 @@ public sealed record StartupShellSnapshot(
     int BackgroundBlur,
     string BackgroundStretchMode,
     string HotkeyShowGui,
-    string HotkeyLinkStart)
+    string HotkeyLinkStart,
+    bool HideCloseButton = false)
 {
     private const string ThemeModeKey = "Theme.Mode";
     private const string DefaultTheme = "SyncWithOs";
@@ -89,7 +90,8 @@ public sealed record StartupShellSnapshot(
             BackgroundStretchMode: NormalizeBackgroundStretchMode(
                 ReadGlobalString(config, ConfigurationKeys.BackgroundImageStretchMode, DefaultBackgroundStretchMode)),
             HotkeyShowGui: parsedHotkeys.ShowGui,
-            HotkeyLinkStart: parsedHotkeys.LinkStart);
+            HotkeyLinkStart: parsedHotkeys.LinkStart,
+            HideCloseButton: ReadGlobalBool(config, ConfigurationKeys.HideCloseButton, false));
     }
 
     private static string ReadGlobalString(UnifiedConfig config, string key, string fallback)

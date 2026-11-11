@@ -6,6 +6,8 @@ public sealed class NoOpTrayService : ITrayService
 
     public event EventHandler<TrayMenuRequestEvent>? MenuRequested;
 
+    public event EventHandler<TrayActivationEvent>? ActivationRequested;
+
     public PlatformCapabilityStatus Capability => new(
         false,
         "System tray is not supported in this environment",
@@ -27,6 +29,21 @@ public sealed class NoOpTrayService : ITrayService
 
     public Task<PlatformOperationResult> SetVisibleAsync(bool visible, CancellationToken cancellationToken = default)
         => Task.FromResult(PlatformOperation.FallbackSuccess(Capability.Provider, Capability.Message, "tray.setVisible", PlatformErrorCodes.TrayUnsupported));
+}
+
+public sealed class NoOpTaskbarProgressService : ITaskbarProgressService
+{
+    public PlatformCapabilityStatus Capability => new(
+        false,
+        "Taskbar progress is not supported on this platform.",
+        Provider: "no-op",
+        HasFallback: false);
+
+    public Task<PlatformOperationResult> SetProgressAsync(nint windowHandle, int current, int maximum, CancellationToken cancellationToken = default)
+        => Task.FromResult(PlatformOperation.FallbackSuccess(Capability.Provider, Capability.Message, operationId: "taskbarProgress.set"));
+
+    public Task<PlatformOperationResult> ClearProgressAsync(nint windowHandle, CancellationToken cancellationToken = default)
+        => Task.FromResult(PlatformOperation.FallbackSuccess(Capability.Provider, Capability.Message, operationId: "taskbarProgress.clear"));
 }
 
 public sealed class NoOpNotificationService : INotificationService, INotificationInteractionSource

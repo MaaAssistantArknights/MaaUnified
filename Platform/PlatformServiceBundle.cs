@@ -17,6 +17,8 @@ public sealed class PlatformServiceBundle
     public required IPostActionExecutorService PostActionExecutorService { get; init; }
 
     public IGpuCapabilityService GpuCapabilityService { get; init; } = new UnsupportedGpuCapabilityService();
+
+    public ITaskbarProgressService TaskbarProgressService { get; init; } = new NoOpTaskbarProgressService();
 }
 
 public static class PlatformServicesFactory
@@ -39,6 +41,7 @@ public static class PlatformServicesFactory
         IOverlayCapabilityService overlayService;
         IPostActionExecutorService postActionExecutorService;
         IGpuCapabilityService gpuCapabilityService;
+        ITaskbarProgressService taskbarProgressService;
 
         try
         {
@@ -182,6 +185,17 @@ public static class PlatformServicesFactory
             gpuCapabilityService = new UnsupportedGpuCapabilityService();
         }
 
+        try
+        {
+            taskbarProgressService = !forceFallback && WindowsTaskbarProgressService.TryCreate(out var windowsTaskbarProgress)
+                ? windowsTaskbarProgress
+                : new NoOpTaskbarProgressService();
+        }
+        catch
+        {
+            taskbarProgressService = new NoOpTaskbarProgressService();
+        }
+
         return new PlatformServiceBundle {
             TrayService = trayService,
             NotificationService = notificationService,
@@ -191,6 +205,7 @@ public static class PlatformServicesFactory
             OverlayService = overlayService,
             PostActionExecutorService = postActionExecutorService,
             GpuCapabilityService = gpuCapabilityService,
+            TaskbarProgressService = taskbarProgressService,
         };
     }
 }

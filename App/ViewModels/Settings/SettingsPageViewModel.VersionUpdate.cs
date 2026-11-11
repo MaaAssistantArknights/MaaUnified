@@ -295,6 +295,7 @@ public sealed partial class SettingsPageViewModel
             {
                 UpdatePanelResourceVersion = string.Empty;
                 UpdatePanelResourceTime = string.Empty;
+                UpdatePanelResourceDateTime = null;
                 return;
             }
 
@@ -302,11 +303,15 @@ public sealed partial class SettingsPageViewModel
             UpdatePanelResourceTime = info.LastUpdatedAt == DateTime.MinValue
                 ? string.Empty
                 : info.LastUpdatedAt.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+            UpdatePanelResourceDateTime = info.LastUpdatedAt == DateTime.MinValue
+                ? null
+                : info.LastUpdatedAt;
         }
         catch
         {
             UpdatePanelResourceVersion = string.Empty;
             UpdatePanelResourceTime = string.Empty;
+            UpdatePanelResourceDateTime = null;
         }
     }
 

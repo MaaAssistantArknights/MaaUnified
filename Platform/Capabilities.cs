@@ -7,6 +7,7 @@ public enum PlatformCapabilityId
     Hotkey = 2,
     Autostart = 3,
     Overlay = 4,
+    TaskbarProgress = 5,
 }
 
 public enum PlatformExecutionMode

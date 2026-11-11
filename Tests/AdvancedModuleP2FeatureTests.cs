@@ -762,6 +762,7 @@ public sealed class AdvancedModuleP2FeatureTests
         public event EventHandler<TrayCommandEvent>? CommandInvoked;
 
         public event EventHandler<TrayMenuRequestEvent>? MenuRequested;
+        public event EventHandler<TrayActivationEvent>? ActivationRequested;
 
         public PlatformCapabilityStatus Capability { get; } = new(
             Supported: true,

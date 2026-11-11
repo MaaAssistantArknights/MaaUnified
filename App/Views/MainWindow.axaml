@@ -476,7 +476,7 @@
                            Mode="ResizableDialog"
                            ShowMinimizeButton="True"
                            ShowMaximizeButton="True"
-                           ShowCloseButton="True">
+                           ShowCloseButton="{Binding ShowCloseButton}">
     <controls:AppWindowFrame.Content>
       <LayoutTransformControl>
         <LayoutTransformControl.LayoutTransform>

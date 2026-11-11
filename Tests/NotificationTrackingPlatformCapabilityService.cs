@@ -38,6 +38,12 @@ internal sealed class NotificationTrackingPlatformCapabilityService : IPlatformC
         remove => _inner.TrayMenuRequested -= value;
     }
 
+    public event EventHandler<TrayActivationEvent>? TrayActivationRequested
+    {
+        add => _inner.TrayActivationRequested += value;
+        remove => _inner.TrayActivationRequested -= value;
+    }
+
     public event EventHandler<GlobalHotkeyTriggeredEvent>? GlobalHotkeyTriggered
     {
         add => _inner.GlobalHotkeyTriggered += value;
@@ -76,6 +82,12 @@ internal sealed class NotificationTrackingPlatformCapabilityService : IPlatformC
         LastNotification = new SystemNotificationRequest(title, message);
         return _inner.SendSystemNotificationAsync(title, message, cancellationToken);
     }
+
+    public Task<UiOperationResult> SetTaskbarProgressAsync(nint windowHandle, int current, int maximum, CancellationToken cancellationToken = default)
+        => _inner.SetTaskbarProgressAsync(windowHandle, current, maximum, cancellationToken);
+
+    public Task<UiOperationResult> ClearTaskbarProgressAsync(nint windowHandle, CancellationToken cancellationToken = default)
+        => _inner.ClearTaskbarProgressAsync(windowHandle, cancellationToken);
 
     public Task<UiOperationResult> SendSystemNotificationAsync(
         SystemNotificationRequest notification,

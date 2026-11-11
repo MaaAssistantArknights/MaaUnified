@@ -52,11 +52,7 @@ public sealed class ProcessAppLifecycleService : IAppLifecycleService
                 return Task.FromResult(UiOperationResult.Fail(UiErrorCode.AppRestartExecutableMissing, "Current executable path is unavailable."));
             }
 
-            var startInfo = new ProcessStartInfo
-            {
-                FileName = executable,
-                UseShellExecute = false,
-            };
+            var startInfo = BuildRestartStartInfo(executable);
 
             foreach (var argument in BuildRestartArguments(arguments))
             {
@@ -72,6 +68,16 @@ public sealed class ProcessAppLifecycleService : IAppLifecycleService
         }
     }
 
+    // WPF parity (Bootstrapper.ShutdownAndRestartWithoutArgs): restart launches the
+    // current executable without forwarding the original command-line arguments.
+    internal static ProcessStartInfo BuildRestartStartInfo(string executablePath)
+    {
+        return new ProcessStartInfo
+        {
+            FileName = executablePath,
+            UseShellExecute = false,
+        };
+    }
 }
 
 public sealed class NoOpAppLifecycleService : IAppLifecycleService

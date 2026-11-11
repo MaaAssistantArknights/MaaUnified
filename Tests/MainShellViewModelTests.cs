@@ -73,11 +73,80 @@ public sealed class MainShellViewModelTests
     }
 
     [Fact]
-    public async Task WindowTitle_ShouldUseBuildFlavorDisplayName()
+    public async Task WindowTitle_ShouldProjectBuildMetadata()
     {
         await using var fixture = await TestFixture.CreateAsync();
 
-        Assert.Equal(MainShellViewModel.WindowDisplayName, fixture.ViewModel.WindowTitle);
+        Assert.Contains(MainShellViewModel.WindowDisplayName, fixture.ViewModel.WindowTitle, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task WindowTitle_ShouldAppendLocalizedBuildDateSuffixToUiVersion()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var config = fixture.Runtime.ConfigurationService.CurrentConfig;
+
+        // WPF LocalizationHelper.FormatVersion branches on CustomCultureInfo (GUI.CustomCulture
+        // when valid, otherwise the OS culture), never on the UI language. Seed GUI.CustomCulture
+        // explicitly so the expectation does not depend on the test machine's OS culture.
+        config.GlobalValues[ConfigurationKeys.CustomCulture] = JsonValue.Create("zh-cn");
+
+        await fixture.Runtime.ConfigurationService.SaveAsync();
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Matches(
+            new System.Text.RegularExpressions.Regex(@"pre-alpha#\d{4}"),
+            fixture.ViewModel.WindowTitle);
+    }
+
+    [Fact]
+    public async Task WindowTitle_ShouldFollowCustomCultureOverrideForBuildDateSuffix()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var config = fixture.Runtime.ConfigurationService.CurrentConfig;
+
+        // GUI.CustomCulture = en-us makes WPF render "dd/MM {version}" regardless of UI language.
+        config.GlobalValues[ConfigurationKeys.CustomCulture] = JsonValue.Create("en-us");
+
+        await fixture.Runtime.ConfigurationService.SaveAsync();
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Matches(
+            new System.Text.RegularExpressions.Regex(@"\d{2}/\d{2} [^ ]*pre-alpha"),
+            fixture.ViewModel.WindowTitle);
+    }
+
+    [Fact]
+    public async Task WindowTitle_ShouldHonorLegacyPrefixAndSelectedProjectionParts()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var config = fixture.Runtime.ConfigurationService.CurrentConfig;
+        config.GlobalValues[ConfigurationKeys.WindowTitleSelectShowList] = JsonValue.Create("1 3");
+        config.Profiles[config.CurrentProfile].Values[ConfigurationKeys.WindowTitlePrefix] = JsonValue.Create("Farm");
+        config.Profiles["Secondary"] = new UnifiedProfile();
+        fixture.ViewModel.ConnectionGameSharedState.ConnectAddress = "localhost:16384";
+
+        await fixture.Runtime.ConfigurationService.SaveAsync();
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Contains("Farm -", fixture.ViewModel.WindowTitle, StringComparison.Ordinal);
+        Assert.Contains($"({config.CurrentProfile})", fixture.ViewModel.WindowTitle, StringComparison.Ordinal);
+        Assert.Contains("(16384)", fixture.ViewModel.WindowTitle, StringComparison.Ordinal);
+        Assert.DoesNotContain("General", fixture.ViewModel.WindowTitle, StringComparison.Ordinal);
+        Assert.DoesNotContain("Official", fixture.ViewModel.WindowTitle, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task WindowTitle_ShouldGlueConnectAddressToConnectModeSegmentLikeWpf()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        fixture.ViewModel.ConnectionGameSharedState.ConnectAddress = "127.0.0.1:5556";
+        Dispatcher.UIThread.RunJobs();
+
+        var connectMode = fixture.ViewModel.ConnectionGameSharedState.SelectedConnectConfigOption?.DisplayName
+            ?? fixture.ViewModel.ConnectionGameSharedState.ConnectConfig;
+        Assert.Contains($"{connectMode} (5556)", fixture.ViewModel.WindowTitle, StringComparison.Ordinal);
+        Assert.DoesNotContain("- (5556)", fixture.ViewModel.WindowTitle, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -104,6 +173,38 @@ public sealed class MainShellViewModelTests
         Assert.NotNull(fixture.TrayService.LastMenuState);
         Assert.Equal(expectedStartEnabled, fixture.TrayService.LastMenuState!.StartEnabled);
         Assert.Equal(expectedStopEnabled, fixture.TrayService.LastMenuState.StopEnabled);
+    }
+
+    [Fact]
+    public async Task SyncTrayMenuState_Failure_ShouldRaiseVisibleDialogError()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        fixture.TrayService.SetMenuStateResult = PlatformOperation.Failed(
+            "test", "menu state failed", PlatformErrorCodes.TrayNotInitialized, "tray.setMenuState");
+        DialogErrorRaisedEvent? raised = null;
+        fixture.Runtime.DialogFeatureService.ErrorRaised += (_, e) => raised = e;
+
+        await InvokeSyncTrayMenuStateAsync(fixture.ViewModel);
+
+        Assert.Equal("menu state failed", fixture.ViewModel.LastError);
+        Assert.NotNull(raised);
+        Assert.Equal("App.Shell.Tray.SyncState", raised!.Context);
+    }
+
+    [Fact]
+    public async Task SelectedRootTab_ShouldPrioritizeItsDeferredInitialization()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        fixture.ViewModel.SelectedRootTabIndex = 2;
+
+        var startupTask = fixture.ViewModel.InitializeAsync();
+        await fixture.ViewModel.WaitForFirstScreenReadyAsync();
+
+        Assert.True(await WaitUntilAsync(
+            () => fixture.ViewModel.ToolboxRootPage.IsLoaded,
+            retry: 120,
+            delayMs: 25));
+        await startupTask;
     }
 
     [Fact]
@@ -805,6 +906,65 @@ public sealed class MainShellViewModelTests
 
         Assert.Equal("zh-cn", fixture.ViewModel.CurrentShellLanguage);
         Assert.Equal("zh-cn", fixture.ViewModel.SettingsPage.Language);
+    }
+
+    [Fact]
+    public async Task ApplyStartupShellSnapshot_HideCloseButton_UpdatesShellCloseButtonVisibility()
+    {
+        // WPF parity (RootViewModel.ShowCloseButton bound to the main window caption):
+        // GUI.HideCloseButton hides the main window close button.
+        await using var fixture = await TestFixture.CreateAsync();
+        await fixture.ViewModel.InitializeAsync();
+
+        var applyMethod = typeof(MainShellViewModel).GetMethod(
+            "ApplyStartupShellSnapshot",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(applyMethod);
+
+        Assert.True(fixture.ViewModel.ShowCloseButton);
+
+        var config = fixture.Runtime.ConfigurationService.CurrentConfig;
+        var hiddenSnapshot = StartupShellSnapshot.FromConfig(config) with { HideCloseButton = true };
+        applyMethod!.Invoke(fixture.ViewModel, [hiddenSnapshot]);
+        Assert.False(fixture.ViewModel.ShowCloseButton);
+
+        var shownSnapshot = hiddenSnapshot with { HideCloseButton = false };
+        applyMethod.Invoke(fixture.ViewModel, [shownSnapshot]);
+        Assert.True(fixture.ViewModel.ShowCloseButton);
+    }
+
+    [Fact]
+    public async Task TaskQueueMainTasksProgress_ProjectsToShellTaskProgress()
+    {
+        // WPF parity (TaskQueueViewModel.UpdateMainTasksProgress -> RootViewModel.TaskProgress).
+        await using var fixture = await TestFixture.CreateAsync();
+
+        var taskQueue = fixture.ViewModel.TaskQueuePage;
+        Assert.Null(fixture.ViewModel.TaskProgress);
+
+        taskQueue.Tasks.Add(new TaskQueueItemViewModel("Fight", "Fight", true));
+        taskQueue.Tasks.Add(new TaskQueueItemViewModel("Mall", "Mall", true));
+        Assert.Equal(2, taskQueue.MainTasksSelectedCount);
+
+        taskQueue.UpdateMainTasksProgress();
+        var progress = fixture.ViewModel.TaskProgress;
+        Assert.NotNull(progress);
+        Assert.Equal((1, 2), progress!.Value);
+
+        // Completed >= selected hides the taskbar progress bar.
+        taskQueue.UpdateMainTasksProgress();
+        Assert.Null(fixture.ViewModel.TaskProgress);
+
+        // Idle reset (WPF: RunningState idle -> UpdateMainTasksProgress(0)).
+        taskQueue.UpdateMainTasksProgress(0);
+        progress = fixture.ViewModel.TaskProgress;
+        Assert.NotNull(progress);
+        Assert.Equal((0, 2), progress!.Value);
+
+        // No selected main tasks hides the taskbar progress bar.
+        taskQueue.Tasks.Clear();
+        taskQueue.UpdateMainTasksProgress();
+        Assert.Null(fixture.ViewModel.TaskProgress);
     }
 
     [Fact]
@@ -2820,6 +2980,7 @@ public sealed class MainShellViewModelTests
         public event EventHandler<TrayCommandEvent>? CommandInvoked;
 
         public event EventHandler<TrayMenuRequestEvent>? MenuRequested;
+        public event EventHandler<TrayActivationEvent>? ActivationRequested;
 
         public int InitializeCallCount { get; private set; }
 
@@ -2830,6 +2991,8 @@ public sealed class MainShellViewModelTests
         public string? LastAppTitle { get; private set; }
 
         public bool LastVisible { get; private set; } = true;
+        public PlatformOperationResult SetMenuStateResult { get; set; }
+            = PlatformOperation.NativeSuccess("test", "set-menu", "tray.setMenuState");
 
         public Task<PlatformOperationResult> InitializeAsync(
             string appTitle,
@@ -2855,7 +3018,7 @@ public sealed class MainShellViewModelTests
         public Task<PlatformOperationResult> SetMenuStateAsync(TrayMenuState state, CancellationToken cancellationToken = default)
         {
             LastMenuState = state;
-            return Task.FromResult(PlatformOperation.NativeSuccess(Capability.Provider, "set-menu", "tray.setMenuState"));
+            return Task.FromResult(SetMenuStateResult);
         }
 
         public Task<PlatformOperationResult> SetVisibleAsync(bool visible, CancellationToken cancellationToken = default)

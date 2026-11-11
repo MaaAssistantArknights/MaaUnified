@@ -12,6 +12,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using MAAUnified.App.Features.Dialogs;
+using MAAUnified.App.Infrastructure;
 using MAAUnified.App.Services;
 using MAAUnified.App.ViewModels.Copilot;
 using MAAUnified.App.ViewModels.Infrastructure;
@@ -26,6 +27,7 @@ using MAAUnified.Application.Services.Features;
 using MAAUnified.Application.Services.Localization;
 using MAAUnified.CoreBridge;
 using MAAUnified.Platform;
+using ConfigurationKeys = MAAUnified.Compat.Constants.ConfigurationKeys;
 
 namespace MAAUnified.App.ViewModels;
 
@@ -49,6 +51,7 @@ public sealed class MainShellViewModel : ObservableObject
     private readonly HashSet<string> _reportedLocalizationFallbacks = new(StringComparer.OrdinalIgnoreCase);
     private readonly object _localizationFallbackGate = new();
     private readonly object _secondaryPageGate = new();
+    private readonly Dictionary<int, Task<bool>> _rootPageInitializationTasks = [];
     private readonly object _startupGate = new();
     private readonly object _coreWarmupGate = new();
     private readonly object _deferredCoreWarmupGate = new();
@@ -78,6 +81,8 @@ public sealed class MainShellViewModel : ObservableObject
     private int _timerScheduleProcessing;
     private int _selectedRootTabIndex;
     private bool _isWindowTopMost;
+    private bool _showCloseButton = true;
+    private (int Current, int Max)? _taskProgress;
     private bool _isCoreReady = true;
     private string _windowTitle = WindowDisplayName;
     private string _windowVersionUpdateInfo = string.Empty;
@@ -172,6 +177,7 @@ public sealed class MainShellViewModel : ObservableObject
         SettingsRootPage = new RootPageHostViewModel(settingsPendingTitle, settingsPendingMessage);
         RefreshRootPageHostStatusText();
         TaskQueuePage.Texts.FallbackReported += OnTaskQueueLocalizationFallbackReported;
+        TaskQueuePage.PropertyChanged += OnTaskQueuePagePropertyChanged;
         _currentSessionState = runtime.SessionService.CurrentState;
         runtime.SessionService.SessionStateChanged += OnSessionStateChanged;
         runtime.PlatformCapabilityService.OverlayStateChanged += OnOverlayStateChanged;
@@ -201,6 +207,7 @@ public sealed class MainShellViewModel : ObservableObject
             {
                 SyncConnectionFromProfile();
                 RefreshConfigValidationState(_runtime.ConfigurationService.CurrentValidationIssues);
+                RefreshWindowTitle();
             });
         };
         _runtime.AchievementTrackerService.AchievementUnlocked += OnAchievementUnlocked;
@@ -289,6 +296,7 @@ public sealed class MainShellViewModel : ObservableObject
                 OnPropertyChanged(nameof(IsToolboxRootTabSelected));
                 OnPropertyChanged(nameof(IsSettingsRootTabSelected));
                 OnPropertyChanged(nameof(ShowWindowOverlayButton));
+                PrioritizeSelectedRootPageInitialization(_selectedRootTabIndex);
             }
         }
     }
@@ -311,6 +319,22 @@ public sealed class MainShellViewModel : ObservableObject
     {
         get => _isWindowTopMost;
         set => SetProperty(ref _isWindowTopMost, value);
+    }
+
+    // WPF parity (RootViewModel.ShowCloseButton): hides the main window close button when
+    // the legacy GUI.HideCloseButton configuration key is enabled.
+    public bool ShowCloseButton
+    {
+        get => _showCloseButton;
+        private set => SetProperty(ref _showCloseButton, value);
+    }
+
+    // WPF parity (RootViewModel.TaskProgress): current main-task progress projected to the
+    // Windows taskbar; null hides the taskbar progress bar.
+    public (int Current, int Max)? TaskProgress
+    {
+        get => _taskProgress;
+        private set => SetProperty(ref _taskProgress, value);
     }
 
     public double EffectiveUiScaleFactor
@@ -996,6 +1020,11 @@ public sealed class MainShellViewModel : ObservableObject
 
     private async Task<bool> InitializeDeferredSettingsPageAsync(CancellationToken cancellationToken)
     {
+        return await GetOrStartRootPageInitialization(3, cancellationToken);
+    }
+
+    private async Task<bool> InitializeSettingsPageCoreAsync(CancellationToken cancellationToken)
+    {
         var settingsPage = EnsureSettingsPage();
         return await InitializeDeferredRootPageAsync(
             "Settings",
@@ -1010,25 +1039,78 @@ public sealed class MainShellViewModel : ObservableObject
     private async Task InitializeRemainingDeferredPagesAsync(CancellationToken cancellationToken)
     {
         var taskQueueDeferredTask = InitializeTaskQueueDeferredStartupAsync(cancellationToken);
-        var copilotPage = EnsureCopilotPage();
-        await InitializeDeferredRootPageAsync(
+        await GetOrStartRootPageInitialization(1, cancellationToken);
+        await GetOrStartRootPageInitialization(2, cancellationToken);
+        await taskQueueDeferredTask;
+    }
+
+    private void PrioritizeSelectedRootPageInitialization(int selectedIndex)
+    {
+        if (selectedIndex is < 1 or > 3)
+        {
+            return;
+        }
+
+        _ = PrioritizeRootPageInitializationAsync(selectedIndex);
+    }
+
+    private async Task PrioritizeRootPageInitializationAsync(int selectedIndex)
+    {
+        try
+        {
+            await _firstScreenReadyTcs.Task.WaitAsync(_startupCts.Token);
+            await GetOrStartRootPageInitialization(selectedIndex, _startupCts.Token);
+        }
+        catch (OperationCanceledException) when (_startupCts.IsCancellationRequested)
+        {
+        }
+    }
+
+    private Task<bool> GetOrStartRootPageInitialization(int pageIndex, CancellationToken cancellationToken)
+    {
+        lock (_secondaryPageGate)
+        {
+            if (_rootPageInitializationTasks.TryGetValue(pageIndex, out var existing))
+            {
+                return existing;
+            }
+
+            var task = pageIndex switch
+            {
+                1 => InitializeCopilotPageCoreAsync(cancellationToken),
+                2 => InitializeToolboxPageCoreAsync(cancellationToken),
+                3 => InitializeSettingsPageCoreAsync(cancellationToken),
+                _ => Task.FromResult(true),
+            };
+            _rootPageInitializationTasks[pageIndex] = task;
+            return task;
+        }
+    }
+
+    private Task<bool> InitializeCopilotPageCoreAsync(CancellationToken cancellationToken)
+    {
+        var page = EnsureCopilotPage();
+        return InitializeDeferredRootPageAsync(
             "Copilot",
             "Copilot",
             "Copilot 页面正在后台初始化。",
             CopilotRootPage,
-            ct => copilotPage.InitializeAsync(ct),
-            copilotPage,
+            ct => page.InitializeAsync(ct),
+            page,
             cancellationToken);
-        var toolboxPage = EnsureToolboxPage();
-        await InitializeDeferredRootPageAsync(
+    }
+
+    private Task<bool> InitializeToolboxPageCoreAsync(CancellationToken cancellationToken)
+    {
+        var page = EnsureToolboxPage();
+        return InitializeDeferredRootPageAsync(
             "Toolbox",
             "Toolbox",
             "Toolbox 页面正在后台初始化。",
             ToolboxRootPage,
-            ct => toolboxPage.InitializeAsync(ct),
-            toolboxPage,
+            ct => page.InitializeAsync(ct),
+            page,
             cancellationToken);
-        await taskQueueDeferredTask;
     }
 
     private void ScheduleDeferredCoreWarmupAfterStartup()
@@ -1196,6 +1278,7 @@ public sealed class MainShellViewModel : ObservableObject
 
         RefreshRootPageHostStatusText();
         ApplyWindowTitleScrolling(snapshot.WindowTitleScrollable);
+        ShowCloseButton = !snapshot.HideCloseButton;
         ShellBackgroundOpacity = snapshot.BackgroundOpacity / 100d;
         ShellBackgroundBlur = snapshot.BackgroundBlur;
         ShellBackgroundStretch = ParseStretch(snapshot.BackgroundStretchMode);
@@ -2222,7 +2305,11 @@ public sealed class MainShellViewModel : ObservableObject
 
     private void OnSettingsResourceVersionUpdated(object? sender, EventArgs e)
     {
-        Dispatcher.UIThread.Post(() => TaskQueuePage.RefreshStagePresentation(forceReloadStageOptions: true));
+        Dispatcher.UIThread.Post(() =>
+        {
+            TaskQueuePage.RefreshStagePresentation(forceReloadStageOptions: true);
+            RefreshWindowTitle();
+        });
     }
 
     private void OnSettingsUpdateAvailabilityChanged(object? sender, EventArgs e)
@@ -2252,6 +2339,13 @@ public sealed class MainShellViewModel : ObservableObject
         if (string.Equals(e.PropertyName, nameof(SettingsPageViewModel.IsBlockingOperationOverlayVisible), StringComparison.Ordinal))
         {
             OnPropertyChanged(nameof(IsBlockingOperationOverlayVisible));
+        }
+
+        if (string.Equals(e.PropertyName, nameof(SettingsPageViewModel.UpdatePanelUiVersion), StringComparison.Ordinal)
+            || string.Equals(e.PropertyName, nameof(SettingsPageViewModel.UpdatePanelResourceVersion), StringComparison.Ordinal)
+            || string.Equals(e.PropertyName, nameof(SettingsPageViewModel.UpdatePanelResourceDateTime), StringComparison.Ordinal))
+        {
+            RefreshWindowTitle();
         }
     }
 
@@ -2404,6 +2498,66 @@ public sealed class MainShellViewModel : ObservableObject
 
     private void RefreshWindowTitle()
     {
+        var titleParts = new List<string>();
+        var prefix = ReadTitleSetting(ConfigurationKeys.WindowTitlePrefix, string.Empty, globalOnly: false);
+        var selectedPartsText = ReadTitleSetting(ConfigurationKeys.WindowTitleSelectShowList, "2 3 4", globalOnly: true);
+        var selectedParts = (string.IsNullOrWhiteSpace(selectedPartsText) ? "2 3 4" : selectedPartsText)
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToHashSet(StringComparer.Ordinal);
+        var productName = string.IsNullOrWhiteSpace(prefix)
+            ? WindowDisplayName
+            : $"{prefix.Trim()} - {WindowDisplayName}";
+        var config = _runtime.ConfigurationService.CurrentConfig;
+        if (selectedParts.Contains("1")
+            && config.Profiles.Count > 1
+            && !string.IsNullOrWhiteSpace(config.CurrentProfile))
+        {
+            productName += $" ({config.CurrentProfile.Trim()})";
+        }
+
+        titleParts.Add(productName);
+        var uiVersion = typeof(MainShellViewModel).Assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
+            ?.InformationalVersion?.Split('+')[0];
+        if (!string.IsNullOrWhiteSpace(uiVersion))
+        {
+            titleParts.Add(FormatWindowTitleVersion(uiVersion.Trim(), GetUiBuildDateTime()));
+        }
+
+        if (TryGetSettingsPage(out var settingsPage)
+            && !string.IsNullOrWhiteSpace(settingsPage.UpdatePanelResourceVersion))
+        {
+            titleParts.Add(FormatWindowTitleVersion(
+                settingsPage.UpdatePanelResourceVersion.Trim(),
+                settingsPage.UpdatePanelResourceDateTime));
+        }
+
+        // WPF SettingsViewModel glues the connect address to the connect-mode segment with a
+        // single space ("... - {mode} ({address}) - ...") instead of treating it as its own
+        // " - "-separated part; without the mode segment it still appends to the preceding text.
+        var titleConnectAddress = selectedParts.Contains("3") ? GetWindowTitleConnectAddress() : null;
+        if (selectedParts.Contains("2"))
+        {
+            var connectConfigName = _connectionGameSharedState.SelectedConnectConfigOption?.DisplayName
+                ?? _connectionGameSharedState.ConnectConfig;
+            if (titleConnectAddress is not null)
+            {
+                connectConfigName += $" ({titleConnectAddress})";
+            }
+
+            titleParts.Add(connectConfigName);
+        }
+        else if (titleConnectAddress is not null && titleParts.Count > 0)
+        {
+            titleParts[^1] += $" ({titleConnectAddress})";
+        }
+
+        if (selectedParts.Contains("4"))
+        {
+            titleParts.Add(_connectionGameSharedState.SelectedClientTypeOption?.DisplayName
+                ?? _connectionGameSharedState.ClientType);
+        }
+
         var updateMessages = new List<string>();
         if (HasWindowVersionUpdateInfo)
         {
@@ -2415,11 +2569,80 @@ public sealed class MainShellViewModel : ObservableObject
             updateMessages.Add(WindowResourceUpdateInfo.Trim());
         }
 
-        _windowTitleSource = updateMessages.Count == 0
-            ? WindowDisplayName
-            : $"{WindowDisplayName} - {string.Join(" / ", updateMessages)}";
+        if (updateMessages.Count > 0)
+        {
+            titleParts.Add(string.Join(" / ", updateMessages));
+        }
+
+        _windowTitleSource = string.Join(" - ", titleParts.Where(static part => !string.IsNullOrWhiteSpace(part)));
         _windowTitleScrollOffset = 0;
         UpdateWindowTitleDisplay();
+    }
+
+    private string? GetWindowTitleConnectAddress()
+    {
+        if (string.IsNullOrWhiteSpace(_connectionGameSharedState.ConnectAddress))
+        {
+            return null;
+        }
+
+        return _connectionGameSharedState.ConnectAddress.Trim()
+            .Replace("127.0.0.1:", string.Empty, StringComparison.OrdinalIgnoreCase)
+            .Replace("localhost:", string.Empty, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // WPF LocalizationHelper.FormatVersion appends a localized date suffix to both the UI
+    // version (build time) and the resource version (resource last-updated time). When the
+    // timestamp is unavailable the bare version is kept instead of rendering a bogus date.
+    // The date format culture mirrors WPF LocalizationHelper.CustomCultureInfo: the global
+    // GUI.CustomCulture config value when it names a valid culture, otherwise the OS
+    // CultureInfo.CurrentCulture - the shell UI language is intentionally not consulted.
+    private string FormatWindowTitleVersion(string version, DateTime? dateTime)
+    {
+        return dateTime is { } value && value != DateTime.MinValue
+            ? VersionDisplayFormatter.FormatVersion(
+                version,
+                value,
+                ReadTitleSetting(ConfigurationKeys.CustomCulture, string.Empty, globalOnly: true))
+            : version;
+    }
+
+    private static DateTime? GetUiBuildDateTime()
+    {
+        return typeof(MainShellViewModel).Assembly
+            .GetCustomAttribute<BuildDateTimeAttribute>()
+            ?.BuildDateTime;
+    }
+
+    private string ReadTitleSetting(string key, string fallback, bool globalOnly)
+    {
+        var config = _runtime.ConfigurationService.CurrentConfig;
+        if (!globalOnly
+            && config.Profiles.TryGetValue(config.CurrentProfile, out var profile)
+            && TryReadString(profile.Values, key, out var profileValue))
+        {
+            return profileValue;
+        }
+
+        return TryReadString(config.GlobalValues, key, out var globalValue) ? globalValue : fallback;
+    }
+
+    private static bool TryReadString(IReadOnlyDictionary<string, JsonNode?> values, string key, out string value)
+    {
+        value = string.Empty;
+        if (!values.TryGetValue(key, out var node) || node is null)
+        {
+            return false;
+        }
+
+        if (node is JsonValue jsonValue && jsonValue.TryGetValue<string>(out var text))
+        {
+            value = text;
+            return true;
+        }
+
+        value = node.ToString();
+        return true;
     }
 
     public void DismissWindowUpdateOverlay()
@@ -2553,7 +2776,7 @@ public sealed class MainShellViewModel : ObservableObject
                 "Settings.ConfigurationContextChanged",
                 ex,
                 UiErrorCode.UiOperationFailed,
-                $"閰嶇疆涓婁笅鏂囧埛鏂板け璐? {ex.Message}");
+                $"配置上下文刷新失败: {ex.Message}");
         }
     }
 
@@ -2574,6 +2797,7 @@ public sealed class MainShellViewModel : ObservableObject
             case ConfigurationContextChangeReason.UnifiedImport:
                 await SyncLanguageCoordinatorWithConfigAsync();
                 await ApplyGuiSettingsAsync(SettingsPage.CurrentGuiSnapshot);
+                RefreshShellCloseButtonVisibilityFromConfig();
                 await TaskQueuePage.ReloadConfigurationContextAsync(forceReloadStageOptions: true);
                 break;
         }
@@ -2688,6 +2912,13 @@ public sealed class MainShellViewModel : ObservableObject
             var previousClientType = _lastObservedClientType;
             _lastObservedClientType = _connectionGameSharedState.ClientType;
             _ = ReloadClientResourceIfChangedAsync(previousClientType, _connectionGameSharedState.ClientType);
+        }
+
+        if (string.Equals(e.PropertyName, nameof(ConnectionGameSharedStateViewModel.ConnectConfig), StringComparison.Ordinal)
+            || string.Equals(e.PropertyName, nameof(ConnectionGameSharedStateViewModel.ConnectAddress), StringComparison.Ordinal)
+            || string.Equals(e.PropertyName, nameof(ConnectionGameSharedStateViewModel.ClientType), StringComparison.Ordinal))
+        {
+            RefreshWindowTitle();
         }
     }
 
@@ -3138,6 +3369,10 @@ public sealed class MainShellViewModel : ObservableObject
                     "App.Gui.Apply.TrayRefresh",
                     trayRefresh,
                     cancellationToken);
+                await _runtime.DialogFeatureService.ReportErrorAsync(
+                    "App.Gui.Apply.TrayRefresh",
+                    trayRefresh,
+                    cancellationToken);
             }
 
             var trayVisibility = await _runtime.PlatformCapabilityService.SetTrayVisibleAsync(
@@ -3147,6 +3382,10 @@ public sealed class MainShellViewModel : ObservableObject
             {
                 LastError = trayVisibility.Message;
                 await RecordFailedResultAsync(
+                    "App.Gui.Apply.TrayVisibility",
+                    trayVisibility,
+                    cancellationToken);
+                await _runtime.DialogFeatureService.ReportErrorAsync(
                     "App.Gui.Apply.TrayVisibility",
                     trayVisibility,
                     cancellationToken);
@@ -3865,6 +4104,14 @@ public sealed class MainShellViewModel : ObservableObject
             $"scope={info.Scope}; language={language}; key={key}; fallback={info.FallbackSource}");
     }
 
+    private void OnTaskQueuePagePropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (string.Equals(e.PropertyName, nameof(TaskQueuePageViewModel.MainTasksProgress), StringComparison.Ordinal))
+        {
+            TaskProgress = TaskQueuePage.MainTasksProgress;
+        }
+    }
+
     private void OnTaskQueueLocalizationFallbackReported(LocalizationFallbackInfo info)
     {
         ReportLocalizationFallback(info);
@@ -3922,6 +4169,12 @@ public sealed class MainShellViewModel : ObservableObject
         {
             RootLogs.RemoveAt(0);
         }
+    }
+
+    private void RefreshShellCloseButtonVisibilityFromConfig()
+    {
+        var snapshot = StartupShellSnapshot.FromConfig(_runtime.ConfigurationService.CurrentConfig);
+        ShowCloseButton = !snapshot.HideCloseButton;
     }
 
     private void ApplyWindowTitleScrolling(bool enabled)
@@ -4091,6 +4344,10 @@ public sealed class MainShellViewModel : ObservableObject
         {
             LastError = result.Message;
             await RecordFailedResultAsync("App.Shell.Tray.SyncState", result, cancellationToken);
+            await _runtime.DialogFeatureService.ReportErrorAsync(
+                "App.Shell.Tray.SyncState",
+                result,
+                cancellationToken);
         }
     }
 

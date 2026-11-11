@@ -21,4 +21,17 @@ public sealed class AppLifecycleServiceTests
 
         Assert.Equal([ProcessAppLifecycleService.RestartWaitForInstanceArgument], arguments);
     }
+
+    [Fact]
+    public void BuildRestartStartInfo_ShouldNotForwardCommandLineArguments()
+    {
+        // WPF parity: Bootstrapper.ShutdownAndRestartWithoutArgs starts the current
+        // executable with no Arguments, regardless of the original command line.
+        var startInfo = ProcessAppLifecycleService.BuildRestartStartInfo("/tmp/MAAUnified");
+
+        Assert.Equal("/tmp/MAAUnified", startInfo.FileName);
+        Assert.Equal(string.Empty, startInfo.Arguments);
+        Assert.Empty(startInfo.ArgumentList);
+        Assert.False(startInfo.UseShellExecute);
+    }
 }

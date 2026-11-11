@@ -555,6 +555,8 @@ public interface IPlatformCapabilityService
 
     event EventHandler<TrayMenuRequestEvent>? TrayMenuRequested;
 
+    event EventHandler<TrayActivationEvent>? TrayActivationRequested;
+
     event EventHandler<GlobalHotkeyTriggeredEvent>? GlobalHotkeyTriggered;
 
     event EventHandler<OverlayStateChangedEvent>? OverlayStateChanged;
@@ -573,6 +575,10 @@ public interface IPlatformCapabilityService
     Task<UiOperationResult> SetTrayVisibleAsync(bool visible, CancellationToken cancellationToken = default);
 
     Task<UiOperationResult> SetTrayMenuStateAsync(TrayMenuState state, CancellationToken cancellationToken = default);
+
+    Task<UiOperationResult> SetTaskbarProgressAsync(nint windowHandle, int current, int maximum, CancellationToken cancellationToken = default);
+
+    Task<UiOperationResult> ClearTaskbarProgressAsync(nint windowHandle, CancellationToken cancellationToken = default);
 
     Task<UiOperationResult> SendSystemNotificationAsync(string title, string message, CancellationToken cancellationToken = default);
 

@@ -54,6 +54,9 @@ public partial class MainWindow : Window
     private const string WindowPlacementPlatformsKey = "Platforms";
     private const string WindowPlacementWidthKey = "Width";
     private const string WindowPlacementHeightKey = "Height";
+    private const string WindowPlacementXKey = "X";
+    private const string WindowPlacementYKey = "Y";
+    private const string WindowPlacementStateKey = "State";
     private const double MinimumPersistedWindowWidth = 320d;
     private const double MinimumPersistedWindowHeight = 240d;
     private const int ResponsiveMarginProgressSteps = 12;
@@ -115,7 +118,6 @@ public partial class MainWindow : Window
     private bool _processingDialogErrors;
     private bool _processingMinimizeToTray;
     private bool _dockHiddenForMinimizeToTray;
-    private bool _trayTemporarilyVisibleForHiddenMainWindow;
     private bool _allowLifecycleClose;
     private bool _closeRequestPending;
     private bool _compactLayoutEnabled;
@@ -129,6 +131,9 @@ public partial class MainWindow : Window
     private double _lastAppliedWindowWidthScale = 1d;
     private double _lastAppliedWindowHeightScale = 1d;
     private Size? _lastNormalWindowSize;
+    private PixelPoint? _lastNormalWindowPosition;
+    private WindowState? _previousTrackedWindowState;
+    private DateTime? _minimizedSince;
     private DispatcherTimer? _resizeSettleTimer;
     private CancellationTokenSource? _closeCompletionWatchdogCts;
     private bool _isLiveResizing;
@@ -153,6 +158,8 @@ public partial class MainWindow : Window
     private readonly INotificationInteractionSource? _notificationInteractionSource;
 
     private readonly record struct ResponsiveDoubleResourceRange(string ResourceKey, double Minimum, double Maximum);
+
+    internal readonly record struct PersistedWindowPlacement(Size Size, PixelPoint? Position, WindowState State);
 
     private readonly record struct ResponsiveLayoutMetrics(double PageMargin, double LayoutWidth, double WidthProgress)
     {
@@ -294,8 +301,10 @@ public partial class MainWindow : Window
         Program.RecordStartupStage("MainWindow.PlatformInit.Begin", "Initializing tray, hotkeys, and overlay host.");
         vm.PlatformCapabilityService.TrayCommandInvoked += OnTrayCommandInvoked;
         vm.PlatformCapabilityService.TrayMenuRequested += OnTrayMenuRequested;
+        vm.PlatformCapabilityService.TrayActivationRequested += OnTrayActivationRequested;
         vm.PlatformCapabilityService.GlobalHotkeyTriggered += OnGlobalHotkeyTriggered;
         vm.PlatformCapabilityService.OverlayStateChanged += OnPlatformOverlayStateChanged;
+        vm.PropertyChanged += OnShellViewModelPropertyChanged;
         _platformBound = true;
         ShowNotificationAvailabilityWarningIfNeeded(vm);
 
@@ -415,8 +424,10 @@ public partial class MainWindow : Window
         {
             vm.PlatformCapabilityService.TrayCommandInvoked -= OnTrayCommandInvoked;
             vm.PlatformCapabilityService.TrayMenuRequested -= OnTrayMenuRequested;
+            vm.PlatformCapabilityService.TrayActivationRequested -= OnTrayActivationRequested;
             vm.PlatformCapabilityService.GlobalHotkeyTriggered -= OnGlobalHotkeyTriggered;
             vm.PlatformCapabilityService.OverlayStateChanged -= OnPlatformOverlayStateChanged;
+            vm.PropertyChanged -= OnShellViewModelPropertyChanged;
             _platformBound = false;
         }
 
@@ -598,9 +609,84 @@ public partial class MainWindow : Window
         {
             EndLiveResizeVisualThrottle();
             CaptureLastNormalWindowSize();
+            TrackAfkWatcherMinimizedDuration();
             await HandleMinimizeToTrayAsync();
         }
     });
+
+    // WPF MainWindowManager.MainWindowStateChanged records when the window enters Minimized and
+    // unlocks the AfkWatcher achievement when the window is restored after at least one hour.
+    private void TrackAfkWatcherMinimizedDuration()
+    {
+        var currentState = WindowState;
+        if (_previousTrackedWindowState != WindowState.Minimized && currentState == WindowState.Minimized)
+        {
+            _minimizedSince = DateTime.Now;
+        }
+        else if (_previousTrackedWindowState == WindowState.Minimized && currentState != WindowState.Minimized)
+        {
+            if (_minimizedSince is { } minimizedSince
+                && ShouldUnlockAfkWatcherOnRestore(minimizedSince, DateTime.Now))
+            {
+                UnlockAfkWatcherAchievement();
+            }
+
+            _minimizedSince = null;
+        }
+
+        _previousTrackedWindowState = currentState;
+    }
+
+    internal static bool ShouldUnlockAfkWatcherOnRestore(DateTime minimizedSince, DateTime restoredAt)
+        => restoredAt - minimizedSince >= TimeSpan.FromHours(1);
+
+    // WPF parity: hiding to the tray always passes through WindowState.Minimized in WPF, which
+    // starts the AfkWatcher minimized clock. When the WindowState pipeline already recorded the
+    // start, keep the original timestamp instead of restarting the clock.
+    internal static DateTime ResolveAfkWatcherMinimizedSince(DateTime? minimizedSince, DateTime hiddenAt)
+        => minimizedSince ?? hiddenAt;
+
+    // Restore paths that bypass the WindowState pipeline (e.g. showing the window again after a
+    // direct hide-to-tray from the custom title bar minimize button) still need the WPF restore
+    // check: unlock AfkWatcher after at least one hour and reset the tracked start either way.
+    private void CompleteAfkWatcherMinimizedDuration()
+    {
+        if (_minimizedSince is not { } minimizedSince)
+        {
+            return;
+        }
+
+        if (ShouldUnlockAfkWatcherOnRestore(minimizedSince, DateTime.Now))
+        {
+            UnlockAfkWatcherAchievement();
+        }
+
+        _minimizedSince = null;
+    }
+
+    private void UnlockAfkWatcherAchievement()
+    {
+        try
+        {
+            var achievementResult = App.Runtime.AchievementTrackerService.Unlock("AfkWatcher");
+            if (!achievementResult.Success)
+            {
+                _ = App.Runtime.DiagnosticsService.RecordFailedResultAsync(
+                    "MainWindow.WindowState.UnlockAfkWatcher",
+                    achievementResult);
+            }
+        }
+        catch (Exception ex) when (App.ShouldIgnoreUnhandledException(ex))
+        {
+        }
+        catch (Exception ex)
+        {
+            _ = App.Runtime.DiagnosticsService.RecordErrorAsync(
+                "MainWindow.WindowState.UnlockAfkWatcher",
+                "Failed to unlock AfkWatcher achievement.",
+                ex);
+        }
+    }
 
     private void UpdateAchievementToastVisibility()
     {
@@ -1088,10 +1174,10 @@ public partial class MainWindow : Window
         {
             var globalValues = App.Runtime.ConfigurationService.CurrentConfig.GlobalValues;
             if (!ShouldLoadPersistedWindowSize(globalValues)
-                || !TryReadPersistedWindowSize(
+                || !TryReadPersistedWindowPlacement(
                     globalValues,
                     ResolveCurrentWindowPlacementPlatformKey(),
-                    out var persistedSize))
+                    out var persistedPlacement))
             {
                 return false;
             }
@@ -1103,14 +1189,22 @@ public partial class MainWindow : Window
             MinHeight = ComputeMinimumWindowHeight(isMacOS) * heightScale;
             if (WindowState == WindowState.Normal)
             {
-                Width = Math.Max(MinWidth, persistedSize.Width);
-                Height = Math.Max(MinHeight, persistedSize.Height);
+                Width = Math.Max(MinWidth, persistedPlacement.Size.Width);
+                Height = Math.Max(MinHeight, persistedPlacement.Size.Height);
+                if (persistedPlacement.Position is { } position)
+                {
+                    Position = position;
+                }
             }
 
             _lastAppliedWindowWidthScale = widthScale;
             _lastAppliedWindowHeightScale = heightScale;
             _hasAppliedUiScaleToWindowBounds = true;
             FitToCurrentScreenWorkingArea();
+            if (persistedPlacement.State == WindowState.Maximized)
+            {
+                WindowState = WindowState.Maximized;
+            }
             Program.RecordStartupStage(
                 "MainWindow.WindowPlacement.Restore",
                 FormattableString.Invariant($"size={Width:0.#}x{Height:0.#}; platform={ResolveCurrentWindowPlacementPlatformKey()}"));
@@ -1221,7 +1315,7 @@ public partial class MainWindow : Window
         size = default;
         if (string.IsNullOrWhiteSpace(platformKey)
             || !globalValues.TryGetValue(LegacyConfigurationKeys.WindowPlacement, out var node)
-            || node is not JsonObject placement)
+            || !TryResolvePlacementObject(node, out var placement))
         {
             return false;
         }
@@ -1241,6 +1335,103 @@ public partial class MainWindow : Window
         }
 
         return true;
+    }
+
+    internal static bool TryReadPersistedWindowPlacement(
+        IReadOnlyDictionary<string, JsonNode?> globalValues,
+        string platformKey,
+        out PersistedWindowPlacement placement)
+    {
+        placement = default;
+        if (string.IsNullOrWhiteSpace(platformKey)
+            || !globalValues.TryGetValue(LegacyConfigurationKeys.WindowPlacement, out var node)
+            || !TryResolvePlacementObject(node, out var root))
+        {
+            return false;
+        }
+
+        var value = root;
+        if (root[WindowPlacementPlatformsKey] is JsonObject platforms
+            && platforms[platformKey] is JsonObject platformPlacement)
+        {
+            value = platformPlacement;
+        }
+
+        if (!TryReadFiniteDouble(value, WindowPlacementWidthKey, out var width)
+            || !TryReadFiniteDouble(value, WindowPlacementHeightKey, out var height)
+            || !TryCreatePersistedWindowSize(width, height, 0d, 0d, out var size))
+        {
+            return false;
+        }
+
+        PixelPoint? position = null;
+        if (TryReadFiniteDouble(value, WindowPlacementXKey, out var x)
+            && TryReadFiniteDouble(value, WindowPlacementYKey, out var y)
+            && x is >= int.MinValue and <= int.MaxValue
+            && y is >= int.MinValue and <= int.MaxValue)
+        {
+            position = new PixelPoint((int)Math.Round(x), (int)Math.Round(y));
+        }
+
+        var state = value[WindowPlacementStateKey] is JsonValue stateValue
+            && stateValue.TryGetValue<string>(out var stateText)
+            && Enum.TryParse<WindowState>(stateText, ignoreCase: true, out var parsedState)
+            && parsedState is WindowState.Normal or WindowState.Maximized
+                ? parsedState
+                : WindowState.Normal;
+        placement = new PersistedWindowPlacement(size, position, state);
+        return true;
+    }
+
+    private static bool TryResolvePlacementObject(JsonNode? node, out JsonObject placement)
+    {
+        if (node is JsonObject objectValue)
+        {
+            placement = objectValue;
+            return true;
+        }
+
+        placement = [];
+        if (node is not JsonValue value
+            || !value.TryGetValue<string>(out var serialized)
+            || string.IsNullOrWhiteSpace(serialized))
+        {
+            return false;
+        }
+
+        try
+        {
+            if (JsonNode.Parse(serialized) is not JsonObject legacy
+                || legacy["NormalPosition"] is not JsonObject rect
+                || !TryReadFiniteDouble(rect, "Left", out var left)
+                || !TryReadFiniteDouble(rect, "Top", out var top)
+                || !TryReadFiniteDouble(rect, "Right", out var right)
+                || !TryReadFiniteDouble(rect, "Bottom", out var bottom))
+            {
+                return false;
+            }
+
+            placement = new JsonObject
+            {
+                [WindowPlacementXKey] = left,
+                [WindowPlacementYKey] = top,
+                [WindowPlacementWidthKey] = right - left,
+                [WindowPlacementHeightKey] = bottom - top,
+                [WindowPlacementStateKey] = ReadLegacyShowCommand(legacy),
+            };
+            return true;
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return false;
+        }
+    }
+
+    private static string ReadLegacyShowCommand(JsonObject placement)
+    {
+        return TryReadFiniteDouble(placement, "ShowCmd", out var showCommand) && (int)showCommand == 3
+            ? nameof(WindowState.Maximized)
+            : nameof(WindowState.Normal);
     }
 
     internal static void WritePersistedWindowSize(
@@ -1273,6 +1464,28 @@ public partial class MainWindow : Window
             [WindowPlacementWidthKey] = JsonValue.Create(Math.Round(normalizedSize.Width, 2)),
             [WindowPlacementHeightKey] = JsonValue.Create(Math.Round(normalizedSize.Height, 2)),
         };
+    }
+
+    internal static void WritePersistedWindowPlacement(
+        IDictionary<string, JsonNode?> globalValues,
+        string platformKey,
+        PersistedWindowPlacement windowPlacement)
+    {
+        WritePersistedWindowSize(globalValues, platformKey, windowPlacement.Size);
+        if (globalValues[LegacyConfigurationKeys.WindowPlacement] is not JsonObject root
+            || root[WindowPlacementPlatformsKey] is not JsonObject platforms
+            || platforms[platformKey] is not JsonObject platformPlacement)
+        {
+            return;
+        }
+
+        if (windowPlacement.Position is { } position)
+        {
+            platformPlacement[WindowPlacementXKey] = position.X;
+            platformPlacement[WindowPlacementYKey] = position.Y;
+        }
+
+        platformPlacement[WindowPlacementStateKey] = windowPlacement.State.ToString();
     }
 
     internal static bool TryCreatePersistedWindowSize(
@@ -1369,6 +1582,18 @@ public partial class MainWindow : Window
         {
             value = doubleValue;
             return double.IsFinite(value);
+        }
+
+        if (jsonValue.TryGetValue<int>(out var intValue))
+        {
+            value = intValue;
+            return true;
+        }
+
+        if (jsonValue.TryGetValue<long>(out var longValue))
+        {
+            value = longValue;
+            return true;
         }
 
         if (jsonValue.TryGetValue<string>(out var stringValue)
@@ -2112,6 +2337,54 @@ public partial class MainWindow : Window
             "MainWindow.TrayCommandInvoked",
             () => DispatchTrayCommandAsync(e.Command, e.Source));
 
+    // WPF parity (NotifyIcon Click/MouseDoubleClick -> MainWindowManager.Show):
+    // tray icon left click shows and activates the main window.
+    private async void OnTrayActivationRequested(object? sender, TrayActivationEvent e)
+        => await App.RunUiTaskAsync(
+            "MainWindow.TrayActivationRequested",
+            () => ShowAndActivateMainWindowAsync());
+
+    private async void OnShellViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (!string.Equals(e.PropertyName, nameof(MainShellViewModel.TaskProgress), StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        await App.RunUiTaskAsync("MainWindow.TaskbarProgress", () => ApplyTaskbarProgressAsync());
+    }
+
+    // WPF parity (RootViewModel.TaskProgress -> TaskbarManager.SetProgressValue): project the
+    // main task progress onto the Windows taskbar; like WPF, skipped while the main window
+    // is not visible, and null progress clears the taskbar progress bar.
+    private async Task ApplyTaskbarProgressAsync(CancellationToken cancellationToken = default)
+    {
+        var vm = VM;
+        if (vm is null || !IsVisible)
+        {
+            return;
+        }
+
+        var handle = TryGetPlatformHandle()?.Handle ?? nint.Zero;
+        if (handle == nint.Zero)
+        {
+            return;
+        }
+
+        var progress = vm.TaskProgress;
+        var result = progress is null
+            ? await vm.PlatformCapabilityService.ClearTaskbarProgressAsync(handle, cancellationToken)
+            : await vm.PlatformCapabilityService.SetTaskbarProgressAsync(
+                handle,
+                progress.Value.Current,
+                progress.Value.Max,
+                cancellationToken);
+        if (!result.Success)
+        {
+            await HandlePlatformResultAsync("PlatformCapability.TaskbarProgress", result, cancellationToken);
+        }
+    }
+
     private void OnTrayMenuRequested(object? sender, TrayMenuRequestEvent e)
     {
         App.PostUiCallback(
@@ -2265,8 +2538,35 @@ public partial class MainWindow : Window
         popup.Close();
     }
 
-    private async void OnGlobalHotkeyTriggered(object? sender, GlobalHotkeyTriggeredEvent e)
-        => await App.RunUiTaskAsync("MainWindow.GlobalHotkeyTriggered", async () =>
+    private void OnGlobalHotkeyTriggered(object? sender, GlobalHotkeyTriggeredEvent e)
+    {
+        // WPF parity (MaaHotKeyActionHandler dispatches through the UI message loop):
+        // SharpHook raises on its hook event-loop thread and the Linux portal raises on
+        // a D-Bus signal thread, so marshal to the UI thread before touching window or
+        // view-model state. The macOS window-scoped path already arrives on the UI
+        // thread and runs inline.
+        DispatchGlobalHotkeyCallback(
+            Dispatcher.UIThread.CheckAccess(),
+            callback => Dispatcher.UIThread.Post(callback),
+            () => _ = App.RunUiTaskAsync(
+                "MainWindow.GlobalHotkeyTriggered",
+                () => HandleGlobalHotkeyTriggeredAsync(e)));
+    }
+
+    internal static void DispatchGlobalHotkeyCallback(bool isUiThread, Action<Action> postToUiThread, Action callback)
+    {
+        ArgumentNullException.ThrowIfNull(postToUiThread);
+        ArgumentNullException.ThrowIfNull(callback);
+        if (isUiThread)
+        {
+            callback();
+            return;
+        }
+
+        postToUiThread(callback);
+    }
+
+    private async Task HandleGlobalHotkeyTriggeredAsync(GlobalHotkeyTriggeredEvent e)
     {
         if (VM is null)
         {
@@ -2293,7 +2593,7 @@ public partial class MainWindow : Window
                 "Global hotkey execution failed.",
                 ex);
         }
-    });
+    }
 
     private async Task HandleMinimizeToTrayAsync(CancellationToken cancellationToken = default)
     {
@@ -2351,7 +2651,10 @@ public partial class MainWindow : Window
             return;
         }
 
-        await HideMainWindowToTrayAsync(requireMinimizedState: false, cancellationToken);
+        // WPF parity (MainWindowManager.SwitchWindowState -> Collapse): the ShowGui hotkey
+        // only minimizes the window. The WindowState change pipeline hides it to the tray
+        // when MinimizeToTray is enabled; otherwise it stays restorable from the taskbar.
+        WindowState = WindowState.Minimized;
     }
 
     private void ShowAndActivateMainWindow()
@@ -2367,40 +2670,27 @@ public partial class MainWindow : Window
             WindowState = WindowState.Normal;
         }
 
+        CompleteAfkWatcherMinimizedDuration();
         FitToCurrentScreenWorkingArea();
         UpdateAdaptiveLayoutMode();
         Activate();
     }
 
-    private async Task ShowAndActivateMainWindowAsync(CancellationToken cancellationToken = default)
+    private Task ShowAndActivateMainWindowAsync(CancellationToken cancellationToken = default)
     {
         ShowAndActivateMainWindow();
-        await RestoreTemporaryTrayVisibilityAsync(cancellationToken);
+        return Task.CompletedTask;
     }
 
     private void HideMainWindowToTray()
     {
-        _trayTemporarilyVisibleForHiddenMainWindow = VM is { SettingsPage.UseTray: false };
+        // WPF parity (MainWindowManager.MainWindowStateChanged): minimizing to the tray in WPF
+        // always goes through WindowState.Minimized, which starts the AfkWatcher clock. The
+        // custom title bar minimize button cancels the state change and hides the window
+        // directly, so start the clock here when the WindowState pipeline has not recorded it.
+        _minimizedSince = ResolveAfkWatcherMinimizedSince(_minimizedSince, DateTime.Now);
         HideDockIconForMinimizeToTray();
         Hide();
-    }
-
-    private async Task RestoreTemporaryTrayVisibilityAsync(CancellationToken cancellationToken = default)
-    {
-        var vm = VM;
-        if (!_trayTemporarilyVisibleForHiddenMainWindow || vm is null)
-        {
-            return;
-        }
-
-        _trayTemporarilyVisibleForHiddenMainWindow = false;
-        if (vm.SettingsPage.UseTray)
-        {
-            return;
-        }
-
-        var trayVisible = await vm.PlatformCapabilityService.SetTrayVisibleAsync(false, cancellationToken);
-        await HandlePlatformResultAsync("PlatformCapability.Tray.RestoreTemporaryHotkeyTray", trayVisible, cancellationToken);
     }
 
     private void HideDockIconForMinimizeToTray()
@@ -2603,6 +2893,7 @@ public partial class MainWindow : Window
         if (TryCaptureCurrentWindowSize(out var size))
         {
             _lastNormalWindowSize = size;
+            _lastNormalWindowPosition = Position;
         }
     }
 
@@ -2638,10 +2929,16 @@ public partial class MainWindow : Window
                 return;
             }
 
-            WritePersistedWindowSize(
+            var position = WindowState == WindowState.Normal
+                ? Position
+                : _lastNormalWindowPosition;
+            WritePersistedWindowPlacement(
                 config.GlobalValues,
                 ResolveCurrentWindowPlacementPlatformKey(),
-                size.Value);
+                new PersistedWindowPlacement(
+                    size.Value,
+                    position,
+                    WindowState == WindowState.Maximized ? WindowState.Maximized : WindowState.Normal));
             await App.Runtime.ConfigurationService.SaveAsync(cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

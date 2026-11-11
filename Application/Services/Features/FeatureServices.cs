@@ -4858,7 +4858,6 @@ public sealed class PostActionFeatureService : IPostActionFeatureService
     private readonly UnifiedSessionService? _sessionService;
     private readonly IAppLifecycleService? _appLifecycleService;
     private readonly IPostActionPromptService _promptService;
-    private readonly UnifiedSessionService? _sessionService;
 
     public PostActionFeatureService(
         UnifiedConfigurationService configService,
@@ -5980,6 +5979,8 @@ public sealed class PlatformCapabilityFeatureService : IPlatformCapabilityServic
 
     public event EventHandler<TrayMenuRequestEvent>? TrayMenuRequested;
 
+    public event EventHandler<TrayActivationEvent>? TrayActivationRequested;
+
     public event EventHandler<GlobalHotkeyTriggeredEvent>? GlobalHotkeyTriggered;
 
     public event EventHandler<OverlayStateChangedEvent>? OverlayStateChanged;
@@ -5990,6 +5991,7 @@ public sealed class PlatformCapabilityFeatureService : IPlatformCapabilityServic
         _diagnostics = diagnostics;
         _platform.TrayService.CommandInvoked += OnTrayCommandInvoked;
         _platform.TrayService.MenuRequested += OnTrayMenuRequested;
+        _platform.TrayService.ActivationRequested += OnTrayActivationRequested;
         _platform.HotkeyService.Triggered += OnGlobalHotkeyTriggered;
         _platform.OverlayService.OverlayStateChanged += OnOverlayStateChanged;
     }
@@ -6190,6 +6192,57 @@ public sealed class PlatformCapabilityFeatureService : IPlatformCapabilityServic
         return await ToUiResultAsync(PlatformCapabilityId.Autostart, "set-enabled", result, cancellationToken);
     }
 
+    public async Task<UiOperationResult> SetTaskbarProgressAsync(
+        nint windowHandle,
+        int current,
+        int maximum,
+        CancellationToken cancellationToken = default)
+    {
+        return await ExecuteTaskbarProgressOperationAsync(
+            "set",
+            cancellationToken,
+            ct => _platform.TaskbarProgressService.SetProgressAsync(windowHandle, current, maximum, ct));
+    }
+
+    public async Task<UiOperationResult> ClearTaskbarProgressAsync(nint windowHandle, CancellationToken cancellationToken = default)
+    {
+        return await ExecuteTaskbarProgressOperationAsync(
+            "clear",
+            cancellationToken,
+            ct => _platform.TaskbarProgressService.ClearProgressAsync(windowHandle, ct));
+    }
+
+    private async Task<UiOperationResult> ExecuteTaskbarProgressOperationAsync(
+        string action,
+        CancellationToken cancellationToken,
+        Func<CancellationToken, Task<PlatformOperationResult>> operation)
+    {
+        const string operationId = "taskbarProgress.apply";
+        try
+        {
+            var result = await operation(cancellationToken);
+            return await ToUiResultAsync(PlatformCapabilityId.TaskbarProgress, action, result, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            var failure = PlatformOperation.Failed(
+                _platform.TaskbarProgressService.Capability.Provider,
+                $"Taskbar progress {action} failed unexpectedly: {ex.Message}",
+                PlatformErrorCodes.TrayMenuDispatchFailed,
+                operationId);
+            await _diagnostics.RecordErrorAsync(
+                $"PlatformCapability.TaskbarProgress.{action}",
+                failure.Message,
+                ex,
+                cancellationToken);
+            return await ToUiResultAsync(PlatformCapabilityId.TaskbarProgress, action, failure, cancellationToken);
+        }
+    }
+
     private async Task<UiOperationResult> ExecuteTrayOperationAsync(
         string action,
         string operationId,
@@ -6312,6 +6365,24 @@ public sealed class PlatformCapabilityFeatureService : IPlatformCapabilityServic
             _ = _diagnostics.RecordErrorAsync(
                 "PlatformCapability.TrayCommand",
                 "Tray command callback failed.",
+                ex);
+        }
+    }
+
+    private void OnTrayActivationRequested(object? sender, TrayActivationEvent e)
+    {
+        _ = _diagnostics.RecordEventAsync(
+            "PlatformCapability.TrayActivation",
+            $"source={e.Source} ts={e.Timestamp:O}");
+        try
+        {
+            TrayActivationRequested?.Invoke(this, e);
+        }
+        catch (Exception ex)
+        {
+            _ = _diagnostics.RecordErrorAsync(
+                "PlatformCapability.TrayActivation",
+                "Tray activation callback failed.",
                 ex);
         }
     }

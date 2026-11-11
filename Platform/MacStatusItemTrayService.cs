@@ -74,6 +74,7 @@ public sealed class MacStatusItemTrayService : ITrayService, IDisposable
         _interop = interop;
         _fallbackService = fallbackService;
         _fallbackService.CommandInvoked += (_, e) => RaiseCommand(e.Command);
+        _fallbackService.ActivationRequested += (_, _) => RaiseActivation();
     }
 
     public PlatformCapabilityStatus Capability => new(
@@ -86,6 +87,11 @@ public sealed class MacStatusItemTrayService : ITrayService, IDisposable
     public event EventHandler<TrayCommandEvent>? CommandInvoked;
 
     public event EventHandler<TrayMenuRequestEvent>? MenuRequested;
+
+    // macOS platform constraint: NSStatusItem with an attached menu consumes the click to
+    // open the menu, so left-click activation cannot be observed; the menu exposes
+    // Force Show instead. Activation is only forwarded from the fallback service.
+    public event EventHandler<TrayActivationEvent>? ActivationRequested;
 
     public static bool TryCreate([NotNullWhen(true)] out MacStatusItemTrayService? service)
     {
@@ -469,6 +475,18 @@ public sealed class MacStatusItemTrayService : ITrayService, IDisposable
         }
 
         RaiseCommand((TrayCommandId)tag);
+    }
+
+    private void RaiseActivation()
+    {
+        try
+        {
+            ActivationRequested?.Invoke(this, new TrayActivationEvent(Capability.Provider, DateTimeOffset.UtcNow));
+        }
+        catch
+        {
+            // Ignore user event exceptions to avoid destabilizing tray event dispatch.
+        }
     }
 
     private void RaiseCommand(TrayCommandId command)

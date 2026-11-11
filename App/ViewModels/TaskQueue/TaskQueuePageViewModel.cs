@@ -137,6 +137,46 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         TaskModuleTypes.UserDataUpdate,
     };
 
+    private int _mainTasksCompletedCount;
+    private (int Current, int Max)? _mainTasksProgress;
+
+    // WPF parity (TaskQueueViewModel.MainTasksCompletedCount): number of main task chains
+    // completed during the current run; reset on every LinkStart.
+    public int MainTasksCompletedCount
+    {
+        get => _mainTasksCompletedCount;
+        private set => SetProperty(ref _mainTasksCompletedCount, value);
+    }
+
+    // WPF parity (TaskQueueViewModel.MainTasksSelectedCount): enabled main queue tasks.
+    public int MainTasksSelectedCount => Tasks.Count(static task => task.IsEnabled ?? true);
+
+    // WPF parity (RootViewModel.TaskProgress): null hides the taskbar progress bar.
+    public (int Current, int Max)? MainTasksProgress
+    {
+        get => _mainTasksProgress;
+        private set => SetProperty(ref _mainTasksProgress, value);
+    }
+
+    // WPF parity (TaskQueueViewModel.UpdateMainTasksProgress).
+    public void UpdateMainTasksProgress(int? completedCount = null)
+    {
+        if (MainTasksSelectedCount == 0)
+        {
+            MainTasksProgress = null;
+            return;
+        }
+
+        MainTasksCompletedCount = completedCount ?? MainTasksCompletedCount + 1;
+        MainTasksProgress = MainTasksCompletedCount >= MainTasksSelectedCount
+            ? null
+            : (MainTasksCompletedCount, MainTasksSelectedCount);
+    }
+
+    private bool IsMainTaskChainForProgress(string? taskChain)
+        => !string.IsNullOrWhiteSpace(taskChain)
+            && MainTaskModules.Contains(TaskModuleTypes.Normalize(taskChain));
+
     private static readonly string[] AddableTaskModules =
     [
         TaskModuleTypes.StartUp,
@@ -2818,6 +2858,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             _startRequestCts = startRequestCts;
             var startCancellationToken = startRequestCts.Token;
             SetStartRequestActive(true);
+            // WPF parity (LinkStart): a new run restarts the main task progress counter.
+            MainTasksCompletedCount = 0;
             try
             {
                 if (!await EnsureCoreReadyAsync("TaskQueue.Start.CoreWarmup", startCancellationToken))
@@ -6816,6 +6858,12 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 break;
             case "TaskChainCompleted":
                 UpdateTaskStatus(taskIndex, taskChain, TaskQueueItemStatus.Success);
+                // WPF parity (AsstProxy TaskChainCompleted -> UpdateMainTasksProgress).
+                if (IsMainTaskChainForProgress(taskChain))
+                {
+                    UpdateMainTasksProgress();
+                }
+
                 ClearRoguelikeCombatStateIfTaskCompleted(taskChain);
                 await ConsumeFightOneShotParamsAfterCompletionAsync(taskChain, taskIndex);
                 await AdvanceInfrastCustomPlanAfterCompletionAsync(metadata, taskIndex);
@@ -8265,6 +8313,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             _roguelikeInCombat = false;
             IsWaitingForStop = false;
             CancelStallReminder();
+            // WPF parity (RunningState Idle -> UpdateMainTasksProgress(0)).
+            UpdateMainTasksProgress(0);
             SyncStoppedUiStateIfSessionNotActive();
         }
 

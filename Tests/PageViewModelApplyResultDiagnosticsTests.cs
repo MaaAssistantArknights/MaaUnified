@@ -66,6 +66,18 @@ public sealed class PageViewModelApplyResultDiagnosticsTests
         Assert.Equal("synthetic-failed-result", raised.Result.Message);
     }
 
+    [Fact]
+    public async Task RunTrackedConfigurationSaveAsync_Failure_ShouldPopulateVisiblePageError()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+
+        var ok = await fixture.ViewModel.RunTrackedSaveFailureAsync();
+
+        Assert.False(ok);
+        Assert.Equal("synthetic-save-failed", fixture.ViewModel.LastErrorMessage);
+        Assert.True(fixture.ViewModel.HasLastErrorMessage);
+    }
+
     private sealed class TestFixture : IAsyncDisposable
     {
         private TestFixture(string root, MAAUnifiedRuntime runtime, ProbePageViewModel viewModel)
@@ -153,6 +165,16 @@ public sealed class PageViewModelApplyResultDiagnosticsTests
 
     private sealed class ProbePageViewModel(MAAUnifiedRuntime runtime) : PageViewModelBase(runtime)
     {
+        public Task<bool> RunTrackedSaveFailureAsync(CancellationToken cancellationToken = default)
+        {
+            return RunTrackedConfigurationSaveAsync(
+                "PageViewModel.TrackedSave",
+                "Tracked Save",
+                "PageViewModel.TrackedSave.Save",
+                _ => Task.FromResult(UiOperationResult.Fail(UiErrorCode.SettingsSaveFailed, "synthetic-save-failed")),
+                cancellationToken);
+        }
+
         public Task<bool> ApplyFailedResultAsync(string scope, CancellationToken cancellationToken = default)
         {
             return ApplyResultAsync(
