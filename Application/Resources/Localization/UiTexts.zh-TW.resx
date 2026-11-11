@@ -430,6 +430,15 @@
   <data name="Reception" xml:space="preserve">
     <value>會客室</value>
   </data>
+  <data name="RecruitingTips" xml:space="preserve">
+    <value>公招提示</value>
+  </data>
+  <data name="RecruitmentOfStar" xml:space="preserve">
+    <value>公招出現 {0}★ 囉！</value>
+  </data>
+  <data name="TaskStallWarning" xml:space="preserve">
+    <value>任務日誌已超過 {0} 分鐘沒有更新（目前已停滯 {1} 分鐘），請檢查任務是否仍在正常執行。</value>
+  </data>
   <data name="Trade" xml:space="preserve">
     <value>貿易站</value>
   </data>
@@ -4141,7 +4150,7 @@
     <value>重新啟動</value>
   </data>
   <data name="PlatformCapability.TrayMenu.Start" xml:space="preserve">
-    <value>開始</value>
+    <value>一鍵長草</value>
   </data>
   <data name="PlatformCapability.TrayMenu.Stop" xml:space="preserve">
     <value>停止</value>

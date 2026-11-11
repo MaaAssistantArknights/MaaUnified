@@ -1,11 +1,31 @@
 using System.Collections.Concurrent;
 using MAAUnified.App.ViewModels.Infrastructure;
+using MAAUnified.App.Views;
 using MAAUnified.Platform;
 
 namespace MAAUnified.Tests;
 
 public sealed class DesktopNotificationServiceTests
 {
+    [Fact]
+    public void InAppNotificationPresentationQueue_ShouldKeepFallbacksUntilTheMainWindowCanPresentThem()
+    {
+        var queue = new InAppNotificationPresentationQueue();
+        var presented = new List<SystemNotificationRequest>();
+        var notification = new SystemNotificationRequest("task complete", "message", [], UseSystemNotification: false);
+
+        queue.PresentOrQueue(notification, canPresent: false, presented.Add);
+        queue.FlushIfPossible(canPresent: false, presented.Add);
+
+        Assert.Equal(1, queue.PendingCount);
+        Assert.Empty(presented);
+
+        queue.FlushIfPossible(canPresent: true, presented.Add);
+
+        Assert.Equal(0, queue.PendingCount);
+        Assert.Equal([notification], presented);
+    }
+
     [Fact]
     public async Task NotifyAsync_ForwardsActionsToNativePoster()
     {

@@ -16,10 +16,30 @@ public partial class AppPopupMenuPresenter : UserControl
 
     public event EventHandler<AppMenuItemInvokedEventArgs>? ItemInvoked;
 
+    public event EventHandler<AppMenuSubmenuInvokedEventArgs>? SubmenuInvoked;
+
     public IEnumerable<AppMenuEntry>? Items
     {
         get => GetValue(ItemsProperty);
         set => SetValue(ItemsProperty, value);
+    }
+
+    private void OnSubmenuItemPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (sender is not Control { Tag: AppMenuSubmenuItem item } control || !item.IsEnabled)
+        {
+            return;
+        }
+
+        var point = e.GetCurrentPoint(control);
+        if (!point.Properties.IsLeftButtonPressed
+            && point.Properties.PointerUpdateKind != PointerUpdateKind.LeftButtonPressed)
+        {
+            return;
+        }
+
+        e.Handled = true;
+        SubmenuInvoked?.Invoke(this, new AppMenuSubmenuInvokedEventArgs(item));
     }
 
     private void OnMenuItemPointerPressed(object? sender, PointerPressedEventArgs e)

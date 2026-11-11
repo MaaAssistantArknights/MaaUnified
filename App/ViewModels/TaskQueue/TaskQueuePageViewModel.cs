@@ -6226,10 +6226,10 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
                 case "RecruitPreservedTag":
                 case "RecruitRobotTag":
-                    var tag = GetStringValue(payload.Details, "tag");
-                    if (!string.IsNullOrWhiteSpace(tag))
+                    var preservedTag = GetStringValue(payload.Details, "tag");
+                    if (!string.IsNullOrWhiteSpace(preservedTag))
                     {
-                        notification = new(title, tag, "TaskQueue.Notification.RecruitTag", "recruitment tag");
+                        notification = new(title, preservedTag, "TaskQueue.Notification.RecruitTag", "recruitment tag");
                     }
 
                     break;
@@ -6238,7 +6238,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                     if (level >= 5)
                     {
                         notification = new(
-                            string.Format(GetRootText("RecruitmentOfStar", "Recruitment of {0}-star Operator"), level),
+                            string.Format(GetRootText("RecruitmentOfStar", "{0}★ has been recruited!"), level),
                             new string('\u2605', level),
                             "TaskQueue.Notification.RecruitResult",
                             "high-rarity recruitment result");

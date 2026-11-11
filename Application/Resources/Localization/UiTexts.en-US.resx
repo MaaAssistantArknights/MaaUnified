@@ -1186,6 +1186,15 @@ Target inventory: use saved Toolbox depot data and only farm the missing amount 
   <data name="Reception" xml:space="preserve">
     <value>Reception Room</value>
   </data>
+  <data name="RecruitingTips" xml:space="preserve">
+    <value>Recruiting Tips</value>
+  </data>
+  <data name="RecruitmentOfStar" xml:space="preserve">
+    <value>{0}★ has been recruited!</value>
+  </data>
+  <data name="TaskStallWarning" xml:space="preserve">
+    <value>Task log output has not been updated for {0} minutes (currently stalled for {1} minutes). Please check whether the task is still running.</value>
+  </data>
   <data name="Trade" xml:space="preserve">
     <value>Trading Post</value>
   </data>
@@ -1806,25 +1815,25 @@ If necessary, please go to Control Panel > Windows Tools > Task Scheduler to cre
     <value>Exit</value>
   </data>
   <data name="PlatformCapability.TrayMenu.ForceShow" xml:space="preserve">
-    <value>Show Main Window</value>
+    <value>Force display of MAA</value>
   </data>
   <data name="PlatformCapability.TrayMenu.HideTray" xml:space="preserve">
-    <value>Hide Tray</value>
+    <value>Disable Tray Icon</value>
   </data>
   <data name="PlatformCapability.TrayMenu.Restart" xml:space="preserve">
     <value>Restart</value>
   </data>
   <data name="PlatformCapability.TrayMenu.Start" xml:space="preserve">
-    <value>Start</value>
+    <value>Farming</value>
   </data>
   <data name="PlatformCapability.TrayMenu.Stop" xml:space="preserve">
     <value>Stop</value>
   </data>
   <data name="PlatformCapability.TrayMenu.SwitchLanguage" xml:space="preserve">
-    <value>Cycle Language</value>
+    <value>Switch Language 🌐</value>
   </data>
   <data name="PlatformCapability.TrayMenu.ToggleOverlay" xml:space="preserve">
-    <value>Toggle Overlay</value>
+    <value>Toggle Log Overlay</value>
   </data>
   <data name="PlatformCapability.Ui.OverlayHostUnavailable" xml:space="preserve">
     <value>Overlay host handle is unavailable</value>
@@ -3566,19 +3575,19 @@ With save file: farm points through crafting (advanced).
     <value>English</value>
   </data>
   <data name="Settings.Option.Language.ja-jp" xml:space="preserve">
-    <value>Japanese</value>
+    <value>日本語</value>
   </data>
   <data name="Settings.Option.Language.ko-kr" xml:space="preserve">
-    <value>Korean</value>
+    <value>한국어</value>
   </data>
   <data name="Settings.Option.Language.pallas" xml:space="preserve">
     <value>Pallas</value>
   </data>
   <data name="Settings.Option.Language.zh-cn" xml:space="preserve">
-    <value>Simplified Chinese</value>
+    <value>简体中文</value>
   </data>
   <data name="Settings.Option.Language.zh-tw" xml:space="preserve">
-    <value>Traditional Chinese</value>
+    <value>繁體中文</value>
   </data>
   <data name="Settings.Option.OperNameLanguage.Client" xml:space="preserve">
     <value>Follow game client</value>

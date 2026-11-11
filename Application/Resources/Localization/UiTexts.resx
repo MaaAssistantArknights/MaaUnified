@@ -1186,6 +1186,15 @@
   <data name="Reception" xml:space="preserve">
     <value>会客室</value>
   </data>
+  <data name="RecruitingTips" xml:space="preserve">
+    <value>公招提示</value>
+  </data>
+  <data name="RecruitmentOfStar" xml:space="preserve">
+    <value>公招出 {0} 星了哦！</value>
+  </data>
+  <data name="TaskStallWarning" xml:space="preserve">
+    <value>任务日志已超过 {0} 分钟没有更新（当前已停滞 {1} 分钟），请检查任务是否仍在正常运行。</value>
+  </data>
   <data name="Trade" xml:space="preserve">
     <value>贸易站</value>
   </data>
@@ -1806,25 +1815,25 @@
     <value>退出</value>
   </data>
   <data name="PlatformCapability.TrayMenu.ForceShow" xml:space="preserve">
-    <value>显示主窗口</value>
+    <value>强制显示MAA</value>
   </data>
   <data name="PlatformCapability.TrayMenu.HideTray" xml:space="preserve">
-    <value>隐藏托盘</value>
+    <value>隐藏托盘图标</value>
   </data>
   <data name="PlatformCapability.TrayMenu.Restart" xml:space="preserve">
     <value>重启</value>
   </data>
   <data name="PlatformCapability.TrayMenu.Start" xml:space="preserve">
-    <value>开始</value>
+    <value>一键长草</value>
   </data>
   <data name="PlatformCapability.TrayMenu.Stop" xml:space="preserve">
     <value>停止</value>
   </data>
   <data name="PlatformCapability.TrayMenu.SwitchLanguage" xml:space="preserve">
-    <value>循环切换语言</value>
+    <value>切换语言 🌐</value>
   </data>
   <data name="PlatformCapability.TrayMenu.ToggleOverlay" xml:space="preserve">
-    <value>切换 Overlay</value>
+    <value>开/关日志悬浮窗</value>
   </data>
   <data name="PlatformCapability.Ui.OverlayHostUnavailable" xml:space="preserve">
     <value>Overlay 宿主句柄不可用</value>

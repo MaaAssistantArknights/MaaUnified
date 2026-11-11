@@ -531,6 +531,45 @@ public sealed class TaskQueueNotificationTests
         }
     }
 
+
+    public async Task RecruitSpecialTag_RobotTag_SuppressedUnlessNotChooseLevel1(
+        bool notChooseLevel1,
+        int expectedCount)
+    {
+        await using var fixture = await NotificationFixture.CreateAsync(useNotify: true);
+        await fixture.ViewModel.InitializeAsync();
+
+        // Frozen WPF AsstProxy.cs suppresses the 支援机械 toast when
+        // RecruitTask.NotChooseLevel1 == false.
+        fixture.ViewModel.RecruitModule.NotChooseLevel1 = notChooseLevel1;
+
+        await NotificationFixture.InvokeCallbackAsync(
+            fixture.ViewModel,
+            new CoreCallbackEvent(
+                10003,
+                "SubTaskExtraInfo",
+                new JsonObject
+                {
+                    ["task_chain"] = "Recruit",
+                    ["subtask"] = "AutoRecruitTask",
+                    ["what"] = "RecruitSpecialTag",
+                    ["details"] = new JsonObject { ["tag"] = "支援机械" },
+                }.ToJsonString(),
+                DateTimeOffset.UtcNow));
+
+        if (expectedCount > 0)
+        {
+            await WaitForNotificationCountAsync(fixture.NotificationCapability, expectedCount);
+            Assert.Equal("支援机械", fixture.NotificationCapability.LastMessage);
+        }
+        else
+        {
+            await Task.Delay(50);
+        }
+
+        Assert.Equal(expectedCount, fixture.NotificationCapability.NotificationCallCount);
+    }
+
     private sealed class NotificationFixture : IAsyncDisposable
     {
         private NotificationFixture(

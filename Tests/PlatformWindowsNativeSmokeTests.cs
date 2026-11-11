@@ -1,9 +1,51 @@
 using MAAUnified.Platform;
+using MAAUnified.App.ViewModels.Infrastructure;
 
 namespace MAAUnified.Tests;
 
 public sealed class PlatformWindowsNativeSmokeTests
 {
+    [Fact]
+    public void WindowsNotifyIconTrayService_ShouldStartHiddenAndMapPrimaryActivationToForceShow()
+    {
+        var service = new WindowsNotifyIconTrayService();
+
+        Assert.False(service.IsVisibleForTesting);
+        Assert.True(WindowsNotifyIconTrayService.TryGetActivationCommand(0x0202, out var clickCommand));
+        Assert.Equal(TrayCommandId.ForceShow, clickCommand);
+        Assert.True(WindowsNotifyIconTrayService.TryGetActivationCommand(0x0203, out var doubleClickCommand));
+        Assert.Equal(TrayCommandId.ForceShow, doubleClickCommand);
+        Assert.False(WindowsNotifyIconTrayService.TryGetActivationCommand(0x0205, out _));
+        Assert.True(WindowsNotifyIconTrayService.ShouldDispatchPrimaryActivation(1_000, -1, 500));
+        Assert.False(WindowsNotifyIconTrayService.ShouldDispatchPrimaryActivation(1_200, 1_000, 500));
+        Assert.True(WindowsNotifyIconTrayService.ShouldDispatchPrimaryActivation(1_500, 1_000, 500));
+    }
+
+    [Fact]
+    public void WindowsNotifyIconTrayService_ShouldMapLanguageSubmenuSelectionToTargetLanguage()
+    {
+        var menuText = TrayMenuText.Default with
+        {
+            LanguageItems =
+            [
+                new TrayLanguageMenuItem("zh-cn", "简体中文"),
+                new TrayLanguageMenuItem("en-us", "English"),
+                new TrayLanguageMenuItem("ja-jp", "日本語"),
+            ],
+        };
+
+        Assert.True(WindowsNotifyIconTrayService.TryMapNativeMenuCommand(
+            11_003,
+            menuText,
+            out var command,
+            out var targetLanguage));
+        Assert.Equal(TrayCommandId.SwitchLanguage, command);
+        Assert.Equal("ja-jp", targetLanguage);
+
+        var trayText = PlatformCapabilityTextMap.CreateTrayMenuText("zh-cn");
+        Assert.DoesNotContain(trayText.LanguageItems!, item => item.Language == "pallas");
+    }
+
     [Fact]
     public void WindowsHealthyEnvironment_ShouldDefaultToNativeProviders()
     {

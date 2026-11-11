@@ -67,7 +67,10 @@ public sealed record TrayMenuState(
     bool StopEnabled,
     bool OverlayEnabled,
     bool ForceShowEnabled,
-    bool HideTrayEnabled);
+    bool HideTrayEnabled,
+    bool HideTrayVisible = true);
+
+public sealed record TrayLanguageMenuItem(string Language, string Text);
 
 public sealed record TrayMenuText(
     string Start,
@@ -77,7 +80,8 @@ public sealed record TrayMenuText(
     string ToggleOverlay,
     string SwitchLanguage,
     string Restart,
-    string Exit)
+    string Exit,
+    IReadOnlyList<TrayLanguageMenuItem>? LanguageItems = null)
 {
     public static TrayMenuText Default { get; } = new(
         Start: "Start",
@@ -106,7 +110,8 @@ public enum TrayCommandId
 public sealed record TrayCommandEvent(
     TrayCommandId Command,
     string Source,
-    DateTimeOffset Timestamp);
+    DateTimeOffset Timestamp,
+    string? TargetLanguage = null);
 
 /// <summary>
 /// Raised when the user activates the tray icon itself (left click / double click),

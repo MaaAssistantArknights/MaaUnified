@@ -11,6 +11,13 @@
         SystemDecorations="None"
         WindowStartupLocation="Manual"
         Topmost="True">
-  <controls:AppPopupMenuPresenter x:Name="MenuPresenter"
-                                  ItemInvoked="OnMenuItemInvoked" />
+  <StackPanel Orientation="Horizontal">
+    <controls:AppPopupMenuPresenter x:Name="MenuPresenter"
+                                    ItemInvoked="OnMenuItemInvoked"
+                                    SubmenuInvoked="OnSubmenuInvoked" />
+    <controls:AppPopupMenuPresenter x:Name="SubmenuPresenter"
+                                    Margin="4,0,0,0"
+                                    IsVisible="False"
+                                    ItemInvoked="OnMenuItemInvoked" />
+  </StackPanel>
 </Window>

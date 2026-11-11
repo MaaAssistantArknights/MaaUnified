@@ -120,4 +120,44 @@ public sealed class PackageInstanceGuardTests
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(keyMaterial));
         return $"MAAUnified.Package.{Convert.ToHexString(hash)}";
     }
+
+
+    [Fact]
+    public void ReleaseProcessWideGuard_AfterAdopt_FreesMutexForSuccessorInstance()
+    {
+        var identity = $"maa-unified-instance-{Guid.NewGuid():N}";
+        Assert.True(PackageInstanceGuard.TryAcquire(identity, out var guard));
+        PackageInstanceGuard.AdoptProcessWideGuard(guard!);
+        try
+        {
+            PackageInstanceGuard.ReleaseProcessWideGuard();
+
+            Assert.True(PackageInstanceGuard.TryAcquire(identity, out var successor));
+            successor!.Dispose();
+        }
+        finally
+        {
+            PackageInstanceGuard.ReleaseProcessWideGuard();
+        }
+    }
+
+    [Fact]
+    public void TryReacquireProcessWideGuard_AfterRelease_RestoresSingleInstanceProtection()
+    {
+        var identity = $"maa-unified-instance-{Guid.NewGuid():N}";
+        Assert.True(PackageInstanceGuard.TryAcquire(identity, out var guard));
+        PackageInstanceGuard.AdoptProcessWideGuard(guard!);
+        try
+        {
+            PackageInstanceGuard.ReleaseProcessWideGuard();
+
+            Assert.True(PackageInstanceGuard.TryReacquireProcessWideGuard());
+            Assert.False(PackageInstanceGuard.TryAcquire(identity, out var duplicate));
+            Assert.Null(duplicate);
+        }
+        finally
+        {
+            PackageInstanceGuard.ReleaseProcessWideGuard();
+        }
+    }
 }

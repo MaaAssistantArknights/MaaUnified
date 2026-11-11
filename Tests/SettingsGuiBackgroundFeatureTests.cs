@@ -1362,7 +1362,7 @@ public sealed class SettingsGuiBackgroundFeatureTests
             await WaitUntilAsync(() => string.Equals(vm.TaskQueuePage.Texts.Language, "ja-jp", StringComparison.OrdinalIgnoreCase));
             Assert.Equal("ja-jp", vm.TaskQueuePage.Texts.Language);
             Assert.NotNull(tray.LastMenuText);
-            Assert.Equal("開始", tray.LastMenuText!.Start);
+            Assert.Equal("スタート", tray.LastMenuText!.Start);
         }
         finally
         {

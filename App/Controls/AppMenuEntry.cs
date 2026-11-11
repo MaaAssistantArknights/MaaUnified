@@ -11,6 +11,11 @@ public sealed record AppMenuActionItem(
     bool IsEnabled = true,
     bool IsVisible = true) : AppMenuEntry;
 
+public sealed record AppMenuSubmenuItem(
+    string Header,
+    IReadOnlyList<AppMenuEntry> Items,
+    bool IsEnabled = true) : AppMenuEntry;
+
 public sealed record AppMenuSeparatorEntry() : AppMenuEntry;
 
 public sealed class AppMenuItemInvokedEventArgs(AppMenuActionItem item) : EventArgs
@@ -20,5 +25,10 @@ public sealed class AppMenuItemInvokedEventArgs(AppMenuActionItem item) : EventA
     public object Command => Item.Command;
 
     public object? Parameter => Item.Parameter;
+}
+
+public sealed class AppMenuSubmenuInvokedEventArgs(AppMenuSubmenuItem item) : EventArgs
+{
+    public AppMenuSubmenuItem Item { get; } = item;
 }
 

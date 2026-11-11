@@ -133,4 +133,52 @@ public sealed class RootLocalizationTextMapTests
         Assert.Equal("단축키를 눌러 주세요...", map["Settings.Hotkey.Capture.Prompt"]);
         Assert.Equal("아직 지원하지 않는 키입니다: {0}", map["Settings.Hotkey.Capture.Error.UnsupportedKey"]);
     }
+
+    [Fact]
+    public void TaskNotificationKeys_ShouldResolveToLocalizedText_ForEveryLanguage()
+    {
+        // R16-F2: these keys back the recruit/stall desktop-notification texts.
+        // They previously existed only in AchievementLocalizations xaml (or nowhere),
+        // so every language silently fell back to the English code fallback.
+        var map = new RootLocalizationTextMap();
+
+        var expectations = new Dictionary<string, (string IdentifyTheMistakes, string RecruitingTips, string RecruitmentOfStar, string TaskStallWarning)>(StringComparer.Ordinal)
+        {
+            ["zh-cn"] = (
+                "识别错误",
+                "公招提示",
+                "公招出 {0} 星了哦！",
+                "任务日志已超过 {0} 分钟没有更新（当前已停滞 {1} 分钟），请检查任务是否仍在正常运行。"),
+            ["zh-tw"] = (
+                "辨識錯誤",
+                "公招提示",
+                "公招出現 {0}★ 囉！",
+                "任務日誌已超過 {0} 分鐘沒有更新（目前已停滯 {1} 分鐘），請檢查任務是否仍在正常執行。"),
+            ["en-us"] = (
+                "Recognition error",
+                "Recruiting Tips",
+                "{0}★ has been recruited!",
+                "Task log output has not been updated for {0} minutes (currently stalled for {1} minutes). Please check whether the task is still running."),
+            ["ja-jp"] = (
+                "認識エラー",
+                "公開求人ヒント",
+                "公開求人で星{0}が出ました！",
+                "タスクのログ出力が {0} 分間更新されていません（現在 {1} 分間停止しています）。タスクが正常に実行されているか確認してください。"),
+            // ko-KR keeps WPF's inline {key=Operator} reference; it must resolve to 오퍼레이터.
+            ["ko-kr"] = (
+                "인식 오류",
+                "공개모집 팁",
+                "★{0} 오퍼레이터를 모집했습니다!",
+                "작업 로그 출력이 {0}분 동안 갱신되지 않았습니다(현재 {1}분째 멈춰 있습니다). 작업이 정상적으로 실행 중인지 확인하세요."),
+        };
+
+        foreach (var (language, expected) in expectations)
+        {
+            map.Language = language;
+            Assert.Equal(expected.IdentifyTheMistakes, map["IdentifyTheMistakes"]);
+            Assert.Equal(expected.RecruitingTips, map["RecruitingTips"]);
+            Assert.Equal(expected.RecruitmentOfStar, map["RecruitmentOfStar"]);
+            Assert.Equal(expected.TaskStallWarning, map["TaskStallWarning"]);
+        }
+    }
 }

@@ -1,4 +1,5 @@
 using MAAUnified.Application.Services.Localization;
+using MAAUnified.App.ViewModels.Settings;
 using MAAUnified.Platform;
 
 namespace MAAUnified.App.ViewModels.Infrastructure;
@@ -127,7 +128,14 @@ public static class PlatformCapabilityTextMap
             ToggleOverlay: localizer.GetOrDefault("PlatformCapability.TrayMenu.ToggleOverlay", "Toggle Overlay", Scope, fallbackReporter),
             SwitchLanguage: localizer.GetOrDefault("PlatformCapability.TrayMenu.SwitchLanguage", "Cycle Language", Scope, fallbackReporter),
             Restart: localizer.GetOrDefault("PlatformCapability.TrayMenu.Restart", "Restart", Scope, fallbackReporter),
-            Exit: localizer.GetOrDefault("PlatformCapability.TrayMenu.Exit", "Exit", Scope, fallbackReporter));
+            Exit: localizer.GetOrDefault("PlatformCapability.TrayMenu.Exit", "Exit", Scope, fallbackReporter),
+            LanguageItems: UiLanguageCatalog.Ordered
+                // WPF keeps the Pallas easter-egg locale out of the tray switcher.
+                .Where(language => !string.Equals(language, "pallas", StringComparison.OrdinalIgnoreCase))
+                .Select(language => new TrayLanguageMenuItem(
+                    language,
+                    SettingsOptionCatalog.GetLanguageDisplayName(language)))
+                .ToArray());
     }
 
     public static string GetUiText(

@@ -4349,6 +4349,254 @@ private sealed class CapturingTrayService : ITrayService
         }
     }
 
+
+    [Fact]
+    public async Task ExecuteTrayCommandAsync_Exit_AfterResetLifecycleCloseInitiated_ShouldCloseAgain()
+    {
+        // The view layer reopens the latch when the requested close failed, so the
+        // user can retry the tray Exit/Restart command.
+        await using var fixture = await TestFixture.CreateAsync();
+
+        var first = await fixture.ViewModel.ExecuteTrayCommandAsync(TrayCommandId.Exit, "test-tray");
+        fixture.ViewModel.ResetLifecycleCloseInitiated();
+        var second = await fixture.ViewModel.ExecuteTrayCommandAsync(TrayCommandId.Exit, "test-tray");
+
+        Assert.Equal(ShellUiAction.CloseMainWindow, first);
+        Assert.Equal(ShellUiAction.CloseMainWindow, second);
+    }
+
+    [Fact]
+    public async Task ExecuteTrayCommandAsync_Exit_WhenLifecycleCloseAlreadyInitiated_ShouldBeNoOp()
+    {
+        // WPF parity (frozen TaskQueueViewModel.ConfirmExit): on the idle path the
+        // !Running early return never resets Closing, so repeat Exit/Restart clicks
+        // during shutdown are inert on both sides. On the dialog-passed path WPF's
+        // App_restart can still convert an in-flight exit into a restart inside a
+        // sub-second racy window before OnExit reads the flag; MAAUnified keeps
+        // first-intent-wins instead (M22 R13-F2 wontfix-by-design), which this test
+        // pins (restartAfterExit must stay a no-op).
+        var lifecycle = new SpyAppLifecycleService(UiOperationResult.Ok("Restart process launched."));
+        await using var fixture = await TestFixture.CreateAsync(appLifecycleService: lifecycle);
+
+        var firstExit = await fixture.ViewModel.ExecuteTrayCommandAsync(TrayCommandId.Exit, "test-tray");
+        var secondExit = await fixture.ViewModel.ExecuteTrayCommandAsync(TrayCommandId.Exit, "test-tray");
+        var restartAfterExit = await fixture.ViewModel.ExecuteTrayCommandAsync(TrayCommandId.Restart, "test-tray");
+
+        Assert.Equal(ShellUiAction.CloseMainWindow, firstExit);
+        Assert.Equal(ShellUiAction.None, secondExit);
+        Assert.Equal(ShellUiAction.None, restartAfterExit);
+        Assert.Equal(0, lifecycle.RestartCallCount);
+    }
+
+    [Fact]
+    public async Task ExecuteTrayCommandAsync_Restart_WhenLifecycleCloseAlreadyInitiated_ShouldNotInvokeLifecycleServiceAgain()
+    {
+        // WPF parity: the frozen bootstrapper starts the successor exactly once at
+        // the end of OnExit, so a repeat Restart command before the process finishes
+        // exiting must not reach the lifecycle service again.
+        var lifecycle = new SpyAppLifecycleService(UiOperationResult.Ok("Restart process launched."));
+        await using var fixture = await TestFixture.CreateAsync(appLifecycleService: lifecycle);
+
+        var first = await fixture.ViewModel.ExecuteTrayCommandAsync(TrayCommandId.Restart, "test-tray");
+        var second = await fixture.ViewModel.ExecuteTrayCommandAsync(TrayCommandId.Restart, "test-tray");
+
+        Assert.Equal(ShellUiAction.CloseMainWindow, first);
+        Assert.Equal(ShellUiAction.None, second);
+        Assert.Equal(1, lifecycle.RestartCallCount);
+    }
+
+    [Fact]
+    public async Task ExecuteTrayCommandAsync_Restart_WhenSpawnFails_ShouldAllowRetry()
+    {
+        var lifecycle = new SpyAppLifecycleService(UiOperationResult.Fail(UiErrorCode.AppRestartFailed, "spawn failed"));
+        await using var fixture = await TestFixture.CreateAsync(appLifecycleService: lifecycle);
+
+        var first = await fixture.ViewModel.ExecuteTrayCommandAsync(TrayCommandId.Restart, "test-tray");
+        var second = await fixture.ViewModel.ExecuteTrayCommandAsync(TrayCommandId.Restart, "test-tray");
+
+        Assert.Equal(ShellUiAction.None, first);
+        Assert.Equal(ShellUiAction.None, second);
+        Assert.Equal(2, lifecycle.RestartCallCount);
+    }
+
+    [Fact]
+    public async Task ExecuteTrayCommandAsync_StopWhileIdleOrConnected_ShouldRemainANoOp()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        await fixture.ViewModel.InitializeAsync();
+
+        var idleAction = await fixture.ViewModel.ExecuteTrayCommandAsync(TrayCommandId.Stop, "windows-notify-icon");
+
+        Assert.Equal(ShellUiAction.None, idleAction);
+        Assert.Equal(SessionState.Idle, fixture.Runtime.SessionService.CurrentState);
+        Assert.True(await WaitForLogContainsAsync(
+            fixture.Runtime.DiagnosticsService.EventLogPath,
+            "ignored-state=Idle"));
+
+        await SetSessionStateAsync(fixture.Runtime.SessionService, SessionState.Connected);
+
+        var connectedAction = await fixture.ViewModel.ExecuteTrayCommandAsync(TrayCommandId.Stop, "windows-notify-icon");
+
+        Assert.Equal(ShellUiAction.None, connectedAction);
+        Assert.Equal(SessionState.Connected, fixture.Runtime.SessionService.CurrentState);
+        Assert.True(await WaitForLogContainsAsync(
+            fixture.Runtime.DiagnosticsService.EventLogPath,
+            "ignored-state=Connected"));
+    }
+
+    [Fact]
+    public async Task ExecuteTrayCommandAsync_SwitchLanguage_ShouldLiveApplyWithoutForceShowOrRestart()
+    {
+        // M22 R15-F1 wontfix-by-design lock-in: frozen WPF's tray language
+        // submenu force-shows the main window and prompts for an immediate
+        // restart because its locale resources only merge once at startup
+        // (static readonly _culture; LocalizationHelper.Load called only from
+        // the bootstrapper). MAAUnified live-applies through the shared
+        // language coordinator (the same path the settings page uses), so the
+        // tray switch must stay window-state-neutral (ShellUiAction.None, no
+        // force-show) and must never reach the lifecycle service. This also
+        // preserves the protected invariant that restart/exit always require
+        // close confirmation: WPF's language-OK restart bypasses it via
+        // ConfirmExit's IsShuttingDown early return.
+        var lifecycle = new SpyAppLifecycleService(UiOperationResult.Ok("Restart process launched."));
+        var shellSpy = new SpyShellFeatureService("ja-jp");
+        await using var fixture = await TestFixture.CreateAsync(shellSpy, appLifecycleService: lifecycle);
+
+        var action = await fixture.ViewModel.ExecuteTrayCommandAsync(
+            TrayCommandId.SwitchLanguage,
+            "windows-notify-icon",
+            targetLanguage: "ja-jp");
+
+        Assert.Equal(ShellUiAction.None, action);
+        Assert.Equal(0, lifecycle.RestartCallCount);
+        Assert.Equal(1, shellSpy.SwitchLanguageCallCount);
+        Assert.Equal("ja-jp", shellSpy.LastTargetLanguage);
+        Assert.True(await WaitUntilAsync(() => string.Equals(fixture.ViewModel.SettingsPage.Language, "ja-jp", StringComparison.OrdinalIgnoreCase)));
+        Assert.False(string.IsNullOrWhiteSpace(fixture.TrayService.LastMenuText!.SwitchLanguage));
+
+        // The lifecycle-close latch must stay unarmed: a later tray Exit still
+        // requests a close, proving the language switch did not silently start
+        // any shutdown/restart sequence.
+        var exitAction = await fixture.ViewModel.ExecuteTrayCommandAsync(TrayCommandId.Exit, "test-tray");
+        Assert.Equal(ShellUiAction.CloseMainWindow, exitAction);
+    }
+
+    [Fact]
+    public async Task ExecuteTrayCommandAsync_SwitchLanguage_WithTarget_ShouldUseTargetLanguage()
+    {
+        var shellSpy = new SpyShellFeatureService("ja-jp");
+        await using var fixture = await TestFixture.CreateAsync(shellSpy);
+
+        var action = await fixture.ViewModel.ExecuteTrayCommandAsync(
+            TrayCommandId.SwitchLanguage,
+            "windows-notify-icon",
+            targetLanguage: "ja-jp");
+
+        Assert.Equal(ShellUiAction.None, action);
+        Assert.Equal(1, shellSpy.SwitchLanguageCallCount);
+        Assert.Equal("ja-jp", shellSpy.LastTargetLanguage);
+    }
+
+    public void TrayMenuText_LanguageItems_ShouldUseFrozenWpfNativeNames(string language)
+    {
+        var text = PlatformCapabilityTextMap.CreateTrayMenuText(language);
+
+        // Frozen WPF LocalizationHelper.SupportedLanguages values are fixed native
+        // names regardless of the active UI language; pallas stays out of the tray.
+        var expected = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["zh-cn"] = "简体中文",
+            ["zh-tw"] = "繁體中文",
+            ["en-us"] = "English",
+            ["ja-jp"] = "日本語",
+            ["ko-kr"] = "한국어",
+        };
+        Assert.Equal(
+            expected.Select(pair => pair.Key),
+            text.LanguageItems!.Select(item => item.Language));
+        foreach (var item in text.LanguageItems!)
+        {
+            Assert.Equal(expected[item.Language], item.Text);
+        }
+    }
+
+    public void TrayMenuText_ShouldUseFrozenWpfTerms(
+        string language,
+        string expectedStart,
+        string expectedForceShow,
+        string expectedHideTray,
+        string expectedOverlay)
+    {
+        var text = PlatformCapabilityTextMap.CreateTrayMenuText(language);
+
+        Assert.Equal(expectedStart, text.Start);
+        Assert.Equal(expectedForceShow, text.ForceShow);
+        Assert.Equal(expectedHideTray, text.HideTray);
+        Assert.Equal(expectedOverlay, text.ToggleOverlay);
+        Assert.Equal(
+            UiLanguageCatalog.Ordered.Where(language => !string.Equals(language, "pallas", StringComparison.OrdinalIgnoreCase)),
+            text.LanguageItems!.Select(item => item.Language));
+    }
+
+    public void ResolveLinkStartHotkeyCommand_ShouldToggleStartStop(SessionState state, TrayCommandId expected)
+    {
+        // WPF parity (frozen MaaHotKeyActionHandler.HandleLinkStart): idle -> start,
+        // otherwise -> stop. WPF idle covers MAAUnified Idle and Connected.
+        Assert.Equal(expected, MainShellViewModel.ResolveLinkStartHotkeyCommand(state));
+    }
+
+    [Fact]
+    public void ResolveLinkStartHotkeyCommand_WhenStopping_ShouldBeNoOp()
+    {
+        // WPF parity: HandleLinkStart returns immediately while a stop is in flight.
+        Assert.Null(MainShellViewModel.ResolveLinkStartHotkeyCommand(SessionState.Stopping));
+    }
+
+    [Fact]
+    public async Task SetTrayHideCommandVisibleAsync_ShouldRemoveAndRestoreTheHideTrayEntry()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        await fixture.ViewModel.InitializeAsync();
+
+        await fixture.ViewModel.SetTrayHideCommandVisibleAsync(false);
+
+        Assert.NotNull(fixture.TrayService.LastMenuState);
+        Assert.False(fixture.TrayService.LastMenuState!.HideTrayVisible);
+
+        await fixture.ViewModel.SetTrayHideCommandVisibleAsync(true);
+
+        Assert.True(fixture.TrayService.LastMenuState.HideTrayVisible);
+    }
+
+    [Fact]
+    public async Task WindowTitle_ShouldUseBuildFlavorDisplayName()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+
+        Assert.Equal(MainShellViewModel.WindowDisplayName, fixture.ViewModel.WindowTitle);
+    }
+
+    public async Task CanStartExecution_ShouldNotDisableWpfTrayStartOrStopEntries(
+        SessionState sessionState,
+        bool hasBlockingIssue,
+        bool expectedStartEnabled,
+        bool expectedStopEnabled)
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        await fixture.ViewModel.InitializeAsync();
+        await SetSessionStateAsync(fixture.Runtime.SessionService, sessionState);
+        InvokeRefreshConfigValidationState(
+            fixture.ViewModel,
+            hasBlockingIssue ? [CreateBlockingIssue()] : []);
+        await InvokeSyncTrayMenuStateAsync(fixture.ViewModel);
+
+        Assert.Equal(expectedStartEnabled, fixture.ViewModel.CanStartExecution);
+        Assert.Equal(expectedStopEnabled, fixture.ViewModel.CanStopExecution);
+        Assert.NotNull(fixture.TrayService.LastMenuState);
+        Assert.True(fixture.TrayService.LastMenuState!.StartEnabled);
+        Assert.True(fixture.TrayService.LastMenuState.StopEnabled);
+    }
+
     private sealed class UnknownErrorHotkeyService : IGlobalHotkeyService
     {
         public PlatformCapabilityStatus Capability { get; } = new(

@@ -14,6 +14,16 @@
                    Text="{Binding Header}" />
       </Border>
     </DataTemplate>
+    <DataTemplate DataType="controls:AppMenuSubmenuItem">
+      <Border Classes="app-popup-menu-item-shell"
+              IsEnabled="{Binding IsEnabled}"
+              Tag="{Binding}"
+              PointerPressed="OnSubmenuItemPointerPressed">
+        <TextBlock Classes="app-popup-menu-item-text"
+                   Text="{Binding Header}" />
+      </Border>
+    </DataTemplate>
+
     <DataTemplate DataType="controls:AppMenuSeparatorEntry">
       <Border Classes="app-popup-menu-separator" />
     </DataTemplate>

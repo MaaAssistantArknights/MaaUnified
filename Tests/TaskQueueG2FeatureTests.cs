@@ -1309,6 +1309,44 @@ public sealed class TaskQueueG2FeatureTests
     }
 
     [Fact]
+    public async Task StartAsync_PendingConnect_ShouldKeepCloseConfirmationGateEngaged()
+    {
+        // R10-F1 wontfix lock-in: MainWindow.ConfirmCloseAsync passes
+        // TaskQueuePage.IsRunning to the close-confirmation service, and IsRunning
+        // stays true for the whole start-request (Connecting) phase. Unlike frozen
+        // WPF (Running flips true only on the first TaskChainStart), MAAUnified
+        // deliberately prompts for Exit/Restart while a connect is still pending;
+        // cancelling the prompt leaves the connect running, and cancelling the
+        // start request disengages the gate.
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup-a")).Success);
+        fixture.Bridge.ConnectDelay = TimeSpan.FromSeconds(30);
+        fixture.Bridge.ConnectStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var shared = new ConnectionGameSharedStateViewModel
+        {
+            ConnectAddress = TestConnectionFixtureSupport.ReadyConnectAddress,
+            ConnectConfig = TestConnectionFixtureSupport.ReadyConnectConfig,
+            AdbPath = fixture.ReadyAdbPath,
+            MacUseBundledAdb = false,
+        };
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, shared);
+        await vm.InitializeAsync();
+
+        var startTask = vm.StartAsync();
+        await fixture.Bridge.ConnectStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(SessionState.Connecting, fixture.Runtime.SessionService.CurrentState);
+        Assert.True(vm.IsRunning);
+
+        await vm.ToggleRunAsync();
+        await startTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.False(vm.IsRunning);
+        Assert.Equal(SessionState.Idle, fixture.Runtime.SessionService.CurrentState);
+    }
+
+    [Fact]
     public async Task StartAsync_AutoConnectFailure_ShouldReturnToEditableStateAndReportError()
     {
         await using var fixture = await TestFixture.CreateAsync();

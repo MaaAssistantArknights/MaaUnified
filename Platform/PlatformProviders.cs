@@ -78,7 +78,7 @@ public sealed class WindowsNotifyIconTrayService : ITrayService, IDisposable
     private const uint NiifNone = 0x00000000;
     private const uint MfString = 0x00000000;
     private const uint MfGrayed = 0x00000001;
-    private const uint MfSeparator = 0x00000800;
+    private const uint MfPopup = 0x00000010;
     private const uint TpmRightButton = 0x00000002;
     private const uint TpmRightAlign = 0x00000008;
     private const uint TpmReturnCmd = 0x00000100;
@@ -90,6 +90,7 @@ public sealed class WindowsNotifyIconTrayService : ITrayService, IDisposable
     private const long ActivationDebounceMilliseconds = 500;
     private const int SmMenuDropAlignment = 40;
     private const uint NativeMenuStartId = 10_001;
+    private const uint NativeLanguageMenuStartId = 11_001;
     private readonly CommandNotificationService _notificationFallback = new();
     private readonly WindowMenuTrayService _fallbackService = new();
     private readonly TrayWindowProc _windowProc;
@@ -97,11 +98,13 @@ public sealed class WindowsNotifyIconTrayService : ITrayService, IDisposable
     private nint _iconHandle;
     private nint _windowHandle;
     private bool _ownsIconHandle;
-    private bool _visible = true;
+    // Start hidden so GUI.UseTray=false cannot briefly add an icon before startup applies it.
+    private bool _visible;
     private bool _initialized;
     private bool _fallbackMode;
     private bool _iconAdded;
     private bool _trackingNativeMenu;
+    private long _lastPrimaryActivationTick = -1;
     private ushort _windowClassAtom;
     private uint _taskbarCreatedMessage;
     private long _lastActivationTicks;
@@ -121,12 +124,12 @@ public sealed class WindowsNotifyIconTrayService : ITrayService, IDisposable
     public event EventHandler<TrayMenuRequestEvent>? MenuRequested;
 
     public event EventHandler<TrayActivationEvent>? ActivationRequested;
+    internal bool IsVisibleForTesting => _visible;
 
     public WindowsNotifyIconTrayService()
     {
         _windowProc = WindowProc;
-        _fallbackService.CommandInvoked += (_, e) => RaiseCommand(e.Command);
-        _fallbackService.ActivationRequested += (_, _) => RaiseActivation();
+        _fallbackService.CommandInvoked += (_, e) => RaiseCommand(e.Command, e.TargetLanguage);
     }
 
     public static bool TryCreate([NotNullWhen(true)] out WindowsNotifyIconTrayService? service)
@@ -453,11 +456,11 @@ public sealed class WindowsNotifyIconTrayService : ITrayService, IDisposable
         _iconAdded = false;
     }
 
-    private void RaiseCommand(TrayCommandId command)
+    private void RaiseCommand(TrayCommandId command, string? targetLanguage = null)
     {
         try
         {
-            CommandInvoked?.Invoke(this, new TrayCommandEvent(command, Capability.Provider, DateTimeOffset.UtcNow));
+            CommandInvoked?.Invoke(this, new TrayCommandEvent(command, Capability.Provider, DateTimeOffset.UtcNow, targetLanguage));
         }
         catch
         {
@@ -519,25 +522,27 @@ public sealed class WindowsNotifyIconTrayService : ITrayService, IDisposable
         try
         {
             var eventMessage = unchecked((uint)lParam.ToInt64());
-            switch (eventMessage)
+            if (TryGetActivationCommand(eventMessage, out var activationCommand)
+                && TryAcceptPrimaryActivation())
             {
-                // WPF parity (NotifyIcon.Click/MouseDoubleClick -> MainWindowManager.Show):
-                // left click / double click on the tray icon shows the main window.
-                case WmLButtonUp:
-                case WmLButtonDblClk:
-                    RaiseActivation();
-                    break;
-                case WmRButtonUp:
-                case WmContextMenu:
-                    if (!TryShowNativeContextMenu()
-                        && TryCreateTrayMenuRequest(out var menuRequest))
-                    {
-                        MenuRequested?.Invoke(
-                            this,
-                            menuRequest);
-                    }
+                RaiseCommand(activationCommand);
+            }
+            else
+            {
+                switch (eventMessage)
+                {
+                    case WmRButtonUp:
+                    case WmContextMenu:
+                        if (!TryShowNativeContextMenu()
+                            && TryCreateTrayMenuRequest(out var menuRequest))
+                        {
+                            MenuRequested?.Invoke(
+                                this,
+                                menuRequest);
+                        }
 
-                    break;
+                        break;
+                }
             }
         }
         catch
@@ -587,9 +592,9 @@ public sealed class WindowsNotifyIconTrayService : ITrayService, IDisposable
 
             RestoreNotificationAreaFocus();
             _ = PostMessage(_windowHandle, WmNull, nuint.Zero, nint.Zero);
-            if (TryMapNativeMenuCommand(selectedId, out var command))
+            if (TryMapNativeMenuCommand(selectedId, _menuText, out var command, out var targetLanguage))
             {
-                RaiseCommand(command);
+                RaiseCommand(command, targetLanguage);
             }
 
             return true;
@@ -611,12 +616,15 @@ public sealed class WindowsNotifyIconTrayService : ITrayService, IDisposable
     {
         AppendMenuItem(menu, TrayCommandId.Start, _menuText.Start, _menuState.StartEnabled);
         AppendMenuItem(menu, TrayCommandId.Stop, _menuText.Stop, _menuState.StopEnabled);
-        AppendMenuSeparator(menu);
+        AppendLanguageSubmenu(menu);
         AppendMenuItem(menu, TrayCommandId.ForceShow, _menuText.ForceShow, _menuState.ForceShowEnabled);
-        AppendMenuItem(menu, TrayCommandId.HideTray, _menuText.HideTray, _menuState.HideTrayEnabled);
+        if (_menuState.HideTrayVisible)
+        {
+            AppendMenuItem(menu, TrayCommandId.HideTray, _menuText.HideTray, _menuState.HideTrayEnabled);
+        }
+
         AppendMenuItem(menu, TrayCommandId.ToggleOverlay, _menuText.ToggleOverlay, _menuState.OverlayEnabled);
         AppendMenuItem(menu, TrayCommandId.Restart, _menuText.Restart, enabled: true);
-        AppendMenuSeparator(menu);
         AppendMenuItem(menu, TrayCommandId.Exit, _menuText.Exit, enabled: true);
     }
 
@@ -624,11 +632,6 @@ public sealed class WindowsNotifyIconTrayService : ITrayService, IDisposable
     {
         var flags = MfString | (enabled ? 0 : MfGrayed);
         _ = AppendMenu(menu, flags, GetNativeMenuId(command), string.IsNullOrWhiteSpace(text) ? command.ToString() : text);
-    }
-
-    private static void AppendMenuSeparator(nint menu)
-    {
-        _ = AppendMenu(menu, MfSeparator, nuint.Zero, null);
     }
 
     private static uint GetNativeMenuFlags()
@@ -647,11 +650,76 @@ public sealed class WindowsNotifyIconTrayService : ITrayService, IDisposable
         return NativeMenuStartId + (uint)command;
     }
 
-    private static bool TryMapNativeMenuCommand(uint selectedId, out TrayCommandId command)
+    private void AppendLanguageSubmenu(nint menu)
+    {
+        var languageItems = _menuText.LanguageItems;
+        if (languageItems is not { Count: > 0 })
+        {
+            return;
+        }
+
+        var languageMenu = CreatePopupMenu();
+        if (languageMenu == nint.Zero)
+        {
+            return;
+        }
+
+        try
+        {
+            for (var index = 0; index < languageItems.Count; index++)
+            {
+                var item = languageItems[index];
+                if (string.IsNullOrWhiteSpace(item.Language))
+                {
+                    continue;
+                }
+
+                var text = string.IsNullOrWhiteSpace(item.Text) ? item.Language : item.Text;
+                _ = AppendMenu(languageMenu, MfString, NativeLanguageMenuStartId + (uint)index, text);
+            }
+
+            if (AppendMenu(menu, MfString | MfPopup, unchecked((nuint)languageMenu), _menuText.SwitchLanguage))
+            {
+                languageMenu = nint.Zero;
+            }
+        }
+        finally
+        {
+            if (languageMenu != nint.Zero)
+            {
+                _ = DestroyMenu(languageMenu);
+            }
+        }
+    }
+
+    internal static bool TryMapNativeMenuCommand(
+        uint selectedId,
+        TrayMenuText menuText,
+        out TrayCommandId command,
+        out string? targetLanguage)
     {
         command = default;
+        targetLanguage = null;
         if (selectedId < NativeMenuStartId)
         {
+            return false;
+        }
+
+        var languageItems = menuText.LanguageItems;
+        if (selectedId >= NativeLanguageMenuStartId && languageItems is not null)
+        {
+            var languageIndex = selectedId - NativeLanguageMenuStartId;
+            if (languageIndex < languageItems.Count)
+            {
+                var language = languageItems[(int)languageIndex].Language;
+                if (!string.IsNullOrWhiteSpace(language))
+                {
+                    command = TrayCommandId.SwitchLanguage;
+                    targetLanguage = language;
+                    return true;
+                }
+            }
+
             return false;
         }
 
@@ -662,6 +730,34 @@ public sealed class WindowsNotifyIconTrayService : ITrayService, IDisposable
         }
 
         command = (TrayCommandId)raw;
+        return true;
+    }
+
+    internal static bool TryGetActivationCommand(uint eventMessage, out TrayCommandId command)
+    {
+        command = eventMessage switch
+        {
+            WmLButtonUp or WmLButtonDblClk => TrayCommandId.ForceShow,
+            _ => default,
+        };
+        return eventMessage is WmLButtonUp or WmLButtonDblClk;
+    }
+
+    internal static bool ShouldDispatchPrimaryActivation(
+        long currentTick,
+        long previousTick,
+        uint doubleClickInterval)
+        => previousTick < 0 || currentTick - previousTick >= doubleClickInterval;
+
+    private bool TryAcceptPrimaryActivation()
+    {
+        var currentTick = Environment.TickCount64;
+        if (!ShouldDispatchPrimaryActivation(currentTick, _lastPrimaryActivationTick, GetDoubleClickTime()))
+        {
+            return false;
+        }
+
+        _lastPrimaryActivationTick = currentTick;
         return true;
     }
 
@@ -891,6 +987,9 @@ public sealed class WindowsNotifyIconTrayService : ITrayService, IDisposable
 
     [DllImport("user32.dll")]
     private static extern int GetSystemMetrics(int nIndex);
+
+    [DllImport("user32.dll")]
+    private static extern uint GetDoubleClickTime();
 
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]

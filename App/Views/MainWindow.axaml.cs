@@ -118,8 +118,12 @@ public partial class MainWindow : Window
     private bool _processingDialogErrors;
     private bool _processingMinimizeToTray;
     private bool _dockHiddenForMinimizeToTray;
+    private bool _trayTemporarilyVisibleForHiddenMainWindow;
     private bool _allowLifecycleClose;
     private bool _closeRequestPending;
+    private bool _trayCloseConfirmationPending;
+    private CloseConfirmPresentationSnapshot? _closeConfirmPresentationSnapshot;
+    private bool _closeConfirmPresentationChangedByUser;
     private bool _compactLayoutEnabled;
     private ResponsiveLayoutMetrics? _responsiveLayoutMetrics;
     private bool _adaptiveLayoutUpdateQueued;
@@ -155,6 +159,7 @@ public partial class MainWindow : Window
     private MainShellViewModel? _shellBackgroundVm;
     private BlurEffect? _shellBackgroundBlurEffect;
     private readonly WindowNotificationManager _inAppNotificationManager;
+    private readonly InAppNotificationPresentationQueue _inAppNotificationPresentationQueue = new();
     private readonly INotificationInteractionSource? _notificationInteractionSource;
 
     private readonly record struct ResponsiveDoubleResourceRange(string ResourceKey, double Minimum, double Maximum);
@@ -228,19 +233,49 @@ public partial class MainWindow : Window
         }
 
         e.Cancel = true;
-        if (_closeRequestPending)
+        // WPF parity (frozen TaskQueueViewModel.ConfirmExit Closing guard): any
+        // pending close confirmation (window-chrome or tray Exit/Restart)
+        // suppresses a new close request instead of queuing a second dialog.
+        if (_closeRequestPending || _trayCloseConfirmationPending)
         {
             return;
         }
 
         _closeRequestPending = true;
+        var wasVisible = IsVisible;
+        var previousWindowState = WindowState;
+        BeginCloseConfirmPresentationTracking(wasVisible, previousWindowState);
         try
         {
-            if (!await ConfirmCloseAsync("App.Shell.Window.Close.Confirm"))
+            bool confirmed;
+            try
+            {
+                confirmed = await ConfirmCloseAsync("App.Shell.Window.Close.Confirm");
+            }
+            catch
+            {
+                // The dialog service may already have transiently force-shown
+                // or un-minimized the owner; restore so the window is not
+                // stranded in the transient state.
+                await TryRestorePresentationAfterAbortedCloseConfirmAsync(
+                    wasVisible,
+                    previousWindowState,
+                    "App.Shell.Window.Close.Confirm");
+                throw;
+            }
+
+            if (!confirmed)
             {
                 await App.Runtime.DiagnosticsService.RecordEventAsync(
                     "App.Shell.Window.Close",
                     "source=window-chrome; cancelled");
+                // WPF parity (frozen CanCloseAsync -> ConfirmExit owner-less
+                // MessageBox): a cancelled close leaves a taskbar-minimized
+                // window minimized instead of the dialog-restored Normal state.
+                await RestorePresentationAfterCancelledCloseConfirmAsync(
+                    wasVisible,
+                    previousWindowState,
+                    CancellationToken.None);
                 return;
             }
 
@@ -257,6 +292,7 @@ public partial class MainWindow : Window
         }
         finally
         {
+            EndCloseConfirmPresentationTracking();
             if (!_allowLifecycleClose)
             {
                 DisarmCloseCompletionWatchdog();
@@ -431,6 +467,18 @@ public partial class MainWindow : Window
             _platformBound = false;
         }
 
+        // WPF parity (frozen RootView.xaml:167 hosts the NotifyIcon inside the
+        // main window's visual tree, so it is destroyed together with the
+        // window): the main window only ever closes as part of a lifecycle exit
+        // (OnWindowClosing cancels every other close request), so hide the tray
+        // icon as soon as the window is gone instead of leaving it visible and
+        // its native menu openable for the whole runtime-dispose window. The
+        // icon's final teardown still happens in TrayService.ShutdownAsync
+        // during runtime dispose; this only removes the interaction surface.
+        App.ForgetTask(
+            App.Runtime.Platform.TrayService.SetVisibleAsync(false, CancellationToken.None),
+            "MainWindow.Closed.TrayHide");
+
         if (_overlayHostWindow is not null)
         {
             await RunWindowCleanupStepAsync(
@@ -480,13 +528,14 @@ public partial class MainWindow : Window
             _notificationInteractionSource.InAppNotificationRequested -= OnInAppNotificationRequested;
         }
         _inAppNotificationManager.CloseAll();
+        _inAppNotificationPresentationQueue.Clear();
     });
 
     private void OnInAppNotificationRequested(object? sender, InAppNotificationRequestedEventArgs e)
     {
         Dispatcher.UIThread.Post(() =>
         {
-            ShowInAppNotification(e.Notification);
+            PresentInAppNotification(e.Notification);
         });
     }
 
@@ -539,7 +588,7 @@ public partial class MainWindow : Window
             "Notification.Unavailable",
             "Toast notifications are unavailable: {0}",
             vm.ReportLocalizationFallback);
-        ShowInAppNotification(
+        PresentInAppNotification(
             new SystemNotificationRequest(
                 title,
                 string.Format(
@@ -552,6 +601,30 @@ public partial class MainWindow : Window
                 [],
                 InAppSeverity: InAppNotificationSeverity.Error));
     }
+
+    private void PresentInAppNotification(SystemNotificationRequest notification)
+    {
+        _inAppNotificationPresentationQueue.PresentOrQueue(
+            notification,
+            CanPresentInAppNotifications,
+            ShowInAppNotification);
+    }
+
+    private void FlushPendingInAppNotifications()
+    {
+        _inAppNotificationPresentationQueue.FlushIfPossible(
+            CanPresentInAppNotifications,
+            ShowInAppNotification);
+    }
+
+    // A close-confirm force-show/un-minimize is transient: while it is the
+    // only reason the window is presentable (and the user has not taken
+    // control of the presentation), keep fallback notifications queued so a
+    // cancelled confirm cannot strand them in a window that is re-hidden.
+    private bool CanPresentInAppNotifications
+        => IsVisible
+           && WindowState != WindowState.Minimized
+           && !IsCloseConfirmTransientPresentation;
 
     private void ShowInAppNotification(SystemNotificationRequest notification)
     {
@@ -595,6 +668,7 @@ public partial class MainWindow : Window
         if (e.Property == IsVisibleProperty || e.Property == WindowStateProperty)
         {
             UpdateAchievementToastVisibility();
+            FlushPendingInAppNotifications();
         }
 
         if (string.Equals(e.Property.Name, nameof(RenderScaling), StringComparison.Ordinal))
@@ -2338,7 +2412,7 @@ public partial class MainWindow : Window
     private async void OnTrayCommandInvoked(object? sender, TrayCommandEvent e)
         => await App.RunUiTaskAsync(
             "MainWindow.TrayCommandInvoked",
-            () => DispatchTrayCommandAsync(e.Command, e.Source));
+            () => DispatchTrayCommandAsync(e.Command, e.Source, targetLanguage: e.TargetLanguage));
 
     // WPF parity (NotifyIcon Click/MouseDoubleClick -> MainWindowManager.Show):
     // tray icon left click shows and activates the main window.
@@ -2398,7 +2472,8 @@ public partial class MainWindow : Window
     private async Task DispatchTrayCommandAsync(
         TrayCommandId command,
         string source,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? targetLanguage = null)
     {
         if (VM is null)
         {
@@ -2412,12 +2487,8 @@ public partial class MainWindow : Window
                 var confirmScope = command == TrayCommandId.Restart
                     ? "App.Shell.Tray.Restart.Confirm"
                     : "App.Shell.Tray.Exit.Confirm";
-                if (!await ConfirmCloseAsync(confirmScope, cancellationToken))
+                if (!await ConfirmTrayCloseAsync(confirmScope, source, cancellationToken))
                 {
-                    await App.Runtime.DiagnosticsService.RecordEventAsync(
-                        confirmScope,
-                        $"source={source}; cancelled",
-                        cancellationToken);
                     return;
                 }
 
@@ -2429,7 +2500,7 @@ public partial class MainWindow : Window
                 }
             }
 
-            var action = await VM.ExecuteTrayCommandAsync(command, source, cancellationToken);
+            var action = await VM.ExecuteTrayCommandAsync(command, source, cancellationToken, targetLanguage);
             switch (action)
             {
                 case ShellUiAction.None:
@@ -2492,18 +2563,7 @@ public partial class MainWindow : Window
         }
 
         var text = PlatformCapabilityTextMap.CreateTrayMenuText(vm.CurrentShellLanguage, vm.ReportLocalizationFallback);
-        return
-        [
-            new TrayContextMenuItemEntry(text.Start, TrayCommandId.Start, vm.CanStartExecution),
-            new TrayContextMenuItemEntry(text.Stop, TrayCommandId.Stop, vm.CanStopExecution),
-            new TrayContextMenuSeparatorEntry(),
-            new TrayContextMenuItemEntry(text.ForceShow, TrayCommandId.ForceShow, true),
-            new TrayContextMenuItemEntry(text.HideTray, TrayCommandId.HideTray, true),
-            new TrayContextMenuItemEntry(text.ToggleOverlay, TrayCommandId.ToggleOverlay, true),
-            new TrayContextMenuItemEntry(text.Restart, TrayCommandId.Restart, true),
-            new TrayContextMenuSeparatorEntry(),
-            new TrayContextMenuItemEntry(text.Exit, TrayCommandId.Exit, true),
-        ];
+        return TrayContextMenuEntryBuilder.Build(text, IsVisible);
     }
 
     private async void OnTrayContextMenuCommandInvoked(object? sender, TrayContextMenuCommandInvokedEventArgs e)
@@ -2511,7 +2571,7 @@ public partial class MainWindow : Window
     {
         var source = _trayContextMenuWindow?.CommandSource ?? "tray-popup";
         CloseTrayContextMenu();
-        await DispatchTrayCommandAsync(e.Command, source);
+        await DispatchTrayCommandAsync(e.Command, source, targetLanguage: e.TargetLanguage);
     });
 
     private void OnTrayContextMenuClosed(object? sender, EventArgs e)
@@ -2586,7 +2646,7 @@ public partial class MainWindow : Window
 
             if (string.Equals(e.Name, "LinkStart", StringComparison.OrdinalIgnoreCase))
             {
-                await DispatchTrayCommandAsync(TrayCommandId.Start, "hotkey-linkstart");
+                await ExecuteLinkStartHotkeyAsync();
             }
         }
         catch (Exception ex)
@@ -2613,8 +2673,94 @@ public partial class MainWindow : Window
         var vm = VM;
         return !_processingMinimizeToTray
             && vm is not null
-            && vm.SettingsPage.UseTray
-            && vm.SettingsPage.MinimizeToTray;
+            && ShouldHideWindowToTray(vm.SettingsPage.UseTray, vm.SettingsPage.MinimizeToTray);
+    }
+
+    // Mirrors the frozen WPF gating: MainWindowManager.SwitchWindowState only
+    // minimizes the window, and MainWindowStateChanged hides it to the tray
+    // only when both ShouldMinimizeToTray and ShouldUseTrayIcon are set.
+    internal static bool ShouldHideWindowToTray(bool useTray, bool minimizeToTray)
+        => useTray && minimizeToTray;
+
+    // WPF parity (frozen TaskQueueViewModel.ConfirmExit + owner-less
+    // HandyControl MessageBox): the tray Exit/Restart confirmation never
+    // changes the main-window presentation, so a cancelled confirm leaves a
+    // hidden-to-tray window hidden (with the HideTray menu entry still
+    // removed) and a minimized window minimized. Avalonia's ShowDialog(owner)
+    // requires a visible owner, so the dialog service force-shows the window;
+    // the cancel path restores the presentation state captured before the
+    // dialog.
+    public enum CloseConfirmCancelRestore
+    {
+        None,
+        HiddenToTray,
+        Minimized,
+    }
+
+    internal static CloseConfirmCancelRestore ResolveCloseConfirmCancelRestore(
+        bool wasVisible,
+        WindowState previousWindowState)
+    {
+        if (!wasVisible)
+        {
+            return CloseConfirmCancelRestore.HiddenToTray;
+        }
+
+        return previousWindowState == WindowState.Minimized
+            ? CloseConfirmCancelRestore.Minimized
+            : CloseConfirmCancelRestore.None;
+    }
+
+    // While a close confirmation is pending, the dialog service may have
+    // transiently force-shown or un-minimized the owner (the frozen WPF
+    // owner-less MessageBox never changes window state). Until the user
+    // explicitly changes the presentation (tray ForceShow, ShowGui hotkey,
+    // minimize-to-tray), the transient state must not count as user-visible.
+    internal static bool IsTransientCloseConfirmPresentation(
+        bool wasVisible,
+        WindowState previousWindowState,
+        bool presentationChangedByUser)
+        => !presentationChangedByUser
+           && (!wasVisible || previousWindowState == WindowState.Minimized);
+
+    private bool IsCloseConfirmTransientPresentation
+        => _closeConfirmPresentationSnapshot is { } snapshot
+           && IsTransientCloseConfirmPresentation(
+               snapshot.WasVisible,
+               snapshot.WindowState,
+               _closeConfirmPresentationChangedByUser);
+
+    private void BeginCloseConfirmPresentationTracking(bool wasVisible, WindowState windowState)
+    {
+        _closeConfirmPresentationSnapshot = new CloseConfirmPresentationSnapshot(wasVisible, windowState);
+        _closeConfirmPresentationChangedByUser = false;
+    }
+
+    private void EndCloseConfirmPresentationTracking()
+    {
+        _closeConfirmPresentationSnapshot = null;
+        _closeConfirmPresentationChangedByUser = false;
+    }
+
+    private void MarkCloseConfirmPresentationChangedByUser()
+    {
+        if (_closeConfirmPresentationSnapshot is not null)
+        {
+            _closeConfirmPresentationChangedByUser = true;
+        }
+    }
+
+    private readonly struct CloseConfirmPresentationSnapshot
+    {
+        public CloseConfirmPresentationSnapshot(bool wasVisible, WindowState windowState)
+        {
+            WasVisible = wasVisible;
+            WindowState = windowState;
+        }
+
+        public bool WasVisible { get; }
+
+        public WindowState WindowState { get; }
     }
 
     private async Task HideMainWindowToTrayAsync(
@@ -2627,6 +2773,7 @@ public partial class MainWindow : Window
             return;
         }
 
+        MarkCloseConfirmPresentationChangedByUser();
         try
         {
             _processingMinimizeToTray = true;
@@ -2637,7 +2784,7 @@ public partial class MainWindow : Window
                 return;
             }
 
-            HideMainWindowToTray();
+            await HideMainWindowToTrayCoreAsync(cancellationToken);
         }
         finally
         {
@@ -2648,7 +2795,12 @@ public partial class MainWindow : Window
 
     private async Task ToggleMainWindowFromHotkeyAsync(CancellationToken cancellationToken = default)
     {
-        if (WindowState == WindowState.Minimized || !IsVisible)
+        // WPF parity (frozen MainWindowManager.SwitchWindowState): while a
+        // close confirmation transiently force-showed/un-minimized the window
+        // (the frozen owner-less MessageBox leaves it hidden/minimized), the
+        // first ShowGui press shows the window instead of toggling the
+        // transient state back to hidden.
+        if (WindowState == WindowState.Minimized || !IsVisible || IsCloseConfirmTransientPresentation)
         {
             await ShowAndActivateMainWindowAsync(cancellationToken);
             return;
@@ -2660,6 +2812,91 @@ public partial class MainWindow : Window
         WindowState = WindowState.Minimized;
     }
 
+    private async Task ExecuteLinkStartHotkeyAsync(CancellationToken cancellationToken = default)
+    {
+        var vm = VM;
+        if (vm is null)
+        {
+            return;
+        }
+
+        var outcome = await vm.ExecuteLinkStartHotkeyAsync("hotkey-linkstart", cancellationToken);
+        if (outcome == LinkStartHotkeyOutcome.Ignored)
+        {
+            return;
+        }
+
+        await NotifyBackgroundLinkStartToggleAsync(vm, outcome, cancellationToken);
+    }
+
+    // WPF parity (frozen MaaHotKeyActionHandler.HandleLinkStart): the background
+    // start/stop toast is shown only while the main window is minimized. A WPF
+    // window hidden to the tray keeps WindowState.Minimized, so the hidden check
+    // here matches. The frozen WPF close confirmation is an owner-less MessageBox
+    // that never changes window state, so the gate still sees the pre-confirm
+    // minimized/hidden state; Avalonia must force-show the owner for ShowDialog,
+    // so a transient close-confirm presentation (R6/R7) is judged by the logical
+    // pre-confirm state and counts as background, exactly like the R7 ShowGui
+    // hotkey handling.
+    internal static bool ShouldNotifyBackgroundLinkStartToggle(
+        bool isVisible,
+        WindowState windowState,
+        bool isCloseConfirmTransientPresentation)
+        => isCloseConfirmTransientPresentation
+           || !isVisible
+           || windowState == WindowState.Minimized;
+
+    private async Task NotifyBackgroundLinkStartToggleAsync(
+        MainShellViewModel vm,
+        LinkStartHotkeyOutcome outcome,
+        CancellationToken cancellationToken)
+    {
+        if (!ShouldNotifyBackgroundLinkStartToggle(IsVisible, WindowState, IsCloseConfirmTransientPresentation))
+        {
+            return;
+        }
+
+        var key = outcome == LinkStartHotkeyOutcome.Started
+            ? "BackgroundLinkStarted"
+            : "BackgroundLinkStopped";
+        var text = AchievementTextCatalog.GetString(key, vm.CurrentShellLanguage);
+        try
+        {
+            // Mirrors the WPF UseNotify gate: disabled system notifications fall
+            // back to the in-app notification flow instead of dropping the toast.
+            var result = await vm.PlatformCapabilityService.SendSystemNotificationAsync(
+                new SystemNotificationRequest(
+                    text,
+                    string.Empty,
+                    [],
+                    UseSystemNotification: vm.SettingsPage.UseNotify),
+                cancellationToken);
+            if (!result.Success)
+            {
+                await App.Runtime.DiagnosticsService.RecordFailedResultAsync(
+                    "PlatformCapability.HotkeyLinkStart.BackgroundNotify",
+                    result,
+                    cancellationToken);
+            }
+        }
+        catch (Exception ex)
+        {
+            await App.Runtime.DiagnosticsService.RecordErrorAsync(
+                "PlatformCapability.HotkeyLinkStart.BackgroundNotify",
+                "Failed to dispatch the background LinkStart notification.",
+                ex);
+        }
+    }
+
+    // Design decision (Round 9 R9-F1, wontfix-by-design): frozen WPF
+    // normalizes every tray-shown window (WindowManager.ShowWindow sets
+    // WindowState.Normal unconditionally; ForceShow uses SwShownormal), so a
+    // window hidden to the tray while Maximized always comes back Normal.
+    // MAAUnified deliberately preserves the user's chosen window state across a
+    // hide-to-tray/show cycle and only lifts a real OS minimize.
+    internal static bool ShouldNormalizeWindowStateOnShow(WindowState windowState)
+        => windowState == WindowState.Minimized;
+
     private void ShowAndActivateMainWindow()
     {
         RestoreDockIconAfterMinimizeToTray();
@@ -2668,7 +2905,7 @@ public partial class MainWindow : Window
             Show();
         }
 
-        if (WindowState == WindowState.Minimized)
+        if (ShouldNormalizeWindowStateOnShow(WindowState))
         {
             WindowState = WindowState.Normal;
         }
@@ -2679,21 +2916,52 @@ public partial class MainWindow : Window
         Activate();
     }
 
-    private Task ShowAndActivateMainWindowAsync(CancellationToken cancellationToken = default)
+    private async Task ShowAndActivateMainWindowAsync(CancellationToken cancellationToken = default)
     {
+        MarkCloseConfirmPresentationChangedByUser();
         ShowAndActivateMainWindow();
-        return Task.CompletedTask;
+        if (VM is not null)
+        {
+            await VM.SetTrayHideCommandVisibleAsync(true, cancellationToken);
+        }
+
+        FlushPendingInAppNotifications();
+
+        await RestoreTemporaryTrayVisibilityAsync(cancellationToken);
     }
 
-    private void HideMainWindowToTray()
+    private async Task HideMainWindowToTrayCoreAsync(CancellationToken cancellationToken)
     {
         // WPF parity (MainWindowManager.MainWindowStateChanged): minimizing to the tray in WPF
         // always goes through WindowState.Minimized, which starts the AfkWatcher clock. The
         // custom title bar minimize button cancels the state change and hides the window
         // directly, so start the clock here when the WindowState pipeline has not recorded it.
         _minimizedSince = ResolveAfkWatcherMinimizedSince(_minimizedSince, DateTime.Now);
+        _trayTemporarilyVisibleForHiddenMainWindow = VM is { SettingsPage.UseTray: false };
         HideDockIconForMinimizeToTray();
         Hide();
+        if (VM is not null)
+        {
+            await VM.SetTrayHideCommandVisibleAsync(false, cancellationToken);
+        }
+    }
+
+    private async Task RestoreTemporaryTrayVisibilityAsync(CancellationToken cancellationToken = default)
+    {
+        var vm = VM;
+        if (!_trayTemporarilyVisibleForHiddenMainWindow || vm is null)
+        {
+            return;
+        }
+
+        _trayTemporarilyVisibleForHiddenMainWindow = false;
+        if (vm.SettingsPage.UseTray)
+        {
+            return;
+        }
+
+        var trayVisible = await vm.PlatformCapabilityService.SetTrayVisibleAsync(false, cancellationToken);
+        await HandlePlatformResultAsync("PlatformCapability.Tray.RestoreTemporaryHotkeyTray", trayVisible, cancellationToken);
     }
 
     private void HideDockIconForMinimizeToTray()
@@ -2807,6 +3075,14 @@ public partial class MainWindow : Window
             return Task.FromResult(true);
         }
 
+        // Deliberate divergence from frozen WPF (TaskQueueViewModel.ConfirmExit):
+        // WPF gates the exit confirmation on AsstProxy.Running, which flips true
+        // only on the first TaskChainStart, so WPF exits without prompting during
+        // the Connecting phase. TaskQueuePage.IsRunning also covers the
+        // start-request (Connecting) phase, so MAAUnified prompts there as well.
+        // The prompt set is a protective superset of WPF's, and cancelling the
+        // prompt leaves the in-flight connect running (cancellable via Stop).
+        // Recorded as M22 R10-F1 wontfix-by-design.
         return _closeConfirmationService.ConfirmCloseAsync(
             vm.RootTexts,
             vm.CurrentShellLanguage,
@@ -2814,6 +3090,123 @@ public partial class MainWindow : Window
             vm.SettingsPage.IsVersionUpdateActionRunning,
             sourceScope,
             cancellationToken);
+    }
+
+    private async Task<bool> ConfirmTrayCloseAsync(
+        string confirmScope,
+        string source,
+        CancellationToken cancellationToken)
+    {
+        // WPF parity (frozen TaskQueueViewModel.ConfirmExit Closing guard): a
+        // second Exit/Restart request while any close confirmation is pending
+        // is treated as not confirmed instead of queuing another dialog.
+        if (_closeRequestPending || _trayCloseConfirmationPending)
+        {
+            await App.Runtime.DiagnosticsService.RecordEventAsync(
+                confirmScope,
+                $"source={source}; ignored-pending-close-confirmation",
+                cancellationToken);
+            return false;
+        }
+
+        var wasVisible = IsVisible;
+        var previousWindowState = WindowState;
+        _trayCloseConfirmationPending = true;
+        BeginCloseConfirmPresentationTracking(wasVisible, previousWindowState);
+        try
+        {
+            bool confirmed;
+            try
+            {
+                confirmed = await ConfirmCloseAsync(confirmScope, cancellationToken);
+            }
+            catch
+            {
+                // The dialog service may already have transiently force-shown
+                // or un-minimized the owner; restore so the window and the
+                // HideTray tray-menu entry are not stranded in the transient
+                // state.
+                await TryRestorePresentationAfterAbortedCloseConfirmAsync(
+                    wasVisible,
+                    previousWindowState,
+                    confirmScope);
+                throw;
+            }
+
+            if (confirmed)
+            {
+                return true;
+            }
+
+            await App.Runtime.DiagnosticsService.RecordEventAsync(
+                confirmScope,
+                $"source={source}; cancelled",
+                cancellationToken);
+            await RestorePresentationAfterCancelledCloseConfirmAsync(
+                wasVisible,
+                previousWindowState,
+                cancellationToken);
+            return false;
+        }
+        finally
+        {
+            // Release the latch only after the cancel restore so a second tray
+            // Exit/Restart cannot capture the transient force-shown state as
+            // its pre-confirm snapshot.
+            EndCloseConfirmPresentationTracking();
+            _trayCloseConfirmationPending = false;
+        }
+    }
+
+    private async Task RestorePresentationAfterCancelledCloseConfirmAsync(
+        bool wasVisible,
+        WindowState previousWindowState,
+        CancellationToken cancellationToken)
+    {
+        if (_closeConfirmPresentationChangedByUser)
+        {
+            // WPF parity (the frozen owner-less MessageBox never touches the
+            // window): an explicit presentation change during the modal (tray
+            // ForceShow, ShowGui hotkey, minimize-to-tray) persists through a
+            // cancel.
+            return;
+        }
+
+        switch (ResolveCloseConfirmCancelRestore(wasVisible, previousWindowState))
+        {
+            case CloseConfirmCancelRestore.HiddenToTray when IsVisible:
+                // Re-hide so the window and the HideTray tray-menu entry return
+                // to the pre-confirm hidden-to-tray state (the frozen WPF
+                // owner-less MessageBox never unhid them).
+                await HideMainWindowToTrayCoreAsync(cancellationToken);
+                break;
+            case CloseConfirmCancelRestore.Minimized when IsVisible && WindowState != WindowState.Minimized:
+                WindowState = WindowState.Minimized;
+                break;
+            default:
+                break;
+        }
+    }
+
+    private async Task TryRestorePresentationAfterAbortedCloseConfirmAsync(
+        bool wasVisible,
+        WindowState previousWindowState,
+        string sourceScope)
+    {
+        try
+        {
+            await RestorePresentationAfterCancelledCloseConfirmAsync(
+                wasVisible,
+                previousWindowState,
+                CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            await App.Runtime.DiagnosticsService.RecordErrorAsync(
+                sourceScope,
+                "Failed to restore the pre-confirm window presentation after an aborted close confirmation.",
+                ex);
+        }
     }
 
     private async Task<bool> CompleteConfigurationSavesBeforeCloseAsync(
@@ -2992,6 +3385,10 @@ public partial class MainWindow : Window
         DisarmCloseCompletionWatchdog();
         if (vm is not null)
         {
+            // The close requested by a tray Exit/Restart command did not happen;
+            // reopen the command latch so the user can retry the command. (No-op
+            // for window-chrome closes, which never set the latch.)
+            vm.ResetLifecycleCloseInitiated();
             vm.PushGrowl(result.Message);
         }
 

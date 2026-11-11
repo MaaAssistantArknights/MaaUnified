@@ -105,6 +105,8 @@ public sealed class MainShellViewModel : ObservableObject
     private bool _isWindowUpdateOverlayAnimationHidden = true;
     private bool _isShellBlockingOperationOverlayVisible;
     private bool _hasBlockingConfigIssues;
+    private bool _trayHideCommandVisible = true;
+    private bool _lifecycleCloseInitiated;
     private int _blockingConfigIssueCount;
     private SessionState _currentSessionState;
     private string _appliedTheme = "Light";
@@ -1894,10 +1896,46 @@ public sealed class MainShellViewModel : ObservableObject
             cancellationToken);
     }
 
+    // WPF parity (frozen MaaHotKeyActionHandler.HandleLinkStart): the LinkStart
+    // hotkey is a start/stop toggle - while stopping it is a no-op, while idle it
+    // starts, and otherwise (connecting/running) it stops. WPF idle covers both
+    // MAAUnified Idle and Connected (no run in flight). Tray menu Start/Stop keep
+    // their own always-enabled, state-guarded no-op semantics; this toggle applies
+    // to the hotkey dispatch path only.
+    internal static TrayCommandId? ResolveLinkStartHotkeyCommand(SessionState state)
+        => state switch
+        {
+            SessionState.Stopping => null,
+            SessionState.Idle or SessionState.Connected => TrayCommandId.Start,
+            _ => TrayCommandId.Stop,
+        };
+
+    public async Task<LinkStartHotkeyOutcome> ExecuteLinkStartHotkeyAsync(
+        string source,
+        CancellationToken cancellationToken = default)
+    {
+        var state = _runtime.SessionService.CurrentState;
+        var command = ResolveLinkStartHotkeyCommand(state);
+        if (command is null)
+        {
+            await RecordEventAsync(
+                "App.Shell.Tray.LinkStartHotkey",
+                $"source={source}; ignored-state={state}",
+                cancellationToken);
+            return LinkStartHotkeyOutcome.Ignored;
+        }
+
+        await ExecuteTrayCommandAsync(command.Value, source, cancellationToken);
+        return command.Value == TrayCommandId.Start
+            ? LinkStartHotkeyOutcome.Started
+            : LinkStartHotkeyOutcome.Stopped;
+    }
+
     public async Task<ShellUiAction> ExecuteTrayCommandAsync(
         TrayCommandId command,
         string source,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? targetLanguage = null)
     {
         var scope = GetTrayCommandScope(command);
         try
@@ -2008,7 +2046,7 @@ public sealed class MainShellViewModel : ObservableObject
 
                         await RecordEventAsync(
                             scope,
-                            $"source={source}; blocked",
+                            $"source={source}; ignored-state={CurrentSessionState}",
                             cancellationToken);
                         return ShellUiAction.None;
                     }
@@ -2036,13 +2074,36 @@ public sealed class MainShellViewModel : ObservableObject
 
                 case TrayCommandId.Stop:
                     CurrentSessionState = _runtime.SessionService.CurrentState;
-                    if (!CanStopExecution)
+                    // WPF ManualStop returns only when already stopping or idle; Connected
+                    // (no run in flight) maps to WPF idle, so it is a no-op as well.
+                    if (CurrentSessionState is SessionState.Idle or SessionState.Connected or SessionState.Stopping)
                     {
-                        var blockedStopMessage = BuildStopStateNotAllowedMessage(CurrentSessionState);
-                        PushGrowl(blockedStopMessage);
                         await RecordEventAsync(
                             scope,
-                            $"source={source}; blocked",
+                            $"source={source}; ignored-state={CurrentSessionState}",
+                            cancellationToken);
+                        return ShellUiAction.None;
+                    }
+
+                    if (CurrentSessionState == SessionState.Connecting)
+                    {
+                        // WPF ManualStop cancels an in-flight connect; the feature service
+                        // supersedes the pending connect and settles the session to Idle.
+                        var cancelConnectResult = await _runtime.ConnectFeatureService.StopAsync(cancellationToken);
+                        CurrentSessionState = _runtime.SessionService.CurrentState;
+                        await SyncTrayMenuStateAsync(cancellationToken);
+                        if (!cancelConnectResult.Success)
+                        {
+                            LastError = cancelConnectResult.Message;
+                            await RecordFailedResultAsync(scope, cancelConnectResult, cancellationToken);
+                            PushGrowl(cancelConnectResult.Message);
+                            return ShellUiAction.None;
+                        }
+
+                        PushGrowl("停止执行");
+                        await RecordEventAsync(
+                            scope,
+                            $"source={source}; cancel-connecting; session={CurrentSessionState}",
                             cancellationToken);
                         return ShellUiAction.None;
                     }
@@ -2083,15 +2144,36 @@ public sealed class MainShellViewModel : ObservableObject
                     return ShellUiAction.None;
 
                 case TrayCommandId.SwitchLanguage:
-                    // The tray cycle-language command is kept reserved for compatibility,
-                    // but the tray menu no longer exposes or dispatches it.
-                    await RecordEventAsync(
-                        scope,
-                        $"source={source}; disabled",
-                        cancellationToken);
+                    if (string.IsNullOrWhiteSpace(targetLanguage))
+                    {
+                        await RecordEventAsync(
+                            scope,
+                            $"source={source}; ignored-without-target",
+                            cancellationToken);
+                        return ShellUiAction.None;
+                    }
+
+                    await ExecuteTrayLanguageSwitchAsync(targetLanguage, source, cancellationToken);
                     return ShellUiAction.None;
 
                 case TrayCommandId.Exit:
+                    // WPF parity (frozen TaskQueueViewModel.ConfirmExit): on the
+                    // idle path the !Running early return never resets Closing, so
+                    // repeat Exit/Restart clicks during shutdown are inert there.
+                    // The dialog-passed path diverges by design: WPF's App_restart
+                    // can still set the restart flag before OnExit reads it (a
+                    // sub-second, racy window), while this latch keeps
+                    // first-intent-wins - recorded as M22 R13-F2 wontfix-by-design.
+                    if (_lifecycleCloseInitiated)
+                    {
+                        await RecordEventAsync(
+                            scope,
+                            $"source={source}; ignored-lifecycle-close-initiated",
+                            cancellationToken);
+                        return ShellUiAction.None;
+                    }
+
+                    _lifecycleCloseInitiated = true;
                     await RecordEventAsync(
                         scope,
                         $"source={source}; close",
@@ -2099,9 +2181,29 @@ public sealed class MainShellViewModel : ObservableObject
                     return ShellUiAction.CloseMainWindow;
 
                 case TrayCommandId.Restart:
+                    // WPF parity: the frozen bootstrapper starts the successor exactly
+                    // once at the end of OnExit, so a repeat Restart command before the
+                    // process finishes exiting must not reach the lifecycle service
+                    // again (a second spawn would race the single-instance mutex).
+                    // Restart-after-Exit is likewise inert here; frozen WPF can honor
+                    // it only in the dialog-passed case (see the Exit case, M22 R13-F2
+                    // wontfix-by-design).
+                    if (_lifecycleCloseInitiated)
+                    {
+                        await RecordEventAsync(
+                            scope,
+                            $"source={source}; ignored-lifecycle-close-initiated",
+                            cancellationToken);
+                        return ShellUiAction.None;
+                    }
+
+                    _lifecycleCloseInitiated = true;
                     var restartResult = await _runtime.AppLifecycleService.RestartAsync(cancellationToken);
                     if (!await ApplyResultAsync(restartResult, scope, cancellationToken))
                     {
+                        // The spawn failed and the app keeps running; reopen the latch
+                        // so the user can retry the Restart command.
+                        _lifecycleCloseInitiated = false;
                         PushGrowl(restartResult.Message);
                         return ShellUiAction.None;
                     }
@@ -4122,6 +4224,17 @@ public sealed class MainShellViewModel : ObservableObject
         PushGrowl(result.Message);
     }
 
+    public async Task SetTrayHideCommandVisibleAsync(bool visible, CancellationToken cancellationToken = default)
+    {
+        if (_trayHideCommandVisible == visible)
+        {
+            return;
+        }
+
+        _trayHideCommandVisible = visible;
+        await SyncTrayMenuStateAsync(cancellationToken);
+    }
+
     public async Task ToggleOverlayFromTrayAsync(CancellationToken cancellationToken = default)
     {
         var scope = "App.Shell.Tray.ToggleOverlay";
@@ -4853,11 +4966,12 @@ public sealed class MainShellViewModel : ObservableObject
     {
         CurrentSessionState = _runtime.SessionService.CurrentState;
         var state = new TrayMenuState(
-            StartEnabled: CanStartExecution,
-            StopEnabled: CanStopExecution,
+            StartEnabled: true,
+            StopEnabled: true,
             OverlayEnabled: true,
             ForceShowEnabled: true,
-            HideTrayEnabled: true);
+            HideTrayEnabled: true,
+            HideTrayVisible: _trayHideCommandVisible);
         var result = await _runtime.PlatformCapabilityService.SetTrayMenuStateAsync(state, cancellationToken);
         if (!result.Success)
         {
@@ -4868,6 +4982,16 @@ public sealed class MainShellViewModel : ObservableObject
                 result,
                 cancellationToken);
         }
+    }
+
+    /// <summary>
+    /// Reopens the tray Exit/Restart latch when the close requested by the
+    /// command failed (the window and process keep running), so the user can
+    /// retry the command. Called by the view layer's exit failure path.
+    /// </summary>
+    public void ResetLifecycleCloseInitiated()
+    {
+        _lifecycleCloseInitiated = false;
     }
 
     private static string GetTrayCommandScope(TrayCommandId command)
@@ -4969,6 +5093,13 @@ public enum ShellUiAction
     None = 0,
     ShowMainWindow = 1,
     CloseMainWindow = 2,
+}
+
+public enum LinkStartHotkeyOutcome
+{
+    Ignored = 0,
+    Started = 1,
+    Stopped = 2,
 }
 
 public sealed class ConfigIssueDetailItem

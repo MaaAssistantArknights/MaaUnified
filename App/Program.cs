@@ -66,6 +66,13 @@ internal static class Program
         }
 
         using var heldInstanceGuard = instanceGuard;
+        // Expose the held guard so the restart flow can release it before
+        // spawning the successor process (WPF OnExit Release-then-spawn order).
+        if (instanceGuard is not null)
+        {
+            PackageInstanceGuard.AdoptProcessWideGuard(instanceGuard);
+        }
+
         var macSeedResult = MacAppRuntimeSeed.EnsureSeeded(AppContext.BaseDirectory, runtimeBaseDirectory);
         if (macSeedResult.Status == MacAppRuntimeSeedStatus.Ready)
         {

@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Platform;
+using Avalonia.Threading;
 using MAAUnified.App.Controls;
 using MAAUnified.App.Infrastructure;
 using MAAUnified.Platform;
@@ -14,13 +15,77 @@ public abstract record TrayContextMenuEntry;
 public sealed record TrayContextMenuItemEntry(
     string Header,
     TrayCommandId Command,
-    bool IsEnabled) : TrayContextMenuEntry;
+    bool IsEnabled,
+    string? TargetLanguage = null) : TrayContextMenuEntry;
+
+public sealed record TrayContextMenuSubmenuEntry(
+    string Header,
+    IReadOnlyList<TrayContextMenuItemEntry> Items) : TrayContextMenuEntry;
 
 public sealed record TrayContextMenuSeparatorEntry() : TrayContextMenuEntry;
 
-public sealed class TrayContextMenuCommandInvokedEventArgs(TrayCommandId command) : EventArgs
+public sealed class TrayContextMenuCommandInvokedEventArgs(TrayCommandId command, string? targetLanguage = null) : EventArgs
 {
     public TrayCommandId Command { get; } = command;
+
+    public string? TargetLanguage { get; } = targetLanguage;
+}
+
+public static class TrayContextMenuEntryBuilder
+{
+    // Mirrors the WPF NotifyIcon menu layout: Start, Stop, a SwitchLanguage submenu,
+    // ForceShow, HideTray (only while the main window is visible), ToggleOverlay,
+    // Restart, Exit. Start and Stop are always enabled; MainShellViewModel turns
+    // state-illegal invocations into silent no-ops, matching WPF LinkStart/ManualStop.
+    public static IReadOnlyList<TrayContextMenuEntry> Build(TrayMenuText text, bool mainWindowVisible)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+
+        var entries = new List<TrayContextMenuEntry>
+        {
+            new TrayContextMenuItemEntry(text.Start, TrayCommandId.Start, IsEnabled: true),
+            new TrayContextMenuItemEntry(text.Stop, TrayCommandId.Stop, IsEnabled: true),
+        };
+
+        var languageItems = (text.LanguageItems ?? [])
+            .Where(static item => !string.IsNullOrWhiteSpace(item.Language))
+            .Select(static item => new TrayContextMenuItemEntry(
+                string.IsNullOrWhiteSpace(item.Text) ? item.Language : item.Text,
+                TrayCommandId.SwitchLanguage,
+                IsEnabled: true,
+                TargetLanguage: item.Language))
+            .ToArray();
+        if (languageItems.Length > 0)
+        {
+            entries.Add(new TrayContextMenuSubmenuEntry(text.SwitchLanguage, languageItems));
+        }
+
+        entries.Add(new TrayContextMenuItemEntry(text.ForceShow, TrayCommandId.ForceShow, IsEnabled: true));
+        if (mainWindowVisible)
+        {
+            entries.Add(new TrayContextMenuItemEntry(text.HideTray, TrayCommandId.HideTray, IsEnabled: true));
+        }
+
+        entries.Add(new TrayContextMenuItemEntry(text.ToggleOverlay, TrayCommandId.ToggleOverlay, IsEnabled: true));
+        entries.Add(new TrayContextMenuItemEntry(text.Restart, TrayCommandId.Restart, IsEnabled: true));
+        entries.Add(new TrayContextMenuItemEntry(text.Exit, TrayCommandId.Exit, IsEnabled: true));
+        return entries;
+    }
+
+    public static AppMenuEntry ToAppMenuEntry(TrayContextMenuEntry entry)
+        => entry switch
+        {
+            TrayContextMenuItemEntry item => new AppMenuActionItem(
+                item.Header,
+                item.Command,
+                Parameter: item.TargetLanguage,
+                IsEnabled: item.IsEnabled),
+            TrayContextMenuSubmenuEntry submenu => new AppMenuSubmenuItem(
+                submenu.Header,
+                submenu.Items.Select(static item => (AppMenuEntry)ToAppMenuEntry(item)).ToArray()),
+            TrayContextMenuSeparatorEntry => new AppMenuSeparatorEntry(),
+            _ => throw new InvalidOperationException($"Unsupported tray context menu entry: {entry.GetType().FullName}"),
+        };
 }
 
 public partial class TrayContextMenuWindow : Window
@@ -67,12 +132,7 @@ public partial class TrayContextMenuWindow : Window
 
     public void SetEntries(IReadOnlyList<TrayContextMenuEntry> entries)
     {
-        MenuPresenter.Items = entries.Select<TrayContextMenuEntry, AppMenuEntry>(static entry => entry switch
-        {
-            TrayContextMenuItemEntry item => new AppMenuActionItem(item.Header, item.Command, IsEnabled: item.IsEnabled),
-            TrayContextMenuSeparatorEntry => new AppMenuSeparatorEntry(),
-            _ => throw new InvalidOperationException($"Unsupported tray context menu entry: {entry.GetType().FullName}"),
-        }).ToArray();
+        MenuPresenter.Items = entries.Select(static entry => TrayContextMenuEntryBuilder.ToAppMenuEntry(entry)).ToArray();
     }
 
     public void OpenAt(PixelPoint anchorPosition)
@@ -130,6 +190,15 @@ public partial class TrayContextMenuWindow : Window
         Close();
     }
 
+    private void OnSubmenuInvoked(object? sender, AppMenuSubmenuInvokedEventArgs e)
+    {
+        SubmenuPresenter.Items = e.Item.Items;
+        SubmenuPresenter.IsVisible = true;
+
+        // The window grows horizontally for the submenu; re-clamp inside the working area.
+        Dispatcher.UIThread.Post(PositionWithinWorkingArea);
+    }
+
     private void OnMenuItemInvoked(object? sender, AppMenuItemInvokedEventArgs e)
     {
         if (e.Command is not TrayCommandId command)
@@ -137,7 +206,7 @@ public partial class TrayContextMenuWindow : Window
             return;
         }
 
-        CommandInvoked?.Invoke(this, new TrayContextMenuCommandInvokedEventArgs(command));
+        CommandInvoked?.Invoke(this, new TrayContextMenuCommandInvokedEventArgs(command, e.Parameter as string));
     }
 
     private void PositionWithinWorkingArea()
