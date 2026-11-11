@@ -24,13 +24,32 @@
       "items": {
         "type": "object",
         "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "NotExecuted",
+              "Passed",
+              "Failed",
+              "Blocked"
+            ]
+          },
+          "execution_evidence": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "waiver": {
             "$ref": "#/$defs/waiver"
           },
           "waiver_scope": {
             "$ref": "#/$defs/waiver_scope"
           }
-        }
+        },
+        "required": [
+          "status",
+          "execution_evidence"
+        ]
       }
     }
   },

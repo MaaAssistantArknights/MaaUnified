@@ -423,7 +423,7 @@ public sealed class AdvancedModuleP2FeatureTests
         Assert.False(string.IsNullOrWhiteSpace(stageManager.ClientType));
         Assert.NotEmpty(providers.Providers);
         Assert.False(string.IsNullOrWhiteSpace(providers.SelectedProvider));
-        Assert.Equal(5000, remoteControl.PollIntervalMs);
+        Assert.Equal(1000, remoteControl.PollIntervalMs);
         Assert.False(string.IsNullOrWhiteSpace(tray.CapabilitySummary));
         Assert.NotEmpty(overlay.Targets);
         Assert.NotNull(overlay.SelectedTarget);

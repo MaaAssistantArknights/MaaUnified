@@ -12,6 +12,16 @@ public static class BaselineConstants
         "Gap",
         "Waived",
     ];
+
+    public const string AcceptanceStatusNotExecuted = "NotExecuted";
+
+    public static readonly string[] AllowedAcceptanceStatus =
+    [
+        AcceptanceStatusNotExecuted,
+        "Passed",
+        "Failed",
+        "Blocked",
+    ];
 }
 
 public sealed record BaselineFreeze
@@ -63,6 +73,15 @@ public sealed record BaselineMetadata
 
     [JsonPropertyName("config_key_count")]
     public int ConfigKeyCount { get; init; }
+
+    [JsonPropertyName("wpf_config_key_count")]
+    public int WpfConfigKeyCount { get; init; }
+
+    [JsonPropertyName("avalonia_extension_config_key_count")]
+    public int AvaloniaExtensionConfigKeyCount { get; init; }
+
+    [JsonPropertyName("wpf_config_key_set_sha256")]
+    public string WpfConfigKeySetSha256 { get; init; } = string.Empty;
 
     [JsonPropertyName("fallback_record_count")]
     public int FallbackRecordCount { get; init; }
@@ -195,6 +214,12 @@ public sealed record ConfigKeyMappingSpec
 
     [JsonPropertyName("mapping_target")]
     public string? MappingTarget { get; init; }
+
+    [JsonPropertyName("read_path")]
+    public string? ReadPath { get; init; }
+
+    [JsonPropertyName("write_path")]
+    public string? WritePath { get; init; }
 
     [JsonPropertyName("notes")]
     public string Notes { get; init; } = string.Empty;
@@ -390,4 +415,14 @@ public sealed record AcceptanceCaseSpec
 
     [JsonPropertyName("requires_fallback_trace")]
     public bool RequiresFallbackTrace { get; init; }
+
+    // M01-R5-04: both honesty fields are required so a missing field fails loudly instead of
+    // silently deserializing to the honest-looking NotExecuted default.
+    [JsonPropertyName("status")]
+    [JsonRequired]
+    public string Status { get; init; } = BaselineConstants.AcceptanceStatusNotExecuted;
+
+    [JsonPropertyName("execution_evidence")]
+    [JsonRequired]
+    public string? ExecutionEvidence { get; init; }
 }

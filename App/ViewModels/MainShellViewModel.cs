@@ -109,8 +109,8 @@ public sealed class MainShellViewModel : ObservableObject
         OperatingSystem.IsWindows(),
         OperatingSystem.IsMacOS());
     private Bitmap? _shellBackgroundImage;
-    private double _shellBackgroundOpacity = 0.45;
-    private int _shellBackgroundBlur = 12;
+    private double _shellBackgroundOpacity = 0.50;
+    private int _shellBackgroundBlur = 5;
     private Stretch _shellBackgroundStretch = Stretch.UniformToFill;
     private bool _schemaMigrationNoticeShown;
     private StartupShellSnapshot _startupSnapshot = StartupShellSnapshot.Default;

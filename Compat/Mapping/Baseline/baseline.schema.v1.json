@@ -11,7 +11,8 @@
     "locales",
     "items",
     "config_key_mappings",
-    "fallback_capabilities"
+    "fallback_capabilities",
+    "metadata"
   ],
   "properties": {
     "schema_version": {
@@ -53,7 +54,33 @@
       "type": "array",
       "items": {
         "type": "object",
+        "required": [
+          "key",
+          "owner_item_id",
+          "parity_status",
+          "priority",
+          "notes",
+          "evidence"
+        ],
         "properties": {
+          "mapping_target": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "read_path": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "write_path": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "waiver": {
             "$ref": "#/$defs/waiver"
           }
@@ -71,6 +98,32 @@
           "waiver_scope": {
             "$ref": "#/$defs/waiver_scope"
           }
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "required": [
+        "feature_item_count",
+        "system_item_count",
+        "config_key_count",
+        "wpf_config_key_count",
+        "avalonia_extension_config_key_count",
+        "wpf_config_key_set_sha256",
+        "fallback_record_count"
+      ],
+      "properties": {
+        "wpf_config_key_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "avalonia_extension_config_key_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "wpf_config_key_set_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
         }
       }
     }

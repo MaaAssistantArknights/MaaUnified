@@ -48,8 +48,8 @@ public sealed record StartupShellSnapshot(
         UseSoftwareRendering: false,
         LogItemDateFormatString: DefaultLogItemDateFormat,
         BackgroundImagePath: string.Empty,
-        BackgroundOpacity: 45,
-        BackgroundBlur: 12,
+        BackgroundOpacity: 50,
+        BackgroundBlur: 5,
         BackgroundStretchMode: DefaultBackgroundStretchMode,
         HotkeyShowGui: HotkeyConfigurationCodec.DefaultHotkeyShowGui,
         HotkeyLinkStart: HotkeyConfigurationCodec.DefaultHotkeyLinkStart);

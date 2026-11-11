@@ -13,8 +13,8 @@
 - Fallback records: `15`
 
 ## Feature Parity
-- Aligned: `38`
-- Gap: `0`
+- Aligned: `19`
+- Gap: `19`
 - Waived: `0`
 
 | Item ID | Group | Parity | Avalonia Path |
@@ -24,32 +24,32 @@
 | `Settings.About` | Settings | Aligned | `App/Features/Settings/AboutSettingsView.axaml` |
 | `Settings.Achievement` | Settings | Aligned | `App/Features/Settings/AchievementSettingsView.axaml` |
 | `Settings.Background` | Settings | Aligned | `App/Features/Settings/BackgroundSettingsView.axaml` |
-| `Settings.ConfigurationManager` | Settings | Aligned | `App/Features/Settings/ConfigurationManagerView.axaml` |
-| `Settings.Connect` | Settings | Aligned | `App/Features/Settings/ConnectSettingsView.axaml` |
-| `Settings.ExternalNotification` | Settings | Aligned | `App/Features/Settings/ExternalNotificationSettingsView.axaml` |
-| `Settings.Game` | Settings | Aligned | `App/Features/Settings/GameSettingsView.axaml` |
-| `Settings.Gui` | Settings | Aligned | `App/Features/Settings/GuiSettingsView.axaml` |
+| `Settings.ConfigurationManager` | Settings | Gap | `App/Features/Settings/ConfigurationManagerView.axaml` |
+| `Settings.Connect` | Settings | Gap | `App/Features/Settings/ConnectSettingsView.axaml` |
+| `Settings.ExternalNotification` | Settings | Gap | `App/Features/Settings/ExternalNotificationSettingsView.axaml` |
+| `Settings.Game` | Settings | Gap | `App/Features/Settings/GameSettingsView.axaml` |
+| `Settings.Gui` | Settings | Gap | `App/Features/Settings/GuiSettingsView.axaml` |
 | `Settings.HotKey` | Settings | Aligned | `App/Features/Settings/HotKeySettingsView.axaml` |
 | `Settings.IssueReport` | Settings | Aligned | `App/Features/Settings/IssueReportView.axaml` |
-| `Settings.Performance` | Settings | Aligned | `App/Features/Settings/PerformanceSettingsView.axaml` |
-| `Settings.RemoteControl` | Settings | Aligned | `App/Features/Settings/RemoteControlSettingsView.axaml` |
-| `Settings.Start` | Settings | Aligned | `App/Features/Settings/StartSettingsView.axaml` |
-| `Settings.Timer` | Settings | Aligned | `App/Features/Settings/TimerSettingsView.axaml` |
+| `Settings.Performance` | Settings | Gap | `App/Features/Settings/PerformanceSettingsView.axaml` |
+| `Settings.RemoteControl` | Settings | Gap | `App/Features/Settings/RemoteControlSettingsView.axaml` |
+| `Settings.Start` | Settings | Gap | `App/Features/Settings/StartSettingsView.axaml` |
+| `Settings.Timer` | Settings | Gap | `App/Features/Settings/TimerSettingsView.axaml` |
 | `Settings.VersionUpdate` | Settings | Aligned | `App/Features/Settings/VersionUpdateSettingsView.axaml` |
 | `Task.StartUp` | TaskQueue | Aligned | `App/Features/TaskQueue/StartUpTaskView.axaml` |
-| `Task.Fight` | TaskQueue | Aligned | `App/Features/TaskQueue/FightSettingsView.axaml` |
-| `Task.Recruit` | TaskQueue | Aligned | `App/Features/TaskQueue/RecruitSettingsView.axaml` |
-| `Task.Infrast` | TaskQueue | Aligned | `App/Features/TaskQueue/InfrastSettingsView.axaml` |
-| `Task.Mall` | TaskQueue | Aligned | `App/Features/TaskQueue/MallSettingsView.axaml` |
-| `Task.Award` | TaskQueue | Aligned | `App/Features/TaskQueue/AwardSettingsView.axaml` |
-| `Task.Roguelike` | TaskQueue | Aligned | `App/Features/TaskQueue/RoguelikeSettingsView.axaml` |
-| `Task.Reclamation` | TaskQueue | Aligned | `App/Features/TaskQueue/ReclamationSettingsView.axaml` |
+| `Task.Fight` | TaskQueue | Gap | `App/Features/TaskQueue/FightSettingsView.axaml` |
+| `Task.Recruit` | TaskQueue | Gap | `App/Features/TaskQueue/RecruitSettingsView.axaml` |
+| `Task.Infrast` | TaskQueue | Gap | `App/Features/TaskQueue/InfrastSettingsView.axaml` |
+| `Task.Mall` | TaskQueue | Gap | `App/Features/TaskQueue/MallSettingsView.axaml` |
+| `Task.Award` | TaskQueue | Gap | `App/Features/TaskQueue/AwardSettingsView.axaml` |
+| `Task.Roguelike` | TaskQueue | Gap | `App/Features/TaskQueue/RoguelikeSettingsView.axaml` |
+| `Task.Reclamation` | TaskQueue | Gap | `App/Features/TaskQueue/ReclamationSettingsView.axaml` |
 | `Task.Custom` | TaskQueue | Aligned | `App/Features/TaskQueue/CustomSettingsView.axaml` |
 | `Task.PostAction` | TaskQueue | Aligned | `App/Features/TaskQueue/PostActionSettingsView.axaml` |
 | `Advanced.Copilot` | Advanced | Aligned | `App/Features/Advanced/CopilotView.axaml` |
-| `Advanced.Toolbox` | Advanced | Aligned | `App/Features/Advanced/ToolboxView.axaml` |
-| `Advanced.StageManager` | Advanced | Aligned | `App/Features/Advanced/StageManagerView.axaml` |
-| `Advanced.WebApi` | Advanced | Aligned | `App/Features/Advanced/WebApiView.axaml` |
+| `Advanced.Toolbox` | Advanced | Gap | `App/Features/Advanced/ToolboxView.axaml` |
+| `Advanced.StageManager` | Advanced | Gap | `App/Features/Advanced/StageManagerView.axaml` |
+| `Advanced.WebApi` | Advanced | Gap | `App/Features/Advanced/WebApiView.axaml` |
 | `Dialog.Announcement` | Dialogs | Aligned | `App/Features/Dialogs/AnnouncementDialogView.axaml` |
 | `Dialog.VersionUpdate` | Dialogs | Aligned | `App/Features/Dialogs/VersionUpdateDialogView.axaml` |
 | `Dialog.ProcessPicker` | Dialogs | Aligned | `App/Features/Dialogs/ProcessPickerDialogView.axaml` |
@@ -70,13 +70,13 @@
 | `System.TrayMenu.ToggleOverlay` | Aligned | `App/Views/MainWindow.axaml` |
 | `System.TrayMenu.Restart` | Aligned | `App/Views/MainWindow.axaml` |
 | `System.TrayMenu.Exit` | Aligned | `App/Views/MainWindow.axaml` |
-| `System.CapabilitySummary` | Aligned | `App/Views/MainWindow.axaml` |
+| `System.TrayMenu.SwitchLanguage` | Gap | `App/ViewModels/MainShellViewModel.cs` |
 | `System.GlobalErrorChannel` | Aligned | `App/Views/MainWindow.axaml` |
 | `System.PageErrorChannel` | Aligned | `App/ViewModels/Infrastructure/PageViewModelBase.cs` |
 
 ## Config Key Mapping Summary
-- Aligned: `300`
-- Gap: `0`
+- Aligned: `58`
+- Gap: `242`
 - Waived: `0`
 
 ### Aligned Config Keys
@@ -85,54 +85,38 @@
 - `Announcement.AnnouncementInfo` -> `AnnouncementState`
 - `Announcement.DoNotRemindThisAnnouncementAgain` -> `AnnouncementState`
 - `Announcement.DoNotShowAnnouncement` -> `AnnouncementState`
-- `Bluestacks.Config.Error` -> `UnifiedConfigurationService.CurrentConfig.GlobalValues[Bluestacks.Config.Error]`
-- `Bluestacks.Config.Keyword` -> `UnifiedConfigurationService.CurrentConfig.GlobalValues[Bluestacks.Config.Keyword]`
-- `Bluestacks.Config.Path` -> `UnifiedConfigurationService.CurrentConfig.GlobalValues[Bluestacks.Config.Path]`
-- `Configurations` -> `UnifiedConfigurationService.CurrentConfig.GlobalValues[Configurations]`
-- `Copilot.AddUserAdditional` -> `Copilot settings bridge`
-- `Copilot.CopilotTaskList` -> `Copilot settings bridge`
-- `Copilot.LoopTimes` -> `Copilot settings bridge`
-- `Copilot.SelectFormation` -> `Copilot settings bridge`
-- `Copilot.SupportUnitUsage` -> `Copilot settings bridge`
-- `Copilot.UserAdditional` -> `Copilot settings bridge`
-- `Cron` -> `UnifiedConfigurationService.CurrentConfig.GlobalValues[Cron]`
-- `Current` -> `UnifiedConfigurationService.CurrentConfig.GlobalValues[Current]`
-- `Data` -> `UnifiedConfigurationService.CurrentConfig.GlobalValues[Data]`
-- `Debug.TaskName` -> `UnifiedConfigurationService.CurrentConfig.GlobalValues[Debug.TaskName]`
-- `Default` -> `UnifiedConfigurationService.CurrentConfig.GlobalValues[Default]`
-- `Depot.DepotResult` -> `UnifiedConfigurationService.CurrentConfig.GlobalValues[Depot.DepotResult]`
+- `Configurations` -> `UnifiedConfig.Profiles`
+- `Copilot.AddUserAdditional` -> `CopilotPageViewModel.AddUserAdditional`
+- `Copilot.CopilotTaskList` -> `CopilotPageViewModel.Items`
+- `Copilot.LoopTimes` -> `CopilotPageViewModel.LoopTimes`
+- `Copilot.SelectFormation` -> `CopilotPageViewModel.FormationIndex`
+- `Copilot.SupportUnitUsage` -> `CopilotPageViewModel.SupportUnitUsage`
+- `Copilot.UserAdditional` -> `CopilotPageViewModel.UserAdditional`
+- `Current` -> `UnifiedConfig.CurrentProfile`
+- `Default` -> `UnifiedConfig.Profiles[Default]`
+- `Depot.DepotResult` -> `ToolboxPageViewModel.DepotResult`
 - `GUI.Background.BlurEffectRadius` -> `SettingsPageViewModel.BackgroundBlur`
 - `GUI.Background.ImagePath` -> `SettingsPageViewModel.BackgroundImagePath`
 - `GUI.Background.Opacity` -> `SettingsPageViewModel.BackgroundOpacity`
-- `GUI.IgnoreBadModulesAndUseSoftwareRendering` -> `SettingsPageViewModel.UseSoftwareRendering`
-- `GUI.Localization` -> `SettingsPageViewModel.Language`
-- `GUI.MinimizeToTray` -> `SettingsPageViewModel.MinimizeToTray`
-- `GUI.UiScalePercent` -> `SettingsPageViewModel.UiScalePercent`
-- `GUI.UseNotify` -> `SettingsPageViewModel.UseNotify`
-- `GUI.UseTray` -> `SettingsPageViewModel.UseTray`
-- `GUI.WindowTitleScrollable` -> `SettingsPageViewModel.WindowTitleScrollable`
-- `Gacha.ShowDisclaimerNoMore` -> `UnifiedConfigurationService.CurrentConfig.GlobalValues[Gacha.ShowDisclaimerNoMore]`
-- `Global` -> `UnifiedConfigurationService.CurrentConfig.GlobalValues[Global]`
-- `Guide.StepIndex` -> `UnifiedConfigurationService.CurrentConfig.GlobalValues[Guide.StepIndex]`
-- `HotKeys` -> `UnifiedConfigurationService.CurrentConfig.GlobalValues[HotKeys]`
-- `MiniGame.SecretFrontEnding` -> `Toolbox settings bridge`
-- `MiniGame.SecretFrontEvent` -> `Toolbox settings bridge`
-- `MiniGame.TaskName` -> `Toolbox settings bridge`
-- `OperBox.Data` -> `UnifiedConfigurationService.CurrentConfig.GlobalValues[OperBox.Data]`
+- `GUI.Background.StretchMode` -> `SettingsPageViewModel.BackgroundStretchMode`
+- `Gacha.ShowDisclaimerNoMore` -> `ToolboxPageViewModel.GachaShowDisclaimerNoMore`
+- `Global` -> `UnifiedConfig.GlobalValues`
+- `HotKeys` -> `UnifiedConfig.GlobalValues[HotKeys]`
+- `MainFunction.PostActions` -> `PostActionFeatureService.LoadAsync`
+- `MiniGame.SecretFrontEnding` -> `ToolboxPageViewModel.MiniGameSecretFrontEnding`
+- `MiniGame.SecretFrontEvent` -> `ToolboxPageViewModel.MiniGameSecretFrontEvent`
+- `MiniGame.TaskName` -> `ToolboxPageViewModel.MiniGameTaskName`
+- `OperBox.Data` -> `ToolboxPageViewModel.OperBoxHaveList`
 - `Overlay.PreviewPinned` -> `OverlayTargetPersistence.LoadPreviewPreference`
-- `Overlay.Target` -> `OverlayAdvancedPageViewModel.SelectedTarget`
-- `Peep.TargetFps` -> `UnifiedConfigurationService.CurrentConfig.GlobalValues[Peep.TargetFps]`
-- `Penguin.EnablePenguin` -> `UnifiedConfigurationService.CurrentConfig.GlobalValues[Penguin.EnablePenguin]`
-- `Penguin.Id` -> `UnifiedConfigurationService.CurrentConfig.GlobalValues[Penguin.Id]`
-- `Penguin.IsDrGrandet` -> `UnifiedConfigurationService.CurrentConfig.GlobalValues[Penguin.IsDrGrandet]`
-- `RemoteControl.RemoteControlGetTaskEndpointUri` -> `SettingsPageViewModel.RemoteGetTaskEndpoint`
-- `RemoteControl.RemoteControlPollIntervalMs` -> `SettingsPageViewModel.RemotePollInterval`
-- `RemoteControl.RemoteControlReportStatusUri` -> `SettingsPageViewModel.RemoteReportEndpoint`
-- `TimeOut.Timer.ReminderIntervalMinutes` -> `UnifiedConfigurationService.CurrentConfig.GlobalValues[TimeOut.Timer.ReminderIntervalMinutes]`
-- `TimeOut.Timer.TaskTimeoutMinutes` -> `UnifiedConfigurationService.CurrentConfig.GlobalValues[TimeOut.Timer.TaskTimeoutMinutes]`
-- `Toolbox.Recruit.ChooseLevel3.Time` -> `Toolbox settings bridge`
-- `Toolbox.Recruit.ChooseLevel4.Time` -> `Toolbox settings bridge`
-- `Toolbox.Recruit.ChooseLevel5.Time` -> `Toolbox settings bridge`
+- `Overlay.Target` -> `OverlayTargetPersistence.Load`
+- `Peep.TargetFps` -> `ToolboxPageViewModel.PeepTargetFps`
+- `Penguin.EnablePenguin` -> `SettingsPageViewModel.EnablePenguin`
+- `Penguin.Id` -> `SettingsPageViewModel.PenguinId`
+- `Penguin.IsDrGrandet` -> `UnifiedTaskItem.Params[IsDrGrandet]`
+- `TimeOut.Timer.ReminderIntervalMinutes` -> `SettingsPageViewModel.ReminderIntervalMinutes`
+- `Toolbox.Recruit.ChooseLevel3.Time` -> `ToolboxPageViewModel.RecruitLevel3Time`
+- `Toolbox.Recruit.ChooseLevel4.Time` -> `ToolboxPageViewModel.RecruitLevel4Time`
+- `Toolbox.Recruit.ChooseLevel5.Time` -> `ToolboxPageViewModel.RecruitLevel5Time`
 - `VersionUpdate.AllowNightlyUpdates` -> `VersionUpdatePolicy`
 - `VersionUpdate.AutoDownloadUpdatePackage` -> `VersionUpdatePolicy`
 - `VersionUpdate.AutoInstallUpdatePackage` -> `VersionUpdatePolicy`
@@ -153,7 +137,7 @@
 - `VersionUpdate.isfirstboot` -> `VersionUpdatePolicy`
 - `VersionUpdate.name` -> `VersionUpdatePolicy`
 - `VersionUpdate.package` -> `VersionUpdatePolicy`
-- `Yituliu.EnableYituliu` -> `UnifiedConfigurationService.CurrentConfig.GlobalValues[Yituliu.EnableYituliu]`
+- `Yituliu.EnableYituliu` -> `SettingsPageViewModel.EnableYituliu`
 
 ## Waiver Entries
 - None
@@ -163,20 +147,21 @@
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Tray | windows | full | full | Aligned | True | True | True |
 | Tray | macos | full | full | Aligned | True | True | True |
-| Tray | linux | degrade-visible | fallback | Aligned | True | True | True |
+| Tray | linux | degrade-visible | conditional-native-with-fallback | Aligned | True | True | True |
 | Notification | windows | full | full | Aligned | True | True | True |
-| Notification | macos | degrade-visible | fallback | Aligned | True | True | True |
-| Notification | linux | degrade-visible | fallback | Aligned | True | True | True |
+| Notification | macos | degrade-visible | conditional-native-with-fallback | Aligned | True | True | True |
+| Notification | linux | degrade-visible | conditional-native-with-fallback | Aligned | True | True | True |
 | Hotkey | windows | full | full | Aligned | True | True | True |
-| Hotkey | macos | degrade-visible | fallback | Aligned | True | True | True |
-| Hotkey | linux | degrade-visible | fallback | Aligned | True | True | True |
+| Hotkey | macos | degrade-visible | conditional-native-with-fallback | Aligned | True | True | True |
+| Hotkey | linux | degrade-visible | conditional-native-with-fallback | Aligned | True | True | True |
 | Autostart | windows | full | full | Aligned | True | True | True |
-| Autostart | macos | degrade-visible | fallback | Aligned | True | True | True |
-| Autostart | linux | degrade-visible | fallback | Aligned | True | True | True |
+| Autostart | macos | degrade-visible | conditional-native-with-fallback | Aligned | True | True | True |
+| Autostart | linux | degrade-visible | conditional-native-with-fallback | Aligned | True | True | True |
 | Overlay | windows | full | full | Aligned | True | True | True |
-| Overlay | macos | degrade-visible | fallback | Aligned | True | True | True |
-| Overlay | linux | degrade-visible | fallback | Aligned | True | True | True |
+| Overlay | macos | degrade-visible | conditional-native-with-fallback | Aligned | True | True | True |
+| Overlay | linux | degrade-visible | conditional-native-with-fallback | Aligned | True | True | True |
 
 ## Notes
 - This file is generated from `baseline.freeze.v1.json` during Package A freeze.
 - Any baseline change must follow `baseline-change-control.v1.md`.
+- Projection consistency and acceptance locators are not runtime evidence; Aligned rows require executed behavior verification.

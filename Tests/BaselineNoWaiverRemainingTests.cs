@@ -3,31 +3,15 @@ namespace MAAUnified.Tests;
 public sealed class BaselineNoWaiverRemainingTests
 {
     [Fact]
-    public void Baseline_ShouldContainNoWaivedRows()
+    public void KnownGaps_ShouldNotBeHiddenBehindWaivers()
     {
         var baseline = BaselineTestSupport.LoadBaseline();
         var acceptance = BaselineTestSupport.LoadAcceptanceTemplate();
 
-        var waivedItems = baseline.Items
-            .Where(item => string.Equals(item.ParityStatus, "Waived", StringComparison.Ordinal))
-            .Select(item => item.ItemId)
-            .ToList();
-        var waivedMappings = baseline.ConfigKeyMappings
-            .Where(mapping => string.Equals(mapping.ParityStatus, "Waived", StringComparison.Ordinal))
-            .Select(mapping => mapping.Key)
-            .ToList();
-        var waivedFallbacks = baseline.FallbackCapabilities
-            .Where(row => string.Equals(row.ParityStatus, "Waived", StringComparison.Ordinal))
-            .Select(row => $"{row.CapabilityId}:{row.Platform}")
-            .ToList();
-        var waivedCases = acceptance.Cases
-            .Where(testCase => testCase.Waiver is not null)
-            .Select(testCase => testCase.CaseId)
-            .ToList();
-
-        var totalWaived = waivedItems.Count + waivedMappings.Count + waivedFallbacks.Count + waivedCases.Count;
-        Assert.True(
-            totalWaived == 0,
-            $"Waived rows remain. items=[{string.Join(", ", waivedItems)}] mappings=[{string.Join(", ", waivedMappings)}] fallback=[{string.Join(", ", waivedFallbacks)}] cases=[{string.Join(", ", waivedCases)}]");
+        Assert.All(baseline.Items.Where(item => item.ParityStatus == "Gap"), item => Assert.Null(item.Waiver));
+        Assert.All(baseline.ConfigKeyMappings.Where(mapping => mapping.ParityStatus == "Gap"), mapping => Assert.Null(mapping.Waiver));
+        Assert.All(baseline.FallbackCapabilities.Where(row => row.ParityStatus == "Gap"), row => Assert.Null(row.Waiver));
+        Assert.All(acceptance.Cases.Where(testCase => testCase.Waiver is not null), testCase =>
+            Assert.DoesNotContain(baseline.Items, item => item.ItemId == testCase.ItemId && item.ParityStatus == "Gap"));
     }
 }

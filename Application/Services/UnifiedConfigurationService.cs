@@ -33,7 +33,6 @@ public sealed class UnifiedConfigurationService
     private const string GuiFileName = "gui.json";
     private const string ParseNullWarningCode = "ConfigRepair.DeserializeNull";
     private const string ParseExceptionWarningCode = "ConfigRepair.DeserializeException";
-    private const string AchievementAutoCloseDefaultRepairMarker = "ConfigRepair.AchievementPopupAutoCloseDefault.True.V1";
     private const string SensitivePendingCommitFileName = ".sensitive-settings.pending.json";
     private const string ConfigBackupFilePrefix = "avalonia.json.bak.";
     private const string SchemaConfigBackupFilePrefix = "avalonia.json.schema-v";
@@ -230,7 +229,6 @@ public sealed class UnifiedConfigurationService
 
                     var normalizedFightStageCount = NormalizeFightStageSelections(CurrentConfig);
                     var normalizedTaskParamCount = NormalizeTaskQueueParams(CurrentConfig);
-                    var repairedAchievementPopupAutoCloseCount = RepairAchievementPopupAutoCloseDefault(CurrentConfig);
                     var clearedRecruitExpeditedCount = ClearOneShotRecruitExpedited(CurrentConfig);
                     var legacyConversionReport = new ImportReport
                     {
@@ -262,7 +260,6 @@ public sealed class UnifiedConfigurationService
                     var requiresSchemaMigration = CurrentConfig.SchemaVersion < UnifiedConfig.LatestSchemaVersion;
                     var normalizedConfigChanged = normalizedFightStageCount > 0
                         || normalizedTaskParamCount > 0
-                        || repairedAchievementPopupAutoCloseCount > 0
                         || clearedRecruitExpeditedCount > 0
                         || decryptedLegacySensitiveValueCount > 0
                         || normalizedSensitiveScopeCount > 0
@@ -279,12 +276,6 @@ public sealed class UnifiedConfigurationService
                     if (normalizedTaskParamCount > 0)
                     {
                         LogService.Info($"Normalized {normalizedTaskParamCount} task parameter set(s).");
-                    }
-
-                    if (repairedAchievementPopupAutoCloseCount > 0)
-                    {
-                        LogService.Info(
-                            $"Repaired {repairedAchievementPopupAutoCloseCount} achievement popup auto-close setting(s) to True.");
                     }
 
                     if (clearedRecruitExpeditedCount > 0)
@@ -498,8 +489,6 @@ public sealed class UnifiedConfigurationService
                 ImportedFromGui = report.ImportedGui,
                 Warnings = [.. report.Warnings],
             };
-            RepairAchievementPopupAutoCloseDefault(config);
-
             if (request.ManualImport
                 && report.UnreadableValues.Count > 0
                 && !request.AllowDiscardUnreadableSensitiveValues)
@@ -1396,83 +1385,6 @@ public sealed class UnifiedConfigurationService
         }
 
         collection.Add(fileName);
-    }
-
-    private static int RepairAchievementPopupAutoCloseDefault(UnifiedConfig config)
-    {
-        if (config.Migration.Warnings.Any(warning => string.Equals(
-                warning,
-                AchievementAutoCloseDefaultRepairMarker,
-                StringComparison.Ordinal)))
-        {
-            return 0;
-        }
-
-        var profiles = config.Profiles.Values.ToArray();
-        if (profiles.Length == 0)
-        {
-            return 0;
-        }
-
-        var hasExplicitFalse = false;
-        foreach (var profile in profiles)
-        {
-            if (!profile.Values.TryGetValue(ConfigurationKeys.AchievementPopupAutoClose, out var value)
-                || !TryReadBool(value, out var parsed))
-            {
-                continue;
-            }
-
-            if (parsed)
-            {
-                return 0;
-            }
-
-            hasExplicitFalse = true;
-        }
-
-        if (!hasExplicitFalse)
-        {
-            return 0;
-        }
-
-        if (config.GlobalValues.TryGetValue(ConfigurationKeys.AchievementPopupAutoClose, out var globalValue)
-            && TryReadBool(globalValue, out var parsedGlobal)
-            && parsedGlobal)
-        {
-            return 0;
-        }
-
-        foreach (var profile in profiles)
-        {
-            profile.Values[ConfigurationKeys.AchievementPopupAutoClose] = JsonValue.Create(true);
-        }
-
-        config.Migration.Warnings.Add(AchievementAutoCloseDefaultRepairMarker);
-        return profiles.Length;
-    }
-
-    private static bool TryReadBool(JsonNode? node, out bool value)
-    {
-        value = false;
-        if (node is null)
-        {
-            return false;
-        }
-
-        var text = node.ToString();
-        if (bool.TryParse(text, out value))
-        {
-            return true;
-        }
-
-        if (int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var number))
-        {
-            value = number != 0;
-            return true;
-        }
-
-        return false;
     }
 
     private static int NormalizeTaskQueueParams(UnifiedConfig config)

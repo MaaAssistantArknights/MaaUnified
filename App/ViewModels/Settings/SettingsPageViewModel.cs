@@ -299,8 +299,8 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
     private string _remoteControlWarningMessage = string.Empty;
     private string _remoteControlErrorMessage = string.Empty;
     private string _backgroundImagePath = string.Empty;
-    private int _backgroundOpacity = 45;
-    private int _backgroundBlur = 12;
+    private int _backgroundOpacity = 50;
+    private int _backgroundBlur = 5;
     private string _backgroundStretchMode = DefaultBackgroundStretchMode;
     private bool _hasPendingGuiChanges;
     private string _guiValidationMessage = string.Empty;

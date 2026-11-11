@@ -3,26 +3,28 @@ namespace MAAUnified.Tests;
 public sealed class BaselineNoBareGapClosureTests
 {
     [Fact]
-    public void Baseline_ShouldNotContainBareGapEntries()
+    public void Baseline_GapsShouldBeExplicitAndActionable()
     {
         var baseline = BaselineTestSupport.LoadBaseline();
 
-        var itemGaps = baseline.Items
+        var bareItemGaps = baseline.Items
             .Where(item => string.Equals(item.ParityStatus, "Gap", StringComparison.Ordinal))
+            .Where(item => item.Fields.Count == 0 || item.Fields.All(field => string.IsNullOrWhiteSpace(field.Notes)))
             .Select(item => item.ItemId)
             .ToList();
-        var mappingGaps = baseline.ConfigKeyMappings
+        var bareMappingGaps = baseline.ConfigKeyMappings
             .Where(mapping => string.Equals(mapping.ParityStatus, "Gap", StringComparison.Ordinal))
+            .Where(mapping => string.IsNullOrWhiteSpace(mapping.Notes))
             .Select(mapping => $"{mapping.OwnerItemId}:{mapping.Key}")
             .ToList();
-        var fallbackGaps = baseline.FallbackCapabilities
+        var bareFallbackGaps = baseline.FallbackCapabilities
             .Where(row => string.Equals(row.ParityStatus, "Gap", StringComparison.Ordinal))
+            .Where(row => string.IsNullOrWhiteSpace(row.Message))
             .Select(row => $"{row.CapabilityId}:{row.Platform}")
             .ToList();
 
-        Assert.True(itemGaps.Count == 0, $"Feature/System gaps remain: {string.Join(", ", itemGaps)}");
-        Assert.True(mappingGaps.Count == 0, $"Config key gaps remain: {string.Join(", ", mappingGaps)}");
-        Assert.True(fallbackGaps.Count == 0, $"Fallback gaps remain: {string.Join(", ", fallbackGaps)}");
+        Assert.Empty(bareItemGaps);
+        Assert.Empty(bareMappingGaps);
+        Assert.Empty(bareFallbackGaps);
     }
 }
-

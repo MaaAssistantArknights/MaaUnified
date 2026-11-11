@@ -17,6 +17,7 @@
    - 应用进程不崩溃
    - UI 有可见错误反馈
    - `debug/` 下有可定位日志
+5. `evidence`、投影文档、路径存在和验收模板步骤都是定位契约，不是运行通过证明。功能项与系统项的 `Aligned` 必须引用并执行行为测试或保留人工验收产物；配置键行适用两层契约：第一层是 locator 契约（`mapping_target`/`read_path`/`write_path` 必须解析到真实运行时代码），第二层是逐行执行证据状态声明（`Executed evidence: <测试类>.<测试方法>` 或显式 `Executed evidence: pending`），标注 pending 的行不得被引用为行为已验证的依据。两层契约的完整定义见 `Docs/zh-cn/protocol/compatibility-baseline.md`。
 
 ## 变更类型
 - `Data-only`: 仅修改基线 JSON 的状态、备注、证据、案例矩阵。

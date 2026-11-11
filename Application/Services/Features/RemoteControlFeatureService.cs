@@ -321,11 +321,11 @@ public sealed class RemoteControlFeatureService : IRemoteControlFeatureService, 
         }
     }
 
-    private RemoteControlPollingSnapshot ReadSnapshot()
+    internal RemoteControlPollingSnapshot ReadSnapshot()
     {
         if (_configService is null || !CanUseSensitiveSettings)
         {
-            return new RemoteControlPollingSnapshot(null, null, Environment.UserName, Environment.MachineName, 5000);
+            return new RemoteControlPollingSnapshot(null, null, Environment.UserName, Environment.MachineName, 1000);
         }
 
         var config = _configService.CurrentConfig;
@@ -333,7 +333,7 @@ public sealed class RemoteControlFeatureService : IRemoteControlFeatureService, 
         var reportEndpoint = ReadUri(config, ConfigurationKeys.RemoteControlReportStatusUri);
         var userIdentity = ReadString(config, ConfigurationKeys.RemoteControlUserIdentity, Environment.UserName);
         var deviceIdentity = ReadString(config, ConfigurationKeys.RemoteControlDeviceIdentity, Environment.MachineName);
-        var pollIntervalMs = ReadInt(config, ConfigurationKeys.RemoteControlPollIntervalMs, 5000);
+        var pollIntervalMs = ReadInt(config, ConfigurationKeys.RemoteControlPollIntervalMs, 1000);
         return new RemoteControlPollingSnapshot(getTaskEndpoint, reportEndpoint, userIdentity, deviceIdentity, pollIntervalMs);
     }
 

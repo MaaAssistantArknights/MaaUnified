@@ -1643,7 +1643,7 @@ public sealed class ConfigurationImportTests
     }
 
     [Fact]
-    public async Task ExistingAvaloniaConfig_BackfilledAchievementAutoCloseFalse_ShouldRepairAndPersist()
+    public async Task ExistingAvaloniaConfig_ExplicitAchievementAutoCloseFalse_ShouldBePreserved()
     {
         var root = CreateTempRoot();
         Directory.CreateDirectory(Path.Combine(root, "config"));
@@ -1682,18 +1682,18 @@ public sealed class ConfigurationImportTests
         var service = CreateService(root);
         var result = await service.LoadOrBootstrapAsync();
 
+        // Frozen WPF preserves an explicit Achievement.PopupAutoClose=false; the load path must not rewrite it.
         Assert.True(result.LoadedFromExistingConfig);
-        Assert.True(service.CurrentConfig.Profiles["MissingSetting"].Values["Achievement.PopupAutoClose"]?.GetValue<bool>());
-        Assert.True(service.CurrentConfig.Profiles["Default"].Values["Achievement.PopupAutoClose"]?.GetValue<bool>());
-        Assert.True(service.CurrentConfig.Profiles["Alt"].Values["Achievement.PopupAutoClose"]?.GetValue<bool>());
-        Assert.Contains(
+        Assert.Equal("False", service.CurrentConfig.Profiles["Default"].Values["Achievement.PopupAutoClose"]?.GetValue<string>());
+        Assert.Equal("False", service.CurrentConfig.Profiles["Alt"].Values["Achievement.PopupAutoClose"]?.GetValue<string>());
+        Assert.False(service.CurrentConfig.Profiles["MissingSetting"].Values.ContainsKey("Achievement.PopupAutoClose"));
+        Assert.DoesNotContain(
             service.LogService.Snapshot,
-            log => string.Equals(log.Level, "INFO", StringComparison.Ordinal)
-                   && log.Message.Contains("achievement popup auto-close", StringComparison.OrdinalIgnoreCase));
+            log => log.Message.Contains("achievement popup auto-close", StringComparison.OrdinalIgnoreCase));
 
         var persisted = Assert.IsType<JsonObject>(
             JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(root, "config", "avalonia.json"))));
-        Assert.True(persisted["Profiles"]?["Default"]?["Values"]?["Achievement.PopupAutoClose"]?.GetValue<bool>());
+        Assert.Equal("False", persisted["Profiles"]?["Default"]?["Values"]?["Achievement.PopupAutoClose"]?.GetValue<string>());
 
         AchievementUnlockedEvent? unlocked = null;
         var tracker = new AchievementTrackerService(service, root);
@@ -1702,7 +1702,68 @@ public sealed class ConfigurationImportTests
         var unlockResult = tracker.Unlock("Linguist");
         Assert.True(unlockResult.Success);
         Assert.NotNull(unlocked);
-        Assert.True(unlocked!.AutoClose);
+        Assert.False(unlocked!.AutoClose);
+    }
+
+    [Fact]
+    public async Task AchievementAutoClosePolicy_ShouldMatchFrozenWpfDefaults()
+    {
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "avalonia.json"),
+            """
+            {
+              "SchemaVersion": 2,
+              "CurrentProfile": "Default",
+              "Profiles": {
+                "Default": {
+                  "Values": {
+                    "Achievement.PopupAutoClose": "True"
+                  },
+                  "TaskQueue": []
+                },
+                "NoSetting": {
+                  "Values": {},
+                  "TaskQueue": []
+                }
+              },
+              "GlobalValues": {},
+              "Migration": {}
+            }
+            """);
+
+        var service = CreateService(root);
+        await service.LoadOrBootstrapAsync();
+
+        var policyService = new AchievementFeatureService(service);
+
+        // Frozen WPF default is false: a profile without the key resolves to false.
+        service.CurrentConfig.CurrentProfile = "NoSetting";
+        var defaultPolicy = await policyService.LoadPolicyAsync();
+        Assert.True(defaultPolicy.Success);
+        Assert.NotNull(defaultPolicy.Value);
+        Assert.False(defaultPolicy.Value!.PopupAutoClose);
+
+        AchievementUnlockedEvent? defaultUnlock = null;
+        var tracker = new AchievementTrackerService(service, root);
+        tracker.AchievementUnlocked += (_, e) => defaultUnlock = e;
+        Assert.True(tracker.Unlock("Linguist").Success);
+        Assert.NotNull(defaultUnlock);
+        Assert.False(defaultUnlock!.AutoClose);
+
+        // An explicit true keeps the WPF auto-close behavior.
+        service.CurrentConfig.CurrentProfile = "Default";
+        var explicitPolicy = await policyService.LoadPolicyAsync();
+        Assert.True(explicitPolicy.Success);
+        Assert.True(explicitPolicy.Value!.PopupAutoClose);
+
+        AchievementUnlockedEvent? explicitUnlock = null;
+        tracker.AchievementUnlocked += (_, e) => explicitUnlock = e;
+        Assert.True(tracker.Unlock("Lucky").Success);
+        Assert.NotNull(explicitUnlock);
+        Assert.True(explicitUnlock!.AutoClose);
     }
 
     [Fact]

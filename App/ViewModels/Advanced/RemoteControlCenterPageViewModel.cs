@@ -14,7 +14,7 @@ public sealed class RemoteControlCenterPageViewModel : PageViewModelBase, IDispo
     private readonly ToolboxLocalizationTextMap _texts = new();
     private string _getTaskEndpoint = string.Empty;
     private string _reportEndpoint = string.Empty;
-    private int _pollIntervalMs = 5000;
+    private int _pollIntervalMs = 1000;
     private string _warningMessage = string.Empty;
     private bool _disposed;
 
@@ -67,7 +67,7 @@ public sealed class RemoteControlCenterPageViewModel : PageViewModelBase, IDispo
     {
         GetTaskEndpoint = ReadString(ConfigurationKeys.RemoteControlGetTaskEndpointUri, string.Empty);
         ReportEndpoint = ReadString(ConfigurationKeys.RemoteControlReportStatusUri, string.Empty);
-        PollIntervalMs = ReadInt(ConfigurationKeys.RemoteControlPollIntervalMs, 5000);
+        PollIntervalMs = ReadInt(ConfigurationKeys.RemoteControlPollIntervalMs, 1000);
         await Runtime.DiagnosticsService.RecordEventAsync("Advanced.RemoteControlCenter", "Initialized remote control center.", cancellationToken);
     }
 

@@ -23,6 +23,10 @@ icon: mdi:shield-check-outline
 
 `BaselineRenderSyncTests.GeneratedDocs_ShouldMatchMachineReadableSource` 会把 JSON 渲染出的 Markdown 与 `Docs/testing/` 下投影文件逐字比较。该测试的目的，是防止评审看到的文档与机读基线不一致。
 
+投影一致、路径存在，以及 `evidence.case_id` 的格式与唯一性，都只表示契约可定位，不代表行为已经运行通过；`evidence.case_id` 是基线内部标识（功能项/系统项用 `BL-*`、配置行用 `CFG-*`、平台 fallback 用 `FAL-*`），验收模板只包含 `ACC-*` 用例，基线 case_id 并不解析到验收模板；验收模板中的步骤和预期本身不能作为运行证据。功能项与系统项的 `Aligned` 结论必须另有可执行的行为测试或保存的人工验收结果支撑，不能只依赖投影或定位器。
+
+配置键行的强制门禁分两层。第一层是 locator 契约：`Aligned` 行必须给出真实的 `mapping_target`、`read_path` 和 `write_path`，门禁会校验定位器指向的源文件存在且方法体引用对应配置键。第二层是逐行执行证据声明：每个 `Aligned` 配置行的 `notes` 必须显式写出执行证据状态——引用真实执行过的行为测试（格式 `Executed evidence: <测试类>.<测试方法>`，`BaselineExecutedEvidenceConventionTests` 会校验所引用的测试类和方法真实存在），或者显式标注 `Executed evidence: pending`（表示仅 locator 契约已验证、逐行执行证据尚未补齐）。标注 pending 的行不得被引用为行为已验证的依据；为配置行补齐或引用执行证据时，应同时把 pending 标注替换为真实测试引用。
+
 相关测试还会检查：
 
 - 基线条目的优先级、状态值和证据字段。

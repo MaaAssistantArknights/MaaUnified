@@ -20,7 +20,7 @@ public sealed class BaselineContractTests
         Assert.Equal("src/MAAUnified/**", baseline.Scope);
         Assert.Equal("tiered", baseline.MatrixMode);
 
-        Assert.Equal("1.0.0", acceptance.SchemaVersion);
+        Assert.Equal("1.2.0", acceptance.SchemaVersion);
         Assert.Equal("tiered", acceptance.Matrix.Strategy);
         Assert.NotEmpty(acceptance.Cases);
 
@@ -83,6 +83,20 @@ public sealed class BaselineContractTests
         Assert.All(acceptance.Cases, testCase =>
         {
             Assert.False(string.IsNullOrWhiteSpace(testCase.CaseId));
+            Assert.Contains(testCase.Status, BaselineConstants.AllowedAcceptanceStatus);
+            if (string.Equals(testCase.Status, BaselineConstants.AcceptanceStatusNotExecuted, StringComparison.Ordinal))
+            {
+                // A NotExecuted case must not fabricate evidence; any executed outcome
+                // (Passed/Failed/Blocked) must cite durable execution evidence.
+                Assert.Null(testCase.ExecutionEvidence);
+            }
+            else
+            {
+                Assert.False(
+                    string.IsNullOrWhiteSpace(testCase.ExecutionEvidence),
+                    $"Acceptance case `{testCase.CaseId}` reports `{testCase.Status}` without durable execution evidence.");
+            }
+
             if (testCase.Waiver is not null)
             {
                 AssertValidWaiver(testCase.Waiver);
@@ -120,6 +134,99 @@ public sealed class BaselineContractTests
         {
             AssertValidWaiver(waived.Waiver);
         }
+    }
+
+    [Fact]
+    public void TraySwitchLanguageAndLinuxFallbackRecords_ShouldDescribeVerifiedContracts()
+    {
+        var baseline = BaselineTestSupport.LoadBaseline();
+
+        // The frozen WPF tray menu (NotifyIcon.xaml) exposes SwitchLanguage; the baseline system
+        // inventory must be derived from frozen object evidence, not from Avalonia-only diagnostics.
+        Assert.DoesNotContain(baseline.Items, item => item.ItemId == "System.CapabilitySummary");
+
+        var switchLanguage = Assert.Single(baseline.Items, item => item.ItemId == "System.TrayMenu.SwitchLanguage");
+        Assert.Equal("System", switchLanguage.Kind);
+        Assert.Equal("Gap", switchLanguage.ParityStatus);
+        Assert.Contains("NotifyIcon.xaml", switchLanguage.WpfReference, StringComparison.Ordinal);
+        Assert.Equal("App/ViewModels/MainShellViewModel.cs", switchLanguage.AvaloniaPath);
+        Assert.Equal("App/ViewModels/MainShellViewModel.cs", switchLanguage.Evidence.UiPath);
+        Assert.Contains("not reachable", switchLanguage.VisibilityRules.Single().ExpectedVisibility, StringComparison.OrdinalIgnoreCase);
+
+        var linuxCapabilities = baseline.FallbackCapabilities
+            .Where(capability => string.Equals(capability.Platform, "linux", StringComparison.Ordinal))
+            .OrderBy(capability => capability.CapabilityId, StringComparer.Ordinal)
+            .ToList();
+
+        Assert.Equal(["Autostart", "Hotkey", "Notification", "Overlay", "Tray"], linuxCapabilities.Select(capability => capability.CapabilityId));
+        Assert.All(linuxCapabilities, capability =>
+            Assert.Equal("conditional-native-with-fallback", capability.CurrentMode));
+    }
+
+    [Fact]
+    public void AdvancedStandalonePages_ShouldNotBeCountedAsReachableWpfParity()
+    {
+        var baseline = BaselineTestSupport.LoadBaseline();
+        var stageManager = Assert.Single(baseline.Items, item => item.ItemId == "Advanced.StageManager");
+        var webApi = Assert.Single(baseline.Items, item => item.ItemId == "Advanced.WebApi");
+
+        Assert.Equal("Gap", stageManager.ParityStatus);
+        Assert.Contains("service-only", stageManager.WpfReference, StringComparison.Ordinal);
+        Assert.Equal("Gap", webApi.ParityStatus);
+        Assert.Equal("Not present in frozen WPF tree", webApi.WpfReference);
+
+        Assert.Contains("not reachable", stageManager.VisibilityRules.Single().ExpectedVisibility, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("not reachable", webApi.VisibilityRules.Single().ExpectedVisibility, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void TrayCommandBaseline_ShouldDescribeWpfBehaviorWithoutReplacingRuntimeTests()
+    {
+        var baseline = BaselineTestSupport.LoadBaseline();
+        var hideTray = Assert.Single(baseline.Items, item => item.ItemId == "System.TrayMenu.HideTray");
+        var restart = Assert.Single(baseline.Items, item => item.ItemId == "System.TrayMenu.Restart");
+        Assert.Equal("Show main window; disable tray integration", hideTray.Fields.Single().DefaultValue);
+        Assert.Equal("Confirm exit; restart without user arguments", restart.Fields.Single().DefaultValue);
+
+        Assert.Contains("shown", hideTray.Interactions.Single().ExpectedResult, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("replacement process", restart.Interactions.Single().ExpectedResult, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void AcceptanceSchema_ShouldRequireHonestyFields()
+    {
+        var schemaPath = Path.Combine(
+            BaselineTestSupport.GetMaaUnifiedRoot(), "Compat", "Mapping", "Baseline", "acceptance.schema.v1.json");
+        using var schema = JsonDocument.Parse(File.ReadAllText(schemaPath));
+        var required = schema.RootElement
+            .GetProperty("properties")
+            .GetProperty("cases")
+            .GetProperty("items")
+            .GetProperty("required")
+            .EnumerateArray()
+            .Select(element => element.GetString())
+            .ToList();
+
+        // M01-R5-04: without schema-level required fields a case missing status silently
+        // deserializes to the honest-looking NotExecuted default.
+        Assert.Contains("status", required);
+        Assert.Contains("execution_evidence", required);
+    }
+
+    [Fact]
+    public void AcceptanceCase_MissingHonestyFields_ShouldFailDeserialization()
+    {
+        const string completeCase = "{\"case_id\":\"ACC-T\",\"tier\":\"Tier-1\",\"item_id\":\"TaskQueueRoot\",\"platforms\":[],\"themes\":[],\"locales\":[],\"steps\":[],\"expected\":[],\"non_crash_required\":true,\"requires_fallback_trace\":false,\"status\":\"NotExecuted\",\"execution_evidence\":null}";
+        var parsed = JsonSerializer.Deserialize<AcceptanceCaseSpec>(completeCase);
+        Assert.NotNull(parsed);
+        Assert.Equal(BaselineConstants.AcceptanceStatusNotExecuted, parsed!.Status);
+        Assert.Null(parsed.ExecutionEvidence);
+
+        const string missingStatus = "{\"case_id\":\"ACC-T\",\"tier\":\"Tier-1\",\"item_id\":\"TaskQueueRoot\",\"platforms\":[],\"themes\":[],\"locales\":[],\"steps\":[],\"expected\":[],\"non_crash_required\":true,\"requires_fallback_trace\":false,\"execution_evidence\":null}";
+        Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<AcceptanceCaseSpec>(missingStatus));
+
+        const string missingEvidence = "{\"case_id\":\"ACC-T\",\"tier\":\"Tier-1\",\"item_id\":\"TaskQueueRoot\",\"platforms\":[],\"themes\":[],\"locales\":[],\"steps\":[],\"expected\":[],\"non_crash_required\":true,\"requires_fallback_trace\":false,\"status\":\"NotExecuted\"}";
+        Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<AcceptanceCaseSpec>(missingEvidence));
     }
 
     private static void AssertParityAndWaiverConsistency(string parityStatus, WaiverSpec? waiver)
@@ -215,6 +322,35 @@ internal static class BaselineTestSupport
             .Select(f => (string)f.GetRawConstantValue()!)
             .ToList();
     }
+
+    // Derived from the full frozen WPF configuration surface at the frozen SHA (legacy
+    // MaaWpfGui/Constants/ConfigurationKeys.cs constants + ConfigFactory Configuration/** models
+    // persisted in gui.new.json + raw ConfigurationHelper string keys): these 8 keys have no frozen
+    // WPF counterpart and are explicit Avalonia extensions.
+    // M01-R5-02: HotKeys (frozen Services/HotKeys/MaaHotKeyManager.cs persists the global "HotKeys"
+    // key via ConfigurationHelper), GUI.UseNotify, and GUI.IgnoreBadModulesAndUseSoftwareRendering
+    // (frozen Configuration/Global/GUI.cs ConfigFactory properties) were reclassified as frozen-WPF
+    // keys after the derivation was broadened beyond legacy ConfigurationKeys constants.
+    public static IReadOnlySet<string> AvaloniaExtensionConfigKeys { get; } = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "Connect.MacBundledAdbTermsAcceptedAtUtc",
+        "Connect.MacBundledAdbTermsAcceptedVersion",
+        "ExternalNotification.SendWhenStalled",
+        "GUI.UiScalePercent",
+        "MainFunction.ActionAfterCompleted",
+        "Overlay.PreviewPinned",
+        "TimeOut.Timer.StallTimeoutEnabled",
+        "TimeOut.Timer.StallTimeoutMinutes",
+    };
+
+    // Maps each frozen configuration key value to its ConfigurationKeys constant identifier
+    // (value -> identifier), used to resolve key references inside located method bodies.
+    public static IReadOnlyDictionary<string, string> LegacyConfigurationKeyConstantNames { get; } =
+        typeof(ConfigurationKeys)
+            .GetFields(BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly)
+            .Where(f => f.IsLiteral && !f.IsInitOnly && f.FieldType == typeof(string))
+            .GroupBy(f => (string)f.GetRawConstantValue()!, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.First().Name, StringComparer.Ordinal);
 
     public static string RenderBaselineMarkdown(BaselineFreeze baseline)
     {
@@ -343,6 +479,7 @@ internal static class BaselineTestSupport
         sb.AppendLine("## Notes");
         sb.AppendLine("- This file is generated from `baseline.freeze.v1.json` during Package A freeze.");
         sb.AppendLine("- Any baseline change must follow `baseline-change-control.v1.md`.");
+        sb.AppendLine("- Projection consistency and acceptance locators are not runtime evidence; Aligned rows require executed behavior verification.");
 
         return sb.ToString();
     }
@@ -375,11 +512,12 @@ internal static class BaselineTestSupport
 
         sb.AppendLine();
         sb.AppendLine("## Acceptance Cases");
-        sb.AppendLine("| Case ID | Tier | Item ID | Platforms | Themes | Locales |");
-        sb.AppendLine("| --- | --- | --- | --- | --- | --- |");
+        // M01-R5-04: render the honesty fields so the human-facing checklist shows execution state.
+        sb.AppendLine("| Case ID | Tier | Item ID | Status | Execution Evidence | Platforms | Themes | Locales |");
+        sb.AppendLine("| --- | --- | --- | --- | --- | --- | --- | --- |");
         foreach (var testCase in acceptance.Cases)
         {
-            sb.AppendLine($"| `{testCase.CaseId}` | {testCase.Tier} | `{testCase.ItemId}` | {string.Join(", ", testCase.Platforms)} | {string.Join(", ", testCase.Themes)} | {string.Join(", ", testCase.Locales)} |");
+            sb.AppendLine($"| `{testCase.CaseId}` | {testCase.Tier} | `{testCase.ItemId}` | {testCase.Status} | {testCase.ExecutionEvidence ?? "-"} | {string.Join(", ", testCase.Platforms)} | {string.Join(", ", testCase.Themes)} | {string.Join(", ", testCase.Locales)} |");
         }
 
         var caseWaivers = acceptance.Cases.Where(c => c.Waiver is not null).OrderBy(c => c.CaseId, StringComparer.Ordinal).ToList();
@@ -407,6 +545,7 @@ internal static class BaselineTestSupport
         sb.AppendLine();
         sb.AppendLine("## Notes");
         sb.AppendLine("- This checklist file is generated from `acceptance.template.v1.json`.");
+        sb.AppendLine("- Checklist steps describe future or manual acceptance work and do not prove that a case has run.");
 
         return sb.ToString();
     }
