@@ -289,6 +289,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     private readonly object _moduleAutoSaveGate = new();
     private readonly OverlaySharedState _overlaySharedState;
     private readonly ConnectionGameSharedStateViewModel _connectionGameSharedState;
+    private readonly GameDataReportService _gameDataReportService;
+    private Task _reportRequestTask = Task.CompletedTask;
     private readonly Action<LocalizationFallbackInfo>? _localizationFallbackReporter;
     private readonly IAppDialogService _dialogService;
     private readonly Action<string>? _navigateToSettingsSection;
@@ -373,9 +375,11 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         IAppDialogService? dialogService = null,
         Action<string>? navigateToSettingsSection = null,
         Func<CancellationToken, Task<bool>>? ensureCoreReadyForExecutionAsync = null,
-        Func<string, CancellationToken, Task>? stopRunOwnerAsync = null)
+        Func<string, CancellationToken, Task>? stopRunOwnerAsync = null,
+        GameDataReportService? gameDataReportService = null)
         : base(runtime)
     {
+        _gameDataReportService = gameDataReportService ?? new GameDataReportService();
         _connectionGameSharedState = connectionGameSharedState;
         _localizationFallbackReporter = localizationFallbackReporter;
         _dialogService = dialogService ?? NoOpAppDialogService.Instance;
@@ -6816,6 +6820,19 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                     callback.PayloadJson,
                     resolveSource: resolveSource);
                 break;
+            case "ReportRequest":
+                // WPF AsstProxy.ProcReportRequest (fire-and-forget): the GUI executes the
+                // core-requested Penguin Stats / Yituliu upload.
+                await RecordRuntimeStatusAsync(
+                    runId,
+                    taskIndex,
+                    module,
+                    callback.MsgName,
+                    "Observed",
+                    callback.PayloadJson,
+                    resolveSource: resolveSource);
+                _reportRequestTask = ProcessReportRequestAsync(callback);
+                break;
             default:
                 await RecordRuntimeStatusAsync(
                     runId,
@@ -6827,6 +6844,116 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                     resolveSource: resolveSource);
                 break;
         }
+    }
+
+    private async Task ProcessReportRequestAsync(CoreCallbackEvent callback)
+    {
+        // Frozen WPF reference: AsstProxy.ProcReportRequest + GameDataReportService.PostWithRetryAsync.
+        JsonObject? root = null;
+        try
+        {
+            root = JsonNode.Parse(callback.PayloadJson) as JsonObject;
+        }
+        catch (JsonException)
+        {
+            // Handled below as an empty-URL report request.
+        }
+
+        var url = root is null ? null : GetStringValue(root, "url");
+        if (string.IsNullOrEmpty(url))
+        {
+            Runtime.LogService.Error("Report request received with empty URL.");
+            return;
+        }
+
+        var subTask = root is null ? string.Empty : GetStringValue(root, "subtask") ?? string.Empty;
+
+        // 企鹅物流不收集 txwy 客户端数据
+        if (string.Equals(subTask, GameDataReportService.PenguinStatsSubtask, StringComparison.Ordinal)
+            && Runtime.ConfigurationService.TryGetCurrentProfile(out var reportProfile)
+            && string.Equals(ResolveProfileClientType(reportProfile), "txwy", StringComparison.OrdinalIgnoreCase))
+        {
+            Runtime.LogService.Info("PenguinStats report skipped for txwy client type.");
+            return;
+        }
+
+        Dictionary<string, string> headers = [];
+        if (root?["headers"] is JsonObject headersObj)
+        {
+            foreach (var property in headersObj)
+            {
+                headers[property.Key] = property.Value?.ToString() ?? string.Empty;
+            }
+        }
+
+        var body = root is null ? null : GetStringValue(root, "body");
+        if (string.IsNullOrEmpty(body))
+        {
+            Runtime.LogService.Error("Report request received with empty body.");
+            return;
+        }
+
+        string? newPenguinId = null;
+        bool success;
+        try
+        {
+            success = await _gameDataReportService.PostWithRetryAsync(
+                url,
+                body,
+                headers,
+                subTask,
+                penguinId => newPenguinId = penguinId);
+        }
+        catch (Exception ex)
+        {
+            Runtime.LogService.Warn($"Failed to report: {url}; {ex.Message}");
+            success = false;
+        }
+
+        if (!string.IsNullOrEmpty(newPenguinId))
+        {
+            Runtime.LogService.Info($"New PenguinId got: {newPenguinId}");
+            await PersistPenguinIdIfEmptyAsync(newPenguinId);
+        }
+
+        if (!success)
+        {
+            AppendLogEntry(
+                timestamp: callback.Timestamp,
+                content: "Failed to report, " + GetRootText("GiveUpUploadingPenguins", "Abort upload to Penguin Statistics"),
+                level: "WARN",
+                updateThumbnail: false,
+                notifyActivity: false);
+        }
+    }
+
+    private async Task PersistPenguinIdIfEmptyAsync(string penguinId)
+    {
+        if (!Runtime.ConfigurationService.TryGetCurrentProfile(out var profile))
+        {
+            return;
+        }
+
+        // WPF only writes the server-assigned id back when the configured PenguinId is empty.
+        if (profile.Values.TryGetValue(ConfigurationKeys.PenguinId, out var existing)
+            && existing is JsonValue existingValue
+            && existingValue.TryGetValue(out string? existingId)
+            && !string.IsNullOrWhiteSpace(existingId))
+        {
+            return;
+        }
+
+        profile.Values[ConfigurationKeys.PenguinId] = JsonValue.Create(penguinId);
+        _ = await ConfigurationSaveTracker.Instance.RunTrackedAsync(
+            "TaskQueue.ReportRequest.PenguinId",
+            Texts.GetOrDefault("Settings.Game.PenguinId", "PenguinId"),
+            "TaskQueue.ReportRequest.PenguinId.Save",
+            Runtime.DiagnosticsService,
+            async cancellationToken =>
+            {
+                await Runtime.ConfigurationService.SaveAsync(cancellationToken);
+                return true;
+            });
     }
 
     private async Task AdvanceInfrastCustomPlanAfterCompletionAsync(CallbackPayload payload, int? taskIndex)

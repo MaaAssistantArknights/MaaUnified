@@ -21,6 +21,24 @@ public sealed class FightStageFallbackParityTests
     ];
 
     [Fact]
+    public void CompileFight_RemovedPermanentStageOf1_ShouldBeSkippedAsExpiredActivityLikeWpf()
+    {
+        // The frozen WPF permanent table has no OF-1 entry; WPF GetStageInfo treats "OF-1"
+        // as an expired two-letter activity stage, so plan resolution skips it and picks the
+        // next open candidate. A hidden permanent OF-1 row would wrongly execute OF-1 here.
+        var compiled = TaskParamCompiler.CompileFight(new FightTaskParamsDto
+        {
+            Stage = "OF-1",
+            StagePlan = ["OF-1", "LS-6"],
+            UseAlternateStage = true,
+            HideUnavailableStage = false,
+            StageResetMode = "Ignore",
+        }, new UnifiedProfile(), new UnifiedConfig(), stageActivityState: HermeticStageState);
+
+        Assert.Equal("LS-6", compiled.Params["stage"]?.GetValue<string>());
+    }
+
+    [Fact]
     public void CompileFight_ClosedKnownStage_ShouldFallBackToFirstCandidate()
     {
         var closedStage = ResolveClosedWeeklyStage();
@@ -31,7 +49,7 @@ public sealed class FightStageFallbackParityTests
             StagePlan = [closedStage],
             HideUnavailableStage = true,
             StageResetMode = "Current",
-        }, new UnifiedProfile(), new UnifiedConfig(), PinnedUtc);
+        }, new UnifiedProfile(), new UnifiedConfig(), PinnedUtc, HermeticStageState);
 
         Assert.DoesNotContain(compiled.Issues, issue => issue.Code == "TaskCompileSkipAppend" && issue.Field == "fight.stage_plan");
         Assert.Equal(closedStage, compiled.Params["stage"]?.GetValue<string>());
@@ -49,7 +67,7 @@ public sealed class FightStageFallbackParityTests
             UseAlternateStage = true,
             HideUnavailableStage = false,
             StageResetMode = "Ignore",
-        }, new UnifiedProfile(), new UnifiedConfig(), PinnedUtc);
+        }, new UnifiedProfile(), new UnifiedConfig(), PinnedUtc, HermeticStageState);
 
         Assert.DoesNotContain(compiled.Issues, issue => issue.Code == "TaskCompileSkipAppend" && issue.Field == "fight.stage_plan");
         Assert.Equal(closedStage, compiled.Params["stage"]?.GetValue<string>());
@@ -164,12 +182,15 @@ public sealed class FightStageFallbackParityTests
             UseAlternateStage = true,
             HideUnavailableStage = false,
             StageResetMode = "Ignore",
-        }, new UnifiedProfile(), new UnifiedConfig(), PinnedUtc);
+        }, new UnifiedProfile(), new UnifiedConfig(), PinnedUtc, HermeticStageState);
 
         Assert.DoesNotContain(compiled.Issues, issue => issue.Code == "TaskCompileSkipAppend" && issue.Field == "fight.stage_plan");
         var coreParameters = TaskParamCompiler.BuildCoreParams("Fight", compiled.Params);
         Assert.Equal(string.Empty, coreParameters["stage"]?.GetValue<string>());
     }
+
+    private static readonly StageActivityState HermeticStageState =
+        StageActivityState.Empty("Official");
 
     private static string ResolveClosedWeeklyStage()
     {

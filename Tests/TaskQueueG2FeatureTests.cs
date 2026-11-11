@@ -973,7 +973,7 @@ public sealed class TaskQueueG2FeatureTests
         Assert.Contains("AP-5: 红票", hint);
         Assert.Contains("LS-6: 经验", hint);
         Assert.Contains("PR-A-1/2: 奶&盾芯片", hint);
-        Assert.Contains("(库存 7 & 8 / 4 & 5)", hint);
+        Assert.Contains("(库存 8 & 7 / 5 & 4)", hint);
         Assert.DoesNotContain("今日资源关卡：", hint);
         Assert.DoesNotContain("周一了", hint);
     }
@@ -991,7 +991,7 @@ public sealed class TaskQueueG2FeatureTests
             new DateTime(2026, 03, 12, 0, 0, 0, DateTimeKind.Utc));
 
         Assert.Contains("PR-A-1/2: 奶&盾芯片", hint);
-        Assert.Contains("(库存 -- & 8 / -- & --)", hint);
+        Assert.Contains("(库存 8 & -1 / -1 & -1)", hint);
     }
 
     private static async Task InvokeCallbackAsync(TaskQueuePageViewModel vm, CoreCallbackEvent callback)

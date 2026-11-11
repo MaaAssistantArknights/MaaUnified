@@ -13,6 +13,95 @@ namespace MAAUnified.Tests;
 public sealed class StageActivityWpfParityTests
 {
     [Fact]
+    public void PermanentStageTable_ShouldMatchFrozenWpfStageManager()
+    {
+        var stages = StageActivityStage.CreatePermanentStages();
+
+        // WPF frozen commit StageManager: InitializeDefaultStages + AddPermanentStages.
+        Assert.Equal(
+            [
+                "Cur/Last", "Pormpt1", "Pormpt2",
+                "1-7", "R8-11", "12-17-HARD",
+                "CE-6", "AP-5", "CA-5", "LS-6", "SK-5",
+                "Annihilation",
+                "PR-A-1", "PR-A-2", "PR-B-1", "PR-B-2",
+                "PR-C-1", "PR-C-2", "PR-D-1", "PR-D-2",
+            ],
+            stages.Select(stage => stage.Display).ToArray());
+
+        // WPF has no OF-1/OF-F3 entries at all; they must not exist even as hidden rows.
+        Assert.DoesNotContain(stages, stage => stage.Value is "OF-1" or "OF-F3");
+
+        // WPF assigns dropGroups only to the chip stages PR-x-1, in this exact item order.
+        AssertChipDropGroups(stages, "PR-A-1", ["3231", "3261"], ["3232", "3262"]);
+        AssertChipDropGroups(stages, "PR-B-1", ["3251", "3241"], ["3252", "3242"]);
+        AssertChipDropGroups(stages, "PR-C-1", ["3211", "3271"], ["3212", "3272"]);
+        AssertChipDropGroups(stages, "PR-D-1", ["3221", "3281"], ["3222", "3282"]);
+        Assert.All(
+            stages.Where(stage => stage.Value
+                is "CA-5" or "LS-6" or "PR-A-2" or "PR-B-2" or "PR-C-2" or "PR-D-2"),
+            stage => Assert.Null(stage.DropGroups));
+    }
+
+    [Fact]
+    public void CachedActivityState_ShouldTreatMalformedActivityTimeAsExpiredLikeWpf()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            WriteActivityCache(root, """
+                {
+                  "Official": {
+                    "sideStoryStage": {
+                      "event": {
+                        "MinimumRequired": "v1.0.0",
+                        "Activity": {
+                          "StageName": "Malformed",
+                          "UtcStartTime": "2026-07-01T00:00:00Z",
+                          "UtcExpireTime": "2026-07-03T00:00:00Z",
+                          "TimeZone": 0
+                        },
+                        "Stages": [ { "Display": "EV-9", "Value": "EV-9", "Drop": "30011" } ]
+                      }
+                    }
+                  }
+                }
+                """);
+
+            var service = new StageManagerFeatureService(
+                configService: null,
+                baseDirectory: root,
+                coreVersionResolver: () => "v1.0.0");
+            var state = service.GetStageActivityState("Official", forceReload: true);
+            var now = new DateTime(2026, 7, 2, 0, 0, 0, DateTimeKind.Utc);
+
+            // WPF ParseDateTime throws for non-"yyyy/MM/dd HH:mm:ss" input and the caller
+            // falls back to DateTime.MinValue, so the stage counts as expired.
+            var stage = state.Find("EV-9");
+            Assert.NotNull(stage);
+            Assert.False(stage!.IsOpenOrWillOpen(now));
+            Assert.False(stage.IsOpen(now, DayOfWeek.Wednesday));
+        }
+        finally
+        {
+            DeleteTempRoot(root);
+        }
+    }
+
+    private static void AssertChipDropGroups(
+        IReadOnlyList<StageActivityStage> stages,
+        string value,
+        string[] firstGroup,
+        string[] secondGroup)
+    {
+        var groups = stages.Single(stage => stage.Value == value).DropGroups;
+        Assert.NotNull(groups);
+        Assert.Equal(2, groups!.Count);
+        Assert.Equal(firstGroup, groups[0].ToArray());
+        Assert.Equal(secondGroup, groups[1].ToArray());
+    }
+
+    [Fact]
     public void CachedActivityState_ShouldApplyResourceCollectionAndFutureActivityRules()
     {
         var root = CreateTempRoot();
@@ -145,7 +234,7 @@ public sealed class StageActivityWpfParityTests
                       "event": {
                         "MinimumRequired": "v1.0.0",
                         "Activity": { "UtcStartTime": "2026/07/01 00:00:00", "UtcExpireTime": "2026/07/03 00:00:00", "TimeZone": 0 },
-                        "Stages": [ { "Display": "OF-1", "Value": "OF-1", "Drop": "30011" } ]
+                        "Stages": [ { "Display": "1-7", "Value": "1-7", "Drop": "30011" } ]
                       }
                     }
                   }
@@ -158,7 +247,7 @@ public sealed class StageActivityWpfParityTests
                 coreVersionResolver: () => "v1.0.0");
             var state = service.GetStageActivityState("Official", forceReload: true);
 
-            var stage = Assert.Single(state.Stages, stage => stage.Value == "OF-1");
+            var stage = Assert.Single(state.Stages, stage => stage.Value == "1-7");
             Assert.False(stage.IsHidden);
             Assert.NotNull(stage.Activity);
             Assert.Equal("30011", stage.Drop);
@@ -235,7 +324,42 @@ public sealed class StageActivityWpfParityTests
             new DateTime(2026, 7, 1, 12, 0, 0, 0, DateTimeKind.Utc));
 
         Assert.Contains("｢All resource stages open｣", hint);
-        Assert.Contains("(库存 -- & 8 / -- & --)", hint);
+        Assert.Contains(" (库存 8 & -1 / -1 & -1)", hint);
+    }
+
+    [Fact]
+    public void DailyHint_ShouldFormatLargeInventoryCountsLikeWpf()
+    {
+        // WPF renders depot counts through DepotResult.DisplayCount = Count.FormatNumber(false):
+        // >= 10000 -> "12.3k", >= 1M -> "2.5M"; smaller counts stay raw.
+        var config = new UnifiedConfig();
+        config.GlobalValues[LegacyConfigurationKeys.DepotResult] = JsonValue.Create("""{"data":"{\"3231\":12345,\"3232\":2500000,\"3261\":9999}"}""");
+        var state = new MAAUnified.Application.Models.StageActivityState(
+            "Official",
+            MAAUnified.Application.Models.StageActivityStage.CreatePermanentStages()
+                .Select(stage => stage.Value is "PR-A-1"
+                    ? stage with
+                    {
+                        Activity = new MAAUnified.Application.Models.StageActivityWindow(
+                            "All resource stages open",
+                            string.Empty,
+                            new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Utc),
+                            new DateTime(2026, 7, 3, 0, 0, 0, DateTimeKind.Utc),
+                            IsResourceCollection: true),
+                    }
+                    : stage)
+                .ToArray(),
+            DateTimeOffset.UtcNow,
+            ResourceTasksUpdated: false);
+
+        var hint = FightTaskModuleViewModel.BuildDailyResourceHint(
+            "zh-cn",
+            "Official",
+            config,
+            state,
+            new DateTime(2026, 7, 1, 12, 0, 0, 0, DateTimeKind.Utc));
+
+        Assert.Contains(" (库存 12.3k & 9999 / 2.5M & -1)", hint);
     }
 
     [Fact]

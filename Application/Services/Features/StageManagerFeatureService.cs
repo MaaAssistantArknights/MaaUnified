@@ -504,9 +504,9 @@ public sealed class StageManagerFeatureService : IStageManagerFeatureService
             return DateTime.SpecifyKind(parsed.AddHours(-timezoneOffset), DateTimeKind.Utc);
         }
 
-        return DateTime.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out parsed)
-            ? parsed.ToUniversalTime()
-            : DateTime.MinValue;
+        // WPF ParseDateTime accepts only "yyyy/MM/dd HH:mm:ss"; anything else falls back
+        // to DateTime.MinValue (expired), so no lenient parsing is allowed here.
+        return DateTime.MinValue;
     }
 
     private static bool IsResourceStage(string stageCode)

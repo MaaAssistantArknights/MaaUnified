@@ -333,7 +333,8 @@ public static class TaskParamCompiler
         FightTaskParamsDto dto,
         UnifiedProfile profile,
         UnifiedConfig config,
-        DateTime? nowUtc = null)
+        DateTime? nowUtc = null,
+        StageActivityState? stageActivityState = null)
     {
         var issues = new List<TaskValidationIssue>();
 
@@ -385,7 +386,8 @@ public static class TaskParamCompiler
             dto.IsStageManually,
             stageResetMode,
             ResolveStringSetting(profile, config, "Start.ClientType", "ClientType") ?? "Official",
-            stageSelectionTime);
+            stageSelectionTime,
+            stageActivityState);
         var stage = selectedStage;
 
         if (dto.Series is < -1 or > 6)
@@ -917,7 +919,8 @@ public static class TaskParamCompiler
         bool isStageManually,
         string stageResetMode,
         string clientType,
-        DateTime utcNow)
+        DateTime utcNow,
+        StageActivityState? stageActivityState = null)
     {
         var normalizedPlan = FightStageSelection.NormalizeStagePlan(stagePlan);
         var normalizedClientType = NormalizeFightClientType(clientType);
@@ -929,8 +932,9 @@ public static class TaskParamCompiler
             stageResetMode = "Ignore";
         }
 
-        var stageManager = new StageManagerFeatureService();
-        var stageState = stageManager.GetStageActivityState(normalizedClientType);
+        // Tests inject a hermetic state; production reads the machine's cached/web stage state.
+        var stageState = stageActivityState
+            ?? new StageManagerFeatureService().GetStageActivityState(normalizedClientType);
 
         foreach (var candidate in normalizedPlan)
         {

@@ -74,11 +74,11 @@ public sealed record StageActivityStage(
             new("12-17-HARD", "12-17-HARD"),
             new("CE-6", "CE-6", Days(DayOfWeek.Tuesday, DayOfWeek.Thursday, DayOfWeek.Saturday, DayOfWeek.Sunday), Tip: "CETip"),
             new("AP-5", "AP-5", Days(DayOfWeek.Monday, DayOfWeek.Thursday, DayOfWeek.Saturday, DayOfWeek.Sunday), Tip: "APTip"),
-            new("CA-5", "CA-5", Days(DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Friday, DayOfWeek.Sunday), Tip: "CATip", DropGroups: [["3301", "3302", "3303"]]),
+            new("CA-5", "CA-5", Days(DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Friday, DayOfWeek.Sunday), Tip: "CATip"),
             new("LS-6", "LS-6", Tip: "LSTip"),
             new("SK-5", "SK-5", Days(DayOfWeek.Monday, DayOfWeek.Wednesday, DayOfWeek.Friday, DayOfWeek.Saturday), Tip: "SKTip"),
             new("Annihilation", "Annihilation"),
-            new("PR-A-1", "PR-A-1", Days(DayOfWeek.Monday, DayOfWeek.Thursday, DayOfWeek.Friday, DayOfWeek.Sunday), Tip: "PR-ATip", DropGroups: [["3261", "3231"], ["3262", "3232"]]),
+            new("PR-A-1", "PR-A-1", Days(DayOfWeek.Monday, DayOfWeek.Thursday, DayOfWeek.Friday, DayOfWeek.Sunday), Tip: "PR-ATip", DropGroups: [["3231", "3261"], ["3232", "3262"]]),
             new("PR-A-2", "PR-A-2", Days(DayOfWeek.Monday, DayOfWeek.Thursday, DayOfWeek.Friday, DayOfWeek.Sunday)),
             new("PR-B-1", "PR-B-1", Days(DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Friday, DayOfWeek.Saturday), Tip: "PR-BTip", DropGroups: [["3251", "3241"], ["3252", "3242"]]),
             new("PR-B-2", "PR-B-2", Days(DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Friday, DayOfWeek.Saturday)),
@@ -86,8 +86,6 @@ public sealed record StageActivityStage(
             new("PR-C-2", "PR-C-2", Days(DayOfWeek.Wednesday, DayOfWeek.Thursday, DayOfWeek.Saturday, DayOfWeek.Sunday)),
             new("PR-D-1", "PR-D-1", Days(DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Saturday, DayOfWeek.Sunday), Tip: "PR-DTip", DropGroups: [["3221", "3281"], ["3222", "3282"]]),
             new("PR-D-2", "PR-D-2", Days(DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Saturday, DayOfWeek.Sunday)),
-            new("OF-1", "OF-1", IsHidden: true),
-            new("OF-F3", "OF-F3", IsHidden: true),
         ];
     }
 

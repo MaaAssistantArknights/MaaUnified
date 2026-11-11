@@ -1209,7 +1209,7 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
                 if (stage.IsCoreVersionSupported && depotCounts.TryGetValue(drop, out var count) && count >= 0)
                 {
                     var inventory = AchievementTextCatalog.GetString("Inventory", language, zhCn ? "库存" : "Inventory");
-                    dropLine += $" ({inventory} {count.ToString(CultureInfo.InvariantCulture)})";
+                    dropLine += $" ({inventory} {FormatInventoryCount(count)})";
                 }
 
                 lines.Add(dropLine);
@@ -1256,6 +1256,19 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
             : $"{lowVersion}\n{minimumRequirements}{minimumRequired}";
     }
 
+    private static string FormatInventoryCount(int count)
+    {
+        // WPF NumberExtensions.FormatNumber(abbreviateK: false), used by StageManager.GetStageTips
+        // through DepotResult.DisplayCount.
+        return count switch
+        {
+            >= 1_000_000_000 => $"{(count / 1_000_000_000.0).ToString("#.#", CultureInfo.InvariantCulture)}B",
+            >= 1_000_000 => $"{(count / 1_000_000.0).ToString("#.#", CultureInfo.InvariantCulture)}M",
+            >= 10_000 => $"{(count / 1_000.0).ToString("#.#", CultureInfo.InvariantCulture)}k",
+            _ => count.ToString(CultureInfo.InvariantCulture),
+        };
+    }
+
     private static string? BuildInventoryHint(
         IReadOnlyList<IReadOnlyList<string>>? inventoryGroups,
         IReadOnlyDictionary<string, int> depotCounts,
@@ -1267,30 +1280,23 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
             return null;
         }
 
-        if (!inventoryGroups
-                .SelectMany(static group => group)
-                .Select(itemId => depotCounts.TryGetValue(itemId, out var count) ? count : -1)
-                .Any(count => count >= 0))
-        {
-            return null;
-        }
-
         var groupTexts = new List<string>(inventoryGroups.Count);
         foreach (var group in inventoryGroups)
         {
             var itemCounts = new List<string>(group.Count);
             foreach (var itemId in group)
             {
+                // WPF GetStageTips renders "-1" for unknown depot counts.
                 itemCounts.Add(depotCounts.TryGetValue(itemId, out var count) && count >= 0
-                    ? count.ToString(CultureInfo.InvariantCulture)
-                    : "--");
+                    ? FormatInventoryCount(count)
+                    : "-1");
             }
 
             groupTexts.Add(string.Join(" & ", itemCounts));
         }
 
         var inventory = AchievementTextCatalog.GetString("Inventory", language, zhCn ? "库存" : "Inventory");
-        return $"({inventory} {string.Join(" / ", groupTexts)})";
+        return $" ({inventory} {string.Join(" / ", groupTexts)})";
     }
 
     private static IReadOnlyDictionary<string, int> ReadDepotCounts(UnifiedConfig? config)
