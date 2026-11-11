@@ -7417,6 +7417,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
         var rawStretchMode = ReadGlobalString(config, ConfigurationKeys.BackgroundImageStretchMode, DefaultBackgroundStretchMode);
         var rawLogItemDateFormat = ReadGlobalString(config, ConfigurationKeys.LogItemDateFormat, DefaultLogItemDateFormat);
         var rawOperNameLanguage = ReadGlobalString(config, ConfigurationKeys.OperNameLanguage, DefaultOperNameLanguage);
+        // WPF reads GUI.InverseClearMode via ConfigurationHelper.GetGlobalValue.
         var rawInverseClearMode = ReadGlobalString(config, ConfigurationKeys.InverseClearMode, DefaultInverseClearMode);
         var rawUseSoftwareRendering = ReadGlobalBool(config, SoftwareRenderingConfigKey, false);
         var rawHotkeys = ReadGlobalString(config, ConfigurationKeys.HotKeys, string.Empty);
@@ -8101,6 +8102,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
         var rawStretchMode = ReadGlobalString(config, ConfigurationKeys.BackgroundImageStretchMode, DefaultBackgroundStretchMode);
         var rawLogItemDateFormat = ReadGlobalString(config, ConfigurationKeys.LogItemDateFormat, DefaultLogItemDateFormat);
         var rawOperNameLanguage = ReadGlobalString(config, ConfigurationKeys.OperNameLanguage, DefaultOperNameLanguage);
+        // WPF reads GUI.InverseClearMode via ConfigurationHelper.GetGlobalValue.
         var rawInverseClearMode = ReadGlobalString(config, ConfigurationKeys.InverseClearMode, DefaultInverseClearMode);
         var rawUseSoftwareRendering = ReadGlobalBool(config, SoftwareRenderingConfigKey, false);
         var rawHotkeys = ReadGlobalString(config, ConfigurationKeys.HotKeys, string.Empty);
@@ -9984,6 +9986,7 @@ public sealed record GuiSettingsSnapshot(
         return new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["Theme.Mode"] = Theme,
+            [ConfigurationKeys.InverseClearMode] = InverseClearMode,
             [ConfigurationKeys.UseTray] = UseTray.ToString(),
             [ConfigurationKeys.UseNotify] = UseNotify.ToString(),
             [ConfigurationKeys.MinimizeToTray] = MinimizeToTray.ToString(),
@@ -10003,6 +10006,9 @@ public sealed record GuiSettingsSnapshot(
 
     public IReadOnlyDictionary<string, string> ToProfileSettingUpdates()
     {
+        // WPF stores GUI.InverseClearMode globally; only MainFunction.InverseMode
+        // is per-configuration. Clear/Inverse still force the per-profile inverse
+        // toggle like GuiSettingsUserControlModel.InverseClearMode does in WPF.
         var updates = new Dictionary<string, string>(StringComparer.Ordinal);
 
         if (string.Equals(InverseClearMode, "Clear", StringComparison.OrdinalIgnoreCase))

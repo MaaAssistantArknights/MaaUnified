@@ -4584,6 +4584,12 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
   <data name="TaskQueue.Root.Delete" xml:space="preserve">
     <value>Delete</value>
   </data>
+  <data name="TaskQueue.Root.DeleteConfirmTitle" xml:space="preserve">
+    <value>Confirm Delete</value>
+  </data>
+  <data name="TaskQueue.Root.DeleteConfirmMessage" xml:space="preserve">
+    <value>Are you sure you want to delete task "{0}"?</value>
+  </data>
   <data name="TaskQueue.Root.GeneralSettings" xml:space="preserve">
     <value>General</value>
   </data>

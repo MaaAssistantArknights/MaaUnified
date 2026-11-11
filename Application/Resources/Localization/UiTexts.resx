@@ -4585,6 +4585,12 @@
   <data name="TaskQueue.Root.Delete" xml:space="preserve">
     <value>删除</value>
   </data>
+  <data name="TaskQueue.Root.DeleteConfirmTitle" xml:space="preserve">
+    <value>确认删除</value>
+  </data>
+  <data name="TaskQueue.Root.DeleteConfirmMessage" xml:space="preserve">
+    <value>确定要删除任务“{0}”吗？</value>
+  </data>
   <data name="TaskQueue.Root.GeneralSettings" xml:space="preserve">
     <value>常规设置</value>
   </data>

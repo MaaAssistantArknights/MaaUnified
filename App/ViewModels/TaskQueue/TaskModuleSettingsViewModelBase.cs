@@ -8,6 +8,7 @@ namespace MAAUnified.App.ViewModels.TaskQueue;
 
 public abstract class TaskModuleSettingsViewModelBase : ObservableObject, ITaskModulePanelViewModel
 {
+    private static readonly TimeSpan PersistDebounceDelay = TimeSpan.FromMilliseconds(200);
     private readonly SemaphoreSlim _persistLock = new(1, 1);
     private CancellationTokenSource? _persistDebounceCts;
     private bool _isTaskBound;
@@ -160,7 +161,7 @@ public abstract class TaskModuleSettingsViewModelBase : ObservableObject, ITaskM
     {
         try
         {
-            await Task.Delay(180, cancellationToken);
+            await Task.Delay(PersistDebounceDelay, cancellationToken);
             await PersistNowAsync(cancellationToken);
         }
         catch (OperationCanceledException)

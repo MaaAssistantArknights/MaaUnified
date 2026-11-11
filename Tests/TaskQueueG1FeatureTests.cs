@@ -50,6 +50,78 @@ public sealed class TaskQueueG1FeatureTests
     }
 
     [Fact]
+    public async Task TaskQueuePage_InitializeOnEmptyQueue_ShouldSelectLastSeededTaskLikeWpf()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        // WPF seeds defaults through sequential add notifications; each add moves
+        // the settings selection to the newly added row, so the final seeded task
+        // (Reclamation) ends up selected and persisted.
+        Assert.Equal(8, vm.Tasks.Count);
+        Assert.Equal(TaskModuleTypes.Reclamation, vm.SelectedTask?.Type);
+        Assert.True(fixture.Config.TryGetCurrentProfile(out var profile));
+        Assert.Equal(vm.Tasks.Count - 1, profile.Values["TaskSelectedIndex"]?.GetValue<int>());
+    }
+
+    [Fact]
+    public async Task TaskQueuePage_RemoveLastTask_ShouldKeepQueueEmptyUntilNextInitialization()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.StartUp, "startup")).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        Assert.Single(vm.Tasks);
+
+        await vm.RemoveSelectedTaskAsync();
+        await vm.WaitForPendingBindingAsync();
+
+        Assert.Empty(vm.Tasks);
+        Assert.Null(vm.SelectedTask);
+
+        // WPF keeps the session queue empty after deleting the final task; the
+        // 200 ms autosave must persist the empty queue instead of reseeding.
+        await Task.Delay(700);
+        var queue = await fixture.TaskQueue.GetCurrentTaskQueueAsync();
+        Assert.True(queue.Success);
+        Assert.Empty(queue.Value!);
+        var persisted = await ReadPersistedProfileAsync(fixture);
+        Assert.Empty(Assert.IsType<JsonArray>(persisted["TaskQueue"]));
+
+        // Defaults only return on the next page/application initialization.
+        var reloaded = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await reloaded.InitializeAsync();
+        Assert.Equal(8, reloaded.Tasks.Count);
+        Assert.Equal(TaskModuleTypes.StartUp, reloaded.Tasks[0].Type);
+        Assert.Equal(TaskModuleTypes.Reclamation, reloaded.SelectedTask?.Type);
+    }
+
+    [Fact]
+    public async Task SettingsPage_InverseClearModeChange_ShouldPersistGloballyLikeWpf()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        vm.InverseClearMode = "Inverse";
+
+        Assert.True(await WaitForConditionAsync(
+            () =>
+            {
+                var globalValues = fixture.Runtime.ConfigurationService.CurrentConfig.GlobalValues;
+                return Task.FromResult(
+                    globalValues.TryGetValue(ConfigurationKeys.InverseClearMode, out var node)
+                    && string.Equals(node?.GetValue<string>(), "Inverse", StringComparison.Ordinal));
+            },
+            retry: 80,
+            delayMs: 50));
+        Assert.True(fixture.Runtime.ConfigurationService.TryGetCurrentProfile(out var profile));
+        Assert.False(profile.Values.ContainsKey(ConfigurationKeys.InverseClearMode));
+    }
+
+    [Fact]
     public async Task TaskQueuePage_SetLanguage_ShouldKeepTextsAndRootTextsAligned()
     {
         await using var fixture = await TestFixture.CreateAsync();
@@ -1023,7 +1095,7 @@ public sealed class TaskQueueG1FeatureTests
     }
 
     [Fact]
-    public async Task TaskQueuePage_ToggleSelectionBatchMode_ShouldPersistLegacyKeys()
+    public async Task TaskQueuePage_ToggleSelectionBatchMode_ShouldPersistInverseClearModeGloballyLikeWpf()
     {
         await using var fixture = await TestFixture.CreateAsync();
         fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.InverseClearMode] = JsonValue.Create("ClearInverse");
@@ -1306,6 +1378,149 @@ public sealed class TaskQueueG1FeatureTests
             return queue.Success && queue.Value is not null && queue.Value[0].IsEnabled is not true;
         });
         Assert.True(synced);
+    }
+
+    [Fact]
+    public async Task TaskQueuePage_BatchEnabledChanges_ShouldKeepExcludedTasksInSyncWithProfile()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.StartUp, "startup", enabled: false)).Success);
+        Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.Roguelike, "rogue", enabled: false)).Success);
+        Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.Reclamation, "reclamation", enabled: true)).Success);
+        Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.Custom, "custom", enabled: true)).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        await vm.SelectAllAsync(true);
+        Assert.Collection(
+            vm.Tasks,
+            task => Assert.True(task.IsEnabled),
+            task => Assert.False(task.IsEnabled),
+            task => Assert.True(task.IsEnabled),
+            task => Assert.True(task.IsEnabled));
+
+        await vm.InverseSelectionAsync();
+        var queue = Assert.IsAssignableFrom<IReadOnlyList<UnifiedTaskItem>>(
+            AssertSuccessfulValue(await fixture.TaskQueue.GetCurrentTaskQueueAsync()));
+        Assert.Equal(queue.Select(static task => task.IsEnabled), vm.Tasks.Select(static task => task.IsEnabled));
+
+        await vm.SelectAllAsync(false);
+        queue = Assert.IsAssignableFrom<IReadOnlyList<UnifiedTaskItem>>(
+            AssertSuccessfulValue(await fixture.TaskQueue.GetCurrentTaskQueueAsync()));
+        Assert.All(vm.Tasks, task => Assert.False(task.IsEnabled));
+        Assert.All(queue, task => Assert.False(task.IsEnabled));
+    }
+
+    [Fact]
+    public async Task TaskQueuePage_QueueAndSelectionChanges_ShouldAutoSaveWithinWpfDelayWindow()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.StartUp, "startup")).Success);
+        Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.Fight, "fight")).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        vm.SelectedTask = vm.Tasks[1];
+        vm.RenameTargetName = "fight-renamed";
+        await vm.RenameSelectedTaskAsync();
+
+        Assert.True(await WaitForConditionAsync(async () =>
+        {
+            var profile = await ReadPersistedProfileAsync(fixture);
+            var queue = Assert.IsType<JsonArray>(profile["TaskQueue"]);
+            var values = Assert.IsType<JsonObject>(profile["Values"]);
+            return string.Equals(queue[1]?["Name"]?.GetValue<string>(), "fight-renamed", StringComparison.Ordinal)
+                && values["TaskSelectedIndex"]?.GetValue<int>() == 1;
+        }, retry: 30, delayMs: 20));
+    }
+
+    [Fact]
+    public async Task TaskQueuePage_ProfileSelectionMinusOne_ShouldFallbackToFightLikeWpf()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.StartUp, "startup")).Success);
+        Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.Fight, "fight")).Success);
+        Assert.True(fixture.Config.TryGetCurrentProfile(out var profile));
+        profile.Values["TaskSelectedIndex"] = JsonValue.Create(-1);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        Assert.Equal(TaskModuleTypes.Fight, vm.SelectedTask?.Type);
+    }
+
+    [Fact]
+    public async Task TaskQueuePage_AddAndRemove_ShouldSelectWpfEquivalentTaskAndRequireUiConfirmation()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.StartUp, "startup")).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        await vm.AddTaskAsync(TaskModuleTypes.Fight);
+        Assert.Equal(TaskModuleTypes.Fight, vm.SelectedTask?.Type);
+
+        await vm.RemoveSelectedTaskWithConfirmationAsync();
+        Assert.Equal(2, vm.Tasks.Count);
+
+        await vm.RemoveSelectedTaskAsync();
+        Assert.Single(vm.Tasks);
+        Assert.Equal(TaskModuleTypes.StartUp, vm.SelectedTask?.Type);
+    }
+
+    [Fact]
+    public async Task TaskQueuePage_TaskEnabledToggle_WhenBoundModuleSaveFails_ShouldRollbackUiState()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.StartUp, "startup")).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        vm.StartUpModule.AccountName = "force-bound-module-save";
+        Assert.True(vm.StartUpModule.IsDirty);
+        Assert.True((await fixture.TaskQueue.RemoveTaskAsync(0)).Success);
+
+        vm.Tasks[0].IsEnabled = false;
+
+        Assert.True(await WaitForConditionAsync(
+            () => Task.FromResult(vm.Tasks[0].IsEnabled is true),
+            retry: 30,
+            delayMs: 20));
+    }
+
+    [Fact]
+    public async Task TaskQueuePage_CloseFlush_ShouldResetAndPersistOneShotEnabledState()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.SingleStep, "single-step", enabled: false)).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        await vm.ToggleTaskEnabledOneShotAsync(Assert.Single(vm.Tasks));
+        Assert.Null(vm.Tasks[0].IsEnabled);
+
+        Assert.True(await vm.FlushConfigurationSavesForCloseAsync());
+        Assert.False(vm.Tasks[0].IsEnabled);
+        Assert.False((await ReadPersistedTaskAsync(fixture))["IsEnabled"]?.GetValue<bool>());
+    }
+
+    [Fact]
+    public async Task TaskQueuePage_TypedModuleChange_ShouldPersistWithinUnifiedTwoHundredMillisecondDebounce()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.StartUp, "startup")).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        vm.StartUpModule.AccountName = "debounce-200ms";
+
+        Assert.True(await WaitForConditionAsync(async () =>
+        {
+            var result = await fixture.TaskQueue.GetTaskParamsAsync(0);
+            return result.Success
+                && string.Equals(result.Value?["account_name"]?.GetValue<string>(), "debounce-200ms", StringComparison.Ordinal);
+        }, retry: 19, delayMs: 20));
     }
 
     [Fact]
@@ -1644,12 +1859,23 @@ public sealed class TaskQueueG1FeatureTests
 
     private static async Task<JsonObject> ReadPersistedTaskAsync(TestFixture fixture)
     {
+        var persistedDefault = await ReadPersistedProfileAsync(fixture);
+        var persistedQueue = Assert.IsType<JsonArray>(persistedDefault["TaskQueue"]);
+        return Assert.IsType<JsonObject>(persistedQueue[0]);
+    }
+
+    private static async Task<JsonObject> ReadPersistedProfileAsync(TestFixture fixture)
+    {
         var persistedPath = Path.Combine(fixture.Root, "config", "avalonia.json");
         var persisted = Assert.IsType<JsonObject>(JsonNode.Parse(await File.ReadAllTextAsync(persistedPath)));
         var persistedProfiles = Assert.IsType<JsonObject>(persisted["Profiles"]);
-        var persistedDefault = Assert.IsType<JsonObject>(persistedProfiles["Default"]);
-        var persistedQueue = Assert.IsType<JsonArray>(persistedDefault["TaskQueue"]);
-        return Assert.IsType<JsonObject>(persistedQueue[0]);
+        return Assert.IsType<JsonObject>(persistedProfiles["Default"]);
+    }
+
+    private static T AssertSuccessfulValue<T>(UiOperationResult<T> result)
+    {
+        Assert.True(result.Success, result.Message);
+        return Assert.IsAssignableFrom<T>(result.Value);
     }
 
     [Fact]

@@ -3026,6 +3026,12 @@ OF-1 스테이지가 개방되지 않은 경우에는 선택하지 마세요.</v
   <data name="TaskQueue.Root.Delete" xml:space="preserve">
     <value>삭제</value>
   </data>
+  <data name="TaskQueue.Root.DeleteConfirmTitle" xml:space="preserve">
+    <value>삭제 확인</value>
+  </data>
+  <data name="TaskQueue.Root.DeleteConfirmMessage" xml:space="preserve">
+    <value>작업 "{0}"을(를) 삭제하시겠습니까?</value>
+  </data>
   <data name="TaskQueue.Root.GeneralSettings" xml:space="preserve">
     <value>일반 설정</value>
   </data>

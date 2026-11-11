@@ -1385,6 +1385,128 @@ public sealed class MainShellViewModelTests
     }
 
     [Fact]
+    public async Task SettingsProfileSwitch_WhenTargetProfileOmitsTaskSelectedIndex_ShouldFallbackToFirstFightTaskLikeWpf()
+    {
+        await using var fixture = await TestFixture.CreateAsync(
+            existingAvaloniaJson: CreateMissingTaskSelectedIndexSwitchConfigJson());
+        await fixture.ViewModel.InitializeAsync();
+
+        Assert.True(await WaitUntilAsync(
+            () => string.Equals(fixture.ViewModel.TaskQueuePage.SelectedTask?.Name, "Infrast Default", StringComparison.Ordinal)));
+
+        fixture.ViewModel.SettingsPage.ConfigurationManagerSelectedProfile = "Alt";
+        await fixture.ViewModel.SettingsPage.SwitchConfigurationProfileAsync();
+
+        // WPF defaults a missing SpecificConfig.TaskSelectedIndex to -1 and falls
+        // back to the first Fight task; it never reuses the previous profile's
+        // numeric index (which would select Infrast Alt at index 2 here).
+        Assert.True(await WaitUntilAsync(
+            () => string.Equals(
+                      fixture.Runtime.ConfigurationService.CurrentConfig.CurrentProfile,
+                      "Alt",
+                      StringComparison.OrdinalIgnoreCase)
+                  && string.Equals(
+                      fixture.ViewModel.TaskQueuePage.SelectedTask?.Name,
+                      "Fight Alt",
+                      StringComparison.Ordinal)));
+        Assert.Equal(
+            1,
+            fixture.Runtime.ConfigurationService.CurrentConfig.Profiles["Alt"].Values["TaskSelectedIndex"]?.GetValue<int>());
+    }
+
+    [Fact]
+    public async Task SettingsProfileSwitch_ShouldKeepInverseClearModeGlobalLikeWpf()
+    {
+        await using var fixture = await TestFixture.CreateAsync(
+            existingAvaloniaJson: CreateInverseClearModeGlobalSwitchConfigJson());
+        await fixture.ViewModel.InitializeAsync();
+
+        // The stale per-profile copy in Default must not override the global value.
+        Assert.True(await WaitUntilAsync(
+            () => fixture.ViewModel.TaskQueuePage.SelectionBatchMode == SelectionBatchMode.Inverse
+                  && !fixture.ViewModel.TaskQueuePage.ShowBatchModeToggle));
+
+        fixture.ViewModel.SettingsPage.ConfigurationManagerSelectedProfile = "Alt";
+        await fixture.ViewModel.SettingsPage.SwitchConfigurationProfileAsync();
+
+        Assert.True(await WaitUntilAsync(
+            () => string.Equals(
+                      fixture.Runtime.ConfigurationService.CurrentConfig.CurrentProfile,
+                      "Alt",
+                      StringComparison.OrdinalIgnoreCase)
+                  && string.Equals(
+                      fixture.ViewModel.TaskQueuePage.SelectedTask?.Name,
+                      "StartUp Alt",
+                      StringComparison.Ordinal)));
+
+        Assert.False(fixture.ViewModel.TaskQueuePage.ShowBatchModeToggle);
+        Assert.Equal(SelectionBatchMode.Inverse, fixture.ViewModel.TaskQueuePage.SelectionBatchMode);
+        Assert.Equal(
+            "Inverse",
+            fixture.Runtime.ConfigurationService.CurrentConfig.GlobalValues[ConfigurationKeys.InverseClearMode]?.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task SettingsProfileSwitch_ShouldRehydrateSourceProfileOneShotRunOnceToEnabledLikeWpf()
+    {
+        await using var fixture = await TestFixture.CreateAsync(
+            existingAvaloniaJson: CreateOneShotProfileSwitchConfigJson(invertNullFunction: false));
+        await fixture.ViewModel.InitializeAsync();
+
+        var sourceTask = Assert.Single(fixture.ViewModel.TaskQueuePage.Tasks);
+        Assert.False(sourceTask.IsEnabled);
+        await fixture.ViewModel.TaskQueuePage.ToggleTaskEnabledOneShotAsync(sourceTask);
+        Assert.Null(sourceTask.IsEnabled);
+
+        fixture.ViewModel.SettingsPage.ConfigurationManagerSelectedProfile = "Alt";
+        await fixture.ViewModel.SettingsPage.SwitchConfigurationProfileAsync();
+
+        Assert.True(await WaitUntilAsync(
+            () => string.Equals(
+                fixture.Runtime.ConfigurationService.CurrentConfig.CurrentProfile,
+                "Alt",
+                StringComparison.OrdinalIgnoreCase)));
+
+        // WPF omits null IsEnable on save (WhenWritingNull) and rehydrates it to
+        // the BaseTask.IsEnable initializer (true) on the next load, so the source
+        // profile's pending run-once state settles to enabled, not disabled.
+        var defaultProfile = fixture.Runtime.ConfigurationService.CurrentConfig.Profiles["Default"];
+        Assert.True(Assert.Single(defaultProfile.TaskQueue).IsEnabled);
+
+        var persisted = JsonNode.Parse(await File.ReadAllTextAsync(
+            Path.Combine(fixture.Root, "config", "avalonia.json")));
+        var persistedTask = persisted?["Profiles"]?["Default"]?["TaskQueue"]?[0];
+        Assert.True(persistedTask?["IsEnabled"]?.GetValue<bool>());
+    }
+
+    [Fact]
+    public async Task SettingsProfileSwitch_InvertNullMode_ShouldRehydrateSourceProfileOneShotSkipOnceToEnabledLikeWpf()
+    {
+        await using var fixture = await TestFixture.CreateAsync(
+            existingAvaloniaJson: CreateOneShotProfileSwitchConfigJson(invertNullFunction: true));
+        await fixture.ViewModel.InitializeAsync();
+
+        var sourceTask = Assert.Single(fixture.ViewModel.TaskQueuePage.Tasks);
+        Assert.True(sourceTask.IsEnabled);
+        await fixture.ViewModel.TaskQueuePage.ToggleTaskEnabledOneShotAsync(sourceTask);
+        Assert.Null(sourceTask.IsEnabled);
+
+        fixture.ViewModel.SettingsPage.ConfigurationManagerSelectedProfile = "Alt";
+        await fixture.ViewModel.SettingsPage.SwitchConfigurationProfileAsync();
+
+        Assert.True(await WaitUntilAsync(
+            () => string.Equals(
+                fixture.Runtime.ConfigurationService.CurrentConfig.CurrentProfile,
+                "Alt",
+                StringComparison.OrdinalIgnoreCase)));
+
+        // In inverted-null mode the source profile's pending skip-once state also
+        // rehydrates to the BaseTask.IsEnable initializer (true), matching WPF.
+        var defaultProfile = fixture.Runtime.ConfigurationService.CurrentConfig.Profiles["Default"];
+        Assert.True(Assert.Single(defaultProfile.TaskQueue).IsEnabled);
+    }
+
+    [Fact]
     public async Task SettingsProfileSwitch_StartUpClientTypeUiInitialization_ShouldKeepLoadedAccountName()
     {
         await using var fixture = await TestFixture.CreateAsync(
@@ -2103,7 +2225,6 @@ public sealed class MainShellViewModelTests
                     "AdbPath": "/tmp/adb-default",
                     "TaskSelectedIndex": 1,
                     "Infrast.DefaultInfrast": "153_layout_3_times_a_day.json",
-                    "GUI.InverseClearMode": "ClearInverse",
                     "MainFunction.InverseMode": "False",
                     "Roguelike.RoguelikeDelayAbortUntilCombatComplete": "True"
                   },
@@ -2146,7 +2267,6 @@ public sealed class MainShellViewModelTests
                     "AdbPath": "/tmp/adb-alt",
                     "TaskSelectedIndex": 2,
                     "Infrast.DefaultInfrast": "243_layout_4_times_a_day.json",
-                    "GUI.InverseClearMode": "ClearInverse",
                     "MainFunction.InverseMode": "True",
                     "Roguelike.RoguelikeDelayAbortUntilCombatComplete": "False"
                   },
@@ -2184,7 +2304,8 @@ public sealed class MainShellViewModelTests
                 }
               },
               "GlobalValues": {
-                "GUI.Localization": "zh-cn"
+                "GUI.Localization": "zh-cn",
+                "GUI.InverseClearMode": "ClearInverse"
               },
               "Migration": {}
             }
@@ -2238,6 +2359,156 @@ public sealed class MainShellViewModelTests
               },
               "GlobalValues": {
                 "GUI.Localization": "zh-cn"
+              },
+              "Migration": {}
+            }
+            """;
+    }
+
+    private static string CreateMissingTaskSelectedIndexSwitchConfigJson()
+    {
+        return
+            """
+            {
+              "SchemaVersion": 2,
+              "CurrentProfile": "Default",
+              "Profiles": {
+                "Default": {
+                  "Values": {
+                    "TaskSelectedIndex": 2
+                  },
+                  "TaskQueue": [
+                    {
+                      "Type": "StartUp",
+                      "Name": "StartUp Default",
+                      "IsEnabled": true,
+                      "Params": {}
+                    },
+                    {
+                      "Type": "Fight",
+                      "Name": "Fight Default",
+                      "IsEnabled": true,
+                      "Params": {}
+                    },
+                    {
+                      "Type": "Infrast",
+                      "Name": "Infrast Default",
+                      "IsEnabled": true,
+                      "Params": {}
+                    }
+                  ]
+                },
+                "Alt": {
+                  "Values": {},
+                  "TaskQueue": [
+                    {
+                      "Type": "StartUp",
+                      "Name": "StartUp Alt",
+                      "IsEnabled": true,
+                      "Params": {}
+                    },
+                    {
+                      "Type": "Fight",
+                      "Name": "Fight Alt",
+                      "IsEnabled": true,
+                      "Params": {}
+                    },
+                    {
+                      "Type": "Infrast",
+                      "Name": "Infrast Alt",
+                      "IsEnabled": true,
+                      "Params": {}
+                    }
+                  ]
+                }
+              },
+              "GlobalValues": {
+                "GUI.Localization": "zh-cn"
+              },
+              "Migration": {}
+            }
+            """;
+    }
+
+    private static string CreateInverseClearModeGlobalSwitchConfigJson()
+    {
+        return
+            """
+            {
+              "SchemaVersion": 2,
+              "CurrentProfile": "Default",
+              "Profiles": {
+                "Default": {
+                  "Values": {
+                    "GUI.InverseClearMode": "ClearInverse"
+                  },
+                  "TaskQueue": [
+                    {
+                      "Type": "StartUp",
+                      "Name": "StartUp Default",
+                      "IsEnabled": true,
+                      "Params": {}
+                    }
+                  ]
+                },
+                "Alt": {
+                  "Values": {},
+                  "TaskQueue": [
+                    {
+                      "Type": "StartUp",
+                      "Name": "StartUp Alt",
+                      "IsEnabled": true,
+                      "Params": {}
+                    }
+                  ]
+                }
+              },
+              "GlobalValues": {
+                "GUI.Localization": "zh-cn",
+                "GUI.InverseClearMode": "Inverse"
+              },
+              "Migration": {}
+            }
+            """;
+    }
+
+    private static string CreateOneShotProfileSwitchConfigJson(bool invertNullFunction)
+    {
+        var sourceIsEnabled = invertNullFunction ? "true" : "false";
+        var invertNullLine = invertNullFunction
+            ? "                \"GUI.MainTasksInvertNullFunction\": true,\n"
+            : string.Empty;
+        return
+            $$"""
+            {
+              "SchemaVersion": 2,
+              "CurrentProfile": "Default",
+              "Profiles": {
+                "Default": {
+                  "Values": {},
+                  "TaskQueue": [
+                    {
+                      "Type": "SingleStep",
+                      "Name": "OneShot Default",
+                      "IsEnabled": {{sourceIsEnabled}},
+                      "Params": {}
+                    }
+                  ]
+                },
+                "Alt": {
+                  "Values": {},
+                  "TaskQueue": [
+                    {
+                      "Type": "Fight",
+                      "Name": "Fight Alt",
+                      "IsEnabled": true,
+                      "Params": {}
+                    }
+                  ]
+                }
+              },
+              "GlobalValues": {
+            {{invertNullLine}}                "GUI.Localization": "zh-cn"
               },
               "Migration": {}
             }

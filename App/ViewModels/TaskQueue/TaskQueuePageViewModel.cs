@@ -318,6 +318,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         };
 
     private const int MaxTimeoutMinutes = 11451;
+    private static readonly TimeSpan TaskQueueAutoSaveDelay = TimeSpan.FromMilliseconds(200);
     private const string UiMallCreditFightLastTime = "_ui_mall_credit_fight_last_time";
     private const string UiMallVisitFriendsLastTime = "_ui_mall_visit_friends_last_time";
     private readonly SemaphoreSlim _logThumbnailSemaphore = new(1, 1);
@@ -325,6 +326,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     private readonly SemaphoreSlim _runTransitionLock = new(1, 1);
     private readonly object _pendingBindingGate = new();
     private readonly object _moduleAutoSaveGate = new();
+    private readonly object _taskQueueAutoSaveGate = new();
     private readonly OverlaySharedState _overlaySharedState;
     private readonly ConnectionGameSharedStateViewModel _connectionGameSharedState;
     private readonly GameDataReportService _gameDataReportService;
@@ -348,6 +350,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     private Task _pendingBindingTask = Task.CompletedTask;
     private Task _stopStartRequestTask = Task.CompletedTask;
     private CancellationTokenSource? _moduleAutoSaveCts;
+    private CancellationTokenSource? _taskQueueAutoSaveCts;
     private int _pendingBindingVersion;
     private CancellationTokenSource? _startRequestCts;
     private CancellationTokenSource? _stallReminderCts;
@@ -1246,7 +1249,11 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     {
         SetLanguage(ResolveLanguage());
         RefreshConfigValidationState(Runtime.ConfigurationService.CurrentValidationIssues);
-        await ReloadTasksAsync(cancellationToken, preferProfileSelectedIndex: true, waitForPendingBinding: false);
+        await ReloadTasksAsync(
+            cancellationToken,
+            preferProfileSelectedIndex: true,
+            waitForPendingBinding: false,
+            seedDefaultsWhenEmpty: true);
 
         ApplyGuiSettingsFromConfig();
         UpdatePostActionSummary();
@@ -1271,7 +1278,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         await ReloadTasksAsync(
             cancellationToken,
             preferProfileSelectedIndex: true,
-            waitForPendingBinding: false);
+            waitForPendingBinding: false,
+            seedDefaultsWhenEmpty: true);
         await ReloadTaskPanelPersistentConfigAsync(cancellationToken);
         ApplyGuiSettingsFromConfig();
         await PostActionModule.InitializeAsync(cancellationToken);
@@ -1693,7 +1701,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     public async Task ReloadTasksAsync(
         CancellationToken cancellationToken = default,
         bool preferProfileSelectedIndex = false,
-        bool waitForPendingBinding = true)
+        bool waitForPendingBinding = true,
+        bool seedDefaultsWhenEmpty = false)
     {
         var previousSelectedIndex = SelectedTask is null ? -1 : Tasks.IndexOf(SelectedTask);
         var tasks = await ApplyResultAsync(
@@ -1706,7 +1715,12 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             return;
         }
 
-        if (tasks.Count == 0)
+        // WPF seeds the default queue only from TaskQueueViewModel.InitializeItems
+        // (initial activation, i.e. process start, including the restart caused by
+        // a profile switch). Explicit deletions that empty the queue keep it empty
+        // until the next initialization, so seeding is opt-in per call site.
+        var seededDefaults = false;
+        if (tasks.Count == 0 && seedDefaultsWhenEmpty)
         {
             if (!await SeedDefaultTaskQueueAsync(cancellationToken))
             {
@@ -1721,6 +1735,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             {
                 return;
             }
+
+            seededDefaults = tasks.Count > 0;
         }
 
         foreach (var task in Tasks)
@@ -1747,7 +1763,12 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
         await RebuildTaskPanelsAsync(cancellationToken);
 
-        var reloadSelectionIndex = ResolveReloadSelectionIndex(preferProfileSelectedIndex, previousSelectedIndex, Tasks.Count);
+        // WPF seeds defaults through sequential add notifications; each add moves
+        // the settings selection to the newly added row, so the final seeded task
+        // (Reclamation, last index) ends up selected and persisted.
+        var reloadSelectionIndex = seededDefaults
+            ? Tasks.Count - 1
+            : ResolveReloadSelectionIndex(preferProfileSelectedIndex, previousSelectedIndex, Tasks.Count);
         if (reloadSelectionIndex.HasValue)
         {
             SelectedTask = Tasks[reloadSelectionIndex.Value];
@@ -2103,6 +2124,15 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             await WaitForPendingBindingAsync(cancellationToken);
             if (!await SaveBoundTaskModulesAsync(cancellationToken))
             {
+                _suppressTaskEnabledSync = true;
+                try
+                {
+                    task.IsEnabled = revertEnabled;
+                }
+                finally
+                {
+                    _suppressTaskEnabledSync = false;
+                }
                 return;
             }
 
@@ -2118,6 +2148,10 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 {
                     _suppressTaskEnabledSync = false;
                 }
+            }
+            else
+            {
+                RegisterTaskQueueSavePending();
             }
         }
         finally
@@ -2151,6 +2185,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             "TaskQueue.AddTask",
             ct => Runtime.TaskQueueFeatureService.AddTaskAsync(normalizedTaskType, taskName, true, ct),
             resetBindingsBeforeReload: true,
+            onSuccessAsync: async ct => await SelectTaskByIndexAsync(Tasks.Count - 1, ct),
             cancellationToken: cancellationToken);
     }
 
@@ -2173,7 +2208,39 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             "TaskQueue.RemoveTask",
             ct => Runtime.TaskQueueFeatureService.RemoveTaskAsync(index, ct),
             resetBindingsBeforeReload: true,
+            onSuccessAsync: async ct =>
+            {
+                if (Tasks.Count > 0)
+                {
+                    await SelectTaskByIndexAsync(Math.Min(index, Tasks.Count - 1), ct);
+                }
+                else
+                {
+                    SelectedTask = null;
+                }
+            },
             cancellationToken: cancellationToken);
+    }
+
+    public async Task RemoveSelectedTaskWithConfirmationAsync(CancellationToken cancellationToken = default)
+    {
+        if (SelectedTask is null)
+        {
+            await RemoveSelectedTaskAsync(cancellationToken);
+            return;
+        }
+
+        var task = SelectedTask;
+        var request = new WarningConfirmDialogRequest(
+            RootTexts.GetOrDefault("TaskQueue.Root.DeleteConfirmTitle", "Delete task"),
+            string.Format(RootTexts.GetOrDefault("TaskQueue.Root.DeleteConfirmMessage", "Delete task \"{0}\"?"), task.Name),
+            ConfirmText: TaskMenuDeleteText,
+            CancelText: RootTexts.GetOrDefault("Dialog.Common.Cancel", "Cancel"));
+        var result = await _dialogService.ShowWarningConfirmAsync(request, "TaskQueue.RemoveTask.Dialog", cancellationToken);
+        if (result.Return == DialogReturnSemantic.Confirm)
+        {
+            await RemoveSelectedTaskAsync(cancellationToken);
+        }
     }
 
     public async Task RenameSelectedTaskAsync(CancellationToken cancellationToken = default)
@@ -2347,6 +2414,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             "TaskQueue.SelectAll",
             ct => Runtime.TaskQueueFeatureService.SetAllTasksEnabledAsync(enabled, ct),
             _ => enabled,
+            skipExcludedTaskTypes: enabled,
             cancellationToken: cancellationToken);
     }
 
@@ -2356,6 +2424,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             "TaskQueue.InverseSelection",
             ct => Runtime.TaskQueueFeatureService.InvertTasksEnabledAsync(ct),
             current => !(current ?? true),
+            skipExcludedTaskTypes: true,
             cancellationToken: cancellationToken);
     }
 
@@ -2363,6 +2432,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         string scope,
         Func<CancellationToken, Task<UiOperationResult>> mutationAsync,
         Func<bool?, bool> resolveEnabled,
+        bool skipExcludedTaskTypes,
         CancellationToken cancellationToken = default)
     {
         if (!await EnsureEditableAsync(scope, cancellationToken))
@@ -2379,7 +2449,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 return false;
             }
 
-            ApplyLocalTaskEnabledBatch(resolveEnabled);
+            ApplyLocalTaskEnabledBatch(resolveEnabled, skipExcludedTaskTypes);
             RegisterTaskQueueSavePending();
             return true;
         }
@@ -2389,13 +2459,18 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         }
     }
 
-    private void ApplyLocalTaskEnabledBatch(Func<bool?, bool> resolveEnabled)
+    private void ApplyLocalTaskEnabledBatch(Func<bool?, bool> resolveEnabled, bool skipExcludedTaskTypes)
     {
         _suppressTaskEnabledSync = true;
         try
         {
             foreach (var task in Tasks)
             {
+                if (skipExcludedTaskTypes && IsSkippedTaskType(task.Type))
+                {
+                    continue;
+                }
+
                 var next = resolveEnabled(task.IsEnabled);
                 if (task.IsEnabled != next)
                 {
@@ -2409,9 +2484,21 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         }
     }
 
+    private static bool IsSkippedTaskType(string taskType)
+    {
+        var normalizedType = TaskModuleTypes.Normalize(taskType);
+        return string.Equals(normalizedType, TaskModuleTypes.Roguelike, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(normalizedType, TaskModuleTypes.Reclamation, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(normalizedType, TaskModuleTypes.Custom, StringComparison.OrdinalIgnoreCase);
+    }
+
     private void ApplyLocalOneShotTaskEnabledReset()
     {
-        var resetValue = TaskQueueEnabledState.ResetOneShotValue(Runtime.ConfigurationService.CurrentConfig);
+        ApplyLocalOneShotTaskEnabledReset(TaskQueueEnabledState.ResetOneShotValue(Runtime.ConfigurationService.CurrentConfig));
+    }
+
+    private void ApplyLocalOneShotTaskEnabledReset(bool resetValue)
+    {
         _suppressTaskEnabledSync = true;
         try
         {
@@ -2697,7 +2784,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     {
         try
         {
-            await Task.Delay(450, cancellationToken);
+            await Task.Delay(TaskQueueAutoSaveDelay, cancellationToken);
             await _queueMutationLock.WaitAsync(cancellationToken);
             try
             {
@@ -4825,14 +4912,74 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         return false;
     }
 
-    public async Task<bool> FlushConfigurationSavesForCloseAsync(CancellationToken cancellationToken = default)
+    public Task<bool> FlushConfigurationSavesForCloseAsync(CancellationToken cancellationToken = default)
+    {
+        return FlushConfigurationSavesCoreAsync(forProfileSwitch: false, cancellationToken);
+    }
+
+    // WPF switches ConfigFactory.CurrentConfig before shutting down, so the exit
+    // one-shot reset only runs against the new profile. The source profile's
+    // one-shot (null) enabled state is omitted from the saved JSON
+    // (DefaultIgnoreCondition.WhenWritingNull) and rehydrates to the
+    // BaseTask.IsEnable initializer (true) on the next load, so a profile switch
+    // settles pending one-shot states to enabled instead of disabled.
+    public Task<bool> FlushConfigurationSavesForProfileSwitchAsync(CancellationToken cancellationToken = default)
+    {
+        return FlushConfigurationSavesCoreAsync(forProfileSwitch: true, cancellationToken);
+    }
+
+    private async Task<bool> FlushConfigurationSavesCoreAsync(bool forProfileSwitch, CancellationToken cancellationToken)
     {
         CancelTypedModuleAutoSave();
+        CancelTaskQueueAutoSave();
 
         await _queueMutationLock.WaitAsync(cancellationToken);
         try
         {
             await WaitForPendingBindingAsync(cancellationToken);
+            var oneShotScope = forProfileSwitch
+                ? "TaskQueue.OneShotReset.ProfileSwitch"
+                : "TaskQueue.OneShotReset.Close";
+            var oneShotFailureMessage = forProfileSwitch
+                ? "Failed to settle one-shot task enabled states before switching profiles."
+                : "Failed to reset one-shot task enabled states before closing.";
+            CoreResult<int> oneShotReset;
+            try
+            {
+                oneShotReset = forProfileSwitch
+                    ? await Runtime.TaskQueueFeatureService.RehydrateOneShotTaskEnabledStatesForProfileSwitchAsync(cancellationToken)
+                    : await Runtime.TaskQueueFeatureService.ConsumeCompletedOneShotTaskEnabledStatesAsync(cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                LastErrorMessage = oneShotFailureMessage;
+                await RecordUnhandledExceptionAsync(
+                    oneShotScope,
+                    ex,
+                    UiErrorCode.SettingsSaveFailed,
+                    LastErrorMessage);
+                return false;
+            }
+
+            if (!oneShotReset.Success)
+            {
+                LastErrorMessage = oneShotReset.Error?.Message ?? oneShotFailureMessage;
+                await RecordErrorAsync(oneShotScope, LastErrorMessage);
+                return false;
+            }
+
+            if (oneShotReset.Value > 0)
+            {
+                if (forProfileSwitch)
+                {
+                    ApplyLocalOneShotTaskEnabledReset(resetValue: true);
+                }
+                else
+                {
+                    ApplyLocalOneShotTaskEnabledReset();
+                }
+            }
+
             if (CanEdit)
             {
                 _suppressModuleAutoSave = true;
@@ -4877,12 +5024,51 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
     private void RegisterTaskQueueSavePending()
     {
-        ConfigurationSaveTracker.Instance.MarkPending(
-            TaskQueueSaveKey,
-            ResolveTaskQueueSaveDisplayName(),
-            "TaskQueue.Save",
-            Runtime.DiagnosticsService,
-            SaveTaskQueueCoreAsync);
+        lock (_taskQueueAutoSaveGate)
+        {
+            ConfigurationSaveTracker.Instance.MarkPending(
+                TaskQueueSaveKey,
+                ResolveTaskQueueSaveDisplayName(),
+                "TaskQueue.Save",
+                Runtime.DiagnosticsService,
+                SaveTaskQueueCoreAsync);
+            _taskQueueAutoSaveCts?.Cancel();
+            _taskQueueAutoSaveCts?.Dispose();
+            _taskQueueAutoSaveCts = new CancellationTokenSource();
+            _ = PersistTaskQueueDebouncedAsync(_taskQueueAutoSaveCts.Token);
+        }
+    }
+
+    private async Task PersistTaskQueueDebouncedAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(TaskQueueAutoSaveDelay, cancellationToken);
+            await _queueMutationLock.WaitAsync(cancellationToken);
+            try
+            {
+                if (CanEdit)
+                {
+                    _ = await SaveTaskQueueTrackedAsync(cancellationToken, "TaskQueue.AutoSave");
+                }
+            }
+            finally
+            {
+                _queueMutationLock.Release();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Debounced autosave canceled by newer queue changes or an explicit flush.
+        }
+        catch (Exception ex)
+        {
+            await RecordUnhandledExceptionAsync(
+                "TaskQueue.AutoSave",
+                ex,
+                UiErrorCode.SettingsSaveFailed,
+                "Failed to auto-save the task queue.");
+        }
     }
 
     private Task<bool> SaveTaskQueueTrackedAsync(
@@ -7874,6 +8060,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         var config = Runtime.ConfigurationService.CurrentConfig;
         var inverseMode = TryReadProfileBool(config, ConfigurationKeys.MainFunctionInverseMode, false);
         ApplySelectionBatchMode(
+            // WPF reads GUI.InverseClearMode via ConfigurationHelper.GetGlobalValue,
+            // so the Clear/Inverse/ClearInverse mode is global, not profile-scoped.
             TryReadGlobalString(config.GlobalValues, ConfigurationKeys.InverseClearMode, "Clear"),
             inverseMode);
     }
@@ -8193,6 +8381,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     private void PrepareForConfigurationContextSwitch()
     {
         CancelTypedModuleAutoSave();
+        CancelTaskQueueAutoSave();
         CancelPendingBinding();
         ClearTaskModuleBindings();
     }
@@ -8204,6 +8393,16 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             _moduleAutoSaveCts?.Cancel();
             _moduleAutoSaveCts?.Dispose();
             _moduleAutoSaveCts = null;
+        }
+    }
+
+    private void CancelTaskQueueAutoSave()
+    {
+        lock (_taskQueueAutoSaveGate)
+        {
+            _taskQueueAutoSaveCts?.Cancel();
+            _taskQueueAutoSaveCts?.Dispose();
+            _taskQueueAutoSaveCts = null;
         }
     }
 
@@ -8226,6 +8425,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
         var selectedIndex = _selectedTask is null ? -1 : Tasks.IndexOf(_selectedTask);
         profile.Values[TaskSelectedIndexConfigKey] = JsonValue.Create(selectedIndex);
+        RegisterTaskQueueSavePending();
     }
 
     private int? ResolveReloadSelectionIndex(bool preferProfileSelectedIndex, int previousSelectedIndex, int taskCount)
@@ -8235,20 +8435,39 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             return null;
         }
 
-        if (preferProfileSelectedIndex && TryReadPersistedSelectedTaskIndex(out var persistedIndex))
+        if (preferProfileSelectedIndex)
         {
-            return persistedIndex switch
-            {
-                < 0 when previousSelectedIndex >= 0 && previousSelectedIndex < taskCount => previousSelectedIndex,
-                < 0 => null,
-                _ when persistedIndex < taskCount => persistedIndex,
-                _ => 0,
-            };
+            // WPF SpecificConfig.TaskSelectedIndex defaults to -1 when the key is
+            // absent, and InitializeItems falls back from an invalid index to the
+            // first Fight task and then to the first task; it never reuses the
+            // previous profile's numeric index.
+            var persistedIndex = TryReadPersistedSelectedTaskIndex(out var storedIndex)
+                ? storedIndex
+                : -1;
+            return persistedIndex >= 0 && persistedIndex < taskCount
+                ? persistedIndex
+                : ResolveFightTaskIndex();
         }
 
         if (previousSelectedIndex >= 0 && previousSelectedIndex < taskCount)
         {
             return previousSelectedIndex;
+        }
+
+        return 0;
+    }
+
+    private int ResolveFightTaskIndex()
+    {
+        for (var index = 0; index < Tasks.Count; index++)
+        {
+            if (string.Equals(
+                    TaskModuleTypes.Normalize(Tasks[index].Type),
+                    TaskModuleTypes.Fight,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return index;
+            }
         }
 
         return 0;

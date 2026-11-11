@@ -2917,6 +2917,12 @@
   <data name="TaskQueue.Root.Delete" xml:space="preserve">
     <value>刪除</value>
   </data>
+  <data name="TaskQueue.Root.DeleteConfirmTitle" xml:space="preserve">
+    <value>確認刪除</value>
+  </data>
+  <data name="TaskQueue.Root.DeleteConfirmMessage" xml:space="preserve">
+    <value>確定要刪除任務「{0}」嗎？</value>
+  </data>
   <data name="TaskQueue.Root.GeneralSettings" xml:space="preserve">
     <value>常規設定</value>
   </data>

@@ -279,6 +279,9 @@ public interface ITaskQueueFeatureService
     Task<CoreResult<int>> ResetAllFightOneShotParamsAsync(CancellationToken cancellationToken = default)
         => Task.FromResult(CoreResult<int>.Ok(0));
 
+    Task<CoreResult<int>> RehydrateOneShotTaskEnabledStatesForProfileSwitchAsync(CancellationToken cancellationToken = default)
+        => Task.FromResult(CoreResult<int>.Ok(0));
+
     Task<UiOperationResult<IReadOnlyList<TaskQueuePrecheckWarning>>> GetStartPrecheckWarningsAsync(CancellationToken cancellationToken = default);
 
     Task<UiOperationResult<IReadOnlyList<TaskQueuePrecheckWarning>>> ApplyStartPrecheckDowngradesAsync(CancellationToken cancellationToken = default);

@@ -554,7 +554,7 @@ public partial class TaskQueueView : UserControl
                 await ExecuteTaskItemActionAsync(item.Task, static vm => vm.RenameSelectedTaskWithDialogAsync());
                 break;
             case TaskQueuePopupAction.RemoveTask:
-                await ExecuteTaskItemActionAsync(item.Task, static vm => vm.RemoveSelectedTaskAsync());
+                await ExecuteTaskItemActionAsync(item.Task, static vm => vm.RemoveSelectedTaskWithConfirmationAsync());
                 break;
         }
     }

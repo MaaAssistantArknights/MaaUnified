@@ -3025,6 +3025,12 @@ MAA を複数開くには、新しい MAA を他のフォルダにコピーし�
   <data name="TaskQueue.Root.Delete" xml:space="preserve">
     <value>削除</value>
   </data>
+  <data name="TaskQueue.Root.DeleteConfirmTitle" xml:space="preserve">
+    <value>削除の確認</value>
+  </data>
+  <data name="TaskQueue.Root.DeleteConfirmMessage" xml:space="preserve">
+    <value>タスク「{0}」を削除してもよろしいですか？</value>
+  </data>
   <data name="TaskQueue.Root.GeneralSettings" xml:space="preserve">
     <value>一般設定</value>
   </data>

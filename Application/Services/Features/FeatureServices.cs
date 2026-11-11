@@ -2513,6 +2513,26 @@ public sealed class TaskQueueFeatureService : ITaskQueueFeatureService
         return CoreResult<int>.Ok(affected);
     }
 
+    public async Task<CoreResult<int>> RehydrateOneShotTaskEnabledStatesForProfileSwitchAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!TryGetProfile(out var profile, out var error))
+        {
+            return CoreResult<int>.Fail(new CoreError(CoreErrorCode.InvalidRequest, error));
+        }
+
+        // WPF omits null IsEnable values when saving (WhenWritingNull) and the
+        // BaseTask.IsEnable initializer rehydrates them as true on the next load,
+        // so switching profiles settles pending one-shot states to enabled.
+        var affected = ResetOneShotTaskEnabledStates(profile, resetValueOverride: true);
+        if (affected > 0)
+        {
+            await _configService.SaveAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        return CoreResult<int>.Ok(affected);
+    }
+
     public Task<UiOperationResult<IReadOnlyList<TaskQueuePrecheckWarning>>> GetStartPrecheckWarningsAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -3307,9 +3327,9 @@ public sealed class TaskQueueFeatureService : ITaskQueueFeatureService
         };
     }
 
-    private int ResetOneShotTaskEnabledStates(UnifiedProfile profile)
+    private int ResetOneShotTaskEnabledStates(UnifiedProfile profile, bool? resetValueOverride = null)
     {
-        var resetValue = TaskQueueEnabledState.ResetOneShotValue(_configService.CurrentConfig);
+        var resetValue = resetValueOverride ?? TaskQueueEnabledState.ResetOneShotValue(_configService.CurrentConfig);
         var affected = 0;
         foreach (var task in profile.TaskQueue)
         {

@@ -250,10 +250,15 @@ public sealed class MainShellViewModel : ObservableObject
 
     public ConnectionGameSharedStateViewModel ConnectionGameSharedState => _connectionGameSharedState;
 
-    public async Task<IReadOnlyList<string>> FlushConfigurationSavesForCloseAsync(CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<string>> FlushConfigurationSavesForCloseAsync(
+        CancellationToken cancellationToken = default,
+        bool forProfileSwitch = false)
     {
         var failedNames = new List<string>();
-        if (!await TaskQueuePage.FlushConfigurationSavesForCloseAsync(cancellationToken))
+        var taskQueueFlushed = forProfileSwitch
+            ? await TaskQueuePage.FlushConfigurationSavesForProfileSwitchAsync(cancellationToken)
+            : await TaskQueuePage.FlushConfigurationSavesForCloseAsync(cancellationToken);
+        if (!taskQueueFlushed)
         {
             failedNames.AddRange(ConfigurationSaveTracker.Instance.GetFailedDisplayNames(_runtime.DiagnosticsService));
         }
@@ -1474,7 +1479,7 @@ public sealed class MainShellViewModel : ObservableObject
             dialogService: _dialogService);
         page.BeforeConfigurationProfileSwitchAsync = async ct =>
         {
-            if (await TaskQueuePage.FlushConfigurationSavesForCloseAsync(ct))
+            if (await TaskQueuePage.FlushConfigurationSavesForProfileSwitchAsync(ct))
             {
                 return UiOperationResult.Ok("Task queue configuration changes flushed.");
             }
@@ -1789,7 +1794,7 @@ public sealed class MainShellViewModel : ObservableObject
 
         ImportStatus = ImportReportTextFormatter.BuildStatusMessage(report, manualImport: true);
         GlobalStatus = ImportStatus;
-        await TaskQueuePage.ReloadTasksAsync(cancellationToken);
+        await TaskQueuePage.ReloadTasksAsync(cancellationToken, seedDefaultsWhenEmpty: true);
         await SettingsPage.InitializeAsync(cancellationToken);
         await SyncLanguageCoordinatorWithConfigAsync(cancellationToken);
         await ApplyGuiSettingsAsync(SettingsPage.CurrentGuiSnapshot, cancellationToken);
@@ -3180,7 +3185,7 @@ public sealed class MainShellViewModel : ObservableObject
         var previousClientType = _connectionGameSharedState.ClientType;
         try
         {
-            var failedNames = await FlushConfigurationSavesForCloseAsync(cancellationToken);
+            var failedNames = await FlushConfigurationSavesForCloseAsync(cancellationToken, forProfileSwitch: true);
             if (failedNames.Count > 0)
             {
                 await RecordTimerScheduleErrorAsync(
@@ -3229,7 +3234,7 @@ public sealed class MainShellViewModel : ObservableObject
                 return false;
             }
 
-            await TaskQueuePage.ReloadTasksAsync(cancellationToken);
+            await TaskQueuePage.ReloadTasksAsync(cancellationToken, seedDefaultsWhenEmpty: true);
             await TaskQueuePage.WaitForPendingBindingAsync(cancellationToken);
             SyncConnectionFromProfile();
             await RecordEventAsync(
