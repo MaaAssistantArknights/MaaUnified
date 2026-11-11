@@ -22,13 +22,15 @@ public sealed class FightTaskParamsDto
 
     public int Times { get; set; } = int.MaxValue;
 
-    public int Series { get; set; } = 1;
+    public int Series { get; set; }
 
     public bool IsDrGrandet { get; set; }
 
     public bool UseExpiringMedicine { get; set; }
 
     public int ExpiringMedicine { get; set; } = 9999;
+
+    public int MedicineExpireDays { get; set; } = 2;
 
     public bool UseExpireMedicineForActivity { get; set; }
 

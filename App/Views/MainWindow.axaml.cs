@@ -2561,6 +2561,22 @@ public partial class MainWindow : Window
         failedNames = ConfigurationSaveTracker.Instance.FailedDisplayNames;
         if (failedNames.Count == 0)
         {
+            Program.RecordStartupStage($"{sourceScope}.FightOneShotReset.Begin", "Resetting Fight one-shot parameters for exit.");
+            var resetResult = await App.Runtime.TaskQueueFeatureService.ResetAllFightOneShotParamsAsync(cancellationToken);
+            Program.RecordStartupStage(
+                $"{sourceScope}.FightOneShotReset.End",
+                $"Close-time Fight one-shot reset returned success={resetResult.Success}; affected={resetResult.Value}.");
+            if (!resetResult.Success)
+            {
+                await App.Runtime.DialogFeatureService.ReportErrorAsync(
+                    sourceScope,
+                    MAAUnified.Application.Models.UiOperationResult.Fail(
+                        MAAUnified.Application.Models.UiErrorCode.SettingsSaveFailed,
+                        resetResult.Error?.Message ?? "Failed to reset Fight one-shot parameters."),
+                    cancellationToken);
+                return false;
+            }
+
             Program.RecordStartupStage($"{sourceScope}.Complete", "Close-time configuration save gate completed successfully.");
             return true;
         }

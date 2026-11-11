@@ -7,6 +7,11 @@ namespace MAAUnified.Tests;
 
 public sealed class FightStageFallbackParityTests
 {
+    // Pinned to a past Monday so the weekly-closed premise holds for any cached
+    // StageActivityV2.json: resource-collection windows fetched from the network
+    // always cover the fetch time, never a deep-past instant.
+    private static readonly DateTime PinnedUtc = new(2025, 1, 6, 12, 0, 0, DateTimeKind.Utc);
+
     private static readonly IReadOnlyList<(string Stage, IReadOnlySet<DayOfWeek> OpenDays)> WeeklyStageFixtures =
     [
         ("CE-6", new HashSet<DayOfWeek> { DayOfWeek.Tuesday, DayOfWeek.Thursday, DayOfWeek.Saturday, DayOfWeek.Sunday }),
@@ -16,7 +21,7 @@ public sealed class FightStageFallbackParityTests
     ];
 
     [Fact]
-    public void CompileFight_ClosedKnownStage_ShouldSkipInsteadOfFallingBackToCurrentOrLast()
+    public void CompileFight_ClosedKnownStage_ShouldFallBackToFirstCandidate()
     {
         var closedStage = ResolveClosedWeeklyStage();
 
@@ -26,14 +31,14 @@ public sealed class FightStageFallbackParityTests
             StagePlan = [closedStage],
             HideUnavailableStage = true,
             StageResetMode = "Current",
-        }, new UnifiedProfile(), new UnifiedConfig());
+        }, new UnifiedProfile(), new UnifiedConfig(), PinnedUtc);
 
-        Assert.Contains(compiled.Issues, issue => issue.Code == "TaskCompileSkipAppend" && issue.Field == "fight.stage_plan");
+        Assert.DoesNotContain(compiled.Issues, issue => issue.Code == "TaskCompileSkipAppend" && issue.Field == "fight.stage_plan");
         Assert.Equal(closedStage, compiled.Params["stage"]?.GetValue<string>());
     }
 
     [Fact]
-    public void CompileFight_AlternativePlanWithNoOpenStage_ShouldSkipAppend()
+    public void CompileFight_AlternativePlanWithNoOpenStage_ShouldFallBackToFirstCandidate()
     {
         var closedStage = ResolveClosedWeeklyStage();
 
@@ -44,13 +49,14 @@ public sealed class FightStageFallbackParityTests
             UseAlternateStage = true,
             HideUnavailableStage = false,
             StageResetMode = "Ignore",
-        }, new UnifiedProfile(), new UnifiedConfig());
+        }, new UnifiedProfile(), new UnifiedConfig(), PinnedUtc);
 
-        Assert.Contains(compiled.Issues, issue => issue.Code == "TaskCompileSkipAppend" && issue.Field == "fight.stage_plan");
+        Assert.DoesNotContain(compiled.Issues, issue => issue.Code == "TaskCompileSkipAppend" && issue.Field == "fight.stage_plan");
+        Assert.Equal(closedStage, compiled.Params["stage"]?.GetValue<string>());
     }
 
     [Fact]
-    public void CompileFight_ExpiredActivityStageWithIgnore_ShouldSkipAppend()
+    public void CompileFight_ExpiredActivityStageWithIgnore_ShouldFallBackToConfiguredStage()
     {
         const string expiredStage = "ZZ-99";
 
@@ -62,11 +68,12 @@ public sealed class FightStageFallbackParityTests
             StageResetMode = "Ignore",
         }, new UnifiedProfile(), new UnifiedConfig());
 
-        Assert.Contains(compiled.Issues, issue => issue.Code == "TaskCompileSkipAppend" && issue.Field == "fight.stage_plan");
+        Assert.DoesNotContain(compiled.Issues, issue => issue.Code == "TaskCompileSkipAppend" && issue.Field == "fight.stage_plan");
+        Assert.Equal(expiredStage, compiled.Params["stage"]?.GetValue<string>());
     }
 
     [Fact]
-    public void CompileFight_HistoricalStageInResourceStages_ShouldSkipLikeWpf()
+    public void CompileFight_HistoricalStageInResourceStages_ShouldFallBackLikeWpf()
     {
         // SV-1 remains in resource/stages.json but is not in the current StageActivityV2 state.
         // WPF treats it as an expired two-letter activity stage rather than a permanent stage.
@@ -80,11 +87,12 @@ public sealed class FightStageFallbackParityTests
             StageResetMode = "Ignore",
         }, new UnifiedProfile(), new UnifiedConfig());
 
-        Assert.Contains(compiled.Issues, issue => issue.Code == "TaskCompileSkipAppend" && issue.Field == "fight.stage_plan");
+        Assert.DoesNotContain(compiled.Issues, issue => issue.Code == "TaskCompileSkipAppend" && issue.Field == "fight.stage_plan");
+        Assert.Equal(historicalStage, compiled.Params["stage"]?.GetValue<string>());
     }
 
     [Fact]
-    public void CompileFight_ManualExpiredActivityStage_ShouldSkipAppend()
+    public void CompileFight_ManualExpiredActivityStage_ShouldFallBackToConfiguredStage()
     {
         const string expiredStage = "ZZ-99";
 
@@ -97,7 +105,8 @@ public sealed class FightStageFallbackParityTests
             StageResetMode = "Ignore",
         }, new UnifiedProfile(), new UnifiedConfig());
 
-        Assert.Contains(compiled.Issues, issue => issue.Code == "TaskCompileSkipAppend" && issue.Field == "fight.stage_plan");
+        Assert.DoesNotContain(compiled.Issues, issue => issue.Code == "TaskCompileSkipAppend" && issue.Field == "fight.stage_plan");
+        Assert.Equal(expiredStage, compiled.Params["stage"]?.GetValue<string>());
     }
 
     [Fact]
@@ -121,7 +130,8 @@ public sealed class FightStageFallbackParityTests
         var compiled = TaskParamCompiler.CompileTask(task, new UnifiedProfile(), new UnifiedConfig(), strict: true);
 
         Assert.Equal("Ignore", compiled.Params["_ui_stage_reset_mode"]?.GetValue<string>());
-        Assert.Contains(compiled.Issues, issue => issue.Code == "TaskCompileSkipAppend" && issue.Field == "fight.stage_plan");
+        Assert.DoesNotContain(compiled.Issues, issue => issue.Code == "TaskCompileSkipAppend" && issue.Field == "fight.stage_plan");
+        Assert.Equal("ZZ-99", compiled.Params["stage"]?.GetValue<string>());
     }
 
     [Fact]
@@ -138,7 +148,8 @@ public sealed class FightStageFallbackParityTests
         }, new UnifiedProfile(), new UnifiedConfig());
 
         Assert.Equal("Ignore", compiled.Params["_ui_stage_reset_mode"]?.GetValue<string>());
-        Assert.Contains(compiled.Issues, issue => issue.Code == "TaskCompileSkipAppend" && issue.Field == "fight.stage_plan");
+        Assert.DoesNotContain(compiled.Issues, issue => issue.Code == "TaskCompileSkipAppend" && issue.Field == "fight.stage_plan");
+        Assert.Equal(expiredStage, compiled.Params["stage"]?.GetValue<string>());
     }
 
     [Fact]
@@ -153,7 +164,7 @@ public sealed class FightStageFallbackParityTests
             UseAlternateStage = true,
             HideUnavailableStage = false,
             StageResetMode = "Ignore",
-        }, new UnifiedProfile(), new UnifiedConfig());
+        }, new UnifiedProfile(), new UnifiedConfig(), PinnedUtc);
 
         Assert.DoesNotContain(compiled.Issues, issue => issue.Code == "TaskCompileSkipAppend" && issue.Field == "fight.stage_plan");
         var coreParameters = TaskParamCompiler.BuildCoreParams("Fight", compiled.Params);
@@ -162,7 +173,7 @@ public sealed class FightStageFallbackParityTests
 
     private static string ResolveClosedWeeklyStage()
     {
-        var dayOfWeek = MallDailyResetHelper.GetYjDate(DateTime.UtcNow, "Official").DayOfWeek;
+        var dayOfWeek = MallDailyResetHelper.GetYjDate(PinnedUtc, "Official").DayOfWeek;
         return WeeklyStageFixtures.First(candidate => !candidate.OpenDays.Contains(dayOfWeek)).Stage;
     }
 }

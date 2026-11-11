@@ -127,10 +127,11 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
     private int _stone;
     private bool? _enableTimesLimit = false;
     private int _times = int.MaxValue;
-    private int _series = 1;
+    private int _series;
     private bool _isDrGrandet;
     private bool _useExpiringMedicine;
     private int _expiringMedicine = 9999;
+    private int _medicineExpireDays = 2;
     private bool _useExpireMedicineForActivity;
     private bool? _enableTargetDrop = false;
     private bool _isInventoryTarget;
@@ -151,6 +152,7 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
     private string _stageResetMode = "Current";
     private bool _hideSeries;
     private bool _allowUseStoneSave;
+    private bool _allowUseStoneSaveConfirmationPending;
     private bool _autoRestartOnDrop = true;
     private IReadOnlyList<IntOption> _seriesOptions = [];
     private IReadOnlyList<StringOption> _dropTargetModeOptions = [];
@@ -158,10 +160,16 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
     private IReadOnlyList<StringOption> _annihilationStageOptions = [];
     private IReadOnlyList<DropOption> _dropOptions = [];
     private readonly ObservableCollection<StageOption> _stageOptions = [];
+    private readonly Func<WarningConfirmDialogRequest, CancellationToken, Task<bool>> _confirmAllowUseStoneSaveAsync;
 
-    public FightTaskModuleViewModel(MAAUnifiedRuntime runtime, LocalizedTextMap texts)
+    public FightTaskModuleViewModel(
+        MAAUnifiedRuntime runtime,
+        LocalizedTextMap texts,
+        Func<WarningConfirmDialogRequest, CancellationToken, Task<bool>>? confirmAllowUseStoneSaveAsync = null)
         : base(runtime, texts, "TaskQueue.Fight")
     {
+        _confirmAllowUseStoneSaveAsync = confirmAllowUseStoneSaveAsync
+            ?? ((_, _) => Task.FromResult(false));
         _stagePlan.CollectionChanged += (_, e) => OnStagePlanCollectionChanged(e);
         Texts.PropertyChanged += OnTextsChanged;
         ApplyPersistentAutoRestartOnDrop(ResolveAutoRestartOnDrop());
@@ -176,7 +184,7 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
     public IntOption? SelectedSeriesOption
     {
         get => SeriesOptions.FirstOrDefault(option => option.Value == Series);
-        set => Series = value?.Value ?? 1;
+        set => Series = value?.Value ?? 0;
     }
 
     public IReadOnlyList<StringOption> DropTargetModeOptions => _dropTargetModeOptions;
@@ -287,7 +295,11 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
 
     public bool IsDropControlsEnabled => EnableTargetDrop != false;
 
-    public bool IsHideUnavailableStageEnabled => !UseWeeklySchedule;
+    // WPF binds the drop quantity label and input visibility to IsSpecifiedDrops,
+    // which is only visible when EnableTargetDrop is exactly true.
+    public bool IsDropQuantityVisible => EnableTargetDrop == true;
+
+    public bool IsHideUnavailableStageEnabled => true;
 
     public bool CanRemoveStagePlanEntry => StagePlan.Count > 1;
 
@@ -370,7 +382,14 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
 
             OnPropertyChanged(nameof(SelectedStageOption));
             OnPropertyChanged(nameof(SelectedStageValue));
+            OnPropertyChanged(nameof(EditableStageText));
         }
+    }
+
+    public string EditableStageText
+    {
+        get => FightStageSelection.IsCurrentOrLast(Stage) ? string.Empty : Stage;
+        set => Stage = value;
     }
 
     public bool IsStageManually
@@ -443,10 +462,9 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
 
             if (value != false)
             {
-                if (Medicine < 999)
-                {
-                    Medicine = 999;
-                }
+                // WPF resets the medicine count to the stone-equivalent bound
+                // unconditionally whenever the stone toggle is not false.
+                Medicine = 999;
 
                 if (UseMedicine == false)
                 {
@@ -522,6 +540,7 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
             }
 
             OnPropertyChanged(nameof(IsDropControlsEnabled));
+            OnPropertyChanged(nameof(IsDropQuantityVisible));
         }
     }
 
@@ -615,11 +634,6 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
             if (!SetTrackedProperty(ref _useWeeklySchedule, value))
             {
                 return;
-            }
-
-            if (value && HideUnavailableStage)
-            {
-                HideUnavailableStage = false;
             }
 
             OnPropertyChanged(nameof(IsHideUnavailableStageEnabled));
@@ -763,6 +777,13 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
         get => _allowUseStoneSave;
         set
         {
+            if (value && !_allowUseStoneSave)
+            {
+                OnPropertyChanged(nameof(AllowUseStoneSave));
+                _ = RequestAllowUseStoneSaveAsync();
+                return;
+            }
+
             if (!SetTrackedProperty(ref _allowUseStoneSave, value))
             {
                 return;
@@ -774,6 +795,42 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
             {
                 UseStone = null;
             }
+        }
+    }
+
+    public async Task<bool> RequestAllowUseStoneSaveAsync(CancellationToken cancellationToken = default)
+    {
+        if (_allowUseStoneSave || _allowUseStoneSaveConfirmationPending)
+        {
+            return _allowUseStoneSave;
+        }
+
+        _allowUseStoneSaveConfirmationPending = true;
+        try
+        {
+            var language = Texts.Language;
+            var confirmed = await _confirmAllowUseStoneSaveAsync(
+                new WarningConfirmDialogRequest(
+                    Title: DialogTextCatalog.WarningDialogTitle(language),
+                    Message: Texts.GetOrDefault(
+                        "Fight.AllowUseStoneSaveWarning",
+                        "Using sanity stones may consume premium currency."),
+                    ConfirmText: DialogTextCatalog.WarningDialogConfirmButton(language),
+                    CancelText: DialogTextCatalog.WarningDialogCancelButton(language),
+                    Language: language),
+                cancellationToken);
+            if (!confirmed)
+            {
+                return false;
+            }
+
+            SetTrackedProperty(ref _allowUseStoneSave, true, nameof(AllowUseStoneSave));
+            OnPropertyChanged(nameof(UseStoneDisplayName));
+            return true;
+        }
+        finally
+        {
+            _allowUseStoneSaveConfirmationPending = false;
         }
     }
 
@@ -804,7 +861,9 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
         ReplaceStagePlan(dto.StagePlan.Count > 0 ? dto.StagePlan : [dto.Stage]);
         SetProperty(ref _stage, FightStageSelection.NormalizeStoredValue(dto.Stage), nameof(Stage));
         OnPropertyChanged(nameof(SelectedStageOption));
-        AllowUseStoneSave = dto.AllowUseStoneSave;
+        OnPropertyChanged(nameof(EditableStageText));
+        SetProperty(ref _allowUseStoneSave, dto.AllowUseStoneSave, nameof(AllowUseStoneSave));
+        OnPropertyChanged(nameof(UseStoneDisplayName));
         UseMedicine = dto.UseMedicine;
         Medicine = dto.Medicine;
         UseStone = dto.UseStone;
@@ -815,6 +874,7 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
         IsDrGrandet = dto.IsDrGrandet;
         UseExpiringMedicine = dto.UseExpiringMedicine;
         _expiringMedicine = Math.Max(1, dto.ExpiringMedicine);
+        _medicineExpireDays = Math.Max(1, dto.MedicineExpireDays);
         UseExpireMedicineForActivity = dto.UseExpireMedicineForActivity;
         EnableTargetDrop = dto.EnableTargetDrop;
         IsInventoryTarget = dto.IsInventoryTarget;
@@ -857,6 +917,7 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
             IsDrGrandet = IsDrGrandet,
             UseExpiringMedicine = UseExpiringMedicine,
             ExpiringMedicine = UseExpiringMedicine ? Math.Max(1, _expiringMedicine) : 0,
+            MedicineExpireDays = UseExpiringMedicine ? Math.Max(1, _medicineExpireDays) : 0,
             UseExpireMedicineForActivity = UseExpireMedicineForActivity,
             EnableTargetDrop = EnableTargetDrop,
             DropId = DropId.Trim(),
@@ -2209,6 +2270,7 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
                 SetProperty(ref _stage, primary, nameof(Stage));
                 OnPropertyChanged(nameof(SelectedStageOption));
                 OnPropertyChanged(nameof(SelectedStageValue));
+                OnPropertyChanged(nameof(EditableStageText));
             }
         }
         finally
@@ -2257,9 +2319,14 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
 
     internal string NormalizeStagePlanEntryValue(string? value)
     {
-        if (IsStageManually)
+        if (IsStageManually && UseAlternateStage)
         {
             return NormalizeManualStageInput(value);
+        }
+
+        if (IsStageManually)
+        {
+            return string.IsNullOrEmpty(value) ? FightStageSelection.CurrentOrLast : value;
         }
 
         return FightStageSelection.NormalizeStoredValue(value);
@@ -2272,39 +2339,32 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
 
     private string NormalizeManualStageInput(string? value)
     {
-        if (string.IsNullOrWhiteSpace(value))
+        if (string.IsNullOrEmpty(value))
         {
             return FightStageSelection.CurrentOrLast;
         }
 
-        var trimmed = value.Trim();
-        if (FightStageSelection.IsCurrentOrLast(trimmed))
+        // Match WPF's StagePlanItem setter, which skips normalization for three-character input.
+        if (value.Length == 3)
         {
-            return FightStageSelection.CurrentOrLast;
+            return value;
         }
 
-        var upper = trimmed.ToUpperInvariant();
+        var upper = value.ToUpper(CultureInfo.CurrentCulture);
         if (ManualStageAliasMap.TryGetValue(upper, out var alias))
         {
             return alias;
         }
 
-        var stageActivityMatch = ResolveStageActivityState(ResolveClientTypeFromConfig())
-            .Find(trimmed)?.Value;
-        if (!string.IsNullOrWhiteSpace(stageActivityMatch))
+        var matchedStage = StageOptions.FirstOrDefault(option =>
+            string.Equals(upper, option.Value, StringComparison.CurrentCultureIgnoreCase)
+            || string.Equals(upper, option.DisplayName, StringComparison.CurrentCultureIgnoreCase));
+        if (matchedStage is not null)
         {
-            return stageActivityMatch;
+            return matchedStage.Value;
         }
 
-        var matchedStage = Runtime.StageManagerFeatureService
-            .GetStageCodes(ResolveClientTypeFromConfig())
-            .FirstOrDefault(stageCode => string.Equals(stageCode, trimmed, StringComparison.OrdinalIgnoreCase));
-        if (!string.IsNullOrWhiteSpace(matchedStage))
-        {
-            return matchedStage;
-        }
-
-        return upper;
+        return value;
     }
 
     internal void OnStagePlanEntryChanged(StagePlanEntry entry)

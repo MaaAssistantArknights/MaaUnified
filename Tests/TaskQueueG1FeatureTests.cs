@@ -745,6 +745,78 @@ public sealed class TaskQueueG1FeatureTests
     }
 
     [Fact]
+    public async Task TaskQueuePage_AllTasksCompleted_ShouldResetFightTaskAndParameterOneShotStates()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.Fight, "fight", enabled: false)).Success);
+        Assert.True((await fixture.TaskQueue.SaveFightParamsAsync(0, new FightTaskParamsDto
+        {
+            Stage = "1-7",
+            UseMedicine = null,
+            Medicine = 5,
+            UseStone = null,
+            Stone = 2,
+            EnableTimesLimit = null,
+            Times = 7,
+            EnableTargetDrop = null,
+            DropId = "30012",
+            DropCount = 3,
+        })).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        var task = Assert.Single(vm.Tasks);
+        await vm.ToggleTaskEnabledOneShotAsync(task);
+        Assert.Null(task.IsEnabled);
+        MapCoreTaskId(fixture.Runtime.SessionService, 1, 0);
+
+        await InvokeCallbackAsync(
+            vm,
+            new CoreCallbackEvent(0, "AllTasksCompleted", """{"finished_tasks":[1]}""", DateTimeOffset.UtcNow));
+
+        Assert.False(task.IsEnabled);
+        var persisted = fixture.Config.CurrentConfig.Profiles["Default"].TaskQueue[0];
+        Assert.False(persisted.IsEnabled);
+        Assert.False(persisted.Params["_ui_use_medicine"]?.GetValue<bool>());
+        Assert.False(persisted.Params["_ui_use_stone"]?.GetValue<bool>());
+        Assert.False(persisted.Params["_ui_enable_times_limit"]?.GetValue<bool>());
+        Assert.False(persisted.Params["_ui_enable_target_drop"]?.GetValue<bool>());
+    }
+
+    [Fact]
+    public async Task TaskQueuePage_AllTasksCompleted_ShouldResetDisabledFightOneShotParams()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.Fight, "fight", enabled: false)).Success);
+        Assert.True((await fixture.TaskQueue.SaveFightParamsAsync(0, new FightTaskParamsDto
+        {
+            Stage = "1-7",
+            UseMedicine = null,
+            UseStone = null,
+            EnableTimesLimit = null,
+            EnableTargetDrop = null,
+        })).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        var task = Assert.Single(vm.Tasks);
+        Assert.False(task.IsEnabled);
+
+        // WPF ResetAllTemporaryVariable clears Fight one-shot parameters on every
+        // Fight task, including disabled ones, when all tasks complete.
+        await InvokeCallbackAsync(
+            vm,
+            new CoreCallbackEvent(0, "AllTasksCompleted", """{"finished_tasks":[]}""", DateTimeOffset.UtcNow));
+
+        var persisted = fixture.Config.CurrentConfig.Profiles["Default"].TaskQueue[0];
+        Assert.False(persisted.IsEnabled);
+        Assert.False(persisted.Params["_ui_use_medicine"]?.GetValue<bool>());
+        Assert.False(persisted.Params["_ui_use_stone"]?.GetValue<bool>());
+        Assert.False(persisted.Params["_ui_enable_times_limit"]?.GetValue<bool>());
+        Assert.False(persisted.Params["_ui_enable_target_drop"]?.GetValue<bool>());
+    }
+
+    [Fact]
     public async Task TaskQueuePage_AllTasksCompleted_InvertMode_ShouldResetOneShotSkipOnceToEnabled()
     {
         await using var fixture = await TestFixture.CreateAsync();

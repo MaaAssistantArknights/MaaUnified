@@ -24,6 +24,8 @@ public static class TaskParamCompiler
 {
     private const string UiStagePlan = "_ui_stage_plan";
     private const string UiIsStageManually = "_ui_is_stage_manually";
+    private const string UiUseExpiringMedicine = "_ui_use_expiring_medicine";
+    private const string UiMedicineExpireDays = "_ui_medicine_expire_days";
     private const string UiUseMedicine = "_ui_use_medicine";
     private const string UiUseStone = "_ui_use_stone";
     private const string UiEnableTimesLimit = "_ui_enable_times_limit";
@@ -236,10 +238,22 @@ public static class TaskParamCompiler
         var medicine = ReadInt(parameters, "medicine", strict, issues, "fight.medicine", 0);
         var stone = ReadInt(parameters, "stone", strict, issues, "fight.stone", 0);
         var medicineExpireDays = ReadInt(parameters, "medicine_expire_days", false, issues, "fight.medicine_expire_days", 0);
+        var configuredMedicineExpireDays = ReadInt(parameters, UiMedicineExpireDays, false, issues, "fight.configured_medicine_expire_days", 0);
         var legacyExpiringMedicine = ReadInt(parameters, "expiring_medicine", false, issues, "fight.expiring_medicine", 0);
-        var expiringMedicine = medicineExpireDays > 0 ? medicineExpireDays : legacyExpiringMedicine;
+        var useExpireMedicineForActivity = ReadBool(parameters, UiUseExpireMedicineForActivity, false);
+        var useExpiringMedicine = ReadBool(
+            parameters,
+            UiUseExpiringMedicine,
+            medicineExpireDays > 0 || legacyExpiringMedicine > 0);
+        var resolvedMedicineExpireDays = configuredMedicineExpireDays > 0
+            ? configuredMedicineExpireDays
+            : medicineExpireDays > 0
+                ? medicineExpireDays
+                : legacyExpiringMedicine is > 0 and < 9999
+                    ? legacyExpiringMedicine
+                    : 2;
         var times = ReadInt(parameters, "times", strict, issues, "fight.times", int.MaxValue);
-        var series = ReadInt(parameters, "series", strict, issues, "fight.series", 1);
+        var series = ReadInt(parameters, "series", strict, issues, "fight.series", 0);
 
         string dropId = string.Empty;
         var dropCount = 1;
@@ -287,9 +301,10 @@ public static class TaskParamCompiler
             EnableTimesLimit = ReadNullableBool(parameters, UiEnableTimesLimit, times != int.MaxValue, issues, "fight.enable_times_limit"),
             Series = series,
             IsDrGrandet = ReadBool(parameters, "DrGrandet", false),
-            UseExpiringMedicine = expiringMedicine > 0,
-            ExpiringMedicine = expiringMedicine > 0 ? expiringMedicine : 9999,
-            UseExpireMedicineForActivity = ReadBool(parameters, UiUseExpireMedicineForActivity, false),
+            UseExpiringMedicine = useExpiringMedicine,
+            ExpiringMedicine = useExpiringMedicine ? 9999 : 0,
+            MedicineExpireDays = resolvedMedicineExpireDays,
+            UseExpireMedicineForActivity = useExpireMedicineForActivity,
             EnableTargetDrop = ReadNullableBool(parameters, UiEnableTargetDrop, !string.IsNullOrWhiteSpace(dropId), issues, "fight.enable_target_drop"),
             DropId = dropId,
             DropCount = Math.Max(1, dropCount),
@@ -369,10 +384,9 @@ public static class TaskParamCompiler
             stagePlan,
             dto.IsStageManually,
             stageResetMode,
-            ResolveStringSetting(profile, config, "ClientType", "Start.ClientType") ?? "Official",
+            ResolveStringSetting(profile, config, "Start.ClientType", "ClientType") ?? "Official",
             stageSelectionTime);
-        var skipAppendForNoRunnableStage = selectedStage is null;
-        var stage = selectedStage ?? stagePlan[0];
+        var stage = selectedStage;
 
         if (dto.Series is < -1 or > 6)
         {
@@ -384,11 +398,6 @@ public static class TaskParamCompiler
             issues.Add(new TaskValidationIssue("FightTimesOutOfRange", "fight.times", "Fight times must be greater than or equal to zero."));
         }
 
-        if (enableTargetDrop != false && string.IsNullOrWhiteSpace(dto.DropId))
-        {
-            issues.Add(new TaskValidationIssue("FightDropMissing", "fight.drop_id", "Target drop id cannot be empty when target drop is enabled."));
-        }
-
         if (enableTimesLimit != false && dto.Series > 0 && dto.Times > 0 && dto.Times % dto.Series != 0)
         {
             issues.Add(new TaskValidationIssue(
@@ -398,44 +407,40 @@ public static class TaskParamCompiler
                 Blocking: false));
         }
 
-        if (skipAppendForNoRunnableStage)
-        {
-            issues.Add(new TaskValidationIssue(
-                SkipAppendIssueCode,
-                "fight.stage_plan",
-                "No configured fight stage is open today.",
-                Blocking: false));
-        }
-
-        if (string.Equals(stage, "Annihilation", StringComparison.OrdinalIgnoreCase)
-            && dto.UseCustomAnnihilation
-            && !string.IsNullOrWhiteSpace(dto.AnnihilationStage))
+        // WPF assigns the configured custom annihilation stage unconditionally
+        // once the resolved stage is exactly "Annihilation", so a blank override
+        // reaches Core as an empty stage.
+        if (string.Equals(stage, "Annihilation", StringComparison.Ordinal)
+            && dto.UseCustomAnnihilation)
         {
             stage = dto.AnnihilationStage.Trim();
         }
 
-        var expiringMedicine = dto.UseExpiringMedicine ? Math.Max(1, dto.ExpiringMedicine) : 0;
+        var configuredMedicineExpireDays = dto.UseExpiringMedicine ? Math.Max(1, dto.MedicineExpireDays) : 0;
         var activityExpireDays = ResolveActivityExpireMedicineDays(dto, profile, config, nowUtc);
-        var effectiveMedicineExpireDays = Math.Max(expiringMedicine, activityExpireDays);
+        var effectiveMedicineExpireDays = Math.Max(configuredMedicineExpireDays, activityExpireDays);
+        var expiringMedicine = effectiveMedicineExpireDays > 0 ? 9999 : 0;
 
         var parameters = new JsonObject
         {
             ["stage"] = stage,
             ["medicine"] = useMedicine != false ? Math.Max(0, dto.Medicine) : 0,
-            ["expiring_medicine"] = effectiveMedicineExpireDays,
+            ["expiring_medicine"] = expiringMedicine,
             ["medicine_expire_days"] = effectiveMedicineExpireDays,
             ["stone"] = useStone != false ? Math.Max(0, dto.Stone) : 0,
             ["times"] = enableTimesLimit != false ? Math.Max(0, dto.Times) : int.MaxValue,
             ["series"] = dto.Series,
             ["DrGrandet"] = dto.IsDrGrandet,
-            ["report_to_penguin"] = ResolveBooleanSetting(profile, config, "EnablePenguin"),
-            ["report_to_yituliu"] = ResolveBooleanSetting(profile, config, "EnableYituliu"),
-            ["penguin_id"] = ResolveStringSetting(profile, config, "PenguinId") ?? string.Empty,
+            ["report_to_penguin"] = ResolveBooleanSetting(profile, config, true, "Penguin.EnablePenguin", "EnablePenguin"),
+            ["report_to_yituliu"] = ResolveBooleanSetting(profile, config, true, "Yituliu.EnableYituliu", "EnableYituliu"),
+            ["penguin_id"] = ResolveStringSetting(profile, config, "Penguin.Id", "PenguinId") ?? string.Empty,
             ["yituliu_id"] = ResolveYituliuId(profile, config),
-            ["server"] = ResolveStringSetting(profile, config, "ServerType") ?? "CN",
-            ["client_type"] = ResolveStringSetting(profile, config, "ClientType", "Start.ClientType") ?? "Official",
+            ["server"] = ResolveFightServerType(profile, config),
+            ["client_type"] = ResolveStringSetting(profile, config, "Start.ClientType", "ClientType") ?? "Official",
             [UiStagePlan] = ToJsonArray(stagePlan),
             [UiIsStageManually] = dto.IsStageManually,
+            [UiUseExpiringMedicine] = dto.UseExpiringMedicine,
+            [UiMedicineExpireDays] = Math.Max(1, dto.MedicineExpireDays),
             [UiUseMedicine] = JsonValue.Create(useMedicine),
             [UiUseStone] = JsonValue.Create(useStone),
             [UiEnableTimesLimit] = JsonValue.Create(enableTimesLimit),
@@ -577,7 +582,7 @@ public static class TaskParamCompiler
         }
 
         var timestamp = nowUtc ?? DateTime.UtcNow;
-        var clientType = ResolveStringSetting(profile, config, "ClientType", "Start.ClientType") ?? "Official";
+        var clientType = ResolveStringSetting(profile, config, "Start.ClientType", "ClientType") ?? "Official";
         if (!IsAnyActivityExpiringWithin48Hours(clientType, timestamp))
         {
             return 0;
@@ -907,7 +912,7 @@ public static class TaskParamCompiler
         return storedStage;
     }
 
-    private static string? ResolveFightExecutionStage(
+    private static string ResolveFightExecutionStage(
         IReadOnlyList<string> stagePlan,
         bool isStageManually,
         string stageResetMode,
@@ -936,7 +941,7 @@ public static class TaskParamCompiler
 
             if (string.Equals(candidate, "Annihilation", StringComparison.OrdinalIgnoreCase))
             {
-                return "Annihilation";
+                return isStageManually ? candidate : "Annihilation";
             }
 
             var stage = stageState.Find(candidate);
@@ -972,7 +977,7 @@ public static class TaskParamCompiler
 
         }
 
-        return null;
+        return normalizedPlan[0];
     }
 
     private static string NormalizeFightClientType(string? clientType)
@@ -1119,9 +1124,9 @@ public static class TaskParamCompiler
                 ["4"] = ClampRecruitTime(dto.Level4Time),
                 ["5"] = ClampRecruitTime(dto.Level5Time),
             },
-            ["report_to_penguin"] = ResolveBooleanSetting(profile, config, "EnablePenguin"),
-            ["report_to_yituliu"] = ResolveBooleanSetting(profile, config, "EnableYituliu"),
-            ["penguin_id"] = ResolveStringSetting(profile, config, "PenguinId") ?? string.Empty,
+            ["report_to_penguin"] = ResolveBooleanSetting(profile, config, true, "Penguin.EnablePenguin", "EnablePenguin"),
+            ["report_to_yituliu"] = ResolveBooleanSetting(profile, config, true, "Yituliu.EnableYituliu", "EnableYituliu"),
+            ["penguin_id"] = ResolveStringSetting(profile, config, "Penguin.Id", "PenguinId") ?? string.Empty,
             ["yituliu_id"] = ResolveYituliuId(profile, config),
             ["server"] = ResolveStringSetting(profile, config, "ServerType") ?? "CN",
         };
@@ -1760,7 +1765,46 @@ public static class TaskParamCompiler
             runtimeParams["stage"] = FightStageSelection.ToCoreStage(stage);
         }
 
+        foreach (var key in runtimeParams.Select(static pair => pair.Key).ToArray())
+        {
+            if (key.StartsWith("_ui_", StringComparison.Ordinal))
+            {
+                runtimeParams.Remove(key);
+            }
+        }
+
+        if (runtimeParams["report_to_penguin"]?.GetValue<bool>() != true
+            || string.IsNullOrWhiteSpace(runtimeParams["penguin_id"]?.GetValue<string>()))
+        {
+            runtimeParams.Remove("penguin_id");
+        }
+
+        if (runtimeParams["report_to_yituliu"]?.GetValue<bool>() != true
+            || string.IsNullOrWhiteSpace(runtimeParams["yituliu_id"]?.GetValue<string>()))
+        {
+            runtimeParams.Remove("yituliu_id");
+        }
+
         return runtimeParams;
+    }
+
+    private static string ResolveFightServerType(UnifiedProfile profile, UnifiedConfig config)
+    {
+        var explicitServer = ResolveStringSetting(profile, config, "ServerType", "Server");
+        if (!string.IsNullOrWhiteSpace(explicitServer))
+        {
+            return explicitServer.Trim();
+        }
+
+        var clientType = ResolveStringSetting(profile, config, "Start.ClientType", "ClientType") ?? "Official";
+        return clientType.Trim() switch
+        {
+            var value when value.Equals("YoStarEN", StringComparison.OrdinalIgnoreCase) => "US",
+            var value when value.Equals("YoStarJP", StringComparison.OrdinalIgnoreCase) => "JP",
+            var value when value.Equals("YoStarKR", StringComparison.OrdinalIgnoreCase) => "KR",
+            var value when value.Equals("txwy", StringComparison.OrdinalIgnoreCase) => "ZH_TW",
+            _ => "CN",
+        };
     }
 
     private static TaskCompileOutput CompileStartUpFromTask(
@@ -2484,8 +2528,7 @@ public static class TaskParamCompiler
 
     private static string ResolveYituliuId(UnifiedProfile profile, UnifiedConfig config)
     {
-        return ResolveStringSetting(profile, config, "YituliuId")
-            ?? ResolveStringSetting(profile, config, "PenguinId")
+        return ResolveStringSetting(profile, config, "Penguin.Id", "YituliuId", "PenguinId")
             ?? string.Empty;
     }
 

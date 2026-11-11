@@ -209,7 +209,7 @@ internal static class LegacyConfigValueMappings
         return "Current";
     }
 
-    public static int NormalizeFightSeries(JsonNode? value, int fallback = 1)
+    public static int NormalizeFightSeries(JsonNode? value, int fallback = 0)
     {
         if (TryReadString(value, out var text))
         {

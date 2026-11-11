@@ -416,7 +416,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             Texts,
             _connectionGameSharedState,
             RunAccountSwitchManualAsync);
-        _fallbackFightModule = new FightTaskModuleViewModel(runtime, Texts);
+        _fallbackFightModule = new FightTaskModuleViewModel(runtime, Texts, ConfirmAllowUseStoneSaveAsync);
         _fallbackRecruitModule = new RecruitTaskModuleViewModel(runtime, Texts);
         _fallbackInfrastModule = new InfrastModuleViewModel(runtime, Texts);
         _fallbackMallModule = new MallModuleViewModel(runtime, Texts);
@@ -1900,6 +1900,17 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         }
     }
 
+    private async Task<bool> ConfirmAllowUseStoneSaveAsync(
+        WarningConfirmDialogRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await _dialogService.ShowWarningConfirmAsync(
+            request,
+            "TaskQueue.Fight.AllowUseStoneSave",
+            cancellationToken);
+        return result.Return == DialogReturnSemantic.Confirm;
+    }
+
     private ITaskModulePanelViewModel CreateTaskModuleViewModel(string moduleType)
     {
         return moduleType switch
@@ -1909,7 +1920,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 Texts,
                 _connectionGameSharedState,
                 RunAccountSwitchManualAsync),
-            TaskModuleTypes.Fight => new FightTaskModuleViewModel(Runtime, Texts),
+            TaskModuleTypes.Fight => new FightTaskModuleViewModel(Runtime, Texts, ConfirmAllowUseStoneSaveAsync),
             TaskModuleTypes.Recruit => new RecruitTaskModuleViewModel(Runtime, Texts),
             TaskModuleTypes.Infrast => new InfrastModuleViewModel(Runtime, Texts),
             TaskModuleTypes.Mall => new MallModuleViewModel(Runtime, Texts),
@@ -6685,6 +6696,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             case "TaskChainCompleted":
                 UpdateTaskStatus(taskIndex, taskChain, TaskQueueItemStatus.Success);
                 ClearRoguelikeCombatStateIfTaskCompleted(taskChain);
+                await ConsumeFightOneShotParamsAfterCompletionAsync(taskChain, taskIndex);
                 await AdvanceInfrastCustomPlanAfterCompletionAsync(metadata, taskIndex);
                 TrackAchievementsFromCallback(metadata, callback.MsgName);
                 AppendWpfCallbackLog(callback, metadata, taskIndex);
@@ -6754,6 +6766,14 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                     TaskQueueItemStatus.Success,
                     callback.PayloadJson,
                     resolveSource: resolveSource);
+                // WPF ResetAllTemporaryVariable resets every Fight task, including disabled ones.
+                for (var index = 0; index < Tasks.Count; index++)
+                {
+                    if (string.Equals(TaskModuleTypes.Normalize(Tasks[index].Type), TaskModuleTypes.Fight, StringComparison.OrdinalIgnoreCase))
+                    {
+                        await ConsumeFightOneShotParamsAfterCompletionAsync(TaskModuleTypes.Fight, index);
+                    }
+                }
                 await ConsumeCompletedOneShotTaskEnabledStatesAsync();
                 if (IsMainTaskQueueCompletion(metadata))
                 {
@@ -6831,6 +6851,41 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         }
 
         await RefreshInfrastTaskPanelAsync(index);
+    }
+
+    private async Task ConsumeFightOneShotParamsAfterCompletionAsync(string? taskChain, int? taskIndex)
+    {
+        if (!string.Equals(TaskModuleTypes.Normalize(taskChain), TaskModuleTypes.Fight, StringComparison.OrdinalIgnoreCase)
+            || !IsValidTaskIndex(taskIndex, Tasks.Count))
+        {
+            return;
+        }
+
+        var index = taskIndex!.Value;
+        var result = await Runtime.TaskQueueFeatureService.ConsumeCompletedFightOneShotParamsAsync(index);
+        if (!result.Success)
+        {
+            await RecordErrorAsync(
+                "TaskQueue.Fight.OneShotReset",
+                result.Error?.Message ?? "Failed to consume one-shot fight parameters after completion.");
+            return;
+        }
+
+        if (result.Value == 0)
+        {
+            return;
+        }
+
+        var panel = TaskPanels.FirstOrDefault(candidate => candidate.TaskIndex == index);
+        if (panel?.ModuleViewModel is FightTaskModuleViewModel module)
+        {
+            var paramsResult = await Runtime.TaskQueueFeatureService.GetTaskParamsAsync(index);
+            if (paramsResult.Success && paramsResult.Value is not null)
+            {
+                await module.BindAsync(index);
+                await RefreshTaskPanelValidationSummaryAsync(panel, CancellationToken.None);
+            }
+        }
     }
 
     private async Task RefreshInfrastTaskPanelAsync(int taskIndex)

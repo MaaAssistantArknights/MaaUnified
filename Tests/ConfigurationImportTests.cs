@@ -984,15 +984,16 @@ public sealed class ConfigurationImportTests
 
         Assert.True(report.Success);
         var task = service.CurrentConfig.Profiles["Default"].TaskQueue.Single(task => task.Type == TaskModuleTypes.Fight);
-        Assert.Equal(3, task.Params["expiring_medicine"]?.GetValue<int>());
+        Assert.Equal(9999, task.Params["expiring_medicine"]?.GetValue<int>());
 
         var (dto, issues) = TaskParamCompiler.ReadFight(task, strict: true);
         Assert.Empty(issues);
         Assert.True(dto.UseExpiringMedicine);
-        Assert.Equal(3, dto.ExpiringMedicine);
+        Assert.Equal(9999, dto.ExpiringMedicine);
+        Assert.Equal(3, dto.MedicineExpireDays);
 
         var compiled = TaskParamCompiler.CompileFight(dto, service.CurrentConfig.Profiles["Default"], service.CurrentConfig);
-        Assert.Equal(3, compiled.Params["expiring_medicine"]?.GetValue<int>());
+        Assert.Equal(9999, compiled.Params["expiring_medicine"]?.GetValue<int>());
         Assert.Equal(3, compiled.Params["medicine_expire_days"]?.GetValue<int>());
     }
 
@@ -1027,7 +1028,7 @@ public sealed class ConfigurationImportTests
 
         Assert.True(report.Success);
         var task = Assert.Single(service.CurrentConfig.Profiles["Default"].TaskQueue);
-        Assert.Equal(2, task.Params["expiring_medicine"]?.GetValue<int>());
+        Assert.Equal(9999, task.Params["expiring_medicine"]?.GetValue<int>());
         Assert.Equal(2, task.Params["medicine_expire_days"]?.GetValue<int>());
     }
 
@@ -1073,6 +1074,45 @@ public sealed class ConfigurationImportTests
         Assert.Equal(false, dto.UseStone);
         Assert.Equal(false, dto.EnableTimesLimit);
         Assert.Equal(false, dto.EnableTargetDrop);
+    }
+
+    [Fact]
+    public async Task GuiNewImport_FightStoneShouldBeDisabledWithoutPermission()
+    {
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.new.json"),
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": {
+                  "TaskQueue": [
+                    {
+                      "$type": "FightTask",
+                      "Name": "Fight",
+                      "IsEnable": true,
+                      "UseStoneAllowSave": false,
+                      "UseStone": true,
+                      "StoneCount": 3,
+                      "StagePlan": ["1-7"]
+                    }
+                  ]
+                }
+              }
+            }
+            """);
+
+        var service = CreateService(root);
+        var report = await service.ImportLegacyAsync(ImportSource.GuiNewOnly, manualImport: false);
+
+        Assert.True(report.Success);
+        var task = Assert.Single(service.CurrentConfig.Profiles["Default"].TaskQueue);
+        Assert.False(task.Params["_ui_allow_use_stone_save"]?.GetValue<bool>());
+        Assert.False(task.Params["_ui_use_stone"]?.GetValue<bool>());
+        Assert.Equal(0, task.Params["stone"]?.GetValue<int>());
     }
 
     [Fact]
@@ -1350,15 +1390,14 @@ public sealed class ConfigurationImportTests
         Assert.True(startUp.IsEnabled);
         Assert.Equal("doctor", startUp.Params["account_name"]?.GetValue<string>());
 
-        var fight = tasks.Single(task => task.Type == TaskModuleTypes.Fight);
+        var fight = tasks.Single(task => task.Type == TaskModuleTypes.Fight && task.Name == "Fight");
         Assert.True(fight.IsEnabled);
         Assert.Equal("1-7", fight.Params["stage"]?.GetValue<string>());
         Assert.Equal(4, fight.Params["medicine"]?.GetValue<int>());
         Assert.Equal(12, fight.Params["times"]?.GetValue<int>());
         Assert.Equal(3, fight.Params["series"]?.GetValue<int>());
-        var expiringMedicineDays = fight.Params["expiring_medicine"]?.GetValue<int>();
-        Assert.True(expiringMedicineDays >= 2);
-        Assert.Equal(expiringMedicineDays, fight.Params["medicine_expire_days"]?.GetValue<int>());
+        Assert.Equal(9999, fight.Params["expiring_medicine"]?.GetValue<int>());
+        Assert.True(fight.Params["medicine_expire_days"]?.GetValue<int>() >= 2);
         Assert.True(fight.Params["_ui_is_inventory_target"]?.GetValue<bool>());
         Assert.True(fight.Params["_ui_use_expire_medicine_for_activity"]?.GetValue<bool>());
         Assert.Equal("30012", fight.Params["_ui_drop_id"]?.GetValue<string>());
@@ -1405,9 +1444,63 @@ public sealed class ConfigurationImportTests
         var report = await service.ImportLegacyAsync(ImportSource.GuiOnly, manualImport: false);
 
         Assert.True(report.Success);
-        var task = service.CurrentConfig.Profiles["Default"].TaskQueue.Single(task => task.Type == TaskModuleTypes.Fight);
-        Assert.Equal(5, task.Params["expiring_medicine"]?.GetValue<int>());
+        var task = service.CurrentConfig.Profiles["Default"].TaskQueue.Single(task => task.Type == TaskModuleTypes.Fight && task.Name == "Fight");
+        Assert.Equal(9999, task.Params["expiring_medicine"]?.GetValue<int>());
         Assert.Equal(5, task.Params["medicine_expire_days"]?.GetValue<int>());
+    }
+
+    [Fact]
+    public async Task GuiImport_FlatFightDefaultsAndDisabledRemainingSanityTask_ShouldMatchWpf()
+    {
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.json"),
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": {
+                  "TaskQueue.Combat.IsChecked": true,
+                  "MainFunction.Stage1": "1-7",
+                  "MainFunction.UseMedicine": true,
+                  "MainFunction.TimesLimited": true,
+                  "MainFunction.Drops.Enable": true,
+                  "MainFunction.Drops.ItemId": "30012",
+                  "Fight.UseRemainingSanityStage": false,
+                  "Fight.RemainingSanityStage": "CE-6"
+                }
+              }
+            }
+            """);
+
+        var service = CreateService(root);
+        var report = await service.ImportLegacyAsync(ImportSource.GuiOnly, manualImport: false);
+
+        Assert.True(report.Success);
+        var fights = service.CurrentConfig.Profiles["Default"].TaskQueue
+            .Where(task => task.Type == TaskModuleTypes.Fight)
+            .ToArray();
+        Assert.Equal(2, fights.Length);
+
+        var fight = Assert.Single(fights, task => task.Name == "Fight");
+        Assert.True(fight.IsEnabled);
+        Assert.Equal(999, fight.Params["medicine"]?.GetValue<int>());
+        Assert.Equal(5, fight.Params["times"]?.GetValue<int>());
+        Assert.Equal(0, fight.Params["series"]?.GetValue<int>());
+        Assert.Equal(5, fight.Params["drops"]?["30012"]?.GetValue<int>());
+        Assert.Equal(5, fight.Params["_ui_drop_count"]?.GetValue<int>());
+        Assert.True(fight.Params["_ui_hide_unavailable_stage"]?.GetValue<bool>());
+
+        var remaining = Assert.Single(fights, task => task.Name == "RemainingSanityStage");
+        Assert.False(remaining.IsEnabled);
+        Assert.Equal("CE-6", remaining.Params["stage"]?.GetValue<string>());
+        Assert.Equal(0, remaining.Params["medicine"]?.GetValue<int>());
+        Assert.Equal(int.MaxValue, remaining.Params["times"]?.GetValue<int>());
+        Assert.Equal(0, remaining.Params["series"]?.GetValue<int>());
+        Assert.Equal(5, remaining.Params["_ui_drop_count"]?.GetValue<int>());
+        Assert.True(remaining.Params["_ui_hide_unavailable_stage"]?.GetValue<bool>());
     }
 
     [Fact]
@@ -1435,7 +1528,7 @@ public sealed class ConfigurationImportTests
         var report = await service.ImportLegacyAsync(ImportSource.GuiOnly, manualImport: false);
 
         Assert.True(report.Success);
-        var task = service.CurrentConfig.Profiles["Default"].TaskQueue.Single(task => task.Type == TaskModuleTypes.Fight);
+        var task = service.CurrentConfig.Profiles["Default"].TaskQueue.Single(task => task.Type == TaskModuleTypes.Fight && task.Name == "Fight");
         Assert.False(task.Params["_ui_use_medicine"]?.GetValue<bool>());
         Assert.False(task.Params["_ui_use_stone"]?.GetValue<bool>());
         Assert.False(task.Params["_ui_enable_times_limit"]?.GetValue<bool>());
@@ -1447,6 +1540,115 @@ public sealed class ConfigurationImportTests
         Assert.Equal(false, dto.UseStone);
         Assert.Equal(false, dto.EnableTimesLimit);
         Assert.Equal(false, dto.EnableTargetDrop);
+    }
+
+    [Fact]
+    public async Task GuiImport_FlatFightBlankAnnihilationStage_ShouldPreserveBlankAndKeepCustomFlagLikeWpf()
+    {
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.json"),
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": {
+                  "TaskQueue.Combat.IsChecked": true,
+                  "TaskQueue.Order.Combat": 0,
+                  "MainFunction.Stage1": "Annihilation",
+                  "MainFunction.Annihilation.UseCustom": true,
+                  "MainFunction.Annihilation.Stage": ""
+                }
+              }
+            }
+            """);
+
+        var service = CreateService(root);
+        var report = await service.ImportLegacyAsync(ImportSource.GuiOnly, manualImport: false);
+
+        Assert.True(report.Success);
+        var task = service.CurrentConfig.Profiles["Default"].TaskQueue.Single(task => task.Type == TaskModuleTypes.Fight && task.Name == "Fight");
+        Assert.True(task.Params["_ui_use_custom_annihilation"]?.GetValue<bool>());
+        Assert.Equal(string.Empty, task.Params["_ui_annihilation_stage"]?.GetValue<string>());
+
+        // WPF assigns the blank override unconditionally at serialize time, so the
+        // Core stage becomes empty instead of "Annihilation".
+        var (dto, issues) = TaskParamCompiler.ReadFight(task, strict: true);
+        Assert.Empty(issues);
+        var compiled = TaskParamCompiler.CompileFight(
+            dto,
+            service.CurrentConfig.Profiles["Default"],
+            service.CurrentConfig,
+            new DateTime(2025, 1, 6, 12, 0, 0, DateTimeKind.Utc));
+        var coreParams = TaskParamCompiler.BuildCoreParams(TaskModuleTypes.Fight, compiled.Params);
+        Assert.Equal(string.Empty, coreParams["stage"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task GuiNewImport_FightAnnihilationStageMigration_ShouldMatchWpfCustomFlagGate()
+    {
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.new.json"),
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": {
+                  "TaskQueue": [
+                    {
+                      "$type": "FightTask",
+                      "Name": "FightBlankAnnihilation",
+                      "IsEnable": true,
+                      "StagePlan": ["Annihilation"],
+                      "UseCustomAnnihilation": true,
+                      "AnnihilationStage": ""
+                    },
+                    {
+                      "$type": "FightTask",
+                      "Name": "FightDefaultAnnihilation",
+                      "IsEnable": true,
+                      "StagePlan": ["Annihilation"],
+                      "UseCustomAnnihilation": true,
+                      "AnnihilationStage": "Annihilation"
+                    }
+                  ]
+                }
+              }
+            }
+            """);
+
+        var service = CreateService(root);
+        var report = await service.ImportLegacyAsync(ImportSource.GuiNewOnly, manualImport: false);
+
+        Assert.True(report.Success);
+        var tasks = service.CurrentConfig.Profiles["Default"].TaskQueue;
+
+        // A hand-edited blank stage survives migration verbatim and keeps the custom
+        // flag, so the Core stage compiles to empty like WPF.
+        var blank = tasks.Single(task => task.Name == "FightBlankAnnihilation");
+        Assert.True(blank.Params["_ui_use_custom_annihilation"]?.GetValue<bool>());
+        Assert.Equal(string.Empty, blank.Params["_ui_annihilation_stage"]?.GetValue<string>());
+        var (blankDto, blankIssues) = TaskParamCompiler.ReadFight(blank, strict: true);
+        Assert.Empty(blankIssues);
+        var blankCompiled = TaskParamCompiler.CompileFight(
+            blankDto,
+            service.CurrentConfig.Profiles["Default"],
+            service.CurrentConfig,
+            new DateTime(2025, 1, 6, 12, 0, 0, DateTimeKind.Utc));
+        var blankCoreParams = TaskParamCompiler.BuildCoreParams(TaskModuleTypes.Fight, blankCompiled.Params);
+        Assert.Equal(string.Empty, blankCoreParams["stage"]?.GetValue<string>());
+
+        // A stored stage equal to the default clears the custom flag on migration,
+        // matching WPF ConfigConverter's `stored && AnnihilationStage != "Annihilation"`.
+        var defaulted = tasks.Single(task => task.Name == "FightDefaultAnnihilation");
+        Assert.False(defaulted.Params["_ui_use_custom_annihilation"]?.GetValue<bool>());
+        Assert.Equal("Annihilation", defaulted.Params["_ui_annihilation_stage"]?.GetValue<string>());
+        Assert.Equal("Annihilation", defaulted.Params["stage"]?.GetValue<string>());
     }
 
     [Fact]

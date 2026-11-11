@@ -39,7 +39,7 @@ public sealed class TaskModuleAFeatureTests
         Assert.Equal("Fight", tasks[1].Type);
         Assert.Equal(FightStageSelection.CurrentOrLast, tasks[1].Params["stage"]?.GetValue<string>());
         Assert.Equal(int.MaxValue, tasks[1].Params["times"]?.GetValue<int>());
-        Assert.Equal(1, tasks[1].Params["series"]?.GetValue<int>());
+        Assert.Equal(0, tasks[1].Params["series"]?.GetValue<int>());
 
         Assert.Equal("Recruit", tasks[2].Type);
         Assert.Equal(4, tasks[2].Params["times"]?.GetValue<int>());
@@ -529,15 +529,15 @@ public sealed class TaskModuleAFeatureTests
         Assert.Equal(2, json["medicine"]?.GetValue<int>());
         Assert.Equal(1, json["stone"]?.GetValue<int>());
         Assert.Equal(9999, json["expiring_medicine"]?.GetValue<int>());
-        Assert.Equal(9999, json["medicine_expire_days"]?.GetValue<int>());
+        Assert.Equal(2, json["medicine_expire_days"]?.GetValue<int>());
         Assert.Equal(6, json["times"]?.GetValue<int>());
         Assert.Equal(3, json["series"]?.GetValue<int>());
         Assert.True(json["DrGrandet"]?.GetValue<bool>());
-        Assert.True(json["_ui_use_alternate_stage"]?.GetValue<bool>());
-        Assert.False(json["_ui_hide_unavailable_stage"]?.GetValue<bool>());
-        Assert.Equal("Ignore", json["_ui_stage_reset_mode"]?.GetValue<string>());
-        Assert.True(json["_ui_use_custom_annihilation"]?.GetValue<bool>());
-        Assert.Equal("Anni-3", json["_ui_annihilation_stage"]?.GetValue<string>());
+        Assert.DoesNotContain(json, pair => pair.Key.StartsWith("_ui_", StringComparison.Ordinal));
+        Assert.Equal("Official", json["client_type"]?.GetValue<string>());
+        Assert.False(json.ContainsKey("penguin_id"));
+        Assert.False(json.ContainsKey("yituliu_id"));
+        Assert.Equal("CN", json["server"]?.GetValue<string>());
 
         var drops = Assert.IsType<JsonObject>(json["drops"]);
         Assert.Equal(2, drops["30012"]?.GetValue<int>());

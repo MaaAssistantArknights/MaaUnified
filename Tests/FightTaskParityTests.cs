@@ -2,6 +2,7 @@ using System.Text.Json.Nodes;
 using System.Threading.Channels;
 using Avalonia.Threading;
 using MAAUnified.App.ViewModels.TaskQueue;
+using MAAUnified.App.ViewModels.Infrastructure;
 using MAAUnified.Application.Configuration;
 using MAAUnified.Application.Models;
 using MAAUnified.Application.Models.TaskParams;
@@ -85,6 +86,348 @@ public sealed class FightTaskParityTests
         Assert.Equal("Ignore", roundTrip.Value.StageResetMode);
         Assert.True(roundTrip.Value.UseWeeklySchedule);
         Assert.False(roundTrip.Value.WeeklyScheduleMonday);
+    }
+
+    [Fact]
+    public async Task ConsumeCompletedFightOneShotParams_ShouldResetNullableFlagsToFalse()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Fight", "fight")).Success);
+        Assert.True((await fixture.TaskQueue.SaveFightParamsAsync(0, new FightTaskParamsDto
+        {
+            Stage = "1-7",
+            UseMedicine = null,
+            Medicine = 5,
+            UseStone = null,
+            Stone = 2,
+            EnableTimesLimit = null,
+            Times = 7,
+            EnableTargetDrop = null,
+            DropId = "30012",
+            DropCount = 3,
+        })).Success);
+
+        var consumed = await fixture.TaskQueue.ConsumeCompletedFightOneShotParamsAsync(0);
+
+        Assert.True(consumed.Success);
+        Assert.Equal(4, consumed.Value);
+        var raw = (await fixture.TaskQueue.GetTaskParamsAsync(0)).Value!;
+        Assert.False(raw["_ui_use_medicine"]?.GetValue<bool>());
+        Assert.False(raw["_ui_use_stone"]?.GetValue<bool>());
+        Assert.False(raw["_ui_enable_times_limit"]?.GetValue<bool>());
+        Assert.False(raw["_ui_enable_target_drop"]?.GetValue<bool>());
+
+        var compiled = TaskParamCompiler.CompileTask(
+            fixture.Config.CurrentConfig.Profiles["Default"].TaskQueue[0],
+            fixture.Config.CurrentConfig.Profiles["Default"],
+            fixture.Config.CurrentConfig,
+            strict: true);
+        Assert.Equal(0, compiled.Params["medicine"]?.GetValue<int>());
+        Assert.Equal(0, compiled.Params["stone"]?.GetValue<int>());
+        Assert.Equal(int.MaxValue, compiled.Params["times"]?.GetValue<int>());
+        Assert.Null(compiled.Params["drops"]);
+    }
+
+    [Fact]
+    public async Task ResetAllFightOneShotParams_ShouldResetEveryFightBeforeExit()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Fight", "first")).Success);
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Fight", "second")).Success);
+
+        for (var index = 0; index < 2; index++)
+        {
+            Assert.True((await fixture.TaskQueue.SaveFightParamsAsync(index, new FightTaskParamsDto
+            {
+                Stage = "1-7",
+                UseMedicine = null,
+                UseStone = null,
+                EnableTimesLimit = null,
+                EnableTargetDrop = null,
+                DropId = "30012",
+                DropCount = 1,
+            })).Success);
+        }
+
+        var reset = await fixture.TaskQueue.ResetAllFightOneShotParamsAsync();
+
+        Assert.True(reset.Success);
+        Assert.Equal(8, reset.Value);
+        for (var index = 0; index < 2; index++)
+        {
+            var parameters = (await fixture.TaskQueue.GetTaskParamsAsync(index)).Value!;
+            Assert.False(parameters["_ui_use_medicine"]?.GetValue<bool>());
+            Assert.False(parameters["_ui_use_stone"]?.GetValue<bool>());
+            Assert.False(parameters["_ui_enable_times_limit"]?.GetValue<bool>());
+            Assert.False(parameters["_ui_enable_target_drop"]?.GetValue<bool>());
+        }
+    }
+
+    [Fact]
+    public void CompileFight_ShouldPreferWpfReportingSettingsAndRemoveDisabledReporterIds()
+    {
+        var profile = new UnifiedProfile();
+        profile.Values["Penguin.EnablePenguin"] = JsonValue.Create(true);
+        profile.Values["Yituliu.EnableYituliu"] = JsonValue.Create(true);
+        profile.Values["Penguin.Id"] = JsonValue.Create("wpf-penguin-id");
+        profile.Values["Start.ClientType"] = JsonValue.Create("YoStarJP");
+        profile.Values["EnablePenguin"] = JsonValue.Create(false);
+        profile.Values["EnableYituliu"] = JsonValue.Create(false);
+        profile.Values["PenguinId"] = JsonValue.Create("legacy-penguin-id");
+        profile.Values["YituliuId"] = JsonValue.Create("legacy-yituliu-id");
+        profile.Values["ClientType"] = JsonValue.Create("Official");
+
+        var compiled = TaskParamCompiler.CompileFight(new FightTaskParamsDto(), profile, new UnifiedConfig());
+        var coreParams = TaskParamCompiler.BuildCoreParams(TaskModuleTypes.Fight, compiled.Params);
+
+        Assert.True(coreParams["report_to_penguin"]?.GetValue<bool>());
+        Assert.True(coreParams["report_to_yituliu"]?.GetValue<bool>());
+        Assert.Equal("wpf-penguin-id", coreParams["penguin_id"]?.GetValue<string>());
+        Assert.Equal("wpf-penguin-id", coreParams["yituliu_id"]?.GetValue<string>());
+        Assert.Equal("JP", coreParams["server"]?.GetValue<string>());
+
+        profile.Values["Penguin.EnablePenguin"] = JsonValue.Create(false);
+        profile.Values["Yituliu.EnableYituliu"] = JsonValue.Create(false);
+        var disabledCoreParams = TaskParamCompiler.BuildCoreParams(
+            TaskModuleTypes.Fight,
+            TaskParamCompiler.CompileFight(new FightTaskParamsDto(), profile, new UnifiedConfig()).Params);
+
+        Assert.False(disabledCoreParams["report_to_penguin"]?.GetValue<bool>());
+        Assert.False(disabledCoreParams["report_to_yituliu"]?.GetValue<bool>());
+        Assert.Null(disabledCoreParams["penguin_id"]);
+        Assert.Null(disabledCoreParams["yituliu_id"]);
+
+        var defaults = TaskParamCompiler.CompileFight(new FightTaskParamsDto(), new UnifiedProfile(), new UnifiedConfig());
+        Assert.True(defaults.Params["report_to_penguin"]?.GetValue<bool>());
+        Assert.True(defaults.Params["report_to_yituliu"]?.GetValue<bool>());
+    }
+
+    [Fact]
+    public async Task QueueEnabledTasks_FightBlankTargetDrop_ShouldAppendWithoutDrops()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.Fight, "fight")).Success);
+        Assert.True((await fixture.TaskQueue.SaveFightParamsAsync(0, new FightTaskParamsDto
+        {
+            Stage = "1-7",
+            EnableTargetDrop = true,
+            DropId = string.Empty,
+            DropCount = 3,
+        })).Success);
+
+        var queued = await fixture.TaskQueue.QueueEnabledTasksAsync();
+
+        Assert.True(queued.Success);
+        var appended = Assert.Single(fixture.Bridge.AppendedTasks);
+        var coreParams = Assert.IsType<JsonObject>(JsonNode.Parse(appended.ParamsJson));
+        Assert.False(coreParams.ContainsKey("drops"));
+    }
+
+    [Theory]
+    [InlineData("Annihilation", "Chernobog@Annihilation")]
+    [InlineData("annihilation", "annihilation")]
+    [InlineData("ANNIHILATION", "ANNIHILATION")]
+    public async Task QueueEnabledTasks_ManualAnnihilationToken_ShouldOnlyRemapExactWpfToken(
+        string stage,
+        string expectedCoreStage)
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.Fight, "fight")).Success);
+        Assert.True((await fixture.TaskQueue.SaveFightParamsAsync(0, new FightTaskParamsDto
+        {
+            Stage = stage,
+            StagePlan = [stage],
+            IsStageManually = true,
+            UseCustomAnnihilation = true,
+            AnnihilationStage = "Chernobog@Annihilation",
+        })).Success);
+
+        var queued = await fixture.TaskQueue.QueueEnabledTasksAsync();
+
+        Assert.True(queued.Success);
+        var appended = Assert.Single(fixture.Bridge.AppendedTasks);
+        var coreParams = Assert.IsType<JsonObject>(JsonNode.Parse(appended.ParamsJson));
+        Assert.Equal(expectedCoreStage, coreParams["stage"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task FightModule_UseStoneToggle_ShouldResetMedicineToWpfBound()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var module = new FightTaskModuleViewModel(
+            fixture.Runtime,
+            new LocalizedTextMap { Language = "en-us" },
+            (_, _) => Task.FromResult(true));
+
+        // Hand-edited configs can hold values above the UI bound; WPF still resets
+        // the medicine count to 999 whenever the stone toggle is not false.
+        module.Medicine = 1500;
+        module.UseStone = null;
+        Assert.Equal(999, module.Medicine);
+
+        module.Medicine = 1500;
+        Assert.True(await module.RequestAllowUseStoneSaveAsync());
+        module.UseStone = true;
+        Assert.Equal(999, module.Medicine);
+    }
+
+    [Fact]
+    public async Task FightModule_DropQuantityVisibility_ShouldFollowWpfIsSpecifiedDrops()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var module = new FightTaskModuleViewModel(fixture.Runtime, new LocalizedTextMap { Language = "en-us" });
+
+        // WPF binds the drop quantity controls to IsSpecifiedDrops: visible only
+        // when EnableTargetDrop is exactly true.
+        module.EnableTargetDrop = true;
+        Assert.True(module.IsDropQuantityVisible);
+        Assert.True(module.IsDropControlsEnabled);
+
+        module.EnableTargetDrop = false;
+        Assert.False(module.IsDropQuantityVisible);
+        Assert.False(module.IsDropControlsEnabled);
+
+        module.EnableTargetDrop = null;
+        Assert.False(module.IsDropQuantityVisible);
+        Assert.True(module.IsDropControlsEnabled);
+    }
+
+    [Fact]
+    public void FightSettingsView_ShouldHideDropQuantityControlsUnlessTargetDropEnabled()
+    {
+        var root = TestRepoLayout.GetMaaUnifiedRoot();
+        var view = File.ReadAllText(Path.Combine(root, "App", "Features", "TaskQueue", "FightSettingsView.axaml"));
+
+        Assert.Contains(
+            """
+            IsVisible="{Binding IsDropQuantityVisible}"
+                                   Text="{Binding DropCountLabelText}"
+            """.ReplaceLineEndings("\n").Trim(),
+            view,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            """
+            Value="{Binding DropCount}"
+                                                 IsEnabled="{Binding IsDropControlsEnabled}"
+                                                 IsVisible="{Binding IsDropQuantityVisible}"
+            """.ReplaceLineEndings("\n").Trim(),
+            view,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void CompileFight_BlankCustomAnnihilationStage_ShouldEmitEmptyStageLikeWpf()
+    {
+        // WPF assigns the configured custom annihilation stage unconditionally once
+        // the resolved stage is exactly "Annihilation"; a hand-edited blank override
+        // therefore reaches Core as an empty stage.
+        var compiled = TaskParamCompiler.CompileFight(new FightTaskParamsDto
+        {
+            Stage = "Annihilation",
+            StagePlan = ["Annihilation"],
+            UseCustomAnnihilation = true,
+            AnnihilationStage = string.Empty,
+        }, new UnifiedProfile(), new UnifiedConfig(), new DateTime(2025, 1, 6, 12, 0, 0, DateTimeKind.Utc));
+
+        Assert.Equal(string.Empty, compiled.Params["stage"]?.GetValue<string>());
+        var coreParams = TaskParamCompiler.BuildCoreParams(TaskModuleTypes.Fight, compiled.Params);
+        Assert.Equal(string.Empty, coreParams["stage"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public void FightSettingsView_ShouldUseWpfNumericBounds()
+    {
+        var root = TestRepoLayout.GetMaaUnifiedRoot();
+        var view = File.ReadAllText(Path.Combine(root, "App", "Features", "TaskQueue", "FightSettingsView.axaml"));
+
+        Assert.Contains("Maximum=\"999\"\n                                       Value=\"{Binding Times}\"", view, StringComparison.Ordinal);
+        Assert.Contains("Maximum=\"1145141919\"\n                                     Value=\"{Binding DropCount}\"", view, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task GuiImport_FlatDisabledCombat_ShouldNotQueueRemainingSanityFight()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        await File.WriteAllTextAsync(
+            Path.Combine(fixture.Root, "config", "gui.json"),
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": {
+                  "TaskQueue.Combat.IsChecked": false,
+                  "MainFunction.Stage1": "1-7",
+                  "Fight.UseRemainingSanityStage": true,
+                  "Fight.RemainingSanityStage": "CE-6"
+                }
+              }
+            }
+            """);
+
+        Assert.True((await fixture.Config.ImportLegacyAsync(ImportSource.GuiOnly, manualImport: false)).Success);
+        var fights = fixture.Config.CurrentConfig.Profiles["Default"].TaskQueue
+            .Where(task => task.Type == TaskModuleTypes.Fight)
+            .ToArray();
+        Assert.All(fights, task => Assert.False(task.IsEnabled));
+
+        var queued = await fixture.TaskQueue.QueueEnabledTasksAsync();
+        Assert.True(queued.Success);
+        Assert.DoesNotContain(fixture.Bridge.AppendedTasks, static _ => true);
+    }
+
+    [Fact]
+    public async Task GuiImport_LeadingAnnihilationAlternatePlan_ShouldSplitAndQueueInWpfOrder()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        await File.WriteAllTextAsync(
+            Path.Combine(fixture.Root, "config", "gui.json"),
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": {
+                  "TaskQueue.Combat.IsChecked": true,
+                  "TaskQueue.Order.Combat": 0,
+                  "GUI.UseAlternateStage": true,
+                  "MainFunction.Stage1": "Annihilation",
+                  "MainFunction.Stage2": "CE-6",
+                  "Fight.UseRemainingSanityStage": false,
+                  "Fight.RemainingSanityStage": "CE-6"
+                }
+              }
+            }
+            """);
+
+        Assert.True((await fixture.Config.ImportLegacyAsync(ImportSource.GuiOnly, manualImport: false)).Success);
+        var fights = fixture.Config.CurrentConfig.Profiles["Default"].TaskQueue
+            .Where(task => task.Type == TaskModuleTypes.Fight)
+            .ToArray();
+        Assert.Equal(["AnnihilationMode", "Fight", "RemainingSanityStage"], fights.Select(task => task.Name).ToArray());
+        Assert.Equal([true, true, false], fights.Select(task => task.IsEnabled).ToArray());
+
+        var queued = await fixture.TaskQueue.QueueEnabledTasksAsync();
+        Assert.True(queued.Success);
+        var stages = fixture.Bridge.AppendedTasks
+            .Select(task => Assert.IsType<JsonObject>(JsonNode.Parse(task.ParamsJson))["stage"]!.GetValue<string>())
+            .ToArray();
+        Assert.Equal(["Annihilation", "CE-6"], stages);
+    }
+
+    [Theory]
+    [InlineData("Official", "CN")]
+    [InlineData("Bilibili", "CN")]
+    [InlineData("YoStarEN", "US")]
+    [InlineData("YoStarJP", "JP")]
+    [InlineData("YoStarKR", "KR")]
+    [InlineData("txwy", "ZH_TW")]
+    public void CompileFight_ServerShouldFallBackFromClientType(string clientType, string expectedServer)
+    {
+        var profile = new UnifiedProfile();
+        profile.Values["ClientType"] = JsonValue.Create(clientType);
+
+        var compiled = TaskParamCompiler.CompileFight(new FightTaskParamsDto(), profile, new UnifiedConfig());
+
+        Assert.Equal(expectedServer, compiled.Params["server"]?.GetValue<string>());
     }
 
     [Fact]
@@ -222,13 +565,41 @@ public sealed class FightTaskParityTests
             }, new UnifiedProfile(), new UnifiedConfig(), new DateTime(2026, 7, 1, 12, 0, 0, DateTimeKind.Utc));
 
             Assert.Equal(5, compiled.Params["medicine_expire_days"]?.GetValue<int>());
-            Assert.Equal(5, compiled.Params["expiring_medicine"]?.GetValue<int>());
+            Assert.Equal(9999, compiled.Params["expiring_medicine"]?.GetValue<int>());
             Assert.True(compiled.Params["_ui_use_expire_medicine_for_activity"]?.GetValue<bool>());
+            Assert.Equal(2, compiled.Params["_ui_medicine_expire_days"]?.GetValue<int>());
+
+            var task = new UnifiedTaskItem { Type = TaskModuleTypes.Fight, Params = compiled.Params };
+            var (roundTrip, issues) = TaskParamCompiler.ReadFight(task, strict: true);
+            Assert.Empty(issues);
+            Assert.False(roundTrip.UseExpiringMedicine);
+            Assert.Equal(2, roundTrip.MedicineExpireDays);
         }
         finally
         {
             Environment.CurrentDirectory = originalDirectory;
         }
+    }
+
+    [Fact]
+    public void CompileFight_ExpiringMedicine_ShouldUseWpfCountAndCoreDayFields()
+    {
+        var compiled = TaskParamCompiler.CompileFight(new FightTaskParamsDto
+        {
+            UseExpiringMedicine = true,
+            ExpiringMedicine = 3,
+            MedicineExpireDays = 3,
+        }, new UnifiedProfile(), new UnifiedConfig());
+
+        Assert.Equal(9999, compiled.Params["expiring_medicine"]?.GetValue<int>());
+        Assert.Equal(3, compiled.Params["medicine_expire_days"]?.GetValue<int>());
+
+        var task = new UnifiedTaskItem { Type = TaskModuleTypes.Fight, Params = compiled.Params };
+        var (roundTrip, issues) = TaskParamCompiler.ReadFight(task, strict: true);
+        Assert.Empty(issues);
+        Assert.True(roundTrip.UseExpiringMedicine);
+        Assert.Equal(9999, roundTrip.ExpiringMedicine);
+        Assert.Equal(3, roundTrip.MedicineExpireDays);
     }
 
     [Fact]
@@ -277,7 +648,12 @@ public sealed class FightTaskParityTests
 
         var task = Assert.Single(service.CurrentConfig.Profiles["Default"].TaskQueue);
         Assert.Equal("Fight", task.Type);
-        Assert.Equal("LS-6", task.Params["stage"]?.GetValue<string>());
+        // Save-time normalization stores the execution-resolved stage. A leading
+        // current/last plan entry resolves to the sentinel, which BuildCoreParams
+        // sends to Core as an empty stage, matching frozen WPF GetFightStage.
+        Assert.Equal(FightStageSelection.CurrentOrLast, task.Params["stage"]?.GetValue<string>());
+        var coreParams = TaskParamCompiler.BuildCoreParams(TaskModuleTypes.Fight, task.Params);
+        Assert.Equal(string.Empty, coreParams["stage"]?.GetValue<string>());
         Assert.True(task.Params["_ui_is_stage_manually"]?.GetValue<bool>());
         Assert.True(task.Params["_ui_use_alternate_stage"]?.GetValue<bool>());
         Assert.False(task.Params["_ui_hide_unavailable_stage"]?.GetValue<bool>());
@@ -285,7 +661,7 @@ public sealed class FightTaskParityTests
         Assert.True(task.Params["_ui_use_weekly_schedule"]?.GetValue<bool>());
         Assert.False(task.Params["_ui_weekly_schedule_monday"]?.GetValue<bool>());
         Assert.Null(task.Params["_ui_use_medicine"]);
-        Assert.Null(task.Params["_ui_use_stone"]);
+        Assert.False(task.Params["_ui_use_stone"]?.GetValue<bool>());
         Assert.Null(task.Params["_ui_enable_times_limit"]);
         Assert.Null(task.Params["_ui_enable_target_drop"]);
 
@@ -328,6 +704,158 @@ public sealed class FightTaskParityTests
         Assert.Contains("CE-6", values);
         Assert.DoesNotContain("GT-1", values);
         Assert.InRange(values.Length, 1, 40);
+    }
+
+    [Fact]
+    public async Task FightModule_WeeklyScheduleAndHideUnavailableStage_ShouldRemainIndependent()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var module = new FightTaskModuleViewModel(fixture.Runtime, new LocalizedTextMap { Language = "en-us" })
+        {
+            HideUnavailableStage = true,
+            UseWeeklySchedule = true,
+        };
+
+        Assert.True(module.HideUnavailableStage);
+        Assert.True(module.UseWeeklySchedule);
+        Assert.True(module.IsHideUnavailableStageEnabled);
+    }
+
+    [Theory]
+    [InlineData("ce")]
+    [InlineData("ls-6")]
+    [InlineData("an")]
+    public async Task FightModule_SingleManualStageInput_ShouldPreserveWpfInput(string input)
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var module = new FightTaskModuleViewModel(fixture.Runtime, new LocalizedTextMap { Language = "en-us" })
+        {
+            IsStageManually = true,
+        };
+
+        module.EditableStageText = input;
+
+        Assert.Equal(input, module.Stage);
+        Assert.Equal(input, module.EditableStageText);
+        Assert.Equal(input, Assert.Single(module.StagePlan).Stage);
+    }
+
+    [Theory]
+    [InlineData("ce", "CE-6")]
+    [InlineData("ls-6", "LS-6")]
+    [InlineData("an", "Annihilation")]
+    [InlineData("unknown", "unknown")]
+    public async Task FightModule_AlternateManualStageInput_ShouldUseWpfAliasAndCandidateMatching(
+        string input,
+        string expected)
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var module = new FightTaskModuleViewModel(fixture.Runtime, new LocalizedTextMap { Language = "en-us" })
+        {
+            IsStageManually = true,
+            UseAlternateStage = true,
+        };
+
+        module.EditableStageText = input;
+
+        Assert.Equal(expected, module.Stage);
+        Assert.Equal(expected, Assert.Single(module.StagePlan).Stage);
+    }
+
+    [Fact]
+    public async Task FightModule_AllowUseStoneSave_ShouldRequireWarningConfirmation()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        WarningConfirmDialogRequest? request = null;
+        var confirm = false;
+        var texts = new LocalizedTextMap { Language = "en-us" };
+        var module = new FightTaskModuleViewModel(
+            fixture.Runtime,
+            texts,
+            (nextRequest, _) =>
+            {
+                request = nextRequest;
+                return Task.FromResult(confirm);
+            });
+
+        Assert.False(await module.RequestAllowUseStoneSaveAsync());
+        Assert.False(module.AllowUseStoneSave);
+        Assert.NotNull(request);
+        Assert.Equal(DialogTextCatalog.WarningDialogTitle("en-us"), request.Title);
+        Assert.Equal(texts["Fight.AllowUseStoneSaveWarning"], request.Message);
+        Assert.Equal(DialogTextCatalog.WarningDialogConfirmButton("en-us"), request.ConfirmText);
+        Assert.Equal(DialogTextCatalog.WarningDialogCancelButton("en-us"), request.CancelText);
+
+        confirm = true;
+        Assert.True(await module.RequestAllowUseStoneSaveAsync());
+        Assert.True(module.AllowUseStoneSave);
+    }
+
+    [Theory]
+    [InlineData("ce")]
+    [InlineData("ls-6")]
+    [InlineData("an")]
+    public async Task FightModule_SingleManualStageInput_ShouldPersistAndAppendWpfCoreStage(string input)
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Fight", "fight")).Success);
+        var module = new FightTaskModuleViewModel(fixture.Runtime, new LocalizedTextMap { Language = "en-us" });
+        await module.BindAsync(0);
+
+        module.IsStageManually = true;
+        module.EditableStageText = input;
+
+        Assert.True(await module.SaveAsync());
+        var stored = (await fixture.TaskQueue.GetTaskParamsAsync(0)).Value!;
+        Assert.Equal(input, stored["stage"]?.GetValue<string>());
+        var storedPlan = Assert.IsType<JsonArray>(stored["_ui_stage_plan"]);
+        Assert.Equal(input, Assert.Single(storedPlan)!.GetValue<string>());
+
+        var queued = await fixture.TaskQueue.QueueEnabledTasksAsync();
+        Assert.True(queued.Success);
+        var appended = Assert.Single(fixture.Bridge.AppendedTasks);
+        var coreParams = Assert.IsType<JsonObject>(JsonNode.Parse(appended.ParamsJson));
+        Assert.Equal(input, coreParams["stage"]?.GetValue<string>());
+        Assert.DoesNotContain(coreParams, pair => pair.Key.StartsWith("_ui_", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task FightModule_AlternateManualActivityDisplayAndCurrentOrLast_ShouldMatchWpfCandidates()
+    {
+        await using var fixture = await TestFixture.CreateAsync(coreVersion: "v9.9.9");
+        Directory.CreateDirectory(Path.Combine(fixture.Root, "cache", "gui"));
+        await File.WriteAllTextAsync(
+            Path.Combine(fixture.Root, "cache", "gui", "StageActivityV2.json"),
+            """
+            {
+              "Official": {
+                "sideStoryStage": {
+                  "AT": {
+                    "MinimumRequired": "v1.0.0",
+                    "Activity": {
+                      "UtcStartTime": "2020/01/01 00:00:00",
+                      "UtcExpireTime": "2099/01/01 00:00:00"
+                    },
+                    "Stages": [
+                      { "Display": "Activity Eight", "Value": "AT-8" }
+                    ]
+                  }
+                }
+              }
+            }
+            """);
+        var module = new FightTaskModuleViewModel(fixture.Runtime, new LocalizedTextMap { Language = "en-us" })
+        {
+            IsStageManually = true,
+            UseAlternateStage = true,
+        };
+
+        module.EditableStageText = "activity eight";
+        Assert.Equal("AT-8", module.Stage);
+
+        module.EditableStageText = string.Empty;
+        Assert.Equal(FightStageSelection.CurrentOrLast, module.Stage);
+        Assert.Equal(string.Empty, module.EditableStageText);
     }
 
     [Fact]
@@ -758,7 +1286,7 @@ public sealed class FightTaskParityTests
 
         public MAAUnifiedRuntime Runtime { get; }
 
-        public static async Task<TestFixture> CreateAsync()
+        public static async Task<TestFixture> CreateAsync(string? coreVersion = null)
         {
             var root = Path.Combine(Path.GetTempPath(), "maa-fight-parity-tests", Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(Path.Combine(root, "config"));
@@ -812,7 +1340,10 @@ public sealed class FightTaskParityTests
                 SettingsFeatureService = new SettingsFeatureService(config, capability, diagnostics),
                 DialogFeatureService = new DialogFeatureService(diagnostics),
                 PostActionFeatureService = new PostActionFeatureService(config, diagnostics, platform.PostActionExecutorService),
-                StageManagerFeatureService = new StageManagerFeatureService(config, root),
+                StageManagerFeatureService = new StageManagerFeatureService(
+                    config,
+                    root,
+                    coreVersionResolver: () => coreVersion),
             };
             return new TestFixture(root, config, taskQueue, bridge, runtime);
         }
@@ -836,6 +1367,8 @@ public sealed class FightTaskParityTests
         private readonly Channel<CoreCallbackEvent> _callbackChannel = Channel.CreateUnbounded<CoreCallbackEvent>();
         private int _taskId;
 
+        public List<CoreTaskRequest> AppendedTasks { get; } = [];
+
         public Task<CoreResult<CoreInitializeInfo>> InitializeAsync(CoreInitializeRequest request, CancellationToken cancellationToken = default)
             => Task.FromResult(CoreResult<CoreInitializeInfo>.Ok(new CoreInitializeInfo(request.BaseDirectory, "fake", "fake", request.ClientType)));
 
@@ -843,7 +1376,10 @@ public sealed class FightTaskParityTests
             => Task.FromResult(CoreResult<bool>.Ok(true));
 
         public Task<CoreResult<int>> AppendTaskAsync(CoreTaskRequest task, CancellationToken cancellationToken = default)
-            => Task.FromResult(CoreResult<int>.Ok(Interlocked.Increment(ref _taskId)));
+        {
+            AppendedTasks.Add(task);
+            return Task.FromResult(CoreResult<int>.Ok(Interlocked.Increment(ref _taskId)));
+        }
 
         public Task<CoreResult<bool>> StartAsync(CancellationToken cancellationToken = default)
             => Task.FromResult(CoreResult<bool>.Ok(true));

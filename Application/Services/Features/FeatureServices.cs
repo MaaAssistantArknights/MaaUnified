@@ -2469,6 +2469,50 @@ public sealed class TaskQueueFeatureService : ITaskQueueFeatureService
         return CoreResult<int>.Ok(affected);
     }
 
+    public async Task<CoreResult<int>> ConsumeCompletedFightOneShotParamsAsync(
+        int index,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!TryGetTaskByIndex(index, out var task, out var error))
+        {
+            return CoreResult<int>.Fail(new CoreError(CoreErrorCode.InvalidRequest, error));
+        }
+
+        if (!IsTaskType(task, TaskModuleTypes.Fight))
+        {
+            return CoreResult<int>.Ok(0);
+        }
+
+        var affected = ResetFightOneShotParams(task);
+
+        if (affected > 0)
+        {
+            await _configService.SaveAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        return CoreResult<int>.Ok(affected);
+    }
+
+    public async Task<CoreResult<int>> ResetAllFightOneShotParamsAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!TryGetProfile(out var profile, out var error))
+        {
+            return CoreResult<int>.Fail(new CoreError(CoreErrorCode.InvalidRequest, error));
+        }
+
+        var affected = profile.TaskQueue
+            .Where(static task => IsTaskType(task, TaskModuleTypes.Fight))
+            .Sum(ResetFightOneShotParams);
+        if (affected > 0)
+        {
+            await _configService.SaveAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        return CoreResult<int>.Ok(affected);
+    }
+
     public Task<UiOperationResult<IReadOnlyList<TaskQueuePrecheckWarning>>> GetStartPrecheckWarningsAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -3209,6 +3253,27 @@ public sealed class TaskQueueFeatureService : ITaskQueueFeatureService
 
         task = profile.TaskQueue[index];
         return true;
+    }
+
+    private static int ResetFightOneShotParams(UnifiedTaskItem task)
+    {
+        var affected = 0;
+        foreach (var key in new[]
+        {
+            "_ui_use_medicine",
+            "_ui_use_stone",
+            "_ui_enable_times_limit",
+            "_ui_enable_target_drop",
+        })
+        {
+            if (task.Params.TryGetPropertyValue(key, out var value) && value is null)
+            {
+                task.Params[key] = false;
+                affected++;
+            }
+        }
+
+        return affected;
     }
 
     private bool TryGetProfile(out UnifiedProfile profile, out string error)

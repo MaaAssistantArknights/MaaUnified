@@ -191,15 +191,35 @@ public sealed class GuiJsonConfigImporter : IConfigImporter
             .Select(static entry => entry.Task)
             .ToList();
 
-        if (ReadBool(source, "Fight.UseRemainingSanityStage", true)
-            && TryReadString(source, "Fight.RemainingSanityStage", out var remainingStage)
-            && !string.IsNullOrWhiteSpace(remainingStage))
+        var combatIndex = result.FindIndex(static task => string.Equals(ReadTaskType(task), "FightTask", StringComparison.OrdinalIgnoreCase));
+        var combatEnabled = combatIndex >= 0
+            && result[combatIndex]["IsEnable"] is JsonValue combatEnabledValue
+            && combatEnabledValue.TryGetValue(out bool isCombatEnabled)
+            && isCombatEnabled;
+        if (combatIndex >= 0
+            && ReadBool(source, "GUI.UseAlternateStage", false)
+            && result[combatIndex]["StagePlan"] is JsonArray combatStagePlan
+            && combatStagePlan.Count > 0
+            && combatStagePlan[0] is JsonValue firstStageValue
+            && firstStageValue.TryGetValue(out string? firstStage)
+            && string.Equals(firstStage, "Annihilation", StringComparison.OrdinalIgnoreCase))
         {
-            var remaining = NewLegacyTask("FightTask", "RemainingSanityStage", ReadBool(source, "TaskQueue.Combat.IsChecked", false));
-            remaining["StagePlan"] = new JsonArray(remainingStage.Trim());
-            var combatIndex = result.FindIndex(static task => string.Equals(ReadTaskType(task), "FightTask", StringComparison.OrdinalIgnoreCase));
-            result.Insert(combatIndex < 0 ? result.Count : combatIndex + 1, remaining);
+            var annihilation = NewLegacyTask("FightTask", "AnnihilationMode", true);
+            annihilation["StagePlan"] = new JsonArray("Annihilation");
+            result.Insert(combatIndex, annihilation);
+            combatIndex++;
+            combatStagePlan.RemoveAt(0);
         }
+
+        var useRemainingSanityStage = ReadBool(source, "Fight.UseRemainingSanityStage", true);
+        var hasRemainingSanityStage = TryReadString(source, "Fight.RemainingSanityStage", out var remainingStage)
+            && !string.IsNullOrWhiteSpace(remainingStage);
+        var remaining = NewLegacyTask(
+            "FightTask",
+            "RemainingSanityStage",
+            combatEnabled && useRemainingSanityStage && hasRemainingSanityStage);
+        remaining["StagePlan"] = new JsonArray(hasRemainingSanityStage ? remainingStage.Trim() : string.Empty);
+        result.Insert(combatIndex < 0 ? result.Count : combatIndex + 1, remaining);
 
         return result;
     }

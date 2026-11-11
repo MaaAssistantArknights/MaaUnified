@@ -222,19 +222,25 @@ internal static class LegacyTaskSchemaConverter
         var stagePlan = ResolveFightStagePlan(task);
         var stage = FightStageSelection.NormalizeStoredValue(ResolveFightStage(task));
         var useMedicine = GetNullableBool(task, "UseMedicine") ?? false;
-        var useStone = GetNullableBool(task, "UseStone") ?? false;
+        var allowUseStoneSave = GetBool(task, "UseStoneAllowSave", false);
+        var useStone = allowUseStoneSave && (GetNullableBool(task, "UseStone") ?? false);
         var useExpiringMedicine = GetBool(task, "UseExpiringMedicine", false);
         var expiringMedicine = GetInt(task, "MedicineExpireDays", 2);
         var useExpireMedicineForActivity = GetBool(task, "UseExpireMedicineForActivity", false);
         var enableTimesLimit = GetNullableBool(task, "EnableTimesLimit") ?? false;
         var enableTargetDrop = GetNullableBool(task, "EnableTargetDrop") ?? false;
         var dropId = GetString(task, "DropId") ?? string.Empty;
-        var dropCount = GetInt(task, "DropCount", 1);
+        var dropCount = GetInt(task, "DropCount", 5);
         var isInventoryTarget = GetBool(task, "IsInventoryTarget", false);
-        var useCustomAnnihilation = GetBool(task, "UseCustomAnnihilation", false);
-        var annihilationStage = GetString(task, "AnnihilationStage") ?? string.Empty;
+        var annihilationStage = GetString(task, "AnnihilationStage") ?? "Annihilation";
+
+        // WPF ConfigConverter keeps the stored annihilation stage verbatim (a
+        // hand-edited blank stays blank) and only preserves the custom flag when
+        // the stored stage differs from the default "Annihilation".
+        var useCustomAnnihilation = GetBool(task, "UseCustomAnnihilation", false)
+            && !string.Equals(annihilationStage, "Annihilation", StringComparison.Ordinal);
         var useAlternateStage = GetBool(task, "UseOptionalStage", false);
-        var hideUnavailableStage = GetBool(task, "HideUnavailableStage", false);
+        var hideUnavailableStage = GetBool(task, "HideUnavailableStage", true);
         var stageResetMode = ResolveFightStageResetMode(task);
 
         // Match CompileFight normalization rules so legacy import produces consistent UI metadata.
@@ -260,24 +266,25 @@ internal static class LegacyTaskSchemaConverter
         var result = new JsonObject
         {
             ["stage"] = stage,
-            ["medicine"] = useMedicine ? GetInt(task, "MedicineCount", 0) : 0,
-            ["expiring_medicine"] = useExpiringMedicine ? Math.Max(1, expiringMedicine) : 0,
+            ["medicine"] = useMedicine ? GetInt(task, "MedicineCount", 999) : 0,
+            ["expiring_medicine"] = useExpiringMedicine ? 9999 : 0,
             ["medicine_expire_days"] = useExpiringMedicine ? Math.Max(1, expiringMedicine) : 0,
             ["stone"] = useStone ? GetInt(task, "StoneCount", 0) : 0,
-            ["times"] = enableTimesLimit ? GetInt(task, "TimesLimit", int.MaxValue) : int.MaxValue,
+            ["times"] = enableTimesLimit ? GetInt(task, "TimesLimit", 5) : int.MaxValue,
             ["series"] = LegacyConfigValueMappings.NormalizeFightSeries(task["Series"]),
             ["DrGrandet"] = GetBool(task, "IsDrGrandet", false),
-            ["report_to_penguin"] = ResolveBooleanSetting(profile, config, "EnablePenguin"),
-            ["report_to_yituliu"] = ResolveBooleanSetting(profile, config, "EnableYituliu"),
-            ["penguin_id"] = ResolveStringSetting(profile, config, "PenguinId"),
-            ["yituliu_id"] = ResolveStringSetting(profile, config, "YituliuId")
-                ?? ResolveStringSetting(profile, config, "PenguinId"),
+            ["report_to_penguin"] = ResolveBooleanSetting(profile, config, true, "Penguin.EnablePenguin", "EnablePenguin"),
+            ["report_to_yituliu"] = ResolveBooleanSetting(profile, config, true, "Yituliu.EnableYituliu", "EnableYituliu"),
+            ["penguin_id"] = ResolveStringSetting(profile, config, "Penguin.Id", "PenguinId"),
+            ["yituliu_id"] = ResolveStringSetting(profile, config, "Penguin.Id", "YituliuId", "PenguinId"),
             ["server"] = ResolveServerType(profile, config),
             ["client_type"] = ResolveClientType(profile, config),
             ["_ui_stage_plan"] = ToJsonArray(stagePlan),
             ["_ui_is_stage_manually"] = GetBool(task, "IsStageManually", false),
+            ["_ui_use_expiring_medicine"] = useExpiringMedicine,
+            ["_ui_medicine_expire_days"] = Math.Max(1, expiringMedicine),
             ["_ui_use_medicine"] = CreateLegacyNullableBoolUiValue(task, "UseMedicine"),
-            ["_ui_use_stone"] = CreateLegacyNullableBoolUiValue(task, "UseStone"),
+            ["_ui_use_stone"] = useStone,
             ["_ui_enable_times_limit"] = CreateLegacyNullableBoolUiValue(task, "EnableTimesLimit"),
             ["_ui_enable_target_drop"] = CreateLegacyNullableBoolUiValue(task, "EnableTargetDrop"),
             ["_ui_drop_id"] = dropId.Trim(),
@@ -288,9 +295,9 @@ internal static class LegacyTaskSchemaConverter
             ["_ui_hide_unavailable_stage"] = hideUnavailableStage,
             ["_ui_stage_reset_mode"] = stageResetMode,
             ["_ui_use_custom_annihilation"] = useCustomAnnihilation,
-            ["_ui_annihilation_stage"] = string.IsNullOrWhiteSpace(annihilationStage) ? "Annihilation" : annihilationStage.Trim(),
+            ["_ui_annihilation_stage"] = string.IsNullOrWhiteSpace(annihilationStage) ? annihilationStage : annihilationStage.Trim(),
             ["_ui_hide_series"] = GetBool(task, "HideSeries", false),
-            ["_ui_allow_use_stone_save"] = GetBool(task, "UseStoneAllowSave", false),
+            ["_ui_allow_use_stone_save"] = allowUseStoneSave,
             ["_ui_use_weekly_schedule"] = GetBool(task, "UseWeeklySchedule", false),
             ["_ui_weekly_schedule_sunday"] = ResolveLegacyWeeklySchedule(task, DayOfWeek.Sunday),
             ["_ui_weekly_schedule_monday"] = ResolveLegacyWeeklySchedule(task, DayOfWeek.Monday),
@@ -382,11 +389,10 @@ internal static class LegacyTaskSchemaConverter
                 ["4"] = GetInt(task, "Level4Time", 540),
                 ["5"] = GetInt(task, "Level5Time", 540),
             },
-            ["report_to_penguin"] = ResolveBooleanSetting(profile, config, "EnablePenguin"),
-            ["report_to_yituliu"] = ResolveBooleanSetting(profile, config, "EnableYituliu"),
-            ["penguin_id"] = ResolveStringSetting(profile, config, "PenguinId"),
-            ["yituliu_id"] = ResolveStringSetting(profile, config, "YituliuId")
-                ?? ResolveStringSetting(profile, config, "PenguinId"),
+            ["report_to_penguin"] = ResolveBooleanSetting(profile, config, true, "Penguin.EnablePenguin", "EnablePenguin"),
+            ["report_to_yituliu"] = ResolveBooleanSetting(profile, config, true, "Yituliu.EnableYituliu", "EnableYituliu"),
+            ["penguin_id"] = ResolveStringSetting(profile, config, "Penguin.Id", "PenguinId"),
+            ["yituliu_id"] = ResolveStringSetting(profile, config, "Penguin.Id", "YituliuId", "PenguinId"),
             ["server"] = ResolveServerType(profile, config),
         };
 
@@ -841,7 +847,7 @@ internal static class LegacyTaskSchemaConverter
 
     private static string ResolveClientType(UnifiedProfile profile, UnifiedConfig config)
     {
-        return LegacyConfigValueNormalizer.NormalizeClientType(ResolveStringSetting(profile, config, "ClientType", "Start.ClientType")
+        return LegacyConfigValueNormalizer.NormalizeClientType(ResolveStringSetting(profile, config, "Start.ClientType", "ClientType")
             ?? ResolveStringSetting(profile, config, "GameSettings.ClientType")
             ?? "Official");
     }
@@ -850,7 +856,19 @@ internal static class LegacyTaskSchemaConverter
     {
         return ResolveStringSetting(profile, config, "ServerType")
             ?? ResolveStringSetting(profile, config, "Server")
-            ?? "CN";
+            ?? ResolveServerTypeFromClientType(ResolveClientType(profile, config));
+    }
+
+    private static string ResolveServerTypeFromClientType(string clientType)
+    {
+        return clientType.Trim() switch
+        {
+            var value when value.Equals("YoStarEN", StringComparison.OrdinalIgnoreCase) => "US",
+            var value when value.Equals("YoStarJP", StringComparison.OrdinalIgnoreCase) => "JP",
+            var value when value.Equals("YoStarKR", StringComparison.OrdinalIgnoreCase) => "KR",
+            var value when value.Equals("txwy", StringComparison.OrdinalIgnoreCase) => "ZH_TW",
+            _ => "CN",
+        };
     }
 
     private static string? ResolveStringSetting(UnifiedProfile profile, UnifiedConfig config, params string[] keys)
@@ -885,7 +903,7 @@ internal static class LegacyTaskSchemaConverter
         return null;
     }
 
-    private static bool ResolveBooleanSetting(UnifiedProfile profile, UnifiedConfig config, params string[] keys)
+    private static bool ResolveBooleanSetting(UnifiedProfile profile, UnifiedConfig config, bool fallback, params string[] keys)
     {
         foreach (var key in keys)
         {
@@ -905,7 +923,12 @@ internal static class LegacyTaskSchemaConverter
             }
         }
 
-        return false;
+        return fallback;
+    }
+
+    private static bool ResolveBooleanSetting(UnifiedProfile profile, UnifiedConfig config, params string[] keys)
+    {
+        return ResolveBooleanSetting(profile, config, false, keys);
     }
 
     private static bool ToBoolean(JsonNode? node, bool fallback)
