@@ -42,11 +42,13 @@
             <controls:AppActionInput HorizontalAlignment="Left"
                                      Text="{Binding AccountName, UpdateSourceTrigger=LostFocus}"
                                      ActionContent="{Binding Texts[StartUp.AccountSwitchManualRun]}"
+                                     ActionEnabled="{Binding CanRunAccountSwitchNow}"
                                      ActionClick="OnAccountSwitchManualRunClick" />
           </controls:SettingsInlineRow>
         </Border>
 
-        <Border Classes="app-surface app-card">
+        <Border Classes="app-surface app-card"
+                IsVisible="{Binding ShowStartGameEnabledOption}">
           <CheckBox Classes="app-checkbox"
                     Content="{Binding Texts[StartUp.StartGameEnabled]}"
                     IsChecked="{Binding StartGameEnabled}"
@@ -55,7 +57,8 @@
       </controls:AdaptiveSpacingStackPanel>
 
     <controls:AdaptiveSpacingStackPanel Classes="startup-section-content">
-        <Border Classes="app-surface app-card">
+        <Border Classes="app-surface app-card"
+                IsVisible="{Binding ShowClientTypeSelection}">
           <controls:SettingsInlineRow Classes="startup-card-content"
                                       controls:SettingsLabelWidthCoordinator.GroupKey="TaskQueue.Fields">
             <controls:SettingsLabel Text="{Binding Texts[StartUp.ClientType]}" />
@@ -87,7 +90,14 @@
           </controls:SettingsInlineRow>
         </Border>
 
-        <Border Classes="app-surface app-card">
+        <Border Classes="app-highlight app-warning-highlight"
+                IsVisible="{Binding IsAttachWindowMode}">
+          <TextBlock Classes="state-warning app-caption long-wrap"
+                     Text="{Binding Texts[StartUp.AttachWindowWarning]}" />
+        </Border>
+
+        <Border Classes="app-surface app-card"
+                IsVisible="{Binding ShowConnectAddressControls}">
           <controls:SettingsInlineRow Classes="startup-card-content"
                                       FieldWidth="{DynamicResource MAA.Size.Settings.FieldInputWidth}"
                                       controls:SettingsLabelWidthCoordinator.GroupKey="TaskQueue.Fields">
@@ -103,7 +113,8 @@
         </Border>
       </controls:AdaptiveSpacingStackPanel>
 
-    <controls:AdaptiveSpacingStackPanel Classes="startup-section-content">
+    <controls:AdaptiveSpacingStackPanel Classes="startup-section-content"
+                                        IsVisible="{Binding IsAdbConnectionMode}">
         <Border Classes="app-surface app-card"
                 IsVisible="{Binding IsMacBundledAdbSupported}">
           <CheckBox Classes="app-checkbox"
@@ -112,7 +123,7 @@
         </Border>
 
         <Border Classes="app-surface app-card"
-                IsVisible="{Binding ShowManualAdbPathControls}">
+                IsVisible="{Binding ShowAdbPathControls}">
           <controls:SettingsInlineRow Classes="startup-card-content"
                                       FieldWidth="{DynamicResource MAA.Size.Settings.FieldInputWidth}"
                                       controls:SettingsLabelWidthCoordinator.GroupKey="TaskQueue.Fields">
@@ -144,6 +155,61 @@
           <controls:AppHintedCheckBox Text="{Binding Texts[StartUp.AutoDetect]}"
                                        Tip="{Binding Texts[StartUp.AutoDetectConnectionTip]}"
                                        IsChecked="{Binding AutoDetectConnection}" />
+        </Border>
+
+        <Border Classes="app-surface app-card"
+                IsVisible="{Binding ShowAlwaysAutoDetectConnection}">
+          <controls:AppHintedCheckBox Text="{Binding Texts[Settings.Connect.AlwaysAutoDetect]}"
+                                       Tip="{DynamicResource AlwaysAutoDetectConnectionTip}"
+                                       IsChecked="{Binding AlwaysAutoDetectConnection}" />
+        </Border>
+      </controls:AdaptiveSpacingStackPanel>
+
+    <controls:AdaptiveSpacingStackPanel Classes="startup-section-content"
+                                        IsVisible="{Binding IsAttachWindowMode}">
+        <Border Classes="app-surface app-card">
+          <controls:SettingsInlineRow Classes="startup-card-content"
+                                      controls:SettingsLabelWidthCoordinator.GroupKey="TaskQueue.Fields">
+            <controls:SettingsLabel Text="{Binding Texts[StartUp.AttachScreencap]}" />
+            <controls:AppSelect ItemsSource="{Binding AttachWindowScreencapOptions}"
+                                SelectedItem="{Binding SelectedAttachWindowScreencapOption, Mode=TwoWay}">
+              <controls:AppSelect.ItemTemplate>
+                <DataTemplate x:DataType="vm:TaskModuleOption">
+                  <TextBlock Text="{Binding DisplayName}" />
+                </DataTemplate>
+              </controls:AppSelect.ItemTemplate>
+            </controls:AppSelect>
+          </controls:SettingsInlineRow>
+        </Border>
+
+        <Border Classes="app-surface app-card">
+          <controls:SettingsInlineRow Classes="startup-card-content"
+                                      controls:SettingsLabelWidthCoordinator.GroupKey="TaskQueue.Fields">
+            <controls:SettingsLabel Text="{Binding Texts[StartUp.AttachMouse]}" />
+            <controls:AppSelect ItemsSource="{Binding AttachWindowInputOptions}"
+                                SelectedItem="{Binding SelectedAttachWindowMouseOption, Mode=TwoWay}">
+              <controls:AppSelect.ItemTemplate>
+                <DataTemplate x:DataType="vm:TaskModuleOption">
+                  <TextBlock Text="{Binding DisplayName}" />
+                </DataTemplate>
+              </controls:AppSelect.ItemTemplate>
+            </controls:AppSelect>
+          </controls:SettingsInlineRow>
+        </Border>
+
+        <Border Classes="app-surface app-card">
+          <controls:SettingsInlineRow Classes="startup-card-content"
+                                      controls:SettingsLabelWidthCoordinator.GroupKey="TaskQueue.Fields">
+            <controls:SettingsLabel Text="{Binding Texts[StartUp.AttachKeyboard]}" />
+            <controls:AppSelect ItemsSource="{Binding AttachWindowInputOptions}"
+                                SelectedItem="{Binding SelectedAttachWindowKeyboardOption, Mode=TwoWay}">
+              <controls:AppSelect.ItemTemplate>
+                <DataTemplate x:DataType="vm:TaskModuleOption">
+                  <TextBlock Text="{Binding DisplayName}" />
+                </DataTemplate>
+              </controls:AppSelect.ItemTemplate>
+            </controls:AppSelect>
+          </controls:SettingsInlineRow>
         </Border>
       </controls:AdaptiveSpacingStackPanel>
 

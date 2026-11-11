@@ -3011,6 +3011,10 @@ public sealed class TaskQueueFeatureService : ITaskQueueFeatureService
 
         task.Type = compiled.NormalizedType;
         task.Params = compiled.Params;
+        // WPF parity (StartUpSettingsUserControlModel.AccountName setter): the stored
+        // account name keeps the user-entered value regardless of the client type; only
+        // the serialized Core payload blanks it for non-Official/Bilibili clients.
+        task.Params["account_name"] = (dto.AccountName ?? string.Empty).Trim();
         TaskParamCompiler.ApplyStartUpSharedProfileValues(profile, new StartUpTaskParamsDto
         {
             AccountName = compiled.Params["account_name"]?.GetValue<string>() ?? string.Empty,

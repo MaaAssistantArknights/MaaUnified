@@ -2704,6 +2704,9 @@
   <data name="StartUp.AttachScreencap" xml:space="preserve">
     <value>AttachWindow-截圖</value>
   </data>
+  <data name="StartUp.AttachWindowWarning" xml:space="preserve">
+    <value>連接 PC 端（實驗性功能，穩定性無法保證）</value>
+  </data>
   <data name="StartUp.AutoDetect" xml:space="preserve">
     <value>自動偵測連線</value>
   </data>

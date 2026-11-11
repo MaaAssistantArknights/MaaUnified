@@ -24,6 +24,9 @@ public partial class AppActionInput : UserControl
     public static readonly StyledProperty<object?> ActionContentProperty =
         AvaloniaProperty.Register<AppActionInput, object?>(nameof(ActionContent));
 
+    public static readonly StyledProperty<bool> ActionEnabledProperty =
+        AvaloniaProperty.Register<AppActionInput, bool>(nameof(ActionEnabled), true);
+
     public static readonly StyledProperty<ICommand?> ActionCommandProperty =
         AvaloniaProperty.Register<AppActionInput, ICommand?>(nameof(ActionCommand));
 
@@ -78,6 +81,12 @@ public partial class AppActionInput : UserControl
     {
         get => GetValue(ActionContentProperty);
         set => SetValue(ActionContentProperty, value);
+    }
+
+    public bool ActionEnabled
+    {
+        get => GetValue(ActionEnabledProperty);
+        set => SetValue(ActionEnabledProperty, value);
     }
 
     public ICommand? ActionCommand

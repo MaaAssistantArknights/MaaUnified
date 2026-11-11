@@ -2812,6 +2812,9 @@ MAA を複数開くには、新しい MAA を他のフォルダにコピーし�
   <data name="StartUp.AttachScreencap" xml:space="preserve">
     <value>AttachWindow-スクショ</value>
   </data>
+  <data name="StartUp.AttachWindowWarning" xml:space="preserve">
+    <value>PC 接続（実験的機能・動作の安定性は保証されません）</value>
+  </data>
   <data name="StartUp.AutoDetect" xml:space="preserve">
     <value>自動検出</value>
   </data>

@@ -2813,6 +2813,9 @@ OF-1 스테이지가 개방되지 않은 경우에는 선택하지 마세요.</v
   <data name="StartUp.AttachScreencap" xml:space="preserve">
     <value>AttachWindow-스크린샷</value>
   </data>
+  <data name="StartUp.AttachWindowWarning" xml:space="preserve">
+    <value>PC 연결 (실험적 기능이며 안정성은 보장되지 않습니다)</value>
+  </data>
   <data name="StartUp.AutoDetect" xml:space="preserve">
     <value>자동 감지</value>
   </data>

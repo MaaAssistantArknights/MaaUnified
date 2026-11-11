@@ -782,7 +782,20 @@ public sealed class UnifiedSessionService
             }
             else if (!string.Equals(compiled.NormalizedType, TaskModuleTypes.Mall, StringComparison.OrdinalIgnoreCase))
             {
-                task.Params = compiled.Params;
+                if (string.Equals(compiled.NormalizedType, TaskModuleTypes.StartUp, StringComparison.OrdinalIgnoreCase))
+                {
+                    // WPF parity: running the queue must not rewrite the stored StartUp
+                    // account name; only the appended Core JSON blanks it for
+                    // non-Official/Bilibili clients. Keep compiled.Params untouched so the
+                    // appended payload below still carries the blanked account name.
+                    var storedParams = compiled.Params.DeepClone() as JsonObject ?? new JsonObject();
+                    TaskParamCompiler.PreserveStoredStartUpAccountName(task, storedParams);
+                    task.Params = storedParams;
+                }
+                else
+                {
+                    task.Params = compiled.Params;
+                }
             }
 
             if (ShouldSkipTaskForToday(task, profile, _configService.CurrentConfig))

@@ -1656,40 +1656,23 @@ public static class TaskParamCompiler
         _ = config;
 
         var issues = new List<TaskValidationIssue>();
-        var taskNames = ParseDelimitedList(dto.TaskNames);
+        // WPF splits only the editor's comma-separated input, then passes each
+        // trimmed name to MaaCore without interpreting it as a task type.
+        var taskNames = dto.TaskNames.Select(taskName => taskName.Trim()).ToList();
         if (taskNames.Count == 0)
         {
             issues.Add(new TaskValidationIssue("CustomTaskNamesEmpty", "custom.task_names", "Custom task names list is empty.", Blocking: false));
         }
 
-        var normalizedTaskNames = new List<string>(taskNames.Count);
-        var normalizedChanged = false;
+        var taskNamesJson = new JsonArray();
         foreach (var taskName in taskNames)
         {
-            if (ContainsStructuredToken(taskName))
-            {
-                issues.Add(new TaskValidationIssue("CustomTaskNameInvalid", "custom.task_names", $"Custom task name `{taskName}` contains unparseable structured tokens."));
-                continue;
-            }
-
-            var normalizedName = NormalizeTaskType(taskName);
-            if (!CustomKnownTaskTypes.Contains(normalizedName))
-            {
-                issues.Add(new TaskValidationIssue("CustomTaskNameUnknown", "custom.task_names", $"Custom task name `{taskName}` is not recognized.", Blocking: false));
-            }
-
-            normalizedTaskNames.Add(normalizedName);
-            normalizedChanged |= !string.Equals(taskName, normalizedName, StringComparison.Ordinal);
-        }
-
-        if (normalizedChanged || normalizedTaskNames.Count != taskNames.Count || taskNames.Count != dto.TaskNames.Count)
-        {
-            issues.Add(new TaskValidationIssue("CustomTaskNamesNormalized", "custom.task_names", "Custom task names were normalized and deduplicated.", Blocking: false));
+            taskNamesJson.Add(taskName);
         }
 
         var parameters = new JsonObject
         {
-            ["task_names"] = ToJsonArray(normalizedTaskNames),
+            ["task_names"] = taskNamesJson,
         };
 
         return new TaskCompileOutput
@@ -1758,6 +1741,17 @@ public static class TaskParamCompiler
         var issues = new List<TaskValidationIssue>();
         var parameters = task.Params ?? new JsonObject();
 
+        // WPF parity: a bare SingleStep marker carries no parameter keys at all
+        // (WPF SingleStepTask has no settings), so it must not raise strict-mode
+        // missing-field issues; CompileSingleStep turns it into a skippable marker.
+        var isBareMarker = !parameters.ContainsKey("type")
+            && !parameters.ContainsKey("subtype")
+            && !parameters.ContainsKey("details");
+        if (isBareMarker)
+        {
+            return (new SingleStepTaskParamsDto(), issues);
+        }
+
         var dto = new SingleStepTaskParamsDto
         {
             Type = ReadString(parameters, "type", strict, issues, "single_step.type", string.Empty),
@@ -1773,6 +1767,25 @@ public static class TaskParamCompiler
         var issues = new List<TaskValidationIssue>();
         var type = (dto.Type ?? string.Empty).Trim();
         var subtype = (dto.Subtype ?? string.Empty).Trim();
+
+        // WPF parity: a bare SingleStep marker carries no parameters at all (WPF
+        // SingleStepTask has no settings view model), so WPF skips it and keeps
+        // appending the remaining queue instead of failing the whole run.
+        if (type.Length == 0 && subtype.Length == 0 && dto.Details is null)
+        {
+            issues.Add(new TaskValidationIssue(
+                SkipAppendIssueCode,
+                "single_step.type",
+                "SingleStep marker has no runtime parameters; skipping append to match WPF marker behavior.",
+                Blocking: false));
+
+            return new TaskCompileOutput
+            {
+                NormalizedType = TaskModuleTypes.SingleStep,
+                Params = new JsonObject(),
+                Issues = issues,
+            };
+        }
 
         if (!string.Equals(type, "copilot", StringComparison.OrdinalIgnoreCase))
         {
@@ -1873,7 +1886,32 @@ public static class TaskParamCompiler
             return CompileRoguelikeForPersistence(task, profile, config, strict);
         }
 
+        if (string.Equals(normalized, TaskModuleTypes.StartUp, StringComparison.OrdinalIgnoreCase))
+        {
+            var startUpCompiled = CompileStartUpFromTask(task, profile, config, strict);
+            PreserveStoredStartUpAccountName(task, startUpCompiled.Params);
+            return startUpCompiled;
+        }
+
         return CompileTask(task, profile, config, strict);
+    }
+
+    // WPF parity (StartUpSettingsUserControlModel): the stored StartUp account name is
+    // never cleared because of the client type; only the serialized Core payload blanks
+    // it for non-Official/Bilibili clients. Persistence write-back sites call this helper
+    // to restore the previously stored value onto the compiled parameters. The caller
+    // must invoke it before replacing task.Params.
+    public static void PreserveStoredStartUpAccountName(UnifiedTaskItem task, JsonObject compiledParams)
+    {
+        if (task.Params?["account_name"] is JsonValue storedAccountNameNode
+            && storedAccountNameNode.TryGetValue(out string? storedAccountName))
+        {
+            compiledParams["account_name"] = storedAccountName;
+        }
+        else
+        {
+            compiledParams.Remove("account_name");
+        }
     }
 
     public static JsonObject BuildCoreParams(string taskType, JsonObject parameters)

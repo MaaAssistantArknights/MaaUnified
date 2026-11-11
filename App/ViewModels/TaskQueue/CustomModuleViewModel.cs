@@ -19,7 +19,8 @@ public sealed class CustomModuleViewModel : TypedTaskModuleViewModelBase<CustomT
         get => _taskNamesText;
         set
         {
-            if (!SetTrackedProperty(ref _taskNamesText, value))
+            var normalized = (value ?? string.Empty).Replace('，', ',');
+            if (!SetTrackedProperty(ref _taskNamesText, normalized))
             {
                 return;
             }
@@ -54,7 +55,7 @@ public sealed class CustomModuleViewModel : TypedTaskModuleViewModelBase<CustomT
 
     protected override void ApplyDto(CustomTaskParamsDto dto)
     {
-        TaskNamesText = string.Join(Environment.NewLine, dto.TaskNames);
+        TaskNamesText = string.Join(",", dto.TaskNames);
         OnPropertyChanged(nameof(TaskNamesPreview));
     }
 
@@ -68,31 +69,15 @@ public sealed class CustomModuleViewModel : TypedTaskModuleViewModelBase<CustomT
 
     protected override IReadOnlyList<TaskValidationIssue> ValidateBeforeSave()
     {
-        if (!ContainsStructuredMarkers(TaskNamesText))
-        {
-            return [];
-        }
-
-        return
-        [
-            new TaskValidationIssue(
-                "DelimitedInputParseFailed",
-                "custom.task_names",
-                "Custom task names only support plain delimiter-separated text."),
-        ];
+        return [];
     }
 
     private static List<string> ParseTaskNames(string value)
     {
-        return value
-            .Split(new[] { '\r', '\n', ';', ',', '|' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Where(v => !string.IsNullOrWhiteSpace(v))
-            .Distinct(StringComparer.Ordinal)
+        return (value ?? string.Empty)
+            .Replace('，', ',')
+            .Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(v => v.Trim())
             .ToList();
-    }
-
-    private static bool ContainsStructuredMarkers(string value)
-    {
-        return !string.IsNullOrWhiteSpace(value) && value.IndexOfAny(['[', ']', '{', '}', ':', '"']) >= 0;
     }
 }

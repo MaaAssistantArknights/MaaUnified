@@ -669,7 +669,7 @@ public sealed class ConfigurationImportTests
                       "$type": "CustomTask",
                       "Name": "Custom",
                       "IsEnable": true,
-                      "CustomTaskName": "Fight\r\nRecruit；Roguelike|Reclamation"
+                      "CustomTaskName": "Fight\r\nRecruit；Roguelike|Reclamation，Award"
                     }
                   ]
                 }
@@ -733,7 +733,7 @@ public sealed class ConfigurationImportTests
 
         var custom = tasks.Single(task => task.Name == "Custom");
         Assert.Equal(
-            ["Fight", "Recruit", "Roguelike", "Reclamation"],
+            ["Fight\r\nRecruit；Roguelike|Reclamation", "Award"],
             ReadStringArray((JsonArray)custom.Params["task_names"]!));
     }
 
@@ -1185,8 +1185,11 @@ public sealed class ConfigurationImportTests
             strict: true);
 
         Assert.Equal(TaskModuleTypes.SingleStep, compiled.NormalizedType);
-        Assert.True(compiled.HasBlockingIssues);
-        Assert.Contains(compiled.Issues, issue => issue.Code == "SingleStepTypeMissing");
+        // WPF parity: a bare imported SingleStep marker is skipped (non-blocking)
+        // instead of blocking the whole queue.
+        Assert.False(compiled.HasBlockingIssues);
+        Assert.Contains(compiled.Issues, issue => issue.Code == "TaskCompileSkipAppend" && !issue.Blocking);
+        Assert.DoesNotContain(compiled.Issues, issue => issue.Code == "SingleStepTypeMissing");
 
         var explicitTask = tasks.Single(task => task.Name == "Single step explicit");
         Assert.Equal(TaskModuleTypes.SingleStep, explicitTask.Type);

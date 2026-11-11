@@ -4263,6 +4263,9 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
   <data name="StartUp.AttachScreencap" xml:space="preserve">
     <value>AttachWindow - Screenshot</value>
   </data>
+  <data name="StartUp.AttachWindowWarning" xml:space="preserve">
+    <value>PC connection (experimental feature, stability not guaranteed)</value>
+  </data>
   <data name="StartUp.AutoDetect" xml:space="preserve">
     <value>Auto detect</value>
   </data>

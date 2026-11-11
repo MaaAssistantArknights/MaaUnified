@@ -189,6 +189,15 @@ public sealed class RootViewStructureContractTests
 
         var startUpText = File.ReadAllText(Path.Combine(root, "App", "Features", "TaskQueue", "StartUpTaskView.axaml"));
         Assert.Contains("IsVisible=\"{Binding ShowAccountSwitch}\"", startUpText, StringComparison.Ordinal);
+        Assert.Contains("IsVisible=\"{Binding ShowStartGameEnabledOption}\"", startUpText, StringComparison.Ordinal);
+        Assert.Contains("IsVisible=\"{Binding ShowClientTypeSelection}\"", startUpText, StringComparison.Ordinal);
+        Assert.Contains("ActionEnabled=\"{Binding CanRunAccountSwitchNow}\"", startUpText, StringComparison.Ordinal);
+        Assert.Contains("IsVisible=\"{Binding IsAdbConnectionMode}\"", startUpText, StringComparison.Ordinal);
+        Assert.Contains("IsVisible=\"{Binding IsAttachWindowMode}\"", startUpText, StringComparison.Ordinal);
+        Assert.Contains("IsVisible=\"{Binding ShowConnectAddressControls}\"", startUpText, StringComparison.Ordinal);
+        Assert.Contains("IsVisible=\"{Binding ShowAdbPathControls}\"", startUpText, StringComparison.Ordinal);
+        Assert.Contains("IsVisible=\"{Binding ShowAlwaysAutoDetectConnection}\"", startUpText, StringComparison.Ordinal);
+        Assert.Contains("Texts[StartUp.AttachWindowWarning]", startUpText, StringComparison.Ordinal);
         Assert.Contains("<controls:SettingsInlineRow Classes=\"startup-card-content\"", startUpText, StringComparison.Ordinal);
         Assert.Contains("Texts[StartUp.AccountSwitchManualRun]", startUpText, StringComparison.Ordinal);
 

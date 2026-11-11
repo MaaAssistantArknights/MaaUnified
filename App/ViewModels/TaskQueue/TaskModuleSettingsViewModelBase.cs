@@ -17,6 +17,7 @@ public abstract class TaskModuleSettingsViewModelBase : ObservableObject, ITaskM
     private int _boundTaskIndex = -1;
     private bool _suppressPersist = true;
     private bool _persistAfterBindRequested;
+    private bool _isDirty;
 
     protected TaskModuleSettingsViewModelBase(MAAUnifiedRuntime runtime, LocalizedTextMap texts, string moduleType)
     {
@@ -85,6 +86,7 @@ public abstract class TaskModuleSettingsViewModelBase : ObservableObject, ITaskM
         _boundTaskIndex = taskIndex;
         _suppressPersist = true;
         _persistAfterBindRequested = false;
+        _isDirty = false;
         IsTaskBound = true;
         LastErrorMessage = string.Empty;
         await LoadFromParametersAsync(parameters, cancellationToken);
@@ -101,6 +103,7 @@ public abstract class TaskModuleSettingsViewModelBase : ObservableObject, ITaskM
         _boundTaskIndex = -1;
         _suppressPersist = true;
         _persistAfterBindRequested = false;
+        _isDirty = false;
         IsTaskBound = false;
     }
 
@@ -125,6 +128,7 @@ public abstract class TaskModuleSettingsViewModelBase : ObservableObject, ITaskM
             return;
         }
 
+        _isDirty = true;
         ConfigurationSaveTracker.Instance.MarkPending(
             $"TaskQueue.{ModuleType}",
             ResolveSaveDisplayName(),
@@ -148,6 +152,7 @@ public abstract class TaskModuleSettingsViewModelBase : ObservableObject, ITaskM
         if (_boundTaskIndex >= 0)
         {
             _persistAfterBindRequested = true;
+            _isDirty = true;
         }
     }
 
@@ -185,6 +190,16 @@ public abstract class TaskModuleSettingsViewModelBase : ObservableObject, ITaskM
                 return true;
             }
 
+            // WPF parity: binding a module panel must not rewrite stored task
+            // parameters unless the user actually edited something. In
+            // particular a bare SingleStep marker (WPF SingleStepTask has no
+            // settings view) would otherwise be flushed as {"type":"copilot"}
+            // and then block the whole queue with SingleStepSubtypeMissing.
+            if (!_isDirty)
+            {
+                return true;
+            }
+
             var parameters = BuildParameters();
             var update = await Runtime.TaskQueueFeatureService.UpdateTaskParamsAsync(
                 _boundTaskIndex,
@@ -200,6 +215,7 @@ public abstract class TaskModuleSettingsViewModelBase : ObservableObject, ITaskM
 
             LastErrorMessage = string.Empty;
             StatusMessage = string.Empty;
+            _isDirty = false;
             return true;
         }
         catch (Exception ex)

@@ -747,6 +747,208 @@ public sealed class SettingsModuleAK1FeatureTests
     }
 
     [Fact]
+    public async Task ConnectConfigPc_HidesAccountSwitchStartGameAndClientType_InStartUpModule()
+    {
+        // WPF parity: in PC (UseAttachWindow) mode the whole account-switch row,
+        // StartGame checkbox, and ClientType selector are hidden.
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup")).Success);
+        await fixture.Shell.TaskQueuePage.ReloadTasksAsync();
+        await WaitUntilAsync(() => fixture.Shell.TaskQueuePage.StartUpModule.IsTaskBound);
+
+        var module = fixture.Shell.TaskQueuePage.StartUpModule;
+        var state = fixture.Shell.SettingsPage.ConnectionGameSharedState;
+
+        state.ConnectConfig = "General";
+        module.ClientType = "Official";
+        Assert.True(module.ShowAccountSwitch);
+        Assert.True(module.ShowStartGameEnabledOption);
+        Assert.True(module.ShowClientTypeSelection);
+
+        module.ClientType = "YoStarEN";
+        Assert.False(module.ShowAccountSwitch);
+        Assert.True(module.ShowStartGameEnabledOption);
+        Assert.True(module.ShowClientTypeSelection);
+
+        module.ClientType = "Official";
+        state.ConnectConfig = "PC";
+        Assert.False(module.ShowAccountSwitch);
+        Assert.False(module.ShowStartGameEnabledOption);
+        Assert.False(module.ShowClientTypeSelection);
+        Assert.False(module.CanRunAccountSwitchNow);
+    }
+
+    [Fact]
+    public async Task AccountSwitchManualRun_RequiresNonEmptyAccountName_LikeWpf()
+    {
+        // WPF parity: the manual account-switch button is enabled only when
+        // AccountName is non-empty (CanRunAccountSwitchNow drives ActionEnabled).
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup")).Success);
+        await fixture.Shell.TaskQueuePage.ReloadTasksAsync();
+        await WaitUntilAsync(() => fixture.Shell.TaskQueuePage.StartUpModule.IsTaskBound);
+
+        var module = fixture.Shell.TaskQueuePage.StartUpModule;
+        module.ClientType = "Official";
+
+        module.AccountName = string.Empty;
+        Assert.False(module.CanRunAccountSwitchNow);
+
+        module.AccountName = "account-a";
+        Assert.True(module.CanRunAccountSwitchNow);
+
+        module.ClientType = "YoStarEN";
+        Assert.False(module.CanRunAccountSwitchNow);
+        // WPF parity: switching to a client without account switching keeps the
+        // stored account name (WPF only blanks it at serialization time).
+        Assert.Equal("account-a", module.AccountName);
+
+        module.ClientType = "Official";
+        Assert.True(module.CanRunAccountSwitchNow);
+        Assert.Equal("account-a", module.AccountName);
+    }
+
+    [Fact]
+    public async Task ClientTypeSwitch_PreservesStoredAccountName_AndSerializationBlanksIt_LikeWpf()
+    {
+        // WPF parity: StartUpSettingsUserControlModel.ISerialize blanks account_name
+        // for non-Official/Bilibili clients only when serializing; the stored
+        // StartUpTask.AccountName is preserved across client type switches.
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup")).Success);
+        await fixture.Shell.TaskQueuePage.ReloadTasksAsync();
+        await WaitUntilAsync(() => fixture.Shell.TaskQueuePage.StartUpModule.IsTaskBound);
+
+        var module = fixture.Shell.TaskQueuePage.StartUpModule;
+        module.ClientType = "Official";
+        module.AccountName = "account-a";
+        Assert.True(await module.SaveAsync());
+
+        module.ClientType = "YoStarEN";
+        Assert.Equal("account-a", module.AccountName);
+
+        var profile = fixture.GetCurrentProfile();
+        profile.Values["ClientType"] = JsonValue.Create("YoStarEN");
+        var queueResult = await fixture.TaskQueue.QueueEnabledTasksAsync();
+        Assert.True(queueResult.Success);
+        var appended = Assert.Single(fixture.Bridge.AppendedTasks);
+        var json = Assert.IsType<JsonObject>(JsonNode.Parse(appended.ParamsJson));
+        Assert.Equal("YoStarEN", json["client_type"]?.GetValue<string>());
+        Assert.Equal(string.Empty, json["account_name"]?.GetValue<string>());
+
+        // The stored task params must survive the queue run; only the appended Core
+        // payload blanks the account name for non-Official/Bilibili clients.
+        var storedParams = (await fixture.TaskQueue.GetTaskParamsAsync(0)).Value!;
+        Assert.Equal("account-a", storedParams["account_name"]?.GetValue<string>());
+
+        module.ClientType = "Official";
+        Assert.Equal("account-a", module.AccountName);
+    }
+
+    [Fact]
+    public async Task ConnectConfigPc_TogglesAdbAndAttachWindowSections_InStartUpModule()
+    {
+        // WPF parity: PC (UseAttachWindow) mode hides the ADB connection section
+        // and shows the AttachWindow method section in the StartUp task view.
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup")).Success);
+        await fixture.Shell.TaskQueuePage.ReloadTasksAsync();
+        await WaitUntilAsync(() => fixture.Shell.TaskQueuePage.StartUpModule.IsTaskBound);
+
+        var module = fixture.Shell.TaskQueuePage.StartUpModule;
+        var state = fixture.Shell.SettingsPage.ConnectionGameSharedState;
+
+        state.ConnectConfig = "General";
+        Assert.True(module.IsAdbConnectionMode);
+        Assert.False(module.IsAttachWindowMode);
+
+        state.ConnectConfig = "PC";
+        Assert.False(module.IsAdbConnectionMode);
+        Assert.True(module.IsAttachWindowMode);
+
+        Assert.NotEmpty(module.AttachWindowScreencapOptions);
+        Assert.NotEmpty(module.AttachWindowInputOptions);
+    }
+
+    [Fact]
+    public async Task AutoDetectConnection_TogglesManualConnectionControls_InStartUpModule()
+    {
+        // WPF parity (StartUpTaskUserControl.xaml): with AutoDetectConnection on,
+        // WPF hides the AdbPath/ConnectAddress rows and reveals the
+        // AlwaysAutoDetectConnection checkbox instead.
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup")).Success);
+        await fixture.Shell.TaskQueuePage.ReloadTasksAsync();
+        await WaitUntilAsync(() => fixture.Shell.TaskQueuePage.StartUpModule.IsTaskBound);
+
+        var module = fixture.Shell.TaskQueuePage.StartUpModule;
+        var state = fixture.Shell.SettingsPage.ConnectionGameSharedState;
+        state.ConnectConfig = "General";
+        state.MacUseBundledAdb = false;
+
+        state.AutoDetect = false;
+        Assert.True(module.ShowConnectAddressControls);
+        Assert.True(module.ShowAdbPathControls);
+        Assert.False(module.ShowAlwaysAutoDetectConnection);
+
+        state.AutoDetect = true;
+        Assert.False(module.ShowConnectAddressControls);
+        Assert.False(module.ShowAdbPathControls);
+        Assert.True(module.ShowAlwaysAutoDetectConnection);
+
+        state.ConnectConfig = "PC";
+        Assert.False(module.ShowConnectAddressControls);
+        Assert.False(module.ShowAdbPathControls);
+        Assert.False(module.ShowAlwaysAutoDetectConnection);
+    }
+
+    [Fact]
+    public async Task SingleStepBareMarker_PanelFlush_ShouldKeepEmptyParamsAndSkipAppend()
+    {
+        // WPF parity: WPF SingleStepTask has no settings view, so a bare marker
+        // keeps empty params and is skipped at append time. Binding the module
+        // panel and flushing it (as LinkStart / account switch do via
+        // SaveBoundTaskModulesAsync) must not rewrite the marker into a partial
+        // parameterized task ({"type":"copilot"}) that would block the queue.
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.SingleStep, "single-step")).Success);
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUpTask", "startup")).Success);
+        await fixture.Shell.TaskQueuePage.ReloadTasksAsync();
+        await WaitUntilAsync(() => fixture.Shell.TaskQueuePage.SingleStepModule.IsTaskBound);
+
+        var module = fixture.Shell.TaskQueuePage.SingleStepModule;
+        Assert.Equal("copilot", module.Type); // display-only default, must not persist
+
+        Assert.True(await module.FlushPendingChangesAsync());
+
+        var stored = (await fixture.TaskQueue.GetTaskParamsAsync(0)).Value!;
+        Assert.Empty(stored);
+
+        var queueResult = await fixture.TaskQueue.QueueEnabledTasksAsync();
+        Assert.True(queueResult.Success);
+        var appended = Assert.Single(fixture.Bridge.AppendedTasks);
+        Assert.Equal("StartUp", appended.Type);
+    }
+
+    [Fact]
+    public async Task SingleStepMarker_AfterUserEdit_PanelFlushPersistsRuntimeParams()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.SingleStep, "single-step")).Success);
+        await fixture.Shell.TaskQueuePage.ReloadTasksAsync();
+        await WaitUntilAsync(() => fixture.Shell.TaskQueuePage.SingleStepModule.IsTaskBound);
+
+        var module = fixture.Shell.TaskQueuePage.SingleStepModule;
+        module.Subtype = "start";
+
+        Assert.True(await module.FlushPendingChangesAsync());
+
+        var stored = (await fixture.TaskQueue.GetTaskParamsAsync(0)).Value!;
+        Assert.Equal("copilot", stored["type"]?.GetValue<string>());
+        Assert.Equal("start", stored["subtype"]?.GetValue<string>());
+    }
+
+    [Fact]
     public async Task ConnectAsync_WithWindowsStyleAdbPathOnNonWindows_ShouldFallbackToSystemAdb()
     {
         await using var fixture = await TestFixture.CreateAsync();

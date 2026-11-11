@@ -2905,6 +2905,21 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                     return;
                 }
 
+                // WPF parity: when no task is appended (all disabled or all skipped),
+                // WPF logs "UnselectedTask", returns to idle and does not start the session.
+                if (appendResult.Value <= 0)
+                {
+                    LastErrorMessage = BuildLocalizedMessage(
+                        "未选择任务，本次没有产生可执行的核心任务。",
+                        "Unselected task: no runnable core task was queued this time.");
+                    AppendStartFailureLog(LastErrorMessage);
+                    await RecordFailedResultAsync(
+                        "TaskQueue.Start.AppendEmpty",
+                        UiOperationResult.Fail(UiErrorCode.TaskValidationFailed, LastErrorMessage),
+                        startCancellationToken);
+                    return;
+                }
+
                 ResetRecruitExpeditedOncePanels();
 
                 ResetRuntimeLogState();
@@ -3645,13 +3660,6 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         public static AdbRecoveryResult Failed(AdbCommandFailureInfo? failure) => new(false, failure);
     }
 
-    private string BuildSessionStateNotAllowedMessage(SessionState state, string actionZh, string actionEn)
-    {
-        return BuildLocalizedMessage(
-            $"会话状态 `{state}` 不允许{actionZh}。",
-            $"Session state `{state}` does not allow {actionEn}.");
-    }
-
     private string BuildSessionAlreadyNonRunningMessage(SessionState state)
     {
         return BuildLocalizedMessage(
@@ -3911,17 +3919,6 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         await _runTransitionLock.WaitAsync(cancellationToken);
         try
         {
-            CurrentSessionState = Runtime.SessionService.CurrentState;
-            if (CurrentSessionState != SessionState.Connected)
-            {
-                LastErrorMessage = BuildSessionStateNotAllowedMessage(CurrentSessionState, "账号切换", "account switch");
-                await RecordFailedResultAsync(
-                    "TaskQueue.AccountSwitch",
-                    UiOperationResult.Fail(UiErrorCode.SessionStateNotAllowed, LastErrorMessage),
-                    cancellationToken);
-                return;
-            }
-
             if (!Runtime.SessionService.TryBeginRun(TaskQueueRunOwner, out var currentOwner))
             {
                 var owner = string.IsNullOrWhiteSpace(currentOwner) ? "Unknown" : currentOwner;
@@ -3937,6 +3934,11 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             var keepRunOwner = false;
             try
             {
+                if (!await EnsureConnectedForLinkStartAsync("TaskQueue.AccountSwitch", cancellationToken))
+                {
+                    return;
+                }
+
                 await WaitForPendingBindingAsync(cancellationToken);
                 if (!await SaveBoundTaskModulesAsync(cancellationToken))
                 {

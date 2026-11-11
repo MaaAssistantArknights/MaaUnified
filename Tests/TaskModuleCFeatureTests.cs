@@ -895,27 +895,22 @@ public sealed class TaskModuleCFeatureTests
         Assert.False(validated.Value!.CompiledParams.ContainsKey("start_with_seed"));
     }
 
-    [Fact]
-    public async Task SaveCustom_RejectsStructuredNames_AndNormalizesKnownTaskNames()
+    public async Task SaveCustom_PreservesWpfTaskNamesAndOrder()
     {
         await using var fixture = await TestFixture.CreateAsync();
         Assert.True((await fixture.TaskQueue.AddTaskAsync("Custom", "custom")).Success);
 
-        var badSave = await fixture.TaskQueue.SaveCustomParamsAsync(0, new CustomTaskParamsDto
-        {
-            TaskNames = ["[Fight]"],
-        });
-        Assert.False(badSave.Success);
-
         var save = await fixture.TaskQueue.SaveCustomParamsAsync(0, new CustomTaskParamsDto
         {
-            TaskNames = ["FightTask", "Mall", "Mall", "  FightTask  "],
+            TaskNames = ["FightTask", "Mall", "Mall", "  [Core]: \"literal\"  "],
         });
         Assert.True(save.Success, save.Message);
 
         var parameters = (await fixture.TaskQueue.GetTaskParamsAsync(0)).Value!;
         var taskNames = Assert.IsType<JsonArray>(parameters["task_names"]);
-        Assert.Equal(new[] { "Fight", "Mall" }, taskNames.Select(node => node?.GetValue<string>()).ToArray());
+        Assert.Equal(
+            new[] { "FightTask", "Mall", "Mall", "[Core]: \"literal\"" },
+            taskNames.Select(node => node?.GetValue<string>()).ToArray());
     }
 
     [Fact]

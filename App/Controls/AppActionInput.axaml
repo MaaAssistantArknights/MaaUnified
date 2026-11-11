@@ -18,6 +18,7 @@
               Grid.Column="1"
               Classes="settings-input-group-action"
               Content="{Binding ActionContent, ElementName=Root}"
+              IsEnabled="{Binding ActionEnabled, ElementName=Root}"
               Command="{Binding ActionCommand, ElementName=Root}"
               Click="OnActionButtonClick" />
 

@@ -53,15 +53,40 @@ public sealed class TaskModuleAFeatureTests
     }
 
     [Fact]
-    public async Task QueueEnabledTasks_SingleStepMarkerWithoutRuntimeParams_ShouldBlockAppend()
+    public async Task QueueEnabledTasks_SingleStepMarkerWithoutRuntimeParams_ShouldSkipAndContinueAppending()
     {
+        // WPF parity: a bare SingleStep marker has no settings VM in WPF, so WPF
+        // logs TaskAppend.Skip, marks the item skipped, and continues appending
+        // the remaining queue instead of failing the whole run.
         await using var fixture = await TestFixture.CreateAsync();
         Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.SingleStep, "single-step")).Success);
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUpTask", "startup")).Success);
+
+        var queueResult = await fixture.TaskQueue.QueueEnabledTasksAsync();
+
+        Assert.True(queueResult.Success);
+        var appended = Assert.Single(fixture.Bridge.AppendedTasks);
+        Assert.Equal("StartUp", appended.Type);
+    }
+
+    [Fact]
+    public async Task QueueEnabledTasks_SingleStepWithPartialRuntimeParams_ShouldBlockAppend()
+    {
+        // The parameterized SingleStep (copilot type/subtype) is an Avalonia
+        // extension; a partially configured extension task still blocks append.
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.SingleStep, "single-step")).Success);
+        Assert.True((await fixture.TaskQueue.UpdateTaskParamsAsync(
+            0,
+            new JsonObject
+            {
+                ["type"] = "copilot",
+            })).Success);
 
         var queueResult = await fixture.TaskQueue.QueueEnabledTasksAsync();
 
         Assert.False(queueResult.Success);
-        Assert.Contains("SingleStepTypeMissing", queueResult.Error?.Message ?? string.Empty, StringComparison.Ordinal);
+        Assert.Contains("SingleStepSubtypeMissing", queueResult.Error?.Message ?? string.Empty, StringComparison.Ordinal);
         Assert.Empty(fixture.Bridge.AppendedTasks);
     }
 
@@ -181,13 +206,21 @@ public sealed class TaskModuleAFeatureTests
         Assert.True(save.Success);
         var startUpParams = (await fixture.TaskQueue.GetTaskParamsAsync(0)).Value!;
         Assert.Equal("Txwy", startUpParams["client_type"]?.GetValue<string>());
-        Assert.Equal(string.Empty, startUpParams["account_name"]?.GetValue<string>());
+        // WPF parity: the stored account name is kept for non-Official/Bilibili clients;
+        // only the serialized Core payload blanks it.
+        Assert.Equal("my-account", startUpParams["account_name"]?.GetValue<string>());
         Assert.False(startUpParams["start_game_enabled"]?.GetValue<bool>());
 
         var profile = fixture.Config.CurrentConfig.Profiles["Default"];
         Assert.Equal("PC", profile.Values["ConnectConfig"]?.GetValue<string>());
         Assert.Equal("127.0.0.1:7555", profile.Values["ConnectAddress"]?.GetValue<string>());
         Assert.False(profile.Values["StartGame"]?.GetValue<bool>());
+
+        // Config save/load normalization must not blank the stored account name either.
+        Assert.True((await fixture.TaskQueue.SaveAsync()).Success);
+        var persistedTask = await ReadPersistedTaskAsync(fixture);
+        var persistedParams = Assert.IsType<JsonObject>(persistedTask["Params"]);
+        Assert.Equal("my-account", persistedParams["account_name"]?.GetValue<string>());
     }
 
     [Fact]
@@ -495,6 +528,11 @@ public sealed class TaskModuleAFeatureTests
         Assert.NotNull(paramsJson);
         Assert.Equal(string.Empty, paramsJson!["account_name"]?.GetValue<string>());
         Assert.False(paramsJson["start_game_enabled"]?.GetValue<bool>());
+
+        // WPF parity: queueing the task must not rewrite the stored account name even
+        // though the appended Core payload blanks it for non-Official/Bilibili clients.
+        var storedParams = (await fixture.TaskQueue.GetTaskParamsAsync(0)).Value!;
+        Assert.Equal("will-clear", storedParams["account_name"]?.GetValue<string>());
     }
 
     [Fact]
@@ -1014,7 +1052,9 @@ public sealed class TaskModuleAFeatureTests
         var startUp = await queue.GetStartUpParamsAsync(0);
         Assert.True(startUp.Success);
         Assert.NotNull(startUp.Value);
-        Assert.Equal(string.Empty, startUp.Value!.AccountName);
+        // WPF parity: the stored account name survives save/reload for
+        // non-Official/Bilibili clients; only the serialized Core payload blanks it.
+        Assert.Equal("account-a", startUp.Value!.AccountName);
         Assert.Equal("Txwy", startUp.Value.ClientType);
         Assert.False(startUp.Value.StartGameEnabled);
         Assert.Equal("PC", startUp.Value.ConnectConfig);
@@ -1343,10 +1383,16 @@ public sealed class TaskModuleAFeatureTests
         Assert.Contains("Text=\"{Binding DetailsText, UpdateSourceTrigger=LostFocus}\"", singleStepView);
         Assert.Contains("IsVisible=\"{Binding IsMacBundledAdbSupported}\"", startUpView);
         Assert.Contains("IsChecked=\"{Binding MacUseBundledAdb}\"", startUpView);
-        Assert.Contains("IsVisible=\"{Binding ShowManualAdbPathControls}\"", startUpView);
-        Assert.DoesNotContain("SelectedAttachWindowScreencapOption", startUpView);
-        Assert.DoesNotContain("SelectedAttachWindowMouseOption", startUpView);
-        Assert.DoesNotContain("SelectedAttachWindowKeyboardOption", startUpView);
+        Assert.Contains("IsVisible=\"{Binding ShowAdbPathControls}\"", startUpView);
+        Assert.Contains("IsVisible=\"{Binding IsAdbConnectionMode}\"", startUpView);
+        Assert.Contains("IsVisible=\"{Binding ShowConnectAddressControls}\"", startUpView);
+        Assert.Contains("IsVisible=\"{Binding ShowAlwaysAutoDetectConnection}\"", startUpView);
+        Assert.Contains("IsChecked=\"{Binding AlwaysAutoDetectConnection}\"", startUpView);
+        Assert.Contains("IsVisible=\"{Binding IsAttachWindowMode}\"", startUpView);
+        Assert.Contains("Texts[StartUp.AttachWindowWarning]", startUpView);
+        Assert.Contains("SelectedItem=\"{Binding SelectedAttachWindowScreencapOption, Mode=TwoWay}\"", startUpView);
+        Assert.Contains("SelectedItem=\"{Binding SelectedAttachWindowMouseOption, Mode=TwoWay}\"", startUpView);
+        Assert.Contains("SelectedItem=\"{Binding SelectedAttachWindowKeyboardOption, Mode=TwoWay}\"", startUpView);
         Assert.Contains("Text=\"{Binding Texts[Recruit.UseExpedited]}\"", recruitView);
         Assert.Contains("Tip=\"{Binding Texts[Recruit.UseExpeditedTip]}\"", recruitView);
         Assert.Contains("IsChecked=\"{Binding UseExpedited}\"", recruitView);
@@ -1373,6 +1419,7 @@ public sealed class TaskModuleAFeatureTests
         return
         [
             "StartUp.Title",
+            "StartUp.AttachWindowWarning",
             "Fight.Title",
             "Recruit.Title",
             "Common.LoadingTaskHint",

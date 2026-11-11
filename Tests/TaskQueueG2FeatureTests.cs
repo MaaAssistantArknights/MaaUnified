@@ -64,7 +64,72 @@ public sealed class TaskQueueG2FeatureTests
         vm.StartUpModule.SelectedClientTypeValue = "YoStarEN";
 
         Assert.Equal("YoStarEN", vm.StartUpModule.ClientType);
-        Assert.Equal(string.Empty, vm.StartUpModule.AccountName);
+        // WPF parity: the stored account name is preserved when switching to a
+        // client without account switching; only serialization blanks it.
+        Assert.Equal("doctor-a", vm.StartUpModule.AccountName);
+    }
+
+    [Fact]
+    public async Task CustomModule_UsesWpfCommaDelimiterAndPreservesRawNames()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Custom", "custom")).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        vm.SelectedTask = Assert.Single(vm.Tasks);
+        await vm.WaitForPendingBindingAsync();
+
+        vm.CustomModule.TaskNamesText = "First;Second|Third\nFourth，FinalTask, FinalTask";
+        Assert.True(await vm.CustomModule.SaveAsync());
+
+        var parameters = (await fixture.TaskQueue.GetTaskParamsAsync(0)).Value!;
+        var taskNames = Assert.IsType<JsonArray>(parameters["task_names"]);
+        Assert.Equal(
+            new[] { "First;Second|Third\nFourth", "FinalTask", "FinalTask" },
+            taskNames.Select(node => node?.GetValue<string>()).ToArray());
+    }
+
+    [Fact]
+    public async Task AccountSwitchManualRun_ShouldConnectThenAppendStartUpWhenInitiallyDisconnected()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup-a")).Success);
+        Assert.True((await fixture.TaskQueue.SaveStartUpParamsAsync(0, new StartUpTaskParamsDto
+        {
+            AccountName = "doctor-a",
+            ClientType = "Official",
+            StartGameEnabled = true,
+            ConnectConfig = TestConnectionFixtureSupport.ReadyConnectConfig,
+            ConnectAddress = TestConnectionFixtureSupport.ReadyConnectAddress,
+            AdbPath = fixture.ReadyAdbPath,
+            TouchMode = "MaaFwAdb",
+            AutoDetectConnection = false,
+            AttachWindowScreencapMethod = "2",
+            AttachWindowMouseMethod = "64",
+            AttachWindowKeyboardMethod = "64",
+        })).Success);
+
+        var shared = new ConnectionGameSharedStateViewModel
+        {
+            ClientType = "Official",
+            ConnectConfig = TestConnectionFixtureSupport.ReadyConnectConfig,
+            ConnectAddress = TestConnectionFixtureSupport.ReadyConnectAddress,
+            AdbPath = fixture.ReadyAdbPath,
+            TouchMode = "MaaFwAdb",
+            AutoDetect = false,
+        };
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, shared);
+        await vm.InitializeAsync();
+        vm.SelectedTask = Assert.Single(vm.Tasks);
+        await vm.WaitForPendingBindingAsync();
+
+        Assert.NotEqual(SessionState.Connected, fixture.Runtime.SessionService.CurrentState);
+        await vm.StartUpModule.RunAccountSwitchManualAsync();
+
+        Assert.Equal(1, fixture.Bridge.StartCallCount);
+        Assert.Equal(TaskModuleTypes.StartUp, Assert.Single(fixture.Bridge.AppendedTasks).Type);
+        Assert.Equal(SessionState.Running, fixture.Runtime.SessionService.CurrentState);
     }
 
     [Fact]
@@ -167,6 +232,32 @@ public sealed class TaskQueueG2FeatureTests
         Assert.Equal(UiErrorCode.ConnectFailed, dialogError.Result.Error?.Code);
         Assert.Equal(string.Empty, navigatedSection);
         Assert.Equal(0, fixture.Bridge.StartCallCount);
+    }
+
+    [Fact]
+    public async Task StartAsync_WithNoAppendedTasks_ShouldNotStartSession_LikeWpf()
+    {
+        // WPF parity: TaskQueueViewModel logs "UnselectedTask", returns to idle and
+        // does not call AsstStart when zero tasks were appended.
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup-a")).Success);
+        Assert.True((await fixture.TaskQueue.SetTaskEnabledAsync(0, false)).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(fixture.Runtime.ConnectFeatureService, fixture.ReadyAdbPath)).Success);
+        await vm.StartAsync();
+
+        Assert.Equal(0, fixture.Bridge.StartCallCount);
+        Assert.False(string.IsNullOrWhiteSpace(vm.LastErrorMessage));
+        Assert.NotEqual(SessionState.Running, fixture.Runtime.SessionService.CurrentState);
+
+        // The run owner must be released so a later start can proceed.
+        Assert.True((await fixture.TaskQueue.SetTaskEnabledAsync(0, true)).Success);
+        await vm.ReloadTasksAsync();
+        await vm.StartAsync();
+        Assert.Equal(1, fixture.Bridge.StartCallCount);
     }
 
     [Fact]

@@ -681,7 +681,7 @@ internal static class LegacyTaskSchemaConverter
     {
         return new JsonObject
         {
-            ["task_names"] = ToJsonArray(SplitNonEmpty(GetString(task, "CustomTaskName"), ',')),
+            ["task_names"] = ToJsonArray(SplitCustomTaskNames(GetString(task, "CustomTaskName"))),
         };
     }
 
@@ -1103,6 +1103,14 @@ internal static class LegacyTaskSchemaConverter
             .Split(';')
             .Select(item => trimEntries ? item.Trim() : item)
             .Where(item => preserveEmptyEntries || !string.IsNullOrEmpty(item));
+    }
+
+    private static IEnumerable<string> SplitCustomTaskNames(string? input)
+    {
+        return (input ?? string.Empty)
+            .Replace('，', ',')
+            .Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(value => value.Trim());
     }
 
     private static JsonArray ToJsonArray(IEnumerable<string> values)

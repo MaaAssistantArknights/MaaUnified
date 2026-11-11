@@ -219,12 +219,6 @@ public sealed class StartUpTaskModuleViewModel : TypedTaskModuleViewModelBase<St
             OnPropertyChanged(nameof(SelectedClientTypeValue));
             OnPropertyChanged(nameof(ShowAccountSwitch));
             OnPropertyChanged(nameof(CanRunAccountSwitchNow));
-            if (!string.IsNullOrWhiteSpace(normalized)
-                && !IsAccountSwitchSupportedClient(normalized))
-            {
-                SetTrackedProperty(ref _accountName, string.Empty, nameof(AccountName));
-                OnPropertyChanged(nameof(CanRunAccountSwitchNow));
-            }
         }
     }
 
@@ -313,6 +307,7 @@ public sealed class StartUpTaskModuleViewModel : TypedTaskModuleViewModelBase<St
             MarkDirty();
             OnPropertyChanged();
             OnPropertyChanged(nameof(ShowManualAdbPathControls));
+            OnPropertyChanged(nameof(ShowAdbPathControls));
         }
     }
 
@@ -352,9 +347,46 @@ public sealed class StartUpTaskModuleViewModel : TypedTaskModuleViewModelBase<St
         }
     }
 
+    public bool AlwaysAutoDetectConnection
+    {
+        get => _sharedState.AlwaysAutoDetect;
+        set
+        {
+            if (_sharedState.AlwaysAutoDetect == value)
+            {
+                return;
+            }
+
+            _sharedState.AlwaysAutoDetect = value;
+            MarkDirty();
+            OnPropertyChanged();
+        }
+    }
+
     public bool CanEditStartGameEnabled => _sharedState.CanStartGameEnabled;
 
-    public bool ShowAccountSwitch => IsAccountSwitchSupportedClient(ClientType);
+    // WPF parity: in PC (UseAttachWindow) mode the whole account-switch row,
+    // StartGame checkbox, and ClientType selector are hidden.
+    public bool ShowAccountSwitch => !_sharedState.IsAttachWindowMode && IsAccountSwitchSupportedClient(ClientType);
+
+    public bool ShowStartGameEnabledOption => !_sharedState.IsAttachWindowMode;
+
+    public bool ShowClientTypeSelection => !_sharedState.IsAttachWindowMode;
+
+    // WPF parity: in PC (UseAttachWindow) mode the StartUp task view hides the
+    // ADB connection section and shows the AttachWindow method section instead.
+    public bool IsAttachWindowMode => _sharedState.IsAttachWindowMode;
+
+    public bool IsAdbConnectionMode => _sharedState.IsAdbConnectionMode;
+
+    // WPF parity (StartUpTaskUserControl.xaml): with AutoDetectConnection on,
+    // WPF hides the AdbPath and ConnectAddress rows and reveals the
+    // AlwaysAutoDetectConnection checkbox instead.
+    public bool ShowConnectAddressControls => IsAdbConnectionMode && !AutoDetectConnection;
+
+    public bool ShowAdbPathControls => ShowManualAdbPathControls && !AutoDetectConnection;
+
+    public bool ShowAlwaysAutoDetectConnection => IsAdbConnectionMode && AutoDetectConnection;
 
     public bool CanRunAccountSwitchNow =>
         ShowAccountSwitch
@@ -496,6 +528,14 @@ public sealed class StartUpTaskModuleViewModel : TypedTaskModuleViewModelBase<St
                 OnPropertyChanged(nameof(SelectedConnectConfigOption));
                 OnPropertyChanged(nameof(SelectedConnectConfigValue));
                 OnPropertyChanged(nameof(CanEditStartGameEnabled));
+                OnPropertyChanged(nameof(IsAttachWindowMode));
+                OnPropertyChanged(nameof(IsAdbConnectionMode));
+                OnPropertyChanged(nameof(ShowConnectAddressControls));
+                OnPropertyChanged(nameof(ShowAlwaysAutoDetectConnection));
+                OnPropertyChanged(nameof(ShowAccountSwitch));
+                OnPropertyChanged(nameof(ShowStartGameEnabledOption));
+                OnPropertyChanged(nameof(ShowClientTypeSelection));
+                OnPropertyChanged(nameof(CanRunAccountSwitchNow));
                 break;
             case nameof(ConnectionGameSharedStateViewModel.ConnectAddress):
                 OnPropertyChanged(nameof(ConnectAddress));
@@ -512,6 +552,7 @@ public sealed class StartUpTaskModuleViewModel : TypedTaskModuleViewModelBase<St
             case nameof(ConnectionGameSharedStateViewModel.UseMacBundledAdbEffective):
             case nameof(ConnectionGameSharedStateViewModel.ShowManualAdbPathControls):
                 OnPropertyChanged(nameof(ShowManualAdbPathControls));
+                OnPropertyChanged(nameof(ShowAdbPathControls));
                 break;
             case nameof(ConnectionGameSharedStateViewModel.ClientType):
                 OnPropertyChanged(nameof(ClientType));
@@ -530,6 +571,12 @@ public sealed class StartUpTaskModuleViewModel : TypedTaskModuleViewModelBase<St
                 break;
             case nameof(ConnectionGameSharedStateViewModel.AutoDetect):
                 OnPropertyChanged(nameof(AutoDetectConnection));
+                OnPropertyChanged(nameof(ShowConnectAddressControls));
+                OnPropertyChanged(nameof(ShowAdbPathControls));
+                OnPropertyChanged(nameof(ShowAlwaysAutoDetectConnection));
+                break;
+            case nameof(ConnectionGameSharedStateViewModel.AlwaysAutoDetect):
+                OnPropertyChanged(nameof(AlwaysAutoDetectConnection));
                 break;
             case nameof(ConnectionGameSharedStateViewModel.CanStartGameEnabled):
                 OnPropertyChanged(nameof(CanEditStartGameEnabled));
