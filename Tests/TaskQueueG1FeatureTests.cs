@@ -871,6 +871,8 @@ public sealed class TaskQueueG1FeatureTests
         await using var fixture = await TestFixture.CreateAsync();
         fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.InverseClearMode] = JsonValue.Create("ClearInverse");
         fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.MainFunctionInverseMode] = JsonValue.Create(false);
+        fixture.Config.CurrentConfig.Profiles[fixture.Config.CurrentConfig.CurrentProfile]
+            .Values[ConfigurationKeys.InverseClearMode] = JsonValue.Create("Clear");
         Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup-a", enabled: true)).Success);
         Assert.True((await fixture.TaskQueue.AddTaskAsync("Fight", "fight-b", enabled: true)).Success);
 
@@ -931,7 +933,10 @@ public sealed class TaskQueueG1FeatureTests
         Assert.True(vm.ShowBatchModeToggle);
         Assert.Equal("反选", vm.BatchActionText);
         var profile = fixture.Config.CurrentConfig.Profiles[fixture.Config.CurrentConfig.CurrentProfile];
-        Assert.Equal("ClearInverse", profile.Values[ConfigurationKeys.InverseClearMode]?.GetValue<string>());
+        Assert.Equal(
+            "ClearInverse",
+            fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.InverseClearMode]?.GetValue<string>());
+        Assert.False(profile.Values.ContainsKey(ConfigurationKeys.InverseClearMode));
         Assert.True(profile.Values[ConfigurationKeys.MainFunctionInverseMode]?.GetValue<bool>());
     }
 

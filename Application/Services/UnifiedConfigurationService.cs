@@ -101,7 +101,7 @@ public sealed class UnifiedConfigurationService
             _sensitiveSettingsService.ConfirmDiscardUnreadableLegacySensitiveValues();
             _pendingUnreadableLegacySensitiveValues = [];
             LogService.Warn("The user confirmed discarding unreadable legacy sensitive values; re-entry is now enabled.");
-            ConfigChanged?.Invoke(CurrentConfig);
+            RaiseConfigChanged();
         }
         finally
         {
@@ -172,7 +172,7 @@ public sealed class UnifiedConfigurationService
                 LogService.Warn($"Obsolete plaintext sensitive storage cleanup failed: errorCode={ex.ErrorCode}.");
             }
 
-            ConfigChanged?.Invoke(CurrentConfig);
+            RaiseConfigChanged();
             LogService.Info(
                 $"Sensitive storage migration completed: backend={configToPersist.SensitiveStorage.Backend}, revision={configToPersist.SensitiveStorage.Revision}.");
         }
@@ -219,6 +219,23 @@ public sealed class UnifiedConfigurationService
                 if (loaded is not null)
                 {
                     CurrentConfig = loaded;
+                    var repairedNullEntries = CurrentConfig.HasPersistedNullEntries;
+                    // Repairing the selection before checking for misplaced profile-scoped sensitive
+                    // values would silently migrate those secrets into the fallback profile. Keep the
+                    // blocking ActionRequired behavior for that case and leave the file authoritative.
+                    var hasUnmigratableMisplacedValues =
+                        !CurrentConfig.Profiles.ContainsKey(CurrentConfig.CurrentProfile)
+                        && SensitiveSettingKeyRegistry.HasMisplacedProfileValues(CurrentConfig);
+                    (string Missing, string Fallback)? repairedProfileSelection = null;
+                    if (!hasUnmigratableMisplacedValues)
+                    {
+                        repairedProfileSelection = RepairMissingCurrentProfileSelection(CurrentConfig);
+                        if (repairedProfileSelection is not null)
+                        {
+                            LogService.Warn(
+                                $"Current profile `{repairedProfileSelection.Value.Missing}` was not found in config/avalonia.json; selected `{repairedProfileSelection.Value.Fallback}` instead.");
+                        }
+                    }
                     var removedPersistedSensitiveValues = await _sensitiveSettingsService.LoadAsync(CurrentConfig, cancellationToken);
                     await RetryObsoletePlaintextCleanupAsync(cancellationToken);
                     if (_sensitiveSettingsService.State is SensitiveStorageState.Unavailable or SensitiveStorageState.Corrupt)
@@ -244,8 +261,6 @@ public sealed class UnifiedConfigurationService
                     _pendingUnreadableLegacySensitiveValues = hasUnreadableLegacySensitiveValues
                         ? legacyConversionReport.UnreadableValues.ToArray()
                         : [];
-                    var hasUnmigratableMisplacedValues = !CurrentConfig.Profiles.ContainsKey(CurrentConfig.CurrentProfile)
-                                                        && SensitiveSettingKeyRegistry.HasMisplacedProfileValues(CurrentConfig);
                     if (hasUnreadableLegacySensitiveValues || hasUnmigratableMisplacedValues)
                     {
                         _sensitiveSettingsService.RecordFailure(new SensitiveStorageException(
@@ -263,6 +278,8 @@ public sealed class UnifiedConfigurationService
                         || clearedRecruitExpeditedCount > 0
                         || decryptedLegacySensitiveValueCount > 0
                         || normalizedSensitiveScopeCount > 0
+                        || repairedNullEntries
+                        || repairedProfileSelection is not null
                         || removedPersistedSensitiveValues
                         || requiresSensitiveMigration
                         || requiresSchemaMigration;
@@ -276,6 +293,11 @@ public sealed class UnifiedConfigurationService
                     if (normalizedTaskParamCount > 0)
                     {
                         LogService.Info($"Normalized {normalizedTaskParamCount} task parameter set(s).");
+                    }
+
+                    if (repairedNullEntries)
+                    {
+                        LogService.Info("Removed null profile or task queue entries from config/avalonia.json.");
                     }
 
                     if (clearedRecruitExpeditedCount > 0)
@@ -343,7 +365,7 @@ public sealed class UnifiedConfigurationService
 
                     var validationIssues = RefreshValidationState(validationMode, logIssues: true);
                     LogService.Info("Loaded config/avalonia.json and skipped legacy auto import");
-                    ConfigChanged?.Invoke(CurrentConfig);
+                    RaiseConfigChanged();
 
                     legacyConversionReport.FinishedAt = DateTimeOffset.UtcNow;
                     legacyConversionReport.Success = !hasUnreadableLegacySensitiveValues;
@@ -489,6 +511,8 @@ public sealed class UnifiedConfigurationService
                 ImportedFromGui = report.ImportedGui,
                 Warnings = [.. report.Warnings],
             };
+            EnsureCurrentProfileExists(config, report);
+
             if (request.ManualImport
                 && report.UnreadableValues.Count > 0
                 && !request.AllowDiscardUnreadableSensitiveValues)
@@ -686,6 +710,29 @@ public sealed class UnifiedConfigurationService
         return CurrentValidationIssues;
     }
 
+    private void RaiseConfigChanged()
+    {
+        var handlers = ConfigChanged?.GetInvocationList();
+        if (handlers is null)
+        {
+            return;
+        }
+
+        // A subscriber failure must not escape an already-durable save/load transaction or
+        // starve the remaining subscribers; isolate and disclose each failure instead.
+        foreach (Action<UnifiedConfig> handler in handlers)
+        {
+            try
+            {
+                handler(CurrentConfig);
+            }
+            catch (Exception ex)
+            {
+                LogService.Warn($"ConfigChanged subscriber failed and was isolated: {ex.GetType().Name}: {ex.Message}");
+            }
+        }
+    }
+
     private async Task<IReadOnlyList<ConfigValidationIssue>> SaveCoreAsync(
         UnifiedConfig config,
         bool logSavedConfig,
@@ -698,26 +745,32 @@ public sealed class UnifiedConfigurationService
         try
         {
             await using var commitLock = await _store.AcquireCommitLockAsync(cancellationToken);
-            var sourceSchemaVersion = config.SchemaVersion;
+            // Save-time repairs must remain detached until the config store accepts the write.
+            // Callers may recover their own pending edits after a failed save, but they cannot
+            // recover mutations made here unless this transaction keeps them off the live model.
+            var candidate = CloneConfigForSave(config);
+            var sourceSchemaVersion = candidate.SchemaVersion;
             if (sourceSchemaVersion != UnifiedConfig.LatestSchemaVersion && _store.Exists())
             {
                 var suffix = $".schema-v{sourceSchemaVersion}.bak.{DateTimeOffset.UtcNow:yyyyMMddHHmmss}";
-                var sanitizedBackup = CreateRedactedConfigSnapshot(config);
+                var sanitizedBackup = CreateRedactedConfigSnapshot(candidate);
                 await _store.BackupSanitizedAsync(sanitizedBackup, suffix, cancellationToken);
                 LogService.Warn(
                     $"Schema migration write detected: v{sourceSchemaVersion} -> v{UnifiedConfig.LatestSchemaVersion}. Redacted backup created.");
             }
 
-            config.SchemaVersion = UnifiedConfig.LatestSchemaVersion;
-            var normalizedTaskParamCount = NormalizeTaskQueueParams(config);
-            var persistedMetadataBaseline = CloneSensitiveStorageMetadata(config.SensitiveStorage);
+            candidate.SchemaVersion = UnifiedConfig.LatestSchemaVersion;
+            var normalizedTaskParamCount = NormalizeTaskQueueParams(candidate);
+            var persistedMetadataBaseline = CloneSensitiveStorageMetadata(candidate.SensitiveStorage);
             if (!replaceInvalidPersistedConfig)
             {
                 await EnsurePersistedSensitiveMetadataIsCurrentAsync(persistedMetadataBaseline, cancellationToken);
             }
 
+            // Validate the live input, not the detached candidate: the guard relies on profile
+            // instance identity captured at load time, and the clone always fails that check.
             _sensitiveSettingsService.ValidateRedactedSaveSource(config);
-            var configToPersist = CreatePersistentConfigSnapshot(config);
+            var configToPersist = CreatePersistentConfigSnapshot(candidate);
             if (allowInitialBackendSelectionRetry)
             {
                 _sensitiveSettingsService.BeginInitialBackendSelectionRetry(configToPersist.SensitiveStorage);
@@ -736,8 +789,10 @@ public sealed class UnifiedConfigurationService
                     cancellationToken);
             }
             var configSnapshot = SerializeConfigSnapshot(configToPersist);
-            if (string.Equals(_lastPersistedConfigSnapshot, configSnapshot, StringComparison.Ordinal))
+            if (!config.HasPersistedNullEntries
+                && string.Equals(_lastPersistedConfigSnapshot, configSnapshot, StringComparison.Ordinal))
             {
+                ApplySuccessfulSaveNormalization(config, candidate);
                 CurrentConfig = config;
                 return RefreshValidationState(validationMode, logIssues: true);
             }
@@ -753,13 +808,18 @@ public sealed class UnifiedConfigurationService
             }
             await _store.SaveAsync(configToPersist, cancellationToken);
             TryDeletePendingSensitiveCommit();
-            await SanitizeKnownConfigBackupsAsync(cancellationToken);
+            // The durable write already succeeded: post-write cleanup must not surface
+            // cancellation as a save failure. Callers roll back live edits on any error,
+            // which would diverge the live model from the persisted file.
+            await SanitizeKnownConfigBackupsAsync(CancellationToken.None);
+            config.MarkNullEntryRepairsPersisted();
             _lastPersistedConfigSnapshot = configSnapshot;
+            ApplySuccessfulSaveNormalization(config, candidate);
             SensitiveSettingKeyRegistry.NormalizeMisplacedProfileValues(config);
             config.SensitiveStorage = CloneSensitiveStorageMetadata(configToPersist.SensitiveStorage);
             CurrentConfig = config;
             var issues = RefreshValidationState(validationMode, logIssues: true);
-            ConfigChanged?.Invoke(CurrentConfig);
+            RaiseConfigChanged();
 
             if (logSavedConfig)
             {
@@ -781,10 +841,21 @@ public sealed class UnifiedConfigurationService
 
     private static UnifiedConfig CreatePersistentConfigSnapshot(UnifiedConfig config)
     {
-        var json = JsonSerializer.Serialize(config, _configSnapshotOptions);
-        var copy = JsonSerializer.Deserialize<UnifiedConfig>(json, _configSnapshotOptions) ?? new UnifiedConfig();
+        var copy = CloneConfigForSave(config);
         ClearOneShotRecruitExpedited(copy);
         return copy;
+    }
+
+    private static UnifiedConfig CloneConfigForSave(UnifiedConfig config)
+    {
+        var json = JsonSerializer.Serialize(config, _configSnapshotOptions);
+        return JsonSerializer.Deserialize<UnifiedConfig>(json, _configSnapshotOptions) ?? new UnifiedConfig();
+    }
+
+    private static void ApplySuccessfulSaveNormalization(UnifiedConfig config, UnifiedConfig candidate)
+    {
+        config.SchemaVersion = candidate.SchemaVersion;
+        _ = NormalizeTaskQueueParams(config);
     }
 
     private static UnifiedConfig CreateRedactedConfigSnapshot(UnifiedConfig config)
@@ -992,7 +1063,25 @@ public sealed class UnifiedConfigurationService
             Backend = metadata.Backend,
             StoreId = metadata.StoreId,
             Revision = metadata.Revision,
+            ExtensionData = CloneExtensionData(metadata.ExtensionData),
         };
+
+    private static Dictionary<string, JsonElement>? CloneExtensionData(
+        Dictionary<string, JsonElement>? extensionData)
+    {
+        if (extensionData is null)
+        {
+            return null;
+        }
+
+        var copy = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
+        foreach (var (key, value) in extensionData)
+        {
+            copy[key] = value.Clone();
+        }
+
+        return copy;
+    }
 
     private async Task SanitizeKnownConfigBackupsAsync(CancellationToken cancellationToken)
     {
@@ -1385,6 +1474,50 @@ public sealed class UnifiedConfigurationService
         }
 
         collection.Add(fileName);
+    }
+
+    private static void EnsureCurrentProfileExists(UnifiedConfig config, ImportReport report)
+    {
+        if (config.Profiles.ContainsKey(config.CurrentProfile))
+        {
+            return;
+        }
+
+        var missing = config.CurrentProfile;
+        var fallback = SelectFallbackProfileName(config);
+        report.Warnings.Add(
+            $"Current profile `{missing}` was not imported; selected `{fallback}` instead.");
+        config.CurrentProfile = fallback;
+    }
+
+    // A persisted configuration must always retain a usable selected profile. The fallback is
+    // deterministic: the first non-"Default" profile, then the first profile, then a recreated
+    // "Default" profile. Callers must disclose the repair and persist it.
+    private static (string Missing, string Fallback)? RepairMissingCurrentProfileSelection(UnifiedConfig config)
+    {
+        if (config.Profiles.ContainsKey(config.CurrentProfile))
+        {
+            return null;
+        }
+
+        var missing = config.CurrentProfile;
+        var fallback = SelectFallbackProfileName(config);
+        config.CurrentProfile = fallback;
+        return (missing, fallback);
+    }
+
+    private static string SelectFallbackProfileName(UnifiedConfig config)
+    {
+        var fallback = config.Profiles.Keys.FirstOrDefault(name =>
+            !string.Equals(name, "Default", StringComparison.OrdinalIgnoreCase));
+        fallback ??= config.Profiles.Keys.FirstOrDefault();
+        if (string.IsNullOrWhiteSpace(fallback))
+        {
+            fallback = "Default";
+            config.Profiles[fallback] = new UnifiedProfile();
+        }
+
+        return fallback;
     }
 
     private static int NormalizeTaskQueueParams(UnifiedConfig config)

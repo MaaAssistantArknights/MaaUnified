@@ -27,7 +27,7 @@ namespace MAAUnified.App.ViewModels.Settings;
 public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposable
 {
     private const string ThemeModeKey = "Theme.Mode";
-    private const string DefaultTheme = "Light";
+    private const string DefaultTheme = "SyncWithOs";
     private const string DefaultLanguage = UiLanguageCatalog.DefaultLanguage;
     private const string DefaultBackgroundStretchMode = "Fill";
     private const string DefaultLogItemDateFormat = "HH:mm:ss";
@@ -54,6 +54,8 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
     private const int UiScalePercentMin = 70;
     private const int UiScalePercentMax = 140;
     private const int AutostartFeedbackDelayMs = 1000;
+    private const int SuppressedAutoSaveRetryDelayMs = 100;
+    private const int MaxSuppressedAutoSaveWaits = 50;
     private const int TimerSlotCount = 8;
     private const int TimerHourMin = 0;
     private const int TimerHourMax = 23;
@@ -223,6 +225,10 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
     private static readonly JsonSerializerOptions ConfigExportSerializerOptions = new()
     {
         WriteIndented = true,
+    };
+    private static readonly JsonSerializerOptions ConfigImportSerializerOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
     };
 
     private SettingsSectionViewModel? _selectedSection;
@@ -4138,7 +4144,21 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
         try
         {
             await using var stream = File.OpenRead(normalizedPath);
-            var imported = await JsonSerializer.DeserializeAsync<UnifiedConfig>(stream, cancellationToken: cancellationToken);
+            using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+            if (!HasObjectPropertyIgnoreCase(document.RootElement, "Profiles"))
+            {
+                ConfigurationManagerStatusMessage = LocalizeSettingsText(
+                    "Settings.ConfigurationManager.Status.ImportFailed",
+                    "导入配置失败。");
+                ConfigurationManagerErrorMessage = LocalizeSettingsText(
+                    "Settings.ConfigurationManager.Error.ImportNoValidProfile",
+                    "导入文件中未找到有效配置。");
+                return;
+            }
+
+            var imported = JsonSerializer.Deserialize<UnifiedConfig>(
+                document.RootElement.GetRawText(),
+                ConfigImportSerializerOptions);
             if (imported is null || imported.Profiles.Count == 0)
             {
                 ConfigurationManagerStatusMessage = LocalizeSettingsText(
@@ -4184,6 +4204,24 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
                     "导入文件中未找到可用配置项。");
                 return;
             }
+
+            // Imported non-sensitive global values win on conflict; destination-only keys are
+            // retained. Registered sensitive keys are never merged from a Unified import file:
+            // exports redact them and the destination secure store stays authoritative.
+            var skippedSensitiveGlobalCount = MergeImportedGlobalValues(currentConfig, imported);
+            if (skippedSensitiveGlobalCount > 0)
+            {
+                Runtime.LogService.Warn(
+                    $"Skipped {skippedSensitiveGlobalCount} sensitive global value(s) during configuration import; destination secure storage remains authoritative.");
+            }
+
+            // Forward-compatible root and migration extension data merge with import-wins
+            // precedence; destination-only members are retained. The destination sensitive
+            // storage metadata and migration history stay unchanged.
+            currentConfig.ExtensionData = MergeExtensionData(currentConfig.ExtensionData, imported.ExtensionData);
+            currentConfig.Migration.ExtensionData = MergeExtensionData(
+                currentConfig.Migration.ExtensionData,
+                imported.Migration.ExtensionData);
 
             if (string.IsNullOrWhiteSpace(currentConfig.CurrentProfile)
                 || !currentConfig.Profiles.ContainsKey(currentConfig.CurrentProfile))
@@ -5409,9 +5447,20 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
         try
         {
             await Task.Delay(delayMs, cancellationToken);
+
+            // A non-cancelling suppression window (for example the unified language apply)
+            // must not drop the pending marker: scopes without a dirty flag would otherwise
+            // lose the edit because close-flush only recovers tracked pending entries. Wait
+            // for the window to end and retry; if it outlives the retry budget, keep the
+            // pending marker so FlushConfigurationSavesForCloseAsync can still recover it.
+            var suppressionWaitsRemaining = MaxSuppressedAutoSaveWaits;
+            while (IsPageAutoSaveSuppressed && suppressionWaitsRemaining-- > 0)
+            {
+                await Task.Delay(SuppressedAutoSaveRetryDelayMs, cancellationToken);
+            }
+
             if (IsPageAutoSaveSuppressed)
             {
-                ConfigurationSaveTracker.Instance.ClearPending(scope);
                 return;
             }
 
@@ -5419,7 +5468,8 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
         }
         catch (OperationCanceledException)
         {
-            // Newer input superseded previous autosave request.
+            // Newer input superseded this autosave request, or a cancelling suspension
+            // (SuspendAutoSave/close-flush) took ownership of the pending marker.
         }
         catch (Exception ex)
         {
@@ -6314,6 +6364,24 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
         await JsonSerializer.SerializeAsync(stream, config, ConfigExportSerializerOptions, cancellationToken);
     }
 
+    private static bool HasObjectPropertyIgnoreCase(JsonElement source, string name)
+    {
+        if (source.ValueKind != JsonValueKind.Object)
+        {
+            return false;
+        }
+
+        foreach (var property in source.EnumerateObject())
+        {
+            if (string.Equals(property.Name, name, StringComparison.OrdinalIgnoreCase))
+            {
+                return property.Value.ValueKind == JsonValueKind.Object;
+            }
+        }
+
+        return false;
+    }
+
     private static UnifiedConfig BuildCurrentProfileOnlyConfig(UnifiedConfig source)
     {
         var normalizedCurrent = source.CurrentProfile;
@@ -6337,8 +6405,46 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
             },
             GlobalValues = CloneJsonNodeMap(source.GlobalValues),
             Migration = CloneMigration(source.Migration),
+            ExtensionData = CloneExtensionData(source.ExtensionData),
         };
         return config;
+    }
+
+    private static int MergeImportedGlobalValues(UnifiedConfig target, UnifiedConfig imported)
+    {
+        var skippedSensitiveKeys = 0;
+        foreach (var (key, value) in imported.GlobalValues)
+        {
+            if (SensitiveSettingKeyRegistry.IsSensitive(key))
+            {
+                skippedSensitiveKeys++;
+                continue;
+            }
+
+            target.GlobalValues[key] = value?.DeepClone();
+        }
+
+        return skippedSensitiveKeys;
+    }
+
+    private static Dictionary<string, JsonElement>? MergeExtensionData(
+        Dictionary<string, JsonElement>? target,
+        Dictionary<string, JsonElement>? imported)
+    {
+        if (imported is null || imported.Count == 0)
+        {
+            return target;
+        }
+
+        var merged = target is null
+            ? new Dictionary<string, JsonElement>(StringComparer.Ordinal)
+            : new Dictionary<string, JsonElement>(target, StringComparer.Ordinal);
+        foreach (var (key, value) in imported)
+        {
+            merged[key] = value.Clone();
+        }
+
+        return merged;
     }
 
     private static UnifiedConfig CloneConfig(UnifiedConfig source)
@@ -6356,6 +6462,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
             Profiles = profiles,
             GlobalValues = CloneJsonNodeMap(source.GlobalValues),
             Migration = CloneMigration(source.Migration),
+            ExtensionData = CloneExtensionData(source.ExtensionData),
         };
     }
 
@@ -6368,6 +6475,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
             Backend = source.SensitiveStorage.Backend,
             StoreId = source.SensitiveStorage.StoreId,
             Revision = source.SensitiveStorage.Revision,
+            ExtensionData = CloneExtensionData(source.SensitiveStorage.ExtensionData),
         };
         return clone;
     }
@@ -6383,12 +6491,14 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
                 IsEnabled = task.IsEnabled,
                 Params = task.Params?.DeepClone() as JsonObject ?? [],
                 LegacyRawTask = task.LegacyRawTask?.DeepClone() as JsonObject,
+                ExtensionData = CloneExtensionData(task.ExtensionData),
             })
             .ToList();
         return new UnifiedProfile
         {
             Values = values,
             TaskQueue = tasks,
+            ExtensionData = CloneExtensionData(source.ExtensionData),
         };
     }
 
@@ -6412,7 +6522,25 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
             ImportedFromGui = source.ImportedFromGui,
             ImportedFromGuiNew = source.ImportedFromGuiNew,
             Warnings = [.. source.Warnings],
+            ExtensionData = CloneExtensionData(source.ExtensionData),
         };
+    }
+
+    private static Dictionary<string, JsonElement>? CloneExtensionData(
+        Dictionary<string, JsonElement>? extensionData)
+    {
+        if (extensionData is null)
+        {
+            return null;
+        }
+
+        var copy = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
+        foreach (var (key, value) in extensionData)
+        {
+            copy[key] = value.Clone();
+        }
+
+        return copy;
     }
 
     private static string AllocateUniqueProfileName(HashSet<string> existingNames, string preferredName)
@@ -7280,7 +7408,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
         var rawStretchMode = ReadGlobalString(config, ConfigurationKeys.BackgroundImageStretchMode, DefaultBackgroundStretchMode);
         var rawLogItemDateFormat = ReadGlobalString(config, ConfigurationKeys.LogItemDateFormat, DefaultLogItemDateFormat);
         var rawOperNameLanguage = ReadGlobalString(config, ConfigurationKeys.OperNameLanguage, DefaultOperNameLanguage);
-        var rawInverseClearMode = ReadProfileString(config, ConfigurationKeys.InverseClearMode, DefaultInverseClearMode);
+        var rawInverseClearMode = ReadGlobalString(config, ConfigurationKeys.InverseClearMode, DefaultInverseClearMode);
         var rawUseSoftwareRendering = ReadGlobalBool(config, SoftwareRenderingConfigKey, false);
         var rawHotkeys = ReadGlobalString(config, ConfigurationKeys.HotKeys, string.Empty);
         var parsedHotkeys = HotkeyConfigurationCodec.Parse(rawHotkeys);
@@ -7964,7 +8092,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
         var rawStretchMode = ReadGlobalString(config, ConfigurationKeys.BackgroundImageStretchMode, DefaultBackgroundStretchMode);
         var rawLogItemDateFormat = ReadGlobalString(config, ConfigurationKeys.LogItemDateFormat, DefaultLogItemDateFormat);
         var rawOperNameLanguage = ReadGlobalString(config, ConfigurationKeys.OperNameLanguage, DefaultOperNameLanguage);
-        var rawInverseClearMode = ReadProfileString(config, ConfigurationKeys.InverseClearMode, DefaultInverseClearMode);
+        var rawInverseClearMode = ReadGlobalString(config, ConfigurationKeys.InverseClearMode, DefaultInverseClearMode);
         var rawUseSoftwareRendering = ReadGlobalBool(config, SoftwareRenderingConfigKey, false);
         var rawHotkeys = ReadGlobalString(config, ConfigurationKeys.HotKeys, string.Empty);
         var parsedHotkeys = HotkeyConfigurationCodec.Parse(rawHotkeys);
@@ -9856,6 +9984,7 @@ public sealed record GuiSettingsSnapshot(
             ["GUI.DeveloperMode"] = DeveloperModeEnabled.ToString(),
             [ConfigurationKeys.LogItemDateFormat] = LogItemDateFormatString,
             [ConfigurationKeys.OperNameLanguage] = OperNameLanguage,
+            [ConfigurationKeys.InverseClearMode] = InverseClearMode,
             [ConfigurationKeys.BackgroundImagePath] = BackgroundImagePath,
             [ConfigurationKeys.BackgroundOpacity] = BackgroundOpacity.ToString(),
             [ConfigurationKeys.BackgroundBlurEffectRadius] = BackgroundBlur.ToString(),
@@ -9865,10 +9994,7 @@ public sealed record GuiSettingsSnapshot(
 
     public IReadOnlyDictionary<string, string> ToProfileSettingUpdates()
     {
-        var updates = new Dictionary<string, string>(StringComparer.Ordinal)
-        {
-            [ConfigurationKeys.InverseClearMode] = InverseClearMode,
-        };
+        var updates = new Dictionary<string, string>(StringComparer.Ordinal);
 
         if (string.Equals(InverseClearMode, "Clear", StringComparison.OrdinalIgnoreCase))
         {

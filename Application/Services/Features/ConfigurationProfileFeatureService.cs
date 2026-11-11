@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using MAAUnified.Application.Models;
 using MAAUnified.Application.Security;
@@ -287,10 +288,22 @@ public sealed class ConfigurationProfileFeatureService : IConfigurationProfileFe
 
     private static ConfigSnapshot CaptureSnapshot(UnifiedConfig config)
     {
+        // Keep the original profile instances alongside deep content clones. The sensitive storage
+        // guard identifies profiles by instance reference, so rollback must reinstall the originals
+        // while still undoing any content mutation from the failed operation.
         var profiles = config.Profiles
-            .Select(pair => new KeyValuePair<string, UnifiedProfile>(pair.Key, pair.Value))
+            .Select(pair => new KeyValuePair<string, ProfileSnapshot>(
+                pair.Key,
+                new ProfileSnapshot(pair.Value, CloneProfile(pair.Value))))
             .ToList();
-        return new ConfigSnapshot(config.CurrentProfile, profiles);
+        return new ConfigSnapshot(
+            config.SchemaVersion,
+            config.CurrentProfile,
+            profiles,
+            CloneJsonNodeMap(config.GlobalValues),
+            CloneMigration(config.Migration),
+            CloneExtensionData(config.ExtensionData),
+            CloneSensitiveStorage(config.SensitiveStorage));
     }
 
     private static void RestoreSnapshot(UnifiedConfig config, ConfigSnapshot snapshot)
@@ -298,10 +311,20 @@ public sealed class ConfigurationProfileFeatureService : IConfigurationProfileFe
         var restored = new Dictionary<string, UnifiedProfile>(StringComparer.OrdinalIgnoreCase);
         foreach (var pair in snapshot.Profiles)
         {
-            restored[pair.Key] = pair.Value;
+            var instance = pair.Value.Instance;
+            var content = pair.Value.Content;
+            instance.Values = content.Values;
+            instance.TaskQueue = content.TaskQueue;
+            instance.ExtensionData = content.ExtensionData;
+            restored[pair.Key] = instance;
         }
 
         config.Profiles = restored;
+        config.SchemaVersion = snapshot.SchemaVersion;
+        config.GlobalValues = snapshot.GlobalValues;
+        config.Migration = snapshot.Migration;
+        config.ExtensionData = snapshot.ExtensionData;
+        config.SensitiveStorage = snapshot.SensitiveStorage;
         config.CurrentProfile = snapshot.CurrentProfile;
     }
 
@@ -402,13 +425,62 @@ public sealed class ConfigurationProfileFeatureService : IConfigurationProfileFe
                 IsEnabled = task.IsEnabled,
                 Params = task.Params.DeepClone() as JsonObject ?? new JsonObject(),
                 LegacyRawTask = task.LegacyRawTask?.DeepClone() as JsonObject,
+                ExtensionData = CloneExtensionData(task.ExtensionData),
             });
         }
+
+        clone.ExtensionData = CloneExtensionData(source.ExtensionData);
 
         return clone;
     }
 
+    private static Dictionary<string, JsonNode?> CloneJsonNodeMap(Dictionary<string, JsonNode?> source)
+    {
+        var result = new Dictionary<string, JsonNode?>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (key, value) in source)
+        {
+            result[key] = value?.DeepClone();
+        }
+
+        return result;
+    }
+
+    private static UnifiedMigrationMetadata CloneMigration(UnifiedMigrationMetadata source)
+    {
+        return new UnifiedMigrationMetadata
+        {
+            ImportedAt = source.ImportedAt,
+            ImportedBy = source.ImportedBy,
+            ImportedFromGuiNew = source.ImportedFromGuiNew,
+            ImportedFromGui = source.ImportedFromGui,
+            Warnings = [.. source.Warnings],
+            ExtensionData = CloneExtensionData(source.ExtensionData),
+        };
+    }
+
+    private static SensitiveStorageMetadata CloneSensitiveStorage(SensitiveStorageMetadata source)
+    {
+        return new SensitiveStorageMetadata
+        {
+            FormatVersion = source.FormatVersion,
+            Backend = source.Backend,
+            StoreId = source.StoreId,
+            Revision = source.Revision,
+            ExtensionData = CloneExtensionData(source.ExtensionData),
+        };
+    }
+
+    private static Dictionary<string, JsonElement>? CloneExtensionData(Dictionary<string, JsonElement>? source)
+        => source?.ToDictionary(pair => pair.Key, pair => pair.Value.Clone(), StringComparer.OrdinalIgnoreCase);
+
+    private sealed record ProfileSnapshot(UnifiedProfile Instance, UnifiedProfile Content);
+
     private sealed record ConfigSnapshot(
+        int SchemaVersion,
         string CurrentProfile,
-        IReadOnlyList<KeyValuePair<string, UnifiedProfile>> Profiles);
+        IReadOnlyList<KeyValuePair<string, ProfileSnapshot>> Profiles,
+        Dictionary<string, JsonNode?> GlobalValues,
+        UnifiedMigrationMetadata Migration,
+        Dictionary<string, JsonElement>? ExtensionData,
+        SensitiveStorageMetadata SensitiveStorage);
 }

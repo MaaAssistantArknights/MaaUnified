@@ -33,24 +33,18 @@ public sealed class GuiJsonConfigImporter : IConfigImporter
             using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
             var root = doc.RootElement;
 
-            if (root.TryGetProperty("Current", out var currentProp) && currentProp.ValueKind == JsonValueKind.String)
+            if (TryGetPropertyIgnoreCase(root, "Current", out var currentProp) && currentProp.ValueKind == JsonValueKind.String)
             {
-                if (fillMissingOnly)
-                {
-                    if (string.Equals(target.CurrentProfile, "Default", StringComparison.OrdinalIgnoreCase))
-                    {
-                        target.CurrentProfile = currentProp.GetString() ?? target.CurrentProfile;
-                        report.MappedFieldCount += 1;
-                    }
-                }
-                else
+                // gui.new.json takes precedence during the automatic two-file import.
+                // gui.json remains the source of truth when it is the only usable file.
+                if (!fillMissingOnly || !report.ImportedGuiNew)
                 {
                     target.CurrentProfile = currentProp.GetString() ?? target.CurrentProfile;
                     report.MappedFieldCount += 1;
                 }
             }
 
-            if (root.TryGetProperty("Configurations", out var configsProp) && configsProp.ValueKind == JsonValueKind.Object)
+            if (TryGetPropertyIgnoreCase(root, "Configurations", out var configsProp) && configsProp.ValueKind == JsonValueKind.Object)
             {
                 foreach (var configProp in configsProp.EnumerateObject())
                 {
@@ -68,6 +62,16 @@ public sealed class GuiJsonConfigImporter : IConfigImporter
                     foreach (var valueProp in configProp.Value.EnumerateObject())
                     {
                         var normalizedKey = NormalizeProfileKey(valueProp.Name);
+                        if (string.Equals(normalizedKey, "GUI.InverseClearMode", StringComparison.OrdinalIgnoreCase))
+                        {
+                            JsonImportMergeHelper.MergeGlobalValue(
+                                target,
+                                normalizedKey,
+                                JsonImportMergeHelper.ToJsonNode(valueProp.Value),
+                                fillMissingOnly,
+                                report);
+                            continue;
+                        }
                         JsonImportMergeHelper.MergeProfileValue(
                             profile,
                             configProp.Name,
@@ -81,13 +85,58 @@ public sealed class GuiJsonConfigImporter : IConfigImporter
                 }
             }
 
-            if (root.TryGetProperty("Global", out var globalProp) && globalProp.ValueKind == JsonValueKind.Object)
+            // Older gui.json files stored one profile's flat values at the root.
+            // Import that shape instead of reporting a successful no-op.
+            if (!HasConfigurationObject(root) && HasFlatProfileValues(root))
+            {
+                var profileName = string.IsNullOrWhiteSpace(target.CurrentProfile) ? "Default" : target.CurrentProfile;
+                if (!target.Profiles.TryGetValue(profileName, out var profile))
+                {
+                    profile = new UnifiedProfile();
+                    target.Profiles[profileName] = profile;
+                }
+
+                foreach (var prop in root.EnumerateObject())
+                {
+                    if (string.Equals(prop.Name, "Current", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(prop.Name, "Global", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(prop.Name, "Configurations", StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    var normalizedKey = NormalizeProfileKey(prop.Name);
+                    if (string.Equals(normalizedKey, "GUI.InverseClearMode", StringComparison.OrdinalIgnoreCase))
+                    {
+                        JsonImportMergeHelper.MergeGlobalValue(
+                            target,
+                            normalizedKey,
+                            JsonImportMergeHelper.ToJsonNode(prop.Value),
+                            fillMissingOnly,
+                            report);
+                    }
+                    else
+                    {
+                        JsonImportMergeHelper.MergeProfileValue(
+                            profile,
+                            profileName,
+                            normalizedKey,
+                            JsonImportMergeHelper.ToJsonNode(prop.Value),
+                            fillMissingOnly,
+                            report);
+                    }
+                }
+
+                MigrateFlatTaskQueue(profileName, root, profile, target, fillMissingOnly, report);
+            }
+
+            if (TryGetPropertyIgnoreCase(root, "Global", out var globalProp) && globalProp.ValueKind == JsonValueKind.Object)
             {
                 foreach (var valueProp in globalProp.EnumerateObject())
                 {
                     JsonImportMergeHelper.MergeGlobalValue(
                         target,
-                        valueProp.Name,
+                        LegacyConfigValueMappings.NormalizeGlobalKey(valueProp.Name),
                         JsonImportMergeHelper.ToJsonNode(valueProp.Value),
                         fillMissingOnly,
                         report);
@@ -103,6 +152,10 @@ public sealed class GuiJsonConfigImporter : IConfigImporter
             report.Errors.Add($"Failed to import gui.json (errorType={ex.GetType().Name}).");
         }
     }
+
+    private static bool HasConfigurationObject(JsonElement root)
+        => TryGetPropertyIgnoreCase(root, "Configurations", out var configurations)
+           && configurations.ValueKind == JsonValueKind.Object;
 
     private static string NormalizeProfileKey(string key)
     {
@@ -164,6 +217,19 @@ public sealed class GuiJsonConfigImporter : IConfigImporter
             || prop.Name.StartsWith("Reclamation.", StringComparison.OrdinalIgnoreCase)
             || prop.Name.StartsWith("Fight.", StringComparison.OrdinalIgnoreCase)
             || string.Equals(prop.Name, "Start.AccountName", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool HasFlatProfileValues(JsonElement source)
+    {
+        if (source.ValueKind != JsonValueKind.Object)
+        {
+            return false;
+        }
+
+        return source.EnumerateObject().Any(static prop =>
+            !string.Equals(prop.Name, "Current", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(prop.Name, "Global", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(prop.Name, "Configurations", StringComparison.OrdinalIgnoreCase));
     }
 
     private static IReadOnlyList<JsonObject> BuildFlatLegacyTasks(JsonElement source)

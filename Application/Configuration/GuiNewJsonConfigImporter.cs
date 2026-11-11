@@ -33,13 +33,13 @@ public sealed class GuiNewJsonConfigImporter : IConfigImporter
             using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
             var root = doc.RootElement;
 
-            if (root.TryGetProperty("Current", out var currentProp) && currentProp.ValueKind == JsonValueKind.String)
+            if (TryGetPropertyIgnoreCase(root, "Current", out var currentProp) && currentProp.ValueKind == JsonValueKind.String)
             {
                 target.CurrentProfile = currentProp.GetString() ?? target.CurrentProfile;
                 report.MappedFieldCount += 1;
             }
 
-            if (root.TryGetProperty("Configurations", out var configsProp) && configsProp.ValueKind == JsonValueKind.Object)
+            if (TryGetPropertyIgnoreCase(root, "Configurations", out var configsProp) && configsProp.ValueKind == JsonValueKind.Object)
             {
                 foreach (var configProp in configsProp.EnumerateObject())
                 {
@@ -57,14 +57,39 @@ public sealed class GuiNewJsonConfigImporter : IConfigImporter
                     JsonElement? taskQueueProp = null;
                     foreach (var valueProp in configProp.Value.EnumerateObject())
                     {
-                        if (string.Equals(valueProp.Name, "TaskQueue", StringComparison.OrdinalIgnoreCase)
-                            && valueProp.Value.ValueKind == JsonValueKind.Array)
+                        if (string.Equals(valueProp.Name, "TaskQueue", StringComparison.OrdinalIgnoreCase))
                         {
-                            taskQueueProp = valueProp.Value;
+                            if (valueProp.Value.ValueKind == JsonValueKind.Array)
+                            {
+                                taskQueueProp = valueProp.Value;
+                            }
+                            else if (valueProp.Value.ValueKind == JsonValueKind.Null)
+                            {
+                                if (!fillMissingOnly)
+                                {
+                                    profile.TaskQueue.Clear();
+                                }
+                            }
+                            else
+                            {
+                                report.Warnings.Add(
+                                    $"Profile `{configProp.Name}` has an invalid TaskQueue value; expected an array or null.");
+                            }
+
                             continue;
                         }
 
                         var normalizedKey = NormalizeProfileKey(valueProp.Name);
+                        if (string.Equals(normalizedKey, "GUI.InverseClearMode", StringComparison.OrdinalIgnoreCase))
+                        {
+                            JsonImportMergeHelper.MergeGlobalValue(
+                                target,
+                                "GUI.InverseClearMode",
+                                JsonImportMergeHelper.ToJsonNode(valueProp.Value),
+                                fillMissingOnly,
+                                report);
+                            continue;
+                        }
                         JsonImportMergeHelper.MergeProfileValue(
                             profile,
                             configProp.Name,
@@ -102,16 +127,16 @@ public sealed class GuiNewJsonConfigImporter : IConfigImporter
         bool fillMissingOnly,
         ImportReport report)
     {
-        if (root.TryGetProperty("Timers", out var timers) && timers.ValueKind == JsonValueKind.Object)
+        if (TryGetPropertyIgnoreCase(root, "Timers", out var timers) && timers.ValueKind == JsonValueKind.Object)
         {
             MergeTimerDictionary(timers, target, fillMissingOnly, report);
         }
-        else if (root.TryGetProperty("Timers", out timers) && timers.ValueKind == JsonValueKind.Array)
+        else if (TryGetPropertyIgnoreCase(root, "Timers", out timers) && timers.ValueKind == JsonValueKind.Array)
         {
             MergeTimerArray(timers, target, fillMissingOnly, report);
         }
 
-        if (root.TryGetProperty("Timer", out var timer) && timer.ValueKind == JsonValueKind.Object)
+        if (TryGetPropertyIgnoreCase(root, "Timer", out var timer) && timer.ValueKind == JsonValueKind.Object)
         {
             MergeTimerFlatObject(timer, target, fillMissingOnly, report);
         }
@@ -369,7 +394,7 @@ public sealed class GuiNewJsonConfigImporter : IConfigImporter
         bool fillMissingOnly,
         ImportReport report)
     {
-        if (!root.TryGetProperty(objectName, out var obj) || obj.ValueKind != JsonValueKind.Object)
+        if (!TryGetPropertyIgnoreCase(root, objectName, out var obj) || obj.ValueKind != JsonValueKind.Object)
         {
             return;
         }
@@ -378,7 +403,7 @@ public sealed class GuiNewJsonConfigImporter : IConfigImporter
         {
             JsonImportMergeHelper.MergeGlobalValue(
                 target,
-                $"{objectName}.{prop.Name}",
+                LegacyConfigValueMappings.NormalizeGlobalKey($"{objectName}.{prop.Name}"),
                 JsonImportMergeHelper.ToJsonNode(prop.Value),
                 fillMissingOnly,
                 report);

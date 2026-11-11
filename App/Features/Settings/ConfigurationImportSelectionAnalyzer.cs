@@ -141,19 +141,21 @@ internal static class ConfigurationImportSelectionAnalyzer
                 return ConfigurationImportJsonShape.Unknown;
             }
 
+            // The Unified store/importers bind roots case-insensitively; selection must
+            // recognize the same documents instead of rejecting them as unrecognized.
             var looksUnified =
-                root.TryGetProperty("Profiles", out _)
-                && root.TryGetProperty("CurrentProfile", out _);
+                HasPropertyIgnoreCase(root, "Profiles")
+                && HasPropertyIgnoreCase(root, "CurrentProfile");
             if (looksUnified)
             {
                 return ConfigurationImportJsonShape.UnifiedConfig;
             }
 
             var looksLegacy =
-                root.TryGetProperty("Configurations", out _)
-                || root.TryGetProperty("Current", out _)
-                || root.TryGetProperty("GUI", out _)
-                || root.TryGetProperty("Global", out _);
+                HasPropertyIgnoreCase(root, "Configurations")
+                || HasPropertyIgnoreCase(root, "Current")
+                || HasPropertyIgnoreCase(root, "GUI")
+                || HasPropertyIgnoreCase(root, "Global");
             return looksLegacy
                 ? ConfigurationImportJsonShape.LegacyConfig
                 : ConfigurationImportJsonShape.Unknown;
@@ -162,6 +164,19 @@ internal static class ConfigurationImportSelectionAnalyzer
         {
             return ConfigurationImportJsonShape.Unknown;
         }
+    }
+
+    private static bool HasPropertyIgnoreCase(JsonElement root, string name)
+    {
+        foreach (var property in root.EnumerateObject())
+        {
+            if (string.Equals(property.Name, name, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static bool IsGuiNewFile(string? fileName)

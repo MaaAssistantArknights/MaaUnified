@@ -7665,7 +7665,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         var config = Runtime.ConfigurationService.CurrentConfig;
         var inverseMode = TryReadProfileBool(config, ConfigurationKeys.MainFunctionInverseMode, false);
         ApplySelectionBatchMode(
-            TryReadProfileString(config, ConfigurationKeys.InverseClearMode, "Clear"),
+            TryReadGlobalString(config.GlobalValues, ConfigurationKeys.InverseClearMode, "Clear"),
             inverseMode);
     }
 
@@ -7675,17 +7675,18 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         if (config.Profiles.TryGetValue(config.CurrentProfile, out var profile))
         {
             profile.Values[ConfigurationKeys.MainFunctionInverseMode] = JsonValue.Create(SelectionBatchMode == SelectionBatchMode.Inverse);
-            if (ShowBatchModeToggle)
-            {
-                profile.Values[ConfigurationKeys.InverseClearMode] = JsonValue.Create("ClearInverse");
-            }
         }
         else
         {
             config.GlobalValues[ConfigurationKeys.MainFunctionInverseMode] = JsonValue.Create(SelectionBatchMode == SelectionBatchMode.Inverse);
-            if (ShowBatchModeToggle)
+        }
+
+        if (ShowBatchModeToggle)
+        {
+            config.GlobalValues[ConfigurationKeys.InverseClearMode] = JsonValue.Create("ClearInverse");
+            foreach (var profileEntry in config.Profiles.Values)
             {
-                config.GlobalValues[ConfigurationKeys.InverseClearMode] = JsonValue.Create("ClearInverse");
+                profileEntry.Values.Remove(ConfigurationKeys.InverseClearMode);
             }
         }
 

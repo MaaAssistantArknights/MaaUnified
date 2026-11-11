@@ -200,7 +200,7 @@ internal static class LegacyTaskSchemaConverter
     {
         var clientType = ResolveClientType(profile, config);
         var accountName = GetString(task, "AccountName") ?? string.Empty;
-        var startGameEnabled = ResolveBooleanSetting(profile, config, "StartGame", "Start.StartGame");
+        var startGameEnabled = ResolveBooleanSetting(profile, config, true, "StartGame", "Start.StartGame");
         return new JsonObject
         {
             ["client_type"] = clientType,
@@ -549,7 +549,9 @@ internal static class LegacyTaskSchemaConverter
     {
         var mode = LegacyConfigValueMappings.NormalizeRoguelikeMode(task["Mode"]);
         var theme = ResolveRoguelikeTheme(task["Theme"]);
-        var collectibleAwardsMask = LegacyConfigValueMappings.NormalizeRoguelikeCollectibleAwardsMask(task["CollectibleStartAwards"]);
+        var collectibleAwardsMask = task.ContainsKey("CollectibleStartAwards")
+            ? LegacyConfigValueMappings.NormalizeRoguelikeCollectibleAwardsMask(task["CollectibleStartAwards"])
+            : (1 << 0) | (1 << 3) | (1 << 7);
         var missingIterationFlagsDefault = options.MissingRoguelikeIterationFlagsDefault;
 
         var result = new JsonObject

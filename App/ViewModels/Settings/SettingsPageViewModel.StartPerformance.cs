@@ -137,6 +137,13 @@ public sealed partial class SettingsPageViewModel
         Dictionary<string, JsonNode?>? profileSnapshot = profile is null
             ? null
             : CloneJsonNodeMap(profile.Values);
+        Dictionary<string, Dictionary<string, JsonNode?>>? allProfileSnapshots =
+            globalUpdates.ContainsKey(ConfigurationKeys.InverseClearMode)
+                ? config.Profiles.ToDictionary(
+                    pair => pair.Key,
+                    pair => CloneJsonNodeMap(pair.Value.Values),
+                    StringComparer.OrdinalIgnoreCase)
+                : null;
 
         try
         {
@@ -167,7 +174,17 @@ public sealed partial class SettingsPageViewModel
                 }
             }
 
+            if (allProfileSnapshots is not null)
+            {
+                foreach (var profileEntry in config.Profiles.Values)
+                {
+                    profileEntry.Values.Remove(ConfigurationKeys.InverseClearMode);
+                }
+            }
+
             await Runtime.ConfigurationService.SaveAsync(cancellationToken);
+            // The save is already durable; cancellation must not turn the success
+            // diagnostics into a failure that rolls back the persisted values.
             await RecordEventAsync(
                 successScope,
                 string.Format(
@@ -176,7 +193,7 @@ public sealed partial class SettingsPageViewModel
                         "Saved settings batch: global={0}, profile={1}"),
                     globalUpdates.Count,
                     profileUpdates.Count),
-                cancellationToken);
+                CancellationToken.None);
             return UiOperationResult.Ok(
                 string.Format(
                     RootTexts.GetOrDefault("Settings.SaveScoped.Status.SavedCount", "Saved {0} settings."),
@@ -185,6 +202,16 @@ public sealed partial class SettingsPageViewModel
         catch (Exception ex)
         {
             config.GlobalValues = globalSnapshot;
+            if (allProfileSnapshots is not null)
+            {
+                foreach (var (profileName, values) in allProfileSnapshots)
+                {
+                    if (config.Profiles.TryGetValue(profileName, out var profileEntry))
+                    {
+                        profileEntry.Values = values;
+                    }
+                }
+            }
             if (profile is not null && profileSnapshot is not null)
             {
                 profile.Values = profileSnapshot;

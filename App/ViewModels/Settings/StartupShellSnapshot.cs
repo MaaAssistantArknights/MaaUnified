@@ -24,7 +24,7 @@ public sealed record StartupShellSnapshot(
     string HotkeyLinkStart)
 {
     private const string ThemeModeKey = "Theme.Mode";
-    private const string DefaultTheme = "Light";
+    private const string DefaultTheme = "SyncWithOs";
     private const string DefaultLanguage = UiLanguageCatalog.DefaultLanguage;
     private const string DefaultBackgroundStretchMode = "Fill";
     private const string DefaultLogItemDateFormat = "HH:mm:ss";

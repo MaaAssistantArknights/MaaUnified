@@ -40,6 +40,17 @@ internal static class LegacyConfigValueMappings
         ["Yituliu.EnableYituliu"] = "EnableYituliu",
     };
 
+    private static readonly Dictionary<string, string> GlobalKeyAliases = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["GUI.DarkMode"] = "Theme.Mode",
+        ["GUI.LogItemDateFormat"] = "GUI.LogItemDateFormatString",
+        ["GUI.WindowPlacement"] = "GUI.Placement",
+        ["GUI.LoadWindowPlacement"] = "GUI.Placement.Load",
+        ["GUI.SaveWindowPlacement"] = "GUI.Placement.SaveOnClosing",
+        ["VersionUpdate.UpdateCheck"] = "VersionUpdate.StartupUpdateCheck",
+        ["VersionUpdate.UpdateAutoCheck"] = "VersionUpdate.ScheduledUpdateCheck",
+    };
+
     private static readonly Dictionary<string, string> ClientTypeAliases = new(StringComparer.OrdinalIgnoreCase)
     {
         ["official"] = "Official",
@@ -145,6 +156,11 @@ internal static class LegacyConfigValueMappings
         return ProfileKeyAliases.TryGetValue(key, out var mapped)
             ? mapped
             : key;
+    }
+
+    public static string NormalizeGlobalKey(string key)
+    {
+        return GlobalKeyAliases.TryGetValue(key, out var mapped) ? mapped : key;
     }
 
     public static JsonNode? NormalizeProfileValue(string key, JsonNode? value)

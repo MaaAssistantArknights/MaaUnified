@@ -94,6 +94,7 @@ public sealed class ConfigurationSaveTracker
             entry.DiagnosticsService = diagnosticsService;
             entry.RetryAsync = retryAsync;
             entry.Pending = true;
+            entry.PendingVersion++;
         }
 
         RaiseStateChanged();
@@ -187,7 +188,7 @@ public sealed class ConfigurationSaveTracker
         }
 
         RegisterSaveTarget(key, displayName, scope, diagnosticsService, saveAsync);
-        BeginActive(key, displayName);
+        var pendingVersion = BeginActive(key, displayName);
         try
         {
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -198,7 +199,7 @@ public sealed class ConfigurationSaveTracker
                 await RecordTimeoutAsync(displayName, scope, diagnosticsService);
                 timeoutCts.Cancel();
                 _ = ObserveLateSaveAsync(saveTask, displayName, scope, diagnosticsService);
-                MarkFailedCore(key);
+                MarkFailedCore(key, pendingVersion);
                 return false;
             }
 
@@ -207,11 +208,11 @@ public sealed class ConfigurationSaveTracker
                 var succeeded = await saveTask;
                 if (succeeded)
                 {
-                    MarkSucceeded(key);
+                    MarkSucceeded(key, pendingVersion);
                 }
                 else
                 {
-                    MarkFailedCore(key);
+                    MarkFailedCore(key, pendingVersion);
                 }
 
                 return succeeded;
@@ -219,7 +220,7 @@ public sealed class ConfigurationSaveTracker
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
                 await RecordTimeoutAsync(displayName, scope, diagnosticsService);
-                MarkFailedCore(key);
+                MarkFailedCore(key, pendingVersion);
                 return false;
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -233,7 +234,7 @@ public sealed class ConfigurationSaveTracker
                     $"{displayName} save failed unexpectedly.",
                     ex,
                     CancellationToken.None);
-                MarkFailedCore(key);
+                MarkFailedCore(key, pendingVersion);
                 return false;
             }
         }
@@ -341,8 +342,9 @@ public sealed class ConfigurationSaveTracker
         }
     }
 
-    private void BeginActive(string key, string displayName)
+    private long BeginActive(string key, string displayName)
     {
+        long pendingVersion;
         lock (_gate)
         {
             if (_entries.Values.All(static entry => entry.ActiveCount <= 0))
@@ -353,9 +355,11 @@ public sealed class ConfigurationSaveTracker
             var entry = GetOrCreateEntry(key, displayName);
             entry.Pending = false;
             entry.ActiveCount++;
+            pendingVersion = entry.PendingVersion;
         }
 
         RaiseStateChanged();
+        return pendingVersion;
     }
 
     private void EndActive(string key)
@@ -381,11 +385,14 @@ public sealed class ConfigurationSaveTracker
         }
     }
 
-    private void MarkSucceeded(string key)
+    private void MarkSucceeded(string key, long pendingVersion)
     {
         lock (_gate)
         {
-            if (_entries.TryGetValue(key, out var entry))
+            // A completion whose generation is stale was superseded by a newer
+            // edit; it must not clear the newer Pending marker (or a newer
+            // Failed state), otherwise close-flush would skip the unsaved edit.
+            if (_entries.TryGetValue(key, out var entry) && entry.PendingVersion == pendingVersion)
             {
                 entry.Pending = false;
                 entry.Failed = false;
@@ -395,11 +402,11 @@ public sealed class ConfigurationSaveTracker
         RaiseStateChanged();
     }
 
-    private void MarkFailedCore(string key)
+    private void MarkFailedCore(string key, long pendingVersion)
     {
         lock (_gate)
         {
-            if (_entries.TryGetValue(key, out var entry))
+            if (_entries.TryGetValue(key, out var entry) && entry.PendingVersion == pendingVersion)
             {
                 entry.Pending = false;
                 entry.Failed = true;
@@ -495,6 +502,8 @@ public sealed class ConfigurationSaveTracker
         public string DisplayName { get; set; }
 
         public bool Pending { get; set; }
+
+        public long PendingVersion { get; set; }
 
         public bool Failed { get; set; }
 

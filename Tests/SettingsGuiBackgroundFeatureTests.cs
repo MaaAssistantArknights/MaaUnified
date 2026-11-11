@@ -93,6 +93,55 @@ public sealed class SettingsGuiBackgroundFeatureTests
     }
 
     [Fact]
+    public async Task GuiSave_AfterLegacyImport_KeepsInverseClearModeGlobalAcrossProfileSwitches()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "maa-unified-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.json"),
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": { "GUI.InverseClearMode": "Inverse" },
+                "Alt": { "ConnectAddress": "127.0.0.1:5555" }
+              }
+            }
+            """);
+
+        await using var fixture = await RuntimeFixture.CreateAsync(root, cleanupRoot: true);
+        Assert.Equal(
+            "Inverse",
+            ReadGlobalString(fixture.Config, ConfigurationKeys.InverseClearMode));
+        fixture.Config.CurrentConfig.Profiles["Default"].Values[ConfigurationKeys.InverseClearMode] = JsonValue.Create("ClearInverse");
+        fixture.Config.CurrentConfig.Profiles["Alt"].Values[ConfigurationKeys.InverseClearMode] = JsonValue.Create("Inverse");
+
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        vm.InverseClearMode = "Clear";
+
+        await WaitUntilAsync(() =>
+            string.Equals(
+                ReadGlobalString(fixture.Config, ConfigurationKeys.InverseClearMode),
+                "Clear",
+                StringComparison.Ordinal)
+            && fixture.Config.CurrentConfig.Profiles.Values.All(
+                profile => !profile.Values.ContainsKey(ConfigurationKeys.InverseClearMode)));
+
+        Assert.Equal("Clear", ReadGlobalString(fixture.Config, ConfigurationKeys.InverseClearMode));
+        Assert.All(
+            fixture.Config.CurrentConfig.Profiles.Values,
+            profile => Assert.False(profile.Values.ContainsKey(ConfigurationKeys.InverseClearMode)));
+
+        var profileService = new ConfigurationProfileFeatureService(fixture.Config);
+        var switchResult = await profileService.SwitchProfileAsync("Alt");
+        Assert.True(switchResult.Success);
+        var switchedVm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await switchedVm.InitializeAsync();
+        Assert.Equal("Clear", switchedVm.InverseClearMode);
+    }
+
+    [Fact]
     public async Task SelectedLanguageOption_UpdatesLanguageImmediately()
     {
         await using var fixture = await RuntimeFixture.CreateAsync();
@@ -815,7 +864,7 @@ public sealed class SettingsGuiBackgroundFeatureTests
         var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
         await vm.InitializeAsync();
 
-        Assert.Equal("Light", vm.Theme);
+        Assert.Equal("SyncWithOs", vm.Theme);
         Assert.Equal("zh-cn", vm.Language);
         Assert.Equal(0, vm.BackgroundOpacity);
         Assert.Equal(80, vm.BackgroundBlur);

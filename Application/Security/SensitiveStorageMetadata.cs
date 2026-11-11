@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace MAAUnified.Application.Security;
@@ -26,4 +27,7 @@ public sealed class SensitiveStorageMetadata
 
     [JsonPropertyName("revision")]
     public long Revision { get; set; }
+
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? ExtensionData { get; set; }
 }

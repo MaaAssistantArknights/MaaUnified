@@ -520,6 +520,70 @@ public sealed class SettingsModuleCM1FeatureTests
     }
 
     [Fact]
+    public async Task AutoSave_DebouncedSaveCompletingInsideNonCancellingSuppression_KeepsPendingAndSavesAfterResume()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync();
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        const string scope = "Settings.AutoSave.ConnectionGame";
+        var tracker = MAAUnified.App.Services.ConfigurationSaveTracker.Instance;
+        try
+        {
+            vm.ConnectionGameSharedState.ConnectAddress = "10.8.0.7:5555";
+            Assert.True(tracker.IsPendingOrFailed(scope));
+
+            // Simulate a non-cancelling suppression window (e.g. unified language apply)
+            // that outlasts the 500ms debounce delay without cancelling the debounce CTS.
+            SetPageAutoSaveSuppressed(vm, suppressed: true);
+            await Task.Delay(1200);
+
+            Assert.True(
+                tracker.IsPendingOrFailed(scope),
+                "A debounced save completing inside a non-cancelling suppression window must keep its pending marker.");
+
+            SetPageAutoSaveSuppressed(vm, suppressed: false);
+            var saved = await WaitForAsync(
+                () => !tracker.IsPendingOrFailed(scope),
+                TimeSpan.FromSeconds(10));
+            Assert.True(saved, "The pending debounced save must run once the suppression window ends.");
+            Assert.True(fixture.Config.TryGetCurrentProfile(out var profile));
+            Assert.Equal("10.8.0.7:5555", profile.Values["ConnectAddress"]?.GetValue<string>());
+        }
+        finally
+        {
+            SetPageAutoSaveSuppressed(vm, suppressed: false);
+            tracker.ClearPending(scope);
+            tracker.ClearFailure(scope);
+        }
+    }
+
+    private static void SetPageAutoSaveSuppressed(SettingsPageViewModel vm, bool suppressed)
+    {
+        var field = typeof(SettingsPageViewModel).GetField(
+            "_suppressPageAutoSave",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        Assert.NotNull(field);
+        field!.SetValue(vm, suppressed);
+    }
+
+    private static async Task<bool> WaitForAsync(Func<bool> condition, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            if (condition())
+            {
+                return true;
+            }
+
+            await Task.Delay(50);
+        }
+
+        return condition();
+    }
+
+    [Fact]
     public async Task ConfigurationManager_DeleteCurrentProfile_ShouldAutoSwitchToRemainingProfile()
     {
         await using var fixture = await RuntimeFixture.CreateAsync();
@@ -645,6 +709,197 @@ public sealed class SettingsModuleCM1FeatureTests
         Assert.NotNull(raised);
         Assert.Equal(ConfigurationContextChangeReason.UnifiedImport, raised!.Reason);
         Assert.Contains("已导入 1 个配置", raised.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ImportConfigurations_CamelCaseUnifiedConfig_ShouldMergeBoundProfiles()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync();
+        var importPath = Path.Combine(fixture.Root, "camel-case-config.json");
+        await File.WriteAllTextAsync(
+            importPath,
+            """
+            {
+              "schemaVersion": 3,
+              "currentProfile": "Imported",
+              "profiles": {
+                "Imported": {
+                  "values": {
+                    "ConnectAddress": "10.0.0.1:5555"
+                  },
+                  "taskQueue": []
+                }
+              },
+              "globalValues": {},
+              "migration": {}
+            }
+            """);
+
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        await vm.ImportConfigurationsAsync(importPath);
+
+        var imported = fixture.Config.CurrentConfig.Profiles["Imported"];
+        Assert.Equal("10.0.0.1:5555", imported.Values["ConnectAddress"]?.GetValue<string>());
+        Assert.Contains("已导入 1 个配置", vm.ConfigurationManagerStatusMessage, StringComparison.Ordinal);
+        Assert.Equal(string.Empty, vm.ConfigurationManagerErrorMessage);
+    }
+
+    [Fact]
+    public async Task ImportConfigurations_MissingProfilesMember_ShouldNotMergeModelDefault()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync();
+        var importPath = Path.Combine(fixture.Root, "missing-profiles-config.json");
+        await File.WriteAllTextAsync(
+            importPath,
+            """
+            {
+              "schemaVersion": 3,
+              "currentProfile": "Imported",
+              "globalValues": {}
+            }
+            """);
+
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        await vm.ImportConfigurationsAsync(importPath);
+
+        Assert.Single(fixture.Config.CurrentConfig.Profiles);
+        Assert.True(fixture.Config.CurrentConfig.Profiles.ContainsKey("Default"));
+        Assert.Contains("有效配置", vm.ConfigurationManagerErrorMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ImportConfigurations_ShouldMergeGlobalValuesAndExtensionData()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync();
+        var config = fixture.Config.CurrentConfig;
+        config.GlobalValues["NonSensitive.Conflict"] = JsonValue.Create("destination");
+        config.GlobalValues["NonSensitive.DestinationOnly"] = JsonValue.Create("keep-me");
+        config.ExtensionData = new Dictionary<string, JsonElement>(StringComparer.Ordinal)
+        {
+            ["keep-root"] = JsonDocument.Parse("\"dest-root\"").RootElement.Clone(),
+            ["conflict-root"] = JsonDocument.Parse("\"dest-conflict\"").RootElement.Clone(),
+        };
+        config.Migration.ExtensionData = new Dictionary<string, JsonElement>(StringComparer.Ordinal)
+        {
+            ["keep-migration"] = JsonDocument.Parse("\"dest-migration\"").RootElement.Clone(),
+        };
+
+        var importPath = Path.Combine(fixture.Root, "import-globals.json");
+        await File.WriteAllTextAsync(
+            importPath,
+            """
+            {
+              "schemaVersion": 3,
+              "currentProfile": "Imported",
+              "profiles": {
+                "Imported": { "values": {}, "taskQueue": [] }
+              },
+              "globalValues": {
+                "NonSensitive.Conflict": "from-source",
+                "NonSensitive.ImportedOnly": "source-only"
+              },
+              "migration": {
+                "future-migration": "source-migration"
+              },
+              "conflict-root": "source-conflict",
+              "future-root": "source-root"
+            }
+            """);
+
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        await vm.ImportConfigurationsAsync(importPath);
+
+        var merged = fixture.Config.CurrentConfig;
+        Assert.Equal("from-source", merged.GlobalValues["NonSensitive.Conflict"]?.GetValue<string>());
+        Assert.Equal("source-only", merged.GlobalValues["NonSensitive.ImportedOnly"]?.GetValue<string>());
+        Assert.Equal("keep-me", merged.GlobalValues["NonSensitive.DestinationOnly"]?.GetValue<string>());
+        Assert.Equal("source-root", merged.ExtensionData?["future-root"].GetString());
+        Assert.Equal("source-conflict", merged.ExtensionData?["conflict-root"].GetString());
+        Assert.Equal("dest-root", merged.ExtensionData?["keep-root"].GetString());
+        Assert.Equal("source-migration", merged.Migration.ExtensionData?["future-migration"].GetString());
+        Assert.Equal("dest-migration", merged.Migration.ExtensionData?["keep-migration"].GetString());
+        Assert.Equal(string.Empty, vm.ConfigurationManagerErrorMessage);
+    }
+
+    [Fact]
+    public async Task ImportConfigurations_SensitiveGlobalValues_ShouldNotOverwriteDestinationSecrets()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync();
+        var importPath = Path.Combine(fixture.Root, "import-sensitive-global.json");
+        await File.WriteAllTextAsync(
+            importPath,
+            """
+            {
+              "schemaVersion": 3,
+              "currentProfile": "Imported",
+              "profiles": {
+                "Imported": { "values": {}, "taskQueue": [] }
+              },
+              "globalValues": {
+                "NonSensitive.Global": "from-source",
+                "VersionUpdate.ResourceUpdateSource.MirrorChyanCdk": "imported-cdk"
+              },
+              "migration": {}
+            }
+            """);
+
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        await vm.ImportConfigurationsAsync(importPath);
+
+        var merged = fixture.Config.CurrentConfig;
+        Assert.Equal("from-source", merged.GlobalValues["NonSensitive.Global"]?.GetValue<string>());
+        Assert.False(merged.GlobalValues.ContainsKey(ConfigurationKeys.MirrorChyanCdk));
+        Assert.DoesNotContain("imported-cdk", SensitiveSettingKeyRegistry.GetPlaintextValues(merged));
+        Assert.Equal(string.Empty, vm.ConfigurationManagerErrorMessage);
+    }
+
+    [Fact]
+    public async Task ExportImport_AllConfigurations_ShouldRoundTripGlobalValuesAndExtensionData()
+    {
+        await using var sourceFixture = await RuntimeFixture.CreateAsync();
+        var sourceConfig = sourceFixture.Config.CurrentConfig;
+        sourceConfig.Profiles["Alt"] = new UnifiedProfile
+        {
+            Values = new Dictionary<string, JsonNode?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["ConnectAddress"] = JsonValue.Create("10.0.0.2:5555"),
+            },
+        };
+        sourceConfig.GlobalValues["NonSensitive.Global"] = JsonValue.Create("from-source");
+        sourceConfig.ExtensionData = new Dictionary<string, JsonElement>(StringComparer.Ordinal)
+        {
+            ["future-root"] = JsonDocument.Parse("\"source-root\"").RootElement.Clone(),
+        };
+        sourceConfig.Migration.ExtensionData = new Dictionary<string, JsonElement>(StringComparer.Ordinal)
+        {
+            ["future-migration"] = JsonDocument.Parse("\"source-migration\"").RootElement.Clone(),
+        };
+
+        var sourceVm = new SettingsPageViewModel(sourceFixture.Runtime, new ConnectionGameSharedStateViewModel());
+        var exportPath = Path.Combine(sourceFixture.Root, "export-all.json");
+        await sourceVm.ExportAllConfigurationsAsync(exportPath);
+
+        await using var destinationFixture = await RuntimeFixture.CreateAsync();
+        var destinationVm = new SettingsPageViewModel(
+            destinationFixture.Runtime,
+            new ConnectionGameSharedStateViewModel());
+        await destinationVm.ImportConfigurationsAsync(exportPath);
+
+        var merged = destinationFixture.Config.CurrentConfig;
+        Assert.True(merged.Profiles.ContainsKey("Alt"));
+        Assert.Equal(
+            "10.0.0.2:5555",
+            merged.Profiles["Alt"].Values["ConnectAddress"]?.GetValue<string>());
+        Assert.Equal("from-source", merged.GlobalValues["NonSensitive.Global"]?.GetValue<string>());
+        Assert.Equal("source-root", merged.ExtensionData?["future-root"].GetString());
+        Assert.Equal("source-migration", merged.Migration.ExtensionData?["future-migration"].GetString());
+        Assert.Equal(string.Empty, destinationVm.ConfigurationManagerErrorMessage);
     }
 
     [Fact]
@@ -931,6 +1186,101 @@ public sealed class SettingsModuleCM1FeatureTests
     }
 
     [Fact]
+    public void ConfigurationImportSelectionAnalyzer_CamelCaseUnifiedJson_ShouldClassifyUnifiedConfig()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "maa-unified-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var filePath = Path.Combine(root, "exported.json");
+            File.WriteAllText(
+                filePath,
+                """
+                {
+                  "schemaVersion": 3,
+                  "currentProfile": "Default",
+                  "profiles": {
+                    "Default": {
+                      "values": {},
+                      "taskQueue": []
+                    }
+                  },
+                  "globalValues": {},
+                  "migration": {}
+                }
+                """);
+
+            var analysis = ConfigurationImportSelectionAnalyzer.Analyze([filePath]);
+
+            Assert.Equal(ConfigurationImportSelectionKind.UnifiedConfig, analysis.Kind);
+            Assert.Equal(filePath, analysis.UnifiedConfigPath);
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(root, recursive: true);
+            }
+            catch
+            {
+                // ignore cleanup failures
+            }
+        }
+    }
+
+    [Fact]
+    public void ConfigurationImportSelectionAnalyzer_MixedCaseStructuralRoots_ShouldClassifyByShape()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "maa-unified-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var unifiedPath = Path.Combine(root, "mixed-unified.json");
+            File.WriteAllText(
+                unifiedPath,
+                """
+                {
+                  "SchemaVersion": 3,
+                  "currentProfile": "Default",
+                  "PROFILES": {
+                    "Default": { "values": {}, "taskQueue": [] }
+                  }
+                }
+                """);
+            var legacyPath = Path.Combine(root, "mixed-legacy.json");
+            File.WriteAllText(
+                legacyPath,
+                """
+                {
+                  "current": "Default",
+                  "configurations": {
+                    "Default": {}
+                  }
+                }
+                """);
+
+            var unifiedAnalysis = ConfigurationImportSelectionAnalyzer.Analyze([unifiedPath]);
+            var legacyAnalysis = ConfigurationImportSelectionAnalyzer.Analyze([legacyPath], static key => key);
+
+            Assert.Equal(ConfigurationImportSelectionKind.UnifiedConfig, unifiedAnalysis.Kind);
+            Assert.Equal(unifiedPath, unifiedAnalysis.UnifiedConfigPath);
+            Assert.Equal(ConfigurationImportSelectionKind.Invalid, legacyAnalysis.Kind);
+            Assert.Equal("Settings.ConfigurationManager.Import.LegacyFilenameInvalid", legacyAnalysis.Message);
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(root, recursive: true);
+            }
+            catch
+            {
+                // ignore cleanup failures
+            }
+        }
+    }
+
+    [Fact]
     public void ConfigurationImportSelectionAnalyzer_LegacyDirectory_ShouldAcceptRootOrConfigFolder()
     {
         var root = Path.Combine(Path.GetTempPath(), "maa-unified-tests", Guid.NewGuid().ToString("N"));
@@ -1092,6 +1442,186 @@ public sealed class SettingsModuleCM1FeatureTests
         Assert.Single(config.CurrentConfig.Profiles);
         Assert.True(config.CurrentConfig.Profiles.ContainsKey("Default"));
         Assert.False(config.CurrentConfig.Profiles.ContainsKey("Alpha"));
+    }
+
+    [Fact]
+    public async Task ConfigurationProfileFeatureService_AddProfile_CopiesProfileAndTaskExtensionData()
+    {
+        var config = CreateConfigServiceWithStore(new InMemoryConfigStore());
+        var source = config.CurrentConfig.Profiles["Default"];
+        source.ExtensionData = new Dictionary<string, JsonElement>
+        {
+            ["future-profile"] = JsonDocument.Parse("""{ "nested": true }""").RootElement.Clone(),
+        };
+        source.TaskQueue.Add(new UnifiedTaskItem
+        {
+            Type = "Fight",
+            Name = "Fight",
+            Params = new JsonObject { ["stage"] = "1-7" },
+            ExtensionData = new Dictionary<string, JsonElement>
+            {
+                ["future-task"] = JsonDocument.Parse("""[1, 2, 3]""").RootElement.Clone(),
+            },
+        });
+        var service = new ConfigurationProfileFeatureService(config);
+
+        var result = await service.AddProfileAsync("Copied");
+
+        Assert.True(result.Success);
+        var copied = config.CurrentConfig.Profiles["Copied"];
+        Assert.True(copied.ExtensionData?["future-profile"].GetProperty("nested").GetBoolean());
+        var copiedTask = Assert.Single(copied.TaskQueue);
+        Assert.Equal(3, copiedTask.ExtensionData?["future-task"].GetArrayLength());
+        Assert.NotSame(source.ExtensionData, copied.ExtensionData);
+        Assert.NotSame(source.TaskQueue[0].ExtensionData, copiedTask.ExtensionData);
+    }
+
+    [Fact]
+    public async Task ConfigurationProfileFeatureService_AddProfile_SaveFailure_RestoresDeepConfigState()
+    {
+        var config = CreateConfigServiceWithStore(new ThrowOnSaveStore());
+        var current = config.CurrentConfig;
+        current.SchemaVersion = 1;
+        current.GlobalValues["before-global"] = JsonValue.Create("before");
+        current.ExtensionData = new Dictionary<string, JsonElement>
+        {
+            ["future-root"] = JsonDocument.Parse("""{ "preserve": true }""").RootElement.Clone(),
+        };
+        current.Migration = new UnifiedMigrationMetadata
+        {
+            ImportedBy = "before",
+            Warnings = ["before-warning"],
+            ExtensionData = new Dictionary<string, JsonElement>
+            {
+                ["future-migration"] = JsonDocument.Parse("""{ "preserve": true }""").RootElement.Clone(),
+            },
+        };
+        current.SensitiveStorage = new SensitiveStorageMetadata
+        {
+            Backend = SensitiveStorageBackendKind.Plaintext,
+            StoreId = "before-store",
+            Revision = 7,
+            ExtensionData = new Dictionary<string, JsonElement>
+            {
+                ["future-sensitive"] = JsonDocument.Parse("""{ "preserve": true }""").RootElement.Clone(),
+            },
+        };
+        var originalParams = new JsonObject { ["stage"] = string.Empty, ["times"] = 1 };
+        current.Profiles["Default"].TaskQueue.Add(new UnifiedTaskItem
+        {
+            Type = "Fight",
+            Name = "Fight",
+            Params = originalParams.DeepClone() as JsonObject ?? new JsonObject(),
+        });
+        var service = new ConfigurationProfileFeatureService(config);
+
+        var result = await service.AddProfileAsync("Alpha");
+
+        Assert.False(result.Success);
+        Assert.Equal(1, current.SchemaVersion);
+        Assert.False(current.Profiles.ContainsKey("Alpha"));
+        Assert.Equal("before", current.GlobalValues["before-global"]?.GetValue<string>());
+        Assert.True(JsonNode.DeepEquals(originalParams, current.Profiles["Default"].TaskQueue[0].Params));
+        Assert.Equal("before", current.Migration.ImportedBy);
+        Assert.Equal(["before-warning"], current.Migration.Warnings);
+        Assert.True(current.ExtensionData?["future-root"].GetProperty("preserve").GetBoolean());
+        Assert.True(current.Migration.ExtensionData?["future-migration"].GetProperty("preserve").GetBoolean());
+        Assert.Equal("before-store", current.SensitiveStorage.StoreId);
+        Assert.True(current.SensitiveStorage.ExtensionData?["future-sensitive"].GetProperty("preserve").GetBoolean());
+    }
+
+    [Fact]
+    public async Task SettingsFeatureService_SaveGlobalSettings_SaveFailure_PreservesEntireLiveConfig()
+    {
+        var config = CreateConfigServiceWithStore(new ThrowOnSaveStore());
+        var current = config.CurrentConfig;
+        current.SchemaVersion = 1;
+        current.GlobalValues["before-global"] = JsonValue.Create("before");
+        current.Profiles["Alt"] = new UnifiedProfile
+        {
+            Values = new Dictionary<string, JsonNode?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["before-profile"] = JsonValue.Create("alt"),
+            },
+        };
+        current.Profiles["Default"].TaskQueue.Add(new UnifiedTaskItem
+        {
+            Type = "Fight",
+            Name = "Fight",
+            Params = new JsonObject { ["stage"] = string.Empty, ["times"] = 1 },
+            ExtensionData = new Dictionary<string, JsonElement>
+            {
+                ["future-task"] = JsonDocument.Parse("""{ "preserve": true }""").RootElement.Clone(),
+            },
+        });
+        current.ExtensionData = new Dictionary<string, JsonElement>
+        {
+            ["future-root"] = JsonDocument.Parse("""{ "preserve": true }""").RootElement.Clone(),
+        };
+        current.Migration = new UnifiedMigrationMetadata
+        {
+            ImportedBy = "before",
+            Warnings = ["before-warning"],
+            ExtensionData = new Dictionary<string, JsonElement>
+            {
+                ["future-migration"] = JsonDocument.Parse("""{ "preserve": true }""").RootElement.Clone(),
+            },
+        };
+        current.SensitiveStorage = new SensitiveStorageMetadata
+        {
+            ExtensionData = new Dictionary<string, JsonElement>
+            {
+                ["future-sensitive"] = JsonDocument.Parse("""{ "preserve": true }""").RootElement.Clone(),
+            },
+        };
+        var expectedSnapshot = JsonSerializer.Serialize(current);
+        var diagnostics = new UiDiagnosticsService(
+            Path.Combine(Path.GetTempPath(), "maa-unified-tests", Guid.NewGuid().ToString("N")),
+            new UiLogService());
+        var settings = new SettingsFeatureService(config, null!, diagnostics);
+
+        var result = await settings.SaveGlobalSettingsAsync(
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["changed-global"] = "after",
+            });
+
+        Assert.False(result.Success);
+        Assert.Contains("Simulated save failure", result.Message, StringComparison.Ordinal);
+        Assert.Equal(expectedSnapshot, JsonSerializer.Serialize(config.CurrentConfig));
+    }
+
+    [Fact]
+    public async Task NullMigrationWarnings_ShouldSupportProfileManagementAndConfigurationExport()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "maa-unified-tests", Guid.NewGuid().ToString("N"));
+        var configDirectory = Path.Combine(root, "config");
+        Directory.CreateDirectory(configDirectory);
+        await File.WriteAllTextAsync(
+            Path.Combine(configDirectory, "avalonia.json"),
+            """
+            {
+              "SchemaVersion": 3,
+              "CurrentProfile": "Default",
+              "Profiles": { "Default": { "Values": {}, "TaskQueue": [] } },
+              "GlobalValues": {},
+              "Migration": { "Warnings": null }
+            }
+            """);
+
+        await using var fixture = await RuntimeFixture.CreateAsync(root: root);
+        Assert.Empty(fixture.Config.CurrentConfig.Migration.Warnings);
+
+        var addResult = await fixture.Runtime.ConfigurationProfileFeatureService.AddProfileAsync("Copied");
+        Assert.True(addResult.Success);
+
+        var exportPath = Path.Combine(root, "exported-config.json");
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.ExportAllConfigurationsAsync(exportPath);
+
+        var exported = Assert.IsType<JsonObject>(JsonNode.Parse(await File.ReadAllTextAsync(exportPath)));
+        Assert.IsType<JsonArray>(exported["Migration"]?["Warnings"]);
+        Assert.Equal(string.Empty, vm.ConfigurationManagerErrorMessage);
     }
 
     [Fact]
@@ -1352,6 +1882,22 @@ public sealed class SettingsModuleCM1FeatureTests
         {
             return Task.CompletedTask;
         }
+    }
+
+    private sealed class InMemoryConfigStore : IUnifiedConfigStore
+    {
+        public string ConfigPath => "in-memory";
+
+        public bool Exists() => false;
+
+        public Task<UnifiedConfig?> LoadAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult<UnifiedConfig?>(null);
+
+        public Task SaveAsync(UnifiedConfig config, CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
+
+        public Task BackupAsync(string suffix, CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
     }
 
     private sealed class FailNextSaveStore(IUnifiedConfigStore inner) : IUnifiedConfigStore

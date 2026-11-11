@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using MAAUnified.Application.Configuration;
 using MAAUnified.Application.Models;
@@ -2122,7 +2123,7 @@ public sealed class ConfigurationImportTests
     }
 
     [Fact]
-    public async Task LoadOrBootstrapAsync_CurrentProfileMissing_ShouldBeBlockingAndSynced()
+    public async Task LoadOrBootstrapAsync_CurrentProfileMissing_ShouldRepairSelectionAndPersist()
     {
         var root = CreateTempRoot();
         Directory.CreateDirectory(Path.Combine(root, "config"));
@@ -2130,10 +2131,10 @@ public sealed class ConfigurationImportTests
             Path.Combine(root, "config", "avalonia.json"),
             """
             {
-              "SchemaVersion": 2,
+              "SchemaVersion": 3,
               "CurrentProfile": "Default",
               "Profiles": {
-                "Alt": { "Values": {}, "TaskQueue": [] }
+                "Alt": { "Values": { "ConnectAddress": "10.0.0.1:5555" }, "TaskQueue": [] }
               },
               "GlobalValues": {},
               "Migration": {}
@@ -2143,12 +2144,84 @@ public sealed class ConfigurationImportTests
         var service = CreateService(root);
         var load = await service.LoadOrBootstrapAsync();
 
-        var issue = Assert.Single(load.ValidationIssues, i =>
-            string.Equals(i.Code, "CurrentProfileMissing", StringComparison.Ordinal));
-        Assert.True(issue.Blocking);
-        Assert.True(load.HasBlockingValidationIssues);
-        Assert.True(service.HasBlockingValidationIssues);
-        Assert.Contains(service.CurrentValidationIssues, i => string.Equals(i.Code, "CurrentProfileMissing", StringComparison.Ordinal));
+        Assert.DoesNotContain(load.ValidationIssues, i => i.Blocking);
+        Assert.False(load.HasBlockingValidationIssues);
+        Assert.False(service.HasBlockingValidationIssues);
+        Assert.Equal("Alt", service.CurrentConfig.CurrentProfile);
+        Assert.Equal(
+            "10.0.0.1:5555",
+            service.CurrentConfig.Profiles["Alt"].Values["ConnectAddress"]?.GetValue<string>());
+
+        using var persisted = JsonDocument.Parse(
+            await File.ReadAllTextAsync(Path.Combine(root, "config", "avalonia.json")));
+        Assert.Equal("Alt", persisted.RootElement.GetProperty("CurrentProfile").GetString());
+        Assert.True(persisted.RootElement.GetProperty("Profiles").TryGetProperty("Alt", out _));
+    }
+
+    [Fact]
+    public async Task LoadOrBootstrapAsync_ProfilesNull_ShouldRecreateDefaultProfileAndPersist()
+    {
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "avalonia.json"),
+            """
+            {
+              "SchemaVersion": 3,
+              "CurrentProfile": "Default",
+              "Profiles": null,
+              "GlobalValues": {},
+              "Migration": {}
+            }
+            """);
+
+        var service = CreateService(root);
+        var load = await service.LoadOrBootstrapAsync();
+
+        Assert.True(load.LoadedFromExistingConfig);
+        Assert.False(load.HasBlockingValidationIssues);
+        Assert.False(service.HasBlockingValidationIssues);
+        Assert.Equal("Default", service.CurrentConfig.CurrentProfile);
+        Assert.True(service.CurrentConfig.Profiles.ContainsKey("Default"));
+        Assert.True(service.TryGetCurrentProfile(out _));
+
+        using var persisted = JsonDocument.Parse(
+            await File.ReadAllTextAsync(Path.Combine(root, "config", "avalonia.json")));
+        Assert.Equal("Default", persisted.RootElement.GetProperty("CurrentProfile").GetString());
+        Assert.True(persisted.RootElement.GetProperty("Profiles").TryGetProperty("Default", out _));
+    }
+
+    [Fact]
+    public async Task LoadOrBootstrapAsync_ProfilesEmpty_ShouldRecreateDefaultProfileAndPersist()
+    {
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "avalonia.json"),
+            """
+            {
+              "SchemaVersion": 3,
+              "CurrentProfile": "Default",
+              "Profiles": {},
+              "GlobalValues": {},
+              "Migration": {}
+            }
+            """);
+
+        var service = CreateService(root);
+        var load = await service.LoadOrBootstrapAsync();
+
+        Assert.True(load.LoadedFromExistingConfig);
+        Assert.False(load.HasBlockingValidationIssues);
+        Assert.False(service.HasBlockingValidationIssues);
+        Assert.Equal("Default", service.CurrentConfig.CurrentProfile);
+        Assert.True(service.CurrentConfig.Profiles.ContainsKey("Default"));
+        Assert.True(service.TryGetCurrentProfile(out _));
+
+        using var persisted = JsonDocument.Parse(
+            await File.ReadAllTextAsync(Path.Combine(root, "config", "avalonia.json")));
+        Assert.Equal("Default", persisted.RootElement.GetProperty("CurrentProfile").GetString());
+        Assert.True(persisted.RootElement.GetProperty("Profiles").TryGetProperty("Default", out _));
     }
 
     [Fact]
@@ -2207,6 +2280,55 @@ public sealed class ConfigurationImportTests
     }
 
     [Fact]
+    public async Task SaveAsync_TokenCancelledAfterDurableWrite_ShouldCompleteAndKeepSavedValues()
+    {
+        var root = CreateTempRoot();
+        var store = new PostSaveCallbackConfigStore(root, new UnifiedConfig());
+        var service = CreateService(root, store);
+        await service.LoadOrBootstrapAsync();
+
+        var configDirectory = Path.Combine(root, "config");
+        Directory.CreateDirectory(configDirectory);
+        var backupPath = Path.Combine(configDirectory, "avalonia.json.bak.20260101000000");
+        await File.WriteAllTextAsync(backupPath, "{}");
+
+        var configChangedCount = 0;
+        service.ConfigChanged += _ => configChangedCount += 1;
+        service.CurrentConfig.GlobalValues["GUI.Localization"] = JsonValue.Create("en-us");
+
+        using var cts = new CancellationTokenSource();
+        store.AfterSave = cts.Cancel;
+
+        // Cancellation after the durable write must not surface as a save failure:
+        // callers roll back live edits on any error and would diverge from the file.
+        await service.SaveAsync(cts.Token);
+
+        Assert.Equal(1, store.SaveCount);
+        Assert.Equal(1, configChangedCount);
+        Assert.Equal("en-us", service.CurrentConfig.GlobalValues["GUI.Localization"]?.GetValue<string>());
+        Assert.Equal("{}", (await File.ReadAllTextAsync(backupPath)).Trim());
+    }
+
+    [Fact]
+    public async Task SaveAsync_TokenCancelledBeforeDurableWrite_ShouldThrowAndNotPersist()
+    {
+        var root = CreateTempRoot();
+        var store = new CountingConfigStore(root, new UnifiedConfig());
+        var service = CreateService(root, store);
+        await service.LoadOrBootstrapAsync();
+
+        service.CurrentConfig.GlobalValues["GUI.Localization"] = JsonValue.Create("en-us");
+
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.SaveAsync(cts.Token));
+
+        Assert.Equal(0, store.SaveCount);
+        Assert.Equal("en-us", service.CurrentConfig.GlobalValues["GUI.Localization"]?.GetValue<string>());
+    }
+
+    [Fact]
     public async Task SaveAsync_NormalizedToLoadedSnapshot_ShouldNotWriteOrRaiseConfigChanged()
     {
         var root = CreateTempRoot();
@@ -2239,6 +2361,49 @@ public sealed class ConfigurationImportTests
         Assert.Equal(0, store.SaveCount);
         Assert.Equal(0, configChangedCount);
         Assert.False(service.CurrentConfig.Profiles["Default"].TaskQueue[0].Params["clear_store"]?.GetValue<bool>());
+    }
+
+    [Fact]
+    public async Task SaveAsync_ThrowingConfigChangedSubscriber_ShouldNotAffectSaveOutcomeOrOtherSubscribers()
+    {
+        var root = CreateTempRoot();
+        var store = new CountingConfigStore(root, new UnifiedConfig());
+        var service = CreateService(root, store);
+        await service.LoadOrBootstrapAsync();
+
+        var healthySubscriberCount = 0;
+        service.ConfigChanged += _ => throw new InvalidOperationException("Subscriber failure during save notification.");
+        service.ConfigChanged += _ => healthySubscriberCount += 1;
+        service.CurrentConfig.GlobalValues["GUI.Localization"] = JsonValue.Create("en-us");
+
+        await service.SaveAsync();
+
+        Assert.Equal(1, store.SaveCount);
+        Assert.Equal(1, healthySubscriberCount);
+        Assert.Equal("en-us", service.CurrentConfig.GlobalValues["GUI.Localization"]?.GetValue<string>());
+        Assert.Contains(
+            service.LogService.Snapshot,
+            log => log.Message.Contains("ConfigChanged subscriber", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task LoadOrBootstrapAsync_ThrowingConfigChangedSubscriber_ShouldNotAffectLoadOrOtherSubscribers()
+    {
+        var root = CreateTempRoot();
+        var store = new CountingConfigStore(root, new UnifiedConfig());
+        var service = CreateService(root, store);
+
+        var healthySubscriberCount = 0;
+        service.ConfigChanged += _ => throw new InvalidOperationException("Subscriber failure during load notification.");
+        service.ConfigChanged += _ => healthySubscriberCount += 1;
+
+        var result = await service.LoadOrBootstrapAsync();
+
+        Assert.True(result.LoadedFromExistingConfig);
+        Assert.Equal(1, healthySubscriberCount);
+        Assert.Contains(
+            service.LogService.Snapshot,
+            log => log.Message.Contains("ConfigChanged subscriber", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -2892,6 +3057,241 @@ public sealed class ConfigurationImportTests
         Assert.Contains("\"GUI.Localization\": \"en-us\"", saved, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task AutoImport_CaseInsensitiveRoots_PreservesGuiNewCurrentAndMovesInverseClearModeGlobal()
+    {
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.new.json"),
+            """
+            {
+              "current": "NewProfile",
+              "configurations": {
+                "NewProfile": { "GUI.InverseClearMode": "Inverse" }
+              },
+              "gui": { "DarkMode": "SyncWithOs" }
+            }
+            """);
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.json"),
+            """
+            {
+              "CURRENT": "OldProfile",
+              "CONFIGURATIONS": { "OldProfile": { "TouchMode": "adb" } }
+            }
+            """);
+
+        var service = CreateService(root);
+        var report = await service.ImportLegacyAsync(ImportSource.Auto, manualImport: false);
+
+        Assert.True(report.Success);
+        Assert.Equal("NewProfile", service.CurrentConfig.CurrentProfile);
+        Assert.Equal("Inverse", service.CurrentConfig.GlobalValues["GUI.InverseClearMode"]?.GetValue<string>());
+        Assert.Equal("SyncWithOs", service.CurrentConfig.GlobalValues["Theme.Mode"]?.GetValue<string>());
+        Assert.False(service.CurrentConfig.Profiles["NewProfile"].Values.ContainsKey("GUI.InverseClearMode"));
+    }
+
+    [Fact]
+    public async Task GuiImport_FlatNonTaskProfileValues_ShouldImportAndKeepInverseClearModeGlobal()
+    {
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.json"),
+            """
+            {
+              "Current": "Default",
+              "Configurations": null,
+              "Connect.Address": "127.0.0.1:5555",
+              "GUI.InverseClearMode": "Clear"
+            }
+            """);
+
+        var service = CreateService(root);
+        var report = await service.ImportLegacyAsync(ImportSource.GuiOnly, manualImport: false);
+
+        Assert.True(report.Success);
+        Assert.Equal(
+            "127.0.0.1:5555",
+            service.CurrentConfig.Profiles["Default"].Values["ConnectAddress"]?.GetValue<string>());
+        Assert.Equal(
+            "Clear",
+            service.CurrentConfig.GlobalValues["GUI.InverseClearMode"]?.GetValue<string>());
+        Assert.False(service.CurrentConfig.Profiles["Default"].Values.ContainsKey("GUI.InverseClearMode"));
+        Assert.False(service.CurrentConfig.Profiles["Default"].Values.ContainsKey("Configurations"));
+    }
+
+    [Fact]
+    public async Task GuiNewImport_MissingWpfTaskDefaults_ShouldUseWpfValues()
+    {
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.new.json"),
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": {
+                  "TaskQueue": [
+                    { "$type": "StartUpTask", "Name": "Start" },
+                    { "$type": "FightTask", "Name": "Fight" },
+                    { "$type": "RecruitTask", "Name": "Recruit" },
+                    { "$type": "RoguelikeTask", "Name": "Rogue", "Mode": "Collectible" }
+                  ]
+                }
+              }
+            }
+            """);
+
+        var service = CreateService(root);
+        var report = await service.ImportLegacyAsync(ImportSource.GuiNewOnly, manualImport: false);
+        var tasks = service.CurrentConfig.Profiles["Default"].TaskQueue;
+
+        Assert.True(report.Success);
+        Assert.True(tasks.Single(task => task.Name == "Start").Params["start_game_enabled"]?.GetValue<bool>());
+        var fight = tasks.Single(task => task.Name == "Fight");
+        Assert.Equal(0, fight.Params["series"]?.GetValue<int>());
+        Assert.True(fight.Params["report_to_penguin"]?.GetValue<bool>());
+        Assert.True(fight.Params["report_to_yituliu"]?.GetValue<bool>());
+        Assert.True(tasks.Single(task => task.Name == "Recruit").Params["report_to_penguin"]?.GetValue<bool>());
+        var awards = Assert.IsType<JsonObject>(tasks.Single(task => task.Name == "Rogue").Params["collectible_mode_start_list"]);
+        Assert.True(awards["hot_water"]?.GetValue<bool>());
+        Assert.True(awards["hope"]?.GetValue<bool>());
+        Assert.True(awards["ideas"]?.GetValue<bool>());
+    }
+
+    [Fact]
+    public async Task ManualImport_MissingCurrentProfile_ShouldSelectAnImportedProfile()
+    {
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.json"),
+            """{ "Current": "Missing", "Configurations": { "Available": { "TouchMode": "adb" } } }""");
+
+        var service = CreateService(root);
+        var report = await service.ImportLegacyAsync(ImportSource.GuiOnly, manualImport: true);
+
+        Assert.True(report.AppliedConfig);
+        Assert.Equal("Available", service.CurrentConfig.CurrentProfile);
+        Assert.Contains(report.Warnings, warning => warning.Contains("Missing", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task AvaloniaConfig_UnknownAndNullFields_ShouldRoundTrip()
+    {
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+        var path = Path.Combine(root, "config", "avalonia.json");
+        await File.WriteAllTextAsync(
+            path,
+            """
+            {
+              "SchemaVersion": 3,
+              "CurrentProfile": "Default",
+              "Profiles": { "Default": { "Values": { "known-null": null }, "TaskQueue": [], "future-profile": { "x": 1 } } },
+              "GlobalValues": { "global-null": null },
+              "Migration": { "future-migration": true },
+              "future-root": [1, 2]
+            }
+            """);
+
+        var store = new AvaloniaJsonConfigStore(root);
+        var config = await store.LoadAsync();
+        Assert.NotNull(config);
+        await store.SaveAsync(config!);
+
+        var saved = JsonNode.Parse(await File.ReadAllTextAsync(path))!.AsObject();
+        Assert.True(saved.ContainsKey("future-root"));
+        Assert.True(saved["Profiles"]?["Default"]?["future-profile"] is JsonObject);
+        Assert.True(saved["Migration"]?["future-migration"]?.GetValue<bool>());
+        Assert.Null(saved["GlobalValues"]?["global-null"]);
+        Assert.Null(saved["Profiles"]?["Default"]?["Values"]?["known-null"]);
+    }
+
+    [Fact]
+    public async Task AvaloniaConfig_NullProfileAndTaskEntries_ShouldNormalizeAtDeserializeBoundary()
+    {
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+        var path = Path.Combine(root, "config", "avalonia.json");
+        await File.WriteAllTextAsync(
+            path,
+            """
+            {
+              "SchemaVersion": 3,
+              "CurrentProfile": "Default",
+              "Profiles": {
+                "Default": null,
+                "Alt": {
+                  "Values": {},
+                  "TaskQueue": [
+                    null,
+                    { "Type": "Fight", "Name": "Fight", "IsEnabled": true, "Params": {} }
+                  ]
+                }
+              },
+              "GlobalValues": {},
+              "Migration": {}
+            }
+            """);
+
+        var service = CreateService(root);
+        var load = await service.LoadOrBootstrapAsync();
+
+        Assert.True(load.LoadedFromExistingConfig);
+        Assert.Empty(service.CurrentConfig.Profiles["Default"].TaskQueue);
+        var altTask = Assert.Single(service.CurrentConfig.Profiles["Alt"].TaskQueue);
+        Assert.Equal("Fight", altTask.Type);
+
+        var saved = JsonNode.Parse(await File.ReadAllTextAsync(path))!.AsObject();
+        Assert.IsType<JsonObject>(saved["Profiles"]?["Default"]);
+        Assert.Single(Assert.IsType<JsonArray>(saved["Profiles"]?["Alt"]?["TaskQueue"]));
+
+        await service.SaveAsync();
+    }
+
+    [Fact]
+    public async Task GuiNewImport_NullAndInvalidTaskQueueMembers_ShouldRemainStructural()
+    {
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.new.json"),
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": {
+                  "TaskQueue": null,
+                  "Connect.Address": "127.0.0.1:5555"
+                },
+                "Malformed": {
+                  "TaskQueue": {},
+                  "Connect.Address": "10.0.0.1:5555"
+                }
+              }
+            }
+            """);
+
+        var service = CreateService(root);
+        var report = await service.ImportLegacyAsync(ImportSource.GuiNewOnly, manualImport: false);
+
+        Assert.True(report.Success);
+        var defaultProfile = service.CurrentConfig.Profiles["Default"];
+        Assert.Empty(defaultProfile.TaskQueue);
+        Assert.Equal("127.0.0.1:5555", defaultProfile.Values["ConnectAddress"]?.GetValue<string>());
+        Assert.False(defaultProfile.Values.ContainsKey("TaskQueue"));
+
+        var malformedProfile = service.CurrentConfig.Profiles["Malformed"];
+        Assert.Empty(malformedProfile.TaskQueue);
+        Assert.Equal("10.0.0.1:5555", malformedProfile.Values["ConnectAddress"]?.GetValue<string>());
+        Assert.False(malformedProfile.Values.ContainsKey("TaskQueue"));
+        Assert.Contains(report.Warnings, warning => warning.Contains("invalid TaskQueue", StringComparison.Ordinal));
+    }
+
     private static UnifiedConfigurationService CreateService(string baseDirectory)
     {
         var store = new AvaloniaJsonConfigStore(baseDirectory);
@@ -2933,6 +3333,43 @@ public sealed class ConfigurationImportTests
         Assert.Equal(TaskModuleTypes.Reclamation, task.Type);
         Assert.Equal("RelaunchAnchor", task.Params["theme"]?.GetValue<string>());
         return task;
+    }
+
+    private sealed class PostSaveCallbackConfigStore : IUnifiedConfigStore
+    {
+        private UnifiedConfig? _config;
+
+        public PostSaveCallbackConfigStore(string baseDirectory, UnifiedConfig? config)
+        {
+            ConfigPath = Path.Combine(baseDirectory, "config", "avalonia.json");
+            _config = config;
+        }
+
+        public string ConfigPath { get; }
+
+        public int SaveCount { get; private set; }
+
+        public Action? AfterSave { get; set; }
+
+        public bool Exists() => _config is not null;
+
+        public Task<UnifiedConfig?> LoadAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(_config);
+        }
+
+        public Task SaveAsync(UnifiedConfig config, CancellationToken cancellationToken = default)
+        {
+            SaveCount += 1;
+            _config = config;
+            AfterSave?.Invoke();
+            return Task.CompletedTask;
+        }
+
+        public Task BackupAsync(string suffix, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class CountingConfigStore : IUnifiedConfigStore

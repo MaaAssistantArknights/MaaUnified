@@ -6309,10 +6309,12 @@ public sealed class SettingsFeatureService : ISettingsFeatureService
         try
         {
             await _configService.SaveAsync(cancellationToken);
+            // The save is already durable; cancellation must not turn the success
+            // diagnostics into a failure that rolls back the persisted values.
             await _diagnostics.RecordEventAsync(
                 "Settings",
                 $"Saved settings batch: {string.Join(", ", updates.Keys.OrderBy(static k => k, StringComparer.Ordinal))}",
-                cancellationToken);
+                CancellationToken.None);
             return UiOperationResult.Ok($"Saved {updates.Count} settings.");
         }
         catch (Exception ex)
@@ -6371,10 +6373,12 @@ public sealed class SettingsFeatureService : ISettingsFeatureService
         try
         {
             await _configService.SaveAsync(cancellationToken);
+            // The save is already durable; cancellation must not turn the success
+            // diagnostics into a failure that rolls back the persisted values.
             await _diagnostics.RecordEventAsync(
                 "Settings",
                 $"Saved profile settings batch: {string.Join(", ", updates.Keys.OrderBy(static k => k, StringComparer.Ordinal))}",
-                cancellationToken);
+                CancellationToken.None);
             return UiOperationResult.Ok($"Saved {updates.Count} profile settings.");
         }
         catch (Exception ex)
