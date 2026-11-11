@@ -67,6 +67,35 @@ public sealed class RuntimeDisposalTests
     }
 
     [Fact]
+    public async Task DisposeAsync_ShouldStartCoreDisposalWhileRemoteControlCleanupIsBlocked()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "maa-runtime-disposal-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+        var order = new List<string>();
+        var bridge = new RecordingBridge(order, "core");
+        var remoteControl = new BlockingRemoteControlFeatureService(order);
+        var runtime = CreateRuntime(root, bridge: bridge, remoteControlFeatureService: remoteControl);
+
+        try
+        {
+            var disposeTask = runtime.DisposeAsync().AsTask();
+            await remoteControl.DisposeStarted.Task.WaitAsync(TimeSpan.FromSeconds(1));
+            await bridge.DisposeStarted.Task.WaitAsync(TimeSpan.FromSeconds(1));
+
+            Assert.Equal(["remote-start", "core"], order.Take(2).ToArray());
+            Assert.False(disposeTask.IsCompleted);
+
+            remoteControl.CompleteDispose();
+            await disposeTask;
+        }
+        finally
+        {
+            remoteControl.CompleteDispose();
+            TryDeleteDirectory(root);
+        }
+    }
+
+    [Fact]
     public async Task DisposeAsync_ShouldDisposeHotkeyProviderInsteadOfWaitingForUnregister()
     {
         var root = Path.Combine(Path.GetTempPath(), "maa-runtime-disposal-tests", Guid.NewGuid().ToString("N"));
@@ -96,7 +125,8 @@ public sealed class RuntimeDisposalTests
         ITrayService? trayService = null,
         INotificationService? notificationService = null,
         IWebApiFeatureService? webApiFeatureService = null,
-        IGlobalHotkeyService? hotkeyService = null)
+        IGlobalHotkeyService? hotkeyService = null,
+        IRemoteControlFeatureService? remoteControlFeatureService = null)
     {
         var log = new UiLogService();
         var diagnostics = new UiDiagnosticsService(root, log);
@@ -134,7 +164,7 @@ public sealed class RuntimeDisposalTests
             TaskQueueFeatureService = new TaskQueueFeatureService(session, config),
             CopilotFeatureService = new CopilotFeatureService(),
             ToolboxFeatureService = new ToolboxFeatureService(),
-            RemoteControlFeatureService = new RemoteControlFeatureService(),
+            RemoteControlFeatureService = remoteControlFeatureService ?? new RemoteControlFeatureService(),
             PlatformCapabilityService = capability,
             OverlayFeatureService = new OverlayFeatureService(capability),
             NotificationProviderFeatureService = new NotificationProviderFeatureService(),
@@ -257,6 +287,8 @@ public sealed class RuntimeDisposalTests
     {
         public bool Disposed { get; private set; }
 
+        public TaskCompletionSource DisposeStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
         public override ValueTask DisposeAsync()
         {
             Disposed = true;
@@ -265,7 +297,48 @@ public sealed class RuntimeDisposalTests
                 order.Add(disposeName);
             }
 
+            DisposeStarted.TrySetResult();
+
             return base.DisposeAsync();
+        }
+    }
+
+    private sealed class BlockingRemoteControlFeatureService(List<string> order) : IRemoteControlFeatureService, IAsyncDisposable
+    {
+        private readonly TaskCompletionSource _disposeCompletion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource DisposeStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task<CoreResult<bool>> StartRemotePollingAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(CoreResult<bool>.Ok(true));
+
+        public Task<UiOperationResult<RemoteControlConnectivityResult>> TestConnectivityAsync(
+            RemoteControlConnectivityRequest request,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(UiOperationResult<RemoteControlConnectivityResult>.Ok(
+                new RemoteControlConnectivityResult(request.PollIntervalMs, null, null),
+                "Remote connectivity passed."));
+
+        public ValueTask DisposeAsync()
+        {
+            lock (order)
+            {
+                order.Add("remote-start");
+            }
+
+            DisposeStarted.TrySetResult();
+            return new ValueTask(CompleteAsync());
+        }
+
+        public void CompleteDispose() => _disposeCompletion.TrySetResult();
+
+        private async Task CompleteAsync()
+        {
+            await _disposeCompletion.Task;
+            lock (order)
+            {
+                order.Add("remote-end");
+            }
         }
     }
 

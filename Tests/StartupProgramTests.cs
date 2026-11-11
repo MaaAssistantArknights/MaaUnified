@@ -96,6 +96,31 @@ public sealed class StartupProgramTests
     }
 
     [Fact]
+    public void ParseStartupArguments_ConsumesConfigAndRestartWaitArguments()
+    {
+        var parsed = Program.ParseStartupArguments(["--config", "Night profile", "--wait-for-single-instance", "--trace"]);
+
+        Assert.Equal("Night profile", parsed.ConfigurationName);
+        Assert.True(parsed.WaitForSingleInstance);
+        Assert.Equal(["--trace"], parsed.AvaloniaArguments);
+    }
+
+    [Fact]
+    public void ParseStartupArguments_SupportsInlineConfigValue()
+    {
+        var parsed = Program.ParseStartupArguments(["--config=Night profile"]);
+
+        Assert.Equal("Night profile", parsed.ConfigurationName);
+        Assert.Empty(parsed.AvaloniaArguments);
+    }
+
+    [Fact]
+    public void BuildStartupFailurePromptMessage_ReferencesDebugLog()
+    {
+        Assert.Contains("debug", Program.BuildStartupFailurePromptMessage(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void BuildStartupTracePayload_WhenExceptionProvided_IncludesStageAndException()
     {
         var payload = Program.BuildStartupTracePayload(

@@ -29,4 +29,24 @@ public sealed class AppUnhandledExceptionFilterTests
 
         Assert.False(MAAUnified.App.App.ShouldIgnoreUnhandledException(exception));
     }
+
+    [Fact]
+    public void ShouldTerminateAfterDispatcherUnhandledException_WhenUnexpectedFailureOccurs_ReturnsTrue()
+    {
+        Assert.True(MAAUnified.App.App.ShouldTerminateAfterDispatcherUnhandledException(
+            new InvalidOperationException("boom")));
+    }
+
+    [Fact]
+    public void ShouldTerminateAfterDispatcherUnhandledException_WhenCancellationOccurs_ReturnsFalse()
+    {
+        Assert.False(MAAUnified.App.App.ShouldTerminateAfterDispatcherUnhandledException(
+            new OperationCanceledException()));
+    }
+
+    [Fact]
+    public void RuntimeDisposeTimeout_CoversCoreDisposeLockBudget()
+    {
+        Assert.True(MAAUnified.App.App.RuntimeDisposeTimeout >= TimeSpan.FromSeconds(11));
+    }
 }

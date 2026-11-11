@@ -240,13 +240,12 @@ public partial class MainWindow : Window
             await App.Runtime.DiagnosticsService.RecordEventAsync(
                 "App.Shell.Window.Close",
                 "source=window-chrome; confirmed");
-            ArmCloseCompletionWatchdog("App.Shell.Window.Close.Watchdog");
             if (!await CompleteConfigurationSavesBeforeCloseAsync("App.Shell.Window.Close.ConfigSave"))
             {
-                DisarmCloseCompletionWatchdog();
                 return;
             }
 
+            ArmCloseCompletionWatchdog("App.Shell.Window.Close.Watchdog");
             _ = await ExitApplicationAsync("App.Shell.Window.Close.Exit");
         }
         finally
@@ -2146,12 +2145,10 @@ public partial class MainWindow : Window
                     return;
                 }
 
-                ArmCloseCompletionWatchdog($"{confirmScope}.Watchdog");
                 if (!await CompleteConfigurationSavesBeforeCloseAsync(
                         $"{confirmScope}.ConfigSave",
                         cancellationToken))
                 {
-                    DisarmCloseCompletionWatchdog();
                     return;
                 }
             }

@@ -24,7 +24,7 @@ public partial class App : Avalonia.Application
     private static readonly HashSet<string> ReportedGlobalExceptions = new(StringComparer.Ordinal);
     private static readonly TimeSpan UiLagProbeInterval = TimeSpan.FromMilliseconds(250);
     private static readonly TimeSpan UiLagLogMinInterval = TimeSpan.FromSeconds(5);
-    private static readonly TimeSpan RuntimeDisposeTimeout = TimeSpan.FromSeconds(4);
+    internal static readonly TimeSpan RuntimeDisposeTimeout = TimeSpan.FromSeconds(12);
     private static readonly string[] LegacyLocalizationResourceKeys =
     [
         "AlwaysAutoDetectConnectionTip",
@@ -573,7 +573,7 @@ public partial class App : Avalonia.Application
 
     private static void OnDispatcherUnhandledExceptionFilter(object? sender, DispatcherUnhandledExceptionFilterEventArgs e)
     {
-        if (ShouldIgnoreUnhandledException(e.Exception))
+        if (!ShouldTerminateAfterDispatcherUnhandledException(e.Exception))
         {
             return;
         }
@@ -589,9 +589,22 @@ public partial class App : Avalonia.Application
         }
 
         e.Handled = true;
+        var summary = BuildUnhandledExceptionSummary(
+            "App.DispatcherUnhandledException",
+            e.Exception,
+            handled: false,
+            isTerminating: true);
+        TryShowFatalErrorDialog(summary);
         ForgetTask(
-            ReportGlobalExceptionAsync("App.DispatcherUnhandledException", e.Exception, handled: true),
+            ReportGlobalExceptionAsync(
+                "App.DispatcherUnhandledException",
+                e.Exception,
+                handled: false,
+                isTerminating: true,
+                precomputedSummary: summary,
+                reportToDialogFeature: false),
             "App.DispatcherUnhandledException.Report");
+        Environment.Exit(1);
     }
 
     private static void OnTaskSchedulerUnobservedTaskException(object? sender, UnobservedTaskExceptionEventArgs e)
@@ -660,6 +673,9 @@ public partial class App : Avalonia.Application
 
         return IsBenignLinuxAppMenuRegistrarFailure(exception);
     }
+
+    internal static bool ShouldTerminateAfterDispatcherUnhandledException(Exception exception)
+        => !ShouldIgnoreUnhandledException(exception);
 
     private static bool IsBenignLinuxAppMenuRegistrarFailure(Exception exception)
     {

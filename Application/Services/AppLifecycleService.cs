@@ -9,6 +9,9 @@ public interface IAppLifecycleService
 
     Task<UiOperationResult> RestartAsync(CancellationToken cancellationToken = default);
 
+    Task<UiOperationResult> RestartWithoutArgumentsAsync(CancellationToken cancellationToken = default)
+        => RestartAsync(cancellationToken);
+
     Task<UiOperationResult> ExitAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -18,7 +21,26 @@ public interface IAppLifecycleService
 
 public sealed class ProcessAppLifecycleService : IAppLifecycleService
 {
+    public const string RestartWaitForInstanceArgument = "--wait-for-single-instance";
+
     public Task<UiOperationResult> RestartAsync(CancellationToken cancellationToken = default)
+        => RestartCoreAsync(Environment.GetCommandLineArgs().Skip(1), cancellationToken);
+
+    public Task<UiOperationResult> RestartWithoutArgumentsAsync(CancellationToken cancellationToken = default)
+        => RestartCoreAsync([], cancellationToken);
+
+    internal static IReadOnlyList<string> BuildRestartArguments(IEnumerable<string> arguments)
+    {
+        ArgumentNullException.ThrowIfNull(arguments);
+        return arguments
+            .Where(argument => !string.Equals(argument, RestartWaitForInstanceArgument, StringComparison.Ordinal))
+            .Append(RestartWaitForInstanceArgument)
+            .ToArray();
+    }
+
+    private static Task<UiOperationResult> RestartCoreAsync(
+        IEnumerable<string> arguments,
+        CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -30,13 +52,16 @@ public sealed class ProcessAppLifecycleService : IAppLifecycleService
                 return Task.FromResult(UiOperationResult.Fail(UiErrorCode.AppRestartExecutableMissing, "Current executable path is unavailable."));
             }
 
-            var arguments = Environment.GetCommandLineArgs().Skip(1).Select(Quote).ToArray();
             var startInfo = new ProcessStartInfo
             {
                 FileName = executable,
-                Arguments = string.Join(' ', arguments),
                 UseShellExecute = false,
             };
+
+            foreach (var argument in BuildRestartArguments(arguments))
+            {
+                startInfo.ArgumentList.Add(argument);
+            }
 
             _ = Process.Start(startInfo);
             return Task.FromResult(UiOperationResult.Ok("Restart process launched."));
@@ -47,14 +72,6 @@ public sealed class ProcessAppLifecycleService : IAppLifecycleService
         }
     }
 
-    private static string Quote(string value)
-    {
-        return string.IsNullOrEmpty(value)
-            ? "\"\""
-            : value.Contains(' ', StringComparison.Ordinal)
-                ? $"\"{value.Replace("\"", "\\\"", StringComparison.Ordinal)}\""
-                : value;
-    }
 }
 
 public sealed class NoOpAppLifecycleService : IAppLifecycleService

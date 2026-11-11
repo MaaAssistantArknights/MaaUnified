@@ -722,6 +722,35 @@ public sealed class MainShellViewModel : ObservableObject
                     loadResult.ValidationIssues,
                     "Config.LoadValidation",
                     cancellationToken);
+                if (!string.IsNullOrWhiteSpace(Program.RequestedConfigurationName))
+                {
+                    var requestedProfile = Program.RequestedConfigurationName;
+                    var switchResult = await _runtime.ConfigurationProfileFeatureService
+                        .SwitchProfileAsync(requestedProfile, cancellationToken);
+                    if (!switchResult.Success)
+                    {
+                        throw new InvalidOperationException(
+                            $"The requested configuration profile `{requestedProfile}` could not be selected: {switchResult.Message}");
+                    }
+
+                    RecordStartupPhase(
+                        "ConfigBootstrap.CommandLineProfile",
+                        $"Switched to requested configuration profile `{requestedProfile}`; restarting without command-line configuration arguments.");
+                    var restartResult = await _runtime.AppLifecycleService.RestartWithoutArgumentsAsync(cancellationToken);
+                    if (!restartResult.Success)
+                    {
+                        throw new InvalidOperationException(
+                            $"Configuration profile `{requestedProfile}` was selected, but restart failed: {restartResult.Message}");
+                    }
+
+                    if (_runtime.AppLifecycleService.SupportsExit)
+                    {
+                        await _runtime.AppLifecycleService.ExitAsync(cancellationToken);
+                    }
+
+                    return;
+                }
+
                 await PersistPlatformHotkeyDefaultsMigrationIfNeededAsync(cancellationToken);
 
                 ApplyDeveloperModeFromConfig();

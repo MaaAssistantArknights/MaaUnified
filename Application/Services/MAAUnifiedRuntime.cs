@@ -86,19 +86,15 @@ public sealed class MAAUnifiedRuntime : IAsyncDisposable
             "App.Exit.Cleanup.WebApi",
             () => WebApiFeatureService.StopAsync(CancellationToken.None)).ConfigureAwait(false);
 
-        await RunExitCleanupAsync(
-            "App.Exit.Cleanup.RemoteControl",
-            async () =>
-            {
-                if (RemoteControlFeatureService is IAsyncDisposable remoteControlDisposable)
-                {
-                    await remoteControlDisposable.DisposeAsync().ConfigureAwait(false);
-                }
-            }).ConfigureAwait(false);
+        // Starting disposal synchronously cancels polling before Core teardown. Do not let an
+        // in-flight non-cancellable native capture prevent Core from receiving its exit budget.
+        var remoteControlCleanupTask = BeginRemoteControlExitCleanup();
 
         await RunExitCleanupAsync(
             "App.Exit.Cleanup.CoreBridge",
             async () => await CoreBridge.DisposeAsync().ConfigureAwait(false)).ConfigureAwait(false);
+
+        await remoteControlCleanupTask.ConfigureAwait(false);
 
         await RunExitCleanupAsync(
             "App.Exit.Cleanup.Tray",
@@ -149,6 +145,28 @@ public sealed class MAAUnifiedRuntime : IAsyncDisposable
 
                 return Task.CompletedTask;
             }).ConfigureAwait(false);
+    }
+
+    private Task BeginRemoteControlExitCleanup()
+    {
+        if (RemoteControlFeatureService is not IAsyncDisposable remoteControlDisposable)
+        {
+            return Task.CompletedTask;
+        }
+
+        try
+        {
+            // IAsyncDisposable implementations begin their shutdown before returning the ValueTask.
+            // RemoteControlFeatureService uses that boundary to cancel its polling token.
+            var disposeTask = remoteControlDisposable.DisposeAsync().AsTask();
+            return RunExitCleanupAsync("App.Exit.Cleanup.RemoteControl", () => disposeTask);
+        }
+        catch (Exception ex)
+        {
+            return RunExitCleanupAsync(
+                "App.Exit.Cleanup.RemoteControl",
+                () => Task.FromException(ex));
+        }
     }
 
     private async Task RunExitCleanupAsync(string scope, Func<Task> cleanup)

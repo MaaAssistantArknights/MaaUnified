@@ -20,6 +20,9 @@ public sealed class AvaloniaDesktopAppLifecycleService : IAppLifecycleService
     public Task<UiOperationResult> RestartAsync(CancellationToken cancellationToken = default)
         => _restartService.RestartAsync(cancellationToken);
 
+    public Task<UiOperationResult> RestartWithoutArgumentsAsync(CancellationToken cancellationToken = default)
+        => _restartService.RestartWithoutArgumentsAsync(cancellationToken);
+
     public async Task<UiOperationResult> ExitAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();

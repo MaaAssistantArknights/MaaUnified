@@ -31,7 +31,11 @@ internal static class Program
     private const string ConfigDirectoryName = "config";
     private const string AvaloniaConfigFileName = "avalonia.json";
     private const string GuiNewConfigFileName = "gui.new.json";
+    internal const string RestartWaitForInstanceArgument = ProcessAppLifecycleService.RestartWaitForInstanceArgument;
+    private static readonly TimeSpan RestartInstanceWaitTimeout = TimeSpan.FromSeconds(15);
     private static readonly Stopwatch StartupElapsedSinceEntry = Stopwatch.StartNew();
+
+    internal static string? RequestedConfigurationName { get; private set; }
 
     [STAThread]
     public static int Main(string[] args)
@@ -43,6 +47,9 @@ internal static class Program
         }
 #endif
 
+        var startupArguments = ParseStartupArguments(args);
+        RequestedConfigurationName = startupArguments.ConfigurationName;
+        args = startupArguments.AvaloniaArguments;
         var runtimeBaseDirectory = RuntimeLayout.ResolveRuntimeBaseDirectory();
         RecordStartupStage("Main.Entry", BuildStartupEnvironmentSnapshot(args));
         if (!ValidateLinuxPortablePackageLayout(runtimeBaseDirectory))
@@ -50,7 +57,10 @@ internal static class Program
             return 1;
         }
 
-        if (!TryAcquireSingleInstanceGuard(runtimeBaseDirectory, out var instanceGuard))
+        if (!TryAcquireSingleInstanceGuard(
+                runtimeBaseDirectory,
+                startupArguments.WaitForSingleInstance ? RestartInstanceWaitTimeout : TimeSpan.Zero,
+                out var instanceGuard))
         {
             return 3;
         }
@@ -118,6 +128,10 @@ internal static class Program
         catch (Exception ex)
         {
             ReportStartupFailure(StartupUnhandledCode, "Unhandled startup failure.", ex);
+            StartupPrompt.Show(
+                LocalizeStartupText(runtimeBaseDirectory, "Common.ErrorPrefix", "Error"),
+                BuildStartupFailurePromptMessage(),
+                StartupPromptSeverity.Error);
             return 1;
         }
     }
@@ -463,10 +477,16 @@ internal static class Program
     }
 
     internal static bool TryAcquireSingleInstanceGuard(string runtimeBaseDirectory, out PackageInstanceGuard? guard)
+        => TryAcquireSingleInstanceGuard(runtimeBaseDirectory, TimeSpan.Zero, out guard);
+
+    internal static bool TryAcquireSingleInstanceGuard(
+        string runtimeBaseDirectory,
+        TimeSpan timeout,
+        out PackageInstanceGuard? guard)
     {
         guard = null;
         var identityPath = RuntimeLayout.ResolveSingleInstanceIdentityPath();
-        if (PackageInstanceGuard.TryAcquire(identityPath, out guard))
+        if (PackageInstanceGuard.TryAcquire(identityPath, timeout, out guard))
         {
             RecordStartupStage("Main.SingleInstance.Acquired", "identityFile=instance.lock");
             return true;
@@ -485,6 +505,53 @@ internal static class Program
         StartupPrompt.Show(title, message, StartupPromptSeverity.Warning);
         return false;
     }
+
+    internal static StartupArguments ParseStartupArguments(string[] args)
+    {
+        ArgumentNullException.ThrowIfNull(args);
+        string? configurationName = null;
+        var waitForSingleInstance = false;
+        var avaloniaArguments = new List<string>();
+
+        for (var index = 0; index < args.Length; index++)
+        {
+            var argument = args[index];
+            if (string.Equals(argument, RestartWaitForInstanceArgument, StringComparison.Ordinal))
+            {
+                waitForSingleInstance = true;
+                continue;
+            }
+
+            if (string.Equals(argument, "--config", StringComparison.Ordinal))
+            {
+                if (index + 1 < args.Length && !string.IsNullOrWhiteSpace(args[index + 1]))
+                {
+                    configurationName = args[++index].Trim();
+                }
+
+                continue;
+            }
+
+            const string configPrefix = "--config=";
+            if (argument.StartsWith(configPrefix, StringComparison.Ordinal))
+            {
+                var value = argument[configPrefix.Length..].Trim();
+                if (!string.IsNullOrWhiteSpace(value))
+                {
+                    configurationName = value;
+                }
+
+                continue;
+            }
+
+            avaloniaArguments.Add(argument);
+        }
+
+        return new StartupArguments(configurationName, waitForSingleInstance, avaloniaArguments.ToArray());
+    }
+
+    internal static string BuildStartupFailurePromptMessage()
+        => "MAAUnified could not start. Review the startup error log in the debug directory for details.";
 
     private static void ReportStartupFailure(string code, string message, Exception? exception = null)
     {
@@ -567,3 +634,8 @@ internal static class Program
         }
     }
 }
+
+internal sealed record StartupArguments(
+    string? ConfigurationName,
+    bool WaitForSingleInstance,
+    string[] AvaloniaArguments);

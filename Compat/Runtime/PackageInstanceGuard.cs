@@ -19,8 +19,15 @@ public sealed class PackageInstanceGuard : IDisposable
     public string KeyMaterial { get; }
 
     public static bool TryAcquire(string keyMaterial, out PackageInstanceGuard? guard)
+        => TryAcquire(keyMaterial, TimeSpan.Zero, out guard);
+
+    public static bool TryAcquire(string keyMaterial, TimeSpan timeout, out PackageInstanceGuard? guard)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(keyMaterial);
+        if (timeout < TimeSpan.Zero && timeout != Timeout.InfiniteTimeSpan)
+        {
+            throw new ArgumentOutOfRangeException(nameof(timeout));
+        }
 
         guard = null;
         lock (HeldKeysGate)
@@ -34,7 +41,7 @@ public sealed class PackageInstanceGuard : IDisposable
         var mutex = new Mutex(initiallyOwned: false, BuildMutexName(keyMaterial));
         try
         {
-            if (!mutex.WaitOne(0, exitContext: false))
+            if (!mutex.WaitOne(timeout, exitContext: false))
             {
                 mutex.Dispose();
                 return false;
