@@ -95,6 +95,15 @@ public sealed class PostActionPromptLocalizationTests
         Assert.Equal(expectedConfirmText, InvokeBuildConfirmText(language));
     }
 
+    [Fact]
+    public void WarningConfirmDialogRequest_ShowConfirmButton_DefaultsToTrue()
+    {
+        var request = new WarningConfirmDialogRequest("Title", "Prompt");
+
+        Assert.True(request.ShowConfirmButton);
+        Assert.True(request.ShowCancelButton);
+    }
+
     private static string InvokeBuildTitle(PostActionType action, string language)
     {
         return (string)typeof(AvaloniaPostActionPromptService)

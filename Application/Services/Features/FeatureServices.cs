@@ -4858,6 +4858,7 @@ public sealed class PostActionFeatureService : IPostActionFeatureService
     private readonly UnifiedSessionService? _sessionService;
     private readonly IAppLifecycleService? _appLifecycleService;
     private readonly IPostActionPromptService _promptService;
+    private readonly UnifiedSessionService? _sessionService;
 
     public PostActionFeatureService(
         UnifiedConfigurationService configService,
@@ -4883,6 +4884,7 @@ public sealed class PostActionFeatureService : IPostActionFeatureService
         _sessionService = sessionService;
         _appLifecycleService = appLifecycleService;
         _promptService = promptService ?? new NoOpPostActionPromptService();
+        _sessionService = sessionService;
     }
 
     public async Task<UiOperationResult<PostActionConfig>> LoadAsync(CancellationToken cancellationToken = default)
@@ -5085,6 +5087,86 @@ public sealed class PostActionFeatureService : IPostActionFeatureService
         return UiOperationResult<PostActionPreview>.Ok(preview, "Post action selection validated.");
     }
 
+    public async Task<UiOperationResult> ExecuteStartScriptAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var script = ReadUserScriptSetting(ConfigurationKeys.StartsWithScript);
+        if (string.IsNullOrWhiteSpace(script))
+        {
+            return UiOperationResult.Ok("Start script is not configured.");
+        }
+
+        return await ExecuteUserScriptCoreAsync("StartsWithScript", script, cancellationToken);
+    }
+
+    public async Task<UiOperationResult> ExecuteEndScriptAsync(
+        bool manualStop,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (manualStop && !ReadUserScriptBoolSetting(ConfigurationKeys.ManualStopWithScript))
+        {
+            return UiOperationResult.Ok("Manual stop script is disabled.");
+        }
+
+        var script = ReadUserScriptSetting(ConfigurationKeys.EndsWithScript);
+        if (string.IsNullOrWhiteSpace(script))
+        {
+            return UiOperationResult.Ok("End script is not configured.");
+        }
+
+        return await ExecuteUserScriptCoreAsync("EndsWithScript", script, cancellationToken);
+    }
+
+    private string? ReadUserScriptSetting(string key)
+    {
+        _ = _configService.TryGetCurrentProfile(out var profile);
+        return ReadStringSetting(profile, _configService.CurrentConfig.GlobalValues, key);
+    }
+
+    private bool ReadUserScriptBoolSetting(string key)
+    {
+        _ = _configService.TryGetCurrentProfile(out var profile);
+        return ReadBooleanSetting(profile, _configService.CurrentConfig.GlobalValues, false, key);
+    }
+
+    private async Task<UiOperationResult> ExecuteUserScriptCoreAsync(
+        string scriptKind,
+        string script,
+        CancellationToken cancellationToken)
+    {
+        var context = new PostActionExecutionContext(scriptKind, WasSuccessfulTaskChain: true);
+        await RecordEventAsync(context, scriptKind, null, $"Executing user script: {script}", cancellationToken);
+        try
+        {
+            var result = await _executor.ExecuteUserScriptAsync(script, cancellationToken);
+            if (!result.Success)
+            {
+                await RecordErrorAsync(
+                    context,
+                    scriptKind,
+                    result.ErrorCode ?? UiErrorCode.PostActionExecutionFailed,
+                    result.Message,
+                    cancellationToken);
+                return UiOperationResult.Fail(
+                    result.ErrorCode ?? UiErrorCode.PostActionExecutionFailed,
+                    result.Message);
+            }
+
+            await RecordEventAsync(context, scriptKind, null, result.Message, cancellationToken);
+            return UiOperationResult.Ok(result.Message);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            await RecordErrorAsync(context, scriptKind, UiErrorCode.PostActionExecutionFailed, ex.Message, cancellationToken);
+            return UiOperationResult.Fail(UiErrorCode.PostActionExecutionFailed, ex.Message);
+        }
+    }
+
     public async Task<UiOperationResult> ExecuteAfterCompletionAsync(
         PostActionExecutionContext context,
         PostActionConfig? configOverride = null,
@@ -5125,6 +5207,7 @@ public sealed class PostActionFeatureService : IPostActionFeatureService
         var skippedActions = new List<string>();
         var failures = new List<string>();
         var skipSystemActionsForOtherMaa = config.IfNoOtherMaa && HasOtherMaaProcess();
+        var persistentExitSelfRestored = false;
         if (skipSystemActionsForOtherMaa)
         {
             summary.Add("Detected another MAA process, skipped system-level post actions.");
@@ -5224,6 +5307,15 @@ public sealed class PostActionFeatureService : IPostActionFeatureService
 
             if (IsPowerAction(action))
             {
+                if (config.Once
+                    && action is PostActionType.Hibernate or PostActionType.Sleep
+                    && !persistentExitSelfRestored)
+                {
+                    var persistent = await LoadAsync(token);
+                    config.ExitSelf = persistent.Success && persistent.Value?.ExitSelf == true;
+                    persistentExitSelfRestored = true;
+                }
+
                 var promptResult = await _promptService.ConfirmPowerActionAsync(
                     new PostActionPromptRequest(action, PowerActionPromptCountdown, ResolveCurrentLanguage()),
                     token);
@@ -5249,6 +5341,11 @@ public sealed class PostActionFeatureService : IPostActionFeatureService
 
             try
             {
+                if (action == PostActionType.ExitEmulator)
+                {
+                    _sessionService?.InvalidateConnectionAfterExternalExit();
+                }
+
                 var result = await ExecuteResolvedActionAsync(action, request, token);
                 if (!result.Success)
                 {

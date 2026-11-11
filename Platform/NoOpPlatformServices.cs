@@ -233,4 +233,16 @@ public sealed class NoOpPostActionExecutorService : IPostActionExecutorService
             operationId: $"post-action.{action}",
             errorCode: PlatformErrorCodes.PostActionUnsupported));
     }
+
+    public Task<PlatformOperationResult> ExecuteUserScriptAsync(
+        string scriptPath,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromResult(PlatformOperation.Failed(
+            Unsupported.Provider,
+            "User script execution is unsupported in current environment.",
+            PlatformErrorCodes.PostActionUnsupported,
+            "post-action.UserScript"));
+    }
 }

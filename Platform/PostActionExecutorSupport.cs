@@ -5,6 +5,10 @@ namespace MAAUnified.Platform;
 
 internal static class PostActionExecutorSupport
 {
+    internal static readonly TimeSpan EmulatorConsoleExitTimeout = TimeSpan.FromSeconds(5);
+
+    private static readonly Regex UserScriptControlChars = new(@"\p{C}", RegexOptions.Compiled);
+
     public static PostActionCapabilityMatrix BuildCapabilityMatrix(PostActionExecutorRequest? request)
     {
         var exitArknights = BuildCoreManagedCapability("Exit Arknights", "maa-core");
@@ -90,14 +94,132 @@ internal static class PostActionExecutorSupport
             Provider: "system");
     }
 
+    // Mirrors WPF GameSettingsUserControlModel.ExecuteScript: quoted path + arguments,
+    // optional -noWindow / -minimized flags, wait for exit.
+    public static async Task<PlatformOperationResult> ExecuteUserScriptAsync(
+        string scriptPath,
+        CancellationToken cancellationToken)
+    {
+        const string provider = "user-script";
+        const string operationId = "post-action.UserScript";
+        Process? process = null;
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!TryParseUserScript(scriptPath, out var fileName, out var arguments, out var createNoWindow, out var minimized))
+            {
+                return PlatformOperation.Failed(
+                    provider,
+                    "User script path is empty or invalid.",
+                    PlatformErrorCodes.PostActionExecutionFailed,
+                    operationId);
+            }
+
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = fileName,
+                Arguments = arguments,
+                WindowStyle = minimized ? ProcessWindowStyle.Minimized : ProcessWindowStyle.Normal,
+                CreateNoWindow = createNoWindow,
+                UseShellExecute = !createNoWindow,
+            };
+
+            process = Process.Start(startInfo);
+            if (process is null)
+            {
+                return PlatformOperation.Failed(
+                    provider,
+                    $"User script `{fileName}` did not start.",
+                    PlatformErrorCodes.PostActionExecutionFailed,
+                    operationId);
+            }
+
+            await process.WaitForExitAsync(cancellationToken);
+            return PlatformOperation.NativeSuccess(
+                provider,
+                $"User script `{fileName}` executed.",
+                operationId);
+        }
+        catch (OperationCanceledException)
+        {
+            TryTerminateProcess(process);
+            throw;
+        }
+        catch (Exception ex)
+        {
+            return PlatformOperation.Failed(
+                provider,
+                $"User script failed: {ex.Message}",
+                PlatformErrorCodes.PostActionExecutionFailed,
+                operationId);
+        }
+        finally
+        {
+            process?.Dispose();
+        }
+    }
+
+    internal static bool TryParseUserScript(
+        string? rawScriptPath,
+        out string fileName,
+        out string arguments,
+        out bool createNoWindow,
+        out bool minimized)
+    {
+        fileName = string.Empty;
+        arguments = string.Empty;
+        createNoWindow = false;
+        minimized = false;
+
+        var sanitized = UserScriptControlChars.Replace((rawScriptPath ?? string.Empty).Trim(), string.Empty);
+        if (string.IsNullOrWhiteSpace(sanitized))
+        {
+            return false;
+        }
+
+        if (sanitized.StartsWith('\"'))
+        {
+            var parts = sanitized.Split('\"', 3);
+            if (parts.Length < 2 || string.IsNullOrWhiteSpace(parts[1]))
+            {
+                return false;
+            }
+
+            fileName = parts[1];
+            arguments = parts.Length > 2 ? parts[2] : string.Empty;
+        }
+        else
+        {
+            fileName = sanitized;
+        }
+
+        if (arguments.Contains("-noWindow", StringComparison.Ordinal))
+        {
+            createNoWindow = true;
+            arguments = arguments.Replace("-noWindow", string.Empty, StringComparison.Ordinal).Trim();
+        }
+
+        if (arguments.Contains("-minimized", StringComparison.Ordinal))
+        {
+            minimized = true;
+            arguments = arguments.Replace("-minimized", string.Empty, StringComparison.Ordinal).Trim();
+        }
+
+        return true;
+    }
+
     internal static async Task<PlatformOperationResult> ExecuteDirectCommandAsync(
         string provider,
         string operationId,
         string successMessage,
         string fileName,
         string arguments,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        TimeSpan? timeout = null)
     {
+        Process? process = null;
+        Task<string>? stdoutTask = null;
+        Task<string>? stderrTask = null;
         try
         {
             var startInfo = new ProcessStartInfo
@@ -110,11 +232,15 @@ internal static class PostActionExecutorSupport
                 CreateNoWindow = true,
             };
 
-            using var process = new Process { StartInfo = startInfo };
+            process = new Process { StartInfo = startInfo };
             process.Start();
-            var stdoutTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
-            var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
-            await process.WaitForExitAsync(cancellationToken);
+            using var timeoutCts = timeout.HasValue ? new CancellationTokenSource(timeout.Value) : null;
+            using var waitCts = timeoutCts is null
+                ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)
+                : CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+            stdoutTask = process.StandardOutput.ReadToEndAsync();
+            stderrTask = process.StandardError.ReadToEndAsync();
+            await process.WaitForExitAsync(waitCts.Token);
             var stdout = (await stdoutTask).Trim();
             var stderr = (await stderrTask).Trim();
 
@@ -135,6 +261,22 @@ internal static class PostActionExecutorSupport
                 PlatformErrorCodes.PostActionExecutionFailed,
                 operationId);
         }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && timeout.HasValue)
+        {
+            TryTerminateProcess(process);
+            await DrainOutputAsync(stdoutTask, stderrTask);
+            return PlatformOperation.Failed(
+                provider,
+                $"{successMessage} Timed out after {timeout.Value.TotalSeconds:0} seconds.",
+                PlatformErrorCodes.PostActionExecutionFailed,
+                operationId);
+        }
+        catch (OperationCanceledException)
+        {
+            TryTerminateProcess(process);
+            await DrainOutputAsync(stdoutTask, stderrTask);
+            throw;
+        }
         catch (Exception ex)
         {
             return PlatformOperation.Failed(
@@ -142,6 +284,48 @@ internal static class PostActionExecutorSupport
                 $"{successMessage} {ex.Message}",
                 PlatformErrorCodes.PostActionExecutionFailed,
                 operationId);
+        }
+        finally
+        {
+            process?.Dispose();
+        }
+    }
+
+    private static void TryTerminateProcess(Process? process)
+    {
+        if (process is null)
+        {
+            return;
+        }
+
+        try
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+                process.WaitForExit(5000);
+            }
+        }
+        catch
+        {
+            // Best effort after command cancellation or timeout.
+        }
+    }
+
+    private static async Task DrainOutputAsync(Task<string>? stdoutTask, Task<string>? stderrTask)
+    {
+        if (stdoutTask is null || stderrTask is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await Task.WhenAll(stdoutTask, stderrTask).WaitAsync(TimeSpan.FromSeconds(1));
+        }
+        catch
+        {
+            // The process is already being torn down; avoid retaining output tasks.
         }
     }
 
@@ -532,12 +716,16 @@ internal static class WindowsEmulatorExitHelper
 
         if (TryResolveMuMuConsolePath(request?.MuMu12EmulatorPath, out var consolePath))
         {
-            return await PostActionExecutorSupport.ExecuteDirectCommandAsync(
-                "windows-native",
-                "post-action.ExitEmulator",
-                $"MuMu emulator shutdown command accepted for index {emulatorIndex}.",
-                consolePath,
-                $"api -v {emulatorIndex} shutdown_player",
+            return await ExecuteConsoleWithFallbackAsync(
+                (timeout, token) => PostActionExecutorSupport.ExecuteDirectCommandAsync(
+                    "windows-native",
+                    "post-action.ExitEmulator",
+                    $"MuMu emulator shutdown command accepted for index {emulatorIndex}.",
+                    consolePath,
+                    $"api -v {emulatorIndex} shutdown_player",
+                    token,
+                    timeout),
+                () => ExecuteWindowOrPortFallback(request, "windows-native.mumu"),
                 cancellationToken);
         }
 
@@ -557,12 +745,16 @@ internal static class WindowsEmulatorExitHelper
 
         if (TryResolveLdPlayerConsolePath(request?.LdPlayerEmulatorPath, out var consolePath))
         {
-            return await PostActionExecutorSupport.ExecuteDirectCommandAsync(
-                "windows-native",
-                "post-action.ExitEmulator",
-                $"LDPlayer shutdown command accepted for index {emulatorIndex}.",
-                consolePath,
-                $"quit --index {emulatorIndex}",
+            return await ExecuteConsoleWithFallbackAsync(
+                (timeout, token) => PostActionExecutorSupport.ExecuteDirectCommandAsync(
+                    "windows-native",
+                    "post-action.ExitEmulator",
+                    $"LDPlayer shutdown command accepted for index {emulatorIndex}.",
+                    consolePath,
+                    $"quit --index {emulatorIndex}",
+                    token,
+                    timeout),
+                () => ExecuteWindowOrPortFallback(request, "windows-native.ldplayer"),
                 cancellationToken);
         }
 
@@ -582,12 +774,16 @@ internal static class WindowsEmulatorExitHelper
 
         if (TryResolveConsolePathFromProcess("Nox", "NoxConsole.exe", out var consolePath))
         {
-            return await PostActionExecutorSupport.ExecuteDirectCommandAsync(
-                "windows-native",
-                "post-action.ExitEmulator",
-                $"Nox shutdown command accepted for index {emulatorIndex}.",
-                consolePath,
-                $"quit -index:{emulatorIndex}",
+            return await ExecuteConsoleWithFallbackAsync(
+                (timeout, token) => PostActionExecutorSupport.ExecuteDirectCommandAsync(
+                    "windows-native",
+                    "post-action.ExitEmulator",
+                    $"Nox shutdown command accepted for index {emulatorIndex}.",
+                    consolePath,
+                    $"quit -index:{emulatorIndex}",
+                    token,
+                    timeout),
+                () => ExecuteWindowOrPortFallback(request, "windows-native.nox"),
                 cancellationToken);
         }
 
@@ -607,12 +803,16 @@ internal static class WindowsEmulatorExitHelper
 
         if (TryResolveConsolePathFromProcess("MEmu", "memuc.exe", out var consolePath))
         {
-            return await PostActionExecutorSupport.ExecuteDirectCommandAsync(
-                "windows-native",
-                "post-action.ExitEmulator",
-                $"XYAZ shutdown command accepted for index {emulatorIndex}.",
-                consolePath,
-                $"stop -i {emulatorIndex}",
+            return await ExecuteConsoleWithFallbackAsync(
+                (timeout, token) => PostActionExecutorSupport.ExecuteDirectCommandAsync(
+                    "windows-native",
+                    "post-action.ExitEmulator",
+                    $"XYAZ shutdown command accepted for index {emulatorIndex}.",
+                    consolePath,
+                    $"stop -i {emulatorIndex}",
+                    token,
+                    timeout),
+                () => ExecuteWindowOrPortFallback(request, "windows-native.xyaz"),
                 cancellationToken);
         }
 
@@ -657,6 +857,15 @@ internal static class WindowsEmulatorExitHelper
             "Unable to locate a local emulator window or owning process for current connection.",
             PlatformErrorCodes.PostActionUnsupported,
             "post-action.ExitEmulator");
+    }
+
+    internal static async Task<PlatformOperationResult> ExecuteConsoleWithFallbackAsync(
+        Func<TimeSpan, CancellationToken, Task<PlatformOperationResult>> executeConsoleAsync,
+        Func<PlatformOperationResult> executeFallback,
+        CancellationToken cancellationToken)
+    {
+        var result = await executeConsoleAsync(PostActionExecutorSupport.EmulatorConsoleExitTimeout, cancellationToken);
+        return result.Success ? result : executeFallback();
     }
 
     private static bool IsRecognizedWindowsEmulator(string? connectConfig)

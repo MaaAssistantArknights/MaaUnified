@@ -2851,6 +2851,12 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                     return;
                 }
 
+                var startScriptResult = await Runtime.PostActionFeatureService.ExecuteStartScriptAsync(startCancellationToken);
+                if (!startScriptResult.Success)
+                {
+                    await RecordEventAsync("TaskQueue.Start.StartsWithScript", startScriptResult.Message, startCancellationToken);
+                }
+
                 if (!await EnsureConnectedForLinkStartAsync("TaskQueue.Start", startCancellationToken))
                 {
                     return;
@@ -4112,6 +4118,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 return;
             }
 
+            _ = RunEndScriptAfterManualStopAsync();
+
             ResetAllTaskStatuses();
             CurrentSessionState = Runtime.SessionService.CurrentState;
             SyncStoppedUiStateIfSessionNotActive();
@@ -4119,6 +4127,29 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         finally
         {
             _runTransitionLock.Release();
+        }
+    }
+
+    private async Task RunEndScriptAfterManualStopAsync()
+    {
+        try
+        {
+            var result = await Runtime.PostActionFeatureService.ExecuteEndScriptAsync(manualStop: true);
+            if (!result.Success)
+            {
+                await RecordEventAsync("TaskQueue.Stop.EndsWithScript", result.Message, CancellationToken.None);
+            }
+        }
+        catch (Exception ex)
+        {
+            try
+            {
+                await RecordEventAsync("TaskQueue.Stop.EndsWithScript", ex.Message, CancellationToken.None);
+            }
+            catch
+            {
+                // Best effort: manual stop script failures must not break stop flow.
+            }
         }
     }
 
@@ -7474,25 +7505,38 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
     private async Task ExecutePostActionAfterCompletionAsync(CoreCallbackEvent callback, string runId, int? taskIndex)
     {
-        var result = await Runtime.PostActionFeatureService.ExecuteAfterCompletionAsync(
-            new PostActionExecutionContext(
-                callback.MsgName,
-                WasSuccessfulTaskChain: true,
-                RunId: runId,
-                TaskIndex: taskIndex),
-            PostActionModule.BuildRuntimeConfig());
-
-        if (!result.Success)
+        var once = PostActionModule.Once;
+        try
         {
-            LastErrorMessage = result.Message;
-            await RecordFailedResultAsync("PostAction.Execute", result);
-            return;
+            var endScriptResult = await Runtime.PostActionFeatureService.ExecuteEndScriptAsync(manualStop: false);
+            if (!endScriptResult.Success)
+            {
+                await RecordEventAsync("TaskQueue.PostAction.EndsWithScript", endScriptResult.Message, CancellationToken.None);
+            }
+
+            var result = await Runtime.PostActionFeatureService.ExecuteAfterCompletionAsync(
+                new PostActionExecutionContext(
+                    callback.MsgName,
+                    WasSuccessfulTaskChain: true,
+                    RunId: runId,
+                    TaskIndex: taskIndex),
+                PostActionModule.BuildRuntimeConfig());
+
+            if (!result.Success)
+            {
+                LastErrorMessage = result.Message;
+                await RecordFailedResultAsync("PostAction.Execute", result);
+                return;
+            }
+
+            StatusMessage = result.Message;
         }
-
-        StatusMessage = result.Message;
-        if (PostActionModule.Once)
+        finally
         {
-            await PostActionModule.ReloadPersistentConfigAsync();
+            if (once)
+            {
+                await PostActionModule.ReloadPersistentConfigAsync();
+            }
         }
     }
 

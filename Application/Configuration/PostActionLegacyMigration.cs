@@ -184,6 +184,8 @@ internal static class PostActionLegacyMigration
     {
         return new PostActionConfig
         {
+            ExitArknights = flags.HasFlag(LegacyPostActionFlags.ExitArknights),
+            BackToAndroidHome = flags.HasFlag(LegacyPostActionFlags.BackToAndroidHome),
             ExitSelf = flags.HasFlag(LegacyPostActionFlags.ExitSelf),
             ExitEmulator = flags.HasFlag(LegacyPostActionFlags.ExitEmulator),
             Hibernate = flags.HasFlag(LegacyPostActionFlags.Hibernate),
@@ -386,12 +388,14 @@ internal static class PostActionLegacyMigration
     [Flags]
     private enum LegacyPostActionFlags
     {
-        ExitSelf = 8,
-        ExitEmulator = 16,
-        Hibernate = 32,
-        Shutdown = 64,
-        Sleep = 128,
-        IfNoOtherMaa = 256,
+        ExitArknights = 1 << 0,
+        BackToAndroidHome = 1 << 1,
+        ExitEmulator = 1 << 2,
+        ExitSelf = 1 << 3,
+        IfNoOtherMaa = 1 << 4,
+        Hibernate = 1 << 5,
+        Shutdown = 1 << 6,
+        Sleep = 1 << 7,
     }
 
     private enum LegacyCompletionAction

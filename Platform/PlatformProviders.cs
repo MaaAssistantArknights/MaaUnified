@@ -5354,4 +5354,9 @@ public sealed class CommandPostActionExecutorService : IPostActionExecutorServic
             _ => PlatformOperation.Failed("post-action", "Unknown post action.", PlatformErrorCodes.PostActionExecutionFailed, $"post-action.{action}"),
         };
     }
+
+    public async Task<PlatformOperationResult> ExecuteUserScriptAsync(
+        string scriptPath,
+        CancellationToken cancellationToken = default)
+        => await PostActionExecutorSupport.ExecuteUserScriptAsync(scriptPath, cancellationToken);
 }

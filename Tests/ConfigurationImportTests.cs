@@ -2828,6 +2828,60 @@ public sealed class ConfigurationImportTests
         Assert.True(load.Value.Sleep);
     }
 
+    [Theory]
+    [InlineData("1", true, false, false, false)]
+    [InlineData("2", false, true, false, false)]
+    [InlineData("4", false, false, true, false)]
+    [InlineData("16", false, false, false, true)]
+    public async Task ImportLegacy_GuiPostActionsLegacyBitmask_MapsWpfPostActionsBits(
+        string legacyValue,
+        bool expectedExitArknights,
+        bool expectedBackToAndroidHome,
+        bool expectedExitEmulator,
+        bool expectedIfNoOtherMaa)
+    {
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.json"),
+            $$"""
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": {
+                  "ConnectAddress": "10.0.0.7:5555"
+                }
+              },
+              "Global": {
+                "MainFunction.PostActions": "{{legacyValue}}"
+              }
+            }
+            """);
+
+        var service = CreateService(root);
+        var report = await service.ImportLegacyAsync(ImportSource.GuiOnly, manualImport: false);
+
+        Assert.True(report.Success);
+        var migratedProfile = service.CurrentConfig.Profiles["Default"];
+        Assert.True(migratedProfile.Values.ContainsKey("TaskQueue.PostAction"));
+        var migrated = PostActionConfig.FromJson(migratedProfile.Values["TaskQueue.PostAction"]);
+        Assert.Equal(expectedExitArknights, migrated.ExitArknights);
+        Assert.Equal(expectedBackToAndroidHome, migrated.BackToAndroidHome);
+        Assert.Equal(expectedExitEmulator, migrated.ExitEmulator);
+        Assert.Equal(expectedIfNoOtherMaa, migrated.IfNoOtherMaa);
+        Assert.False(migrated.ExitSelf);
+        Assert.False(migrated.Hibernate);
+        Assert.False(migrated.Shutdown);
+        Assert.False(migrated.Sleep);
+
+        var diagnostics = new UiDiagnosticsService(root, service.LogService);
+        var feature = new PostActionFeatureService(service, diagnostics, new NoOpPostActionExecutorService());
+        var load = await feature.LoadAsync();
+        Assert.True(load.Success);
+        Assert.Equal(expectedExitEmulator, load.Value!.ExitEmulator);
+        Assert.Equal(expectedIfNoOtherMaa, load.Value.IfNoOtherMaa);
+    }
+
     [Fact]
     public async Task ImportLegacy_GuiActionAfterCompletedWithoutPostActions_RemainsReadable_AndMigratesOnLoad()
     {

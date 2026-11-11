@@ -259,7 +259,8 @@ public sealed class AvaloniaDialogService : IAppDialogService
             normalizedRequest.Language,
             normalizedRequest.CountdownSeconds,
             normalizedRequest.Links,
-            normalizedRequest.ShowCancelButton);
+            normalizedRequest.ShowCancelButton,
+            normalizedRequest.ShowConfirmButton);
         using var chromeBinding = AttachChromeLocalization(dialog, normalizedRequest.Title, normalizedRequest.Chrome);
         var presentation = await ShowDialogWithOwnerScaleAsync<DialogReturnSemantic?>(dialog, cancellationToken);
         if (!presentation.OwnerAvailable)

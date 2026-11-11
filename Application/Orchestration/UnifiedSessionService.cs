@@ -637,6 +637,14 @@ public sealed class UnifiedSessionService
             && LastSuccessfulConnectionInfoMatches(connectionInfo);
     }
 
+    public void InvalidateConnectionAfterExternalExit()
+    {
+        _lastSuccessfulConnectionInfo = null;
+        ClearActiveConnectionTarget();
+        MarkIdleConnectionCallbacksStale();
+        MoveToState(SessionState.Idle, "Session.ExternalExit", "external-device-exit");
+    }
+
     private bool LastSuccessfulConnectionInfoMatches(CoreConnectionInfo connectionInfo)
     {
         var last = _lastSuccessfulConnectionInfo;

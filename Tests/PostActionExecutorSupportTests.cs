@@ -93,4 +93,129 @@ public sealed class PostActionExecutorSupportTests
         Assert.Contains("requires native provider", capability.BackToAndroidHome.Message, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("requires native provider", capability.ExitSelf.Message, StringComparison.OrdinalIgnoreCase);
     }
+
+    [Fact]
+    public async Task WindowsEmulatorExitHelper_ExecuteConsoleWithFallback_UsesConsoleResultWhenSuccessful()
+    {
+        var fallbackCalled = false;
+
+        var result = await WindowsEmulatorExitHelper.ExecuteConsoleWithFallbackAsync(
+            (_, _) => Task.FromResult(PlatformOperation.NativeSuccess("test", "console ok", "test-op")),
+            () =>
+            {
+                fallbackCalled = true;
+                return PlatformOperation.NativeSuccess("test", "fallback ok", "test-op");
+            },
+            CancellationToken.None);
+
+        Assert.True(result.Success);
+        Assert.Equal("console ok", result.Message);
+        Assert.False(fallbackCalled);
+    }
+
+    [Fact]
+    public async Task WindowsEmulatorExitHelper_ExecuteConsoleWithFallback_FallsBackWhenConsoleFails()
+    {
+        var fallbackCalled = false;
+
+        var result = await WindowsEmulatorExitHelper.ExecuteConsoleWithFallbackAsync(
+            (_, _) => Task.FromResult(PlatformOperation.Failed(
+                "test",
+                "console timed out",
+                PlatformErrorCodes.PostActionExecutionFailed,
+                "test-op")),
+            () =>
+            {
+                fallbackCalled = true;
+                return PlatformOperation.NativeSuccess("test", "fallback ok", "test-op");
+            },
+            CancellationToken.None);
+
+        Assert.True(result.Success);
+        Assert.Equal("fallback ok", result.Message);
+        Assert.True(fallbackCalled);
+    }
+
+    [Fact]
+    public async Task PostActionExecutorSupport_ExecuteDirectCommand_TimesOutAndReportsFailure()
+    {
+        var (fileName, arguments) = OperatingSystem.IsWindows()
+            ? ("cmd.exe", "/c ping -n 10 127.0.0.1")
+            : ("/bin/sleep", "5");
+
+        var result = await PostActionExecutorSupport.ExecuteDirectCommandAsync(
+            "test",
+            "test-op",
+            "console command finished.",
+            fileName,
+            arguments,
+            CancellationToken.None,
+            TimeSpan.FromMilliseconds(300));
+
+        Assert.False(result.Success);
+        Assert.Contains("Timed out", result.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData("\"/opt/tool/run.sh\" --fast -noWindow -minimized", "/opt/tool/run.sh", "--fast", true, true)]
+    [InlineData("\"/opt/tool/run.sh\"", "/opt/tool/run.sh", "", false, false)]
+    [InlineData("/opt/tool/run.sh", "/opt/tool/run.sh", "", false, false)]
+    public void PostActionExecutorSupport_TryParseUserScript_ParsesQuotedPathAndFlags(
+        string raw,
+        string expectedFile,
+        string expectedArguments,
+        bool expectedNoWindow,
+        bool expectedMinimized)
+    {
+        var parsed = PostActionExecutorSupport.TryParseUserScript(
+            raw,
+            out var fileName,
+            out var arguments,
+            out var createNoWindow,
+            out var minimized);
+
+        Assert.True(parsed);
+        Assert.Equal(expectedFile, fileName);
+        Assert.Equal(expectedArguments, arguments);
+        Assert.Equal(expectedNoWindow, createNoWindow);
+        Assert.Equal(expectedMinimized, minimized);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("\"\"")]
+    public void PostActionExecutorSupport_TryParseUserScript_RejectsEmptyInput(string raw)
+    {
+        var parsed = PostActionExecutorSupport.TryParseUserScript(
+            raw,
+            out _,
+            out _,
+            out _,
+            out _);
+
+        Assert.False(parsed);
+    }
+
+    [Fact]
+    public async Task PostActionExecutorSupport_ExecuteUserScript_RunsProcessToCompletion()
+    {
+        var script = OperatingSystem.IsWindows()
+            ? "\"cmd.exe\" /c exit 0 -noWindow"
+            : "\"/bin/echo\" hello -noWindow";
+
+        var result = await PostActionExecutorSupport.ExecuteUserScriptAsync(script, CancellationToken.None);
+
+        Assert.True(result.Success, result.Message);
+    }
+
+    [Fact]
+    public async Task PostActionExecutorSupport_ExecuteUserScript_FailsForMissingFile()
+    {
+        var result = await PostActionExecutorSupport.ExecuteUserScriptAsync(
+            "\"definitely-not-a-real-script-9f8d7c6b5a\" -noWindow",
+            CancellationToken.None);
+
+        Assert.False(result.Success);
+    }
 }

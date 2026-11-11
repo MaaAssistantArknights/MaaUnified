@@ -653,4 +653,12 @@ public interface IPostActionFeatureService
         PostActionExecutionContext context,
         PostActionConfig? configOverride = null,
         CancellationToken cancellationToken = default);
+
+    Task<UiOperationResult> ExecuteStartScriptAsync(CancellationToken cancellationToken = default)
+        => Task.FromResult(UiOperationResult.Ok("Start script is not configured."));
+
+    Task<UiOperationResult> ExecuteEndScriptAsync(
+        bool manualStop,
+        CancellationToken cancellationToken = default)
+        => Task.FromResult(UiOperationResult.Ok("End script is not configured."));
 }

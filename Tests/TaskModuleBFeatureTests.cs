@@ -1821,6 +1821,191 @@ public sealed class TaskModuleBFeatureTests
         Assert.True(module.Recruit);
     }
 
+    [Fact]
+    public async Task PostAction_EndScript_Completion_ExecutesConfiguredScript()
+    {
+        var supported = new PlatformCapabilityStatus(true, "supported", Provider: "test");
+        var executor = new TestPostActionExecutorService(new PostActionCapabilityMatrix(
+            ExitArknights: supported,
+            BackToAndroidHome: supported,
+            ExitEmulator: supported,
+            ExitSelf: supported,
+            Hibernate: supported,
+            Shutdown: supported,
+            Sleep: supported));
+        await using var fixture = await TestFixture.CreateAsync(executor: executor);
+        var profile = fixture.Config.CurrentConfig.Profiles[fixture.Config.CurrentConfig.CurrentProfile];
+        profile.Values[ConfigurationKeys.EndsWithScript] = JsonValue.Create("/bin/echo done");
+
+        var result = await fixture.PostAction.ExecuteEndScriptAsync(manualStop: false);
+
+        Assert.True(result.Success, result.Message);
+        Assert.Equal(["/bin/echo done"], executor.ExecutedScripts);
+
+        var eventLog = await File.ReadAllTextAsync(Path.Combine(fixture.Root, "debug", "avalonia-ui-events.log"));
+        Assert.Contains("action=EndsWithScript", eventLog);
+    }
+
+    [Fact]
+    public async Task PostAction_EndScript_NotConfigured_SkipsExecution()
+    {
+        var supported = new PlatformCapabilityStatus(true, "supported", Provider: "test");
+        var executor = new TestPostActionExecutorService(new PostActionCapabilityMatrix(
+            ExitArknights: supported,
+            BackToAndroidHome: supported,
+            ExitEmulator: supported,
+            ExitSelf: supported,
+            Hibernate: supported,
+            Shutdown: supported,
+            Sleep: supported));
+        await using var fixture = await TestFixture.CreateAsync(executor: executor);
+
+        var result = await fixture.PostAction.ExecuteEndScriptAsync(manualStop: false);
+
+        Assert.True(result.Success, result.Message);
+        Assert.Empty(executor.ExecutedScripts);
+    }
+
+    [Fact]
+    public async Task PostAction_EndScript_ManualStop_RequiresManualStopWithScriptFlag()
+    {
+        var supported = new PlatformCapabilityStatus(true, "supported", Provider: "test");
+        var executor = new TestPostActionExecutorService(new PostActionCapabilityMatrix(
+            ExitArknights: supported,
+            BackToAndroidHome: supported,
+            ExitEmulator: supported,
+            ExitSelf: supported,
+            Hibernate: supported,
+            Shutdown: supported,
+            Sleep: supported));
+        await using var fixture = await TestFixture.CreateAsync(executor: executor);
+        var profile = fixture.Config.CurrentConfig.Profiles[fixture.Config.CurrentConfig.CurrentProfile];
+        profile.Values[ConfigurationKeys.EndsWithScript] = JsonValue.Create("/bin/echo stop");
+
+        var disabled = await fixture.PostAction.ExecuteEndScriptAsync(manualStop: true);
+
+        Assert.True(disabled.Success, disabled.Message);
+        Assert.Empty(executor.ExecutedScripts);
+
+        profile.Values[ConfigurationKeys.ManualStopWithScript] = JsonValue.Create("True");
+        var enabled = await fixture.PostAction.ExecuteEndScriptAsync(manualStop: true);
+
+        Assert.True(enabled.Success, enabled.Message);
+        Assert.Equal(["/bin/echo stop"], executor.ExecutedScripts);
+    }
+
+    [Fact]
+    public async Task PostAction_StartScript_ExecutesConfiguredScript()
+    {
+        var supported = new PlatformCapabilityStatus(true, "supported", Provider: "test");
+        var executor = new TestPostActionExecutorService(new PostActionCapabilityMatrix(
+            ExitArknights: supported,
+            BackToAndroidHome: supported,
+            ExitEmulator: supported,
+            ExitSelf: supported,
+            Hibernate: supported,
+            Shutdown: supported,
+            Sleep: supported));
+        await using var fixture = await TestFixture.CreateAsync(executor: executor);
+        var profile = fixture.Config.CurrentConfig.Profiles[fixture.Config.CurrentConfig.CurrentProfile];
+
+        var skipped = await fixture.PostAction.ExecuteStartScriptAsync();
+        Assert.True(skipped.Success, skipped.Message);
+
+        profile.Values[ConfigurationKeys.StartsWithScript] = JsonValue.Create("/bin/echo start");
+        var result = await fixture.PostAction.ExecuteStartScriptAsync();
+
+        Assert.True(result.Success, result.Message);
+        Assert.Equal(["/bin/echo start"], executor.ExecutedScripts);
+
+        var eventLog = await File.ReadAllTextAsync(Path.Combine(fixture.Root, "debug", "avalonia-ui-events.log"));
+        Assert.Contains("action=StartsWithScript", eventLog);
+    }
+
+    [Fact]
+    public async Task PostAction_Execute_OnceSleep_RestoresExitSelfFromPersistentConfig()
+    {
+        var supported = new PlatformCapabilityStatus(true, "supported", Provider: "test");
+        var executor = new TestPostActionExecutorService(new PostActionCapabilityMatrix(
+            ExitArknights: supported,
+            BackToAndroidHome: supported,
+            ExitEmulator: supported,
+            ExitSelf: supported,
+            Hibernate: supported,
+            Shutdown: supported,
+            Sleep: supported));
+        await using var fixture = await TestFixture.CreateAsync(
+            executor: executor,
+            promptService: new TestPostActionPromptService(UiOperationResult.Ok("confirmed")));
+
+        var save = await fixture.PostAction.SaveAsync(new PostActionConfig { ExitSelf = true });
+        Assert.True(save.Success, save.Message);
+
+        var execute = await fixture.PostAction.ExecuteAfterCompletionAsync(
+            new PostActionExecutionContext("AllTasksCompleted", true, RunId: "run-once-sleep"),
+            new PostActionConfig
+            {
+                Once = true,
+                Sleep = true,
+                ExitSelf = false,
+            });
+
+        Assert.True(execute.Success, execute.Message);
+        Assert.Contains(PostActionType.Sleep, executor.ExecutedActions);
+        Assert.Contains(PostActionType.ExitSelf, executor.ExecutedActions);
+    }
+
+    [Fact]
+    public async Task SessionService_InvalidateConnectionAfterExternalExit_ResetsConnectionState()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var session = fixture.Runtime.SessionService;
+
+        var connect = await session.ConnectAsync("127.0.0.1:5555", "General", string.Empty);
+        Assert.True(connect.Success);
+        Assert.Equal(SessionState.Connected, session.CurrentState);
+        Assert.True(session.IsConnectedWith(new CoreConnectionInfo("127.0.0.1:5555", "General", string.Empty)));
+
+        session.InvalidateConnectionAfterExternalExit();
+
+        Assert.Equal(SessionState.Idle, session.CurrentState);
+        Assert.False(session.IsConnectedWith(new CoreConnectionInfo("127.0.0.1:5555", "General", string.Empty)));
+    }
+
+    [Fact]
+    public async Task PostAction_Execute_ExitEmulator_InvalidatesSessionConnection()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            // ExitEmulator is normalized away on non-Windows runtimes (NormalizeForRuntime).
+            return;
+        }
+
+        var supported = new PlatformCapabilityStatus(true, "supported", Provider: "test");
+        var executor = new TestPostActionExecutorService(new PostActionCapabilityMatrix(
+            ExitArknights: supported,
+            BackToAndroidHome: supported,
+            ExitEmulator: supported,
+            ExitSelf: supported,
+            Hibernate: supported,
+            Shutdown: supported,
+            Sleep: supported));
+        await using var fixture = await TestFixture.CreateAsync(executor: executor);
+        var session = fixture.Runtime.SessionService;
+
+        var connect = await session.ConnectAsync("127.0.0.1:5555", "General", string.Empty);
+        Assert.True(connect.Success);
+        Assert.Equal(SessionState.Connected, session.CurrentState);
+
+        var execute = await fixture.PostAction.ExecuteAfterCompletionAsync(
+            new PostActionExecutionContext("AllTasksCompleted", true, RunId: "run-exit-emulator"),
+            new PostActionConfig { ExitEmulator = true });
+
+        Assert.True(execute.Success, execute.Message);
+        Assert.Contains(PostActionType.ExitEmulator, executor.ExecutedActions);
+        Assert.Equal(SessionState.Idle, session.CurrentState);
+    }
+
     private static async Task InvokeCallbackAsync(TaskQueuePageViewModel vm, CoreCallbackEvent callback)
     {
         var method = typeof(TaskQueuePageViewModel).GetMethod(
@@ -2034,7 +2219,8 @@ public sealed class TaskModuleBFeatureTests
                 platform.PostActionExecutorService,
                 bridge,
                 lifecycle,
-                promptService ?? new NoOpPostActionPromptService());
+                promptService ?? new NoOpPostActionPromptService(),
+                session);
             var connectFeatureService = new ConnectFeatureService(session, config, log, bridge, root);
             var runtime = new MAAUnifiedRuntime
             {
@@ -2106,6 +2292,27 @@ public sealed class TaskModuleBFeatureTests
 
         public PostActionCapabilityMatrix GetCapabilityMatrix(PostActionExecutorRequest? request = null)
             => _matrixSelector?.Invoke(request) ?? CapabilityMatrix;
+
+        public List<string> ExecutedScripts { get; } = [];
+
+        public Func<string, PlatformOperationResult>? ScriptHandler { get; set; }
+
+        public Task<PlatformOperationResult> ExecuteUserScriptAsync(
+            string scriptPath,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            ExecutedScripts.Add(scriptPath);
+            if (ScriptHandler is not null)
+            {
+                return Task.FromResult(ScriptHandler(scriptPath));
+            }
+
+            return Task.FromResult(PlatformOperation.NativeSuccess(
+                "user-script",
+                $"Executed user script `{scriptPath}`.",
+                "post-action.UserScript"));
+        }
 
         public Task<PlatformOperationResult> ExecuteAsync(
             PostActionType action,

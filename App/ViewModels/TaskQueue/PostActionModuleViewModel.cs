@@ -187,6 +187,7 @@ public sealed class PostActionModuleViewModel : ObservableObject
 
             if (value)
             {
+                ExitEmulator = true;
                 ExitSelf = true;
             }
 

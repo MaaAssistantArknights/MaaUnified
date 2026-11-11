@@ -231,6 +231,7 @@ public sealed record WarningConfirmDialogRequest(
     int CountdownSeconds = 0,
     DialogChromeCatalog? Chrome = null,
     IReadOnlyList<DialogLinkItem>? Links = null,
-    bool ShowCancelButton = true);
+    bool ShowCancelButton = true,
+    bool ShowConfirmButton = true);
 
 public sealed record WarningConfirmDialogPayload(bool Confirmed);

@@ -54,7 +54,8 @@ public sealed class AvaloniaPostActionPromptService : IPostActionPromptService
                 ConfirmText: BuildConfirmText(request.Language),
                 CancelText: DialogTextCatalog.WarningDialogCancelButton(request.Language),
                 Language: request.Language ?? "en-us",
-                CountdownSeconds: seconds),
+                CountdownSeconds: seconds,
+                ShowConfirmButton: false),
             "App.PostActionPrompt.PowerAction",
             cancellationToken);
 

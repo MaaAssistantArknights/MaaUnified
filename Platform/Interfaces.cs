@@ -449,4 +449,8 @@ public interface IPostActionExecutorService
         PostActionType action,
         PostActionExecutorRequest? request = null,
         CancellationToken cancellationToken = default);
+
+    Task<PlatformOperationResult> ExecuteUserScriptAsync(
+        string scriptPath,
+        CancellationToken cancellationToken = default);
 }
