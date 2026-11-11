@@ -6,15 +6,24 @@ namespace MAAUnified.Application.Configuration;
 
 internal sealed class LegacyTaskSchemaConversionOptions
 {
-    public static readonly LegacyTaskSchemaConversionOptions GuiJsonFlat = new(false);
-    public static readonly LegacyTaskSchemaConversionOptions GuiNewJson = new(true);
+    public static readonly LegacyTaskSchemaConversionOptions GuiJsonFlat = new(false, false, false);
+    public static readonly LegacyTaskSchemaConversionOptions GuiNewJson = new(true, true, true);
 
-    private LegacyTaskSchemaConversionOptions(bool missingRoguelikeIterationFlagsDefault)
+    private LegacyTaskSchemaConversionOptions(
+        bool missingRoguelikeIterationFlagsDefault,
+        bool missingInfrastDormTrustDefault,
+        bool missingInfrastRoomListDefault)
     {
         MissingRoguelikeIterationFlagsDefault = missingRoguelikeIterationFlagsDefault;
+        MissingInfrastDormTrustDefault = missingInfrastDormTrustDefault;
+        MissingInfrastRoomListDefault = missingInfrastRoomListDefault;
     }
 
     public bool MissingRoguelikeIterationFlagsDefault { get; }
+
+    public bool MissingInfrastDormTrustDefault { get; }
+
+    public bool MissingInfrastRoomListDefault { get; }
 }
 
 internal static class LegacyTaskSchemaConverter
@@ -92,7 +101,7 @@ internal static class LegacyTaskSchemaConverter
                 "CloseDown" => ConvertCloseDown(profile, config),
                 "Fight" => ConvertFight(legacyTask, profile, config),
                 "Recruit" => ConvertRecruit(legacyTask, profile, config),
-                "Infrast" => ConvertInfrast(legacyTask),
+                "Infrast" => ConvertInfrast(legacyTask, options),
                 "Mall" => ConvertMall(legacyTask, ResolveUiLanguage(config, uiLanguage)),
                 "Award" => ConvertAward(legacyTask),
                 "Roguelike" => ConvertRoguelike(legacyTask, options),
@@ -422,9 +431,10 @@ internal static class LegacyTaskSchemaConverter
         return result;
     }
 
-    private static JsonObject ConvertInfrast(JsonObject task)
+    private static JsonObject ConvertInfrast(JsonObject task, LegacyTaskSchemaConversionOptions options)
     {
         var facilities = new JsonArray();
+        var facilityOrder = new JsonArray();
         if (task["RoomList"] is JsonArray roomList)
         {
             foreach (var roomNode in roomList)
@@ -434,28 +444,36 @@ internal static class LegacyTaskSchemaConverter
                     continue;
                 }
 
-                if (!GetBool(room, "IsEnabled", true))
-                {
-                    continue;
-                }
-
                 var roomName = GetString(room, "Room");
                 if (!string.IsNullOrWhiteSpace(roomName))
                 {
+                    facilityOrder.Add(roomName);
+                    if (!GetBool(room, "IsEnabled", true))
+                    {
+                        continue;
+                    }
+
                     facilities.Add(roomName);
                 }
+            }
+        }
+        else if (options.MissingInfrastRoomListDefault)
+        {
+            foreach (var roomName in new[] { "Mfg", "Trade", "Control", "Power", "Reception", "Office", "Dorm", "Processing", "Training" })
+            {
+                facilities.Add(roomName);
+                facilityOrder.Add(roomName);
             }
         }
 
         var mode = LegacyConfigValueMappings.NormalizeInfrastMode(task["Mode"]);
         var result = new JsonObject
         {
-            ["facility"] = facilities,
-            ["drones"] = GetString(task, "UsesOfDrones") ?? "_NotUse",
+            ["drones"] = GetString(task, "UsesOfDrones") ?? "Money",
             ["continue_training"] = GetBool(task, "ContinueTraining", false),
             ["threshold"] = GetInt(task, "DormThreshold", 30) / 100.0,
             ["dorm_notstationed_enabled"] = GetBool(task, "DormFilterNotStationed", true),
-            ["dorm_trust_enabled"] = GetBool(task, "DormTrustEnabled", true),
+            ["dorm_trust_enabled"] = GetBool(task, "DormTrustEnabled", options.MissingInfrastDormTrustDefault),
             ["replenish"] = GetBool(task, "OriginiumShardAutoReplenishment", true),
             ["reception_message_board"] = GetBool(task, "ReceptionMessageBoard", true),
             ["reception_clue_exchange"] = GetBool(task, "ReceptionClueExchange", true),
@@ -463,10 +481,16 @@ internal static class LegacyTaskSchemaConverter
             ["mode"] = mode,
         };
 
-        if (mode == 10000)
+        // Frozen WPF serializes Filename/PlanSelect unconditionally and the flat migration maps
+        // CustomInfrastFile/CustomInfrastPlanSelect regardless of mode, so persist the saved Custom
+        // selection for every mode. Non-Custom runtime Core params still strip them in BuildCoreParams.
+        result["filename"] = GetString(task, "Filename") ?? string.Empty;
+        result["plan_index"] = Math.Max(-1, GetInt(task, "PlanSelect", -1));
+
+        if (task["RoomList"] is JsonArray || options.MissingInfrastRoomListDefault)
         {
-            result["filename"] = GetString(task, "Filename") ?? string.Empty;
-            result["plan_index"] = Math.Max(-1, GetInt(task, "PlanSelect", 0));
+            result["facility"] = facilities;
+            result["_ui_facility_order"] = facilityOrder;
         }
 
         return result;

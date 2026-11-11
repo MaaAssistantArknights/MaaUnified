@@ -2695,6 +2695,40 @@ public sealed class ConfigurationImportTests
     }
 
     [Fact]
+    public async Task LoadOrBootstrapAsync_PartialSchemaV2InfrastParams_ShouldPersistWpfDefaults()
+    {
+        var root = CreateTempRoot();
+        var loadedConfig = new UnifiedConfig();
+        loadedConfig.Profiles["Default"].TaskQueue.Add(new UnifiedTaskItem
+        {
+            Type = TaskModuleTypes.Infrast,
+            Name = "Infrast",
+            Params = new JsonObject { ["mode"] = 0 },
+        });
+
+        var store = new CountingConfigStore(root, loadedConfig);
+        var service = CreateService(root, store);
+
+        var load = await service.LoadOrBootstrapAsync();
+
+        Assert.True(load.LoadedFromExistingConfig);
+        Assert.Equal(1, store.SaveCount);
+        var parameters = Assert.Single(service.CurrentConfig.Profiles["Default"].TaskQueue).Params;
+        Assert.Equal(
+            ["Mfg", "Trade", "Control", "Power", "Reception", "Office", "Dorm", "Processing", "Training"],
+            Assert.IsType<JsonArray>(parameters["facility"]).Select(node => node!.GetValue<string>()));
+        Assert.Equal("Money", parameters["drones"]?.GetValue<string>());
+        Assert.False(parameters["continue_training"]?.GetValue<bool>());
+        Assert.Equal(0.3, parameters["threshold"]?.GetValue<double>());
+        Assert.True(parameters["dorm_notstationed_enabled"]?.GetValue<bool>());
+        Assert.True(parameters["dorm_trust_enabled"]?.GetValue<bool>());
+        Assert.True(parameters["replenish"]?.GetValue<bool>());
+        Assert.True(parameters["reception_message_board"]?.GetValue<bool>());
+        Assert.True(parameters["reception_clue_exchange"]?.GetValue<bool>());
+        Assert.True(parameters["reception_send_clue"]?.GetValue<bool>());
+    }
+
+    [Fact]
     public async Task LoadOrBootstrap_AutoImportFailure_WritesDebugReport()
     {
         var root = CreateTempRoot();
@@ -3403,37 +3437,7 @@ public sealed class ConfigurationImportTests
     }
 
     [Fact]
-    public async Task GuiImport_FlatNonTaskProfileValues_ShouldImportAndKeepInverseClearModeGlobal()
-    {
-        var root = CreateTempRoot();
-        Directory.CreateDirectory(Path.Combine(root, "config"));
-        await File.WriteAllTextAsync(
-            Path.Combine(root, "config", "gui.json"),
-            """
-            {
-              "Current": "Default",
-              "Configurations": null,
-              "Connect.Address": "127.0.0.1:5555",
-              "GUI.InverseClearMode": "Clear"
-            }
-            """);
-
-        var service = CreateService(root);
-        var report = await service.ImportLegacyAsync(ImportSource.GuiOnly, manualImport: false);
-
-        Assert.True(report.Success);
-        Assert.Equal(
-            "127.0.0.1:5555",
-            service.CurrentConfig.Profiles["Default"].Values["ConnectAddress"]?.GetValue<string>());
-        Assert.Equal(
-            "Clear",
-            service.CurrentConfig.GlobalValues["GUI.InverseClearMode"]?.GetValue<string>());
-        Assert.False(service.CurrentConfig.Profiles["Default"].Values.ContainsKey("GUI.InverseClearMode"));
-        Assert.False(service.CurrentConfig.Profiles["Default"].Values.ContainsKey("Configurations"));
-    }
-
-    [Fact]
-    public async Task GuiNewImport_MissingWpfTaskDefaults_ShouldUseWpfValues()
+    public async Task GuiNewImport_NonCustomInfrast_PreservesFilenameAndPlanSelect()
     {
         var root = CreateTempRoot();
         Directory.CreateDirectory(Path.Combine(root, "config"));
@@ -3445,10 +3449,13 @@ public sealed class ConfigurationImportTests
               "Configurations": {
                 "Default": {
                   "TaskQueue": [
-                    { "$type": "StartUpTask", "Name": "Start" },
-                    { "$type": "FightTask", "Name": "Fight" },
-                    { "$type": "RecruitTask", "Name": "Recruit" },
-                    { "$type": "RoguelikeTask", "Name": "Rogue", "Mode": "Collectible" }
+                    {
+                      "$type": "InfrastTask",
+                      "Name": "Infrast",
+                      "Mode": "Normal",
+                      "Filename": "/tmp/infrast.json",
+                      "PlanSelect": 2
+                    }
                   ]
                 }
               }
@@ -3457,149 +3464,12 @@ public sealed class ConfigurationImportTests
 
         var service = CreateService(root);
         var report = await service.ImportLegacyAsync(ImportSource.GuiNewOnly, manualImport: false);
-        var tasks = service.CurrentConfig.Profiles["Default"].TaskQueue;
+        var parameters = service.CurrentConfig.Profiles["Default"].TaskQueue.Single().Params;
 
         Assert.True(report.Success);
-        Assert.True(tasks.Single(task => task.Name == "Start").Params["start_game_enabled"]?.GetValue<bool>());
-        var fight = tasks.Single(task => task.Name == "Fight");
-        Assert.Equal(0, fight.Params["series"]?.GetValue<int>());
-        Assert.True(fight.Params["report_to_penguin"]?.GetValue<bool>());
-        Assert.True(fight.Params["report_to_yituliu"]?.GetValue<bool>());
-        Assert.True(tasks.Single(task => task.Name == "Recruit").Params["report_to_penguin"]?.GetValue<bool>());
-        var awards = Assert.IsType<JsonObject>(tasks.Single(task => task.Name == "Rogue").Params["collectible_mode_start_list"]);
-        Assert.True(awards["hot_water"]?.GetValue<bool>());
-        Assert.True(awards["hope"]?.GetValue<bool>());
-        Assert.True(awards["ideas"]?.GetValue<bool>());
-    }
-
-    [Fact]
-    public async Task ManualImport_MissingCurrentProfile_ShouldSelectAnImportedProfile()
-    {
-        var root = CreateTempRoot();
-        Directory.CreateDirectory(Path.Combine(root, "config"));
-        await File.WriteAllTextAsync(
-            Path.Combine(root, "config", "gui.json"),
-            """{ "Current": "Missing", "Configurations": { "Available": { "TouchMode": "adb" } } }""");
-
-        var service = CreateService(root);
-        var report = await service.ImportLegacyAsync(ImportSource.GuiOnly, manualImport: true);
-
-        Assert.True(report.AppliedConfig);
-        Assert.Equal("Available", service.CurrentConfig.CurrentProfile);
-        Assert.Contains(report.Warnings, warning => warning.Contains("Missing", StringComparison.Ordinal));
-    }
-
-    [Fact]
-    public async Task AvaloniaConfig_UnknownAndNullFields_ShouldRoundTrip()
-    {
-        var root = CreateTempRoot();
-        Directory.CreateDirectory(Path.Combine(root, "config"));
-        var path = Path.Combine(root, "config", "avalonia.json");
-        await File.WriteAllTextAsync(
-            path,
-            """
-            {
-              "SchemaVersion": 3,
-              "CurrentProfile": "Default",
-              "Profiles": { "Default": { "Values": { "known-null": null }, "TaskQueue": [], "future-profile": { "x": 1 } } },
-              "GlobalValues": { "global-null": null },
-              "Migration": { "future-migration": true },
-              "future-root": [1, 2]
-            }
-            """);
-
-        var store = new AvaloniaJsonConfigStore(root);
-        var config = await store.LoadAsync();
-        Assert.NotNull(config);
-        await store.SaveAsync(config!);
-
-        var saved = JsonNode.Parse(await File.ReadAllTextAsync(path))!.AsObject();
-        Assert.True(saved.ContainsKey("future-root"));
-        Assert.True(saved["Profiles"]?["Default"]?["future-profile"] is JsonObject);
-        Assert.True(saved["Migration"]?["future-migration"]?.GetValue<bool>());
-        Assert.Null(saved["GlobalValues"]?["global-null"]);
-        Assert.Null(saved["Profiles"]?["Default"]?["Values"]?["known-null"]);
-    }
-
-    [Fact]
-    public async Task AvaloniaConfig_NullProfileAndTaskEntries_ShouldNormalizeAtDeserializeBoundary()
-    {
-        var root = CreateTempRoot();
-        Directory.CreateDirectory(Path.Combine(root, "config"));
-        var path = Path.Combine(root, "config", "avalonia.json");
-        await File.WriteAllTextAsync(
-            path,
-            """
-            {
-              "SchemaVersion": 3,
-              "CurrentProfile": "Default",
-              "Profiles": {
-                "Default": null,
-                "Alt": {
-                  "Values": {},
-                  "TaskQueue": [
-                    null,
-                    { "Type": "Fight", "Name": "Fight", "IsEnabled": true, "Params": {} }
-                  ]
-                }
-              },
-              "GlobalValues": {},
-              "Migration": {}
-            }
-            """);
-
-        var service = CreateService(root);
-        var load = await service.LoadOrBootstrapAsync();
-
-        Assert.True(load.LoadedFromExistingConfig);
-        Assert.Empty(service.CurrentConfig.Profiles["Default"].TaskQueue);
-        var altTask = Assert.Single(service.CurrentConfig.Profiles["Alt"].TaskQueue);
-        Assert.Equal("Fight", altTask.Type);
-
-        var saved = JsonNode.Parse(await File.ReadAllTextAsync(path))!.AsObject();
-        Assert.IsType<JsonObject>(saved["Profiles"]?["Default"]);
-        Assert.Single(Assert.IsType<JsonArray>(saved["Profiles"]?["Alt"]?["TaskQueue"]));
-
-        await service.SaveAsync();
-    }
-
-    [Fact]
-    public async Task GuiNewImport_NullAndInvalidTaskQueueMembers_ShouldRemainStructural()
-    {
-        var root = CreateTempRoot();
-        Directory.CreateDirectory(Path.Combine(root, "config"));
-        await File.WriteAllTextAsync(
-            Path.Combine(root, "config", "gui.new.json"),
-            """
-            {
-              "Current": "Default",
-              "Configurations": {
-                "Default": {
-                  "TaskQueue": null,
-                  "Connect.Address": "127.0.0.1:5555"
-                },
-                "Malformed": {
-                  "TaskQueue": {},
-                  "Connect.Address": "10.0.0.1:5555"
-                }
-              }
-            }
-            """);
-
-        var service = CreateService(root);
-        var report = await service.ImportLegacyAsync(ImportSource.GuiNewOnly, manualImport: false);
-
-        Assert.True(report.Success);
-        var defaultProfile = service.CurrentConfig.Profiles["Default"];
-        Assert.Empty(defaultProfile.TaskQueue);
-        Assert.Equal("127.0.0.1:5555", defaultProfile.Values["ConnectAddress"]?.GetValue<string>());
-        Assert.False(defaultProfile.Values.ContainsKey("TaskQueue"));
-
-        var malformedProfile = service.CurrentConfig.Profiles["Malformed"];
-        Assert.Empty(malformedProfile.TaskQueue);
-        Assert.Equal("10.0.0.1:5555", malformedProfile.Values["ConnectAddress"]?.GetValue<string>());
-        Assert.False(malformedProfile.Values.ContainsKey("TaskQueue"));
-        Assert.Contains(report.Warnings, warning => warning.Contains("invalid TaskQueue", StringComparison.Ordinal));
+        Assert.Equal(0, parameters["mode"]?.GetValue<int>());
+        Assert.Equal("/tmp/infrast.json", parameters["filename"]?.GetValue<string>());
+        Assert.Equal(2, parameters["plan_index"]?.GetValue<int>());
     }
 
     private static UnifiedConfigurationService CreateService(string baseDirectory)

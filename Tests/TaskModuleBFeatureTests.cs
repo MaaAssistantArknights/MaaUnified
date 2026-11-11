@@ -1782,7 +1782,7 @@ public sealed class TaskModuleBFeatureTests
             """
             {
               "plans": [
-                { "name": "Day", "period": ["00:00-12:00"] },
+                { "name": "Day", "period": [["00:00", "12:00"]] },
                 { "name": "Night", "period": [] }
               ]
             }
@@ -1807,11 +1807,11 @@ public sealed class TaskModuleBFeatureTests
         var customPlanPath = Path.Combine(fixture.Root, "config", "infrast.cache.json");
         await File.WriteAllTextAsync(
             customPlanPath,
-            "{\"plans\":[{\"name\":\"PlanA\",\"period\":[\"00:00-12:00\"]}]}");
+            "{\"plans\":[{\"name\":\"PlanA\",\"period\":[[\"00:00\",\"12:00\"]]}]}");
 
         module.Mode = 10000;
         module.CustomFilePath = customPlanPath;
-        await module.ReloadPlansAsync();
+        await WaitUntilAsync(() => module.PlanOptions.Any(option => option.Display == "PlanA"));
 
         Assert.Equal(1, module.PlanFileReadCount);
         Assert.Contains(module.PlanOptions, option => option.Display == "PlanA");
@@ -1826,13 +1826,134 @@ public sealed class TaskModuleBFeatureTests
 
         await File.WriteAllTextAsync(
             customPlanPath,
-            "{\"plans\":[{\"name\":\"PlanB\",\"period\":[\"00:00-12:00\"]}]}");
+            "{\"plans\":[{\"name\":\"PlanB\",\"period\":[[\"00:00\",\"12:00\"]]}]}");
         File.SetLastWriteTimeUtc(customPlanPath, DateTime.UtcNow.AddMinutes(1));
 
         await module.ReloadPlansAsync();
 
         Assert.Equal(3, module.PlanFileReadCount);
         Assert.Contains(module.PlanOptions, option => option.Display == "PlanB");
+    }
+
+    [Fact]
+    public async Task Infrast_CustomFilePathChange_AutomaticallyReloadsAndReportsInvalidFile()
+    {
+        await using var fixture = await TestFixture.CreateAsync("en-us");
+        var module = new InfrastModuleViewModel(fixture.Runtime, new LocalizedTextMap { Language = "en-us" });
+        var firstPath = Path.Combine(fixture.Root, "config", "infrast.auto-a.json");
+        var secondPath = Path.Combine(fixture.Root, "config", "infrast.auto-b.json");
+        await File.WriteAllTextAsync(firstPath, "{\"plans\":[{\"name\":\"AutoA\",\"period\":[]}]}");
+        await File.WriteAllTextAsync(secondPath, "{\"plans\":[{\"name\":\"AutoB\",\"period\":[[\"00:00\",\"12:00\"]]}]}");
+
+        module.Mode = InfrastModuleViewModel.InfrastModeCustom;
+        module.CustomFilePath = firstPath;
+        await module.WaitForPendingPlanReloadAsync();
+        Assert.Contains(module.PlanOptions, option => option.Display == "AutoA");
+        Assert.Equal(0, module.SelectedPlanIndex);
+
+        module.CustomFilePath = secondPath;
+        await module.WaitForPendingPlanReloadAsync();
+        Assert.Contains(module.PlanOptions, option => option.Display == "AutoB");
+        Assert.Equal(-1, module.SelectedPlanIndex);
+
+        module.CustomFilePath = Path.Combine(fixture.Root, "config", "missing.json");
+        await module.WaitForPendingPlanReloadAsync();
+        Assert.Contains("not found", module.LastErrorMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Infrast_BindCustomParameters_PreservesPersistedPlanSelection()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.Infrast, "infra")).Success);
+        var path = Path.Combine(fixture.Root, "config", "infrast.bind.json");
+        await File.WriteAllTextAsync(
+            path,
+            "{\"plans\":[{\"name\":\"A\",\"period\":[[\"00:00\",\"12:00\"]]},{\"name\":\"B\",\"period\":[]}]}");
+        var parameters = new InfrastParams
+        {
+            Mode = InfrastModuleViewModel.InfrastModeCustom,
+            Filename = path,
+            PlanIndex = 1,
+            Facility = ["Mfg"],
+            FacilityOrder = ["Mfg", "Dorm"],
+        }.ToJson();
+
+        var module = new InfrastModuleViewModel(fixture.Runtime, new LocalizedTextMap { Language = "en-us" });
+        await module.BindAsync(0, parameters);
+
+        Assert.Equal(1, module.SelectedPlanIndex);
+        Assert.Equal("B", module.SelectedPlan?.Display);
+    }
+
+    [Fact]
+    public async Task Infrast_Append_UsesResolvedPlanIndexWithoutOverwritingTimeRotationSelection()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var path = Path.Combine(fixture.Root, "config", "infrast.append.json");
+        await File.WriteAllTextAsync(path, "{\"plans\":[{\"name\":\"Only\",\"period\":[]}]}");
+        var profile = fixture.Config.CurrentConfig.Profiles["Default"];
+        profile.TaskQueue.Add(new UnifiedTaskItem
+        {
+            Type = TaskModuleTypes.Infrast,
+            Name = "infra",
+            IsEnabled = true,
+            Params = new InfrastParams
+            {
+                Mode = InfrastModuleViewModel.InfrastModeCustom,
+                Filename = path,
+                PlanIndex = -1,
+                Facility = ["Mfg"],
+                FacilityOrder = ["Mfg", "Dorm"],
+            }.ToJson(),
+        });
+
+        var result = await fixture.Runtime.SessionService.AppendTasksFromCurrentProfileAsync();
+        var appended = JsonNode.Parse(Assert.Single(fixture.Bridge.AppendedTasks).ParamsJson)!.AsObject();
+
+        Assert.True(result.Success);
+        Assert.Equal(0, appended["plan_index"]?.GetValue<int>());
+        Assert.Null(appended["_ui_facility_order"]);
+        Assert.Equal(-1, profile.TaskQueue.Single().Params["plan_index"]?.GetValue<int>());
+    }
+
+    [Fact]
+    public async Task Infrast_Append_OutOfRangePlanIndex_RunsFirstPlanWithoutBlockingQueue()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var path = Path.Combine(fixture.Root, "config", "infrast.shrunk.json");
+        await File.WriteAllTextAsync(path, "{\"plans\":[{\"name\":\"Only\",\"period\":[]}]}");
+        var profile = fixture.Config.CurrentConfig.Profiles["Default"];
+        profile.TaskQueue.Add(new UnifiedTaskItem
+        {
+            Type = TaskModuleTypes.Infrast,
+            Name = "infra",
+            IsEnabled = true,
+            Params = new InfrastParams
+            {
+                Mode = InfrastModuleViewModel.InfrastModeCustom,
+                Filename = path,
+                PlanIndex = 5,
+                Facility = ["Mfg"],
+                FacilityOrder = ["Mfg", "Dorm"],
+            }.ToJson(),
+        });
+        profile.TaskQueue.Add(new UnifiedTaskItem
+        {
+            Type = TaskModuleTypes.Award,
+            Name = "award",
+            IsEnabled = true,
+            Params = new JsonObject(),
+        });
+
+        var result = await fixture.Runtime.SessionService.AppendTasksFromCurrentProfileAsync();
+
+        Assert.True(result.Success);
+        Assert.Equal(2, fixture.Bridge.AppendedTasks.Count);
+        var infrastAppend = JsonNode.Parse(fixture.Bridge.AppendedTasks[0].ParamsJson)!.AsObject();
+        Assert.Equal(0, infrastAppend["plan_index"]?.GetValue<int>());
+        Assert.Null(infrastAppend["_ui_facility_order"]);
+        Assert.Equal(5, profile.TaskQueue[0].Params["plan_index"]?.GetValue<int>());
     }
 
     [Fact]
@@ -1852,7 +1973,7 @@ public sealed class TaskModuleBFeatureTests
         var validPath = Path.Combine(fixture.Root, "config", "infrast.valid.json");
         await File.WriteAllTextAsync(
             validPath,
-            "{\"plans\":[{\"name\":\"PlanA\",\"period\":[\"00:00-12:00\"]}]}");
+            "{\"plans\":[{\"name\":\"PlanA\",\"period\":[[\"00:00\",\"12:00\"]]}]}");
         module.CustomFilePath = validPath;
         module.SelectedPlanIndex = 5;
         await module.ReloadPlansAsync();
@@ -1872,7 +1993,7 @@ public sealed class TaskModuleBFeatureTests
         var customPlanPath = Path.Combine(fixture.Root, "config", "infrast.custom.json");
         await File.WriteAllTextAsync(
             customPlanPath,
-            "{\"plans\":[{\"name\":\"PlanA\",\"period\":[\"00:00-12:00\"]}]}");
+            "{\"plans\":[{\"name\":\"PlanA\",\"period\":[[\"00:00\",\"12:00\"]]}]}");
 
         module.Mode = 10000;
         module.CustomFilePath = customPlanPath;
@@ -1896,6 +2017,39 @@ public sealed class TaskModuleBFeatureTests
 
         Assert.Equal(originalOrder[0], module.FacilityOptions[2].Value);
         Assert.True(module.FacilityOptions[2].IsSelected);
+    }
+
+    [Fact]
+    public async Task Infrast_FacilityPersistence_PreservesEmptySelectionAndDisabledRoomOrder()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.Infrast, "infra")).Success);
+        var parameters = new InfrastParams
+        {
+            Facility = ["Mfg", "Trade"],
+            FacilityOrder = ["Mfg", "Dorm", "Trade", "Control", "Power", "Reception", "Office", "Processing", "Training"],
+        }.ToJson();
+        Assert.True((await fixture.TaskQueue.UpdateTaskParamsAsync(0, parameters, persistImmediately: true)).Success);
+
+        var module = new InfrastModuleViewModel(fixture.Runtime, new LocalizedTextMap { Language = "en-us" });
+        await module.BindAsync(0, parameters);
+        Assert.Equal(["Mfg", "Dorm", "Trade"], module.FacilityOptions.Take(3).Select(option => option.Value));
+        Assert.False(module.FacilityOptions.Single(option => option.Value == "Dorm").IsSelected);
+
+        module.FacilityOptions.Single(option => option.Value == "Dorm").IsSelected = true;
+        Assert.True(await module.FlushPendingChangesAsync());
+        var enabled = Assert.IsType<JsonArray>((await fixture.TaskQueue.GetTaskParamsAsync(0)).Value?["facility"]);
+        Assert.Equal(["Mfg", "Dorm", "Trade"], enabled.Select(node => node!.GetValue<string>()));
+
+        module.ClearFacility();
+        Assert.True(await module.FlushPendingChangesAsync());
+        var cleared = (await fixture.TaskQueue.GetTaskParamsAsync(0)).Value!;
+        Assert.Empty(Assert.IsType<JsonArray>(cleared["facility"]));
+
+        var rebound = new InfrastModuleViewModel(fixture.Runtime, new LocalizedTextMap { Language = "en-us" });
+        await rebound.BindAsync(0, cleared);
+        Assert.DoesNotContain(rebound.FacilityOptions, option => option.IsSelected);
+        Assert.Equal(["Mfg", "Dorm", "Trade"], rebound.FacilityOptions.Take(3).Select(option => option.Value));
     }
 
     [Fact]
@@ -2268,6 +2422,21 @@ public sealed class TaskModuleBFeatureTests
         var leaseProperty = snapshot.GetType().GetProperty("Lease", BindingFlags.Instance | BindingFlags.Public);
         Assert.NotNull(leaseProperty);
         return (RunOwnershipLease)leaseProperty!.GetValue(snapshot)!;
+    }
+
+    private static async Task WaitUntilAsync(Func<bool> condition)
+    {
+        for (var attempt = 0; attempt < 100; attempt++)
+        {
+            if (condition())
+            {
+                return;
+            }
+
+            await Task.Delay(20);
+        }
+
+        Assert.Fail("Condition was not satisfied within the timeout.");
     }
 
     private sealed class TestFixture : IAsyncDisposable

@@ -62,6 +62,7 @@ public static class TaskModuleParameterDefaults
         {
             ["mode"] = 0,
             ["facility"] = new JsonArray("Mfg", "Trade", "Control", "Power", "Reception", "Office", "Dorm", "Processing", "Training"),
+            ["_ui_facility_order"] = new JsonArray("Mfg", "Trade", "Control", "Power", "Reception", "Office", "Dorm", "Processing", "Training"),
             ["drones"] = "Money",
             ["continue_training"] = false,
             ["threshold"] = 0.3,
@@ -136,6 +137,8 @@ public sealed class InfrastParams
 
     public List<string> Facility { get; set; } = [];
 
+    public List<string> FacilityOrder { get; set; } = [];
+
     public string Drones { get; set; } = "Money";
 
     public bool ContinueTraining { get; set; }
@@ -188,13 +191,29 @@ public sealed class InfrastParams
                 }
             }
         }
-
-        if (result.Facility.Count == 0)
+        else
         {
             result.Facility.AddRange(new[]
             {
                 "Mfg", "Trade", "Control", "Power", "Reception", "Office", "Dorm", "Processing", "Training",
             });
+        }
+
+        if (obj["_ui_facility_order"] is JsonArray orderArray)
+        {
+            foreach (var node in orderArray)
+            {
+                var value = node?.GetValue<string?>();
+                if (!string.IsNullOrWhiteSpace(value))
+                {
+                    result.FacilityOrder.Add(value.Trim());
+                }
+            }
+        }
+
+        if (result.FacilityOrder.Count == 0)
+        {
+            result.FacilityOrder.AddRange(result.Facility);
         }
 
         return result;
@@ -208,10 +227,17 @@ public sealed class InfrastParams
             facility.Add(name.Trim());
         }
 
+        var facilityOrder = new JsonArray();
+        foreach (var name in FacilityOrder.Where(n => !string.IsNullOrWhiteSpace(n)))
+        {
+            facilityOrder.Add(name.Trim());
+        }
+
         return new JsonObject
         {
             ["mode"] = Mode,
             ["facility"] = facility,
+            ["_ui_facility_order"] = facilityOrder,
             ["drones"] = Drones,
             ["continue_training"] = ContinueTraining,
             ["threshold"] = Math.Clamp(Threshold, 0, 1),

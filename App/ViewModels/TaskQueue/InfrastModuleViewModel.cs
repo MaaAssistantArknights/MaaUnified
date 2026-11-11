@@ -7,6 +7,7 @@ using MAAUnified.App.Services;
 using MAAUnified.App.ViewModels.Infrastructure;
 using MAAUnified.Application.Models;
 using MAAUnified.Application.Services;
+using MAAUnified.Application.Services.TaskParams;
 using MAAUnified.Compat.Constants;
 
 namespace MAAUnified.App.ViewModels.TaskQueue;
@@ -51,8 +52,12 @@ public sealed class InfrastModuleViewModel : TaskModuleSettingsViewModelBase
     private bool _isCustomFileReadOnly;
     private bool _suppressDefaultInfrastPersist;
     private bool _suppressFacilitySelectionChanged;
-    private readonly List<ParsedPlan> _parsedPlans = [];
+    private IReadOnlyList<InfrastPlanDefinition> _parsedPlans = [];
     private InfrastPlanCacheEntry? _planCache;
+    private int _planReloadVersion;
+    private bool _loadingParameters;
+    private IReadOnlyList<PlanOption> _planOptions = [];
+    private Task _pendingPlanReload = Task.CompletedTask;
 
     public InfrastModuleViewModel(MAAUnifiedRuntime runtime, LocalizedTextMap texts)
         : base(runtime, texts, TaskModuleTypes.Infrast)
@@ -63,7 +68,7 @@ public sealed class InfrastModuleViewModel : TaskModuleSettingsViewModelBase
         ConfigureFacilityOptions(DefaultFacilityOrder);
     }
 
-    public ObservableCollection<PlanOption> PlanOptions { get; } = [];
+    public IReadOnlyList<PlanOption> PlanOptions => Volatile.Read(ref _planOptions);
 
     public ObservableCollection<FacilityOption> FacilityOptions { get; } = [];
 
@@ -119,10 +124,14 @@ public sealed class InfrastModuleViewModel : TaskModuleSettingsViewModelBase
             OnPropertyChanged(nameof(CanEditDrones));
 
             QueuePersist();
-            if (!IsCustomMode)
+            if (IsCustomMode)
             {
-                PlanOptions.Clear();
-                _parsedPlans.Clear();
+                StartPlanReload(resetPlanSelection: false);
+            }
+            else
+            {
+                ReplacePlanOptions([]);
+                Volatile.Write(ref _parsedPlans, []);
                 SelectedPlan = null;
                 StatusMessage = string.Empty;
                 LastErrorMessage = string.Empty;
@@ -173,6 +182,10 @@ public sealed class InfrastModuleViewModel : TaskModuleSettingsViewModelBase
             }
 
             QueuePersist();
+            if (IsCustomMode)
+            {
+                StartPlanReload(resetPlanSelection: !_loadingParameters);
+            }
         }
     }
 
@@ -188,7 +201,8 @@ public sealed class InfrastModuleViewModel : TaskModuleSettingsViewModelBase
 
             if (SelectedPlan?.Index != value)
             {
-                _selectedPlan = PlanOptions.FirstOrDefault(option => option.Index == value);
+                var planOptions = PlanOptions;
+                _selectedPlan = planOptions.FirstOrDefault(option => option.Index == value);
                 OnPropertyChanged(nameof(SelectedPlan));
             }
 
@@ -240,6 +254,10 @@ public sealed class InfrastModuleViewModel : TaskModuleSettingsViewModelBase
             {
                 var defaultPath = Path.Combine(global::MAAUnified.Compat.Runtime.RuntimeLayout.ResolveRuntimeBaseDirectory(), "resource", "custom_infrast", normalized);
                 CustomFilePath = defaultPath;
+            }
+            else if (IsCustomMode)
+            {
+                _ = ReloadPlansAsync();
             }
 
             if (!_suppressDefaultInfrastPersist)
@@ -432,14 +450,29 @@ public sealed class InfrastModuleViewModel : TaskModuleSettingsViewModelBase
     }
 
     public Task ReloadPlansAsync(CancellationToken cancellationToken = default)
-        => ReloadPlansAsync(forceReload: false, cancellationToken);
+        => ReloadPlansAsync(forceReload: false, resetPlanSelection: false, cancellationToken);
 
-    public async Task ReloadPlansAsync(bool forceReload, CancellationToken cancellationToken = default)
+    public Task ReloadPlansAsync(bool forceReload, CancellationToken cancellationToken = default)
+        => ReloadPlansAsync(forceReload, resetPlanSelection: false, cancellationToken);
+
+    internal Task WaitForPendingPlanReloadAsync()
+        => Volatile.Read(ref _pendingPlanReload);
+
+    private void StartPlanReload(bool resetPlanSelection)
     {
-        _parsedPlans.Clear();
-        PlanOptions.Clear();
+        var reload = ReloadPlansAsync(forceReload: false, resetPlanSelection);
+        Volatile.Write(ref _pendingPlanReload, reload);
+    }
+
+    private async Task ReloadPlansAsync(
+        bool forceReload,
+        bool resetPlanSelection,
+        CancellationToken cancellationToken = default)
+    {
+        var reloadVersion = Interlocked.Increment(ref _planReloadVersion);
         if (!IsCustomMode || string.IsNullOrWhiteSpace(CustomFilePath))
         {
+            ClearPlansIfCurrent(reloadVersion);
             LastErrorMessage = string.Empty;
             StatusMessage = string.Empty;
             return;
@@ -447,6 +480,7 @@ public sealed class InfrastModuleViewModel : TaskModuleSettingsViewModelBase
 
         if (!File.Exists(CustomFilePath))
         {
+            ClearPlansIfCurrent(reloadVersion);
             StatusMessage = string.Empty;
             LastErrorMessage = string.Format(
                 Texts.GetOrDefault("Infrast.Error.CustomFileNotFound", "Custom file not found: {0}"),
@@ -465,7 +499,7 @@ public sealed class InfrastModuleViewModel : TaskModuleSettingsViewModelBase
             fileInfo.Length);
         if (!forceReload && _planCache is { } cache && cache.Key == cacheKey)
         {
-            await ApplyParsedPlansAsync(cache.Plans, cancellationToken);
+            await ApplyParsedPlansAsync(cache.Plans, reloadVersion, resetPlanSelection, cancellationToken);
             return;
         }
 
@@ -474,12 +508,23 @@ public sealed class InfrastModuleViewModel : TaskModuleSettingsViewModelBase
         {
             PlanFileReadCount++;
             var json = await File.ReadAllTextAsync(CustomFilePath, cancellationToken);
-            var parsedPlans = ParsePlans(json);
+            var parsedPlans = InfrastPlanParser.Parse(json);
+            if (reloadVersion != Volatile.Read(ref _planReloadVersion))
+            {
+                return;
+            }
+
             _planCache = new InfrastPlanCacheEntry(cacheKey, parsedPlans);
-            await ApplyParsedPlansAsync(parsedPlans, cancellationToken);
+            await ApplyParsedPlansAsync(parsedPlans, reloadVersion, resetPlanSelection, cancellationToken);
         }
         catch (Exception ex)
         {
+            if (reloadVersion != Volatile.Read(ref _planReloadVersion))
+            {
+                return;
+            }
+
+            ClearPlansIfCurrent(reloadVersion);
             StatusMessage = string.Empty;
             LastErrorMessage = Texts.GetOrDefault("Infrast.Error.ParseFailed", "Failed to parse custom infrast file.");
             await Runtime.DiagnosticsService.RecordFailedResultAsync(
@@ -489,62 +534,69 @@ public sealed class InfrastModuleViewModel : TaskModuleSettingsViewModelBase
         }
     }
 
-    private IReadOnlyList<ParsedPlan> ParsePlans(string json)
-    {
-        var root = JsonNode.Parse(json) as JsonObject;
-        if (root?["plans"] is not JsonArray plansArray)
-        {
-            throw new JsonException("`plans` section missing.");
-        }
-
-        var parsedPlans = new List<ParsedPlan>();
-        var index = 0;
-        foreach (var node in plansArray.OfType<JsonObject>())
-        {
-            var name = node["name"]?.GetValue<string?>() ?? string.Format(
-                Texts.GetOrDefault("Infrast.Plan.DefaultName", "Plan {0}"),
-                index + 1);
-            var periods = ParsePlanPeriods(node["period"]);
-            parsedPlans.Add(new ParsedPlan(index, name, periods));
-            index++;
-        }
-
-        return parsedPlans;
-    }
-
-    private Task ApplyParsedPlansAsync(IReadOnlyList<ParsedPlan> parsedPlans, CancellationToken cancellationToken)
+    private Task ApplyParsedPlansAsync(
+        IReadOnlyList<InfrastPlanDefinition> parsedPlans,
+        int reloadVersion,
+        bool resetPlanSelection,
+        CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        _parsedPlans.Clear();
-        _parsedPlans.AddRange(parsedPlans.Select(
-            plan => new ParsedPlan(plan.Index, plan.Name, [.. plan.Periods])));
-
-        PlanOptions.Clear();
-        if (_parsedPlans.Any(plan => plan.Periods.Count > 0))
+        if (reloadVersion != Volatile.Read(ref _planReloadVersion))
         {
-            PlanOptions.Add(new PlanOption(-1, BuildAutoPlanDisplayName()));
+            return Task.CompletedTask;
         }
 
-        foreach (var plan in _parsedPlans)
+        var plans = parsedPlans.ToArray();
+        Volatile.Write(ref _parsedPlans, plans);
+
+        var planOptions = new List<PlanOption>();
+        if (plans.Any(plan => plan.Periods.Count > 0))
         {
-            PlanOptions.Add(new PlanOption(plan.Index, plan.Name));
+            planOptions.Add(new PlanOption(-1, BuildAutoPlanDisplayName()));
         }
 
-        var normalizedPlanIndex = NormalizeCustomPlanIndex(SelectedPlanIndex, _parsedPlans.Count);
+        foreach (var plan in plans)
+        {
+            planOptions.Add(new PlanOption(plan.Index, plan.Name));
+        }
+
+        ReplacePlanOptions(planOptions);
+
+        var normalizedPlanIndex = resetPlanSelection
+            ? (plans.Any(plan => plan.Periods.Count > 0) ? -1 : 0)
+            : NormalizeCustomPlanIndex(SelectedPlanIndex, plans.Length);
         if (normalizedPlanIndex != SelectedPlanIndex)
         {
             SelectedPlanIndex = normalizedPlanIndex;
             RequestPersistAfterBind();
         }
 
-        SelectedPlan = PlanOptions.FirstOrDefault(option => option.Index == SelectedPlanIndex);
+        SelectedPlan = planOptions.FirstOrDefault(option => option.Index == SelectedPlanIndex);
         LastErrorMessage = string.Empty;
 
         StatusMessage = string.Format(
             CultureInfo.CurrentCulture,
             Texts.GetOrDefault("Infrast.Status.LoadedPlans", "Loaded {0} plans."),
-            _parsedPlans.Count);
+            plans.Length);
         return Task.CompletedTask;
+    }
+
+    private void ClearPlansIfCurrent(int reloadVersion)
+    {
+        if (reloadVersion != Volatile.Read(ref _planReloadVersion))
+        {
+            return;
+        }
+
+        Volatile.Write(ref _parsedPlans, []);
+        ReplacePlanOptions([]);
+        SelectedPlan = null;
+    }
+
+    private void ReplacePlanOptions(IEnumerable<PlanOption> options)
+    {
+        Volatile.Write(ref _planOptions, options.ToArray());
+        OnPropertyChanged(nameof(PlanOptions));
     }
 
     private static int NormalizeCustomPlanIndex(int planIndex, int planCount)
@@ -553,19 +605,27 @@ public sealed class InfrastModuleViewModel : TaskModuleSettingsViewModelBase
     protected override async Task LoadFromParametersAsync(JsonObject parameters, CancellationToken cancellationToken)
     {
         var model = InfrastParams.FromJson(parameters);
-        Mode = model.Mode;
-        Drones = model.Drones;
-        DormThresholdPercent = Math.Clamp((int)Math.Round(model.Threshold * 100), 0, 100);
-        CustomFilePath = model.Filename;
-        SelectedPlanIndex = model.PlanIndex;
-        ContinueTraining = model.ContinueTraining;
-        DormTrustEnabled = model.DormTrustEnabled;
-        DormNotStationedEnabled = model.DormNotStationedEnabled;
-        Replenish = model.Replenish;
-        ReceptionMessageBoard = model.ReceptionMessageBoard;
-        ReceptionClueExchange = model.ReceptionClueExchange;
-        ReceptionSendClue = model.ReceptionSendClue;
-        ConfigureFacilityOptions(model.Facility);
+        _loadingParameters = true;
+        try
+        {
+            Mode = model.Mode;
+            Drones = model.Drones;
+            DormThresholdPercent = Math.Clamp((int)Math.Round(model.Threshold * 100), 0, 100);
+            CustomFilePath = model.Filename;
+            SelectedPlanIndex = model.PlanIndex;
+            ContinueTraining = model.ContinueTraining;
+            DormTrustEnabled = model.DormTrustEnabled;
+            DormNotStationedEnabled = model.DormNotStationedEnabled;
+            Replenish = model.Replenish;
+            ReceptionMessageBoard = model.ReceptionMessageBoard;
+            ReceptionClueExchange = model.ReceptionClueExchange;
+            ReceptionSendClue = model.ReceptionSendClue;
+            ConfigureFacilityOptions(model.Facility, model.FacilityOrder);
+        }
+        finally
+        {
+            _loadingParameters = false;
+        }
 
         await ReloadPlansAsync(cancellationToken);
     }
@@ -581,6 +641,7 @@ public sealed class InfrastModuleViewModel : TaskModuleSettingsViewModelBase
         {
             Mode = Mode,
             Facility = facilities,
+            FacilityOrder = FacilityOptions.Select(option => option.Value).ToList(),
             Drones = Drones,
             ContinueTraining = ContinueTraining,
             Threshold = DormThresholdPercent / 100.0,
@@ -605,12 +666,15 @@ public sealed class InfrastModuleViewModel : TaskModuleSettingsViewModelBase
         }
 
         RebuildLocalizedOptions();
-        if (PlanOptions.Count > 0 && PlanOptions[0].Index == -1)
+        var planOptions = PlanOptions;
+        if (planOptions.Count > 0 && planOptions[0].Index == -1)
         {
-            PlanOptions[0] = new PlanOption(-1, BuildAutoPlanDisplayName());
+            var localizedOptions = planOptions.ToArray();
+            localizedOptions[0] = new PlanOption(-1, BuildAutoPlanDisplayName());
+            ReplacePlanOptions(localizedOptions);
             if (SelectedPlanIndex == -1)
             {
-                SelectedPlan = PlanOptions[0];
+                SelectedPlan = localizedOptions[0];
             }
         }
     }
@@ -665,7 +729,9 @@ public sealed class InfrastModuleViewModel : TaskModuleSettingsViewModelBase
     private string ResolveFacilityDisplayName(string value)
         => Texts.GetOrDefault(value, value);
 
-    private void ConfigureFacilityOptions(IEnumerable<string> enabledFacilities)
+    private void ConfigureFacilityOptions(
+        IEnumerable<string> enabledFacilities,
+        IEnumerable<string>? persistedOrder = null)
     {
         var enabled = enabledFacilities
             .Where(name => !string.IsNullOrWhiteSpace(name))
@@ -673,7 +739,19 @@ public sealed class InfrastModuleViewModel : TaskModuleSettingsViewModelBase
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
         var enabledSet = enabled.ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var orderedNames = new List<string>(enabled);
+        var orderedNames = (persistedOrder ?? enabled)
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Select(name => name.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        foreach (var name in enabled)
+        {
+            if (!orderedNames.Contains(name, StringComparer.OrdinalIgnoreCase))
+            {
+                orderedNames.Add(name);
+            }
+        }
 
         foreach (var room in DefaultFacilityOrder)
         {
@@ -815,90 +893,10 @@ public sealed class InfrastModuleViewModel : TaskModuleSettingsViewModelBase
     private string? ResolveCurrentPlanName()
     {
         var now = TimeOnly.FromDateTime(DateTime.Now.ToLocalTime());
-        var current = _parsedPlans.FirstOrDefault(plan => plan.Periods.Any(period => period.Contains(now)));
-        current ??= _parsedPlans.FirstOrDefault();
+        var plans = Volatile.Read(ref _parsedPlans);
+        var current = plans.FirstOrDefault(plan => plan.Periods.Any(period => period.Contains(now)));
+        current ??= plans.FirstOrDefault();
         return current?.Name;
-    }
-
-    private static List<TimeRange> ParsePlanPeriods(JsonNode? node)
-    {
-        if (node is not JsonArray array)
-        {
-            return [];
-        }
-
-        var periods = new List<TimeRange>();
-        foreach (var item in array)
-        {
-            if (TryParsePeriodNode(item, out var period))
-            {
-                periods.Add(period);
-            }
-        }
-
-        return periods;
-    }
-
-    private static bool TryParsePeriodNode(JsonNode? node, out TimeRange period)
-    {
-        period = default;
-        if (node is null)
-        {
-            return false;
-        }
-
-        if (node is JsonValue stringNode && stringNode.TryGetValue(out string? text))
-        {
-            return TryParseRangeString(text, out period);
-        }
-
-        if (node is not JsonArray rangeArray || rangeArray.Count < 2)
-        {
-            return false;
-        }
-
-        var start = rangeArray[0]?.GetValue<string?>();
-        var end = rangeArray[1]?.GetValue<string?>();
-        if (!TryParseTime(start, out var startTime) || !TryParseTime(end, out var endTime))
-        {
-            return false;
-        }
-
-        period = new TimeRange(startTime, endTime);
-        return true;
-    }
-
-    private static bool TryParseRangeString(string? value, out TimeRange period)
-    {
-        period = default;
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return false;
-        }
-
-        var segments = value.Split('-', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-        if (segments.Length != 2)
-        {
-            return false;
-        }
-
-        if (!TryParseTime(segments[0], out var start) || !TryParseTime(segments[1], out var end))
-        {
-            return false;
-        }
-
-        period = new TimeRange(start, end);
-        return true;
-    }
-
-    private static bool TryParseTime(string? value, out TimeOnly result)
-    {
-        if (!TimeOnly.TryParseExact(value, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out result))
-        {
-            return TimeOnly.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.None, out result);
-        }
-
-        return true;
     }
 
     private static IntOption? ResolveSelectedOption(IReadOnlyList<IntOption> options, int value)
@@ -945,19 +943,8 @@ public sealed class InfrastModuleViewModel : TaskModuleSettingsViewModelBase
         }
     }
 
-    private sealed record InfrastPlanCacheEntry(InfrastPlanCacheKey Key, IReadOnlyList<ParsedPlan> Plans);
+    private sealed record InfrastPlanCacheEntry(InfrastPlanCacheKey Key, IReadOnlyList<InfrastPlanDefinition> Plans);
 
     private readonly record struct InfrastPlanCacheKey(string FullPath, DateTime LastWriteTimeUtc, long Length);
 
-    private sealed record ParsedPlan(int Index, string Name, List<TimeRange> Periods);
-
-    private readonly record struct TimeRange(TimeOnly Start, TimeOnly End)
-    {
-        public bool Contains(TimeOnly now)
-        {
-            return Start <= End
-                ? now >= Start && now <= End
-                : now >= Start || now <= End;
-        }
-    }
 }

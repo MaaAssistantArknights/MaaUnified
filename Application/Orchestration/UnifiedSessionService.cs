@@ -847,7 +847,8 @@ public sealed class UnifiedSessionService
             }
 
             task.Type = compiled.NormalizedType;
-            if (string.Equals(compiled.NormalizedType, TaskModuleTypes.Roguelike, StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(compiled.NormalizedType, TaskModuleTypes.Mall, StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(compiled.NormalizedType, TaskModuleTypes.Infrast, StringComparison.OrdinalIgnoreCase))
             {
                 // Keep the full-fidelity stored form so queuing a run does not strip
                 // hidden mode/investment-gated Roguelike settings.
@@ -855,7 +856,8 @@ public sealed class UnifiedSessionService
                     .CompileRoguelikeForPersistence(task, profile, _configService.CurrentConfig, strict: true)
                     .Params;
             }
-            else if (!string.Equals(compiled.NormalizedType, TaskModuleTypes.Mall, StringComparison.OrdinalIgnoreCase))
+            else if (!string.Equals(compiled.NormalizedType, TaskModuleTypes.Mall, StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(compiled.NormalizedType, TaskModuleTypes.Infrast, StringComparison.OrdinalIgnoreCase))
             {
                 if (string.Equals(compiled.NormalizedType, TaskModuleTypes.StartUp, StringComparison.OrdinalIgnoreCase))
                 {

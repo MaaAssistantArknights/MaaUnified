@@ -61,7 +61,6 @@ public partial class InfrastSettingsView : UserControl
         if (!string.IsNullOrWhiteSpace(path))
         {
             vm.SelectCustomFile(path);
-            await vm.ReloadPlansAsync(forceReload: true);
         }
     }
 

@@ -54,6 +54,8 @@ public static class TaskParamCompiler
     private const string UserDataUpdateOperBox = "update_oper_box";
     private const string UserDataUpdateDepot = "update_depot";
     private const string UserDataUpdateTriggerInterval = "trigger_interval";
+    private const string UiRecruitPreserveTagsEnabled = "_ui_preserve_tags_enabled";
+    private const string UiInfrastFacilityOrder = "_ui_facility_order";
     private const string SkipAppendIssueCode = "TaskCompileSkipAppend";
     private static readonly Regex ExpiredActivityStageCodeRegex = new("^[A-Za-z]{2}-\\d{1,2}$", RegexOptions.Compiled);
     private static readonly Regex RoguelikeSeedRegex = new("^[0-9A-Za-z]+,rogue_\\d+,\\d+$", RegexOptions.Compiled);
@@ -1852,6 +1854,7 @@ public static class TaskParamCompiler
         {
             "StartUp" => CompileStartUpFromTask(task, profile, config, strict),
             "Fight" => CompileFightFromTask(task, profile, config, strict),
+            "Infrast" => CompileInfrastFromTask(task),
             "Mall" => CompileMallFromTask(task, profile, config, strict),
             "Recruit" => CompileRecruitFromTask(task, profile, config, strict),
             "Award" => CompileAwardFromTask(task),
@@ -1893,6 +1896,16 @@ public static class TaskParamCompiler
             return startUpCompiled;
         }
 
+        if (string.Equals(normalized, TaskModuleTypes.Infrast, StringComparison.OrdinalIgnoreCase))
+        {
+            return new TaskCompileOutput
+            {
+                NormalizedType = normalized,
+                Params = NormalizeInfrastParams(task.Params),
+                Issues = [],
+            };
+        }
+
         return CompileTask(task, profile, config, strict);
     }
 
@@ -1916,7 +1929,13 @@ public static class TaskParamCompiler
 
     public static JsonObject BuildCoreParams(string taskType, JsonObject parameters)
     {
-        var runtimeParams = parameters.DeepClone() as JsonObject ?? new JsonObject();
+        var isInfrast = string.Equals(
+            NormalizeTaskType(taskType),
+            TaskModuleTypes.Infrast,
+            StringComparison.OrdinalIgnoreCase);
+        var runtimeParams = isInfrast
+            ? NormalizeInfrastParams(parameters)
+            : parameters.DeepClone() as JsonObject ?? new JsonObject();
         var normalizedType = NormalizeTaskType(taskType);
         if (string.Equals(normalizedType, TaskModuleTypes.Recruit, StringComparison.OrdinalIgnoreCase))
         {
@@ -1945,6 +1964,19 @@ public static class TaskParamCompiler
                 runtimeParams.Remove(key);
             }
         }
+
+        if (isInfrast)
+        {
+            runtimeParams.Remove(UiInfrastFacilityOrder);
+            if ((runtimeParams["mode"]?.GetValue<int?>() ?? 0) != 10000)
+            {
+                runtimeParams.Remove("filename");
+                runtimeParams.Remove("plan_index");
+            }
+
+            return runtimeParams;
+        }
+
 
         if (!string.Equals(normalizedType, TaskModuleTypes.Fight, StringComparison.OrdinalIgnoreCase))
         {
@@ -2022,6 +2054,64 @@ public static class TaskParamCompiler
             Params = compiled.Params,
             Issues = allIssues,
         };
+    }
+
+    private static TaskCompileOutput CompileInfrastFromTask(UnifiedTaskItem task)
+    {
+        var parameters = NormalizeInfrastParams(task.Params);
+        var issues = new List<TaskValidationIssue>();
+        var mode = parameters["mode"]?.GetValue<int?>() ?? 0;
+        if (mode == 10000)
+        {
+            var filename = parameters["filename"]?.GetValue<string>() ?? string.Empty;
+            try
+            {
+                var plans = InfrastPlanParser.ParseFile(filename);
+                var selected = parameters["plan_index"]?.GetValue<int?>() ?? -1;
+                if (plans.Count > 0 && selected >= plans.Count)
+                {
+                    // Frozen WPF InfrastTask.OnDeserialized resets PlanSelect >= Count to 0 at load;
+                    // clamp here so a stale persisted index can never block the append.
+                    issues.Add(new TaskValidationIssue(
+                        "InfrastCustomPlanIndexClamped",
+                        "infrast.plan_index",
+                        $"Custom infrast plan index {selected} is out of range for {plans.Count} plan(s); reset to 0.",
+                        Blocking: false));
+                    selected = 0;
+                }
+
+                parameters["plan_index"] = InfrastPlanParser.ResolvePlanIndex(
+                    plans,
+                    selected,
+                    TimeOnly.FromDateTime(DateTime.Now));
+            }
+            catch (Exception ex)
+            {
+                issues.Add(new TaskValidationIssue(
+                    "InfrastCustomConfigInvalid",
+                    "infrast.custom_config",
+                    ex.Message));
+            }
+        }
+
+        return new TaskCompileOutput
+        {
+            NormalizedType = TaskModuleTypes.Infrast,
+            Params = parameters,
+            Issues = issues,
+        };
+    }
+
+    private static JsonObject NormalizeInfrastParams(JsonObject? parameters)
+    {
+        var normalized = parameters?.DeepClone() as JsonObject ?? new JsonObject();
+        var canonical = InfrastParams.FromJson(parameters).ToJson();
+        foreach (var property in canonical)
+        {
+            normalized[property.Key] = property.Value?.DeepClone();
+        }
+
+        return normalized;
     }
 
     private static TaskCompileOutput CompileFightFromTask(
