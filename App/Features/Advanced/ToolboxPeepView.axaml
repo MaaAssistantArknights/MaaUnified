@@ -114,7 +114,7 @@
                      Text="{Binding PeepTargetFpsText}" />
           <controls:AppNumberInput Classes="toolbox-peep-fps-input"
                                     Minimum="1"
-                                    Maximum="60"
+                                    Maximum="600"
                                     Value="{Binding PeepTargetFps}" />
         </StackPanel>
       </Grid>

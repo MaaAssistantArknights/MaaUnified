@@ -111,7 +111,7 @@ internal sealed class ToolboxTestFixture : IAsyncDisposable
             ShellFeatureService = new ShellFeatureService(connect),
             TaskQueueFeatureService = new TaskQueueFeatureService(session, config),
             CopilotFeatureService = new CopilotFeatureService(),
-            ToolboxFeatureService = new ToolboxFeatureService(session, connect),
+            ToolboxFeatureService = new ToolboxFeatureService(bridge, connect),
             RemoteControlFeatureService = new RemoteControlFeatureService(),
             PlatformCapabilityService = capability,
             OverlayFeatureService = new OverlayFeatureService(capability),
@@ -172,6 +172,9 @@ internal sealed class ToolboxTestFixture : IAsyncDisposable
         public int GetImageBgrCallCount { get; private set; }
 
         public int RecoverTaintedTaskQueueCallCount { get; private set; }
+        public int GetImageCallCount { get; private set; }
+
+        public byte[]? RawBgrFrameOverride { get; set; }
 
         public bool ForceConnectFailure { get; set; }
 
@@ -244,12 +247,15 @@ internal sealed class ToolboxTestFixture : IAsyncDisposable
             => Task.FromResult(CoreResult<bool>.Fail(new CoreError(CoreErrorCode.NotSupported, "not supported")));
 
         public Task<CoreResult<byte[]>> GetImageAsync(CancellationToken cancellationToken = default)
-            => Task.FromResult(CoreResult<byte[]>.Ok(TinyPng));
+        {
+            GetImageCallCount++;
+            return Task.FromResult(CoreResult<byte[]>.Ok(TinyPng));
+        }
 
         public Task<CoreResult<byte[]>> GetImageBgrAsync(bool forceScreencap = false, CancellationToken cancellationToken = default)
         {
             GetImageBgrCallCount++;
-            return Task.FromResult(CoreResult<byte[]>.Ok(RawBgrFrame));
+            return Task.FromResult(CoreResult<byte[]>.Ok(RawBgrFrameOverride ?? RawBgrFrame));
         }
 
         public async IAsyncEnumerable<CoreCallbackEvent> CallbackStreamAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)

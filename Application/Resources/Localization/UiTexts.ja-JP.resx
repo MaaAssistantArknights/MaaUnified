@@ -3148,6 +3148,12 @@ MAA を複数開くには、新しい MAA を他のフォルダにコピーし�
   <data name="Toolbox.Action.PeepStopStrong" xml:space="preserve">
     <value>停止！！！！！</value>
   </data>
+  <data name="Toolbox.Action.PeepStarting" xml:space="preserve">
+    <value>起動中...</value>
+  </data>
+  <data name="Toolbox.Action.PeepStopping" xml:space="preserve">
+    <value>停止中...</value>
+  </data>
   <data name="Toolbox.Action.StartRecognition" xml:space="preserve">
     <value>認識開始</value>
   </data>
@@ -3442,6 +3448,21 @@ MAA を複数開くには、新しい MAA を他のフォルダにコピーし�
   <data name="Toolbox.BusyDialog.Title" xml:space="preserve">
     <value>Toolbox は実行中です</value>
   </data>
+  <data name="Toolbox.RetryableDialog.DetailsButton" xml:space="preserve">
+    <value>エラー詳細</value>
+  </data>
+  <data name="Toolbox.RetryableDialog.LaterButton" xml:space="preserve">
+    <value>後で再試行</value>
+  </data>
+  <data name="Toolbox.RetryableDialog.Message" xml:space="preserve">
+    <value>ずいぶん手が早いですね。でも予想済みです。Toolbox はまだ準備中です。しばらくしてからもう一度お試しください。</value>
+  </data>
+  <data name="Toolbox.RetryableDialog.RetryButton" xml:space="preserve">
+    <value>再試行</value>
+  </data>
+  <data name="Toolbox.RetryableDialog.Title" xml:space="preserve">
+    <value>Toolbox はまだ準備中です</value>
+  </data>
   <data name="Toolbox.ExecutionReview.HistoryLabel" xml:space="preserve">
     <value>履歴</value>
   </data>
@@ -3684,6 +3705,9 @@ MAA を複数開くには、新しい MAA を他のフォルダにコピーし�
   </data>
   <data name="Toolbox.Validation.MiniGameTaskNameEmpty" xml:space="preserve">
     <value>ミニゲームのタスク名は空にできません。</value>
+  </data>
+  <data name="Toolbox.Validation.MiniGameTaskUnavailable" xml:space="preserve">
+    <value>選択したミニゲームは現在のクライアントまたはコアバージョンでは利用できません。</value>
   </data>
   <data name="Toolbox.Validation.OperBoxModeInvalid" xml:space="preserve">
     <value>オペレーター認識モードは owned または all のみ対応です。</value>

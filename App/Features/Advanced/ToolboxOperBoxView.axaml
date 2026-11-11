@@ -365,6 +365,7 @@
           HorizontalAlignment="Center">
       <StackPanel Classes="toolbox-operbox-section toolbox-operbox-actions">
         <Button Classes="app-button app-secondary toolbox-operbox-action"
+                IsEnabled="{Binding CanExportOperBox}"
                 Click="OnOperBoxExportClick">
           <TextBlock Text="{Binding OperBoxCopyToClipboardText}"
                      TextAlignment="Center"

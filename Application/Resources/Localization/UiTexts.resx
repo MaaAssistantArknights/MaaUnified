@@ -4768,6 +4768,12 @@
   <data name="ThisFacility" xml:space="preserve">
     <value>当前设施: </value>
   </data>
+  <data name="Toolbox.Action.PeepStarting" xml:space="preserve">
+    <value>启动中...</value>
+  </data>
+  <data name="Toolbox.Action.PeepStopping" xml:space="preserve">
+    <value>停止中...</value>
+  </data>
   <data name="Toolbox.Action.StartRecognition" xml:space="preserve">
     <value>开始识别</value>
   </data>
@@ -5310,6 +5316,9 @@
   </data>
   <data name="Toolbox.Validation.MiniGameTaskNameEmpty" xml:space="preserve">
     <value>小游戏任务名不能为空。</value>
+  </data>
+  <data name="Toolbox.Validation.MiniGameTaskUnavailable" xml:space="preserve">
+    <value>所选小游戏在当前客户端或核心版本下不可用。</value>
   </data>
   <data name="Toolbox.Validation.OperBoxModeInvalid" xml:space="preserve">
     <value>干员识别模式仅支持 owned 或 all。</value>

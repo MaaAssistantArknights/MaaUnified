@@ -43,7 +43,22 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
     private const int PeepPreviewPixelWidth = 1280;
     private const int PeepPreviewPixelHeight = 720;
     private const int PeepPreviewPixelChannels = 3;
+
+    // MAA-supported screencap resolutions are 16:9 with a height of at least 720 pixels.
+    // AsstGetImageBgr returns raw BGR bytes without dimensions, so the frame size is
+    // derived from the byte count and only accepted when it exactly matches one of these
+    // resolutions; anything else falls back to the resolution-adaptive encoded path.
+    private static readonly (int Width, int Height)[] PeepRawFrameSupportedSizes =
+    [
+        (PeepPreviewPixelWidth, PeepPreviewPixelHeight),
+        (1600, 900),
+        (1920, 1080),
+        (2560, 1440),
+        (3200, 1800),
+        (3840, 2160),
+    ];
     private const int PeepBitmapCacheSize = 3;
+    private const int MaxPeepTargetFps = 600;
     private static readonly Random GachaTipRandom = new();
     private static readonly JsonSerializerOptions PersistedPayloadJsonOptions = new()
     {
@@ -156,6 +171,8 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
     private readonly Dictionary<string, int> _operBoxPotential = new(StringComparer.Ordinal);
     private readonly Dictionary<string, ToolboxOwnedOperatorState> _operBoxOwnedById = new(StringComparer.Ordinal);
     private bool _operBoxListsMaterialized;
+    private bool _hasOperBoxRecognitionData;
+    private bool _loadingBridgeSettings;
     private ToolboxToolKind? _activeTool;
     private string _lastDispatchedParameterSummary = string.Empty;
     private string _currentLanguage = UiLanguageCatalog.DefaultLanguage;
@@ -164,6 +181,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
     private CancellationTokenSource? _peepPollingCts;
     private Task? _peepPollingTask;
     private bool _peepWasAutoStarted;
+    private bool _peepRawFrameSizeUnsupported;
     private readonly WriteableBitmap?[] _peepBitmapCache = new WriteableBitmap?[PeepBitmapCacheSize];
     private int _callbackDrainScheduled;
     private int _peepBitmapSequence;
@@ -470,6 +488,8 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
 
     public bool CanStartDepotRecognition => true;
 
+    public bool CanExportOperBox => _hasOperBoxRecognitionData;
+
     public bool HasExecutionHistory => ExecutionHistory.Count > 0;
 
     public bool IsToolboxBusy => _activeTool is not null || Peeping || IsPeepTransitioning || IsGachaInProgress;
@@ -511,25 +531,49 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
     public bool ChooseLevel3
     {
         get => _chooseLevel3;
-        set => SetTrackedProperty(ref _chooseLevel3, value);
+        set
+        {
+            if (SetTrackedProperty(ref _chooseLevel3, value))
+            {
+                PersistBridgeSettingsIfNotLoading(ToolboxToolKind.Recruit);
+            }
+        }
     }
 
     public bool ChooseLevel4
     {
         get => _chooseLevel4;
-        set => SetTrackedProperty(ref _chooseLevel4, value);
+        set
+        {
+            if (SetTrackedProperty(ref _chooseLevel4, value))
+            {
+                PersistBridgeSettingsIfNotLoading(ToolboxToolKind.Recruit);
+            }
+        }
     }
 
     public bool ChooseLevel5
     {
         get => _chooseLevel5;
-        set => SetTrackedProperty(ref _chooseLevel5, value);
+        set
+        {
+            if (SetTrackedProperty(ref _chooseLevel5, value))
+            {
+                PersistBridgeSettingsIfNotLoading(ToolboxToolKind.Recruit);
+            }
+        }
     }
 
     public bool ChooseLevel6
     {
         get => _chooseLevel6;
-        set => SetTrackedProperty(ref _chooseLevel6, value);
+        set
+        {
+            if (SetTrackedProperty(ref _chooseLevel6, value))
+            {
+                PersistBridgeSettingsIfNotLoading(ToolboxToolKind.Recruit);
+            }
+        }
     }
 
     public int RecruitLevel3Time
@@ -543,6 +587,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
                 OnPropertyChanged(nameof(RecruitLevel3Hour));
                 OnPropertyChanged(nameof(RecruitLevel3Minute));
                 OnPropertyChanged(nameof(RecruitLevel3TimeInput));
+                PersistBridgeSettingsIfNotLoading(ToolboxToolKind.Recruit);
             }
         }
     }
@@ -558,6 +603,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
                 OnPropertyChanged(nameof(RecruitLevel4Hour));
                 OnPropertyChanged(nameof(RecruitLevel4Minute));
                 OnPropertyChanged(nameof(RecruitLevel4TimeInput));
+                PersistBridgeSettingsIfNotLoading(ToolboxToolKind.Recruit);
             }
         }
     }
@@ -573,6 +619,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
                 OnPropertyChanged(nameof(RecruitLevel5Hour));
                 OnPropertyChanged(nameof(RecruitLevel5Minute));
                 OnPropertyChanged(nameof(RecruitLevel5TimeInput));
+                PersistBridgeSettingsIfNotLoading(ToolboxToolKind.Recruit);
             }
         }
     }
@@ -657,6 +704,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
             if (SetTrackedProperty(ref _recruitAutoSetTime, value))
             {
                 OnPropertyChanged(nameof(ShowRecruitAutoSetTimeControls));
+                PersistBridgeSettingsIfNotLoading(ToolboxToolKind.Recruit);
             }
         }
     }
@@ -664,7 +712,13 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
     public bool RecruitmentShowPotential
     {
         get => _recruitmentShowPotential;
-        set => SetTrackedProperty(ref _recruitmentShowPotential, value);
+        set
+        {
+            if (SetTrackedProperty(ref _recruitmentShowPotential, value))
+            {
+                PersistBridgeSettingsIfNotLoading(ToolboxToolKind.Recruit);
+            }
+        }
     }
 
     public string OperBoxInfo
@@ -959,7 +1013,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         get => _peepTargetFps;
         set
         {
-            var normalized = Math.Clamp(value, 1, 60);
+            var normalized = Math.Clamp(value, 1, MaxPeepTargetFps);
             if (!SetTrackedProperty(ref _peepTargetFps, normalized))
             {
                 return;
@@ -967,6 +1021,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
 
             OnPropertyChanged(nameof(VideoRecognitionTargetFpsInput));
             UpdatePeepTimerInterval();
+            PersistBridgeSettingsIfNotLoading(ToolboxToolKind.VideoRecognition);
         }
     }
 
@@ -1014,6 +1069,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
             UpdateMiniGameSelectionFromTaskName();
             MiniGameTip = ResolveMiniGameTip(normalized);
             OnPropertyChanged(nameof(IsMiniGameSecretFront));
+            PersistBridgeSettingsIfNotLoading(ToolboxToolKind.MiniGame);
         }
     }
 
@@ -1026,6 +1082,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
             if (SetTrackedProperty(ref _miniGameSecretFrontEnding, normalized))
             {
                 RefreshCurrentToolParametersPreview();
+                PersistBridgeSettingsIfNotLoading(ToolboxToolKind.MiniGame);
             }
         }
     }
@@ -1042,6 +1099,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
             }
 
             OnPropertyChanged(nameof(SelectedMiniGameSecretFrontEventOption));
+            PersistBridgeSettingsIfNotLoading(ToolboxToolKind.MiniGame);
         }
     }
 
@@ -1083,6 +1141,8 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
     public bool IsMiniGameSecretFront => string.Equals(MiniGameTaskName, MiniGameSecretFrontTaskName, StringComparison.Ordinal);
 
     public bool IsMiniGameRunning => _activeTool == ToolboxToolKind.MiniGame && IsExecuting;
+
+    public bool CanEditMiniGameOptions => !IsMiniGameRunning;
 
     public string MiniGameCommandText => IsMiniGameRunning
         ? IsToolActionStopHovered(ToolboxToolKind.MiniGame)
@@ -1386,7 +1446,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
                         string.Format(
                             CultureInfo.InvariantCulture,
                             T("Toolbox.Error.BusyWithTool", "`{0}` is running. Stop it first before peep."),
-                            _activeTool)),
+                            GetToolDisplayName(_activeTool.Value))),
                     cancellationToken);
                 return;
             }
@@ -1466,10 +1526,9 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
     {
         _ = Runtime.AchievementTrackerService.Unlock("RealGacha");
         GachaShowDisclaimer = false;
-        if (GachaShowDisclaimerNoMore)
-        {
-            _ = PersistBridgeSettingsForToolAsync(ToolboxToolKind.Gacha, CancellationToken.None);
-        }
+        // Persist the legacy preference in both directions so an unchecked
+        // "don't show again" also reaches legacy-compatible consumers.
+        _ = PersistBridgeSettingsForToolAsync(ToolboxToolKind.Gacha, CancellationToken.None);
 
         GachaInfo = T("Toolbox.Tip.GachaInit", "Gacha hint.");
     }
@@ -1643,6 +1702,8 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
             return;
         }
 
+        await PersistBridgeSettingsForToolAsync(tool, cancellationToken);
+
         if (transitionBeforeConnect)
         {
             prepareUiAction();
@@ -1657,8 +1718,6 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
             await ApplyFailureAsync(tool, connectResult, "connect", cancellationToken);
             return;
         }
-
-        await PersistBridgeSettingsForToolAsync(tool, cancellationToken);
 
         if (!transitionBeforeConnect)
         {
@@ -1739,8 +1798,10 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         OperBoxHaveGroups.Clear();
         OperBoxNotHaveGroups.Clear();
         _operBoxListsMaterialized = false;
+        _hasOperBoxRecognitionData = false;
         OperBoxSelectedIndex = 1;
         LastOperBoxSyncTime = null;
+        OnPropertyChanged(nameof(CanExportOperBox));
     }
 
     private void PrepareDepotForStart()
@@ -1807,6 +1868,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         LastExecutionErrorCode = string.Empty;
         LastExecutionAt = null;
         OnPropertyChanged(nameof(IsMiniGameRunning));
+        OnPropertyChanged(nameof(CanEditMiniGameOptions));
         OnPropertyChanged(nameof(MiniGameCommandText));
         NotifyToolActionTextChanged(tool);
         NotifyToolboxBusyStateChanged();
@@ -1827,6 +1889,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
 
         _lastDispatchedParameterSummary = string.Empty;
         OnPropertyChanged(nameof(IsMiniGameRunning));
+        OnPropertyChanged(nameof(CanEditMiniGameOptions));
         OnPropertyChanged(nameof(MiniGameCommandText));
         NotifyToolActionTextChanged(expectedTool);
         NotifyToolboxBusyStateChanged();
@@ -2552,6 +2615,8 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
             return;
         }
 
+        _hasOperBoxRecognitionData = true;
+        OnPropertyChanged(nameof(CanExportOperBox));
         RebuildOperBoxLists();
         LastOperBoxSyncTime = DateTimeOffset.UtcNow;
         OperBoxInfo = T("Toolbox.Status.RecognitionCompleted", "Recognition completed.");
@@ -2930,6 +2995,10 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         LastErrorMessage = formatted;
         LastExecutionErrorCode = errorCode;
         LastExecutionAt = DateTimeOffset.Now;
+        if (tool is not null)
+        {
+            ApplyStoppedStatusToTool(tool.Value, formatted);
+        }
         if (!IsToolboxBusy)
         {
             ExecutionState = ToolboxExecutionState.Failed;
@@ -3191,6 +3260,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         CancelPeepPollingLoop();
         Peeping = true;
         PeepScreenFps = 0;
+        _peepRawFrameSizeUnsupported = false;
         _lastPeepFpsWindowStartedAt = DateTimeOffset.UtcNow;
         _peepFramesInWindow = 0;
         _peepPollingCts = new CancellationTokenSource();
@@ -3335,6 +3405,11 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
 
     private async Task<bool> TryRefreshPeepRawFrameAsync(CancellationToken cancellationToken)
     {
+        if (_peepRawFrameSizeUnsupported)
+        {
+            return false;
+        }
+
         var screenshotStopwatch = Stopwatch.StartNew();
         var imageResult = await Runtime.CoreBridge.GetImageBgrAsync(forceScreencap: true, cancellationToken).ConfigureAwait(false);
         screenshotStopwatch.Stop();
@@ -3350,19 +3425,35 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
             return imageResult.Error?.Code != CoreErrorCode.NotSupported;
         }
 
+        if (!TryResolvePeepRawFrameSize(imageResult.Value.Length, out var frameWidth, out var frameHeight))
+        {
+            // The raw API does not report dimensions; without an exact size match the
+            // frame cannot be rendered correctly, so fall back to the encoded path for
+            // the rest of this peep session instead of showing a corrupted preview.
+            _peepRawFrameSizeUnsupported = true;
+            _ = Runtime.DiagnosticsService.RecordScreenshotTestAsync(
+                "Toolbox.Peep.RefreshRaw",
+                success: false,
+                elapsedMs: screenshotStopwatch.Elapsed.TotalMilliseconds,
+                provider: "CoreBridge.GetImageBgrAsync",
+                details: $"Unsupported raw frame size `{imageResult.Value.Length}` bytes; using the encoded screenshot path instead.",
+                minInterval: TimeSpan.FromSeconds(10));
+            return false;
+        }
+
         _ = Runtime.DiagnosticsService.RecordScreenshotTestAsync(
             "Toolbox.Peep.RefreshRaw",
             success: true,
             elapsedMs: screenshotStopwatch.Elapsed.TotalMilliseconds,
             provider: "CoreBridge.GetImageBgrAsync",
-            width: PeepPreviewPixelWidth,
-            height: PeepPreviewPixelHeight,
+            width: frameWidth,
+            height: frameHeight,
             minInterval: TimeSpan.FromSeconds(30));
 
         try
         {
             await Dispatcher.UIThread.InvokeAsync(
-                () => ApplyPeepRawFrame(imageResult.Value),
+                () => ApplyPeepRawFrame(imageResult.Value, frameWidth, frameHeight),
                 DispatcherPriority.Render,
                 cancellationToken);
             return true;
@@ -3401,22 +3492,39 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         AdvancePeepFpsWindow();
     }
 
-    private void ApplyPeepRawFrame(byte[] bgrData)
+    internal static bool TryResolvePeepRawFrameSize(int byteLength, out int width, out int height)
+    {
+        foreach (var (candidateWidth, candidateHeight) in PeepRawFrameSupportedSizes)
+        {
+            if (byteLength == candidateWidth * candidateHeight * PeepPreviewPixelChannels)
+            {
+                width = candidateWidth;
+                height = candidateHeight;
+                return true;
+            }
+        }
+
+        width = 0;
+        height = 0;
+        return false;
+    }
+
+    private void ApplyPeepRawFrame(byte[] bgrData, int frameWidth, int frameHeight)
     {
         if (!Peeping)
         {
             return;
         }
 
-        var bytesPerFrame = PeepPreviewPixelWidth * PeepPreviewPixelHeight * PeepPreviewPixelChannels;
+        var bytesPerFrame = frameWidth * frameHeight * PeepPreviewPixelChannels;
         if (bgrData.Length < bytesPerFrame)
         {
             return;
         }
 
         var sequence = _peepBitmapSequence++;
-        var bitmap = GetOrCreatePeepBitmap(sequence % _peepBitmapCache.Length);
-        WriteBgrFrame(bitmap, bgrData);
+        var bitmap = GetOrCreatePeepBitmap(sequence % _peepBitmapCache.Length, frameWidth, frameHeight);
+        WriteBgrFrame(bitmap, bgrData, frameWidth, frameHeight);
         PeepImage = bitmap;
         AdvancePeepFpsWindow();
     }
@@ -3434,19 +3542,34 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         }
     }
 
-    private WriteableBitmap GetOrCreatePeepBitmap(int index)
+    private WriteableBitmap GetOrCreatePeepBitmap(int index, int frameWidth, int frameHeight)
     {
+        var cached = _peepBitmapCache[index];
+        if (cached is not null
+            && (cached.PixelSize.Width != frameWidth || cached.PixelSize.Height != frameHeight))
+        {
+            // Detach the stale bitmap first so the PeepImage setter disposes it when the
+            // replacement frame is assigned; dispose it here only when it is not displayed.
+            _peepBitmapCache[index] = null;
+            if (!ReferenceEquals(cached, PeepImage))
+            {
+                cached.Dispose();
+            }
+
+            cached = null;
+        }
+
         return _peepBitmapCache[index] ??= new WriteableBitmap(
-            new PixelSize(PeepPreviewPixelWidth, PeepPreviewPixelHeight),
+            new PixelSize(frameWidth, frameHeight),
             new Vector(96, 96),
             PixelFormats.Bgr24,
             AlphaFormat.Opaque);
     }
 
-    private static void WriteBgrFrame(WriteableBitmap bitmap, byte[] bgrData)
+    private static void WriteBgrFrame(WriteableBitmap bitmap, byte[] bgrData, int frameWidth, int frameHeight)
     {
-        var frameStride = PeepPreviewPixelWidth * PeepPreviewPixelChannels;
-        var frameBytes = PeepPreviewPixelHeight * frameStride;
+        var frameStride = frameWidth * PeepPreviewPixelChannels;
+        var frameBytes = frameHeight * frameStride;
         using var framebuffer = bitmap.Lock();
         if (framebuffer.RowBytes == frameStride)
         {
@@ -3454,7 +3577,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
             return;
         }
 
-        for (var row = 0; row < PeepPreviewPixelHeight; row++)
+        for (var row = 0; row < frameHeight; row++)
         {
             var sourceOffset = row * frameStride;
             var destination = IntPtr.Add(framebuffer.Address, row * framebuffer.RowBytes);
@@ -3502,13 +3625,6 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         switch (tool)
         {
             case ToolboxToolKind.Recruit:
-                if (!ChooseLevel3 && !ChooseLevel4 && !ChooseLevel5 && !ChooseLevel6)
-                {
-                    return UiOperationResult.Fail(
-                        UiErrorCode.ToolboxInvalidParameters,
-                        T("Toolbox.Validation.RecruitSelectAtLeastOne", "Select at least one star level for recruit calculation."));
-                }
-
                 if (!TryParseRecruitMinutes(RecruitLevel3TimeInput, out _)
                     || !TryParseRecruitMinutes(RecruitLevel4TimeInput, out _)
                     || !TryParseRecruitMinutes(RecruitLevel5TimeInput, out _))
@@ -3548,11 +3664,11 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
 
                 return UiOperationResult.Ok("Gacha parameters validated.");
             case ToolboxToolKind.VideoRecognition:
-                if (!TryParseInt(VideoRecognitionTargetFpsInput, 1, 60, out _))
+                if (!TryParseInt(VideoRecognitionTargetFpsInput, 1, MaxPeepTargetFps, out _))
                 {
                     return UiOperationResult.Fail(
                         UiErrorCode.ToolboxInvalidParameters,
-                        T("Toolbox.Validation.PeepFpsInvalid", "Target peep FPS must be between 1 and 60."));
+                        T("Toolbox.Validation.PeepFpsInvalid", "Target peep FPS must be between 1 and 600."));
                 }
 
                 return UiOperationResult.Ok("Peep parameters validated.");
@@ -3562,6 +3678,14 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
                     return UiOperationResult.Fail(
                         UiErrorCode.ToolboxInvalidParameters,
                         T("Toolbox.Validation.MiniGameTaskNameEmpty", "Mini-game task name cannot be empty."));
+                }
+
+                if (MiniGameTaskList.Count > 0
+                    && !MiniGameTaskList.Any(entry => string.Equals(entry.Value, MiniGameTaskName, StringComparison.Ordinal)))
+                {
+                    return UiOperationResult.Fail(
+                        UiErrorCode.ToolboxInvalidParameters,
+                        T("Toolbox.Validation.MiniGameTaskUnavailable", "The selected mini-game is unavailable for the current client or core version."));
                 }
 
                 if (string.Equals(MiniGameTaskName, MiniGameSecretFrontTaskName, StringComparison.Ordinal)
@@ -3576,6 +3700,19 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
             default:
                 return UiOperationResult.Fail(UiErrorCode.ToolNotSupported, $"Tool `{tool}` is not supported.");
         }
+    }
+
+    private void PersistBridgeSettingsIfNotLoading(ToolboxToolKind tool)
+    {
+        // Settings edited outside of dispatch must still persist immediately
+        // (same behavior as the WPF configuration setters), but applying
+        // persisted values during LoadBridgeSettings must not write them back.
+        if (_loadingBridgeSettings)
+        {
+            return;
+        }
+
+        _ = PersistBridgeSettingsForToolAsync(tool, CancellationToken.None);
     }
 
     private async Task PersistBridgeSettingsForToolAsync(ToolboxToolKind tool, CancellationToken cancellationToken)
@@ -3793,24 +3930,35 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         OperBoxHaveGroups.Clear();
         OperBoxNotHaveGroups.Clear();
         _operBoxListsMaterialized = false;
+        _hasOperBoxRecognitionData = false;
         LastOperBoxSyncTime = null;
 
-        if (!Runtime.ConfigurationService.CurrentConfig.GlobalValues.TryGetValue(LegacyConfigurationKeys.OperBoxData, out var node) || node is null)
+        JsonNode? parsed = null;
+        if (Runtime.ConfigurationService.CurrentConfig.GlobalValues.TryGetValue(LegacyConfigurationKeys.OperBoxData, out var node) && node is not null)
+        {
+            var payload = node is JsonValue value && value.TryGetValue(out string? raw)
+                ? raw
+                : node.ToJsonString();
+            if (!string.IsNullOrWhiteSpace(payload))
+            {
+                try
+                {
+                    parsed = JsonNode.Parse(payload);
+                }
+                catch
+                {
+                    // Continue with the WPF data-file fallback below.
+                }
+            }
+        }
+
+        if (parsed is null && !ToolboxAssetCatalog.TryLoadLegacyDataFile("OperBoxData.json", out parsed))
         {
             return;
         }
 
         try
         {
-            var payload = node is JsonValue value && value.TryGetValue(out string? raw)
-                ? raw
-                : node.ToJsonString();
-            if (string.IsNullOrWhiteSpace(payload))
-            {
-                return;
-            }
-
-            var parsed = JsonNode.Parse(payload);
             var ownNode = parsed switch
             {
                 JsonArray legacyArray => legacyArray,
@@ -3832,6 +3980,11 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
                 }
             }
 
+            _hasOperBoxRecognitionData = parsed is JsonArray
+                || (parsed is JsonObject payloadObject && ReadBool(payloadObject, "done"))
+                || _operBoxOwnedById.Count > 0;
+            OnPropertyChanged(nameof(CanExportOperBox));
+
             if (parsed is JsonObject persistedObject)
             {
                 var syncTime = ReadString(persistedObject, "syncTime");
@@ -3850,20 +4003,42 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
     private void LoadDepotDetails()
     {
         ReplaceCollectionItems(DepotResult, Array.Empty<DepotItemViewModel>());
-        if (!Runtime.ConfigurationService.CurrentConfig.GlobalValues.TryGetValue(LegacyConfigurationKeys.DepotResult, out var node) || node is null)
+        JsonObject? payload = null;
+        if (Runtime.ConfigurationService.CurrentConfig.GlobalValues.TryGetValue(LegacyConfigurationKeys.DepotResult, out var node) && node is not null)
+        {
+            try
+            {
+                payload = node is JsonValue value && value.TryGetValue(out string? raw)
+                    ? JsonNode.Parse(raw ?? string.Empty) as JsonObject
+                    : node as JsonObject ?? JsonNode.Parse(node.ToJsonString()) as JsonObject;
+            }
+            catch
+            {
+                // Continue with the WPF data-file fallback below.
+            }
+        }
+
+        if (payload is null
+            && ToolboxAssetCatalog.TryLoadLegacyDataFile("DepotData.json", out var legacyData)
+            && legacyData is JsonObject legacyObject)
+        {
+            payload = legacyObject["data"] is not null
+                ? legacyObject
+                : new JsonObject
+                {
+                    ["done"] = true,
+                    ["data"] = legacyObject.ToJsonString(),
+                };
+        }
+
+        if (payload is null)
         {
             return;
         }
 
         try
         {
-            var payload = node is JsonValue value && value.TryGetValue(out string? raw)
-                ? JsonNode.Parse(raw ?? string.Empty) as JsonObject
-                : node as JsonObject ?? JsonNode.Parse(node.ToJsonString()) as JsonObject;
-            if (payload is not null)
-            {
-                ApplyDepotRecognition(payload, updateSyncTime: false);
-            }
+            ApplyDepotRecognition(payload, updateSyncTime: false);
         }
         catch
         {
@@ -3874,29 +4049,40 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
     private void LoadMiniGameEntries()
     {
         var clientType = ResolveClientType();
+        var stageActivity = Runtime.StageManagerFeatureService.GetStageActivityState(clientType);
         MiniGameTaskList.Clear();
-        foreach (var entry in ToolboxAssetCatalog.GetMiniGameEntries(clientType, _currentLanguage))
+        foreach (var entry in ToolboxAssetCatalog.GetMiniGameEntries(clientType, _currentLanguage, stageActivity.CoreVersion))
         {
             MiniGameTaskList.Add(entry);
         }
 
-        if (!MiniGameTaskList.Any(entry => string.Equals(entry.Value, MiniGameTaskName, StringComparison.Ordinal)))
+        if (MiniGameTaskList.Count > 0
+            && !MiniGameTaskList.Any(entry => string.Equals(entry.Value, MiniGameTaskName, StringComparison.Ordinal)))
         {
-            MiniGameTaskList.Insert(0, new ToolboxMiniGameEntry(MiniGameTaskName, MiniGameTaskName, string.Empty));
+            // A persisted or previously selected task that is unavailable for the
+            // active client, expired, or blocked by the minimum core version must
+            // not be resurrected; fall back to the first available entry instead.
+            // The fallback is programmatic, so it must not overwrite the persisted
+            // selection before the user actually edits or runs the tool.
+            _loadingBridgeSettings = true;
+            try
+            {
+                MiniGameTaskName = MiniGameTaskList[0].Value;
+            }
+            finally
+            {
+                _loadingBridgeSettings = false;
+            }
         }
 
         MiniGameTip = ResolveMiniGameTip(MiniGameTaskName);
+        OnPropertyChanged(nameof(SelectedMiniGameEntry));
     }
 
     private void UpdateMiniGameSelectionFromTaskName()
     {
-        if (MiniGameTaskList.Any(entry => string.Equals(entry.Value, MiniGameTaskName, StringComparison.Ordinal)))
-        {
-            OnPropertyChanged(nameof(SelectedMiniGameEntry));
-            return;
-        }
-
-        MiniGameTaskList.Insert(0, new ToolboxMiniGameEntry(MiniGameTaskName, MiniGameTaskName, string.Empty));
+        // Never reinsert a task name that is not part of the currently available
+        // entries (different client, expired activity, or blocked core version).
         OnPropertyChanged(nameof(SelectedMiniGameEntry));
     }
 
@@ -3956,23 +4142,31 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
 
     private void LoadBridgeSettings()
     {
-        ChooseLevel3 = ReadBoolSetting(LegacyConfigurationKeys.ChooseLevel3, true);
-        ChooseLevel4 = ReadBoolSetting(LegacyConfigurationKeys.ChooseLevel4, true);
-        ChooseLevel5 = ReadBoolSetting(LegacyConfigurationKeys.ChooseLevel5, true);
-        ChooseLevel6 = ReadBoolSetting(LegacyConfigurationKeys.ChooseLevel6, true);
-        RecruitLevel3Time = ReadIntSetting(LegacyConfigurationKeys.ToolBoxChooseLevel3Time, 540);
-        RecruitLevel4Time = ReadIntSetting(LegacyConfigurationKeys.ToolBoxChooseLevel4Time, 540);
-        RecruitLevel5Time = ReadIntSetting(LegacyConfigurationKeys.ToolBoxChooseLevel5Time, 540);
-        RecruitAutoSetTime = ReadBoolSetting(LegacyConfigurationKeys.AutoSetTime, true);
-        RecruitmentShowPotential = ReadBoolSetting(LegacyConfigurationKeys.RecruitmentShowPotential, true);
+        _loadingBridgeSettings = true;
+        try
+        {
+            ChooseLevel3 = ReadBoolSetting(LegacyConfigurationKeys.ChooseLevel3, true);
+            ChooseLevel4 = ReadBoolSetting(LegacyConfigurationKeys.ChooseLevel4, true);
+            ChooseLevel5 = ReadBoolSetting(LegacyConfigurationKeys.ChooseLevel5, true);
+            ChooseLevel6 = ReadBoolSetting(LegacyConfigurationKeys.ChooseLevel6, true);
+            RecruitLevel3Time = ReadIntSetting(LegacyConfigurationKeys.ToolBoxChooseLevel3Time, 540);
+            RecruitLevel4Time = ReadIntSetting(LegacyConfigurationKeys.ToolBoxChooseLevel4Time, 540);
+            RecruitLevel5Time = ReadIntSetting(LegacyConfigurationKeys.ToolBoxChooseLevel5Time, 540);
+            RecruitAutoSetTime = ReadBoolSetting(LegacyConfigurationKeys.AutoSetTime, true);
+            RecruitmentShowPotential = ReadBoolSetting(LegacyConfigurationKeys.RecruitmentShowPotential, true);
 
-        GachaShowDisclaimerNoMore = ReadBoolSetting(LegacyConfigurationKeys.GachaShowDisclaimerNoMore, false);
-        GachaShowDisclaimer = !GachaShowDisclaimerNoMore;
-        PeepTargetFps = ReadIntSetting(LegacyConfigurationKeys.PeepTargetFps, 20);
+            GachaShowDisclaimerNoMore = ReadBoolSetting(LegacyConfigurationKeys.GachaShowDisclaimerNoMore, false);
+            GachaShowDisclaimer = true;
+            PeepTargetFps = ReadIntSetting(LegacyConfigurationKeys.PeepTargetFps, 20);
 
-        MiniGameTaskName = ReadStringSetting(LegacyConfigurationKeys.MiniGameTaskName, "SS@Store@Begin");
-        MiniGameSecretFrontEnding = ReadStringSetting(LegacyConfigurationKeys.MiniGameSecretFrontEnding, "A");
-        MiniGameSecretFrontEvent = ReadStringSetting(LegacyConfigurationKeys.MiniGameSecretFrontEvent, string.Empty);
+            MiniGameTaskName = ReadStringSetting(LegacyConfigurationKeys.MiniGameTaskName, "SS@Store@Begin");
+            MiniGameSecretFrontEnding = ReadStringSetting(LegacyConfigurationKeys.MiniGameSecretFrontEnding, "A");
+            MiniGameSecretFrontEvent = ReadStringSetting(LegacyConfigurationKeys.MiniGameSecretFrontEvent, string.Empty);
+        }
+        finally
+        {
+            _loadingBridgeSettings = false;
+        }
     }
 
     private int ReadIntSetting(string key, int fallback)
@@ -4251,6 +4445,11 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
 
     private string BuildOperBoxExportText()
     {
+        if (!CanExportOperBox)
+        {
+            return string.Empty;
+        }
+
         var operators = ToolboxAssetCatalog.GetOperators();
         var clientType = ResolveClientType();
         var language = _currentLanguage;
@@ -4283,6 +4482,21 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
                     false,
                     0));
             }
+        }
+
+        foreach (var owned in _operBoxOwnedById.Values
+                     .Where(item => !operators.ContainsKey(item.Id))
+                     .OrderByDescending(item => item.Rarity)
+                     .ThenBy(item => item.Id, StringComparer.Ordinal))
+        {
+            exportItems.Add(new PersistedOperBoxOperator(
+                owned.Id,
+                owned.Name,
+                owned.Rarity,
+                owned.Elite,
+                owned.Level,
+                true,
+                owned.Potential));
         }
 
         return JsonSerializer.Serialize(exportItems, new JsonSerializerOptions { WriteIndented = true });

@@ -414,9 +414,16 @@ public sealed class LocalizationAuditRegressionTests
     [
         "Toolbox.Tab.Recruit",
         "Toolbox.Action.StartRecognition",
+        "Toolbox.Action.PeepStarting",
+        "Toolbox.Action.PeepStopping",
         "Toolbox.MiniGame.Name",
         "Toolbox.Status.WaitingForExecution",
         "Toolbox.Tip.RecruitRecognition",
+        "Toolbox.RetryableDialog.Title",
+        "Toolbox.RetryableDialog.Message",
+        "Toolbox.RetryableDialog.RetryButton",
+        "Toolbox.RetryableDialog.LaterButton",
+        "Toolbox.RetryableDialog.DetailsButton",
     ];
 
     private static readonly string[] TaskQueueCriticalKeys =
@@ -756,6 +763,51 @@ public sealed class LocalizationAuditRegressionTests
                     enUsBaseline[key],
                     map[key]);
             }
+        }
+    }
+
+    [Fact]
+    public void ToolboxPeepTransitionKeys_ShouldResolveLocalizedText_ForFiveLanguages()
+    {
+        var map = new ToolboxLocalizationTextMap();
+        var expected = new Dictionary<string, (string Starting, string Stopping)>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["zh-cn"] = ("启动中...", "停止中..."),
+            ["zh-tw"] = ("啟動中...", "停止中..."),
+            ["en-us"] = ("Starting...", "Stopping..."),
+            ["ja-jp"] = ("起動中...", "停止中..."),
+            ["ko-kr"] = ("시작 중...", "중지 중..."),
+        };
+
+        foreach (var (language, texts) in expected)
+        {
+            map.Language = language;
+            Assert.Equal(texts.Starting, map["Toolbox.Action.PeepStarting"]);
+            Assert.Equal(texts.Stopping, map["Toolbox.Action.PeepStopping"]);
+        }
+    }
+
+    [Fact]
+    public void ToolboxRetryableDialogKeys_ShouldResolveLocalizedText_ForFiveLanguages()
+    {
+        var map = new ToolboxLocalizationTextMap();
+        var expected = new Dictionary<string, (string Title, string Message, string Retry, string Later, string Details)>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["zh-cn"] = ("小工具还没准备好", "你的手速怎么这么快，不过被我料到了。小工具还没准备好，稍后再试一下。", "重试", "稍后再试", "详细报错"),
+            ["zh-tw"] = ("小工具還沒準備好", "你的手速怎麼這麼快，不過被我料到了。小工具還沒準備好，稍後再試一下。", "重試", "稍後再試", "詳細報錯"),
+            ["en-us"] = ("Toolbox is not ready yet", "That was impressively fast, and yes, I saw it coming. The toolbox is still getting ready, so try again in a moment.", "Retry", "Try later", "Error details"),
+            ["ja-jp"] = ("Toolbox はまだ準備中です", "ずいぶん手が早いですね。でも予想済みです。Toolbox はまだ準備中です。しばらくしてからもう一度お試しください。", "再試行", "後で再試行", "エラー詳細"),
+            ["ko-kr"] = ("Toolbox가 아직 준비되지 않았습니다", "손이 정말 빠르시네요. 하지만 예상하고 있었습니다. Toolbox가 아직 준비 중입니다. 잠시 후 다시 시도하세요.", "다시 시도", "나중에 시도", "오류 상세"),
+        };
+
+        foreach (var (language, texts) in expected)
+        {
+            map.Language = language;
+            Assert.Equal(texts.Title, map["Toolbox.RetryableDialog.Title"]);
+            Assert.Equal(texts.Message, map["Toolbox.RetryableDialog.Message"]);
+            Assert.Equal(texts.Retry, map["Toolbox.RetryableDialog.RetryButton"]);
+            Assert.Equal(texts.Later, map["Toolbox.RetryableDialog.LaterButton"]);
+            Assert.Equal(texts.Details, map["Toolbox.RetryableDialog.DetailsButton"]);
         }
     }
 

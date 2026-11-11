@@ -3040,6 +3040,12 @@
   <data name="Toolbox.Action.PeepStopStrong" xml:space="preserve">
     <value>停止！！！！！</value>
   </data>
+  <data name="Toolbox.Action.PeepStarting" xml:space="preserve">
+    <value>啟動中...</value>
+  </data>
+  <data name="Toolbox.Action.PeepStopping" xml:space="preserve">
+    <value>停止中...</value>
+  </data>
   <data name="Toolbox.Action.StartRecognition" xml:space="preserve">
     <value>開始辨識</value>
   </data>
@@ -3334,6 +3340,21 @@
   <data name="Toolbox.BusyDialog.Title" xml:space="preserve">
     <value>小工具正在執行</value>
   </data>
+  <data name="Toolbox.RetryableDialog.DetailsButton" xml:space="preserve">
+    <value>詳細報錯</value>
+  </data>
+  <data name="Toolbox.RetryableDialog.LaterButton" xml:space="preserve">
+    <value>稍後再試</value>
+  </data>
+  <data name="Toolbox.RetryableDialog.Message" xml:space="preserve">
+    <value>你的手速怎麼這麼快，不過被我料到了。小工具還沒準備好，稍後再試一下。</value>
+  </data>
+  <data name="Toolbox.RetryableDialog.RetryButton" xml:space="preserve">
+    <value>重試</value>
+  </data>
+  <data name="Toolbox.RetryableDialog.Title" xml:space="preserve">
+    <value>小工具還沒準備好</value>
+  </data>
   <data name="Toolbox.ExecutionReview.HistoryLabel" xml:space="preserve">
     <value>歷史記錄</value>
   </data>
@@ -3576,6 +3597,9 @@
   </data>
   <data name="Toolbox.Validation.MiniGameTaskNameEmpty" xml:space="preserve">
     <value>小遊戲任務名稱不可為空。</value>
+  </data>
+  <data name="Toolbox.Validation.MiniGameTaskUnavailable" xml:space="preserve">
+    <value>所選小遊戲在目前用戶端或核心版本下不可用。</value>
   </data>
   <data name="Toolbox.Validation.OperBoxModeInvalid" xml:space="preserve">
     <value>幹員辨識模式僅支援 owned 或 all。</value>

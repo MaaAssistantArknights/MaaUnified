@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json.Nodes;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
@@ -14,7 +15,6 @@ internal static class ToolboxAssetCatalog
     private static readonly object CharacterGate = new();
     private static readonly object ItemGate = new();
     private static readonly object ImageGate = new();
-    private static readonly object MiniGameGate = new();
     private static readonly HashSet<string> VirtualOperatorIds = new(StringComparer.Ordinal)
     {
         "char_504_rguard",
@@ -54,7 +54,6 @@ internal static class ToolboxAssetCatalog
     private static readonly Dictionary<string, IReadOnlyDictionary<string, ToolboxItemAsset>> ItemAssetsByLanguage = new(StringComparer.OrdinalIgnoreCase);
     private static readonly Dictionary<string, IReadOnlyDictionary<string, string>> ItemNamesByLanguage = new(StringComparer.OrdinalIgnoreCase);
     private static readonly Dictionary<string, Bitmap?> BitmapCache = new(StringComparer.Ordinal);
-    private static readonly Dictionary<string, IReadOnlyList<ToolboxMiniGameEntry>> MiniGamesByClient = new(StringComparer.OrdinalIgnoreCase);
     private static readonly IReadOnlyDictionary<string, string> MiniGameTextEnUs = new Dictionary<string, string>(StringComparer.Ordinal)
     {
         ["MiniGameNameEmptyTip"] = "Select a mini-game above to start.",
@@ -154,21 +153,46 @@ internal static class ToolboxAssetCatalog
         }
     }
 
-    public static IReadOnlyList<ToolboxMiniGameEntry> GetMiniGameEntries(string? clientType = null, string? language = null)
+    public static IReadOnlyList<ToolboxMiniGameEntry> GetMiniGameEntries(
+        string? clientType = null,
+        string? language = null,
+        string? coreVersion = null,
+        DateTime? utcNow = null)
     {
         var normalizedClientType = NormalizeClientType(clientType);
         var normalizedLanguage = NormalizeLanguage(language);
-        var cacheKey = $"{normalizedClientType}|{normalizedLanguage}";
-        lock (MiniGameGate)
+        return LoadMiniGameEntries(normalizedClientType, normalizedLanguage, coreVersion, utcNow ?? DateTime.UtcNow);
+    }
+
+    public static bool TryLoadLegacyDataFile(string fileName, out JsonNode? data)
+    {
+        data = null;
+        if (string.IsNullOrWhiteSpace(fileName)
+            || !string.Equals(Path.GetFileName(fileName), fileName, StringComparison.Ordinal))
         {
-            if (!MiniGamesByClient.TryGetValue(cacheKey, out var entries))
+            return false;
+        }
+
+        foreach (var root in EnumerateBaseDirectories())
+        {
+            var path = Path.Combine(root, "data", fileName);
+            if (!File.Exists(path))
             {
-                entries = LoadMiniGameEntries(normalizedClientType, normalizedLanguage);
-                MiniGamesByClient[cacheKey] = entries;
+                continue;
             }
 
-            return entries;
+            try
+            {
+                data = JsonNode.Parse(File.ReadAllText(path));
+                return data is not null;
+            }
+            catch
+            {
+                // A malformed legacy file must not prevent later candidate roots from loading.
+            }
         }
+
+        return false;
     }
 
     public static bool IsOperatorAvailableInClient(ToolboxOperatorAsset asset, string? clientType)
@@ -311,10 +335,6 @@ internal static class ToolboxAssetCatalog
             BitmapCache.Clear();
         }
 
-        lock (MiniGameGate)
-        {
-            MiniGamesByClient.Clear();
-        }
     }
 
     internal static void RestoreTestBaseDirectoriesForTests(IReadOnlyList<string>? directories)
@@ -470,7 +490,11 @@ internal static class ToolboxAssetCatalog
         }
     }
 
-    private static IReadOnlyList<ToolboxMiniGameEntry> LoadMiniGameEntries(string clientType, string language)
+    private static IReadOnlyList<ToolboxMiniGameEntry> LoadMiniGameEntries(
+        string clientType,
+        string language,
+        string? coreVersion,
+        DateTime utcNow)
     {
         var entries = new List<ToolboxMiniGameEntry>
         {
@@ -497,7 +521,7 @@ internal static class ToolboxAssetCatalog
 
             if (TryResolveMiniGameClientNode(root, clientType, out var clientNode))
             {
-                AppendMiniGameEntries(entries, clientNode["miniGame"], language);
+                AppendMiniGameEntries(entries, clientNode["miniGame"], language, coreVersion, utcNow);
             }
         }
         catch
@@ -513,19 +537,8 @@ internal static class ToolboxAssetCatalog
 
     private static bool TryResolveMiniGameClientNode(JsonObject root, string clientType, out JsonObject clientNode)
     {
-        if (TryGetClientNode(root, clientType, out clientNode))
-        {
-            return clientNode["miniGame"] is not null;
-        }
-
-        if (!string.Equals(clientType, DefaultClientType, StringComparison.OrdinalIgnoreCase)
-            && TryGetClientNode(root, DefaultClientType, out clientNode))
-        {
-            return clientNode["miniGame"] is not null;
-        }
-
-        clientNode = null!;
-        return false;
+        return TryGetClientNode(root, clientType, out clientNode)
+            && clientNode["miniGame"] is not null;
     }
 
     private static bool TryGetClientNode(JsonObject root, string clientType, out JsonObject clientNode)
@@ -546,22 +559,32 @@ internal static class ToolboxAssetCatalog
         return false;
     }
 
-    private static void AppendMiniGameEntries(ICollection<ToolboxMiniGameEntry> target, JsonNode? miniGameNode, string language)
+    private static void AppendMiniGameEntries(
+        ICollection<ToolboxMiniGameEntry> target,
+        JsonNode? miniGameNode,
+        string language,
+        string? coreVersion,
+        DateTime utcNow)
     {
         if (miniGameNode is JsonArray array)
         {
             foreach (var item in array)
             {
-                TryAppendMiniGameEntry(target, item, language);
+                TryAppendMiniGameEntry(target, item, language, coreVersion, utcNow);
             }
 
             return;
         }
 
-        TryAppendMiniGameEntry(target, miniGameNode, language);
+        TryAppendMiniGameEntry(target, miniGameNode, language, coreVersion, utcNow);
     }
 
-    private static void TryAppendMiniGameEntry(ICollection<ToolboxMiniGameEntry> target, JsonNode? node, string language)
+    private static void TryAppendMiniGameEntry(
+        ICollection<ToolboxMiniGameEntry> target,
+        JsonNode? node,
+        string language,
+        string? coreVersion,
+        DateTime utcNow)
     {
         if (node is null)
         {
@@ -583,6 +606,11 @@ internal static class ToolboxAssetCatalog
             return;
         }
 
+        if (!IsMiniGameEntryAvailable(obj, coreVersion, utcNow))
+        {
+            return;
+        }
+
         _ = TryReadString(obj["Display"], out var display);
         _ = TryReadString(obj["DisplayKey"], out var displayKey);
         _ = TryReadString(obj["Value"], out var explicitValue);
@@ -599,6 +627,60 @@ internal static class ToolboxAssetCatalog
         var finalDisplay = FirstNonEmpty(display, ResolveMiniGameText(displayKey, language), finalValue);
         var finalTip = FirstNonEmpty(ResolveMiniGameText(tipKey, language), tip, ResolveMiniGameText(displayKey + "Tip", language), string.Empty);
         target.Add(new ToolboxMiniGameEntry(finalDisplay!, finalValue!, finalTip!));
+    }
+
+    private static bool IsMiniGameEntryAvailable(JsonObject entry, string? coreVersion, DateTime utcNow)
+    {
+        var activityObject = entry["Activity"] as JsonObject ?? entry["activity"] as JsonObject;
+        if (activityObject is not null)
+        {
+            var timezone = activityObject["TimeZone"] is JsonValue timezoneValue
+                && timezoneValue.TryGetValue(out int timezoneOffset)
+                ? timezoneOffset
+                : 0;
+            var start = ParseActivityTime(activityObject["UtcStartTime"] ?? activityObject["utcStartTime"], timezone);
+            var expire = ParseActivityTime(activityObject["UtcExpireTime"] ?? activityObject["utcExpireTime"], timezone);
+            if (start == DateTime.MinValue || expire == DateTime.MinValue || utcNow <= start || utcNow >= expire)
+            {
+                return false;
+            }
+        }
+
+        if (!TryReadString(entry["MinimumRequired"] ?? entry["minimumRequired"], out var minimumRequired))
+        {
+            return true;
+        }
+
+        if (string.Equals(coreVersion?.Trim(), "DEBUG_VERSION", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return SemanticVersion.TryParse(coreVersion, out var current)
+            && SemanticVersion.TryParse(minimumRequired, out var required)
+            && current.CompareTo(required) >= 0;
+    }
+
+    private static DateTime ParseActivityTime(JsonNode? node, int timezoneOffset)
+    {
+        if (!TryReadString(node, out var text))
+        {
+            return DateTime.MinValue;
+        }
+
+        if (DateTime.TryParseExact(
+                text,
+                "yyyy/MM/dd HH:mm:ss",
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.None,
+                out var parsed))
+        {
+            return DateTime.SpecifyKind(parsed.AddHours(-timezoneOffset), DateTimeKind.Utc);
+        }
+
+        return DateTime.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out parsed)
+            ? parsed.ToUniversalTime()
+            : DateTime.MinValue;
     }
 
     private static Bitmap? ResolveEmbeddedBitmap(string cacheKey, string assetUri)
@@ -864,6 +946,91 @@ internal static class ToolboxAssetCatalog
             "ko-kr" => MiniGameTextKoKr,
             _ => MiniGameTextEnUs,
         };
+    }
+
+    private sealed record SemanticVersion(int Major, int Minor, int Patch, IReadOnlyList<string> PreRelease)
+        : IComparable<SemanticVersion>
+    {
+        public static bool TryParse(string? value, out SemanticVersion version)
+        {
+            version = null!;
+            var normalized = value?.Trim();
+            if (string.IsNullOrWhiteSpace(normalized))
+            {
+                return false;
+            }
+
+            if (normalized.StartsWith('v'))
+            {
+                normalized = normalized[1..];
+            }
+
+            var buildSeparator = normalized.IndexOf('+');
+            if (buildSeparator >= 0)
+            {
+                normalized = normalized[..buildSeparator];
+            }
+
+            var prereleaseSeparator = normalized.IndexOf('-');
+            var core = prereleaseSeparator >= 0 ? normalized[..prereleaseSeparator] : normalized;
+            var prerelease = prereleaseSeparator >= 0 ? normalized[(prereleaseSeparator + 1)..] : string.Empty;
+            var components = core.Split('.');
+            if (components.Length != 3
+                || !int.TryParse(components[0], NumberStyles.None, CultureInfo.InvariantCulture, out var major)
+                || !int.TryParse(components[1], NumberStyles.None, CultureInfo.InvariantCulture, out var minor)
+                || !int.TryParse(components[2], NumberStyles.None, CultureInfo.InvariantCulture, out var patch))
+            {
+                return false;
+            }
+
+            var identifiers = string.IsNullOrEmpty(prerelease) ? [] : prerelease.Split('.');
+            if (identifiers.Any(static identifier => string.IsNullOrWhiteSpace(identifier)
+                || identifier.Any(static character => !char.IsAsciiLetterOrDigit(character) && character != '-')))
+            {
+                return false;
+            }
+
+            version = new SemanticVersion(major, minor, patch, identifiers);
+            return true;
+        }
+
+        public int CompareTo(SemanticVersion? other)
+        {
+            if (other is null)
+            {
+                return 1;
+            }
+
+            var coreComparison = Major.CompareTo(other.Major);
+            coreComparison = coreComparison != 0 ? coreComparison : Minor.CompareTo(other.Minor);
+            coreComparison = coreComparison != 0 ? coreComparison : Patch.CompareTo(other.Patch);
+            if (coreComparison != 0)
+            {
+                return coreComparison;
+            }
+
+            if (PreRelease.Count == 0 || other.PreRelease.Count == 0)
+            {
+                return PreRelease.Count == other.PreRelease.Count ? 0 : (PreRelease.Count == 0 ? 1 : -1);
+            }
+
+            for (var index = 0; index < Math.Min(PreRelease.Count, other.PreRelease.Count); index++)
+            {
+                var left = PreRelease[index];
+                var right = other.PreRelease[index];
+                var leftIsNumber = int.TryParse(left, NumberStyles.None, CultureInfo.InvariantCulture, out var leftNumber);
+                var rightIsNumber = int.TryParse(right, NumberStyles.None, CultureInfo.InvariantCulture, out var rightNumber);
+                var comparison = leftIsNumber && rightIsNumber
+                    ? leftNumber.CompareTo(rightNumber)
+                    : leftIsNumber ? -1 : rightIsNumber ? 1 : string.CompareOrdinal(left, right);
+                if (comparison != 0)
+                {
+                    return comparison;
+                }
+            }
+
+            return PreRelease.Count.CompareTo(other.PreRelease.Count);
+        }
     }
 
     private static string NormalizeLanguage(string? language)

@@ -54,7 +54,7 @@
                 HorizontalAlignment="Center"
                 Classes="toolbox-minigame-root-stack">
       <controls:AppSelect Classes="toolbox-minigame-selector"
-                          IsEnabled="{Binding Idle}"
+                          IsEnabled="{Binding CanEditMiniGameOptions}"
                           ItemsSource="{Binding MiniGameTaskList}"
                           SelectedValueBinding="{Binding Value}"
                           SelectedValue="{Binding MiniGameTaskName}">
@@ -70,7 +70,7 @@
 
       <StackPanel Classes="toolbox-minigame-secretfront-stack"
                   IsVisible="{Binding IsMiniGameSecretFront}"
-                  IsEnabled="{Binding Idle}">
+                  IsEnabled="{Binding CanEditMiniGameOptions}">
         <Grid ColumnDefinitions="140,*">
           <TextBlock Classes="toolbox-minigame-field-label"
                      Text="{Binding MiniGameEndingText}" />
@@ -105,7 +105,6 @@
       <Button Classes="app-button app-primary toolbox-minigame-action"
               Classes.locked="{Binding IsMiniGameRunning}"
               Content="{Binding MiniGameCommandText}"
-              IsEnabled="{Binding Inited}"
               PointerEntered="OnMiniGameCommandPointerEntered"
               PointerExited="OnMiniGameCommandPointerExited"
               Click="OnMiniGameCommandClick" />

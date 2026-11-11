@@ -4628,7 +4628,7 @@ public sealed class CopilotFeatureService : ICopilotFeatureService
 
 public sealed class ToolboxFeatureService : IToolboxFeatureService
 {
-    private readonly UnifiedSessionService? _sessionService;
+    private readonly IMaaCoreBridge? _bridge;
     private readonly IConnectFeatureService? _connectFeatureService;
 
     public ToolboxFeatureService()
@@ -4636,9 +4636,9 @@ public sealed class ToolboxFeatureService : IToolboxFeatureService
     {
     }
 
-    public ToolboxFeatureService(UnifiedSessionService? sessionService, IConnectFeatureService? connectFeatureService = null)
+    public ToolboxFeatureService(IMaaCoreBridge? bridge, IConnectFeatureService? connectFeatureService = null)
     {
-        _sessionService = sessionService;
+        _bridge = bridge;
         _connectFeatureService = connectFeatureService;
     }
 
@@ -4660,11 +4660,11 @@ public sealed class ToolboxFeatureService : IToolboxFeatureService
                 $"Tool `{request.Tool}` dispatch cancelled by caller.");
         }
 
-        if (_sessionService is null || _connectFeatureService is null)
+        if (_bridge is null && _connectFeatureService is null)
         {
             return UiOperationResult<ToolboxDispatchResult>.Fail(
                 UiErrorCode.ToolboxExecutionFailed,
-                "Toolbox core session or connect service is not configured.");
+                "Toolbox core bridge is not configured.");
         }
 
         if (!TryBuildCoreTask(request, out var coreTask, out var taskType, out var parameterSummary, out var validationError))
@@ -4675,23 +4675,26 @@ public sealed class ToolboxFeatureService : IToolboxFeatureService
                 validationError?.Details);
         }
 
-        var appendResult = await _connectFeatureService.AppendAndStartCoreTaskAsync(coreTask, cancellationToken);
+        var appendResult = _connectFeatureService is not null
+            ? await _connectFeatureService.AppendAndStartCoreTaskAsync(coreTask, cancellationToken)
+            : await _bridge!.AppendTaskAsync(coreTask, cancellationToken);
         if (!appendResult.Success)
         {
             return UiOperationResult<ToolboxDispatchResult>.Fail(
                 UiErrorCode.ToolboxExecutionFailed,
-                $"Tool `{request.Tool}` dispatch failed: {appendResult.Error?.Message ?? "unknown error"}.",
+                $"Tool `{request.Tool}` append failed: {appendResult.Error?.Message ?? "unknown error"}.",
                 JsonSerializer.Serialize(new
                 {
                     tool = request.Tool.ToString(),
                     taskType,
                     coreTask = coreTask.Name,
                     parameterSummary,
-                    coreError = appendResult.Error?.Code.ToString(),
+                    appendError = appendResult.Error?.Code.ToString(),
                     appendResult.Error?.Message,
                     appendResult.Error?.NativeDetails,
                 }));
         }
+
 
         return UiOperationResult<ToolboxDispatchResult>.Ok(
             new ToolboxDispatchResult(
@@ -4745,14 +4748,6 @@ public sealed class ToolboxFeatureService : IToolboxFeatureService
                     .Distinct()
                     .OrderBy(level => level)
                     .ToArray();
-                if (levels.Length == 0)
-                {
-                    error = (
-                        UiErrorCode.ToolboxInvalidParameters,
-                        "Recruit request must include at least one selected level.",
-                        null);
-                    return false;
-                }
 
                 var payload = new JsonObject
                 {

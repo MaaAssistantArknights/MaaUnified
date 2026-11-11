@@ -579,11 +579,15 @@ public sealed class ToolboxModuleO3FeatureTests
         Assert.Contains("x:Name=\"PeepControlPanel\"", peepXaml, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"PeepCommandControlGroup\"", peepXaml, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"PeepFpsControlGroup\"", peepXaml, StringComparison.Ordinal);
+        Assert.Contains("Maximum=\"600\"", peepXaml, StringComparison.Ordinal);
         Assert.Contains("ColumnDefinitions=\"*,Auto,*\"", peepXaml, StringComparison.Ordinal);
         Assert.Contains("Orientation=\"Horizontal\"", peepXaml, StringComparison.Ordinal);
         Assert.Contains("SizeChanged=\"OnPeepLayoutSizeChanged\"", peepXaml, StringComparison.Ordinal);
         Assert.Contains("PeepPreviewAspectRatio = 16d / 9d", ReadAdvancedView(root, "ToolboxPeepView.axaml.cs"), StringComparison.Ordinal);
         Assert.Contains("Content=\"{Binding MiniGameCommandText}\"", miniGameXaml, StringComparison.Ordinal);
+        Assert.Contains("IsEnabled=\"{Binding CanEditMiniGameOptions}\"", miniGameXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("{Binding Idle}", miniGameXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("{Binding Inited}", miniGameXaml, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -1332,7 +1332,7 @@ public sealed class FightTaskParityTests
                 ShellFeatureService = new ShellFeatureService(connect),
                 TaskQueueFeatureService = taskQueue,
                 CopilotFeatureService = new CopilotFeatureService(),
-                ToolboxFeatureService = new ToolboxFeatureService(session, connect),
+                ToolboxFeatureService = new ToolboxFeatureService(bridge, connect),
                 RemoteControlFeatureService = new RemoteControlFeatureService(),
                 PlatformCapabilityService = capability,
                 OverlayFeatureService = new OverlayFeatureService(capability),

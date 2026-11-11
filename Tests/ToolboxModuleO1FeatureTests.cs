@@ -14,7 +14,7 @@ public sealed class ToolboxModuleO1FeatureTests
     public async Task ExecuteToolAsync_Recruit_ShouldAppendStructuredRecruitTask()
     {
         await using var fixture = await ToolboxTestFixture.CreateAsync();
-        var service = new ToolboxFeatureService(fixture.Runtime.SessionService, fixture.Runtime.ConnectFeatureService);
+        var service = new ToolboxFeatureService(fixture.Bridge, fixture.Runtime.ConnectFeatureService);
 
         var request = new ToolboxDispatchRequest(
             ToolboxToolKind.Recruit,
@@ -35,10 +35,26 @@ public sealed class ToolboxModuleO1FeatureTests
     }
 
     [Fact]
+    public async Task ExecuteToolAsync_Recruit_WithNoSelectedLevels_ShouldAppendEmptySelectLikeWpf()
+    {
+        await using var fixture = await ToolboxTestFixture.CreateAsync();
+        var service = new ToolboxFeatureService(fixture.Bridge, fixture.Runtime.ConnectFeatureService);
+
+        var result = await service.DispatchToolAsync(
+            new ToolboxDispatchRequest(
+                ToolboxToolKind.Recruit,
+                Recruit: new ToolboxRecruitRequest([], AutoSetTime: true, Level3Time: 540, Level4Time: 540, Level5Time: 540, ServerType: "CN")));
+
+        Assert.True(result.Success);
+        var payload = Assert.IsType<JsonObject>(JsonNode.Parse(Assert.Single(fixture.Bridge.AppendedTasks).ParamsJson));
+        Assert.Empty(Assert.IsType<JsonArray>(payload["select"]));
+    }
+
+    [Fact]
     public async Task ExecuteToolAsync_GachaAndMiniGame_ShouldAppendCustomTasks()
     {
         await using var fixture = await ToolboxTestFixture.CreateAsync();
-        var service = new ToolboxFeatureService(fixture.Runtime.SessionService, fixture.Runtime.ConnectFeatureService);
+        var service = new ToolboxFeatureService(fixture.Bridge, fixture.Runtime.ConnectFeatureService);
 
         var gachaResult = await service.DispatchToolAsync(
             new ToolboxDispatchRequest(
@@ -73,7 +89,7 @@ public sealed class ToolboxModuleO1FeatureTests
     public async Task ExecuteToolAsync_Peep_ShouldFailAsNoCoreTaskIsRequired()
     {
         await using var fixture = await ToolboxTestFixture.CreateAsync();
-        var service = new ToolboxFeatureService(fixture.Runtime.SessionService, fixture.Runtime.ConnectFeatureService);
+        var service = new ToolboxFeatureService(fixture.Bridge, fixture.Runtime.ConnectFeatureService);
 
         var result = await service.DispatchToolAsync(new ToolboxDispatchRequest(ToolboxToolKind.VideoRecognition));
 
@@ -86,7 +102,7 @@ public sealed class ToolboxModuleO1FeatureTests
     public async Task ExecuteToolAsync_StartFailure_ShouldRecoverQueueBeforeLaterDispatch()
     {
         await using var fixture = await ToolboxTestFixture.CreateAsync();
-        var service = new ToolboxFeatureService(fixture.Runtime.SessionService, fixture.Runtime.ConnectFeatureService);
+        var service = new ToolboxFeatureService(fixture.Bridge, fixture.Runtime.ConnectFeatureService);
         fixture.Bridge.StartResults.Enqueue(CoreResult<bool>.Fail(new CoreError(CoreErrorCode.StartFailed, "start failed")));
         fixture.Bridge.StartResults.Enqueue(CoreResult<bool>.Ok(true));
         Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(
@@ -122,7 +138,7 @@ public sealed class ToolboxModuleO1FeatureTests
             fixture.Runtime.ConfigurationService.CurrentConfig.CurrentProfile];
         profile.Values["TouchMode"] = "maatouch";
         profile.Values["AdbLiteEnabled"] = true;
-        var service = new ToolboxFeatureService(fixture.Runtime.SessionService, fixture.Runtime.ConnectFeatureService);
+        var service = new ToolboxFeatureService(fixture.Bridge, fixture.Runtime.ConnectFeatureService);
 
         var result = await service.DispatchToolAsync(new ToolboxDispatchRequest(
             ToolboxToolKind.Gacha,

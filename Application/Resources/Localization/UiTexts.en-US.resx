@@ -4779,6 +4779,12 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
   <data name="Toolbox.Action.PeepStopStrong" xml:space="preserve">
     <value>Stop!!!!!</value>
   </data>
+  <data name="Toolbox.Action.PeepStarting" xml:space="preserve">
+    <value>Starting...</value>
+  </data>
+  <data name="Toolbox.Action.PeepStopping" xml:space="preserve">
+    <value>Stopping...</value>
+  </data>
   <data name="Toolbox.Action.StartRecognition" xml:space="preserve">
     <value>Start recognition</value>
   </data>
@@ -5330,6 +5336,9 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
   </data>
   <data name="Toolbox.Validation.MiniGameTaskNameEmpty" xml:space="preserve">
     <value>Mini-game task name cannot be empty.</value>
+  </data>
+  <data name="Toolbox.Validation.MiniGameTaskUnavailable" xml:space="preserve">
+    <value>The selected mini-game is unavailable for the current client or core version.</value>
   </data>
   <data name="Toolbox.Validation.OperBoxModeInvalid" xml:space="preserve">
     <value>OperBox mode only supports `owned` or `all`.</value>

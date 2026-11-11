@@ -51,7 +51,7 @@ public sealed class ToolboxModuleO2FeatureTests
         Assert.False(vm.RecruitAutoSetTime);
         Assert.False(vm.RecruitmentShowPotential);
         Assert.True(vm.GachaShowDisclaimerNoMore);
-        Assert.False(vm.GachaShowDisclaimer);
+        Assert.True(vm.GachaShowDisclaimer);
         Assert.Equal(37, vm.PeepTargetFps);
         Assert.Equal("MiniGame@SecretFront", vm.MiniGameTaskName);
         Assert.Equal("D", vm.MiniGameSecretFrontEnding);
@@ -222,6 +222,222 @@ public sealed class ToolboxModuleO2FeatureTests
         Assert.Equal("500", fixture.Config.CurrentConfig.GlobalValues[LegacyConfigurationKeys.ToolBoxChooseLevel3Time]?.ToString());
         Assert.Equal("520", fixture.Config.CurrentConfig.GlobalValues[LegacyConfigurationKeys.ToolBoxChooseLevel5Time]?.ToString());
         Assert.Equal("Toolbox", fixture.Runtime.SessionService.CurrentRunOwner);
+    }
+
+    [Fact]
+    public async Task StartRecruitAsync_WithNoSelectedLevels_ShouldDispatchAnEmptySelect()
+    {
+        await using var fixture = await ToolboxTestFixture.CreateAsync();
+        var vm = new ToolboxPageViewModel(fixture.Runtime, fixture.ConnectionState);
+        await vm.InitializeAsync();
+        vm.ChooseLevel3 = false;
+        vm.ChooseLevel4 = false;
+        vm.ChooseLevel5 = false;
+        vm.ChooseLevel6 = false;
+
+        await vm.StartRecruitAsync();
+
+        Assert.Equal(ToolboxExecutionState.Executing, vm.ExecutionState);
+        var payload = Assert.IsType<JsonObject>(JsonNode.Parse(Assert.Single(fixture.Bridge.AppendedTasks).ParamsJson));
+        Assert.Empty(Assert.IsType<JsonArray>(payload["select"]));
+    }
+
+    [Fact]
+    public async Task StartRecognition_WhenConnectionFails_ShouldPersistRecruitSettingsAndReplacePageStatus()
+    {
+        await using var fixture = await ToolboxTestFixture.CreateAsync();
+        fixture.Bridge.ForceConnectFailure = true;
+        var vm = new ToolboxPageViewModel(fixture.Runtime, fixture.ConnectionState);
+        await vm.InitializeAsync();
+        vm.ChooseLevel3 = false;
+        vm.ChooseLevel4 = true;
+        vm.ChooseLevel5 = false;
+        vm.ChooseLevel6 = false;
+
+        await vm.StartRecruitAsync();
+
+        Assert.Equal(ToolboxExecutionState.Failed, vm.ExecutionState);
+        Assert.Equal(bool.FalseString, fixture.Config.CurrentConfig.GlobalValues[LegacyConfigurationKeys.ChooseLevel3]?.ToString());
+        Assert.NotEqual(vm.Texts["Toolbox.Status.Recognizing"], vm.RecruitInfo);
+        Assert.Contains("连接", vm.RecruitInfo, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task StartOperBoxAsync_WhenConnectionFails_ShouldReplacePageStatus()
+    {
+        await using var fixture = await ToolboxTestFixture.CreateAsync();
+        fixture.Bridge.ForceConnectFailure = true;
+        var vm = new ToolboxPageViewModel(fixture.Runtime, fixture.ConnectionState);
+        await vm.InitializeAsync();
+
+        await vm.StartOperBoxAsync();
+
+        Assert.Equal(ToolboxExecutionState.Failed, vm.ExecutionState);
+        Assert.NotEqual(vm.Texts["Toolbox.Status.Recognizing"], vm.OperBoxInfo);
+        Assert.Contains("连接", vm.OperBoxInfo, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task InitializeAsync_ShouldLoadWpfOperBoxAndDepotDataFiles()
+    {
+        await using var fixture = await ToolboxTestFixture.CreateAsync();
+        var dataDirectory = Path.Combine(fixture.Root, "data");
+        Directory.CreateDirectory(dataDirectory);
+        await File.WriteAllTextAsync(
+            Path.Combine(dataDirectory, "OperBoxData.json"),
+            """[{"id":"char_003_kalts","name":"凯尔希","rarity":6,"elite":2,"level":90,"own":true,"potential":6}]""");
+        await File.WriteAllTextAsync(
+            Path.Combine(dataDirectory, "DepotData.json"),
+            """{"2001":123}""");
+
+        using var _ = ToolboxAssetCatalog.PushTestBaseDirectoriesForTests(fixture.Root);
+        var vm = new ToolboxPageViewModel(fixture.Runtime, fixture.ConnectionState);
+        await vm.InitializeAsync();
+
+        Assert.True(vm.CanExportOperBox);
+        Assert.Contains("char_003_kalts", vm.OperBoxExportText, StringComparison.Ordinal);
+        Assert.Equal("2001", Assert.Single(vm.DepotResult).Id);
+    }
+
+    [Fact]
+    public async Task OperBoxExport_WithoutRecognitionHistory_ShouldBeDisabledAndEmpty()
+    {
+        await using var fixture = await ToolboxTestFixture.CreateAsync();
+        var vm = new ToolboxPageViewModel(fixture.Runtime, fixture.ConnectionState);
+        await vm.InitializeAsync();
+
+        Assert.False(vm.CanExportOperBox);
+        Assert.Equal(string.Empty, vm.OperBoxExportText);
+    }
+
+    [Fact]
+    public async Task PeepTargetFps_ShouldAllow600AndPersistImmediately()
+    {
+        await using var fixture = await ToolboxTestFixture.CreateAsync();
+        var vm = new ToolboxPageViewModel(fixture.Runtime, fixture.ConnectionState);
+        await vm.InitializeAsync();
+
+        vm.PeepTargetFps = 600;
+        await WaitForGlobalSettingAsync(fixture, LegacyConfigurationKeys.PeepTargetFps, "600");
+
+        Assert.Equal(600, vm.PeepTargetFps);
+        Assert.Equal("600", fixture.Config.CurrentConfig.GlobalValues[LegacyConfigurationKeys.PeepTargetFps]?.ToString());
+    }
+
+    [Fact]
+    public async Task RecruitSettings_ShouldPersistImmediatelyWithoutDispatch()
+    {
+        await using var fixture = await ToolboxTestFixture.CreateAsync();
+        var vm = new ToolboxPageViewModel(fixture.Runtime, fixture.ConnectionState);
+        await vm.InitializeAsync();
+
+        vm.ChooseLevel3 = false;
+        await WaitForGlobalSettingAsync(fixture, LegacyConfigurationKeys.ChooseLevel3, "False");
+
+        vm.RecruitAutoSetTime = false;
+        await WaitForGlobalSettingAsync(fixture, LegacyConfigurationKeys.AutoSetTime, "False");
+
+        vm.RecruitmentShowPotential = false;
+        await WaitForGlobalSettingAsync(fixture, LegacyConfigurationKeys.RecruitmentShowPotential, "False");
+
+        vm.RecruitLevel3Time = 120;
+        await WaitForGlobalSettingAsync(fixture, LegacyConfigurationKeys.ToolBoxChooseLevel3Time, "120");
+
+        Assert.Equal("False", fixture.Config.CurrentConfig.GlobalValues[LegacyConfigurationKeys.ChooseLevel3]?.ToString());
+        Assert.Equal("120", fixture.Config.CurrentConfig.GlobalValues[LegacyConfigurationKeys.ToolBoxChooseLevel3Time]?.ToString());
+    }
+
+    [Fact]
+    public async Task MiniGameSettings_ShouldPersistImmediatelyWithoutDispatch()
+    {
+        await using var fixture = await ToolboxTestFixture.CreateAsync();
+        var vm = new ToolboxPageViewModel(fixture.Runtime, fixture.ConnectionState);
+        await vm.InitializeAsync();
+
+        vm.MiniGameTaskName = "GreenTicket@Store@Begin";
+        await WaitForGlobalSettingAsync(fixture, LegacyConfigurationKeys.MiniGameTaskName, "GreenTicket@Store@Begin");
+
+        vm.MiniGameSecretFrontEnding = "B";
+        await WaitForGlobalSettingAsync(fixture, LegacyConfigurationKeys.MiniGameSecretFrontEnding, "B");
+
+        vm.MiniGameSecretFrontEvent = "游侠";
+        await WaitForGlobalSettingAsync(fixture, LegacyConfigurationKeys.MiniGameSecretFrontEvent, "游侠");
+
+        Assert.Equal("GreenTicket@Store@Begin", fixture.Config.CurrentConfig.GlobalValues[LegacyConfigurationKeys.MiniGameTaskName]?.ToString());
+    }
+
+    [Fact]
+    public async Task MiniGameRunningState_ShouldLockOptionEditingUntilStopped()
+    {
+        await using var fixture = await ToolboxTestFixture.CreateAsync();
+        var vm = new ToolboxPageViewModel(fixture.Runtime, fixture.ConnectionState);
+        await vm.InitializeAsync();
+
+        Assert.False(vm.IsMiniGameRunning);
+        Assert.True(vm.CanEditMiniGameOptions);
+
+        await vm.StartMiniGameAsync();
+
+        Assert.Equal(ToolboxExecutionState.Executing, vm.ExecutionState);
+        Assert.True(vm.IsMiniGameRunning);
+        Assert.False(vm.CanEditMiniGameOptions);
+
+        await vm.StopActiveToolAsync();
+
+        Assert.False(vm.IsMiniGameRunning);
+        Assert.True(vm.CanEditMiniGameOptions);
+        Assert.Equal(UiErrorCode.ToolboxExecutionCancelled, vm.LastExecutionErrorCode);
+    }
+
+    [Fact]
+    public async Task InitializeAsync_ShouldNotPersistProgrammaticMiniGameFallback()
+    {
+        var globalSeeds = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [LegacyConfigurationKeys.MiniGameTaskName] = "MiniGame@Unavailable@Begin",
+        };
+
+        await using var fixture = await ToolboxTestFixture.CreateAsync(globalSeeds);
+        var vm = new ToolboxPageViewModel(fixture.Runtime, fixture.ConnectionState);
+        await vm.InitializeAsync();
+
+        Assert.Equal("SS@Store@Begin", vm.MiniGameTaskName);
+
+        // The unavailable persisted selection is dropped from the view model, but
+        // the programmatic fallback must not silently overwrite the persisted value.
+        await Task.Delay(200);
+        Assert.Equal(
+            "MiniGame@Unavailable@Begin",
+            fixture.Config.CurrentConfig.GlobalValues[LegacyConfigurationKeys.MiniGameTaskName]?.ToString());
+    }
+
+    [Fact]
+    public async Task MiniGameEntries_ShouldUseCurrentClientAndFilterTimeAndCoreVersion()
+    {
+        await using var fixture = await ToolboxTestFixture.CreateAsync();
+        Directory.CreateDirectory(Path.Combine(fixture.Root, "gui"));
+        await File.WriteAllTextAsync(
+            Path.Combine(fixture.Root, "gui", "StageActivityV2.json"),
+            """
+            {
+              "Official": {
+                "miniGame": [
+                  { "Display": "可用", "Value": "MiniGame@Available", "MinimumRequired": "v1.0.0", "Activity": { "UtcStartTime": "2026/01/01 00:00:00", "UtcExpireTime": "2026/12/31 00:00:00", "TimeZone": 0 } },
+                  { "Display": "过期", "Value": "MiniGame@Expired", "Activity": { "UtcStartTime": "2025/01/01 00:00:00", "UtcExpireTime": "2025/12/31 00:00:00", "TimeZone": 0 } },
+                  { "Display": "版本过低", "Value": "MiniGame@NewCore", "MinimumRequired": "v2.0.0" }
+                ]
+              }
+            }
+            """);
+
+        using var _ = ToolboxAssetCatalog.PushTestBaseDirectoriesForTests(fixture.Root);
+        var now = new DateTime(2026, 6, 1, 12, 0, 0, DateTimeKind.Utc);
+        var official = ToolboxAssetCatalog.GetMiniGameEntries("Official", "zh-cn", "v1.0.0", now);
+        var en = ToolboxAssetCatalog.GetMiniGameEntries("YoStarEN", "zh-cn", "v1.0.0", now);
+
+        Assert.Contains(official, entry => entry.Value == "MiniGame@Available");
+        Assert.DoesNotContain(official, entry => entry.Value is "MiniGame@Expired" or "MiniGame@NewCore");
+        Assert.DoesNotContain(en, entry => entry.Value == "MiniGame@Available");
     }
 
     [Fact]
@@ -437,6 +653,81 @@ public sealed class ToolboxModuleO2FeatureTests
         Assert.Null(fixture.Runtime.SessionService.CurrentRunOwner);
     }
 
+    [Theory]
+    [InlineData(1280 * 720 * 3, 1280, 720)]
+    [InlineData(1600 * 900 * 3, 1600, 900)]
+    [InlineData(1920 * 1080 * 3, 1920, 1080)]
+    [InlineData(2560 * 1440 * 3, 2560, 1440)]
+    [InlineData(3200 * 1800 * 3, 3200, 1800)]
+    [InlineData(3840 * 2160 * 3, 3840, 2160)]
+    public void TryResolvePeepRawFrameSize_ShouldAcceptSupported16By9Resolutions(int byteLength, int expectedWidth, int expectedHeight)
+    {
+        var resolved = ToolboxPageViewModel.TryResolvePeepRawFrameSize(byteLength, out var width, out var height);
+
+        Assert.True(resolved);
+        Assert.Equal(expectedWidth, width);
+        Assert.Equal(expectedHeight, height);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(100)]
+    [InlineData(1280 * 720 * 3 - 1)]
+    [InlineData(1280 * 720 * 3 + 3)]
+    [InlineData(1366 * 768 * 3)]
+    public void TryResolvePeepRawFrameSize_ShouldRejectUnknownSizes(int byteLength)
+    {
+        var resolved = ToolboxPageViewModel.TryResolvePeepRawFrameSize(byteLength, out _, out _);
+
+        Assert.False(resolved);
+    }
+
+    [Fact]
+    public async Task TogglePeepAsync_WithUnresolvableRawFrameSize_ShouldFallBackToEncodedScreenshot()
+    {
+        await using var fixture = await ToolboxTestFixture.CreateAsync();
+        fixture.Bridge.RawBgrFrameOverride = new byte[1366 * 768 * 3];
+        var vm = new ToolboxPageViewModel(fixture.Runtime, fixture.ConnectionState);
+        await vm.InitializeAsync();
+
+        await vm.TogglePeepAsync();
+        Assert.True(vm.Peeping);
+
+        var fallbackUsed = false;
+        for (var attempt = 0; attempt < 100 && !fallbackUsed; attempt++)
+        {
+            await Task.Delay(20);
+            fallbackUsed = fixture.Bridge.GetImageCallCount > 0;
+        }
+
+        await vm.TogglePeepAsync();
+        Assert.False(vm.Peeping);
+
+        Assert.True(fallbackUsed, "Expected the encoded screenshot fallback after an unresolvable raw frame size.");
+        Assert.Equal(1, fixture.Bridge.GetImageBgrCallCount);
+    }
+
+    [Fact]
+    public async Task TogglePeepAsync_WhenAnotherToolRunning_ShouldShowLocalizedToolNameInBusyMessage()
+    {
+        await using var fixture = await ToolboxTestFixture.CreateAsync();
+        var dialogService = new RecordingDialogService(DialogReturnSemantic.Close);
+        var vm = new ToolboxPageViewModel(fixture.Runtime, fixture.ConnectionState, dialogService);
+        await vm.InitializeAsync();
+
+        await vm.StartOperBoxAsync();
+        Assert.True(vm.IsOperBoxExecuting);
+
+        await vm.TogglePeepAsync();
+
+        var localizedName = vm.Texts["Toolbox.ToolName.OperBox"];
+        Assert.False(vm.Peeping);
+        Assert.Equal("Toolbox.Busy", dialogService.LastScope);
+        var busyRecord = Assert.Single(vm.ExecutionHistory.Where(record => !record.Success));
+        Assert.Contains($"`{localizedName}`", busyRecord.ResultSummary, StringComparison.Ordinal);
+        Assert.DoesNotContain("`OperBox`", busyRecord.ResultSummary, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task StopActiveToolAsync_WhenRecruitRunning_ShouldStopViaToolboxService()
     {
@@ -566,6 +857,153 @@ public sealed class ToolboxModuleO2FeatureTests
         Assert.DoesNotContain("char_508_aguard", operators.Keys);
         Assert.DoesNotContain("char_1001_amiya2", operators.Keys);
         Assert.DoesNotContain("token_test", operators.Keys);
+    }
+
+    [Fact]
+    public async Task InitializeAsync_ShouldNotResurrectPersistedMiniGameTaskUnavailableForCurrentClient()
+    {
+        var globalSeeds = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [LegacyConfigurationKeys.MiniGameTaskName] = "MiniGame@Official@Begin",
+        };
+
+        await using var fixture = await ToolboxTestFixture.CreateAsync(globalSeeds);
+        Directory.CreateDirectory(Path.Combine(fixture.Root, "gui"));
+        await File.WriteAllTextAsync(
+            Path.Combine(fixture.Root, "gui", "StageActivityV2.json"),
+            """
+            {
+              "Official": {
+                "miniGame": [
+                  { "Display": "国服小游戏", "Value": "MiniGame@Official@Begin", "Tip": "国服提示" }
+                ]
+              }
+            }
+            """);
+
+        using var _ = ToolboxAssetCatalog.PushTestBaseDirectoriesForTests(fixture.Root);
+        fixture.ConnectionState.ClientType = "YoStarEN";
+        var vm = new ToolboxPageViewModel(fixture.Runtime, fixture.ConnectionState);
+
+        await vm.InitializeAsync();
+
+        Assert.DoesNotContain(vm.MiniGameTaskList, item => item.Value == "MiniGame@Official@Begin");
+        Assert.NotEqual("MiniGame@Official@Begin", vm.MiniGameTaskName);
+        Assert.Contains(vm.MiniGameTaskList, item => item.Value == vm.MiniGameTaskName);
+        Assert.DoesNotContain("MiniGame@Official@Begin", vm.GetMiniGameTask(), StringComparison.Ordinal);
+
+        await vm.StartMiniGameAsync();
+
+        var appended = Assert.Single(fixture.Bridge.AppendedTasks);
+        Assert.DoesNotContain("MiniGame@Official@Begin", appended.ParamsJson, StringComparison.Ordinal);
+        Assert.Contains(vm.MiniGameTaskName, appended.ParamsJson, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task InitializeAsync_ShouldNotResurrectPersistedExpiredMiniGameTask()
+    {
+        var globalSeeds = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [LegacyConfigurationKeys.MiniGameTaskName] = "MiniGame@Expired",
+        };
+
+        await using var fixture = await ToolboxTestFixture.CreateAsync(globalSeeds);
+        Directory.CreateDirectory(Path.Combine(fixture.Root, "gui"));
+        await File.WriteAllTextAsync(
+            Path.Combine(fixture.Root, "gui", "StageActivityV2.json"),
+            """
+            {
+              "Official": {
+                "miniGame": [
+                  { "Display": "过期", "Value": "MiniGame@Expired", "Activity": { "UtcStartTime": "2025/01/01 00:00:00", "UtcExpireTime": "2025/12/31 00:00:00", "TimeZone": 0 } }
+                ]
+              }
+            }
+            """);
+
+        using var _ = ToolboxAssetCatalog.PushTestBaseDirectoriesForTests(fixture.Root);
+        fixture.ConnectionState.ClientType = "Official";
+        var vm = new ToolboxPageViewModel(fixture.Runtime, fixture.ConnectionState);
+
+        await vm.InitializeAsync();
+
+        Assert.DoesNotContain(vm.MiniGameTaskList, item => item.Value == "MiniGame@Expired");
+        Assert.NotEqual("MiniGame@Expired", vm.MiniGameTaskName);
+        Assert.Contains(vm.MiniGameTaskList, item => item.Value == vm.MiniGameTaskName);
+        Assert.DoesNotContain("MiniGame@Expired", vm.GetMiniGameTask(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ClientSwitch_ShouldResetMiniGameSelectionUnavailableForNewClient()
+    {
+        await using var fixture = await ToolboxTestFixture.CreateAsync();
+        Directory.CreateDirectory(Path.Combine(fixture.Root, "gui"));
+        await File.WriteAllTextAsync(
+            Path.Combine(fixture.Root, "gui", "StageActivityV2.json"),
+            """
+            {
+              "Official": {
+                "miniGame": [
+                  { "Display": "国服小游戏", "Value": "MiniGame@Official@Begin", "Tip": "国服提示" }
+                ]
+              }
+            }
+            """);
+
+        using var _ = ToolboxAssetCatalog.PushTestBaseDirectoriesForTests(fixture.Root);
+        fixture.ConnectionState.ClientType = "Official";
+        var vm = new ToolboxPageViewModel(fixture.Runtime, fixture.ConnectionState);
+        await vm.InitializeAsync();
+
+        vm.MiniGameTaskName = "MiniGame@Official@Begin";
+        Assert.Contains(vm.MiniGameTaskList, item => item.Value == "MiniGame@Official@Begin");
+
+        fixture.ConnectionState.ClientType = "YoStarEN";
+
+        Assert.DoesNotContain(vm.MiniGameTaskList, item => item.Value == "MiniGame@Official@Begin");
+        Assert.NotEqual("MiniGame@Official@Begin", vm.MiniGameTaskName);
+        Assert.Contains(vm.MiniGameTaskList, item => item.Value == vm.MiniGameTaskName);
+        Assert.DoesNotContain("MiniGame@Official@Begin", vm.GetMiniGameTask(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AgreeGachaDisclaimer_ShouldPersistUncheckedShowDisclaimerNoMore()
+    {
+        var globalSeeds = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [LegacyConfigurationKeys.GachaShowDisclaimerNoMore] = "true",
+        };
+
+        await using var fixture = await ToolboxTestFixture.CreateAsync(globalSeeds);
+        var vm = new ToolboxPageViewModel(fixture.Runtime, fixture.ConnectionState);
+        await vm.InitializeAsync();
+        Assert.True(vm.GachaShowDisclaimerNoMore);
+
+        vm.GachaShowDisclaimerNoMore = false;
+        vm.AgreeGachaDisclaimer();
+        await WaitForGlobalSettingAsync(fixture, LegacyConfigurationKeys.GachaShowDisclaimerNoMore, "False");
+
+        Assert.False(vm.GachaShowDisclaimer);
+        Assert.False(vm.GachaShowDisclaimerNoMore);
+    }
+
+    private static async Task WaitForGlobalSettingAsync(ToolboxTestFixture fixture, string key, string expected)
+    {
+        for (var attempt = 0; attempt < 100; attempt++)
+        {
+            if (fixture.Config.CurrentConfig.GlobalValues.TryGetValue(key, out var value)
+                && string.Equals(value?.ToString(), expected, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            await Task.Delay(10);
+        }
+
+        var actual = fixture.Config.CurrentConfig.GlobalValues.TryGetValue(key, out var finalValue)
+            ? finalValue?.ToString()
+            : "<missing>";
+        Assert.Fail($"Expected global setting `{key}` to be `{expected}`, actual `{actual}`.");
     }
 
     private static void AssertHeaderMatchesLocalizedTemplate(string template, string actual)
