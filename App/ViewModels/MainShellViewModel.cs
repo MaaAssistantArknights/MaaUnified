@@ -203,6 +203,25 @@ public sealed class MainShellViewModel : ObservableObject
             });
         };
 
+        // WPF parity (AsstProxy.Init -> TaskQueueViewModel.AddLog, freeze 23ddd27): GPU driver
+        // warnings must surface in the task queue log panel and the overlay log, not only in the
+        // runtime log window.
+        _runtime.ResourceWorkflowService.GpuUserNotice += message =>
+        {
+            Dispatcher.UIThread.Post(() => TaskQueuePage.AppendSystemLog(message, "WARN"));
+        };
+
+        // WPF parity (AsstProxy.AsstAttachWindowConnect -> TaskQueueViewModel.AddLog, freeze 23ddd27):
+        // PC window binding prompts (UseAttachWindowWarning / NotFound / MultipleFound / Found /
+        // AttachWindowFailed) must be visible in the task queue log panel and the overlay log.
+        if (_runtime.ConnectFeatureService is ConnectFeatureService attachWindowConnectService)
+        {
+            attachWindowConnectService.AttachWindowUserNotice += (message, level) =>
+            {
+                Dispatcher.UIThread.Post(() => TaskQueuePage.AppendSystemLog(message, level));
+            };
+        }
+
         _runtime.ConfigurationService.ConfigChanged += _ =>
         {
             Dispatcher.UIThread.Post(() =>

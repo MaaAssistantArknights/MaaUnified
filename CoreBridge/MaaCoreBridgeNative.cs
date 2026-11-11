@@ -3166,7 +3166,7 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge, IMaaCoreBridgeRecovery
     [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     private delegate byte AsstAttachWindowDelegate(
         nint handle,
-        nint windowHandle,
+        nint hwnd,
         ulong screencapMethod,
         ulong mouseMethod,
         ulong keyboardMethod);

@@ -2209,7 +2209,9 @@ public partial class MainWindow : Window
         var result = await VM.PlatformCapabilityService.BindOverlayHostAsync(
             handle,
             clickThrough: true,
-            opacity: 0.85,
+            // WPF parity (OverlayWindow.xaml, freeze 23ddd27): the window itself stays fully
+            // opaque; translucency comes from the semi-transparent content brush alone.
+            opacity: 1.0,
             cancellationToken);
         await HandlePlatformResultAsync("PlatformCapability.Overlay.BindHost", result, cancellationToken);
     }

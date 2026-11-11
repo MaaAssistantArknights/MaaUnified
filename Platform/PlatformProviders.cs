@@ -3547,15 +3547,21 @@ public sealed class CrossPlatformAutostartService : IAutostartService
     }
 }
 
-public sealed class WindowsOverlayCapabilityService : IOverlayCapabilityService, IDisposable
+public sealed class WindowsOverlayCapabilityService : IOverlayCapabilityService, IAttachWindowTargetFinder, IDisposable
 {
     private static readonly nint HwndTopMost = new(-1);
+    private static readonly nint HwndNoTopMost = new(-2);
     private const int GwlExStyle = -20;
+    private const int GwlHwndParent = -8;
     private const int MaxConsecutiveSyncFailures = 3;
     private const nint WsExLayered = 0x00080000;
     private const nint WsExTransparent = 0x00000020;
     private const nint WsExNoActivate = 0x08000000;
+    private const nint WsExTopmost = 0x00000008;
     private const uint LwaAlpha = 0x2;
+    private const uint SwpNoSize = 0x0001;
+    private const uint SwpNoMove = 0x0002;
+    private const uint SwpNoZOrder = 0x0004;
     private const uint SwpNoActivate = 0x0010;
     private const uint SwpShowWindow = 0x0040;
     private const int SwHide = 0;
@@ -3765,6 +3771,34 @@ public sealed class WindowsOverlayCapabilityService : IOverlayCapabilityService,
         }
     }
 
+    /// <inheritdoc />
+    public IReadOnlyList<nint> FindVisibleWindowsByExactTitle(string exactTitle)
+    {
+        // WPF parity (AsstProxy.FindWindowsByName, freeze 23ddd27): visible top-level windows
+        // whose raw (untrimmed) title matches exactly; no result cap and no own-process exclusion,
+        // unlike the 80-target capped picker enumeration in QueryTargetsAsync.
+        var matches = new List<nint>();
+        foreach (var hWnd in _api.EnumerateWindows())
+        {
+            if (!_api.IsWindowVisible(hWnd))
+            {
+                continue;
+            }
+
+            if (_api.GetWindowTextLength(hWnd) <= 0)
+            {
+                continue;
+            }
+
+            if (string.Equals(_api.GetWindowText(hWnd), exactTitle, StringComparison.Ordinal))
+            {
+                matches.Add(hWnd);
+            }
+        }
+
+        return matches;
+    }
+
     public Task<PlatformOperationResult> SelectTargetAsync(string targetId, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -3915,6 +3949,7 @@ public sealed class WindowsOverlayCapabilityService : IOverlayCapabilityService,
         {
             _consecutiveSyncFailures = 0;
             StopAttachSync();
+            RestoreFloatingZOrder();
             HideHostWindow();
             EmitStateChanged(
                 OverlayRuntimeMode.Hidden,
@@ -4041,7 +4076,7 @@ public sealed class WindowsOverlayCapabilityService : IOverlayCapabilityService,
             return;
         }
 
-        if (SyncSelectedTargetCore(handle, out var failureMessage, out var failureCode))
+        if (SyncSelectedTargetCore(handle, ensureVisible: false, out var failureMessage, out var failureCode))
         {
             return;
         }
@@ -4083,7 +4118,8 @@ public sealed class WindowsOverlayCapabilityService : IOverlayCapabilityService,
 
     private bool TryAttachSelectedTarget(out string failureMessage, out string failureCode)
     {
-        if (!SyncSelectedTargetCore(_selectedTarget, out failureMessage, out failureCode))
+        ApplyTargetOwnedZOrder(_selectedTarget);
+        if (!SyncSelectedTargetCore(_selectedTarget, ensureVisible: true, out failureMessage, out failureCode))
         {
             EnterPreviewMode(
                 string.Equals(failureCode, PlatformErrorCodes.OverlayTargetGone, StringComparison.Ordinal)
@@ -4101,7 +4137,7 @@ public sealed class WindowsOverlayCapabilityService : IOverlayCapabilityService,
         return true;
     }
 
-    private bool SyncSelectedTargetCore(nint handle, out string failureMessage, out string failureCode)
+    private bool SyncSelectedTargetCore(nint handle, bool ensureVisible, out string failureMessage, out string failureCode)
     {
         if (handle == nint.Zero || !_api.IsWindow(handle))
         {
@@ -4117,7 +4153,7 @@ public sealed class WindowsOverlayCapabilityService : IOverlayCapabilityService,
             return false;
         }
 
-        if (!SetHostBounds(rect))
+        if (!SetHostBounds(rect, ensureVisible))
         {
             failureMessage = "SetWindowPos failed.";
             failureCode = PlatformErrorCodes.OverlayAttachFailed;
@@ -4232,7 +4268,7 @@ public sealed class WindowsOverlayCapabilityService : IOverlayCapabilityService,
         return _api.SetLayeredWindowAttributes(_hostWindow, 0, alpha, LwaAlpha);
     }
 
-    private bool SetHostBounds(OverlayRect targetRect)
+    private bool SetHostBounds(OverlayRect targetRect, bool ensureVisible)
     {
         if (_hostWindow == nint.Zero)
         {
@@ -4241,20 +4277,67 @@ public sealed class WindowsOverlayCapabilityService : IOverlayCapabilityService,
 
         var width = Math.Max(1, targetRect.Right - targetRect.Left);
         var height = Math.Max(1, targetRect.Bottom - targetRect.Top);
+        // WPF parity (OverlayWindow.UpdatePosition, freeze 23ddd27): position sync never touches
+        // the Z-order and never force-shows the window; the overlay stays above the target through
+        // window ownership instead of being globally topmost, and when the owned target is
+        // minimized the OS hides the overlay until the target is restored. The host is only shown
+        // once when the attach is established (WPF InitializeAndShowAsync -> Show()).
+        var flags = SwpNoActivate | SwpNoZOrder | (ensureVisible ? SwpShowWindow : 0u);
         var ok = _api.SetWindowPos(
             _hostWindow,
-            HwndTopMost,
+            nint.Zero,
             targetRect.Left,
             targetRect.Top,
             width,
             height,
-            SwpNoActivate | SwpShowWindow);
-        if (ok)
+            flags);
+        if (ok && ensureVisible)
         {
             _ = _api.ShowWindow(_hostWindow, SwShowNoActivate);
         }
 
         return ok;
+    }
+
+    private void ApplyTargetOwnedZOrder(nint targetHandle)
+    {
+        // WPF parity (OverlayWindow.InitializeAndShowAsync, freeze 23ddd27): the overlay host is
+        // owned by the target window (GWLP_HWNDPARENT) so it tracks the target's Z-order instead
+        // of staying globally topmost; the Avalonia-level Topmost style is removed for the
+        // duration of the native attach.
+        if (_hostWindow == nint.Zero || targetHandle == nint.Zero || !_api.IsWindow(_hostWindow))
+        {
+            return;
+        }
+
+        var style = _api.GetWindowLongPtr(_hostWindow, GwlExStyle);
+        if (style != nint.Zero || _api.GetLastWin32Error() == 0)
+        {
+            _ = _api.SetWindowLongPtr(_hostWindow, GwlExStyle, style & ~WsExTopmost);
+        }
+
+        _ = _api.SetWindowPos(_hostWindow, HwndNoTopMost, 0, 0, 0, 0, SwpNoMove | SwpNoSize | SwpNoActivate);
+        _ = _api.SetWindowLongPtr(_hostWindow, GwlHwndParent, targetHandle);
+    }
+
+    private void RestoreFloatingZOrder()
+    {
+        // Preview mode keeps MAAUnified's floating topmost presentation (the Avalonia host window
+        // is created with Topmost=true); native attach removes it, so restore both the cleared
+        // ownership and the topmost band when leaving the native attach.
+        if (_hostWindow == nint.Zero || !_api.IsWindow(_hostWindow))
+        {
+            return;
+        }
+
+        _ = _api.SetWindowLongPtr(_hostWindow, GwlHwndParent, nint.Zero);
+        var style = _api.GetWindowLongPtr(_hostWindow, GwlExStyle);
+        if (style != nint.Zero || _api.GetLastWin32Error() == 0)
+        {
+            _ = _api.SetWindowLongPtr(_hostWindow, GwlExStyle, style | WsExTopmost);
+        }
+
+        _ = _api.SetWindowPos(_hostWindow, HwndTopMost, 0, 0, 0, 0, SwpNoMove | SwpNoSize | SwpNoActivate);
     }
 
     private void ShowPreviewHostBestEffort()
@@ -4270,6 +4353,8 @@ public sealed class WindowsOverlayCapabilityService : IOverlayCapabilityService,
             {
                 return;
             }
+
+            RestoreFloatingZOrder();
 
             _ = _api.ShowWindow(_hostWindow, SwShowNoActivate);
         }

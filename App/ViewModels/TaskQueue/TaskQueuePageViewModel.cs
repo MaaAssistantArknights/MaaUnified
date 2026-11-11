@@ -317,6 +317,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         };
 
     private const int MaxTimeoutMinutes = 11451;
+    private const int MaxOverlayLogs = 200;
     private static readonly TimeSpan TaskQueueAutoSaveDelay = TimeSpan.FromMilliseconds(200);
     private const string UiMallCreditFightLastTime = "_ui_mall_credit_fight_last_time";
     private const string UiMallVisitFriendsLastTime = "_ui_mall_visit_friends_last_time";
@@ -3470,6 +3471,14 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 return connectResult;
             }
 
+            if (_connectionGameSharedState.IsAttachWindowMode)
+            {
+                // WPF parity (TaskQueueViewModel.ConnectToEmulator, freeze 23ddd27): when the PC
+                // client window-binding mode fails, MAA logs the error and stops immediately
+                // without trying emulator start / ADB reconnect / ADB restart fallbacks.
+                return connectResult;
+            }
+
             AdbCommandFailureInfo? lastAdbFailure = null;
             var address = (_connectionGameSharedState.ConnectAddress ?? string.Empty).Trim();
             var adbExecutableResult = await ResolveAdbExecutableForRecoveryAsync(retryToken);
@@ -4872,10 +4881,15 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         return BuildOverlayPickerItems(OverlayTargets);
     }
 
-    private static IReadOnlyList<ProcessPickerItem> BuildOverlayPickerItems(IEnumerable<OverlayTarget> targets)
+    // WPF parity (ProcessPickerDialogViewModel, freeze 23ddd27): the target picker list is sorted by
+    // process name, then window title (WPF OrderBy(ProcessName).ThenBy(Title)); targets whose process
+    // name could not be resolved sort under "(unknown)" like WPF's fallback name.
+    internal static IReadOnlyList<ProcessPickerItem> BuildOverlayPickerItems(IEnumerable<OverlayTarget> targets)
     {
         return targets
             .Where(target => !IsPreviewOverlayTarget(target))
+            .OrderBy(target => string.IsNullOrEmpty(target.ProcessName) ? "(unknown)" : target.ProcessName)
+            .ThenBy(target => target.WindowTitle ?? string.Empty)
             .Select(target => new ProcessPickerItem(target.Id, target.DisplayName, target.IsPrimary))
             .ToArray();
     }
@@ -4908,7 +4922,16 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
     public async Task ToggleOverlayAsync(CancellationToken cancellationToken = default)
     {
-        if (!await SelectAndPersistOverlayTargetAsync(SelectedOverlayTarget?.Id ?? "preview", cancellationToken))
+        // WPF parity (TaskQueueViewModel.EnableOverlay → OverlayViewModel.EnsureCreated → LoadConfig
+        // → TryFindWindow, freeze 23ddd27): every enable re-enumerates windows and re-resolves the
+        // persisted target identity, so a stale hwnd (e.g. after a game restart) is re-found
+        // instead of aborting the toggle with OverlayTargetGone.
+        if (!OverlayVisible)
+        {
+            await ReloadOverlayTargetsAsync(cancellationToken);
+        }
+
+        if (!await SelectAndPersistOverlayTargetAsync(SelectedOverlayTarget?.Id ?? "preview", cancellationToken, protectPersistedBinding: true))
         {
             return;
         }
@@ -5656,7 +5679,18 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         return null;
     }
 
-    private async Task<bool> SelectAndPersistOverlayTargetAsync(string targetId, CancellationToken cancellationToken)
+    private void TrimOverlayLogs()
+    {
+        while (OverlayLogs.Count > MaxOverlayLogs)
+        {
+            OverlayLogs.RemoveAt(0);
+        }
+    }
+
+    private async Task<bool> SelectAndPersistOverlayTargetAsync(
+        string targetId,
+        CancellationToken cancellationToken,
+        bool protectPersistedBinding = false)
     {
         var targetResult = await Runtime.OverlayFeatureService.SelectOverlayTargetAsync(targetId, cancellationToken);
         if (!await ApplyResultAsync(targetResult, "Overlay.Select", cancellationToken))
@@ -5668,7 +5702,19 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                                 ?? SelectedOverlayTarget
                                 ?? new OverlayTarget(targetId, targetId, false);
 
-        await PersistOverlayTargetSelectionBestEffortAsync(SelectedOverlayTarget, cancellationToken);
+        // WPF parity (freeze 23ddd27): the toggle path re-resolves the persisted identity like WPF
+        // LoadConfig → SetTargetHwnd(found, persist:false), so an automatic fallback selection must
+        // not overwrite a persisted native binding while the bound target is temporarily absent.
+        // Explicit picks (ApplyOverlayTargetAsync) always persist like WPF ChooseOverlayTarget →
+        // SetTargetHwnd(persist: true).
+        if (!protectPersistedBinding
+            || OverlayTargetPersistence.ShouldPersistResolvedSelection(
+                SelectedOverlayTarget,
+                Runtime.ConfigurationService.CurrentConfig.GlobalValues))
+        {
+            await PersistOverlayTargetSelectionBestEffortAsync(SelectedOverlayTarget, cancellationToken);
+        }
+
         return true;
     }
 

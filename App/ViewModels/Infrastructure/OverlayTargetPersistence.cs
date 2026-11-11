@@ -44,13 +44,15 @@ internal static class OverlayTargetPersistence
         if (persisted is not null)
         {
             if (TryFindById(targets, persisted.TargetId, out selected)
+                && MatchesPersistedIdentity(selected, persisted)
                 && ShouldHonorSelection(selected, targets, previewPinned))
             {
                 return selected;
             }
 
             if (persisted.NativeHandle is long nativeHandle
-                && TryFindByHandle(targets, nativeHandle, out selected))
+                && TryFindByHandle(targets, nativeHandle, out selected)
+                && MatchesPersistedIdentity(selected, persisted))
             {
                 return selected;
             }
@@ -77,6 +79,33 @@ internal static class OverlayTargetPersistence
         }
 
         return targets.FirstOrDefault(static target => target.IsPrimary) ?? targets[0];
+    }
+
+    public static bool ShouldPersistResolvedSelection(
+        OverlayTarget? selected,
+        IReadOnlyDictionary<string, JsonNode?> globalValues)
+    {
+        // WPF parity (OverlayViewModel.LoadConfig → SetTargetHwnd(found, persist:false), freeze
+        // 23ddd27): automatic re-resolution never rewrites the persisted binding; WPF persists only
+        // on an explicit user pick (TaskQueueViewModel.ChooseOverlayTarget → SetTargetHwnd with
+        // persist: true). Persisting an automatic fallback while the persisted target is
+        // temporarily absent (e.g. the game is not running) would overwrite the binding with an
+        // unrelated window and break automatic re-discovery when the game returns. Persist only
+        // when no native binding exists yet (first write / legacy preview → native migration) or
+        // when the resolved target still carries the persisted identity (a restarted game re-found
+        // by process id or by process name + title).
+        if (selected is null)
+        {
+            return false;
+        }
+
+        var persisted = Load(globalValues);
+        if (persisted is null || IsPreviewId(persisted.TargetId))
+        {
+            return true;
+        }
+
+        return MatchesProcessMetadata(selected, persisted);
     }
 
     public static bool ShouldDefaultToPreview(
@@ -191,33 +220,46 @@ internal static class OverlayTargetPersistence
         PersistedOverlayTargetSelection persisted,
         out OverlayTarget? selected)
     {
-        selected = null;
-        if (persisted.ProcessId is null
-            || string.IsNullOrWhiteSpace(persisted.ProcessName)
-            || string.IsNullOrWhiteSpace(persisted.WindowTitle))
-        {
-            return false;
-        }
-
-        selected = targets.FirstOrDefault(target =>
-            target.ProcessId == persisted.ProcessId
-            && string.Equals(target.ProcessName, persisted.ProcessName, StringComparison.OrdinalIgnoreCase)
-            && TitlesMatch(target.WindowTitle, persisted.WindowTitle));
+        selected = targets.FirstOrDefault(target => MatchesProcessMetadata(target, persisted));
         return selected is not null;
     }
 
-    private static bool TitlesMatch(string? currentTitle, string? persistedTitle)
+    private static bool MatchesProcessMetadata(
+        OverlayTarget target,
+        PersistedOverlayTargetSelection persisted)
     {
-        var current = NormalizeText(currentTitle);
-        var persisted = NormalizeText(persistedTitle);
-        if (current is null || persisted is null)
+        // WPF parity (OverlayViewModel.TryFindWindow enumeration, freeze 23ddd27): per window, a
+        // process-id match alone is sufficient; otherwise fall back to process-name equality plus
+        // a one-directional title containment. The name+title fallback intentionally does not
+        // require the persisted process id, so a restarted game (new pid/hwnd) is still found.
+        if (IsPreviewId(target.Id))
         {
             return false;
         }
 
-        return string.Equals(current, persisted, StringComparison.OrdinalIgnoreCase)
-            || current.Contains(persisted, StringComparison.OrdinalIgnoreCase)
-            || persisted.Contains(current, StringComparison.OrdinalIgnoreCase);
+        if (persisted.ProcessId is { } processId && target.ProcessId == processId)
+        {
+            return true;
+        }
+
+        return !string.IsNullOrWhiteSpace(persisted.ProcessName)
+            && string.Equals(target.ProcessName, persisted.ProcessName, StringComparison.OrdinalIgnoreCase)
+            && (persisted.WindowTitle is not { } persistedTitle
+                || (target.WindowTitle ?? string.Empty).Contains(persistedTitle, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool MatchesPersistedIdentity(
+        OverlayTarget? target,
+        PersistedOverlayTargetSelection persisted)
+    {
+        // WPF parity (OverlayViewModel.TryFindWindow hwnd path, freeze 23ddd27): a persisted
+        // hwnd/TargetId is trusted only when the window still belongs to the persisted process
+        // id; WPF performs no process-name or title check here. Configurations without a process
+        // id cannot be validated (WPF compares against pid 0, which never matches a real window)
+        // and must fall through to the metadata-based re-resolution.
+        return target is not null
+            && persisted.ProcessId is { } processId
+            && target.ProcessId == processId;
     }
 
     private static string? NormalizeText(string? value)

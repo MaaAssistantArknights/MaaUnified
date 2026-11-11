@@ -117,6 +117,13 @@ public sealed class OverlayAdvancedPageViewModel : PageViewModelBase
 
     public async Task ToggleOverlayAsync(CancellationToken cancellationToken = default)
     {
+        // WPF parity: every enable re-resolves the persisted target identity (see
+        // TaskQueuePageViewModel.ToggleOverlayAsync), so a stale hwnd is re-found by metadata.
+        if (!Visible)
+        {
+            await ReloadTargetsAsync(cancellationToken);
+        }
+
         if (!await SelectAndPersistTargetAsync(SelectedTarget?.Id ?? "preview", cancellationToken))
         {
             return;
@@ -150,7 +157,16 @@ public sealed class OverlayAdvancedPageViewModel : PageViewModelBase
                          ?? SelectedTarget
                          ?? new OverlayTarget(targetId, targetId, false);
 
-        await PersistSelectedTargetBestEffortAsync(SelectedTarget, cancellationToken);
+        // WPF parity (freeze 23ddd27): the toggle path re-resolves the persisted identity like WPF
+        // LoadConfig → SetTargetHwnd(found, persist:false); never overwrite a persisted native
+        // binding with an automatic fallback selection while the bound target is temporarily absent.
+        if (OverlayTargetPersistence.ShouldPersistResolvedSelection(
+                SelectedTarget,
+                Runtime.ConfigurationService.CurrentConfig.GlobalValues))
+        {
+            await PersistSelectedTargetBestEffortAsync(SelectedTarget, cancellationToken);
+        }
+
         return true;
     }
 

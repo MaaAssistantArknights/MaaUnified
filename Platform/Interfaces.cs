@@ -423,6 +423,17 @@ public interface IOverlayCapabilityService
     Task<PlatformOperationResult> SetVisibleAsync(bool visible, CancellationToken cancellationToken = default);
 }
 
+/// <summary>
+/// Optional exact-title window finder used by PC client window binding (AttachWindow).
+/// Mirrors WPF AsstProxy.FindWindowsByName (freeze 23ddd27): enumerates visible top-level
+/// windows, compares raw (untrimmed) titles with an exact ordinal match, has no result cap
+/// and no own-process exclusion, and returns every match in enumeration (Z) order.
+/// </summary>
+public interface IAttachWindowTargetFinder
+{
+    IReadOnlyList<nint> FindVisibleWindowsByExactTitle(string exactTitle);
+}
+
 public enum PostActionType
 {
     ExitArknights = 0,

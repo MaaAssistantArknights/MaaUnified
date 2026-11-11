@@ -711,6 +711,106 @@ public sealed class UnifiedSessionService
         MoveToState(SessionState.Idle, "Session.ExternalExit", "external-device-exit");
     }
 
+    public async Task<CoreResult<bool>> AttachWindowAsync(
+        CoreConnectionInfo requestedConnectionInfo,
+        CoreAttachWindowRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        if (request.WindowHandle == nint.Zero)
+        {
+            return CoreResult<bool>.Fail(new CoreError(
+                CoreErrorCode.InvalidRequest,
+                "AttachWindow requires a non-zero window handle."));
+        }
+
+        var connectionInfo = NormalizeConnectionInfo(requestedConnectionInfo, DefaultConnectTimeout);
+        _logService.Debug(
+            $"Session.AttachWindow requested: state={CurrentState}, {BuildConnectionSummary(connectionInfo)}");
+
+        await _connectionOperationLock.WaitAsync(cancellationToken);
+        CancellationTokenSource? operationCts = null;
+        long generation = 0;
+        try
+        {
+            operationCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            var operationToken = operationCts.Token;
+            lock (_connectionOperationGate)
+            {
+                generation = ++_connectionOperationGeneration;
+                _activeConnectCts?.Dispose();
+                _activeConnectCts = operationCts;
+                _activeConnectionTarget = connectionInfo;
+                _activeConnectionGeneration = generation;
+                _ignoreIdleConnectionCallbacks = false;
+            }
+
+            if (CurrentState == SessionState.Connected && !LastSuccessfulConnectionInfoMatches(connectionInfo))
+            {
+                _lastSuccessfulConnectionInfo = null;
+            }
+
+            MoveToState(SessionState.Connecting, "Session.AttachWindow", "begin");
+            CoreResult<bool> result;
+            try
+            {
+                result = await _bridge.AttachWindowAsync(request, operationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (operationToken.IsCancellationRequested)
+            {
+                if (IsCurrentConnectionGeneration(generation))
+                {
+                    var fallbackState = await ResolveFailureStateAsync("Session.AttachWindow", SessionState.Idle, CancellationToken.None);
+                    MoveToState(fallbackState, "Session.AttachWindow", "attach-canceled-fallback");
+                }
+
+                throw;
+            }
+
+            if (!IsCurrentConnectionGeneration(generation))
+            {
+                _logService.Warn(
+                    $"Session.AttachWindow ignored stale result for address={connectionInfo.Address}, generation={generation}.");
+                return CoreResult<bool>.Fail(new CoreError(CoreErrorCode.ConnectTimeout, "AttachWindow result was superseded by a newer operation."));
+            }
+
+            if (result.Success)
+            {
+                _lastSuccessfulConnectionInfo = connectionInfo;
+                MoveToState(SessionState.Connected, "Session.AttachWindow", "connected");
+                _logService.Info($"Attached to window: {BuildConnectionSummary(connectionInfo)}");
+            }
+            else
+            {
+                ClearActiveConnectionTarget(connectionInfo);
+                var fallbackState = await ResolveFailureStateAsync("Session.AttachWindow", SessionState.Idle, cancellationToken);
+                MoveToState(fallbackState, "Session.AttachWindow", "attach-failed-fallback");
+                _logService.Warn(
+                    $"Failed to attach to window: {BuildConnectionSummary(connectionInfo)}; error={result.Error?.Code} {result.Error?.Message}");
+            }
+
+            return result;
+        }
+        finally
+        {
+            lock (_connectionOperationGate)
+            {
+                if (ReferenceEquals(_activeConnectCts, operationCts))
+                {
+                    _activeConnectCts = null;
+                }
+
+                if (_activeConnectionGeneration == generation)
+                {
+                    _activeConnectionTarget = null;
+                    _activeConnectionGeneration = 0;
+                }
+            }
+
+            operationCts?.Dispose();
+            _connectionOperationLock.Release();
+        }
+    }
+
     private bool LastSuccessfulConnectionInfoMatches(CoreConnectionInfo connectionInfo)
     {
         var last = _lastSuccessfulConnectionInfo;

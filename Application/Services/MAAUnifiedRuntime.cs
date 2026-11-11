@@ -248,7 +248,8 @@ public static class MAAUnifiedRuntimeFactory
             configService,
             logService,
             bridge,
-            runtimeBaseDirectory);
+            runtimeBaseDirectory,
+            overlayTargetProvider: platform.OverlayService);
         var shellFeatureService = new ShellFeatureService(connectFeatureService);
         var taskQueueFeatureService = new TaskQueueFeatureService(sessionService, configService);
         var copilotFeatureService = new CopilotFeatureService();

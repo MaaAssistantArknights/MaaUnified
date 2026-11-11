@@ -160,7 +160,119 @@ public sealed class ResourceWorkflowGpuFeatureTests
         }
     }
 
-    private static UnifiedConfig BuildConfig(IReadOnlyDictionary<string, string> profileValues)
+    [Fact]
+    public async Task InitializeCoreAsync_DeprecatedGpu_RaisesLocalizedGpuUserNoticeAndKeepsDiagnosticLog()
+    {
+        var bridge = new CapturingBridge();
+        var log = new UiLogService();
+        var service = new ResourceWorkflowService(
+            "/tmp/maa",
+            bridge,
+            log,
+            new ScriptedWindowsGpuCapabilityService(new GpuOptionDescriptor(
+                Id: "PCI#9",
+                Kind: GpuOptionKind.SpecificGpu,
+                DisplayName: "Legacy GPU",
+                Description: "Legacy GPU",
+                InstancePath: "PCI#9",
+                GpuIndex: 2,
+                IsDeprecated: true)));
+        var notices = new List<string>();
+        service.GpuUserNotice += notices.Add;
+        var config = BuildConfig(
+            new Dictionary<string, string>
+            {
+                [ConfigurationKeys.PerformanceUseGpu] = "True",
+                [ConfigurationKeys.PerformancePreferredGpuDescription] = "Legacy GPU",
+                [ConfigurationKeys.PerformancePreferredGpuInstancePath] = "PCI#9",
+            },
+            language: "en-us");
+
+        var result = await service.InitializeCoreAsync(config);
+
+        Assert.True(result.Success);
+        var notice = Assert.Single(notices);
+        Assert.Contains("Legacy GPU", notice, StringComparison.Ordinal);
+        Assert.Contains("compatibility", notice, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("switch to a different GPU", notice, StringComparison.Ordinal);
+        Assert.Contains("Settings", notice, StringComparison.Ordinal);
+        Assert.DoesNotContain("GpuDeprecatedMessage", notice, StringComparison.Ordinal);
+        Assert.Contains(
+            log.Snapshot,
+            entry => entry.Level == "WARN"
+                && entry.Message.Contains("marked deprecated for DirectML OCR", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task InitializeCoreAsync_GpuDriverOverTwoYearsOld_RaisesLocalizedOutdatedDriverNotice()
+    {
+        var driverDate = DateTime.Now.AddYears(-3);
+        var bridge = new CapturingBridge();
+        var log = new UiLogService();
+        var service = new ResourceWorkflowService(
+            "/tmp/maa",
+            bridge,
+            log,
+            new ScriptedWindowsGpuCapabilityService(new GpuOptionDescriptor(
+                Id: "PCI#8",
+                Kind: GpuOptionKind.SpecificGpu,
+                DisplayName: "Dated GPU",
+                Description: "Dated GPU",
+                InstancePath: "PCI#8",
+                GpuIndex: 3,
+                DriverDate: driverDate,
+                DriverVersion: "31.0.101.0")));
+        var notices = new List<string>();
+        service.GpuUserNotice += notices.Add;
+        var config = BuildConfig(
+            new Dictionary<string, string>
+            {
+                [ConfigurationKeys.PerformanceUseGpu] = "True",
+                [ConfigurationKeys.PerformancePreferredGpuDescription] = "Dated GPU",
+                [ConfigurationKeys.PerformancePreferredGpuInstancePath] = "PCI#8",
+            },
+            language: "zh-cn");
+
+        var result = await service.InitializeCoreAsync(config);
+
+        Assert.True(result.Success);
+        var notice = Assert.Single(notices);
+        Assert.Contains("Dated GPU", notice, StringComparison.Ordinal);
+        Assert.Contains("31.0.101.0", notice, StringComparison.Ordinal);
+        Assert.Contains(driverDate.ToString("yyyy-MM-dd"), notice, StringComparison.Ordinal);
+        Assert.Contains("超过两年", notice, StringComparison.Ordinal);
+        Assert.Contains("设置", notice, StringComparison.Ordinal);
+        Assert.DoesNotContain("GpuDriverOutdatedMessage", notice, StringComparison.Ordinal);
+        Assert.Contains(
+            log.Snapshot,
+            entry => entry.Level == "WARN"
+                && entry.Message.Contains("over two years old", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task InitializeCoreAsync_HealthyGpu_DoesNotRaiseGpuUserNotice()
+    {
+        var bridge = new CapturingBridge();
+        var log = new UiLogService();
+        var service = new ResourceWorkflowService("/tmp/maa", bridge, log, new ScriptedWindowsGpuCapabilityService());
+        var notices = new List<string>();
+        service.GpuUserNotice += notices.Add;
+        var config = BuildConfig(new Dictionary<string, string>
+        {
+            [ConfigurationKeys.PerformanceUseGpu] = "True",
+            [ConfigurationKeys.PerformancePreferredGpuDescription] = "RTX",
+            [ConfigurationKeys.PerformancePreferredGpuInstancePath] = "PCI#0",
+        });
+
+        var result = await service.InitializeCoreAsync(config);
+
+        Assert.True(result.Success);
+        Assert.Empty(notices);
+    }
+
+    private static UnifiedConfig BuildConfig(
+        IReadOnlyDictionary<string, string> profileValues,
+        string? language = null)
     {
         var profile = new UnifiedProfile();
         foreach (var (key, value) in profileValues)
@@ -168,7 +280,7 @@ public sealed class ResourceWorkflowGpuFeatureTests
             profile.Values[key] = JsonValue.Create(value);
         }
 
-        return new UnifiedConfig
+        var config = new UnifiedConfig
         {
             CurrentProfile = "Default",
             Profiles = new Dictionary<string, UnifiedProfile>(StringComparer.OrdinalIgnoreCase)
@@ -176,6 +288,12 @@ public sealed class ResourceWorkflowGpuFeatureTests
                 ["Default"] = profile,
             },
         };
+        if (!string.IsNullOrWhiteSpace(language))
+        {
+            config.GlobalValues[ConfigurationKeys.Localization] = JsonValue.Create(language);
+        }
+
+        return config;
     }
 
     private sealed class CapturingBridge : IMaaCoreBridge
@@ -235,6 +353,13 @@ public sealed class ResourceWorkflowGpuFeatureTests
 
     private sealed class ScriptedWindowsGpuCapabilityService : IGpuCapabilityService
     {
+        private readonly GpuOptionDescriptor? _selectedOverride;
+
+        public ScriptedWindowsGpuCapabilityService(GpuOptionDescriptor? selectedOverride = null)
+        {
+            _selectedOverride = selectedOverride;
+        }
+
         public GpuSelectionResolution Resolve(GpuPreference preference)
         {
             var options = new List<GpuOptionDescriptor>
@@ -249,10 +374,15 @@ public sealed class ResourceWorkflowGpuFeatureTests
                     InstancePath: "PCI#0",
                     GpuIndex: 1),
             };
+            if (_selectedOverride is not null)
+            {
+                options.Add(_selectedOverride);
+            }
 
             var selected = !preference.UseGpu
                 ? GpuOptionDescriptor.Disabled
-                : options.FirstOrDefault(option => option.InstancePath == preference.PreferredGpuInstancePath)
+                : _selectedOverride
+                    ?? options.FirstOrDefault(option => option.InstancePath == preference.PreferredGpuInstancePath)
                     ?? options.First(option => option.Kind == GpuOptionKind.SystemDefault);
 
             return new GpuSelectionResolution(

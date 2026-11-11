@@ -1,4 +1,6 @@
+using System.Globalization;
 using MAAUnified.Application.Models;
+using MAAUnified.Application.Services.Localization;
 using MAAUnified.Compat.Constants;
 using MAAUnified.Compat.Runtime;
 using MAAUnified.CoreBridge;
@@ -14,6 +16,13 @@ public sealed class ResourceWorkflowService
     private readonly IMaaCoreBridge _bridge;
     private readonly IGpuCapabilityService _gpuCapabilityService;
     private readonly UiLogService _logService;
+
+    /// <summary>
+    /// Raised with a localized, user-facing GPU warning. WPF parity (AsstProxy.Init, freeze
+    /// 23ddd27): these warnings go through TaskQueueViewModel.AddLog, which feeds both the main
+    /// log panel and the overlay; here the shell forwards them into the task queue log/overlay.
+    /// </summary>
+    public event Action<string>? GpuUserNotice;
 
     public ResourceWorkflowService(
         string baseDirectory,
@@ -54,7 +63,7 @@ public sealed class ResourceWorkflowService
                 $"Removed {repairedShadowFileCount} stale plugin shadow resource file(s) before core initialization.");
         }
 
-        LogGpuSelection(gpuPreference, gpuResolution);
+        LogGpuSelection(gpuPreference, gpuResolution, ReadCurrentLanguage(config));
 
         // MaaCore resource loading is synchronous and can take multiple seconds.
         // Keep it off the UI thread so the Avalonia shell can stay responsive.
@@ -149,7 +158,7 @@ public sealed class ResourceWorkflowService
             SelectedOption: GpuOptionDescriptor.Disabled);
     }
 
-    private void LogGpuSelection(GpuPreference preference, GpuSelectionResolution resolution)
+    private void LogGpuSelection(GpuPreference preference, GpuSelectionResolution resolution, string language)
     {
         if (!string.IsNullOrWhiteSpace(resolution.SelectionWarningTextKey))
         {
@@ -168,6 +177,15 @@ public sealed class ResourceWorkflowService
 
                 if (resolution.SelectedOption.IsDeprecated)
                 {
+                    // WPF parity (AsstProxy.Init, freeze 23ddd27): localized user-facing warning
+                    // routed to the task queue log panel and the overlay via GpuUserNotice.
+                    RaiseGpuUserNotice(string.Format(
+                        CultureInfo.InvariantCulture,
+                        AchievementTextCatalog.GetString(
+                            "GpuDeprecatedMessage",
+                            language,
+                            "The selected GPU ({0}) for inference acceleration has known compatibility issues, which may cause recognition errors, misalignment, or other unexpected results.\n\nIt is recommended to switch to a different GPU in Settings - Performance."),
+                        resolution.SelectedOption.Description));
                     _logService.Warn(
                         $"Selected GPU `{resolution.SelectedOption.Description}` is marked deprecated for DirectML OCR.");
                 }
@@ -177,6 +195,24 @@ public sealed class ResourceWorkflowService
                 {
                     _logService.Warn(
                         $"Selected GPU driver predates DirectML support ({resolution.SelectedOption.DriverDate:yyyy-MM-dd}).");
+                }
+
+                // WPF parity (AsstProxy.Init, freeze 23ddd27): drivers older than two years raise
+                // an outdated-driver warning even when they are new enough for DirectML.
+                if (resolution.SelectedOption.DriverDate.HasValue
+                    && IsGpuDriverOutdated(resolution.SelectedOption.DriverDate.Value, DateTime.Now))
+                {
+                    RaiseGpuUserNotice(string.Format(
+                        CultureInfo.InvariantCulture,
+                        AchievementTextCatalog.GetString(
+                            "GpuDriverOutdatedMessage",
+                            language,
+                            "The driver version ({1}, release date: {2}) of the selected GPU ({0}) for inference acceleration is over two years old, which may cause compatibility issues.\n\nIt is recommended to update the graphics driver or switch to a different GPU in Settings - Performance."),
+                        resolution.SelectedOption.Description,
+                        resolution.SelectedOption.DriverVersion ?? "Unknown",
+                        resolution.SelectedOption.DriverDate.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)));
+                    _logService.Warn(
+                        $"Selected GPU `{resolution.SelectedOption.Description}` driver {resolution.SelectedOption.DriverVersion ?? "Unknown"} is over two years old ({resolution.SelectedOption.DriverDate:yyyy-MM-dd}); consider updating the driver.");
                 }
 
                 break;
@@ -208,6 +244,30 @@ public sealed class ResourceWorkflowService
             }
         }
     }
+
+    private void RaiseGpuUserNotice(string message)
+    {
+        if (!string.IsNullOrWhiteSpace(message))
+        {
+            GpuUserNotice?.Invoke(message);
+        }
+    }
+
+    private static string ReadCurrentLanguage(UnifiedConfig config)
+    {
+        if (config.GlobalValues.TryGetValue(ConfigurationKeys.Localization, out var node)
+            && node is JsonValue jsonValue
+            && jsonValue.TryGetValue(out string? language)
+            && !string.IsNullOrWhiteSpace(language))
+        {
+            return UiLanguageCatalog.Normalize(language);
+        }
+
+        return UiLanguageCatalog.DefaultLanguage;
+    }
+
+    internal static bool IsGpuDriverOutdated(DateTime driverDate, DateTime now)
+        => driverDate.Date < now.Date.AddYears(-2);
 
     private static string ReadProfileString(UnifiedConfig config, string key, string fallback)
     {

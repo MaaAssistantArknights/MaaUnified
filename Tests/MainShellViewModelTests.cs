@@ -3192,6 +3192,44 @@ public sealed class MainShellViewModelTests
         }
     }
 
+    [Fact]
+    public async Task GpuUserNotice_ShouldAppendLocalizedWarnEntryToTaskQueueAndOverlayLogs()
+    {
+        // WPF parity (freeze 23ddd27 AsstProxy.Init -> TaskQueueViewModel.AddLog): GPU driver
+        // warnings are visible in the main task queue log panel and in the overlay log.
+        await using var fixture = await TestFixture.CreateAsync(
+            gpuCapabilityService: new DeprecatedGpuCapabilityService());
+        if (fixture.Runtime.ConfigurationService.TryGetCurrentProfile(out var profile))
+        {
+            profile.Values[ConfigurationKeys.PerformanceUseGpu] = JsonValue.Create("True");
+            profile.Values[ConfigurationKeys.PerformancePreferredGpuDescription] = JsonValue.Create("Legacy GPU");
+            profile.Values[ConfigurationKeys.PerformancePreferredGpuInstancePath] = JsonValue.Create("PCI#9");
+        }
+
+        fixture.Runtime.ConfigurationService.CurrentConfig.GlobalValues[ConfigurationKeys.Localization] =
+            JsonValue.Create("en-us");
+
+        var initResult = await fixture.Runtime.ResourceWorkflowService.InitializeCoreAsync(
+            fixture.Runtime.ConfigurationService.CurrentConfig);
+
+        Assert.True(initResult.Success);
+        Assert.True(await WaitUntilAsync(() =>
+        {
+            Dispatcher.UIThread.RunJobs();
+            return fixture.ViewModel.TaskQueuePage.LogCards.Count > 0;
+        }, retry: 80, delayMs: 25));
+        Assert.Contains(
+            fixture.ViewModel.TaskQueuePage.LogCards.SelectMany(card => card.Items),
+            entry => entry.Level == "WARN"
+                && entry.Content.Contains("Legacy GPU", StringComparison.Ordinal)
+                && entry.Content.Contains("compatibility", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(
+            fixture.ViewModel.TaskQueuePage.OverlayLogs,
+            entry => entry.Level == "WARN"
+                && entry.Content.Contains("Legacy GPU", StringComparison.Ordinal)
+                && entry.Content.Contains("compatibility", StringComparison.OrdinalIgnoreCase));
+    }
+
     private sealed class TestFixture : IAsyncDisposable
     {
         private TestFixture(
@@ -3237,6 +3275,7 @@ public sealed class MainShellViewModelTests
             IAppDialogService? dialogService = null,
             IMaaCoreBridge? bridge = null,
             INotificationService? notificationService = null,
+            IGpuCapabilityService? gpuCapabilityService = null,
             bool preloadConfig = true)
         {
             var root = Path.Combine(Path.GetTempPath(), "maa-unified-tests", Guid.NewGuid().ToString("N"));
@@ -3293,7 +3332,7 @@ public sealed class MainShellViewModelTests
             {
                 CoreBridge = runtimeBridge,
                 ConfigurationService = config,
-                ResourceWorkflowService = new ResourceWorkflowService(root, runtimeBridge, log),
+                ResourceWorkflowService = new ResourceWorkflowService(root, runtimeBridge, log, gpuCapabilityService),
                 SessionService = session,
                 Platform = platform,
                 LogService = log,
@@ -3751,6 +3790,31 @@ private sealed class CapturingTrayService : ITrayService
         {
             LastVisible = visible;
             return Task.FromResult(PlatformOperation.NativeSuccess(Capability.Provider, "set-visible", "tray.setVisible"));
+        }
+    }
+
+    private sealed class DeprecatedGpuCapabilityService : IGpuCapabilityService
+    {
+        public GpuSelectionResolution Resolve(GpuPreference preference)
+        {
+            var legacy = new GpuOptionDescriptor(
+                Id: "PCI#9",
+                Kind: GpuOptionKind.SpecificGpu,
+                DisplayName: "Legacy GPU",
+                Description: "Legacy GPU",
+                InstancePath: "PCI#9",
+                GpuIndex: 2,
+                IsDeprecated: true);
+            return new GpuSelectionResolution(
+                Snapshot: new GpuCapabilitySnapshot(
+                    SupportMode: GpuPlatformSupportMode.WindowsSupported,
+                    IsEditable: true,
+                    AppliesToCore: true,
+                    SupportsDeprecatedToggle: true,
+                    Options: [GpuOptionDescriptor.Disabled, legacy],
+                    StatusTextKey: "Settings.Performance.Gpu.Status.WindowsReady",
+                    Provider: "test"),
+                SelectedOption: preference.UseGpu ? legacy : GpuOptionDescriptor.Disabled);
         }
     }
 

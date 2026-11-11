@@ -28,6 +28,7 @@ public sealed class ConnectFeatureService : IConnectFeatureService
     private readonly UnifiedConfigurationService _configService;
     private readonly UiLogService? _logService;
     private readonly IMaaCoreBridge? _bridge;
+    private readonly IOverlayCapabilityService? _overlayTargetProvider;
     private readonly string? _runtimeBaseDirectory;
     private readonly bool _enableQuickConnectionPrecheck;
     private IMacRawByNcRiskConnectionPromptService _macRawByNcRiskPromptService;
@@ -47,6 +48,10 @@ public sealed class ConnectFeatureService : IConnectFeatureService
     private static readonly TimeSpan FastestScreencapCallbackGracePeriod = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan MacRawByNcForceRunCacheTtl = TimeSpan.FromMinutes(5);
     private const string MaaFwAdbTouchMode = "MaaFwAdb";
+    private const ulong DefaultAttachWindowScreencapMethod = 2;
+    private const ulong DefaultAttachWindowInputMethod = 64;
+    private const string AttachWindowConnectConfig = "PC";
+    private const string AttachWindowTargetTitle = "明日方舟";
     private const string MacRawByNcGuardAppliedRecommendedStrategy = "temporary-macos-rawbync-guard:applied-recommended-profile";
     private const string MacRawByNcGuardForceRunStrategy = "temporary-macos-rawbync-guard:force-run";
     private const string MacRawByNcGuardReasonUserForced = "user-forced-risk-combination";
@@ -71,7 +76,8 @@ public sealed class ConnectFeatureService : IConnectFeatureService
         IMaaCoreBridge? bridge = null,
         string? runtimeBaseDirectory = null,
         IMacRawByNcRiskConnectionPromptService? macRawByNcRiskPromptService = null,
-        bool enableQuickConnectionPrecheck = true)
+        bool enableQuickConnectionPrecheck = true,
+        IOverlayCapabilityService? overlayTargetProvider = null)
     {
         _sessionService = sessionService;
         _configService = configService;
@@ -83,6 +89,7 @@ public sealed class ConnectFeatureService : IConnectFeatureService
         _macRawByNcRiskPromptService = macRawByNcRiskPromptService
             ?? NoOpMacRawByNcRiskConnectionPromptService.Instance;
         _enableQuickConnectionPrecheck = enableQuickConnectionPrecheck;
+        _overlayTargetProvider = overlayTargetProvider;
     }
 
     internal Func<IReadOnlyList<EmulatorRuntimeInfo>>? EmulatorDiscoveryOverride { get; set; }
@@ -92,6 +99,12 @@ public sealed class ConnectFeatureService : IConnectFeatureService
         get => _macRawByNcRiskPromptService;
         set => _macRawByNcRiskPromptService = value ?? NoOpMacRawByNcRiskConnectionPromptService.Instance;
     }
+
+    // WPF parity (AsstProxy.AsstAttachWindowConnect -> TaskQueueViewModel.AddLog, freeze 23ddd27):
+    // PC window binding prompts must surface in the task queue log panel and the overlay log.
+    // Those are App-layer sinks, so the Application layer raises this event (localized message,
+    // level: INFO/WARN/ERROR) and the shell subscribes; English diagnostics stay in the root log.
+    public event Action<string, string>? AttachWindowUserNotice;
 
     public Task<CoreResult<bool>> ValidateAndConnectAsync(string address, string config, string? adbPath, CancellationToken cancellationToken = default)
         => ValidateAndConnectAsync(address, config, adbPath, instanceOptions: null, cancellationToken);
@@ -142,6 +155,11 @@ public sealed class ConnectFeatureService : IConnectFeatureService
         CancellationToken cancellationToken,
         MacRawByNcRiskPromptSession? riskPromptSession = null)
     {
+        if (IsAttachWindowConnection(connectionInfo))
+        {
+            return await ValidateAndAttachWindowAsync(connectionInfo, cancellationToken).ConfigureAwait(false);
+        }
+
         if (string.IsNullOrWhiteSpace(connectionInfo.Address))
         {
             return CoreResult<bool>.Fail(new CoreError(CoreErrorCode.InvalidRequest, "Address cannot be empty."));
@@ -213,6 +231,140 @@ public sealed class ConnectFeatureService : IConnectFeatureService
                 + "Possible causes: emulator not running, wrong address/port, ADB unreachable, touch/controller fallback unavailable, or MaaCore screencap negotiation stuck."));
         }
     }
+
+    private static bool IsAttachWindowConnection(CoreConnectionInfo connectionInfo)
+        => IsAttachWindowConnection(connectionInfo.ConnectConfig);
+
+    private static bool IsAttachWindowConnection(string? connectConfig)
+        => string.Equals(NormalizeText(connectConfig), AttachWindowConnectConfig, StringComparison.OrdinalIgnoreCase);
+
+    private async Task<CoreResult<bool>> ValidateAndAttachWindowAsync(
+        CoreConnectionInfo connectionInfo,
+        CancellationToken cancellationToken)
+    {
+        // Mirrors WPF AsstProxy.AsstAttachWindowConnect (freeze 23ddd27): PC client mode binds
+        // the visible Win32 window whose title exactly matches the game window title instead of
+        // dialing an ADB address. On failure no ADB recovery is attempted (WPF returns early).
+        var language = ReadCurrentLanguage();
+        var useAttachWindowWarning = AchievementTextCatalog.GetString(
+            "UseAttachWindowWarning",
+            language,
+            "PC connection (experimental feature, stability not guaranteed)");
+        _logService?.Warn(useAttachWindowWarning);
+        RaiseAttachWindowUserNotice(useAttachWindowWarning, "WARN");
+
+        if (_overlayTargetProvider is null)
+        {
+            _logService?.Warn("AttachWindow: window enumeration service is unavailable.");
+            return CoreResult<bool>.Fail(new CoreError(
+                CoreErrorCode.PlatformNotSupported,
+                "Window enumeration is unavailable; cannot attach to the PC client window."));
+        }
+
+        List<nint> matches;
+        try
+        {
+            if (_overlayTargetProvider is IAttachWindowTargetFinder attachWindowFinder)
+            {
+                // WPF parity (AsstProxy.FindWindowsByName): exact raw-title match over all visible
+                // top-level windows, without the overlay picker's 80-target cap or title trimming.
+                matches = attachWindowFinder.FindVisibleWindowsByExactTitle(AttachWindowTargetTitle).ToList();
+            }
+            else
+            {
+                var targetsResult = await _overlayTargetProvider.QueryTargetsAsync(cancellationToken).ConfigureAwait(false);
+                matches = (targetsResult.Value ?? (IReadOnlyList<OverlayTarget>)[])
+                    .Where(static target => string.Equals(target.WindowTitle, AttachWindowTargetTitle, StringComparison.Ordinal))
+                    .Where(static target => target.NativeHandle is > 0)
+                    .Select(static target => new nint(target.NativeHandle!.Value))
+                    .ToList();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logService?.Warn($"AttachWindow: window enumeration failed: {ex.Message}");
+            return CoreResult<bool>.Fail(new CoreError(
+                CoreErrorCode.ConnectFailed,
+                $"Failed to enumerate windows for AttachWindow: {ex.Message}",
+                Exception: ex.ToString()));
+        }
+
+        if (matches.Count == 0)
+        {
+            var notFound = string.Format(
+                CultureInfo.InvariantCulture,
+                AchievementTextCatalog.GetString(
+                    "AttachWindowNotFound",
+                    language,
+                    "Window \"{0}\" not found, please ensure the game is running"),
+                AttachWindowTargetTitle);
+            _logService?.Error(notFound);
+            RaiseAttachWindowUserNotice(notFound, "ERROR");
+            return CoreResult<bool>.Fail(new CoreError(CoreErrorCode.ConnectFailed, notFound));
+        }
+
+        var selected = matches[0];
+        if (matches.Count > 1)
+        {
+            var multipleFound = string.Format(
+                CultureInfo.InvariantCulture,
+                AchievementTextCatalog.GetString(
+                    "AttachWindowMultipleFound",
+                    language,
+                    "Found {0} \"{1}\" windows, using the first one"),
+                matches.Count,
+                AttachWindowTargetTitle);
+            _logService?.Info(multipleFound);
+            RaiseAttachWindowUserNotice(multipleFound, "INFO");
+            _logService?.Warn(
+                $"AttachWindow: {matches.Count} windows titled '{AttachWindowTargetTitle}' found; using first hwnd=0x{selected:X}.");
+        }
+        else
+        {
+            var found = string.Format(
+                CultureInfo.InvariantCulture,
+                AchievementTextCatalog.GetString("AttachWindowFound", language, "Found window \"{0}\""),
+                AttachWindowTargetTitle);
+            _logService?.Info(found);
+            RaiseAttachWindowUserNotice(found, "INFO");
+        }
+
+        var extras = NormalizeConnectionExtras(connectionInfo.Extras ?? CoreConnectionExtras.Empty);
+        var screencapMethod = TryParseAttachWindowMethod(extras.AttachWindowScreencapMethod, DefaultAttachWindowScreencapMethod);
+        var mouseMethod = TryParseAttachWindowMethod(extras.AttachWindowMouseMethod, DefaultAttachWindowInputMethod);
+        var keyboardMethod = TryParseAttachWindowMethod(extras.AttachWindowKeyboardMethod, DefaultAttachWindowInputMethod);
+        _logService?.Info(
+            $"AttachWindow: hwnd=0x{selected:X}, screencap={screencapMethod}, mouse={mouseMethod}, keyboard={keyboardMethod}.");
+
+        var result = await _sessionService.AttachWindowAsync(
+            connectionInfo,
+            new CoreAttachWindowRequest(
+                selected,
+                screencapMethod,
+                mouseMethod,
+                keyboardMethod),
+            cancellationToken).ConfigureAwait(false);
+        if (!result.Success)
+        {
+            var attachFailed = AchievementTextCatalog.GetString(
+                "AttachWindowFailed",
+                language,
+                "AttachWindow failed, please check screencap/input method settings");
+            _logService?.Error(attachFailed);
+            RaiseAttachWindowUserNotice(attachFailed, "ERROR");
+        }
+
+        return result;
+    }
+
+    private static ulong TryParseAttachWindowMethod(string? value, ulong fallback)
+        => ulong.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : fallback;
 
     private async Task<CoreResult<CoreConnectionInfo>> ResolveMacRawByNcRiskConnectionAsync(
         CoreConnectionInfo connectionInfo,
@@ -507,6 +659,24 @@ public sealed class ConnectFeatureService : IConnectFeatureService
     {
         var normalizedConfiguredAddress = NormalizeAddress(configuredAddress);
         var normalizedConnectConfig = NormalizeText(connectConfig);
+        var normalizedExtras = NormalizeConnectionExtras(extras ?? CoreConnectionExtras.Empty);
+        if (IsAttachWindowConnection(normalizedConnectConfig))
+        {
+            // AttachWindow (PC client) mode binds a Win32 window instead of dialing an ADB
+            // address. Keep the configured address so the successful-address write-back is a
+            // no-op, matching WPF where PC mode never touches ConnectAddress.
+            return UiOperationResult<IReadOnlyList<CoreConnectionInfo>>.Ok(
+            [
+                new CoreConnectionInfo(
+                    normalizedConfiguredAddress,
+                    normalizedConnectConfig,
+                    null,
+                    normalizedExtras,
+                    timeout ?? DefaultConnectBudget),
+            ],
+            "PC window connection candidate built.");
+        }
+
         var addresses = BuildConnectAddressCandidates(
             normalizedConfiguredAddress,
             normalizedConnectConfig,
@@ -525,7 +695,7 @@ public sealed class ConnectFeatureService : IConnectFeatureService
                 address,
                 normalizedConnectConfig,
                 NormalizeNullableText(adbPath),
-                NormalizeConnectionExtras(extras ?? CoreConnectionExtras.Empty),
+                normalizedExtras,
                 NormalizeCandidateTimeout(timeout),
                 DiscoverRuntimeCandidates: autoDetect || alwaysAutoDetect));
         }
@@ -1681,6 +1851,14 @@ public sealed class ConnectFeatureService : IConnectFeatureService
         }
 
         return !extras.AdbLiteEnabled;
+    }
+
+    private void RaiseAttachWindowUserNotice(string message, string level)
+    {
+        if (!string.IsNullOrWhiteSpace(message))
+        {
+            AttachWindowUserNotice?.Invoke(message, level);
+        }
     }
 
     private string ReadCurrentLanguage()
