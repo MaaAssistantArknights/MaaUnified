@@ -50,7 +50,7 @@
                                         Width="{DynamicResource MAA.Size.Settings.FieldNarrowWidth}"
                                         HorizontalAlignment="Left"
                                         Minimum="0"
-                                        Maximum="80"
+                                        Maximum="50"
                                         Value="{Binding BackgroundBlur}" />
       </Grid>
 

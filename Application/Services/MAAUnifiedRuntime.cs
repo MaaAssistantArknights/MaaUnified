@@ -82,6 +82,14 @@ public sealed class MAAUnifiedRuntime : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        // WPF parity (Bootstrapper.Release -> SettingsViewModel.Sober): restore the sober language
+        // when exiting a drunk (Pallas) session, before any other teardown touches the config.
+        await RunExitCleanupAsync(
+            "App.Exit.Cleanup.SoberLanguage",
+            () => UiLanguageCoordinator is UiLanguageCoordinator coordinator
+                ? coordinator.SoberOnExitAsync(CancellationToken.None)
+                : Task.CompletedTask).ConfigureAwait(false);
+
         await RunExitCleanupAsync(
             "App.Exit.Cleanup.WebApi",
             () => WebApiFeatureService.StopAsync(CancellationToken.None)).ConfigureAwait(false);

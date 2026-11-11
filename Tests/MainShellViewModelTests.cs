@@ -77,7 +77,160 @@ public sealed class MainShellViewModelTests
     {
         await using var fixture = await TestFixture.CreateAsync();
 
-        Assert.Contains(MainShellViewModel.WindowDisplayName, fixture.ViewModel.WindowTitle, StringComparison.Ordinal);
+        // WPF parity (SettingsViewModel.UpdateWindowTitle): with the default GUI.WindowTitleSelectShowList
+        // ("2 3 4") the title appends the connection preset, loopback-stripped address, and client type.
+        Assert.StartsWith(MainShellViewModel.WindowDisplayName, fixture.ViewModel.WindowTitle, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task WindowTitle_ComposesLegacyPrefixAndSelectedFields()
+    {
+        await using var fixture = await TestFixture.CreateAsync(
+            existingAvaloniaJson: CreateWindowTitleConfigJson());
+        await fixture.ViewModel.InitializeAsync();
+
+        // WPF parity (SettingsViewModel.UpdateWindowTitle): prefix + profile + preset + address + client.
+        var title = fixture.ViewModel.WindowTitle;
+        Assert.StartsWith(
+            $"LEGACY - {MainShellViewModel.WindowDisplayName} (Default)",
+            title,
+            StringComparison.Ordinal);
+        Assert.Contains(" - 通用模式", title, StringComparison.Ordinal);
+        Assert.Contains("官服", title, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task WindowTitle_ReadsProfileScopedLegacyPrefix()
+    {
+        await using var fixture = await TestFixture.CreateAsync(
+            existingAvaloniaJson: CreateProfileScopedPrefixConfigJson());
+        await fixture.ViewModel.InitializeAsync();
+
+        // WPF parity (SettingsViewModel.UpdateWindowTitle uses ConfigurationHelper.GetValue, which
+        // is profile-first with global fallback): an imported profile-scoped prefix composes into
+        // the title even before any GUI save.
+        Assert.StartsWith(
+            $"PROFILEPFX - {MainShellViewModel.WindowDisplayName}",
+            fixture.ViewModel.WindowTitle,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ApplyShellBackgroundImage_MissingFile_RendersNothingSilently()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        await fixture.ViewModel.InitializeAsync();
+
+        var method = typeof(MainShellViewModel).GetMethod(
+            "ApplyShellBackgroundImage",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        Assert.NotNull(method);
+
+        // WPF parity (BackgroundSettingsUserControlModel.RefreshBackgroundImage): a missing file
+        // renders no background and is not reported as an error.
+        method!.Invoke(fixture.ViewModel, new object?[] { Path.Combine(fixture.Root, "missing.png") });
+        Assert.Null(fixture.ViewModel.ShellBackgroundImage);
+        Assert.DoesNotContain("Background image load failed", fixture.ViewModel.LastError, StringComparison.Ordinal);
+
+        method.Invoke(fixture.ViewModel, new object?[] { string.Empty });
+        Assert.Null(fixture.ViewModel.ShellBackgroundImage);
+    }
+
+    [Fact]
+    public async Task ShowCloseButton_FollowsLegacyHideCloseButton()
+    {
+        await using var fixture = await TestFixture.CreateAsync(
+            existingAvaloniaJson: CreateWindowTitleConfigJson());
+        await fixture.ViewModel.InitializeAsync();
+
+        Assert.False(fixture.ViewModel.ShowCloseButton);
+    }
+
+    [Fact]
+    public async Task WindowTitle_ScrollsWhenEnabled_EvenForShortTitles()
+    {
+        await using var fixture = await TestFixture.CreateAsync(
+            existingAvaloniaJson: CreateScrollableShortTitleConfigJson());
+        await fixture.ViewModel.InitializeAsync();
+
+        // WPF parity (RootView RunningBlock): scrolling follows the toggle, not a length threshold.
+        var shouldAnimate = typeof(MainShellViewModel).GetMethod(
+            "ShouldAnimateWindowTitle",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        Assert.NotNull(shouldAnimate);
+        Assert.True((bool)shouldAnimate!.Invoke(fixture.ViewModel, null)!);
+    }
+
+    private static string CreateWindowTitleConfigJson()
+    {
+        return
+            """
+            {
+              "SchemaVersion": 2,
+              "CurrentProfile": "Default",
+              "Profiles": {
+                "Default": {
+                  "Values": {},
+                  "TaskQueue": []
+                },
+                "Second": {
+                  "Values": {},
+                  "TaskQueue": []
+                }
+              },
+              "GlobalValues": {
+                "GUI.WindowTitlePrefix": "LEGACY",
+                "GUI.WindowTitleSelectShowList": "1 2 3 4",
+                "GUI.HideCloseButton": true
+              },
+              "Migration": {}
+            }
+            """;
+    }
+
+    private static string CreateProfileScopedPrefixConfigJson()
+    {
+        return
+            """
+            {
+              "SchemaVersion": 2,
+              "CurrentProfile": "Default",
+              "Profiles": {
+                "Default": {
+                  "Values": {
+                    "GUI.WindowTitlePrefix": "PROFILEPFX"
+                  },
+                  "TaskQueue": []
+                }
+              },
+              "GlobalValues": {
+                "GUI.WindowTitleSelectShowList": ""
+              },
+              "Migration": {}
+            }
+            """;
+    }
+
+    private static string CreateScrollableShortTitleConfigJson()
+    {
+        return
+            """
+            {
+              "SchemaVersion": 2,
+              "CurrentProfile": "Default",
+              "Profiles": {
+                "Default": {
+                  "Values": {},
+                  "TaskQueue": []
+                }
+              },
+              "GlobalValues": {
+                "GUI.WindowTitleScrollable": true,
+                "GUI.WindowTitleSelectShowList": ""
+              },
+              "Migration": {}
+            }
+            """;
     }
 
     [Fact]
@@ -3543,6 +3696,11 @@ public sealed class MainShellViewModelTests
         public string CurrentLanguage { get; }
 
         public event EventHandler<UiLanguageChangedEventArgs>? LanguageChanged;
+        public bool IsPallasUnlocked => false;
+
+        public Task<bool> CompleteHangoverIfNeededAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(false);
+
 
         public Task<UiOperationResult<string>> ChangeLanguageAsync(string targetLanguage, CancellationToken cancellationToken = default)
         {

@@ -2149,6 +2149,42 @@
   <data name="Settings.GUI.WindowTitleScrollable" xml:space="preserve">
     <value>ウィンドウタイトルをスクロール</value>
   </data>
+  <data name="Settings.GUI.HideCloseButton" xml:space="preserve">
+    <value>「閉じる」ボタンを隠す</value>
+  </data>
+  <data name="Settings.GUI.UseCardLog" xml:space="preserve">
+    <value>カードスタイルのログを使用</value>
+  </data>
+  <data name="Settings.GUI.MaxNumberOfLogThumbnails" xml:space="preserve">
+    <value>ログサムネイルの最大数</value>
+  </data>
+  <data name="Settings.GUI.MainTasksInvertNullFunction" xml:space="preserve">
+    <value>メインタスクの右クリック効果を反転</value>
+  </data>
+  <data name="Settings.GUI.MainTasksInvertNullFunctionTip" xml:space="preserve">
+    <value>デフォルト：1回のみ有効、チェック後：1回のみスキップ</value>
+  </data>
+  <data name="Settings.GUI.WindowTitleSelectShowList" xml:space="preserve">
+    <value>タイトルバー表示コンテンツ</value>
+  </data>
+  <data name="Settings.GUI.WindowTitleField.ConfigurationName" xml:space="preserve">
+    <value>構成名</value>
+  </data>
+  <data name="Settings.GUI.WindowTitleField.ConnectionPreset" xml:space="preserve">
+    <value>接続構成</value>
+  </data>
+  <data name="Settings.GUI.WindowTitleField.ConnectionAddress" xml:space="preserve">
+    <value>接続先アドレス</value>
+  </data>
+  <data name="Settings.GUI.WindowTitleField.ClientType" xml:space="preserve">
+    <value>クライアントバージョン</value>
+  </data>
+  <data name="Settings.GUI.PallasHangoverMessage" xml:space="preserve">
+    <value>つ、次は飲みすぎないようにしないと……</value>
+  </data>
+  <data name="Settings.Option.OperNameLanguage.Force" xml:space="preserve">
+    <value>指定された言語を強制的に使用する</value>
+  </data>
   <data name="Settings.Game.BlockSleep" xml:space="preserve">
     <value>タスク実行時の休止状態の防止</value>
   </data>

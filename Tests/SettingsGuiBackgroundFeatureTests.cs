@@ -7,6 +7,7 @@ using Avalonia.Threading;
 using MAAUnified.App.Features.Settings;
 using MAAUnified.App.ViewModels;
 using MAAUnified.App.ViewModels.Settings;
+using MAAUnified.App.ViewModels.TaskQueue;
 using MAAUnified.Application.Configuration;
 using MAAUnified.Application.Models;
 using MAAUnified.Application.Orchestration;
@@ -215,7 +216,7 @@ public sealed class SettingsGuiBackgroundFeatureTests
             string.Equals(vm.Language, "en-us", StringComparison.OrdinalIgnoreCase)
             && string.Equals(ReadGlobalString(fixture.Config, ConfigurationKeys.Localization), "en-us", StringComparison.OrdinalIgnoreCase));
         var languagesAfterEnglish = vm.SupportedLanguages;
-        Assert.Same(originalLanguages, languagesAfterEnglish);
+        Assert.Equal(originalLanguages, languagesAfterEnglish);
         Assert.Equal("en-us", vm.Language);
         Assert.Equal("en-us", vm.SelectedLanguageValue);
         Assert.Equal("en-us", vm.SelectedLanguageOption?.Value);
@@ -224,7 +225,7 @@ public sealed class SettingsGuiBackgroundFeatureTests
         await WaitUntilAsync(() =>
             string.Equals(vm.Language, "ja-jp", StringComparison.OrdinalIgnoreCase)
             && string.Equals(ReadGlobalString(fixture.Config, ConfigurationKeys.Localization), "ja-jp", StringComparison.OrdinalIgnoreCase));
-        Assert.Same(languagesAfterEnglish, vm.SupportedLanguages);
+        Assert.Equal(languagesAfterEnglish, vm.SupportedLanguages);
         Assert.Equal("ja-jp", vm.Language);
         Assert.Equal("ja-jp", vm.SelectedLanguageValue);
         Assert.Equal("ja-jp", vm.SelectedLanguageOption?.Value);
@@ -754,7 +755,7 @@ public sealed class SettingsGuiBackgroundFeatureTests
     }
 
     [Fact]
-    public async Task SaveGuiSettingsAsync_InvalidBackgroundPath_BlocksEntireSave()
+    public async Task SaveGuiSettingsAsync_InvalidBackgroundPath_SavesOtherSettingsAndKeepsPathDraft()
     {
         await using var fixture = await RuntimeFixture.CreateAsync();
         var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
@@ -770,8 +771,7 @@ public sealed class SettingsGuiBackgroundFeatureTests
         vm.BackgroundBlur = 12;
         vm.BackgroundStretchMode = "UniformToFill";
         await vm.SaveGuiSettingsAsync();
-
-        var before = CaptureGuiSnapshot(fixture.Config);
+        Assert.False(vm.HasPendingGuiChanges);
 
         var missingPath = Path.Combine(fixture.Root, "missing.png");
         vm.BackgroundImagePath = missingPath;
@@ -779,14 +779,347 @@ public sealed class SettingsGuiBackgroundFeatureTests
         vm.UseTray = false;
         await vm.SaveGuiSettingsAsync();
 
+        // WPF parity (BackgroundSettingsUserControlModel): a missing background file must not block
+        // persisting the remaining GUI settings; the invalid path stays an unpersisted draft.
         var after = CaptureGuiSnapshot(fixture.Config);
-        Assert.NotEqual(before[ConfigurationKeys.Localization], after[ConfigurationKeys.Localization]);
-        before.Remove(ConfigurationKeys.Localization);
-        after.Remove(ConfigurationKeys.Localization);
-        Assert.Equal(before, after);
+        Assert.Equal("ja-jp", after[ConfigurationKeys.Localization]);
+        Assert.Equal("False", after[ConfigurationKeys.UseTray]);
+        Assert.Equal(baselinePath, after[ConfigurationKeys.BackgroundImagePath]);
         Assert.True(vm.HasPendingGuiChanges);
         Assert.Equal(missingPath, vm.BackgroundImagePath);
         Assert.Equal("ja-jp", vm.Language);
+        Assert.Contains("does not exist", vm.BackgroundValidationMessage, StringComparison.OrdinalIgnoreCase);
+
+        // Fixing the path clears the pending state and persists everything.
+        vm.BackgroundImagePath = baselinePath;
+        await vm.SaveGuiSettingsAsync();
+        Assert.False(vm.HasPendingGuiChanges);
+        Assert.Equal(baselinePath, ReadGlobalString(fixture.Config, ConfigurationKeys.BackgroundImagePath));
+    }
+
+    [Fact]
+    public async Task SaveGuiSettingsAsync_InvalidBackgroundPathOnFreshInstall_RevertsToConventionalDefault()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync();
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        // Fresh install: the key was never written, so the WPF conventional default applies.
+        Assert.False(fixture.Config.CurrentConfig.GlobalValues.ContainsKey(ConfigurationKeys.BackgroundImagePath));
+        Assert.Equal("background/background.png", vm.BackgroundImagePath);
+
+        var missingPath = Path.Combine(fixture.Root, "missing.png");
+        vm.BackgroundImagePath = missingPath;
+        vm.Theme = "Dark";
+        await vm.SaveGuiSettingsAsync();
+
+        // The invalid path stays an unpersisted draft while the rest of the batch is saved.
+        Assert.True(vm.HasPendingGuiChanges);
+        Assert.Equal(missingPath, vm.BackgroundImagePath);
+        Assert.Equal("Dark", ReadGlobalString(fixture.Config, "Theme.Mode"));
+        Assert.Contains("does not exist", vm.BackgroundValidationMessage, StringComparison.OrdinalIgnoreCase);
+
+        // The rejection must revert to the effective previous value (the conventional default), not
+        // persist GUI.BackgroundImagePath="" — otherwise "never written -> default applies" would
+        // silently become an explicit clear the user never requested (N2 missing-vs-empty semantics).
+        var persisted = fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.BackgroundImagePath];
+        var persistedText = persisted is JsonValue persistedValue && persistedValue.TryGetValue(out string? text) ? text : persisted.ToString();
+        Assert.Equal("background/background.png", persistedText);
+
+        // After a restart the settings page shows the default path again, not an empty textbox.
+        var reloaded = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await reloaded.InitializeAsync();
+        Assert.Equal("background/background.png", reloaded.BackgroundImagePath);
+    }
+
+    [Fact]
+    public void StartupShellSnapshot_UsesLegacyDarkMode_WhenThemeModeMissing()
+    {
+        var config = new UnifiedConfig();
+        config.GlobalValues["GUI.DarkMode" /* legacy key; intentionally absent from the frozen 300-key baseline contract */] = JsonValue.Create("Dark");
+
+        Assert.Equal("Dark", StartupShellSnapshot.FromConfig(config).Theme);
+
+        config.GlobalValues["GUI.DarkMode" /* legacy key; intentionally absent from the frozen 300-key baseline contract */] = JsonValue.Create("SyncWithOs");
+        Assert.Equal("SyncWithOs", StartupShellSnapshot.FromConfig(config).Theme);
+
+        // An explicit Avalonia Theme.Mode value always wins over the legacy key.
+        config.GlobalValues["Theme.Mode"] = JsonValue.Create("Light");
+        Assert.Equal("Light", StartupShellSnapshot.FromConfig(config).Theme);
+    }
+
+    [Fact]
+    public void StartupShellSnapshot_BackgroundDefaults_MatchFrozenWpf()
+    {
+        // Frozen WPF (BackgroundSettingsUserControlModel.cs): path background/background.png,
+        // opacity 50, blur 5.
+        Assert.Equal("background/background.png", StartupShellSnapshot.Default.BackgroundImagePath);
+        Assert.Equal(50, StartupShellSnapshot.Default.BackgroundOpacity);
+        Assert.Equal(5, StartupShellSnapshot.Default.BackgroundBlur);
+
+        // The conventional default applies only when the key was never written; an explicitly
+        // cleared (empty) stored value stays empty so users can remove the background.
+        Assert.Equal("background/background.png", StartupShellSnapshot.FromConfig(new UnifiedConfig()).BackgroundImagePath);
+
+        var cleared = new UnifiedConfig();
+        cleared.GlobalValues[ConfigurationKeys.BackgroundImagePath] = JsonValue.Create(string.Empty);
+        Assert.Equal(string.Empty, StartupShellSnapshot.FromConfig(cleared).BackgroundImagePath);
+    }
+
+    [Fact]
+    public async Task SaveGuiSettingsAsync_DefaultBackgroundPathMissing_SavesWithoutValidationError()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync();
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        // Fresh install: the WPF conventional default path is offered even though the file is absent.
+        Assert.Equal("background/background.png", vm.BackgroundImagePath);
+
+        vm.Theme = "Dark";
+        await vm.SaveGuiSettingsAsync();
+
+        // WPF parity (BackgroundSettingsUserControlModel.RefreshBackgroundImage): a missing default
+        // image renders nothing; it must not fail the save or leave the batch pending.
+        Assert.False(vm.HasPendingGuiChanges);
+        Assert.False(vm.HasBackgroundValidationMessage);
+        Assert.Equal("background/background.png", ReadGlobalString(fixture.Config, ConfigurationKeys.BackgroundImagePath));
+
+        var reloaded = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await reloaded.InitializeAsync();
+        Assert.Equal("background/background.png", reloaded.BackgroundImagePath);
+    }
+
+    [Fact]
+    public async Task GuiSettings_ProfileScopedLegacyKeys_AreHonoredAndPromotedToGlobalOnSave()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync();
+        var config = fixture.Config.CurrentConfig;
+        var profile = config.Profiles[config.CurrentProfile];
+        // Simulate a WPF gui.json import: these keys are per-configuration (profile-scoped) in WPF.
+        profile.Values[ConfigurationKeys.UseCardLog] = JsonValue.Create("False");
+        profile.Values[ConfigurationKeys.MaxNumberOfLogThumbnails] = JsonValue.Create("7");
+        profile.Values[ConfigurationKeys.WindowTitlePrefix] = JsonValue.Create("LEGACY");
+
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        // WPF parity (ConfigurationHelper.GetValue is profile-first): imported profile values are
+        // honored immediately, before any GUI save.
+        Assert.False(vm.UseCardLog);
+        Assert.Equal(7, vm.MaxNumberOfLogThumbnails);
+
+        // An unrelated GUI save promotes the shown values to global scope and drops the stale
+        // profile copies so the profile-first runtime readers keep observing the saved values.
+        vm.UseTray = false;
+        await vm.SaveGuiSettingsAsync();
+
+        Assert.Equal("False", ReadGlobalString(fixture.Config, ConfigurationKeys.UseCardLog));
+        Assert.Equal("7", ReadGlobalString(fixture.Config, ConfigurationKeys.MaxNumberOfLogThumbnails));
+        Assert.False(profile.Values.ContainsKey(ConfigurationKeys.UseCardLog));
+        Assert.False(profile.Values.ContainsKey(ConfigurationKeys.MaxNumberOfLogThumbnails));
+        // Nothing writes the prefix to global scope, so its profile copy stays the source of truth.
+        Assert.True(profile.Values.ContainsKey(ConfigurationKeys.WindowTitlePrefix));
+    }
+
+    [Fact]
+    public async Task TaskQueuePage_RuntimeReaders_HonorProfileScopedLegacyGuiKeys()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync();
+        var config = fixture.Config.CurrentConfig;
+        var profile = config.Profiles[config.CurrentProfile];
+        profile.Values[ConfigurationKeys.UseCardLog] = JsonValue.Create("False");
+
+        var taskQueue = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await taskQueue.InitializeAsync();
+
+        // WPF parity (ConfigurationHelper.GetValue is profile-first with global fallback).
+        Assert.False(taskQueue.UseCardLog);
+
+        // A global value remains the fallback when the profile does not carry the key.
+        profile.Values.Remove(ConfigurationKeys.UseCardLog);
+        config.GlobalValues[ConfigurationKeys.UseCardLog] = JsonValue.Create("False");
+        var fallbackQueue = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await fallbackQueue.InitializeAsync();
+        Assert.False(fallbackQueue.UseCardLog);
+
+        config.GlobalValues[ConfigurationKeys.UseCardLog] = JsonValue.Create("True");
+        profile.Values[ConfigurationKeys.UseCardLog] = JsonValue.Create("False");
+        var profileWinsQueue = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await profileWinsQueue.InitializeAsync();
+        Assert.False(profileWinsQueue.UseCardLog);
+    }
+
+    [Fact]
+    public async Task SaveGuiSettingsAsync_WritesLegacyDarkModeKey()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync();
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        vm.Theme = "Dark";
+        await vm.SaveGuiSettingsAsync();
+
+        Assert.Equal("Dark", ReadGlobalString(fixture.Config, "Theme.Mode"));
+        Assert.Equal("Dark", ReadGlobalString(fixture.Config, "GUI.DarkMode" /* legacy key; intentionally absent from the frozen 300-key baseline contract */));
+    }
+
+    [Fact]
+    public async Task LanguageList_HidesPallas_UnlessCheersUnlocked()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync();
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        Assert.DoesNotContain(vm.SupportedLanguages, option => option.Value == UiLanguageCatalog.PallasLanguage);
+
+        fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.Cheers] = JsonValue.Create(true);
+        var cheersVm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await cheersVm.InitializeAsync();
+        Assert.Contains(cheersVm.SupportedLanguages, option => option.Value == UiLanguageCatalog.PallasLanguage);
+    }
+
+    [Fact]
+    public async Task ChangeLanguage_LeavingPallas_RecordsHangoverAndSoberLanguage()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync();
+        fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.Localization] = JsonValue.Create("pallas");
+        fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.Cheers] = JsonValue.Create(true);
+
+        var coordinator = new UiLanguageCoordinator(fixture.Config);
+        Assert.Equal("pallas", coordinator.CurrentLanguage);
+        var result = await coordinator.ChangeLanguageAsync("en-us");
+
+        Assert.True(result.Success);
+        Assert.Equal("false", ReadGlobalString(fixture.Config, ConfigurationKeys.Cheers));
+        Assert.Equal("true", ReadGlobalString(fixture.Config, ConfigurationKeys.Hangover));
+        Assert.Equal("en-us", ReadGlobalString(fixture.Config, ConfigurationKeys.SoberLanguage));
+
+        // The hangover is completed once at the next startup and then cleared.
+        Assert.True(await coordinator.CompleteHangoverIfNeededAsync());
+        Assert.False(await coordinator.CompleteHangoverIfNeededAsync());
+        Assert.Equal("false", ReadGlobalString(fixture.Config, ConfigurationKeys.Hangover));
+    }
+
+    [Fact]
+    public async Task SoberOnExit_RestoresSoberLanguage()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync();
+        fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.Localization] = JsonValue.Create("pallas");
+        fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.Cheers] = JsonValue.Create(true);
+        fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.SoberLanguage] = JsonValue.Create("ja-jp");
+
+        var coordinator = new UiLanguageCoordinator(fixture.Config);
+        await coordinator.SoberOnExitAsync();
+
+        Assert.Equal("ja-jp", ReadGlobalString(fixture.Config, ConfigurationKeys.Localization));
+        Assert.Equal("ja-jp", coordinator.CurrentLanguage);
+        Assert.Equal("true", ReadGlobalString(fixture.Config, ConfigurationKeys.Hangover));
+        Assert.Equal("false", ReadGlobalString(fixture.Config, ConfigurationKeys.Cheers));
+
+        // A sober session is not rewritten on exit.
+        fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.Hangover] = JsonValue.Create(false);
+        fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.Cheers] = JsonValue.Create(false);
+        await coordinator.SoberOnExitAsync();
+        Assert.Equal("ja-jp", ReadGlobalString(fixture.Config, ConfigurationKeys.Localization));
+    }
+
+    [Fact]
+    public void DidYouBuyWine_DetectsWineInEnabledMallTaskBuyFirst()
+    {
+        var config = new UnifiedConfig();
+        config.Profiles["Default"] = new UnifiedProfile();
+        var mall = new UnifiedTaskItem
+        {
+            Type = "Mall",
+            IsEnabled = true,
+            Params = new JsonObject { ["buy_first"] = new JsonArray("招聘许可", "酒") },
+        };
+        config.Profiles["Default"].TaskQueue.Add(mall);
+        var now = new DateTime(2026, 10, 4, 12, 0, 0, DateTimeKind.Utc);
+
+        Assert.True(PallasLanguageState.DidYouBuyWine(config, "Official", now));
+
+        // Once recorded for the current YJ date, the trigger does not fire again.
+        PallasLanguageState.MarkWineBought(config, "Official", now);
+        Assert.False(PallasLanguageState.DidYouBuyWine(config, "Official", now));
+
+        // A disabled Mall task does not count (WPF requires the Mall task to run).
+        var disabledConfig = new UnifiedConfig();
+        disabledConfig.Profiles["Default"] = new UnifiedProfile();
+        disabledConfig.Profiles["Default"].TaskQueue.Add(new UnifiedTaskItem
+        {
+            Type = "Mall",
+            IsEnabled = false,
+            Params = new JsonObject { ["buy_first"] = new JsonArray("酒") },
+        });
+        Assert.False(PallasLanguageState.DidYouBuyWine(disabledConfig, "Official", now));
+
+        // No wine tokens, no trigger.
+        var soberConfig = new UnifiedConfig();
+        soberConfig.Profiles["Default"] = new UnifiedProfile();
+        soberConfig.Profiles["Default"].TaskQueue.Add(new UnifiedTaskItem
+        {
+            Type = "Mall",
+            IsEnabled = true,
+            Params = new JsonObject { ["buy_first"] = new JsonArray("招聘许可") },
+        });
+        Assert.False(PallasLanguageState.DidYouBuyWine(soberConfig, "Official", now));
+    }
+
+    [Fact]
+    public async Task OperNameLanguageForce_PreservedThroughLoadAndSave()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync();
+        fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.OperNameLanguage] = JsonValue.Create("OperNameLanguageForce.en-us");
+
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        Assert.Equal("OperNameLanguageForce.en-us", vm.OperNameLanguage);
+        Assert.NotNull(vm.SelectedOperNameLanguageOption);
+
+        // Unrelated GUI saves must not clobber the imported force value.
+        vm.UseTray = false;
+        await vm.SaveGuiSettingsAsync();
+        Assert.Equal("OperNameLanguageForce.en-us", ReadGlobalString(fixture.Config, ConfigurationKeys.OperNameLanguage));
+    }
+
+    [Fact]
+    public async Task GuiSettings_LegacyControls_RoundTrip()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync();
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        Assert.False(vm.HideCloseButton);
+        Assert.True(vm.UseCardLog);
+        Assert.Equal(100, vm.MaxNumberOfLogThumbnails);
+        Assert.False(vm.MainTasksInvertNullFunction);
+        Assert.False(vm.WindowTitleShowConfigurationName);
+        Assert.True(vm.WindowTitleShowConnectionPreset);
+        Assert.True(vm.WindowTitleShowConnectionAddress);
+        Assert.True(vm.WindowTitleShowClientType);
+
+        vm.HideCloseButton = true;
+        vm.UseCardLog = false;
+        vm.MaxNumberOfLogThumbnails = 42;
+        vm.MainTasksInvertNullFunction = true;
+        vm.WindowTitleShowConnectionAddress = false;
+        await vm.SaveGuiSettingsAsync();
+
+        Assert.Equal("True", ReadGlobalString(fixture.Config, ConfigurationKeys.HideCloseButton));
+        Assert.Equal("False", ReadGlobalString(fixture.Config, ConfigurationKeys.UseCardLog));
+        Assert.Equal("42", ReadGlobalString(fixture.Config, ConfigurationKeys.MaxNumberOfLogThumbnails));
+        Assert.Equal("True", ReadGlobalString(fixture.Config, "GUI.MainTasksInvertNullFunction"));
+        Assert.Equal("2 4", ReadGlobalString(fixture.Config, ConfigurationKeys.WindowTitleSelectShowList));
+
+        var reloaded = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await reloaded.InitializeAsync();
+        Assert.True(reloaded.HideCloseButton);
+        Assert.False(reloaded.UseCardLog);
+        Assert.Equal(42, reloaded.MaxNumberOfLogThumbnails);
+        Assert.True(reloaded.MainTasksInvertNullFunction);
+        Assert.False(reloaded.WindowTitleShowConnectionAddress);
     }
 
     [Fact]
@@ -885,9 +1218,10 @@ public sealed class SettingsGuiBackgroundFeatureTests
         Assert.Equal("SyncWithOs", vm.Theme);
         Assert.Equal("zh-cn", vm.Language);
         Assert.Equal(0, vm.BackgroundOpacity);
-        Assert.Equal(80, vm.BackgroundBlur);
+        Assert.Equal(50, vm.BackgroundBlur);
         Assert.Equal("Fill", vm.BackgroundStretchMode);
-        Assert.Equal(string.Empty, vm.BackgroundImagePath);
+        // WPF parity: a missing background file keeps the stored path and renders no image.
+        Assert.Equal(Path.Combine(fixture.Root, "missing.jpg"), vm.BackgroundImagePath);
         Assert.True(vm.HasGuiValidationMessage);
         Assert.True(vm.HasGuiSectionValidationMessage);
         Assert.True(vm.HasBackgroundValidationMessage);
@@ -1309,6 +1643,11 @@ public sealed class SettingsGuiBackgroundFeatureTests
         public int ChangeCallCount { get; private set; }
 
         public event EventHandler<UiLanguageChangedEventArgs>? LanguageChanged;
+        public bool IsPallasUnlocked => false;
+
+        public Task<bool> CompleteHangoverIfNeededAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(false);
+
 
         public Task<UiOperationResult<string>> ChangeLanguageAsync(string targetLanguage, CancellationToken cancellationToken = default)
         {
@@ -1332,6 +1671,11 @@ public sealed class SettingsGuiBackgroundFeatureTests
         public int ChangeCallCount { get; private set; }
 
         public event EventHandler<UiLanguageChangedEventArgs>? LanguageChanged;
+        public bool IsPallasUnlocked => false;
+
+        public Task<bool> CompleteHangoverIfNeededAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(false);
+
 
         public Task<UiOperationResult<string>> ChangeLanguageAsync(string targetLanguage, CancellationToken cancellationToken = default)
         {

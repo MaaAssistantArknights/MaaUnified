@@ -3276,6 +3276,42 @@ With save file: farm points through crafting (advanced).
   <data name="Settings.GUI.WindowTitleScrollable" xml:space="preserve">
     <value>Scroll window title</value>
   </data>
+  <data name="Settings.GUI.HideCloseButton" xml:space="preserve">
+    <value>Hide close button</value>
+  </data>
+  <data name="Settings.GUI.UseCardLog" xml:space="preserve">
+    <value>Use card style log</value>
+  </data>
+  <data name="Settings.GUI.MaxNumberOfLogThumbnails" xml:space="preserve">
+    <value>Maximum number of log thumbnails</value>
+  </data>
+  <data name="Settings.GUI.MainTasksInvertNullFunction" xml:space="preserve">
+    <value>Reverse right-click effect for main task</value>
+  </data>
+  <data name="Settings.GUI.MainTasksInvertNullFunctionTip" xml:space="preserve">
+    <value>Default: Apply once; Checked: Skip once</value>
+  </data>
+  <data name="Settings.GUI.WindowTitleSelectShowList" xml:space="preserve">
+    <value>Title Bar Display Content</value>
+  </data>
+  <data name="Settings.GUI.WindowTitleField.ConfigurationName" xml:space="preserve">
+    <value>Config</value>
+  </data>
+  <data name="Settings.GUI.WindowTitleField.ConnectionPreset" xml:space="preserve">
+    <value>Connection Preset</value>
+  </data>
+  <data name="Settings.GUI.WindowTitleField.ConnectionAddress" xml:space="preserve">
+    <value>Connection address</value>
+  </data>
+  <data name="Settings.GUI.WindowTitleField.ClientType" xml:space="preserve">
+    <value>Client Type</value>
+  </data>
+  <data name="Settings.GUI.PallasHangoverMessage" xml:space="preserve">
+    <value>I won't drink so much next time……</value>
+  </data>
+  <data name="Settings.Option.OperNameLanguage.Force" xml:space="preserve">
+    <value>Force use of specified language</value>
+  </data>
   <data name="Settings.Game.BlockSleep" xml:space="preserve">
     <value>Prevent the system from sleeping</value>
   </data>

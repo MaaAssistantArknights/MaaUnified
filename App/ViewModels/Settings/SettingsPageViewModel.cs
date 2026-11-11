@@ -46,10 +46,26 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
     private const int DefaultStallTimeoutMinutes = 25;
     private const int DefaultReminderIntervalMinutes = 30;
     private const int MaxTimeoutMinutes = 11451;
+    private const int DefaultMaxNumberOfLogThumbnails = 100;
+    private const int MaxNumberOfLogThumbnailsMin = 0;
+    private const int MaxNumberOfLogThumbnailsMax = 1000;
+    private const string DefaultWindowTitleSelectShowList = "2 3 4";
+
+    // WPF stores these GUI keys per configuration (ConfigurationHelper.GetValue is profile-first);
+    // Avalonia keeps them global (protected invariant). A WPF gui.json import lands them in the
+    // profile, so each GUI save drops the stale profile copies to keep the just-saved global values
+    // authoritative for the profile-first runtime readers (mirrors WPF's own promote-on-read).
+    // WindowTitlePrefix is intentionally excluded: nothing writes it to global scope, so its
+    // profile copy stays the source of truth.
+    private static readonly string[] WpfProfileScopedGuiKeysPromotedOnSave =
+    [
+        ConfigurationKeys.UseCardLog,
+        ConfigurationKeys.MaxNumberOfLogThumbnails,
+    ];
     private const int BackgroundOpacityMin = 0;
     private const int BackgroundOpacityMax = 100;
     private const int BackgroundBlurMin = 0;
-    private const int BackgroundBlurMax = 80;
+    private const int BackgroundBlurMax = 50;
     private const int DefaultUiScalePercent = 100;
     private const int UiScalePercentMin = 70;
     private const int UiScalePercentMax = 140;
@@ -304,10 +320,18 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
     private string _remoteControlStatusMessage = string.Empty;
     private string _remoteControlWarningMessage = string.Empty;
     private string _remoteControlErrorMessage = string.Empty;
-    private string _backgroundImagePath = string.Empty;
+    private string _backgroundImagePath = StartupShellSnapshot.DefaultBackgroundImagePath;
     private int _backgroundOpacity = 50;
     private int _backgroundBlur = 5;
     private string _backgroundStretchMode = DefaultBackgroundStretchMode;
+    private bool _hideCloseButton;
+    private bool _useCardLog = true;
+    private bool _mainTasksInvertNullFunction;
+    private int _maxNumberOfLogThumbnails = DefaultMaxNumberOfLogThumbnails;
+    private bool _windowTitleShowConfigurationName;
+    private bool _windowTitleShowConnectionPreset = true;
+    private bool _windowTitleShowConnectionAddress = true;
+    private bool _windowTitleShowClientType = true;
     private bool _hasPendingGuiChanges;
     private string _guiValidationMessage = string.Empty;
     private string _guiSectionValidationMessage = string.Empty;
@@ -489,7 +513,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
         ConnectionGameSharedState = connectionGameSharedState;
         ConnectionGameSharedState.SetLanguage(_language);
         runtime.AchievementTrackerService.SetCurrentLanguage(_language);
-        SupportedLanguages = SettingsOptionCatalog.BuildLanguageOptions();
+        RebuildLanguageOptions();
         runtime.AchievementTrackerService.StateChanged += OnAchievementTrackerStateChanged;
         (_updatePanelUiVersion, _updatePanelBuildTime) = BuildVersionUpdateUiMetadata();
         _updatePanelCoreVersion = ResolveCoreVersionOrUnknown();
@@ -673,7 +697,9 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
     public DisplayValueOption? SelectedOperNameLanguageOption
     {
         get => OperNameLanguageOptions.FirstOrDefault(
-            option => string.Equals(option.Value, OperNameLanguage, StringComparison.OrdinalIgnoreCase));
+            option => string.Equals(option.Value, OperNameLanguage, StringComparison.OrdinalIgnoreCase)
+                || (SettingsOptionCatalog.IsOperNameLanguageForceValue(OperNameLanguage)
+                    && string.Equals(option.Value, SettingsOptionCatalog.OperNameLanguageForceOptionValue, StringComparison.Ordinal)));
         set
         {
             if (value is null)
@@ -928,9 +954,15 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
         get => _operNameLanguage;
         set
         {
+            var hadForceOption = SettingsOptionCatalog.IsOperNameLanguageForceValue(_operNameLanguage);
             var normalized = NormalizeOperNameLanguage(value);
             if (SetProperty(ref _operNameLanguage, normalized))
             {
+                if (hadForceOption != SettingsOptionCatalog.IsOperNameLanguageForceValue(_operNameLanguage))
+                {
+                    RebuildGuiOptionLists();
+                }
+
                 OnPropertyChanged(nameof(SelectedOperNameLanguageOption));
                 MarkGuiSettingsDirty();
                 NotifyGuiSettingsPreviewChanged();
@@ -1045,6 +1077,114 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
         set
         {
             if (SetProperty(ref _windowTitleScrollable, value))
+            {
+                MarkGuiSettingsDirty();
+                NotifyGuiSettingsPreviewChanged();
+            }
+        }
+    }
+
+    public bool HideCloseButton
+    {
+        get => _hideCloseButton;
+        set
+        {
+            if (SetProperty(ref _hideCloseButton, value))
+            {
+                MarkGuiSettingsDirty();
+                NotifyGuiSettingsPreviewChanged();
+            }
+        }
+    }
+
+    public bool UseCardLog
+    {
+        get => _useCardLog;
+        set
+        {
+            if (SetProperty(ref _useCardLog, value))
+            {
+                OnPropertyChanged(nameof(ShowMaxNumberOfLogThumbnails));
+                MarkGuiSettingsDirty();
+                NotifyGuiSettingsPreviewChanged();
+            }
+        }
+    }
+
+    public bool ShowMaxNumberOfLogThumbnails => UseCardLog;
+
+    public bool MainTasksInvertNullFunction
+    {
+        get => _mainTasksInvertNullFunction;
+        set
+        {
+            if (SetProperty(ref _mainTasksInvertNullFunction, value))
+            {
+                MarkGuiSettingsDirty();
+                NotifyGuiSettingsPreviewChanged();
+            }
+        }
+    }
+
+    public int MaxNumberOfLogThumbnails
+    {
+        get => _maxNumberOfLogThumbnails;
+        set
+        {
+            var clamped = Math.Clamp(value, MaxNumberOfLogThumbnailsMin, MaxNumberOfLogThumbnailsMax);
+            if (SetProperty(ref _maxNumberOfLogThumbnails, clamped))
+            {
+                MarkGuiSettingsDirty();
+                NotifyGuiSettingsPreviewChanged();
+            }
+        }
+    }
+
+    public bool WindowTitleShowConfigurationName
+    {
+        get => _windowTitleShowConfigurationName;
+        set
+        {
+            if (SetProperty(ref _windowTitleShowConfigurationName, value))
+            {
+                MarkGuiSettingsDirty();
+                NotifyGuiSettingsPreviewChanged();
+            }
+        }
+    }
+
+    public bool WindowTitleShowConnectionPreset
+    {
+        get => _windowTitleShowConnectionPreset;
+        set
+        {
+            if (SetProperty(ref _windowTitleShowConnectionPreset, value))
+            {
+                MarkGuiSettingsDirty();
+                NotifyGuiSettingsPreviewChanged();
+            }
+        }
+    }
+
+    public bool WindowTitleShowConnectionAddress
+    {
+        get => _windowTitleShowConnectionAddress;
+        set
+        {
+            if (SetProperty(ref _windowTitleShowConnectionAddress, value))
+            {
+                MarkGuiSettingsDirty();
+                NotifyGuiSettingsPreviewChanged();
+            }
+        }
+    }
+
+    public bool WindowTitleShowClientType
+    {
+        get => _windowTitleShowClientType;
+        set
+        {
+            if (SetProperty(ref _windowTitleShowClientType, value))
             {
                 MarkGuiSettingsDirty();
                 NotifyGuiSettingsPreviewChanged();
@@ -2752,6 +2892,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
             if (SetProperty(ref _backgroundImagePath, normalized))
             {
                 MarkGuiSettingsDirty(saveImmediately: false);
+                NotifyGuiSettingsPreviewChanged();
             }
         }
     }
@@ -2765,6 +2906,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
             if (SetProperty(ref _backgroundOpacity, clamped))
             {
                 MarkGuiSettingsDirty();
+                NotifyGuiSettingsPreviewChanged();
             }
         }
     }
@@ -2778,6 +2920,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
             if (SetProperty(ref _backgroundBlur, clamped))
             {
                 MarkGuiSettingsDirty();
+                NotifyGuiSettingsPreviewChanged();
             }
         }
     }
@@ -2792,6 +2935,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
             {
                 OnPropertyChanged(nameof(SelectedBackgroundStretchModeOption));
                 MarkGuiSettingsDirty();
+                NotifyGuiSettingsPreviewChanged();
             }
         }
     }
@@ -3592,6 +3736,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
         try
         {
             await PersistPlatformHotkeyDefaultsMigrationIfNeededAsync(cancellationToken);
+            await CompletePallasHangoverIfNeededAsync(cancellationToken);
             await LoadInitialSettingsAsync(cancellationToken);
             await RefreshConfigurationProfilesAsync(cancellationToken);
             _deferredSectionDataLoadEnabled = _deferredSectionDataLoadRequested;
@@ -3617,6 +3762,30 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
             _autoSaveReady = initialized;
             ResumeAutoSave();
         }
+    }
+
+    private async Task CompletePallasHangoverIfNeededAsync(CancellationToken cancellationToken)
+    {
+        bool hangoverCompleted;
+        try
+        {
+            hangoverCompleted = await _uiLanguageCoordinator.CompleteHangoverIfNeededAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            await RecordErrorAsync("Settings.Gui.PallasHangover", "Failed to complete the Pallas hangover state.", ex);
+            return;
+        }
+
+        if (!hangoverCompleted)
+        {
+            return;
+        }
+
+        RebuildLanguageOptions();
+        var message = LocalizeSettingsText("Settings.GUI.PallasHangoverMessage", "下次不能喝、喝这么多了……");
+        StatusMessage = message;
+        await RecordEventAsync("Settings.Gui.PallasHangover", "Pallas hangover completed at startup.", cancellationToken);
     }
 
     private async Task PersistPlatformHotkeyDefaultsMigrationIfNeededAsync(CancellationToken cancellationToken)
@@ -5084,11 +5253,27 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
 
             var snapshot = BuildNormalizedGuiSnapshot();
             var previousSoftwareRendering = ReadGlobalBool(Runtime.ConfigurationService.CurrentConfig, SoftwareRenderingConfigKey, false);
-            var previousBackgroundImagePath = ReadGlobalString(Runtime.ConfigurationService.CurrentConfig, ConfigurationKeys.BackgroundImagePath, string.Empty);
+            // Revert target for a rejected background path is the effective previous value, so a
+            // missing key maps to the conventional default (N2 missing-vs-empty semantics). Using a
+            // plain empty fallback here would turn "never written -> default applies" into an
+            // explicit clear the user never requested, and would also spuriously count the first
+            // fresh-install save as a background customization below.
+            var previousBackgroundImagePath = ReadBackgroundImagePath(Runtime.ConfigurationService.CurrentConfig);
             ApplyGuiSnapshotWithoutAutoSave(snapshot);
 
+            // WPF parity (BackgroundSettingsUserControlModel): a missing background image only means
+            // "no background rendered"; it must not block persisting the remaining GUI settings.
+            // The invalid path itself stays unpersisted as a draft and keeps the batch marked pending.
             var validation = ValidateGuiSnapshot(snapshot);
-            if (!validation.Success)
+            var snapshotToSave = snapshot;
+            var backgroundPathRejected = false;
+            if (!validation.Success
+                && string.Equals(validation.Error?.Code, UiErrorCode.BackgroundImagePathNotFound, StringComparison.Ordinal))
+            {
+                backgroundPathRejected = true;
+                snapshotToSave = snapshot with { BackgroundImagePath = previousBackgroundImagePath };
+            }
+            else if (!validation.Success)
             {
                 HasPendingGuiChanges = true;
                 SetGuiValidationMessageForResult(validation);
@@ -5098,9 +5283,10 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
             }
 
             var saveResult = await SaveScopedSettingsAsync(
-                globalUpdates: snapshot.ToGlobalSettingUpdates(),
-                profileUpdates: snapshot.ToProfileSettingUpdates(),
+                globalUpdates: snapshotToSave.ToGlobalSettingUpdates(),
+                profileUpdates: snapshotToSave.ToProfileSettingUpdates(),
                 successScope: "Settings.Save.GuiBatch",
+                profileKeysToRemove: WpfProfileScopedGuiKeysPromotedOnSave,
                 cancellationToken: cancellationToken);
             if (!await ApplyResultAsync(saveResult, "Settings.Save.GuiBatch", cancellationToken))
             {
@@ -5109,13 +5295,26 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
                 return;
             }
 
-            HasPendingGuiChanges = false;
-            ClearGuiValidationMessages();
-            LastSuccessfulGuiSaveAt = DateTimeOffset.Now;
-            RaiseGuiSettingsApplied(snapshot);
+            HasPendingGuiChanges = backgroundPathRejected;
+            if (backgroundPathRejected)
+            {
+                SetGuiValidationMessageForResult(validation);
+                LastErrorMessage = validation.Message;
+                await RecordEventAsync(
+                    "Settings.Save.GuiBatch.BackgroundPathRejected",
+                    validation.Message,
+                    cancellationToken);
+            }
+            else
+            {
+                ClearGuiValidationMessages();
+            }
 
-            if (!string.IsNullOrWhiteSpace(snapshot.BackgroundImagePath)
-                && !string.Equals(previousBackgroundImagePath, snapshot.BackgroundImagePath, StringComparison.OrdinalIgnoreCase))
+            LastSuccessfulGuiSaveAt = DateTimeOffset.Now;
+            RaiseGuiSettingsApplied(snapshotToSave);
+
+            if (!string.IsNullOrWhiteSpace(snapshotToSave.BackgroundImagePath)
+                && !string.Equals(previousBackgroundImagePath, snapshotToSave.BackgroundImagePath, StringComparison.OrdinalIgnoreCase))
             {
                 _ = Runtime.AchievementTrackerService.Unlock("CustomizationMaster");
             }
@@ -5949,6 +6148,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
         OnPropertyChanged(nameof(HotkeyCaptureGuideText));
 
         RebuildGuiOptionLists();
+        RebuildLanguageOptions();
         RebuildSections(SelectedSection?.Key);
         RebuildVersionUpdateOptionLists();
         if (IsSettingsDataBucketLoaded(SettingsDataBucketStartPerformance))
@@ -6886,7 +7086,11 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
 
     private UiOperationResult ValidateGuiSnapshot(GuiSettingsSnapshot snapshot)
     {
-        if (!string.IsNullOrWhiteSpace(snapshot.BackgroundImagePath) && !File.Exists(snapshot.BackgroundImagePath))
+        // WPF parity (BackgroundSettingsUserControlModel): the conventional default path is always
+        // acceptable even while the file is missing; it simply renders no background.
+        if (!string.IsNullOrWhiteSpace(snapshot.BackgroundImagePath)
+            && !string.Equals(snapshot.BackgroundImagePath, StartupShellSnapshot.DefaultBackgroundImagePath, StringComparison.OrdinalIgnoreCase)
+            && !File.Exists(snapshot.BackgroundImagePath))
         {
             return UiOperationResult.Fail(
                 UiErrorCode.BackgroundImagePathNotFound,
@@ -6913,7 +7117,49 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
             BackgroundImagePath: NormalizeBackgroundPath(BackgroundImagePath),
             BackgroundOpacity: Math.Clamp(BackgroundOpacity, BackgroundOpacityMin, BackgroundOpacityMax),
             BackgroundBlur: Math.Clamp(BackgroundBlur, BackgroundBlurMin, BackgroundBlurMax),
-            BackgroundStretchMode: NormalizeBackgroundStretchMode(BackgroundStretchMode));
+            BackgroundStretchMode: NormalizeBackgroundStretchMode(BackgroundStretchMode),
+            HideCloseButton: HideCloseButton,
+            UseCardLog: UseCardLog,
+            MainTasksInvertNullFunction: MainTasksInvertNullFunction,
+            MaxNumberOfLogThumbnails: Math.Clamp(MaxNumberOfLogThumbnails, MaxNumberOfLogThumbnailsMin, MaxNumberOfLogThumbnailsMax),
+            WindowTitleSelectShowList: BuildWindowTitleSelectShowList());
+    }
+
+    private string BuildWindowTitleSelectShowList()
+    {
+        var selected = new List<string>(4);
+        if (WindowTitleShowConfigurationName)
+        {
+            selected.Add("1");
+        }
+
+        if (WindowTitleShowConnectionPreset)
+        {
+            selected.Add("2");
+        }
+
+        if (WindowTitleShowConnectionAddress)
+        {
+            selected.Add("3");
+        }
+
+        if (WindowTitleShowClientType)
+        {
+            selected.Add("4");
+        }
+
+        return string.Join(' ', selected);
+    }
+
+    private void ApplyWindowTitleSelectShowList(string? raw)
+    {
+        var tokens = new HashSet<string>(
+            (raw ?? string.Empty).Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+            StringComparer.Ordinal);
+        WindowTitleShowConfigurationName = tokens.Contains("1");
+        WindowTitleShowConnectionPreset = tokens.Contains("2");
+        WindowTitleShowConnectionAddress = tokens.Contains("3");
+        WindowTitleShowClientType = tokens.Contains("4");
     }
 
     private void ApplyGuiSnapshotWithoutAutoSave(GuiSettingsSnapshot snapshot)
@@ -6937,6 +7183,11 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
             BackgroundOpacity = snapshot.BackgroundOpacity;
             BackgroundBlur = snapshot.BackgroundBlur;
             BackgroundStretchMode = snapshot.BackgroundStretchMode;
+            HideCloseButton = snapshot.HideCloseButton;
+            UseCardLog = snapshot.UseCardLog;
+            MainTasksInvertNullFunction = snapshot.MainTasksInvertNullFunction;
+            MaxNumberOfLogThumbnails = snapshot.MaxNumberOfLogThumbnails;
+            ApplyWindowTitleSelectShowList(snapshot.WindowTitleSelectShowList);
         }
         finally
         {
@@ -7041,11 +7292,19 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
         return "Github";
     }
 
+    private void RebuildLanguageOptions()
+    {
+        // WPF parity (SettingsViewModel.InitUiSettings): Pallas is listed only while Cheers is unlocked.
+        SupportedLanguages = SettingsOptionCatalog.BuildLanguageOptions(_uiLanguageCoordinator.IsPallasUnlocked);
+        OnPropertyChanged(nameof(SelectedLanguageOption));
+        OnPropertyChanged(nameof(SelectedLanguageValue));
+    }
+
     private void RebuildGuiOptionLists()
     {
         ThemeOptions = SettingsOptionCatalog.BuildThemeOptions(Language);
         BackgroundStretchModes = SettingsOptionCatalog.BuildBackgroundStretchOptions(Language);
-        OperNameLanguageOptions = SettingsOptionCatalog.BuildOperNameLanguageOptions(Language);
+        OperNameLanguageOptions = SettingsOptionCatalog.BuildOperNameLanguageOptions(Language, OperNameLanguage);
         InverseClearModeOptions = SettingsOptionCatalog.BuildInverseClearModeOptions(Language);
 
         OnPropertyChanged(nameof(SelectedThemeOption));
@@ -7409,9 +7668,9 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
             var backgroundWarnings = new List<string>();
             var hotkeyWarnings = new List<string>();
 
-        var rawTheme = ReadGlobalString(config, ThemeModeKey, DefaultTheme);
+        var rawTheme = ReadThemeModeWithLegacyFallback(config);
         var rawLanguage = ReadGlobalString(config, ConfigurationKeys.Localization, DefaultLanguage);
-        var rawBackgroundPath = ReadGlobalString(config, ConfigurationKeys.BackgroundImagePath, string.Empty);
+        var rawBackgroundPath = ReadBackgroundImagePath(config);
         var rawOpacity = ReadGlobalInt(config, ConfigurationKeys.BackgroundOpacity, _backgroundOpacity);
         var rawBlur = ReadGlobalInt(config, ConfigurationKeys.BackgroundBlurEffectRadius, _backgroundBlur);
         var rawStretchMode = ReadGlobalString(config, ConfigurationKeys.BackgroundImageStretchMode, DefaultBackgroundStretchMode);
@@ -7439,10 +7698,14 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
         }
 
         var backgroundPath = NormalizeBackgroundPath(rawBackgroundPath);
-        if (!string.IsNullOrWhiteSpace(backgroundPath) && !File.Exists(backgroundPath))
+        // WPF parity (BackgroundSettingsUserControlModel.RefreshBackgroundImage): a missing file
+        // means "no background rendered"; the stored path itself is preserved, not reset. The
+        // conventional default path is expected to be absent on fresh installs, so it never warns.
+        if (!string.IsNullOrWhiteSpace(backgroundPath)
+            && !string.Equals(backgroundPath, StartupShellSnapshot.DefaultBackgroundImagePath, StringComparison.OrdinalIgnoreCase)
+            && !File.Exists(backgroundPath))
         {
-            backgroundWarnings.Add($"Background path not found and reset: {backgroundPath}");
-            backgroundPath = string.Empty;
+            backgroundWarnings.Add($"Background path not found; rendering without background: {backgroundPath}");
         }
 
         var opacity = Math.Clamp(rawOpacity, BackgroundOpacityMin, BackgroundOpacityMax);
@@ -7503,6 +7766,18 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
             UseNotify = ReadGlobalBool(config, ConfigurationKeys.UseNotify, true);
             MinimizeToTray = ReadGlobalBool(config, ConfigurationKeys.MinimizeToTray, false);
             WindowTitleScrollable = ReadGlobalBool(config, ConfigurationKeys.WindowTitleScrollable, false);
+            HideCloseButton = ReadGlobalBool(config, ConfigurationKeys.HideCloseButton, false);
+            UseCardLog = ReadProfileBool(config, ConfigurationKeys.UseCardLog, true);
+            MainTasksInvertNullFunction = ReadGlobalBool(
+                config,
+                TaskQueueEnabledState.MainTasksInvertNullFunctionKey,
+                false);
+            MaxNumberOfLogThumbnails = Math.Clamp(
+                ReadProfileInt(config, ConfigurationKeys.MaxNumberOfLogThumbnails, DefaultMaxNumberOfLogThumbnails),
+                MaxNumberOfLogThumbnailsMin,
+                MaxNumberOfLogThumbnailsMax);
+            ApplyWindowTitleSelectShowList(
+                ReadGlobalString(config, ConfigurationKeys.WindowTitleSelectShowList, DefaultWindowTitleSelectShowList));
             UiScalePercent = ReadGlobalInt(config, ConfigurationKeys.UiScalePercent, DefaultUiScalePercent);
             UseSoftwareRendering = rawUseSoftwareRendering;
             DeveloperModeEnabled = ReadGlobalBool(config, DeveloperModeConfigKey, false);
@@ -8094,9 +8369,9 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
         var backgroundWarnings = new List<string>();
         var hotkeyWarnings = new List<string>();
 
-        var rawTheme = ReadGlobalString(config, ThemeModeKey, DefaultTheme);
+        var rawTheme = ReadThemeModeWithLegacyFallback(config);
         var rawLanguage = ReadGlobalString(config, ConfigurationKeys.Localization, DefaultLanguage);
-        var rawBackgroundPath = ReadGlobalString(config, ConfigurationKeys.BackgroundImagePath, string.Empty);
+        var rawBackgroundPath = ReadBackgroundImagePath(config);
         var rawOpacity = ReadGlobalInt(config, ConfigurationKeys.BackgroundOpacity, _backgroundOpacity);
         var rawBlur = ReadGlobalInt(config, ConfigurationKeys.BackgroundBlurEffectRadius, _backgroundBlur);
         var rawStretchMode = ReadGlobalString(config, ConfigurationKeys.BackgroundImageStretchMode, DefaultBackgroundStretchMode);
@@ -8124,10 +8399,14 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
         }
 
         var backgroundPath = NormalizeBackgroundPath(rawBackgroundPath);
-        if (!string.IsNullOrWhiteSpace(backgroundPath) && !File.Exists(backgroundPath))
+        // WPF parity (BackgroundSettingsUserControlModel.RefreshBackgroundImage): a missing file
+        // means "no background rendered"; the stored path itself is preserved, not reset. The
+        // conventional default path is expected to be absent on fresh installs, so it never warns.
+        if (!string.IsNullOrWhiteSpace(backgroundPath)
+            && !string.Equals(backgroundPath, StartupShellSnapshot.DefaultBackgroundImagePath, StringComparison.OrdinalIgnoreCase)
+            && !File.Exists(backgroundPath))
         {
-            backgroundWarnings.Add($"Background path not found and reset: {backgroundPath}");
-            backgroundPath = string.Empty;
+            backgroundWarnings.Add($"Background path not found; rendering without background: {backgroundPath}");
         }
 
         var opacity = Math.Clamp(rawOpacity, BackgroundOpacityMin, BackgroundOpacityMax);
@@ -8177,6 +8456,18 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
                 UseTray = ReadGlobalBool(config, ConfigurationKeys.UseTray, true);
                 MinimizeToTray = ReadGlobalBool(config, ConfigurationKeys.MinimizeToTray, false);
                 WindowTitleScrollable = ReadGlobalBool(config, ConfigurationKeys.WindowTitleScrollable, false);
+            HideCloseButton = ReadGlobalBool(config, ConfigurationKeys.HideCloseButton, false);
+            UseCardLog = ReadProfileBool(config, ConfigurationKeys.UseCardLog, true);
+            MainTasksInvertNullFunction = ReadGlobalBool(
+                config,
+                TaskQueueEnabledState.MainTasksInvertNullFunctionKey,
+                false);
+            MaxNumberOfLogThumbnails = Math.Clamp(
+                ReadProfileInt(config, ConfigurationKeys.MaxNumberOfLogThumbnails, DefaultMaxNumberOfLogThumbnails),
+                MaxNumberOfLogThumbnailsMin,
+                MaxNumberOfLogThumbnailsMax);
+            ApplyWindowTitleSelectShowList(
+                ReadGlobalString(config, ConfigurationKeys.WindowTitleSelectShowList, DefaultWindowTitleSelectShowList));
                 UiScalePercent = ReadGlobalInt(config, ConfigurationKeys.UiScalePercent, DefaultUiScalePercent);
                 UseSoftwareRendering = rawUseSoftwareRendering;
                 DeveloperModeEnabled = ReadGlobalBool(config, DeveloperModeConfigKey, false);
@@ -8485,6 +8776,23 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
         return UiLanguageCatalog.Normalize(value);
     }
 
+    private static string ReadThemeModeWithLegacyFallback(UnifiedConfig config)
+    {
+        // WPF parity: legacy configs only carry GUI.DarkMode (Light/Dark/SyncWithOs). Consume it when the
+        // Avalonia-specific Theme.Mode key has never been written; the next GUI save persists both keys.
+        if (config.GlobalValues.ContainsKey(ThemeModeKey))
+        {
+            return ReadGlobalString(config, ThemeModeKey, DefaultTheme);
+        }
+
+        if (config.GlobalValues.ContainsKey(StartupShellSnapshot.LegacyDarkModeKey))
+        {
+            return ReadGlobalString(config, StartupShellSnapshot.LegacyDarkModeKey, DefaultTheme);
+        }
+
+        return DefaultTheme;
+    }
+
     private string NormalizeBackgroundStretchMode(string? value)
     {
         var normalized = value?.Trim();
@@ -8521,6 +8829,22 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
     private string NormalizeOperNameLanguage(string? value)
     {
         var normalized = (value ?? string.Empty).Trim();
+        if (SettingsOptionCatalog.IsOperNameLanguageForceValue(normalized))
+        {
+            // WPF keeps imported OperNameLanguageForce.<language> values; never clobber them.
+            return SettingsOptionCatalog.OperNameLanguageForcePrefix
+                + UiLanguageCatalog.Normalize(normalized[SettingsOptionCatalog.OperNameLanguageForcePrefix.Length..]);
+        }
+
+        if (string.Equals(normalized, SettingsOptionCatalog.OperNameLanguageForceOptionValue, StringComparison.OrdinalIgnoreCase))
+        {
+            // Selecting the bare force entry is a no-op while a forced value is active (WPF setter parity);
+            // otherwise it falls back to the default mode.
+            return SettingsOptionCatalog.IsOperNameLanguageForceValue(_operNameLanguage)
+                ? _operNameLanguage
+                : DefaultOperNameLanguage;
+        }
+
         return OperNameLanguageOptions.FirstOrDefault(
                 option => string.Equals(option.Value, normalized, StringComparison.OrdinalIgnoreCase))
             ?.Value
@@ -8539,6 +8863,20 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
     private static string NormalizeBackgroundPath(string? value)
     {
         return value?.Trim() ?? string.Empty;
+    }
+
+    private static string ReadBackgroundImagePath(UnifiedConfig config)
+    {
+        // WPF parity (BackgroundSettingsUserControlModel): the conventional default path applies
+        // only when the key was never written; an explicitly cleared (empty) stored value stays
+        // empty so users can remove the background.
+        if (!config.GlobalValues.TryGetValue(ConfigurationKeys.BackgroundImagePath, out var node) || node is null)
+        {
+            return StartupShellSnapshot.DefaultBackgroundImagePath;
+        }
+
+        return NormalizeBackgroundPath(
+            node is JsonValue value && value.TryGetValue(out string? text) ? text : node.ToString());
     }
 
     private GpuPreference BuildCurrentGpuPreference()
@@ -9979,6 +10317,11 @@ public sealed record GuiSettingsSnapshot(
     int BackgroundOpacity,
     int BackgroundBlur,
     string BackgroundStretchMode,
+    bool HideCloseButton,
+    bool UseCardLog,
+    bool MainTasksInvertNullFunction,
+    int MaxNumberOfLogThumbnails,
+    string WindowTitleSelectShowList,
     bool DeveloperModeEnabled = false)
 {
     public IReadOnlyDictionary<string, string> ToGlobalSettingUpdates()
@@ -9987,6 +10330,8 @@ public sealed record GuiSettingsSnapshot(
         {
             ["Theme.Mode"] = Theme,
             [ConfigurationKeys.InverseClearMode] = InverseClearMode,
+            // Keep the legacy WPF key in sync so imported/shared configs behave identically (values match 1:1).
+            [StartupShellSnapshot.LegacyDarkModeKey] = Theme,
             [ConfigurationKeys.UseTray] = UseTray.ToString(),
             [ConfigurationKeys.UseNotify] = UseNotify.ToString(),
             [ConfigurationKeys.MinimizeToTray] = MinimizeToTray.ToString(),
@@ -10001,6 +10346,11 @@ public sealed record GuiSettingsSnapshot(
             [ConfigurationKeys.BackgroundOpacity] = BackgroundOpacity.ToString(),
             [ConfigurationKeys.BackgroundBlurEffectRadius] = BackgroundBlur.ToString(),
             [ConfigurationKeys.BackgroundImageStretchMode] = BackgroundStretchMode,
+            [ConfigurationKeys.HideCloseButton] = HideCloseButton.ToString(),
+            [ConfigurationKeys.UseCardLog] = UseCardLog.ToString(),
+            [TaskQueueEnabledState.MainTasksInvertNullFunctionKey] = MainTasksInvertNullFunction.ToString(),
+            [ConfigurationKeys.MaxNumberOfLogThumbnails] = MaxNumberOfLogThumbnails.ToString(CultureInfo.InvariantCulture),
+            [ConfigurationKeys.WindowTitleSelectShowList] = WindowTitleSelectShowList,
         };
     }
 

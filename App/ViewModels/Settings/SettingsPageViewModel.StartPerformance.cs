@@ -111,6 +111,7 @@ public sealed partial class SettingsPageViewModel
         IReadOnlyDictionary<string, string>? globalUpdates = null,
         IReadOnlyDictionary<string, string>? profileUpdates = null,
         string successScope = "Settings.SaveScoped",
+        IReadOnlyList<string>? profileKeysToRemove = null,
         CancellationToken cancellationToken = default)
     {
         globalUpdates ??= EmptySettingUpdates;
@@ -171,6 +172,14 @@ public sealed partial class SettingsPageViewModel
                     }
 
                     profile.Values[key] = JsonValue.Create(value);
+                }
+
+                if (profileKeysToRemove is not null)
+                {
+                    foreach (var key in profileKeysToRemove)
+                    {
+                        profile.Values.Remove(key);
+                    }
                 }
             }
 

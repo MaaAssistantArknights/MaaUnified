@@ -143,6 +143,11 @@ public sealed class UiFontFamilyResolverTests
 
         public event EventHandler<UiLanguageChangedEventArgs>? LanguageChanged;
 
+        public bool IsPallasUnlocked => false;
+
+        public Task<bool> CompleteHangoverIfNeededAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(false);
+
         public Task<UiOperationResult<string>> ChangeLanguageAsync(string targetLanguage, CancellationToken cancellationToken = default)
         {
             var previous = CurrentLanguage;

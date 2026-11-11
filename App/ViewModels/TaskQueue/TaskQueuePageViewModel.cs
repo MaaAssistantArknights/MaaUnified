@@ -416,6 +416,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     private int _stoneUsedTimes;
     private string _logTimestampFormat = DefaultLogItemDateFormat;
     private bool _useSystemNotifications = true;
+    private bool _useCardLog = true;
     private string _lastCompletionNotificationRunId = string.Empty;
     private bool _selectedTaskSettingsHostResetPending;
     private bool _isSelectedTaskBindingPending;
@@ -524,6 +525,15 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     public ObservableCollection<TaskQueueTaskPanelViewModel> TaskPanels { get; }
 
     public ObservableCollection<TaskQueueLogCardViewModel> LogCards { get; }
+
+    /// <summary>
+    /// WPF parity (GUI.UseCardLog): card-style log rendering vs. plain rows.
+    /// </summary>
+    public bool UseCardLog
+    {
+        get => _useCardLog;
+        private set => SetProperty(ref _useCardLog, value);
+    }
 
     public ObservableCollection<TaskQueueLogEntryViewModel> OverlayLogs { get; }
 
@@ -1421,6 +1431,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
         _logTimestampFormat = NormalizeLogTimestampFormat(snapshot.LogItemDateFormatString);
         _useSystemNotifications = snapshot.UseNotify;
+        UseCardLog = snapshot.UseCardLog;
         ApplySelectionBatchMode(snapshot.InverseClearMode);
         RefreshRoguelikeGuiDependentOptions();
     }
@@ -5796,10 +5807,12 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
     private void TrimLogThumbnails()
     {
+        // WPF parity (ConfigurationHelper.GetValue is profile-first with global fallback): honor
+        // imported profile-scoped values even before a GUI save promotes them to global scope.
         var maxThumbnails = Math.Max(
             0,
-            TryReadGlobalInt(
-                Runtime.ConfigurationService.CurrentConfig.GlobalValues,
+            TryReadProfileInt(
+                Runtime.ConfigurationService.CurrentConfig,
                 MAAUnified.Compat.Constants.ConfigurationKeys.MaxNumberOfLogThumbnails,
                 100));
         if (maxThumbnails == 0)
@@ -5929,6 +5942,39 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 GetRootText("RoutingRestartTooManyBattles", "Too many battles ahead: {0}, restarting route"),
                 cost),
             Level: "WARN");
+    }
+
+    /// <summary>
+    /// WPF parity (AsstProxy AllTasksComplete + SettingsViewModel.DidYouBuyWine): when the main task
+    /// queue completes and the current profile has an enabled Mall task whose buy-first list contains
+    /// wine, unlock the Pallas language and switch to it (Avalonia applies the language live, so no
+    /// WPF-style restart prompt is needed).
+    /// </summary>
+    private async Task TryTriggerPallasWineAsync(DateTimeOffset timestamp)
+    {
+        try
+        {
+            if (Runtime.UiLanguageCoordinator is not UiLanguageCoordinator coordinator)
+            {
+                return;
+            }
+
+            var config = Runtime.ConfigurationService.CurrentConfig;
+            var clientType = TryReadProfileString(config, ConfigurationKeys.ClientType, string.Empty);
+            if (!PallasLanguageState.DidYouBuyWine(config, clientType, timestamp.UtcDateTime))
+            {
+                return;
+            }
+
+            var result = await coordinator.DrinkWineAsync(clientType);
+            await RecordEventAsync(
+                "TaskQueue.Pallas.DrinkWine",
+                $"Pallas wine trigger: success={result.Success}; message={result.Message}");
+        }
+        catch (Exception ex)
+        {
+            await RecordErrorAsync("TaskQueue.Pallas.DrinkWine", "Pallas wine trigger failed.", ex);
+        }
     }
 
     private TaskQueueCallbackUserLog BuildAllTasksCompletedLog(DateTimeOffset timestamp)
@@ -7516,6 +7562,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                         _lastPostActionRunId = runId;
                         await ExecutePostActionAfterCompletionAsync(callback, runId, taskIndex);
                     }
+
+                    await TryTriggerPallasWineAsync(callback.Timestamp);
                 }
 
                 break;
@@ -8639,6 +8687,11 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         _useSystemNotifications = TryReadGlobalBool(
             Runtime.ConfigurationService.CurrentConfig.GlobalValues,
             ConfigurationKeys.UseNotify,
+            fallback: true);
+        // WPF parity (ConfigurationHelper.GetValue is profile-first with global fallback).
+        UseCardLog = TryReadProfileBool(
+            Runtime.ConfigurationService.CurrentConfig,
+            ConfigurationKeys.UseCardLog,
             fallback: true);
         RefreshSelectionBatchModeFromConfig();
         RefreshRoguelikeGuiDependentOptions();

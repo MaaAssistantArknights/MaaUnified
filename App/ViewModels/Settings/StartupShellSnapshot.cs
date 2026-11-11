@@ -13,6 +13,7 @@ public sealed record StartupShellSnapshot(
     bool MinimizeToTray,
     bool DeveloperModeEnabled,
     bool WindowTitleScrollable,
+    bool HideCloseButton,
     int UiScalePercent,
     bool UseSoftwareRendering,
     string LogItemDateFormatString,
@@ -21,11 +22,17 @@ public sealed record StartupShellSnapshot(
     int BackgroundBlur,
     string BackgroundStretchMode,
     string HotkeyShowGui,
-    string HotkeyLinkStart,
-    bool HideCloseButton = false)
+    string HotkeyLinkStart)
 {
     private const string ThemeModeKey = "Theme.Mode";
-    private const string DefaultTheme = "SyncWithOs";
+
+    // Legacy WPF theme key (GUI.DarkMode). Kept out of Compat ConfigurationKeys on purpose: the
+    // frozen baseline contract (BaselineCoverageTests) fixes the public legacy key set at 300.
+    internal const string LegacyDarkModeKey = "GUI.DarkMode";
+
+    // Frozen WPF default (BackgroundSettingsUserControlModel.cs: GetGlobalValue fallback).
+    internal const string DefaultBackgroundImagePath = "background/background.png";
+    private const string DefaultTheme = "Light";
     private const string DefaultLanguage = UiLanguageCatalog.DefaultLanguage;
     private const string DefaultBackgroundStretchMode = "Fill";
     private const string DefaultLogItemDateFormat = "HH:mm:ss";
@@ -33,7 +40,7 @@ public sealed record StartupShellSnapshot(
     private const int BackgroundOpacityMin = 0;
     private const int BackgroundOpacityMax = 100;
     private const int BackgroundBlurMin = 0;
-    private const int BackgroundBlurMax = 80;
+    private const int BackgroundBlurMax = 50;
     private const int DefaultUiScalePercent = 100;
     private const int UiScalePercentMin = 70;
     private const int UiScalePercentMax = 140;
@@ -45,10 +52,11 @@ public sealed record StartupShellSnapshot(
         MinimizeToTray: false,
         DeveloperModeEnabled: false,
         WindowTitleScrollable: false,
+        HideCloseButton: false,
         UiScalePercent: DefaultUiScalePercent,
         UseSoftwareRendering: false,
         LogItemDateFormatString: DefaultLogItemDateFormat,
-        BackgroundImagePath: string.Empty,
+        BackgroundImagePath: DefaultBackgroundImagePath,
         BackgroundOpacity: 50,
         BackgroundBlur: 5,
         BackgroundStretchMode: DefaultBackgroundStretchMode,
@@ -65,12 +73,13 @@ public sealed record StartupShellSnapshot(
         var useTray = ReadGlobalBool(config, ConfigurationKeys.UseTray, true);
 
         return new StartupShellSnapshot(
-            Theme: NormalizeTheme(ReadGlobalString(config, ThemeModeKey, DefaultTheme)),
+            Theme: NormalizeTheme(ReadThemeModeWithLegacyFallback(config)),
             Language: NormalizeLanguage(ReadGlobalString(config, ConfigurationKeys.Localization, DefaultLanguage)),
             UseTray: useTray,
             MinimizeToTray: useTray && ReadGlobalBool(config, ConfigurationKeys.MinimizeToTray, false),
             DeveloperModeEnabled: ReadGlobalBool(config, DeveloperModeConfigKey, false),
             WindowTitleScrollable: ReadGlobalBool(config, ConfigurationKeys.WindowTitleScrollable, false),
+            HideCloseButton: ReadGlobalBool(config, ConfigurationKeys.HideCloseButton, false),
             UiScalePercent: Math.Clamp(
                 ReadGlobalInt(config, ConfigurationKeys.UiScalePercent, DefaultUiScalePercent),
                 UiScalePercentMin,
@@ -78,7 +87,7 @@ public sealed record StartupShellSnapshot(
             UseSoftwareRendering: ReadGlobalBool(config, ConfigurationKeys.IgnoreBadModulesAndUseSoftwareRendering, false),
             LogItemDateFormatString: NormalizeLogItemDateFormat(
                 ReadGlobalString(config, ConfigurationKeys.LogItemDateFormat, DefaultLogItemDateFormat)),
-            BackgroundImagePath: NormalizeBackgroundPath(ReadGlobalString(config, ConfigurationKeys.BackgroundImagePath, string.Empty)),
+            BackgroundImagePath: ReadBackgroundImagePath(config),
             BackgroundOpacity: Math.Clamp(
                 ReadGlobalInt(config, ConfigurationKeys.BackgroundOpacity, Default.BackgroundOpacity),
                 BackgroundOpacityMin,
@@ -90,8 +99,24 @@ public sealed record StartupShellSnapshot(
             BackgroundStretchMode: NormalizeBackgroundStretchMode(
                 ReadGlobalString(config, ConfigurationKeys.BackgroundImageStretchMode, DefaultBackgroundStretchMode)),
             HotkeyShowGui: parsedHotkeys.ShowGui,
-            HotkeyLinkStart: parsedHotkeys.LinkStart,
-            HideCloseButton: ReadGlobalBool(config, ConfigurationKeys.HideCloseButton, false));
+            HotkeyLinkStart: parsedHotkeys.LinkStart);
+    }
+
+    private static string ReadThemeModeWithLegacyFallback(UnifiedConfig config)
+    {
+        // WPF parity: legacy configs only carry GUI.DarkMode (Light/Dark/SyncWithOs). Consume it when the
+        // Avalonia-specific Theme.Mode key has never been written.
+        if (config.GlobalValues.ContainsKey(ThemeModeKey))
+        {
+            return ReadGlobalString(config, ThemeModeKey, DefaultTheme);
+        }
+
+        if (config.GlobalValues.ContainsKey(LegacyDarkModeKey))
+        {
+            return ReadGlobalString(config, LegacyDarkModeKey, DefaultTheme);
+        }
+
+        return DefaultTheme;
     }
 
     private static string ReadGlobalString(UnifiedConfig config, string key, string fallback)
@@ -200,6 +225,20 @@ public sealed record StartupShellSnapshot(
     private static string NormalizeBackgroundPath(string? value)
     {
         return value?.Trim() ?? string.Empty;
+    }
+
+    private static string ReadBackgroundImagePath(UnifiedConfig config)
+    {
+        // WPF parity (BackgroundSettingsUserControlModel): the conventional default path applies
+        // only when the key was never written; an explicitly cleared (empty) stored value stays
+        // empty so users can remove the background.
+        if (!config.GlobalValues.TryGetValue(ConfigurationKeys.BackgroundImagePath, out var node) || node is null)
+        {
+            return DefaultBackgroundImagePath;
+        }
+
+        return NormalizeBackgroundPath(
+            node is JsonValue value && value.TryGetValue(out string? text) ? text : node.ToString());
     }
 
     private static string NormalizeLogItemDateFormat(string? value)

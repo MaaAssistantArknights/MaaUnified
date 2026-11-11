@@ -41,7 +41,6 @@ public sealed class MainShellViewModel : ObservableObject
             ?.InformationalVersion);
     private const string DeveloperModeConfigKey = "GUI.DeveloperMode";
     private const string DefaultLogItemDateFormat = "HH:mm:ss";
-    private const int WindowTitleScrollThreshold = 24;
     private const string WindowTitleScrollSpacer = "     ";
     private static readonly TimeSpan DeferredStartupCoreWarmupDelay = TimeSpan.FromMilliseconds(1500);
     private static readonly TimeSpan FloatingOverlayAnimationDuration = TimeSpan.FromMilliseconds(220);
@@ -116,8 +115,9 @@ public sealed class MainShellViewModel : ObservableObject
         OperatingSystem.IsWindows(),
         OperatingSystem.IsMacOS());
     private Bitmap? _shellBackgroundImage;
-    private double _shellBackgroundOpacity = 0.50;
-    private int _shellBackgroundBlur = 5;
+    private string? _appliedBackgroundImagePath;
+    private double _shellBackgroundOpacity = 0.45;
+    private int _shellBackgroundBlur = 12;
     private Stretch _shellBackgroundStretch = Stretch.UniformToFill;
     private bool _schemaMigrationNoticeShown;
     private StartupShellSnapshot _startupSnapshot = StartupShellSnapshot.Default;
@@ -1270,6 +1270,7 @@ public sealed class MainShellViewModel : ObservableObject
                         : ThemeVariant.Light;
         }
 
+        ShowCloseButton = !snapshot.HideCloseButton;
         TaskQueuePage.SetLanguage(language);
         if (TryGetCopilotPage(out var copilotPage))
         {
@@ -1288,6 +1289,7 @@ public sealed class MainShellViewModel : ObservableObject
         ShellBackgroundBlur = snapshot.BackgroundBlur;
         ShellBackgroundStretch = ParseStretch(snapshot.BackgroundStretchMode);
         ApplyShellBackgroundImage(snapshot.BackgroundImagePath);
+        RefreshWindowTitle();
     }
 
     private CopilotPageViewModel EnsureCopilotPage()
@@ -2574,14 +2576,129 @@ public sealed class MainShellViewModel : ObservableObject
             updateMessages.Add(WindowResourceUpdateInfo.Trim());
         }
 
-        if (updateMessages.Count > 0)
-        {
-            titleParts.Add(string.Join(" / ", updateMessages));
-        }
-
-        _windowTitleSource = string.Join(" - ", titleParts.Where(static part => !string.IsNullOrWhiteSpace(part)));
+        var baseTitle = ComposeWindowTitleBase();
+        _windowTitleSource = updateMessages.Count == 0
+            ? baseTitle
+            : $"{baseTitle} - {string.Join(" / ", updateMessages)}";
         _windowTitleScrollOffset = 0;
         UpdateWindowTitleDisplay();
+    }
+
+    private string ComposeWindowTitleBase()
+    {
+        var config = _runtime.ConfigurationService.CurrentConfig;
+        // WPF parity (SettingsViewModel.UpdateWindowTitle uses ConfigurationHelper.GetValue):
+        // the prefix is read profile-first with global fallback, so an imported profile-scoped
+        // prefix is honored even before any GUI save.
+        var prefix = ReadProfileFirstConfigString(
+            config,
+            MAAUnified.Compat.Constants.ConfigurationKeys.WindowTitlePrefix,
+            string.Empty).Trim();
+        if (prefix.Length > 0)
+        {
+            prefix += " - ";
+        }
+
+        var selectList = ReadGlobalConfigString(
+                config,
+                MAAUnified.Compat.Constants.ConfigurationKeys.WindowTitleSelectShowList,
+                "2 3 4")
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        var profilePart = string.Empty;
+        var presetPart = string.Empty;
+        var addressPart = string.Empty;
+        var clientPart = string.Empty;
+        foreach (var select in selectList)
+        {
+            switch (select)
+            {
+                case "1": // configuration profile name (only when multiple profiles exist)
+                    if (config.Profiles.Count > 1)
+                    {
+                        profilePart = $" ({config.CurrentProfile})";
+                    }
+
+                    break;
+                case "2": // connection preset display name
+                    var preset = _connectionGameSharedState.ConnectConfigOptions.FirstOrDefault(
+                        option => string.Equals(option.Value, _connectionGameSharedState.ConnectConfig, StringComparison.OrdinalIgnoreCase));
+                    if (!string.IsNullOrWhiteSpace(preset?.DisplayName))
+                    {
+                        presetPart = $" - {preset.DisplayName}";
+                    }
+
+                    break;
+                case "3": // connection address, loopback host stripped (WPF parity)
+                    var address = _connectionGameSharedState.ConnectAddress;
+                    if (!string.IsNullOrWhiteSpace(address))
+                    {
+                        addressPart = $" ({address})"
+                            .Replace("127.0.0.1:", string.Empty, StringComparison.Ordinal)
+                            .Replace("localhost:", string.Empty, StringComparison.Ordinal);
+                    }
+
+                    break;
+                case "4": // client type display name
+                    var client = _connectionGameSharedState.ClientTypeOptions.FirstOrDefault(
+                        option => string.Equals(option.Value, _connectionGameSharedState.ClientType, StringComparison.OrdinalIgnoreCase));
+                    if (!string.IsNullOrWhiteSpace(client?.DisplayName))
+                    {
+                        clientPart = $" - {client.DisplayName}";
+                    }
+
+                    break;
+            }
+        }
+
+        var title = $"{prefix}{WindowDisplayName}{profilePart}";
+
+        var uiVersion = typeof(MainShellViewModel).Assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
+            ?.InformationalVersion?.Split('+')[0];
+        if (!string.IsNullOrWhiteSpace(uiVersion))
+        {
+            title += $" - {FormatWindowTitleVersion(uiVersion.Trim(), GetUiBuildDateTime())}";
+        }
+
+        if (TryGetSettingsPage(out var settingsPage)
+            && !string.IsNullOrWhiteSpace(settingsPage.UpdatePanelResourceVersion))
+        {
+            title += $" - {FormatWindowTitleVersion(
+                settingsPage.UpdatePanelResourceVersion.Trim(),
+                settingsPage.UpdatePanelResourceDateTime)}";
+        }
+
+        return $"{title}{presetPart}{addressPart}{clientPart}";
+    }
+
+    private static string ReadGlobalConfigString(UnifiedConfig config, string key, string fallback)
+    {
+        if (!config.GlobalValues.TryGetValue(key, out var node) || node is null)
+        {
+            return fallback;
+        }
+
+        return node is System.Text.Json.Nodes.JsonValue value && value.TryGetValue(out string? text) && text is not null
+            ? text
+            : node.ToString();
+    }
+
+    private static string ReadProfileFirstConfigString(UnifiedConfig config, string key, string fallback)
+    {
+        if (!string.IsNullOrWhiteSpace(config.CurrentProfile)
+            && config.Profiles.TryGetValue(config.CurrentProfile, out var profile)
+            && profile.Values.TryGetValue(key, out var profileNode)
+            && profileNode is not null)
+        {
+            return profileNode is System.Text.Json.Nodes.JsonValue profileValue
+                   && profileValue.TryGetValue(out string? profileText)
+                   && profileText is not null
+                ? profileText
+                : profileNode.ToString();
+        }
+
+        return ReadGlobalConfigString(config, key, fallback);
     }
 
     private string? GetWindowTitleConnectAddress()
@@ -2919,9 +3036,11 @@ public sealed class MainShellViewModel : ObservableObject
             _ = ReloadClientResourceIfChangedAsync(previousClientType, _connectionGameSharedState.ClientType);
         }
 
-        if (string.Equals(e.PropertyName, nameof(ConnectionGameSharedStateViewModel.ConnectConfig), StringComparison.Ordinal)
-            || string.Equals(e.PropertyName, nameof(ConnectionGameSharedStateViewModel.ConnectAddress), StringComparison.Ordinal)
-            || string.Equals(e.PropertyName, nameof(ConnectionGameSharedStateViewModel.ClientType), StringComparison.Ordinal))
+        if (e.PropertyName is nameof(ConnectionGameSharedStateViewModel.ConnectConfig)
+            or nameof(ConnectionGameSharedStateViewModel.ConnectAddress)
+            or nameof(ConnectionGameSharedStateViewModel.ClientType)
+            or nameof(ConnectionGameSharedStateViewModel.ConnectConfigOptions)
+            or nameof(ConnectionGameSharedStateViewModel.ClientTypeOptions))
         {
             RefreshWindowTitle();
         }
@@ -3345,8 +3464,10 @@ public sealed class MainShellViewModel : ObservableObject
                             : ThemeVariant.Light;
             }
 
+            ShowCloseButton = !snapshot.HideCloseButton;
             TaskQueuePage.ApplyGuiSettingsPreview(snapshot);
             ApplyWindowTitleScrolling(snapshot.WindowTitleScrollable);
+            RefreshWindowTitle();
             SettingsPage.AutostartStatus = PlatformCapabilityTextMap.FormatAutostartStatus(
                 CurrentShellLanguage,
                 SettingsPage.StartSelf,
@@ -3423,16 +3544,36 @@ public sealed class MainShellViewModel : ObservableObject
         if (string.IsNullOrWhiteSpace(path))
         {
             ShellBackgroundImage = null;
+            _appliedBackgroundImagePath = null;
+            return;
+        }
+
+        // WPF parity (BackgroundSettingsUserControlModel.RefreshBackgroundImage): a missing file
+        // means "no background rendered"; it is not an error worth logging on every GUI apply.
+        if (!File.Exists(path))
+        {
+            ShellBackgroundImage = null;
+            _appliedBackgroundImagePath = null;
+            return;
+        }
+
+        // Background draft previews (opacity/blur/stretch) re-apply the unchanged path; reuse the
+        // already decoded bitmap instead of re-decoding on every preview step.
+        if (ShellBackgroundImage is not null
+            && string.Equals(_appliedBackgroundImagePath, path, StringComparison.Ordinal))
+        {
             return;
         }
 
         try
         {
             ShellBackgroundImage = new Bitmap(path);
+            _appliedBackgroundImagePath = path;
         }
         catch (Exception ex)
         {
             ShellBackgroundImage = null;
+            _appliedBackgroundImagePath = null;
             LastError = $"Background image load failed: {ex.Message}";
             _ = RecordErrorAsync(
                 "App.Gui.Apply.Background",
@@ -4232,7 +4373,8 @@ public sealed class MainShellViewModel : ObservableObject
 
     private bool ShouldAnimateWindowTitle()
     {
-        return _windowTitleScrollable && _windowTitleSource.Length > WindowTitleScrollThreshold;
+        // WPF parity (RootView RunningBlock): the title scrolls whenever the option is enabled.
+        return _windowTitleScrollable && _windowTitleSource.Length > 0;
     }
 
     private string FormatRootLogTimestamp(DateTimeOffset timestamp)

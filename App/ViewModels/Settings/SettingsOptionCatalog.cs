@@ -112,9 +112,12 @@ internal static class SettingsOptionCatalog
     public static IReadOnlyList<DisplayValueOption> BuildThemeOptions(string language)
         => BuildDisplayOptions(language, ThemeOptionSpecs);
 
-    public static IReadOnlyList<DisplayValueOption> BuildLanguageOptions()
+    public static IReadOnlyList<DisplayValueOption> BuildLanguageOptions(bool includePallas = true)
     {
+        // WPF parity (SettingsViewModel.InitUiSettings): the Pallas easter-egg language is only listed
+        // while Cheers is unlocked.
         return UiLanguageCatalog.Ordered
+            .Where(language => includePallas || !string.Equals(language, "pallas", StringComparison.OrdinalIgnoreCase))
             .Select(
                 language => new DisplayValueOption(
                     GetLanguageDisplayName(language),
@@ -149,8 +152,37 @@ internal static class SettingsOptionCatalog
     public static IReadOnlyList<DisplayValueOption> BuildVersionResourceSourceOptions(string language)
         => BuildDisplayOptions(language, ResourceSourceOptionSpecs);
 
-    public static IReadOnlyList<DisplayValueOption> BuildOperNameLanguageOptions(string language)
-        => BuildDisplayOptions(language, OperNameLanguageOptionSpecs);
+    public static IReadOnlyList<DisplayValueOption> BuildOperNameLanguageOptions(string language, string? currentValue = null)
+    {
+        var options = BuildDisplayOptions(language, OperNameLanguageOptionSpecs).ToList();
+        if (IsOperNameLanguageForceValue(currentValue))
+        {
+            // WPF parity (GuiSettingsUserControlModel.OperNameLanguage): the force entry only appears
+            // while a forced operator-name language is active.
+            var localizer = UiLocalizer.Create(language);
+            options.Add(new DisplayValueOption(
+                localizer.GetOrDefault("Settings.Option.OperNameLanguage.Force", "Force use of specified language", Scope),
+                OperNameLanguageForceOptionValue));
+        }
+
+        return options;
+    }
+
+    public const string OperNameLanguageForceOptionValue = "OperNameLanguageForce";
+
+    public const string OperNameLanguageForcePrefix = "OperNameLanguageForce.";
+
+    public static bool IsOperNameLanguageForceValue(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)
+            || !value.StartsWith(OperNameLanguageForcePrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var suffix = value[OperNameLanguageForcePrefix.Length..];
+        return UiLanguageCatalog.IsSupported(suffix);
+    }
 
     public static IReadOnlyList<DisplayValueOption> BuildInverseClearModeOptions(string language)
         => BuildDisplayOptions(language, InverseClearModeOptionSpecs);

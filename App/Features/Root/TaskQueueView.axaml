@@ -897,9 +897,12 @@
                         ItemsSource="{Binding LogCards}">
             <ItemsControl.ItemTemplate>
               <DataTemplate>
-                <Border Classes="app-surface app-card task-queue-log-card">
+                <Border Classes.app-surface="{Binding $parent[ItemsControl].DataContext.UseCardLog}"
+                        Classes.app-card="{Binding $parent[ItemsControl].DataContext.UseCardLog}"
+                        Classes.task-queue-log-card="{Binding $parent[ItemsControl].DataContext.UseCardLog}">
                   <Grid ColumnDefinitions="3,80,*,Auto">
-                    <Border Classes="task-queue-log-accent" />
+                    <Border Classes="task-queue-log-accent"
+                            IsVisible="{Binding $parent[ItemsControl].DataContext.UseCardLog}" />
                     <Grid Grid.Column="3"
                           Width="80"
                           VerticalAlignment="Center"

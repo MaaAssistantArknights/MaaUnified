@@ -3277,6 +3277,42 @@
   <data name="Settings.GUI.WindowTitleScrollable" xml:space="preserve">
     <value>窗口标题滚动</value>
   </data>
+  <data name="Settings.GUI.HideCloseButton" xml:space="preserve">
+    <value>隐藏关闭按钮</value>
+  </data>
+  <data name="Settings.GUI.UseCardLog" xml:space="preserve">
+    <value>使用卡片样式日志</value>
+  </data>
+  <data name="Settings.GUI.MaxNumberOfLogThumbnails" xml:space="preserve">
+    <value>日志缩略图最大数量</value>
+  </data>
+  <data name="Settings.GUI.MainTasksInvertNullFunction" xml:space="preserve">
+    <value>反转主任务右键单击效果</value>
+  </data>
+  <data name="Settings.GUI.MainTasksInvertNullFunctionTip" xml:space="preserve">
+    <value>默认仅一次生效，勾选后仅一次跳过</value>
+  </data>
+  <data name="Settings.GUI.WindowTitleSelectShowList" xml:space="preserve">
+    <value>标题栏显示内容</value>
+  </data>
+  <data name="Settings.GUI.WindowTitleField.ConfigurationName" xml:space="preserve">
+    <value>配置名称</value>
+  </data>
+  <data name="Settings.GUI.WindowTitleField.ConnectionPreset" xml:space="preserve">
+    <value>连接配置</value>
+  </data>
+  <data name="Settings.GUI.WindowTitleField.ConnectionAddress" xml:space="preserve">
+    <value>连接地址</value>
+  </data>
+  <data name="Settings.GUI.WindowTitleField.ClientType" xml:space="preserve">
+    <value>客户端类型</value>
+  </data>
+  <data name="Settings.GUI.PallasHangoverMessage" xml:space="preserve">
+    <value>下次不能喝、喝这么多了……</value>
+  </data>
+  <data name="Settings.Option.OperNameLanguage.Force" xml:space="preserve">
+    <value>强制使用指定语言</value>
+  </data>
   <data name="Settings.Game.BlockSleep" xml:space="preserve">
     <value>阻止系统休眠</value>
   </data>

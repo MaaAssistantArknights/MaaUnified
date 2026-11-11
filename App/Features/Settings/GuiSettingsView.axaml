@@ -58,6 +58,17 @@
           <CheckBox Classes="app-checkbox"
                     Content="{Binding RootTexts[Settings.GUI.WindowTitleScrollable]}"
                     IsChecked="{Binding WindowTitleScrollable}" />
+          <CheckBox Classes="app-checkbox"
+                    Content="{Binding RootTexts[Settings.GUI.HideCloseButton]}"
+                    IsChecked="{Binding HideCloseButton}" />
+          <CheckBox Classes="app-checkbox"
+                    Content="{Binding RootTexts[Settings.GUI.UseCardLog]}"
+                    IsChecked="{Binding UseCardLog}" />
+          <controls:AdaptiveSpacingStackPanel Classes="settings-page-inline-field-group">
+            <controls:AppHintedCheckBox Text="{Binding RootTexts[Settings.GUI.MainTasksInvertNullFunction]}"
+                                         Tip="{Binding RootTexts[Settings.GUI.MainTasksInvertNullFunctionTip]}"
+                                         IsChecked="{Binding MainTasksInvertNullFunction}" />
+          </controls:AdaptiveSpacingStackPanel>
           <controls:AdaptiveSpacingStackPanel Classes="settings-page-inline-field-group">
             <controls:AppHintedCheckBox Text="{Binding RootTexts[Settings.GUI.UseSoftwareRendering]}"
                                          Tip="{DynamicResource BadModules.UseSoftwareRenderingTip}"
@@ -85,6 +96,19 @@
                          Classes="app-caption gui-settings-preview-text"
                          Text="{Binding GuiLogItemDateFormatPreview}"
                          TextWrapping="Wrap" />
+            </Grid>
+
+            <Grid Classes="settings-page-labeled-row"
+                  controls:SettingsLabelWidthCoordinator.GroupKey="Gui.Log"
+                  ColumnDefinitions="Auto,*"
+                  IsVisible="{Binding ShowMaxNumberOfLogThumbnails}">
+              <controls:SettingsLabel Text="{Binding RootTexts[Settings.GUI.MaxNumberOfLogThumbnails]}" />
+              <controls:AppNumberInput Grid.Column="1"
+                                       Width="{DynamicResource MAA.Size.Settings.FieldNarrowWidth}"
+                                       HorizontalAlignment="Left"
+                                       Minimum="0"
+                                       Maximum="1000"
+                                       Value="{Binding MaxNumberOfLogThumbnails}" />
             </Grid>
           </controls:AdaptiveSpacingStackPanel>
         </controls:AdaptiveSpacingStackPanel>
@@ -175,6 +199,27 @@
                 </DataTemplate>
               </controls:AppSelect.ItemTemplate>
             </controls:AppSelect>
+          </Grid>
+
+          <Grid Classes="settings-page-labeled-row"
+                controls:SettingsLabelWidthCoordinator.GroupKey="Gui.Main"
+                ColumnDefinitions="Auto,*">
+            <controls:SettingsLabel Text="{Binding RootTexts[Settings.GUI.WindowTitleSelectShowList]}" />
+            <controls:AdaptiveSpacingStackPanel Grid.Column="1"
+                        Classes="settings-page-inline-field-group">
+              <CheckBox Classes="app-checkbox"
+                        Content="{Binding RootTexts[Settings.GUI.WindowTitleField.ConfigurationName]}"
+                        IsChecked="{Binding WindowTitleShowConfigurationName}" />
+              <CheckBox Classes="app-checkbox"
+                        Content="{Binding RootTexts[Settings.GUI.WindowTitleField.ConnectionPreset]}"
+                        IsChecked="{Binding WindowTitleShowConnectionPreset}" />
+              <CheckBox Classes="app-checkbox"
+                        Content="{Binding RootTexts[Settings.GUI.WindowTitleField.ConnectionAddress]}"
+                        IsChecked="{Binding WindowTitleShowConnectionAddress}" />
+              <CheckBox Classes="app-checkbox"
+                        Content="{Binding RootTexts[Settings.GUI.WindowTitleField.ClientType]}"
+                        IsChecked="{Binding WindowTitleShowClientType}" />
+            </controls:AdaptiveSpacingStackPanel>
           </Grid>
         </controls:AdaptiveSpacingStackPanel>
       </Grid>

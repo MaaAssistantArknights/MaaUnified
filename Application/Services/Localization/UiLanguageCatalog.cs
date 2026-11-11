@@ -21,6 +21,8 @@ public static class UiLanguageCatalog
 
     public const string DefaultLanguage = "zh-cn";
 
+    public const string PallasLanguage = "pallas";
+
     public const string FallbackLanguage = "en-us";
 
     public static IReadOnlyList<string> Ordered => OrderedLanguages;
