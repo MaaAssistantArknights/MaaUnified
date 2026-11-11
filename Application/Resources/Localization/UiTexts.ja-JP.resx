@@ -2224,12 +2224,6 @@
   <data name="Settings.Game.TaskTimeoutMinutes" xml:space="preserve">
     <value>タスクのタイムアウト時間（分）</value>
   </data>
-  <data name="Settings.Game.StallTimeoutEnabled" xml:space="preserve">
-    <value>停滞検出を有効にする</value>
-  </data>
-  <data name="Settings.Game.StallTimeoutMinutes" xml:space="preserve">
-    <value>ログ出力停滞タイムアウト（分）</value>
-  </data>
   <data name="Settings.Game.UseScriptOnCopilot" xml:space="preserve">
     <value>自動戦闘時に上記のスクリプトを有効にする</value>
   </data>
@@ -2548,6 +2542,24 @@
   <data name="Settings.Start.EmulatorExtraArgsTip" xml:space="preserve">
     <value>エミュレータ起動コマンドに渡す引数</value>
   </data>
+  <data name="Settings.Start.EmulatorPathEmptyWarning" xml:space="preserve">
+    <value>エミュレータのパスが空のため、「切断時に再試行」と「起動後にエミュレータを自動起動」をオフにしました。</value>
+  </data>
+  <data name="Settings.Start.EmulatorPathMaaConfirm.Title" xml:space="preserve">
+    <value>ヒント</value>
+  </data>
+  <data name="Settings.Start.EmulatorPathMaaConfirm.Message" xml:space="preserve">
+    <value>バーでバーを注文したいですか？</value>
+  </data>
+  <data name="Settings.Start.EmulatorPathMaaConfirm.Confirm" xml:space="preserve">
+    <value>確かに間違って選択していないと思います</value>
+  </data>
+  <data name="Settings.Start.EmulatorPathMaaConfirm.Cancel" xml:space="preserve">
+    <value>はい、もう一度選択します</value>
+  </data>
+  <data name="Settings.Start.EmulatorPathNotExistWarning" xml:space="preserve">
+    <value>エミュレータのパスが存在しません</value>
+  </data>
   <data name="Settings.Start.EmulatorPath" xml:space="preserve">
     <value>エミュレータパス</value>
   </data>
@@ -2613,6 +2625,24 @@
   </data>
   <data name="Settings.Timer.CustomConfig" xml:space="preserve">
     <value>カスタム構成オプション</value>
+  </data>
+  <data name="Timer.Schedule.ForceCountdown.Title" xml:space="preserve">
+    <value>スケジュール起動</value>
+  </data>
+  <data name="Timer.Schedule.ForceCountdown.Message" xml:space="preserve">
+    <value>カウントダウン終了後に強制的に起動します。実行中のタスクは停止して再起動されます。</value>
+  </data>
+  <data name="Timer.Schedule.ForceCountdown.Confirm" xml:space="preserve">
+    <value>今すぐ開始</value>
+  </data>
+  <data name="Timer.Schedule.ForceCountdown.Cancel" xml:space="preserve">
+    <value>キャンセル</value>
+  </data>
+  <data name="Timer.Schedule.ProfileMismatchWarning" xml:space="preserve">
+    <value>スケジュール起動をスキップしました：現在の構成がタイマーの構成と一致しません。</value>
+  </data>
+  <data name="Timer.Schedule.CloseDownFailed" xml:space="preserve">
+    <value>ゲームの終了に失敗しました。</value>
   </data>
   <data name="Settings.Timer.ForceScheduledStart" xml:space="preserve">
     <value>強制的なタイミングで起動</value>
@@ -2952,9 +2982,6 @@ MAA を複数開くには、新しい MAA を他のフォルダにコピーし�
   </data>
   <data name="StartUp.Option.TouchMode.MaaTouch" xml:space="preserve">
     <value>MaaTouch (実験機能)</value>
-  </data>
-  <data name="StartUp.Option.TouchMode.MaaFwAdbTouch" xml:space="preserve">
-    <value>MaaFramework (実験機能)</value>
   </data>
   <data name="StartUp.Option.TouchMode.MiniTouch" xml:space="preserve">
     <value>Minitouch (標準)</value>

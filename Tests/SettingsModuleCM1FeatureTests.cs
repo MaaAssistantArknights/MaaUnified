@@ -310,6 +310,24 @@ public sealed class SettingsModuleCM1FeatureTests
     }
 
     [Fact]
+    public async Task BuildConnectionCandidates_AutoDetectOffEmptyAddress_ShouldReturnNoFallbackCandidates()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync();
+
+        var result = fixture.Runtime.ConnectFeatureService.BuildConnectionCandidates(
+            configuredAddress: string.Empty,
+            connectConfig: "BlueStacks",
+            adbPath: null,
+            autoDetect: false,
+            alwaysAutoDetect: false,
+            includeConfiguredAddress: true);
+
+        // WPF parity: AutoDetect off + empty address fails instead of trying default ports.
+        Assert.True(result.Success);
+        Assert.Empty(result.Value!);
+    }
+
+    [Fact]
     public async Task ConnectSettingsView_ScreenshotLifecycleCandidates_WhenMacBundledAdb_ShouldUseEffectiveBundledAdb()
     {
         if (!OperatingSystem.IsMacOS())
@@ -671,7 +689,8 @@ public sealed class SettingsModuleCM1FeatureTests
         Assert.Single(fixture.Config.CurrentConfig.Profiles);
         Assert.True(fixture.Config.CurrentConfig.Profiles.ContainsKey("default"));
         Assert.Equal("default", vm.ConfigurationManagerSelectedProfile);
-        Assert.Equal("127.0.0.1:5555", vm.ConnectionGameSharedState.ConnectAddress);
+        // WPF parity: the recreated default profile starts with an empty connect address.
+        Assert.Equal(string.Empty, vm.ConnectionGameSharedState.ConnectAddress);
         Assert.Contains("已切换至配置 `default`", vm.ConfigurationManagerStatusMessage, StringComparison.Ordinal);
     }
 

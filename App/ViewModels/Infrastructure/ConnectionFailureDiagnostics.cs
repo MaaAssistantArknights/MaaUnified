@@ -432,13 +432,13 @@ public static class ConnectionFailureDiagnosticBuilder
             var extras = connectionInfo.Extras ?? CoreConnectionExtras.Empty;
             var fallback = !string.IsNullOrWhiteSpace(extras.FallbackStrategy)
                 ? extras.FallbackStrategy
-                : $"configured:{extras.TouchMode ?? "MaaFwAdb"}/adbLite={extras.AdbLiteEnabled}";
+                : $"configured:{extras.TouchMode ?? "minitouch"}/adbLite={extras.AdbLiteEnabled}";
             builder.AppendLine("Effective connection configuration:");
             builder.AppendLine($"ADB: {connectionInfo.AdbPath ?? "<system adb>"}");
             builder.AppendLine($"Address: {connectionInfo.Address}");
             builder.AppendLine($"Connect config: {connectionInfo.ConnectConfig}");
             builder.AppendLine($"Fallback: {fallback}");
-            builder.AppendLine($"Configured: touch={extras.ConfiguredTouchMode ?? extras.TouchMode ?? "MaaFwAdb"}, adbLite={extras.ConfiguredAdbLiteEnabled ?? extras.AdbLiteEnabled}");
+            builder.AppendLine($"Configured: touch={extras.ConfiguredTouchMode ?? extras.TouchMode ?? "minitouch"}, adbLite={extras.ConfiguredAdbLiteEnabled ?? extras.AdbLiteEnabled}");
             builder.AppendLine($"Touch/controller fallback: touch={extras.TouchMode ?? "<default>"}, adbLite={extras.AdbLiteEnabled}, killAdbOnExit={extras.KillAdbOnExit}");
             builder.AppendLine($"Extras/clientType: macBundledAdb={extras.MacUseBundledAdb}, MuMu={extras.MuMu12ExtrasEnabled}:{extras.MuMu12EmulatorPath ?? "<empty>"}:{extras.MuMuBridgeConnection}:{extras.MuMu12Index ?? "<empty>"}, LD={extras.LdPlayerExtrasEnabled}:{extras.LdPlayerEmulatorPath ?? "<empty>"}:{extras.LdPlayerManualSetIndex}:{extras.LdPlayerIndex ?? "<empty>"}, Attach={extras.AttachWindowScreencapMethod ?? "<empty>"}:{extras.AttachWindowMouseMethod ?? "<empty>"}:{extras.AttachWindowKeyboardMethod ?? "<empty>"}, clientType={extras.ClientType ?? "<empty>"}");
             builder.AppendLine();

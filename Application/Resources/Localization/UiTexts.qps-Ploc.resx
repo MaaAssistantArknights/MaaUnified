@@ -18,12 +18,6 @@
   <data name="Settings.ExternalNotification.SendWhenStalled" xml:space="preserve">
     <value>[!! Şéñď ñöţîƒîçåţîöñ ŵħéñ ţåşķ ļöĝ öüţþüţ şţåļļş !!]</value>
   </data>
-  <data name="Settings.Game.StallTimeoutEnabled" xml:space="preserve">
-    <value>[!! Éñåƀļé şţåļļ ďéţéçţîöñ !!]</value>
-  </data>
-  <data name="Settings.Game.StallTimeoutMinutes" xml:space="preserve">
-    <value>[!! Ļöĝ öüţþüţ şţåļļ ţîɱéöüţ (ɱîñ) !!]</value>
-  </data>
   <data name="Copilot.List.Button.ClearAll" xml:space="preserve">
     <value>[!! Çļéåř åļļ !!]</value>
   </data>

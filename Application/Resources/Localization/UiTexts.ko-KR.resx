@@ -2225,12 +2225,6 @@ OF-1 스테이지가 개방되지 않은 경우에는 선택하지 마세요.</v
   <data name="Settings.Game.TaskTimeoutMinutes" xml:space="preserve">
     <value>작업 타임아웃 시간 (분)</value>
   </data>
-  <data name="Settings.Game.StallTimeoutEnabled" xml:space="preserve">
-    <value>정지 감지 활성화</value>
-  </data>
-  <data name="Settings.Game.StallTimeoutMinutes" xml:space="preserve">
-    <value>로그 출력 정지 타임아웃 (분)</value>
-  </data>
   <data name="Settings.Game.UseScriptOnCopilot" xml:space="preserve">
     <value>자동지휘 시 스크립트 사용</value>
   </data>
@@ -2549,6 +2543,24 @@ OF-1 스테이지가 개방되지 않은 경우에는 선택하지 마세요.</v
   <data name="Settings.Start.EmulatorExtraArgsTip" xml:space="preserve">
     <value>에뮬레이터 실행 명령에 전달할 인수</value>
   </data>
+  <data name="Settings.Start.EmulatorPathEmptyWarning" xml:space="preserve">
+    <value>에뮬레이터 경로가 비어 있어 「연결 끊김 시 재시도」와 「시작 후 에뮬레이터 자동 실행」이 해제되었습니다.</value>
+  </data>
+  <data name="Settings.Start.EmulatorPathMaaConfirm.Title" xml:space="preserve">
+    <value>도움말</value>
+  </data>
+  <data name="Settings.Start.EmulatorPathMaaConfirm.Message" xml:space="preserve">
+    <value>바에서 바를 주문하고 싶습니까?</value>
+  </data>
+  <data name="Settings.Start.EmulatorPathMaaConfirm.Confirm" xml:space="preserve">
+    <value>잘못 선택한 것이 확실히 아닙니다</value>
+  </data>
+  <data name="Settings.Start.EmulatorPathMaaConfirm.Cancel" xml:space="preserve">
+    <value>다시 선택하겠습니다</value>
+  </data>
+  <data name="Settings.Start.EmulatorPathNotExistWarning" xml:space="preserve">
+    <value>에뮬레이터 경로가 존재하지 않습니다</value>
+  </data>
   <data name="Settings.Start.EmulatorPath" xml:space="preserve">
     <value>에뮬레이터 경로</value>
   </data>
@@ -2614,6 +2626,24 @@ OF-1 스테이지가 개방되지 않은 경우에는 선택하지 마세요.</v
   </data>
   <data name="Settings.Timer.CustomConfig" xml:space="preserve">
     <value>커스텀 구성 옵션</value>
+  </data>
+  <data name="Timer.Schedule.ForceCountdown.Title" xml:space="preserve">
+    <value>예약 시작</value>
+  </data>
+  <data name="Timer.Schedule.ForceCountdown.Message" xml:space="preserve">
+    <value>카운트다운이 끝나면 강제로 시작합니다. 실행 중인 작업은 중지 후 다시 시작됩니다.</value>
+  </data>
+  <data name="Timer.Schedule.ForceCountdown.Confirm" xml:space="preserve">
+    <value>지금 시작</value>
+  </data>
+  <data name="Timer.Schedule.ForceCountdown.Cancel" xml:space="preserve">
+    <value>취소</value>
+  </data>
+  <data name="Timer.Schedule.ProfileMismatchWarning" xml:space="preserve">
+    <value>예약 시작을 건너뛰었습니다: 현재 구성이 타이머 구성과 일치하지 않습니다.</value>
+  </data>
+  <data name="Timer.Schedule.CloseDownFailed" xml:space="preserve">
+    <value>게임 종료에 실패했습니다.</value>
   </data>
   <data name="Settings.Timer.ForceScheduledStart" xml:space="preserve">
     <value>강제 예약 시작</value>
@@ -2953,9 +2983,6 @@ OF-1 스테이지가 개방되지 않은 경우에는 선택하지 마세요.</v
   </data>
   <data name="StartUp.Option.TouchMode.MaaTouch" xml:space="preserve">
     <value>MaaTouch (실험적)</value>
-  </data>
-  <data name="StartUp.Option.TouchMode.MaaFwAdbTouch" xml:space="preserve">
-    <value>MaaFramework (실험적)</value>
   </data>
   <data name="StartUp.Option.TouchMode.MiniTouch" xml:space="preserve">
     <value>Minitouch (기본값)</value>

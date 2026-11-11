@@ -60,12 +60,13 @@ internal static class ConnectionGameProfileSync
     private const string AttachWindowMouseMethodLegacyKey = "Connect.AttachWindow.MouseMethod";
     private const string AttachWindowKeyboardMethodLegacyKey = "Connect.AttachWindow.KeyboardMethod";
 
-    private const string DefaultConnectAddress = "127.0.0.1:5555";
+    // WPF parity: frozen defaults are string.Empty for both (ConnectSettingsUserControlModel:134/:194).
+    private const string DefaultConnectAddress = "";
     private const string DefaultConnectConfig = "General";
-    private const string DefaultAdbPath = "adb";
+    private const string DefaultAdbPath = "";
     private const string DefaultClientType = "Official";
     private const bool DefaultStartGame = true;
-    private const string DefaultTouchMode = "MaaFwAdb";
+    private const string DefaultTouchMode = "minitouch";
     private const bool DefaultAutoDetect = true;
     private const bool DefaultAlwaysAutoDetect = false;
     private const bool DefaultRetryOnDisconnected = false;
@@ -128,7 +129,7 @@ internal static class ConnectionGameProfileSync
         profile.Values[ConnectConfigKey] = JsonValue.Create((state.ConnectConfig ?? string.Empty).Trim());
         profile.Values[AdbPathKey] = JsonValue.Create((state.AdbPath ?? string.Empty).Trim());
         profile.Values[ClientTypeKey] = JsonValue.Create((state.ClientType ?? string.Empty).Trim());
-        profile.Values[StartGameKey] = JsonValue.Create(state.StartGameEnabled);
+        profile.Values[StartGameKey] = JsonValue.Create(state.StoredStartGameEnabled);
         profile.Values[TouchModeKey] = JsonValue.Create((state.TouchMode ?? string.Empty).Trim());
         profile.Values[AutoDetectKey] = JsonValue.Create(state.AutoDetect);
         profile.Values[AlwaysAutoDetectKey] = JsonValue.Create(state.AlwaysAutoDetect);
@@ -172,7 +173,7 @@ internal static class ConnectionGameProfileSync
                 profile.Values[ClientTypeKey] = JsonValue.Create((state.ClientType ?? string.Empty).Trim());
                 return;
             case nameof(ConnectionGameSharedStateViewModel.StartGameEnabled):
-                profile.Values[StartGameKey] = JsonValue.Create(state.StartGameEnabled);
+                profile.Values[StartGameKey] = JsonValue.Create(state.StoredStartGameEnabled);
                 return;
             case nameof(ConnectionGameSharedStateViewModel.TouchMode):
                 profile.Values[TouchModeKey] = JsonValue.Create((state.TouchMode ?? string.Empty).Trim());
@@ -252,7 +253,7 @@ internal static class ConnectionGameProfileSync
         var fallbackConnectConfig = tolerateMissing ? state.ConnectConfig : DefaultConnectConfig;
         var fallbackAdbPath = tolerateMissing ? state.AdbPath : DefaultAdbPath;
         var fallbackClientType = tolerateMissing ? state.ClientType : DefaultClientType;
-        var fallbackStartGame = tolerateMissing ? state.StartGameEnabled : DefaultStartGame;
+        var fallbackStartGame = tolerateMissing ? state.StoredStartGameEnabled : DefaultStartGame;
         var fallbackTouchMode = tolerateMissing ? state.TouchMode : DefaultTouchMode;
         var fallbackAutoDetect = tolerateMissing ? state.AutoDetect : DefaultAutoDetect;
         var fallbackAlwaysAutoDetect = tolerateMissing ? state.AlwaysAutoDetect : DefaultAlwaysAutoDetect;

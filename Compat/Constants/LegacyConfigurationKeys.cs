@@ -259,6 +259,9 @@ public static class ConfigurationKeys
 
     public const string TaskTimeoutMinutes = "TimeOut.Timer.TaskTimeoutMinutes";
     public const string ReminderIntervalMinutes = "TimeOut.Timer.ReminderIntervalMinutes";
+
+    // Retired MAAUnified-only stall-detection keys (never existed in WPF). The constants remain
+    // so the baseline key vocabulary stays stable; the settings UI and runtime no longer read them.
     public const string StallTimeoutMinutes = "TimeOut.Timer.StallTimeoutMinutes";
     public const string StallTimeoutEnabled = "TimeOut.Timer.StallTimeoutEnabled";
 

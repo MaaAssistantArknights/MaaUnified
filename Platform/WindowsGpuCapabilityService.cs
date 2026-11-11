@@ -59,8 +59,14 @@ public sealed class WindowsGpuCapabilityService : IGpuCapabilityService
         /* CHIP_STONEY   */ "\u98E4");
 
     private static ReadOnlySpan<ushort> IntelBlacklist => MemoryMarshal.Cast<char, ushort>(
-        // Keep only pre-Xe Intel generations in the default deprecated list.
-        // Modern Xe / Xe-LPG devices should remain visible without requiring the deprecated toggle.
+        // WPF parity: freeze 23ddd271 GpuOption.cs IntelBlacklist, including the Xe and Xe-LPG generations.
+        /* Xe (Tiger Lake, Elkhart Lake, Jasper Lake, Rocket Lake, Alder Lake, Raptor Lake)    */ "\uA780\uA781" +
+        "\uA788\uA789\uA78A\uA782\uA78B\uA783\uA7A0\uA7A1\uA7A8\uA7AA\uA7AB\uA7AC\uA7AD\uA7A9\uA721\u4905\u4907" +
+        "\u4908\u4909\u4680\u4690\u4688\u468A\u468B\u4682\u4692\u4693\u46D3\u46D4\u46D0\u46D1\u46D2\u4626\u4628" +
+        "\u462A\u46A2\u46B3\u46C2\u46A3\u46B2\u46C3\u46A0\u46B0\u46C0\u46A6\u46AA\u46A8\u46A1\u46B1\u46C1\u4C8A" +
+        "\u4C8B\u4C90\u4C9A\u4E71\u4E61\u4E57\u4E55\u4E51\u4557\u4555\u4571\u4551\u4541\u9A59\u9A78\u9A60\u9A70" +
+        "\u9A68\u9A40\u9A49" +
+        /* Xe-LPG (Meteor Lake) */ "\u7D40\u7D45\u7D55\u7DD5" +
         /* Gen11 */ "\u8A70\u8A71\u8A56\u8A58\u8A5B\u8A5D\u8A54\u8A5A\u8A5C\u8A57\u8A59\u8A50\u8A51\u8A52\u8A53" +
         /* Gen9  */ "\u3EA5\u3EA8\u3EA6\u3EA7\u3EA2\u3E90\u3E93\u3E99\u3E9C\u3EA1\u9BA5\u9BA8\u3EA4\u9B21\u9BA0" +
         "\u9BA2\u9BA4\u9BAA\u9BAB\u9BAC\u87CA\u3EA3\u9B41\u9BC0\u9BC2\u9BC4\u9BCA\u9BCB\u9BCC\u3E91\u3E92\u3E98" +
@@ -86,7 +92,11 @@ public sealed class WindowsGpuCapabilityService : IGpuCapabilityService
 
     public GpuSelectionResolution Resolve(GpuPreference preference)
     {
-        var options = GetGpuOptions(preference.AllowDeprecatedGpu);
+        // WPF parity (freeze 23ddd271 GpuOption.GetGpuOptions/GetCurrent): the option list and
+        // selection resolution never filter deprecated GPUs. AllowDeprecatedGpu only controls
+        // whether deprecated entries are hidden in the picker UI; a stored (or default)
+        // selection that resolves to a deprecated GPU is still honored and handed to the core.
+        var options = GetGpuOptions();
         var selected = ResolveSelection(preference, options, out var selectionChanged);
 
         return new GpuSelectionResolution(
@@ -103,7 +113,7 @@ public sealed class WindowsGpuCapabilityService : IGpuCapabilityService
             SelectionWarningTextKey: selectionChanged ? SelectionFallbackWarningKey : null);
     }
 
-    private IReadOnlyList<GpuOptionDescriptor> GetGpuOptions(bool allowDeprecatedGpu)
+    private IReadOnlyList<GpuOptionDescriptor> GetGpuOptions()
     {
         if (!OperatingSystem.IsWindows())
         {
@@ -111,7 +121,7 @@ public sealed class WindowsGpuCapabilityService : IGpuCapabilityService
         }
 
         var candidates = GetGpuCandidates();
-        return BuildOptionList(allowDeprecatedGpu, candidates);
+        return BuildOptionList(candidates);
     }
 
     private IReadOnlyList<WindowsGpuCandidate> GetGpuCandidates()
@@ -511,14 +521,16 @@ public sealed class WindowsGpuCapabilityService : IGpuCapabilityService
     }
 
     internal static IReadOnlyList<GpuOptionDescriptor> BuildOptionList(
-        bool allowDeprecatedGpu,
         IReadOnlyList<WindowsGpuCandidate> candidates)
     {
-        var filteredCandidates = candidates
-            .Where(candidate => allowDeprecatedGpu || !candidate.IsDeprecated)
-            .ToArray();
-
-        if (filteredCandidates.Length == 0)
+        // WPF parity (freeze 23ddd271 GpuOption.GetGpuOptions): deprecated candidates stay in
+        // the option list; hiding them is a UI-only concern driven by AllowDeprecatedGpu. The
+        // system default entry is only added when DXGI adapter 0 itself passed the capability
+        // check (WPF `if (index == 0)`); it describes that adapter, matching the fixed
+        // GpuIndex=0 handed to the core for this option. When adapter 0 was rejected the option
+        // list has no system default entry and resolution falls back to Disable (CPU OCR),
+        // exactly like WPF GetCurrent's `FirstOrDefault(Disable)`.
+        if (candidates.Count == 0)
         {
             return [GpuOptionDescriptor.Disabled];
         }
@@ -528,14 +540,17 @@ public sealed class WindowsGpuCapabilityService : IGpuCapabilityService
             GpuOptionDescriptor.Disabled,
         };
 
-        var defaultCandidate = filteredCandidates[0];
-        options.Add(GpuOptionDescriptor.SystemDefault(
-            displayName: defaultCandidate.Description,
-            isDeprecated: defaultCandidate.IsDeprecated,
-            driverDate: defaultCandidate.DriverDate,
-            driverVersion: defaultCandidate.DriverVersion));
+        if (candidates[0].AdapterIndex == 0)
+        {
+            var defaultCandidate = candidates[0];
+            options.Add(GpuOptionDescriptor.SystemDefault(
+                displayName: defaultCandidate.Description,
+                isDeprecated: defaultCandidate.IsDeprecated,
+                driverDate: defaultCandidate.DriverDate,
+                driverVersion: defaultCandidate.DriverVersion));
+        }
 
-        options.AddRange(filteredCandidates.Select(candidate => new GpuOptionDescriptor(
+        options.AddRange(candidates.Select(candidate => new GpuOptionDescriptor(
             Id: string.IsNullOrWhiteSpace(candidate.InstancePath)
                 ? BuildSyntheticOptionId(candidate.AdapterIndex, candidate.Description)
                 : candidate.InstancePath,
@@ -851,7 +866,7 @@ public sealed class WindowsGpuCapabilityService : IGpuCapabilityService
             $"UNRESOLVED:{candidate.Description.Trim()}#{candidate.AdapterIndex}");
     }
 
-    private static GpuOptionDescriptor ResolveSelection(
+    internal static GpuOptionDescriptor ResolveSelection(
         GpuPreference preference,
         IReadOnlyList<GpuOptionDescriptor> options,
         out bool selectionChanged)
@@ -866,36 +881,49 @@ public sealed class WindowsGpuCapabilityService : IGpuCapabilityService
             return disabled;
         }
 
-        var fallback = options.FirstOrDefault(option => option.Kind == GpuOptionKind.SystemDefault)
-            ?? disabled;
+        var systemDefault = options.FirstOrDefault(option => option.Kind == GpuOptionKind.SystemDefault);
 
         if (preference.HasSpecificSelection)
         {
-            var specificByPath = options.FirstOrDefault(
-                option => option.Kind == GpuOptionKind.SpecificGpu
-                    && string.Equals(option.InstancePath, preference.PreferredGpuInstancePath, StringComparison.Ordinal));
-            if (specificByPath is not null)
+            // WPF parity (freeze 23ddd271 GpuOption.GetCurrent): the instance-path lookup only
+            // runs when a non-empty path was stored (`preferredGpuInstancePath != string.Empty`).
+            // Without this guard an empty stored path matches any option whose own instance path
+            // could not be resolved (string.Equals("", "", Ordinal) is always true), selecting
+            // the wrong GPU ahead of the description fallback.
+            if (!string.IsNullOrEmpty(preference.PreferredGpuInstancePath))
             {
-                return specificByPath;
+                var specificByPath = options.FirstOrDefault(
+                    option => option.Kind == GpuOptionKind.SpecificGpu
+                        && string.Equals(option.InstancePath, preference.PreferredGpuInstancePath, StringComparison.Ordinal));
+                if (specificByPath is not null)
+                {
+                    return specificByPath;
+                }
             }
 
-            var specificByName = options.FirstOrDefault(
-                option => option.Kind == GpuOptionKind.SpecificGpu
-                    && string.Equals(option.Description, preference.PreferredGpuDescription, StringComparison.OrdinalIgnoreCase));
-            if (specificByName is not null)
+            // WPF parity: the description fallback only applies on top of the system default
+            // entry (`result is SystemDefaultOption`). When DXGI adapter 0 was rejected the
+            // option list has no system default entry and resolution falls back to Disable.
+            if (systemDefault is not null)
             {
-                return specificByName;
+                var specificByName = options.FirstOrDefault(
+                    option => option.Kind == GpuOptionKind.SpecificGpu
+                        && string.Equals(option.Description, preference.PreferredGpuDescription, StringComparison.OrdinalIgnoreCase));
+                if (specificByName is not null)
+                {
+                    return specificByName;
+                }
             }
 
             selectionChanged = true;
         }
 
-        if (ReferenceEquals(fallback, disabled) && options.Count == 1)
+        if (systemDefault is null && options.Count == 1)
         {
             selectionChanged = true;
         }
 
-        return fallback;
+        return systemDefault ?? disabled;
     }
 
     private static bool CheckD3D12Support(object adapter, D3DFeatureLevel minimumFeatureLevel)

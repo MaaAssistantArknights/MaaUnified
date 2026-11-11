@@ -78,7 +78,6 @@ internal static class SettingsOptionCatalog
         new("minitouch", "StartUp.Option.TouchMode.MiniTouch", "Minitouch (Default)"),
         new("maatouch", "StartUp.Option.TouchMode.MaaTouch", "MaaTouch (Experimental)"),
         new("adb", "StartUp.Option.TouchMode.AdbTouch", "ADB Input (Deprecated)"),
-        new("MaaFwAdb", "StartUp.Option.TouchMode.MaaFwAdbTouch", "MaaFramework (Experimental)"),
     ];
 
     private static readonly IReadOnlyList<LocalizedOptionSpec<string>> AttachWindowScreencapOptionSpecs =

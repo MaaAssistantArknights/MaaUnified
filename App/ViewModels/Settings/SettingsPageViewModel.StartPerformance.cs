@@ -499,8 +499,7 @@ public sealed partial class SettingsPageViewModel
             EnablePenguin: EnablePenguin,
             EnableYituliu: EnableYituliu,
             PenguinId: (PenguinId ?? string.Empty).Trim(),
-            StallTimeoutEnabled: StallTimeoutEnabled,
-            StallTimeoutMinutes: Math.Clamp(StallTimeoutMinutes, 0, MaxTimeoutMinutes),
+            TaskTimeoutMinutes: Math.Clamp(TaskTimeoutMinutes, 0, MaxTimeoutMinutes),
             ReminderIntervalMinutes: Math.Clamp(ReminderIntervalMinutes, 1, MaxTimeoutMinutes));
     }
 
@@ -595,12 +594,11 @@ public sealed partial class SettingsPageViewModel
             // normalize them to the bare aliases (LegacyConfigValueMappings.ProfileKeyAliases).
             // Read the dotted key first (it is the live settings-page write) and fall back to
             // the bare import alias so the settings UI, CompileRecruit, and import all agree.
-            EnablePenguin: ReadProfileBoolFlexible(config, ConfigurationKeys.EnablePenguin, ReadProfileBoolFlexible(config, "EnablePenguin", true)),
-            EnableYituliu: ReadProfileBoolFlexible(config, ConfigurationKeys.EnableYituliu, ReadProfileBoolFlexible(config, "EnableYituliu", true)),
-            PenguinId: ReadProfileString(config, ConfigurationKeys.PenguinId, ReadProfileString(config, "PenguinId", string.Empty)).Trim(),
-            StallTimeoutEnabled: ReadProfileBoolFlexible(config, ConfigurationKeys.StallTimeoutEnabled, true),
-            StallTimeoutMinutes: Math.Clamp(
-                ReadProfileInt(config, ConfigurationKeys.StallTimeoutMinutes, DefaultStallTimeoutMinutes),
+            EnablePenguin: ReadProfileBoolFlexible(config, ConfigurationKeys.EnablePenguin, true),
+            EnableYituliu: ReadProfileBoolFlexible(config, ConfigurationKeys.EnableYituliu, true),
+            PenguinId: ReadProfileString(config, ConfigurationKeys.PenguinId, string.Empty).Trim(),
+            TaskTimeoutMinutes: Math.Clamp(
+                ReadProfileInt(config, ConfigurationKeys.TaskTimeoutMinutes, DefaultTaskTimeoutMinutes),
                 0,
                 MaxTimeoutMinutes),
             ReminderIntervalMinutes: Math.Clamp(
@@ -794,8 +792,7 @@ public sealed partial class SettingsPageViewModel
             EnablePenguin = snapshot.EnablePenguin;
             EnableYituliu = snapshot.EnableYituliu;
             PenguinId = snapshot.PenguinId;
-            StallTimeoutEnabled = snapshot.StallTimeoutEnabled;
-            StallTimeoutMinutes = snapshot.StallTimeoutMinutes;
+            TaskTimeoutMinutes = snapshot.TaskTimeoutMinutes;
             ReminderIntervalMinutes = snapshot.ReminderIntervalMinutes;
         }
         finally

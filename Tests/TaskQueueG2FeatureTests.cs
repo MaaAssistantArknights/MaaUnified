@@ -2128,6 +2128,104 @@ public sealed class TaskQueueG2FeatureTests
     }
 
     [Fact]
+    public void EmulatorStartResolution_Reconnect_DoesNotRequireAutoLaunchEnabled()
+    {
+        // WPF parity (TaskQueueViewModel.ConnectToEmulator -> StartSettings.TryToStartEmulator):
+        // the reconnect path only requires a non-empty existing EmulatorPath and must not be
+        // gated by OpenEmulatorAfterLaunch (StartEmulator).
+        var emulatorPath = NewExistingEmulatorPath();
+        var config = BuildEmulatorStartConfig(startEmulator: "False", emulatorPath);
+
+        var resolved = TaskQueuePageViewModel.TryResolveEmulatorStartRequest(
+            config,
+            requireAutoLaunchEnabled: false,
+            out var resolvedPath,
+            out var arguments,
+            out var waitSeconds,
+            out _);
+
+        Assert.True(resolved);
+        Assert.Equal(emulatorPath, resolvedPath);
+        Assert.Equal("--emu-arg", arguments);
+        Assert.Equal(5, waitSeconds);
+    }
+
+    [Fact]
+    public void EmulatorStartResolution_RejectsEmptyOrMissingPath()
+    {
+        var emptyPathConfig = BuildEmulatorStartConfig(startEmulator: "True", string.Empty);
+        Assert.False(TaskQueuePageViewModel.TryResolveEmulatorStartRequest(
+            emptyPathConfig,
+            requireAutoLaunchEnabled: false,
+            out _,
+            out _,
+            out _,
+            out _));
+
+        var missingPathConfig = BuildEmulatorStartConfig(
+            startEmulator: "True",
+            Path.Combine(Path.GetTempPath(), "maa-missing-emulator-" + Guid.NewGuid().ToString("N") + ".exe"));
+        Assert.False(TaskQueuePageViewModel.TryResolveEmulatorStartRequest(
+            missingPathConfig,
+            requireAutoLaunchEnabled: false,
+            out _,
+            out _,
+            out _,
+            out _));
+    }
+
+    [Fact]
+    public void EmulatorStartResolution_Startup_RequiresAutoLaunchEnabled()
+    {
+        var emulatorPath = NewExistingEmulatorPath();
+        var disabledConfig = BuildEmulatorStartConfig(startEmulator: "False", emulatorPath);
+
+        Assert.False(TaskQueuePageViewModel.TryResolveEmulatorStartRequest(
+            disabledConfig,
+            requireAutoLaunchEnabled: true,
+            out _,
+            out _,
+            out _,
+            out _));
+
+        var enabledConfig = BuildEmulatorStartConfig(startEmulator: "True", emulatorPath);
+        Assert.True(TaskQueuePageViewModel.TryResolveEmulatorStartRequest(
+            enabledConfig,
+            requireAutoLaunchEnabled: true,
+            out _,
+            out _,
+            out _,
+            out _));
+    }
+
+    [Fact]
+    public void EmulatorStartResolution_WaitSecondsHasNoUpperClamp()
+    {
+        // WPF parity: EmulatorWaitSeconds is free-form text in WPF with no upper bound.
+        var emulatorPath = NewExistingEmulatorPath();
+        var config = BuildEmulatorStartConfig(startEmulator: "True", emulatorPath, waitSeconds: "3600");
+
+        Assert.True(TaskQueuePageViewModel.TryResolveEmulatorStartRequest(
+            config,
+            requireAutoLaunchEnabled: true,
+            out _,
+            out _,
+            out var waitSeconds,
+            out _));
+        Assert.Equal(3600, waitSeconds);
+
+        var negativeConfig = BuildEmulatorStartConfig(startEmulator: "True", emulatorPath, waitSeconds: "-5");
+        Assert.True(TaskQueuePageViewModel.TryResolveEmulatorStartRequest(
+            negativeConfig,
+            requireAutoLaunchEnabled: true,
+            out _,
+            out _,
+            out var negativeWaitSeconds,
+            out _));
+        Assert.Equal(0, negativeWaitSeconds);
+    }
+
+    [Fact]
     public async Task StopAsync_ShouldAppendStoppingLogLikeWpf()
     {
         await using var fixture = await TestFixture.CreateAsync();
@@ -2645,6 +2743,27 @@ public sealed class TaskQueueG2FeatureTests
 
     private static Task InvokeCallbackAsync(TaskQueuePageViewModel vm, CoreCallbackEvent callback)
         => InvokeCallbackCoreAsync(vm, callback, GetActiveRunLease(vm));
+
+    private static UnifiedConfig BuildEmulatorStartConfig(
+        string startEmulator,
+        string emulatorPath,
+        string waitSeconds = "5")
+    {
+        var config = new UnifiedConfig();
+        var profile = config.Profiles[config.CurrentProfile];
+        profile.Values[LegacyConfigurationKeys.StartEmulator] = JsonValue.Create(startEmulator);
+        profile.Values[LegacyConfigurationKeys.EmulatorPath] = JsonValue.Create(emulatorPath);
+        profile.Values[LegacyConfigurationKeys.EmulatorAddCommand] = JsonValue.Create(" --emu-arg ");
+        profile.Values[LegacyConfigurationKeys.EmulatorWaitSeconds] = JsonValue.Create(waitSeconds);
+        return config;
+    }
+
+    private static string NewExistingEmulatorPath()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "maa-emulator-" + Guid.NewGuid().ToString("N") + ".exe");
+        File.WriteAllText(path, "stub");
+        return path;
+    }
 
     private static async Task InvokeCallbackCoreAsync(
         TaskQueuePageViewModel vm,

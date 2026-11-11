@@ -436,7 +436,10 @@ public sealed class MainShellViewModelTests
             existingAvaloniaJson: CreateLaunchBehaviorConfigJson(
                 runDirectly: true,
                 minimizeDirectly: false,
-                openEmulatorAfterLaunch: false));
+                openEmulatorAfterLaunch: false),
+            // The minitouch default (WPF parity) triggers the macOS RawByNc risk prompt;
+            // Cancel maps to ForceRun so the headless connect proceeds.
+            dialogService: new CapturingDialogService { WarningConfirmReturn = DialogReturnSemantic.Cancel });
         await fixture.SeedStartupDirectRunRuntimeAsync();
         await fixture.ViewModel.InitializeAsync();
 
@@ -451,7 +454,10 @@ public sealed class MainShellViewModelTests
         var bridge = new FakeBridge();
         await using var fixture = await TestFixture.CreateAsync(
             existingAvaloniaJson: CreateRunnableShellConfigJson(),
-            bridge: bridge);
+            bridge: bridge,
+            // The minitouch default (WPF parity) triggers the macOS RawByNc risk prompt;
+            // Cancel maps to ForceRun so the headless connect proceeds.
+            dialogService: new CapturingDialogService { WarningConfirmReturn = DialogReturnSemantic.Cancel });
         await fixture.ViewModel.InitializeAsync();
         Assert.True(await WaitUntilAsync(() => fixture.ViewModel.IsCoreReady, retry: 160, delayMs: 25));
 

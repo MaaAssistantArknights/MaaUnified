@@ -38,7 +38,7 @@ public sealed class ConnectFeatureService : IConnectFeatureService
     private CancellationTokenSource? _activeLifecycleOperationCts;
     private string? _activeLifecycleOperation;
     private MacRawByNcRiskForceRunCacheEntry? _macRawByNcRiskForceRunCache;
-    private const string DefaultTouchMode = "MaaFwAdb";
+    private const string DefaultTouchMode = "minitouch";
     private static readonly TimeSpan DefaultConnectBudget = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan DefaultCandidateConnectTimeout = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan LifecycleOperationWaitTimeout = TimeSpan.FromMilliseconds(250);
@@ -480,7 +480,8 @@ public sealed class ConnectFeatureService : IConnectFeatureService
         }
 
         var connectConfig = ReadProfileString(profile, "ConnectConfig", ConfigurationKeys.ConnectConfig) ?? "General";
-        var configuredAddress = ReadProfileString(profile, "ConnectAddress", ConfigurationKeys.ConnectAddress) ?? "127.0.0.1:5555";
+        // WPF parity: frozen Connect.Address default is string.Empty; AutoDetect refills at connect time.
+        var configuredAddress = ReadProfileString(profile, "ConnectAddress", ConfigurationKeys.ConnectAddress) ?? string.Empty;
         var adbPath = ResolveProfileAdbPath(profile);
         var extras = ResolveConnectionExtrasFromConfig();
         return BuildConnectionCandidates(
@@ -1798,14 +1799,8 @@ public sealed class ConnectFeatureService : IConnectFeatureService
             }
         }
 
-        if (candidates.Count == 0)
-        {
-            foreach (var fallbackAddress in GetDefaultAddresses(connectConfig))
-            {
-                AddAddressCandidate(candidates, fallbackAddress);
-            }
-        }
-
+        // WPF parity: with AutoDetect off and an empty address there are no fallback
+        // candidates; the connect attempt fails instead of silently trying default ports.
         return candidates;
     }
 
@@ -3039,7 +3034,9 @@ public sealed class TaskQueueFeatureService : ITaskQueueFeatureService
         {
             AccountName = compiled.Params["account_name"]?.GetValue<string>() ?? string.Empty,
             ClientType = compiled.Params["client_type"]?.GetValue<string>() ?? dto.ClientType,
-            StartGameEnabled = compiled.Params["start_game_enabled"]?.GetValue<bool>() ?? dto.StartGameEnabled,
+            // WPF parity: the compiled value is masked to false in AttachWindow (PC) mode;
+            // the profile must keep the stored (pre-mask) dto value.
+            StartGameEnabled = dto.StartGameEnabled,
             ConnectConfig = dto.ConnectConfig,
             ConnectAddress = dto.ConnectAddress,
             AdbPath = dto.AdbPath,

@@ -49,6 +49,33 @@ public sealed class ResourceWorkflowGpuFeatureTests
     }
 
     [Fact]
+    public async Task InitializeCoreAsync_DeprecatedGpuWithoutAllowDeprecated_StillPassesGpuRequestAndLogsWarning()
+    {
+        // WPF parity (freeze 23ddd271 GpuOption.GetCurrent + AsstProxy.Init): AllowDeprecatedGpu
+        // only hides deprecated GPUs in the picker UI; core initialization still uses the
+        // resolved deprecated GPU and logs a warning instead of falling back to CPU OCR.
+        var bridge = new CapturingBridge();
+        var log = new UiLogService();
+        var service = new ResourceWorkflowService("/tmp/maa", bridge, log, new DeprecatedOnlyGpuCapabilityService());
+        var config = BuildConfig(new Dictionary<string, string>
+        {
+            [ConfigurationKeys.PerformanceUseGpu] = "True",
+            [ConfigurationKeys.PerformanceAllowDeprecatedGpu] = "False",
+        });
+
+        var result = await service.InitializeCoreAsync(config);
+
+        Assert.True(result.Success);
+        Assert.NotNull(bridge.LastRequest);
+        Assert.Equal(CoreGpuRequestMode.Gpu, bridge.LastRequest!.Gpu?.Mode);
+        Assert.Equal((uint)0, bridge.LastRequest.Gpu?.GpuIndex);
+        Assert.Contains(
+            log.Snapshot,
+            entry => entry.Level == "WARN"
+                && entry.Message.Contains("deprecated", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public async Task InitializeCoreAsync_UnsupportedGpuConfig_ForcesCpuRequestAndLogsWarning()
     {
         var bridge = new CapturingBridge();
@@ -227,6 +254,44 @@ public sealed class ResourceWorkflowGpuFeatureTests
                 ? GpuOptionDescriptor.Disabled
                 : options.FirstOrDefault(option => option.InstancePath == preference.PreferredGpuInstancePath)
                     ?? options.First(option => option.Kind == GpuOptionKind.SystemDefault);
+
+            return new GpuSelectionResolution(
+                Snapshot: new GpuCapabilitySnapshot(
+                    SupportMode: GpuPlatformSupportMode.WindowsSupported,
+                    IsEditable: true,
+                    AppliesToCore: true,
+                    SupportsDeprecatedToggle: true,
+                    Options: options,
+                    StatusTextKey: "Settings.Performance.Gpu.Status.WindowsReady",
+                    Provider: "scripted-windows"),
+                SelectedOption: selected);
+        }
+    }
+
+    private sealed class DeprecatedOnlyGpuCapabilityService : IGpuCapabilityService
+    {
+        public GpuSelectionResolution Resolve(GpuPreference preference)
+        {
+            var systemDefault = GpuOptionDescriptor.SystemDefault(
+                displayName: "Intel(R) Iris(R) Xe Graphics",
+                isDeprecated: true,
+                driverDate: new DateTime(2023, 1, 1),
+                driverVersion: "31.0.101.9999");
+            var options = new List<GpuOptionDescriptor>
+            {
+                GpuOptionDescriptor.Disabled,
+                systemDefault,
+                new(
+                    Id: "PCI#0",
+                    Kind: GpuOptionKind.SpecificGpu,
+                    DisplayName: "Intel(R) Iris(R) Xe Graphics",
+                    Description: "Intel(R) Iris(R) Xe Graphics",
+                    InstancePath: "PCI#0",
+                    GpuIndex: 0,
+                    IsDeprecated: true),
+            };
+
+            var selected = preference.UseGpu ? systemDefault : GpuOptionDescriptor.Disabled;
 
             return new GpuSelectionResolution(
                 Snapshot: new GpuCapabilitySnapshot(

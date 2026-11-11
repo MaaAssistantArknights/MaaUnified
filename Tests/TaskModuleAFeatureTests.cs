@@ -214,7 +214,9 @@ public sealed class TaskModuleAFeatureTests
         var profile = fixture.Config.CurrentConfig.Profiles["Default"];
         Assert.Equal("PC", profile.Values["ConnectConfig"]?.GetValue<string>());
         Assert.Equal("127.0.0.1:7555", profile.Values["ConnectAddress"]?.GetValue<string>());
-        Assert.False(profile.Values["StartGame"]?.GetValue<bool>());
+        // WPF parity: the profile keeps the stored StartGame value; the PC (AttachWindow)
+        // mask applies only to the compiled task params asserted above.
+        Assert.True(profile.Values["StartGame"]?.GetValue<bool>());
 
         // Config save/load normalization must not blank the stored account name either.
         Assert.True((await fixture.TaskQueue.SaveAsync()).Success);
@@ -1056,7 +1058,9 @@ public sealed class TaskModuleAFeatureTests
         // non-Official/Bilibili clients; only the serialized Core payload blanks it.
         Assert.Equal("account-a", startUp.Value!.AccountName);
         Assert.Equal("Txwy", startUp.Value.ClientType);
-        Assert.False(startUp.Value.StartGameEnabled);
+        // WPF parity: the stored StartGame value survives the PC-mode save; masking happens
+        // at read (shared-state getter) and compile time, not in the persisted value.
+        Assert.True(startUp.Value.StartGameEnabled);
         Assert.Equal("PC", startUp.Value.ConnectConfig);
         Assert.Equal("127.0.0.1:16384", startUp.Value.ConnectAddress);
         Assert.Equal("/opt/adb", startUp.Value.AdbPath);

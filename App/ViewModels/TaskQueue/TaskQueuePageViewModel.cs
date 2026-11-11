@@ -363,8 +363,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
         public RunOwnershipLease Lease { get; }
     }
-    private CancellationTokenSource? _stallReminderCts;
-    private int _stallAccumulatedCount;
+    private CancellationTokenSource? _taskTimeoutReminderCts;
+    private int _taskTimeoutReminderCount;
     private CancellationTokenSource? _sanityReminderCts;
     private bool _suppressTaskEnabledSync;
     private bool _suppressModuleAutoSave;
@@ -3144,7 +3144,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 _currentRunId = Guid.NewGuid().ToString("N");
                 _lastPostActionRunId = string.Empty;
                 TrackAchievementsAfterStart(appendResult.Value);
-                StartOrResetStallReminder();
+                StartOrResetTaskTimeoutReminder();
                 keepRunOwner = true;
                 SetStartRequestActive(false);
             }
@@ -3781,24 +3781,23 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     }
 
     internal Task<bool> TryStartEmulatorOnStartupAsync(CancellationToken cancellationToken = default)
-        => TryStartEmulatorAsync("startup", cancellationToken);
+        => TryStartEmulatorAsync("startup", requireAutoLaunchEnabled: true, cancellationToken);
 
     private Task<bool> TryStartEmulatorForReconnectAsync(CancellationToken cancellationToken)
-        => TryStartEmulatorAsync("reconnect", cancellationToken);
+        => TryStartEmulatorAsync("reconnect", requireAutoLaunchEnabled: false, cancellationToken);
 
-    private async Task<bool> TryStartEmulatorAsync(string source, CancellationToken cancellationToken)
+    private async Task<bool> TryStartEmulatorAsync(string source, bool requireAutoLaunchEnabled, CancellationToken cancellationToken)
     {
         var config = Runtime.ConfigurationService.CurrentConfig;
-        var startEnabled = TryReadProfileBool(config, ConfigurationKeys.StartEmulator, false);
-        if (!startEnabled)
+        if (!TryResolveEmulatorStartRequest(
+                config,
+                requireAutoLaunchEnabled,
+                out var emulatorPath,
+                out var arguments,
+                out var waitSeconds,
+                out var skipReason))
         {
-            return false;
-        }
-
-        var emulatorPath = TryReadProfileString(config, ConfigurationKeys.EmulatorPath, string.Empty).Trim();
-        if (string.IsNullOrWhiteSpace(emulatorPath))
-        {
-            Runtime.LogService.Warn("Auto start emulator skipped because emulator path is empty.");
+            Runtime.LogService.Warn($"Auto start emulator skipped during {source}: {skipReason}");
             return false;
         }
 
@@ -3807,17 +3806,13 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             var startInfo = new ProcessStartInfo
             {
                 FileName = emulatorPath,
-                Arguments = TryReadProfileString(config, ConfigurationKeys.EmulatorAddCommand, string.Empty).Trim(),
+                Arguments = arguments,
                 UseShellExecute = true,
             };
 
             Runtime.LogService.Debug($"Auto start emulator triggered from {source}: `{emulatorPath}`");
             _ = Process.Start(startInfo);
 
-            var waitSeconds = Math.Clamp(
-                TryReadProfileInt(config, ConfigurationKeys.EmulatorWaitSeconds, 60),
-                0,
-                600);
             if (waitSeconds > 0)
             {
                 await Task.Delay(TimeSpan.FromSeconds(waitSeconds), cancellationToken);
@@ -3830,6 +3825,46 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             Runtime.LogService.Warn($"Auto start emulator failed during {source}: {ex.Message}");
             return false;
         }
+    }
+
+    // WPF parity: StartSettingsUserControlModel.TryToStartEmulator gates on a non-empty existing
+    // EmulatorPath, and additionally requires OpenEmulatorAfterLaunch only for the MAA-launch
+    // (startup) path. The reconnect-after-disconnect path must not require OpenEmulatorAfterLaunch.
+    internal static bool TryResolveEmulatorStartRequest(
+        UnifiedConfig config,
+        bool requireAutoLaunchEnabled,
+        out string emulatorPath,
+        out string arguments,
+        out int waitSeconds,
+        out string skipReason)
+    {
+        emulatorPath = string.Empty;
+        arguments = string.Empty;
+        waitSeconds = 0;
+        skipReason = string.Empty;
+
+        if (requireAutoLaunchEnabled && !TryReadProfileBool(config, ConfigurationKeys.StartEmulator, false))
+        {
+            skipReason = "OpenEmulatorAfterLaunch is disabled.";
+            return false;
+        }
+
+        emulatorPath = TryReadProfileString(config, ConfigurationKeys.EmulatorPath, string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(emulatorPath))
+        {
+            skipReason = "emulator path is empty.";
+            return false;
+        }
+
+        if (!File.Exists(emulatorPath))
+        {
+            skipReason = $"emulator path does not exist: `{emulatorPath}`.";
+            return false;
+        }
+
+        arguments = TryReadProfileString(config, ConfigurationKeys.EmulatorAddCommand, string.Empty).Trim();
+        waitSeconds = Math.Max(0, TryReadProfileInt(config, ConfigurationKeys.EmulatorWaitSeconds, 60));
+        return true;
     }
 
     internal static Task<AdbCommandFailureInfo> RunAdbRecoveryProcessForTestAsync(
@@ -5549,11 +5584,6 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         string weight = "Regular",
         LogCardSplitMode splitMode = LogCardSplitMode.None)
     {
-        if (notifyActivity && _stallReminderCts is not null)
-        {
-            StartOrResetStallReminder();
-        }
-
         var logTime = FormatLogTimestamp(timestamp);
         if (string.IsNullOrWhiteSpace(content) && !updateThumbnail)
         {
@@ -6168,47 +6198,47 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         }
     }
 
-    private void StartOrResetStallReminder()
+
+
+
+
+
+
+    private void StartOrResetTaskTimeoutReminder()
     {
-        CancelStallReminder();
-        _stallAccumulatedCount = 0;
+        CancelTaskTimeoutReminder();
+        _taskTimeoutReminderCount = 0;
         var config = Runtime.ConfigurationService.CurrentConfig;
-        var enabled = TryReadProfileBool(config, ConfigurationKeys.StallTimeoutEnabled, true);
         var timeoutMinutes = Math.Clamp(
-            TryReadProfileInt(config, ConfigurationKeys.StallTimeoutMinutes, 25),
+            TryReadProfileInt(config, ConfigurationKeys.TaskTimeoutMinutes, 60),
             0,
             MaxTimeoutMinutes);
-        if (!enabled || timeoutMinutes <= 0)
-        {
-            return;
-        }
-
         var reminderMinutes = Math.Clamp(
             TryReadProfileInt(config, ConfigurationKeys.ReminderIntervalMinutes, 30),
             1,
             MaxTimeoutMinutes);
-        _stallReminderCts = new CancellationTokenSource();
-        _ = RunStallReminderLoopAsync(timeoutMinutes, reminderMinutes, _stallReminderCts.Token);
+        _taskTimeoutReminderCts = new CancellationTokenSource();
+        _ = RunTaskTimeoutReminderLoopAsync(timeoutMinutes, reminderMinutes, _taskTimeoutReminderCts.Token);
     }
 
-    private async Task RunStallReminderLoopAsync(int timeoutMinutes, int reminderMinutes, CancellationToken cancellationToken)
+    private async Task RunTaskTimeoutReminderLoopAsync(int timeoutMinutes, int reminderMinutes, CancellationToken cancellationToken)
     {
         try
         {
             await Task.Delay(TimeSpan.FromMinutes(timeoutMinutes), cancellationToken);
             while (true)
             {
-                _stallAccumulatedCount++;
-                var accumulatedMinutes = timeoutMinutes + ((_stallAccumulatedCount - 1) * reminderMinutes);
+                _taskTimeoutReminderCount++;
+                var accumulatedMinutes = timeoutMinutes + ((_taskTimeoutReminderCount - 1) * reminderMinutes);
                 var message = string.Format(
                     GetRootText(
-                        "TaskStallWarning",
-                        "Task log output has not been updated for {0} minutes (currently stalled for {1} minutes). Please check whether the task is still running."),
+                        "TaskTimeoutWarning",
+                        "The task has been running for over {0} minutes (currently {1} minutes). If there is no further log output for a long time, manual intervention may be required."),
                     timeoutMinutes,
                     accumulatedMinutes);
                 await Dispatcher.UIThread.InvokeAsync(() =>
                 {
-                    AppendLogEntry(DateTimeOffset.Now, message, "WARN", updateThumbnail: false, notifyActivity: false);
+                    AppendLogEntry(DateTimeOffset.Now, message, "WARN", updateThumbnail: false);
                     var systemNotification = new TaskQueueSystemNotification(
                         message,
                         string.Empty,
@@ -6228,11 +6258,11 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         }
     }
 
-    private void CancelStallReminder()
+    private void CancelTaskTimeoutReminder()
     {
-        _stallReminderCts?.Cancel();
-        _stallReminderCts?.Dispose();
-        _stallReminderCts = null;
+        _taskTimeoutReminderCts?.Cancel();
+        _taskTimeoutReminderCts?.Dispose();
+        _taskTimeoutReminderCts = null;
     }
 
     private void ScheduleSanityRecoveryReminder(DateTimeOffset now)
@@ -7408,6 +7438,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             case "TaskChainStart":
                 _currentRunId = runId;
                 UpdateTaskStatus(taskIndex, taskChain, TaskQueueItemStatus.Running);
+                StartOrResetTaskTimeoutReminder();
                 AppendWpfCallbackLog(callback, metadata, taskIndex);
                 await RecordRuntimeStatusAsync(
                     runId,
@@ -7501,7 +7532,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 QueueAutomaticNotifications(callback, metadata, taskIndex, runId);
                 break;
             case "TaskChainStopped":
-                CancelStallReminder();
+                CancelTaskTimeoutReminder();
                 // WPF SetStopped() logs "Stopped" (split on both sides) when the
                 // stop callback arrives. notifyActivity stays false so the stall
                 // reminder cancelled above is not restarted by this final entry.
@@ -7546,7 +7577,6 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                     }
                 }
                 await ConsumeCompletedOneShotTaskEnabledStatesAsync();
-                CancelStallReminder();
                 // WPF parity: AsstProxy marks the run idle before firing
                 // CheckAfterCompleted in the background, so a new run may start while
                 // post actions (e.g. the power-action confirmation countdown) are still
@@ -7565,6 +7595,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
                     await TryTriggerPallasWineAsync(callback.Timestamp);
                 }
+                CancelTaskTimeoutReminder();
+                CompleteTaskQueueRunOwnership();
 
                 break;
             case "TaskChainExtraInfo":
@@ -8981,9 +9013,9 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
             _roguelikeInCombat = false;
             IsWaitingForStop = false;
-            CancelStallReminder();
             // WPF parity (RunningState Idle -> UpdateMainTasksProgress(0)).
             UpdateMainTasksProgress(0);
+            CancelTaskTimeoutReminder();
             SyncStoppedUiStateIfSessionNotActive();
         }
 

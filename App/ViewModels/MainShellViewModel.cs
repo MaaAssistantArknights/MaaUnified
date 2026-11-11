@@ -59,6 +59,7 @@ public sealed class MainShellViewModel : ObservableObject
     private readonly IAppDialogService _dialogService;
     private readonly OverlaySharedState _overlaySharedState;
     private readonly Dictionary<int, string> _timerSlotMinuteDedup = [];
+    private readonly Dictionary<int, string> _timerSlotPreSwitchMinuteDedup = [];
     private readonly Queue<AchievementUnlockedEvent> _pendingAchievementToasts = [];
     private readonly TaskCompletionSource<bool> _startupAchievementToastAnnouncementGate = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private Task _pendingLanguageApplyTask = Task.CompletedTask;
@@ -3139,6 +3140,25 @@ public sealed class MainShellViewModel : ObservableObject
                     continue;
                 }
 
+                // WPF parity (TaskQueueViewModel.CheckTimers): two minutes before the scheduled
+                // time the configuration is pre-switched; the minute wrap keeps a 00:00 slot
+                // switching at 23:58 of the same day.
+                var slotTotalMinutes = (slotHour * 60) + slotMinute;
+                var nowTotalMinutes = (nowHour * 60) + nowMinute;
+                var preSwitchMinutes = (slotTotalMinutes - 2 + 1440) % 1440;
+                if (nowTotalMinutes == preSwitchMinutes)
+                {
+                    if (_timerSlotPreSwitchMinuteDedup.TryGetValue(slot.Index, out var lastPreSwitchMinute)
+                        && string.Equals(lastPreSwitchMinute, minuteKey, StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
+                    _timerSlotPreSwitchMinuteDedup[slot.Index] = minuteKey;
+                    await PreSwitchTimerProfileAsync(slot, minuteKey, cancellationToken);
+                    continue;
+                }
+
                 if (slotHour != nowHour || slotMinute != nowMinute)
                 {
                     continue;
@@ -3194,7 +3214,25 @@ public sealed class MainShellViewModel : ObservableObject
 
             resetOneShotAfterAttempt = true;
 
-            if (sessionRunning && SettingsPage.ForceScheduledStart)
+            var force = SettingsPage.ForceScheduledStart;
+
+            // WPF parity (TaskQueueViewModel.HandleScheduledStart): with ForceScheduledStart and
+            // CustomConfig enabled, a mismatched current configuration skips the scheduled start.
+            // The T-2 minute pre-switch is expected to have aligned the configuration already.
+            if (force && SettingsPage.CustomTimerConfig && !IsCurrentProfileMatchingSlot(slot))
+            {
+                var currentProfile = _runtime.ConfigurationService.CurrentConfig.CurrentProfile;
+                await RecordEventAsync(
+                    "Timer.Schedule.Skip",
+                    $"slot={slot.Index}; reason=profile-mismatch; current={currentProfile}; expected={slot.Profile}",
+                    cancellationToken);
+                PushGrowl(RootTexts.GetOrDefault(
+                    "Timer.Schedule.ProfileMismatchWarning",
+                    "定时启动已跳过：当前配置与定时配置不一致。"));
+                return;
+            }
+
+            if (force)
             {
                 if (SettingsPage.ShowWindowBeforeForceScheduledStart)
                 {
@@ -3205,6 +3243,20 @@ public sealed class MainShellViewModel : ObservableObject
                     PushGrowl("定时触发：强制执行前显示窗口。");
                 }
 
+                // WPF parity (TaskQueueViewModel.TimerCanceledAsync): force scheduled start shows
+                // a 10-second countdown that can cancel the run before anything is stopped.
+                if (await ConfirmForceScheduledStartCanceledAsync(cancellationToken))
+                {
+                    await RecordEventAsync(
+                        "Timer.Schedule.Canceled",
+                        $"slot={slot.Index}; reason=user-canceled-countdown",
+                        cancellationToken);
+                    return;
+                }
+            }
+
+            if (sessionRunning)
+            {
                 await StopAsync(cancellationToken, userInitiated: false);
                 CurrentSessionState = _runtime.SessionService.CurrentState;
                 if (CurrentSessionState is SessionState.Running or SessionState.Stopping)
@@ -3214,33 +3266,19 @@ public sealed class MainShellViewModel : ObservableObject
                         cancellationToken: cancellationToken);
                     return;
                 }
-
-                if (!await SwitchTimerProfileIfNeededAsync(slot, cancellationToken))
-                {
-                    return;
-                }
-
-                await StartAsync(cancellationToken);
-                CurrentSessionState = _runtime.SessionService.CurrentState;
-                if (CurrentSessionState == SessionState.Running)
-                {
-                    _ = _runtime.AchievementTrackerService.AddProgressToGroup("ScheduleMaster");
-                    await RecordEventAsync(
-                        "Timer.Schedule.StopAndStart",
-                        $"slot={slot.Index}; profile={_runtime.ConfigurationService.CurrentConfig.CurrentProfile}",
-                        cancellationToken);
-                }
-                else
-                {
-                    await RecordTimerScheduleErrorAsync(
-                        $"slot={slot.Index}; start failed after forced stop; lastError={LastError}",
-                        cancellationToken: cancellationToken);
-                }
-
-                return;
             }
 
-            if (!await SwitchTimerProfileIfNeededAsync(slot, cancellationToken))
+            if (force)
+            {
+                await AppendCloseDownForForceScheduledRestartAsync(slot, cancellationToken);
+            }
+
+            // WPF parity (TaskQueueViewModel.HandleScheduledStart): a non-forced scheduled start
+            // goes straight to LinkStart without switching or validating the configuration; the
+            // configuration switch only happens at the T-2 pre-switch (HandleConfigChange). In
+            // the force path the profile was already verified to match above (or CustomConfig is
+            // off), so this call is a defensive no-op that can never switch.
+            if (force && !await SwitchTimerProfileIfNeededAsync(slot, cancellationToken))
             {
                 return;
             }
@@ -3251,14 +3289,16 @@ public sealed class MainShellViewModel : ObservableObject
             {
                 _ = _runtime.AchievementTrackerService.AddProgressToGroup("ScheduleMaster");
                 await RecordEventAsync(
-                    "Timer.Schedule.Start",
+                    sessionRunning ? "Timer.Schedule.StopAndStart" : "Timer.Schedule.Start",
                     $"slot={slot.Index}; profile={_runtime.ConfigurationService.CurrentConfig.CurrentProfile}",
                     cancellationToken);
                 return;
             }
 
             await RecordTimerScheduleErrorAsync(
-                $"slot={slot.Index}; start failed; lastError={LastError}",
+                sessionRunning
+                    ? $"slot={slot.Index}; start failed after forced stop; lastError={LastError}"
+                    : $"slot={slot.Index}; start failed; lastError={LastError}",
                 cancellationToken: cancellationToken);
         }
         finally
@@ -3269,6 +3309,114 @@ public sealed class MainShellViewModel : ObservableObject
                 await SettingsPage.SaveTimerSettingsAsync(cancellationToken);
             }
         }
+    }
+
+    private async Task PreSwitchTimerProfileAsync(
+        TimerSlotViewModel slot,
+        string minuteKey,
+        CancellationToken cancellationToken)
+    {
+        CurrentSessionState = _runtime.SessionService.CurrentState;
+        var sessionRunning = CurrentSessionState is SessionState.Running or SessionState.Stopping;
+
+        // WPF parity (TaskQueueViewModel.HandleTimerLogic/HandleConfigChange): the T-2 minute
+        // configuration pre-switch requires CustomConfig and (idle || ForceScheduledStart).
+        if (sessionRunning && !SettingsPage.ForceScheduledStart)
+        {
+            return;
+        }
+
+        if (!SettingsPage.CustomTimerConfig)
+        {
+            return;
+        }
+
+        var targetProfile = slot.Profile?.Trim() ?? string.Empty;
+        var currentProfile = _runtime.ConfigurationService.CurrentConfig.CurrentProfile;
+        if (string.IsNullOrWhiteSpace(targetProfile)
+            || string.Equals(currentProfile, targetProfile, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        await RecordEventAsync(
+            "Timer.Schedule.PreSwitchProfile",
+            $"slot={slot.Index}; minute={minuteKey}; from={currentProfile}; to={targetProfile}",
+            cancellationToken);
+        await SwitchTimerProfileIfNeededAsync(slot, cancellationToken);
+    }
+
+    private bool IsCurrentProfileMatchingSlot(TimerSlotViewModel slot)
+    {
+        var targetProfile = slot.Profile?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(targetProfile))
+        {
+            return false;
+        }
+
+        return string.Equals(
+            _runtime.ConfigurationService.CurrentConfig.CurrentProfile,
+            targetProfile,
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    private async Task<bool> ConfirmForceScheduledStartCanceledAsync(CancellationToken cancellationToken)
+    {
+        var request = new WarningConfirmDialogRequest(
+            Title: RootTexts.GetOrDefault("Timer.Schedule.ForceCountdown.Title", "定时启动"),
+            Message: RootTexts.GetOrDefault(
+                "Timer.Schedule.ForceCountdown.Message",
+                "定时启动将在倒计时结束后强制执行：正在运行的任务会被停止并重新开始。"),
+            ConfirmText: RootTexts.GetOrDefault("Timer.Schedule.ForceCountdown.Confirm", "立即开始"),
+            CancelText: RootTexts.GetOrDefault("Timer.Schedule.ForceCountdown.Cancel", "取消"),
+            Language: CurrentShellLanguage,
+            CountdownSeconds: 10);
+        var completion = await _dialogService.ShowWarningConfirmAsync(
+            request,
+            "Timer.Schedule.ForceCountdown",
+            cancellationToken);
+
+        // WPF auto-proceeds when the countdown elapses; only an explicit cancel aborts the run.
+        // Confirm/Close/dialog-unavailable all proceed (headless environments never block).
+        return completion.Return == DialogReturnSemantic.Cancel;
+    }
+
+    private async Task AppendCloseDownForForceScheduledRestartAsync(
+        TimerSlotViewModel slot,
+        CancellationToken cancellationToken)
+    {
+        if (_runtime.CoreBridge is not { SupportsStartCloseDown: true } bridge)
+        {
+            return;
+        }
+
+        // WPF parity (TaskQueueViewModel.HandleScheduledStart -> AsstAppendCloseDown): a forced
+        // restart appends a CloseDown task so the game client is closed before the new queue
+        // starts. The task is appended only; the following StartAsync runs it first.
+        var clientType = _connectionGameSharedState.ClientType?.Trim() ?? string.Empty;
+        var payload = new JsonObject
+        {
+            ["client_type"] = clientType,
+        }.ToJsonString();
+        var append = await bridge.AppendTaskAsync(
+            new CoreTaskRequest("CloseDown", "CloseDown", true, payload),
+            cancellationToken);
+        if (!append.Success)
+        {
+            await RecordEventAsync(
+                "Timer.Schedule.CloseDownFailed",
+                $"slot={slot.Index}; error={append.Error?.Message}",
+                cancellationToken);
+            TaskQueuePage.AppendSystemLog(
+                RootTexts.GetOrDefault("Timer.Schedule.CloseDownFailed", "关闭游戏失败。"),
+                "WARN");
+            return;
+        }
+
+        await RecordEventAsync(
+            "Timer.Schedule.CloseDown",
+            $"slot={slot.Index}; clientType={clientType}",
+            cancellationToken);
     }
 
     private async Task<bool> SwitchTimerProfileIfNeededAsync(TimerSlotViewModel slot, CancellationToken cancellationToken)

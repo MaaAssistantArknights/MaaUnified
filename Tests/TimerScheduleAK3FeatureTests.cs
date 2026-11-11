@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text.Json.Nodes;
+using MAAUnified.App.Features.Dialogs;
 using MAAUnified.App.ViewModels;
 using MAAUnified.App.ViewModels.Settings;
 using MAAUnified.Application.Configuration;
@@ -88,6 +89,9 @@ public sealed class TimerScheduleAK3FeatureTests
         var scheduledAt = BuildScheduleTime(10, 40);
         await fixture.ConfigureSingleTimerAsync(scheduledAt, force: false, custom: true, profile: "Night");
 
+        // WPF parity: the configuration switch happens at the T-2 pre-switch (HandleConfigChange);
+        // the T-minute trigger only starts the queue.
+        await InvokeEvaluateTimerScheduleAsync(fixture.Shell, scheduledAt.AddMinutes(-2));
         await InvokeEvaluateTimerScheduleAsync(fixture.Shell, scheduledAt);
 
         Assert.True(await WaitForConditionAsync(() => fixture.Shell.TaskQueuePage.IsRunning, retry: 80, delayMs: 20));
@@ -120,7 +124,9 @@ public sealed class TimerScheduleAK3FeatureTests
         var scheduledAt = BuildScheduleTime(10, 41);
         await fixture.ConfigureSingleTimerAsync(scheduledAt, force: false, custom: true, profile: "Night");
 
-        await InvokeEvaluateTimerScheduleAsync(fixture.Shell, scheduledAt);
+        // WPF parity: the profile switch (and its configuration flush) happens at the T-2
+        // pre-switch minute, not at the scheduled start minute.
+        await InvokeEvaluateTimerScheduleAsync(fixture.Shell, scheduledAt.AddMinutes(-2));
 
         Assert.True(await WaitForConditionAsync(
             () => string.Equals(
@@ -149,6 +155,8 @@ public sealed class TimerScheduleAK3FeatureTests
             var scheduledAt = BuildScheduleTime(12, 10 + i);
             await fixture.ConfigureSingleTimerAsync(scheduledAt, force: false, custom: true, profile: "Night");
 
+            // WPF parity: the T-2 pre-switch performs the profile switch; T only starts.
+            await InvokeEvaluateTimerScheduleAsync(fixture.Shell, scheduledAt.AddMinutes(-2));
             await InvokeEvaluateTimerScheduleAsync(fixture.Shell, scheduledAt);
 
             expectedSwitchProfileCount++;
@@ -196,10 +204,165 @@ public sealed class TimerScheduleAK3FeatureTests
         settings.Timers[0].Time = scheduledAt.ToString("HH:mm", CultureInfo.InvariantCulture);
         settings.Timers[0].Profile = "MissingProfile";
 
-        await InvokeEvaluateTimerScheduleAsync(fixture.Shell, scheduledAt);
+        // The invalid profile is rejected at the T-2 pre-switch minute.
+        await InvokeEvaluateTimerScheduleAsync(fixture.Shell, scheduledAt.AddMinutes(-2));
 
         Assert.False(fixture.Shell.TaskQueuePage.IsRunning);
+        Assert.Equal("Default", fixture.Runtime.ConfigurationService.CurrentConfig.CurrentProfile);
         Assert.True(await WaitForLogContainsAsync(fixture.Runtime.DiagnosticsService.ErrorLogPath, "Timer.Schedule.Error"));
+
+        // WPF parity (HandleScheduledStart): the non-forced T-minute trigger does not re-validate
+        // or switch the configuration; it starts with whatever configuration is current.
+        await InvokeEvaluateTimerScheduleAsync(fixture.Shell, scheduledAt);
+
+        Assert.True(fixture.Shell.TaskQueuePage.IsRunning);
+        Assert.Equal(1, fixture.Bridge.StartCallCount);
+        Assert.Equal("Default", fixture.Runtime.ConfigurationService.CurrentConfig.CurrentProfile);
+    }
+
+    [Fact]
+    public async Task Timer_Schedule_NonForce_PreSwitchMissed_StartsWithCurrentProfileWithoutSwitching()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var scheduledAt = BuildScheduleTime(19, 40);
+        await fixture.ConfigureSingleTimerAsync(scheduledAt, force: false, custom: true, profile: "Night");
+        Assert.Equal("Default", fixture.Runtime.ConfigurationService.CurrentConfig.CurrentProfile);
+
+        // WPF parity (TaskQueueViewModel.HandleScheduledStart): without ForceScheduledStart the
+        // T-minute trigger goes straight to LinkStart. If the T-2 pre-switch was missed (app not
+        // running, or the user switched away inside the T-2..T window), the run starts with the
+        // current configuration instead of forcing the slot configuration.
+        await InvokeEvaluateTimerScheduleAsync(fixture.Shell, scheduledAt);
+
+        Assert.True(fixture.Shell.TaskQueuePage.IsRunning);
+        Assert.Equal(1, fixture.Bridge.StartCallCount);
+        Assert.Equal("Default", fixture.Runtime.ConfigurationService.CurrentConfig.CurrentProfile);
+        Assert.True(await WaitForLogContainsAsync(fixture.Runtime.DiagnosticsService.EventLogPath, "Timer.Schedule.Start"));
+        var eventLog = await File.ReadAllTextAsync(fixture.Runtime.DiagnosticsService.EventLogPath);
+        Assert.DoesNotContain("Timer.Schedule.SwitchProfile", eventLog, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Timer_Schedule_PreSwitch_TwoMinutesBefore_SwitchesProfileWithoutStarting()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var scheduledAt = BuildScheduleTime(13, 30);
+        await fixture.ConfigureSingleTimerAsync(scheduledAt, force: false, custom: true, profile: "Night");
+        Assert.Equal("Default", fixture.Runtime.ConfigurationService.CurrentConfig.CurrentProfile);
+
+        // WPF parity (TaskQueueViewModel.CheckTimers): the configuration pre-switch happens
+        // two minutes before the scheduled time and does not start any task.
+        await InvokeEvaluateTimerScheduleAsync(fixture.Shell, scheduledAt.AddMinutes(-2));
+
+        Assert.False(fixture.Shell.TaskQueuePage.IsRunning);
+        Assert.Equal(0, fixture.Bridge.StartCallCount);
+        Assert.Equal("Night", fixture.Runtime.ConfigurationService.CurrentConfig.CurrentProfile);
+        Assert.True(await WaitForLogContainsAsync(fixture.Runtime.DiagnosticsService.EventLogPath, "Timer.Schedule.PreSwitchProfile"));
+
+        // At the scheduled time the slot starts with the pre-switched configuration.
+        await InvokeEvaluateTimerScheduleAsync(fixture.Shell, scheduledAt);
+
+        Assert.True(await WaitForConditionAsync(() => fixture.Shell.TaskQueuePage.IsRunning, retry: 80, delayMs: 20));
+        Assert.Equal(1, fixture.Bridge.StartCallCount);
+        Assert.Equal("Night", fixture.Runtime.ConfigurationService.CurrentConfig.CurrentProfile);
+    }
+
+    [Fact]
+    public async Task Timer_Schedule_PreSwitch_RunningWithoutForce_DoesNotSwitch()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var scheduledAt = BuildScheduleTime(14, 30);
+        await fixture.ConfigureSingleTimerAsync(scheduledAt, force: false, custom: true, profile: "Night");
+        await fixture.Shell.StartAsync();
+        Assert.True(fixture.Shell.TaskQueuePage.IsRunning);
+
+        // WPF parity: HandleTimerLogic returns early when running without ForceScheduledStart,
+        // so the T-2 pre-switch must not run either.
+        await InvokeEvaluateTimerScheduleAsync(fixture.Shell, scheduledAt.AddMinutes(-2));
+
+        Assert.Equal("Default", fixture.Runtime.ConfigurationService.CurrentConfig.CurrentProfile);
+        Assert.Equal(1, fixture.Bridge.StartCallCount);
+        Assert.Equal(0, fixture.Bridge.StopCallCount);
+    }
+
+    [Fact]
+    public async Task Timer_Schedule_Force_ProfileMismatch_Skips()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var scheduledAt = BuildScheduleTime(15, 30);
+        await fixture.ConfigureSingleTimerAsync(scheduledAt, force: true, custom: true, profile: "Night");
+        await fixture.Shell.StartAsync();
+        Assert.True(fixture.Shell.TaskQueuePage.IsRunning);
+        Assert.Equal(1, fixture.Bridge.StartCallCount);
+
+        // WPF parity: force + CustomConfig with a mismatched current configuration warns and
+        // skips the scheduled start (the T-2 pre-switch is expected to have aligned it).
+        await InvokeEvaluateTimerScheduleAsync(fixture.Shell, scheduledAt);
+
+        Assert.Equal(1, fixture.Bridge.StartCallCount);
+        Assert.Equal(0, fixture.Bridge.StopCallCount);
+        Assert.True(fixture.Shell.TaskQueuePage.IsRunning);
+        Assert.True(await WaitForLogContainsAsync(fixture.Runtime.DiagnosticsService.EventLogPath, "reason=profile-mismatch"));
+    }
+
+    [Fact]
+    public async Task Timer_Schedule_Force_CountdownCanceled_Skips()
+    {
+        var dialogService = new ScriptedDialogService(DialogReturnSemantic.Cancel);
+        await using var fixture = await TestFixture.CreateAsync(dialogService);
+        var scheduledAt = BuildScheduleTime(16, 30);
+        await fixture.ConfigureSingleTimerAsync(scheduledAt, force: true, custom: false, profile: "Default");
+        await fixture.Shell.StartAsync();
+        Assert.True(fixture.Shell.TaskQueuePage.IsRunning);
+        Assert.Equal(1, fixture.Bridge.StartCallCount);
+
+        // WPF parity (TimerCanceledAsync): the 10-second countdown can cancel the forced restart.
+        await InvokeEvaluateTimerScheduleAsync(fixture.Shell, scheduledAt);
+
+        Assert.Equal(1, fixture.Bridge.StartCallCount);
+        Assert.Equal(0, fixture.Bridge.StopCallCount);
+        Assert.True(fixture.Shell.TaskQueuePage.IsRunning);
+        Assert.Equal(1, dialogService.ForceCountdownCallCount);
+        Assert.Equal(10, dialogService.ForceCountdownRequests[0].CountdownSeconds);
+        Assert.True(await WaitForLogContainsAsync(fixture.Runtime.DiagnosticsService.EventLogPath, "Timer.Schedule.Canceled"));
+    }
+
+    [Fact]
+    public async Task Timer_Schedule_Force_CountdownElapsed_Proceeds()
+    {
+        var dialogService = new ScriptedDialogService(DialogReturnSemantic.Confirm);
+        await using var fixture = await TestFixture.CreateAsync(dialogService);
+        var scheduledAt = BuildScheduleTime(17, 30);
+        await fixture.ConfigureSingleTimerAsync(scheduledAt, force: true, custom: false, profile: "Default");
+        await fixture.Shell.StartAsync();
+        Assert.True(fixture.Shell.TaskQueuePage.IsRunning);
+
+        await InvokeEvaluateTimerScheduleAsync(fixture.Shell, scheduledAt);
+
+        Assert.Equal(1, dialogService.ForceCountdownCallCount);
+        Assert.Equal(2, fixture.Bridge.StartCallCount);
+        Assert.Equal(1, fixture.Bridge.StopCallCount);
+        Assert.True(fixture.Shell.TaskQueuePage.IsRunning);
+    }
+
+    [Fact]
+    public async Task Timer_Schedule_Force_AppendsCloseDownBeforeRestart()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var scheduledAt = BuildScheduleTime(18, 30);
+        await fixture.ConfigureSingleTimerAsync(scheduledAt, force: true, custom: false, profile: "Default");
+        await fixture.Shell.StartAsync();
+        Assert.True(fixture.Shell.TaskQueuePage.IsRunning);
+        fixture.Bridge.AppendedTaskTypes.Clear();
+
+        // WPF parity (AsstAppendCloseDown): the forced restart queues a CloseDown task so the
+        // game client is closed before the new queue starts.
+        await InvokeEvaluateTimerScheduleAsync(fixture.Shell, scheduledAt);
+
+        Assert.Equal(2, fixture.Bridge.StartCallCount);
+        Assert.Equal(1, fixture.Bridge.StopCallCount);
+        Assert.Equal("CloseDown", fixture.Bridge.AppendedTaskTypes[0]);
+        Assert.True(await WaitForLogContainsAsync(fixture.Runtime.DiagnosticsService.EventLogPath, "Timer.Schedule.CloseDown"));
     }
 
     private static DateTimeOffset BuildScheduleTime(int hour, int minute)
@@ -324,7 +487,7 @@ public sealed class TimerScheduleAK3FeatureTests
 
         public CountingBridge Bridge { get; }
 
-        public static async Task<TestFixture> CreateAsync()
+        public static async Task<TestFixture> CreateAsync(IAppDialogService? dialogService = null)
         {
             var root = Path.Combine(Path.GetTempPath(), "maa-unified-tests", Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(Path.Combine(root, "config"));
@@ -400,7 +563,9 @@ public sealed class TimerScheduleAK3FeatureTests
             config.CurrentConfig.CurrentProfile = "Default";
             await config.SaveAsync();
 
-            var shell = new MainShellViewModel(runtime);
+            var shell = new MainShellViewModel(
+                runtime,
+                dialogService ?? new ScriptedDialogService(DialogReturnSemantic.Confirm));
             await shell.InitializeAsync();
             var connectResult = await TestConnectionFixtureSupport.ConnectReadyAsync(runtime.ConnectFeatureService, readyAdbPath);
             Assert.True(connectResult.Success, connectResult.Message);
@@ -451,8 +616,92 @@ public sealed class TimerScheduleAK3FeatureTests
         }
     }
 
+    private sealed class ScriptedDialogService : IAppDialogService
+    {
+        private readonly DialogReturnSemantic _forceCountdownReturn;
+
+        public ScriptedDialogService(DialogReturnSemantic forceCountdownReturn)
+        {
+            _forceCountdownReturn = forceCountdownReturn;
+        }
+
+        public int ForceCountdownCallCount { get; private set; }
+
+        public List<WarningConfirmDialogRequest> ForceCountdownRequests { get; } = [];
+
+        public Task<DialogCompletion<AnnouncementDialogPayload>> ShowAnnouncementAsync(
+            AnnouncementDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<AnnouncementDialogPayload>(DialogReturnSemantic.Close, null, "scripted"));
+
+        public Task<DialogCompletion<VersionUpdateDialogPayload>> ShowVersionUpdateAsync(
+            VersionUpdateDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<VersionUpdateDialogPayload>(DialogReturnSemantic.Close, null, "scripted"));
+
+        public Task<DialogCompletion<ProcessPickerDialogPayload>> ShowProcessPickerAsync(
+            ProcessPickerDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<ProcessPickerDialogPayload>(DialogReturnSemantic.Close, null, "scripted"));
+
+        public Task<DialogCompletion<EmulatorPathDialogPayload>> ShowEmulatorPathAsync(
+            EmulatorPathDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<EmulatorPathDialogPayload>(DialogReturnSemantic.Close, null, "scripted"));
+
+        public Task<DialogCompletion<ErrorDialogPayload>> ShowErrorAsync(
+            ErrorDialogRequest request,
+            string sourceScope,
+            Func<CancellationToken, Task<UiOperationResult>>? openIssueReportAsync = null,
+            Func<CancellationToken, Task<UiOperationResult>>? openSettingsAsync = null,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<ErrorDialogPayload>(DialogReturnSemantic.Close, null, "scripted"));
+
+        public Task<DialogCompletion<AchievementListDialogPayload>> ShowAchievementListAsync(
+            AchievementListDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<AchievementListDialogPayload>(DialogReturnSemantic.Close, null, "scripted"));
+
+        public Task<DialogCompletion<TextDialogPayload>> ShowTextAsync(
+            TextDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<TextDialogPayload>(DialogReturnSemantic.Close, null, "scripted"));
+
+        public Task<DialogCompletion<WarningConfirmDialogPayload>> ShowWarningConfirmAsync(
+            WarningConfirmDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+        {
+            // The macOS RawByNc risk prompt maps Cancel to ForceRun; confirm it away so the
+            // minitouch default does not abort fixture connections on macOS. The force-start
+            // countdown prompt uses the scripted semantic under test.
+            var isForceCountdown = sourceScope.StartsWith("Timer.Schedule.ForceCountdown", StringComparison.Ordinal);
+            var semantic = isForceCountdown ? _forceCountdownReturn : DialogReturnSemantic.Cancel;
+            if (isForceCountdown)
+            {
+                ForceCountdownCallCount++;
+                ForceCountdownRequests.Add(request);
+            }
+
+            return Task.FromResult(new DialogCompletion<WarningConfirmDialogPayload>(
+                semantic,
+                semantic == DialogReturnSemantic.Confirm ? new WarningConfirmDialogPayload(true) : null,
+                "scripted"));
+        }
+    }
+
     private sealed class CountingBridge : IMaaCoreBridge
     {
+        public bool SupportsStartCloseDown => true;
+
+        public List<string> AppendedTaskTypes { get; } = [];
+
         public int StartCallCount { get; private set; }
 
         public int StopCallCount { get; private set; }
@@ -471,6 +720,7 @@ public sealed class TimerScheduleAK3FeatureTests
 
         public Task<CoreResult<int>> AppendTaskAsync(CoreTaskRequest task, CancellationToken cancellationToken = default)
         {
+            AppendedTaskTypes.Add(task.Type);
             return Task.FromResult(CoreResult<int>.Ok(1));
         }
 

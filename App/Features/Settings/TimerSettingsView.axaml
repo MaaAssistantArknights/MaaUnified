@@ -99,6 +99,7 @@
                           Classes="settings-select"
                           ItemsSource="{Binding DataContext.ConfigurationProfiles, RelativeSource={RelativeSource AncestorType=UserControl}}"
                           SelectedItem="{Binding Profile, Mode=TwoWay}"
+                          IsEnabled="{Binding DataContext.IsSessionIdle, RelativeSource={RelativeSource AncestorType=UserControl}}"
                           IsVisible="{Binding DataContext.CustomTimerConfig, RelativeSource={RelativeSource AncestorType=UserControl}}" />
               </controls:AdaptiveSpacingStackPanel>
             </Grid>
@@ -150,6 +151,7 @@
                           Classes="settings-select"
                           ItemsSource="{Binding DataContext.ConfigurationProfiles, RelativeSource={RelativeSource AncestorType=UserControl}}"
                           SelectedItem="{Binding Profile, Mode=TwoWay}"
+                          IsEnabled="{Binding DataContext.IsSessionIdle, RelativeSource={RelativeSource AncestorType=UserControl}}"
                           IsVisible="{Binding DataContext.CustomTimerConfig, RelativeSource={RelativeSource AncestorType=UserControl}}" />
               </controls:AdaptiveSpacingStackPanel>
             </Grid>
@@ -201,6 +203,7 @@
                           Classes="settings-select"
                           ItemsSource="{Binding DataContext.ConfigurationProfiles, RelativeSource={RelativeSource AncestorType=UserControl}}"
                           SelectedItem="{Binding Profile, Mode=TwoWay}"
+                          IsEnabled="{Binding DataContext.IsSessionIdle, RelativeSource={RelativeSource AncestorType=UserControl}}"
                           IsVisible="{Binding DataContext.CustomTimerConfig, RelativeSource={RelativeSource AncestorType=UserControl}}" />
               </controls:AdaptiveSpacingStackPanel>
             </Grid>
@@ -252,6 +255,7 @@
                           Classes="settings-select"
                           ItemsSource="{Binding DataContext.ConfigurationProfiles, RelativeSource={RelativeSource AncestorType=UserControl}}"
                           SelectedItem="{Binding Profile, Mode=TwoWay}"
+                          IsEnabled="{Binding DataContext.IsSessionIdle, RelativeSource={RelativeSource AncestorType=UserControl}}"
                           IsVisible="{Binding DataContext.CustomTimerConfig, RelativeSource={RelativeSource AncestorType=UserControl}}" />
               </controls:AdaptiveSpacingStackPanel>
             </Grid>
@@ -306,6 +310,7 @@
                           Classes="settings-select"
                           ItemsSource="{Binding DataContext.ConfigurationProfiles, RelativeSource={RelativeSource AncestorType=UserControl}}"
                           SelectedItem="{Binding Profile, Mode=TwoWay}"
+                          IsEnabled="{Binding DataContext.IsSessionIdle, RelativeSource={RelativeSource AncestorType=UserControl}}"
                           IsVisible="{Binding DataContext.CustomTimerConfig, RelativeSource={RelativeSource AncestorType=UserControl}}" />
               </controls:AdaptiveSpacingStackPanel>
             </Grid>
@@ -357,6 +362,7 @@
                           Classes="settings-select"
                           ItemsSource="{Binding DataContext.ConfigurationProfiles, RelativeSource={RelativeSource AncestorType=UserControl}}"
                           SelectedItem="{Binding Profile, Mode=TwoWay}"
+                          IsEnabled="{Binding DataContext.IsSessionIdle, RelativeSource={RelativeSource AncestorType=UserControl}}"
                           IsVisible="{Binding DataContext.CustomTimerConfig, RelativeSource={RelativeSource AncestorType=UserControl}}" />
               </controls:AdaptiveSpacingStackPanel>
             </Grid>
@@ -408,6 +414,7 @@
                           Classes="settings-select"
                           ItemsSource="{Binding DataContext.ConfigurationProfiles, RelativeSource={RelativeSource AncestorType=UserControl}}"
                           SelectedItem="{Binding Profile, Mode=TwoWay}"
+                          IsEnabled="{Binding DataContext.IsSessionIdle, RelativeSource={RelativeSource AncestorType=UserControl}}"
                           IsVisible="{Binding DataContext.CustomTimerConfig, RelativeSource={RelativeSource AncestorType=UserControl}}" />
               </controls:AdaptiveSpacingStackPanel>
             </Grid>
@@ -459,6 +466,7 @@
                           Classes="settings-select"
                           ItemsSource="{Binding DataContext.ConfigurationProfiles, RelativeSource={RelativeSource AncestorType=UserControl}}"
                           SelectedItem="{Binding Profile, Mode=TwoWay}"
+                          IsEnabled="{Binding DataContext.IsSessionIdle, RelativeSource={RelativeSource AncestorType=UserControl}}"
                           IsVisible="{Binding DataContext.CustomTimerConfig, RelativeSource={RelativeSource AncestorType=UserControl}}" />
               </controls:AdaptiveSpacingStackPanel>
             </Grid>

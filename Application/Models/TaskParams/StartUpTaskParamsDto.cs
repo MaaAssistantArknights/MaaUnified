@@ -10,13 +10,13 @@ public sealed class StartUpTaskParamsDto
 
     public string ConnectConfig { get; set; } = "General";
 
-    public string ConnectAddress { get; set; } = "127.0.0.1:5555";
+    public string ConnectAddress { get; set; } = string.Empty;
 
     public string AdbPath { get; set; } = string.Empty;
 
     public bool? MacUseBundledAdb { get; set; }
 
-    public string TouchMode { get; set; } = "MaaFwAdb";
+    public string TouchMode { get; set; } = "minitouch";
 
     public bool AutoDetectConnection { get; set; } = true;
 

@@ -19,16 +19,18 @@ namespace MAAUnified.Tests;
 public sealed class SettingsModuleAK2FeatureTests
 {
     [Fact]
-    public async Task Initialize_StallDetectionDefaults_MatchWpfAndIgnoreRetiredTimeoutSetting()
+    public async Task Initialize_TaskTimeoutDefaults_MatchWpfAndIgnoreRetiredStallSettings()
     {
         await using var fixture = await RuntimeFixture.CreateAsync(gpuCapabilityService: new ScriptedWindowsGpuCapabilityService());
-        fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.TaskTimeoutMinutes] = JsonValue.Create("90");
+        var profile = fixture.Config.CurrentConfig.Profiles[fixture.Config.CurrentConfig.CurrentProfile];
+        profile.Values["TimeOut.Timer.StallTimeoutEnabled"] = JsonValue.Create("False");
+        profile.Values["TimeOut.Timer.StallTimeoutMinutes"] = JsonValue.Create("7");
 
         var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
         await vm.InitializeAsync();
 
-        Assert.True(vm.StallTimeoutEnabled);
-        Assert.Equal(25, vm.StallTimeoutMinutes);
+        Assert.Equal(60, vm.TaskTimeoutMinutes);
+        Assert.Equal(30, vm.ReminderIntervalMinutes);
     }
 
     [Fact]
@@ -41,8 +43,9 @@ public sealed class SettingsModuleAK2FeatureTests
         var emulatorPath = CreateExistingFile(fixture.Root, "emulator.exe");
         vm.RunDirectly = true;
         vm.MinimizeDirectly = true;
-        vm.OpenEmulatorAfterLaunch = true;
+        // WPF parity: enabling auto-launch requires a non-empty path, so set the path first.
         vm.EmulatorPath = $"  {emulatorPath}  ";
+        vm.OpenEmulatorAfterLaunch = true;
         vm.EmulatorAddCommand = " --instance 2 ";
         vm.EmulatorWaitSeconds = 135;
         vm.PerformanceUseGpu = true;
@@ -60,8 +63,7 @@ public sealed class SettingsModuleAK2FeatureTests
         vm.EnablePenguin = false;
         vm.EnableYituliu = true;
         vm.PenguinId = "  penguin-001  ";
-        vm.StallTimeoutEnabled = false;
-        vm.StallTimeoutMinutes = 180;
+        vm.TaskTimeoutMinutes = 180;
         vm.ReminderIntervalMinutes = 45;
 
         await vm.SaveStartPerformanceSettingsAsync();
@@ -86,8 +88,7 @@ public sealed class SettingsModuleAK2FeatureTests
         Assert.Equal("False", ReadScopedString(fixture.Config, ConfigurationKeys.EnablePenguin));
         Assert.Equal("True", ReadScopedString(fixture.Config, ConfigurationKeys.EnableYituliu));
         Assert.Equal("penguin-001", ReadScopedString(fixture.Config, ConfigurationKeys.PenguinId));
-        Assert.Equal("False", ReadScopedString(fixture.Config, ConfigurationKeys.StallTimeoutEnabled));
-        Assert.Equal("180", ReadScopedString(fixture.Config, ConfigurationKeys.StallTimeoutMinutes));
+        Assert.Equal("180", ReadScopedString(fixture.Config, ConfigurationKeys.TaskTimeoutMinutes));
         Assert.Equal("45", ReadScopedString(fixture.Config, ConfigurationKeys.ReminderIntervalMinutes));
 
         Assert.True(vm.RunDirectly);
@@ -110,13 +111,221 @@ public sealed class SettingsModuleAK2FeatureTests
         Assert.False(vm.EnablePenguin);
         Assert.True(vm.EnableYituliu);
         Assert.Equal("penguin-001", vm.PenguinId);
-        Assert.False(vm.StallTimeoutEnabled);
-        Assert.Equal(180, vm.StallTimeoutMinutes);
+        Assert.Equal(180, vm.TaskTimeoutMinutes);
         Assert.Equal(45, vm.ReminderIntervalMinutes);
         Assert.False(vm.HasPendingStartPerformanceChanges);
     }
 
     [Fact]
+    public async Task EmulatorPathCleared_TurnsOffRetryAndAutoLaunch_WithWarning()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync();
+        var sharedState = new ConnectionGameSharedStateViewModel();
+        var vm = new SettingsPageViewModel(fixture.Runtime, sharedState);
+        await vm.InitializeAsync();
+
+        var emulatorPath = CreateExistingFile(fixture.Root, "linked-emulator.exe");
+        vm.EmulatorPath = emulatorPath;
+        vm.OpenEmulatorAfterLaunch = true;
+        sharedState.RetryOnDisconnected = true;
+        Assert.True(vm.OpenEmulatorAfterLaunch);
+        Assert.True(sharedState.RetryOnDisconnected);
+
+        vm.EmulatorPath = string.Empty;
+
+        Assert.False(vm.OpenEmulatorAfterLaunch);
+        Assert.False(sharedState.RetryOnDisconnected);
+        Assert.Equal(
+            vm.RootTexts["Settings.Start.EmulatorPathEmptyWarning"],
+            vm.StartPerformanceValidationMessage);
+    }
+
+    [Fact]
+    public async Task OpenEmulatorAfterLaunch_WithoutPath_IsRejectedImmediately_AndBackfillsClientType()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync();
+        var sharedState = new ConnectionGameSharedStateViewModel();
+        var vm = new SettingsPageViewModel(fixture.Runtime, sharedState);
+        await vm.InitializeAsync();
+
+        sharedState.ClientType = string.Empty;
+        vm.EmulatorPath = string.Empty;
+        vm.OpenEmulatorAfterLaunch = true;
+
+        Assert.False(vm.OpenEmulatorAfterLaunch);
+        Assert.Equal(
+            vm.RootTexts["Settings.StartPerformance.Validation.EmulatorPathRequired"],
+            vm.StartPerformanceValidationMessage);
+        Assert.Equal("Official", sharedState.ClientType);
+        Assert.False(vm.CanEditEmulatorAddCommand);
+
+        vm.EmulatorPath = "some-path";
+        Assert.True(vm.CanEditEmulatorAddCommand);
+    }
+
+    [Fact]
+    public async Task EmulatorPath_MaaFileName_ConfirmedThreeTimes_AppliesPath()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync();
+        var dialogService = new ScriptedMaaPathConfirmDialogService(
+            DialogReturnSemantic.Confirm,
+            DialogReturnSemantic.Confirm,
+            DialogReturnSemantic.Confirm);
+        var vm = new SettingsPageViewModel(
+            fixture.Runtime,
+            new ConnectionGameSharedStateViewModel(),
+            dialogService: dialogService);
+        await vm.InitializeAsync();
+
+        var maaPath = CreateExistingFile(fixture.Root, "maa-emulator.exe");
+        vm.EmulatorPath = maaPath;
+
+        Assert.Equal(maaPath, vm.EmulatorPath);
+        Assert.Equal(3, dialogService.WarningConfirmRequests.Count);
+        Assert.EndsWith("(3)", dialogService.WarningConfirmRequests[0].ConfirmText, StringComparison.Ordinal);
+        Assert.EndsWith("(2)", dialogService.WarningConfirmRequests[1].ConfirmText, StringComparison.Ordinal);
+        Assert.EndsWith("(1)", dialogService.WarningConfirmRequests[2].ConfirmText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task EmulatorPath_MaaFileName_ConfirmationCanceled_AbandonsAssignment()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync();
+        var dialogService = new ScriptedMaaPathConfirmDialogService(
+            DialogReturnSemantic.Confirm,
+            DialogReturnSemantic.Cancel);
+        var vm = new SettingsPageViewModel(
+            fixture.Runtime,
+            new ConnectionGameSharedStateViewModel(),
+            dialogService: dialogService);
+        await vm.InitializeAsync();
+
+        var previousPath = CreateExistingFile(fixture.Root, "previous-emulator.exe");
+        vm.EmulatorPath = previousPath;
+        Assert.Equal(previousPath, vm.EmulatorPath);
+
+        var maaPath = CreateExistingFile(fixture.Root, "maa-core.exe");
+        vm.EmulatorPath = maaPath;
+
+        // WPF parity: canceling any of the confirmations abandons the assignment entirely.
+        Assert.Equal(previousPath, vm.EmulatorPath);
+        Assert.Equal(2, dialogService.WarningConfirmRequests.Count);
+    }
+
+    [Fact]
+    public async Task EmulatorPath_NonMaaFileName_AppliesWithoutConfirmation()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync();
+        var dialogService = new ScriptedMaaPathConfirmDialogService();
+        var vm = new SettingsPageViewModel(
+            fixture.Runtime,
+            new ConnectionGameSharedStateViewModel(),
+            dialogService: dialogService);
+        await vm.InitializeAsync();
+
+        var emulatorPath = CreateExistingFile(fixture.Root, "normal-emulator.exe");
+        vm.EmulatorPath = emulatorPath;
+
+        Assert.Equal(emulatorPath, vm.EmulatorPath);
+        Assert.Empty(dialogService.WarningConfirmRequests);
+    }
+
+    [Fact]
+    public async Task EmulatorPath_NonExistentPath_WarnsImmediately_ButStillSaves()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync();
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        var missingPath = Path.Combine(fixture.Root, "missing-emulator.exe");
+        vm.EmulatorPath = missingPath;
+
+        // WPF parity: a non-empty missing path warns immediately but the value is still kept.
+        Assert.Equal(missingPath, vm.EmulatorPath);
+        Assert.Equal(
+            vm.RootTexts["Settings.Start.EmulatorPathNotExistWarning"],
+            vm.StartPerformanceValidationMessage);
+
+        await vm.SaveStartPerformanceSettingsAsync();
+
+        Assert.Equal(missingPath, ReadScopedString(fixture.Config, ConfigurationKeys.EmulatorPath));
+        Assert.Equal(string.Empty, vm.StartPerformanceValidationMessage);
+        Assert.False(vm.HasPendingStartPerformanceChanges);
+    }
+
+    [Fact]
+    public async Task EmulatorPath_ExistingPath_DoesNotWarn()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync();
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        var emulatorPath = CreateExistingFile(fixture.Root, "existing-emulator.exe");
+        vm.EmulatorPath = emulatorPath;
+
+        Assert.Equal(emulatorPath, vm.EmulatorPath);
+        Assert.Equal(string.Empty, vm.StartPerformanceValidationMessage);
+    }
+
+    [Fact]
+    public async Task SaveStartPerformanceSettings_ProfileScopedGpuKeysFromImport_ShouldBeOverwrittenByNewSelection()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync(gpuCapabilityService: new ScriptedWindowsGpuCapabilityService());
+        var config = fixture.Config.CurrentConfig;
+        var profile = config.Profiles[config.CurrentProfile];
+
+        // Simulate a WPF gui.json import: GPU settings live in the profile scope.
+        profile.Values[ConfigurationKeys.PerformanceUseGpu] = JsonValue.Create("True");
+        profile.Values[ConfigurationKeys.PerformanceAllowDeprecatedGpu] = JsonValue.Create("True");
+        profile.Values[ConfigurationKeys.PerformancePreferredGpuDescription] = JsonValue.Create("GPU-DESC");
+        profile.Values[ConfigurationKeys.PerformancePreferredGpuInstancePath] = JsonValue.Create("GPU-PATH");
+
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        Assert.True(vm.PerformanceUseGpu);
+        Assert.Equal("GPU-PATH", vm.PerformancePreferredGpuInstancePath);
+
+        vm.PerformanceUseGpu = false;
+        vm.PerformanceAllowDeprecatedGpu = false;
+
+        await vm.SaveStartPerformanceSettingsAsync();
+
+        // The write must target the profile scope so the profile-first read-back observes the change.
+        Assert.Equal("False", ReadScopedString(fixture.Config, ConfigurationKeys.PerformanceUseGpu));
+        Assert.Equal("False", ReadScopedString(fixture.Config, ConfigurationKeys.PerformanceAllowDeprecatedGpu));
+        Assert.False(vm.PerformanceUseGpu);
+        Assert.False(vm.PerformanceAllowDeprecatedGpu);
+        Assert.False(vm.HasPendingStartPerformanceChanges);
+
+        var reloaded = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await reloaded.InitializeAsync();
+        Assert.False(reloaded.PerformanceUseGpu);
+        Assert.False(reloaded.PerformanceAllowDeprecatedGpu);
+    }
+
+    [Fact]
+    public async Task GpuPreferenceChange_Headless_ResolvesAndAppliesSynchronouslyOnCallerThread()
+    {
+        var gpuService = new ScriptedWindowsGpuCapabilityService();
+        await using var fixture = await RuntimeFixture.CreateAsync(gpuCapabilityService: gpuService);
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        gpuService.ResolveThreadIds.Clear();
+
+        var callerThreadId = Environment.CurrentManagedThreadId;
+        vm.PerformanceUseGpu = !vm.PerformanceUseGpu;
+
+        // Headless determinism guard: the GPU refresh triggered by a setter must resolve and
+        // apply inline on the caller thread. A late thread-pool apply can interleave with
+        // subsequent synchronous mutations (or an explicit save) and write stale GPU values
+        // back into the view model (see the N1 flake in the M20 record).
+        Assert.NotEmpty(gpuService.ResolveThreadIds);
+        Assert.All(gpuService.ResolveThreadIds, threadId => Assert.Equal(callerThreadId, threadId));
+        Assert.Equal(
+            vm.PerformanceUseGpu ? GpuOptionKind.SystemDefault : GpuOptionKind.Disabled,
+            vm.SelectedGpuOption?.Descriptor.Kind);
+    }
+
     public async Task Initialize_RecruitReportSettings_FallBackToImportedBareKeys_LikeCompile()
     {
         // gui.json importers normalize Penguin.EnablePenguin/Penguin.Id to the bare aliases
@@ -380,6 +589,29 @@ public sealed class SettingsModuleAK2FeatureTests
     }
 
     [Fact]
+    public async Task SelectedGpuOption_ProgrammaticChange_RaisesSelectedGpuOptionIdNotification()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync(gpuCapabilityService: new ScriptedWindowsGpuCapabilityService());
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        var target = Assert.Single(
+            vm.AvailableGpuOptions,
+            option => option.Descriptor.InstancePath == "GPU-PATH");
+        Assert.NotSame(target, vm.SelectedGpuOption);
+
+        var notifications = new List<string?>();
+        vm.PropertyChanged += (_, args) => notifications.Add(args.PropertyName);
+
+        // Simulates the programmatic rewrites (probe completion / probe failure / config
+        // import) that previously left the bound GPU ComboBox display stale.
+        vm.SelectedGpuOption = target;
+
+        Assert.Contains(nameof(SettingsPageViewModel.SelectedGpuOptionId), notifications);
+        Assert.Equal("GPU-PATH", vm.SelectedGpuOptionId);
+    }
+
+    [Fact]
     public async Task Initialize_UnsupportedGpuConfig_DisablesSelectionAndCollapsesLegacyState()
     {
         await using var fixture = await RuntimeFixture.CreateAsync(gpuCapabilityService: new UnsupportedGpuCapabilityService());
@@ -416,16 +648,22 @@ public sealed class SettingsModuleAK2FeatureTests
         vm.EmulatorWaitSeconds = 60;
         await vm.SaveStartPerformanceSettingsAsync();
 
-        vm.EmulatorWaitSeconds = 900;
+        vm.EmulatorWaitSeconds = -5;
         await vm.SaveStartPerformanceSettingsAsync();
 
         Assert.Equal("60", ReadScopedString(fixture.Config, ConfigurationKeys.EmulatorWaitSeconds));
         Assert.True(vm.HasPendingStartPerformanceChanges);
-        Assert.Contains("0-600", vm.StartPerformanceValidationMessage, StringComparison.Ordinal);
+        Assert.Contains("0-", vm.StartPerformanceValidationMessage, StringComparison.Ordinal);
+
+        // WPF parity: values above 600 are accepted (no upper bound).
+        vm.EmulatorWaitSeconds = 3600;
+        await vm.SaveStartPerformanceSettingsAsync();
+        Assert.Equal("3600", ReadScopedString(fixture.Config, ConfigurationKeys.EmulatorWaitSeconds));
+        Assert.False(vm.HasPendingStartPerformanceChanges);
     }
 
     [Fact]
-    public async Task SaveStartPerformanceSettings_OpenEmulatorWithoutExistingPath_BlocksSaveAndKeepsPreviousConfig()
+    public async Task OpenEmulatorAfterLaunch_EnableWithEmptyPath_RejectedImmediately_MissingPathSavableWhileDisabled()
     {
         await using var fixture = await RuntimeFixture.CreateAsync();
         var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
@@ -436,18 +674,47 @@ public sealed class SettingsModuleAK2FeatureTests
         vm.EmulatorWaitSeconds = 30;
         await vm.SaveStartPerformanceSettingsAsync();
 
-        var missingPath = Path.Combine(fixture.Root, "missing-emulator.exe");
+        // WPF parity: enabling automatic emulator launch with an empty path is rejected at input
+        // time (WPF shows a message box and resets the toggle), so the save below must not block.
         vm.OpenEmulatorAfterLaunch = true;
+        Assert.False(vm.OpenEmulatorAfterLaunch);
+        Assert.Equal(
+            vm.RootTexts["Settings.StartPerformance.Validation.EmulatorPathRequired"],
+            vm.StartPerformanceValidationMessage);
+
+        var missingPath = Path.Combine(fixture.Root, "missing-emulator.exe");
         vm.EmulatorPath = missingPath;
         await vm.SaveStartPerformanceSettingsAsync();
 
         Assert.Equal("False", ReadScopedString(fixture.Config, ConfigurationKeys.StartEmulator));
-        Assert.Equal(string.Empty, ReadScopedString(fixture.Config, ConfigurationKeys.EmulatorPath));
+        Assert.Equal(missingPath, ReadScopedString(fixture.Config, ConfigurationKeys.EmulatorPath));
+        Assert.False(vm.HasPendingStartPerformanceChanges);
+    }
+
+    [Fact]
+    public async Task SaveStartPerformanceSettings_OpenEmulatorWithDeletedPath_BlocksSaveAndKeepsPreviousConfig()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync();
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        var emulatorPath = CreateExistingFile(fixture.Root, "emulator-to-delete.exe");
+        vm.EmulatorPath = emulatorPath;
+        vm.OpenEmulatorAfterLaunch = true;
+        await vm.SaveStartPerformanceSettingsAsync();
+        Assert.Equal("True", ReadScopedString(fixture.Config, ConfigurationKeys.StartEmulator));
+        Assert.False(vm.HasPendingStartPerformanceChanges);
+
+        // The path existed when the toggle was enabled, but was deleted afterwards: the save-time
+        // validation still blocks persistence.
+        File.Delete(emulatorPath);
+        await vm.SaveStartPerformanceSettingsAsync();
+
         Assert.True(vm.HasPendingStartPerformanceChanges);
         var expectedMessage = string.Format(
             CultureInfo.InvariantCulture,
             vm.RootTexts["Settings.StartPerformance.Validation.EmulatorPathNotFound"],
-            missingPath);
+            emulatorPath);
         Assert.Equal(expectedMessage, vm.StartPerformanceValidationMessage);
     }
 
@@ -477,8 +744,7 @@ public sealed class SettingsModuleAK2FeatureTests
         fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.EnablePenguin] = JsonValue.Create("false");
         fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.EnableYituliu] = JsonValue.Create(1);
         fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.PenguinId] = JsonValue.Create("  pid  ");
-        fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.StallTimeoutEnabled] = JsonValue.Create("false");
-        fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.StallTimeoutMinutes] = JsonValue.Create("99999");
+        fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.TaskTimeoutMinutes] = JsonValue.Create("99999");
         fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.ReminderIntervalMinutes] = JsonValue.Create("99999");
 
         var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
@@ -489,7 +755,7 @@ public sealed class SettingsModuleAK2FeatureTests
         Assert.True(vm.OpenEmulatorAfterLaunch);
         Assert.Equal(emulatorPath, vm.EmulatorPath);
         Assert.Equal("--normalize", vm.EmulatorAddCommand);
-        Assert.Equal(600, vm.EmulatorWaitSeconds);
+        Assert.Equal(9999, vm.EmulatorWaitSeconds);
         Assert.True(vm.PerformanceUseGpu);
         Assert.False(vm.PerformanceAllowDeprecatedGpu);
         Assert.Equal("GPU-DESC", vm.PerformancePreferredGpuDescription);
@@ -505,15 +771,9 @@ public sealed class SettingsModuleAK2FeatureTests
         Assert.False(vm.EnablePenguin);
         Assert.True(vm.EnableYituliu);
         Assert.Equal("pid", vm.PenguinId);
-        Assert.False(vm.StallTimeoutEnabled);
-        Assert.Equal(11451, vm.StallTimeoutMinutes);
+        Assert.Equal(11451, vm.TaskTimeoutMinutes);
         Assert.Equal(11451, vm.ReminderIntervalMinutes);
-        var expectedWarning = string.Format(
-            CultureInfo.InvariantCulture,
-            vm.RootTexts["Settings.StartPerformance.Warning.EmulatorWaitSecondsClamped"],
-            9999,
-            600);
-        Assert.Equal(expectedWarning, vm.StartPerformanceValidationMessage);
+        Assert.Equal(string.Empty, vm.StartPerformanceValidationMessage);
     }
 
     [Fact]
@@ -555,6 +815,63 @@ public sealed class SettingsModuleAK2FeatureTests
     }
 
     [Fact]
+    public async Task GpuAllowDeprecatedToggle_HidesAndShowsDeprecatedOptions_InPickerOnly()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync(gpuCapabilityService: new ScriptedWindowsGpuCapabilityService());
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        // WPF parity (freeze 23ddd271 PerformanceUserControl.xaml ComboBoxItem trigger):
+        // deprecated options are hidden from the picker unless AllowDeprecatedGpu is set.
+        Assert.DoesNotContain(vm.AvailableGpuOptions, option => option.Descriptor.IsDeprecated);
+
+        vm.PerformanceAllowDeprecatedGpu = true;
+
+        Assert.Contains(
+            vm.AvailableGpuOptions,
+            option => option.Descriptor.IsDeprecated && option.Descriptor.InstancePath == "LEGACY#0");
+    }
+
+    [Fact]
+    public async Task Initialize_DeprecatedGpuSelection_AllowDeprecatedFalse_KeepsSelectionThroughSave()
+    {
+        // WPF parity (freeze 23ddd271 GpuOption.GetCurrent + AsstProxy.Init): a stored selection
+        // pointing at a deprecated GPU keeps resolving to that GPU while AllowDeprecatedGpu=false,
+        // and is not rewritten to a fallback on refresh or save.
+        await using var fixture = await RuntimeFixture.CreateAsync(gpuCapabilityService: new ScriptedWindowsGpuCapabilityService());
+        var profile = fixture.Config.CurrentConfig.Profiles[fixture.Config.CurrentConfig.CurrentProfile];
+        profile.Values[ConfigurationKeys.PerformanceUseGpu] = JsonValue.Create("True");
+        profile.Values[ConfigurationKeys.PerformanceAllowDeprecatedGpu] = JsonValue.Create("False");
+        profile.Values[ConfigurationKeys.PerformancePreferredGpuDescription] = JsonValue.Create("Legacy GPU");
+        profile.Values[ConfigurationKeys.PerformancePreferredGpuInstancePath] = JsonValue.Create("LEGACY#0");
+
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        Assert.True(vm.PerformanceUseGpu);
+        Assert.False(vm.PerformanceAllowDeprecatedGpu);
+        Assert.Equal("Legacy GPU", vm.PerformancePreferredGpuDescription);
+        Assert.Equal("LEGACY#0", vm.PerformancePreferredGpuInstancePath);
+        Assert.Equal("LEGACY#0", vm.SelectedGpuOption?.Descriptor.InstancePath);
+        Assert.True(vm.SelectedGpuOption?.Descriptor.IsDeprecated);
+
+        // The selected deprecated option stays listed so the picker reflects the effective
+        // selection; the picker warning still surfaces the deprecated state.
+        Assert.Contains(vm.AvailableGpuOptions, option => option.Descriptor.InstancePath == "LEGACY#0");
+        Assert.Contains(
+            vm.RootTexts["Settings.Performance.Gpu.Warning.Deprecated"],
+            vm.GpuWarningMessage,
+            StringComparison.Ordinal);
+
+        await vm.SaveStartPerformanceSettingsAsync();
+
+        Assert.Equal("True", ReadScopedString(fixture.Config, ConfigurationKeys.PerformanceUseGpu));
+        Assert.Equal("False", ReadScopedString(fixture.Config, ConfigurationKeys.PerformanceAllowDeprecatedGpu));
+        Assert.Equal("Legacy GPU", ReadScopedString(fixture.Config, ConfigurationKeys.PerformancePreferredGpuDescription));
+        Assert.Equal("LEGACY#0", ReadScopedString(fixture.Config, ConfigurationKeys.PerformancePreferredGpuInstancePath));
+    }
+
+    [Fact]
     public async Task RestartRoundTrip_StartPerformanceFields_PersistAndReload_OnWindows()
     {
         var root = Path.Combine(Path.GetTempPath(), "maa-unified-tests", Guid.NewGuid().ToString("N"));
@@ -570,8 +887,8 @@ public sealed class SettingsModuleAK2FeatureTests
 
                 vm.RunDirectly = true;
                 vm.MinimizeDirectly = false;
-                vm.OpenEmulatorAfterLaunch = true;
                 vm.EmulatorPath = emulatorPath;
+                vm.OpenEmulatorAfterLaunch = true;
                 vm.EmulatorAddCommand = "--boot";
                 vm.EmulatorWaitSeconds = 210;
                 vm.PerformanceUseGpu = true;
@@ -588,8 +905,7 @@ public sealed class SettingsModuleAK2FeatureTests
                 vm.EnablePenguin = true;
                 vm.EnableYituliu = false;
                 vm.PenguinId = "penguin-roundtrip";
-                vm.StallTimeoutEnabled = false;
-                vm.StallTimeoutMinutes = 240;
+                vm.TaskTimeoutMinutes = 240;
                 vm.ReminderIntervalMinutes = 60;
 
                 await vm.SaveStartPerformanceSettingsAsync();
@@ -618,8 +934,7 @@ public sealed class SettingsModuleAK2FeatureTests
             Assert.True(reloaded.EnablePenguin);
             Assert.False(reloaded.EnableYituliu);
             Assert.Equal("penguin-roundtrip", reloaded.PenguinId);
-            Assert.False(reloaded.StallTimeoutEnabled);
-            Assert.Equal(240, reloaded.StallTimeoutMinutes);
+            Assert.Equal(240, reloaded.TaskTimeoutMinutes);
             Assert.Equal(60, reloaded.ReminderIntervalMinutes);
         }
         finally
@@ -777,8 +1092,15 @@ public sealed class SettingsModuleAK2FeatureTests
 
     private sealed class ScriptedWindowsGpuCapabilityService : IGpuCapabilityService
     {
+        public List<int> ResolveThreadIds { get; } = [];
+
         public GpuSelectionResolution Resolve(GpuPreference preference)
         {
+            lock (ResolveThreadIds)
+            {
+                ResolveThreadIds.Add(Environment.CurrentManagedThreadId);
+            }
+
             var options = new List<GpuOptionDescriptor>
             {
                 GpuOptionDescriptor.Disabled,
@@ -799,18 +1121,17 @@ public sealed class SettingsModuleAK2FeatureTests
                     GpuIndex: 2),
             };
 
-            if (preference.AllowDeprecatedGpu)
-            {
-                options.Add(new GpuOptionDescriptor(
-                    Id: "deprecated",
-                    Kind: GpuOptionKind.SpecificGpu,
-                    DisplayName: "Legacy GPU",
-                    Description: "Legacy GPU",
-                    InstancePath: "LEGACY#0",
-                    GpuIndex: 3,
-                    IsDeprecated: true,
-                    DriverDate: new DateTime(2018, 1, 1)));
-            }
+            // WPF parity (freeze 23ddd271 GpuOption.GetGpuOptions): the capability service never
+            // filters deprecated GPUs; hiding them is a view-model concern (ApplyGpuResolution).
+            options.Add(new GpuOptionDescriptor(
+                Id: "deprecated",
+                Kind: GpuOptionKind.SpecificGpu,
+                DisplayName: "Legacy GPU",
+                Description: "Legacy GPU",
+                InstancePath: "LEGACY#0",
+                GpuIndex: 3,
+                IsDeprecated: true,
+                DriverDate: new DateTime(2018, 1, 1)));
 
             var selected = preference.UseGpu
                 ? options.FirstOrDefault(option => option.Kind == GpuOptionKind.SystemDefault)
@@ -980,6 +1301,77 @@ public sealed class SettingsModuleAK2FeatureTests
             return Task.FromResult(new DialogCompletion<WarningConfirmDialogPayload>(
                 _warningConfirmReturn,
                 _warningConfirmReturn == DialogReturnSemantic.Confirm ? new WarningConfirmDialogPayload(true) : null,
+                "scripted"));
+        }
+    }
+
+    private sealed class ScriptedMaaPathConfirmDialogService : IAppDialogService
+    {
+        private readonly Queue<DialogReturnSemantic> _warningConfirmReturns;
+
+        public ScriptedMaaPathConfirmDialogService(params DialogReturnSemantic[] warningConfirmReturns)
+        {
+            _warningConfirmReturns = new Queue<DialogReturnSemantic>(warningConfirmReturns);
+        }
+
+        public List<WarningConfirmDialogRequest> WarningConfirmRequests { get; } = [];
+
+        public Task<DialogCompletion<AnnouncementDialogPayload>> ShowAnnouncementAsync(
+            AnnouncementDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<AnnouncementDialogPayload>(DialogReturnSemantic.Close, null, "scripted"));
+
+        public Task<DialogCompletion<VersionUpdateDialogPayload>> ShowVersionUpdateAsync(
+            VersionUpdateDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<VersionUpdateDialogPayload>(DialogReturnSemantic.Close, null, "scripted"));
+
+        public Task<DialogCompletion<ProcessPickerDialogPayload>> ShowProcessPickerAsync(
+            ProcessPickerDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<ProcessPickerDialogPayload>(DialogReturnSemantic.Close, null, "scripted"));
+
+        public Task<DialogCompletion<EmulatorPathDialogPayload>> ShowEmulatorPathAsync(
+            EmulatorPathDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<EmulatorPathDialogPayload>(DialogReturnSemantic.Close, null, "scripted"));
+
+        public Task<DialogCompletion<ErrorDialogPayload>> ShowErrorAsync(
+            ErrorDialogRequest request,
+            string sourceScope,
+            Func<CancellationToken, Task<UiOperationResult>>? openIssueReportAsync = null,
+            Func<CancellationToken, Task<UiOperationResult>>? openSettingsAsync = null,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<ErrorDialogPayload>(DialogReturnSemantic.Close, null, "scripted"));
+
+        public Task<DialogCompletion<AchievementListDialogPayload>> ShowAchievementListAsync(
+            AchievementListDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<AchievementListDialogPayload>(DialogReturnSemantic.Close, null, "scripted"));
+
+        public Task<DialogCompletion<TextDialogPayload>> ShowTextAsync(
+            TextDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<TextDialogPayload>(DialogReturnSemantic.Close, null, "scripted"));
+
+        public Task<DialogCompletion<WarningConfirmDialogPayload>> ShowWarningConfirmAsync(
+            WarningConfirmDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+        {
+            WarningConfirmRequests.Add(request);
+            var result = _warningConfirmReturns.Count > 0
+                ? _warningConfirmReturns.Dequeue()
+                : DialogReturnSemantic.Cancel;
+            return Task.FromResult(new DialogCompletion<WarningConfirmDialogPayload>(
+                result,
+                result == DialogReturnSemantic.Confirm ? new WarningConfirmDialogPayload(true) : null,
                 "scripted"));
         }
     }

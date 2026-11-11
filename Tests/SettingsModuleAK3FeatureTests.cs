@@ -14,6 +14,23 @@ namespace MAAUnified.Tests;
 public sealed class SettingsModuleAK3FeatureTests
 {
     [Fact]
+    public async Task Timer_DefaultSlotHours_MatchWpfSlotIndexTimesThree()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync();
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        Assert.Equal(8, vm.Timers.Count);
+        for (var i = 0; i < vm.Timers.Count; i++)
+        {
+            var expectedTime = FormattableString.Invariant($"{i * 3:00}:00");
+            Assert.Equal(expectedTime, vm.Timers[i].Time);
+            Assert.Equal(i * 3, vm.Timers[i].Hour);
+            Assert.Equal(0, vm.Timers[i].Minute);
+        }
+    }
+
+    [Fact]
     public async Task Timer_SaveAndReload_RoundTrip8Slots()
     {
         var root = Path.Combine(Path.GetTempPath(), "maa-unified-tests", Guid.NewGuid().ToString("N"));

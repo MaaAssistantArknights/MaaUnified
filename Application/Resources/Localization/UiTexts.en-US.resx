@@ -3351,12 +3351,6 @@ With save file: farm points through crafting (advanced).
   <data name="Settings.Game.TaskTimeoutMinutes" xml:space="preserve">
     <value>Task timeout (minutes)</value>
   </data>
-  <data name="Settings.Game.StallTimeoutEnabled" xml:space="preserve">
-    <value>Enable stall detection</value>
-  </data>
-  <data name="Settings.Game.StallTimeoutMinutes" xml:space="preserve">
-    <value>Log output stall timeout (min)</value>
-  </data>
   <data name="Settings.Game.UseScriptOnCopilot" xml:space="preserve">
     <value>Run scripts during Copilot</value>
   </data>
@@ -3867,6 +3861,24 @@ With save file: farm points through crafting (advanced).
   <data name="Settings.Start.EmulatorExtraArgsTip" xml:space="preserve">
     <value>Arguments passed to the emulator launch command</value>
   </data>
+  <data name="Settings.Start.EmulatorPathEmptyWarning" xml:space="preserve">
+    <value>Emulator path is empty; "Retry on disconnect" and "Auto-launch emulator" have been turned off.</value>
+  </data>
+  <data name="Settings.Start.EmulatorPathMaaConfirm.Title" xml:space="preserve">
+    <value>Tip</value>
+  </data>
+  <data name="Settings.Start.EmulatorPathMaaConfirm.Message" xml:space="preserve">
+    <value>Do you also want to order a bar in a bar?</value>
+  </data>
+  <data name="Settings.Start.EmulatorPathMaaConfirm.Confirm" xml:space="preserve">
+    <value>I'm sure I haven't selected the wrong one</value>
+  </data>
+  <data name="Settings.Start.EmulatorPathMaaConfirm.Cancel" xml:space="preserve">
+    <value>Okay, I will choose again</value>
+  </data>
+  <data name="Settings.Start.EmulatorPathNotExistWarning" xml:space="preserve">
+    <value>The emulator path does not exist</value>
+  </data>
   <data name="Settings.Start.EmulatorPath" xml:space="preserve">
     <value>Emulator path</value>
   </data>
@@ -3932,6 +3944,24 @@ With save file: farm points through crafting (advanced).
   </data>
   <data name="Settings.Timer.CustomConfig" xml:space="preserve">
     <value>Use custom configuration</value>
+  </data>
+  <data name="Timer.Schedule.ForceCountdown.Title" xml:space="preserve">
+    <value>Scheduled Start</value>
+  </data>
+  <data name="Timer.Schedule.ForceCountdown.Message" xml:space="preserve">
+    <value>The scheduled start will be forced when the countdown ends: any running task is stopped and restarted.</value>
+  </data>
+  <data name="Timer.Schedule.ForceCountdown.Confirm" xml:space="preserve">
+    <value>Start Now</value>
+  </data>
+  <data name="Timer.Schedule.ForceCountdown.Cancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="Timer.Schedule.ProfileMismatchWarning" xml:space="preserve">
+    <value>Scheduled start skipped: the current configuration does not match the timer configuration.</value>
+  </data>
+  <data name="Timer.Schedule.CloseDownFailed" xml:space="preserve">
+    <value>Failed to close the game.</value>
   </data>
   <data name="Settings.Timer.ForceScheduledStart" xml:space="preserve">
     <value>Force scheduled start</value>
@@ -4403,9 +4433,6 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
   </data>
   <data name="StartUp.Option.TouchMode.MaaTouch" xml:space="preserve">
     <value>MaaTouch (Experimental)</value>
-  </data>
-  <data name="StartUp.Option.TouchMode.MaaFwAdbTouch" xml:space="preserve">
-    <value>MaaFramework (Experimental)</value>
   </data>
   <data name="StartUp.Option.TouchMode.MiniTouch" xml:space="preserve">
     <value>Minitouch (Default)</value>

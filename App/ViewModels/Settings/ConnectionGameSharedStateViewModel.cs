@@ -47,12 +47,14 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
         };
 
     private string _language = UiLanguageCatalog.DefaultLanguage;
-    private string _connectAddress = "127.0.0.1:5555";
+    // WPF parity (ConnectSettingsUserControlModel): both default to string.Empty;
+    // AutoDetect (runtime discovery / default address table) refills them at connect time.
+    private string _connectAddress = string.Empty;
     private string _connectConfig = "General";
-    private string _adbPath = "adb";
+    private string _adbPath = string.Empty;
     private string _clientType = "Official";
     private bool _startGameEnabled = true;
-    private string _touchMode = "MaaFwAdb";
+    private string _touchMode = "minitouch";
     private bool _autoDetect = true;
     private bool _alwaysAutoDetect;
     private bool _retryOnDisconnected;
@@ -307,10 +309,9 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
             OnPropertyChanged(nameof(ShowLdPlayerExtrasSection));
             OnPropertyChanged(nameof(ShowEmulatorExtrasSection));
             OnPropertyChanged(nameof(CanEditAdbConnectionFields));
-            if (string.Equals(_connectConfig, "PC", StringComparison.OrdinalIgnoreCase))
-            {
-                StartGameEnabled = false;
-            }
+            // WPF parity: switching ConnectConfig only re-evaluates the StartGame read mask
+            // (getter returns false while AttachWindow/PC); the stored value is preserved.
+            OnPropertyChanged(nameof(StartGameEnabled));
 
             if (ShowMuMuExtrasSection && MuMu12ExtrasEnabled)
             {
@@ -352,17 +353,17 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
 
     public bool StartGameEnabled
     {
-        get => _startGameEnabled;
-        set
-        {
-            if (string.Equals(ConnectConfig, "PC", StringComparison.OrdinalIgnoreCase) && value)
-            {
-                value = false;
-            }
-
-            SetProperty(ref _startGameEnabled, value);
-        }
+        // WPF parity (GameSettingsUserControlModel.StartGame): the getter is masked while
+        // AttachWindow (PC) mode is active, but the stored value is never rewritten.
+        get => IsAttachWindowMode ? false : _startGameEnabled;
+        set => SetProperty(ref _startGameEnabled, value);
     }
+
+    /// <summary>
+    /// Gets the persisted StartGame value without the AttachWindow (PC) read mask.
+    /// Profile persistence must use this value so a PC round-trip does not erase it.
+    /// </summary>
+    public bool StoredStartGameEnabled => _startGameEnabled;
 
     public bool CanStartGameEnabled => !string.Equals(ConnectConfig, "PC", StringComparison.OrdinalIgnoreCase);
 
@@ -714,14 +715,8 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
             }
         }
 
-        if (candidates.Count == 0)
-        {
-            foreach (var fallbackAddress in GetDefaultAddressesForCurrentConfig())
-            {
-                AddAddressCandidate(candidates, fallbackAddress);
-            }
-        }
-
+        // WPF parity: with AutoDetect off and an empty address there are no fallback
+        // candidates; the connect attempt fails instead of silently trying default ports.
         return candidates;
     }
 

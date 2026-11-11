@@ -2116,12 +2116,6 @@
   <data name="Settings.Game.TaskTimeoutMinutes" xml:space="preserve">
     <value>任務逾時時間（分鐘）</value>
   </data>
-  <data name="Settings.Game.StallTimeoutEnabled" xml:space="preserve">
-    <value>啟用停滯偵測</value>
-  </data>
-  <data name="Settings.Game.StallTimeoutMinutes" xml:space="preserve">
-    <value>日誌輸出停滯超時時間（分鐘）</value>
-  </data>
   <data name="Settings.Game.UseScriptOnCopilot" xml:space="preserve">
     <value>自動戰鬥時啟用上述腳本</value>
   </data>
@@ -2440,6 +2434,24 @@
   <data name="Settings.Start.EmulatorExtraArgsTip" xml:space="preserve">
     <value>傳遞給模擬器啟動命令的參數</value>
   </data>
+  <data name="Settings.Start.EmulatorPathEmptyWarning" xml:space="preserve">
+    <value>模擬器路徑為空，「斷線重試」與「啟動後自動開啟模擬器」已自動關閉。</value>
+  </data>
+  <data name="Settings.Start.EmulatorPathMaaConfirm.Title" xml:space="preserve">
+    <value>提示</value>
+  </data>
+  <data name="Settings.Start.EmulatorPathMaaConfirm.Message" xml:space="preserve">
+    <value>你也想在酒吧裡點酒吧？</value>
+  </data>
+  <data name="Settings.Start.EmulatorPathMaaConfirm.Confirm" xml:space="preserve">
+    <value>我確定沒選錯</value>
+  </data>
+  <data name="Settings.Start.EmulatorPathMaaConfirm.Cancel" xml:space="preserve">
+    <value>好的，我會重新選擇</value>
+  </data>
+  <data name="Settings.Start.EmulatorPathNotExistWarning" xml:space="preserve">
+    <value>模擬器路徑不存在</value>
+  </data>
   <data name="Settings.Start.EmulatorPath" xml:space="preserve">
     <value>模擬器路徑</value>
   </data>
@@ -2505,6 +2517,24 @@
   </data>
   <data name="Settings.Timer.CustomConfig" xml:space="preserve">
     <value>自定義配置選擇</value>
+  </data>
+  <data name="Timer.Schedule.ForceCountdown.Title" xml:space="preserve">
+    <value>定時啟動</value>
+  </data>
+  <data name="Timer.Schedule.ForceCountdown.Message" xml:space="preserve">
+    <value>定時啟動將在倒數結束後強制執行：正在執行的任務會被停止並重新開始。</value>
+  </data>
+  <data name="Timer.Schedule.ForceCountdown.Confirm" xml:space="preserve">
+    <value>立即開始</value>
+  </data>
+  <data name="Timer.Schedule.ForceCountdown.Cancel" xml:space="preserve">
+    <value>取消</value>
+  </data>
+  <data name="Timer.Schedule.ProfileMismatchWarning" xml:space="preserve">
+    <value>定時啟動已跳過：目前配置與定時配置不一致。</value>
+  </data>
+  <data name="Timer.Schedule.CloseDownFailed" xml:space="preserve">
+    <value>關閉遊戲失敗。</value>
   </data>
   <data name="Settings.Timer.ForceScheduledStart" xml:space="preserve">
     <value>強制定時啟動</value>
@@ -2844,9 +2874,6 @@
   </data>
   <data name="StartUp.Option.TouchMode.MaaTouch" xml:space="preserve">
     <value>MaaTouch（實驗功能）</value>
-  </data>
-  <data name="StartUp.Option.TouchMode.MaaFwAdbTouch" xml:space="preserve">
-    <value>MaaFramework（實驗功能）</value>
   </data>
   <data name="StartUp.Option.TouchMode.MiniTouch" xml:space="preserve">
     <value>Minitouch（預設）</value>

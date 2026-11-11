@@ -73,8 +73,7 @@
         </controls:AdaptiveSpacingStackPanel>
 
         <controls:AdaptiveSpacingStackPanel Grid.Column="2"
-                    Classes="start-settings-stack settings-page-column-stack"
-                    IsVisible="{Binding CanEditEmulatorLaunchSettings}">
+                    Classes="start-settings-stack settings-page-column-stack">
           <Grid Classes="settings-page-labeled-action-row"
                 controls:SettingsLabelWidthCoordinator.GroupKey="Start.Emulator"
                 ColumnDefinitions="Auto,*">
@@ -95,7 +94,7 @@
                                     Tip="{Binding RootTexts[Settings.Start.EmulatorExtraArgsTip]}" />
             <controls:AppTextInput Grid.Column="1"
                      Classes="settings-input"
-                     IsEnabled="{Binding CanEditEmulatorLaunchSettings}"
+                     IsEnabled="{Binding CanEditEmulatorAddCommand}"
                      Text="{Binding EmulatorAddCommand, UpdateSourceTrigger=LostFocus}" />
           </Grid>
 
@@ -108,7 +107,6 @@
               <controls:AppNumberInput
                                               Width="80"
                                               Minimum="0"
-                                              Maximum="600"
                                               Value="{Binding EmulatorWaitSeconds}" />
               <TextBlock Classes="app-caption"
                          Text="{Binding RootTexts[Settings.Start.EmulatorWaitSecondsNote]}" />

@@ -36,34 +36,40 @@ public sealed class SettingsModuleAK1FeatureTests
     ];
 
     [Fact]
-    public void ConnectionGameSharedState_DefaultAdbPath_ShouldBeSystemAdb()
+    public void ConnectionGameSharedState_DefaultConnectionFields_ShouldMatchWpfEmptyDefaults()
     {
         var state = new ConnectionGameSharedStateViewModel();
 
-        Assert.Equal("adb", state.AdbPath);
+        // WPF parity (frozen ConnectSettingsUserControlModel.cs:134/:194): both default to
+        // string.Empty; AutoDetect refills them at connect time.
+        Assert.Equal(string.Empty, state.AdbPath);
+        Assert.Equal(string.Empty, state.ConnectAddress);
     }
 
     [Fact]
-    public void ConnectionGameSharedState_DefaultTouchMode_ShouldBeMaaFwAdb()
+    public void ConnectionGameSharedState_DefaultTouchMode_ShouldMatchWpfMiniTouch()
     {
         var state = new ConnectionGameSharedStateViewModel();
 
-        Assert.Equal("MaaFwAdb", state.TouchMode);
+        Assert.Equal("minitouch", state.TouchMode);
     }
 
     [Fact]
-    public void ConnectionGameProfileSync_ReadFromEmptyProfile_ShouldUseSystemAdbDefault()
+    public void ConnectionGameProfileSync_ReadFromEmptyProfile_ShouldUseWpfEmptyDefaults()
     {
         var profile = new UnifiedProfile();
         var state = new ConnectionGameSharedStateViewModel
         {
-            AdbPath = string.Empty,
+            AdbPath = "adb",
+            ConnectAddress = "127.0.0.1:5555",
         };
 
         ConnectionGameProfileSync.ReadFromProfile(profile, state, tolerateMissing: false);
 
-        Assert.Equal("adb", state.AdbPath);
-        Assert.Equal("MaaFwAdb", state.TouchMode);
+        // WPF parity: frozen defaults are string.Empty for Connect.Address/Connect.AdbPath.
+        Assert.Equal(string.Empty, state.AdbPath);
+        Assert.Equal(string.Empty, state.ConnectAddress);
+        Assert.Equal("minitouch", state.TouchMode);
     }
 
     [Fact]
@@ -291,9 +297,9 @@ public sealed class SettingsModuleAK1FeatureTests
         Assert.Contains(
             state.ConnectConfigOptions,
             option => string.Equals(option.Value, "AVD", StringComparison.OrdinalIgnoreCase));
-        Assert.Contains(
-            state.TouchModeOptions,
-            option => string.Equals(option.Value, "MaaFwAdb", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(
+            new[] { "minitouch", "maatouch", "adb" },
+            state.TouchModeOptions.Select(option => option.Value).ToArray());
     }
 
     [Fact]
@@ -334,9 +340,26 @@ public sealed class SettingsModuleAK1FeatureTests
     }
 
     [Fact]
+    public void ConnectionGameSharedState_AutoDetectOffEmptyAddress_ShouldReturnNoFallbackCandidates()
+    {
+        var state = new ConnectionGameSharedStateViewModel
+        {
+            ConnectConfig = "BlueStacks",
+            AutoDetect = false,
+            AlwaysAutoDetect = false,
+            ConnectAddress = string.Empty,
+        };
+
+        // WPF parity: AutoDetect off + empty address fails the connect attempt instead of
+        // silently trying the default port table.
+        Assert.Empty(state.BuildConnectAddressCandidates(includeConfiguredAddress: true));
+    }
+
+    [Fact]
     public void ConnectionGameSharedState_RemoveAddressFromHistory_ShouldDeleteOnlyTargetEntry()
     {
         var state = new ConnectionGameSharedStateViewModel();
+        state.ConnectAddress = "127.0.0.1:5555";
         state.ConnectAddress = TestConnectionFixtureSupport.ReadyConnectAddress;
         state.ConnectAddress = "127.0.0.1:5556";
         state.ConnectAddress = "127.0.0.1:5557";
@@ -727,7 +750,7 @@ public sealed class SettingsModuleAK1FeatureTests
     }
 
     [Fact]
-    public async Task ConnectConfigPc_ForcesStartGameFalse_InSettingsAndStartUp()
+    public async Task ConnectConfigPc_MasksStartGameRead_ButPreservesStoredValue_InSettingsAndStartUp()
     {
         await using var fixture = await TestFixture.CreateAsync();
         Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup")).Success);
@@ -739,11 +762,69 @@ public sealed class SettingsModuleAK1FeatureTests
         state.StartGameEnabled = true;
         await fixture.Shell.SettingsPage.SaveConnectionGameSettingsAsync();
 
+        // WPF parity (frozen GameSettingsUserControlModel.cs:47-55): the getter is masked in
+        // AttachWindow (PC) mode while the setter persists unconditionally, so the stored
+        // value survives a PC round-trip.
         Assert.False(state.CanStartGameEnabled);
         Assert.False(state.StartGameEnabled);
+        Assert.True(state.StoredStartGameEnabled);
         Assert.False(fixture.Shell.TaskQueuePage.StartUpModule.CanEditStartGameEnabled);
         Assert.False(fixture.Shell.TaskQueuePage.StartUpModule.StartGameEnabled);
-        Assert.False(fixture.GetCurrentProfile().Values["StartGame"]?.GetValue<bool>());
+        Assert.True(fixture.GetCurrentProfile().Values["StartGame"]?.GetValue<bool>());
+
+        // Runtime compile still masks PC -> false (both sides agree at the task layer).
+        var queueResult = await fixture.TaskQueue.QueueEnabledTasksAsync();
+        Assert.True(queueResult.Success);
+        var appended = Assert.Single(fixture.Bridge.AppendedTasks);
+        var json = Assert.IsType<JsonObject>(JsonNode.Parse(appended.ParamsJson));
+        Assert.False(json["start_game_enabled"]?.GetValue<bool>());
+
+        // Switching back to General unmasks the stored value.
+        state.ConnectConfig = "General";
+        Assert.True(state.StartGameEnabled);
+        Assert.True(fixture.GetCurrentProfile().Values["StartGame"]?.GetValue<bool>());
+    }
+
+    [Fact]
+    public async Task ConnectConfigPc_StartUpModuleSave_PreservesStoredStartGameValue()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup")).Success);
+        await fixture.Shell.TaskQueuePage.ReloadTasksAsync();
+        await WaitUntilAsync(() => fixture.Shell.TaskQueuePage.StartUpModule.IsTaskBound);
+
+        var state = fixture.Shell.SettingsPage.ConnectionGameSharedState;
+        state.StartGameEnabled = true;
+        state.ConnectConfig = "PC";
+        await fixture.Shell.SettingsPage.SaveConnectionGameSettingsAsync();
+        Assert.True(fixture.GetCurrentProfile().Values["StartGame"]?.GetValue<bool>());
+
+        // Saving the StartUp task while in PC mode must not write the masked value back.
+        Assert.True(await fixture.Shell.TaskQueuePage.StartUpModule.SaveAsync());
+        Assert.True(fixture.GetCurrentProfile().Values["StartGame"]?.GetValue<bool>());
+
+        state.ConnectConfig = "General";
+        Assert.True(state.StartGameEnabled);
+    }
+
+    [Fact]
+    public void ConnectionGameProfileSync_PcProfileWithStoredStartGame_PreservesValueThroughRoundTrip()
+    {
+        var profile = new UnifiedProfile();
+        profile.Values["ConnectConfig"] = JsonValue.Create("PC");
+        profile.Values["StartGame"] = JsonValue.Create(true);
+        var state = new ConnectionGameSharedStateViewModel();
+
+        ConnectionGameProfileSync.ReadFromProfile(profile, state, tolerateMissing: false);
+
+        Assert.False(state.StartGameEnabled);
+        Assert.True(state.StoredStartGameEnabled);
+
+        ConnectionGameProfileSync.WriteToProfile(profile, state);
+        Assert.True(profile.Values["StartGame"]?.GetValue<bool>());
+
+        state.ConnectConfig = "General";
+        Assert.True(state.StartGameEnabled);
     }
 
     [Fact]
@@ -951,7 +1032,9 @@ public sealed class SettingsModuleAK1FeatureTests
     [Fact]
     public async Task ConnectAsync_WithWindowsStyleAdbPathOnNonWindows_ShouldFallbackToSystemAdb()
     {
-        await using var fixture = await TestFixture.CreateAsync();
+        // The minitouch default (WPF parity) triggers the macOS RawByNc risk prompt;
+        // Cancel maps to ForceRun so the headless connect proceeds.
+        await using var fixture = await TestFixture.CreateAsync(new ForceRunMacRiskDialogService());
         var state = fixture.Shell.ConnectionGameSharedState;
         state.ConnectAddress = TestConnectionFixtureSupport.ReadyConnectAddress;
         state.ConnectConfig = "MuMuEmulator12";
@@ -1128,6 +1211,59 @@ public sealed class SettingsModuleAK1FeatureTests
         }
     }
 
+    private sealed class ForceRunMacRiskDialogService : IAppDialogService
+    {
+        public Task<DialogCompletion<AnnouncementDialogPayload>> ShowAnnouncementAsync(
+            AnnouncementDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<AnnouncementDialogPayload>(DialogReturnSemantic.Close, null, "stub"));
+
+        public Task<DialogCompletion<VersionUpdateDialogPayload>> ShowVersionUpdateAsync(
+            VersionUpdateDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<VersionUpdateDialogPayload>(DialogReturnSemantic.Close, null, "stub"));
+
+        public Task<DialogCompletion<ProcessPickerDialogPayload>> ShowProcessPickerAsync(
+            ProcessPickerDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<ProcessPickerDialogPayload>(DialogReturnSemantic.Close, null, "stub"));
+
+        public Task<DialogCompletion<EmulatorPathDialogPayload>> ShowEmulatorPathAsync(
+            EmulatorPathDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<EmulatorPathDialogPayload>(DialogReturnSemantic.Close, null, "stub"));
+
+        public Task<DialogCompletion<ErrorDialogPayload>> ShowErrorAsync(
+            ErrorDialogRequest request,
+            string sourceScope,
+            Func<CancellationToken, Task<UiOperationResult>>? openIssueReportAsync = null,
+            Func<CancellationToken, Task<UiOperationResult>>? openSettingsAsync = null,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<ErrorDialogPayload>(DialogReturnSemantic.Close, null, "stub"));
+
+        public Task<DialogCompletion<AchievementListDialogPayload>> ShowAchievementListAsync(
+            AchievementListDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<AchievementListDialogPayload>(DialogReturnSemantic.Close, null, "stub"));
+
+        public Task<DialogCompletion<TextDialogPayload>> ShowTextAsync(
+            TextDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<TextDialogPayload>(DialogReturnSemantic.Close, null, "stub"));
+
+        public Task<DialogCompletion<WarningConfirmDialogPayload>> ShowWarningConfirmAsync(
+            WarningConfirmDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<WarningConfirmDialogPayload>(DialogReturnSemantic.Cancel, null, "stub"));
+    }
+
     private sealed class TestFixture : IAsyncDisposable
     {
         private TestFixture(
@@ -1164,7 +1300,7 @@ public sealed class SettingsModuleAK1FeatureTests
 
         public string ReadyAdbPath { get; }
 
-        public static async Task<TestFixture> CreateAsync()
+        public static async Task<TestFixture> CreateAsync(IAppDialogService? dialogService = null)
         {
             var root = Path.Combine(Path.GetTempPath(), "maa-unified-tests", Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(Path.Combine(root, "config"));
@@ -1227,7 +1363,7 @@ public sealed class SettingsModuleAK1FeatureTests
                 PostActionFeatureService = new PostActionFeatureService(config, diagnostics, platform.PostActionExecutorService),
             };
 
-            var shell = new MainShellViewModel(runtime);
+            var shell = new MainShellViewModel(runtime, dialogService);
             InvokePrivateMethod(shell, "SyncConnectionFromProfile");
 
             return new TestFixture(root, config, taskQueue, runtime, shell, bridge, readyAdbPath);

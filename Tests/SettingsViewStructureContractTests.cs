@@ -56,7 +56,9 @@ public sealed class SettingsViewStructureContractTests
         Assert.Contains("CommitValueOnLostFocus=\"True\"", gui, StringComparison.Ordinal);
 
         var start = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "StartSettingsView.axaml"));
-        Assert.Contains("IsVisible=\"{Binding CanEditEmulatorLaunchSettings}\"", start, StringComparison.Ordinal);
+        // WPF parity: emulator path/args/wait fields are always visible; args require a path.
+        Assert.DoesNotContain("IsVisible=\"{Binding CanEditEmulatorLaunchSettings}\"", start, StringComparison.Ordinal);
+        Assert.Contains("IsEnabled=\"{Binding CanEditEmulatorAddCommand}\"", start, StringComparison.Ordinal);
         Assert.Contains("Classes=\"app-caption settings-note start-settings-note\"", start, StringComparison.Ordinal);
         Assert.Contains("Classes=\"start-settings-note-pair\"", start, StringComparison.Ordinal);
         Assert.Contains("start-settings-toggle-stack", start, StringComparison.Ordinal);
@@ -68,6 +70,8 @@ public sealed class SettingsViewStructureContractTests
 
         var timer = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "TimerSettingsView.axaml"));
         Assert.Contains("IsVisible=\"{Binding ForceScheduledStart}\"", timer, StringComparison.Ordinal);
+        // WPF parity: timer slot profile selectors are editable only while the session is idle.
+        Assert.Equal(8, Regex.Matches(timer, "IsEnabled=\"\\{Binding DataContext\\.IsSessionIdle").Count);
 
         var connect = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "ConnectSettingsView.axaml"));
         Assert.Equal(2, Regex.Matches(connect, "IsVisible=\"\\{Binding ShowEmulatorExtrasSection\\}\"").Count);

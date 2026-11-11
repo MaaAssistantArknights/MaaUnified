@@ -40,7 +40,6 @@ public sealed class StartUpTaskModuleViewModel : TypedTaskModuleViewModelBase<St
         ("minitouch", "StartUp.Option.TouchMode.MiniTouch", "Minitouch (Default)"),
         ("maatouch", "StartUp.Option.TouchMode.MaaTouch", "MaaTouch (Experimental)"),
         ("adb", "StartUp.Option.TouchMode.AdbTouch", "ADB Input (Deprecated)"),
-        ("MaaFwAdb", "StartUp.Option.TouchMode.MaaFwAdbTouch", "MaaFramework (Experimental)"),
     ];
 
     private static readonly (string Value, string TextKey, string Fallback)[] AttachWindowScreencapOptionSpecs =
@@ -501,7 +500,9 @@ public sealed class StartUpTaskModuleViewModel : TypedTaskModuleViewModelBase<St
         {
             AccountName = AccountName.Trim(),
             ClientType = ClientType.Trim(),
-            StartGameEnabled = StartGameEnabled,
+            // WPF parity: persist the stored value; the AttachWindow (PC) mask is applied at
+            // read/compile time only, so saving while in PC mode must not erase the stored flag.
+            StartGameEnabled = _sharedState.StoredStartGameEnabled,
             ConnectConfig = ConnectConfig.Trim(),
             ConnectAddress = ConnectAddress.Trim(),
             AdbPath = AdbPath.Trim(),

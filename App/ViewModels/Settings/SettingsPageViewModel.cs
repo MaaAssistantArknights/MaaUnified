@@ -14,6 +14,7 @@ using MAAUnified.App.Services;
 using MAAUnified.App.ViewModels.Infrastructure;
 using MAAUnified.Application.Configuration;
 using MAAUnified.Application.Models;
+using MAAUnified.Application.Orchestration;
 using MAAUnified.Application.Security;
 using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Localization;
@@ -40,10 +41,12 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
     private static readonly string DefaultHotkeyShowGui = HotkeyConfigurationCodec.DefaultHotkeyShowGui;
     private static readonly string DefaultHotkeyLinkStart = HotkeyConfigurationCodec.DefaultHotkeyLinkStart;
     private const int EmulatorWaitSecondsMin = 0;
-    private const int EmulatorWaitSecondsMax = 600;
+
+    // WPF stores EmulatorWaitSeconds as free-form text with no upper bound.
+    private const int EmulatorWaitSecondsMax = int.MaxValue;
     private const int DefaultEmulatorWaitSeconds = 60;
     private const int DefaultRemotePollIntervalMs = 1000;
-    private const int DefaultStallTimeoutMinutes = 25;
+    private const int DefaultTaskTimeoutMinutes = 60;
     private const int DefaultReminderIntervalMinutes = 30;
     private const int MaxTimeoutMinutes = 11451;
     private const int DefaultMaxNumberOfLogThumbnails = 100;
@@ -77,7 +80,8 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
     private const int TimerHourMax = 23;
     private const int TimerMinuteMin = 0;
     private const int TimerMinuteMax = 59;
-    private const int DefaultTimerHour = 7;
+    // WPF parity: TimerSettingsUserControlModel defaults slot i to hour (i - 1) * 3.
+    private static int GetDefaultTimerHour(int slotIndex) => (slotIndex - 1) * 3;
     private const int DefaultTimerMinute = 0;
     private const string IssueReportHelpUrl = "https://maa.plus/docs/";
     private const string IssueReportIssueEntryUrl = "https://github.com/MaaAssistantArknights/MaaAssistantArknights/issues/new/choose";
@@ -279,6 +283,8 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
     private bool _suppressGuiPreview;
     private bool _suppressSelectedLanguageChangeRequest;
     private bool _suppressStartPerformanceDirtyTracking;
+    private bool _suppressEmulatorPathMaaConfirmation;
+    private int _emulatorPathMaaConfirmationVersion;
     private bool _suppressConfigurationProfileSelectionHandling;
     private string _theme = DefaultTheme;
     private string _language = DefaultLanguage;
@@ -369,8 +375,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
     private bool _enablePenguin = true;
     private bool _enableYituliu = true;
     private string _penguinId = string.Empty;
-    private bool _stallTimeoutEnabled = true;
-    private int _stallTimeoutMinutes = DefaultStallTimeoutMinutes;
+    private int _taskTimeoutMinutes = DefaultTaskTimeoutMinutes;
     private int _reminderIntervalMinutes = DefaultReminderIntervalMinutes;
     private bool _hasPendingStartPerformanceChanges;
     private string _startPerformanceValidationMessage = string.Empty;
@@ -540,6 +545,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
         SelectedSection = Sections[0];
         PropertyChanged += OnSettingsPropertyChanged;
         ConnectionGameSharedState.PropertyChanged += OnConnectionGameSharedStateChanged;
+        Runtime.SessionService.SessionStateChanged += OnSessionStateChangedForEditGating;
     }
 
     private void HandleSensitiveStorageStateChanged()
@@ -583,6 +589,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
 
         _disposed = true;
         Runtime.ConfigurationService.SensitiveStorageStateChanged -= HandleSensitiveStorageStateChanged;
+        Runtime.SessionService.SessionStateChanged -= OnSessionStateChangedForEditGating;
     }
 
     public RootLocalizationTextMap RootTexts { get; }
@@ -3042,20 +3049,60 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
         get => _openEmulatorAfterLaunch;
         set
         {
-            if (SetProperty(ref _openEmulatorAfterLaunch, value))
+            var requested = value;
+            var rejected = false;
+            if (!_suppressStartPerformanceDirtyTracking)
             {
-                if (!value)
+                // WPF parity: enabling automatic emulator launch without a path is rejected immediately.
+                if (requested && string.IsNullOrWhiteSpace(EmulatorPath))
+                {
+                    requested = false;
+                    rejected = true;
+                }
+
+                // WPF parity: backfill the client type when it is empty while the session is idle.
+                if (string.IsNullOrEmpty(ConnectionGameSharedState.ClientType)
+                    && Runtime.SessionService.CurrentState == SessionState.Idle)
+                {
+                    ConnectionGameSharedState.ClientType = "Official";
+                }
+            }
+
+            if (SetProperty(ref _openEmulatorAfterLaunch, requested))
+            {
+                if (!requested && !rejected)
                 {
                     StartPerformanceValidationMessage = string.Empty;
                 }
 
-                OnPropertyChanged(nameof(CanEditEmulatorLaunchSettings));
                 MarkStartPerformanceDirty();
+            }
+
+            if (rejected)
+            {
+                StartPerformanceValidationMessage = RootTexts.GetOrDefault(
+                    "Settings.StartPerformance.Validation.EmulatorPathRequired",
+                    "Emulator path is required when automatic emulator launch is enabled.");
             }
         }
     }
 
-    public bool CanEditEmulatorLaunchSettings => OpenEmulatorAfterLaunch;
+    // WPF parity: the extra emulator arguments are editable only when an emulator path is set.
+    public bool CanEditEmulatorAddCommand => EmulatorPath.Length > 0;
+
+    // WPF parity: client type and timer profile selection are editable only while idle.
+    public bool IsSessionIdle => Runtime.SessionService.CurrentState == SessionState.Idle;
+
+    private void OnSessionStateChangedForEditGating(SessionState state)
+    {
+        if (Dispatcher.UIThread.CheckAccess() || Avalonia.Application.Current is null)
+        {
+            OnPropertyChanged(nameof(IsSessionIdle));
+            return;
+        }
+
+        Dispatcher.UIThread.Post(() => OnPropertyChanged(nameof(IsSessionIdle)));
+    }
 
     public string EmulatorPath
     {
@@ -3063,10 +3110,115 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
         set
         {
             var normalized = value?.Trim() ?? string.Empty;
+            if (!_suppressEmulatorPathMaaConfirmation)
+            {
+                _emulatorPathMaaConfirmationVersion++;
+            }
+
+            if (!_suppressStartPerformanceDirtyTracking
+                && !_suppressEmulatorPathMaaConfirmation
+                && !string.Equals(normalized, _emulatorPath, StringComparison.Ordinal)
+                && Path.GetFileName(normalized).Contains("maa", StringComparison.OrdinalIgnoreCase))
+            {
+                // WPF parity: an executable whose file name contains "maa" requires up to three
+                // confirmations; canceling any of them abandons the assignment.
+                _ = ConfirmMaaEmulatorPathSelectionAsync(normalized, _emulatorPathMaaConfirmationVersion, CancellationToken.None);
+                OnPropertyChanged(nameof(EmulatorPath));
+                return;
+            }
+
             if (SetProperty(ref _emulatorPath, normalized))
             {
+                string? clearedWarning = null;
+                string? notExistWarning = null;
+                if (!_suppressStartPerformanceDirtyTracking
+                    && normalized.Length == 0
+                    && (ConnectionGameSharedState.RetryOnDisconnected || OpenEmulatorAfterLaunch))
+                {
+                    // WPF parity: clearing the emulator path turns off the dependent toggles with a warning.
+                    ConnectionGameSharedState.RetryOnDisconnected = false;
+                    OpenEmulatorAfterLaunch = false;
+                    clearedWarning = RootTexts.GetOrDefault(
+                        "Settings.Start.EmulatorPathEmptyWarning",
+                        "Emulator path is empty; the disconnect-retry and auto-launch options have been turned off.");
+                }
+                else if (!_suppressStartPerformanceDirtyTracking
+                    && normalized.Length > 0
+                    && !File.Exists(normalized))
+                {
+                    // WPF parity: a non-empty path that does not exist warns immediately but is still kept.
+                    notExistWarning = RootTexts.GetOrDefault(
+                        "Settings.Start.EmulatorPathNotExistWarning",
+                        "The emulator path does not exist.");
+                }
+
+                OnPropertyChanged(nameof(CanEditEmulatorAddCommand));
                 MarkStartPerformanceDirty();
+
+                // MarkStartPerformanceDirty clears the validation message; re-apply the warning last.
+                if (clearedWarning is not null)
+                {
+                    StartPerformanceValidationMessage = clearedWarning;
+                }
+                else if (notExistWarning is not null)
+                {
+                    StartPerformanceValidationMessage = notExistWarning;
+                }
             }
+        }
+    }
+
+    internal async Task ConfirmMaaEmulatorPathSelectionAsync(
+        string candidatePath,
+        int confirmationVersion,
+        CancellationToken cancellationToken = default)
+    {
+        const int MaxConfirmationAttempts = 3;
+        for (var attempt = MaxConfirmationAttempts; attempt >= 1; attempt--)
+        {
+            if (confirmationVersion != _emulatorPathMaaConfirmationVersion)
+            {
+                return;
+            }
+
+            var request = new WarningConfirmDialogRequest(
+                Title: RootTexts.GetOrDefault("Settings.Start.EmulatorPathMaaConfirm.Title", "Tip"),
+                Message: RootTexts.GetOrDefault(
+                    "Settings.Start.EmulatorPathMaaConfirm.Message",
+                    "The selected file name contains \"maa\". Are you sure it is the emulator and not MAA itself?"),
+                ConfirmText: RootTexts.GetOrDefault(
+                        "Settings.Start.EmulatorPathMaaConfirm.Confirm",
+                        "I'm sure I haven't selected the wrong one")
+                    + $"({attempt})",
+                CancelText: RootTexts.GetOrDefault(
+                    "Settings.Start.EmulatorPathMaaConfirm.Cancel",
+                    "Okay, I will choose again"),
+                Language: Language);
+            var dialogResult = await _dialogService.ShowWarningConfirmAsync(
+                request,
+                "Settings.Start.EmulatorPathMaaConfirm.Dialog",
+                cancellationToken);
+            if (dialogResult.Return != DialogReturnSemantic.Confirm)
+            {
+                // WPF parity: canceling any confirmation abandons the assignment.
+                OnPropertyChanged(nameof(EmulatorPath));
+                return;
+            }
+        }
+
+        if (confirmationVersion != _emulatorPathMaaConfirmationVersion)
+        {
+            return;
+        }
+
+        _suppressEmulatorPathMaaConfirmation = true;
+        try
+        {
+            EmulatorPath = candidatePath;
+        }
+        finally
+        {
+            _suppressEmulatorPathMaaConfirmation = false;
         }
     }
 
@@ -3176,7 +3328,16 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
         get => _selectedGpuOption;
         set
         {
-            if (!SetProperty(ref _selectedGpuOption, value) || _suppressGpuSelectionChange || value is null)
+            if (!SetProperty(ref _selectedGpuOption, value))
+            {
+                return;
+            }
+
+            // The Performance view binds SelectedValue to the derived SelectedGpuOptionId;
+            // without this notification programmatic rewrites leave the ComboBox display stale.
+            OnPropertyChanged(nameof(SelectedGpuOptionId));
+
+            if (_suppressGpuSelectionChange || value is null)
             {
                 return;
             }
@@ -3416,25 +3577,13 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
         }
     }
 
-    public bool StallTimeoutEnabled
+    public int TaskTimeoutMinutes
     {
-        get => _stallTimeoutEnabled;
-        set
-        {
-            if (SetProperty(ref _stallTimeoutEnabled, value))
-            {
-                MarkStartPerformanceDirty();
-            }
-        }
-    }
-
-    public int StallTimeoutMinutes
-    {
-        get => _stallTimeoutMinutes;
+        get => _taskTimeoutMinutes;
         set
         {
             var normalized = Math.Clamp(value, 0, MaxTimeoutMinutes);
-            if (SetProperty(ref _stallTimeoutMinutes, normalized))
+            if (SetProperty(ref _taskTimeoutMinutes, normalized))
             {
                 MarkStartPerformanceDirty();
             }
@@ -9165,11 +9314,25 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
 
         var preference = BuildCurrentGpuPreference();
         var refreshSequence = Interlocked.Increment(ref _gpuRefreshSequence);
+
+        // Headless hosts (tests) have no UI dispatcher. Resolving and applying inline keeps the
+        // refresh atomic with respect to synchronous property mutations on the caller thread;
+        // a thread-pool apply could otherwise interleave with later setter calls (or an explicit
+        // save) and write stale GPU preference values back into the view model.
+        var isHeadless = Avalonia.Application.Current is null;
         try
         {
-            var resolution = await Task.Run(
-                () => Runtime.Platform.GpuCapabilityService.Resolve(preference),
-                cancellationToken).ConfigureAwait(false);
+            GpuSelectionResolution resolution;
+            if (isHeadless)
+            {
+                resolution = Runtime.Platform.GpuCapabilityService.Resolve(preference);
+            }
+            else
+            {
+                resolution = await Task.Run(
+                    () => Runtime.Platform.GpuCapabilityService.Resolve(preference),
+                    cancellationToken).ConfigureAwait(false);
+            }
 
             void ApplyResolutionIfCurrent()
             {
@@ -9190,7 +9353,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
                 ApplyGpuResolution(resolution);
             }
 
-            if (Avalonia.Application.Current is null)
+            if (isHeadless)
             {
                 ApplyResolutionIfCurrent();
             }
@@ -9217,7 +9380,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
                 ApplyGpuProbeFailureState(ex);
             }
 
-            if (Avalonia.Application.Current is null)
+            if (isHeadless)
             {
                 ApplyFailureIfCurrent();
             }
@@ -9248,7 +9411,16 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
                 selectedOption.IsCustomEntry ? PerformancePreferredGpuDescription : null,
                 selectedOption.IsCustomEntry ? PerformancePreferredGpuInstancePath : null);
 
+            // WPF parity (freeze 23ddd271 PerformanceUserControl.xaml ComboBoxItem trigger):
+            // deprecated options are hidden from the picker unless AllowDeprecatedGpu is set,
+            // but hiding is display-only - the resolved selection above never filters them.
+            // The currently selected option stays listed so the picker keeps showing the
+            // effective selection even when it resolves to a hidden deprecated GPU.
+            var hideDeprecatedOptions = !PerformanceAllowDeprecatedGpu;
             AvailableGpuOptions = resolution.Snapshot.Options
+                .Where(option => !hideDeprecatedOptions
+                    || !option.IsDeprecated
+                    || string.Equals(option.Id, selectedOption.Id, StringComparison.Ordinal))
                 .Select(BuildGpuOptionDisplayItem)
                 .ToArray();
 
@@ -9828,10 +10000,11 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
 
             var enabled = ReadGlobalNullableBoolFlexible(config, enabledKey, false);
 
-            var rawHour = ReadGlobalIntFlexible(config, hourKey, DefaultTimerHour, out var parsedHour);
+            var defaultHour = GetDefaultTimerHour(index);
+            var rawHour = ReadGlobalIntFlexible(config, hourKey, defaultHour, out var parsedHour);
             if (!parsedHour && HasConfigKey(config, hourKey, ConfigValuePreference.GlobalFirst))
             {
-                warnings.Add(BuildTimerHourParseFallbackWarning(index, DefaultTimerHour));
+                warnings.Add(BuildTimerHourParseFallbackWarning(index, defaultHour));
             }
 
             var hour = Math.Clamp(rawHour, TimerHourMin, TimerHourMax);
@@ -10395,8 +10568,7 @@ public sealed record StartPerformanceSettingsSnapshot(
     bool EnablePenguin,
     bool EnableYituliu,
     string PenguinId,
-    bool StallTimeoutEnabled,
-    int StallTimeoutMinutes,
+    int TaskTimeoutMinutes,
     int ReminderIntervalMinutes)
 {
     public IReadOnlyDictionary<string, string> ToGlobalSettingUpdates()
@@ -10404,10 +10576,6 @@ public sealed record StartPerformanceSettingsSnapshot(
         return new Dictionary<string, string>(StringComparer.Ordinal)
         {
             [ConfigurationKeys.MinimizeDirectly] = MinimizeDirectly.ToString(),
-            [ConfigurationKeys.PerformanceUseGpu] = PerformanceUseGpu.ToString(),
-            [ConfigurationKeys.PerformanceAllowDeprecatedGpu] = PerformanceAllowDeprecatedGpu.ToString(),
-            [ConfigurationKeys.PerformancePreferredGpuDescription] = PerformancePreferredGpuDescription,
-            [ConfigurationKeys.PerformancePreferredGpuInstancePath] = PerformancePreferredGpuInstancePath,
         };
     }
 
@@ -10430,10 +10598,19 @@ public sealed record StartPerformanceSettingsSnapshot(
             [ConfigurationKeys.EnablePenguin] = EnablePenguin.ToString(),
             [ConfigurationKeys.EnableYituliu] = EnableYituliu.ToString(),
             [ConfigurationKeys.PenguinId] = PenguinId,
-            [ConfigurationKeys.StallTimeoutEnabled] = StallTimeoutEnabled.ToString(),
-            [ConfigurationKeys.StallTimeoutMinutes] = StallTimeoutMinutes.ToString(),
+            [ConfigurationKeys.TaskTimeoutMinutes] = TaskTimeoutMinutes.ToString(),
             [ConfigurationKeys.ReminderIntervalMinutes] = ReminderIntervalMinutes.ToString(),
         };
+
+        // GPU settings are profile-scoped to match WPF GpuOption (ConfigurationHelper.SetValue)
+        // and the profile-first readers in SettingsPageViewModel/ResourceWorkflowService.
+        if (includeGpuSettings)
+        {
+            updates[ConfigurationKeys.PerformanceUseGpu] = PerformanceUseGpu.ToString();
+            updates[ConfigurationKeys.PerformanceAllowDeprecatedGpu] = PerformanceAllowDeprecatedGpu.ToString();
+            updates[ConfigurationKeys.PerformancePreferredGpuDescription] = PerformancePreferredGpuDescription;
+            updates[ConfigurationKeys.PerformancePreferredGpuInstancePath] = PerformancePreferredGpuInstancePath;
+        }
 
         return updates;
     }
@@ -10581,7 +10758,6 @@ public enum HotkeyRegistrationSource
 
 public sealed class TimerSlotViewModel : ObservableObject
 {
-    private const int DefaultHour = 7;
     private const int DefaultMinute = 0;
     private const int HourMin = 0;
     private const int HourMax = 23;
@@ -10589,13 +10765,18 @@ public sealed class TimerSlotViewModel : ObservableObject
     private const int MinuteMax = 59;
 
     private bool? _enabled;
-    private string _time = "07:00";
+    private string _time;
     private string _profile = "Default";
 
     public TimerSlotViewModel(int index)
     {
         Index = index;
+
+        // WPF parity: TimerModels default each slot to hour (index - 1) * 3.
+        _time = FormattableString.Invariant($"{GetDefaultTimerHour(index):00}:{DefaultMinute:00}");
     }
+
+    private static int GetDefaultTimerHour(int index) => (Math.Max(1, index) - 1) * 3;
 
     public int Index { get; }
 
@@ -10633,7 +10814,7 @@ public sealed class TimerSlotViewModel : ObservableObject
 
     public int Hour
     {
-        get => TryParseTime(Time, out var hour, out _) ? hour : DefaultHour;
+        get => TryParseTime(Time, out var hour, out _) ? hour : GetDefaultTimerHour(Index);
         set => UpdateTime(value, Minute);
     }
 
