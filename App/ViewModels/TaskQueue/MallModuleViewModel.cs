@@ -247,11 +247,15 @@ public sealed class MallModuleViewModel : TaskModuleSettingsViewModelBase
 
     private static List<string> SplitList(string text)
     {
+        // Frozen WPF parity: the CreditFirstList/CreditBlackList setters store the
+        // list text verbatim apart from fullwidth-semicolon replacement and an
+        // outer trim, so duplicates and case variants the user typed are kept.
+        // Core matches goods names case-sensitively, so collapsing case variants
+        // could drop the variant that would actually match.
         return text
             .Replace('；', ';')
             .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Where(t => !string.IsNullOrWhiteSpace(t))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
     }
 

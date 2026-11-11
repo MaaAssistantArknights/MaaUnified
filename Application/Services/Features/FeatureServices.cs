@@ -2433,7 +2433,7 @@ public sealed class TaskQueueFeatureService : ITaskQueueFeatureService
             return CoreResult<int>.Fail(new CoreError(CoreErrorCode.InvalidRequest, error));
         }
 
-        ApplyMallCreditFightGuard(profile);
+        _ = CollectMallCreditFightWarnings(profile, mutate: true);
         return await _sessionService.AppendTasksFromCurrentProfileAsync(cancellationToken).ConfigureAwait(false);
     }
 
@@ -2448,7 +2448,7 @@ public sealed class TaskQueueFeatureService : ITaskQueueFeatureService
             return CoreResult<int>.Fail(new CoreError(CoreErrorCode.InvalidRequest, error));
         }
 
-        ApplyMallCreditFightGuard(profile);
+        _ = CollectMallCreditFightWarnings(profile, mutate: true);
         return await connectFeatureService.AppendProfileTasksAndStartAsync(cancellationToken).ConfigureAwait(false);
     }
 
@@ -3718,11 +3718,6 @@ public sealed class TaskQueueFeatureService : ITaskQueueFeatureService
         return UiLanguageCatalog.DefaultLanguage;
     }
 
-    private void ApplyMallCreditFightGuard(UnifiedProfile profile)
-    {
-        _ = CollectMallCreditFightWarnings(profile, mutate: true);
-    }
-
     private IReadOnlyList<TaskQueuePrecheckWarning> CollectMallCreditFightWarnings(UnifiedProfile profile, bool mutate)
     {
         var warnings = new List<TaskQueuePrecheckWarning>();
@@ -3737,12 +3732,19 @@ public sealed class TaskQueueFeatureService : ITaskQueueFeatureService
             return warnings;
         }
 
-        var hasCurrentOrLastFightStage = enabledFightTasks.Any(t => !HasSpecificFightStage(t.Params));
+        // Frozen WPF parity: use the same week-aggregated full-stage-plan guard as
+        // Mall compilation (TaskParamCompiler.HasCurrentOrLastFightStage), so the
+        // warning and the runtime downgrade always agree.
+        var hasCurrentOrLastFightStage = TaskParamCompiler.HasCurrentOrLastFightStage(
+            profile,
+            _configService.CurrentConfig,
+            DateTime.UtcNow);
         if (!hasCurrentOrLastFightStage)
         {
             return warnings;
         }
 
+        var mallClientType = ResolveClientTypeForMallDailyCheck(profile);
         foreach (var mallTask in profile.TaskQueue.Where(t =>
                      TaskQueueEnabledState.IsEffectivelyEnabled(t, _configService.CurrentConfig)
                      && string.Equals(TaskModuleTypes.Normalize(t.Type), TaskModuleTypes.Mall, StringComparison.OrdinalIgnoreCase)))
@@ -3753,6 +3755,27 @@ public sealed class TaskQueueFeatureService : ITaskQueueFeatureService
                 continue;
             }
 
+            // Frozen WPF parity (MallSettingsUserControlModel.Serialize warns only when
+            // MallTask.IsCreditFightAvailable is true): with the once-a-day switch on and
+            // today completion marker recorded, WPF neither warns nor emits credit_fight=true,
+            // so skip the warning here as well. Read-only: the stored user choice is untouched.
+            var creditFightOnceADay = !TryReadBool(mallParams, "credit_fight_once_a_day", out var onceADayValue) || onceADayValue;
+            if (creditFightOnceADay)
+            {
+                string? creditFightLastTime = null;
+                if (mallParams.TryGetPropertyValue("_ui_mall_credit_fight_last_time", out var lastTimeNode)
+                    && lastTimeNode is JsonValue lastTimeValue
+                    && lastTimeValue.TryGetValue(out string? lastTimeText))
+                {
+                    creditFightLastTime = lastTimeText;
+                }
+
+                if (!MallDailyResetHelper.IsTaskAvailableToday(creditFightLastTime, mallClientType, DateTime.UtcNow))
+                {
+                    continue;
+                }
+            }
+
             var warningMessage = FormatTaskQueueMessage(
                 localizer,
                 "TaskQueue.Warning.MallCreditFightDowngraded",
@@ -3761,7 +3784,6 @@ public sealed class TaskQueueFeatureService : ITaskQueueFeatureService
                 fightDisplayName);
             if (mutate)
             {
-                mallParams["credit_fight"] = false;
                 _configService.LogService.Warn(warningMessage);
             }
             warnings.Add(new TaskQueuePrecheckWarning(
@@ -3774,19 +3796,32 @@ public sealed class TaskQueueFeatureService : ITaskQueueFeatureService
         return warnings;
     }
 
-    private static bool HasSpecificFightStage(JsonObject obj)
+    private string ResolveClientTypeForMallDailyCheck(UnifiedProfile profile)
     {
-        if (!obj.TryGetPropertyValue("stage", out var stageNode) || stageNode is not JsonValue value)
+        // Mirrors TaskParamCompiler.ResolveStringSetting(profile, config, "ClientType",
+        // "Start.ClientType") ?? "Official" so the once-a-day availability check uses the
+        // same per-client YJ-date timezone as Mall compilation.
+        var config = _configService.CurrentConfig;
+        foreach (var key in new[] { "ClientType", ConfigurationKeys.ClientType })
         {
-            return false;
+            if (profile.Values.TryGetValue(key, out var profileNode)
+                && profileNode is JsonValue profileValue
+                && profileValue.TryGetValue(out string? profileText)
+                && !string.IsNullOrWhiteSpace(profileText))
+            {
+                return profileText;
+            }
+
+            if (config.GlobalValues.TryGetValue(key, out var globalNode)
+                && globalNode is JsonValue globalValue
+                && globalValue.TryGetValue(out string? globalText)
+                && !string.IsNullOrWhiteSpace(globalText))
+            {
+                return globalText;
+            }
         }
 
-        if (!value.TryGetValue(out string? stage))
-        {
-            return false;
-        }
-
-        return !FightStageSelection.IsCurrentOrLast(stage);
+        return "Official";
     }
 
     private static bool TryReadBool(JsonObject obj, string key, out bool value)

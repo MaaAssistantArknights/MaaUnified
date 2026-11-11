@@ -10,6 +10,7 @@ using MAAUnified.Application.Orchestration;
 using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Features;
 using MAAUnified.Application.Services.Localization;
+using MAAUnified.Compat.Constants;
 using MAAUnified.CoreBridge;
 using MAAUnified.Platform;
 
@@ -265,7 +266,7 @@ public sealed class TaskModuleAFeatureTests
 
         var taskParams = (await fixture.TaskQueue.GetTaskParamsAsync(0)).Value!;
         Assert.False(taskParams["refresh"]?.GetValue<bool>());
-        Assert.False(taskParams["force_refresh"]?.GetValue<bool>());
+        Assert.True(taskParams["force_refresh"]?.GetValue<bool>());
         Assert.Equal(3, taskParams["expedite_times"]?.GetValue<int>());
     }
 
@@ -351,6 +352,10 @@ public sealed class TaskModuleAFeatureTests
         var module = new RecruitTaskModuleViewModel(runtime, new LocalizedTextMap { Language = "en-us" });
 
         Assert.False(module.UseExpedited);
+        module.ForceRefresh = true;
+        module.Refresh = false;
+        Assert.True(module.ForceRefresh);
+
         module.UseExpedited = true;
         Assert.Null(module.UseExpedited);
         module.UseExpedited = false;
@@ -370,7 +375,7 @@ public sealed class TaskModuleAFeatureTests
     }
 
     [Fact]
-    public async Task GetRecruitParamsAsync_ReadsLevel6FromExistingParams_AndKeepsLegacyEntriesCompatible()
+    public async Task GetRecruitParamsAsync_IgnoresUnsupportedLevel6_AndKeepsLegacyEntriesCompatible()
     {
         var root = Path.Combine(Path.GetTempPath(), "maa-unified-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(Path.Combine(root, "config"));
@@ -453,7 +458,7 @@ public sealed class TaskModuleAFeatureTests
         var withLevel6 = await queue.GetRecruitParamsAsync(0);
         Assert.True(withLevel6.Success);
         Assert.NotNull(withLevel6.Value);
-        Assert.True(withLevel6.Value!.ChooseLevel6);
+        Assert.False(withLevel6.Value!.ChooseLevel6);
         Assert.True(withLevel6.Value.ChooseLevel4);
         Assert.Equal(530, withLevel6.Value.Level4Time);
 
@@ -588,8 +593,6 @@ public sealed class TaskModuleAFeatureTests
             ChooseLevel5 = false,
             ChooseLevel6 = true,
             SetTime = true,
-            PreserveTagsEnabled = true,
-            PreserveTags = ["支援机械", "高级资深干员"],
             Level3Time = 540,
             Level4Time = 530,
             Level5Time = 520,
@@ -602,25 +605,22 @@ public sealed class TaskModuleAFeatureTests
 
         var json = Assert.IsType<JsonObject>(JsonNode.Parse(appended.ParamsJson));
         Assert.False(json["refresh"]?.GetValue<bool>());
-        Assert.False(json["force_refresh"]?.GetValue<bool>());
+        Assert.True(json["force_refresh"]?.GetValue<bool>());
         Assert.True(json["expedite"]?.GetValue<bool>());
         Assert.Equal(4, json["times"]?.GetValue<int>());
         Assert.Equal(4, json["expedite_times"]?.GetValue<int>());
         Assert.True(json["skip_robot"]?.GetValue<bool>());
 
-        var preserveTags = Assert.IsType<JsonArray>(json["preserve_tags"]);
-        Assert.Equal(["支援机械", "高级资深干员"], ReadStringArray(preserveTags));
-
         var confirm = Assert.IsType<JsonArray>(json["confirm"]);
         Assert.Contains(confirm, item => item?.GetValue<int>() == 1);
         Assert.Contains(confirm, item => item?.GetValue<int>() == 3);
         Assert.Contains(confirm, item => item?.GetValue<int>() == 4);
-        Assert.Contains(confirm, item => item?.GetValue<int>() == 6);
+        Assert.DoesNotContain(confirm, item => item?.GetValue<int>() == 6);
         Assert.DoesNotContain(confirm, item => item?.GetValue<int>() == 5);
 
         var select = Assert.IsType<JsonArray>(json["select"]);
         Assert.Contains(select, item => item?.GetValue<int>() == 4);
-        Assert.Contains(select, item => item?.GetValue<int>() == 6);
+        Assert.DoesNotContain(select, item => item?.GetValue<int>() == 6);
         Assert.DoesNotContain(select, item => item?.GetValue<int>() == 5);
 
         var recruitmentTime = Assert.IsType<JsonObject>(json["recruitment_time"]);
@@ -628,28 +628,308 @@ public sealed class TaskModuleAFeatureTests
         Assert.Equal(530, recruitmentTime["4"]?.GetValue<int>());
         Assert.Equal(520, recruitmentTime["5"]?.GetValue<int>());
         Assert.DoesNotContain("6", recruitmentTime.Select(pair => pair.Key), StringComparer.Ordinal);
+        Assert.Equal(
+            [
+                "confirm",
+                "expedite",
+                "expedite_times",
+                "extra_tags_mode",
+                "first_tags",
+                "force_refresh",
+                "penguin_id",
+                "recruitment_time",
+                "refresh",
+                "report_to_penguin",
+                "report_to_yituliu",
+                "select",
+                "server",
+                "set_time",
+                "skip_robot",
+                "times",
+                "yituliu_id",
+            ],
+            json.Select(pair => pair.Key).OrderBy(key => key, StringComparer.Ordinal));
     }
 
     [Fact]
-    public async Task QueueEnabledTasks_RecruitSkipRobotDoesNotImplyPreserveTags()
+    public async Task QueueEnabledTasks_RecruitReportSwitches_DefaultTrueWhenSettingsAbsent_LikeFrozenWpf()
     {
+        // Frozen WPF reads EnablePenguin/EnableYituliu with a bool.TrueString fallback
+        // (GameSettingsUserControlModel), so a fresh profile that never saved the settings
+        // page must still emit both switches as true and keep the (empty) ID fields.
         await using var fixture = await TestFixture.CreateAsync();
         Assert.True((await fixture.TaskQueue.AddTaskAsync("Recruit", "recruit")).Success);
-        Assert.True((await fixture.TaskQueue.SaveRecruitParamsAsync(0, new RecruitTaskParamsDto
-        {
-            SkipRobot = true,
-            PreserveTagsEnabled = false,
-            PreserveTags = ["支援机械"],
-        })).Success);
 
         var queueResult = await fixture.TaskQueue.QueueEnabledTasksAsync();
 
         Assert.True(queueResult.Success);
         var appended = Assert.Single(fixture.Bridge.AppendedTasks);
         var json = Assert.IsType<JsonObject>(JsonNode.Parse(appended.ParamsJson));
-        Assert.True(json["skip_robot"]?.GetValue<bool>());
-        var preserveTags = Assert.IsType<JsonArray>(json["preserve_tags"]);
-        Assert.Empty(preserveTags);
+        Assert.True(json["report_to_penguin"]?.GetValue<bool>());
+        Assert.True(json["report_to_yituliu"]?.GetValue<bool>());
+        Assert.Equal(string.Empty, json["penguin_id"]?.GetValue<string>());
+        Assert.Equal(string.Empty, json["yituliu_id"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task QueueEnabledTasks_RecruitReportSwitches_ExplicitFalseIsHonored()
+    {
+        // An explicit stored false is a persistent user choice: it must survive the
+        // true fallback and still strip the ID fields at the Core boundary.
+        await using var fixture = await TestFixture.CreateAsync();
+        var profile = fixture.Config.CurrentConfig.Profiles["Default"];
+        profile.Values["EnablePenguin"] = JsonValue.Create(false);
+        profile.Values["EnableYituliu"] = JsonValue.Create(false);
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Recruit", "recruit")).Success);
+
+        var queueResult = await fixture.TaskQueue.QueueEnabledTasksAsync();
+
+        Assert.True(queueResult.Success);
+        var appended = Assert.Single(fixture.Bridge.AppendedTasks);
+        var json = Assert.IsType<JsonObject>(JsonNode.Parse(appended.ParamsJson));
+        Assert.False(json["report_to_penguin"]?.GetValue<bool>());
+        Assert.False(json["report_to_yituliu"]?.GetValue<bool>());
+        Assert.DoesNotContain("penguin_id", json.Select(pair => pair.Key), StringComparer.Ordinal);
+        Assert.DoesNotContain("yituliu_id", json.Select(pair => pair.Key), StringComparer.Ordinal);
+    }
+
+    [Fact]
+    public async Task QueueEnabledTasks_RecruitReportSwitches_SettingsPageDottedKeysAreHonored_LikeFrozenWpf()
+    {
+        // The settings page saves the dotted legacy keys (ConfigurationKeys.EnablePenguin etc.,
+        // pinned by SettingsModuleAK2FeatureTests); compile must honor them so an explicit UI
+        // privacy opt-out reaches the Core payload exactly like frozen WPF.
+        await using var fixture = await TestFixture.CreateAsync();
+        var profile = fixture.Config.CurrentConfig.Profiles["Default"];
+        profile.Values[ConfigurationKeys.EnablePenguin] = JsonValue.Create("False");
+        profile.Values[ConfigurationKeys.EnableYituliu] = JsonValue.Create("False");
+        profile.Values[ConfigurationKeys.PenguinId] = JsonValue.Create("penguin-001");
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Recruit", "recruit")).Success);
+
+        var queueResult = await fixture.TaskQueue.QueueEnabledTasksAsync();
+
+        Assert.True(queueResult.Success);
+        var appended = Assert.Single(fixture.Bridge.AppendedTasks);
+        var json = Assert.IsType<JsonObject>(JsonNode.Parse(appended.ParamsJson));
+        Assert.False(json["report_to_penguin"]?.GetValue<bool>());
+        Assert.False(json["report_to_yituliu"]?.GetValue<bool>());
+        Assert.DoesNotContain("penguin_id", json.Select(pair => pair.Key), StringComparer.Ordinal);
+        Assert.DoesNotContain("yituliu_id", json.Select(pair => pair.Key), StringComparer.Ordinal);
+    }
+
+    [Fact]
+    public async Task QueueEnabledTasks_RecruitReportIds_SettingsPagePenguinIdReachesCorePayload()
+    {
+        // Switches absent -> default true (6550614); the settings-page Penguin.Id value must
+        // be emitted for both penguin_id and yituliu_id (frozen WPF passes
+        // GameSettings.PenguinId for both fields).
+        await using var fixture = await TestFixture.CreateAsync();
+        var profile = fixture.Config.CurrentConfig.Profiles["Default"];
+        profile.Values[ConfigurationKeys.PenguinId] = JsonValue.Create("penguin-001");
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Recruit", "recruit")).Success);
+
+        var queueResult = await fixture.TaskQueue.QueueEnabledTasksAsync();
+
+        Assert.True(queueResult.Success);
+        var appended = Assert.Single(fixture.Bridge.AppendedTasks);
+        var json = Assert.IsType<JsonObject>(JsonNode.Parse(appended.ParamsJson));
+        Assert.True(json["report_to_penguin"]?.GetValue<bool>());
+        Assert.True(json["report_to_yituliu"]?.GetValue<bool>());
+        Assert.Equal("penguin-001", json["penguin_id"]?.GetValue<string>());
+        Assert.Equal("penguin-001", json["yituliu_id"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task QueueEnabledTasks_RecruitReportSwitches_SettingsPageKeyWinsOverStaleImportAlias()
+    {
+        // A gui.json import writes the bare alias key; a later explicit settings-page toggle
+        // (dotted key) is the live user choice and must win over the stale alias.
+        await using var fixture = await TestFixture.CreateAsync();
+        var profile = fixture.Config.CurrentConfig.Profiles["Default"];
+        profile.Values["EnablePenguin"] = JsonValue.Create(true);
+        profile.Values[ConfigurationKeys.EnablePenguin] = JsonValue.Create("False");
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Recruit", "recruit")).Success);
+
+        var queueResult = await fixture.TaskQueue.QueueEnabledTasksAsync();
+
+        Assert.True(queueResult.Success);
+        var appended = Assert.Single(fixture.Bridge.AppendedTasks);
+        var json = Assert.IsType<JsonObject>(JsonNode.Parse(appended.ParamsJson));
+        Assert.False(json["report_to_penguin"]?.GetValue<bool>());
+    }
+
+    [Fact]
+    public async Task RecruitModule_UnrelatedSave_PreservesUnresolvableStoredFirstTags_LikeFrozenWpf()
+    {
+        // Frozen WPF rewrites Level3PreferTags only from the tag-selection setter
+        // (AutoRecruitFirstList); unrelated edits (RecruitMaxTimes etc.) leave the stored
+        // list verbatim and serialization emits it unchanged. Tags that are not resolvable
+        // under the current client type (e.g. chosen under YoStarEN, then switched to
+        // Official) must therefore survive a panel save that only touched another field.
+        // (The test environment ships no recruitment.json, so every stored tag exercises
+        // the unresolvable branch.)
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Recruit", "recruit")).Success);
+        var stored = (await fixture.TaskQueue.GetTaskParamsAsync(0)).Value!;
+        stored["first_tags"] = new JsonArray("支援机械", "近战位");
+        Assert.True((await fixture.TaskQueue.UpdateTaskParamsAsync(0, stored)).Success);
+
+        var log = new UiLogService();
+        var diagnostics = new UiDiagnosticsService(fixture.Root, log);
+        var session = new UnifiedSessionService(fixture.Bridge, fixture.Config, log, new SessionStateMachine());
+        var platform = PlatformServicesFactory.CreateDefaults();
+        var platformCapabilityService = new PlatformCapabilityFeatureService(platform, diagnostics);
+        var connectFeatureService = new ConnectFeatureService(session, fixture.Config);
+        var runtime = new MAAUnifiedRuntime
+        {
+            CoreBridge = fixture.Bridge,
+            ConfigurationService = fixture.Config,
+            ResourceWorkflowService = new ResourceWorkflowService(fixture.Root, fixture.Bridge, log),
+            SessionService = session,
+            Platform = platform,
+            LogService = log,
+            DiagnosticsService = diagnostics,
+            ConnectFeatureService = connectFeatureService,
+            ShellFeatureService = new ShellFeatureService(connectFeatureService),
+            TaskQueueFeatureService = new TaskQueueFeatureService(session, fixture.Config),
+            CopilotFeatureService = new CopilotFeatureService(),
+            ToolboxFeatureService = new ToolboxFeatureService(),
+            RemoteControlFeatureService = new RemoteControlFeatureService(),
+            PlatformCapabilityService = platformCapabilityService,
+            OverlayFeatureService = new OverlayFeatureService(platformCapabilityService),
+            NotificationProviderFeatureService = new NotificationProviderFeatureService(),
+            SettingsFeatureService = new SettingsFeatureService(fixture.Config, platformCapabilityService, diagnostics),
+            DialogFeatureService = new DialogFeatureService(diagnostics),
+            PostActionFeatureService = new PostActionFeatureService(
+                fixture.Config,
+                diagnostics,
+                platform.PostActionExecutorService),
+        };
+        var module = new RecruitTaskModuleViewModel(runtime, new LocalizedTextMap { Language = "en-us" });
+        await module.BindAsync(0);
+        Assert.True(module.IsTaskBound);
+
+        module.Times = 8;
+        Assert.True(await module.SaveAsync());
+
+        var persisted = (await fixture.TaskQueue.GetTaskParamsAsync(0)).Value!;
+        var firstTags = Assert.IsType<JsonArray>(persisted["first_tags"]);
+        Assert.Equal(["支援机械", "近战位"], firstTags.Select(tag => tag?.GetValue<string>()).ToArray());
+    }
+
+    [Fact]
+    public void RecruitModule_ResolveFirstTagsForSave_MirrorsFrozenWpfStoredListLifetime()
+    {
+        // Untouched selection: the stored list persists verbatim, including values that are
+        // not resolvable under the current client type.
+        Assert.Equal(
+            ["支援机械", "近战位"],
+            RecruitTaskModuleViewModel.ResolveFirstTagsForSave(["支援机械", "近战位"], ["近战位"], selectionTouched: false));
+
+        // Touched selection: the stored list is rewritten from the selection, dropping
+        // unresolvable values exactly like the frozen WPF AutoRecruitFirstList setter.
+        Assert.Equal(
+            ["近战位"],
+            RecruitTaskModuleViewModel.ResolveFirstTagsForSave(["支援机械", "近战位"], ["近战位"], selectionTouched: true));
+    }
+
+    [Theory]
+    [InlineData("Official", "CN")]
+    [InlineData("Bilibili", "CN")]
+    [InlineData("YoStarEN", "US")]
+    [InlineData("YoStarJP", "JP")]
+    [InlineData("YoStarKR", "KR")]
+    [InlineData("txwy", "ZH_TW")]
+    [InlineData("NotAClientType", "CN")]
+    public async Task QueueEnabledTasks_RecruitServer_DerivesFromClientTypeLikeFrozenWpf(string clientType, string expectedServer)
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var profile = fixture.Config.CurrentConfig.Profiles["Default"];
+        profile.Values["ClientType"] = clientType;
+        // A stale/hand-edited ServerType key must not win: frozen WPF has no such
+        // config key and always derives Recruit's server from the client type.
+        profile.Values["ServerType"] = "KR";
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Recruit", "recruit")).Success);
+
+        var queueResult = await fixture.TaskQueue.QueueEnabledTasksAsync();
+
+        Assert.True(queueResult.Success);
+        var appended = Assert.Single(fixture.Bridge.AppendedTasks);
+        Assert.Equal("Recruit", appended.Type);
+        var json = Assert.IsType<JsonObject>(JsonNode.Parse(appended.ParamsJson));
+        Assert.Equal(expectedServer, json["server"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task QueueEnabledTasks_RecruitIgnoresStalePreserveTagFields()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Recruit", "recruit")).Success);
+        var staleParams = (await fixture.TaskQueue.GetTaskParamsAsync(0)).Value!;
+        staleParams["preserve_tags"] = new JsonArray("支援机械");
+        staleParams["_ui_preserve_tags_enabled"] = true;
+        Assert.True((await fixture.TaskQueue.UpdateTaskParamsAsync(0, staleParams)).Success);
+
+        var queueResult = await fixture.TaskQueue.QueueEnabledTasksAsync();
+
+        Assert.True(queueResult.Success);
+        var appended = Assert.Single(fixture.Bridge.AppendedTasks);
+        var json = Assert.IsType<JsonObject>(JsonNode.Parse(appended.ParamsJson));
+        Assert.DoesNotContain("preserve_tags", json.Select(pair => pair.Key), StringComparer.Ordinal);
+        Assert.DoesNotContain("_ui_preserve_tags_enabled", json.Select(pair => pair.Key), StringComparer.Ordinal);
+    }
+
+    [Fact]
+    public async Task QueueEnabledTasks_RecruitMalformedStoredTimeValues_AbortEntireQueueRun()
+    {
+        // Deliberate MAAUnified fail-fast design (frozen WPF passes these values through
+        // unchanged): a hand-edited out-of-range recruit times/recruitment_time produces
+        // blocking validation issues, and UnifiedSessionService aborts the whole append,
+        // so no task - Recruit or otherwise - reaches Core. UI paths normalize these
+        // values (NormalizeRecruitTime replicates the WPF setter quirk), so this state is
+        // only reachable via a hand-edited avalonia.json or legacy gui.new.json import.
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Recruit", "recruit")).Success);
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Award", "award")).Success);
+
+        var profile = fixture.Config.CurrentConfig.Profiles["Default"];
+        profile.TaskQueue[0].Params = new JsonObject
+        {
+            ["times"] = -1,
+            ["recruitment_time"] = new JsonObject
+            {
+                ["3"] = 45,
+                ["4"] = 600,
+                ["5"] = 540,
+            },
+        };
+
+        var queueResult = await fixture.TaskQueue.QueueEnabledTasksAsync();
+
+        Assert.False(queueResult.Success);
+        Assert.Contains("RecruitTimesOutOfRange", queueResult.Error?.Message ?? string.Empty);
+        Assert.Contains("RecruitTimeOutOfRange", queueResult.Error?.Message ?? string.Empty);
+        Assert.Empty(fixture.Bridge.AppendedTasks);
+    }
+
+    [Fact]
+    public async Task QueueEnabledTasks_RecruitHandEditedSetTimeFalse_IsHonored()
+    {
+        // Deliberate divergence from frozen WPF (which hardcodes SetRecruitTime = true):
+        // MAAUnified keeps a stored `set_time` key with default true; the view model and
+        // the legacy converter always write true, so only a hand-edited profile can carry
+        // false, and that explicit value is honored instead of being overwritten.
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Recruit", "recruit")).Success);
+        var profile = fixture.Config.CurrentConfig.Profiles["Default"];
+        profile.TaskQueue[0].Params!["set_time"] = false;
+
+        var queueResult = await fixture.TaskQueue.QueueEnabledTasksAsync();
+
+        Assert.True(queueResult.Success);
+        var appended = Assert.Single(fixture.Bridge.AppendedTasks);
+        var json = Assert.IsType<JsonObject>(JsonNode.Parse(appended.ParamsJson));
+        Assert.False(json["set_time"]?.GetValue<bool>());
     }
 
     [Fact]
@@ -710,8 +990,6 @@ public sealed class TaskModuleAFeatureTests
             ChooseLevel6 = true,
             SetTime = true,
             FirstTags = ["先锋干员"],
-            PreserveTagsEnabled = true,
-            PreserveTags = ["支援机械", "高级资深干员"],
             Level3Time = 540,
             Level4Time = 530,
             Level5Time = 520,
@@ -758,15 +1036,13 @@ public sealed class TaskModuleAFeatureTests
         Assert.NotNull(recruit.Value);
         Assert.Equal(3, recruit.Value!.Times);
         Assert.False(recruit.Value.Refresh);
-        Assert.False(recruit.Value.ForceRefresh);
+        Assert.True(recruit.Value.ForceRefresh);
         Assert.False(recruit.Value.UseExpedited);
         Assert.True(recruit.Value.ChooseLevel3);
         Assert.False(recruit.Value.ChooseLevel4);
         Assert.True(recruit.Value.ChooseLevel5);
-        Assert.True(recruit.Value.ChooseLevel6);
+        Assert.False(recruit.Value.ChooseLevel6);
         Assert.Equal(["先锋干员"], recruit.Value.FirstTags);
-        Assert.True(recruit.Value.PreserveTagsEnabled);
-        Assert.Equal(["支援机械", "高级资深干员"], recruit.Value.PreserveTags);
         Assert.Equal(540, recruit.Value.Level3Time);
         Assert.Equal(530, recruit.Value.Level4Time);
         Assert.Equal(520, recruit.Value.Level5Time);
@@ -1074,10 +1350,8 @@ public sealed class TaskModuleAFeatureTests
         Assert.Contains("Text=\"{Binding Texts[Recruit.UseExpedited]}\"", recruitView);
         Assert.Contains("Tip=\"{Binding Texts[Recruit.UseExpeditedTip]}\"", recruitView);
         Assert.Contains("IsChecked=\"{Binding UseExpedited}\"", recruitView);
-        Assert.Contains("IsChecked=\"{Binding ChooseLevel6}\"", recruitView);
-        Assert.Contains("IsChecked=\"{Binding PreserveTagsEnabled}\"", recruitView);
-        Assert.Contains("HeaderText=\"{Binding PreserveTagsSummary}\"", recruitView);
-        Assert.Contains("ItemsSource=\"{Binding PreserveTagOptions}\"", recruitView);
+        Assert.Contains("IsChecked=\"False\"", recruitView);
+        Assert.Contains("IsEnabled=\"False\"", recruitView);
         Assert.DoesNotContain("AutoSelectLevel6Notice", recruitView);
         Assert.Equal(2, CountOccurrences(mallView, "Tip=\"{Binding Texts[Mall.OnlyOnceADayTip]}\""));
         Assert.Contains("IsChecked=\"{Binding VisitFriendsOnceADay}\"", mallView);
@@ -1132,8 +1406,6 @@ public sealed class TaskModuleAFeatureTests
             "Recruit.AutoSelectLevel6FixedTime",
             "Recruit.UseExpedited",
             "Recruit.UseExpeditedTip",
-            "Recruit.PreserveTags",
-            "Recruit.PreserveTagsTip",
             "Mall.OnlyOnceADayTip",
             "Issue.TaskFieldMissing",
             "TaskQueue.Status.ParamsLoaded",
@@ -1165,6 +1437,27 @@ public sealed class TaskModuleAFeatureTests
         var persistedDefault = Assert.IsType<JsonObject>(persistedProfiles["Default"]);
         var persistedQueue = Assert.IsType<JsonArray>(persistedDefault["TaskQueue"]);
         return Assert.IsType<JsonObject>(persistedQueue[0]);
+    }
+
+    [Fact]
+    public void RecruitSettingsView_TimesInput_HasNoUpperBoundLikeFrozenWpf()
+    {
+        // Frozen WPF RecruitSettingsUserControl.xaml binds RecruitMaxTimes to a
+        // NumericUpDown with only Minimum="0" and no Maximum, so values above 99
+        // stay expressible in the UI.
+        var root = TestRepoLayout.GetMaaUnifiedRoot();
+        var text = File.ReadAllText(Path.Combine(root, "App", "Features", "TaskQueue", "RecruitSettingsView.axaml"));
+
+        var bindingIndex = text.IndexOf("Value=\"{Binding Times}\"", StringComparison.Ordinal);
+        Assert.True(bindingIndex >= 0, "Recruit times input binding not found.");
+        var elementStart = text.LastIndexOf("<controls:AppNumberInput", bindingIndex, StringComparison.Ordinal);
+        Assert.True(elementStart >= 0, "Recruit times AppNumberInput element not found.");
+        var elementEnd = text.IndexOf("/>", bindingIndex, StringComparison.Ordinal);
+        Assert.True(elementEnd > bindingIndex, "Recruit times AppNumberInput element is not self-closing.");
+        var element = text[elementStart..elementEnd];
+
+        Assert.Contains("Minimum=\"0\"", element, StringComparison.Ordinal);
+        Assert.DoesNotContain("Maximum", element, StringComparison.Ordinal);
     }
 
     private sealed class TestFixture : IAsyncDisposable

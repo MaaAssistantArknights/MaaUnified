@@ -28,7 +28,6 @@
                        Text="{Binding Texts[Recruit.Times]}"
                        TextWrapping="Wrap" />
             <controls:AppNumberInput Minimum="0"
-                                     Maximum="99"
                                      Value="{Binding Times}" />
           </controls:SettingsInlineRow>
         </Border>
@@ -96,42 +95,6 @@
                     Content="{Binding Texts[Recruit.ForceRefresh]}"
                     IsChecked="{Binding ForceRefresh}"
                     IsEnabled="{Binding Refresh}" />
-
-          <Border Classes="app-surface app-card">
-            <controls:AdaptiveSpacingStackPanel Classes="recruit-card-content">
-              <CheckBox Classes="app-checkbox"
-                        Content="{Binding Texts[Recruit.PreserveTags]}"
-                        IsChecked="{Binding PreserveTagsEnabled}" />
-              <TextBlock Classes="subtle"
-                         Text="{Binding Texts[Recruit.PreserveTagsTip]}"
-                         TextWrapping="Wrap" />
-              <controls:SettingsInlineRow FieldWidth="{DynamicResource MAA.Size.Settings.FieldWideWidth}"
-                                          IsEnabled="{Binding PreserveTagsEnabled}">
-                <TextBlock Classes="subtle"
-                           Text="{Binding Texts[Recruit.PreserveTags]}"
-                           TextWrapping="Wrap" />
-                <controls:AppMultiSelect HeaderText="{Binding PreserveTagsSummary}">
-                  <controls:AppMultiSelect.DropDownContent>
-                    <ItemsControl ItemsSource="{Binding PreserveTagOptions}">
-                      <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate>
-                          <StackPanel Spacing="4" />
-                        </ItemsPanelTemplate>
-                      </ItemsControl.ItemsPanel>
-                      <ItemsControl.ItemTemplate>
-                        <DataTemplate x:DataType="vm:RecruitTaskModuleViewModel+RecruitTagOption">
-                          <ToggleButton Classes="app-multi-select-option"
-                                        IsChecked="{Binding IsSelected}">
-                            <TextBlock Text="{Binding DisplayName}" />
-                          </ToggleButton>
-                        </DataTemplate>
-                      </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                  </controls:AppMultiSelect.DropDownContent>
-                </controls:AppMultiSelect>
-              </controls:SettingsInlineRow>
-            </controls:AdaptiveSpacingStackPanel>
-          </Border>
 
           <Border Classes="app-surface app-card">
             <controls:AppHintedCheckBox Text="{Binding Texts[Recruit.NotChooseLevel1]}"
@@ -241,11 +204,12 @@
               <StackPanel Orientation="Horizontal">
                 <CheckBox Classes="app-checkbox"
                           Content="{Binding Texts[Recruit.AutoSelectLevel6]}"
-                          IsChecked="{Binding ChooseLevel6}" />
+                          IsChecked="False"
+                          IsEnabled="False" />
                 <TextBlock Classes="subtle"
                            Margin="{DynamicResource MAA.Thickness.MarginLeftSmall}"
                            VerticalAlignment="Center"
-                           IsVisible="{Binding ChooseLevel6}"
+                           IsVisible="False"
                            Text="{Binding Texts[Recruit.AutoSelectLevel6FixedTime]}"
                            TextWrapping="Wrap" />
               </StackPanel>

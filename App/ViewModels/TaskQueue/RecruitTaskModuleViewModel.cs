@@ -51,7 +51,6 @@ public sealed class RecruitTaskModuleViewModel : TypedTaskModuleViewModelBase<Re
     private bool? _useExpedited = false;
     private bool _skipRobot = true;
     private int _extraTagsMode;
-    private bool _preserveTagsEnabled;
     private bool _chooseLevel3 = true;
     private bool _chooseLevel4 = true;
     private bool _chooseLevel5;
@@ -61,6 +60,8 @@ public sealed class RecruitTaskModuleViewModel : TypedTaskModuleViewModelBase<Re
     private int _level5Time = 540;
     private IReadOnlyList<ExtraTagsModeOption> _extraTagsModeOptions = [];
     private bool _suppressTagSelectionChanged;
+    private IReadOnlyList<string> _appliedFirstTags = [];
+    private bool _firstTagsSelectionTouched;
 
     public RecruitTaskModuleViewModel(MAAUnifiedRuntime runtime, LocalizedTextMap texts)
         : base(runtime, texts, "TaskQueue.Recruit")
@@ -73,25 +74,7 @@ public sealed class RecruitTaskModuleViewModel : TypedTaskModuleViewModelBase<Re
 
     public ObservableCollection<RecruitTagOption> FirstTagOptions { get; } = [];
 
-    public ObservableCollection<RecruitTagOption> PreserveTagOptions { get; } = [];
-
     public string FirstTagsSummary => BuildFirstTagsSummary();
-
-    public string PreserveTagsSummary => BuildPreserveTagsSummary();
-
-    public bool PreserveTagsEnabled
-    {
-        get => _preserveTagsEnabled;
-        set
-        {
-            if (!SetTrackedProperty(ref _preserveTagsEnabled, value))
-            {
-                return;
-            }
-
-            OnPropertyChanged(nameof(PreserveTagsSummary));
-        }
-    }
 
     public int Times
     {
@@ -111,7 +94,7 @@ public sealed class RecruitTaskModuleViewModel : TypedTaskModuleViewModelBase<Re
 
             if (!_refresh)
             {
-                ForceRefresh = false;
+                OnPropertyChanged(nameof(ForceRefresh));
             }
         }
     }
@@ -119,7 +102,7 @@ public sealed class RecruitTaskModuleViewModel : TypedTaskModuleViewModelBase<Re
     public bool ForceRefresh
     {
         get => _forceRefresh;
-        set => SetTrackedProperty(ref _forceRefresh, Refresh && value);
+        set => SetTrackedProperty(ref _forceRefresh, value);
     }
 
     public bool? UseExpedited
@@ -285,9 +268,18 @@ public sealed class RecruitTaskModuleViewModel : TypedTaskModuleViewModelBase<Re
         return Runtime.TaskQueueFeatureService.GetRecruitParamsAsync(index, cancellationToken);
     }
 
-    protected override Task<UiOperationResult> SaveDtoAsync(int index, RecruitTaskParamsDto dto, CancellationToken cancellationToken)
+    protected override async Task<UiOperationResult> SaveDtoAsync(int index, RecruitTaskParamsDto dto, CancellationToken cancellationToken)
     {
-        return Runtime.TaskQueueFeatureService.SaveRecruitParamsAsync(index, dto, cancellationToken);
+        var result = await Runtime.TaskQueueFeatureService.SaveRecruitParamsAsync(index, dto, cancellationToken);
+        if (result.Success)
+        {
+            // The persisted list is the new baseline: only a later tag-selection edit may
+            // rewrite first_tags; unrelated saves must keep preserving the stored values.
+            _appliedFirstTags = dto.FirstTags.ToArray();
+            _firstTagsSelectionTouched = false;
+        }
+
+        return result;
     }
 
     protected override TaskCompileOutput CompileDto(RecruitTaskParamsDto dto, UnifiedProfile profile, UnifiedConfig config)
@@ -310,31 +302,28 @@ public sealed class RecruitTaskModuleViewModel : TypedTaskModuleViewModelBase<Re
         Level3Time = dto.Level3Time;
         Level4Time = dto.Level4Time;
         Level5Time = dto.Level5Time;
-        PreserveTagsEnabled = dto.PreserveTagsEnabled;
         ApplyFirstTags(dto.FirstTags);
-        ApplyPreserveTags(dto.PreserveTags);
+        _appliedFirstTags = dto.FirstTags.ToArray();
+        _firstTagsSelectionTouched = false;
     }
 
     protected override RecruitTaskParamsDto BuildDto()
     {
-        var firstTags = BuildSelectedTagValues(FirstTagOptions);
-        var preserveTags = BuildSelectedTagValues(PreserveTagOptions);
+        var firstTags = ResolveFirstTagsForSave(_appliedFirstTags, BuildSelectedTagValues(FirstTagOptions), _firstTagsSelectionTouched);
 
         return new RecruitTaskParamsDto
         {
             Times = Math.Max(0, Times),
             Refresh = Refresh,
-            ForceRefresh = Refresh && ForceRefresh,
+            ForceRefresh = ForceRefresh,
             UseExpedited = UseExpedited,
             SkipRobot = SkipRobot,
             ExtraTagsMode = ExtraTagsMode,
             FirstTags = firstTags,
-            PreserveTagsEnabled = PreserveTagsEnabled,
-            PreserveTags = preserveTags,
             ChooseLevel3 = ChooseLevel3,
             ChooseLevel4 = ChooseLevel4,
             ChooseLevel5 = ChooseLevel5,
-            ChooseLevel6 = ChooseLevel6,
+            ChooseLevel6 = false,
             Level3Time = Level3Time,
             Level4Time = Level4Time,
             Level5Time = Level5Time,
@@ -379,14 +368,8 @@ public sealed class RecruitTaskModuleViewModel : TypedTaskModuleViewModelBase<Re
             .Where(option => option.IsSelected)
             .Select(option => option.Value)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var preserveSelected = PreserveTagOptions
-            .Where(option => option is not null)
-            .Where(option => option.IsSelected)
-            .Select(option => option.Value)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         var firstTags = ResolveRecruitTags(firstTagsOnly: true);
-        var preserveTags = ResolveRecruitTags(firstTagsOnly: false);
 
         foreach (var option in FirstTagOptions)
         {
@@ -404,36 +387,13 @@ public sealed class RecruitTaskModuleViewModel : TypedTaskModuleViewModelBase<Re
             FirstTagOptions.Add(option);
         }
 
-        foreach (var option in PreserveTagOptions)
-        {
-            option.PropertyChanged -= OnRecruitTagOptionChanged;
-        }
-
-        PreserveTagOptions.Clear();
-        foreach (var (display, value) in preserveTags)
-        {
-            var option = new RecruitTagOption(display, value)
-            {
-                IsSelected = preserveSelected.Contains(value),
-            };
-            option.PropertyChanged += OnRecruitTagOptionChanged;
-            PreserveTagOptions.Add(option);
-        }
-
         OnPropertyChanged(nameof(FirstTagsSummary));
-        OnPropertyChanged(nameof(PreserveTagsSummary));
     }
 
     private void ApplyFirstTags(IReadOnlyList<string> tags)
     {
         ApplyTags(FirstTagOptions, tags);
         OnPropertyChanged(nameof(FirstTagsSummary));
-    }
-
-    private void ApplyPreserveTags(IReadOnlyList<string> tags)
-    {
-        ApplyTags(PreserveTagOptions, tags);
-        OnPropertyChanged(nameof(PreserveTagsSummary));
     }
 
     private void ApplyTags(IEnumerable<RecruitTagOption> options, IReadOnlyList<string> tags)
@@ -460,8 +420,8 @@ public sealed class RecruitTaskModuleViewModel : TypedTaskModuleViewModelBase<Re
             return;
         }
 
+        _firstTagsSelectionTouched = true;
         OnPropertyChanged(nameof(FirstTagsSummary));
-        OnPropertyChanged(nameof(PreserveTagsSummary));
         MarkDirty();
     }
 
@@ -481,22 +441,6 @@ public sealed class RecruitTaskModuleViewModel : TypedTaskModuleViewModelBase<Re
         return string.Join(", ", selected);
     }
 
-    private string BuildPreserveTagsSummary()
-    {
-        var selected = PreserveTagOptions
-            .Where(option => option.IsSelected)
-            .Select(option => option.DisplayName)
-            .Where(name => !string.IsNullOrWhiteSpace(name))
-            .ToList();
-
-        if (selected.Count == 0)
-        {
-            return Texts.GetOrDefault("Recruit.PreserveTags", "Preserve tags");
-        }
-
-        return string.Join(", ", selected);
-    }
-
     private static List<string> BuildSelectedTagValues(IEnumerable<RecruitTagOption> options)
     {
         return options
@@ -504,6 +448,20 @@ public sealed class RecruitTaskModuleViewModel : TypedTaskModuleViewModelBase<Re
             .Select(option => option.Value)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
+    }
+
+    // Frozen WPF rewrites the stored Level3PreferTags only when the tag selection itself
+    // changes (AutoRecruitFirstList setter); unrelated edits (RecruitMaxTimes etc.) leave
+    // the stored list verbatim, and serialization emits the stored list unchanged. Mirror
+    // that: until the selection is touched, persist the applied list as-is so stored tags
+    // that are not resolvable under the current client type survive unrelated saves; once
+    // the user edits the selection, persist the selection exactly like the WPF setter.
+    internal static List<string> ResolveFirstTagsForSave(
+        IReadOnlyList<string> appliedFirstTags,
+        List<string> selectedValues,
+        bool selectionTouched)
+    {
+        return selectionTouched ? selectedValues : appliedFirstTags.ToList();
     }
 
     private IReadOnlyList<(string Display, string Value)> ResolveRecruitTags(bool firstTagsOnly)

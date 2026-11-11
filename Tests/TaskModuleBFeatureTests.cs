@@ -19,6 +19,20 @@ namespace MAAUnified.Tests;
 
 public sealed class TaskModuleBFeatureTests
 {
+    [Theory]
+    [InlineData("zh-cn", "招聘许可", "家具")]
+    [InlineData("zh-tw", "招聘許可", "傢俱")]
+    [InlineData("en-us", "Recruitment Permit", "Furniture Part")]
+    [InlineData("ja-jp", "求人票", "家具")]
+    [InlineData("ko-kr", "모집 허가증", "가구 부품")]
+    public void CreateMallDefaults_UsesLocalizedWpfItemNames(string language, string firstItem, string blacklistItem)
+    {
+        var parameters = TaskModuleParameterDefaults.CreateMallDefaults(language);
+
+        Assert.Contains(firstItem, Assert.IsType<JsonArray>(parameters["buy_first"]).Select(item => item?.GetValue<string>()));
+        Assert.Contains(blacklistItem, Assert.IsType<JsonArray>(parameters["blacklist"]).Select(item => item?.GetValue<string>()));
+    }
+
     [Fact]
     public async Task AddTask_InfrastMallAward_InjectsExpectedDefaults()
     {
@@ -106,7 +120,7 @@ public sealed class TaskModuleBFeatureTests
         Assert.Equal(2, queueResult.Value);
 
         Assert.Equal(FightStageSelection.CurrentOrLast, profile.TaskQueue[0].Params["stage"]?.GetValue<string>());
-        Assert.False(profile.TaskQueue[1].Params["credit_fight"]?.GetValue<bool>());
+        Assert.True(profile.TaskQueue[1].Params["credit_fight"]?.GetValue<bool>());
 
         var fightTask = Assert.IsType<JsonObject>(JsonNode.Parse(fixture.Bridge.AppendedTasks[0].ParamsJson));
         var mallTask = Assert.IsType<JsonObject>(JsonNode.Parse(fixture.Bridge.AppendedTasks[1].ParamsJson));
@@ -115,6 +129,153 @@ public sealed class TaskModuleBFeatureTests
 
         var eventLog = await File.ReadAllTextAsync(Path.Combine(fixture.Root, "debug", "avalonia-ui-events.log"));
         Assert.Contains("Disabled Mall credit fight", eventLog, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task QueueEnabledTasks_MallCreditFight_GuardFiresWhenPlanResolvesToCurrentOrLastOnAnyEnabledWeekday()
+    {
+        // Frozen WPF parity: the guard aggregates over the whole week, so a plan
+        // [Pormpt1, current/last] downgrades credit_fight even when today's
+        // persisted stage is specific, because Pormpt1 is closed on most enabled
+        // days (it opens Monday only). Pormpt1 is a permanent non-resource stage,
+        // so no activity window can make it open all week (CE-6 et al. can become
+        // week-long open during resource-collection activities).
+        await using var fixture = await TestFixture.CreateAsync("en-us");
+        var profile = fixture.Config.CurrentConfig.Profiles["Default"];
+        profile.Values["ClientType"] = "Official";
+        profile.TaskQueue.Add(new UnifiedTaskItem
+        {
+            Type = "Fight",
+            Name = "fight",
+            IsEnabled = true,
+            Params = new JsonObject
+            {
+                ["stage"] = "Pormpt1",
+                ["_ui_stage_plan"] = new JsonArray("Pormpt1", FightStageSelection.CurrentOrLast),
+                ["_ui_use_alternate_stage"] = true,
+                ["medicine"] = 0,
+                ["stone"] = 0,
+                ["times"] = 1,
+                ["series"] = 1,
+            },
+        });
+        profile.TaskQueue.Add(new UnifiedTaskItem
+        {
+            Type = "Mall",
+            Name = "mall",
+            IsEnabled = true,
+            Params = new JsonObject
+            {
+                ["credit_fight"] = true,
+                ["credit_fight_once_a_day"] = false,
+            },
+        });
+
+        var queueResult = await fixture.TaskQueue.QueueEnabledTasksAsync();
+
+        Assert.True(queueResult.Success);
+        var mallTask = Assert.IsType<JsonObject>(JsonNode.Parse(fixture.Bridge.AppendedTasks.Single(t => t.Type == "Mall").ParamsJson));
+        Assert.False(mallTask["credit_fight"]?.GetValue<bool>());
+        // Runtime-only downgrade: the persisted user choice is untouched.
+        Assert.True(profile.TaskQueue[1].Params["credit_fight"]?.GetValue<bool>());
+    }
+
+    [Fact]
+    public async Task QueueEnabledTasks_MallCreditFight_GuardSkipsDaysDisabledByWeeklySchedule()
+    {
+        // Frozen WPF parity: only schedule-enabled days are evaluated. With the
+        // plan [Pormpt1, current/last] and the weekly schedule limited to Monday
+        // (Pormpt1's only open day), no enabled day resolves to current/last, so
+        // credit_fight stays enabled even though today's persisted stage resolved
+        // to current/last.
+        await using var fixture = await TestFixture.CreateAsync("en-us");
+        var profile = fixture.Config.CurrentConfig.Profiles["Default"];
+        profile.Values["ClientType"] = "Official";
+        profile.TaskQueue.Add(new UnifiedTaskItem
+        {
+            Type = "Fight",
+            Name = "fight",
+            IsEnabled = true,
+            Params = new JsonObject
+            {
+                ["stage"] = FightStageSelection.CurrentOrLast,
+                ["_ui_stage_plan"] = new JsonArray("Pormpt1", FightStageSelection.CurrentOrLast),
+                ["_ui_use_alternate_stage"] = true,
+                ["_ui_use_weekly_schedule"] = true,
+                ["_ui_weekly_schedule_sunday"] = false,
+                ["_ui_weekly_schedule_monday"] = true,
+                ["_ui_weekly_schedule_tuesday"] = false,
+                ["_ui_weekly_schedule_wednesday"] = false,
+                ["_ui_weekly_schedule_thursday"] = false,
+                ["_ui_weekly_schedule_friday"] = false,
+                ["_ui_weekly_schedule_saturday"] = false,
+                ["medicine"] = 0,
+                ["stone"] = 0,
+                ["times"] = 1,
+                ["series"] = 1,
+            },
+        });
+        profile.TaskQueue.Add(new UnifiedTaskItem
+        {
+            Type = "Mall",
+            Name = "mall",
+            IsEnabled = true,
+            Params = new JsonObject
+            {
+                ["credit_fight"] = true,
+                ["credit_fight_once_a_day"] = false,
+            },
+        });
+
+        var queueResult = await fixture.TaskQueue.QueueEnabledTasksAsync();
+
+        // The weekly schedule may disable the Fight task today, so locate the
+        // Mall append by type instead of queue position.
+        Assert.True(queueResult.Success);
+        var mallTask = Assert.IsType<JsonObject>(JsonNode.Parse(fixture.Bridge.AppendedTasks.Single(t => t.Type == "Mall").ParamsJson));
+        Assert.True(mallTask["credit_fight"]?.GetValue<bool>());
+    }
+
+    [Fact]
+    public async Task GetStartPrecheckWarnings_ReportsMallCreditFightDowngrade_WhenPlanResolvesToCurrentOrLastOnAnyEnabledWeekday()
+    {
+        // The warning path must use the same week-aggregated guard as compilation.
+        await using var fixture = await TestFixture.CreateAsync("en-us");
+        var profile = fixture.Config.CurrentConfig.Profiles["Default"];
+        profile.Values["ClientType"] = "Official";
+        profile.TaskQueue.Add(new UnifiedTaskItem
+        {
+            Type = "Fight",
+            Name = "fight",
+            IsEnabled = true,
+            Params = new JsonObject
+            {
+                ["stage"] = "Pormpt1",
+                ["_ui_stage_plan"] = new JsonArray("Pormpt1", FightStageSelection.CurrentOrLast),
+                ["_ui_use_alternate_stage"] = true,
+                ["medicine"] = 0,
+                ["stone"] = 0,
+                ["times"] = 1,
+                ["series"] = 1,
+            },
+        });
+        profile.TaskQueue.Add(new UnifiedTaskItem
+        {
+            Type = "Mall",
+            Name = "mall",
+            IsEnabled = true,
+            Params = new JsonObject
+            {
+                ["credit_fight"] = true,
+                ["credit_fight_once_a_day"] = false,
+            },
+        });
+
+        var warnings = await fixture.TaskQueue.GetStartPrecheckWarningsAsync();
+
+        Assert.True(warnings.Success);
+        Assert.Contains(warnings.Value ?? [], warning => warning.Message.Contains("credit fight", StringComparison.OrdinalIgnoreCase));
+        Assert.True(profile.TaskQueue[1].Params["credit_fight"]?.GetValue<bool>());
     }
 
     [Fact]
@@ -158,7 +319,7 @@ public sealed class TaskModuleBFeatureTests
     }
 
     [Fact]
-    public async Task TaskQueuePage_StartAsync_CurrentOrLastFightStage_ShowsPrecheckWarning_AndAppliesDowngrade()
+    public async Task TaskQueuePage_StartAsync_CurrentOrLastFightStage_AppliesRuntimeDowngradeWithoutPersistingIt()
     {
         await using var fixture = await TestFixture.CreateAsync("en-us");
         var profile = fixture.Config.CurrentConfig.Profiles["Default"];
@@ -195,7 +356,7 @@ public sealed class TaskModuleBFeatureTests
         await vm.StartAsync();
 
         Assert.True(vm.IsRunning);
-        Assert.False(profile.TaskQueue[1].Params["credit_fight"]?.GetValue<bool>());
+        Assert.True(profile.TaskQueue[1].Params["credit_fight"]?.GetValue<bool>());
         Assert.Equal(2, fixture.Bridge.AppendedTasks.Count);
 
         var eventLog = await File.ReadAllTextAsync(Path.Combine(fixture.Root, "debug", "avalonia-ui-events.log"));
@@ -205,7 +366,7 @@ public sealed class TaskModuleBFeatureTests
     }
 
     [Fact]
-    public async Task Mall_ListNormalization_DedupTrimCaseInsensitive()
+    public async Task Mall_ListNormalization_PreservesDuplicatesAndCaseVariantsLikeFrozenWpf()
     {
         await using var fixture = await TestFixture.CreateAsync("en-us");
         await fixture.TaskQueue.AddTaskAsync("Mall", "mall");
@@ -226,8 +387,115 @@ public sealed class TaskModuleBFeatureTests
         var blacklist = latest.Value?["blacklist"] as JsonArray;
         Assert.NotNull(buyFirst);
         Assert.NotNull(blacklist);
-        Assert.Equal(new[] { "A", "B" }, buyFirst!.Select(x => x?.GetValue<string>()).ToArray());
-        Assert.Equal(new[] { "X", "y" }, blacklist!.Select(x => x?.GetValue<string>()).ToArray());
+        // Frozen WPF stores the Mall list text verbatim (the setter only replaces
+        // fullwidth semicolons and trims the outer text), so duplicates and case
+        // variants the user typed survive; only trimming and empty-entry removal
+        // are applied.
+        Assert.Equal(new[] { "A", "a", "B", "B" }, buyFirst!.Select(x => x?.GetValue<string>()).ToArray());
+        Assert.Equal(new[] { "X", "x", "y", "Y" }, blacklist!.Select(x => x?.GetValue<string>()).ToArray());
+    }
+
+    [Fact]
+    public async Task QueueEnabledTasks_MallLists_PreserveCaseVariantDuplicates_LikeFrozenWpf()
+    {
+        await using var fixture = await TestFixture.CreateAsync("en-us");
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Mall", "mall")).Success);
+        fixture.Config.CurrentConfig.Profiles["Default"].Values["ClientType"] = "YoStarEN";
+
+        var update = await fixture.TaskQueue.UpdateTaskParamsAsync(
+            0,
+            new JsonObject
+            {
+                ["credit_fight"] = false,
+                ["credit_fight_once_a_day"] = true,
+                ["visit_friends"] = true,
+                ["visit_friends_once_a_day"] = false,
+                ["shopping"] = true,
+                ["buy_first"] = new JsonArray("lmd", "LMD", "lmd"),
+                ["blacklist"] = new JsonArray("gavial", "Gavial", "gavial"),
+            },
+            persistImmediately: true);
+        Assert.True(update.Success);
+
+        var result = await fixture.TaskQueue.QueueEnabledTasksAsync();
+        Assert.True(result.Success);
+        var appended = Assert.Single(fixture.Bridge.AppendedTasks);
+        var parameters = Assert.IsType<JsonObject>(JsonNode.Parse(appended.ParamsJson));
+
+        // Core matches goods names with a case-sensitive substring test
+        // (CreditShopImageAnalyzer.match_required_index; the OCR equivalence
+        // classes never fold case generally), so case-variant duplicates are
+        // distinct entries and must survive compilation like in frozen WPF.
+        Assert.Equal(
+            ["lmd", "LMD"],
+            parameters["buy_first"]!.AsArray().Select(item => item!.GetValue<string>()).ToArray());
+        // The blacklist keeps the WPF Union semantics (f244924): exact
+        // duplicates collapse through the ordinal Union with the client-type
+        // operator blacklist, while case variants survive.
+        Assert.Equal(
+            ["gavial", "Gavial", "Courier", "Dur-nar"],
+            parameters["blacklist"]!.AsArray().Select(item => item!.GetValue<string>()).ToArray());
+
+        // Accepted divergence (same class as the dropped empty split entries):
+        // frozen WPF also emits exact duplicates in buy_first
+        // ("lmd;LMD;lmd" -> ["lmd","LMD","lmd"]), while MAAUnified collapses
+        // them at the Core boundary. Core match_required_index returns the first
+        // matching index, so trailing exact duplicates never change the
+        // white-list priority order, and blacklist membership is set semantics;
+        // the compiled Core behavior is identical.
+
+        // Compilation must not mutate the persisted profile lists.
+        var persisted = await fixture.TaskQueue.GetTaskParamsAsync(0);
+        Assert.True(persisted.Success);
+        Assert.Equal(
+            ["lmd", "LMD", "lmd"],
+            persisted.Value?["buy_first"]!.AsArray().Select(item => item!.GetValue<string>()).ToArray());
+        Assert.Equal(
+            ["gavial", "Gavial", "gavial"],
+            persisted.Value?["blacklist"]!.AsArray().Select(item => item!.GetValue<string>()).ToArray());
+    }
+
+    [Fact]
+    public async Task MallDuplicateLists_SurviveStartupAndSaveNormalization_LikeFrozenWpf()
+    {
+        await using var fixture = await TestFixture.CreateAsync("en-us");
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Mall", "mall")).Success);
+
+        var update = await fixture.TaskQueue.UpdateTaskParamsAsync(
+            0,
+            new JsonObject
+            {
+                ["credit_fight"] = false,
+                ["credit_fight_once_a_day"] = true,
+                ["visit_friends"] = true,
+                ["visit_friends_once_a_day"] = false,
+                ["shopping"] = true,
+                ["buy_first"] = new JsonArray("Gavial", "gavial"),
+                ["blacklist"] = new JsonArray("LMD", "LMD", "lmd"),
+            },
+            persistImmediately: true);
+        Assert.True(update.Success);
+
+        var log = new UiLogService();
+        var reloaded = new UnifiedConfigurationService(
+            new AvaloniaJsonConfigStore(fixture.Root),
+            new GuiNewJsonConfigImporter(),
+            new GuiJsonConfigImporter(),
+            log,
+            fixture.Root);
+        await reloaded.LoadOrBootstrapAsync();
+
+        var profile = reloaded.CurrentConfig.Profiles[reloaded.CurrentConfig.CurrentProfile];
+        var mall = profile.TaskQueue[0];
+        // Startup/save normalization must not fold the stored duplicates: frozen
+        // WPF keeps the list text verbatim, and a case-sensitive Core match
+        // could depend on the variant that an OrdinalIgnoreCase dedup dropped.
+        Assert.Equal(
+            ["Gavial", "gavial"],
+            mall.Params?["buy_first"]!.AsArray().Select(item => item!.GetValue<string>()).ToArray());
+        Assert.Equal(
+            ["LMD", "LMD", "lmd"],
+            mall.Params?["blacklist"]!.AsArray().Select(item => item!.GetValue<string>()).ToArray());
     }
 
     [Fact]
@@ -269,13 +537,174 @@ public sealed class TaskModuleBFeatureTests
         var appendedParams = Assert.IsType<JsonObject>(JsonNode.Parse(appended.ParamsJson));
         Assert.False(appendedParams["credit_fight"]?.GetValue<bool>());
         Assert.False(appendedParams["visit_friends"]?.GetValue<bool>());
-        Assert.Equal(today, appendedParams["_ui_mall_credit_fight_last_time"]?.GetValue<string>());
-        Assert.Equal(today, appendedParams["_ui_mall_visit_friends_last_time"]?.GetValue<string>());
+        Assert.False(appendedParams.ContainsKey("credit_fight_once_a_day"));
+        Assert.False(appendedParams.ContainsKey("visit_friends_once_a_day"));
+        Assert.False(appendedParams.ContainsKey("_ui_mall_credit_fight_last_time"));
+        Assert.False(appendedParams.ContainsKey("_ui_mall_visit_friends_last_time"));
 
         var persisted = await fixture.TaskQueue.GetTaskParamsAsync(0);
         Assert.True(persisted.Success);
         Assert.True(persisted.Value?["credit_fight"]?.GetValue<bool>());
         Assert.True(persisted.Value?["visit_friends"]?.GetValue<bool>());
+    }
+
+    [Fact]
+    public async Task QueueEnabledTasks_MallDailyOnce_LooseMarkerString_IsTreatedAsAvailableLikeFrozenWpf()
+    {
+        // Frozen WPF MallTask.IsCreditFightAvailable/IsVisitFriendsAvailable only accept
+        // DateTime.ParseExact("yyyy/MM/dd HH:mm:ss"); any other string is a parse failure
+        // and means "available today". A hand-edited date-only marker for the current YJ
+        // date must therefore not downgrade credit_fight/visit_friends.
+        await using var fixture = await TestFixture.CreateAsync("en-us");
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Mall", "mall")).Success);
+
+        var profile = fixture.Config.CurrentConfig.Profiles["Default"];
+        profile.Values["ClientType"] = "Official";
+
+        // Date-only form of the current YJ date: parseable by DateTime.TryParse but not
+        // by the frozen WPF ParseExact marker format.
+        var looseToday = MallDailyResetHelper.GetCurrentYjDateString(DateTime.UtcNow, "Official")[..10];
+        var update = await fixture.TaskQueue.UpdateTaskParamsAsync(
+            0,
+            new JsonObject
+            {
+                ["credit_fight"] = true,
+                ["credit_fight_once_a_day"] = true,
+                ["_ui_mall_credit_fight_last_time"] = looseToday,
+                ["visit_friends"] = true,
+                ["visit_friends_once_a_day"] = true,
+                ["_ui_mall_visit_friends_last_time"] = looseToday,
+                ["shopping"] = false,
+            },
+            persistImmediately: true);
+        Assert.True(update.Success);
+
+        var queueResult = await fixture.TaskQueue.QueueEnabledTasksAsync();
+        Assert.True(queueResult.Success);
+
+        var appended = Assert.Single(fixture.Bridge.AppendedTasks);
+        var appendedParams = Assert.IsType<JsonObject>(JsonNode.Parse(appended.ParamsJson));
+        Assert.True(appendedParams["credit_fight"]?.GetValue<bool>());
+        Assert.True(appendedParams["visit_friends"]?.GetValue<bool>());
+    }
+
+    [Theory]
+    [InlineData("2026/10/02 00:00:00", false)] // exact marker for the current YJ day
+    [InlineData("2026/10/02 03:04:05", false)] // exact marker, non-midnight time today
+    [InlineData("2026-10-02 00:00:00", false)] // WPF normalizes '-' to '/' before ParseExact
+    [InlineData("2026/10/01 00:00:00", true)] // previous YJ day
+    [InlineData("2026/10/02", true)] // date-only: WPF ParseExact fails -> available
+    [InlineData("10/02/2026 00:00:00", true)] // other layout: parse failure -> available
+    [InlineData(" 2026/10/02 00:00:00 ", true)] // surrounding whitespace: parse failure -> available
+    [InlineData("not a date", true)]
+    [InlineData("", true)]
+    public void MallDailyResetHelper_IsTaskAvailableToday_OnlyAcceptsExactWpfMarkerFormat(string marker, bool expectedAvailable)
+    {
+        // 2026-10-02T12:00:00Z with Official (+8, YJ day starts at 04:00) => YJ date 2026-10-02.
+        var utcNow = new DateTime(2026, 10, 2, 12, 0, 0, DateTimeKind.Utc);
+
+        Assert.Equal(expectedAvailable, MallDailyResetHelper.IsTaskAvailableToday(marker, "Official", utcNow));
+    }
+
+    [Theory]
+    [InlineData(3, 3)]
+    [InlineData(99, 4)]
+    [InlineData(-3, 0)]
+    public async Task QueueEnabledTasks_MallFormationIndex_HandEditedOutOfRange_IsClampedToWpfUiDomain(int stored, int expected)
+    {
+        // Deliberate divergence from frozen WPF (which emits the raw CreditFightFormation):
+        // a hand-edited out-of-range formation_index is clamped to the 0..4 domain the
+        // frozen WPF combobox can produce. UI-reachable values pass through unchanged.
+        await using var fixture = await TestFixture.CreateAsync("en-us");
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Mall", "mall")).Success);
+
+        var update = await fixture.TaskQueue.UpdateTaskParamsAsync(
+            0,
+            new JsonObject
+            {
+                ["credit_fight"] = false,
+                ["visit_friends"] = true,
+                ["visit_friends_once_a_day"] = false,
+                ["formation_index"] = stored,
+                ["shopping"] = false,
+            },
+            persistImmediately: true);
+        Assert.True(update.Success);
+
+        var queueResult = await fixture.TaskQueue.QueueEnabledTasksAsync();
+        Assert.True(queueResult.Success);
+
+        var appended = Assert.Single(fixture.Bridge.AppendedTasks);
+        var appendedParams = Assert.IsType<JsonObject>(JsonNode.Parse(appended.ParamsJson));
+        Assert.Equal(expected, appendedParams["formation_index"]?.GetValue<int>());
+    }
+
+    [Fact]
+    public async Task QueueEnabledTasks_MallBlacklist_UnionsClientTypeBlacklistLikeFrozenWpf()
+    {
+        await using var fixture = await TestFixture.CreateAsync("en-us");
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Mall", "mall")).Success);
+        fixture.Config.CurrentConfig.Profiles["Default"].Values["ClientType"] = "YoStarEN";
+
+        var update = await fixture.TaskQueue.UpdateTaskParamsAsync(
+            0,
+            new JsonObject
+            {
+                ["credit_fight"] = false,
+                ["credit_fight_once_a_day"] = true,
+                ["visit_friends"] = true,
+                ["visit_friends_once_a_day"] = false,
+                ["shopping"] = true,
+                ["buy_first"] = new JsonArray("Recruitment Permit"),
+                ["blacklist"] = new JsonArray("My custom item", "Gavial"),
+            },
+            persistImmediately: true);
+        Assert.True(update.Success);
+
+        var result = await fixture.TaskQueue.QueueEnabledTasksAsync();
+        Assert.True(result.Success);
+        var appended = Assert.Single(fixture.Bridge.AppendedTasks);
+        var parameters = Assert.IsType<JsonObject>(JsonNode.Parse(appended.ParamsJson));
+        // Frozen WPF MallSettingsUserControlModel.cs:239 unconditionally unions
+        // the client-type operator blacklist; existing entries are not
+        // duplicated and the names follow the client type, not the UI language.
+        Assert.Equal(
+            ["My custom item", "Gavial", "Courier", "Dur-nar"],
+            parameters["blacklist"]!.AsArray().Select(item => item!.GetValue<string>()).ToArray());
+
+        // The runtime union must not mutate the persisted profile list.
+        var persisted = await fixture.TaskQueue.GetTaskParamsAsync(0);
+        Assert.True(persisted.Success);
+        Assert.Equal(
+            ["My custom item", "Gavial"],
+            persisted.Value?["blacklist"]!.AsArray().Select(item => item!.GetValue<string>()).ToArray());
+    }
+
+    [Fact]
+    public async Task QueueEnabledTasks_AwardEmitsExactlyFrozenWpfFields()
+    {
+        await using var fixture = await TestFixture.CreateAsync("en-us");
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Award", "award")).Success);
+        Assert.True((await fixture.TaskQueue.UpdateTaskParamsAsync(
+            0,
+            new JsonObject
+            {
+                ["mail"] = true,
+                ["recruit"] = true,
+                ["unknown"] = "must-not-reach-core",
+            })).Success);
+
+        var result = await fixture.TaskQueue.QueueEnabledTasksAsync();
+
+        Assert.True(result.Success);
+        var appended = Assert.Single(fixture.Bridge.AppendedTasks);
+        var parameters = Assert.IsType<JsonObject>(JsonNode.Parse(appended.ParamsJson));
+        Assert.Equal(
+            ["award", "mail", "mining", "orundum", "recruit", "specialaccess"],
+            parameters.Select(pair => pair.Key).Order(StringComparer.Ordinal).ToArray());
+        Assert.True(parameters["award"]?.GetValue<bool>());
+        Assert.True(parameters["mail"]?.GetValue<bool>());
+        Assert.True(parameters["recruit"]?.GetValue<bool>());
     }
 
     [Fact]
@@ -288,19 +717,21 @@ public sealed class TaskModuleBFeatureTests
         await vm.InitializeAsync();
         await vm.ReloadTasksAsync();
 
+        // Real Core shape: subtask is the C++ class name; the pipeline task name
+        // lives in details.task (AbstractTask::basic_info / ProcessTask::run_task).
         await InvokeCallbackAsync(
             vm,
             new CoreCallbackEvent(
                 22001,
                 "SubTaskCompleted",
-                """{"task_chain":"Mall","sub_task":"EndOfActionThenStop","run_id":"run-mall","task_index":0}""",
+                """{"taskchain":"Mall","taskid":1,"class":"asst::ProcessTask","subtask":"ProcessTask","details":{"task":"EndOfActionThenStop","exec_times":1,"max_times":1,"action":"Stop","algorithm":"JustReturn","result":{}}}""",
                 DateTimeOffset.UtcNow));
         await InvokeCallbackAsync(
             vm,
             new CoreCallbackEvent(
                 22002,
                 "SubTaskCompleted",
-                """{"task_chain":"Mall","sub_task":"VisitLimited","run_id":"run-mall","task_index":0}""",
+                """{"taskchain":"Mall","taskid":1,"class":"asst::ProcessTask","subtask":"ProcessTask","details":{"task":"VisitLimited","exec_times":2,"max_times":2,"action":"ClickSelf","algorithm":"OcrDetect","result":{}}}""",
                 DateTimeOffset.UtcNow));
 
         var latest = await fixture.TaskQueue.GetTaskParamsAsync(0);
@@ -323,6 +754,142 @@ public sealed class TaskModuleBFeatureTests
             System.Globalization.CultureInfo.InvariantCulture,
             System.Globalization.DateTimeStyles.None,
             out _));
+    }
+
+    [Fact]
+    public async Task TaskQueuePage_MallDailyMarker_UpdatesOnlyCurrentProfile()
+    {
+        await using var fixture = await TestFixture.CreateAsync("en-us");
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Mall", "default-mall")).Success);
+        var config = fixture.Config.CurrentConfig;
+        config.Profiles["Second"] = new UnifiedProfile();
+        config.Profiles["Second"].TaskQueue.Add(new UnifiedTaskItem
+        {
+            Type = TaskModuleTypes.Mall,
+            Name = "second-mall",
+            Params = TaskModuleParameterDefaults.CreateMallDefaults("en-us"),
+        });
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        await vm.ReloadTasksAsync();
+        await InvokeCallbackAsync(
+            vm,
+            new CoreCallbackEvent(
+                22003,
+                "SubTaskCompleted",
+                """{"taskchain":"Mall","taskid":1,"class":"asst::ProcessTask","subtask":"ProcessTask","details":{"task":"EndOfActionThenStop","exec_times":1,"max_times":1,"action":"Stop","algorithm":"JustReturn","result":{}}}""",
+                DateTimeOffset.UtcNow));
+
+        Assert.NotNull(config.Profiles["Default"].TaskQueue[0].Params["_ui_mall_credit_fight_last_time"]);
+        Assert.Null(config.Profiles["Second"].TaskQueue[0].Params["_ui_mall_credit_fight_last_time"]);
+    }
+
+    [Fact]
+    public async Task TaskQueuePage_SubTaskCompletedMall_SyntheticTopLevelMarkerShape_DoesNotWriteMarkers()
+    {
+        // Core never reports the pipeline task name at the top-level subtask field;
+        // such a payload must not be mistaken for a completion callback (frozen WPF
+        // AsstProxy.ProcSubTaskCompleted requires subtask == "ProcessTask").
+        await using var fixture = await TestFixture.CreateAsync("en-us");
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Mall", "mall")).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        await vm.ReloadTasksAsync();
+
+        await InvokeCallbackAsync(
+            vm,
+            new CoreCallbackEvent(
+                22004,
+                "SubTaskCompleted",
+                """{"taskchain":"Mall","taskid":1,"subtask":"EndOfActionThenStop","details":{"task":"EndOfActionThenStop"}}""",
+                DateTimeOffset.UtcNow));
+        await InvokeCallbackAsync(
+            vm,
+            new CoreCallbackEvent(
+                22005,
+                "SubTaskCompleted",
+                """{"taskchain":"Mall","taskid":1,"subtask":"ProcessTask","details":{"task":"SomeOtherPipelineTask"}}""",
+                DateTimeOffset.UtcNow));
+
+        var latest = await fixture.TaskQueue.GetTaskParamsAsync(0);
+        Assert.True(latest.Success);
+        Assert.Null(latest.Value?["_ui_mall_credit_fight_last_time"]);
+        Assert.Null(latest.Value?["_ui_mall_visit_friends_last_time"]);
+    }
+
+    [Fact]
+    public async Task TaskQueuePage_MallDailyMarker_RealCoreShape_SkipsSameDayAndRunsAgainNextYjDay()
+    {
+        await using var fixture = await TestFixture.CreateAsync("en-us");
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Mall", "mall")).Success);
+
+        var profile = fixture.Config.CurrentConfig.Profiles["Default"];
+        profile.Values["ClientType"] = "Official";
+
+        Assert.True((await fixture.TaskQueue.UpdateTaskParamsAsync(
+            0,
+            new JsonObject
+            {
+                ["credit_fight"] = true,
+                ["credit_fight_once_a_day"] = true,
+                ["formation_index"] = 0,
+                ["visit_friends"] = true,
+                ["visit_friends_once_a_day"] = true,
+                ["shopping"] = true,
+                ["buy_first"] = new JsonArray("Recruitment Permit"),
+                ["blacklist"] = new JsonArray("Carbon"),
+                ["force_shopping_if_credit_full"] = false,
+                ["only_buy_discount"] = false,
+                ["reserve_max_credit"] = false,
+            },
+            persistImmediately: true)).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        await vm.ReloadTasksAsync();
+
+        // Real Core SubTaskCompleted callbacks for the credit fight and visit chains.
+        await InvokeCallbackAsync(
+            vm,
+            new CoreCallbackEvent(
+                22006,
+                "SubTaskCompleted",
+                """{"taskchain":"Mall","taskid":1,"class":"asst::ProcessTask","subtask":"ProcessTask","details":{"task":"EndOfActionThenStop","exec_times":1,"max_times":1,"action":"Stop","algorithm":"JustReturn","result":{}}}""",
+                DateTimeOffset.UtcNow));
+        await InvokeCallbackAsync(
+            vm,
+            new CoreCallbackEvent(
+                22007,
+                "SubTaskCompleted",
+                """{"taskchain":"Mall","taskid":1,"class":"asst::ProcessTask","subtask":"ProcessTask","details":{"task":"VisitNextBlack","exec_times":3,"max_times":3,"action":"ClickSelf","algorithm":"JustReturn","result":{}}}""",
+                DateTimeOffset.UtcNow));
+
+        var queueToday = await fixture.TaskQueue.QueueEnabledTasksAsync();
+        Assert.True(queueToday.Success);
+        var todayParams = Assert.IsType<JsonObject>(JsonNode.Parse(Assert.Single(fixture.Bridge.AppendedTasks).ParamsJson));
+        Assert.False(todayParams["credit_fight"]?.GetValue<bool>());
+        Assert.False(todayParams["visit_friends"]?.GetValue<bool>());
+        Assert.False(todayParams.ContainsKey("_ui_mall_credit_fight_last_time"));
+        Assert.False(todayParams.ContainsKey("_ui_mall_visit_friends_last_time"));
+
+        // The runtime downgrade must not overwrite the stored user intent.
+        var persisted = await fixture.TaskQueue.GetTaskParamsAsync(0);
+        Assert.True(persisted.Value?["credit_fight"]?.GetValue<bool>());
+        Assert.True(persisted.Value?["visit_friends"]?.GetValue<bool>());
+
+        // A marker from a previous YJ day makes both available again.
+        var previousDay = MallDailyResetHelper.GetPreviousYjDateString(DateTime.UtcNow, "Official");
+        profile.TaskQueue[0].Params!["_ui_mall_credit_fight_last_time"] = previousDay;
+        profile.TaskQueue[0].Params!["_ui_mall_visit_friends_last_time"] = previousDay;
+
+        fixture.Bridge.AppendedTasks.Clear();
+        var queueNextDay = await fixture.TaskQueue.QueueEnabledTasksAsync();
+        Assert.True(queueNextDay.Success);
+        var nextDayParams = Assert.IsType<JsonObject>(JsonNode.Parse(Assert.Single(fixture.Bridge.AppendedTasks).ParamsJson));
+        Assert.True(nextDayParams["credit_fight"]?.GetValue<bool>());
+        Assert.True(nextDayParams["visit_friends"]?.GetValue<bool>());
     }
 
     [Fact]
@@ -1267,6 +1834,124 @@ public sealed class TaskModuleBFeatureTests
         }
 
         await task;
+    }
+
+    [Fact]
+    public async Task GetStartPrecheckWarnings_SkipsMallCreditFightWarning_WhenOnceADayCreditFightAlreadyRanToday()
+    {
+        await using var fixture = await TestFixture.CreateAsync("en-us");
+        var profile = fixture.Config.CurrentConfig.Profiles["Default"];
+        profile.Values["ClientType"] = "Official";
+        profile.TaskQueue.Add(new UnifiedTaskItem
+        {
+            Type = "Fight",
+            Name = "fight",
+            IsEnabled = true,
+            Params = new JsonObject
+            {
+                ["stage"] = FightStageSelection.CurrentOrLast,
+                ["medicine"] = 0,
+                ["stone"] = 0,
+                ["times"] = 1,
+                ["series"] = 1,
+            },
+        });
+        profile.TaskQueue.Add(new UnifiedTaskItem
+        {
+            Type = "Mall",
+            Name = "mall",
+            IsEnabled = true,
+            Params = new JsonObject
+            {
+                ["credit_fight"] = true,
+                ["credit_fight_once_a_day"] = true,
+                ["_ui_mall_credit_fight_last_time"] = MallDailyResetHelper.GetCurrentYjDateString(DateTime.UtcNow, "Official"),
+            },
+        });
+
+        var warnings = await fixture.TaskQueue.GetStartPrecheckWarningsAsync();
+        Assert.True(warnings.Success);
+        Assert.Empty(warnings.Value ?? []);
+        Assert.True(profile.TaskQueue[1].Params["credit_fight"]?.GetValue<bool>());
+    }
+
+    [Fact]
+    public async Task GetStartPrecheckWarnings_ReportsMallCreditFightDowngrade_WhenOnceADayCreditFightIsAvailableToday()
+    {
+        await using var fixture = await TestFixture.CreateAsync("en-us");
+        var profile = fixture.Config.CurrentConfig.Profiles["Default"];
+        profile.Values["ClientType"] = "Official";
+        profile.TaskQueue.Add(new UnifiedTaskItem
+        {
+            Type = "Fight",
+            Name = "fight",
+            IsEnabled = true,
+            Params = new JsonObject
+            {
+                ["stage"] = FightStageSelection.CurrentOrLast,
+                ["medicine"] = 0,
+                ["stone"] = 0,
+                ["times"] = 1,
+                ["series"] = 1,
+            },
+        });
+        profile.TaskQueue.Add(new UnifiedTaskItem
+        {
+            Type = "Mall",
+            Name = "mall",
+            IsEnabled = true,
+            Params = new JsonObject
+            {
+                ["credit_fight"] = true,
+                ["credit_fight_once_a_day"] = true,
+                ["_ui_mall_credit_fight_last_time"] = MallDailyResetHelper.GetPreviousYjDateString(DateTime.UtcNow, "Official"),
+            },
+        });
+
+        var warnings = await fixture.TaskQueue.GetStartPrecheckWarningsAsync();
+        Assert.True(warnings.Success);
+        var warning = Assert.Single(warnings.Value ?? []);
+        Assert.Equal(UiErrorCode.MallCreditFightDowngraded, warning.Code);
+        Assert.True(profile.TaskQueue[1].Params["credit_fight"]?.GetValue<bool>());
+    }
+
+    [Fact]
+    public async Task GetStartPrecheckWarnings_ReportsMallCreditFightDowngrade_WhenOnceADayDisabledDespiteTodaysMarker()
+    {
+        await using var fixture = await TestFixture.CreateAsync("en-us");
+        var profile = fixture.Config.CurrentConfig.Profiles["Default"];
+        profile.Values["ClientType"] = "Official";
+        profile.TaskQueue.Add(new UnifiedTaskItem
+        {
+            Type = "Fight",
+            Name = "fight",
+            IsEnabled = true,
+            Params = new JsonObject
+            {
+                ["stage"] = FightStageSelection.CurrentOrLast,
+                ["medicine"] = 0,
+                ["stone"] = 0,
+                ["times"] = 1,
+                ["series"] = 1,
+            },
+        });
+        profile.TaskQueue.Add(new UnifiedTaskItem
+        {
+            Type = "Mall",
+            Name = "mall",
+            IsEnabled = true,
+            Params = new JsonObject
+            {
+                ["credit_fight"] = true,
+                ["credit_fight_once_a_day"] = false,
+                ["_ui_mall_credit_fight_last_time"] = MallDailyResetHelper.GetCurrentYjDateString(DateTime.UtcNow, "Official"),
+            },
+        });
+
+        var warnings = await fixture.TaskQueue.GetStartPrecheckWarningsAsync();
+        Assert.True(warnings.Success);
+        var warning = Assert.Single(warnings.Value ?? []);
+        Assert.Equal(UiErrorCode.MallCreditFightDowngraded, warning.Code);
     }
 
     private sealed class TestFixture : IAsyncDisposable

@@ -54,7 +54,8 @@ internal static class LegacyTaskSchemaConverter
         UnifiedConfig config,
         out UnifiedTaskItem taskItem,
         out string? error,
-        LegacyTaskSchemaConversionOptions? options = null)
+        LegacyTaskSchemaConversionOptions? options = null,
+        string? uiLanguage = null)
     {
         options ??= LegacyTaskSchemaConversionOptions.GuiJsonFlat;
 
@@ -92,7 +93,7 @@ internal static class LegacyTaskSchemaConverter
                 "Fight" => ConvertFight(legacyTask, profile, config),
                 "Recruit" => ConvertRecruit(legacyTask, profile, config),
                 "Infrast" => ConvertInfrast(legacyTask),
-                "Mall" => ConvertMall(legacyTask),
+                "Mall" => ConvertMall(legacyTask, ResolveUiLanguage(config, uiLanguage)),
                 "Award" => ConvertAward(legacyTask),
                 "Roguelike" => ConvertRoguelike(legacyTask, options),
                 "Reclamation" => ConvertReclamation(legacyTask),
@@ -330,7 +331,8 @@ internal static class LegacyTaskSchemaConverter
         var level3Choose = GetBool(task, "Level3Choose", true);
         var level4Choose = GetBool(task, "Level4Choose", true);
         var level5Choose = GetBool(task, "Level5Choose", false);
-        var level6Choose = GetBool(task, "Level6Choose", false);
+        // WPF task queue has no selectable six-star recruit option; legacy values are ignored.
+        var level6Choose = false;
         var useExpedited = GetBool(task, "UseExpedited", false);
 
         var selectList = new JsonArray();
@@ -365,9 +367,6 @@ internal static class LegacyTaskSchemaConverter
         }
 
         var firstTags = ToJsonArray(ReadStringArray(task, "Level3PreferTags"));
-        var preserveTagEnabled = GetBool(task, "PreserveTagEnabled", false)
-            || (!task.ContainsKey("PreserveTagEnabled") && ReadStringArray(task, "PreserveTags").Count > 0);
-        var preserveTags = ToJsonArray(preserveTagEnabled ? ReadLegacyRecruitPreserveTags(task) : []);
 
         var result = new JsonObject
         {
@@ -381,8 +380,6 @@ internal static class LegacyTaskSchemaConverter
             ["skip_robot"] = level1NotChoose,
             ["extra_tags_mode"] = GetInt(task, "ExtraTagMode", 0),
             ["first_tags"] = firstTags,
-            ["preserve_tags"] = preserveTags,
-            ["_ui_preserve_tags_enabled"] = preserveTagEnabled,
             ["recruitment_time"] = new JsonObject
             {
                 ["3"] = GetInt(task, "Level3Time", 540),
@@ -402,34 +399,6 @@ internal static class LegacyTaskSchemaConverter
         }
 
         return result;
-    }
-
-    private static List<string> ReadLegacyRecruitPreserveTags(JsonObject task)
-    {
-        if (GetBool(task, "PreserveTagEnabled", false))
-        {
-            var explicitTags = ReadStringArray(task, "PreserveTagList");
-            if (explicitTags.Count == 0)
-            {
-                explicitTags = ReadStringArray(task, "PreserveTags");
-            }
-
-            if (explicitTags.Count > 0)
-            {
-                return explicitTags;
-            }
-        }
-
-        if (!task.ContainsKey("PreserveTagEnabled"))
-        {
-            var explicitTags = ReadStringArray(task, "PreserveTags");
-            if (explicitTags.Count > 0)
-            {
-                return explicitTags;
-            }
-        }
-
-        return [];
     }
 
     private static List<string> ReadStringArray(JsonObject obj, string key)
@@ -503,8 +472,16 @@ internal static class LegacyTaskSchemaConverter
         return result;
     }
 
-    private static JsonObject ConvertMall(JsonObject task)
+    private static JsonObject ConvertMall(JsonObject task, string language)
     {
+        var defaults = TaskModuleParameterDefaults.CreateMallDefaults(language);
+        var buyFirst = task.ContainsKey("FirstList")
+            ? ToJsonArray(SplitNonEmpty(GetString(task, "FirstList"), ';'))
+            : defaults["buy_first"]?.DeepClone() as JsonArray ?? [];
+        var blacklist = task.ContainsKey("BlackList")
+            ? ToJsonArray(SplitNonEmpty(GetString(task, "BlackList"), ';'))
+            : defaults["blacklist"]?.DeepClone() as JsonArray ?? [];
+
         return new JsonObject
         {
             ["credit_fight"] = GetBool(task, "CreditFight", false),
@@ -515,12 +492,30 @@ internal static class LegacyTaskSchemaConverter
             ["visit_friends_once_a_day"] = GetBool(task, "VisitFriendsOnceADay", false),
             ["_ui_mall_visit_friends_last_time"] = GetString(task, "VisitFriendsLastTime") ?? string.Empty,
             ["shopping"] = GetBool(task, "Shopping", true),
-            ["buy_first"] = ToJsonArray(SplitNonEmpty(GetString(task, "FirstList"), ';')),
-            ["blacklist"] = ToJsonArray(SplitNonEmpty(GetString(task, "BlackList"), ';')),
+            ["buy_first"] = buyFirst,
+            ["blacklist"] = blacklist,
             ["force_shopping_if_credit_full"] = GetBool(task, "ShoppingIgnoreBlackListWhenFull", false),
             ["only_buy_discount"] = GetBool(task, "OnlyBuyDiscount", false),
             ["reserve_max_credit"] = GetBool(task, "ReserveMaxCredit", false),
         };
+    }
+
+    private static string ResolveUiLanguage(UnifiedConfig config, string? explicitLanguage)
+    {
+        if (!string.IsNullOrWhiteSpace(explicitLanguage))
+        {
+            return explicitLanguage.Trim();
+        }
+
+        if (config.GlobalValues.TryGetValue("GUI.Localization", out var node)
+            && node is JsonValue value
+            && value.TryGetValue(out string? language)
+            && !string.IsNullOrWhiteSpace(language))
+        {
+            return language.Trim();
+        }
+
+        return "zh-cn";
     }
 
     private static JsonObject ConvertAward(JsonObject task)

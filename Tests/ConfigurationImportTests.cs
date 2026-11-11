@@ -13,6 +13,37 @@ namespace MAAUnified.Tests;
 public sealed class ConfigurationImportTests
 {
     [Fact]
+    public async Task GuiImport_FlatMallMissingLists_UsesLocalizedWpfDefaults()
+    {
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.json"),
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": {
+                  "TaskQueue.Mall.IsChecked": true,
+                  "Mall.CreditShopping": true
+                }
+              },
+              "Global": {
+                "GUI.Localization": "ja-jp"
+              }
+            }
+            """);
+
+        var service = CreateService(root);
+        var report = await service.ImportLegacyAsync(ImportSource.GuiOnly, manualImport: false);
+
+        Assert.True(report.Success);
+        var mall = service.CurrentConfig.Profiles["Default"].TaskQueue.Single(task => task.Type == TaskModuleTypes.Mall);
+        Assert.Equal(["求人票"], ReadStringArray(Assert.IsType<JsonArray>(mall.Params["buy_first"])));
+        Assert.Equal(["炭素材", "家具", "緊急招集票"], ReadStringArray(Assert.IsType<JsonArray>(mall.Params["blacklist"])));
+    }
+
+    [Fact]
     public async Task AutoImport_UsesGuiNewThenGuiFillMissing()
     {
         var root = CreateTempRoot();
@@ -682,9 +713,10 @@ public sealed class ConfigurationImportTests
         Assert.DoesNotContain(report.Warnings, warning => warning.Contains("RA/RelaunchAnchor", StringComparison.Ordinal));
 
         var recruit = tasks.Single(task => task.Name == "Recruit");
-        Assert.Contains(6, ((JsonArray)recruit.Params["select"]!).Select(item => item?.GetValue<int>()));
-        Assert.Contains(6, ((JsonArray)recruit.Params["confirm"]!).Select(item => item?.GetValue<int>()));
-        Assert.Equal(["支援机械", "高级资深干员"], ReadStringArray((JsonArray)recruit.Params["preserve_tags"]!));
+        Assert.DoesNotContain(6, ((JsonArray)recruit.Params["select"]!).Select(item => item?.GetValue<int>()));
+        Assert.DoesNotContain(6, ((JsonArray)recruit.Params["confirm"]!).Select(item => item?.GetValue<int>()));
+        Assert.DoesNotContain("preserve_tags", recruit.Params.Select(pair => pair.Key), StringComparer.Ordinal);
+        Assert.DoesNotContain("_ui_preserve_tags_enabled", recruit.Params.Select(pair => pair.Key), StringComparer.Ordinal);
 
         var custom = tasks.Single(task => task.Name == "Custom");
         Assert.Equal(
@@ -1216,7 +1248,7 @@ public sealed class ConfigurationImportTests
     }
 
     [Fact]
-    public async Task GuiNewImport_RecruitSkipRobotDoesNotEnablePreserveTagsWhenPreserveDisabled()
+    public async Task GuiNewImport_RecruitSkipsRobotAndIgnoresLegacyPreserveTags()
     {
         var root = CreateTempRoot();
         Directory.CreateDirectory(Path.Combine(root, "config"));
@@ -1249,8 +1281,8 @@ public sealed class ConfigurationImportTests
         Assert.True(report.Success);
         var task = service.CurrentConfig.Profiles["Default"].TaskQueue.Single(task => task.Type == TaskModuleTypes.Recruit);
         Assert.True(task.Params["skip_robot"]?.GetValue<bool>());
-        Assert.False(task.Params["_ui_preserve_tags_enabled"]?.GetValue<bool>());
-        Assert.Empty(ReadStringArray((JsonArray)task.Params["preserve_tags"]!));
+        Assert.DoesNotContain("preserve_tags", task.Params.Select(pair => pair.Key), StringComparer.Ordinal);
+        Assert.DoesNotContain("_ui_preserve_tags_enabled", task.Params.Select(pair => pair.Key), StringComparer.Ordinal);
     }
 
     [Fact]
@@ -1409,7 +1441,8 @@ public sealed class ConfigurationImportTests
         Assert.Equal(2, recruit.Params["times"]?.GetValue<int>());
         Assert.Contains(5, ((JsonArray)recruit.Params["select"]!).Select(item => item?.GetValue<int>()));
         Assert.Equal(["资深干员", "高级资深干员"], ReadStringArray((JsonArray)recruit.Params["first_tags"]!));
-        Assert.Equal(["支援机械", "高级资深干员"], ReadStringArray((JsonArray)recruit.Params["preserve_tags"]!));
+        Assert.DoesNotContain("preserve_tags", recruit.Params.Select(pair => pair.Key), StringComparer.Ordinal);
+        Assert.DoesNotContain("_ui_preserve_tags_enabled", recruit.Params.Select(pair => pair.Key), StringComparer.Ordinal);
 
         var infrast = tasks.Single(task => task.Type == TaskModuleTypes.Infrast);
         Assert.True(infrast.IsEnabled);
@@ -1681,8 +1714,8 @@ public sealed class ConfigurationImportTests
         Assert.True(report.Success);
         var task = service.CurrentConfig.Profiles["Default"].TaskQueue.Single(task => task.Type == TaskModuleTypes.Recruit);
         Assert.False(task.Params["skip_robot"]?.GetValue<bool>());
-        Assert.True(task.Params["_ui_preserve_tags_enabled"]?.GetValue<bool>());
-        Assert.Equal(["支援机械"], ReadStringArray((JsonArray)task.Params["preserve_tags"]!));
+        Assert.DoesNotContain("preserve_tags", task.Params.Select(pair => pair.Key), StringComparer.Ordinal);
+        Assert.DoesNotContain("_ui_preserve_tags_enabled", task.Params.Select(pair => pair.Key), StringComparer.Ordinal);
     }
 
     [Fact]

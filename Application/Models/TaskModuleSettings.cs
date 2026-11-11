@@ -78,22 +78,17 @@ public static class TaskModuleParameterDefaults
 
     public static JsonObject CreateMallDefaults(string language)
     {
-        var first = new JsonArray();
-        var blacklist = new JsonArray();
-        if (string.Equals(language, "en-us", StringComparison.OrdinalIgnoreCase))
+        var (firstItem, blacklistItems) = (language ?? string.Empty).Trim().ToLowerInvariant() switch
         {
-            first.Add("Recruitment Permit");
-            blacklist.Add("Carbon");
-            blacklist.Add("Furniture Part");
-            blacklist.Add("Expedited Plan");
-        }
-        else
-        {
-            first.Add("招聘许可");
-            blacklist.Add("碳");
-            blacklist.Add("家具");
-            blacklist.Add("加急许可");
-        }
+            "en-us" => ("Recruitment Permit", new[] { "Carbon", "Furniture Part", "Expedited Plan" }),
+            "ja-jp" => ("求人票", new[] { "炭素材", "家具", "緊急招集票" }),
+            "ko-kr" => ("모집 허가증", new[] { "카본", "가구 부품", "즉시 완료 허가증" }),
+            "zh-tw" => ("招聘許可", new[] { "碳", "傢俱", "加急許可" }),
+            _ => ("招聘许可", new[] { "碳", "家具", "加急许可" }),
+        };
+
+        var first = new JsonArray(firstItem);
+        var blacklist = new JsonArray(blacklistItems.Select(item => JsonValue.Create(item)).ToArray<JsonNode?>());
 
         return new JsonObject
         {
@@ -438,10 +433,17 @@ public sealed class MallParams
     }
 
     private static bool ReadBool(JsonObject obj, string key, bool fallback)
-        => obj.TryGetPropertyValue(key, out var node) && node is JsonValue v && (
-            v.TryGetValue(out bool b) ? b :
-            v.TryGetValue(out int i) ? i != 0 :
-            v.TryGetValue(out string? s) && bool.TryParse(s, out var parsed) ? parsed : fallback);
+    {
+        if (!obj.TryGetPropertyValue(key, out var node) || node is not JsonValue value)
+        {
+            return fallback;
+        }
+
+        return value.TryGetValue(out bool boolean) ? boolean
+            : value.TryGetValue(out int number) ? number != 0
+            : value.TryGetValue(out string? text) && bool.TryParse(text, out var parsed) ? parsed
+            : fallback;
+    }
 
     private static int ReadInt(JsonObject obj, string key, int fallback)
     {
@@ -551,10 +553,17 @@ public sealed class AwardParams
     }
 
     private static bool ReadBool(JsonObject obj, string key, bool fallback)
-        => obj.TryGetPropertyValue(key, out var node) && node is JsonValue v && (
-            v.TryGetValue(out bool b) ? b :
-            v.TryGetValue(out int i) ? i != 0 :
-            v.TryGetValue(out string? s) && bool.TryParse(s, out var parsed) ? parsed : fallback);
+    {
+        if (!obj.TryGetPropertyValue(key, out var node) || node is not JsonValue value)
+        {
+            return fallback;
+        }
+
+        return value.TryGetValue(out bool boolean) ? boolean
+            : value.TryGetValue(out int number) ? number != 0
+            : value.TryGetValue(out string? text) && bool.TryParse(text, out var parsed) ? parsed
+            : fallback;
+    }
 }
 
 public sealed class PostActionConfig

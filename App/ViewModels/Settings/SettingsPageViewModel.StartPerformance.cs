@@ -582,9 +582,13 @@ public sealed partial class SettingsPageViewModel
             ManualStopWithScript: ReadProfileBoolFlexible(config, ConfigurationKeys.ManualStopWithScript, false),
             BlockSleep: ReadProfileBoolFlexible(config, ConfigurationKeys.BlockSleep, false),
             BlockSleepWithScreenOn: ReadProfileBoolFlexible(config, ConfigurationKeys.BlockSleepWithScreenOn, true),
-            EnablePenguin: ReadProfileBoolFlexible(config, ConfigurationKeys.EnablePenguin, true),
-            EnableYituliu: ReadProfileBoolFlexible(config, ConfigurationKeys.EnableYituliu, true),
-            PenguinId: ReadProfileString(config, ConfigurationKeys.PenguinId, string.Empty).Trim(),
+            // The settings page writes the dotted legacy keys below while gui.json importers
+            // normalize them to the bare aliases (LegacyConfigValueMappings.ProfileKeyAliases).
+            // Read the dotted key first (it is the live settings-page write) and fall back to
+            // the bare import alias so the settings UI, CompileRecruit, and import all agree.
+            EnablePenguin: ReadProfileBoolFlexible(config, ConfigurationKeys.EnablePenguin, ReadProfileBoolFlexible(config, "EnablePenguin", true)),
+            EnableYituliu: ReadProfileBoolFlexible(config, ConfigurationKeys.EnableYituliu, ReadProfileBoolFlexible(config, "EnableYituliu", true)),
+            PenguinId: ReadProfileString(config, ConfigurationKeys.PenguinId, ReadProfileString(config, "PenguinId", string.Empty)).Trim(),
             StallTimeoutEnabled: ReadProfileBoolFlexible(config, ConfigurationKeys.StallTimeoutEnabled, true),
             StallTimeoutMinutes: Math.Clamp(
                 ReadProfileInt(config, ConfigurationKeys.StallTimeoutMinutes, DefaultStallTimeoutMinutes),

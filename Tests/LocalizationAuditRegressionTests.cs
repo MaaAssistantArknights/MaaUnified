@@ -459,8 +459,6 @@ public sealed class LocalizationAuditRegressionTests
         "Recruit.Option.ExtraTags.Default",
         "Recruit.Option.ExtraTags.SelectAll",
         "Recruit.Option.ExtraTags.RareOnly",
-        "Recruit.PreserveTags",
-        "Recruit.PreserveTagsTip",
         "Infrast.Title",
         "Infrast.Advanced",
         "Infrast.Facility",

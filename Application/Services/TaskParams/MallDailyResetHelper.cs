@@ -68,23 +68,16 @@ public static class MallDailyResetHelper
 
     private static bool TryParseYjDate(string text, out DateTime value)
     {
-        var normalized = text.Trim().Replace('-', '/');
-        if (DateTime.TryParseExact(
-                normalized,
-                "yyyy/MM/dd HH:mm:ss",
-                CultureInfo.InvariantCulture,
-                DateTimeStyles.None,
-                out value))
-        {
-            return true;
-        }
-
-        if (DateTime.TryParse(normalized, CultureInfo.InvariantCulture, DateTimeStyles.None, out value))
-        {
-            return true;
-        }
-
-        value = default;
-        return false;
+        // Frozen WPF parity (MallTask.IsCreditFightAvailable/IsVisitFriendsAvailable):
+        // only the exact "yyyy/MM/dd HH:mm:ss" marker format (with '-' normalized to '/')
+        // counts as a valid marker. Every other string is a parse failure and therefore
+        // means "available today"; loosely parseable values (date-only strings, other
+        // culture layouts, surrounding whitespace) must not be treated as markers.
+        return DateTime.TryParseExact(
+            text.Replace('-', '/'),
+            "yyyy/MM/dd HH:mm:ss",
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.None,
+            out value);
     }
 }

@@ -32,6 +32,7 @@ public sealed class GuiNewJsonConfigImporter : IConfigImporter
             await using var stream = File.OpenRead(snapshot.GuiNewPath);
             using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
             var root = doc.RootElement;
+            var uiLanguage = ResolveUiLanguage(root, target);
 
             if (TryGetPropertyIgnoreCase(root, "Current", out var currentProp) && currentProp.ValueKind == JsonValueKind.String)
             {
@@ -101,7 +102,7 @@ public sealed class GuiNewJsonConfigImporter : IConfigImporter
 
                     if (taskQueueProp is JsonElement queueElement)
                     {
-                        MergeTaskQueue(profile, target, queueElement, fillMissingOnly, report);
+                        MergeTaskQueue(profile, target, queueElement, uiLanguage, fillMissingOnly, report);
                     }
                 }
             }
@@ -414,6 +415,7 @@ public sealed class GuiNewJsonConfigImporter : IConfigImporter
         UnifiedProfile profile,
         UnifiedConfig config,
         JsonElement taskQueue,
+        string uiLanguage,
         bool fillMissingOnly,
         ImportReport report)
     {
@@ -449,7 +451,8 @@ public sealed class GuiNewJsonConfigImporter : IConfigImporter
                     config,
                     out var convertedTask,
                     out var error,
-                    LegacyTaskSchemaConversionOptions.GuiNewJson))
+                    LegacyTaskSchemaConversionOptions.GuiNewJson,
+                    uiLanguage))
             {
                 if (!string.IsNullOrWhiteSpace(error))
                 {
@@ -467,6 +470,28 @@ public sealed class GuiNewJsonConfigImporter : IConfigImporter
         return node is JsonValue value && value.TryGetValue(out string? text)
             ? text
             : null;
+    }
+
+    private static string ResolveUiLanguage(JsonElement root, UnifiedConfig target)
+    {
+        if (root.TryGetProperty("GUI", out var gui)
+            && gui.ValueKind == JsonValueKind.Object
+            && gui.TryGetProperty("Localization", out var language)
+            && language.ValueKind == JsonValueKind.String
+            && !string.IsNullOrWhiteSpace(language.GetString()))
+        {
+            return language.GetString()!;
+        }
+
+        if (target.GlobalValues.TryGetValue("GUI.Localization", out var node)
+            && node is JsonValue value
+            && value.TryGetValue(out string? existing)
+            && !string.IsNullOrWhiteSpace(existing))
+        {
+            return existing;
+        }
+
+        return "zh-cn";
     }
 
     private static string NormalizeProfileKey(string key)

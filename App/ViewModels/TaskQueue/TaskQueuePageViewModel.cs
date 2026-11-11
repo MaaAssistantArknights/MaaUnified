@@ -7152,9 +7152,18 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             return;
         }
 
-        var updateCreditFight = string.Equals(payload.SubTask, "EndOfActionThenStop", StringComparison.Ordinal);
-        var updateVisitFriends = string.Equals(payload.SubTask, "VisitLimited", StringComparison.Ordinal)
-                                 || string.Equals(payload.SubTask, "VisitNextBlack", StringComparison.Ordinal);
+        // Real Core SubTaskCompleted callbacks always report subtask as the C++
+        // class name ("ProcessTask" for pipeline tasks); the pipeline task name
+        // lives in details.task (frozen WPF AsstProxy.ProcSubTaskCompleted).
+        if (!string.Equals(payload.SubTask, "ProcessTask", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        var completedTaskName = GetStringValue(payload.Details, "task");
+        var updateCreditFight = string.Equals(completedTaskName, "EndOfActionThenStop", StringComparison.Ordinal);
+        var updateVisitFriends = string.Equals(completedTaskName, "VisitLimited", StringComparison.Ordinal)
+                                 || string.Equals(completedTaskName, "VisitNextBlack", StringComparison.Ordinal);
         if (!updateCreditFight && !updateVisitFriends)
         {
             return;

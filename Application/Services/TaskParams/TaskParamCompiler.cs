@@ -54,7 +54,6 @@ public static class TaskParamCompiler
     private const string UserDataUpdateOperBox = "update_oper_box";
     private const string UserDataUpdateDepot = "update_depot";
     private const string UserDataUpdateTriggerInterval = "trigger_interval";
-    private const string UiRecruitPreserveTagsEnabled = "_ui_preserve_tags_enabled";
     private const string SkipAppendIssueCode = "TaskCompileSkipAppend";
     private static readonly Regex ExpiredActivityStageCodeRegex = new("^[A-Za-z]{2}-\\d{1,2}$", RegexOptions.Compiled);
     private static readonly Regex RoguelikeSeedRegex = new("^[0-9A-Za-z]+,rogue_\\d+,\\d+$", RegexOptions.Compiled);
@@ -87,15 +86,37 @@ public static class TaskParamCompiler
         "Custom",
         "PostAction",
     };
-    private static readonly IReadOnlyDictionary<string, IReadOnlyList<string>> MallBlacklistByClientType =
+
+    // Frozen WPF parity: Mall serialization unconditionally unions this
+    // client-type operator blacklist into the user's blacklist
+    // (src/MaaWpfGui/ViewModels/UserControl/TaskQueue/MallSettingsUserControlModel.cs:239
+    // at WPF commit 23ddd271b40a3d0c18de8a6ae8305357cc032e19). Keys are the
+    // canonical client types (WPF ClientType constants).
+    private static readonly IReadOnlyDictionary<string, IReadOnlyList<string>> MallClientTypeBlacklist =
         new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
         {
             ["Official"] = ["讯使", "嘉维尔", "坚雷"],
             ["Bilibili"] = ["讯使", "嘉维尔", "坚雷"],
-            ["EN"] = ["Courier", "Gavial", "Dur-nar"],
-            ["JP"] = ["クーリエ", "ガヴィル", "ジュナー"],
-            ["KR"] = ["쿠리어", "가비알", "듀나"],
-            ["Txwy"] = ["訊使", "嘉維爾", "堅雷"],
+            ["YoStarEN"] = ["Courier", "Gavial", "Dur-nar"],
+            ["YoStarJP"] = ["クーリエ", "ガヴィル", "ジュナー"],
+            ["YoStarKR"] = ["쿠리어", "가비알", "듀나"],
+            ["txwy"] = ["訊使", "嘉維爾", "堅雷"],
+        };
+
+    // Frozen WPF parity: Recruit `server` is derived from the game client type
+    // (SettingsViewModel._serverMapping,
+    // src/MaaWpfGui/ViewModels/UI/SettingsViewModel.cs:959-973 at WPF commit
+    // 23ddd271b40a3d0c18de8a6ae8305357cc032e19). Keys are the canonical client
+    // types (WPF ClientType constants).
+    private static readonly IReadOnlyDictionary<string, string> RecruitClientTypeServer =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Official"] = "CN",
+            ["Bilibili"] = "CN",
+            ["YoStarEN"] = "US",
+            ["YoStarJP"] = "JP",
+            ["YoStarKR"] = "KR",
+            ["txwy"] = "ZH_TW",
         };
 
     public static string NormalizeTaskType(string? type)
@@ -1017,12 +1038,10 @@ public static class TaskParamCompiler
             SkipRobot = ReadBool(parameters, "skip_robot", false, issues, "recruit.skip_robot", true),
             ExtraTagsMode = ReadInt(parameters, "extra_tags_mode", false, issues, "recruit.extra_tags_mode", 0),
             FirstTags = ReadStringArray(parameters, "first_tags"),
-            PreserveTagsEnabled = ReadRecruitPreserveTagsEnabled(parameters),
-            PreserveTags = ReadRecruitPreserveTags(parameters),
             ChooseLevel3 = confirm.Contains(3),
             ChooseLevel4 = confirm.Contains(4),
             ChooseLevel5 = confirm.Contains(5),
-            ChooseLevel6 = confirm.Contains(6) || select.Contains(6),
+            ChooseLevel6 = false,
             Level3Time = ReadInt(recruitmentTime, "3", strict, issues, "recruit.time.3", 540),
             Level4Time = ReadInt(recruitmentTime, "4", strict, issues, "recruit.time.4", 540),
             Level5Time = ReadInt(recruitmentTime, "5", strict, issues, "recruit.time.5", 540),
@@ -1040,17 +1059,6 @@ public static class TaskParamCompiler
         }
 
         return (dto, issues);
-    }
-
-    private static List<string> ReadRecruitPreserveTags(JsonObject parameters)
-    {
-        var preserveTags = ReadStringArray(parameters, "preserve_tags");
-        if (preserveTags.Count > 0)
-        {
-            return preserveTags;
-        }
-
-        return ReadStringArray(parameters, "PreserveTags");
     }
 
     public static TaskCompileOutput CompileRecruit(
@@ -1071,11 +1079,6 @@ public static class TaskParamCompiler
 
         var refresh = dto.Refresh;
         var forceRefresh = dto.ForceRefresh;
-        if (!refresh)
-        {
-            forceRefresh = false;
-        }
-
         var select = new JsonArray();
         var confirm = new JsonArray();
 
@@ -1101,13 +1104,6 @@ public static class TaskParamCompiler
             confirm.Add(5);
         }
 
-        if (dto.ChooseLevel6)
-        {
-            select.Add(6);
-            confirm.Add(6);
-        }
-
-        var preserveTags = dto.PreserveTagsEnabled ? NormalizeRecruitPreserveTags(dto.PreserveTags) : [];
         var parameters = new JsonObject
         {
             ["refresh"] = refresh,
@@ -1120,19 +1116,25 @@ public static class TaskParamCompiler
             ["skip_robot"] = dto.SkipRobot,
             ["extra_tags_mode"] = dto.ExtraTagsMode,
             ["first_tags"] = ToJsonArray(dto.FirstTags),
-            ["preserve_tags"] = ToJsonArray(preserveTags),
-            [UiRecruitPreserveTagsEnabled] = dto.PreserveTagsEnabled,
             ["recruitment_time"] = new JsonObject
             {
                 ["3"] = ClampRecruitTime(dto.Level3Time),
                 ["4"] = ClampRecruitTime(dto.Level4Time),
                 ["5"] = ClampRecruitTime(dto.Level5Time),
             },
+            // Frozen WPF defaults both reporting switches to true when the key is absent
+            // (GameSettingsUserControlModel reads GetValue(..., bool.TrueString)); an explicit
+            // stored false still wins over this fallback. Both key forms are live producers:
+            // the settings page writes the dotted legacy keys (ConfigurationKeys.EnablePenguin
+            // etc.) while the gui.json importers normalize them to the bare aliases
+            // (LegacyConfigValueMappings.ProfileKeyAliases). The dotted form is checked first
+            // because the settings page is the live writer: a stale import alias must not
+            // shadow a later explicit settings-page toggle.
             ["report_to_penguin"] = ResolveBooleanSetting(profile, config, true, "Penguin.EnablePenguin", "EnablePenguin"),
             ["report_to_yituliu"] = ResolveBooleanSetting(profile, config, true, "Yituliu.EnableYituliu", "EnableYituliu"),
             ["penguin_id"] = ResolveStringSetting(profile, config, "Penguin.Id", "PenguinId") ?? string.Empty,
             ["yituliu_id"] = ResolveYituliuId(profile, config),
-            ["server"] = ResolveStringSetting(profile, config, "ServerType") ?? "CN",
+            ["server"] = ResolveRecruitServerType(profile, config),
         };
 
         if (dto.UseExpedited != false)
@@ -1146,28 +1148,6 @@ public static class TaskParamCompiler
             Params = parameters,
             Issues = issues,
         };
-    }
-
-    private static bool ReadRecruitPreserveTagsEnabled(JsonObject parameters)
-    {
-        if (parameters.TryGetPropertyValue(UiRecruitPreserveTagsEnabled, out var enabledNode)
-            && enabledNode is JsonValue enabledValue
-            && enabledValue.TryGetValue(out bool enabled))
-        {
-            return enabled;
-        }
-
-        return ReadRecruitPreserveTags(parameters).Count > 0;
-    }
-
-    private static List<string> NormalizeRecruitPreserveTags(IEnumerable<string> tags)
-    {
-        return tags
-            .Where(tag => !string.IsNullOrWhiteSpace(tag))
-            .Select(tag => tag.Trim())
-            .Where(tag => !string.IsNullOrWhiteSpace(tag))
-            .Distinct(StringComparer.Ordinal)
-            .ToList();
     }
 
     public static (RoguelikeTaskParamsDto Dto, IReadOnlyList<TaskValidationIssue> Issues) ReadRoguelike(
@@ -1726,6 +1706,7 @@ public static class TaskParamCompiler
             "Fight" => CompileFightFromTask(task, profile, config, strict),
             "Mall" => CompileMallFromTask(task, profile, config, strict),
             "Recruit" => CompileRecruitFromTask(task, profile, config, strict),
+            "Award" => CompileAwardFromTask(task),
             "Roguelike" => CompileRoguelikeFromTask(task, profile, config, strict),
             "Reclamation" => CompileReclamationFromTask(task, profile, config, strict),
             "UserDataUpdate" => CompileUserDataUpdateFromTask(task, strict),
@@ -1758,7 +1739,36 @@ public static class TaskParamCompiler
     public static JsonObject BuildCoreParams(string taskType, JsonObject parameters)
     {
         var runtimeParams = parameters.DeepClone() as JsonObject ?? new JsonObject();
-        if (!string.Equals(NormalizeTaskType(taskType), TaskModuleTypes.Fight, StringComparison.OrdinalIgnoreCase))
+        var normalizedType = NormalizeTaskType(taskType);
+        if (string.Equals(normalizedType, TaskModuleTypes.Recruit, StringComparison.OrdinalIgnoreCase))
+        {
+            if (!ReadBooleanNode(runtimeParams, "report_to_penguin"))
+            {
+                runtimeParams.Remove("penguin_id");
+            }
+
+            if (!ReadBooleanNode(runtimeParams, "report_to_yituliu"))
+            {
+                runtimeParams.Remove("yituliu_id");
+            }
+        }
+        else if (string.Equals(normalizedType, TaskModuleTypes.Mall, StringComparison.OrdinalIgnoreCase))
+        {
+            runtimeParams.Remove("credit_fight_once_a_day");
+            runtimeParams.Remove("visit_friends_once_a_day");
+            runtimeParams.Remove(UiMallCreditFightLastTime);
+            runtimeParams.Remove(UiMallVisitFriendsLastTime);
+        }
+        else if (string.Equals(normalizedType, TaskModuleTypes.Award, StringComparison.OrdinalIgnoreCase))
+        {
+            var allowed = new[] { "award", "mail", "recruit", "orundum", "mining", "specialaccess" };
+            foreach (var key in runtimeParams.Select(pair => pair.Key).Where(key => !allowed.Contains(key, StringComparer.Ordinal)).ToList())
+            {
+                runtimeParams.Remove(key);
+            }
+        }
+
+        if (!string.Equals(normalizedType, TaskModuleTypes.Fight, StringComparison.OrdinalIgnoreCase))
         {
             return runtimeParams;
         }
@@ -1809,6 +1819,14 @@ public static class TaskParamCompiler
             var value when value.Equals("txwy", StringComparison.OrdinalIgnoreCase) => "ZH_TW",
             _ => "CN",
         };
+    }
+
+    private static bool ReadBooleanNode(JsonObject obj, string key)
+    {
+        return obj.TryGetPropertyValue(key, out var node)
+            && node is JsonValue value
+            && value.TryGetValue(out bool result)
+            && result;
     }
 
     private static TaskCompileOutput CompileStartUpFromTask(
@@ -1901,7 +1919,7 @@ public static class TaskParamCompiler
             "mall.visit_friends_last_time",
             defaultLastTime);
 
-        var creditFight = model.CreditFight;
+        var creditFight = model.CreditFight && !HasCurrentOrLastFightStage(profile, config, nowUtc);
         if (model.CreditFightOnceADay)
         {
             creditFight = creditFight && MallDailyResetHelper.IsTaskAvailableToday(creditFightLastTime, clientType, nowUtc);
@@ -1918,11 +1936,17 @@ public static class TaskParamCompiler
             .Select(item => item.Trim())
             .Where(item => !string.IsNullOrWhiteSpace(item))
             .ToList();
+        // Frozen WPF parity: Mall serialization unconditionally unions the
+        // client-type operator blacklist into the user's list
+        // (MallSettingsUserControlModel.cs:239). The extra names follow the
+        // game client type, not the UI language, and the union uses the same
+        // case-sensitive ordinal comparison as WPF's Enumerable.Union. The
+        // persisted profile list itself is never mutated here.
         var blacklist = model.Blacklist
             .Where(item => !string.IsNullOrWhiteSpace(item))
             .Select(item => item.Trim())
             .Where(item => !string.IsNullOrWhiteSpace(item))
-            .Union(ResolveMallBlacklistDefaults(clientType), StringComparer.Ordinal)
+            .Union(ResolveMallClientTypeBlacklist(clientType), StringComparer.Ordinal)
             .ToList();
 
         return new TaskCompileOutput
@@ -1964,11 +1988,14 @@ public static class TaskParamCompiler
 
     private static List<string> NormalizeMallStoredList(IEnumerable<string?> values)
     {
+        // Frozen WPF parity: stored Mall lists are kept verbatim (duplicates and
+        // case variants included); only trimming and empty-entry removal are
+        // applied. Core matches goods names case-sensitively, so collapsing case
+        // variants could drop the variant that would actually match.
         return values
             .Where(static item => !string.IsNullOrWhiteSpace(item))
             .Select(static item => item!.Trim())
             .Where(static item => !string.IsNullOrWhiteSpace(item))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
     }
 
@@ -1986,6 +2013,16 @@ public static class TaskParamCompiler
             NormalizedType = compiled.NormalizedType,
             Params = compiled.Params,
             Issues = allIssues,
+        };
+    }
+
+    private static TaskCompileOutput CompileAwardFromTask(UnifiedTaskItem task)
+    {
+        return new TaskCompileOutput
+        {
+            NormalizedType = TaskModuleTypes.Award,
+            Params = AwardParams.FromJson(task.Params).ToJson(),
+            Issues = [],
         };
     }
 
@@ -2120,20 +2157,157 @@ public static class TaskParamCompiler
         };
     }
 
-    private static IReadOnlyList<string> ResolveMallBlacklistDefaults(string clientType)
+    private static IReadOnlyList<string> ResolveMallClientTypeBlacklist(string clientType)
     {
-        var normalized = clientType switch
-        {
-            "YoStarEN" => "EN",
-            "YoStarJP" => "JP",
-            "YoStarKR" => "KR",
-            "txwy" => "Txwy",
-            _ => clientType,
-        };
-
-        return MallBlacklistByClientType.TryGetValue(normalized, out var values)
+        // WPF's settings layer coerces unknown client types to Official, so an
+        // unrecognized value here falls back the same way.
+        return MallClientTypeBlacklist.TryGetValue(clientType, out var values)
             ? values
-            : MallBlacklistByClientType["Official"];
+            : MallClientTypeBlacklist["Official"];
+    }
+
+    private static string ResolveRecruitServerType(UnifiedProfile profile, UnifiedConfig config)
+    {
+        // Frozen WPF parity: Recruit serialization always sets
+        // ServerType = Instances.SettingsViewModel.ServerType
+        // (RecruitSettingsUserControlModel.cs:285 at WPF commit
+        // 23ddd271b40a3d0c18de8a6ae8305357cc032e19) and WPF has no ServerType
+        // config key, so the value is purely derived from the client type.
+        // Unknown client types fall back to Official (WPF settings coercion),
+        // which maps to "CN".
+        var clientType = ResolveStringSetting(profile, config, "ClientType", "Start.ClientType") ?? "Official";
+        return RecruitClientTypeServer.TryGetValue(clientType, out var server)
+            ? server
+            : RecruitClientTypeServer["Official"];
+    }
+
+    /// <summary>
+    /// Frozen WPF parity guard for Mall credit_fight
+    /// (src/MaaWpfGui/ViewModels/UserControl/TaskQueue/MallSettingsUserControlModel.cs
+    /// ISerialize at WPF commit 23ddd271b40a3d0c18de8a6ae8305357cc032e19): for every
+    /// enabled Fight task, resolve the full persisted stage plan on every
+    /// schedule-enabled day of the week via
+    /// GetStageForDayOfWeek = StagePlan.FirstOrDefault(IsStageOpen) ?? StagePlan[0],
+    /// where the current/last sentinel (WPF "") always counts as open
+    /// (StageManager.GetStageInfo("") falls back to a permanent StageInfo). The
+    /// guard fires when the resolved stage is current/last on ANY enabled day.
+    /// </summary>
+    public static bool HasCurrentOrLastFightStage(UnifiedProfile profile, UnifiedConfig config, DateTime utcNow)
+    {
+        var clientType = NormalizeFightClientType(ResolveStringSetting(profile, config, "ClientType", "Start.ClientType") ?? "Official");
+        StageActivityState? stageState = null;
+        foreach (var task in profile.TaskQueue)
+        {
+            if (!TaskQueueEnabledState.IsEffectivelyEnabled(task, config)
+                || !string.Equals(TaskModuleTypes.Normalize(task.Type), TaskModuleTypes.Fight, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var parameters = task.Params ?? new JsonObject();
+            var fallbackStage = FightStageSelection.NormalizeStoredValue(
+                parameters.TryGetPropertyValue("stage", out var stageNode)
+                && stageNode is JsonValue stageValue
+                && stageValue.TryGetValue(out string? stageText)
+                    ? stageText
+                    : FightStageSelection.CurrentOrLast);
+            var plan = ReadFightStagePlan(parameters, strict: false, issues: new List<TaskValidationIssue>(), fallbackStage);
+            if (!ReadBool(parameters, UiUseAlternateStage, false) && plan.Count > 1)
+            {
+                // WPF FightTask.OnDeserialized truncates the stored plan to its
+                // first entry while the alternate-stage switch is off.
+                plan = [plan[0]];
+            }
+
+            var enabledDays = ResolveFightWeeklyEnabledDays(parameters);
+            if (enabledDays.Count == 0)
+            {
+                continue;
+            }
+
+            stageState ??= new StageManagerFeatureService().GetStageActivityState(clientType);
+            foreach (var day in enabledDays)
+            {
+                var resolved = plan.FirstOrDefault(candidate => IsFightStageOpenForMallCreditFightGuard(stageState, candidate, utcNow, day))
+                    ?? plan[0];
+                if (FightStageSelection.IsCurrentOrLast(resolved))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private static IReadOnlyList<DayOfWeek> ResolveFightWeeklyEnabledDays(JsonObject parameters)
+    {
+        // WPF: all seven days while the weekly schedule is off, otherwise only the
+        // enabled days. Missing flags default to true, matching the WPF FightTask
+        // WeeklySchedule defaults and ReadFight.
+        if (!ReadBool(parameters, UiUseWeeklySchedule, false))
+        {
+            return Enum.GetValues<DayOfWeek>();
+        }
+
+        var days = new List<DayOfWeek>(7);
+        if (ReadBool(parameters, UiWeeklyScheduleSunday, true))
+        {
+            days.Add(DayOfWeek.Sunday);
+        }
+
+        if (ReadBool(parameters, UiWeeklyScheduleMonday, true))
+        {
+            days.Add(DayOfWeek.Monday);
+        }
+
+        if (ReadBool(parameters, UiWeeklyScheduleTuesday, true))
+        {
+            days.Add(DayOfWeek.Tuesday);
+        }
+
+        if (ReadBool(parameters, UiWeeklyScheduleWednesday, true))
+        {
+            days.Add(DayOfWeek.Wednesday);
+        }
+
+        if (ReadBool(parameters, UiWeeklyScheduleThursday, true))
+        {
+            days.Add(DayOfWeek.Thursday);
+        }
+
+        if (ReadBool(parameters, UiWeeklyScheduleFriday, true))
+        {
+            days.Add(DayOfWeek.Friday);
+        }
+
+        if (ReadBool(parameters, UiWeeklyScheduleSaturday, true))
+        {
+            days.Add(DayOfWeek.Saturday);
+        }
+
+        return days;
+    }
+
+    private static bool IsFightStageOpenForMallCreditFightGuard(StageActivityState stageState, string candidate, DateTime utcNow, DayOfWeek day)
+    {
+        // WPF StageManager.GetStageInfo("") falls back to a permanent StageInfo,
+        // so the current/last sentinel is always "open".
+        if (FightStageSelection.IsCurrentOrLast(candidate))
+        {
+            return true;
+        }
+
+        var stage = stageState.Find(candidate);
+        if (stage is not null)
+        {
+            return stage.IsOpen(utcNow, day);
+        }
+
+        // WPF treats unknown two-letter activity codes (e.g. "UR-5") as expired
+        // activities (closed) and every other unknown name as a permanent stage
+        // (always open).
+        return !ExpiredActivityStageCodeRegex.IsMatch(candidate);
     }
 
     private static JsonObject CompileCollectibleStartList(RoguelikeCollectibleStartListDto? dto)
@@ -2532,7 +2706,10 @@ public static class TaskParamCompiler
 
     private static string ResolveYituliuId(UnifiedProfile profile, UnifiedConfig config)
     {
-        return ResolveStringSetting(profile, config, "Penguin.Id", "YituliuId", "PenguinId")
+        // Frozen WPF has no separate Yituliu ID setting: Recruit ISerialize passes
+        // GameSettings.PenguinId for both penguin_id and yituliu_id.
+        return ResolveStringSetting(profile, config, "YituliuId")
+            ?? ResolveStringSetting(profile, config, "Penguin.Id", "PenguinId")
             ?? string.Empty;
     }
 

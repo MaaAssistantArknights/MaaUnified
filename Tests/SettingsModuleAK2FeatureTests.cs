@@ -6,6 +6,8 @@ using MAAUnified.App.ViewModels.Settings;
 using MAAUnified.Application.Configuration;
 using MAAUnified.Application.Models;
 using MAAUnified.Application.Orchestration;
+using MAAUnified.Application.Models.TaskParams;
+using MAAUnified.Application.Services.TaskParams;
 using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Features;
 using MAAUnified.Compat.Constants;
@@ -112,6 +114,47 @@ public sealed class SettingsModuleAK2FeatureTests
         Assert.Equal(180, vm.StallTimeoutMinutes);
         Assert.Equal(45, vm.ReminderIntervalMinutes);
         Assert.False(vm.HasPendingStartPerformanceChanges);
+    }
+
+    [Fact]
+    public async Task Initialize_RecruitReportSettings_FallBackToImportedBareKeys_LikeCompile()
+    {
+        // gui.json importers normalize Penguin.EnablePenguin/Penguin.Id to the bare aliases
+        // (LegacyConfigValueMappings.ProfileKeyAliases). The settings page must surface those
+        // imported values so the UI agrees with CompileRecruit, which honors both key forms.
+        await using var fixture = await RuntimeFixture.CreateAsync(gpuCapabilityService: new ScriptedWindowsGpuCapabilityService());
+        var profile = fixture.Config.CurrentConfig.Profiles["Default"];
+        profile.Values["EnablePenguin"] = JsonValue.Create("False");
+        profile.Values["PenguinId"] = JsonValue.Create("imported-id");
+
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        Assert.False(vm.EnablePenguin);
+        Assert.True(vm.EnableYituliu);
+        Assert.Equal("imported-id", vm.PenguinId);
+    }
+
+    [Fact]
+    public async Task SaveStartPerformanceSettings_RecruitReportOptOut_ReachesRecruitCompile_LikeFrozenWpf()
+    {
+        // End-to-end: the real settings save keys (the dotted legacy keys pinned above) must
+        // be honored by CompileRecruit so an explicit privacy opt-out reaches the Core
+        // payload exactly like frozen WPF.
+        await using var fixture = await RuntimeFixture.CreateAsync(gpuCapabilityService: new ScriptedWindowsGpuCapabilityService());
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        vm.EnablePenguin = false;
+        vm.EnableYituliu = false;
+        vm.PenguinId = "penguin-009";
+        await vm.SaveStartPerformanceSettingsAsync();
+
+        var profile = fixture.Config.CurrentConfig.Profiles[fixture.Config.CurrentConfig.CurrentProfile];
+        var compiled = TaskParamCompiler.CompileRecruit(new RecruitTaskParamsDto(), profile, fixture.Config.CurrentConfig);
+
+        Assert.False(compiled.Params["report_to_penguin"]?.GetValue<bool>());
+        Assert.False(compiled.Params["report_to_yituliu"]?.GetValue<bool>());
     }
 
     [Fact]

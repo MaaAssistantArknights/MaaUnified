@@ -32,6 +32,7 @@ public sealed class GuiJsonConfigImporter : IConfigImporter
             await using var stream = File.OpenRead(snapshot.GuiPath);
             using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
             var root = doc.RootElement;
+            var uiLanguage = ResolveUiLanguage(root, target);
 
             if (TryGetPropertyIgnoreCase(root, "Current", out var currentProp) && currentProp.ValueKind == JsonValueKind.String)
             {
@@ -81,7 +82,7 @@ public sealed class GuiJsonConfigImporter : IConfigImporter
                             report);
                     }
 
-                    MigrateFlatTaskQueue(configProp.Name, configProp.Value, profile, target, fillMissingOnly, report);
+                    MigrateFlatTaskQueue(configProp.Name, configProp.Value, profile, target, uiLanguage, fillMissingOnly, report);
                 }
             }
 
@@ -127,7 +128,7 @@ public sealed class GuiJsonConfigImporter : IConfigImporter
                     }
                 }
 
-                MigrateFlatTaskQueue(profileName, root, profile, target, fillMissingOnly, report);
+                MigrateFlatTaskQueue(profileName, root, profile, target, uiLanguage, fillMissingOnly, report);
             }
 
             if (TryGetPropertyIgnoreCase(root, "Global", out var globalProp) && globalProp.ValueKind == JsonValueKind.Object)
@@ -162,11 +163,34 @@ public sealed class GuiJsonConfigImporter : IConfigImporter
         return LegacyConfigValueMappings.NormalizeProfileKey(key);
     }
 
+    private static string ResolveUiLanguage(JsonElement root, UnifiedConfig target)
+    {
+        if (root.TryGetProperty("Global", out var global)
+            && global.ValueKind == JsonValueKind.Object
+            && global.TryGetProperty("GUI.Localization", out var language)
+            && language.ValueKind == JsonValueKind.String
+            && !string.IsNullOrWhiteSpace(language.GetString()))
+        {
+            return language.GetString()!;
+        }
+
+        if (target.GlobalValues.TryGetValue("GUI.Localization", out var node)
+            && node is JsonValue value
+            && value.TryGetValue(out string? existing)
+            && !string.IsNullOrWhiteSpace(existing))
+        {
+            return existing;
+        }
+
+        return "zh-cn";
+    }
+
     private static void MigrateFlatTaskQueue(
         string profileName,
         JsonElement source,
         UnifiedProfile profile,
         UnifiedConfig config,
+        string uiLanguage,
         bool fillMissingOnly,
         ImportReport report)
     {
@@ -187,7 +211,13 @@ public sealed class GuiJsonConfigImporter : IConfigImporter
 
         foreach (var legacyTask in BuildFlatLegacyTasks(source))
         {
-            if (!LegacyTaskSchemaConverter.TryConvertLegacyTask(legacyTask, profile, config, out var convertedTask, out var error)
+            if (!LegacyTaskSchemaConverter.TryConvertLegacyTask(
+                    legacyTask,
+                    profile,
+                    config,
+                    out var convertedTask,
+                    out var error,
+                    uiLanguage: uiLanguage)
                 && !string.IsNullOrWhiteSpace(error))
             {
                 report.Errors.Add(error);
@@ -351,8 +381,6 @@ public sealed class GuiJsonConfigImporter : IConfigImporter
         AddIfPresent(source, "AutoRecruit.ChooseLevel4.Time", task, "Level4Time");
         AddIfPresent(source, "AutoRecruit.ChooseLevel5", task, "Level5Choose");
         AddIfPresent(source, "AutoRecruit.ChooseLevel5.Time", task, "Level5Time");
-        AddIfPresent(source, "AutoRecruit.PreserveTagEnabled", task, "PreserveTagEnabled");
-        AddIfPresent(source, "AutoRecruit.PreserveTagList", task, "PreserveTagList");
 
         if (TryReadString(source, "AutoRecruit.AutoRecruitFirstList", out var firstTags))
         {
@@ -363,17 +391,6 @@ public sealed class GuiJsonConfigImporter : IConfigImporter
             }
 
             task["Level3PreferTags"] = tags;
-        }
-
-        if (TryReadString(source, "AutoRecruit.PreserveTags", out var preserveTags))
-        {
-            var tags = new JsonArray();
-            foreach (var tag in LegacyConfigValueMappings.SplitLegacyList(preserveTags))
-            {
-                tags.Add(tag);
-            }
-
-            task["PreserveTags"] = tags;
         }
 
         return task;
