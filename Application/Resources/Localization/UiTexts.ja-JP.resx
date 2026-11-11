@@ -2036,7 +2036,7 @@
     <value>タッチモード</value>
   </data>
   <data name="Settings.ExternalNotification.DefaultMessage" xml:space="preserve">
-    <value>これは MAA の外部通知テストです。このメッセージが見えれば通知送信は成功しています。</value>
+    <value>これは MAA 外部通知テスト情報です。 このコンテンツが表示された場合、通知は正常に送信されました！</value>
   </data>
   <data name="Settings.ExternalNotification.DefaultTitle" xml:space="preserve">
     <value>MAA 外部通知テスト</value>

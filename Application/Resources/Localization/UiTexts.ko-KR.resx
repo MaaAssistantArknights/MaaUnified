@@ -2037,7 +2037,7 @@ OF-1 스테이지가 개방되지 않은 경우에는 선택하지 마세요.</v
     <value>터치 모드</value>
   </data>
   <data name="Settings.ExternalNotification.DefaultMessage" xml:space="preserve">
-    <value>이 메시지는 MAA 외부 알림 테스트입니다. 이 내용을 보면 알림 전송이 정상 동작한 것입니다.</value>
+    <value>MAA 외부 알림 테스트입니다. 이 메시지가 표시되었다면 알림 전송이 성공한 것입니다!</value>
   </data>
   <data name="Settings.ExternalNotification.DefaultTitle" xml:space="preserve">
     <value>MAA 외부 알림 테스트</value>

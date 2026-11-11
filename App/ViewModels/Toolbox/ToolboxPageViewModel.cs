@@ -16,6 +16,7 @@ using MAAUnified.App.Features.Dialogs;
 using MAAUnified.App.Services;
 using MAAUnified.App.ViewModels.Infrastructure;
 using MAAUnified.App.ViewModels.Settings;
+using MAAUnified.App.ViewModels.TaskQueue;
 using MAAUnified.Application.Models;
 using MAAUnified.Application.Orchestration;
 using MAAUnified.Application.Services;
@@ -1606,6 +1607,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
                         "Recruit recognition failed. Check current screen and connection status.");
                 }
 
+                QueueToolboxExternalErrorNotification(callbackEnvelope.TaskChain);
                 CompleteActiveToolRun(
                     _activeTool.Value,
                     success: false,
@@ -2880,6 +2882,66 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         ReplaceCollectionItems(DepotResult, items);
 
         _ = PersistDepotAsync(CancellationToken.None);
+    }
+
+    // WPF parity (frozen 23ddd271, AsstProxy.ProcTaskChainMsg): any TaskChainError,
+    // including toolbox tool runs, sends an external notification when SendWhenError is enabled.
+    private void QueueToolboxExternalErrorNotification(string? taskChain)
+    {
+        var chainKey = string.IsNullOrWhiteSpace(taskChain)
+            ? _activeTool?.ToString() ?? string.Empty
+            : taskChain;
+        var message = GetRootText("TaskError", "Task error: ") + GetRootText(chainKey, chainKey);
+        var requests = TaskQueuePageViewModel.BuildAutomaticExternalNotificationRequests(
+            "TaskChainError",
+            new TaskQueuePageViewModel.TaskQueueSystemNotification(
+                message,
+                message,
+                "Toolbox.Notification.Error",
+                "toolbox task failure"),
+            Runtime.ConfigurationService.CurrentConfig);
+        if (requests.Count == 0)
+        {
+            return;
+        }
+
+        _ = Task.Run(async () =>
+        {
+            foreach (var request in requests)
+            {
+                try
+                {
+                    var result = await Runtime.NotificationProviderFeatureService.SendTestAsync(request);
+                    if (!result.Success)
+                    {
+                        Runtime.LogService.Warn($"Failed to dispatch Toolbox external notification via {request.Provider}: {result.Message}");
+                        // WPF parity (frozen 23ddd271 ExternalNotificationService.SendAsync):
+                        // failed automatic sends surface a toast; mirror the main queue's
+                        // error-dialog feedback instead of leaving only a log line.
+                        await Runtime.DialogFeatureService.ReportErrorAsync(
+                            "Toolbox.Notification.Error",
+                            UiOperationResult.Fail(
+                                result.Error?.Code ?? UiErrorCode.NotificationProviderFailed,
+                                $"External notification via {request.Provider} failed: {result.Message}",
+                                result.Error?.Details));
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Runtime.LogService.Warn($"Failed to dispatch Toolbox external notification via {request.Provider}: {ex.Message}");
+                    await Runtime.DialogFeatureService.ReportErrorAsync(
+                        "Toolbox.Notification.Error",
+                        UiOperationResult.Fail(
+                            UiErrorCode.NotificationProviderFailed,
+                            $"External notification via {request.Provider} failed."));
+                }
+            }
+        });
+    }
+
+    private string GetRootText(string key, string fallback)
+    {
+        return _rootTexts.GetOrDefault(key, fallback);
     }
 
     private void CompleteActiveToolRun(ToolboxToolKind tool, bool success, string message, string errorCode = "")

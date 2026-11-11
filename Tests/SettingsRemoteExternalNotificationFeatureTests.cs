@@ -11,6 +11,7 @@ using MAAUnified.Application.Models;
 using MAAUnified.Application.Orchestration;
 using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Features;
+using MAAUnified.Application.Services.Localization;
 using MAAUnified.Compat.Constants;
 using MAAUnified.CoreBridge;
 using MAAUnified.Platform;
@@ -148,7 +149,8 @@ public sealed class SettingsRemoteExternalNotificationFeatureTests
             ["Smtp"] = "server=smtp.example.com\nport=465\nfrom=noreply@example.com\nto=ops@example.com",
             ["ServerChan"] = "sendKey=abc123",
             ["Bark"] = "sendKey=abc123\nserver=https://api.day.app",
-            ["Discord"] = "webhookUrl=https://discord.com/api/webhooks/test",
+            ["Discord"] = "botToken=bot-token\nuserId=10001",
+            ["DiscordWebhook"] = "webhookUrl=https://discord.com/api/webhooks/test",
             ["DingTalk"] = "accessToken=ding-token\nsecret=ding-secret",
             ["Telegram"] = "botToken=token\nchatId=10001",
             ["Qmsg"] = "key=qmsg-key\nserver=https://qmsg.example.com",
@@ -245,7 +247,10 @@ public sealed class SettingsRemoteExternalNotificationFeatureTests
     public async Task ExternalNotification_DingTalk_SendTest_SuccessAndNetworkFailureAreClassified()
     {
         var successService = CreateNotificationProviderServiceForHttpProbe(
-            static (_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)));
+            static (_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("""{"errcode":0,"errmsg":"ok"}"""),
+            }));
         var success = await successService.SendTestAsync(
             new NotificationProviderTestRequest(
                 "DingTalk",
@@ -266,6 +271,74 @@ public sealed class SettingsRemoteExternalNotificationFeatureTests
         Assert.Equal(UiErrorCode.NotificationProviderNetworkFailure, failure.Error?.Code);
         Assert.DoesNotContain("network down", failure.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("network down", failure.Error?.Details ?? string.Empty, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(System.Net.HttpStatusCode.NoContent)]
+    [InlineData(System.Net.HttpStatusCode.OK)]
+    public async Task ExternalNotification_DiscordWebhook_EmptyBody2xx_Succeeds(System.Net.HttpStatusCode statusCode)
+    {
+        // WPF frozen 23ddd271 (DiscordWebhookNotificationProvider) treats an empty response
+        // body as success without requiring 204; Discord-compatible endpoints may return
+        // 200 OK with an empty body and must not be reported as failures.
+        var service = CreateNotificationProviderServiceForHttpProbe(
+            (_, _) => Task.FromResult(new HttpResponseMessage(statusCode)
+            {
+                Content = new StringContent(string.Empty),
+            }));
+
+        var result = await service.SendTestAsync(
+            new NotificationProviderTestRequest(
+                "DiscordWebhook",
+                "webhookUrl=https://discord.example.com/api/webhooks/test",
+                "title",
+                "message"));
+
+        Assert.True(result.Success);
+    }
+
+    [Fact]
+    public async Task ExternalNotification_DiscordWebhook_EmptyBodyErrorStatus_StillFails()
+    {
+        // Deliberate divergence from WPF frozen 23ddd271: an empty body on a non-2xx status
+        // is a real failure and must not be reported as success.
+        var service = CreateNotificationProviderServiceForHttpProbe(
+            static (_, _) => Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.InternalServerError)
+            {
+                Content = new StringContent(string.Empty),
+            }));
+
+        var result = await service.SendTestAsync(
+            new NotificationProviderTestRequest(
+                "DiscordWebhook",
+                "webhookUrl=https://discord.example.com/api/webhooks/test",
+                "title",
+                "message"));
+
+        Assert.False(result.Success);
+        Assert.Equal(UiErrorCode.NotificationProviderNetworkFailure, result.Error?.Code);
+    }
+
+    [Fact]
+    public async Task ExternalNotification_DiscordWebhook_NonEmptyBody_Fails()
+    {
+        // WPF frozen 23ddd271 treats any non-empty webhook response (JSON error payload or
+        // foreign HTML) as a failed send.
+        var service = CreateNotificationProviderServiceForHttpProbe(
+            static (_, _) => Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            {
+                Content = new StringContent("""{"message":"Unknown Webhook","code":10015}"""),
+            }));
+
+        var result = await service.SendTestAsync(
+            new NotificationProviderTestRequest(
+                "DiscordWebhook",
+                "webhookUrl=https://discord.example.com/api/webhooks/test",
+                "title",
+                "message"));
+
+        Assert.False(result.Success);
+        Assert.Equal(UiErrorCode.NotificationProviderNetworkFailure, result.Error?.Code);
     }
 
     [Fact]
@@ -326,8 +399,107 @@ public sealed class SettingsRemoteExternalNotificationFeatureTests
         Assert.Equal(HttpMethod.Post, capturedRequest!.Method);
         Assert.Equal("https://api.day.app/push", capturedRequest.RequestUri?.ToString());
         Assert.Contains("\"device_key\":\"bark-key\"", capturedBody, StringComparison.Ordinal);
-        Assert.Contains("\"title\":\"title\"", capturedBody, StringComparison.Ordinal);
+        Assert.Contains("\"title\":\"[MAA] title\"", capturedBody, StringComparison.Ordinal);
         Assert.Contains("\"body\":\"message\"", capturedBody, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ExternalNotification_Bark_ServerWithPath_UsesWpfAbsolutePushEndpoint()
+    {
+        // WPF frozen 23ddd271 (BarkNotificationProvider) posts to new Uri(base, "/push"),
+        // which replaces any path in the configured server URL.
+        HttpRequestMessage? capturedRequest = null;
+        var service = CreateNotificationProviderServiceForHttpProbe((request, _) =>
+        {
+            capturedRequest = request;
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("""{"code":200}"""),
+            });
+        });
+
+        var result = await service.SendTestAsync(
+            new NotificationProviderTestRequest(
+                "Bark",
+                "sendKey=bark-key\nserver=https://bark.example.com/sub",
+                "title",
+                "message"));
+
+        Assert.True(result.Success);
+        Assert.NotNull(capturedRequest);
+        Assert.Equal("https://bark.example.com/push", capturedRequest!.RequestUri?.ToString());
+    }
+
+    [Fact]
+    public async Task ExternalNotification_Gotify_ServerWithPath_UsesWpfAbsoluteMessageEndpoint()
+    {
+        // WPF frozen 23ddd271 (GotifyNotificationProvider) posts to new Uri(base, "/message"),
+        // which replaces any path in the configured server URL.
+        HttpRequestMessage? capturedRequest = null;
+        var service = CreateNotificationProviderServiceForHttpProbe((request, _) =>
+        {
+            capturedRequest = request;
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("""{"id":123}"""),
+            });
+        });
+
+        var result = await service.SendTestAsync(
+            new NotificationProviderTestRequest(
+                "Gotify",
+                "server=https://gotify.example.com/sub\ntoken=gotify-token",
+                "title",
+                "message"));
+
+        Assert.True(result.Success);
+        Assert.NotNull(capturedRequest);
+        Assert.Equal("https://gotify.example.com/message", capturedRequest!.RequestUri?.ToString());
+    }
+
+    [Fact]
+    public async Task ExternalNotification_CustomWebhook_MultiLineHeaders_SendTest_DeliversAllHeaders()
+    {
+        HttpRequestMessage? capturedRequest = null;
+        string? capturedBody = null;
+        var service = CreateNotificationProviderServiceForHttpProbe(async (request, cancellationToken) =>
+        {
+            capturedRequest = request;
+            capturedBody = request.Content is null
+                ? null
+                : await request.Content.ReadAsStringAsync(cancellationToken);
+            return new HttpResponseMessage(HttpStatusCode.OK);
+        });
+
+        var result = await service.SendTestAsync(
+            new NotificationProviderTestRequest(
+                "CustomWebhook",
+                "url=https://example.com/hook\nheaders=X-Token: 123\nX-Second: abc\nbody={title}|{content}",
+                "title",
+                "message"));
+
+        Assert.True(result.Success);
+        Assert.NotNull(capturedRequest);
+        Assert.True(capturedRequest!.Headers.TryGetValues("X-Token", out var tokenValues));
+        Assert.Equal("123", Assert.Single(tokenValues));
+        Assert.True(capturedRequest.Headers.TryGetValues("X-Second", out var secondValues));
+        Assert.Equal("abc", Assert.Single(secondValues));
+        Assert.Equal("[MAA] title|message", capturedBody);
+    }
+
+    [Fact]
+    public async Task ExternalNotification_ParameterText_WithInvalidLine_RemainsRejected()
+    {
+        var service = CreateNotificationProviderServiceForHttpProbe(static (_, _) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)));
+
+        var result = await service.ValidateProviderParametersAsync(
+            new NotificationProviderRequest(
+                "CustomWebhook",
+                "url=https://example.com/hook\nthis line is not an assignment\nbody={title}"));
+
+        Assert.False(result.Success);
+        Assert.Equal(UiErrorCode.NotificationProviderInvalidParameters, result.Error?.Code);
     }
 
     [Fact]
@@ -471,6 +643,42 @@ public sealed class SettingsRemoteExternalNotificationFeatureTests
     }
 
     [Fact]
+    public async Task ExternalNotification_StalledToggle_DefaultsToEnabled_ForWpfParity()
+    {
+        // WPF frozen 23ddd271 defaults ExternalNotificationSendWhenTimeout to true,
+        // so a fresh-install settings page must show the stalled toggle as enabled.
+        await using var fixture = await RuntimeFixture.CreateAsync(
+            notificationProviderFeatureService: new ScriptedNotificationProviderFeatureService
+            {
+                ValidateHandler = static _ => UiOperationResult.Ok("valid"),
+            });
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        Assert.True(vm.ExternalNotificationSendWhenStalled);
+
+        // Toggling off persists through save and reload.
+        vm.ExternalNotificationSendWhenStalled = false;
+        await vm.SaveExternalNotificationAsync();
+        Assert.Equal(
+            "False",
+            ReadCurrentProfileString(fixture.Config, ConfigurationKeys.ExternalNotificationSendWhenStalled));
+
+        // The WPF legacy key is dual-written so the choice travels back to WPF,
+        // which only reads/writes ExternalNotification.SendWhenTimeout (frozen 23ddd271).
+        Assert.Equal(
+            "False",
+            ReadCurrentProfileString(fixture.Config, ConfigurationKeys.ExternalNotificationSendWhenTimeout));
+
+        // Toggling back on mirrors the legacy key as well.
+        vm.ExternalNotificationSendWhenStalled = true;
+        await vm.SaveExternalNotificationAsync();
+        Assert.Equal(
+            "True",
+            ReadCurrentProfileString(fixture.Config, ConfigurationKeys.ExternalNotificationSendWhenTimeout));
+    }
+
+    [Fact]
     public async Task ExternalNotification_SaveAndReload_RoundTripStable()
     {
         var root = Path.Combine(Path.GetTempPath(), "maa-unified-tests", Guid.NewGuid().ToString("N"));
@@ -521,8 +729,9 @@ public sealed class SettingsRemoteExternalNotificationFeatureTests
                 Assert.Equal(
                     "False",
                     ReadCurrentProfileString(first.Config, ConfigurationKeys.ExternalNotificationSendWhenStalled));
+                // Save dual-writes the WPF legacy key so WPF keeps the same toggle state.
                 Assert.Equal(
-                    string.Empty,
+                    "False",
                     ReadCurrentProfileString(first.Config, ConfigurationKeys.ExternalNotificationSendWhenTimeout));
             }
 
@@ -550,6 +759,80 @@ public sealed class SettingsRemoteExternalNotificationFeatureTests
             reloaded.SelectedNotificationProvider = "CustomWebhook";
             Assert.Contains("headers=X-Token: 123", reloaded.NotificationProviderParametersText, StringComparison.Ordinal);
             Assert.Contains("body={title}", reloaded.NotificationProviderParametersText, StringComparison.Ordinal);
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(root, recursive: true);
+            }
+            catch
+            {
+                // ignore cleanup failures in temporary test directories
+            }
+        }
+    }
+
+    [Fact]
+    public async Task ExternalNotification_CustomWebhook_MultiLineHeaders_SaveAndReload_RoundTrips()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "maa-unified-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var notification = new ScriptedNotificationProviderFeatureService
+            {
+                ValidateHandler = static _ => UiOperationResult.Ok("valid"),
+            };
+
+            await using (var first = await RuntimeFixture.CreateAsync(
+                root,
+                cleanupRoot: false,
+                notificationProviderFeatureService: notification))
+            {
+                var vm = new SettingsPageViewModel(first.Runtime, new ConnectionGameSharedStateViewModel());
+                await vm.InitializeAsync();
+
+                vm.ExternalNotificationEnabled = true;
+                vm.NotificationProviderSelections.Single(
+                    static item => string.Equals(item.Provider, "CustomWebhook", StringComparison.OrdinalIgnoreCase)).IsEnabled = true;
+                vm.SelectedNotificationProvider = "CustomWebhook";
+                vm.NotificationProviderParametersText =
+                    "url=https://example.com/hook\nheaders=X-Token: 123\nX-Second: abc\nbody={title}";
+
+                await vm.SaveExternalNotificationAsync();
+
+                Assert.True(vm.HasExternalNotificationStatusMessage);
+                Assert.False(vm.HasExternalNotificationErrorMessage);
+                Assert.Equal(
+                    "https://example.com/hook",
+                    ReadCurrentProfileString(first.Config, ConfigurationKeys.ExternalNotificationCustomWebhookUrl));
+                Assert.Equal(
+                    "X-Token: 123\nX-Second: abc",
+                    ReadCurrentProfileString(first.Config, "ExternalNotification.CustomWebhook.Headers")
+                        .Replace("\r\n", "\n", StringComparison.Ordinal));
+                Assert.Equal(
+                    "{title}",
+                    ReadCurrentProfileString(first.Config, ConfigurationKeys.ExternalNotificationCustomWebhookBody));
+            }
+
+            await using var second = await RuntimeFixture.CreateAsync(
+                root,
+                cleanupRoot: false,
+                notificationProviderFeatureService: new ScriptedNotificationProviderFeatureService
+                {
+                    ValidateHandler = static _ => UiOperationResult.Ok("valid"),
+                });
+            var reloaded = new SettingsPageViewModel(second.Runtime, new ConnectionGameSharedStateViewModel());
+            await reloaded.InitializeAsync();
+
+            reloaded.SelectedNotificationProvider = "CustomWebhook";
+            Assert.Contains("headers=X-Token: 123", reloaded.NotificationProviderParametersText, StringComparison.Ordinal);
+            Assert.Contains("X-Second: abc", reloaded.NotificationProviderParametersText, StringComparison.Ordinal);
+            Assert.Contains("body={title}", reloaded.NotificationProviderParametersText, StringComparison.Ordinal);
+            Assert.Equal(
+                "X-Token: 123\nX-Second: abc",
+                reloaded.CustomWebhookHeaders.Replace("\r\n", "\n", StringComparison.Ordinal));
         }
         finally
         {
@@ -770,6 +1053,198 @@ public sealed class SettingsRemoteExternalNotificationFeatureTests
         return config.CurrentConfig.GlobalValues.TryGetValue(key, out var fallbackNode)
             ? fallbackNode?.ToString() ?? string.Empty
             : string.Empty;
+    }
+
+    [Fact]
+    public async Task ExternalNotification_Smtp_TitleWithNewline_StrippedBeforeMailMessage()
+    {
+        // WPF frozen SmtpNotificationProvider strips CR/LF from the title before assigning the
+        // mail subject; System.Net.Mail.MailMessage rejects newline subjects with
+        // ArgumentException before any network I/O, so an unreachable server must surface a
+        // socket-level failure instead of an ArgumentException.
+        var service = new NotificationProviderFeatureService();
+        var result = await service.SendTestAsync(new NotificationProviderTestRequest(
+            "Smtp",
+            "server=127.0.0.1\nport=9\nfrom=noreply@example.com\nto=ops@example.com",
+            "\u4efb\u52a1\u5df2\u5168\u90e8\u5b8c\u6210\uff01\n(\u7528\u65f6 0h 0m 0s)",
+            "content"));
+
+        Assert.False(result.Success);
+        Assert.Equal(UiErrorCode.NotificationProviderNetworkFailure, result.Error?.Code);
+        Assert.DoesNotContain("errorType=ArgumentException", result.Error?.Details, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ExternalNotification_ServerChan_MalformedSctpKey_ReturnsClassifiedFailure()
+    {
+        // WPF frozen ServerChanNotificationProvider.ConstructUrl throws ArgumentException for an
+        // `sctp`-prefixed key that does not match `^sctp(\d+)t`, but the provider catches it and
+        // reports a failed send; MAAUnified must classify the failure instead of throwing.
+        var httpCalled = false;
+        var service = CreateNotificationProviderServiceForHttpProbe((_, _) =>
+        {
+            httpCalled = true;
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK));
+        });
+
+        var result = await service.SendTestAsync(new NotificationProviderTestRequest(
+            "ServerChan",
+            "sendKey=sctpABC",
+            "title",
+            "message"));
+
+        Assert.False(result.Success);
+        Assert.Equal(UiErrorCode.NotificationProviderFailed, result.Error?.Code);
+        Assert.Contains("errorType=ArgumentException", result.Error?.Details, StringComparison.Ordinal);
+        Assert.DoesNotContain("sctpABC", result.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("sctpABC", result.Error?.Details ?? string.Empty, StringComparison.Ordinal);
+        Assert.False(httpCalled);
+    }
+
+    [Fact]
+    public async Task ExternalNotification_SendAsync_UnexpectedException_ReturnsClassifiedFailure()
+    {
+        // The injected send delegate stands in for any provider construction-phase failure
+        // (malformed ServerChan sctp key, header/URI construction, DingTalk signing): the
+        // send path must classify unexpected exceptions instead of throwing.
+        var ctor = typeof(NotificationProviderFeatureService).GetConstructor(
+            BindingFlags.Instance | BindingFlags.NonPublic,
+            binder: null,
+            [typeof(bool), typeof(Func<string, IReadOnlyDictionary<string, string>, string, string, CancellationToken, Task<UiOperationResult>>), typeof(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>>)],
+            modifiers: null);
+        Assert.NotNull(ctor);
+        var service = (NotificationProviderFeatureService)ctor!.Invoke([
+            true,
+            (Func<string, IReadOnlyDictionary<string, string>, string, string, CancellationToken, Task<UiOperationResult>>)(
+                (_, _, _, _, _) => throw new InvalidOperationException("boom")),
+            null,
+        ]);
+
+        var result = await service.SendTestAsync(new NotificationProviderTestRequest(
+            "ServerChan",
+            "sendKey=abc123",
+            "title",
+            "message"));
+
+        Assert.False(result.Success);
+        Assert.Equal(UiErrorCode.NotificationProviderFailed, result.Error?.Code);
+        Assert.Contains("errorType=InvalidOperationException", result.Error?.Details, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ExternalNotification_TestSend_ThrowingProvider_DoesNotAbortRemainingProviders()
+    {
+        // WPF frozen ExternalNotificationService wraps each provider send in a per-provider
+        // try/catch and continues the loop; a single throwing provider must not abort the rest.
+        var notification = new ScriptedNotificationProviderFeatureService
+        {
+            SendHandler = static request => string.Equals(request.Provider, "ServerChan", StringComparison.OrdinalIgnoreCase)
+                ? throw new ArgumentException("Invalid key format for sctp.")
+                : UiOperationResult.Ok("sent"),
+        };
+
+        await using var fixture = await RuntimeFixture.CreateAsync(notificationProviderFeatureService: notification);
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        vm.NotificationProviderSelections.Single(
+            static item => string.Equals(item.Provider, "ServerChan", StringComparison.OrdinalIgnoreCase)).IsEnabled = true;
+        vm.NotificationProviderSelections.Single(
+            static item => string.Equals(item.Provider, "Telegram", StringComparison.OrdinalIgnoreCase)).IsEnabled = true;
+
+        await vm.TestExternalNotificationAsync();
+
+        Assert.Equal(2, notification.SendCalls.Count);
+        Assert.Contains(notification.SendCalls, static call => call.Provider == "ServerChan");
+        Assert.Contains(notification.SendCalls, static call => call.Provider == "Telegram");
+        Assert.True(vm.HasExternalNotificationErrorMessage);
+        Assert.Contains("ServerChan", vm.ExternalNotificationErrorMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ExternalNotification_EnableDetails_IndependentOfSendWhenComplete_RoundTrips()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "maa-unified-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            await using (var first = await RuntimeFixture.CreateAsync(
+                root,
+                cleanupRoot: false,
+                notificationProviderFeatureService: new ScriptedNotificationProviderFeatureService
+                {
+                    ValidateHandler = static _ => UiOperationResult.Ok("valid"),
+                }))
+            {
+                // Seed a legacy WPF-style config: SendWhenComplete=false + EnableDetails=true.
+                var profile = first.Config.CurrentConfig.Profiles[first.Config.CurrentConfig.CurrentProfile];
+                profile.Values[ConfigurationKeys.ExternalNotificationEnabled] = JsonValue.Create("SMTP");
+                profile.Values[ConfigurationKeys.ExternalNotificationSendWhenComplete] = JsonValue.Create("False");
+                profile.Values[ConfigurationKeys.ExternalNotificationEnableDetails] = JsonValue.Create("True");
+                await first.Config.SaveAsync();
+
+                var vm = new SettingsPageViewModel(first.Runtime, new ConnectionGameSharedStateViewModel());
+                await vm.InitializeAsync();
+
+                Assert.False(vm.ExternalNotificationSendWhenComplete);
+                Assert.True(vm.ExternalNotificationEnableDetails);
+
+                // Toggling SendWhenComplete must not clear the stored EnableDetails value.
+                vm.ExternalNotificationSendWhenComplete = true;
+                Assert.True(vm.ExternalNotificationEnableDetails);
+                vm.ExternalNotificationSendWhenComplete = false;
+                Assert.True(vm.ExternalNotificationEnableDetails);
+
+                await vm.SaveExternalNotificationAsync();
+
+                Assert.Equal(
+                    "False",
+                    ReadCurrentProfileString(first.Config, ConfigurationKeys.ExternalNotificationSendWhenComplete));
+                Assert.Equal(
+                    "True",
+                    ReadCurrentProfileString(first.Config, ConfigurationKeys.ExternalNotificationEnableDetails));
+            }
+
+            await using var second = await RuntimeFixture.CreateAsync(
+                root,
+                cleanupRoot: false,
+                notificationProviderFeatureService: new ScriptedNotificationProviderFeatureService
+                {
+                    ValidateHandler = static _ => UiOperationResult.Ok("valid"),
+                });
+            var reloaded = new SettingsPageViewModel(second.Runtime, new ConnectionGameSharedStateViewModel());
+            await reloaded.InitializeAsync();
+
+            Assert.False(reloaded.ExternalNotificationSendWhenComplete);
+            Assert.True(reloaded.ExternalNotificationEnableDetails);
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(root, recursive: true);
+            }
+            catch
+            {
+                // ignore cleanup failures in temporary test directories
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData("zh-cn", "MAA \u5916\u90e8\u901a\u77e5\u6d4b\u8bd5", "\u8fd9\u662f MAA \u5916\u90e8\u901a\u77e5\u6d4b\u8bd5\u4fe1\u606f\u3002\u5982\u679c\u4f60\u770b\u5230\u4e86\u8fd9\u6bb5\u5185\u5bb9\uff0c\u5c31\u8bf4\u660e\u901a\u77e5\u53d1\u9001\u6210\u529f\u4e86\uff01")]
+    [InlineData("en-us", "MAA external notification test", "This is MAA external notification test information. If you see this content, the notification was sent successfully!")]
+    [InlineData("zh-tw", "MAA \u5916\u90e8\u901a\u77e5\u6e2c\u8a66", "\u9019\u662f MAA \u5916\u90e8\u901a\u77e5\u6e2c\u8a66\u8cc7\u8a0a\u3002\u5982\u679c\u60a8\u770b\u5230\u4e86\u9019\u6bb5\u5167\u5bb9\uff0c\u5c31\u8aaa\u660e\u901a\u77e5\u767c\u9001\u6210\u529f\u4e86\uff01")]
+    [InlineData("ja-jp", "MAA \u5916\u90e8\u901a\u77e5\u30c6\u30b9\u30c8", "\u3053\u308c\u306f MAA \u5916\u90e8\u901a\u77e5\u30c6\u30b9\u30c8\u60c5\u5831\u3067\u3059\u3002 \u3053\u306e\u30b3\u30f3\u30c6\u30f3\u30c4\u304c\u8868\u793a\u3055\u308c\u305f\u5834\u5408\u3001\u901a\u77e5\u306f\u6b63\u5e38\u306b\u9001\u4fe1\u3055\u308c\u307e\u3057\u305f\uff01")]
+    [InlineData("ko-kr", "MAA \uc678\ubd80 \uc54c\ub9bc \ud14c\uc2a4\ud2b8", "MAA \uc678\ubd80 \uc54c\ub9bc \ud14c\uc2a4\ud2b8\uc785\ub2c8\ub2e4. \uc774 \uba54\uc2dc\uc9c0\uac00 \ud45c\uc2dc\ub418\uc5c8\ub2e4\uba74 \uc54c\ub9bc \uc804\uc1a1\uc774 \uc131\uacf5\ud55c \uac83\uc785\ub2c8\ub2e4!")]
+    public void ExternalNotification_DefaultTestTitleAndMessage_MatchWpfFrozen(
+        string language,
+        string expectedTitle,
+        string expectedMessage)
+    {
+        var manager = UiLocalizationResourceManager.Shared;
+        Assert.Equal(expectedTitle, manager.Lookup(language, "Settings.ExternalNotification.DefaultTitle").Value);
+        Assert.Equal(expectedMessage, manager.Lookup(language, "Settings.ExternalNotification.DefaultMessage").Value);
     }
 
     private sealed class RuntimeFixture : IAsyncDisposable

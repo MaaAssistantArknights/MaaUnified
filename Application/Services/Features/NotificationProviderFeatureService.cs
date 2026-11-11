@@ -29,6 +29,7 @@ public sealed class NotificationProviderFeatureService : INotificationProviderFe
         "ServerChan",
         "Bark",
         "Discord",
+        "DiscordWebhook",
         "DingTalk",
         "Telegram",
         "Qmsg",
@@ -44,7 +45,8 @@ public sealed class NotificationProviderFeatureService : INotificationProviderFe
             ["ServerChan"] = "ServerChan",
             ["Bark"] = "Bark",
             ["Discord"] = "Discord",
-            ["Discord Webhook"] = "Discord",
+            ["Discord Webhook"] = "DiscordWebhook",
+            ["DiscordWebhook"] = "DiscordWebhook",
             ["DingTalk"] = "DingTalk",
             ["Telegram"] = "Telegram",
             ["Qmsg"] = "Qmsg",
@@ -160,12 +162,30 @@ public sealed class NotificationProviderFeatureService : INotificationProviderFe
                 "Notification title and message cannot be empty.");
         }
 
-        return await _sendAsync(
-            provider!,
-            parameters!,
-            request.Title.Trim(),
-            request.Message.Trim(),
-            cancellationToken);
+        try
+        {
+            return await _sendAsync(
+                provider!,
+                parameters!,
+                PrefixTitle(request.Title),
+                request.Message.Trim(),
+                cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            // WPF frozen providers catch construction/argument failures (e.g. a malformed
+            // ServerChan `sctp` key rejected by ConstructUrl) and report a failed send
+            // instead of throwing; keep the send path total so a single bad provider
+            // cannot escape as an unhandled exception or abort a multi-provider test loop.
+            return UiOperationResult.Fail(
+                UiErrorCode.NotificationProviderFailed,
+                $"Notification test failed via `{provider}`.",
+                $"errorType={ex.GetType().Name}");
+        }
     }
 
     private bool CanUseSensitiveSettings => _configService?.SensitiveStorageState
@@ -251,27 +271,31 @@ public sealed class NotificationProviderFeatureService : INotificationProviderFe
 
         if (provider == "Bark")
         {
-            if (!HasValue(parameters, "sendKey") || !HasValue(parameters, "server"))
+            if (!HasValue(parameters, "sendKey"))
             {
-                return "Bark requires `sendKey` and `server`.";
+                return "Bark requires `sendKey`.";
             }
 
-            return ValidateHttpUrl(parameters["server"], "Bark `server`");
+            return !HasValue(parameters, "server")
+                ? null
+                : ValidateHttpUrl(parameters["server"], "Bark `server`");
         }
 
         if (provider == "Discord")
         {
-            if (HasValue(parameters, "webhookUrl"))
-            {
-                return ValidateHttpUrl(parameters["webhookUrl"], "Discord `webhookUrl`");
-            }
-
             if (HasValue(parameters, "botToken") && HasValue(parameters, "userId"))
             {
                 return null;
             }
 
-            return "Discord requires `webhookUrl` or (`botToken` + `userId`).";
+            return "Discord requires `botToken` and `userId`.";
+        }
+
+        if (provider == "DiscordWebhook")
+        {
+            return HasValue(parameters, "webhookUrl")
+                ? ValidateHttpUrl(parameters["webhookUrl"], "DiscordWebhook `webhookUrl`")
+                : "DiscordWebhook requires `webhookUrl`.";
         }
 
         if (provider == "DingTalk")
@@ -357,7 +381,7 @@ public sealed class NotificationProviderFeatureService : INotificationProviderFe
             return parameters;
         }
 
-        var lines = text.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n', StringSplitOptions.TrimEntries);
+        var lines = text.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
         for (var i = 0; i < lines.Length; i++)
         {
             var line = lines[i].Trim();
@@ -379,6 +403,27 @@ public sealed class NotificationProviderFeatureService : INotificationProviderFe
             {
                 error = $"Invalid parameter line {i + 1}; expected key=value";
                 return parameters;
+            }
+
+            if (string.Equals(key, "body", StringComparison.OrdinalIgnoreCase))
+            {
+                // WPF stores Custom Webhook bodies verbatim, including multiline JSON.
+                parameters[key] = string.Join("\n", lines.Skip(i))[(lines[i].IndexOf('=') + 1)..];
+                break;
+            }
+
+            if (string.Equals(key, "headers", StringComparison.OrdinalIgnoreCase))
+            {
+                // Custom Webhook headers are `Name: value` lines and may span several
+                // lines; continuation lines never look like `key=value` assignments.
+                var headers = new StringBuilder(value);
+                while (TryReadHeaderContinuationLine(lines, ref i, out var continuation))
+                {
+                    headers.Append('\n').Append(continuation);
+                }
+
+                parameters[key] = headers.ToString();
+                continue;
             }
 
             parameters[key] = value;
@@ -424,6 +469,7 @@ public sealed class NotificationProviderFeatureService : INotificationProviderFe
             "ServerChan" => await SendServerChanAsync(parameters, title, message, cancellationToken),
             "Bark" => await SendBarkAsync(parameters, title, message, cancellationToken),
             "Discord" => await SendDiscordAsync(parameters, title, message, cancellationToken),
+            "DiscordWebhook" => await SendDiscordWebhookProviderAsync(parameters, message, cancellationToken),
             "DingTalk" => await SendDingTalkAsync(parameters, title, message, cancellationToken),
             "Telegram" => await SendTelegramAsync(parameters, title, message, cancellationToken),
             "Qmsg" => await SendQmsgAsync(parameters, title, message, cancellationToken),
@@ -465,10 +511,13 @@ public sealed class NotificationProviderFeatureService : INotificationProviderFe
                     parameters.TryGetValue("password", out var password) ? password : string.Empty);
             }
 
+            // WPF parity: strip CR/LF from the title before it becomes the mail subject
+            // (System.Net.Mail rejects subjects containing newlines).
+            var subject = title.Replace("\r", string.Empty).Replace("\n", string.Empty).Trim();
             using var mail = new MailMessage(
                 from.Trim(),
                 to.Trim(),
-                title.Trim(),
+                subject,
                 message.Trim());
             await client.SendMailAsync(mail, cancellationToken);
             return UiOperationResult.Ok("Notification test sent via `Smtp`.");
@@ -499,7 +548,13 @@ public sealed class NotificationProviderFeatureService : INotificationProviderFe
         }
 
         var postData = $"text={Uri.EscapeDataString(NormalizeServerChanTitle(title))}&desp={Uri.EscapeDataString(message.Trim())}";
-        return await SendFormPostAsync(BuildServerChanUrl(sendKey.Trim()), postData, "ServerChan", cancellationToken);
+        return await SendFormPostAsync(BuildServerChanUrl(sendKey.Trim()), postData, "ServerChan", cancellationToken, static (_, response) =>
+        {
+            using var document = JsonDocument.Parse(response);
+            return document.RootElement.TryGetProperty("code", out var code)
+                   && code.TryGetInt32(out var value)
+                   && value == 0;
+        });
     }
 
     private async Task<UiOperationResult> SendBarkAsync(
@@ -515,23 +570,26 @@ public sealed class NotificationProviderFeatureService : INotificationProviderFe
                 "Bark requires `sendKey`.");
         }
 
-        if (!parameters.TryGetValue("server", out var server) || string.IsNullOrWhiteSpace(server))
-        {
-            return UiOperationResult.Fail(
-                UiErrorCode.NotificationProviderInvalidParameters,
-                "Bark requires `server`.");
-        }
+        var server = parameters.TryGetValue("server", out var configuredServer) && !string.IsNullOrWhiteSpace(configuredServer)
+            ? configuredServer
+            : "https://api.day.app";
 
-        var pushUri = new Uri(new Uri(NormalizeHttpBaseUrl(server), UriKind.Absolute), "push");
+        var pushUri = new Uri(new Uri(NormalizeHttpBaseUrl(server), UriKind.Absolute), "/push");
         var body = JsonSerializer.Serialize(new
         {
             device_key = sendKey.Trim(),
             title = title.Trim(),
             body = message.Trim(),
-            group = "MAAUnified",
-            icon = "https://cdn.jsdelivr.net/gh/MaaAssistantArknights/design@main/v2/icons/maa-logo_256x256.png",
+            group = "MaaAssistantArknights",
+            icon = "https://cdn.jsdelivr.net/gh/MaaAssistantArknights/design@main/logo/maa-logo_256x256.png",
         });
-        return await SendJsonPostAsync(pushUri, body, "Bark", cancellationToken);
+        return await SendJsonPostAsync(pushUri, body, "Bark", cancellationToken, static (_, response) =>
+        {
+            using var document = JsonDocument.Parse(response);
+            return document.RootElement.TryGetProperty("code", out var code)
+                   && code.TryGetInt32(out var value)
+                   && value == 200;
+        });
     }
 
     private async Task<UiOperationResult> SendDiscordAsync(
@@ -540,11 +598,6 @@ public sealed class NotificationProviderFeatureService : INotificationProviderFe
         string message,
         CancellationToken cancellationToken)
     {
-        if (parameters.TryGetValue("webhookUrl", out var webhookUrl) && !string.IsNullOrWhiteSpace(webhookUrl))
-        {
-            return await SendDiscordWebhookAsync(webhookUrl.Trim(), message, cancellationToken);
-        }
-
         if (parameters.TryGetValue("botToken", out var botToken) && !string.IsNullOrWhiteSpace(botToken)
             && parameters.TryGetValue("userId", out var userId) && !string.IsNullOrWhiteSpace(userId))
         {
@@ -553,7 +606,7 @@ public sealed class NotificationProviderFeatureService : INotificationProviderFe
 
         return UiOperationResult.Fail(
             UiErrorCode.NotificationProviderInvalidParameters,
-            "Discord requires `webhookUrl` or (`botToken` + `userId`).");
+            "Discord requires `botToken` and `userId`.");
     }
 
     private async Task<UiOperationResult> SendTelegramAsync(
@@ -584,7 +637,12 @@ public sealed class NotificationProviderFeatureService : INotificationProviderFe
             payload["message_thread_id"] = topicId.Trim();
         }
 
-        return await SendJsonPostAsync(messageUri, JsonSerializer.Serialize(payload), "Telegram", cancellationToken);
+        return await SendJsonPostAsync(messageUri, JsonSerializer.Serialize(payload), "Telegram", cancellationToken, static (_, response) =>
+        {
+            using var document = JsonDocument.Parse(response);
+            return document.RootElement.TryGetProperty("ok", out var ok)
+                   && ok.ValueKind == JsonValueKind.True;
+        });
     }
 
     private async Task<UiOperationResult> SendQmsgAsync(
@@ -610,7 +668,7 @@ public sealed class NotificationProviderFeatureService : INotificationProviderFe
         var uri = new Uri(new Uri(NormalizeHttpBaseUrl(server), UriKind.Absolute), $"jsend/{key.Trim()}");
         var payload = new Dictionary<string, string>
         {
-            ["msg"] = $"{title.Trim()}: {message.Trim()}",
+            ["msg"] = message.Trim(),
         };
         if (parameters.TryGetValue("user", out var user) && !string.IsNullOrWhiteSpace(user))
         {
@@ -622,7 +680,12 @@ public sealed class NotificationProviderFeatureService : INotificationProviderFe
             payload["bot"] = bot.Trim();
         }
 
-        return await SendJsonPostAsync(uri, JsonSerializer.Serialize(payload), "Qmsg", cancellationToken);
+        return await SendJsonPostAsync(uri, JsonSerializer.Serialize(payload), "Qmsg", cancellationToken, static (_, response) =>
+        {
+            using var document = JsonDocument.Parse(response);
+            return document.RootElement.TryGetProperty("success", out var success)
+                   && success.ValueKind == JsonValueKind.True;
+        });
     }
 
     private async Task<UiOperationResult> SendGotifyAsync(
@@ -639,11 +702,16 @@ public sealed class NotificationProviderFeatureService : INotificationProviderFe
                 "Gotify requires `server` and `token`.");
         }
 
-        var messageUri = new Uri(new Uri(NormalizeHttpBaseUrl(server), UriKind.Absolute), "message");
+        var messageUri = new Uri(new Uri(NormalizeHttpBaseUrl(server), UriKind.Absolute), "/message");
         var request = new HttpRequestMessage(HttpMethod.Post, messageUri);
         request.Headers.Add("X-Gotify-Key", token.Trim());
-        request.Content = JsonContent.Create(new { title = title.Trim(), message = message.Trim() });
-        return await SendRequestAsync(request, "Gotify", cancellationToken, inspectJsonResponse: true);
+        request.Content = JsonContent.Create(new { title = title.Trim(), message = StripExternalLogColorMarkers(message) });
+        return await SendRequestAsync(request, "Gotify", cancellationToken, static (_, responseText) =>
+        {
+            using var document = JsonDocument.Parse(responseText);
+            return document.RootElement.TryGetProperty("id", out var id)
+                   && id.TryGetInt32(out var _);
+        });
     }
 
     private async Task<UiOperationResult> SendCustomWebhookAsync(
@@ -668,8 +736,8 @@ public sealed class NotificationProviderFeatureService : INotificationProviderFe
         }
 
         var rendered = body
-            .Replace("{title}", title.Trim(), StringComparison.Ordinal)
-            .Replace("{content}", message.Trim(), StringComparison.Ordinal)
+            .Replace("{title}", title.Replace("\r", string.Empty, StringComparison.Ordinal).Replace("\n", string.Empty, StringComparison.Ordinal), StringComparison.Ordinal)
+            .Replace("{content}", message.Replace("\r", string.Empty, StringComparison.Ordinal).Replace("\n", "\\n", StringComparison.Ordinal), StringComparison.Ordinal)
             .Replace("{time}", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture), StringComparison.Ordinal);
 
         var request = new HttpRequestMessage(HttpMethod.Post, new Uri(url.Trim(), UriKind.Absolute))
@@ -684,7 +752,7 @@ public sealed class NotificationProviderFeatureService : INotificationProviderFe
             }
         }
 
-        return await SendRequestAsync(request, "CustomWebhook", cancellationToken, inspectJsonResponse: false);
+        return await SendRequestAsync(request, "CustomWebhook", cancellationToken);
     }
 
     private async Task<UiOperationResult> SendDingTalkAsync(
@@ -707,7 +775,7 @@ public sealed class NotificationProviderFeatureService : INotificationProviderFe
             msgtype = "text",
             text = new
             {
-                content = $"{title}\n{message}",
+                content = $"{title}: {message}",
             },
         });
 
@@ -718,14 +786,25 @@ public sealed class NotificationProviderFeatureService : INotificationProviderFe
                 Content = new StringContent(body, Encoding.UTF8, "application/json"),
             };
             using var response = await _sendHttpAsync(request, cancellationToken);
-            if (response.IsSuccessStatusCode)
+            if (!response.IsSuccessStatusCode)
+            {
+                return UiOperationResult.Fail(
+                    UiErrorCode.NotificationProviderNetworkFailure,
+                    $"Notification test failed via `DingTalk`: HTTP {(int)response.StatusCode}.");
+            }
+
+            var responseText = await response.Content.ReadAsStringAsync(cancellationToken);
+            using var document = JsonDocument.Parse(responseText);
+            if (document.RootElement.TryGetProperty("errcode", out var errorCode)
+                && errorCode.TryGetInt32(out var value)
+                && value == 0)
             {
                 return UiOperationResult.Ok("Notification test sent via `DingTalk`.");
             }
 
             return UiOperationResult.Fail(
                 UiErrorCode.NotificationProviderNetworkFailure,
-                $"Notification test failed via `DingTalk`: HTTP {(int)response.StatusCode}.");
+                "Notification test failed via `DingTalk`: provider response was not successful.");
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
@@ -733,8 +812,9 @@ public sealed class NotificationProviderFeatureService : INotificationProviderFe
                 UiErrorCode.NotificationProviderNetworkFailure,
                 "Notification test timed out for `DingTalk`.");
         }
-        catch (HttpRequestException ex)
+        catch (Exception ex) when (ex is HttpRequestException or JsonException)
         {
+            // WPF treats unparseable DingTalk responses as send failures.
             return NetworkFailure("DingTalk", ex);
         }
     }
@@ -748,7 +828,28 @@ public sealed class NotificationProviderFeatureService : INotificationProviderFe
         {
             Content = JsonContent.Create(new { content = message.Trim() }),
         };
-        return await SendRequestAsync(request, "Discord", cancellationToken, inspectJsonResponse: false);
+        // WPF frozen 23ddd271 (DiscordWebhookNotificationProvider) treats an empty response
+        // body as success without checking the exact 2xx code: official webhooks return
+        // 204 No Content, but Discord-compatible endpoints/relays may answer 200 with an
+        // empty body. SendRequestAsync already rejects non-2xx statuses before this
+        // predicate runs, so WPF's acceptance of empty-bodied 4xx/5xx responses is
+        // intentionally not replicated.
+        return await SendRequestAsync(request, "DiscordWebhook", cancellationToken, static (_, body) => string.IsNullOrEmpty(body));
+    }
+
+    private async Task<UiOperationResult> SendDiscordWebhookProviderAsync(
+        IReadOnlyDictionary<string, string> parameters,
+        string message,
+        CancellationToken cancellationToken)
+    {
+        if (!parameters.TryGetValue("webhookUrl", out var webhookUrl) || string.IsNullOrWhiteSpace(webhookUrl))
+        {
+            return UiOperationResult.Fail(
+                UiErrorCode.NotificationProviderInvalidParameters,
+                "DiscordWebhook requires `webhookUrl`.");
+        }
+
+        return await SendDiscordWebhookAsync(webhookUrl.Trim(), message, cancellationToken);
     }
 
     private async Task<UiOperationResult> SendDiscordDmAsync(
@@ -788,7 +889,7 @@ public sealed class NotificationProviderFeatureService : INotificationProviderFe
                 Content = JsonContent.Create(new { content = message.Trim() }),
             };
             AddDiscordHeaders(messageRequest, botToken);
-            return await SendRequestAsync(messageRequest, "Discord", cancellationToken, inspectJsonResponse: false);
+            return await SendRequestAsync(messageRequest, "Discord", cancellationToken);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
@@ -806,33 +907,35 @@ public sealed class NotificationProviderFeatureService : INotificationProviderFe
         Uri uri,
         string json,
         string provider,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Func<HttpResponseMessage, string, bool> isProviderSuccess)
     {
         var request = new HttpRequestMessage(HttpMethod.Post, uri)
         {
             Content = new StringContent(json, Encoding.UTF8, "application/json"),
         };
-        return await SendRequestAsync(request, provider, cancellationToken, inspectJsonResponse: true);
+        return await SendRequestAsync(request, provider, cancellationToken, isProviderSuccess);
     }
 
     private async Task<UiOperationResult> SendFormPostAsync(
         string url,
         string postData,
         string provider,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Func<HttpResponseMessage, string, bool> isProviderSuccess)
     {
         var request = new HttpRequestMessage(HttpMethod.Post, new Uri(url, UriKind.Absolute))
         {
             Content = new StringContent(postData, Encoding.UTF8, "application/x-www-form-urlencoded"),
         };
-        return await SendRequestAsync(request, provider, cancellationToken, inspectJsonResponse: true);
+        return await SendRequestAsync(request, provider, cancellationToken, isProviderSuccess);
     }
 
     private async Task<UiOperationResult> SendRequestAsync(
         HttpRequestMessage request,
         string provider,
         CancellationToken cancellationToken,
-        bool inspectJsonResponse)
+        Func<HttpResponseMessage, string, bool>? isProviderSuccess = null)
     {
         try
         {
@@ -844,15 +947,14 @@ public sealed class NotificationProviderFeatureService : INotificationProviderFe
                     $"Notification test failed via `{provider}`: HTTP {(int)response.StatusCode}.");
             }
 
-            if (inspectJsonResponse)
+            if (isProviderSuccess is not null)
             {
                 var responseText = await response.Content.ReadAsStringAsync(cancellationToken);
-                var jsonFailure = TryReadProviderJsonFailure(responseText);
-                if (jsonFailure is not null)
+                if (!isProviderSuccess(response, responseText))
                 {
                     return UiOperationResult.Fail(
                         UiErrorCode.NotificationProviderNetworkFailure,
-                        $"Notification test failed via `{provider}`: providerCode={jsonFailure}.");
+                        $"Notification test failed via `{provider}`: provider response was not successful.");
                 }
             }
 
@@ -905,29 +1007,33 @@ public sealed class NotificationProviderFeatureService : INotificationProviderFe
         request.Headers.UserAgent.ParseAdd("DiscordBot");
     }
 
-    private static string? TryReadProviderJsonFailure(string responseText)
+    private static string PrefixTitle(string title)
     {
-        if (string.IsNullOrWhiteSpace(responseText))
+        var trimmed = title.Trim();
+        return trimmed.StartsWith("[MAA] ", StringComparison.Ordinal)
+            ? trimmed
+            : $"[MAA] {trimmed}";
+    }
+
+    private static string StripExternalLogColorMarkers(string content)
+    {
+        var matches = Regex.Matches(content, @"\[(.*?)\]\[(.*?)\]([\s\S]*?)(?=\n\[|$)");
+        if (matches.Count == 0)
         {
-            return null;
+            return content.Trim();
         }
 
-        using var doc = JsonDocument.Parse(responseText);
-        var root = doc.RootElement;
-        if (root.TryGetProperty("code", out var codeElement)
-            && codeElement.TryGetInt32(out var code)
-            && code is not (0 or 200))
+        var builder = new StringBuilder();
+        foreach (Match match in matches)
         {
-            return code.ToString(CultureInfo.InvariantCulture);
+            builder.Append('[')
+                .Append(match.Groups[1].Value)
+                .Append(']')
+                .Append(match.Groups[3].Value.TrimEnd('\n', '\r'))
+                .Append('\n');
         }
 
-        if (root.TryGetProperty("success", out var successElement)
-            && successElement.ValueKind == JsonValueKind.False)
-        {
-            return "success_false";
-        }
-
-        return null;
+        return builder.ToString().TrimEnd('\n', '\r');
     }
 
     private static string BuildServerChanUrl(string sendKey)
@@ -956,6 +1062,34 @@ public sealed class NotificationProviderFeatureService : INotificationProviderFe
 
     private static string NormalizeHttpBaseUrl(string rawUrl)
         => rawUrl.Trim().TrimEnd('/') + "/";
+
+    private static bool TryReadHeaderContinuationLine(string[] lines, ref int index, out string continuation)
+    {
+        continuation = string.Empty;
+        var lookahead = index + 1;
+        while (lookahead < lines.Length && lines[lookahead].Trim().Length == 0)
+        {
+            lookahead++;
+        }
+
+        if (lookahead >= lines.Length)
+        {
+            return false;
+        }
+
+        var candidate = lines[lookahead].Trim();
+        var equalIndex = candidate.IndexOf('=');
+        var colonIndex = candidate.IndexOf(':');
+        var looksLikeAssignment = equalIndex > 0 && (colonIndex < 0 || equalIndex < colonIndex);
+        if (looksLikeAssignment)
+        {
+            return false;
+        }
+
+        continuation = candidate;
+        index = lookahead;
+        return true;
+    }
 
     private static bool TryGetBool(IReadOnlyDictionary<string, string> parameters, string key, bool fallback)
     {

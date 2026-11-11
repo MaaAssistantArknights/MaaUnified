@@ -183,8 +183,9 @@ public sealed class TaskQueueNotificationTests
     }
 
     [Fact]
-    public void StalledExternalNotification_PrefersWpfSetting_AndDefaultsToDisabled()
+    public void StalledExternalNotification_PrefersWpfSetting_AndDefaultsToEnabled()
     {
+        // WPF frozen 23ddd271 defaults ExternalNotificationSendWhenTimeout to true.
         var config = new UnifiedConfig
         {
             CurrentProfile = "Default",
@@ -202,19 +203,36 @@ public sealed class TaskQueueNotificationTests
             "test",
             "recent logs");
 
+        // Fresh install (no gate keys): parity default is enabled.
+        Assert.Single(TaskQueuePageViewModel.BuildAutomaticExternalNotificationRequests(
+            "TaskStalled",
+            notification,
+            config));
+
+        // Explicit legacy opt-out is honored.
+        profile.Values[ConfigurationKeys.ExternalNotificationSendWhenTimeout] = JsonValue.Create(false);
         Assert.Empty(TaskQueuePageViewModel.BuildAutomaticExternalNotificationRequests(
             "TaskStalled",
             notification,
             config));
 
+        // Legacy opt-in is honored as well.
         profile.Values[ConfigurationKeys.ExternalNotificationSendWhenTimeout] = JsonValue.Create(true);
         Assert.Single(TaskQueuePageViewModel.BuildAutomaticExternalNotificationRequests(
             "TaskStalled",
             notification,
             config));
 
+        // The new key takes precedence over the legacy key in both directions.
         profile.Values[ConfigurationKeys.ExternalNotificationSendWhenStalled] = JsonValue.Create(false);
         Assert.Empty(TaskQueuePageViewModel.BuildAutomaticExternalNotificationRequests(
+            "TaskStalled",
+            notification,
+            config));
+
+        profile.Values[ConfigurationKeys.ExternalNotificationSendWhenTimeout] = JsonValue.Create(false);
+        profile.Values[ConfigurationKeys.ExternalNotificationSendWhenStalled] = JsonValue.Create(true);
+        Assert.Single(TaskQueuePageViewModel.BuildAutomaticExternalNotificationRequests(
             "TaskStalled",
             notification,
             config));

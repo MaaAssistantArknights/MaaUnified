@@ -1482,11 +1482,25 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
                     if (!result.Success)
                     {
                         Runtime.LogService.Warn($"Failed to dispatch Copilot external notification via {request.Provider}: {result.Message}");
+                        // WPF parity (frozen 23ddd271 ExternalNotificationService.SendAsync):
+                        // failed automatic sends surface a toast; mirror the main queue's
+                        // error-dialog feedback instead of leaving only a log line.
+                        await Runtime.DialogFeatureService.ReportErrorAsync(
+                            "Copilot.Notification.Error",
+                            UiOperationResult.Fail(
+                                result.Error?.Code ?? UiErrorCode.NotificationProviderFailed,
+                                $"External notification via {request.Provider} failed: {result.Message}",
+                                result.Error?.Details));
                     }
                 }
                 catch (Exception ex)
                 {
                     Runtime.LogService.Warn($"Failed to dispatch Copilot external notification via {request.Provider}: {ex.Message}");
+                    await Runtime.DialogFeatureService.ReportErrorAsync(
+                        "Copilot.Notification.Error",
+                        UiOperationResult.Fail(
+                            UiErrorCode.NotificationProviderFailed,
+                            $"External notification via {request.Provider} failed."));
                 }
             }
         });

@@ -44,7 +44,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             ["ServerChan"] = "ServerChan",
             ["Bark"] = "Bark",
             ["Discord"] = "Discord",
-            ["Discord Webhook"] = "Discord",
+            ["Discord Webhook"] = "DiscordWebhook",
+            ["DiscordWebhook"] = "DiscordWebhook",
             ["DingTalk"] = "DingTalk",
             ["Telegram"] = "Telegram",
             ["Qmsg"] = "Qmsg",
@@ -79,6 +80,9 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             {
                 ["botToken"] = ConfigurationKeys.ExternalNotificationDiscordBotToken,
                 ["userId"] = ConfigurationKeys.ExternalNotificationDiscordUserId,
+            },
+            ["DiscordWebhook"] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
                 ["webhookUrl"] = ConfigurationKeys.ExternalNotificationDiscordWebhookUrl,
             },
             ["DingTalk"] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -6424,6 +6428,12 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                         await RecordErrorAsync(
                             notification.Scope,
                             $"Failed to dispatch automatic external notification via {request.Provider}: {result.Message}");
+                        await Runtime.DialogFeatureService.ReportErrorAsync(
+                            notification.Scope,
+                            UiOperationResult.Fail(
+                                result.Error?.Code ?? UiErrorCode.NotificationProviderFailed,
+                                $"External notification via {request.Provider} failed: {result.Message}",
+                                result.Error?.Details));
                     }
                 }
                 catch (Exception ex)
@@ -6432,6 +6442,11 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                         notification.Scope,
                         $"Failed to dispatch automatic external notification via {request.Provider}.",
                         ex);
+                    await Runtime.DialogFeatureService.ReportErrorAsync(
+                        notification.Scope,
+                        UiOperationResult.Fail(
+                            UiErrorCode.NotificationProviderFailed,
+                            $"External notification via {request.Provider} failed."));
                 }
             }
         });
@@ -6531,10 +6546,10 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         if (config.Profiles.TryGetValue(config.CurrentProfile, out var profile)
             && profile.Values.ContainsKey(ConfigurationKeys.ExternalNotificationSendWhenStalled))
         {
-            return TryReadProfileBool(config, ConfigurationKeys.ExternalNotificationSendWhenStalled, false);
+            return TryReadProfileBool(config, ConfigurationKeys.ExternalNotificationSendWhenStalled, true);
         }
 
-        return TryReadProfileBool(config, ConfigurationKeys.ExternalNotificationSendWhenTimeout, false);
+        return TryReadProfileBool(config, ConfigurationKeys.ExternalNotificationSendWhenTimeout, true);
     }
 
     private static List<string> ResolveExternalNotificationProviders(UnifiedConfig config)
@@ -6573,6 +6588,12 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             {
                 lines.Add($"{parameterKey}={value}");
             }
+        }
+
+        if (string.Equals(provider, "Bark", StringComparison.OrdinalIgnoreCase)
+            && !lines.Any(line => line.StartsWith("server=", StringComparison.OrdinalIgnoreCase)))
+        {
+            lines.Add("server=https://api.day.app");
         }
 
         return string.Join(Environment.NewLine, lines);

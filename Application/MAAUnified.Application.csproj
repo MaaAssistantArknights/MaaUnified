@@ -13,6 +13,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="4.5.0" />
+  </ItemGroup>
+
+  <ItemGroup>
     <EmbeddedResource Include="Resources\AchievementLocalizations\zh-cn.xaml" Link="AchievementLocalizations\zh-cn.xaml" />
     <EmbeddedResource Include="Resources\AchievementLocalizations\zh-tw.xaml" Link="AchievementLocalizations\zh-tw.xaml" />
     <EmbeddedResource Include="Resources\AchievementLocalizations\en-us.xaml" Link="AchievementLocalizations\en-us.xaml" />

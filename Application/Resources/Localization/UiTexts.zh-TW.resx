@@ -1928,7 +1928,7 @@
     <value>觸控模式</value>
   </data>
   <data name="Settings.ExternalNotification.DefaultMessage" xml:space="preserve">
-    <value>這是 MAA 外部通知測試訊息。若你看見這段內容，代表通知發送成功。</value>
+    <value>這是 MAA 外部通知測試資訊。如果您看到了這段內容，就說明通知發送成功了！</value>
   </data>
   <data name="Settings.ExternalNotification.DefaultTitle" xml:space="preserve">
     <value>MAA 外部通知測試</value>

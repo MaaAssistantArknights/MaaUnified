@@ -137,6 +137,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
         "ServerChan",
         "Bark",
         "Discord",
+        "DiscordWebhook",
         "DingTalk",
         "Telegram",
         "Qmsg",
@@ -173,6 +174,9 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
             {
                 ["botToken"] = ConfigurationKeys.ExternalNotificationDiscordBotToken,
                 ["userId"] = ConfigurationKeys.ExternalNotificationDiscordUserId,
+            },
+            ["DiscordWebhook"] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
                 ["webhookUrl"] = ConfigurationKeys.ExternalNotificationDiscordWebhookUrl,
             },
             ["DingTalk"] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -210,7 +214,8 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
         {
             ["ServerChan"] = [nameof(ServerChanSendKey)],
             ["Telegram"] = [nameof(TelegramBotToken), nameof(TelegramChatId), nameof(TelegramTopicId)],
-            ["Discord"] = [nameof(DiscordBotToken), nameof(DiscordUserId), nameof(DiscordWebhookUrl)],
+            ["Discord"] = [nameof(DiscordBotToken), nameof(DiscordUserId)],
+            ["DiscordWebhook"] = [nameof(DiscordWebhookUrl)],
             ["DingTalk"] = [nameof(DingTalkAccessToken), nameof(DingTalkSecret)],
             ["Smtp"] = [
                 nameof(SmtpServer),
@@ -389,7 +394,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
     private bool _externalNotificationEnabled;
     private bool _externalNotificationSendWhenComplete = true;
     private bool _externalNotificationSendWhenError = true;
-    private bool _externalNotificationSendWhenStalled;
+    private bool _externalNotificationSendWhenStalled = true;
     private bool _externalNotificationEnableDetails;
     private string _externalNotificationStatusMessage = string.Empty;
     private string _externalNotificationWarningMessage = string.Empty;
@@ -1601,12 +1606,8 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
         {
             if (SetProperty(ref _externalNotificationSendWhenComplete, value))
             {
-                if (!value && _externalNotificationEnableDetails)
-                {
-                    _externalNotificationEnableDetails = false;
-                    OnPropertyChanged(nameof(ExternalNotificationEnableDetails));
-                }
-
+                // WPF parity: SendWhenComplete and EnableDetails are independent config keys;
+                // toggling SendWhenComplete must not clear the stored EnableDetails value.
                 OnPropertyChanged(nameof(CanEditExternalNotificationDetails));
             }
         }
@@ -1627,7 +1628,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
     public bool ExternalNotificationEnableDetails
     {
         get => _externalNotificationEnableDetails;
-        set => SetProperty(ref _externalNotificationEnableDetails, CanEditExternalNotificationDetails && value);
+        set => SetProperty(ref _externalNotificationEnableDetails, value);
     }
 
     public bool CanEditExternalNotification => ExternalNotificationEnabled && CanUseSensitiveSettings;
@@ -1733,7 +1734,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
 
     public bool DiscordSectionVisible => _enabledNotificationProviders.Contains("Discord");
 
-    public bool DiscordWebhookSectionVisible => DiscordSectionVisible;
+    public bool DiscordWebhookSectionVisible => _enabledNotificationProviders.Contains("DiscordWebhook");
 
     public bool DingTalkSectionVisible => _enabledNotificationProviders.Contains("DingTalk");
 
@@ -2036,7 +2037,11 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
 
     public string BarkServer
     {
-        get => GetProviderParameterValue("Bark", "server");
+        get
+        {
+            var configured = GetProviderParameterValue("Bark", "server");
+            return string.IsNullOrWhiteSpace(configured) ? "https://api.day.app" : configured;
+        }
         set
         {
             var normalized = value ?? string.Empty;
@@ -8095,7 +8100,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
             ExternalNotificationSendWhenStalled = ReadProfileBool(
                 config,
                 ConfigurationKeys.ExternalNotificationSendWhenStalled,
-                ReadProfileBool(config, ConfigurationKeys.ExternalNotificationSendWhenTimeout, false));
+                ReadProfileBool(config, ConfigurationKeys.ExternalNotificationSendWhenTimeout, true));
             ExternalNotificationEnableDetails = ReadProfileBool(config, ConfigurationKeys.ExternalNotificationEnableDetails, false);
             HotkeyShowGui = loadedShowGui;
             HotkeyLinkStart = loadedLinkStart;
@@ -8898,7 +8903,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
             ExternalNotificationSendWhenStalled = ReadProfileBool(
                 config,
                 ConfigurationKeys.ExternalNotificationSendWhenStalled,
-                ReadProfileBool(config, ConfigurationKeys.ExternalNotificationSendWhenTimeout, false));
+                ReadProfileBool(config, ConfigurationKeys.ExternalNotificationSendWhenTimeout, true));
             ExternalNotificationEnableDetails = ReadProfileBool(config, ConfigurationKeys.ExternalNotificationEnableDetails, false);
             LoadExternalNotificationProviderParametersFromConfig(config);
             configurationSummary = BuildExternalNotificationConfigurationSummary(

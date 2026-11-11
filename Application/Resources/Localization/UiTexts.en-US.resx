@@ -3152,7 +3152,7 @@ With save file: farm points through crafting (advanced).
     <value>Touch mode</value>
   </data>
   <data name="Settings.ExternalNotification.DefaultMessage" xml:space="preserve">
-    <value>This is a MAA external notification test message. If you can see this, notifications are working.</value>
+    <value>This is MAA external notification test information. If you see this content, the notification was sent successfully!</value>
   </data>
   <data name="Settings.ExternalNotification.DefaultTitle" xml:space="preserve">
     <value>MAA external notification test</value>

@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Avalonia.Threading;
@@ -39,6 +40,7 @@ public sealed partial class SettingsPageViewModel
             ["ServerChan"] = "ServerChan",
             ["Bark"] = "Bark",
             ["Discord"] = "Discord",
+            ["DiscordWebhook"] = "Discord Webhook",
             ["DingTalk"] = "DingTalk",
             ["Telegram"] = "Telegram",
             ["Qmsg"] = "Qmsg",
@@ -54,7 +56,8 @@ public sealed partial class SettingsPageViewModel
             ["ServerChan"] = "ServerChan",
             ["Bark"] = "Bark",
             ["Discord"] = "Discord",
-            ["Discord Webhook"] = "Discord",
+            ["Discord Webhook"] = "DiscordWebhook",
+            ["DiscordWebhook"] = "DiscordWebhook",
             ["DingTalk"] = "DingTalk",
             ["Telegram"] = "Telegram",
             ["Qmsg"] = "Qmsg",
@@ -307,23 +310,72 @@ public sealed partial class SettingsPageViewModel
             return;
         }
 
+        var failedProviders = new List<(string Provider, UiOperationResult Result)>();
         foreach (var provider in enabledProviders)
         {
-            var parameterText = _notificationProviderParameters.TryGetValue(provider, out var storedParameters)
-                ? storedParameters
-                : string.Empty;
-            var result = await Runtime.NotificationProviderFeatureService.SendTestAsync(
-                new NotificationProviderTestRequest(
-                    provider,
-                    parameterText,
-                    NotificationTitle,
-                    NotificationMessage),
-                cancellationToken);
+            UiOperationResult result;
+            try
+            {
+                var parameterText = _notificationProviderParameters.TryGetValue(provider, out var storedParameters)
+                    ? storedParameters
+                    : string.Empty;
+                result = await Runtime.NotificationProviderFeatureService.SendTestAsync(
+                    new NotificationProviderTestRequest(
+                        provider,
+                        parameterText,
+                        NotificationTitle,
+                        NotificationMessage),
+                    cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                // WPF frozen ExternalNotificationService wraps each provider send in a
+                // per-provider try/catch and continues the loop with a failure toast;
+                // a single throwing provider must not abort the remaining test sends.
+                result = UiOperationResult.Fail(
+                    UiErrorCode.NotificationProviderFailed,
+                    $"Notification test failed via `{provider}`.",
+                    $"errorType={ex.GetType().Name}");
+            }
+
             if (!result.Success)
             {
-                await ApplyExternalNotificationFailure(result, "Settings.ExternalNotification.TestSend", cancellationToken);
-                return;
+                failedProviders.Add((provider, result));
             }
+        }
+
+        if (failedProviders.Count == 1)
+        {
+            // Preserve the original error classification for single-provider failures.
+            await ApplyExternalNotificationFailure(
+                failedProviders[0].Result,
+                "Settings.ExternalNotification.TestSend",
+                cancellationToken);
+            return;
+        }
+
+        if (failedProviders.Count > 1)
+        {
+            var distinctCodes = failedProviders
+                .Select(failure => failure.Result.Error?.Code)
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+            var aggregatedCode = distinctCodes.Count == 1
+                ? distinctCodes[0] ?? UiErrorCode.NotificationProviderNetworkFailure
+                : UiErrorCode.NotificationProviderNetworkFailure;
+            var aggregatedMessage = string.Join(
+                Environment.NewLine,
+                failedProviders.Select(failure =>
+                    $"{MapProviderToLegacyDisplayName(failure.Provider)}: {FormatExternalNotificationMessage(failure.Result.Error?.Code, failure.Result.Message)}"));
+            await ApplyExternalNotificationFailure(
+                UiOperationResult.Fail(aggregatedCode, aggregatedMessage),
+                "Settings.ExternalNotification.TestSend",
+                cancellationToken);
+            return;
         }
 
         ExternalNotificationStatusMessage = string.Format(
@@ -359,13 +411,18 @@ public sealed partial class SettingsPageViewModel
             [ConfigurationKeys.ExternalNotificationSendWhenComplete] = ExternalNotificationSendWhenComplete.ToString(),
             [ConfigurationKeys.ExternalNotificationSendWhenError] = ExternalNotificationSendWhenError.ToString(),
             [ConfigurationKeys.ExternalNotificationSendWhenStalled] = ExternalNotificationSendWhenStalled.ToString(),
+            // Dual-write the WPF legacy key so the toggle choice also travels back to WPF
+            // (WPF frozen 23ddd271 only reads/writes ExternalNotification.SendWhenTimeout).
+            // Reads stay new-key-first with the legacy key as fallback.
+            [ConfigurationKeys.ExternalNotificationSendWhenTimeout] = ExternalNotificationSendWhenStalled.ToString(),
             [ConfigurationKeys.ExternalNotificationEnableDetails] = ExternalNotificationEnableDetails.ToString(),
         };
 
         var applyProviderResult = await PopulateExternalNotificationProviderUpdatesAsync(
             updates,
             enabledProviders,
-            validateParameters: enabledProviders.Count > 0,
+            // WPF persists incomplete provider settings and reports errors while testing or sending.
+            validateParameters: false,
             cancellationToken);
         if (!applyProviderResult.Success)
         {
@@ -542,7 +599,9 @@ public sealed partial class SettingsPageViewModel
         }
         else
         {
-            map[key] = value.Trim();
+            map[key] = string.Equals(key, "body", StringComparison.OrdinalIgnoreCase)
+                ? value
+                : value.Trim();
         }
 
         ApplyProviderParameterMapChanged(provider, markDirty: true, notifyFieldProperties: false);
@@ -729,7 +788,16 @@ public sealed partial class SettingsPageViewModel
                 continue;
             }
 
-            lines.Add($"{parameterKey}={value.Trim()}");
+            var serialized = string.Equals(parameterKey, "body", StringComparison.OrdinalIgnoreCase)
+                ? value
+                : value.Trim();
+            lines.Add($"{parameterKey}={serialized}");
+        }
+
+        if (string.Equals(provider, "Bark", StringComparison.OrdinalIgnoreCase)
+            && !lines.Any(line => line.StartsWith("server=", StringComparison.OrdinalIgnoreCase)))
+        {
+            lines.Add("server=https://api.day.app");
         }
 
         return string.Join(Environment.NewLine, lines);
@@ -747,7 +815,7 @@ public sealed partial class SettingsPageViewModel
             return true;
         }
 
-        var lines = text.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n', StringSplitOptions.TrimEntries);
+        var lines = text.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
         for (var i = 0; i < lines.Length; i++)
         {
             var line = lines[i].Trim();
@@ -779,9 +847,58 @@ public sealed partial class SettingsPageViewModel
                 return false;
             }
 
+            if (string.Equals(key, "body", StringComparison.OrdinalIgnoreCase))
+            {
+                // The WPF field is free-form JSON and can legally span several lines.
+                parameters[key] = string.Join("\n", lines.Skip(i))[(lines[i].IndexOf('=') + 1)..];
+                break;
+            }
+
+            if (string.Equals(key, "headers", StringComparison.OrdinalIgnoreCase))
+            {
+                // Custom Webhook headers are `Name: value` lines and may span several
+                // lines; continuation lines never look like `key=value` assignments.
+                var headers = new StringBuilder(value);
+                while (TryReadHeaderContinuationLine(lines, ref i, out var continuation))
+                {
+                    headers.Append('\n').Append(continuation);
+                }
+
+                parameters[key] = headers.ToString();
+                continue;
+            }
+
             parameters[key] = value;
         }
 
+        return true;
+    }
+
+    private static bool TryReadHeaderContinuationLine(string[] lines, ref int index, out string continuation)
+    {
+        continuation = string.Empty;
+        var lookahead = index + 1;
+        while (lookahead < lines.Length && lines[lookahead].Trim().Length == 0)
+        {
+            lookahead++;
+        }
+
+        if (lookahead >= lines.Length)
+        {
+            return false;
+        }
+
+        var candidate = lines[lookahead].Trim();
+        var equalIndex = candidate.IndexOf('=');
+        var colonIndex = candidate.IndexOf(':');
+        var looksLikeAssignment = equalIndex > 0 && (colonIndex < 0 || equalIndex < colonIndex);
+        if (looksLikeAssignment)
+        {
+            return false;
+        }
+
+        continuation = candidate;
+        index = lookahead;
         return true;
     }
 

@@ -41,7 +41,8 @@ internal sealed class ToolboxTestFixture : IAsyncDisposable
 
     public static async Task<ToolboxTestFixture> CreateAsync(
         IReadOnlyDictionary<string, string>? globalSeeds = null,
-        IReadOnlyDictionary<string, JsonNode?>? profileSeeds = null)
+        IReadOnlyDictionary<string, JsonNode?>? profileSeeds = null,
+        INotificationProviderFeatureService? notificationProviderFeatureService = null)
     {
         var root = Path.Combine(Path.GetTempPath(), "maa-unified-toolbox-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(Path.Combine(root, "config"));
@@ -115,7 +116,7 @@ internal sealed class ToolboxTestFixture : IAsyncDisposable
             RemoteControlFeatureService = new RemoteControlFeatureService(),
             PlatformCapabilityService = capability,
             OverlayFeatureService = new OverlayFeatureService(capability),
-            NotificationProviderFeatureService = new NotificationProviderFeatureService(),
+            NotificationProviderFeatureService = notificationProviderFeatureService ?? new NotificationProviderFeatureService(),
             SettingsFeatureService = new SettingsFeatureService(config, capability, diagnostics),
             DialogFeatureService = new DialogFeatureService(diagnostics),
             PostActionFeatureService = new PostActionFeatureService(config, diagnostics, platform.PostActionExecutorService),
