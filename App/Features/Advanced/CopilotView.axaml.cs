@@ -94,9 +94,18 @@ public partial class CopilotView : UserControl
         }
 
         var topLevel = TopLevel.GetTopLevel(this);
-        var payload = topLevel?.Clipboard is null
-            ? string.Empty
-            : await topLevel.Clipboard.GetTextAsync() ?? string.Empty;
+        var clipboard = topLevel?.Clipboard;
+        if (clipboard is null)
+        {
+            await VM.LoadCurrentFromClipboardAsync(string.Empty);
+            return;
+        }
+
+        var file = await Avalonia.Input.Platform.ClipboardExtensions.TryGetFileAsync(clipboard);
+        var path = file?.TryGetLocalPath();
+        var payload = !string.IsNullOrWhiteSpace(path)
+            ? path
+            : await clipboard.GetTextAsync() ?? string.Empty;
         await VM.LoadCurrentFromClipboardAsync(payload);
     }
 
@@ -189,6 +198,17 @@ public partial class CopilotView : UserControl
         {
             await VM.ConfirmAndClearAllAsync();
         }
+    }
+
+    private async void OnClearListPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (VM is null || sender is not Control control || !PointerPressedGestures.IsSecondaryClick(control, e))
+        {
+            return;
+        }
+
+        e.Handled = true;
+        await VM.CleanInactiveListItemsAsync();
     }
 
     private async void OnCopilotListItemBodyTapped(object? sender, TappedEventArgs e)

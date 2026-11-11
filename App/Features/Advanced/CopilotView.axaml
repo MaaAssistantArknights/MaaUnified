@@ -468,7 +468,7 @@
                                                          Watermark="{Binding DataContext.OperatorNameWatermark, RelativeSource={RelativeSource AncestorType=UserControl}}" />
                                   <controls:AppNumberInput Grid.Column="1"
                                                            Margin="8,0,0,0"
-                                                           Minimum="0"
+                                                           Minimum="1"
                                                            Maximum="3"
                                                            Value="{Binding Skill}" />
                                   <controls:AppSelect Grid.Column="2"
@@ -535,7 +535,7 @@
                               Content="{Binding LoopTimesText}"
                               IsChecked="{Binding Loop}" />
                     <controls:AppNumberInput Margin="8,0,0,0"
-                                             Minimum="1"
+                                             Minimum="0"
                                              Maximum="9999"
                                              Value="{Binding LoopTimes}" />
                   </StackPanel>
@@ -653,7 +653,8 @@
                               Classes="grouped-card-footer-action"
                               Content="{Binding ClearAllButtonText}"
                               ToolTip.Tip="{Binding ClearButtonTip}"
-                              Click="OnClearListClick" />
+                              Click="OnClearListClick"
+                              PointerPressed="OnClearListPointerPressed" />
                     </Grid>
                   </StackPanel>
                 </Border>

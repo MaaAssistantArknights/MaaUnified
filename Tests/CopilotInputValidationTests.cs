@@ -66,7 +66,6 @@ public sealed class CopilotInputValidationTests
             },
             new JsonObject
             {
-                ["stage_name"] = "2-3",
                 ["actions"] = new JsonArray(new JsonObject()),
             },
         };
@@ -77,7 +76,24 @@ public sealed class CopilotInputValidationTests
         Assert.False(result.Success);
         Assert.Equal(UiErrorCode.CopilotPayloadMissingFields, result.Error?.Code);
         Assert.Contains("第2个作业", result.Message, StringComparison.Ordinal);
-        Assert.Contains("minimum_required", result.Message, StringComparison.Ordinal);
+        Assert.Contains("stage_name", result.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ImportFromFileAsync_MissingMinimumRequiredAndActions_Succeeds()
+    {
+        // WPF 对齐：WPF 反序列化 CopilotModel 时 minimum_required/actions 均为可选，缺失时使用默认值
+        var service = new CopilotFeatureService();
+        var payload = new JsonObject
+        {
+            ["stage_name"] = "1-7",
+        };
+        var file = CreateTempFile(payload.ToJsonString());
+
+        var result = await service.ImportFromFileAsync(file);
+
+        Assert.True(result.Success);
+        Assert.Contains("已导入", result.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -186,11 +202,11 @@ public sealed class CopilotInputValidationTests
         var selectedBefore = vm.SelectedItem;
         var countBefore = vm.Items.Count;
 
-        await vm.ImportFromClipboardAsync("{\"stage_name\":\"1-7\"}");
+        await vm.ImportFromClipboardAsync("{\"actions\":[]}");
 
         Assert.Equal(countBefore, vm.Items.Count);
         Assert.Same(selectedBefore, vm.SelectedItem);
-        Assert.Contains("minimum_required", vm.LastErrorMessage, StringComparison.Ordinal);
+        Assert.Contains("stage_name", vm.LastErrorMessage, StringComparison.Ordinal);
         Assert.True(await WaitForLogContainsAsync(
             fixture.Runtime.DiagnosticsService.ErrorLogPath,
             "[Copilot.ImportClipboard]",

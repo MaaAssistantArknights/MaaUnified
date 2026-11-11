@@ -73,6 +73,7 @@ public static class UiErrorCode
     public const string CopilotPayloadInvalidType = "CopilotPayloadInvalidType";
     public const string CopilotPayloadMissingFields = "CopilotPayloadMissingFields";
     public const string CopilotPayloadEmptyArray = "CopilotPayloadEmptyArray";
+    public const string CopilotPayloadVersionNotMet = "CopilotPayloadVersionNotMet";
     public const string CopilotIdMissing = "CopilotIdMissing";
     public const string CopilotSelectionMissing = "CopilotSelectionMissing";
     public const string CopilotListPersistenceFailed = "CopilotListPersistenceFailed";

@@ -3921,10 +3921,56 @@ public sealed class CopilotFeatureService : ICopilotFeatureService
     private const string PrtsPlusCopilotRating = "https://prts.maa.plus/copilot/rating";
     private static readonly HttpClient DefaultCopilotHttpClient = CreateCopilotHttpClient();
     private readonly HttpClient _copilotHttpClient;
+    private readonly Func<string?> _coreVersionResolver;
+    private readonly Func<string?> _uiVersionResolver;
+    private readonly object _coreVersionGateSync = new();
+    private bool _coreVersionResolved;
+    private string? _resolvedCoreVersion;
 
-    public CopilotFeatureService(HttpClient? copilotHttpClient = null)
+    public CopilotFeatureService(
+        HttpClient? copilotHttpClient = null,
+        Func<string?>? coreVersionResolver = null,
+        Func<string?>? uiVersionResolver = null)
     {
         _copilotHttpClient = copilotHttpClient ?? DefaultCopilotHttpClient;
+        _coreVersionResolver = coreVersionResolver ?? (() => CopilotVersionGate.ResolveInstalledCoreVersion());
+        _uiVersionResolver = uiVersionResolver ?? CopilotVersionGate.ResolveUiVersion;
+    }
+
+    private string? ResolveCoreVersion()
+    {
+        lock (_coreVersionGateSync)
+        {
+            if (!_coreVersionResolved)
+            {
+                try
+                {
+                    // WPF/Semver 3.0.0 对齐：core 版本原样进入门控解析（不裁剪），
+                    // 含首尾空白等非法形式按 "Unable to parse Maa version" 拒绝
+                    _resolvedCoreVersion = _coreVersionResolver();
+                }
+                catch
+                {
+                    _resolvedCoreVersion = null;
+                }
+
+                _coreVersionResolved = true;
+            }
+
+            return _resolvedCoreVersion;
+        }
+    }
+
+    private string? ResolveUiVersion()
+    {
+        try
+        {
+            return _uiVersionResolver();
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     public async Task<UiOperationResult<CopilotRemotePayload>> LoadFromCodeAsync(
@@ -3936,7 +3982,7 @@ public sealed class CopilotFeatureService : ICopilotFeatureService
         {
             return UiOperationResult<CopilotRemotePayload>.Fail(
                 UiErrorCode.CopilotIdMissing,
-                "作业码无效。请输入 `maa:///123456` 或纯数字作业码。");
+                "作业码无效。请输入 `maa://123456` 或纯数字作业码。");
         }
 
         var remote = await GetRemoteJsonObjectAsync($"{PrtsPlusCopilotGet}{copilotId}", cancellationToken);
@@ -4001,7 +4047,7 @@ public sealed class CopilotFeatureService : ICopilotFeatureService
         {
             return UiOperationResult<CopilotRemoteSetPayload>.Fail(
                 UiErrorCode.CopilotIdMissing,
-                "作业集码无效。请输入 `maa:///123456` 或纯数字作业集码。");
+                "作业集码无效。请输入 `maa://123456` 或纯数字作业集码。");
         }
 
         var remote = await GetRemoteJsonObjectAsync($"{PrtsPlusCopilotSetGet}{setId}", cancellationToken);
@@ -4163,7 +4209,7 @@ public sealed class CopilotFeatureService : ICopilotFeatureService
         {
             return UiOperationResult.Fail(
                 UiErrorCode.CopilotIdMissing,
-                "作业码无效。请输入 `maa:///123456` 或纯数字作业码。");
+                "作业码无效。请输入 `maa://123456` 或纯数字作业码。");
         }
 
         var body = JsonSerializer.Serialize(new
@@ -4205,7 +4251,7 @@ public sealed class CopilotFeatureService : ICopilotFeatureService
                 : $"Feedback submitted for {resolvedId}: dislike");
     }
 
-    private static bool TryValidateCopilotPayload(
+    private bool TryValidateCopilotPayload(
         string payload,
         out string errorCode,
         out string errorMessage)
@@ -4273,7 +4319,7 @@ public sealed class CopilotFeatureService : ICopilotFeatureService
         return false;
     }
 
-    private static bool TryValidateCopilotObject(
+    private bool TryValidateCopilotObject(
         JsonObject obj,
         int? index,
         out string errorCode,
@@ -4290,47 +4336,14 @@ public sealed class CopilotFeatureService : ICopilotFeatureService
             return false;
         }
 
-        if (!TryGetRequiredStringProperty(obj, "minimum_required", out _))
+        // WPF CopilotContentConverter 对齐（冻结 CopilotHelper.cs:228-272）：非 Debug 版本强制
+        // minimum_required SemVersion 门控（缺失/不可解析/高于当前 core 版本均拒绝），
+        // 覆盖本地文件/剪贴板/maa://远程全部经服务层校验的导入通道
+        var versionRejection = CopilotVersionGate.Evaluate(obj, ResolveCoreVersion(), ResolveUiVersion());
+        if (versionRejection is not null)
         {
-            errorCode = UiErrorCode.CopilotPayloadMissingFields;
-            errorMessage = $"{position}缺少必填字段 `minimum_required`（非空字符串）。";
-            return false;
-        }
-
-        if (TryGetPropertyCaseInsensitive(obj, "type", out var typeNode)
-            && !TryGetStringValue(typeNode, out var typeValue))
-        {
-            errorCode = UiErrorCode.CopilotPayloadInvalidType;
-            errorMessage = $"{position}字段 `type` 必须是字符串。";
-            return false;
-        }
-
-        var isSss = TryGetPropertyCaseInsensitive(obj, "type", out var resolvedTypeNode)
-                    && TryGetStringValue(resolvedTypeNode, out var resolvedType)
-                    && string.Equals(resolvedType, "SSS", StringComparison.OrdinalIgnoreCase);
-        if (isSss)
-        {
-            return true;
-        }
-
-        if (!TryGetPropertyCaseInsensitive(obj, "actions", out var actionsNode))
-        {
-            errorCode = UiErrorCode.CopilotPayloadMissingFields;
-            errorMessage = $"{position}缺少必填字段 `actions`（非空数组）。";
-            return false;
-        }
-
-        if (actionsNode is not JsonArray actionsArray)
-        {
-            errorCode = UiErrorCode.CopilotPayloadInvalidType;
-            errorMessage = $"{position}字段 `actions` 必须是数组。";
-            return false;
-        }
-
-        if (actionsArray.Count == 0)
-        {
-            errorCode = UiErrorCode.CopilotPayloadMissingFields;
-            errorMessage = $"{position}字段 `actions` 不能为空数组。";
+            errorCode = UiErrorCode.CopilotPayloadVersionNotMet;
+            errorMessage = $"{position}{versionRejection}";
             return false;
         }
 
@@ -4345,8 +4358,12 @@ public sealed class CopilotFeatureService : ICopilotFeatureService
             return false;
         }
 
-        value = raw.Trim();
-        return !string.IsNullOrWhiteSpace(value);
+        // WPF ParseCopilotAsync/AddCopilotTaskToList 对齐（冻结 CopilotViewModel.cs:1139、:1595）：
+        // stage_name 必填校验为 string.IsNullOrEmpty（不裁剪）；纯空白关卡名通过语义校验，
+        // 随后由关卡查找（WPF FindMap / MAAUnified FindOverviewStage）按“无法识别关卡”拒绝，
+        // 批量导入中表现为逐文件报错并继续，而非整批中止
+        value = raw;
+        return !string.IsNullOrEmpty(value);
     }
 
     private static bool TryGetStringValue(JsonNode? node, out string value)
@@ -4439,7 +4456,9 @@ public sealed class CopilotFeatureService : ICopilotFeatureService
 
         if (normalized.StartsWith(CopilotIdPrefix, StringComparison.OrdinalIgnoreCase))
         {
-            normalized = normalized[CopilotIdPrefix.Length..].TrimStart('/');
+            // WPF GetCopilotAsync 对齐（冻结 CopilotViewModel.cs:1097-1103）：剥离前缀后直接
+            // int.TryParse，不额外容忍多余斜杠（maa:///123 在 WPF 中解析失败）
+            normalized = normalized[CopilotIdPrefix.Length..];
         }
 
         return int.TryParse(normalized, out copilotId) && copilotId > 0;

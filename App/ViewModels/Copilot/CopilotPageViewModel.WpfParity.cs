@@ -7,6 +7,7 @@ using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Avalonia.Threading;
 using MAAUnified.Application.Models;
+using MAAUnified.Application.Services.Features;
 using MAAUnified.App.ViewModels.Infrastructure;
 using MAAUnified.CoreBridge;
 using MAAUnified.Compat.Runtime;
@@ -19,9 +20,16 @@ public sealed partial class CopilotPageViewModel
     private const string CopilotIdPrefix = "maa://";
     private const string PrtsPlusUrl = "https://prts.plus";
     private const string MapPrtsUrl = "https://map.ark-nights.com/areas?coord_override=maa";
+    private const string BilibiliVideoUrl = "https://www.bilibili.com/video/";
     private static readonly Regex InvalidNavigationStageNameRegex = new(
         "[:',\\.\\(\\)\\|\\[\\]\\?，。【】｛｝；：]",
         RegexOptions.Compiled);
+    private static readonly Regex LegacyUserAdditionalRegex = new(
+        @"(?<=;)(?<name>[^,;]+)(?:, *(?<skill>\d))?(?=;)",
+        RegexOptions.Compiled);
+    private static readonly Regex BilibiliLinkRegex = new(
+        @"(?:av\d+|bv[a-z0-9]{10})(?:\/\?p=\d+)?",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
     private static readonly string[] LocalizedBindingPropertyNames =
     [
         nameof(Texts),
@@ -118,6 +126,10 @@ public sealed partial class CopilotPageViewModel
     private bool _suppressAutoAddLoadedCopilot;
     private bool _suppressCopilotTaskNameListItemSync;
     private int _copilotTaskNamePersistVersion;
+    private readonly List<int> _copilotIdList = []; // WPF 对齐：同一作业 id 的全部列表条目都成功后才自动点赞
+    private readonly HashSet<int> _recentlyRatedCopilotIds = []; // WPF 对齐：_recentlyRatedCopilotId，同一会话同一作业 id 至多成功评分一次
+    private readonly object _recentlyRatedCopilotIdsGate = new();
+    private bool _hasRequirementIgnored;
     private string _lastRenderedHelpText = string.Empty;
     private IReadOnlyList<IntOption> _supportUnitUsageOptions = [];
     private IReadOnlyList<IntOption> _moduleOptions = [];
@@ -274,7 +286,7 @@ public sealed partial class CopilotPageViewModel
 
     public bool CanEdit => !IsRunning;
 
-    public bool ShowClipboardSetButton => true;
+    public bool ShowClipboardSetButton => CopilotTabIndex is 0 or 2;
 
     public bool Form
     {
@@ -423,8 +435,9 @@ public sealed partial class CopilotPageViewModel
 
     public bool ShowUseCopilotList => CopilotTabIndex is 0 or 2;
 
-    public bool ShowCopilotListPanel
-        => (UseCopilotList && CopilotTabIndex is 0 or 2) || CopilotTabIndex is 1 or 3;
+    public bool ShowCopilotListPanel => UseCopilotList && CopilotTabIndex is 0 or 2;
+
+    private bool SupportsCopilotList => CopilotTabIndex is 0 or 2;
 
     public bool ShowUseSanityPotion => UseCopilotList && CopilotTabIndex == 0;
 
@@ -447,7 +460,7 @@ public sealed partial class CopilotPageViewModel
         get => _loopTimes;
         set
         {
-            var normalized = Math.Max(1, value);
+            var normalized = Math.Max(0, value);
             if (SetProperty(ref _loopTimes, normalized))
             {
                 PersistGlobalSetting(LegacyConfigurationKeys.CopilotLoopTimes, normalized.ToString());
@@ -811,7 +824,7 @@ public sealed partial class CopilotPageViewModel
     {
         _formationIndex = ReadGlobalInt(LegacyConfigurationKeys.CopilotSelectFormation, 1, 1, 4);
         _supportUnitUsage = ReadGlobalInt(LegacyConfigurationKeys.CopilotSupportUnitUsage, 1, 1, 3) == 3 ? 3 : 1;
-        _loopTimes = ReadGlobalInt(LegacyConfigurationKeys.CopilotLoopTimes, 1, 1, 9999);
+        _loopTimes = ReadGlobalInt(LegacyConfigurationKeys.CopilotLoopTimes, 1, 0, 9999);
         _addUserAdditional = ReadGlobalBool(LegacyConfigurationKeys.CopilotAddUserAdditional, false);
         _userAdditional = ReadGlobalString(LegacyConfigurationKeys.CopilotUserAdditional);
     }
@@ -1012,6 +1025,11 @@ public sealed partial class CopilotPageViewModel
             return;
         }
 
+        // WPF UpdateFileDoc 入口对齐（冻结 :1007-1009）：任何输入提交都先作废已加载作业
+        // （_copilotCache = null; CopilotId = 0），成功路径再由 ApplyLoadedCopilot 重新填充，
+        // 防止无效输入或加载失败后 Start 静默执行旧作业
+        InvalidateLoadedCopilot();
+
         var expanded = Environment.ExpandEnvironmentVariables(raw);
         var copilotRoot = ResolveCopilotResourceRoot();
         var absolute = Path.IsPathRooted(expanded)
@@ -1027,6 +1045,14 @@ public sealed partial class CopilotPageViewModel
         if (File.Exists(expanded))
         {
             await LoadCurrentFromFileAsync(expanded, cancellationToken);
+            return;
+        }
+
+        // WPF DisplayFilename setter 对齐（冻结 :271-274）：文件名映射回退不限于相对路径，
+        // 不存在的绝对路径同样按文件名查 resource/copilot 映射
+        if (FindCopilotJsonByFileName(copilotRoot, Path.GetFileName(expanded)) is { } nestedMatch)
+        {
+            await LoadCurrentFromFileAsync(nestedMatch, cancellationToken);
             return;
         }
 
@@ -1077,13 +1103,24 @@ public sealed partial class CopilotPageViewModel
             return;
         }
 
-        FilePath = expanded;
-        StatusMessage = T("Copilot.Status.InputUpdated", "已更新作业输入。");
-        LastErrorMessage = string.Empty;
+        // WPF UpdateFileDoc 对齐（冻结 :1056-1062）：输入既不是可用文件、作业码也不是 JSON 时
+        // 打 CopilotJsonError 错误日志；已加载状态已在入口作废，Start 将因无作业被拒绝
+        // （对齐 WPF CopilotEmptyError 语义），不再显示成功态提示或静默保留旧作业
+        var jsonError = GetRootText("CopilotJsonError", "解析作业文件错误！");
+        StatusMessage = T("Copilot.Status.LoadCurrentFailed", "读取作业失败。");
+        LastErrorMessage = jsonError;
+        AddLog(jsonError, "ERROR", showTime: false);
+        await RecordFailedResultAsync(
+            "Copilot.LoadCurrent.Input",
+            UiOperationResult.Fail(UiErrorCode.CopilotPayloadInvalidType, jsonError),
+            cancellationToken);
     }
 
     public async Task LoadCurrentFromFileAsync(string filePath, CancellationToken cancellationToken = default)
     {
+        // WPF UpdateFileDoc 入口对齐（冻结 :1007-1009）：先作废已加载作业，读取/解析失败出口不得残留旧作业
+        InvalidateLoadedCopilot();
+
         var normalizedPath = ResolveStoredSourcePath(filePath);
         var result = await Runtime.CopilotFeatureService.ImportFromFileAsync(normalizedPath, cancellationToken);
         if (!result.Success)
@@ -1132,6 +1169,10 @@ public sealed partial class CopilotPageViewModel
 
     public async Task LoadCurrentFromClipboardAsync(string payload, CancellationToken cancellationToken = default)
     {
+        // WPF PasteClipboard -> Filename setter -> UpdateFileDoc 对齐（冻结 :812-820、:1007-1009）：
+        // 剪贴板加载先作废已加载作业，失败出口不得残留旧作业
+        InvalidateLoadedCopilot();
+
         var normalized = (payload ?? string.Empty).Trim();
         if (LooksLikeCopilotCodeSource(normalized))
         {
@@ -1210,6 +1251,20 @@ public sealed partial class CopilotPageViewModel
 
     public async Task LoadCurrentFromClipboardSetAsync(string payload, CancellationToken cancellationToken = default)
     {
+        if (!SupportsCopilotList)
+        {
+            StatusMessage = T("Copilot.Status.LoadSetFailed", "读取作业集失败。");
+            LastErrorMessage = T("Copilot.Error.LoadSetUnsupportedTab", "当前页签不支持作业集。请在主线/故事集/SideStory或悖论模拟页签导入。");
+            await RecordFailedResultAsync(
+                "Copilot.LoadSet.Clipboard",
+                UiOperationResult.Fail(UiErrorCode.TaskValidationFailed, LastErrorMessage),
+                cancellationToken);
+            return;
+        }
+
+        // WPF ParseCopilotSetAsync 入口对齐（冻结 :1330-1331）：作业集加载同样作废已加载单作业
+        InvalidateLoadedCopilot();
+
         var normalizedPayload = (payload ?? string.Empty).Trim();
         if (LooksLikeCopilotCodeSource(normalizedPayload))
         {
@@ -1235,13 +1290,18 @@ public sealed partial class CopilotPageViewModel
                     continue;
                 }
 
+                // WPF 对齐：ParseCopilotSetAsync 仅处理 CopilotModel，type=SSS 的保全派驻作业不进入战斗列表
+                if (IsSssDescriptorType(descriptor.Type))
+                {
+                    continue;
+                }
+
                 if (descriptor.CopilotId <= 0)
                 {
                     descriptor = descriptor with { CopilotId = remote.CopilotId };
                 }
 
-                Items.Add(CreateListItemFromDescriptor(descriptor, string.Empty, remote.PayloadJson, isRaid: false));
-                remoteAdded++;
+                remoteAdded += AddListItemsFromDescriptor(descriptor, string.Empty, remote.PayloadJson);
             }
 
             if (remoteAdded == 0)
@@ -1302,9 +1362,13 @@ public sealed partial class CopilotPageViewModel
                 continue;
             }
 
-            var item = CreateListItemFromDescriptor(descriptor, string.Empty, json, isRaid: false);
-            Items.Add(item);
-            added++;
+            // WPF 对齐：作业集中的保全派驻（SSS）作业不进入战斗列表
+            if (IsSssDescriptorType(descriptor.Type))
+            {
+                continue;
+            }
+
+            added += AddListItemsFromDescriptor(descriptor, string.Empty, json);
         }
 
         if (added == 0)
@@ -1322,12 +1386,49 @@ public sealed partial class CopilotPageViewModel
         await RecordEventAsync("Copilot.LoadSet.Clipboard", StatusMessage, cancellationToken);
     }
 
+    // WPF ImportFiles 对齐（冻结 CopilotViewModel.cs AddCopilotTaskToList 末尾逐文件
+    // SaveCopilotTask）：批量导入中止整批时，前半批已入列条目必须已持久化（重启后不丢失）。
+    // 中止路径尽力持久化：失败不回滚已入列条目（WPF SaveCopilotTask 无失败回滚语义），
+    // 批量失败本身已通过 StatusMessage/日志反馈。
+    private async Task PersistAddedItemsBeforeBatchAbortAsync(int added, CancellationToken cancellationToken)
+    {
+        if (added <= 0)
+        {
+            return;
+        }
+
+        // RunTrackedConfigurationSaveAsync 成功路径会清空 LastErrorMessage，
+        // 快照并恢复中止错误反馈，避免覆盖批量失败提示
+        var statusMessage = StatusMessage;
+        var lastErrorMessage = LastErrorMessage;
+        _ = await PersistItemsAsync(cancellationToken);
+        StatusMessage = statusMessage;
+        LastErrorMessage = lastErrorMessage;
+    }
+
     public async Task ImportFilesToListAsync(IReadOnlyList<string> filePaths, CancellationToken cancellationToken = default)
     {
         if (filePaths.Count == 0)
         {
             return;
         }
+
+        if (!SupportsCopilotList)
+        {
+            StatusMessage = T("Copilot.Status.BatchImportFailed", "批量导入失败。");
+            LastErrorMessage = T("Copilot.Error.LoadSetUnsupportedTab", "当前页签不支持作业集。请在主线/故事集/SideStory或悖论模拟页签导入。");
+            await RecordFailedResultAsync(
+                "Copilot.ImportFiles",
+                UiOperationResult.Fail(UiErrorCode.TaskValidationFailed, LastErrorMessage),
+                cancellationToken);
+            return;
+        }
+
+        // WPF ImportFiles 入口对齐（冻结 CopilotViewModel.cs:867-868）：确认文件后无条件作废
+        // 已加载单作业（CopilotId = 0; _copilotCache = null），首文件非法/中途失败中止后
+        // Start 不得再静默执行旧作业（走单作业校验被 CopilotEmptyError 拒绝），
+        // CouldLikeWebJson 随 _loadedCopilotId 复位；成功路径由 ApplyLoadedCopilot 重新填充
+        InvalidateLoadedCopilot();
 
         var added = 0;
         foreach (var filePath in filePaths)
@@ -1339,17 +1440,37 @@ public sealed partial class CopilotPageViewModel
                 StatusMessage = T("Copilot.Status.BatchImportFailed", "批量导入失败。");
                 LastErrorMessage = result.Message;
                 await RecordFailedResultAsync("Copilot.ImportFiles", result, cancellationToken);
+                await PersistAddedItemsBeforeBatchAbortAsync(added, cancellationToken);
                 return;
             }
 
             var payload = await File.ReadAllTextAsync(normalizedPath, cancellationToken);
-            if (!TryReadLoadedCopilotDescriptor(payload, normalizedPath, out var descriptor, out _))
+            if (!TryReadLoadedCopilotDescriptor(payload, normalizedPath, out var descriptor, out var fileWarning))
             {
+                // WPF ImportFiles 对齐（冻结 CopilotViewModel.cs:894-899）：单文件反序列化失败
+                // （非法 JSON / 非法 difficulty / minimum_required 版本门控拒绝）→ CopilotFileReadError
+                // 错误日志并中止整批，后续文件不再处理
+                StatusMessage = T("Copilot.Status.BatchImportFailed", "批量导入失败。");
+                LastErrorMessage = string.IsNullOrWhiteSpace(fileWarning)
+                    ? T("Copilot.Error.FileReadFailed", "读取文件失败！")
+                    : fileWarning;
+                AddLog(T("Copilot.Error.FileReadFailed", "读取文件失败！"), "ERROR", showTime: false);
+                await RecordFailedResultAsync(
+                    "Copilot.ImportFiles",
+                    UiOperationResult.Fail(UiErrorCode.CopilotFileReadFailed, LastErrorMessage),
+                    cancellationToken);
+                await PersistAddedItemsBeforeBatchAbortAsync(added, cancellationToken);
+                return;
+            }
+
+            if (IsSssDescriptorType(descriptor.Type))
+            {
+                // WPF ImportFiles 对齐：批量导入遇到 SSS 作业逐文件打 CopilotSSSNotSupport 错误日志
+                AddLog(T("Copilot.Error.SssNotSupported", "不支持的类型：SSS"), "ERROR", showTime: false);
                 continue;
             }
 
-            Items.Add(CreateListItemFromDescriptor(descriptor, normalizedPath, string.Empty, isRaid: false));
-            added++;
+            added += AddListItemsFromDescriptor(descriptor, normalizedPath, payload);
         }
 
         if (added == 0)
@@ -1371,6 +1492,17 @@ public sealed partial class CopilotPageViewModel
     public async Task AddCurrentToListAsync(bool isRaid, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        if (!SupportsCopilotList)
+        {
+            StatusMessage = T("Copilot.Status.AddCurrentFailed", "添加作业失败。");
+            LastErrorMessage = T("Copilot.Error.LoadSetUnsupportedTab", "当前页签不支持作业集。请在主线/故事集/SideStory或悖论模拟页签导入。");
+            await RecordFailedResultAsync(
+                "Copilot.List.AddCurrent",
+                UiOperationResult.Fail(UiErrorCode.TaskValidationFailed, LastErrorMessage),
+                cancellationToken);
+            return;
+        }
+
         if (!HasLoadedCopilot)
         {
             StatusMessage = T("Copilot.Status.AddCurrentFailed", "添加作业失败。");
@@ -1387,13 +1519,46 @@ public sealed partial class CopilotPageViewModel
             string.IsNullOrWhiteSpace(_loadedType) ? ResolveTypeDisplayNameForTab(CopilotTabIndex) : _loadedType,
             string.IsNullOrWhiteSpace(_loadedStageName) ? _loadedDisplayName : _loadedStageName,
             _loadedCopilotId);
-        var item = CreateListItemFromDescriptor(descriptor, _loadedSourcePath, _loadedInlinePayload, isRaid);
-        item.Name = ResolveListItemName(CopilotTaskName, descriptor.StageName);
+        // WPF 对齐：AddCopilotTaskToList 对 SSSCopilotModel 打 CopilotSSSNotSupport 错误且不添加
+        if (IsSssDescriptorType(descriptor.Type))
+        {
+            StatusMessage = T("Copilot.Status.AddCurrentFailed", "添加作业失败。");
+            LastErrorMessage = T("Copilot.Error.SssNotSupported", "不支持的类型：SSS");
+            await RecordFailedResultAsync(
+                "Copilot.List.AddCurrent",
+                UiOperationResult.Fail(UiErrorCode.TaskValidationFailed, LastErrorMessage),
+                cancellationToken);
+            return;
+        }
+
+        // WPF 对齐：悖论分支恒 isRaid=false，右键「添加突袭」不透传难度
+        var isParadox = IsParadoxDescriptorType(descriptor.Type);
+        var effectiveIsRaid = !isParadox && isRaid;
+        var item = CreateListItemFromDescriptor(descriptor, _loadedSourcePath, _loadedInlinePayload, effectiveIsRaid);
+        if (item is null)
+        {
+            // WPF AddCopilotTaskToList 对齐：mapInfo is null 时拒绝入列
+            StatusMessage = T("Copilot.Status.AddCurrentFailed", "添加作业失败。");
+            LastErrorMessage = string.Format(T("Copilot.Error.StageNotFound", "无法识别作业关卡：{0}"), descriptor.StageName);
+            await RecordFailedResultAsync(
+                "Copilot.List.AddCurrent",
+                UiOperationResult.Fail(UiErrorCode.TaskValidationFailed, LastErrorMessage),
+                cancellationToken);
+            return;
+        }
+
+        // WPF AddCopilotTaskToList 对齐：条目名取导航名输入框值（ParseCopilotAsync 已规范化为 mapInfo.Code，
+        // 用户亦可手动编辑），不得覆盖回原始 stage_name；悖论页签条目名取干员名
+        item.Name = isParadox
+            ? ResolveParadoxItemName(descriptor)
+            : !string.IsNullOrWhiteSpace(CopilotTaskName)
+                ? CopilotTaskName.Trim()
+                : ResolveListItemName(descriptor.DisplayName, descriptor.StageName);
         Items.Add(item);
         SetSelectedItemSilently(item);
         UseCopilotList = CopilotTabIndex is 0 or 2;
         await PersistItemsAsync(cancellationToken);
-        StatusMessage = isRaid
+        StatusMessage = effectiveIsRaid
             ? T("Copilot.Status.AddCurrentRaidSuccess", "已添加突袭作业到战斗列表。")
             : T("Copilot.Status.AddCurrentSuccess", "已添加作业到战斗列表。");
         LastErrorMessage = string.Empty;
@@ -1509,7 +1674,7 @@ public sealed partial class CopilotPageViewModel
             payload.Add(new JsonObject
             {
                 ["name"] = item.Name.Trim(),
-                ["skill"] = Math.Clamp(item.Skill, 0, 3),
+                ["skill"] = Math.Clamp(item.Skill, 1, 3),
                 ["module"] = Math.Clamp(item.Module, 0, 4),
             });
         }
@@ -1538,6 +1703,17 @@ public sealed partial class CopilotPageViewModel
             return;
         }
 
+        // WPF 对齐：RateCopilot 开头 _recentlyRatedCopilotId 拦截，同一会话同一 id 至多评分一次（点踩同样占用）
+        var ratedId = int.TryParse(copilotId, out var parsedRatedId) ? parsedRatedId : 0;
+        if (ratedId > 0 && IsCopilotRecentlyRated(ratedId))
+        {
+            StatusMessage = T("Copilot.Status.FeedbackAlreadyRated", "本会话已对该作业提交过反馈。");
+            LastErrorMessage = string.Empty;
+            CouldLikeWebJson = false;
+            await RecordEventAsync("Copilot.Feedback.Loaded", StatusMessage, cancellationToken);
+            return;
+        }
+
         var result = await Runtime.CopilotFeatureService.SubmitFeedbackAsync(copilotId, like, cancellationToken);
         if (!result.Success)
         {
@@ -1545,6 +1721,17 @@ public sealed partial class CopilotPageViewModel
             LastErrorMessage = result.Message;
             await RecordFailedResultAsync("Copilot.Feedback.Loaded", result, cancellationToken);
             return;
+        }
+
+        if (ratedId > 0)
+        {
+            MarkCopilotRecentlyRated(ratedId);
+        }
+
+        // WPF LikeWebJson 对齐：点赞成功累计 CopilotLikeGiven 成就（DislikeWebJson 不累计）
+        if (like)
+        {
+            _ = Runtime.AchievementTrackerService.AddProgressToGroup("CopilotLikeGiven");
         }
 
         StatusMessage = like
@@ -1557,7 +1744,7 @@ public sealed partial class CopilotPageViewModel
 
     private async Task TryAutoAddLoadedCopilotAsync(CancellationToken cancellationToken)
     {
-        if (!ShowCopilotListPanel || !HasLoadedCopilot || _suppressAutoAddLoadedCopilot)
+        if (!UseCopilotList || !HasLoadedCopilot || _suppressAutoAddLoadedCopilot)
         {
             return;
         }
@@ -1569,7 +1756,24 @@ public sealed partial class CopilotPageViewModel
             return;
         }
 
-        await AddCurrentToListAsync(isRaid: false, cancellationToken);
+        var descriptor = new LoadedCopilotDescriptor(
+            ResolveListItemName(_loadedDisplayName, _loadedStageName),
+            string.IsNullOrWhiteSpace(_loadedType) ? ResolveTypeDisplayNameForTab(CopilotTabIndex) : _loadedType,
+            string.IsNullOrWhiteSpace(_loadedStageName) ? _loadedDisplayName : _loadedStageName,
+            _loadedCopilotId);
+
+        // WPF 对齐：SSSCopilotModel 走 ParseSSSCopilot 只写缓存，从不加入战斗列表
+        if (IsSssDescriptorType(descriptor.Type))
+        {
+            return;
+        }
+
+        var added = AddListItemsFromDescriptor(descriptor, _loadedSourcePath, _loadedInlinePayload);
+        if (added > 0)
+        {
+            SetSelectedItemSilently(Items.LastOrDefault());
+            await PersistItemsAsync(cancellationToken);
+        }
     }
 
     private void ApplyLoadedCopilot(string sourcePath, string inlinePayload, LoadedCopilotDescriptor descriptor)
@@ -1582,15 +1786,234 @@ public sealed partial class CopilotPageViewModel
         _loadedCopilotId = descriptor.CopilotId;
         FilePath = !string.IsNullOrWhiteSpace(sourcePath) ? sourcePath : inlinePayload;
         DisplayFilename = BuildDisplayFilename(sourcePath, inlinePayload);
-        SetCopilotTaskNameFromLoadedCopilot(descriptor.StageName);
-        CopilotUrl = PrtsPlusUrl;
-        MapUrl = MapPrtsUrl;
+        // WPF ParseSSSCopilot 对齐：加载 SSS 作业自动切到「保全派驻」页签
+        if (IsSssDescriptorType(descriptor.Type) && CopilotTabIndex != 1)
+        {
+            // 程序化切页签不触发「选中条目类型编辑」手势（O1 手动切换 SelectedTypeIndex 的同步语义保留），
+            // 避免静默改写并持久化当前选中的战斗列表条目
+            var previousSuppress = _suppressSelectedTypeListItemSync;
+            _suppressSelectedTypeListItemSync = true;
+            try
+            {
+                CopilotTabIndex = 1;
+            }
+            finally
+            {
+                _suppressSelectedTypeListItemSync = previousSuppress;
+            }
+        }
+
+        var loadedPayload = !string.IsNullOrWhiteSpace(inlinePayload) ? inlinePayload : SafeReadAllText(sourcePath);
+        // WPF ParseCopilotAsync 对齐：导航名取 DataHelper.FindMap(stage_name).Code，未知关卡保留原名
+        var overviewJson = ReadOverviewJsonCached();
+        var navigationName = string.IsNullOrWhiteSpace(overviewJson)
+            ? string.Empty
+            : FindOverviewStage(descriptor.StageName, overviewJson).Code ?? string.Empty;
+        SetCopilotTaskNameFromLoadedCopilot(
+            !string.IsNullOrEmpty(navigationName) ? navigationName : descriptor.StageName);
+        // WPF ParseCopilotAsync/ParseSSSCopilot 对齐：地图数据存在但关卡无法识别时打 UnsupportedStages 错误日志
+        // 并解锁 MapOutdated 成就；overview.json 缺失沿用放行偏差（不触发 WPF 的资源更新，属既有 non-goal）
+        if (!string.IsNullOrWhiteSpace(overviewJson) && HasUnsupportedLoadedStage(descriptor, loadedPayload, overviewJson))
+        {
+            AddLog(
+                T("Copilot.Error.UnsupportedStages", "不支持的关卡") + $"  {descriptor.StageName}",
+                "ERROR",
+                showTime: false);
+            _ = Runtime.AchievementTrackerService.Unlock("MapOutdated");
+        }
+
+        // WPF 对齐：解析 documentation.details 视频链接、地图链接并输出作业信息日志
+        ApplyLoadedCopilotMetadata(loadedPayload, descriptor);
         CouldLikeWebJson = descriptor.CopilotId > 0;
         OnPropertyChanged(nameof(HasLoadedCopilot));
         OnPropertyChanged(nameof(LoadedCopilotInputHint));
     }
 
+    // WPF ParseCopilotAsync/ParseSSSCopilot 对齐：判定已加载作业关卡是否在地图数据中无法识别
+    private static bool HasUnsupportedLoadedStage(LoadedCopilotDescriptor descriptor, string payload, string overviewJson)
+    {
+        if (!IsSssDescriptorType(descriptor.Type))
+        {
+            // WPF 对齐（冻结 CopilotViewModel.cs:1139-1194）：守卫与 ParseCopilotAsync 的 IsNullOrEmpty
+            // 拒绝域一致——纯空白 StageName 同样送 FindMap 判定并触发 UnsupportedStages + MapOutdated
+            return !string.IsNullOrEmpty(descriptor.StageName)
+                && FindOverviewStage(descriptor.StageName, overviewJson) is { StageId: null, Code: null };
+        }
+
+        // WPF ParseSSSCopilot 对齐：SSS 校验 stages 数组内每个 stage_name，数组缺失或任一未命中即视为不支持
+        JsonArray? stages;
+        try
+        {
+            stages = JsonNode.Parse(payload) is JsonObject root
+                && TryGetJsonProperty(root, "stages", out var stagesNode)
+                    ? stagesNode as JsonArray
+                    : null;
+        }
+        catch
+        {
+            return true;
+        }
+
+        if (stages is null)
+        {
+            return true;
+        }
+
+        foreach (var stageNode in stages)
+        {
+            var stageName = stageNode is JsonObject stageObj ? ReadJsonString(stageObj, "stage_name") : string.Empty;
+            if (FindOverviewStage(stageName, overviewJson) is { StageId: null, Code: null })
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    // WPF ParseCopilotAsync/ParseSSSCopilot 对齐：视频链接解析、地图链接与作业信息日志
+    private void ApplyLoadedCopilotMetadata(string payload, LoadedCopilotDescriptor descriptor)
+    {
+        CopilotUrl = PrtsPlusUrl;
+        MapUrl = string.IsNullOrWhiteSpace(descriptor.StageName)
+            ? MapPrtsUrl
+            : MapPrtsUrl.Replace("areas", "map/" + descriptor.StageName, StringComparison.Ordinal);
+
+        JsonObject? root;
+        try
+        {
+            root = JsonNode.Parse(payload) as JsonObject;
+        }
+        catch
+        {
+            return;
+        }
+
+        if (root is null)
+        {
+            return;
+        }
+
+        var title = string.Empty;
+        var titleColor = string.Empty;
+        var details = string.Empty;
+        var detailsColor = string.Empty;
+        if (TryGetJsonProperty(root, "documentation", out var docNode) && docNode is JsonObject documentation)
+        {
+            title = ReadJsonString(documentation, "title");
+            titleColor = ReadJsonString(documentation, "title_color");
+            details = ReadJsonString(documentation, "details");
+            detailsColor = ReadJsonString(documentation, "details_color");
+        }
+
+        if (!string.IsNullOrEmpty(details))
+        {
+            var match = BilibiliLinkRegex.Match(details);
+            if (match.Success)
+            {
+                CopilotUrl = BilibiliVideoUrl + match.Value;
+            }
+        }
+
+        AppendLoadedCopilotOutputLogs(descriptor, title, titleColor, details, detailsColor, root);
+    }
+
+    // WPF CopilotModel.Output/SSSCopilotModel.Output 对齐：作业信息写日志面板
+    private void AppendLoadedCopilotOutputLogs(
+        LoadedCopilotDescriptor descriptor,
+        string title,
+        string titleColor,
+        string details,
+        string detailsColor,
+        JsonObject root)
+    {
+        if (!string.IsNullOrEmpty(title))
+        {
+            AddLog(title, MapDocColorToLevel(titleColor), showTime: false);
+        }
+
+        if (!string.IsNullOrEmpty(details))
+        {
+            AddLog(details, MapDocColorToLevel(detailsColor), showTime: false);
+        }
+
+        var isSss = IsSssDescriptorType(descriptor.Type);
+        var skillText = T("Copilot.CopilotSkill", "技能");
+        var count = 0;
+        if (TryGetJsonProperty(root, "opers", out var opersNode) && opersNode is JsonArray opers)
+        {
+            foreach (var oper in opers.OfType<JsonObject>())
+            {
+                count++;
+                var name = ReadJsonString(oper, "name");
+                var skill = ReadJsonInt(oper, "skill") ?? 1; // WPF Oper.Skill 默认 1
+                AddLog(
+                    isSss
+                        ? string.Format(CultureInfo.InvariantCulture, "{0}, {1} {2}", name, skillText, skill)
+                        : string.Format(
+                            CultureInfo.InvariantCulture,
+                            "{0} {1} {2}{3}",
+                            name,
+                            skillText,
+                            skill,
+                            FormatSkillLevelInfo(oper)).Trim(),
+                    "INFO",
+                    showTime: false);
+            }
+        }
+
+        if (!isSss && TryGetJsonProperty(root, "groups", out var groupsNode) && groupsNode is JsonArray groups)
+        {
+            foreach (var group in groups.OfType<JsonObject>())
+            {
+                count++;
+                var groupName = ReadJsonString(group, "name");
+                var infos = TryGetJsonProperty(group, "opers", out var groupOpersNode) && groupOpersNode is JsonArray groupOpers
+                    ? groupOpers.OfType<JsonObject>()
+                        .Select(oper => string.Format(
+                            CultureInfo.InvariantCulture,
+                            "{0} {1}{2}",
+                            ReadJsonString(oper, "name"),
+                            ReadJsonInt(oper, "skill") ?? 1, // WPF Oper.Skill 默认 1
+                            FormatSkillLevelInfo(oper)).Trim())
+                        .ToList()
+                    : new List<string>();
+                AddLog($"{groupName}: {string.Join(" / ", infos)}", "INFO", showTime: false);
+            }
+        }
+
+        if (count > 0)
+        {
+            AddLog(
+                string.Format(CultureInfo.InvariantCulture, T("Copilot.TotalOperatorsCount", "共 {0} 名干员"), count),
+                "INFO",
+                showTime: false);
+        }
+    }
+
+    private static string FormatSkillLevelInfo(JsonObject oper)
+    {
+        if (TryGetJsonProperty(oper, "requirements", out var reqNode) && reqNode is JsonObject requirements
+            && ReadJsonInt(requirements, "skill_level") is { } skillLevel
+            && skillLevel > 0 && skillLevel <= 10)
+        {
+            return string.Format(CultureInfo.InvariantCulture, " [Lv.{0}]", skillLevel);
+        }
+
+        return string.Empty;
+    }
+
     private void ClearLoadedCopilot()
+    {
+        InvalidateLoadedCopilot();
+        FilePath = string.Empty;
+        DisplayFilename = string.Empty;
+    }
+
+    // WPF UpdateFileDoc/ParseCopilotSetAsync 入口对齐（冻结 :1007-1009、:1330-1331）：
+    // 作废当前已加载作业（_copilotCache = null; CopilotId = 0），但保留输入框文本
+    // （DisplayFilename/FilePath）；各加载入口在尝试前调用，成功路径由 ApplyLoadedCopilot 重新填充
+    private void InvalidateLoadedCopilot()
     {
         _loadedSourcePath = string.Empty;
         _loadedInlinePayload = string.Empty;
@@ -1598,8 +2021,6 @@ public sealed partial class CopilotPageViewModel
         _loadedStageName = string.Empty;
         _loadedType = ResolveTypeDisplayNameForTab(CopilotTabIndex);
         _loadedCopilotId = 0;
-        FilePath = string.Empty;
-        DisplayFilename = string.Empty;
         SetCopilotTaskNameFromLoadedCopilot(string.Empty);
         CouldLikeWebJson = false;
         OnPropertyChanged(nameof(HasLoadedCopilot));
@@ -1637,9 +2058,30 @@ public sealed partial class CopilotPageViewModel
         return inlinePayload;
     }
 
-    private static string ResolveCopilotResourceRoot()
+    private string ResolveCopilotResourceRoot()
     {
-        return Path.Combine(RuntimeLayout.ResolveRuntimeBaseDirectory(), "resource", "copilot");
+        return Path.Combine(ResolveCopilotResourceDirectory(), "copilot");
+    }
+
+    // WPF DisplayFilename setter 对齐：_copilotJsonPathMap 覆盖 resource/copilot 全部嵌套子目录，
+    // 输入裸文件名时可解析到子目录中的作业文件
+    private static string? FindCopilotJsonByFileName(string copilotRoot, string fileName)
+    {
+        if (string.IsNullOrWhiteSpace(fileName) || !Directory.Exists(copilotRoot))
+        {
+            return null;
+        }
+
+        try
+        {
+            return Directory
+                .EnumerateFiles(copilotRoot, "*.json", SearchOption.AllDirectories)
+                .FirstOrDefault(path => string.Equals(Path.GetFileName(path), fileName, StringComparison.Ordinal));
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private CopilotFileItemViewModel CreateFileNode(string filePath, string root)
@@ -1710,7 +2152,9 @@ public sealed partial class CopilotPageViewModel
             return false;
         }
 
-        var remainder = normalized[CopilotIdPrefix.Length..].TrimStart('/');
+        // WPF GetCopilotAsync 对齐（冻结 CopilotViewModel.cs:1097-1103）：剥离 maa:// 前缀后
+        // 直接 int.TryParse，不额外容忍多余斜杠（maa:///123 在 WPF 中解析失败并打 CopilotNoFound）
+        var remainder = normalized[CopilotIdPrefix.Length..];
         return int.TryParse(remainder, out _);
     }
 
@@ -1779,34 +2223,113 @@ public sealed partial class CopilotPageViewModel
         var displayName = !string.IsNullOrWhiteSpace(stageName)
             ? stageName
             : Path.GetFileNameWithoutExtension(sourcePath ?? string.Empty);
-        var rawType = ReadJsonString(obj, "type");
+        // WPF 对齐（冻结 CopilotHelper.cs:227）：SSS 判定走 JObject.TryGetValue("type", OrdinalIgnoreCase)，
+        // 大小写变体重复键取插入序首个匹配（区别于 POCO 绑定键的 last-wins）
+        var rawType = ReadJsonStringFirstMatch(obj, "type");
         var type = string.IsNullOrWhiteSpace(rawType)
-            ? ResolveTypeDisplayNameForTab(CopilotTabIndex)
+            ? ResolveTypeDisplayNameForStage(stageName)
             : NormalizeTypeDisplayName(rawType);
+
+        // WPF 对齐（冻结 CopilotModel.cs:47-48，Newtonsoft DifficultyFlags 枚举反序列化）：
+        // SSS 作业（SSSCopilotModel 无 Difficulty 属性）的 difficulty 字段被 Newtonsoft 忽略，不参与校验；
+        // 其余作业的合法域为字段缺省、整数（含未知位）、数字字符串与枚举名（大小写不敏感，支持
+        // "Normal, Raid" 逗号组合）；JSON null 或其他无法解析的值 → JsonSerializationException
+        // → CopilotFileReadError，整个作业拒绝加载。
+        // SSS 判定对齐冻结 CopilotHelper.cs:227：键大小写不敏感、值大小写敏感且不裁剪
+        // （"sss"/"SSS " 均按普通作业解析并参与 difficulty 校验）
+        if (!string.Equals(rawType, "SSS", StringComparison.Ordinal)
+            && !TryReadWpfDifficulty(obj, out _))
+        {
+            warning = T("Copilot.Error.CurrentPayloadInvalidDifficulty", "作业 difficulty 字段必须是整数或难度枚举名。");
+            return false;
+        }
+
+        // WPF CopilotContentConverter 对齐（冻结 CopilotHelper.cs:228-272）：非 Debug 版本强制
+        // minimum_required SemVersion 门控（缺失/不可解析/高于当前 core 版本均拒绝），
+        // 覆盖本地文件/剪贴板/maa://远程/合集全部导入通道；门控在 difficulty 校验之后，
+        // 与 WPF 先 ToObject（字段绑定失败先抛）后比较版本的错误优先级一致
+        var versionRejection = CopilotVersionGate.Evaluate(obj, ResolveCoreVersionForGate(), ResolveUiVersionForGate());
+        if (versionRejection is not null)
+        {
+            warning = versionRejection;
+            return false;
+        }
 
         descriptor = new LoadedCopilotDescriptor(
             string.IsNullOrWhiteSpace(displayName) ? $"Imported-{DateTime.Now:HHmmss}" : displayName.Trim(),
             type,
-            string.IsNullOrWhiteSpace(stageName) ? displayName.Trim() : stageName.Trim(),
+            // WPF 对齐：stage_name 原样保留不裁剪（DataHelper.FindMap 精确比较）；仅 null/空串
+            // （ParseCopilotAsync 的 IsNullOrEmpty 拒绝域）回退文件名。纯空白名必须保留——WPF 放行后由
+            // FindMap 判定 null → UnsupportedStages 错误日志 + MapOutdated 解锁；若回退为文件名/空串，
+            // 剪贴板/maa://来源会把 StageName 吞成 ""，下方校验被 !IsNullOrWhiteSpace 守卫跳过而静默放行
+            string.IsNullOrEmpty(stageName) ? displayName.Trim() : stageName,
             ReadJsonInt(obj, "copilot_id") ?? ReadJsonInt(obj, "id") ?? 0);
         return true;
     }
 
+    // Newtonsoft POCO 绑定对齐：键大小写不敏感；大小写变体重复键按文档序后出现的覆盖先出现的
+    // （last-wins，JsonSerializer 顺序读取逐属性赋值；同键重复两侧解析器均为 last-wins）
+    private static bool TryGetJsonProperty(JsonObject obj, string key, out JsonNode? value)
+    {
+        value = null;
+        var found = false;
+        foreach (var property in obj)
+        {
+            if (string.Equals(property.Key, key, StringComparison.OrdinalIgnoreCase))
+            {
+                value = property.Value;
+                found = true;
+            }
+        }
+
+        return found;
+    }
+
+    // Newtonsoft JObject.TryGetValue(name, OrdinalIgnoreCase) 对齐：忽略大小写、返回插入序首个匹配
+    // （WPF CopilotContentConverter 的 "type" SSS 判定路径专用）
+    private static bool TryGetJsonPropertyFirstMatch(JsonObject obj, string key, out JsonNode? value)
+    {
+        foreach (var property in obj)
+        {
+            if (string.Equals(property.Key, key, StringComparison.OrdinalIgnoreCase))
+            {
+                value = property.Value;
+                return true;
+            }
+        }
+
+        value = null;
+        return false;
+    }
+
     private static string ReadJsonString(JsonObject obj, string key)
     {
-        if (!obj.TryGetPropertyValue(key, out var node)
+        // WPF/Newtonsoft 对齐：键大小写不敏感；值原样返回不裁剪（FindMap/类型判定均为精确比较）
+        if (!TryGetJsonProperty(obj, key, out var node)
             || node is not JsonValue jsonValue
             || !jsonValue.TryGetValue(out string? raw))
         {
             return string.Empty;
         }
 
-        return raw?.Trim() ?? string.Empty;
+        return raw ?? string.Empty;
+    }
+
+    private static string ReadJsonStringFirstMatch(JsonObject obj, string key)
+    {
+        if (!TryGetJsonPropertyFirstMatch(obj, key, out var node)
+            || node is not JsonValue jsonValue
+            || !jsonValue.TryGetValue(out string? raw))
+        {
+            return string.Empty;
+        }
+
+        return raw ?? string.Empty;
     }
 
     private static int? ReadJsonInt(JsonObject obj, string key)
     {
-        if (!obj.TryGetPropertyValue(key, out var node)
+        if (!TryGetJsonProperty(obj, key, out var node)
             || node is not JsonValue jsonValue)
         {
             return null;
@@ -1825,14 +2348,71 @@ public sealed partial class CopilotPageViewModel
         return null;
     }
 
-    private CopilotItemViewModel CreateListItemFromDescriptor(
+    // WPF CopilotModel.DifficultyFlags（冻结 CopilotModel.cs:336-352）
+    [Flags]
+    private enum WpfDifficultyFlags
+    {
+        None = 0,
+        Normal = 1,
+        Raid = 2,
+    }
+
+    // Newtonsoft DifficultyFlags 反序列化接受域：字段缺省（视为 None）、整数（含未知位）、数字字符串、
+    // 枚举名（大小写不敏感，支持 "Normal, Raid" 逗号组合）；JSON null 与其余值均无效
+    // （WPF 抛 JsonSerializationException → CopilotFileReadError 整份拒绝）
+    private static bool TryReadWpfDifficulty(JsonObject obj, out int difficulty)
+    {
+        difficulty = 0;
+        if (!TryGetJsonProperty(obj, "difficulty", out var node))
+        {
+            return true;
+        }
+
+        if (node is not JsonValue jsonValue)
+        {
+            return false;
+        }
+
+        if (jsonValue.TryGetValue(out int parsed))
+        {
+            difficulty = parsed;
+            return true;
+        }
+
+        if (jsonValue.TryGetValue(out string? raw)
+            && Enum.TryParse<WpfDifficultyFlags>(raw, ignoreCase: true, out var flags))
+        {
+            difficulty = (int)flags;
+            return true;
+        }
+
+        return false;
+    }
+
+    private CopilotItemViewModel? CreateListItemFromDescriptor(
         LoadedCopilotDescriptor descriptor,
         string sourcePath,
         string inlinePayload,
         bool isRaid)
     {
+        // WPF AddCopilotTaskToList 对齐：条目名取关卡 code（core 以 nav_name 拼 tasks.json 导航键）；
+        // 地图数据存在但关卡无法识别（WPF mapInfo is null）时拒绝入列，返回 null；
+        // overview.json 缺失沿用放行偏差（回退原名，启动校验仍会拦截）
+        var overviewJson = ReadOverviewJsonCached();
+        var navigationName = string.Empty;
+        if (!string.IsNullOrWhiteSpace(overviewJson))
+        {
+            navigationName = FindOverviewStage(descriptor.StageName, overviewJson).Code ?? string.Empty;
+            if (string.IsNullOrEmpty(navigationName))
+            {
+                return null;
+            }
+        }
+
         return new CopilotItemViewModel(
-            ResolveListItemName(descriptor.DisplayName, descriptor.StageName),
+            !string.IsNullOrEmpty(navigationName)
+                ? navigationName
+                : ResolveListItemName(descriptor.DisplayName, descriptor.StageName),
             descriptor.Type,
             sourcePath,
             inlinePayload)
@@ -1842,6 +2422,500 @@ public sealed partial class CopilotPageViewModel
             IsRaid = isRaid,
             TabIndex = ResolveTabIndexFromType(descriptor.Type),
         };
+    }
+
+    private int AddListItemsFromDescriptor(
+        LoadedCopilotDescriptor descriptor,
+        string sourcePath,
+        string inlinePayload)
+    {
+        var payload = !string.IsNullOrWhiteSpace(inlinePayload)
+            ? inlinePayload
+            : string.IsNullOrWhiteSpace(sourcePath) ? string.Empty : SafeReadAllText(sourcePath);
+        // WPF 对齐：悖论页签（AddCopilotTaskToList 页签 2 分支）恒添加单个条目，忽略难度位掩码，条目名取干员名
+        var isParadox = IsParadoxDescriptorType(descriptor.Type);
+        var added = 0;
+        foreach (var isRaid in isParadox ? new List<bool> { false } : ResolveDifficultyVariants(payload))
+        {
+            var item = CreateListItemFromDescriptor(descriptor, sourcePath, inlinePayload, isRaid);
+            if (item is null)
+            {
+                // WPF AddCopilotTaskToList 对齐：mapInfo is null 时打错误日志并拒绝入列
+                AddLog(
+                    string.Format(T("Copilot.Error.StageNotFound", "无法识别作业关卡：{0}"), descriptor.StageName),
+                    "ERROR",
+                    showTime: false);
+                continue;
+            }
+
+            if (isParadox)
+            {
+                item.Name = ResolveParadoxItemName(descriptor);
+            }
+
+            Items.Add(item);
+            added++;
+        }
+
+        return added;
+    }
+
+    private string ResolveTypeDisplayNameForStage(string stageName)
+    {
+        return IsParadoxStage(stageName)
+            ? ParadoxSimulationType
+            : ResolveTypeDisplayNameForTab(CopilotTabIndex);
+    }
+
+    private static IEnumerable<bool> ResolveDifficultyVariants(string payload)
+    {
+        try
+        {
+            if (JsonNode.Parse(payload) is not JsonObject obj
+                || !TryReadWpfDifficulty(obj, out var difficulty))
+            {
+                return [false];
+            }
+
+            var variants = new List<bool>();
+            if ((difficulty & 1) != 0)
+            {
+                variants.Add(false);
+            }
+
+            if ((difficulty & 2) != 0)
+            {
+                variants.Add(true);
+            }
+
+            // WPF 对齐：DifficultyFlags.None(0) 视为普通（冻结 :1214-1216）；
+            // 难度仅含未知位（如 4）时 HasFlag(Normal/Raid) 均不命中，不添加任何条目（冻结 :1676-1688）
+            if (variants.Count > 0 || difficulty != 0)
+            {
+                return variants;
+            }
+
+            return [false];
+        }
+        catch
+        {
+            return [false];
+        }
+    }
+
+    private static string SafeReadAllText(string sourcePath)
+    {
+        try
+        {
+            return File.ReadAllText(sourcePath);
+        }
+        catch
+        {
+            return string.Empty;
+        }
+    }
+
+    // 资源文本缓存：合集/批量导入逐条目读取并解析 overview.json / battle_data.json（数千条目）开销大，
+    // 按（路径 + 最后写入时间 + 长度）缓存文件内容，功能行为不变（WPF DataHelper 同为进程内缓存）
+    private readonly object _resourceTextCacheLock = new();
+    private readonly Dictionary<string, (DateTime TimestampUtc, long Length, string Content)> _resourceTextCache = new(StringComparer.Ordinal);
+
+    private string ReadResourceTextCached(string path)
+    {
+        DateTime timestampUtc;
+        long length;
+        try
+        {
+            if (!File.Exists(path))
+            {
+                lock (_resourceTextCacheLock)
+                {
+                    _resourceTextCache.Remove(path);
+                }
+
+                return string.Empty;
+            }
+
+            var info = new FileInfo(path);
+            timestampUtc = info.LastWriteTimeUtc;
+            length = info.Length;
+        }
+        catch
+        {
+            return string.Empty;
+        }
+
+        lock (_resourceTextCacheLock)
+        {
+            if (_resourceTextCache.TryGetValue(path, out var entry)
+                && entry.TimestampUtc == timestampUtc
+                && entry.Length == length)
+            {
+                return entry.Content;
+            }
+        }
+
+        var content = SafeReadAllText(path);
+        lock (_resourceTextCacheLock)
+        {
+            _resourceTextCache[path] = (timestampUtc, length, content);
+        }
+
+        return content;
+    }
+
+    private string ReadOverviewJsonCached()
+        => ReadResourceTextCached(Path.Combine(ResolveCopilotResourceDirectory(), "Arknights-Tile-Pos", "overview.json"));
+
+    private string ReadBattleDataJsonCached()
+        => ReadResourceTextCached(Path.Combine(ResolveCopilotResourceDirectory(), "battle_data.json"));
+
+    // WPF ParseCopilotAsync 对齐：DataHelper.FindMap（overview.json）命中且 stageId 以 mem_ 开头判定为悖论模拟；
+    // 生产资源 stages.json 不含 mem_ 关卡（overview.json 才有），不能以其判定
+    private bool IsParadoxStage(string stageName)
+    {
+        if (string.IsNullOrWhiteSpace(stageName))
+        {
+            return false;
+        }
+
+        var overviewJson = ReadOverviewJsonCached();
+        return !string.IsNullOrWhiteSpace(overviewJson) && IsParadoxStageFromOverviewJson(stageName, overviewJson);
+    }
+
+    internal static bool IsParadoxStageFromOverviewJson(string stageName, string overviewJson)
+    {
+        if (string.IsNullOrWhiteSpace(stageName) || string.IsNullOrWhiteSpace(overviewJson))
+        {
+            return false;
+        }
+
+        var (stageId, _) = FindOverviewStage(stageName, overviewJson);
+        return stageId?.StartsWith("mem_", StringComparison.Ordinal) == true;
+    }
+
+    // 测试钩子：覆盖资源目录（overview.json / battle_data.json 所在目录）
+    internal string? ResourceDirectoryOverride { get; set; }
+
+    // 测试钩子：覆盖 minimum_required 门控的 core/UI 版本来源
+    internal string? CoreVersionOverride { get; set; }
+
+    internal string? UiVersionOverride { get; set; }
+
+    private bool _coreVersionForGateResolved;
+    private string? _coreVersionForGate;
+
+    private string? ResolveCoreVersionForGate()
+    {
+        if (CoreVersionOverride is not null)
+        {
+            return CoreVersionOverride;
+        }
+
+        if (!_coreVersionForGateResolved)
+        {
+            _coreVersionForGate = CopilotVersionGate.ResolveInstalledCoreVersion();
+            _coreVersionForGateResolved = true;
+        }
+
+        return _coreVersionForGate;
+    }
+
+    private string? ResolveUiVersionForGate()
+        => UiVersionOverride ?? CopilotVersionGate.ResolveUiVersion();
+
+    private string ResolveCopilotResourceDirectory()
+        => ResourceDirectoryOverride
+            ?? Path.Combine(RuntimeLayout.ResolveRuntimeBaseDirectory(), "resource");
+
+    private static bool IsSssDescriptorType(string type)
+        => string.Equals(ResolveCopilotTaskType(type), "SSSCopilot", StringComparison.Ordinal);
+
+    private static bool IsParadoxDescriptorType(string type)
+        => string.Equals(NormalizeTypeDisplayName(type), ParadoxSimulationType, StringComparison.Ordinal);
+
+    // WPF AddCopilotTaskToList 悖论分支对齐：条目名取干员名，找不到时回退关卡 code / 原名
+    private string ResolveParadoxItemName(LoadedCopilotDescriptor descriptor)
+    {
+        if (!string.IsNullOrWhiteSpace(descriptor.StageName))
+        {
+            var overviewJson = ReadOverviewJsonCached();
+            if (!string.IsNullOrWhiteSpace(overviewJson))
+            {
+                var (stageId, code) = FindOverviewStage(descriptor.StageName, overviewJson);
+                if (!string.IsNullOrEmpty(stageId) && stageId.Length > 6)
+                {
+                    // WPF：stageId[4..^2] 提取干员代号，例如 mem_12fce_1 → 12fce
+                    var battleDataJson = ReadBattleDataJsonCached();
+                    var operatorName = FindOperatorNameByCodeName(stageId[4..^2], battleDataJson);
+                    if (!string.IsNullOrWhiteSpace(operatorName))
+                    {
+                        return operatorName;
+                    }
+                }
+
+                if (!string.IsNullOrWhiteSpace(code))
+                {
+                    return code;
+                }
+            }
+        }
+
+        return ResolveListItemName(descriptor.DisplayName, descriptor.StageName);
+    }
+
+    // WPF AddCopilotTaskToList 悖论分支对齐：stage_name → overview.json 查 stageId → stageId[4..^2] → battle_data.json 查干员名
+    internal static string? ResolveParadoxOperatorName(string stageName, string? overviewJson, string? battleDataJson)
+    {
+        if (string.IsNullOrWhiteSpace(stageName) || string.IsNullOrWhiteSpace(overviewJson))
+        {
+            return null;
+        }
+
+        var (stageId, _) = FindOverviewStage(stageName, overviewJson);
+        if (string.IsNullOrEmpty(stageId) || stageId.Length <= 6)
+        {
+            return null;
+        }
+
+        return FindOperatorNameByCodeName(stageId[4..^2], battleDataJson);
+    }
+
+    internal static bool IsKnownStageFromOverviewJson(string stageName, string overviewJson)
+    {
+        if (string.IsNullOrWhiteSpace(stageName) || string.IsNullOrWhiteSpace(overviewJson))
+        {
+            return false;
+        }
+
+        var (stageId, code) = FindOverviewStage(stageName, overviewJson);
+        return stageId is not null || code is not null;
+    }
+
+    // WPF DataHelper.FindMap 对齐：Code/Name/StageId/LevelId 任一精确匹配
+    private static (string? StageId, string? Code) FindOverviewStage(string stageName, string overviewJson)
+    {
+        if (string.IsNullOrEmpty(stageName))
+        {
+            return (null, null);
+        }
+
+        try
+        {
+            if (JsonNode.Parse(overviewJson) is not JsonObject root)
+            {
+                return (null, null);
+            }
+
+            foreach (var pair in root)
+            {
+                if (pair.Value is not JsonObject entry)
+                {
+                    continue;
+                }
+
+                if (string.Equals(ReadJsonString(entry, "code"), stageName, StringComparison.Ordinal)
+                    || string.Equals(ReadJsonString(entry, "name"), stageName, StringComparison.Ordinal)
+                    || string.Equals(ReadJsonString(entry, "stageId"), stageName, StringComparison.Ordinal)
+                    || string.Equals(ReadJsonString(entry, "levelId"), stageName, StringComparison.Ordinal))
+                {
+                    var stageId = ReadJsonString(entry, "stageId");
+                    var code = ReadJsonString(entry, "code");
+                    return (string.IsNullOrEmpty(stageId) ? null : stageId, string.IsNullOrEmpty(code) ? null : code);
+                }
+            }
+        }
+        catch
+        {
+            // 地图数据损坏时按未命中处理
+        }
+
+        return (null, null);
+    }
+
+    internal static bool IsKnownOperatorNameFromBattleDataJson(string operName, string battleDataJson)
+    {
+        if (string.IsNullOrWhiteSpace(operName) || string.IsNullOrWhiteSpace(battleDataJson))
+        {
+            return false;
+        }
+
+        try
+        {
+            if (JsonNode.Parse(battleDataJson) is not JsonObject root
+                || !root.TryGetPropertyValue("chars", out var charsNode)
+                || charsNode is not JsonObject chars)
+            {
+                return false;
+            }
+
+            foreach (var pair in chars)
+            {
+                // WPF DataHelper.Operators：仅 char_ 前缀且职业为干员职业，且排除 _virtualOperators
+                if (!pair.Key.StartsWith("char_", StringComparison.Ordinal) || pair.Value is not JsonObject charObj)
+                {
+                    continue;
+                }
+
+                // WPF DataHelper._virtualOperators（冻结 DataHelper.cs:441-476）对齐：
+                // 预备干员/集成战略专属等未实装虚拟干员不算合法悖论干员
+                if (VirtualOperatorIds.Contains(pair.Key))
+                {
+                    continue;
+                }
+
+                var profession = ReadJsonString(charObj, "profession");
+                if (!string.IsNullOrEmpty(profession) && !OperatorProfessions.Contains(profession))
+                {
+                    continue;
+                }
+
+                // WPF VerifyParadoxTasks 对齐：GetCharacterByNameOrAlias 的名称索引为 OrdinalIgnoreCase，
+                // 外层 == 比较的是同一干员的 zh-cn 名，整体等效大小写不敏感匹配
+                if (string.Equals(ReadJsonString(charObj, "name"), operName, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(ReadJsonString(charObj, "name_tw"), operName, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(ReadJsonString(charObj, "name_en"), operName, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(ReadJsonString(charObj, "name_jp"), operName, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(ReadJsonString(charObj, "name_kr"), operName, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+        }
+        catch
+        {
+            // 干员数据损坏时按未命中处理
+        }
+
+        return false;
+    }
+
+    // WPF DataHelper.GetCharacterByCodeName 对齐：从 "char_002_amiya" 提取 "amiya" 匹配代号
+    private static string? FindOperatorNameByCodeName(string codeName, string? battleDataJson)
+    {
+        if (string.IsNullOrWhiteSpace(codeName) || string.IsNullOrWhiteSpace(battleDataJson))
+        {
+            return null;
+        }
+
+        try
+        {
+            if (JsonNode.Parse(battleDataJson) is not JsonObject root
+                || !root.TryGetPropertyValue("chars", out var charsNode)
+                || charsNode is not JsonObject chars)
+            {
+                return null;
+            }
+
+            foreach (var pair in chars)
+            {
+                if (!pair.Key.StartsWith("char_", StringComparison.Ordinal) || pair.Value is not JsonObject charObj)
+                {
+                    continue;
+                }
+
+                var parts = pair.Key.Split('_');
+                var charCodeName = parts.Length >= 3 ? parts[2] : pair.Key;
+                if (!string.Equals(charCodeName, codeName, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var name = ReadJsonString(charObj, "name");
+                if (!string.IsNullOrEmpty(name))
+                {
+                    return name;
+                }
+            }
+        }
+        catch
+        {
+            // 干员数据损坏时按未命中处理
+        }
+
+        return null;
+    }
+
+    private static readonly HashSet<string> OperatorProfessions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "CASTER",
+        "MEDIC",
+        "PIONEER",
+        "SNIPER",
+        "SPECIAL",
+        "SUPPORT",
+        "TANK",
+        "WARRIOR",
+    };
+
+    // WPF DataHelper._virtualOperators（冻结 DataHelper.cs:441-476）：未实装但在 battle_data 中的虚拟干员，
+    // battle_data.json 无标记字段，WPF 侧同为硬编码列表
+    private static readonly HashSet<string> VirtualOperatorIds = new(StringComparer.Ordinal)
+    {
+        "char_504_rguard", // 预备干员-近战
+        "char_505_rcast",  // 预备干员-术师
+        "char_506_rmedic", // 预备干员-后勤
+        "char_507_rsnipe", // 预备干员-狙击
+        "char_508_aguard", // Sharp
+        "char_509_acast",  // Pith
+        "char_510_amedic", // Touch
+        "char_511_asnipe", // Stormeye
+        "char_512_aprot",  // 暮落
+        "char_513_apionr", // 郁金香
+        "char_514_rdfend", // 预备干员-重装
+        "char_600_cpione", // 预备干员-先锋 4★
+        "char_601_cguard", // 预备干员-近卫 4★
+        "char_602_cdfend", // 预备干员-重装 4★
+        "char_603_csnipe", // 预备干员-狙击 4★
+        "char_604_ccast",  // 预备干员-术师 4★
+        "char_605_cmedic", // 预备干员-医疗 4★
+        "char_606_csuppo", // 预备干员-辅助 4★
+        "char_607_cspec",  // 预备干员-特种 4★
+        "char_608_acpion", // 郁金香 6★
+        "char_609_acguad", // Sharp 6★
+        "char_610_acfend", // Mechanist 6★
+        "char_611_acnipe", // Stormeye 6★
+        "char_612_accast", // Pith 6★
+        "char_613_acmedc", // Touch 6★
+        "char_614_acsupo", // Raidian 6★
+        "char_615_acspec", // Misery 6★
+        "char_616_pithst", // 盟约·辅助干员
+        "char_617_sharp2", // 领主·Sharp
+        "char_1001_amiya2", // 阿米娅-WARRIOR
+        "char_1037_amiya3", // 阿米娅-MEDIC
+    };
+
+    private bool IsCopilotRecentlyRated(int copilotId)
+    {
+        lock (_recentlyRatedCopilotIdsGate)
+        {
+            return _recentlyRatedCopilotIds.Contains(copilotId);
+        }
+    }
+
+    private void MarkCopilotRecentlyRated(int copilotId)
+    {
+        lock (_recentlyRatedCopilotIdsGate)
+        {
+            _recentlyRatedCopilotIds.Add(copilotId);
+        }
+    }
+
+    // 成功占用返回 true（失败时需 Release 以便重试）；本会话已评分过返回 false
+    private bool TryReserveCopilotRating(int copilotId)
+    {
+        lock (_recentlyRatedCopilotIdsGate)
+        {
+            return _recentlyRatedCopilotIds.Add(copilotId);
+        }
+    }
+
+    private void ReleaseCopilotRatingReservation(int copilotId)
+    {
+        lock (_recentlyRatedCopilotIdsGate)
+        {
+            _recentlyRatedCopilotIds.Remove(copilotId);
+        }
     }
 
     private IEnumerable<CopilotUserAdditionalItemViewModel> ParseUserAdditionalItems()
@@ -1858,19 +2932,25 @@ public sealed partial class CopilotPageViewModel
         }
         catch
         {
+            // WPF ParseUserAdditionals 旧格式回退对齐（冻结 CopilotViewModel.cs:1938-1966）：
+            // 正则 (?<=;)(?<name>[^,;]+)(?:, *(?<skill>\d))?(?=;) 要求技能为单个数字且紧跟分号边界；
+            // "name,10"（多数字）、"name,abc"（非数字）等不匹配先行断言的条目整条丢弃，
+            // 不得按夹取技能值保留
             var fallbackItems = new List<CopilotUserAdditionalItemViewModel>();
-            foreach (var segment in UserAdditional.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            foreach (Match match in LegacyUserAdditionalRegex.Matches(";" + UserAdditional + ";"))
             {
-                var parts = segment.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-                if (parts.Length == 0 || string.IsNullOrWhiteSpace(parts[0]))
+                var name = match.Groups["name"].Value.Trim();
+                if (string.IsNullOrWhiteSpace(name))
                 {
                     continue;
                 }
 
+                var skillText = match.Groups["skill"].Value;
+                var skill = string.IsNullOrEmpty(skillText) ? 1 : int.Parse(skillText, CultureInfo.InvariantCulture);
                 fallbackItems.Add(new CopilotUserAdditionalItemViewModel
                 {
-                    Name = parts[0],
-                    Skill = parts.Length > 1 && int.TryParse(parts[1], out var skill) ? Math.Clamp(skill, 0, 3) : 0,
+                    Name = name,
+                    Skill = Math.Clamp(skill, 1, 3),
                     Module = 0,
                 });
             }
@@ -1895,7 +2975,7 @@ public sealed partial class CopilotPageViewModel
             parsedItems.Add(new CopilotUserAdditionalItemViewModel
             {
                 Name = name,
-                Skill = Math.Clamp(ReadJsonInt(item, "skill") ?? 0, 0, 3),
+                Skill = Math.Clamp(ReadJsonInt(item, "skill") ?? 1, 1, 3),
                 Module = Math.Clamp(ReadJsonInt(item, "module") ?? 0, 0, 4),
             });
         }
@@ -1916,7 +2996,7 @@ public sealed partial class CopilotPageViewModel
             result.Add(new JsonObject
             {
                 ["name"] = item.Name.Trim(),
-                ["skill"] = Math.Clamp(item.Skill, 0, 3),
+                ["skill"] = Math.Clamp(item.Skill, 1, 3),
                 ["module"] = Math.Clamp(item.Module, 0, 4),
             });
         }
@@ -1924,9 +3004,10 @@ public sealed partial class CopilotPageViewModel
         return result;
     }
 
-    private async Task<AppendPlan?> AppendConfiguredCopilotAsync(CancellationToken cancellationToken)
+    // WPF 对齐：Start() 的 ValidateStartAsync 前置校验，在连接模拟器之前执行
+    private async Task<StartSelection?> ValidateStartSelectionAsync(CancellationToken cancellationToken)
     {
-        if (ShowCopilotListPanel)
+        if (UseCopilotList)
         {
             var checkedItems = await ValidateCopilotListSelectionAsync(cancellationToken);
             if (checkedItems is null)
@@ -1934,7 +3015,7 @@ public sealed partial class CopilotPageViewModel
                 return null;
             }
 
-            return await AppendCopilotListAsync(checkedItems, cancellationToken);
+            return new StartSelection(checkedItems);
         }
 
         if (!await ValidateSingleSelectionAsync(cancellationToken))
@@ -1942,23 +3023,33 @@ public sealed partial class CopilotPageViewModel
             return null;
         }
 
+        if (!HasLoadedCopilot && SelectedItem is null)
+        {
+            StatusMessage = T("Copilot.Status.StartFailed", "启动失败。");
+            LastErrorMessage = T("Copilot.Error.StartSelectTask", "请选择要执行的作业。");
+            await RecordFailedResultAsync(
+                "Copilot.Start",
+                UiOperationResult.Fail(UiErrorCode.CopilotSelectionMissing, LastErrorMessage),
+                cancellationToken);
+            return null;
+        }
+
+        return new StartSelection(null);
+    }
+
+    private async Task<AppendPlan?> AppendConfiguredCopilotAsync(StartSelection selection, CancellationToken cancellationToken)
+    {
+        if (selection.CheckedItems is { } checkedItems)
+        {
+            return await AppendCopilotListAsync(checkedItems, cancellationToken);
+        }
+
         if (HasLoadedCopilot)
         {
             return await AppendLoadedCopilotAsync(cancellationToken);
         }
 
-        if (SelectedItem is not null)
-        {
-            return await AppendSingleItemAsync(SelectedItem, cancellationToken);
-        }
-
-        StatusMessage = T("Copilot.Status.StartFailed", "启动失败。");
-        LastErrorMessage = T("Copilot.Error.StartSelectTask", "请选择要执行的作业。");
-        await RecordFailedResultAsync(
-            "Copilot.Start",
-            UiOperationResult.Fail(UiErrorCode.CopilotSelectionMissing, LastErrorMessage),
-            cancellationToken);
-        return null;
+        return await AppendSingleItemAsync(SelectedItem!, cancellationToken);
     }
 
     private async Task<bool> ValidateSingleSelectionAsync(CancellationToken cancellationToken)
@@ -2037,7 +3128,15 @@ public sealed partial class CopilotPageViewModel
             return null;
         }
 
-        if (CopilotTabIndex != 2)
+        // WPF 对齐：页签 2 走 VerifyParadoxTasks（干员名合法性校验），其他页签走 VerifyCopilotListTask（读作业内容 + 地图数据校验关卡），失败拒绝启动
+        if (CopilotTabIndex == 2)
+        {
+            if (!await VerifyParadoxListItemsAsync(checkedItems, cancellationToken))
+            {
+                return null;
+            }
+        }
+        else
         {
             if (checkedItems.Count == 1)
             {
@@ -2053,9 +3152,160 @@ public sealed partial class CopilotPageViewModel
                     cancellationToken);
                 return null;
             }
+
+            if (!await VerifyCopilotListStageContentAsync(checkedItems, cancellationToken))
+            {
+                return null;
+            }
         }
 
         return checkedItems;
+    }
+
+    // WPF VerifyCopilotListTask 对齐：逐个读取勾选项的作业内容，stage_name 无法解析或不在地图数据中时拒绝启动
+    private async Task<bool> VerifyCopilotListStageContentAsync(
+        IReadOnlyList<CopilotItemViewModel> checkedItems,
+        CancellationToken cancellationToken)
+    {
+        var overviewPath = Path.Combine(ResolveCopilotResourceDirectory(), "Arknights-Tile-Pos", "overview.json");
+        if (!File.Exists(overviewPath))
+        {
+            // 有意偏差：地图数据缺失时无法判定关卡合法性，跳过校验（WPF 运行环境资源随包发布，缺失时全部拒绝启动）
+            AddLog(
+                T("Copilot.Warn.ListStageVerifyNoMapData", "缺少地图数据（resource/Arknights-Tile-Pos/overview.json），跳过战斗列表关卡校验。"),
+                "WARN",
+                showTime: false);
+            return true;
+        }
+
+        string overviewJson;
+        try
+        {
+            overviewJson = await File.ReadAllTextAsync(overviewPath, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            AddLog(
+                string.Format(T("Copilot.Warn.ListStageVerifyReadFailed", "读取地图数据失败（{0}），跳过战斗列表关卡校验。"), ex.Message),
+                "WARN",
+                showTime: false);
+            return true;
+        }
+
+        foreach (var item in checkedItems)
+        {
+            var stageName = await TryReadListItemStageNameAsync(item, cancellationToken);
+            if (!string.IsNullOrEmpty(stageName) && IsKnownStageFromOverviewJson(stageName, overviewJson))
+            {
+                continue;
+            }
+
+            var message = string.Format(
+                T("Copilot.Error.ListStageUnsupported", "正在使用「战斗列表」，但作业「{0}」的关卡（{1}）暂不支持，请更新资源后重试"),
+                item.Name,
+                string.IsNullOrEmpty(stageName) ? item.Name : stageName);
+            // WPF VerifyCopilotListTask 对齐：关卡校验失败解锁 MapOutdated 成就
+            _ = Runtime.AchievementTrackerService.Unlock("MapOutdated");
+            await FailStartValidationAsync(
+                "Copilot.Start.List",
+                message,
+                UiErrorCode.TaskValidationFailed,
+                cancellationToken);
+            return false;
+        }
+
+        return true;
+    }
+
+    // WPF VerifyParadoxTasks 对齐：悖论列表逐条校验干员名合法性，非法干员名拒绝启动
+    private async Task<bool> VerifyParadoxListItemsAsync(
+        IReadOnlyList<CopilotItemViewModel> checkedItems,
+        CancellationToken cancellationToken)
+    {
+        var battleDataPath = Path.Combine(ResolveCopilotResourceDirectory(), "battle_data.json");
+        if (!File.Exists(battleDataPath))
+        {
+            // 有意偏差：干员数据缺失时无法校验，跳过（WPF 运行环境资源随包发布）
+            AddLog(
+                T("Copilot.Warn.ParadoxVerifyNoBattleData", "缺少干员数据（resource/battle_data.json），跳过悖论作业干员名校验。"),
+                "WARN",
+                showTime: false);
+            return true;
+        }
+
+        string battleDataJson;
+        try
+        {
+            battleDataJson = await File.ReadAllTextAsync(battleDataPath, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            AddLog(
+                string.Format(T("Copilot.Warn.ParadoxVerifyReadFailed", "读取干员数据失败（{0}），跳过悖论作业干员名校验。"), ex.Message),
+                "WARN",
+                showTime: false);
+            return true;
+        }
+
+        foreach (var item in checkedItems)
+        {
+            if (IsKnownOperatorNameFromBattleDataJson(item.Name, battleDataJson))
+            {
+                continue;
+            }
+
+            var message = string.Format(
+                T("Copilot.Error.ParadoxIllegalOperName", "悖论作业「{0}」的干员名不合法，请更新资源后重试"),
+                item.Name);
+            // WPF VerifyParadoxTasks 对齐：干员名不合法解锁 MapOutdated 成就
+            _ = Runtime.AchievementTrackerService.Unlock("MapOutdated");
+            await FailStartValidationAsync(
+                "Copilot.Start.List",
+                message,
+                UiErrorCode.TaskValidationFailed,
+                cancellationToken);
+            return false;
+        }
+
+        return true;
+    }
+
+    private static async Task<string?> TryReadListItemStageNameAsync(CopilotItemViewModel item, CancellationToken cancellationToken)
+    {
+        var payload = item.InlinePayload;
+        if (string.IsNullOrWhiteSpace(payload))
+        {
+            var sourcePath = ResolveStoredSourcePath(item.SourcePath);
+            if (string.IsNullOrWhiteSpace(sourcePath) || !File.Exists(sourcePath))
+            {
+                // WPF 对齐：作业文件缺失视为校验失败
+                return null;
+            }
+
+            try
+            {
+                payload = await File.ReadAllTextAsync(sourcePath, cancellationToken);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        try
+        {
+            if (JsonNode.Parse(payload) is not JsonObject obj)
+            {
+                return null;
+            }
+
+            var stageName = ReadJsonString(obj, "stage_name");
+            return string.IsNullOrEmpty(stageName) ? null : stageName;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private async Task<bool> FailStartValidationAsync(
@@ -2158,6 +3408,15 @@ public sealed partial class CopilotPageViewModel
         IReadOnlyList<CopilotItemViewModel> checkedItems,
         CancellationToken cancellationToken)
     {
+        // WPF 对齐：记录本次列表运行勾选作业的 copilotId，用于战斗成功后的自动点赞去重
+        _copilotIdList.Clear();
+        foreach (var item in checkedItems)
+        {
+            _copilotIdList.Add(item.CopilotId);
+        }
+
+        _hasRequirementIgnored = false;
+
         if (CopilotTabIndex == 2)
         {
             var list = new JsonArray();
@@ -2277,7 +3536,10 @@ public sealed partial class CopilotPageViewModel
             ["support_unit_usage"] = UseSupportUnitUsage ? SupportUnitUsage : 0,
             ["add_trust"] = AddTrust,
             ["ignore_requirements"] = IgnoreRequirements,
-            ["loop_times"] = ShowLoopSetting && Loop ? LoopTimes : 1,
+            // WPF 对齐（冻结 CopilotViewModel.cs:2048 LoopTimes = Loop ? LoopTimes : 1）：不按页签门控；
+            // 循环控件虽仅在保全(1)/其他活动(3)页签可见，但 Loop 值跨页签保留，切回主线页签启动单作业
+            // 时 WPF 仍发送隐藏的 Loop 状态
+            ["loop_times"] = Loop ? LoopTimes : 1,
             ["use_sanity_potion"] = false,
         };
         if (UseFormation)
@@ -2306,6 +3568,16 @@ public sealed partial class CopilotPageViewModel
         {
             if (!File.Exists(resolvedSourcePath))
             {
+                // 来源文件缺失但列表项仍持有入列时的 InlinePayload 快照（本地文件批量导入同持两者）时
+                // 回退快照执行，避免一次性缓存路径/已移动文件遮蔽完好的内联内容；
+                // 无快照可回退才按 WPF 语义报「作业文件不存在」
+                if (!string.IsNullOrWhiteSpace(inlinePayload))
+                {
+                    var correctedSnapshot = ApplyUnsupportedSkillCorrections(inlinePayload, LoadBattleDataJson(), out var snapshotWarnings);
+                    AppendUnsupportedSkillWarnings(snapshotWarnings);
+                    return await WriteExecutionCacheFileAsync(correctedSnapshot, displayName, cancellationToken);
+                }
+
                 StatusMessage = T("Copilot.Status.StartFailed", "启动失败。");
                 LastErrorMessage = string.Format(
                     T("Copilot.Error.StartInputFileNotFound", "作业文件不存在：{0}"),
@@ -2317,7 +3589,21 @@ public sealed partial class CopilotPageViewModel
                 return null;
             }
 
-            return resolvedSourcePath;
+            // WPF ParseCopilotAsync 对齐：执行前按稀有度校验并修正技能，修正后的作业写缓存文件执行
+            var sourcePayload = SafeReadAllText(resolvedSourcePath);
+            if (string.IsNullOrWhiteSpace(sourcePayload))
+            {
+                return resolvedSourcePath;
+            }
+
+            var correctedSource = ApplyUnsupportedSkillCorrections(sourcePayload, LoadBattleDataJson(), out var sourceWarnings);
+            AppendUnsupportedSkillWarnings(sourceWarnings);
+            if (string.Equals(correctedSource, sourcePayload, StringComparison.Ordinal))
+            {
+                return resolvedSourcePath;
+            }
+
+            return await WriteExecutionCacheFileAsync(correctedSource, displayName, cancellationToken);
         }
 
         if (string.IsNullOrWhiteSpace(inlinePayload))
@@ -2331,6 +3617,16 @@ public sealed partial class CopilotPageViewModel
             return null;
         }
 
+        var correctedInline = ApplyUnsupportedSkillCorrections(inlinePayload, LoadBattleDataJson(), out var inlineWarnings);
+        AppendUnsupportedSkillWarnings(inlineWarnings);
+        return await WriteExecutionCacheFileAsync(correctedInline, displayName, cancellationToken);
+    }
+
+    private async Task<string> WriteExecutionCacheFileAsync(
+        string payload,
+        string displayName,
+        CancellationToken cancellationToken)
+    {
         var debugDirectory = Path.GetDirectoryName(Runtime.DiagnosticsService.EventLogPath)
             ?? Path.Combine(RuntimeLayout.ResolveRuntimeBaseDirectory(), "debug");
         var directory = Path.Combine(debugDirectory, "copilot-cache");
@@ -2338,8 +3634,157 @@ public sealed partial class CopilotPageViewModel
         var baseName = string.IsNullOrWhiteSpace(displayName) ? "copilot-inline" : displayName;
         var fileName = string.Concat(baseName.Select(ch => Path.GetInvalidFileNameChars().Contains(ch) ? '_' : ch));
         var filePath = Path.Combine(directory, $"{fileName}-{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}.json");
-        await File.WriteAllTextAsync(filePath, inlinePayload, cancellationToken);
+        await File.WriteAllTextAsync(filePath, payload, cancellationToken);
         return filePath;
+    }
+
+    private string? LoadBattleDataJson()
+    {
+        var battleDataJson = ReadBattleDataJsonCached();
+        return string.IsNullOrWhiteSpace(battleDataJson) ? null : battleDataJson;
+    }
+
+    private void AppendUnsupportedSkillWarnings(IReadOnlyList<(string Name, int Skill)> warnings)
+    {
+        foreach (var (name, skill) in warnings)
+        {
+            AddLog(
+                string.Format(
+                    CultureInfo.InvariantCulture,
+                    T("Copilot.UnsupportedSkill", "{0} 不支持技能 {1}, 不再选择技能"),
+                    name,
+                    skill),
+                "WARN",
+                showTime: false);
+        }
+    }
+
+    // WPF ParseCopilotAsync 对齐：按稀有度校验干员技能（skill3&rarity<6 / skill2&rarity<4 / skill1&rarity<3），
+    // 不支持时置 skill=0；稀有度未知按 -1 处理（与 WPF `?? -1` 一致）。SSS 作业 WPF 不校验，跳过。
+    internal static string ApplyUnsupportedSkillCorrections(
+        string payload,
+        string? battleDataJson,
+        out IReadOnlyList<(string Name, int Skill)> warnings)
+    {
+        warnings = [];
+        if (string.IsNullOrWhiteSpace(payload) || string.IsNullOrWhiteSpace(battleDataJson))
+        {
+            return payload;
+        }
+
+        JsonNode? rootNode;
+        try
+        {
+            rootNode = JsonNode.Parse(payload);
+        }
+        catch
+        {
+            return payload;
+        }
+
+        // SSS 判定对齐冻结 CopilotHelper.cs:227：值大小写敏感（"sss" 按普通作业处理并校验技能）；
+        // 大小写变体重复键取插入序首个匹配（JObject.TryGetValue OrdinalIgnoreCase 语义）
+        if (rootNode is not JsonObject root
+            || string.Equals(ReadJsonStringFirstMatch(root, "type"), "SSS", StringComparison.Ordinal))
+        {
+            return payload;
+        }
+
+        var applied = new List<(string Name, int Skill)>();
+        foreach (var oper in EnumerateCopilotOpers(root))
+        {
+            var name = ReadJsonString(oper, "name");
+            // WPF Oper.Skill 默认 1：未写 skill 字段的 1-2★ 干员同样触发 skill1&rarity<3 清零告警
+            var skill = ReadJsonInt(oper, "skill") ?? 1;
+            var rarity = FindOperatorRarityByName(name, battleDataJson) ?? -1;
+            if ((skill == 3 && rarity < 6) || (skill == 2 && rarity < 4) || (skill == 1 && rarity < 3))
+            {
+                applied.Add((name, skill));
+                oper["skill"] = 0;
+            }
+        }
+
+        if (applied.Count == 0)
+        {
+            return payload;
+        }
+
+        warnings = applied;
+        return root.ToJsonString();
+    }
+
+    private static IEnumerable<JsonObject> EnumerateCopilotOpers(JsonObject root)
+    {
+        if (TryGetJsonProperty(root, "opers", out var opersNode) && opersNode is JsonArray opers)
+        {
+            foreach (var oper in opers.OfType<JsonObject>())
+            {
+                yield return oper;
+            }
+        }
+
+        if (TryGetJsonProperty(root, "groups", out var groupsNode) && groupsNode is JsonArray groups)
+        {
+            foreach (var group in groups.OfType<JsonObject>())
+            {
+                if (TryGetJsonProperty(group, "opers", out var groupOpersNode) && groupOpersNode is JsonArray groupOpers)
+                {
+                    foreach (var oper in groupOpers.OfType<JsonObject>())
+                    {
+                        yield return oper;
+                    }
+                }
+            }
+        }
+    }
+
+    // WPF DataHelper.GetCharacterByNameOrAlias(...).Rarity 对齐：按任意服务器干员名查稀有度（1-6，char_ 前缀且为干员职业）
+    internal static int? FindOperatorRarityByName(string operName, string? battleDataJson)
+    {
+        if (string.IsNullOrWhiteSpace(operName) || string.IsNullOrWhiteSpace(battleDataJson))
+        {
+            return null;
+        }
+
+        try
+        {
+            if (JsonNode.Parse(battleDataJson) is not JsonObject root
+                || !root.TryGetPropertyValue("chars", out var charsNode)
+                || charsNode is not JsonObject chars)
+            {
+                return null;
+            }
+
+            foreach (var pair in chars)
+            {
+                if (!pair.Key.StartsWith("char_", StringComparison.Ordinal) || pair.Value is not JsonObject charObj)
+                {
+                    continue;
+                }
+
+                var profession = ReadJsonString(charObj, "profession");
+                if (!string.IsNullOrEmpty(profession) && !OperatorProfessions.Contains(profession))
+                {
+                    continue;
+                }
+
+                // WPF DataHelper 干员名索引为 OrdinalIgnoreCase（BuildNameIndex）
+                if (string.Equals(ReadJsonString(charObj, "name"), operName, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(ReadJsonString(charObj, "name_tw"), operName, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(ReadJsonString(charObj, "name_en"), operName, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(ReadJsonString(charObj, "name_jp"), operName, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(ReadJsonString(charObj, "name_kr"), operName, StringComparison.OrdinalIgnoreCase))
+                {
+                    return ReadJsonInt(charObj, "rarity");
+                }
+            }
+        }
+        catch
+        {
+            // 干员数据损坏时按未命中处理
+        }
+
+        return null;
     }
 
     private string GetCopilotTabDisplayName(int tabIndex)
@@ -2368,6 +3813,8 @@ public sealed partial class CopilotPageViewModel
     }
 
     private sealed record LoadedCopilotDescriptor(string DisplayName, string Type, string StageName, int CopilotId);
+
+    private sealed record StartSelection(IReadOnlyList<CopilotItemViewModel>? CheckedItems);
 
     private sealed record AppendPlan(int TaskId, string ActiveItemName, string TaskChain);
 
@@ -2417,7 +3864,7 @@ public sealed partial class CopilotPageViewModel
     public sealed class CopilotUserAdditionalItemViewModel : ObservableObject
     {
         private string _name = string.Empty;
-        private int _skill;
+        private int _skill = 1;
         private int _module;
 
         public string Name
@@ -2429,7 +3876,7 @@ public sealed partial class CopilotPageViewModel
         public int Skill
         {
             get => _skill;
-            set => SetProperty(ref _skill, Math.Clamp(value, 0, 3));
+            set => SetProperty(ref _skill, Math.Clamp(value, 1, 3));
         }
 
         public int Module

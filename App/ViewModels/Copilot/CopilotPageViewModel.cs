@@ -44,7 +44,7 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
 
     private string _filePath = string.Empty;
     private int _selectedTypeIndex;
-    private bool _autoSquad = true;
+    private bool _autoSquad;
     private bool _useSupportUnit;
     private bool _addTrust;
     private bool _overlayEnabled;
@@ -193,6 +193,7 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
                 OnPropertyChanged(nameof(IsOwnRunActive));
                 OnPropertyChanged(nameof(IsExternalRunActive));
                 OnPropertyChanged(nameof(ShowStartButton));
+                OnPropertyChanged(nameof(ShowStopButton));
                 OnPropertyChanged(nameof(StartButtonText));
             }
         }
@@ -230,9 +231,9 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
         }
     }
 
-    public bool ShowStartButton => true;
+    public bool ShowStartButton => !IsRunning;
 
-    public bool ShowStopButton => false;
+    public bool ShowStopButton => IsRunning;
 
     public bool CanStart =>
         !_isStartRequestActive
@@ -288,7 +289,7 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
             var payload = await File.ReadAllTextAsync(normalizedPath, cancellationToken);
             if (TryReadLoadedCopilotDescriptor(payload, normalizedPath, out var descriptor, out _))
             {
-                Items.Add(CreateListItemFromDescriptor(descriptor, normalizedPath, string.Empty, isRaid: false));
+                AddListItemsFromDescriptor(descriptor, normalizedPath, string.Empty);
             }
             else
             {
@@ -363,7 +364,7 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
                 var filePayload = await File.ReadAllTextAsync(sourcePath, cancellationToken);
                 if (TryReadLoadedCopilotDescriptor(filePayload, sourcePath, out var descriptor, out _))
                 {
-                    Items.Add(CreateListItemFromDescriptor(descriptor, sourcePath, string.Empty, isRaid: false));
+                    AddListItemsFromDescriptor(descriptor, sourcePath, string.Empty);
                 }
                 else
                 {
@@ -376,7 +377,7 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
             }
             else if (TryReadLoadedCopilotDescriptor(normalizedPayload, sourcePath: null, out var descriptor, out _))
             {
-                Items.Add(CreateListItemFromDescriptor(descriptor, string.Empty, inlinePayload, isRaid: false));
+                AddListItemsFromDescriptor(descriptor, string.Empty, inlinePayload);
             }
             else
             {
@@ -803,6 +804,13 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
         SetStartRequestActive(true);
         try
         {
+            // WPF 对齐：Start() 先 ValidateStartAsync，校验失败直接返回，不发起连接
+            var selection = await ValidateStartSelectionAsync(cancellationToken);
+            if (selection is null)
+            {
+                return;
+            }
+
             var connectResult = await EnsureConnectedForStartAsync(cancellationToken);
             if (!connectResult.Success)
             {
@@ -814,7 +822,7 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
 
             CurrentSessionState = Runtime.SessionService.CurrentState;
             AddLog(GetRootText("ConnectingToEmulator", "Connecting to emulator……"));
-            var appendPlan = await AppendConfiguredCopilotAsync(cancellationToken);
+            var appendPlan = await AppendConfiguredCopilotAsync(selection, cancellationToken);
             if (appendPlan is null)
             {
                 return;
@@ -871,6 +879,7 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
         OnPropertyChanged(nameof(IsStartRequestActive));
         OnPropertyChanged(nameof(CanStart));
         OnPropertyChanged(nameof(ShowStartButton));
+        OnPropertyChanged(nameof(ShowStopButton));
         OnPropertyChanged(nameof(StartButtonText));
     }
 
@@ -970,95 +979,17 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
         SyncStoppedUiStateIfSessionNotActive();
     }
 
-    private async Task<int?> AppendSelectedItemAsync(CopilotItemViewModel item, CancellationToken cancellationToken)
-    {
-        var filePath = await ResolveExecutionFilePathAsync(item, cancellationToken);
-        if (filePath is null)
-        {
-            return null;
-        }
-
-        var request = BuildCopilotTaskRequest(item, filePath);
-        var taskChain = ResolveCopilotTaskChain(item.Type);
-        var appendResult = await Runtime.ConnectFeatureService.AppendAndStartCoreTaskAsync(
-            request,
-            cancellationToken,
-            taskId => PrepareCopilotStart(taskId, item.Name, taskChain));
-        if (!appendResult.Success)
-        {
-            StatusMessage = T("Copilot.Status.StartFailed", "启动失败。");
-            LastErrorMessage = string.Format(
-                T("Copilot.Error.AppendTaskFailed", "追加 Copilot 任务失败：{0} {1}"),
-                appendResult.Error?.Code,
-                appendResult.Error?.Message);
-            await RecordFailedResultAsync(
-                "Copilot.Append",
-                UiOperationResult.Fail(
-                    UiErrorCode.CopilotFileReadFailed,
-                    LastErrorMessage),
-                cancellationToken);
-            return null;
-        }
-
-        await RecordEventAsync(
-            "Copilot.Append",
-            $"Appended copilot task #{appendResult.Value}: {item.Name}",
-            cancellationToken);
-        return appendResult.Value;
-    }
-
     private async Task<string?> ResolveExecutionFilePathAsync(CopilotItemViewModel item, CancellationToken cancellationToken)
     {
-        var resolvedPath = await ResolveExecutionFilePathAsync(
+        // WPF 对齐：列表项恒指向入列快照来源，执行产物（技能修正缓存文件）仅以局部返回值传给 core，
+        // 不得写回 item.SourcePath——否则一次性缓存路径会随持久化扩散，缓存清理后遮蔽完好的
+        // InlinePayload/原始文件（上游基线 b51fbd9 的写回无其他消费方依赖，ExecutionPathHint 展示
+        // 与 LoadListItemAsync 重载均因写回指向缓存文件而偏离原始来源）
+        return await ResolveExecutionFilePathAsync(
             item.SourcePath,
             item.InlinePayload,
             item.Name,
             cancellationToken);
-        if (resolvedPath is not null)
-        {
-            item.SourcePath = resolvedPath;
-        }
-
-        return resolvedPath;
-    }
-
-    private CoreTaskRequest BuildCopilotTaskRequest(CopilotItemViewModel item, string filePath)
-    {
-        var taskType = ResolveCopilotTaskType(item.Type);
-        JsonObject payload;
-        if (string.Equals(taskType, "ParadoxCopilot", StringComparison.Ordinal))
-        {
-            payload = new JsonObject
-            {
-                ["filename"] = filePath,
-            };
-        }
-        else
-        {
-            payload = new JsonObject
-            {
-                ["filename"] = filePath,
-                ["formation"] = Form,
-                ["support_unit_usage"] = UseSupportUnitUsage ? SupportUnitUsage : 0,
-                ["add_trust"] = AddTrust,
-                ["ignore_requirements"] = IgnoreRequirements,
-                ["loop_times"] = ShowLoopSetting && Loop ? LoopTimes : 1,
-                ["use_sanity_potion"] = false,
-            };
-
-            if (UseFormation)
-            {
-                payload["formation_index"] = FormationIndex;
-            }
-
-            var userAdditional = BuildUserAdditionalPayload();
-            if (userAdditional.Count > 0)
-            {
-                payload["user_additional"] = userAdditional;
-            }
-        }
-
-        return new CoreTaskRequest(taskType, item.Name, true, payload.ToJsonString());
     }
 
     private static string ResolveCopilotTaskType(string type)
@@ -1224,7 +1155,17 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
         }
 
         var itemName = SelectedItem.Name;
-        var feedbackTarget = SelectedItem.CopilotId > 0 ? SelectedItem.CopilotId.ToString() : itemName;
+        var selectedCopilotId = SelectedItem.CopilotId;
+        var feedbackTarget = selectedCopilotId > 0 ? selectedCopilotId.ToString() : itemName;
+        // WPF 对齐：_recentlyRatedCopilotId 会话级去重同样作用于列表项反馈
+        if (selectedCopilotId > 0 && IsCopilotRecentlyRated(selectedCopilotId))
+        {
+            StatusMessage = T("Copilot.Status.FeedbackAlreadyRated", "本会话已对该作业提交过反馈。");
+            LastErrorMessage = string.Empty;
+            await RecordEventAsync("Copilot.Feedback", StatusMessage, cancellationToken);
+            return;
+        }
+
         var result = await Runtime.CopilotFeatureService.SubmitFeedbackAsync(feedbackTarget, like, cancellationToken);
         if (!result.Success)
         {
@@ -1232,6 +1173,11 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
             LastErrorMessage = result.Message;
             await RecordFailedResultAsync("Copilot.Feedback", result, cancellationToken);
             return;
+        }
+
+        if (selectedCopilotId > 0)
+        {
+            MarkCopilotRecentlyRated(selectedCopilotId);
         }
 
         StatusMessage = string.Format(
@@ -1396,10 +1342,6 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
         }
 
         var active = Items.FirstOrDefault(item => string.Equals(item.Name, _activeItemName, StringComparison.Ordinal));
-        if (active is null)
-        {
-            return;
-        }
 
         if (!IsCopilotCallbackForActiveRun(metadata))
         {
@@ -1411,27 +1353,59 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
         switch (callback.MsgName)
         {
             case "TaskChainStart":
-                active.Status = "Running";
+                if (active is not null)
+                {
+                    active.Status = "Running";
+                }
                 break;
             case "TaskChainCompleted":
-                active.Status = "Success";
-                _ = Runtime.AchievementTrackerService.AddProgressToGroup("UseCopilot");
+                if (active is not null)
+                {
+                    active.Status = "Success";
+                }
+
+                // WPF AsstProxy 对齐：isCopilotTaskChain 仅含 Copilot/SSSCopilot，ParadoxCopilot 运行不累计 UseCopilot
+                var completedChain = metadata.TaskChain ?? _activeTaskChain;
+                if (string.Equals(completedChain, "Copilot", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(completedChain, "SSSCopilot", StringComparison.OrdinalIgnoreCase))
+                {
+                    _ = Runtime.AchievementTrackerService.AddProgressToGroup("UseCopilot");
+                }
                 break;
             case "AllTasksCompleted":
-                active.Status = "Success";
-                QueueWpfSystemNotification(
-                    GetRootText("CompleteTask", "Complete task: ")
-                    + GetRootText(metadata.TaskChain ?? _activeTaskChain ?? "Copilot", metadata.TaskChain ?? _activeTaskChain ?? "Copilot"),
-                    "copilot completion");
-                _ = Runtime.AchievementTrackerService.AddProgressToGroup("UseCopilot");
+                if (active is not null)
+                {
+                    active.Status = "Success";
+                }
+                // WPF AsstProxy.AllTasksCompleted 对齐（冻结 :1186、:1279-1282）：主任务队列完成弹 AllTasksComplete
+                // 通知（主任务队列属 TaskQueue 模块职责），else-if isCopilotTaskChain（仅 Copilot/SSSCopilot，:1019）
+                // 弹「完成任务 + 任务链名」Toast；ParadoxCopilot 不弹。
+                // UseCopilot 成就进度仅 TaskChainCompleted 累计，AllTasksCompleted 不重复计数（避免一次运行 +2）
+                var finishedChain = metadata.TaskChain ?? _activeTaskChain;
+                if (string.Equals(finishedChain, "Copilot", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(finishedChain, "SSSCopilot", StringComparison.OrdinalIgnoreCase))
+                {
+                    QueueWpfSystemNotification(
+                        GetRootText("CompleteTask", "Complete task: ")
+                        + GetRootText(finishedChain, finishedChain),
+                        "copilot completion");
+                }
                 CompleteActiveRun();
                 break;
             case "TaskChainStopped":
-                active.Status = "Stopped";
+                if (active is not null)
+                {
+                    active.Status = "Stopped";
+                }
                 CompleteActiveRun();
                 break;
             case "TaskChainError":
-                active.Status = "Error";
+                if (active is not null)
+                {
+                    active.Status = "Error";
+                }
+                // WPF AsstProxy.TaskChainError 对齐：Copilot 任务链错误解锁 CopilotError 成就
+                _ = Runtime.AchievementTrackerService.Unlock("CopilotError");
                 LastErrorMessage = $"{callback.MsgName}: {callback.PayloadJson}";
                 QueueWpfSystemNotification(
                     GetRootText("TaskError", "Task error: ")
@@ -1443,9 +1417,7 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
                 CompleteActiveRun();
                 break;
             case "SubTaskError":
-                active.Status = "Error";
                 LastErrorMessage = $"{callback.MsgName}: {callback.PayloadJson}";
-                CompleteActiveRun();
                 break;
         }
     }
@@ -1571,6 +1543,13 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
             }
 
             AddLog(builder.ToString().TrimEnd(), "ERROR", timestamp: timestamp);
+
+            // WPF 对齐（冻结 AsstProxy.cs:1476-1480）：缺失干员分组 >= 2 时解锁 Irreplaceable 成就
+            if (groups is not null && groups.Count >= 2)
+            {
+                _ = Runtime.AchievementTrackerService.Unlock("Irreplaceable");
+            }
+
             return;
         }
 
@@ -1610,8 +1589,76 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
             case "StageDrops-Stars-3":
             case "StageDrops-Stars-Adverse":
                 AddLog(GetRootText("CompleteCombat", "Complete combat"), "SUCCESS", timestamp: timestamp);
+                _ = CompleteFirstCheckedCopilotListItemAsync();
                 break;
         }
+    }
+
+    private async Task CompleteFirstCheckedCopilotListItemAsync()
+    {
+        if (!UseCopilotList)
+        {
+            return;
+        }
+
+        var completed = Items.FirstOrDefault(item => item.IsChecked);
+        if (completed is null)
+        {
+            return;
+        }
+
+        completed.IsChecked = false;
+        var persistResult = await PersistItemsAsync(CancellationToken.None);
+        if (!persistResult.Success)
+        {
+            completed.IsChecked = true;
+            LastErrorMessage = persistResult.Message;
+            await RecordFailedResultAsync("Copilot.List.TaskSuccess", persistResult, CancellationToken.None);
+            return;
+        }
+
+        await RecordEventAsync("Copilot.List.TaskSuccess", $"Completed copilot list item `{completed.Name}`.", CancellationToken.None);
+
+        // WPF 对齐：同一作业 id 的全部列表条目都成功、且未忽略干员属性要求时才自动点赞
+        if (completed.CopilotId > 0
+            && _copilotIdList.Remove(completed.CopilotId)
+            && !_copilotIdList.Contains(completed.CopilotId)
+            && !_hasRequirementIgnored)
+        {
+            QueueAutomaticCopilotLike(completed);
+        }
+    }
+
+    private void QueueAutomaticCopilotLike(CopilotItemViewModel completed)
+    {
+        if (completed.CopilotId <= 0)
+        {
+            return;
+        }
+
+        // WPF 对齐：_recentlyRatedCopilotId 会话级去重——同一 id 本会话已成功评分过则不再自动点赞；失败时释放占用以允许重试
+        if (!TryReserveCopilotRating(completed.CopilotId))
+        {
+            return;
+        }
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var result = await Runtime.CopilotFeatureService.SubmitFeedbackAsync(completed.CopilotId.ToString(), like: true);
+                if (!result.Success)
+                {
+                    ReleaseCopilotRatingReservation(completed.CopilotId);
+                    Runtime.LogService.Warn($"Failed to automatically like Copilot {completed.CopilotId}: {result.Message}");
+                }
+            }
+            catch (Exception ex)
+            {
+                ReleaseCopilotRatingReservation(completed.CopilotId);
+                Runtime.LogService.Warn($"Failed to automatically like Copilot {completed.CopilotId}: {ex.Message}");
+            }
+        });
     }
 
     private void AppendSubTaskExtraInfoLog(CopilotCallbackPayload payload, DateTimeOffset timestamp)
@@ -1628,12 +1675,14 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
                 AppendBattleFormationSelectedLog(payload.Details, timestamp);
                 break;
             case "BattleFormationOperUnavailable":
+                _hasRequirementIgnored = true;
                 AppendBattleFormationUnavailableLog(payload.Details, timestamp);
                 break;
             case "CopilotAction":
                 AppendCopilotActionLog(payload.Details, timestamp);
                 break;
             case "CopilotListLoadTaskFileSuccess":
+                _hasRequirementIgnored = false;
                 AddLog(
                     $"Parse {GetStringValue(payload.Details, "file_name")}[{GetStringValue(payload.Details, "stage_name")}] Success",
                     timestamp: timestamp);
@@ -1656,7 +1705,8 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
                 AddLog(GetRootText("SSSGamePass", "Game cleared! congratulations!"), timestamp: timestamp);
                 break;
             case "UnsupportedLevel":
-                _ = Runtime.AchievementTrackerService.Unlock("MapOutdated");
+                // WPF AsstProxy.UnsupportedLevel 对齐：仅记录错误日志并触发资源更新（资源更新属既有 non-goal），
+                // 不解锁 MapOutdated——WPF 的 MapOutdated 在加载/启动前校验（FindMap/Verify 失败）时解锁
                 AddLog(GetRootText("UnsupportedLevel", "Unsupported stage, please update resources and try again!"), "ERROR", timestamp: timestamp);
                 break;
         }
@@ -2304,13 +2354,14 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
 
     private static string NormalizeTypeDisplayName(string? type)
     {
-        var normalized = type?.Trim();
-        if (string.IsNullOrWhiteSpace(normalized))
+        // WPF CopilotContentConverter 对齐（冻结 CopilotHelper.cs:227）：类型值不裁剪、大小写敏感
+        // （"sss"/"SSS " 均不识别为 SSS，按普通作业处理）
+        if (string.IsNullOrWhiteSpace(type))
         {
             return MainStageStoryCollectionSideStoryType;
         }
 
-        return normalized switch
+        return type switch
         {
             "主线" or MainStageStoryCollectionSideStoryType or "MainStageStoryCollectionSideStory" or "Copilot"
                 => MainStageStoryCollectionSideStoryType,
@@ -2320,7 +2371,7 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
                 => ParadoxSimulationType,
             "活动" or OtherActivityType or "OtherActivityStage"
                 => OtherActivityType,
-            _ => normalized,
+            _ => type,
         };
     }
 

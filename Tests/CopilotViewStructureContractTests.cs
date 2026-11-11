@@ -103,9 +103,10 @@ public sealed class CopilotViewStructureContractTests
         Assert.Contains("Content=\"{Binding AddListButtonText}\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Content=\"{Binding ClearAllButtonText}\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Click=\"OnClearListClick\"", xaml, StringComparison.Ordinal);
+        // WPF 对齐：清空按钮右键清理未激活作业（MouseRightButtonUp -> CleanUnableCopilotTask）
+        Assert.Contains("PointerPressed=\"OnClearListPointerPressed\"", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("RowDefinitions=\"Auto,8,Auto\"", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("Margin=\"-8,14,-8,-8\"", xaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("PointerPressed=\"OnClearListPointerPressed\"", xaml, StringComparison.Ordinal);
     }
 
     [Fact]
