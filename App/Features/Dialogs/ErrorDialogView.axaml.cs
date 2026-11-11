@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
@@ -6,6 +7,7 @@ using MAAUnified.App.Controls;
 using MAAUnified.App.Infrastructure;
 using MAAUnified.App.ViewModels.Infrastructure;
 using MAAUnified.Application.Models;
+using MAAUnified.Application.Services;
 
 namespace MAAUnified.App.Features.Dialogs;
 
@@ -55,6 +57,9 @@ public partial class ErrorDialogView : Window, IDialogChromeAware
             : DialogTextCatalog.ErrorDialogCopyButton(request.Language);
         IssueReportButton.Content = DialogTextCatalog.ErrorDialogIssueReportButton(request.Language);
         OpenSettingsButton.Content = DialogTextCatalog.ErrorDialogOpenSettingsButton(request.Language);
+        HelpButton.Content = DialogTextCatalog.ErrorDialogHelpButton(request.Language);
+        QqGroupButton.Content = DialogTextCatalog.ErrorDialogQqGroupButton(request.Language);
+        QqGroupButton.IsVisible = DialogTextCatalog.IsErrorDialogQqGroupVisible(request.Language);
         ConfirmButton.Content = _simpleConnectFailureMode
             ? DialogTextCatalog.WarningDialogConfirmButton(request.Language)
             : request.ConfirmText;
@@ -190,6 +195,34 @@ public partial class ErrorDialogView : Window, IDialogChromeAware
         }
     }
 
+    private async void OnOpenHelpClick(object? sender, RoutedEventArgs e)
+    {
+        await OpenExternalUriAsync(IssueReportUrlCatalog.GetHelpUri(_language));
+    }
+
+    private async void OnOpenQqGroupClick(object? sender, RoutedEventArgs e)
+    {
+        await OpenExternalUriAsync(IssueReportUrlCatalog.QqGroupsUri);
+    }
+
+    // Mirrors the WPF hyperlink handlers: best-effort shell open, failures are swallowed.
+    private static Task OpenExternalUriAsync(string uri)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo(uri)
+            {
+                UseShellExecute = true,
+            });
+        }
+        catch
+        {
+            // The OS shell could not open the target; the dialog stays open.
+        }
+
+        return Task.CompletedTask;
+    }
+
     private void OnConfirmClick(object? sender, RoutedEventArgs e)
     {
         Close(DialogReturnSemantic.Confirm);
@@ -282,6 +315,7 @@ public partial class ErrorDialogView : Window, IDialogChromeAware
 
     public void ApplyDialogChrome(DialogChromeSnapshot chrome)
     {
+        _language = chrome.Language ?? _language;
         Title = chrome.Title;
         DialogShell.Title = chrome.Title;
         CopyButton.Content = _simpleConnectFailureMode
@@ -306,6 +340,13 @@ public partial class ErrorDialogView : Window, IDialogChromeAware
         OpenSettingsButton.Content = chrome.GetNamedTextOrDefault(
             DialogTextCatalog.ChromeKeys.OpenSettingsButton,
             OpenSettingsButton.Content?.ToString() ?? "Settings");
+        HelpButton.Content = chrome.GetNamedTextOrDefault(
+            DialogTextCatalog.ChromeKeys.HelpButton,
+            DialogTextCatalog.ErrorDialogHelpButton(_language));
+        QqGroupButton.Content = chrome.GetNamedTextOrDefault(
+            DialogTextCatalog.ChromeKeys.QqGroupButton,
+            DialogTextCatalog.ErrorDialogQqGroupButton(_language));
+        QqGroupButton.IsVisible = DialogTextCatalog.IsErrorDialogQqGroupVisible(_language);
         ConfirmButton.Content = chrome.ConfirmText ?? ConfirmButton.Content;
         CancelButton.Content = chrome.CancelText ?? CancelButton.Content;
     }

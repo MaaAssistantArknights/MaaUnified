@@ -2,8 +2,10 @@ using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 using MAAUnified.Application.Models;
 using MAAUnified.Application.Services.Localization;
+using MAAUnified.Application.Services.TaskParams;
 using MAAUnified.Compat.Constants;
 using MAAUnified.Compat.Runtime;
 
@@ -49,11 +51,11 @@ public interface IAchievementTrackerService
 
     void SetCustomData(string id, string key, JsonNode value);
 
-    void MissionStartCountAdd();
+    void MissionStartCountAdd(DateTime? utcNow = null);
 
-    void UseDailyAdd();
+    void UseDailyAdd(DateTime? utcNow = null);
 
-    void ClueObsessionAdd();
+    void ClueObsessionAdd(DateTime? utcNow = null);
 }
 
 public sealed class AchievementTrackerService : IAchievementTrackerService
@@ -66,6 +68,10 @@ public sealed class AchievementTrackerService : IAchievementTrackerService
     };
 
     private static readonly IReadOnlyDictionary<string, AchievementDefinition> Definitions = BuildDefinitions();
+
+    // `ClientType` is the unified profile key; `Start.ClientType` is the legacy alias WPF reads
+    // (`ConfigurationKeys.ClientType`). Order matches the other unified ClientType resolvers.
+    private static readonly string[] ClientTypeKeys = ["ClientType", "Start.ClientType"];
 
     private readonly object _gate = new();
     private readonly UnifiedConfigurationService? _configService;
@@ -171,21 +177,19 @@ public sealed class AchievementTrackerService : IAchievementTrackerService
         {
             foreach (var definition in Definitions.Values)
             {
-                var target = _states[definition.Id];
                 if (!restored.TryGetValue(definition.Id, out var source))
                 {
-                    target.IsUnlocked = false;
-                    target.UnlockedTime = null;
-                    target.Progress = 0;
-                    target.CustomData = null;
-                    target.IsNewUnlock = false;
                     continue;
                 }
 
+                var target = _states[definition.Id];
                 target.IsUnlocked = source.IsUnlocked;
                 target.UnlockedTime = source.UnlockedTime;
                 target.Progress = source.Progress;
-                target.CustomData = CloneCustomData(source.CustomData);
+
+                // WPF `RestoreAchievements` (frozen `AchievementSettingsUserControlModel.cs:87-97`) copies only
+                // Progress/IsUnlocked/UnlockedTime and deliberately leaves the live `CustomData` (the daily/streak
+                // markers) untouched, so a restore cannot roll the day markers backwards.
                 target.IsNewUnlock = false;
             }
 
@@ -261,8 +265,50 @@ public sealed class AchievementTrackerService : IAchievementTrackerService
             _startupRecorded = true;
         }
 
+        var nowUtc = context?.NowUtc ?? DateTimeOffset.UtcNow;
         var nowLocal = context?.NowLocal ?? DateTimeOffset.Now;
         _ = Unlock("FirstLaunch");
+
+        // Mirrors the frozen WPF `AchievementTrackerHelper.Events.Startup` build/resource age checks:
+        // Martian when the newest of build/resource is older than 90 days, UpdateEarlyBird when the
+        // build is at most 1 h old and UpdateObsession when it is at most 24 h old.
+        var maxTimestampIntervalDays = ResolveMaxTimestampIntervalDays(
+            nowUtc,
+            context?.BuildTimestampUtc,
+            context?.ResourceTimestampUtc);
+        if (maxTimestampIntervalDays > 90d)
+        {
+            _ = Unlock("Martian");
+        }
+
+        if (context?.BuildTimestampUtc is { } buildTimestampUtc)
+        {
+            var totalHours = (nowUtc - buildTimestampUtc).TotalHours;
+            if (totalHours <= 1d)
+            {
+                _ = Unlock("UpdateEarlyBird");
+            }
+
+            if (totalHours <= 24d)
+            {
+                _ = Unlock("UpdateObsession");
+            }
+        }
+
+        // WPF derives the Pioneer tier from the running core version kind:
+        // debug -> Pioneer3, beta -> Pioneer1, any other non-stable version -> Pioneer2.
+        switch (ResolveStartupVersionKind(context?.VersionString))
+        {
+            case AchievementStartupVersionKind.Debug:
+                _ = Unlock("Pioneer3");
+                break;
+            case AchievementStartupVersionKind.Beta:
+                _ = Unlock("Pioneer1");
+                break;
+            case AchievementStartupVersionKind.Nightly:
+                _ = Unlock("Pioneer2");
+                break;
+        }
 
         if (Random.Shared.NextDouble() < 0.00066d)
         {
@@ -496,11 +542,11 @@ public sealed class AchievementTrackerService : IAchievementTrackerService
         OnStateChanged();
     }
 
-    public void MissionStartCountAdd()
+    public void MissionStartCountAdd(DateTime? utcNow = null)
     {
         const string id = "MissionStartCount";
         const string key = "LastStartDate";
-        var today = DateTime.UtcNow.Date;
+        var today = ResolveYjDate(utcNow ?? DateTime.UtcNow);
         var lastDate = ReadCustomDate(id, key);
         if (lastDate.HasValue && lastDate.Value == today)
         {
@@ -513,12 +559,12 @@ public sealed class AchievementTrackerService : IAchievementTrackerService
         }
     }
 
-    public void UseDailyAdd()
+    public void UseDailyAdd(DateTime? utcNow = null)
     {
         const string id = "UseDaily1";
         const string group = "UseDaily";
         const string key = "LastLaunchDate";
-        var today = DateTime.UtcNow.Date;
+        var today = ResolveYjDate(utcNow ?? DateTime.UtcNow);
         var lastDate = ReadCustomDate(id, key);
         if (lastDate.HasValue)
         {
@@ -540,11 +586,11 @@ public sealed class AchievementTrackerService : IAchievementTrackerService
         SetCustomData(id, key, JsonValue.Create(today));
     }
 
-    public void ClueObsessionAdd()
+    public void ClueObsessionAdd(DateTime? utcNow = null)
     {
         const string id = "ClueObsession";
         const string key = "LastOpeningData";
-        var today = DateTime.UtcNow.Date;
+        var today = ResolveYjDate(utcNow ?? DateTime.UtcNow);
         var lastDate = ReadCustomDate(id, key);
         if (lastDate.HasValue)
         {
@@ -564,6 +610,59 @@ public sealed class AchievementTrackerService : IAchievementTrackerService
         }
 
         SetCustomData(id, key, JsonValue.Create(today));
+    }
+
+    // WPF `DateTimeExtension.ToYjDate` (frozen `src/MaaWpfGui/Extensions/DateTimeExtension.cs:25,29-48`) converts
+    // the UTC instant to the configured client's local time, shifts it by the 04:00 YJ day start and takes the
+    // date. The same offset table + boundary already exists in unified's YJ-day helper; reuse it instead of
+    // duplicating the table so the achievement day windows match the game's daily reset.
+    private DateTime ResolveYjDate(DateTime utcNow)
+        => MallDailyResetHelper.GetYjDate(utcNow, ReadClientType());
+
+    private string ReadClientType()
+    {
+        if (_configService is null)
+        {
+            return "Official";
+        }
+
+        var config = _configService.CurrentConfig;
+        config.Profiles.TryGetValue(config.CurrentProfile, out var profile);
+        foreach (var key in ClientTypeKeys)
+        {
+            if (profile is not null
+                && TryReadString(profile.Values, key, out var profileValue))
+            {
+                return profileValue;
+            }
+
+            if (TryReadString(config.GlobalValues, key, out var globalValue))
+            {
+                return globalValue;
+            }
+
+            if (TryReadString(config.GlobalValues, $"GUI.{key}", out var guiValue))
+            {
+                return guiValue;
+            }
+        }
+
+        return "Official";
+    }
+
+    private static bool TryReadString(Dictionary<string, JsonNode?> values, string key, out string value)
+    {
+        value = string.Empty;
+        if (values.TryGetValue(key, out var node)
+            && node is JsonValue jsonValue
+            && jsonValue.TryGetValue(out string? text)
+            && !string.IsNullOrWhiteSpace(text))
+        {
+            value = text.Trim();
+            return true;
+        }
+
+        return false;
     }
 
     private AchievementTrackerSnapshot BuildSnapshot(string language)
@@ -809,6 +908,120 @@ public sealed class AchievementTrackerService : IAchievementTrackerService
         JsonSerializer.Serialize(stream, _states, JsonOptions);
     }
 
+    // WPF `Events.Startup` takes `Math.Max(buildAge, resourceAge)` with a `DateTime.MinValue`
+    // fallback for a missing stamp (effectively ancient). Unified treats an unknown stamp as
+    // absent so a missing build/resource timestamp cannot unlock Martian spuriously.
+    private static double ResolveMaxTimestampIntervalDays(
+        DateTimeOffset nowUtc,
+        DateTimeOffset? buildTimestampUtc,
+        DateTimeOffset? resourceTimestampUtc)
+    {
+        var maxDays = 0d;
+        if (buildTimestampUtc is { } buildTimestamp)
+        {
+            maxDays = Math.Max(maxDays, (nowUtc - buildTimestamp).TotalDays);
+        }
+
+        if (resourceTimestampUtc is { } resourceTimestamp)
+        {
+            maxDays = Math.Max(maxDays, (nowUtc - resourceTimestamp).TotalDays);
+        }
+
+        return maxDays;
+    }
+
+    private static AchievementStartupVersionKind ResolveStartupVersionKind(string? version)
+    {
+        if (string.IsNullOrWhiteSpace(version))
+        {
+            // No core version is available; stay silent instead of awarding a Pioneer tier.
+            return AchievementStartupVersionKind.Stable;
+        }
+
+        var trimmed = version.Trim();
+        if (IsDebugVersion(trimmed))
+        {
+            return AchievementStartupVersionKind.Debug;
+        }
+
+        if (trimmed.StartsWith('c')
+            || trimmed.StartsWith("20", StringComparison.Ordinal)
+            || trimmed.Contains("Local", StringComparison.Ordinal)
+            || !TryParseSemanticVersion(trimmed, out var isPrerelease, out var lastPrereleaseIdentifier))
+        {
+            return AchievementStartupVersionKind.Nightly;
+        }
+
+        if (!isPrerelease)
+        {
+            return AchievementStartupVersionKind.Stable;
+        }
+
+        return IsNightlyPrereleaseIdentifier(lastPrereleaseIdentifier)
+            ? AchievementStartupVersionKind.Nightly
+            : AchievementStartupVersionKind.Beta;
+    }
+
+    // Mirrors the frozen WPF `VersionUpdateDialogViewModel.IsDebugVersion` regex.
+    private static bool IsDebugVersion(string version)
+        => Regex.IsMatch(
+            version,
+            @"^(.*DEBUG.*|v\d+(\.\d+){1,3}-\d+-g[0-9a-f]{6,}|[^v][0-9a-f]{6,})$",
+            RegexOptions.CultureInvariant);
+
+    // Mirrors the frozen WPF `VersionUpdateDialogViewModel.IsNightlyVersion`.
+    private static bool IsNightlyPrereleaseIdentifier(string identifier)
+        => identifier.Length >= 7 && identifier[0] == 'g';
+
+    // Minimal `SemVersion.TryParse(..., AllowLowerV)` equivalent for the stable/beta split.
+    private static bool TryParseSemanticVersion(
+        string version,
+        out bool isPrerelease,
+        out string lastPrereleaseIdentifier)
+    {
+        isPrerelease = false;
+        lastPrereleaseIdentifier = string.Empty;
+
+        var normalized = version;
+        if (normalized.StartsWith('v'))
+        {
+            normalized = normalized[1..];
+        }
+
+        var buildSeparator = normalized.IndexOf('+');
+        if (buildSeparator >= 0)
+        {
+            normalized = normalized[..buildSeparator];
+        }
+
+        var prereleaseSeparator = normalized.IndexOf('-');
+        var core = prereleaseSeparator >= 0 ? normalized[..prereleaseSeparator] : normalized;
+        var prerelease = prereleaseSeparator >= 0 ? normalized[(prereleaseSeparator + 1)..] : string.Empty;
+
+        var coreParts = core.Split('.');
+        if (coreParts.Length is < 1 or > 3
+            || coreParts.Any(static part => part.Length == 0 || !part.All(char.IsAsciiDigit)))
+        {
+            return false;
+        }
+
+        if (string.IsNullOrEmpty(prerelease))
+        {
+            return true;
+        }
+
+        var identifiers = prerelease.Split('.');
+        if (identifiers.Any(static identifier => identifier.Length == 0
+            || !identifier.All(static character => char.IsAsciiLetterOrDigit(character) || character == '-')))
+        {
+            return false;
+        }
+
+        isPrerelease = true;
+        lastPrereleaseIdentifier = identifiers[^1];
+        return true;
+    }
+
     private AchievementPolicy ReadPolicy()
     {
         if (_configService is null)
@@ -1028,4 +1241,12 @@ public sealed class AchievementTrackerService : IAchievementTrackerService
         AchievementCategory Category,
         bool IsRare,
         int GroupIndex);
+}
+
+internal enum AchievementStartupVersionKind
+{
+    Stable = 0,
+    Beta = 1,
+    Nightly = 2,
+    Debug = 3,
 }

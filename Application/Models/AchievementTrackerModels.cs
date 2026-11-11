@@ -53,4 +53,7 @@ public sealed record AchievementUnlockedEvent(
 
 public sealed record AchievementStartupContext(
     DateTimeOffset NowUtc,
-    DateTimeOffset NowLocal);
+    DateTimeOffset NowLocal,
+    DateTimeOffset? BuildTimestampUtc = null,
+    DateTimeOffset? ResourceTimestampUtc = null,
+    string? VersionString = null);

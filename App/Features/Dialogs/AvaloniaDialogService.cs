@@ -12,7 +12,6 @@ namespace MAAUnified.App.Features.Dialogs;
 
 public sealed class AvaloniaDialogService : IAppDialogService
 {
-    private const string IssueReportIssueEntryUrl = "https://github.com/MaaAssistantArknights/MaaAssistantArknights/issues/new/choose";
     // All desktop dialog service instances share owner-modal state through the same main window.
     private static readonly SemaphoreSlim DialogPresentationSemaphore = new(1, 1);
     private static int _activeOwnerModalCount;
@@ -152,7 +151,10 @@ public sealed class AvaloniaDialogService : IAppDialogService
         };
         var token = await _runtime.DialogFeatureService.BeginDialogAsync(DialogType.Error, sourceScope, normalizedRequest.Title, cancellationToken);
         var dialog = new ErrorDialogView();
-        dialog.ApplyRequest(normalizedRequest, openIssueReportAsync ?? OpenIssueReportAsync, openSettingsAsync);
+        dialog.ApplyRequest(
+            normalizedRequest,
+            openIssueReportAsync ?? (token => OpenIssueReportAsync(normalizedRequest.Language, token)),
+            openSettingsAsync);
         using var chromeBinding = AttachChromeLocalization(dialog, normalizedRequest.Title, normalizedRequest.Chrome);
         var presentation = await ShowDialogWithOwnerScaleAsync<DialogReturnSemantic?>(dialog, cancellationToken);
         if (!presentation.OwnerAvailable)
@@ -390,12 +392,12 @@ public sealed class AvaloniaDialogService : IAppDialogService
         return dialog.Topmost || owner.Topmost;
     }
 
-    private static Task<UiOperationResult> OpenIssueReportAsync(CancellationToken cancellationToken = default)
+    private static Task<UiOperationResult> OpenIssueReportAsync(string language, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         try
         {
-            Process.Start(new ProcessStartInfo(IssueReportIssueEntryUrl)
+            Process.Start(new ProcessStartInfo(IssueReportUrlCatalog.GetNewIssueUri(language))
             {
                 UseShellExecute = true,
             });

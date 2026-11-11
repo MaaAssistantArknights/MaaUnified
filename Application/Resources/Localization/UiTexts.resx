@@ -736,6 +736,12 @@
   <data name="Dialog.Error.IssueReportButton" xml:space="preserve">
     <value>问题反馈</value>
   </data>
+  <data name="Dialog.Error.HelpButton" xml:space="preserve">
+    <value>常见问题</value>
+  </data>
+  <data name="Dialog.Error.QqGroupButton" xml:space="preserve">
+    <value>加入 QQ 群</value>
+  </data>
   <data name="Dialog.Error.MessageLabel" xml:space="preserve">
     <value>消息</value>
   </data>
@@ -3460,6 +3466,9 @@
   </data>
   <data name="Settings.IssueReport.ClearImageCache" xml:space="preserve">
     <value>清除图片缓存</value>
+  </data>
+  <data name="Settings.IssueReport.ClearImageCacheConfirm" xml:space="preserve">
+    <value>正常情况下无需手动清理。&#10;DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图片。&#10;手动清理会删除所有图片，可能导致问题排查时缺少截图依据。&#10;缓存文件（如地图、干员头像等）清理后需要重新生成，可能影响使用体验。</value>
   </data>
   <data name="Settings.IssueReport.DeveloperMode" xml:space="preserve">
     <value>开发者模式</value>

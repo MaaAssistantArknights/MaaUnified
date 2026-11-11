@@ -55,6 +55,8 @@ public sealed record DialogChromeSnapshot
 
     public string Title { get; init; }
 
+    public string? Language { get; init; }
+
     public string? ConfirmText { get; init; }
 
     public string? CancelText { get; init; }
@@ -89,7 +91,8 @@ public sealed class DialogChromeCatalog
     public DialogChromeSnapshot GetSnapshot(string? language = null)
     {
         var resolvedLanguage = string.IsNullOrWhiteSpace(language) ? InitialLanguage : language.Trim();
-        return _snapshotFactory(resolvedLanguage);
+        var snapshot = _snapshotFactory(resolvedLanguage);
+        return snapshot.Language is null ? snapshot with { Language = resolvedLanguage } : snapshot;
     }
 }
 

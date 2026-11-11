@@ -1133,6 +1133,8 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
                     (DialogTextCatalog.ChromeKeys.SectionTitle, DialogTextCatalog.ErrorDialogSectionTitle(nextLanguage)),
                     (DialogTextCatalog.ChromeKeys.CopyButton, DialogTextCatalog.ErrorDialogCopyButton(nextLanguage)),
                     (DialogTextCatalog.ChromeKeys.IssueReportButton, DialogTextCatalog.ErrorDialogIssueReportButton(nextLanguage)),
+                    (DialogTextCatalog.ChromeKeys.HelpButton, DialogTextCatalog.ErrorDialogHelpButton(nextLanguage)),
+                    (DialogTextCatalog.ChromeKeys.QqGroupButton, DialogTextCatalog.ErrorDialogQqGroupButton(nextLanguage)),
                     (DialogTextCatalog.ChromeKeys.TimestampLabel, DialogTextCatalog.ErrorDialogTimestampLabel(nextLanguage)),
                     (DialogTextCatalog.ChromeKeys.ContextLabel, DialogTextCatalog.ErrorDialogContextLabel(nextLanguage)),
                     (DialogTextCatalog.ChromeKeys.CodeLabel, DialogTextCatalog.ErrorDialogCodeLabel(nextLanguage)),

@@ -12,6 +12,7 @@ public sealed class UiDiagnosticsService
 {
     private const string StartupLogFileName = "avalonia-ui-startup.log";
     private const long MaxBundleEntrySizeBytes = 20L * 1024L * 1024L;
+    private const long MaxBundlePartSizeBytes = 20L * 1024L * 1024L;
     private const string PerfEventTypeUiThreadLag = "ui_thread_lag";
     private const string PerfEventTypeNavigationTiming = "navigation_timing";
     private const string PerfEventTypeScreenshotTest = "screenshot_test";
@@ -299,101 +300,111 @@ public sealed class UiDiagnosticsService
             File.Delete(outputPath);
         }
 
-        using var archive = ZipFile.Open(outputPath, ZipArchiveMode.Create);
-        var archivedEntryNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var sensitiveValues = _sensitiveValueProvider()
-            .Where(static value => !string.IsNullOrEmpty(value))
-            .Distinct(StringComparer.Ordinal)
-            .ToArray();
-        AddSanitizedConfigOrPlaceholder(
-            archive,
-            archivedEntryNames,
-            Path.Combine(baseDirectory, "config", "avalonia.json"),
-            "config/avalonia.json",
-            "{\"omitted\":\"config_not_found\"}",
-            Path.Combine(baseDirectory, "config"));
-        AddRedactedFileOrPlaceholder(
-            archive,
-            archivedEntryNames,
-            Path.Combine(baseDirectory, "debug", "config-import-report.json"),
-            "debug/config-import-report.json",
-            "config-import-report.json not found when bundle was generated.",
-            sensitiveValues,
-            [_baseDirectory],
-            Path.Combine(baseDirectory, "debug"));
-        AddRedactedFileOrPlaceholder(
-            archive,
-            archivedEntryNames,
-            StartupLogPath,
-            "debug/avalonia-ui-startup.log",
-            "UI startup log is empty or missing.",
-            sensitiveValues,
-            [_baseDirectory],
-            Path.Combine(baseDirectory, "debug"));
-        AddRedactedFileOrPlaceholder(
-            archive,
-            archivedEntryNames,
-            ErrorLogPath,
-            "debug/avalonia-ui-errors.log",
-            "UI error log is empty or missing.",
-            sensitiveValues,
-            [_baseDirectory],
-            Path.Combine(baseDirectory, "debug"));
-        if (global::MAAUnified.Platform.MaaUnifiedBuildFlavor.CapturesVerboseDiagnostics)
+        using (var archive = ZipFile.Open(outputPath, ZipArchiveMode.Create))
         {
+            var archivedEntryNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var sensitiveValues = _sensitiveValueProvider()
+                .Where(static value => !string.IsNullOrEmpty(value))
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+            AddSanitizedConfigOrPlaceholder(
+                archive,
+                archivedEntryNames,
+                Path.Combine(baseDirectory, "config", "avalonia.json"),
+                "config/avalonia.json",
+                "{\"omitted\":\"config_not_found\"}",
+                Path.Combine(baseDirectory, "config"));
             AddRedactedFileOrPlaceholder(
                 archive,
                 archivedEntryNames,
-                EventLogPath,
-                "debug/avalonia-ui-events.log",
-                "UI event log is empty or missing.",
+                Path.Combine(baseDirectory, "debug", "config-import-report.json"),
+                "debug/config-import-report.json",
+                "config-import-report.json not found when bundle was generated.",
                 sensitiveValues,
                 [_baseDirectory],
                 Path.Combine(baseDirectory, "debug"));
             AddRedactedFileOrPlaceholder(
                 archive,
                 archivedEntryNames,
-                PlatformEventLogPath,
-                "debug/avalonia-platform-events.log",
-                "Platform event log is empty or missing.",
+                StartupLogPath,
+                "debug/avalonia-ui-startup.log",
+                "UI startup log is empty or missing.",
                 sensitiveValues,
                 [_baseDirectory],
                 Path.Combine(baseDirectory, "debug"));
+
+            AddRedactedFileOrPlaceholder(
+                archive,
+                archivedEntryNames,
+                ErrorLogPath,
+                "debug/avalonia-ui-errors.log",
+                "UI error log is empty or missing.",
+                sensitiveValues,
+                [_baseDirectory],
+                Path.Combine(baseDirectory, "debug"));
+            if (global::MAAUnified.Platform.MaaUnifiedBuildFlavor.CapturesVerboseDiagnostics)
+            {
+                AddRedactedFileOrPlaceholder(
+                    archive,
+                    archivedEntryNames,
+                    EventLogPath,
+                    "debug/avalonia-ui-events.log",
+                    "UI event log is empty or missing.",
+                    sensitiveValues,
+                    [_baseDirectory],
+                    Path.Combine(baseDirectory, "debug"));
+                AddRedactedFileOrPlaceholder(
+                    archive,
+                    archivedEntryNames,
+                    PlatformEventLogPath,
+                    "debug/avalonia-platform-events.log",
+                    "Platform event log is empty or missing.",
+                    sensitiveValues,
+                    [_baseDirectory],
+                    Path.Combine(baseDirectory, "debug"));
+            }
+
+            AddDirectoryEntries(
+                archive,
+                archivedEntryNames,
+                Path.Combine(baseDirectory, "debug"),
+                "debug",
+                includeFile: static (fullPath, fileName) =>
+                    // WPF copies the whole debug directory minus `report*`; the unified walk mirrors
+                    // that by keeping every text diagnostic (including the MaaCore `asst.log` /
+                    // `asst.bak.log`) and only skipping generated bundles plus the four avalonia logs
+                    // that are added explicitly above.
+                    !fileName.StartsWith("report", StringComparison.OrdinalIgnoreCase)
+                    && !fileName.StartsWith("issue-report-", StringComparison.OrdinalIgnoreCase)
+                    && !fileName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(Path.GetFileName(fullPath), "avalonia-ui-errors.log", StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(Path.GetFileName(fullPath), "avalonia-ui-startup.log", StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(Path.GetFileName(fullPath), "avalonia-ui-events.log", StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(Path.GetFileName(fullPath), "avalonia-platform-events.log", StringComparison.OrdinalIgnoreCase),
+                sensitiveValues,
+                [_baseDirectory],
+                includeBinaryFiles: true);
+            AddDirectoryEntries(
+                archive,
+                archivedEntryNames,
+                Path.Combine(baseDirectory, "cache"),
+                "cache",
+                includeFile: static (_, _) => true,
+                sensitiveValues,
+                [_baseDirectory]);
+            AddDirectoryEntries(
+                archive,
+                archivedEntryNames,
+                Path.Combine(baseDirectory, "resource"),
+                "resource",
+                includeFile: static (fullPath, fileName) =>
+                    fileName.Contains("_custom.", StringComparison.OrdinalIgnoreCase)
+                    || fullPath.Contains($"{Path.DirectorySeparatorChar}custom{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase),
+                sensitiveValues,
+                [_baseDirectory]);
         }
 
-        AddDirectoryEntries(
-            archive,
-            archivedEntryNames,
-            Path.Combine(baseDirectory, "debug"),
-            "debug",
-            includeFile: static (fullPath, fileName) =>
-                !fileName.StartsWith("issue-report-", StringComparison.OrdinalIgnoreCase)
-                && !fileName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase)
-                && !fileName.EndsWith(".log", StringComparison.OrdinalIgnoreCase)
-                && !string.Equals(Path.GetFileName(fullPath), "avalonia-ui-errors.log", StringComparison.OrdinalIgnoreCase)
-                && !string.Equals(Path.GetFileName(fullPath), "avalonia-ui-startup.log", StringComparison.OrdinalIgnoreCase)
-                && !string.Equals(Path.GetFileName(fullPath), "avalonia-ui-events.log", StringComparison.OrdinalIgnoreCase)
-                && !string.Equals(Path.GetFileName(fullPath), "avalonia-platform-events.log", StringComparison.OrdinalIgnoreCase),
-            sensitiveValues,
-            [_baseDirectory]);
-        AddDirectoryEntries(
-            archive,
-            archivedEntryNames,
-            Path.Combine(baseDirectory, "cache"),
-            "cache",
-            includeFile: static (_, _) => true,
-            sensitiveValues,
-            [_baseDirectory]);
-        AddDirectoryEntries(
-            archive,
-            archivedEntryNames,
-            Path.Combine(baseDirectory, "resource"),
-            "resource",
-            includeFile: static (fullPath, fileName) =>
-                fileName.Contains("_custom.", StringComparison.OrdinalIgnoreCase)
-                || fullPath.Contains($"{Path.DirectorySeparatorChar}custom{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase),
-            sensitiveValues,
-            [_baseDirectory]);
+        CreateIssueReportParts(outputPath, cancellationToken);
 
         await RecordEventAsync("IssueReport", "Support bundle generated.", cancellationToken);
         return outputPath;
@@ -526,7 +537,8 @@ public sealed class UiDiagnosticsService
         string entryRoot,
         Func<string, string, bool> includeFile,
         IReadOnlyList<string> sensitiveValues,
-        IReadOnlyList<string> privateRoots)
+        IReadOnlyList<string> privateRoots,
+        bool includeBinaryFiles = false)
     {
         if (!Directory.Exists(directoryPath))
         {
@@ -543,6 +555,18 @@ public sealed class UiDiagnosticsService
 
             if (!IsTextDiagnosticFile(filePath))
             {
+                // WPF copies the whole debug directory (only `report*` is filtered), so MaaCore's
+                // debug screenshots (`debug/**/*.png`, written by
+                // `src/MaaCore/Utils/DebugImageHelper.hpp`) must ship with the bundle. Binary
+                // artifacts cannot be text-redacted, so they are copied byte-for-byte and only the
+                // debug walk opts in; `cache`/`resource` stay text-only (see the metadata
+                // protection asserted by `IssueReportExcludesSensitiveFilesAndRedactsConfigAndLogs`).
+                if (!includeBinaryFiles)
+                {
+                    continue;
+                }
+
+                AddBinaryEntry(archive, archivedEntryNames, directoryPath, entryRoot, filePath, fileName, sensitiveValues, privateRoots);
                 continue;
             }
 
@@ -592,12 +616,90 @@ public sealed class UiDiagnosticsService
             var entryName = ReserveUniqueArchiveEntryName(
                 archivedEntryNames,
                 SanitizeArchiveEntryName(proposedEntryName, sensitiveValues, privateRoots));
-
             var entry = archive.CreateEntry(entryName);
             using var output = entry.Open();
             using var writer = new StreamWriter(output, Encoding.UTF8, leaveOpen: true);
             writer.Write(content);
             writer.Flush();
+        }
+    }
+
+    private static void AddBinaryEntry(
+        ZipArchive archive,
+        ISet<string> archivedEntryNames,
+        string directoryPath,
+        string entryRoot,
+        string filePath,
+        string fileName,
+        IReadOnlyList<string> sensitiveValues,
+        IReadOnlyList<string> privateRoots)
+    {
+        if (!DiagnosticFileSecurity.TryOpenRegularFile(directoryPath, filePath, out var input))
+        {
+            return;
+        }
+
+        using (input)
+        {
+            if (input.Length <= 0 || input.Length > MaxBundleEntrySizeBytes)
+            {
+                return;
+            }
+
+            var relativePath = Path.GetRelativePath(directoryPath, filePath)
+                .Replace(Path.DirectorySeparatorChar, '/');
+            var proposedEntryName = string.IsNullOrWhiteSpace(relativePath)
+                ? $"{entryRoot}/{fileName}"
+                : $"{entryRoot}/{relativePath}";
+            var entryName = ReserveUniqueArchiveEntryName(
+                archivedEntryNames,
+                SanitizeArchiveEntryName(proposedEntryName, sensitiveValues, privateRoots));
+            var entry = archive.CreateEntry(entryName);
+            using var output = entry.Open();
+            input.CopyTo(output);
+        }
+    }
+
+    private static void CreateIssueReportParts(string outputPath, CancellationToken cancellationToken)
+    {
+        var outputDirectory = Path.GetDirectoryName(outputPath);
+        if (string.IsNullOrWhiteSpace(outputDirectory))
+        {
+            return;
+        }
+
+        var partDirectory = Path.Combine(outputDirectory, $"{Path.GetFileNameWithoutExtension(outputPath)}_parts");
+        Directory.CreateDirectory(partDirectory);
+
+        using var sourceArchive = ZipFile.OpenRead(outputPath);
+        ZipArchive? partArchive = null;
+        long partSize = 0;
+        var partNumber = 0;
+        try
+        {
+            foreach (var sourceEntry in sourceArchive.Entries)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (partArchive is null || (partSize > 0 && partSize + sourceEntry.Length > MaxBundlePartSizeBytes))
+                {
+                    partArchive?.Dispose();
+                    partNumber++;
+                    partSize = 0;
+                    partArchive = ZipFile.Open(
+                        Path.Combine(partDirectory, $"part{partNumber:00}.zip"),
+                        ZipArchiveMode.Create);
+                }
+
+                var targetEntry = partArchive.CreateEntry(sourceEntry.FullName);
+                using var source = sourceEntry.Open();
+                using var target = targetEntry.Open();
+                source.CopyTo(target);
+                partSize += sourceEntry.Length;
+            }
+        }
+        finally
+        {
+            partArchive?.Dispose();
         }
     }
 

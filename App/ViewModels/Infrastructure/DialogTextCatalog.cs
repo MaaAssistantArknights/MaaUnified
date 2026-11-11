@@ -23,6 +23,8 @@ public static class DialogTextCatalog
         public const string EmptyStateBody = "EmptyStateBody";
         public const string CopyButton = "CopyButton";
         public const string IssueReportButton = "IssueReportButton";
+        public const string HelpButton = "HelpButton";
+        public const string QqGroupButton = "QqGroupButton";
         public const string OpenSettingsButton = "OpenSettingsButton";
         public const string TimestampLabel = "TimestampLabel";
         public const string ContextLabel = "ContextLabel";
@@ -79,6 +81,20 @@ public static class DialogTextCatalog
     {
         return GetText(language, "Dialog.Error.OpenSettingsButton", "去设置", "Settings");
     }
+
+    public static string ErrorDialogHelpButton(string? language)
+    {
+        return GetText(language, "Dialog.Error.HelpButton", "常见问题", "FAQ");
+    }
+
+    public static string ErrorDialogQqGroupButton(string? language)
+    {
+        return GetText(language, "Dialog.Error.QqGroupButton", "加入 QQ 群", "Join QQ Group");
+    }
+
+    // WPF `ErrorDialogView.xaml.cs` reveals the QQ group link for zh-cn only.
+    public static bool IsErrorDialogQqGroupVisible(string? language)
+        => string.Equals(UiLanguageCatalog.Normalize(language), "zh-cn", StringComparison.OrdinalIgnoreCase);
 
     public static string ErrorDialogCloseButton(string? language)
     {
@@ -289,6 +305,58 @@ public static class DialogTextCatalog
                 "可以先检查当前输入或配置，修正后重试；如仍失败，可复制错误详情并通过 IssueReport 上报。",
                 "Check the current input or configuration, fix it, and try again. If it still fails, copy the error details and submit an IssueReport."),
         };
+    }
+
+    // WPF `ErrorDialogView.GetSolution` (frozen `:109-149`) unlocks `UnexpectedCrash` only when the
+    // exception details match none of the recognized solution patterns; every other branch returns a
+    // known solution and skips the unlock. The unified Error dialog also serves ordinary failures
+    // (connect/toolbox/settings), which WPF never routes to `ErrorDialogView`, so the unlock is
+    // additionally gated on `UiErrorCode.UiError` -- the code the global/unhandled-exception
+    // reporting paths use (`App/App.axaml.cs:756`, `MainShellViewModel.RecordUnhandledExceptionAsync`).
+    public static bool IsUnknownUnhandledError(UiOperationResult result)
+    {
+        if (!string.Equals(result.Error?.Code, UiErrorCode.UiError, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var details = result.Error?.Details ?? string.Empty;
+
+        if (details.Contains("MaaCore.dll not found!", StringComparison.Ordinal)
+            || details.Contains("resource folder not found!", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        if (details.Contains("AsstGetVersion()", StringComparison.Ordinal)
+            || details.Contains("DllNotFoundException", StringComparison.Ordinal)
+            || details.Contains("lambda_method", StringComparison.Ordinal)
+            || details.Contains("HandyControl", StringComparison.Ordinal)
+            || (details.Contains("System.Net.Http", StringComparison.Ordinal)
+                && details.Contains("Version", StringComparison.Ordinal)))
+        {
+            return false;
+        }
+
+        if (details.Contains("CheckAndUpdateNow()", StringComparison.Ordinal)
+            && (details.Contains("MoveFile", StringComparison.Ordinal)
+                || details.Contains("DeleteFile", StringComparison.Ordinal)))
+        {
+            return false;
+        }
+
+        if (details.Contains("Hyperlink_Click", StringComparison.Ordinal)
+            && details.Contains("StartWithShellExecuteEx", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        if (details.Contains("System.IO.File.InternalMove", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        return true;
     }
 
     private static string BuildErrorMessage(string? language, UiOperationResult result)

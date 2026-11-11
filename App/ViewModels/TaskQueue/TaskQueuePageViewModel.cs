@@ -316,6 +316,10 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             ],
         };
 
+    private const int MaxLogCards = 180;
+    // WPF TaskQueueViewModel.ManualStop unlocks TaskStartCancel when a manual stop happens
+    // within five seconds of LinkStart recording _taskStartTime.
+    private static readonly TimeSpan TaskStartCancelUnlockWindow = TimeSpan.FromSeconds(5);
     private const int MaxTimeoutMinutes = 11451;
     private const int MaxOverlayLogs = 200;
     private static readonly TimeSpan TaskQueueAutoSaveDelay = TimeSpan.FromMilliseconds(200);
@@ -393,6 +397,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     private bool _overlayVisible;
     private OverlayRuntimeMode _overlayMode = OverlayRuntimeMode.Hidden;
     private string _currentRunId = "-";
+    private DateTime? _runStartTime;
     private string _lastPostActionRunId = string.Empty;
     private string _selectedTaskValidationSummary = string.Empty;
     private bool _selectedTaskHasBlockingValidationIssues;
@@ -3011,6 +3016,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             // inheriting a stale force flag.
             _roguelikeDelayStopForceRequested = false;
             _stopStartRequestTask = null;
+            _runStartTime = DateTime.Now;
             var keepRunOwner = false;
             startRequestCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             _startRequestCts = startRequestCts;
@@ -3228,6 +3234,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         }
         _clearTaskStatusesWhenStopped = true;
         _ = Runtime.AchievementTrackerService.Unlock("TacticalRetreat");
+        TryUnlockTaskStartCancelOnManualStop();
 
         CurrentSessionState = Runtime.SessionService.CurrentState;
         SetStartRequestActive(false);
@@ -4132,6 +4139,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             // inheriting a stale force flag.
             _roguelikeDelayStopForceRequested = false;
             _stopStartRequestTask = null;
+            _runStartTime = DateTime.Now;
             var keepRunOwner = false;
             startRequestCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             _startRequestCts = startRequestCts;
@@ -4364,6 +4372,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             // inheriting a stale force flag.
             _roguelikeDelayStopForceRequested = false;
             _stopStartRequestTask = null;
+            _runStartTime = DateTime.Now;
             var keepRunOwner = false;
             startRequestCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             _startRequestCts = startRequestCts;
@@ -4626,6 +4635,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             if (userInitiated)
             {
                 _ = Runtime.AchievementTrackerService.Unlock("TacticalRetreat");
+                TryUnlockTaskStartCancelOnManualStop();
             }
 
             // WPF TaskQueueViewModel.Stop() logs "Stopping" with a card split on both sides.
@@ -7639,6 +7649,13 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                         await ExecutePostActionAfterCompletionAsync(callback, runId, taskIndex);
                     }
 
+                    // WPF AsstProxy unlocks LogSupervisor when the main task queue finishes while
+                    // the overlay window has been created (i.e. the overlay is currently enabled).
+                    if (IsOverlayActiveForLogSupervisor())
+                    {
+                        _ = Runtime.AchievementTrackerService.Unlock("LogSupervisor");
+                    }
+
                     await TryTriggerPallasWineAsync(callback.Timestamp);
                 }
                 CancelTaskTimeoutReminder();
@@ -7973,6 +7990,20 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 return true;
             });
     }
+
+    internal static bool ShouldUnlockTaskStartCancelOnManualStop(DateTime? runStartedAt, DateTime stoppedAt)
+        => runStartedAt is { } started && stoppedAt - started < TaskStartCancelUnlockWindow;
+
+    private void TryUnlockTaskStartCancelOnManualStop()
+    {
+        if (ShouldUnlockTaskStartCancelOnManualStop(_runStartTime, DateTime.Now))
+        {
+            _ = Runtime.AchievementTrackerService.Unlock("TaskStartCancel");
+        }
+    }
+
+    private bool IsOverlayActiveForLogSupervisor()
+        => OverlayVisible || _overlaySharedState.Visible;
 
     private void TrackAchievementsAfterStart(int enabledTaskCount)
     {

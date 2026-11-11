@@ -1699,17 +1699,27 @@ public sealed class SettingsModuleCM1FeatureTests
             Assert.Contains(archive.Entries, e => e.FullName == "debug/avalonia-platform-events.log");
         }
 
+        var partsDirectory = Path.Combine(
+            Path.GetDirectoryName(vm.IssueReportPath)!,
+            $"{Path.GetFileNameWithoutExtension(vm.IssueReportPath)}_parts");
+        var partOnePath = Path.Combine(partsDirectory, "part01.zip");
+        Assert.True(File.Exists(partOnePath));
+        using (var partOne = ZipFile.OpenRead(partOnePath))
+        {
+            Assert.Contains(partOne.Entries, entry => entry.FullName == "config/avalonia.json");
+        }
+
         await vm.OpenIssueReportHelpAsync();
         await vm.OpenIssueReportEntryAsync();
         await vm.OpenIssueReportDebugDirectoryAsync();
         Assert.Equal(3, openedTargets.Count);
-        Assert.Contains("https://maa.plus/docs/", openedTargets, StringComparer.Ordinal);
-        Assert.Contains("issues/new/choose", openedTargets[1], StringComparison.Ordinal);
+        Assert.Equal("https://docs.maa.plus/zh-cn/manual/faq.html", openedTargets[0]);
+        Assert.Equal("https://github.com/MaaAssistantArknights/MaaAssistantArknights/issues", openedTargets[1]);
         Assert.Equal(debugDirectory, openedTargets[2]);
     }
 
     [Fact]
-    public async Task IssueReport_DialogEntryAction_ShouldReuseSharedIssueEntryRoute_WithoutMutatingStatus()
+    public async Task IssueReport_ErrorDialogEntry_ShouldUseLocalizedIssueTemplate_WithoutMutatingStatus()
     {
         await using var fixture = await RuntimeFixture.CreateAsync();
         var openedTargets = new List<string>();
@@ -1723,15 +1733,76 @@ public sealed class SettingsModuleCM1FeatureTests
             });
         await vm.InitializeAsync();
 
-        var result = await vm.OpenIssueReportEntryForDialogAsync();
+        var result = await vm.OpenIssueReportEntryForErrorDialogAsync();
 
         Assert.True(result.Success);
         Assert.Single(openedTargets);
-        Assert.Contains("issues/new/choose", openedTargets[0], StringComparison.Ordinal);
+        Assert.Equal(
+            "https://github.com/MaaAssistantArknights/MaaAssistantArknights/issues/new?assignees=&labels=bug&template=cn-bug-report.yaml",
+            openedTargets[0]);
         Assert.False(vm.HasIssueReportPath);
         Assert.False(vm.HasIssueReportStatusMessage);
         Assert.True(string.IsNullOrEmpty(vm.IssueReportStatusMessage));
         Assert.False(vm.HasIssueReportErrorMessage);
+    }
+
+    [Fact]
+    public async Task IssueReport_ErrorDialogEntry_ShouldSelectChineseTemplateOnlyForChineseLanguages()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync();
+        var openedTargets = new List<string>();
+        var vm = new SettingsPageViewModel(
+            fixture.Runtime,
+            new ConnectionGameSharedStateViewModel(),
+            openExternalTargetAsync: (target, _) =>
+            {
+                openedTargets.Add(target);
+                return Task.FromResult(UiOperationResult.Ok($"opened:{target}"));
+            });
+        await vm.InitializeAsync();
+
+        vm.Language = "zh-tw";
+        await vm.OpenIssueReportEntryForErrorDialogAsync();
+        vm.Language = "en-us";
+        await vm.OpenIssueReportEntryForErrorDialogAsync();
+        vm.Language = "ja-jp";
+        await vm.OpenIssueReportEntryForErrorDialogAsync();
+
+        Assert.Equal(3, openedTargets.Count);
+        Assert.EndsWith("template=cn-bug-report.yaml", openedTargets[0], StringComparison.Ordinal);
+        Assert.EndsWith("template=en-bug-report.yaml", openedTargets[1], StringComparison.Ordinal);
+        Assert.EndsWith("template=en-bug-report.yaml", openedTargets[2], StringComparison.Ordinal);
+        Assert.All(
+            openedTargets,
+            target => Assert.Contains(
+                "issues/new?assignees=&labels=bug&template=",
+                target,
+                StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void IssueReport_UrlCatalog_ShouldMatchFrozenWpfMaaUrls()
+    {
+        Assert.Equal(
+            "https://docs.maa.plus/zh-cn/manual/faq.html",
+            IssueReportUrlCatalog.GetHelpUri("zh-cn"));
+        Assert.Equal(
+            "https://docs.maa.plus/en-us/manual/faq.html",
+            IssueReportUrlCatalog.GetHelpUri("en-us"));
+        // Unsupported / null languages fall back to the default language, matching UiLanguageCatalog.
+        Assert.Equal(
+            "https://docs.maa.plus/zh-cn/manual/faq.html",
+            IssueReportUrlCatalog.GetHelpUri(null));
+
+        Assert.Equal(
+            "https://github.com/MaaAssistantArknights/MaaAssistantArknights/issues",
+            IssueReportUrlCatalog.IssueListUri);
+        Assert.Equal(
+            "https://github.com/MaaAssistantArknights/MaaAssistantArknights/issues/new?assignees=&labels=bug&template=cn-bug-report.yaml",
+            IssueReportUrlCatalog.GetNewIssueUri("zh-cn"));
+        Assert.Equal(
+            "https://github.com/MaaAssistantArknights/MaaAssistantArknights/issues/new?assignees=&labels=bug&template=en-bug-report.yaml",
+            IssueReportUrlCatalog.GetNewIssueUri("ko-kr"));
     }
 
     [Fact]
@@ -1741,19 +1812,48 @@ public sealed class SettingsModuleCM1FeatureTests
         var vm = new SettingsPageViewModel(
             fixture.Runtime,
             new ConnectionGameSharedStateViewModel(),
-            openExternalTargetAsync: (target, _) => Task.FromResult(UiOperationResult.Ok(target)));
+            openExternalTargetAsync: (target, _) => Task.FromResult(UiOperationResult.Ok(target)),
+            dialogService: new ScriptedWarningDialogService(DialogReturnSemantic.Confirm));
         await vm.InitializeAsync();
 
+        // WPF `ClearImageCache` deletes only `.jpg/.jpeg/.png` under cache/debug and preserves
+        // every other file, so non-image placeholders must survive.
         var baseDirectory = Directory.GetParent(Path.GetDirectoryName(fixture.Runtime.DiagnosticsService.EventLogPath)!)!.FullName;
         var cacheDirectory = Path.Combine(baseDirectory, "cache", "images");
         Directory.CreateDirectory(Path.Combine(cacheDirectory, "nested"));
-        await File.WriteAllTextAsync(Path.Combine(cacheDirectory, "a.tmp"), "1");
-        await File.WriteAllTextAsync(Path.Combine(cacheDirectory, "nested", "b.tmp"), "2");
+        await File.WriteAllTextAsync(Path.Combine(cacheDirectory, "a.png"), "1");
+        await File.WriteAllTextAsync(Path.Combine(cacheDirectory, "nested", "b.jpg"), "2");
+        await File.WriteAllTextAsync(Path.Combine(cacheDirectory, "keep.tmp"), "3");
 
         await vm.ClearIssueReportImageCacheAsync();
 
         Assert.True(Directory.Exists(cacheDirectory));
-        Assert.Empty(Directory.EnumerateFiles(cacheDirectory, "*", SearchOption.AllDirectories));
+        Assert.Empty(Directory.EnumerateFiles(cacheDirectory, "*.png", SearchOption.AllDirectories));
+        Assert.Empty(Directory.EnumerateFiles(cacheDirectory, "*.jpg", SearchOption.AllDirectories));
+        Assert.True(File.Exists(Path.Combine(cacheDirectory, "keep.tmp")));
+        Assert.False(vm.HasIssueReportErrorMessage);
+    }
+
+    [Fact]
+    public async Task IssueReport_ClearImageCache_Declined_KeepsFiles()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync();
+        var vm = new SettingsPageViewModel(
+            fixture.Runtime,
+            new ConnectionGameSharedStateViewModel(),
+            openExternalTargetAsync: (target, _) => Task.FromResult(UiOperationResult.Ok(target)),
+            dialogService: new ScriptedWarningDialogService(DialogReturnSemantic.Cancel));
+        await vm.InitializeAsync();
+
+        var baseDirectory = Directory.GetParent(Path.GetDirectoryName(fixture.Runtime.DiagnosticsService.EventLogPath)!)!.FullName;
+        var cacheDirectory = Path.Combine(baseDirectory, "cache", "images");
+        Directory.CreateDirectory(cacheDirectory);
+        await File.WriteAllTextAsync(Path.Combine(cacheDirectory, "a.png"), "1");
+
+        await vm.ClearIssueReportImageCacheAsync();
+
+        // WPF returns without deleting when the Yes/No warning is declined.
+        Assert.True(File.Exists(Path.Combine(cacheDirectory, "a.png")));
         Assert.False(vm.HasIssueReportErrorMessage);
     }
 
@@ -2121,6 +2221,59 @@ public sealed class SettingsModuleCM1FeatureTests
 
             return new HttpResponseMessage(HttpStatusCode.OK);
         }
+    }
+
+    private sealed class ScriptedWarningDialogService(DialogReturnSemantic warningReturn) : IAppDialogService
+    {
+        public Task<DialogCompletion<AnnouncementDialogPayload>> ShowAnnouncementAsync(
+            AnnouncementDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<AnnouncementDialogPayload>(DialogReturnSemantic.Close, null, "scripted"));
+
+        public Task<DialogCompletion<VersionUpdateDialogPayload>> ShowVersionUpdateAsync(
+            VersionUpdateDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<VersionUpdateDialogPayload>(DialogReturnSemantic.Close, null, "scripted"));
+
+        public Task<DialogCompletion<ProcessPickerDialogPayload>> ShowProcessPickerAsync(
+            ProcessPickerDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<ProcessPickerDialogPayload>(DialogReturnSemantic.Close, null, "scripted"));
+
+        public Task<DialogCompletion<EmulatorPathDialogPayload>> ShowEmulatorPathAsync(
+            EmulatorPathDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<EmulatorPathDialogPayload>(DialogReturnSemantic.Close, null, "scripted"));
+
+        public Task<DialogCompletion<ErrorDialogPayload>> ShowErrorAsync(
+            ErrorDialogRequest request,
+            string sourceScope,
+            Func<CancellationToken, Task<UiOperationResult>>? openIssueReportAsync = null,
+            Func<CancellationToken, Task<UiOperationResult>>? openSettingsAsync = null,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<ErrorDialogPayload>(DialogReturnSemantic.Close, null, "scripted"));
+
+        public Task<DialogCompletion<AchievementListDialogPayload>> ShowAchievementListAsync(
+            AchievementListDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<AchievementListDialogPayload>(DialogReturnSemantic.Close, null, "scripted"));
+
+        public Task<DialogCompletion<TextDialogPayload>> ShowTextAsync(
+            TextDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<TextDialogPayload>(DialogReturnSemantic.Close, null, "scripted"));
+
+        public Task<DialogCompletion<WarningConfirmDialogPayload>> ShowWarningConfirmAsync(
+            WarningConfirmDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<WarningConfirmDialogPayload>(warningReturn, new WarningConfirmDialogPayload(warningReturn == DialogReturnSemantic.Confirm), "scripted"));
     }
 
     private sealed class RecordingAnnouncementDialogService : IAppDialogService

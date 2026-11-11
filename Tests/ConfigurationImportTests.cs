@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using MAAUnified.Application.Configuration;
@@ -3550,6 +3551,513 @@ public sealed class ConfigurationImportTests
         {
             return Task.CompletedTask;
         }
+    }
+
+
+    [Fact]
+    public async Task GuiNewImport_RecruitSkipRobotDoesNotEnablePreserveTagsWhenPreserveDisabled()
+    {
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.new.json"),
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": {
+                  "TaskQueue": [
+                    {
+                      "$type": "RecruitTask",
+                      "Name": "Recruit",
+                      "IsEnable": true,
+                      "Level1NotChoose": true,
+                      "PreserveTagEnabled": false,
+                      "PreserveTagList": ["支援机械", "高级资深干员"]
+                    }
+                  ]
+                }
+              }
+            }
+            """);
+
+        var service = CreateService(root);
+        var report = await service.ImportLegacyAsync(ImportSource.GuiNewOnly, manualImport: false);
+
+        Assert.True(report.Success);
+        var task = service.CurrentConfig.Profiles["Default"].TaskQueue.Single(task => task.Type == TaskModuleTypes.Recruit);
+        Assert.True(task.Params["skip_robot"]?.GetValue<bool>());
+        Assert.NotEqual(true, task.Params["_ui_preserve_tags_enabled"]?.GetValue<bool>());
+        var preserveTags = task.Params["preserve_tags"] as JsonArray;
+        Assert.True(preserveTags is null || preserveTags.Count == 0);
+    }
+
+    [Fact]
+    public async Task ExistingAvaloniaConfig_AchievementAutoCloseFalseAndMissingValue_ShouldRemainNonAutoClosing()
+    {
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "avalonia.json"),
+            """
+            {
+              "SchemaVersion": 2,
+              "CurrentProfile": "MissingSetting",
+              "Profiles": {
+                "MissingSetting": {
+                  "Values": {},
+                  "TaskQueue": []
+                },
+                "Default": {
+                  "Values": {
+                    "Achievement.PopupDisabled": "False",
+                    "Achievement.PopupAutoClose": "False"
+                  },
+                  "TaskQueue": []
+                },
+                "Alt": {
+                  "Values": {
+                    "Achievement.PopupDisabled": "False",
+                    "Achievement.PopupAutoClose": "False"
+                  },
+                  "TaskQueue": []
+                }
+              },
+              "GlobalValues": {},
+              "Migration": {}
+            }
+            """);
+
+        var service = CreateService(root);
+        var result = await service.LoadOrBootstrapAsync();
+
+        Assert.True(result.LoadedFromExistingConfig);
+        Assert.False(service.CurrentConfig.Profiles["MissingSetting"].Values.ContainsKey("Achievement.PopupAutoClose"));
+        Assert.Equal("False", service.CurrentConfig.Profiles["Default"].Values["Achievement.PopupAutoClose"]?.GetValue<string>());
+        Assert.Equal("False", service.CurrentConfig.Profiles["Alt"].Values["Achievement.PopupAutoClose"]?.GetValue<string>());
+
+        var policy = await new AchievementFeatureService(service).LoadPolicyAsync();
+        Assert.True(policy.Success);
+        Assert.False(policy.Value!.PopupAutoClose);
+
+        var persisted = Assert.IsType<JsonObject>(
+            JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(root, "config", "avalonia.json"))));
+        Assert.Equal("False", persisted["Profiles"]?["Default"]?["Values"]?["Achievement.PopupAutoClose"]?.GetValue<string>());
+
+        AchievementUnlockedEvent? unlocked = null;
+        var tracker = new AchievementTrackerService(service, root);
+        tracker.AchievementUnlocked += (_, e) => unlocked = e;
+
+        var unlockResult = tracker.Unlock("Linguist");
+        Assert.True(unlockResult.Success);
+        Assert.NotNull(unlocked);
+        Assert.False(unlocked!.AutoClose);
+    }
+
+    [Fact]
+    public async Task AchievementRestore_PartialBackup_ShouldPreserveCurrentStatesMissingFromBackup()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var tracker = new AchievementTrackerService(configService: null, root);
+            Assert.True(tracker.Unlock("Linguist").Success);
+            Assert.True(tracker.SetProgress("MissionStartCount", 3).Success);
+            tracker.SetCustomData("MissionStartCount", "marker", JsonValue.Create("current"));
+
+            var restorePath = Path.Combine(root, "partial-achievement-backup.json");
+            await File.WriteAllTextAsync(
+                restorePath,
+                """
+                {
+                  "FirstLaunch": {
+                    "Id": "FirstLaunch",
+                    "IsUnlocked": true,
+                    "Progress": 0
+                  }
+                }
+                """);
+
+            var restored = await tracker.RestoreAsync(restorePath);
+
+            Assert.True(restored.Success);
+            var snapshot = await tracker.GetSnapshotAsync("en-us");
+            Assert.True(snapshot.Success);
+            Assert.Contains(snapshot.Value!.Items, item => item.Id == "FirstLaunch" && item.IsUnlocked);
+            Assert.Contains(snapshot.Value.Items, item => item.Id == "Linguist" && item.IsUnlocked);
+            Assert.Equal(3, tracker.GetProgress("MissionStartCount"));
+            Assert.Equal("current", tracker.GetCustomData("MissionStartCount", "marker")?.GetValue<string>());
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    public async Task MissionStartCount_ShouldUseClientYjDayBoundary(
+        string clientType,
+        string utcNowText,
+        string expectedYjDate)
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var service = CreateService(root);
+            await service.LoadOrBootstrapAsync();
+            SetClientType(service, clientType);
+
+            var tracker = new AchievementTrackerService(service, root);
+            tracker.MissionStartCountAdd(DateTime.Parse(
+                utcNowText,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal));
+
+            var marker = tracker.GetCustomData("MissionStartCount", "LastStartDate");
+            Assert.NotNull(marker);
+            Assert.Equal(expectedYjDate, marker!.GetValue<DateTime>().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task MissionStartCount_ShouldHonorLegacyClientTypeKeyAndDefaultToOfficial()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var service = CreateService(root);
+            await service.LoadOrBootstrapAsync();
+            Assert.True(service.TryGetCurrentProfile(out var profile));
+            // Legacy WPF key only (`Start.ClientType`), no unified `ClientType`.
+            profile.Values.Remove("ClientType");
+            profile.Values["Start.ClientType"] = JsonValue.Create("YoStarJP");
+
+            var tracker = new AchievementTrackerService(service, root);
+            tracker.MissionStartCountAdd(Utc("2026-10-10T18:59:59Z")); // YoStarJP 03:59:59 -> YJ 10-10
+            Assert.Equal(
+                "2026-10-10",
+                tracker.GetCustomData("MissionStartCount", "LastStartDate")!.GetValue<DateTime>()
+                    .ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+
+            profile.Values.Remove("Start.ClientType");
+            tracker.MissionStartCountAdd(Utc("2026-10-10T19:30:00Z")); // Official 03:30 on 10-11 -> YJ 10-10
+            Assert.Equal(
+                "2026-10-10",
+                tracker.GetCustomData("MissionStartCount", "LastStartDate")!.GetValue<DateTime>()
+                    .ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+
+            tracker.MissionStartCountAdd(Utc("2026-10-10T20:30:00Z")); // Official 04:30 on 10-11 -> YJ 10-11
+            Assert.Equal(
+                "2026-10-11",
+                tracker.GetCustomData("MissionStartCount", "LastStartDate")!.GetValue<DateTime>()
+                    .ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task MissionStartCount_SameYjDayAcrossUtcMidnight_ShouldAccumulate()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var service = CreateService(root);
+            await service.LoadOrBootstrapAsync();
+            SetClientType(service, "Official");
+
+            var tracker = new AchievementTrackerService(service, root);
+            tracker.MissionStartCountAdd(Utc("2026-10-10T20:30:00Z")); // local 10-11 04:30
+            tracker.MissionStartCountAdd(Utc("2026-10-11T01:00:00Z")); // local 10-11 09:00
+            tracker.MissionStartCountAdd(Utc("2026-10-11T02:00:00Z")); // local 10-11 10:00
+
+            Assert.Equal(3, tracker.GetProgress("MissionStartCount"));
+            Assert.True((await tracker.GetSnapshotAsync("en-us")).Value!.Items
+                .Any(item => item.Id == "MissionStartCount" && item.IsUnlocked));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task MissionStartCount_NewYjDay_ShouldResetProgress()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var service = CreateService(root);
+            await service.LoadOrBootstrapAsync();
+            SetClientType(service, "Official");
+
+            var tracker = new AchievementTrackerService(service, root);
+            tracker.MissionStartCountAdd(Utc("2026-10-11T09:00:00Z")); // YJ 10-11
+            tracker.MissionStartCountAdd(Utc("2026-10-11T19:30:00Z")); // local 10-12 03:30 -> still YJ 10-11
+            tracker.MissionStartCountAdd(Utc("2026-10-11T20:00:00Z")); // local 10-12 04:00 -> YJ 10-12
+
+            Assert.Equal(1, tracker.GetProgress("MissionStartCount"));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task UseDailyAdd_ShouldAdvanceWithinOneYjDayAndResetAfterGap()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var service = CreateService(root);
+            await service.LoadOrBootstrapAsync();
+            SetClientType(service, "Official");
+
+            var tracker = new AchievementTrackerService(service, root);
+            tracker.UseDailyAdd(Utc("2026-10-10T20:30:00Z")); // YJ 10-11
+            tracker.UseDailyAdd(Utc("2026-10-11T02:00:00Z")); // same YJ 10-11 -> unchanged (delta 0)
+            Assert.Equal(1, tracker.GetProgressToGroup("UseDaily"));
+
+            tracker.UseDailyAdd(Utc("2026-10-11T20:30:00Z")); // YJ 10-12 -> delta 1
+            Assert.Equal(2, tracker.GetProgressToGroup("UseDaily"));
+
+            tracker.UseDailyAdd(Utc("2026-10-14T09:00:00Z")); // YJ 10-14 -> delta 2
+            Assert.Equal(1, tracker.GetProgressToGroup("UseDaily"));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task ClueObsessionAdd_ShouldUseClientYjDayDelta()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var service = CreateService(root);
+            await service.LoadOrBootstrapAsync();
+            SetClientType(service, "YoStarEN");
+
+            var tracker = new AchievementTrackerService(service, root);
+            tracker.ClueObsessionAdd(Utc("2026-10-11T11:30:00Z")); // YJ 10-11
+            tracker.ClueObsessionAdd(Utc("2026-10-11T15:00:00Z")); // same YJ 10-11
+            Assert.Equal(1, tracker.GetProgress("ClueObsession"));
+
+            tracker.ClueObsessionAdd(Utc("2026-10-12T11:30:00Z")); // YJ 10-12 -> delta 1
+            Assert.Equal(2, tracker.GetProgress("ClueObsession"));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task AchievementRestore_ShouldNotOverwriteDailyMarkers()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var service = CreateService(root);
+            await service.LoadOrBootstrapAsync();
+            SetClientType(service, "Official");
+
+            var tracker = new AchievementTrackerService(service, root);
+            tracker.UseDailyAdd(Utc("2026-10-13T09:00:00Z")); // live marker = YJ 10-13
+            var liveMarker = tracker.GetCustomData("UseDaily1", "LastLaunchDate");
+            Assert.NotNull(liveMarker);
+
+            var restorePath = Path.Combine(root, "stale-achievement-backup.json");
+            await File.WriteAllTextAsync(
+                restorePath,
+                """
+                {
+                  "UseDaily1": {
+                    "Id": "UseDaily1",
+                    "IsUnlocked": false,
+                    "Progress": 3,
+                    "CustomData": { "LastLaunchDate": "2026-10-11T00:00:00" }
+                  },
+                  "MissionStartCount": {
+                    "Id": "MissionStartCount",
+                    "IsUnlocked": false,
+                    "Progress": 2
+                  }
+                }
+                """);
+
+            var restored = await tracker.RestoreAsync(restorePath);
+
+            Assert.True(restored.Success);
+            // Progress is restored (WPF parity), but the live day marker must survive the restore.
+            Assert.Equal(3, tracker.GetProgress("UseDaily1"));
+            Assert.Equal(
+                liveMarker!.GetValue<DateTime>(),
+                tracker.GetCustomData("UseDaily1", "LastLaunchDate")!.GetValue<DateTime>());
+
+            // A launch on the same YJ day must not reset the streak (delta 0), matching WPF's live marker.
+            tracker.UseDailyAdd(Utc("2026-10-13T15:00:00Z"));
+            Assert.Equal(3, tracker.GetProgressToGroup("UseDaily"));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    public async Task RecordStartup_ShouldUnlockMartianFromBuildOrResourceAge(
+        double? buildAgeDays,
+        double? resourceAgeDays,
+        bool expectMartian)
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var tracker = new AchievementTrackerService(configService: null, root);
+            var now = DateTimeOffset.UtcNow;
+            var context = new AchievementStartupContext(
+                now,
+                now,
+                BuildTimestampUtc: buildAgeDays is { } buildDays ? now.AddDays(-buildDays) : null,
+                ResourceTimestampUtc: resourceAgeDays is { } resourceDays ? now.AddDays(-resourceDays) : null);
+
+            var result = tracker.RecordStartup(context);
+
+            Assert.True(result.Success);
+            var snapshot = await tracker.GetSnapshotAsync("en-us");
+            Assert.True(snapshot.Success);
+            Assert.Equal(expectMartian, snapshot.Value!.Items.Any(item => item.Id == "Martian" && item.IsUnlocked));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    public async Task RecordStartup_ShouldUnlockUpdateAchievementsFromBuildAge(
+        double buildAgeHours,
+        bool expectEarlyBird,
+        bool expectObsession)
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var tracker = new AchievementTrackerService(configService: null, root);
+            var now = DateTimeOffset.UtcNow;
+            var context = new AchievementStartupContext(
+                now,
+                now,
+                BuildTimestampUtc: now.AddHours(-buildAgeHours));
+
+            var result = tracker.RecordStartup(context);
+
+            Assert.True(result.Success);
+            var snapshot = await tracker.GetSnapshotAsync("en-us");
+            Assert.True(snapshot.Success);
+            Assert.Equal(expectEarlyBird, snapshot.Value!.Items.Any(item => item.Id == "UpdateEarlyBird" && item.IsUnlocked));
+            Assert.Equal(expectObsession, snapshot.Value.Items.Any(item => item.Id == "UpdateObsession" && item.IsUnlocked));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task RecordStartup_WithoutTimestamps_ShouldNotUnlockAgeAchievements()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var tracker = new AchievementTrackerService(configService: null, root);
+
+            var result = tracker.RecordStartup(new AchievementStartupContext(DateTimeOffset.UtcNow, DateTimeOffset.Now));
+
+            Assert.True(result.Success);
+            var snapshot = await tracker.GetSnapshotAsync("en-us");
+            Assert.True(snapshot.Success);
+            Assert.DoesNotContain(snapshot.Value!.Items, item => item.Id == "Martian" && item.IsUnlocked);
+            Assert.DoesNotContain(snapshot.Value.Items, item => item.Id == "UpdateEarlyBird" && item.IsUnlocked);
+            Assert.DoesNotContain(snapshot.Value.Items, item => item.Id == "UpdateObsession" && item.IsUnlocked);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    public async Task RecordStartup_ShouldUnlockPioneerTierFromCoreVersion(string version, string? expectedId)
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var tracker = new AchievementTrackerService(configService: null, root);
+            var now = DateTimeOffset.UtcNow;
+
+            var result = tracker.RecordStartup(new AchievementStartupContext(
+                now,
+                now,
+                VersionString: version));
+
+            Assert.True(result.Success);
+            var snapshot = await tracker.GetSnapshotAsync("en-us");
+            Assert.True(snapshot.Success);
+            foreach (var pioneerId in new[] { "Pioneer1", "Pioneer2", "Pioneer3" })
+            {
+                var isUnlocked = snapshot.Value!.Items.Any(item => item.Id == pioneerId && item.IsUnlocked);
+                Assert.Equal(string.Equals(pioneerId, expectedId, StringComparison.Ordinal), isUnlocked);
+            }
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task RecordStartup_ShouldOnlyRecordOnce()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var tracker = new AchievementTrackerService(configService: null, root);
+            var now = DateTimeOffset.UtcNow;
+
+            Assert.True(tracker.RecordStartup(new AchievementStartupContext(now, now)).Success);
+            Assert.True(tracker.RecordStartup(new AchievementStartupContext(
+                now,
+                now,
+                BuildTimestampUtc: now.AddHours(-1))).Success);
+
+            var snapshot = await tracker.GetSnapshotAsync("en-us");
+            Assert.True(snapshot.Success);
+            Assert.DoesNotContain(snapshot.Value!.Items, item => item.Id == "UpdateEarlyBird" && item.IsUnlocked);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+
+
+    private static DateTime Utc(string text)
+        => DateTime.Parse(text, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal);
+
+    private static void SetClientType(UnifiedConfigurationService service, string clientType)
+    {
+        Assert.True(service.TryGetCurrentProfile(out var profile));
+        profile.Values["ClientType"] = JsonValue.Create(clientType);
     }
 
     private sealed class CountingConfigStore : IUnifiedConfigStore

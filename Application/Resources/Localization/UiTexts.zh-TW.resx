@@ -2200,6 +2200,9 @@
   <data name="Settings.IssueReport.ClearImageCache" xml:space="preserve">
     <value>清除圖片快取</value>
   </data>
+  <data name="Settings.IssueReport.ClearImageCacheConfirm" xml:space="preserve">
+    <value>正常情況下無需手動清理。&#10;DEBUG 目錄下儲存的圖片有數量限制，超出後會自動清理舊圖片。&#10;手動清理會刪除所有圖片，可能導致問題排查時缺少截圖依據。&#10;快取檔案（如地圖、幹員頭像等）清理後需要重新產生，可能影響使用體驗。</value>
+  </data>
   <data name="Settings.IssueReport.DeveloperMode" xml:space="preserve">
     <value>開發者模式</value>
   </data>
@@ -3908,6 +3911,12 @@
   </data>
   <data name="Dialog.Error.IssueReportButton" xml:space="preserve">
     <value>問題回饋</value>
+  </data>
+  <data name="Dialog.Error.HelpButton" xml:space="preserve">
+    <value>常見問題</value>
+  </data>
+  <data name="Dialog.Error.QqGroupButton" xml:space="preserve">
+    <value>加入 QQ 群</value>
   </data>
   <data name="Dialog.Warning.CancelButton" xml:space="preserve">
     <value>取消</value>

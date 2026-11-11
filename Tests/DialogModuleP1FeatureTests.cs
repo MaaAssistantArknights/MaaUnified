@@ -104,6 +104,50 @@ public sealed class DialogModuleP1FeatureTests
     }
 
     [Fact]
+    public void ErrorDialog_ShouldExposeFaqAndQqGroupLinks()
+    {
+        var root = BaselineTestSupport.GetMaaUnifiedRoot();
+        var errorDialogXaml = File.ReadAllText(Path.Combine(root, "App", "Features", "Dialogs", "ErrorDialogView.axaml"));
+        var errorDialogCode = File.ReadAllText(Path.Combine(root, "App", "Features", "Dialogs", "ErrorDialogView.axaml.cs"));
+
+        // WPF `ErrorDialogView.xaml` binds MaaUrls.HelpUri and MaaUrls.QqGroups (zh-cn only).
+        Assert.Contains("x:Name=\"HelpButton\"", errorDialogXaml, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"QqGroupButton\"", errorDialogXaml, StringComparison.Ordinal);
+        Assert.Contains("IssueReportUrlCatalog.GetHelpUri(_language)", errorDialogCode, StringComparison.Ordinal);
+        Assert.Contains("IssueReportUrlCatalog.QqGroupsUri", errorDialogCode, StringComparison.Ordinal);
+        Assert.Contains("QqGroupButton.IsVisible = DialogTextCatalog.IsErrorDialogQqGroupVisible(_language);", errorDialogCode, StringComparison.Ordinal);
+        Assert.Equal(
+            "https://docs.maa.plus/zh-cn/manual/faq.html",
+            IssueReportUrlCatalog.GetHelpUri("zh-cn"));
+        Assert.Equal(
+            "https://api.maa.plus/MaaAssistantArknights/api/qqgroup/index.html",
+            IssueReportUrlCatalog.QqGroupsUri);
+        Assert.True(DialogTextCatalog.IsErrorDialogQqGroupVisible("zh-cn"));
+        Assert.False(DialogTextCatalog.IsErrorDialogQqGroupVisible("en-us"));
+        Assert.Equal("常见问题", DialogTextCatalog.ErrorDialogHelpButton("zh-cn"));
+        Assert.Equal("FAQ", DialogTextCatalog.ErrorDialogHelpButton("en-us"));
+    }
+
+    [Fact]
+    public void ErrorDialog_ActionRow_ShouldWrapSoAllButtonsStayReachable()
+    {
+        var root = BaselineTestSupport.GetMaaUnifiedRoot();
+        var errorDialogXaml = File.ReadAllText(Path.Combine(root, "App", "Features", "Dialogs", "ErrorDialogView.axaml"));
+
+        // Six visible buttons in zh-cn (`Copy`/`IssueReport`/`FAQ`/`QQ`/`Ignore`/`Close`, each
+        // MinWidth=104 + Padding=18,0 + Spacing=10) exceed the ~600 px content area at the
+        // dialog's MinWidth=640, so the action row must wrap instead of clipping the leftmost
+        // button. WPF uses a `WrapPanel` for the same row.
+        Assert.Contains("<WrapPanel Orientation=\"Horizontal\"", errorDialogXaml, StringComparison.Ordinal);
+        Assert.Contains("ItemSpacing=\"10\"", errorDialogXaml, StringComparison.Ordinal);
+        Assert.Contains("LineSpacing=\"10\"", errorDialogXaml, StringComparison.Ordinal);
+        var actionsBlock = errorDialogXaml[
+            errorDialogXaml.IndexOf("<controls:AppWindowFrame.ActionsContent>", StringComparison.Ordinal)..
+            errorDialogXaml.IndexOf("</controls:AppWindowFrame.ActionsContent>", StringComparison.Ordinal)];
+        Assert.DoesNotContain("<StackPanel Orientation=\"Horizontal\"", actionsBlock, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void DialogTextCatalog_ShouldProvideEditableConfigHints_ForProfileNameErrors()
     {
         var result = UiOperationResult.Fail(
@@ -942,7 +986,7 @@ public sealed class DialogModuleP1FeatureTests
                     new AchievementListItem(
                         "unlocked-new",
                         "First contact",
-                        "Unlocked description",
+                        "Reward collected",
                         "Unlocked",
                         IsUnlocked: true,
                         IsNewUnlock: true),
@@ -990,6 +1034,13 @@ public sealed class DialogModuleP1FeatureTests
         var combinedItem = Assert.Single(combinedState.Items);
         Assert.Equal("unlocked-new", combinedItem.Id);
         Assert.True(combinedState.HasActiveFilters);
+
+        presenter.SetFilter(AchievementQuickFilter.All);
+        presenter.SetSearchText("Contact");
+        Assert.Empty(presenter.BuildState("{0}", "{0}").Items);
+
+        presenter.SetSearchText("Unlocked");
+        Assert.Empty(presenter.BuildState("{0}", "{0}").Items);
     }
 
     [Fact]
@@ -1158,6 +1209,85 @@ public sealed class DialogModuleP1FeatureTests
         var method = typeof(ProcessPickerDialogView).GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
         Assert.NotNull(method);
         method!.Invoke(view, args);
+    }
+
+    [Theory]
+    // Every known WPF `GetSolution` branch returns a solution and must NOT unlock `UnexpectedCrash`.
+    [InlineData("System.DllNotFoundException: MaaCore.dll not found!", false)]
+    [InlineData("System.Exception: resource folder not found!", false)]
+    [InlineData("System.Exception: AsstGetVersion() failed", false)]
+    [InlineData("System.DllNotFoundException: core assembly", false)]
+    [InlineData("   at lambda_method(Closure)", false)]
+    [InlineData("HandyControl.Controls.SomeControl", false)]
+    [InlineData("System.Net.Http.HttpRequestException Version=8.0.0", false)]
+    [InlineData("CheckAndUpdateNow() MoveFile failed", false)]
+    [InlineData("CheckAndUpdateNow() DeleteFile failed", false)]
+    [InlineData("Hyperlink_Click StartWithShellExecuteEx", false)]
+    [InlineData("System.IO.File.InternalMove", false)]
+    // Anything else falls through to WPF's unknown-error branch, which unlocks `UnexpectedCrash`.
+    [InlineData("System.NullReferenceException: Object reference not set", true)]
+    [InlineData("System.Exception: something entirely unexpected", true)]
+    public void DialogTextCatalog_ShouldDetectUnknownUnhandledCrash(string details, bool expected)
+    {
+        var result = UiOperationResult.Fail(
+            UiErrorCode.UiError,
+            "Global exception (unhandled) in App.DispatcherUnhandledException.",
+            details);
+
+        Assert.Equal(expected, DialogTextCatalog.IsUnknownUnhandledError(result));
+    }
+
+    [Fact]
+    public void DialogTextCatalog_ShouldNotTreatNonUnhandledErrorsAsUnknownCrash()
+    {
+        // The unified Error dialog also serves ordinary failures (connect/toolbox/settings), which
+        // WPF never routes to `ErrorDialogView`; those must not unlock the hidden crash achievement.
+        Assert.False(DialogTextCatalog.IsUnknownUnhandledError(
+            UiOperationResult.Fail(UiErrorCode.ConnectFailed, "Failed to connect.", "adb devices")));
+        Assert.False(DialogTextCatalog.IsUnknownUnhandledError(
+            UiOperationResult.Fail(UiErrorCode.TaskLoadFailed, "Task load failed.")));
+        Assert.False(DialogTextCatalog.IsUnknownUnhandledError(
+            UiOperationResult.Fail(UiErrorCode.UiOperationFailed, "Unhandled exception in `X`.")));
+    }
+
+    [Fact]
+    public void ErrorDialog_ShouldWireUnknownCrashAchievementUnlock()
+    {
+        var root = BaselineTestSupport.GetMaaUnifiedRoot();
+        var mainWindowCode = File.ReadAllText(Path.Combine(root, "App", "Views", "MainWindow.axaml.cs"));
+
+        // WPF `ErrorDialogView.xaml.cs:99` unlocks `CongratulationError` for every dialog and
+        // `:143` unlocks `UnexpectedCrash` only in the unknown-error branch.
+        Assert.Contains("Unlock(\"CongratulationError\")", mainWindowCode, StringComparison.Ordinal);
+        Assert.Contains("DialogTextCatalog.IsUnknownUnhandledError(dialogError.Result)", mainWindowCode, StringComparison.Ordinal);
+        Assert.Contains("Unlock(\"UnexpectedCrash\")", mainWindowCode, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task UnexpectedCrash_ShouldBecomeVisibleOnlyAfterUnlock()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "maa-unified-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var tracker = new AchievementTrackerService(configService: null, root);
+
+            var before = await tracker.GetSnapshotAsync("zh-cn");
+            Assert.True(before.Success);
+            Assert.DoesNotContain(before.Value!.Items, item => item.Id == "UnexpectedCrash");
+
+            Assert.True(tracker.Unlock("UnexpectedCrash").Success);
+
+            var after = await tracker.GetSnapshotAsync("zh-cn");
+            Assert.True(after.Success);
+            var item = Assert.Single(after.Value!.Items, item => item.Id == "UnexpectedCrash");
+            Assert.True(item.IsUnlocked);
+            Assert.True(item.IsHidden);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
     }
 
     private sealed class DialogFeatureFixture : IAsyncDisposable

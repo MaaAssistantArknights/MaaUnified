@@ -736,6 +736,12 @@ Remaining credits: </value>
   <data name="Dialog.Error.IssueReportButton" xml:space="preserve">
     <value>IssueReport</value>
   </data>
+  <data name="Dialog.Error.HelpButton" xml:space="preserve">
+    <value>FAQ</value>
+  </data>
+  <data name="Dialog.Error.QqGroupButton" xml:space="preserve">
+    <value>Join QQ Group</value>
+  </data>
   <data name="Dialog.Error.MessageLabel" xml:space="preserve">
     <value>Message</value>
   </data>
@@ -3459,6 +3465,9 @@ With save file: farm points through crafting (advanced).
   </data>
   <data name="Settings.IssueReport.ClearImageCache" xml:space="preserve">
     <value>Clear image cache</value>
+  </data>
+  <data name="Settings.IssueReport.ClearImageCacheConfirm" xml:space="preserve">
+    <value>Manual cleanup is usually unnecessary.&#10;Images in the DEBUG directory have a quantity limit, and old images are automatically cleaned when exceeded.&#10;Manual cleanup deletes all images, which may result in missing screenshots for troubleshooting.&#10;Cache files (such as maps, operator avatars, etc.) need to be regenerated after clearing, which may affect user experience.</value>
   </data>
   <data name="Settings.IssueReport.DeveloperMode" xml:space="preserve">
     <value>Developer mode</value>

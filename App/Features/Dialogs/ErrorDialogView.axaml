@@ -69,8 +69,9 @@
       </Grid>
     </controls:AppWindowFrame.Content>
     <controls:AppWindowFrame.ActionsContent>
-      <StackPanel Orientation="Horizontal"
-                  Spacing="10">
+      <WrapPanel Orientation="Horizontal"
+                 ItemSpacing="10"
+                 LineSpacing="10">
         <Button x:Name="CopyButton"
                 Classes="app-button app-secondary"
                 Content="Copy"
@@ -79,6 +80,14 @@
                 Classes="app-button app-secondary"
                 Content="IssueReport"
                 Click="OnOpenIssueReportClick" />
+        <Button x:Name="HelpButton"
+                Classes="app-button app-secondary"
+                Content="FAQ"
+                Click="OnOpenHelpClick" />
+        <Button x:Name="QqGroupButton"
+                Classes="app-button app-secondary"
+                Content="QQ"
+                Click="OnOpenQqGroupClick" />
         <Button x:Name="OpenSettingsButton"
                 Classes="app-button app-secondary"
                 Content="Settings"
@@ -94,7 +103,7 @@
                 Content="Close"
                 IsDefault="True"
                 Click="OnConfirmClick" />
-      </StackPanel>
+      </WrapPanel>
     </controls:AppWindowFrame.ActionsContent>
   </controls:AppWindowFrame>
 </Window>

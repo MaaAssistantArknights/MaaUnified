@@ -292,10 +292,9 @@ internal sealed class AchievementListDialogPresenter
             return true;
         }
 
-        return item.Title.Contains(SearchText, StringComparison.OrdinalIgnoreCase)
-            || item.Description.Contains(SearchText, StringComparison.OrdinalIgnoreCase)
-            || item.Status.Contains(SearchText, StringComparison.OrdinalIgnoreCase)
-            || item.Conditions.Contains(SearchText, StringComparison.OrdinalIgnoreCase);
+        return item.Title.Contains(SearchText, StringComparison.Ordinal)
+            || item.Description.Contains(SearchText, StringComparison.Ordinal)
+            || item.Conditions.Contains(SearchText, StringComparison.Ordinal);
     }
 }
 

@@ -2309,6 +2309,9 @@ OF-1 스테이지가 개방되지 않은 경우에는 선택하지 마세요.</v
   <data name="Settings.IssueReport.ClearImageCache" xml:space="preserve">
     <value>이미지 캐시 비우기</value>
   </data>
+  <data name="Settings.IssueReport.ClearImageCacheConfirm" xml:space="preserve">
+    <value>일반적으로 수동 정리가 필요하지 않습니다.&#10;DEBUG 디렉토리에 저장된 이미지는 수량 제한이 있으며 초과 시 오래된 이미지가 자동으로 정리됩니다.&#10;수동 정리는 모든 이미지를 삭제하므로 문제 해결 시 스크린샷이 부족할 수 있습니다.&#10;캐시 파일(지도, 오퍼레이터 아바타 등)은 정리 후 재생성이 필요하며 사용 경험에 영향을 줄 수 있습니다.</value>
+  </data>
   <data name="Settings.IssueReport.DeveloperMode" xml:space="preserve">
     <value>개발자 모드</value>
   </data>
@@ -3957,6 +3960,12 @@ OF-1 스테이지가 개방되지 않은 경우에는 선택하지 마세요.</v
   </data>
   <data name="Dialog.Error.CopyErrorInfoButton" xml:space="preserve">
     <value>오류 상세</value>
+  </data>
+  <data name="Dialog.Error.HelpButton" xml:space="preserve">
+    <value>자주 묻는 질문</value>
+  </data>
+  <data name="Dialog.Error.QqGroupButton" xml:space="preserve">
+    <value>QQ 그룹 가입</value>
   </data>
   <data name="Dialog.Warning.CancelButton" xml:space="preserve">
     <value>취소</value>

@@ -1,5 +1,6 @@
 using System.IO.Compression;
 using System.Runtime.CompilerServices;
+using MAAUnified.App.Features.Dialogs;
 using MAAUnified.App.ViewModels.Settings;
 using MAAUnified.Application.Configuration;
 using MAAUnified.Application.Models;
@@ -42,6 +43,63 @@ public sealed class SettingsModuleCM2FeatureTests
     }
 
     [Fact]
+    public async Task UiDiagnosticsService_BundleIncludesMaaCoreDebugLog()
+    {
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "debug"));
+        Directory.CreateDirectory(Path.Combine(root, "debug", "copilot"));
+        await File.WriteAllTextAsync(Path.Combine(root, "debug", "asst.log"), "core log line");
+        await File.WriteAllTextAsync(Path.Combine(root, "debug", "asst.bak.log"), "core log backup");
+        await File.WriteAllTextAsync(Path.Combine(root, "debug", "copilot", "formation.json"), "{}");
+        // WPF copies the debug directory minus `report*`; generated bundles and report files stay out.
+        await File.WriteAllTextAsync(Path.Combine(root, "debug", "issue-report-2026-01-01.zip"), "zip");
+        await File.WriteAllTextAsync(Path.Combine(root, "debug", "report_debug.txt"), "report");
+
+        var diagnostics = new UiDiagnosticsService(root, new UiLogService());
+
+        var bundlePath = await diagnostics.BuildIssueReportBundleAsync(root);
+
+        using var archive = ZipFile.OpenRead(bundlePath);
+        Assert.Contains(archive.Entries, entry => entry.FullName == "debug/asst.log");
+        Assert.Contains(archive.Entries, entry => entry.FullName == "debug/asst.bak.log");
+        Assert.Contains(archive.Entries, entry => entry.FullName == "debug/copilot/formation.json");
+        Assert.DoesNotContain(archive.Entries, entry => entry.FullName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(archive.Entries, entry => entry.FullName == "debug/report_debug.txt");
+    }
+
+    [Fact]
+    public async Task UiDiagnosticsService_BundleIncludesDebugScreenshots()
+    {
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "debug", "drops"));
+        Directory.CreateDirectory(Path.Combine(root, "debug", "copilot", "formation"));
+        // MaaCore writes PNG screenshots under `debug/**` (DebugImageHelper.hpp); WPF copies the
+        // whole debug directory minus `report*`, so they must ship with the bundle.
+        await File.WriteAllBytesAsync(Path.Combine(root, "debug", "drops", "2026-01-01_raw.png"), [0x89, 0x50, 0x4E, 0x47, 0x00, 0x01]);
+        await File.WriteAllBytesAsync(Path.Combine(root, "debug", "copilot", "formation", "shot.png"), [0x89, 0x50, 0x4E, 0x47, 0x00, 0x02]);
+        // Generated report bundles stay out even though they live under debug.
+        await File.WriteAllBytesAsync(Path.Combine(root, "debug", "report_2026-01-01.png"), [0x00]);
+        await File.WriteAllTextAsync(Path.Combine(root, "debug", "issue-report-2026-01-01.zip"), "zip");
+
+        var diagnostics = new UiDiagnosticsService(root, new UiLogService());
+
+        var bundlePath = await diagnostics.BuildIssueReportBundleAsync(root);
+
+        using var archive = ZipFile.OpenRead(bundlePath);
+        Assert.Contains(archive.Entries, entry => entry.FullName == "debug/drops/2026-01-01_raw.png");
+        Assert.Contains(archive.Entries, entry => entry.FullName == "debug/copilot/formation/shot.png");
+        Assert.DoesNotContain(archive.Entries, entry => entry.FullName == "debug/report_2026-01-01.png");
+        Assert.DoesNotContain(archive.Entries, entry => entry.FullName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase));
+
+        // The binary bytes survive verbatim (screenshots are not text-redacted).
+        var imageEntry = Assert.Single(archive.Entries, entry => entry.FullName == "debug/drops/2026-01-01_raw.png");
+        using var imageStream = imageEntry.Open();
+        using var buffer = new MemoryStream();
+        await imageStream.CopyToAsync(buffer);
+        Assert.Equal(new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x00, 0x01 }, buffer.ToArray());
+    }
+
+    [Fact]
     public async Task IssueReport_DebugDirectoryAndImageCacheActions_WorkAndExposeStatus()
     {
         await using var fixture = await RuntimeFixture.CreateAsync();
@@ -58,16 +116,26 @@ public sealed class SettingsModuleCM2FeatureTests
             fixture.Runtime,
             new ConnectionGameSharedStateViewModel(),
             null,
-            OpenExternalTargetAsync);
+            OpenExternalTargetAsync,
+            dialogService: new ScriptedWarningDialogService(DialogReturnSemantic.Confirm));
         await vm.InitializeAsync();
         Assert.False(vm.HasIssueReportPath);
         Assert.False(vm.HasIssueReportStatusMessage);
 
+        // WPF clears `.jpg/.jpeg/.png` under `cache` and `debug`, keeping other files intact.
         var imageCacheRoot = Path.Combine(fixture.Root, "cache", "images");
         var nestedDirectory = Path.Combine(imageCacheRoot, "nested");
         Directory.CreateDirectory(nestedDirectory);
         await File.WriteAllTextAsync(Path.Combine(imageCacheRoot, "image-a.png"), "placeholder");
         await File.WriteAllTextAsync(Path.Combine(nestedDirectory, "image-b.jpg"), "placeholder");
+
+        var debugImageDirectory = Path.Combine(fixture.Root, "debug", "copilot", "formation");
+        Directory.CreateDirectory(debugImageDirectory);
+        await File.WriteAllTextAsync(Path.Combine(debugImageDirectory, "screenshot.png"), "placeholder");
+        await File.WriteAllTextAsync(Path.Combine(fixture.Root, "debug", "asst.log"), "core log");
+        Directory.CreateDirectory(Path.Combine(fixture.Root, "cache", "avatars"));
+        await File.WriteAllTextAsync(Path.Combine(fixture.Root, "cache", "avatars", "avatar.png"), "placeholder");
+        await File.WriteAllTextAsync(Path.Combine(fixture.Root, "cache", "settings.json"), "{}");
 
         await vm.OpenIssueReportDebugDirectoryAsync();
         Assert.NotEmpty(openedTargets);
@@ -77,8 +145,12 @@ public sealed class SettingsModuleCM2FeatureTests
         Assert.False(vm.HasIssueReportErrorMessage);
 
         await vm.ClearIssueReportImageCacheAsync();
-        Assert.True(Directory.Exists(imageCacheRoot));
-        Assert.Empty(Directory.EnumerateFileSystemEntries(imageCacheRoot, "*", SearchOption.AllDirectories));
+        Assert.Empty(Directory.EnumerateFiles(imageCacheRoot, "*.png", SearchOption.AllDirectories));
+        Assert.Empty(Directory.EnumerateFiles(Path.Combine(fixture.Root, "debug"), "*.png", SearchOption.AllDirectories));
+        Assert.Empty(Directory.EnumerateFiles(Path.Combine(fixture.Root, "cache"), "*.png", SearchOption.AllDirectories));
+        // Non-image files are preserved (WPF keeps folder structure and non-image content).
+        Assert.True(File.Exists(Path.Combine(fixture.Root, "debug", "asst.log")));
+        Assert.True(File.Exists(Path.Combine(fixture.Root, "cache", "settings.json")));
         Assert.Contains("图像缓存已清理", vm.IssueReportStatusMessage, StringComparison.Ordinal);
         Assert.False(vm.HasIssueReportErrorMessage);
     }
@@ -305,5 +377,58 @@ public sealed class SettingsModuleCM2FeatureTests
         {
             return ValueTask.CompletedTask;
         }
+    }
+
+    private sealed class ScriptedWarningDialogService(DialogReturnSemantic warningReturn) : IAppDialogService
+    {
+        public Task<DialogCompletion<AnnouncementDialogPayload>> ShowAnnouncementAsync(
+            AnnouncementDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<AnnouncementDialogPayload>(DialogReturnSemantic.Close, null, "scripted"));
+
+        public Task<DialogCompletion<VersionUpdateDialogPayload>> ShowVersionUpdateAsync(
+            VersionUpdateDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<VersionUpdateDialogPayload>(DialogReturnSemantic.Close, null, "scripted"));
+
+        public Task<DialogCompletion<ProcessPickerDialogPayload>> ShowProcessPickerAsync(
+            ProcessPickerDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<ProcessPickerDialogPayload>(DialogReturnSemantic.Close, null, "scripted"));
+
+        public Task<DialogCompletion<EmulatorPathDialogPayload>> ShowEmulatorPathAsync(
+            EmulatorPathDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<EmulatorPathDialogPayload>(DialogReturnSemantic.Close, null, "scripted"));
+
+        public Task<DialogCompletion<ErrorDialogPayload>> ShowErrorAsync(
+            ErrorDialogRequest request,
+            string sourceScope,
+            Func<CancellationToken, Task<UiOperationResult>>? openIssueReportAsync = null,
+            Func<CancellationToken, Task<UiOperationResult>>? openSettingsAsync = null,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<ErrorDialogPayload>(DialogReturnSemantic.Close, null, "scripted"));
+
+        public Task<DialogCompletion<AchievementListDialogPayload>> ShowAchievementListAsync(
+            AchievementListDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<AchievementListDialogPayload>(DialogReturnSemantic.Close, null, "scripted"));
+
+        public Task<DialogCompletion<TextDialogPayload>> ShowTextAsync(
+            TextDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<TextDialogPayload>(DialogReturnSemantic.Close, null, "scripted"));
+
+        public Task<DialogCompletion<WarningConfirmDialogPayload>> ShowWarningConfirmAsync(
+            WarningConfirmDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new DialogCompletion<WarningConfirmDialogPayload>(warningReturn, new WarningConfirmDialogPayload(warningReturn == DialogReturnSemantic.Confirm), "scripted"));
     }
 }

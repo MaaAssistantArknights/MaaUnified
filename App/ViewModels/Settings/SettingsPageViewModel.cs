@@ -83,8 +83,6 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
     // WPF parity: TimerSettingsUserControlModel defaults slot i to hour (i - 1) * 3.
     private static int GetDefaultTimerHour(int slotIndex) => (slotIndex - 1) * 3;
     private const int DefaultTimerMinute = 0;
-    private const string IssueReportHelpUrl = "https://maa.plus/docs/";
-    private const string IssueReportIssueEntryUrl = "https://github.com/MaaAssistantArknights/MaaAssistantArknights/issues/new/choose";
     private const string AboutOfficialWebsiteUrl = "https://maa.plus/";
     private const string AboutCommunityUrl = "https://github.com/MaaAssistantArknights/MaaAssistantArknights/discussions";
     private const string AboutDownloadUrl = "https://github.com/MaaAssistantArknights/MaaAssistantArknights/releases";
@@ -1425,6 +1423,13 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
                 break;
             case HotkeyCaptureResultKind.Captured:
                 state.EndCapture();
+                if (capture.Gesture is { Ctrl: true, Shift: true, Alt: true, Meta: true })
+                {
+                    // WPF `HotKeyEditorUserControl` unlocks HotkeyMagician when all four
+                    // modifier keys are held for the captured chord.
+                    _ = Runtime.AchievementTrackerService.Unlock("HotkeyMagician");
+                }
+
                 if (capture.Gesture is not null)
                 {
                     if (string.Equals(hotkeyName, ShowGuiHotkeyName, StringComparison.OrdinalIgnoreCase))
@@ -5115,7 +5120,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
     public async Task OpenIssueReportHelpAsync(CancellationToken cancellationToken = default)
     {
         ClearIssueReportStatus();
-        var result = await _openExternalTargetAsync(IssueReportHelpUrl, cancellationToken);
+        var result = await _openExternalTargetAsync(IssueReportUrlCatalog.GetHelpUri(Language), cancellationToken);
         if (!await ApplyResultAsync(result, "Settings.IssueReport.OpenHelp", cancellationToken))
         {
             IssueReportStatusMessage = LocalizeSettingsText(
@@ -5134,7 +5139,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
     public async Task OpenIssueReportEntryAsync(CancellationToken cancellationToken = default)
     {
         ClearIssueReportStatus();
-        var result = await OpenIssueReportEntryForDialogAsync(cancellationToken);
+        var result = await _openExternalTargetAsync(IssueReportUrlCatalog.IssueListUri, cancellationToken);
         if (!await ApplyResultAsync(result, "Settings.IssueReport.OpenEntry", cancellationToken))
         {
             IssueReportStatusMessage = LocalizeSettingsText(
@@ -5151,9 +5156,9 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
         _ = Runtime.AchievementTrackerService.Unlock("ProblemFeedback");
     }
 
-    public async Task<UiOperationResult> OpenIssueReportEntryForDialogAsync(CancellationToken cancellationToken = default)
+    public async Task<UiOperationResult> OpenIssueReportEntryForErrorDialogAsync(CancellationToken cancellationToken = default)
     {
-        var result = await _openExternalTargetAsync(IssueReportIssueEntryUrl, cancellationToken);
+        var result = await _openExternalTargetAsync(IssueReportUrlCatalog.GetNewIssueUri(Language), cancellationToken);
         if (result.Success)
         {
             _ = Runtime.AchievementTrackerService.Unlock("ProblemFeedback");
@@ -5187,44 +5192,85 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
     public async Task ClearIssueReportImageCacheAsync(CancellationToken cancellationToken = default)
     {
         ClearIssueReportStatus();
-        var imageCacheDirectory = ResolveImageCacheDirectoryPath();
+        // WPF `IssueReportUserControlModel.ClearImageCache` shows a Yes/No warning first and returns
+        // without deleting when the user declines, so both entry points (the Issue Report page and
+        // the `settings.clear-image-cache` section action) funnel through this confirmation.
+        var chrome = CreateSettingsDialogChrome(texts => new DialogChromeSnapshot(
+            title: texts["Dialog.Warning.Title"],
+            confirmText: texts["Dialog.Warning.ConfirmButton"],
+            cancelText: texts["Dialog.Warning.CancelButton"]));
+        var chromeSnapshot = chrome.GetSnapshot();
+        var confirmResult = await _dialogService.ShowWarningConfirmAsync(
+            new WarningConfirmDialogRequest(
+                Title: chromeSnapshot.Title,
+                Message: LocalizeSettingsText(
+                    "Settings.IssueReport.ClearImageCacheConfirm",
+                    "正常情况下无需手动清理。手动清理会删除所有图片，可能导致问题排查时缺少截图依据。"),
+                ConfirmText: chromeSnapshot.ConfirmText ?? RootTexts["Dialog.Warning.ConfirmButton"],
+                CancelText: chromeSnapshot.CancelText ?? RootTexts["Dialog.Warning.CancelButton"],
+                Language: Language,
+                Chrome: chrome),
+            "Settings.IssueReport.ClearImageCache.Confirm",
+            cancellationToken);
+        if (confirmResult.Return != DialogReturnSemantic.Confirm)
+        {
+            await RecordEventAsync(
+                "Settings.IssueReport.ClearImageCache",
+                $"cancelled; return={confirmResult.Return}",
+                cancellationToken);
+            return;
+        }
+
+        // Mirrors WPF `IssueReportUserControlModel.ClearImageCache`: delete `.jpg/.jpeg/.png`
+        // recursively under the cache and debug directories while preserving folder structure
+        // and every non-image file (the core writes its screenshots under `debug/**` and avatar
+        // images under `cache/**`).
+        var imageExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ".jpg", ".jpeg", ".png",
+        };
+
         try
         {
             var removedFiles = 0;
-            var removedDirectories = 0;
-            if (Directory.Exists(imageCacheDirectory))
+            foreach (var directory in ResolveImageCacheScanDirectories())
             {
-                var files = Directory.EnumerateFiles(imageCacheDirectory, "*", SearchOption.AllDirectories).ToList();
-                foreach (var file in files)
+                if (!Directory.Exists(directory))
                 {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    File.Delete(file);
-                    removedFiles++;
+                    continue;
                 }
 
-                var directories = Directory.EnumerateDirectories(imageCacheDirectory, "*", SearchOption.AllDirectories)
-                    .OrderByDescending(static path => path.Length)
-                    .ToList();
-                foreach (var directory in directories)
+                foreach (var file in Directory.EnumerateFiles(directory, "*", SearchOption.AllDirectories))
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    Directory.Delete(directory, recursive: false);
-                    removedDirectories++;
+                    if (!imageExtensions.Contains(Path.GetExtension(file)))
+                    {
+                        continue;
+                    }
+
+                    try
+                    {
+                        File.Delete(file);
+                        removedFiles++;
+                    }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                    {
+                        // WPF logs and keeps going when a single image cannot be removed.
+                    }
                 }
             }
 
-            Directory.CreateDirectory(imageCacheDirectory);
             var result = UiOperationResult.Ok(
-                removedFiles == 0 && removedDirectories == 0
+                removedFiles == 0
                     ? FormatSettingsText(
                         "Settings.IssueReport.Status.ImageCacheAlreadyEmpty",
                         "图像缓存目录为空：{0}",
-                        imageCacheDirectory)
+                        Path.Combine(ResolveRuntimeBaseDirectory(), "cache"))
                     : FormatSettingsText(
                         "Settings.IssueReport.Status.ImageCacheCleared",
                         "图像缓存已清理：文件 {0} 个，目录 {1} 个。",
                         removedFiles,
-                        removedDirectories));
+                        0));
             if (!await ApplyResultAsync(result, "Settings.IssueReport.ClearImageCache", cancellationToken))
             {
                 IssueReportStatusMessage = LocalizeSettingsText(
@@ -7785,9 +7831,15 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
         return Path.Combine(ResolveRuntimeBaseDirectory(), "debug");
     }
 
-    private string ResolveImageCacheDirectoryPath()
+    // WPF `ClearImageCache` walks `PathsHelper.CacheDir` and `PathsHelper.DebugDir`.
+    private IReadOnlyList<string> ResolveImageCacheScanDirectories()
     {
-        return Path.Combine(ResolveRuntimeBaseDirectory(), "cache", "images");
+        var baseDirectory = ResolveRuntimeBaseDirectory();
+        return
+        [
+            Path.Combine(baseDirectory, "cache"),
+            Path.Combine(baseDirectory, "debug"),
+        ];
     }
 
     private IReadOnlyList<string> BuildEmulatorPathDialogCandidates()

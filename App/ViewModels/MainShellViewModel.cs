@@ -25,6 +25,7 @@ using MAAUnified.Application.Orchestration;
 using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Features;
 using MAAUnified.Application.Services.Localization;
+using MAAUnified.Compat.Runtime;
 using MAAUnified.CoreBridge;
 using MAAUnified.Platform;
 using ConfigurationKeys = MAAUnified.Compat.Constants.ConfigurationKeys;
@@ -813,10 +814,14 @@ public sealed class MainShellViewModel : ObservableObject
                 await PersistPlatformHotkeyDefaultsMigrationIfNeededAsync(cancellationToken);
 
                 ApplyDeveloperModeFromConfig();
+                // WPF loads localization (`Main/Bootstrapper.cs:376` `LocalizationHelper.Load()`)
+                // before `AchievementTrackerHelper.Events.Startup()` (`:605`). The tracker localizes
+                // an unlock's title/description at unlock time, so set the configured language from
+                // the freshly loaded config before recording the startup achievements.
+                _runtime.AchievementTrackerService.SetCurrentLanguage(
+                    StartupShellSnapshot.FromConfig(_runtime.ConfigurationService.CurrentConfig).Language);
                 _runtime.AchievementTrackerService.RecordStartup(
-                    new AchievementStartupContext(
-                        DateTimeOffset.UtcNow,
-                        DateTimeOffset.Now));
+                    await BuildAchievementStartupContextAsync(cancellationToken));
                 RecordStartupPhase(
                     "ConfigBootstrap.End",
                     $"loadedExisting={loadResult.LoadedFromExistingConfig}; validationIssues={loadResult.ValidationIssues.Count}");
@@ -3104,6 +3109,69 @@ public sealed class MainShellViewModel : ObservableObject
         }
 
         ConnectionGameProfileSync.WritePropertyToProfile(profile, _connectionGameSharedState, changedPropertyName);
+    }
+
+    private async Task<AchievementStartupContext> BuildAchievementStartupContextAsync(CancellationToken cancellationToken)
+    {
+        return new AchievementStartupContext(
+            DateTimeOffset.UtcNow,
+            DateTimeOffset.Now,
+            ResolveBuildTimestampUtc(),
+            await ResolveResourceTimestampUtcAsync(cancellationToken),
+            MaaCoreBridgeNative.TryReadInstalledVersion(RuntimeLayout.ResolveRuntimeBaseDirectory()));
+    }
+
+    // WPF reads `BuildDateTimeAttribute`; the unified app stamps the same attribute at compile
+    // time. Fall back to the app assembly write time (what the Version Update panel shows) when
+    // the attribute is missing.
+    private static DateTimeOffset? ResolveBuildTimestampUtc()
+    {
+        var buildTime = typeof(MainShellViewModel).Assembly
+            .GetCustomAttribute<MAAUnified.App.Properties.BuildDateTimeAttribute>()
+            ?.BuildTime;
+        if (buildTime.HasValue)
+        {
+            return buildTime.Value;
+        }
+
+        try
+        {
+            var location = typeof(MainShellViewModel).Assembly.Location;
+            if (!string.IsNullOrWhiteSpace(location) && File.Exists(location))
+            {
+                return new DateTimeOffset(File.GetLastWriteTimeUtc(location), TimeSpan.Zero);
+            }
+        }
+        catch
+        {
+            // Best effort: an unavailable build stamp skips the time based achievements.
+        }
+
+        return null;
+    }
+
+    private async Task<DateTimeOffset?> ResolveResourceTimestampUtcAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await _runtime.VersionUpdateFeatureService.LoadResourceVersionInfoAsync(null, cancellationToken);
+            if (result.Success
+                && result.Value is { LastUpdatedAt: var lastUpdatedAt }
+                && lastUpdatedAt != DateTime.MinValue)
+            {
+                return new DateTimeOffset(DateTime.SpecifyKind(lastUpdatedAt, DateTimeKind.Utc));
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch
+        {
+            // Best effort: a missing resource version file skips the resource age check.
+        }
+
+        return null;
     }
 
     private void SyncConnectionFromProfile()

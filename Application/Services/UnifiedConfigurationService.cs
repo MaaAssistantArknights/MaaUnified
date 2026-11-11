@@ -1506,6 +1506,29 @@ public sealed class UnifiedConfigurationService
         return (missing, fallback);
     }
 
+    private static bool TryReadBool(JsonNode? node, out bool value)
+    {
+        value = false;
+        if (node is null)
+        {
+            return false;
+        }
+
+        var text = node.ToString();
+        if (bool.TryParse(text, out value))
+        {
+            return true;
+        }
+
+        if (int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var number))
+        {
+            value = number != 0;
+            return true;
+        }
+
+        return false;
+    }
+
     private static string SelectFallbackProfileName(UnifiedConfig config)
     {
         var fallback = config.Profiles.Keys.FirstOrDefault(name =>

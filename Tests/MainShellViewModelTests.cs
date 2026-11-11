@@ -430,6 +430,35 @@ public sealed class MainShellViewModelTests
     }
 
     [Fact]
+    public async Task InitializeAsync_StartupAchievementNotification_UsesConfiguredLanguage()
+    {
+        // WPF loads localization (`Main/Bootstrapper.cs:376`) before `Events.Startup()` (`:605`),
+        // so startup achievements must be localized with the configured language rather than the
+        // tracker's zh-cn default.
+        await using var fixture = await TestFixture.CreateAsync(
+            existingAvaloniaJson: CreateStartupSnapshotConfigJson());
+        AchievementUnlockedEvent? firstLaunch = null;
+        fixture.Runtime.AchievementTrackerService.AchievementUnlocked += (_, notification) =>
+        {
+            if (string.Equals(notification.Id, "FirstLaunch", StringComparison.Ordinal))
+            {
+                firstLaunch = notification;
+            }
+        };
+
+        await fixture.ViewModel.InitializeAsync();
+
+        Assert.Equal("en-us", fixture.ViewModel.CurrentShellLanguage);
+        Assert.NotNull(firstLaunch);
+        Assert.Equal(
+            AchievementTextCatalog.GetString("Achievement.FirstLaunch.Title", "en-us"),
+            firstLaunch!.Title);
+        Assert.NotEqual(
+            AchievementTextCatalog.GetString("Achievement.FirstLaunch.Title", "zh-cn"),
+            firstLaunch.Title);
+    }
+
+    [Fact]
     public async Task ExecuteStartupLaunchBehaviorAsync_RunDirectlyConfigured_ShouldStartTaskQueue()
     {
         await using var fixture = await TestFixture.CreateAsync(
@@ -712,6 +741,18 @@ public sealed class MainShellViewModelTests
     }
 
     [Fact]
+    public void AppAssembly_ShouldStampBuildDateTimeAttribute()
+    {
+        // WPF reads `BuildDateTimeAttribute` for the Martian/UpdateEarlyBird checks; the unified
+        // app stamps the same attribute so the build age survives single-file publishes.
+        var attribute = typeof(MainShellViewModel).Assembly
+            .GetCustomAttribute<MAAUnified.App.Properties.BuildDateTimeAttribute>();
+
+        Assert.NotNull(attribute);
+        Assert.True(attribute!.BuildTime > new DateTimeOffset(2020, 1, 1, 0, 0, 0, TimeSpan.Zero));
+    }
+
+    [Fact]
     public async Task AchievementToast_ImmediatePointerPause_ShouldNotFreezeCountdown()
     {
         var dismissedIds = new List<string>();
@@ -794,11 +835,11 @@ public sealed class MainShellViewModelTests
         try
         {
             await Task.Delay(200);
-            Assert.Equal(7d, GetAchievementToastRemainingSeconds(toast), precision: 2);
+            Assert.Equal(15d, GetAchievementToastRemainingSeconds(toast), precision: 2);
 
             toast.StartPresentation();
             await Task.Delay(200);
-            Assert.True(GetAchievementToastRemainingSeconds(toast) < 6.95d);
+            Assert.True(GetAchievementToastRemainingSeconds(toast) < 14.95d);
         }
         finally
         {

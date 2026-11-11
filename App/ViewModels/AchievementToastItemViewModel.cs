@@ -5,7 +5,9 @@ namespace MAAUnified.App.ViewModels;
 
 public sealed class AchievementToastItemViewModel : ObservableObject, IDisposable
 {
-    private const double CloseCountdownSeconds = 7d;
+    // WPF `AchievementTrackerHelper.Unlock` sets `GrowlInfo.WaitTime = 15` (HandyControl
+    // interprets `WaitTime` as whole seconds), so the unified toast auto-closes after 15 s.
+    private const double CloseCountdownSeconds = 15d;
     private static readonly TimeSpan InitialPointerPauseSuppressionWindow = TimeSpan.FromMilliseconds(500);
     private readonly Action<string>? _dismissCallback;
     private readonly object _closeCountdownGate = new();

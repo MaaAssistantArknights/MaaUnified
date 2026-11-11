@@ -3186,6 +3186,19 @@ public partial class MainWindow : Window
                     "MainWindow.DialogError.UnlockAchievement",
                     achievementResult);
             }
+
+            // WPF `ErrorDialogView.xaml.cs:143` unlocks `UnexpectedCrash` from `GetSolution` only when
+            // the details fall through to the unknown-error branch (no known solution matched).
+            if (DialogTextCatalog.IsUnknownUnhandledError(dialogError.Result))
+            {
+                var crashAchievementResult = App.Runtime.AchievementTrackerService.Unlock("UnexpectedCrash");
+                if (!crashAchievementResult.Success)
+                {
+                    await App.Runtime.DiagnosticsService.RecordFailedResultAsync(
+                        "MainWindow.DialogError.UnlockUnexpectedCrashAchievement",
+                        crashAchievementResult);
+                }
+            }
         }
         catch (Exception ex) when (App.ShouldIgnoreUnhandledException(ex))
         {
@@ -3219,6 +3232,8 @@ public partial class MainWindow : Window
                         ? DialogTextCatalog.ErrorDialogCopyErrorInfoButton(nextLanguage)
                         : DialogTextCatalog.ErrorDialogCopyButton(nextLanguage)),
                     (DialogTextCatalog.ChromeKeys.IssueReportButton, DialogTextCatalog.ErrorDialogIssueReportButton(nextLanguage)),
+                    (DialogTextCatalog.ChromeKeys.HelpButton, DialogTextCatalog.ErrorDialogHelpButton(nextLanguage)),
+                    (DialogTextCatalog.ChromeKeys.QqGroupButton, DialogTextCatalog.ErrorDialogQqGroupButton(nextLanguage)),
                     (DialogTextCatalog.ChromeKeys.OpenSettingsButton, DialogTextCatalog.ErrorDialogOpenSettingsButton(nextLanguage)),
                     (DialogTextCatalog.ChromeKeys.TimestampLabel, DialogTextCatalog.ErrorDialogTimestampLabel(nextLanguage)),
                     (DialogTextCatalog.ChromeKeys.ContextLabel, DialogTextCatalog.ErrorDialogContextLabel(nextLanguage)),
@@ -3238,7 +3253,7 @@ public partial class MainWindow : Window
             Chrome: chrome);
         Func<CancellationToken, Task<UiOperationResult>>? openIssueReportAsync = VM is null
             ? null
-            : VM.SettingsPage.OpenIssueReportEntryForDialogAsync;
+            : VM.SettingsPage.OpenIssueReportEntryForErrorDialogAsync;
         Func<CancellationToken, Task<UiOperationResult>>? openSettingsAsync = isConnectFailed && VM is not null
             ? OpenConnectionSettingsForDialogAsync
             : null;

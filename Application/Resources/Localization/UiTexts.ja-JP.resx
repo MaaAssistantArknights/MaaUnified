@@ -2308,6 +2308,9 @@
   <data name="Settings.IssueReport.ClearImageCache" xml:space="preserve">
     <value>画像キャッシュを削除</value>
   </data>
+  <data name="Settings.IssueReport.ClearImageCacheConfirm" xml:space="preserve">
+    <value>通常、手動でクリアする必要はありません。&#10;DEBUGディレクトリに保存される画像には数量制限があり、超過すると古い画像が自動的にクリアされます。&#10;手動クリアはすべての画像を削除するため、問題調査時にスクリーンショットが不足する可能性があります。&#10;キャッシュファイル（マップ、オペレーターアイコンなど）はクリア後に再生成が必要で、使用体験に影響する可能性があります。</value>
+  </data>
   <data name="Settings.IssueReport.DeveloperMode" xml:space="preserve">
     <value>開発者モード</value>
   </data>
@@ -3956,6 +3959,12 @@ MAA を複数開くには、新しい MAA を他のフォルダにコピーし�
   </data>
   <data name="Dialog.Error.CopyErrorInfoButton" xml:space="preserve">
     <value>エラー詳細</value>
+  </data>
+  <data name="Dialog.Error.HelpButton" xml:space="preserve">
+    <value>よくある質問</value>
+  </data>
+  <data name="Dialog.Error.QqGroupButton" xml:space="preserve">
+    <value>QQグループに入ります</value>
   </data>
   <data name="Dialog.Warning.CancelButton" xml:space="preserve">
     <value>キャンセル</value>

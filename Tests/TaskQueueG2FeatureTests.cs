@@ -3283,6 +3283,222 @@ public sealed class TaskQueueG2FeatureTests
         }
     }
 
+
+    [Fact]
+    public async Task Callback_TaskChainCompleted_ShouldUseSeparateLogCardFromTaskStart()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "开始唤醒")).Success);
+        fixture.Bridge.NextImageBytes = SinglePixelPng;
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        await InvokeCallbackAsync(vm, new CoreCallbackEvent(
+            10001,
+            "TaskChainStart",
+            """{"task_chain":"StartUp","task_index":0,"run_id":"run-g2-startup-split"}""",
+            DateTimeOffset.UtcNow));
+        await InvokeCallbackAsync(vm, new CoreCallbackEvent(
+            10002,
+            "TaskChainCompleted",
+            """{"task_chain":"StartUp","task_index":0,"run_id":"run-g2-startup-split"}""",
+            DateTimeOffset.UtcNow));
+
+        Assert.Equal(2, vm.LogCards.Count);
+        Assert.Contains("开始任务: 开始唤醒", vm.LogCards[0].PrimaryContent, StringComparison.Ordinal);
+        Assert.Contains("完成任务: 开始唤醒", vm.LogCards[1].PrimaryContent, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Callback_StageDrops_ShouldUseSeparateLogCardAndRequestThumbnail()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Fight", "fight-a")).Success);
+        fixture.Bridge.NextImageBytes = SinglePixelPng;
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        await InvokeCallbackAsync(vm, new CoreCallbackEvent(
+            10001,
+            "TaskChainStart",
+            """{"task_chain":"Fight","task_index":0,"run_id":"run-g2-stage-drops"}""",
+            DateTimeOffset.UtcNow));
+        await InvokeCallbackAsync(vm, new CoreCallbackEvent(
+            10002,
+            "SubTaskExtraInfo",
+            """{"task_chain":"Fight","task_index":0,"what":"StageDrops","details":{"stats":[{"itemName":"源岩","quantity":2,"addQuantity":1}],"stage":{"stageCode":"1-7"},"cur_times":1}}""",
+            DateTimeOffset.UtcNow));
+
+        Assert.True(await WaitForConditionAsync(() => fixture.Bridge.GetImageCallCount > 0));
+
+        Assert.Equal(2, vm.LogCards.Count);
+        Assert.Equal("开始任务: fight-a", vm.LogCards[0].PrimaryContent);
+        Assert.Contains("1-7", vm.LogCards[1].PrimaryContent, StringComparison.Ordinal);
+        Assert.Contains("源岩", vm.LogCards[1].PrimaryContent, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Callback_MallCompletedLogs_ShouldNotStickToPreviousCard()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Mall", "信用收支")).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        await InvokeCallbackAsync(vm, new CoreCallbackEvent(
+            10001,
+            "TaskChainStart",
+            """{"task_chain":"Mall","task_index":0,"run_id":"run-g2-mall-split"}""",
+            DateTimeOffset.UtcNow));
+        await InvokeCallbackAsync(vm, new CoreCallbackEvent(
+            10002,
+            "SubTaskCompleted",
+            """{"task_chain":"Mall","task_index":0,"sub_task":"ProcessTask","details":{"task":"VisitNextBlack"}}""",
+            DateTimeOffset.UtcNow));
+
+        Assert.Equal(2, vm.LogCards.Count);
+        Assert.Contains("开始任务: 信用收支", vm.LogCards[0].PrimaryContent, StringComparison.Ordinal);
+        Assert.Contains("完成任务: 访问好友", vm.LogCards[1].PrimaryContent, StringComparison.Ordinal);
+    }
+
+    public void ShouldUnlockTaskStartCancelOnManualStop_ShouldRequireStopWithinFiveSeconds(
+        double elapsedSeconds,
+        bool expected)
+    {
+        var startedAt = new DateTime(2026, 10, 2, 12, 0, 0, DateTimeKind.Local);
+
+        var actual = TaskQueuePageViewModel.ShouldUnlockTaskStartCancelOnManualStop(
+            startedAt,
+            startedAt.AddSeconds(elapsedSeconds));
+
+        Assert.Equal(expected, actual);
+    }
+
+    [Fact]
+    public void ShouldUnlockTaskStartCancelOnManualStop_ShouldIgnoreMissingStartTime()
+    {
+        Assert.False(TaskQueuePageViewModel.ShouldUnlockTaskStartCancelOnManualStop(null, DateTime.Now));
+    }
+
+    [Fact]
+    public async Task StopAsync_ManualStopWithinFiveSeconds_ShouldUnlockTaskStartCancel()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Fight", "fight-a")).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(fixture.Runtime.ConnectFeatureService, fixture.ReadyAdbPath)).Success);
+        await vm.StartAsync();
+        await vm.StopAsync();
+
+        var snapshot = await fixture.Runtime.AchievementTrackerService.GetSnapshotAsync("zh-cn");
+        Assert.True(snapshot.Success);
+        Assert.Contains(snapshot.Value!.Items, item => item.Id == "TaskStartCancel" && item.IsUnlocked);
+    }
+
+    [Fact]
+    public async Task StopAsync_ManualStopAfterFiveSeconds_ShouldNotUnlockTaskStartCancel()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Fight", "fight-a")).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(fixture.Runtime.ConnectFeatureService, fixture.ReadyAdbPath)).Success);
+        await vm.StartAsync();
+
+        // Simulate a run that started well before the five-second window elapses.
+        SetRunStartTime(vm, DateTime.Now.AddSeconds(-30));
+        await vm.StopAsync();
+
+        var snapshot = await fixture.Runtime.AchievementTrackerService.GetSnapshotAsync("zh-cn");
+        Assert.True(snapshot.Success);
+        Assert.DoesNotContain(snapshot.Value!.Items, item => item.Id == "TaskStartCancel" && item.IsUnlocked);
+        Assert.Contains(snapshot.Value.Items, item => item.Id == "TacticalRetreat" && item.IsUnlocked);
+    }
+
+    [Fact]
+    public async Task StopAsync_ProgrammaticStopWithinFiveSeconds_ShouldNotUnlockTaskStartCancel()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Fight", "fight-a")).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(fixture.Runtime.ConnectFeatureService, fixture.ReadyAdbPath)).Success);
+        await vm.StartAsync();
+        await vm.StopAsync(userInitiated: false);
+
+        var snapshot = await fixture.Runtime.AchievementTrackerService.GetSnapshotAsync("zh-cn");
+        Assert.True(snapshot.Success);
+        Assert.DoesNotContain(snapshot.Value!.Items, item => item.Id == "TaskStartCancel" && item.IsUnlocked);
+    }
+
+    [Fact]
+    public async Task Callback_AllTasksCompleted_WithOverlayVisible_ShouldUnlockLogSupervisor()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Fight", "fight-a")).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(fixture.Runtime.ConnectFeatureService, fixture.ReadyAdbPath)).Success);
+        await vm.StartAsync();
+
+        // WPF unlocks LogSupervisor when the overlay window has been created (overlay enabled).
+        OverlaySharedStateRegistry.Get(fixture.Runtime).Visible = true;
+
+        await InvokeCallbackAsync(vm, new CoreCallbackEvent(
+            3,
+            "AllTasksCompleted",
+            """{"finished_tasks":[1],"run_id":"run-g2-log-supervisor"}""",
+            DateTimeOffset.UtcNow));
+
+        var snapshot = await fixture.Runtime.AchievementTrackerService.GetSnapshotAsync("zh-cn");
+        Assert.True(snapshot.Success);
+        Assert.Contains(snapshot.Value!.Items, item => item.Id == "LogSupervisor" && item.IsUnlocked);
+    }
+
+    [Fact]
+    public async Task Callback_AllTasksCompleted_WithoutOverlay_ShouldNotUnlockLogSupervisor()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Fight", "fight-a")).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(fixture.Runtime.ConnectFeatureService, fixture.ReadyAdbPath)).Success);
+        await vm.StartAsync();
+
+        await InvokeCallbackAsync(vm, new CoreCallbackEvent(
+            3,
+            "AllTasksCompleted",
+            """{"finished_tasks":[1],"run_id":"run-g2-no-overlay"}""",
+            DateTimeOffset.UtcNow));
+
+        var snapshot = await fixture.Runtime.AchievementTrackerService.GetSnapshotAsync("zh-cn");
+        Assert.True(snapshot.Success);
+        Assert.DoesNotContain(snapshot.Value!.Items, item => item.Id == "LogSupervisor" && item.IsUnlocked);
+    }
+
+    private static void SetRunStartTime(TaskQueuePageViewModel vm, DateTime startedAt)
+    {
+        var field = typeof(TaskQueuePageViewModel).GetField(
+            "_runStartTime",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(field);
+        field!.SetValue(vm, startedAt);
+    }
+
     private sealed class CountingPostActionFeatureService : IPostActionFeatureService
     {
         public int ExecuteCount { get; private set; }

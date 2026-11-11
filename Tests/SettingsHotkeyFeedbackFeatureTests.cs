@@ -728,6 +728,43 @@ public sealed class SettingsHotkeyFeedbackFeatureTests
         Assert.Equal("At least one modifier key is required.", vm.ShowGuiHotkeyState.WarningMessage);
     }
 
+    [Fact]
+    public async Task HandleHotkeyCapture_FourModifierChord_ShouldUnlockHotkeyMagician()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync();
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        // WPF `HotKeyEditorUserControl` unlocks HotkeyMagician when all four modifiers are held.
+        vm.HandleHotkeyCapture(
+            "ShowGui",
+            new HotkeyCaptureResult(
+                HotkeyCaptureResultKind.Captured,
+                new HotkeyGesture(Ctrl: true, Shift: true, Alt: true, Meta: true, Key: "F13")));
+
+        var snapshot = await fixture.Runtime.AchievementTrackerService.GetSnapshotAsync("en-us");
+        Assert.True(snapshot.Success);
+        Assert.Contains(snapshot.Value!.Items, item => item.Id == "HotkeyMagician" && item.IsUnlocked);
+    }
+
+    [Fact]
+    public async Task HandleHotkeyCapture_FewerThanFourModifiers_ShouldNotUnlockHotkeyMagician()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync();
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        vm.HandleHotkeyCapture(
+            "ShowGui",
+            new HotkeyCaptureResult(
+                HotkeyCaptureResultKind.Captured,
+                new HotkeyGesture(Ctrl: true, Shift: true, Alt: true, Meta: false, Key: "F13")));
+
+        var snapshot = await fixture.Runtime.AchievementTrackerService.GetSnapshotAsync("en-us");
+        Assert.True(snapshot.Success);
+        Assert.DoesNotContain(snapshot.Value!.Items, item => item.Id == "HotkeyMagician" && item.IsUnlocked);
+    }
+
     private static async Task ValidateMappedHotkeyErrorAsync(string errorCode)
     {
         var hotkeyService = new ScriptedHotkeyService();
