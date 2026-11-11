@@ -3,6 +3,7 @@ using System.Runtime.CompilerServices;
 using System.Text.Json.Nodes;
 using System.Threading.Channels;
 using Avalonia.Threading;
+using MAAUnified.App.Features.Dialogs;
 using MAAUnified.App.ViewModels.Infrastructure;
 using MAAUnified.App.ViewModels.Settings;
 using MAAUnified.App.ViewModels.TaskQueue;
@@ -153,6 +154,822 @@ public sealed class TaskQueueG2FeatureTests
         Assert.Equal("flush-before-start", appendedParams["account_name"]?.GetValue<string>());
     }
 
+    [Fact]
+    public async Task StartAsync_WhenNoTasksAreRunnable_ShouldNotCallCoreStart()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "disabled-startup", enabled: false)).Success);
+
+        var vm = new TaskQueuePageViewModel(
+            fixture.Runtime,
+            new ConnectionGameSharedStateViewModel
+            {
+                ConnectAddress = TestConnectionFixtureSupport.ReadyConnectAddress,
+                ConnectConfig = TestConnectionFixtureSupport.ReadyConnectConfig,
+                AdbPath = fixture.ReadyAdbPath,
+            });
+        await vm.InitializeAsync();
+        var persistedQueue = await fixture.TaskQueue.GetCurrentTaskQueueAsync();
+        Assert.True(persistedQueue.Success);
+        Assert.False(Assert.Single(persistedQueue.Value!).IsEnabled);
+
+        await vm.StartAsync();
+
+        Assert.Equal(0, fixture.Bridge.StartCallCount);
+        // WPF LinkStart parity: an empty append result still stops the core so any
+        // residual queue from a previous attempt cannot leak into the next run.
+        Assert.Equal(1, fixture.Bridge.StopCallCount);
+        Assert.Empty(fixture.Bridge.AppendedTasks);
+        Assert.False(vm.IsRunning);
+        Assert.Contains("可执行的核心任务", vm.LastErrorMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task StartAsync_WhenSecondAppendFails_ShouldClearCoreQueueAndAllowRetry()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup-a")).Success);
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup-b")).Success);
+        fixture.Bridge.FailAppendCallNumber = 2;
+
+        var vm = new TaskQueuePageViewModel(
+            fixture.Runtime,
+            new ConnectionGameSharedStateViewModel
+            {
+                ConnectAddress = TestConnectionFixtureSupport.ReadyConnectAddress,
+                ConnectConfig = TestConnectionFixtureSupport.ReadyConnectConfig,
+                AdbPath = fixture.ReadyAdbPath,
+            });
+        await vm.InitializeAsync();
+
+        await vm.StartAsync();
+
+        Assert.Equal(0, fixture.Bridge.StartCallCount);
+        Assert.Equal(1, fixture.Bridge.StopCallCount);
+        Assert.Empty(fixture.Bridge.AppendedTasks);
+        Assert.Null(fixture.Runtime.SessionService.CurrentRunOwner);
+        Assert.True(vm.CanEdit);
+
+        fixture.Bridge.FailAppendCallNumber = null;
+        await vm.StartAsync();
+
+        Assert.Equal(1, fixture.Bridge.StartCallCount);
+        Assert.Equal(["startup-a", "startup-b"], fixture.Bridge.AppendedTasks.Select(task => task.Name));
+        Assert.Equal("TaskQueue", fixture.Runtime.SessionService.CurrentRunOwner);
+    }
+
+    [Fact]
+    public async Task StartAsync_WhenCoreStartFails_ShouldClearCoreQueueAndAllowRetry()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup-a")).Success);
+        fixture.Bridge.ForceStartFailure = true;
+
+        var vm = new TaskQueuePageViewModel(
+            fixture.Runtime,
+            new ConnectionGameSharedStateViewModel
+            {
+                ConnectAddress = TestConnectionFixtureSupport.ReadyConnectAddress,
+                ConnectConfig = TestConnectionFixtureSupport.ReadyConnectConfig,
+                AdbPath = fixture.ReadyAdbPath,
+            });
+        await vm.InitializeAsync();
+
+        await vm.StartAsync();
+
+        Assert.Equal(1, fixture.Bridge.StartCallCount);
+        Assert.Equal(1, fixture.Bridge.StopCallCount);
+        Assert.Empty(fixture.Bridge.AppendedTasks);
+        Assert.Null(fixture.Runtime.SessionService.CurrentRunOwner);
+        Assert.True(vm.CanEdit);
+
+        fixture.Bridge.ForceStartFailure = false;
+        await vm.StartAsync();
+
+        Assert.Equal(2, fixture.Bridge.StartCallCount);
+        Assert.Single(fixture.Bridge.AppendedTasks);
+        Assert.Equal("TaskQueue", fixture.Runtime.SessionService.CurrentRunOwner);
+    }
+
+    [Fact]
+    public async Task StartAsync_WhenRunOwnerIsSelfAndDialogDismissed_ShouldKeepRunningRunAndLogs()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup-a")).Success);
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(
+            fixture.Runtime.ConnectFeatureService,
+            fixture.ReadyAdbPath)).Success);
+
+        var dialogService = new RunOwnerDialogService { WarningConfirmReturn = DialogReturnSemantic.Close };
+        var vm = new TaskQueuePageViewModel(
+            fixture.Runtime,
+            new ConnectionGameSharedStateViewModel(),
+            dialogService: dialogService);
+        await vm.InitializeAsync();
+
+        await vm.StartAsync();
+        Assert.Equal(SessionState.Running, fixture.Runtime.SessionService.CurrentState);
+        Assert.Equal("TaskQueue", fixture.Runtime.SessionService.CurrentRunOwner);
+        vm.AppendSystemLog("run-one-marker");
+        var logCountBeforeBlockedStart = vm.LogCards.SelectMany(card => card.Items).Count();
+        Assert.True(logCountBeforeBlockedStart > 0);
+
+        // A racing second start (e.g. a scheduled LinkStart while the first run is active)
+        // is rejected by the self-owner check. The rejected start must neither clear the
+        // visible logs of the run still in progress nor disturb the running state.
+        await vm.StartAsync().WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal(1, dialogService.WarningConfirmCount);
+        Assert.Equal(0, fixture.Bridge.StopCallCount);
+        Assert.Equal(SessionState.Running, fixture.Runtime.SessionService.CurrentState);
+        Assert.Equal("TaskQueue", fixture.Runtime.SessionService.CurrentRunOwner);
+        // The rejection may append its own failure entry, but it must never clear the
+        // visible logs of the run that is still in progress.
+        Assert.True(vm.LogCards.SelectMany(card => card.Items).Count() >= logCountBeforeBlockedStart);
+        Assert.Equal(1, CountTaskQueueLogs(vm, "run-one-marker"));
+    }
+
+    [Fact]
+    public async Task StartAsync_WhenRunOwnerIsSelfAndDialogConfirmsStop_ShouldStopWithoutDeadlock()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup-a")).Success);
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(
+            fixture.Runtime.ConnectFeatureService,
+            fixture.ReadyAdbPath)).Success);
+
+        var dialogService = new RunOwnerDialogService { WarningConfirmReturn = DialogReturnSemantic.Cancel };
+        TaskQueuePageViewModel? vmRef = null;
+        var stopOwnerCalls = 0;
+        var vm = new TaskQueuePageViewModel(
+            fixture.Runtime,
+            new ConnectionGameSharedStateViewModel(),
+            dialogService: dialogService,
+            stopRunOwnerAsync: async (owner, cancellationToken) =>
+            {
+                stopOwnerCalls++;
+                Assert.Equal("TaskQueue", owner);
+                await vmRef!.StopAsync(cancellationToken);
+            });
+        vmRef = vm;
+        await vm.InitializeAsync();
+
+        await vm.StartAsync();
+        Assert.Equal(SessionState.Running, fixture.Runtime.SessionService.CurrentState);
+        Assert.Equal("TaskQueue", fixture.Runtime.SessionService.CurrentRunOwner);
+
+        // Confirming "stop current task" routes back into StopAsync. StartAsync must have
+        // released the run-transition lock before showing the dialog, otherwise this call
+        // deadlocks and every subsequent run transition is blocked until app restart.
+        await vm.StartAsync().WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal(1, dialogService.WarningConfirmCount);
+        Assert.Equal(1, stopOwnerCalls);
+        Assert.Equal(1, fixture.Bridge.StopCallCount);
+        Assert.NotEqual(SessionState.Running, fixture.Runtime.SessionService.CurrentState);
+        Assert.Null(fixture.Runtime.SessionService.CurrentRunOwner);
+    }
+
+    [Fact]
+    public async Task ToggleRunAsync_WhenCoreQueueCleanupRequiredAndSessionIdle_ShouldRetryCleanupAndRecover()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup-a")).Success);
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup-b")).Success);
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(
+            fixture.Runtime.ConnectFeatureService,
+            fixture.ReadyAdbPath)).Success);
+        fixture.Bridge.FailAppendCallNumber = 2;
+        fixture.Bridge.ForceStopFailure = true;
+        // Make the failed cleanup stop look like an abandoned native stop so the session
+        // falls back to Idle while the VM still requires a core-queue cleanup.
+        fixture.Bridge.StopFailureMessage = "native stop timed out";
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        await vm.StartAsync();
+
+        Assert.Equal(SessionState.Idle, fixture.Runtime.SessionService.CurrentState);
+        Assert.True(vm.IsRunning);
+        Assert.False(vm.CanEdit);
+        Assert.Equal("TaskQueue", fixture.Runtime.SessionService.CurrentRunOwner);
+
+        fixture.Bridge.ForceStopFailure = false;
+        fixture.Bridge.FailAppendCallNumber = null;
+
+        // The cleanup flag must retry the core stop even in Idle state; otherwise the run
+        // control stays stuck in a non-editable "running" state with no way to recover.
+        await vm.ToggleRunAsync();
+
+        Assert.Empty(fixture.Bridge.AppendedTasks);
+        Assert.False(vm.IsRunning);
+        Assert.True(vm.CanEdit);
+        Assert.Null(fixture.Runtime.SessionService.CurrentRunOwner);
+
+        await vm.StartAsync();
+        Assert.Equal(["startup-a", "startup-b"], fixture.Bridge.AppendedTasks.Select(task => task.Name));
+        Assert.Equal(SessionState.Running, fixture.Runtime.SessionService.CurrentState);
+    }
+
+    [Fact]
+    public async Task StartAsync_WhenAppendThrowsUnexpectedly_ShouldCleanupCoreQueueAndNotThrow()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup-a")).Success);
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup-b")).Success);
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(
+            fixture.Runtime.ConnectFeatureService,
+            fixture.ReadyAdbPath)).Success);
+        fixture.Bridge.ThrowAppendCallNumber = 2;
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        // A non-cancellation failure mid-start must be contained inside StartAsync: callers
+        // reach this method from async-void UI handlers, and the partially appended core
+        // queue must be cleaned up so it cannot leak into the next run.
+        await vm.StartAsync();
+
+        Assert.Equal(0, fixture.Bridge.StartCallCount);
+        Assert.Equal(1, fixture.Bridge.StopCallCount);
+        Assert.Empty(fixture.Bridge.AppendedTasks);
+        Assert.Null(fixture.Runtime.SessionService.CurrentRunOwner);
+        Assert.True(vm.CanEdit);
+
+        fixture.Bridge.ThrowAppendCallNumber = null;
+        await vm.StartAsync();
+        Assert.Equal(1, fixture.Bridge.StartCallCount);
+        Assert.Equal(["startup-a", "startup-b"], fixture.Bridge.AppendedTasks.Select(task => task.Name));
+        Assert.Equal(SessionState.Running, fixture.Runtime.SessionService.CurrentState);
+    }
+
+    [Fact]
+    public async Task StopAsync_DuringRoguelikeDelayWait_RepeatedStopForcesImmediateStop()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Roguelike", "rogue-a")).Success);
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(
+            fixture.Runtime.ConnectFeatureService,
+            fixture.ReadyAdbPath)).Success);
+        Assert.True(fixture.Runtime.ConfigurationService.TryGetCurrentProfile(out var profile));
+        profile.Values[LegacyConfigurationKeys.RoguelikeDelayAbortUntilCombatComplete] = JsonValue.Create(true);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        await vm.StartAsync();
+        Assert.Equal(SessionState.Running, fixture.Runtime.SessionService.CurrentState);
+
+        // Enter roguelike combat so StopAsync takes the delayed-stop wait (up to 600s).
+        await InvokeCallbackAsync(vm, new CoreCallbackEvent(
+            10001,
+            "SubTaskExtraInfo",
+            """{"task_chain":"Roguelike","what":"StageInfo"}""",
+            DateTimeOffset.UtcNow));
+
+        var firstStop = vm.StopAsync();
+        await Task.Delay(500);
+        Assert.False(firstStop.IsCompleted);
+        Assert.Equal(0, fixture.Bridge.StopCallCount);
+
+        // WPF parity (WaitUntilRoguelikeCombatComplete breaks on Stopping): a repeated Stop
+        // while the delayed stop is waiting must force the wait to end immediately instead of
+        // blocking every run transition behind the lock until combat ends or 600s elapse.
+        var secondStop = vm.StopAsync();
+        await Task.WhenAll(firstStop, secondStop).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal(1, fixture.Bridge.StopCallCount);
+        Assert.NotEqual(SessionState.Running, fixture.Runtime.SessionService.CurrentState);
+        Assert.False(vm.IsRunning);
+    }
+
+    [Fact]
+    public async Task RunSelectedTaskOnce_WhenRunOwnerIsSelf_ShouldKeepRunningRunAndLogs()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup-a")).Success);
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(
+            fixture.Runtime.ConnectFeatureService,
+            fixture.ReadyAdbPath)).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        await vm.StartAsync();
+        Assert.Equal(SessionState.Running, fixture.Runtime.SessionService.CurrentState);
+        vm.AppendSystemLog("run-once-marker");
+        var logCountBeforeRejectedRunOnce = vm.LogCards.SelectMany(card => card.Items).Count();
+        Assert.True(logCountBeforeRejectedRunOnce > 0);
+
+        vm.SelectedTask = vm.Tasks[0];
+        // A run-once request rejected by the self-owner check must not clear the visible logs
+        // of the run that is still in progress (same rule as StartAsync).
+        await vm.RunSelectedTaskOnceAsync();
+
+        Assert.Equal(SessionState.Running, fixture.Runtime.SessionService.CurrentState);
+        Assert.Equal("TaskQueue", fixture.Runtime.SessionService.CurrentRunOwner);
+        Assert.Equal(0, fixture.Bridge.StopCallCount);
+        Assert.True(vm.LogCards.SelectMany(card => card.Items).Count() >= logCountBeforeRejectedRunOnce);
+        Assert.Equal(1, CountTaskQueueLogs(vm, "run-once-marker"));
+    }
+
+    [Fact]
+    public async Task RunSelectedTaskOnce_WhenAppendThrowsUnexpectedly_ShouldCleanupCoreQueueAndNotThrow()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup-a")).Success);
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(
+            fixture.Runtime.ConnectFeatureService,
+            fixture.ReadyAdbPath)).Success);
+        fixture.Bridge.ThrowAppendCallNumber = 1;
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        vm.SelectedTask = vm.Tasks[0];
+
+        // A non-cancellation failure mid-run-once must be contained inside the method: callers
+        // reach it from async-void UI handlers, and the core queue must be cleaned up.
+        await vm.RunSelectedTaskOnceAsync();
+
+        Assert.Equal(0, fixture.Bridge.StartCallCount);
+        Assert.Equal(1, fixture.Bridge.StopCallCount);
+        Assert.Empty(fixture.Bridge.AppendedTasks);
+        Assert.Null(fixture.Runtime.SessionService.CurrentRunOwner);
+        Assert.True(vm.CanEdit);
+
+        fixture.Bridge.ThrowAppendCallNumber = null;
+        await vm.RunSelectedTaskOnceAsync();
+        Assert.Equal(1, fixture.Bridge.StartCallCount);
+        Assert.Equal("startup-a", Assert.Single(fixture.Bridge.AppendedTasks).Name);
+        Assert.Equal(SessionState.Running, fixture.Runtime.SessionService.CurrentState);
+    }
+
+    [Fact]
+    public async Task AccountSwitch_WhenAppendThrowsUnexpectedly_ShouldCleanupCoreQueueAndNotThrow()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup-a")).Success);
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(
+            fixture.Runtime.ConnectFeatureService,
+            fixture.ReadyAdbPath)).Success);
+        fixture.Bridge.ThrowAppendCallNumber = 1;
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        vm.SelectedTask = vm.Tasks[0];
+        await vm.WaitForPendingBindingAsync();
+        vm.StartUpModule.AccountName = "doctor-a";
+
+        // Same containment guarantee as StartAsync: the failure must not escape into the
+        // async-void StartUp-module callback, and the core queue must be cleaned up.
+        await vm.StartUpModule.RunAccountSwitchManualAsync();
+
+        Assert.Equal(0, fixture.Bridge.StartCallCount);
+        Assert.Equal(1, fixture.Bridge.StopCallCount);
+        Assert.Empty(fixture.Bridge.AppendedTasks);
+        Assert.Null(fixture.Runtime.SessionService.CurrentRunOwner);
+        Assert.True(vm.CanEdit);
+
+        fixture.Bridge.ThrowAppendCallNumber = null;
+        await vm.StartUpModule.RunAccountSwitchManualAsync();
+        Assert.Equal(1, fixture.Bridge.StartCallCount);
+        Assert.Equal("startup-a", Assert.Single(fixture.Bridge.AppendedTasks).Name);
+        Assert.Equal(SessionState.Running, fixture.Runtime.SessionService.CurrentState);
+    }
+
+    [Fact]
+    public async Task StartAsync_WhenCoreQueueCleanupPending_ShouldRetryCleanupBeforeAppending()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup-a")).Success);
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup-b")).Success);
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(
+            fixture.Runtime.ConnectFeatureService,
+            fixture.ReadyAdbPath)).Success);
+        fixture.Bridge.FailAppendCallNumber = 2;
+        fixture.Bridge.ForceStopFailure = true;
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        await vm.StartAsync();
+        Assert.NotEqual(SessionState.Running, fixture.Runtime.SessionService.CurrentState);
+        Assert.True(vm.IsRunning);
+        Assert.Equal("TaskQueue", fixture.Runtime.SessionService.CurrentRunOwner);
+
+        // Release the run owner via a direct stop while the cleanup keeps failing; the cleanup
+        // flag stays set, which previously let a timer/tray StartAsync append onto the dirty
+        // core queue and re-execute stale tasks.
+        await vm.StopAsync();
+        Assert.Null(fixture.Runtime.SessionService.CurrentRunOwner);
+        Assert.True(vm.IsRunning);
+
+        await vm.StartAsync();
+        Assert.Equal(0, fixture.Bridge.StartCallCount);
+        Assert.Single(fixture.Bridge.AppendedTasks);
+        Assert.True(vm.IsRunning);
+        Assert.Equal("TaskQueue", fixture.Runtime.SessionService.CurrentRunOwner);
+
+        // ToggleRun still recovers once the native stop works again, and the next start runs
+        // on a clean queue.
+        fixture.Bridge.ForceStopFailure = false;
+        fixture.Bridge.FailAppendCallNumber = null;
+        await vm.ToggleRunAsync();
+        Assert.Empty(fixture.Bridge.AppendedTasks);
+        Assert.False(vm.IsRunning);
+        Assert.Null(fixture.Runtime.SessionService.CurrentRunOwner);
+
+        await vm.StartAsync();
+        Assert.Equal(["startup-a", "startup-b"], fixture.Bridge.AppendedTasks.Select(task => task.Name));
+        Assert.Equal(SessionState.Running, fixture.Runtime.SessionService.CurrentState);
+    }
+
+    [Fact]
+    public async Task StopAsync_WhenCoreQueueCleanupPending_ShouldRetryCleanupAndClearFlag()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup-a")).Success);
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup-b")).Success);
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(
+            fixture.Runtime.ConnectFeatureService,
+            fixture.ReadyAdbPath)).Success);
+        fixture.Bridge.FailAppendCallNumber = 2;
+        fixture.Bridge.ForceStopFailure = true;
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        await vm.StartAsync();
+        Assert.NotEqual(SessionState.Running, fixture.Runtime.SessionService.CurrentState);
+        Assert.True(vm.IsRunning);
+
+        // A direct StopAsync (e.g. confirmed from the run-owner dialog) must retry the pending
+        // cleanup and clear the flag; otherwise IsRunning stays stuck true until the user
+        // happens to click ToggleRun.
+        fixture.Bridge.ForceStopFailure = false;
+        fixture.Bridge.FailAppendCallNumber = null;
+        await vm.StopAsync();
+
+        Assert.Empty(fixture.Bridge.AppendedTasks);
+        Assert.False(vm.IsRunning);
+        Assert.True(vm.CanEdit);
+        Assert.Null(fixture.Runtime.SessionService.CurrentRunOwner);
+
+        await vm.StartAsync();
+        Assert.Equal(["startup-a", "startup-b"], fixture.Bridge.AppendedTasks.Select(task => task.Name));
+        Assert.Equal(SessionState.Running, fixture.Runtime.SessionService.CurrentState);
+    }
+
+    [Fact]
+    public async Task Callback_AllTasksCompleted_ForUserDataUpdateOnly_ShouldNotTriggerPostAction()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.UserDataUpdate, "user-data-update")).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        vm.Tasks[0].Status = TaskQueueItemStatus.Running;
+        MapCoreTaskId(fixture.Runtime.SessionService, 3, 0);
+
+        // A pure data-update run (OperBox/Depot) is not part of WPF's _mainTaskTypes, so
+        // its completion must not trigger notifications or post actions (e.g. shutdown).
+        await InvokeCallbackAsync(vm, new CoreCallbackEvent(
+            3,
+            "AllTasksCompleted",
+            """{"task_chain":"OperBox","task_index":0,"run_id":"run-g2-userdata","finished_tasks":[3]}""",
+            DateTimeOffset.UtcNow));
+
+        Assert.Equal(TaskQueueItemStatus.Success, vm.Tasks[0].Status);
+        Assert.Equal(0, fixture.PostAction.ExecuteCount);
+    }
+
+    [Fact]
+    public void CoreBridge_DefaultStopTimeout_ShouldMatchWpfSixtySecondStopBudget()
+    {
+        var field = typeof(MaaCoreBridgeNative).GetField("DefaultStopTimeout", BindingFlags.Static | BindingFlags.NonPublic);
+        Assert.NotNull(field);
+        Assert.Equal(TimeSpan.FromSeconds(60), Assert.IsType<TimeSpan>(field!.GetValue(null)));
+    }
+
+    [Fact]
+    public async Task RunSelectedTaskOnce_WhileConnecting_ShouldBlockEditsAndRunRequestedTask()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup-a")).Success);
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup-b")).Success);
+        fixture.Bridge.ConnectStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        fixture.Bridge.ConnectRelease = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var vm = new TaskQueuePageViewModel(
+            fixture.Runtime,
+            new ConnectionGameSharedStateViewModel
+            {
+                ConnectAddress = TestConnectionFixtureSupport.ReadyConnectAddress,
+                ConnectConfig = TestConnectionFixtureSupport.ReadyConnectConfig,
+                AdbPath = fixture.ReadyAdbPath,
+            });
+        await vm.InitializeAsync();
+        vm.SelectedTask = vm.Tasks[0];
+
+        var runTask = vm.RunSelectedTaskOnceAsync();
+        await fixture.Bridge.ConnectStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+        Assert.False(vm.CanEdit);
+        vm.SelectedTask = vm.Tasks[1];
+        await vm.MoveSelectedTaskAsync(-1);
+        Assert.Equal(["startup-a", "startup-b"], vm.Tasks.Select(task => task.Name));
+
+        fixture.Bridge.ConnectRelease.TrySetResult(true);
+        await runTask;
+
+        var appended = Assert.Single(fixture.Bridge.AppendedTasks);
+        Assert.Equal("startup-a", appended.Name);
+        Assert.Equal(SessionState.Running, vm.CurrentSessionState);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task RunSelectedTaskOnce_WhenAppendOrStartFails_ShouldClearCoreQueueAndAllowRetry(bool failAppend)
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup-a")).Success);
+        fixture.Bridge.FailAppendCallNumber = failAppend ? 1 : null;
+        fixture.Bridge.ForceStartFailure = !failAppend;
+
+        var vm = new TaskQueuePageViewModel(
+            fixture.Runtime,
+            new ConnectionGameSharedStateViewModel
+            {
+                ConnectAddress = TestConnectionFixtureSupport.ReadyConnectAddress,
+                ConnectConfig = TestConnectionFixtureSupport.ReadyConnectConfig,
+                AdbPath = fixture.ReadyAdbPath,
+            });
+        await vm.InitializeAsync();
+        vm.SelectedTask = Assert.Single(vm.Tasks);
+        vm.Tasks[0].Status = TaskQueueItemStatus.Error;
+
+        await vm.RunSelectedTaskOnceAsync();
+
+        Assert.Equal(failAppend ? 0 : 1, fixture.Bridge.StartCallCount);
+        Assert.Equal(1, fixture.Bridge.StopCallCount);
+        Assert.Empty(fixture.Bridge.AppendedTasks);
+        Assert.Equal(TaskQueueItemStatus.Idle, vm.Tasks[0].Status);
+        Assert.Null(fixture.Runtime.SessionService.CurrentRunOwner);
+        Assert.True(vm.CanEdit);
+
+        fixture.Bridge.FailAppendCallNumber = null;
+        fixture.Bridge.ForceStartFailure = false;
+        await vm.RunSelectedTaskOnceAsync();
+
+        Assert.Equal(failAppend ? 1 : 2, fixture.Bridge.StartCallCount);
+        Assert.Single(fixture.Bridge.AppendedTasks);
+        Assert.Equal("TaskQueue", fixture.Runtime.SessionService.CurrentRunOwner);
+    }
+
+    [Fact]
+    public async Task StartAsync_StopDuringConnectedAppend_ShouldClearPartialQueueAndNotStartCore()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup-a")).Success);
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup-b")).Success);
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(
+            fixture.Runtime.ConnectFeatureService,
+            fixture.ReadyAdbPath)).Success);
+        fixture.Bridge.BlockAppendCallNumber = 2;
+        fixture.Bridge.AppendBlocked = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        fixture.Bridge.AppendRelease = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        var startTask = vm.StartAsync();
+        await fixture.Bridge.AppendBlocked.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        Assert.Single(fixture.Bridge.AppendedTasks);
+
+        await vm.ToggleRunAsync().WaitAsync(TimeSpan.FromSeconds(2));
+        await startTask.WaitAsync(TimeSpan.FromSeconds(2));
+
+        Assert.Equal(0, fixture.Bridge.StartCallCount);
+        Assert.Equal(1, fixture.Bridge.StopCallCount);
+        Assert.Empty(fixture.Bridge.AppendedTasks);
+        Assert.Null(fixture.Runtime.SessionService.CurrentRunOwner);
+        Assert.True(vm.CanEdit);
+    }
+
+    [Fact]
+    public async Task RunSelectedTaskOnce_StopDuringCoreStart_ShouldWaitForStopAndNotRemainRunning()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup-a")).Success);
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(
+            fixture.Runtime.ConnectFeatureService,
+            fixture.ReadyAdbPath)).Success);
+        fixture.Bridge.StartStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        fixture.Bridge.StartRelease = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        fixture.Bridge.IgnoreStartCancellation = true;
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        vm.SelectedTask = Assert.Single(vm.Tasks);
+
+        var runTask = vm.RunSelectedTaskOnceAsync();
+        await fixture.Bridge.StartStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        var stopTask = vm.ToggleRunAsync();
+        await Task.Delay(50);
+        Assert.False(stopTask.IsCompleted);
+
+        fixture.Bridge.StartRelease.TrySetResult(true);
+        await stopTask.WaitAsync(TimeSpan.FromSeconds(2));
+        await runTask.WaitAsync(TimeSpan.FromSeconds(2));
+
+        Assert.Equal(1, fixture.Bridge.StartCallCount);
+        Assert.Equal(1, fixture.Bridge.StopCallCount);
+        Assert.Empty(fixture.Bridge.AppendedTasks);
+        Assert.Equal(SessionState.Connected, fixture.Runtime.SessionService.CurrentState);
+        Assert.Null(fixture.Runtime.SessionService.CurrentRunOwner);
+        Assert.True(vm.CanEdit);
+    }
+
+    [Fact]
+    public async Task StartAsync_ConcurrentSameOwnerRequest_ShouldNotReleaseRunningLease()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup-a")).Success);
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(
+            fixture.Runtime.ConnectFeatureService,
+            fixture.ReadyAdbPath)).Success);
+        fixture.Bridge.BlockAppendCallNumber = 1;
+        fixture.Bridge.AppendBlocked = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        fixture.Bridge.AppendRelease = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        var firstStart = vm.StartAsync();
+        await fixture.Bridge.AppendBlocked.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        var secondStart = vm.StartAsync();
+        fixture.Bridge.AppendRelease.TrySetResult(true);
+        await Task.WhenAll(firstStart, secondStart).WaitAsync(TimeSpan.FromSeconds(2));
+
+        Assert.Equal(SessionState.Running, fixture.Runtime.SessionService.CurrentState);
+        Assert.Equal("TaskQueue", fixture.Runtime.SessionService.CurrentRunOwner);
+        Assert.Equal(1, fixture.Bridge.StartCallCount);
+        Assert.Single(fixture.Bridge.AppendedTasks);
+        Assert.False(fixture.Runtime.SessionService.TryBeginRun("RemoteControl", out var currentOwner));
+        Assert.Equal("TaskQueue", currentOwner);
+    }
+
+    [Fact]
+    public async Task AllTasksCompleted_SlowPostAction_ShouldReleaseOwnerBeforePostActionFinishes()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup-a")).Success);
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(
+            fixture.Runtime.ConnectFeatureService,
+            fixture.ReadyAdbPath)).Success);
+        fixture.PostAction.ExecutionStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        fixture.PostAction.ExecutionRelease = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        await vm.StartAsync();
+        using var pumpCts = new CancellationTokenSource();
+        var pumpTask = fixture.Runtime.SessionService.StartCallbackPumpAsync(_ => Task.CompletedTask, pumpCts.Token);
+
+        fixture.Bridge.Publish(new CoreCallbackEvent(
+            10003,
+            "AllTasksCompleted",
+            """{"finished_tasks":[1],"run_id":"slow-terminal"}""",
+            DateTimeOffset.UtcNow));
+        Assert.True(await WaitForConditionAsync(() => fixture.Runtime.SessionService.CurrentState == SessionState.Connected));
+        await fixture.PostAction.ExecutionStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+        // WPF parity: AsstProxy marks the run idle (SetIdle(true)) before firing
+        // CheckAfterCompleted in the background, so the run owner must be released
+        // before post actions run and a new run can start while a slow post action
+        // (e.g. the power-action confirmation countdown) is still in progress.
+        Assert.Null(fixture.Runtime.SessionService.CurrentRunOwner);
+        Assert.True(fixture.Runtime.SessionService.TryBeginRun("RemoteControl", out var currentOwner));
+        Assert.Equal("RemoteControl", currentOwner);
+        fixture.Runtime.SessionService.EndRun("RemoteControl");
+
+        fixture.PostAction.ExecutionRelease.TrySetResult(true);
+        Assert.True(await WaitForConditionAsync(() => fixture.PostAction.ExecuteCount == 1));
+        pumpCts.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pumpTask);
+    }
+
+    [Fact]
+    public async Task StartAsync_WhenCleanupStopFails_ShouldRetainQueueAndOwnerUntilExplicitCleanupSucceeds()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup-a")).Success);
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup-b")).Success);
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(
+            fixture.Runtime.ConnectFeatureService,
+            fixture.ReadyAdbPath)).Success);
+        fixture.Bridge.FailAppendCallNumber = 2;
+        fixture.Bridge.ForceStopFailure = true;
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        await vm.StartAsync();
+
+        Assert.Single(fixture.Bridge.AppendedTasks);
+        Assert.Equal("TaskQueue", fixture.Runtime.SessionService.CurrentRunOwner);
+        Assert.False(vm.CanEdit);
+        Assert.True(vm.IsOwnRunActive);
+        Assert.False(fixture.Runtime.SessionService.TryBeginRun("RemoteControl", out _));
+
+        await vm.StartAsync();
+        Assert.Single(fixture.Bridge.AppendedTasks);
+        Assert.Equal(0, fixture.Bridge.StartCallCount);
+
+        fixture.Bridge.ForceStopFailure = false;
+        await vm.ToggleRunAsync();
+        Assert.Empty(fixture.Bridge.AppendedTasks);
+        Assert.Null(fixture.Runtime.SessionService.CurrentRunOwner);
+        Assert.True(vm.CanEdit);
+
+        fixture.Bridge.FailAppendCallNumber = null;
+        await vm.StartAsync();
+        Assert.Equal(["startup-a", "startup-b"], fixture.Bridge.AppendedTasks.Select(task => task.Name));
+        Assert.Equal(SessionState.Running, fixture.Runtime.SessionService.CurrentState);
+    }
+
+    [Fact]
+    public async Task AccountSwitch_WhileAppendBlocked_ShouldRejectQueueMoveAndRunOriginalStartup()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup-a")).Success);
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup-b")).Success);
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(
+            fixture.Runtime.ConnectFeatureService,
+            fixture.ReadyAdbPath)).Success);
+        fixture.Bridge.BlockAppendCallNumber = 1;
+        fixture.Bridge.AppendBlocked = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        fixture.Bridge.AppendRelease = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        vm.SelectedTask = vm.Tasks[0];
+        await vm.WaitForPendingBindingAsync();
+        vm.StartUpModule.AccountName = "doctor-a";
+
+        var accountSwitchTask = vm.StartUpModule.RunAccountSwitchManualAsync();
+        await fixture.Bridge.AppendBlocked.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        Assert.False(vm.CanEdit);
+
+        vm.SelectedTask = vm.Tasks[1];
+        await vm.MoveSelectedTaskAsync(-1);
+        Assert.Equal(["startup-a", "startup-b"], vm.Tasks.Select(task => task.Name));
+
+        fixture.Bridge.AppendRelease.TrySetResult(true);
+        await accountSwitchTask.WaitAsync(TimeSpan.FromSeconds(2));
+
+        Assert.Equal("startup-a", Assert.Single(fixture.Bridge.AppendedTasks).Name);
+        Assert.Equal(SessionState.Running, fixture.Runtime.SessionService.CurrentState);
+    }
+
+    [Theory]
+    [InlineData("TaskChainCompleted")]
+    [InlineData("TaskChainError")]
+    [InlineData("SubTaskError")]
+    public async Task NonTerminalCallback_ShouldKeepTaskQueueRunOwnerUntilOverallTerminalCallback(string callbackName)
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Fight", "fight-a")).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(
+            fixture.Runtime.ConnectFeatureService,
+            fixture.ReadyAdbPath)).Success);
+        await vm.StartAsync();
+
+        await InvokeCallbackAsync(vm, new CoreCallbackEvent(
+            10002,
+            callbackName,
+            """{"task_chain":"Fight","task_index":0,"run_id":"run-owner"}""",
+            DateTimeOffset.UtcNow));
+
+        Assert.Equal(SessionState.Running, fixture.Runtime.SessionService.CurrentState);
+        Assert.Equal("TaskQueue", fixture.Runtime.SessionService.CurrentRunOwner);
+        Assert.False(fixture.Runtime.SessionService.TryBeginRun("RemoteControl", out var currentOwner));
+        Assert.Equal("TaskQueue", currentOwner);
+
+        await InvokeCallbackAsync(vm, new CoreCallbackEvent(
+            10003,
+            "AllTasksCompleted",
+            """{"finished_tasks":[1],"run_id":"run-owner"}""",
+            DateTimeOffset.UtcNow));
+
+        Assert.Null(fixture.Runtime.SessionService.CurrentRunOwner);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -282,6 +1099,131 @@ public sealed class TaskQueueG2FeatureTests
         var paramsResult = await fixture.TaskQueue.GetTaskParamsAsync(0);
         Assert.True(paramsResult.Success);
         Assert.Equal("before-stop", paramsResult.Value?["account_name"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task StopAsync_WhenBoundModuleSaveFails_ShouldStillStopRunningQueue()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup-a")).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        vm.SelectedTask = Assert.Single(vm.Tasks);
+        await vm.WaitForPendingBindingAsync();
+
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(fixture.Runtime.ConnectFeatureService, fixture.ReadyAdbPath)).Success);
+        await vm.StartAsync();
+        Assert.Equal(SessionState.Running, fixture.Runtime.SessionService.CurrentState);
+
+        // Queue a dirty module edit, then make the flush fail by removing the profile's
+        // task entries so persisting the bound module can no longer resolve its task.
+        vm.StartUpModule.AccountName = "before-stop";
+        Assert.True(fixture.Runtime.ConfigurationService.TryGetCurrentProfile(out var profile));
+        profile.TaskQueue.Clear();
+
+        await vm.StopAsync().WaitAsync(TimeSpan.FromSeconds(10));
+
+        // WPF parity: Stop() has no configuration-save precondition. A failed flush must
+        // not abort the stop, otherwise the running queue stays unstoppable while the
+        // config store is failing.
+        Assert.Equal(1, fixture.Bridge.StopCallCount);
+        Assert.NotEqual(SessionState.Running, fixture.Runtime.SessionService.CurrentState);
+        Assert.False(vm.IsRunning);
+    }
+
+    [Fact]
+    public async Task StopAsync_WhenForcedDelayedStopFails_ShouldNotReenterDelayWaitOnNextStop()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Roguelike", "rogue-a")).Success);
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(
+            fixture.Runtime.ConnectFeatureService,
+            fixture.ReadyAdbPath)).Success);
+        Assert.True(fixture.Runtime.ConfigurationService.TryGetCurrentProfile(out var profile));
+        profile.Values[LegacyConfigurationKeys.RoguelikeDelayAbortUntilCombatComplete] = JsonValue.Create(true);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        await vm.StartAsync();
+        Assert.Equal(SessionState.Running, fixture.Runtime.SessionService.CurrentState);
+
+        // Enter roguelike combat so StopAsync takes the delayed-stop wait (up to 600s).
+        await InvokeCallbackAsync(vm, new CoreCallbackEvent(
+            10001,
+            "SubTaskExtraInfo",
+            """{"task_chain":"Roguelike","what":"StageInfo"}""",
+            DateTimeOffset.UtcNow));
+
+        var firstStop = vm.StopAsync();
+        await Task.Delay(500);
+        Assert.False(firstStop.IsCompleted);
+        Assert.Equal(0, fixture.Bridge.StopCallCount);
+
+        // The repeated stop forces the delayed wait to end, but the core stop fails.
+        fixture.Bridge.ForceStopFailure = true;
+        var secondStop = vm.StopAsync();
+        await Task.WhenAll(firstStop, secondStop).WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.Equal(SessionState.Running, fixture.Runtime.SessionService.CurrentState);
+        Assert.Equal(2, fixture.Bridge.StopCallCount);
+
+        // WPF parity: ManualStop always stops immediately. The failed forced stop must
+        // not consume the force request, so the next stop attempts the core stop
+        // immediately instead of re-entering the 600s delayed wait.
+        fixture.Bridge.ForceStopFailure = false;
+        await vm.StopAsync().WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.Equal(3, fixture.Bridge.StopCallCount);
+        Assert.NotEqual(SessionState.Running, fixture.Runtime.SessionService.CurrentState);
+        Assert.False(vm.IsRunning);
+    }
+
+    [Fact]
+    public async Task ToggleRunAsync_WhenCleanupRequiredAndRunOwnedByAnotherFeature_ShouldShowDialogInsteadOfStoppingCore()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup-a")).Success);
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup-b")).Success);
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(
+            fixture.Runtime.ConnectFeatureService,
+            fixture.ReadyAdbPath)).Success);
+        fixture.Bridge.FailAppendCallNumber = 2;
+        fixture.Bridge.ForceStopFailure = true;
+
+        var dialogService = new RunOwnerDialogService { WarningConfirmReturn = DialogReturnSemantic.Close };
+        var vm = new TaskQueuePageViewModel(
+            fixture.Runtime,
+            new ConnectionGameSharedStateViewModel(),
+            dialogService: dialogService);
+        await vm.InitializeAsync();
+
+        // A failed start whose cleanup stop also fails leaves the core-queue cleanup
+        // flag set and the run owner retained.
+        await vm.StartAsync();
+        Assert.Equal("TaskQueue", fixture.Runtime.SessionService.CurrentRunOwner);
+        Assert.True(vm.IsRunning);
+
+        // A direct stop releases the owner but the cleanup flag stays set because the
+        // cleanup retry keeps failing.
+        await vm.StopAsync();
+        Assert.Null(fixture.Runtime.SessionService.CurrentRunOwner);
+        Assert.True(vm.IsRunning);
+
+        // Another feature (e.g. Copilot) acquires the run and starts running.
+        Assert.True(fixture.Runtime.SessionService.TryBeginRun("Copilot", out _));
+        Assert.True((await fixture.Runtime.SessionService.StartAsync()).Success);
+        Assert.Equal(SessionState.Running, fixture.Runtime.SessionService.CurrentState);
+
+        var stopCallsBeforeToggle = fixture.Bridge.StopCallCount;
+
+        // The pending cleanup flag must not bypass the run-owner confirmation dialog
+        // or silently stop the other feature's run.
+        await vm.ToggleRunAsync().WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal(1, dialogService.WarningConfirmCount);
+        Assert.Equal(stopCallsBeforeToggle, fixture.Bridge.StopCallCount);
+        Assert.Equal(SessionState.Running, fixture.Runtime.SessionService.CurrentState);
+        Assert.Equal("Copilot", fixture.Runtime.SessionService.CurrentRunOwner);
     }
 
     [Fact]
@@ -1584,19 +2526,159 @@ public sealed class TaskQueueG2FeatureTests
         Assert.Empty(vm.LogCards);
     }
 
-    private static async Task InvokeCallbackAsync(TaskQueuePageViewModel vm, CoreCallbackEvent callback)
+    [Fact]
+    public async Task TaskChainStoppedCallback_WithStaleRunLease_ShouldNotReleaseNewRunOwner()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup-a")).Success);
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(
+            fixture.Runtime.ConnectFeatureService,
+            fixture.ReadyAdbPath)).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        await vm.StartAsync();
+        Assert.Equal(SessionState.Running, fixture.Runtime.SessionService.CurrentState);
+        var firstRunLease = GetActiveRunLease(vm);
+        Assert.True(firstRunLease.HasValue);
+
+        // Stop run #1: the core stop succeeds and releases the owner from the stop path,
+        // while a TaskChainStopped callback for run #1 can still be queued behind the UI
+        // dispatcher (the callback pump does not block the stop continuation).
+        await vm.StopAsync();
+        Assert.NotEqual(SessionState.Running, fixture.Runtime.SessionService.CurrentState);
+        Assert.Null(fixture.Runtime.SessionService.CurrentRunOwner);
+
+        // A new run starts immediately (e.g. a scheduled start) and acquires a fresh lease.
+        await vm.StartAsync();
+        Assert.Equal(SessionState.Running, fixture.Runtime.SessionService.CurrentState);
+        Assert.Equal("TaskQueue", fixture.Runtime.SessionService.CurrentRunOwner);
+        var secondRunLease = GetActiveRunLease(vm);
+        Assert.True(secondRunLease.HasValue);
+        Assert.NotEqual(firstRunLease.Value.Generation, secondRunLease.Value.Generation);
+
+        // The delayed TaskChainStopped of run #1 carries its dispatch-time (stale) lease;
+        // it must not release the new run's owner mid-run.
+        await InvokeCallbackCoreAsync(vm, new CoreCallbackEvent(
+            10011,
+            "TaskChainStopped",
+            """{"task_chain":"StartUp","task_index":0}""",
+            DateTimeOffset.UtcNow), firstRunLease);
+
+        Assert.Equal(SessionState.Running, fixture.Runtime.SessionService.CurrentState);
+        Assert.Equal("TaskQueue", fixture.Runtime.SessionService.CurrentRunOwner);
+        Assert.True(vm.IsRunning);
+
+        await vm.StopAsync();
+        Assert.Null(fixture.Runtime.SessionService.CurrentRunOwner);
+    }
+
+    [Fact]
+    public async Task StopAsync_ForceFlagRaisedAfterRunOwnerReleased_ShouldNotBypassNextRunDelayedStop()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Roguelike", "rogue-a")).Success);
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(
+            fixture.Runtime.ConnectFeatureService,
+            fixture.ReadyAdbPath)).Success);
+        Assert.True(fixture.Runtime.ConfigurationService.TryGetCurrentProfile(out var profile));
+        profile.Values[LegacyConfigurationKeys.RoguelikeDelayAbortUntilCombatComplete] = JsonValue.Create(true);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        await vm.StartAsync();
+        Assert.Equal(SessionState.Running, fixture.Runtime.SessionService.CurrentState);
+
+        // Enter roguelike combat so StopAsync takes the delayed-stop wait.
+        await InvokeCallbackAsync(vm, new CoreCallbackEvent(
+            10021,
+            "SubTaskExtraInfo",
+            """{"task_chain":"Roguelike","what":"StageInfo"}""",
+            DateTimeOffset.UtcNow));
+
+        var firstStop = vm.StopAsync();
+        await Task.Delay(500);
+        Assert.False(firstStop.IsCompleted);
+        Assert.Equal(0, fixture.Bridge.StopCallCount);
+
+        // The run ends while stop #1 is still waiting: the core stops and the completion
+        // callback releases the run owner before the waiting stop notices (1s poll).
+        Assert.True((await fixture.Runtime.ConnectFeatureService.StopAsync()).Success);
+        await InvokeCallbackAsync(vm, new CoreCallbackEvent(
+            10022,
+            "AllTasksCompleted",
+            """{"task_chain":"Roguelike","task_index":0}""",
+            DateTimeOffset.UtcNow));
+        Assert.Null(fixture.Runtime.SessionService.CurrentRunOwner);
+
+        // A stop entry (e.g. a confirmed run-owner dialog) arrives inside the window: the
+        // delayed stop is still flagged as waiting, so it raises the force flag, but the
+        // run owner is already gone and no ownership completion clears the flag again.
+        var secondStop = vm.StopAsync();
+        await Task.WhenAll(firstStop, secondStop).WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.False(vm.IsRunning);
+
+        // The next run must not inherit the stale force flag: its first stop honors the
+        // configured delayed stop again instead of bypassing it once.
+        await vm.StartAsync();
+        Assert.Equal(SessionState.Running, fixture.Runtime.SessionService.CurrentState);
+        Assert.Equal("TaskQueue", fixture.Runtime.SessionService.CurrentRunOwner);
+        await InvokeCallbackAsync(vm, new CoreCallbackEvent(
+            10023,
+            "SubTaskExtraInfo",
+            """{"task_chain":"Roguelike","what":"StageInfo"}""",
+            DateTimeOffset.UtcNow));
+
+        var thirdStop = vm.StopAsync();
+        await Task.Delay(500);
+        Assert.False(thirdStop.IsCompleted);
+        Assert.Equal(1, fixture.Bridge.StopCallCount);
+
+        // Cleanup: force the delayed stop to finish so the fixture stops cleanly.
+        var fourthStop = vm.StopAsync();
+        await Task.WhenAll(thirdStop, fourthStop).WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.Equal(2, fixture.Bridge.StopCallCount);
+        Assert.False(vm.IsRunning);
+    }
+
+    private static Task InvokeCallbackAsync(TaskQueuePageViewModel vm, CoreCallbackEvent callback)
+        => InvokeCallbackCoreAsync(vm, callback, GetActiveRunLease(vm));
+
+    private static async Task InvokeCallbackCoreAsync(
+        TaskQueuePageViewModel vm,
+        CoreCallbackEvent callback,
+        RunOwnershipLease? callbackRunLease)
     {
         var method = typeof(TaskQueuePageViewModel).GetMethod(
             "HandleCallbackCoreAsync",
             BindingFlags.Instance | BindingFlags.NonPublic);
         Assert.NotNull(method);
-        var task = method!.Invoke(vm, [callback]) as Task;
+        var task = method!.Invoke(vm, [callback, callbackRunLease]) as Task;
         if (task is null)
         {
             throw new InvalidOperationException("HandleCallbackCoreAsync invocation returned null.");
         }
 
         await task;
+    }
+
+    private static RunOwnershipLease? GetActiveRunLease(TaskQueuePageViewModel vm)
+    {
+        var field = typeof(TaskQueuePageViewModel).GetField(
+            "_activeRunLease",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(field);
+        var snapshot = field!.GetValue(vm);
+        if (snapshot is null)
+        {
+            return null;
+        }
+
+        var leaseProperty = snapshot.GetType().GetProperty("Lease", BindingFlags.Instance | BindingFlags.Public);
+        Assert.NotNull(leaseProperty);
+        return (RunOwnershipLease)leaseProperty!.GetValue(snapshot)!;
     }
 
     private static void MapCoreTaskId(UnifiedSessionService sessionService, int taskId, int taskIndex)
@@ -1859,7 +2941,31 @@ public sealed class TaskQueueG2FeatureTests
 
         public bool ForceConnectFailure { get; set; }
 
+        public bool ForceStartFailure { get; set; }
+
+        public bool ForceStopFailure { get; set; }
+
+        public string? StopFailureMessage { get; set; }
+
+        public int? ThrowAppendCallNumber { get; set; }
+
+        public int? FailAppendCallNumber { get; set; }
+
+        public int? BlockAppendCallNumber { get; set; }
+
+        public TaskCompletionSource<bool>? AppendBlocked { get; set; }
+
+        public TaskCompletionSource<bool>? AppendRelease { get; set; }
+
+        public TaskCompletionSource<bool>? StartStarted { get; set; }
+
+        public TaskCompletionSource<bool>? StartRelease { get; set; }
+
+        public bool IgnoreStartCancellation { get; set; }
+
         public TaskCompletionSource<bool>? ConnectStarted { get; set; }
+
+        public TaskCompletionSource<bool>? ConnectRelease { get; set; }
 
         public byte[]? NextImageBytes { get; set; }
 
@@ -1874,38 +2980,89 @@ public sealed class TaskQueueG2FeatureTests
                 await Task.Delay(ConnectDelay, cancellationToken);
             }
 
+            if (ConnectRelease is not null)
+            {
+                await ConnectRelease.Task.WaitAsync(cancellationToken);
+            }
+
             _connected = !ForceConnectFailure && !string.IsNullOrWhiteSpace(connectionInfo.Address);
             return _connected
                 ? CoreResult<bool>.Ok(true)
                 : CoreResult<bool>.Fail(new CoreError(CoreErrorCode.ConnectFailed, "connect failed"));
         }
 
-        public Task<CoreResult<int>> AppendTaskAsync(CoreTaskRequest task, CancellationToken cancellationToken = default)
+        public async Task<CoreResult<int>> AppendTaskAsync(CoreTaskRequest task, CancellationToken cancellationToken = default)
         {
+            var taskId = Interlocked.Increment(ref _taskId);
+            if (BlockAppendCallNumber == taskId)
+            {
+                AppendBlocked?.TrySetResult(true);
+                if (AppendRelease is not null)
+                {
+                    await AppendRelease.Task.WaitAsync(cancellationToken);
+                }
+            }
+
+            if (ThrowAppendCallNumber == taskId)
+            {
+                throw new InvalidOperationException($"append call {taskId} exploded");
+            }
+
+            if (FailAppendCallNumber == taskId)
+            {
+                return CoreResult<int>.Fail(new CoreError(
+                    CoreErrorCode.AppendTaskFailed,
+                    $"append call {taskId} failed"));
+            }
+
             AppendedTasks.Add(task);
-            return Task.FromResult(CoreResult<int>.Ok(Interlocked.Increment(ref _taskId)));
+            return CoreResult<int>.Ok(taskId);
         }
 
-        public Task<CoreResult<bool>> StartAsync(CancellationToken cancellationToken = default)
+        public async Task<CoreResult<bool>> StartAsync(CancellationToken cancellationToken = default)
         {
             StartCallCount++;
-            if (!_connected)
+            StartStarted?.TrySetResult(true);
+            if (StartRelease is not null)
             {
-                return Task.FromResult(CoreResult<bool>.Fail(new CoreError(CoreErrorCode.StartFailed, "not connected")));
+                if (IgnoreStartCancellation)
+                {
+                    await StartRelease.Task;
+                }
+                else
+                {
+                    await StartRelease.Task.WaitAsync(cancellationToken);
+                }
+            }
+
+            if (ForceStartFailure || !_connected)
+            {
+                return CoreResult<bool>.Fail(new CoreError(CoreErrorCode.StartFailed, "start failed"));
             }
 
             _running = true;
-            return Task.FromResult(CoreResult<bool>.Ok(true));
+            return CoreResult<bool>.Ok(true);
         }
 
-        public Task<CoreResult<bool>> StopAsync(CancellationToken cancellationToken = default)
+        public async Task<CoreResult<bool>> StopAsync(CancellationToken cancellationToken = default)
         {
             StopCallCount++;
-            var wasRunning = _running;
+            if (StartRelease is not null && StartStarted?.Task.IsCompleted == true)
+            {
+                await StartRelease.Task.WaitAsync(cancellationToken);
+            }
+
+            if (ForceStopFailure)
+            {
+                return CoreResult<bool>.Fail(new CoreError(CoreErrorCode.StopFailed, StopFailureMessage ?? "forced stop failure"));
+            }
+
+            var hadQueuedWork = _running || AppendedTasks.Count > 0;
             _running = false;
-            return Task.FromResult(wasRunning
+            AppendedTasks.Clear();
+            return hadQueuedWork
                 ? CoreResult<bool>.Ok(true)
-                : CoreResult<bool>.Fail(new CoreError(CoreErrorCode.StopFailed, "not running")));
+                : CoreResult<bool>.Fail(new CoreError(CoreErrorCode.StopFailed, "not running"));
         }
 
         public Task<CoreResult<CoreRuntimeStatus>> GetRuntimeStatusAsync(CancellationToken cancellationToken = default)
@@ -1930,6 +3087,11 @@ public sealed class TaskQueueG2FeatureTests
             }
         }
 
+        public void Publish(CoreCallbackEvent callback)
+        {
+            _channel.Writer.TryWrite(callback);
+        }
+
         public ValueTask DisposeAsync()
         {
             _channel.Writer.TryComplete();
@@ -1937,9 +3099,78 @@ public sealed class TaskQueueG2FeatureTests
         }
     }
 
+    private sealed class RunOwnerDialogService : IAppDialogService
+    {
+        private readonly IAppDialogService _inner = NoOpAppDialogService.Instance;
+
+        public int WarningConfirmCount { get; private set; }
+
+        public DialogReturnSemantic WarningConfirmReturn { get; set; } = DialogReturnSemantic.Close;
+
+        public Task<DialogCompletion<AnnouncementDialogPayload>> ShowAnnouncementAsync(
+            AnnouncementDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => _inner.ShowAnnouncementAsync(request, sourceScope, cancellationToken);
+
+        public Task<DialogCompletion<VersionUpdateDialogPayload>> ShowVersionUpdateAsync(
+            VersionUpdateDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => _inner.ShowVersionUpdateAsync(request, sourceScope, cancellationToken);
+
+        public Task<DialogCompletion<ProcessPickerDialogPayload>> ShowProcessPickerAsync(
+            ProcessPickerDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => _inner.ShowProcessPickerAsync(request, sourceScope, cancellationToken);
+
+        public Task<DialogCompletion<EmulatorPathDialogPayload>> ShowEmulatorPathAsync(
+            EmulatorPathDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => _inner.ShowEmulatorPathAsync(request, sourceScope, cancellationToken);
+
+        public Task<DialogCompletion<ErrorDialogPayload>> ShowErrorAsync(
+            ErrorDialogRequest request,
+            string sourceScope,
+            Func<CancellationToken, Task<UiOperationResult>>? openIssueReportAsync = null,
+            Func<CancellationToken, Task<UiOperationResult>>? openSettingsAsync = null,
+            CancellationToken cancellationToken = default)
+            => _inner.ShowErrorAsync(request, sourceScope, openIssueReportAsync, openSettingsAsync, cancellationToken);
+
+        public Task<DialogCompletion<AchievementListDialogPayload>> ShowAchievementListAsync(
+            AchievementListDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => _inner.ShowAchievementListAsync(request, sourceScope, cancellationToken);
+
+        public Task<DialogCompletion<TextDialogPayload>> ShowTextAsync(
+            TextDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+            => _inner.ShowTextAsync(request, sourceScope, cancellationToken);
+
+        public Task<DialogCompletion<WarningConfirmDialogPayload>> ShowWarningConfirmAsync(
+            WarningConfirmDialogRequest request,
+            string sourceScope,
+            CancellationToken cancellationToken = default)
+        {
+            WarningConfirmCount++;
+            return Task.FromResult(new DialogCompletion<WarningConfirmDialogPayload>(
+                WarningConfirmReturn,
+                null,
+                "test-dialog"));
+        }
+    }
+
     private sealed class CountingPostActionFeatureService : IPostActionFeatureService
     {
         public int ExecuteCount { get; private set; }
+
+        public TaskCompletionSource<bool>? ExecutionStarted { get; set; }
+
+        public TaskCompletionSource<bool>? ExecutionRelease { get; set; }
 
         public Task<UiOperationResult<PostActionConfig>> LoadAsync(CancellationToken cancellationToken = default)
             => Task.FromResult(UiOperationResult<PostActionConfig>.Ok(new PostActionConfig(), "Loaded."));
@@ -1957,13 +3188,19 @@ public sealed class TaskQueueG2FeatureTests
                 new PostActionPreview(false, [], []),
                 "Validated."));
 
-        public Task<UiOperationResult> ExecuteAfterCompletionAsync(
+        public async Task<UiOperationResult> ExecuteAfterCompletionAsync(
             PostActionExecutionContext context,
             PostActionConfig? configOverride = null,
             CancellationToken cancellationToken = default)
         {
             ExecuteCount++;
-            return Task.FromResult(UiOperationResult.Ok("Post action executed."));
+            ExecutionStarted?.TrySetResult(true);
+            if (ExecutionRelease is not null)
+            {
+                await ExecutionRelease.Task.WaitAsync(cancellationToken);
+            }
+
+            return UiOperationResult.Ok("Post action executed.");
         }
     }
 }

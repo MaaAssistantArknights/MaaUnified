@@ -1189,7 +1189,9 @@ public sealed class TaskModuleBFeatureTests
         Assert.True(execute.Success, execute.Message);
         Assert.Equal(1, bridge.BackToHomeCallCount);
         Assert.Equal(1, bridge.StartCloseDownCallCount);
-        Assert.Equal(1, appLifecycle.ExitCallCount);
+        // WPF parity (CheckAfterCompleted): ExitSelf is gated on !(Hibernate || Shutdown || Sleep),
+        // so the selected Sleep action suppresses ExitSelf even though both are configured.
+        Assert.Equal(0, appLifecycle.ExitCallCount);
         Assert.Contains(PostActionType.Sleep, executor.ExecutedActions);
         Assert.DoesNotContain(executor.ExecutedActions, action => action == PostActionType.ExitSelf);
         Assert.DoesNotContain(executor.ExecutedActions, action => action == PostActionType.ExitArknights);
@@ -1199,7 +1201,7 @@ public sealed class TaskModuleBFeatureTests
         Assert.Contains("runId=run-b1", eventLog);
         Assert.Contains("action=ExitArknights", eventLog);
         Assert.Contains("action=BackToAndroidHome", eventLog);
-        Assert.Contains("action=ExitSelf", eventLog);
+        Assert.DoesNotContain("action=ExitSelf", eventLog, StringComparison.Ordinal);
         Assert.Contains("action=Sleep", eventLog);
     }
 
@@ -1215,11 +1217,8 @@ public sealed class TaskModuleBFeatureTests
             Hibernate: supported,
             Shutdown: supported,
             Sleep: supported));
-        var appLifecycle = new TestAppLifecycleService(supportsExit: true);
-
         await using var fixture = await TestFixture.CreateAsync(
             executor: executor,
-            appLifecycleService: appLifecycle,
             promptService: new TestPostActionPromptService(UiOperationResult.Cancelled("cancelled")));
 
         var execute = await fixture.PostAction.ExecuteAfterCompletionAsync(
@@ -1227,24 +1226,139 @@ public sealed class TaskModuleBFeatureTests
             new PostActionConfig
             {
                 Sleep = true,
-                ExitSelf = true,
+                BackToAndroidHome = true,
             });
 
         Assert.True(execute.Success, execute.Message);
         Assert.DoesNotContain(executor.ExecutedActions, action => action == PostActionType.Sleep);
-        Assert.Equal(1, appLifecycle.ExitCallCount);
+        Assert.Contains(PostActionType.BackToAndroidHome, executor.ExecutedActions);
 
         var eventLog = await File.ReadAllTextAsync(Path.Combine(fixture.Root, "debug", "avalonia-ui-events.log"));
         Assert.Contains("action=Sleep", eventLog);
         Assert.Contains($"errorCode={UiErrorCode.PostActionCancelled}", eventLog);
+        Assert.Contains("action=BackToAndroidHome", eventLog);
+    }
+
+    [Fact]
+    public async Task PostAction_Execute_ExitSelfWithSystemAction_DoesNotExitSelf_WpfParity()
+    {
+        var supported = new PlatformCapabilityStatus(true, "supported", Provider: "test");
+        var executor = new TestPostActionExecutorService(new PostActionCapabilityMatrix(
+            ExitArknights: supported,
+            BackToAndroidHome: supported,
+            ExitEmulator: supported,
+            ExitSelf: supported,
+            Hibernate: supported,
+            Shutdown: supported,
+            Sleep: supported));
+        var appLifecycle = new TestAppLifecycleService(supportsExit: true);
+        var promptService = new TestPostActionPromptService(UiOperationResult.Ok("confirmed"));
+
+        await using var fixture = await TestFixture.CreateAsync(
+            executor: executor,
+            appLifecycleService: appLifecycle,
+            promptService: promptService);
+
+        // WPF CheckAfterCompleted gates ExitSelf on !(Hibernate || Shutdown || Sleep).
+        var execute = await fixture.PostAction.ExecuteAfterCompletionAsync(
+            new PostActionExecutionContext("AllTasksCompleted", true, RunId: "run-b-exitself-gate"),
+            new PostActionConfig
+            {
+                ExitSelf = true,
+                Sleep = true,
+            });
+
+        Assert.True(execute.Success, execute.Message);
+        Assert.Equal(0, appLifecycle.ExitCallCount);
+        Assert.Single(promptService.Requests);
+        Assert.Contains(PostActionType.Sleep, executor.ExecutedActions);
+        Assert.DoesNotContain(executor.ExecutedActions, action => action == PostActionType.ExitSelf);
+    }
+
+    [Fact]
+    public async Task PostAction_Execute_IfNoOtherMaaWithOtherMaaProcess_ExitsSelfInsteadOfSystemAction()
+    {
+        var supported = new PlatformCapabilityStatus(true, "supported", Provider: "test");
+        var executor = new TestPostActionExecutorService(new PostActionCapabilityMatrix(
+            ExitArknights: supported,
+            BackToAndroidHome: supported,
+            ExitEmulator: supported,
+            ExitSelf: supported,
+            Hibernate: supported,
+            Shutdown: supported,
+            Sleep: supported));
+        var appLifecycle = new TestAppLifecycleService(supportsExit: true);
+        var promptService = new TestPostActionPromptService(UiOperationResult.Ok("confirmed"));
+
+        await using var fixture = await TestFixture.CreateAsync(
+            executor: executor,
+            appLifecycleService: appLifecycle,
+            promptService: promptService,
+            hasOtherMaaProcess: () => true);
+
+        // WPF CheckAfterCompleted: IfNoOtherMaa + another MAA process replaces each configured
+        // system-level action with Bootstrapper.Shutdown(), regardless of the ExitSelf checkbox.
+        var execute = await fixture.PostAction.ExecuteAfterCompletionAsync(
+            new PostActionExecutionContext("AllTasksCompleted", true, RunId: "run-b-ifnoother-substitute"),
+            new PostActionConfig
+            {
+                IfNoOtherMaa = true,
+                Shutdown = true,
+            });
+
+        Assert.True(execute.Success, execute.Message);
+        Assert.Equal(1, appLifecycle.ExitCallCount);
+        Assert.DoesNotContain(executor.ExecutedActions, action => action == PostActionType.Shutdown);
+        // The skipped system-level action must not trigger the power-action prompt.
+        Assert.Empty(promptService.Requests);
+
+        var eventLog = await File.ReadAllTextAsync(Path.Combine(fixture.Root, "debug", "avalonia-ui-events.log"));
+        Assert.Contains("action=Shutdown", eventLog);
         Assert.Contains("action=ExitSelf", eventLog);
+    }
+
+    [Fact]
+    public async Task PostAction_Execute_IfNoOtherMaaWithoutOtherMaaProcess_RunsSystemAction()
+    {
+        var supported = new PlatformCapabilityStatus(true, "supported", Provider: "test");
+        var executor = new TestPostActionExecutorService(new PostActionCapabilityMatrix(
+            ExitArknights: supported,
+            BackToAndroidHome: supported,
+            ExitEmulator: supported,
+            ExitSelf: supported,
+            Hibernate: supported,
+            Shutdown: supported,
+            Sleep: supported));
+        var appLifecycle = new TestAppLifecycleService(supportsExit: true);
+        var promptService = new TestPostActionPromptService(UiOperationResult.Ok("confirmed"));
+
+        await using var fixture = await TestFixture.CreateAsync(
+            executor: executor,
+            appLifecycleService: appLifecycle,
+            promptService: promptService,
+            hasOtherMaaProcess: () => false);
+
+        var execute = await fixture.PostAction.ExecuteAfterCompletionAsync(
+            new PostActionExecutionContext("AllTasksCompleted", true, RunId: "run-b-ifnoother-normal"),
+            new PostActionConfig
+            {
+                IfNoOtherMaa = true,
+                Shutdown = true,
+            });
+
+        Assert.True(execute.Success, execute.Message);
+        Assert.Equal(0, appLifecycle.ExitCallCount);
+        Assert.Single(promptService.Requests);
+        Assert.Contains(PostActionType.Shutdown, executor.ExecutedActions);
     }
 
     [Fact]
     public async Task PostAction_Execute_IfNoOtherMaaWithoutPowerAction_DoesNotBlockExitSelf()
     {
         var appLifecycle = new TestAppLifecycleService(supportsExit: true);
-        await using var fixture = await TestFixture.CreateAsync(appLifecycleService: appLifecycle);
+        await using var fixture = await TestFixture.CreateAsync(
+            appLifecycleService: appLifecycle,
+            hasOtherMaaProcess: () => false);
 
         var execute = await fixture.PostAction.ExecuteAfterCompletionAsync(
             new PostActionExecutionContext("AllTasksCompleted", true, RunId: "run-b1-ifnoother"),
@@ -2012,7 +2126,7 @@ public sealed class TaskModuleBFeatureTests
             "HandleCallbackCoreAsync",
             BindingFlags.Instance | BindingFlags.NonPublic);
         Assert.NotNull(method);
-        var task = method!.Invoke(vm, new object?[] { callback }) as Task;
+        var task = method!.Invoke(vm, new object?[] { callback, GetActiveRunLease(vm) }) as Task;
         if (task is null)
         {
             throw new InvalidOperationException("HandleCallbackAsync invocation returned null.");
@@ -2139,6 +2253,23 @@ public sealed class TaskModuleBFeatureTests
         Assert.Equal(UiErrorCode.MallCreditFightDowngraded, warning.Code);
     }
 
+    private static RunOwnershipLease? GetActiveRunLease(TaskQueuePageViewModel vm)
+    {
+        var field = typeof(TaskQueuePageViewModel).GetField(
+            "_activeRunLease",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(field);
+        var snapshot = field!.GetValue(vm);
+        if (snapshot is null)
+        {
+            return null;
+        }
+
+        var leaseProperty = snapshot.GetType().GetProperty("Lease", BindingFlags.Instance | BindingFlags.Public);
+        Assert.NotNull(leaseProperty);
+        return (RunOwnershipLease)leaseProperty!.GetValue(snapshot)!;
+    }
+
     private sealed class TestFixture : IAsyncDisposable
     {
         private TestFixture(
@@ -2174,7 +2305,8 @@ public sealed class TaskModuleBFeatureTests
             IPostActionExecutorService? executor = null,
             FakeBridge? bridge = null,
             IAppLifecycleService? appLifecycleService = null,
-            IPostActionPromptService? promptService = null)
+            IPostActionPromptService? promptService = null,
+            Func<bool>? hasOtherMaaProcess = null)
         {
             var root = Path.Combine(Path.GetTempPath(), "maa-unified-tests", Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(Path.Combine(root, "config"));
@@ -2220,7 +2352,8 @@ public sealed class TaskModuleBFeatureTests
                 bridge,
                 lifecycle,
                 promptService ?? new NoOpPostActionPromptService(),
-                session);
+                session,
+                hasOtherMaaProcess);
             var connectFeatureService = new ConnectFeatureService(session, config, log, bridge, root);
             var runtime = new MAAUnifiedRuntime
             {

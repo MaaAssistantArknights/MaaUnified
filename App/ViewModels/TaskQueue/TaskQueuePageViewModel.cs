@@ -134,7 +134,6 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         TaskModuleTypes.Award,
         TaskModuleTypes.Roguelike,
         TaskModuleTypes.Reclamation,
-        TaskModuleTypes.UserDataUpdate,
     };
 
     private int _mainTasksCompletedCount;
@@ -348,11 +347,22 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     private readonly SingleStepModuleViewModel _fallbackSingleStepModule;
     private readonly CustomModuleViewModel _fallbackCustomModule;
     private Task _pendingBindingTask = Task.CompletedTask;
-    private Task _stopStartRequestTask = Task.CompletedTask;
+    private Task<bool>? _stopStartRequestTask;
     private CancellationTokenSource? _moduleAutoSaveCts;
     private CancellationTokenSource? _taskQueueAutoSaveCts;
     private int _pendingBindingVersion;
     private CancellationTokenSource? _startRequestCts;
+    // Reference-type snapshot behind a volatile field so the callback pump thread can
+    // atomically capture the active lease at dispatch time; a nullable struct field could
+    // tear when read off the UI thread.
+    private volatile ActiveRunLeaseSnapshot? _activeRunLease;
+
+    private sealed class ActiveRunLeaseSnapshot
+    {
+        public ActiveRunLeaseSnapshot(RunOwnershipLease lease) => Lease = lease;
+
+        public RunOwnershipLease Lease { get; }
+    }
     private CancellationTokenSource? _stallReminderCts;
     private int _stallAccumulatedCount;
     private CancellationTokenSource? _sanityReminderCts;
@@ -366,6 +376,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     private bool _isPostActionPanelSelected;
     private bool _isWaitingForStop;
     private bool _isStartRequestActive;
+    private bool _isCoreQueueCleanupRequired;
     private bool _isRunButtonStopHovered;
     private SelectionBatchMode _selectionBatchMode = SelectionBatchMode.Clear;
     private bool _showBatchModeToggle;
@@ -391,6 +402,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     private TaskRuntimeStatusSnapshot? _lastRuntimeStatus;
     private TaskQueueItemViewModel? _selectedTask;
     private bool _roguelikeInCombat;
+    private volatile bool _roguelikeDelayStopWaiting;
+    private volatile bool _roguelikeDelayStopForceRequested;
     private DateTimeOffset? _runStartedAt;
     private DateTimeOffset? _fightSanityReportTime;
     private int? _fightSanityCurrent;
@@ -766,7 +779,9 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         }
     }
 
-    public bool IsRunning => _isStartRequestActive || CurrentSessionState is SessionState.Running or SessionState.Stopping;
+    public bool IsRunning => _isStartRequestActive
+        || _isCoreQueueCleanupRequired
+        || CurrentSessionState is SessionState.Running or SessionState.Stopping;
 
     public bool CanEdit => !IsRunning;
 
@@ -794,6 +809,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     }
 
     public bool IsOwnRunActive => _isStartRequestActive
+        || _isCoreQueueCleanupRequired
         || (CurrentSessionState is SessionState.Running or SessionState.Stopping
             && !IsRunOwnedByAnotherFeature);
 
@@ -858,6 +874,23 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
         _isStartRequestActive = value;
         OnPropertyChanged(nameof(IsStartRequestActive));
+        OnPropertyChanged(nameof(IsRunning));
+        OnPropertyChanged(nameof(CanEdit));
+        OnPropertyChanged(nameof(CanEditSelectedTaskSettings));
+        OnPropertyChanged(nameof(RunButtonText));
+        OnPropertyChanged(nameof(IsRunOwnedByAnotherFeature));
+        OnPropertyChanged(nameof(IsOwnRunActive));
+        OnPropertyChanged(nameof(CanToggleRun));
+    }
+
+    private void SetCoreQueueCleanupRequired(bool value)
+    {
+        if (_isCoreQueueCleanupRequired == value)
+        {
+            return;
+        }
+
+        _isCoreQueueCleanupRequired = value;
         OnPropertyChanged(nameof(IsRunning));
         OnPropertyChanged(nameof(CanEdit));
         OnPropertyChanged(nameof(CanEditSelectedTaskSettings));
@@ -2828,13 +2861,23 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
         if (CurrentSessionState is SessionState.Running or SessionState.Stopping)
         {
-            if (IsOwnRunActive)
+            // Route by run ownership instead of IsOwnRunActive: a pending core-queue
+            // cleanup flag also marks the run as "own", but it must not let a click
+            // bypass the run-owner confirmation dialog (or silently stop another
+            // feature's run) while that feature owns the running session.
+            if (IsRunOwnedByAnotherFeature)
             {
-                await StopAsync(cancellationToken);
+                await ShowRunOwnerDialogAsync(cancellationToken);
                 return;
             }
 
-            await ShowRunOwnerDialogAsync(cancellationToken);
+            await StopAsync(cancellationToken);
+            return;
+        }
+
+        if (_isCoreQueueCleanupRequired)
+        {
+            await StopStartRequestAsync(cancellationToken);
             return;
         }
 
@@ -2922,11 +2965,12 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     public async Task StartAsync(CancellationToken cancellationToken = default)
     {
         await _runTransitionLock.WaitAsync(cancellationToken);
+        var runTransitionLockHeld = true;
         CancellationTokenSource? startRequestCts = null;
+        RunOwnershipLease runLease = default;
         try
         {
-            ClearVisibleRuntimeLogs();
-            if (!Runtime.SessionService.TryBeginRun(TaskQueueRunOwner, out var currentOwner))
+            if (!Runtime.SessionService.TryAcquireRun(TaskQueueRunOwner, out runLease, out var currentOwner))
             {
                 var owner = string.IsNullOrWhiteSpace(currentOwner) ? "Unknown" : currentOwner;
                 var message = $"TaskQueue start blocked by active run owner `{owner}`.";
@@ -2936,10 +2980,25 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                     "TaskQueue.Start.RunOwner",
                     UiOperationResult.Fail(UiErrorCode.TaskQueueEditBlocked, message),
                     cancellationToken);
+                // Release the transition lock before showing the run-owner dialog: confirming
+                // "stop current task" routes back into StopAsync (directly or via the shell's
+                // stopRunOwnerAsync), which waits on this same lock. Holding it here deadlocks
+                // every subsequent run transition when the active owner is TaskQueue itself.
+                // The visible runtime logs are intentionally left untouched so a rejected
+                // start never clears the logs of the run that is still in progress.
+                _runTransitionLock.Release();
+                runTransitionLockHeld = false;
                 await ShowRunOwnerDialogAsync(cancellationToken);
                 return;
             }
 
+            ClearVisibleRuntimeLogs();
+            _activeRunLease = new ActiveRunLeaseSnapshot(runLease);
+            // A forced roguelike delayed-stop request belongs to the run that was stopping;
+            // a newly acquired run must start with a clean delayed-stop state instead of
+            // inheriting a stale force flag.
+            _roguelikeDelayStopForceRequested = false;
+            _stopStartRequestTask = null;
             var keepRunOwner = false;
             startRequestCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             _startRequestCts = startRequestCts;
@@ -2949,6 +3008,16 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             MainTasksCompletedCount = 0;
             try
             {
+                if (_isCoreQueueCleanupRequired
+                    && !await CleanupCoreQueueAfterFailedStartAsync("TaskQueue.Start.PendingCleanup"))
+                {
+                    // A previous failed start left queued core tasks behind and the cleanup
+                    // retry failed; refuse to append new tasks onto the dirty queue. Keep the
+                    // run owner so the run control stays recoverable via ToggleRun.
+                    keepRunOwner = true;
+                    return;
+                }
+
                 if (!await EnsureCoreReadyAsync("TaskQueue.Start.CoreWarmup", startCancellationToken))
                 {
                     return;
@@ -3035,6 +3104,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                     startCancellationToken);
                 if (!appendResult.Success)
                 {
+                    keepRunOwner = !await CleanupCoreQueueAfterFailedStartAsync("TaskQueue.Append.Cleanup");
                     var error = UiOperationResult<int>.FromCore(appendResult, "Tasks queued.");
                     _ = await ApplyResultAsync(error, "TaskQueue.Append", startCancellationToken);
                     return;
@@ -3069,27 +3139,49 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             }
             catch (OperationCanceledException) when (startRequestCts.IsCancellationRequested)
             {
+                keepRunOwner = !await FinishCanceledStartRequestAsync("TaskQueue.Start.CancelCleanup");
                 CurrentSessionState = Runtime.SessionService.CurrentState;
-                SyncStoppedUiStateIfSessionNotActive();
+            }
+            catch (Exception ex)
+            {
+                // Never let a failed start escape StartAsync: callers reach this method from
+                // async-void UI handlers, and any core tasks appended before the failure must
+                // be cleaned up so they cannot leak into the next run.
+                keepRunOwner = !await CleanupCoreQueueAfterFailedStartAsync("TaskQueue.Start.UnexpectedCleanup");
+                CurrentSessionState = Runtime.SessionService.CurrentState;
+                if (ex is OperationCanceledException && cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+
+                await RecordErrorAsync(
+                    "TaskQueue.Start",
+                    "TaskQueue start failed unexpectedly.",
+                    ex);
             }
             finally
             {
                 if (!keepRunOwner)
                 {
-                    Runtime.SessionService.EndRun(TaskQueueRunOwner);
-                    SetStartRequestActive(false);
+                    CompleteTaskQueueRunOwnership(runLease);
                 }
+
+                SetStartRequestActive(false);
 
                 if (ReferenceEquals(_startRequestCts, startRequestCts))
                 {
                     _startRequestCts = null;
+                    _stopStartRequestTask = null;
                 }
             }
         }
         finally
         {
             startRequestCts?.Dispose();
-            _runTransitionLock.Release();
+            if (runTransitionLockHeld)
+            {
+                _runTransitionLock.Release();
+            }
         }
     }
 
@@ -3097,44 +3189,102 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     {
         cancellationToken.ThrowIfCancellationRequested();
         var sessionStateAtCancelRequest = Runtime.SessionService.CurrentState;
-        _startRequestCts?.Cancel();
-        Runtime.SessionService.EndRun(TaskQueueRunOwner);
+        var startRequestCts = _startRequestCts;
+        // A pending core-queue cleanup must retry the core stop even when the session has
+        // already fallen back to Idle; otherwise the cleanup flag can never be cleared and
+        // the run control stays stuck in a non-editable "running" state forever.
+        var shouldStopCore = _isCoreQueueCleanupRequired
+            || sessionStateAtCancelRequest is SessionState.Connecting
+                or SessionState.Connected
+                or SessionState.Running
+                or SessionState.Stopping;
+        Task<bool>? stopTask = null;
+        if (shouldStopCore)
+        {
+            var stopCompletion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            stopTask = stopCompletion.Task;
+            _stopStartRequestTask = stopTask;
+            _startRequestCts?.Cancel();
+            _ = CompleteStopStartRequestAsync(
+                stopCompletion,
+                yieldBeforeStop: sessionStateAtCancelRequest == SessionState.Connecting,
+                cancellationToken);
+        }
+        else
+        {
+            _startRequestCts?.Cancel();
+        }
         _clearTaskStatusesWhenStopped = true;
         _ = Runtime.AchievementTrackerService.Unlock("TacticalRetreat");
 
         CurrentSessionState = Runtime.SessionService.CurrentState;
-        SyncStoppedUiStateIfSessionNotActive();
         SetStartRequestActive(false);
-        if (sessionStateAtCancelRequest is not (SessionState.Connecting or SessionState.Running or SessionState.Stopping))
+        if (!shouldStopCore)
         {
             return;
         }
 
-        _stopStartRequestTask = StopStartRequestCoreWithTimeoutAsync(cancellationToken);
+        if (startRequestCts is null)
+        {
+            var cleanupSucceeded = await stopTask!;
+            ApplyCanceledStartCleanupResult(cleanupSucceeded);
+            _stopStartRequestTask = null;
+            return;
+        }
+
         var settleWindow = Task.Delay(TimeSpan.FromMilliseconds(250), cancellationToken);
-        await Task.WhenAny(_stopStartRequestTask, settleWindow);
+        var settledTask = await Task.WhenAny(stopTask!, settleWindow);
+        if (ReferenceEquals(settledTask, stopTask))
+        {
+            ApplyCanceledStartCleanupResult(await stopTask!);
+        }
     }
 
-    private async Task StopStartRequestCoreWithTimeoutAsync(CancellationToken cancellationToken)
+    private async Task CompleteStopStartRequestAsync(
+        TaskCompletionSource<bool> completion,
+        bool yieldBeforeStop,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (yieldBeforeStop)
+            {
+                await Task.Yield();
+            }
+
+            completion.TrySetResult(await StopStartRequestCoreWithTimeoutAsync(cancellationToken));
+        }
+        catch (Exception ex)
+        {
+            completion.TrySetResult(false);
+            await RecordErrorAsync(
+                "TaskQueue.StopStartRequest",
+                "Background stop completion failed.",
+                ex);
+        }
+    }
+
+    private async Task<bool> StopStartRequestCoreWithTimeoutAsync(CancellationToken cancellationToken)
     {
         using var stopCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         stopCts.CancelAfter(LinkStartCancelStopTimeout);
-        await StopStartRequestCoreAsync(stopCts.Token);
+        return await StopStartRequestCoreAsync(stopCts.Token);
     }
 
-    private async Task StopStartRequestCoreAsync(CancellationToken cancellationToken)
+    private async Task<bool> StopStartRequestCoreAsync(CancellationToken cancellationToken)
     {
         try
         {
             var stopResult = await Runtime.ConnectFeatureService.StopAsync(cancellationToken);
-            if (!stopResult.Success
-                && Runtime.SessionService.CurrentState is SessionState.Running or SessionState.Stopping)
+            if (!stopResult.Success)
             {
                 await RecordFailedResultAsync(
                     "TaskQueue.StopStartRequest",
                     stopResult,
                     CancellationToken.None);
             }
+
+            return stopResult.Success;
         }
         catch (OperationCanceledException)
         {
@@ -3144,6 +3294,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                     UiErrorCode.OperationAlreadyStopped,
                     $"Stop for canceled LinkStart did not settle within {LinkStartCancelStopTimeout.TotalSeconds:N0}s."),
                 CancellationToken.None);
+            return false;
         }
         catch (Exception ex)
         {
@@ -3151,15 +3302,31 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 "TaskQueue.StopStartRequest",
                 "Background stop for canceled LinkStart failed.",
                 ex);
+            return false;
         }
-        finally
+    }
+
+    private async Task<bool> FinishCanceledStartRequestAsync(string cleanupScope)
+    {
+        var stopTask = _stopStartRequestTask;
+        var cleanupSucceeded = stopTask is not null
+            ? await stopTask
+            : await CleanupCoreQueueAfterFailedStartAsync(cleanupScope);
+        return ApplyCanceledStartCleanupResult(cleanupSucceeded);
+    }
+
+    private bool ApplyCanceledStartCleanupResult(bool cleanupSucceeded)
+    {
+        cleanupSucceeded = cleanupSucceeded
+            || Runtime.SessionService.CurrentAppendAttemptQueuedTaskCount == 0;
+        CurrentSessionState = Runtime.SessionService.CurrentState;
+        SetCoreQueueCleanupRequired(!cleanupSucceeded);
+        if (cleanupSucceeded)
         {
-            Dispatcher.UIThread.Post(() =>
-            {
-                CurrentSessionState = Runtime.SessionService.CurrentState;
-                SyncStoppedUiStateIfSessionNotActive();
-            });
+            SyncStoppedUiStateIfSessionNotActive();
         }
+
+        return cleanupSucceeded;
     }
 
     private async Task<bool> EnsureCoreReadyAsync(string scope, CancellationToken cancellationToken)
@@ -3865,7 +4032,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
     public async Task RunSelectedTaskOnceAsync(CancellationToken cancellationToken = default)
     {
-        if (SelectedTask is null)
+        var requestedTask = SelectedTask;
+        if (requestedTask is null)
         {
             LastErrorMessage = BuildLocalizedMessage(
                 "请先选择要单次运行的任务。",
@@ -3873,7 +4041,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             return;
         }
 
-        var selectedIndex = Tasks.IndexOf(SelectedTask);
+        var selectedIndex = Tasks.IndexOf(requestedTask);
         if (selectedIndex < 0)
         {
             LastErrorMessage = BuildLocalizedMessage(
@@ -3883,10 +4051,11 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         }
 
         await _runTransitionLock.WaitAsync(cancellationToken);
+        CancellationTokenSource? startRequestCts = null;
+        RunOwnershipLease runLease = default;
         try
         {
-            ClearVisibleRuntimeLogs();
-            if (!Runtime.SessionService.TryBeginRun(TaskQueueRunOwner, out var currentOwner))
+            if (!Runtime.SessionService.TryAcquireRun(TaskQueueRunOwner, out runLease, out var currentOwner))
             {
                 var owner = string.IsNullOrWhiteSpace(currentOwner) ? "Unknown" : currentOwner;
                 var message = BuildRunOwnerBlockedMessage("单次运行", "run-once", owner);
@@ -3899,32 +4068,65 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 return;
             }
 
+            // Clear the visible logs only after the run owner is acquired so a rejected
+            // run-once never clears the logs of a run that is still in progress.
+            ClearVisibleRuntimeLogs();
+            _activeRunLease = new ActiveRunLeaseSnapshot(runLease);
+            // A forced roguelike delayed-stop request belongs to the run that was stopping;
+            // a newly acquired run must start with a clean delayed-stop state instead of
+            // inheriting a stale force flag.
+            _roguelikeDelayStopForceRequested = false;
+            _stopStartRequestTask = null;
             var keepRunOwner = false;
+            startRequestCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            _startRequestCts = startRequestCts;
+            var startCancellationToken = startRequestCts.Token;
+            SetStartRequestActive(true);
             try
             {
-                if (!await EnsureCoreReadyAsync("TaskQueue.RunOnce.CoreWarmup", cancellationToken))
+                if (_isCoreQueueCleanupRequired
+                    && !await CleanupCoreQueueAfterFailedStartAsync("TaskQueue.RunOnce.PendingCleanup"))
+                {
+                    keepRunOwner = true;
+                    return;
+                }
+
+                if (!await EnsureCoreReadyAsync("TaskQueue.RunOnce.CoreWarmup", startCancellationToken))
                 {
                     return;
                 }
 
-                if (!await EnsureConnectedForLinkStartAsync("TaskQueue.RunOnce", cancellationToken))
+                if (!await EnsureConnectedForLinkStartAsync("TaskQueue.RunOnce", startCancellationToken))
                 {
                     return;
                 }
 
-                await WaitForPendingBindingAsync(cancellationToken);
-                if (!await SaveBoundTaskModulesAsync(cancellationToken))
+                await WaitForPendingBindingAsync(startCancellationToken);
+                if (!await SaveBoundTaskModulesAsync(startCancellationToken))
                 {
+                    return;
+                }
+
+                selectedIndex = Tasks.IndexOf(requestedTask);
+                if (selectedIndex < 0)
+                {
+                    LastErrorMessage = BuildLocalizedMessage(
+                        "当前选中的任务不存在。",
+                        "The selected task no longer exists.");
+                    await RecordFailedResultAsync(
+                        "TaskQueue.RunOnce.Task",
+                        UiOperationResult.Fail(UiErrorCode.TaskNotFound, LastErrorMessage),
+                        startCancellationToken);
                     return;
                 }
 
                 _clearTaskStatusesWhenStopped = false;
 
-                var validationResult = await Runtime.TaskQueueFeatureService.ValidateTaskAsync(selectedIndex, cancellationToken);
+                var validationResult = await Runtime.TaskQueueFeatureService.ValidateTaskAsync(selectedIndex, startCancellationToken);
                 if (!validationResult.Success || validationResult.Value is null)
                 {
                     LastErrorMessage = validationResult.Message;
-                    await SelectTaskByIndexAsync(selectedIndex, cancellationToken);
+                    await SelectTaskByIndexAsync(selectedIndex, startCancellationToken);
                     AppendStartFailureLog(LastErrorMessage);
                     await RecordFailedResultAsync(
                         "TaskQueue.RunOnce.ValidateTask",
@@ -3932,7 +4134,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                             validationResult.Error?.Code ?? UiErrorCode.TaskValidationFailed,
                             validationResult.Message,
                             validationResult.Error?.Details),
-                        cancellationToken);
+                        startCancellationToken);
                     return;
                 }
 
@@ -3947,12 +4149,12 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                             "Task `{0}` blocked by validation: {1}"),
                         validationResult.Value.TaskName,
                         issueDetail);
-                    await SelectTaskByIndexAsync(selectedIndex, cancellationToken);
+                    await SelectTaskByIndexAsync(selectedIndex, startCancellationToken);
                     AppendStartFailureLog(LastErrorMessage);
                     await RecordFailedResultAsync(
                         "TaskQueue.RunOnce.ValidateTask",
                         UiOperationResult.Fail(UiErrorCode.TaskValidationFailed, LastErrorMessage, issueDetail),
-                        cancellationToken);
+                        startCancellationToken);
                     return;
                 }
 
@@ -3963,9 +4165,9 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                     LastErrorMessage = first is null
                         ? "Config validation has blocking issues."
                         : $"{first.Scope}:{first.Code}:{first.Field}:{first.Message}";
-                    await NavigateToFirstBlockingIssueAsync(first, cancellationToken);
+                    await NavigateToFirstBlockingIssueAsync(first, startCancellationToken);
                     AppendStartFailureLog(LastErrorMessage);
-                    await RecordConfigValidationFailureAsync(first, cancellationToken);
+                    await RecordConfigValidationFailureAsync(first, startCancellationToken);
                     return;
                 }
 
@@ -3975,7 +4177,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                     await RecordFailedResultAsync(
                         "TaskQueue.RunOnce.Profile",
                         UiOperationResult.Fail(UiErrorCode.ProfileMissing, LastErrorMessage),
-                        cancellationToken);
+                        startCancellationToken);
                     return;
                 }
 
@@ -3987,7 +4189,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                     await RecordFailedResultAsync(
                         "TaskQueue.RunOnce.Task",
                         UiOperationResult.Fail(UiErrorCode.TaskNotFound, LastErrorMessage),
-                        cancellationToken);
+                        startCancellationToken);
                     return;
                 }
 
@@ -4009,13 +4211,17 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
                 if (!appendResult.Success)
                 {
+                    keepRunOwner = !await CleanupCoreQueueAfterFailedStartAsync("TaskQueue.RunOnce.Append.Cleanup");
                     var error = UiOperationResult<int>.FromCore(appendResult, "Task queued.");
-                    _ = await ApplyResultAsync(error, "TaskQueue.RunOnce.Append", cancellationToken);
+                    _ = await ApplyResultAsync(error, "TaskQueue.RunOnce.Append", startCancellationToken);
                     return;
                 }
 
                 if (appendResult.Value <= 0)
                 {
+                    // Match WPF LinkStart / StartAsync: still stop the core so any residual
+                    // queue left by a previous attempt cannot leak into the next run.
+                    keepRunOwner = !await CleanupCoreQueueAfterFailedStartAsync("TaskQueue.RunOnce.AppendEmpty.Cleanup");
                     LastErrorMessage = BuildLocalizedMessage(
                         "当前任务本次没有产生可执行的核心任务。",
                         "The selected task did not produce any runnable core task this time.");
@@ -4023,7 +4229,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                     await RecordFailedResultAsync(
                         "TaskQueue.RunOnce.AppendEmpty",
                         UiOperationResult.Fail(UiErrorCode.TaskValidationFailed, LastErrorMessage),
-                        cancellationToken);
+                        startCancellationToken);
                     return;
                 }
 
@@ -4035,16 +4241,45 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 TrackAchievementsAfterStart(appendResult.Value);
                 keepRunOwner = true;
             }
+            catch (OperationCanceledException) when (startRequestCts.IsCancellationRequested)
+            {
+                keepRunOwner = !await FinishCanceledStartRequestAsync("TaskQueue.RunOnce.CancelCleanup");
+            }
+            catch (Exception ex)
+            {
+                // Never let a failed run-once escape into async-void UI handlers, and clean up
+                // any core tasks appended before the failure so they cannot leak into the
+                // next run.
+                keepRunOwner = !await CleanupCoreQueueAfterFailedStartAsync("TaskQueue.RunOnce.UnexpectedCleanup");
+                CurrentSessionState = Runtime.SessionService.CurrentState;
+                if (ex is OperationCanceledException && cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+
+                await RecordErrorAsync(
+                    "TaskQueue.RunOnce",
+                    "Run-once failed unexpectedly.",
+                    ex);
+            }
             finally
             {
                 if (!keepRunOwner)
                 {
-                    Runtime.SessionService.EndRun(TaskQueueRunOwner);
+                    CompleteTaskQueueRunOwnership(runLease);
+                }
+
+                SetStartRequestActive(false);
+                if (ReferenceEquals(_startRequestCts, startRequestCts))
+                {
+                    _startRequestCts = null;
+                    _stopStartRequestTask = null;
                 }
             }
         }
         finally
         {
+            startRequestCts?.Dispose();
             _runTransitionLock.Release();
         }
     }
@@ -4052,6 +4287,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     private async Task RunAccountSwitchManualAsync(CancellationToken cancellationToken)
     {
         await _runTransitionLock.WaitAsync(cancellationToken);
+        CancellationTokenSource? startRequestCts = null;
+        RunOwnershipLease runLease = default;
         try
         {
             if (!Runtime.SessionService.TryBeginRun(TaskQueueRunOwner, out var currentOwner))
@@ -4066,7 +4303,17 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 return;
             }
 
+            _activeRunLease = new ActiveRunLeaseSnapshot(runLease);
+            // A forced roguelike delayed-stop request belongs to the run that was stopping;
+            // a newly acquired run must start with a clean delayed-stop state instead of
+            // inheriting a stale force flag.
+            _roguelikeDelayStopForceRequested = false;
+            _stopStartRequestTask = null;
             var keepRunOwner = false;
+            startRequestCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            _startRequestCts = startRequestCts;
+            var startCancellationToken = startRequestCts.Token;
+            SetStartRequestActive(true);
             try
             {
                 if (!await EnsureConnectedForLinkStartAsync("TaskQueue.AccountSwitch", cancellationToken))
@@ -4086,7 +4333,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                     await RecordFailedResultAsync(
                         "TaskQueue.AccountSwitch.Profile",
                         UiOperationResult.Fail(UiErrorCode.ProfileMissing, LastErrorMessage),
-                        cancellationToken);
+                        startCancellationToken);
                     return;
                 }
 
@@ -4099,7 +4346,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                     await RecordFailedResultAsync(
                         "TaskQueue.AccountSwitch.Task",
                         UiOperationResult.Fail(UiErrorCode.TaskNotFound, LastErrorMessage),
-                        cancellationToken);
+                        startCancellationToken);
                     return;
                 }
 
@@ -4130,16 +4377,45 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 _lastPostActionRunId = string.Empty;
                 keepRunOwner = true;
             }
+            catch (OperationCanceledException) when (startRequestCts.IsCancellationRequested)
+            {
+                keepRunOwner = !await FinishCanceledStartRequestAsync("TaskQueue.AccountSwitch.CancelCleanup");
+            }
+            catch (Exception ex)
+            {
+                // Never let a failed account switch escape into async-void UI handlers, and
+                // clean up any core tasks appended before the failure so they cannot leak
+                // into the next run.
+                keepRunOwner = !await CleanupCoreQueueAfterFailedStartAsync("TaskQueue.AccountSwitch.UnexpectedCleanup");
+                CurrentSessionState = Runtime.SessionService.CurrentState;
+                if (ex is OperationCanceledException && cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+
+                await RecordErrorAsync(
+                    "TaskQueue.AccountSwitch",
+                    "Account switch failed unexpectedly.",
+                    ex);
+            }
             finally
             {
                 if (!keepRunOwner)
                 {
-                    Runtime.SessionService.EndRun(TaskQueueRunOwner);
+                    CompleteTaskQueueRunOwnership(runLease);
+                }
+
+                SetStartRequestActive(false);
+                if (ReferenceEquals(_startRequestCts, startRequestCts))
+                {
+                    _startRequestCts = null;
+                    _stopStartRequestTask = null;
                 }
             }
         }
         finally
         {
+            startRequestCts?.Dispose();
             _runTransitionLock.Release();
         }
     }
@@ -4174,8 +4450,43 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         return -1;
     }
 
+    private async Task<bool> CleanupCoreQueueAfterFailedStartAsync(string scope)
+    {
+        var queueMayBeDirty = Runtime.SessionService.CurrentAppendAttemptQueuedTaskCount > 0;
+        var cleanupResult = await Runtime.ConnectFeatureService.StopAsync(CancellationToken.None);
+        CurrentSessionState = Runtime.SessionService.CurrentState;
+        ResetAllTaskStatuses();
+        if (cleanupResult.Success)
+        {
+            SetCoreQueueCleanupRequired(false);
+            Runtime.LogService.Info($"{scope}: cleared queued Core tasks after start failure.");
+            return true;
+        }
+
+        if (!queueMayBeDirty)
+        {
+            SetCoreQueueCleanupRequired(false);
+            Runtime.LogService.Info($"{scope}: no Core tasks were appended before cleanup was rejected.");
+            return true;
+        }
+
+        SetCoreQueueCleanupRequired(true);
+        Runtime.LogService.Warn($"{scope}: failed to clear queued Core tasks: {cleanupResult.Message}");
+        await RecordFailedResultAsync(scope, cleanupResult, CancellationToken.None);
+        return false;
+    }
+
     public async Task StopAsync(CancellationToken cancellationToken = default, bool userInitiated = true)
     {
+        // WPF parity: WPF's WaitUntilRoguelikeCombatComplete loop breaks on Stopping, so a
+        // manual stop always forces the delayed stop to finish immediately. A repeated Stop
+        // while the roguelike delayed stop below is still waiting must do the same, instead
+        // of blocking behind the run-transition lock for up to 600 seconds.
+        if (_roguelikeDelayStopWaiting)
+        {
+            _roguelikeDelayStopForceRequested = true;
+        }
+
         await _runTransitionLock.WaitAsync(cancellationToken);
         try
         {
@@ -4187,6 +4498,14 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                     "TaskQueue.Stop",
                     UiOperationResult.Fail(UiErrorCode.OperationAlreadyStopped, LastErrorMessage),
                     cancellationToken);
+                if (_isCoreQueueCleanupRequired)
+                {
+                    // A previous failed start left queued core tasks behind; retry the cleanup
+                    // so a direct Stop (e.g. confirmed from the run-owner dialog) also clears
+                    // the dirty queue instead of leaving the cleanup flag stuck forever.
+                    await CleanupCoreQueueAfterFailedStartAsync("TaskQueue.Stop.PendingCleanup");
+                }
+
                 SyncStoppedUiStateIfSessionNotActive();
 
                 return;
@@ -4205,14 +4524,41 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             }
 
             await WaitForPendingBindingAsync(cancellationToken);
-            if (!await SaveBoundTaskModulesAsync(cancellationToken))
+
+            // WPF parity: WPF's Stop has no configuration-save precondition. A failed
+            // flush must never abort the stop, otherwise a running queue becomes
+            // unstoppable while the config store is failing.
+            try
             {
-                return;
+                if (!await SaveBoundTaskModulesAsync(cancellationToken))
+                {
+                    Runtime.LogService.Warn(
+                        "TaskQueue.Stop: saving bound task modules failed; continuing the stop so the running queue remains stoppable.");
+                }
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+            {
+                await RecordErrorAsync(
+                    "TaskQueue.Stop.SaveModules",
+                    "Saving bound task modules before stop failed unexpectedly; continuing the stop.",
+                    ex);
             }
 
-            if (ShouldDelayStopUntilRoguelikeCombatComplete())
+            // A repeated stop that already forced the delayed stop to abort stays forced
+            // until the run actually ends (the flag is cleared when the run ownership is
+            // released), so a failed core stop cannot make the next stop wait again.
+            if (ShouldDelayStopUntilRoguelikeCombatComplete() && !_roguelikeDelayStopForceRequested)
             {
-                await WaitUntilRoguelikeCombatCompleteAsync(cancellationToken);
+                _roguelikeDelayStopWaiting = true;
+                try
+                {
+                    await WaitUntilRoguelikeCombatCompleteAsync(cancellationToken);
+                }
+                finally
+                {
+                    _roguelikeDelayStopWaiting = false;
+                }
+
                 CurrentSessionState = Runtime.SessionService.CurrentState;
                 if (CurrentSessionState != SessionState.Running)
                 {
@@ -4248,7 +4594,9 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             }
 
             _ = RunEndScriptAfterManualStopAsync();
-
+            // A successful core stop clears the native task queue, so any pending
+            // failed-start cleanup requirement is resolved as well.
+            SetCoreQueueCleanupRequired(false);
             ResetAllTaskStatuses();
             CurrentSessionState = Runtime.SessionService.CurrentState;
             SyncStoppedUiStateIfSessionNotActive();
@@ -4259,6 +4607,12 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         }
     }
 
+    /// <summary>
+    /// Internal stop variant that waits for a fixed settle window before forcing a core stop.
+    /// This entry point is currently not wired to any UI control. WPF's roguelike
+    /// "wait until combat completes" delayed stop is implemented by <see cref="StopAsync"/>
+    /// through WaitUntilRoguelikeCombatCompleteAsync instead.
+    /// </summary>
     private async Task RunEndScriptAfterManualStopAsync()
     {
         try
@@ -6952,10 +7306,15 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
     private async Task HandleCallbackAsync(CoreCallbackEvent callback)
     {
-        await Dispatcher.UIThread.InvokeAsync(() => HandleCallbackCoreAsync(callback));
+        // Capture the active run lease on the callback pump thread (dispatch time), not when
+        // the UI handler eventually executes: a stopped run's TaskChainStopped callback can
+        // reach the UI thread after a new run already acquired its lease, and capturing at
+        // execution time would release the new run's owner mid-run.
+        var leaseSnapshot = _activeRunLease;
+        await Dispatcher.UIThread.InvokeAsync(() => HandleCallbackCoreAsync(callback, leaseSnapshot?.Lease));
     }
 
-    private async Task HandleCallbackCoreAsync(CoreCallbackEvent callback)
+    private async Task HandleCallbackCoreAsync(CoreCallbackEvent callback, RunOwnershipLease? callbackRunLease)
     {
         var currentOwner = Runtime.SessionService.CurrentRunOwner;
         if (!string.IsNullOrWhiteSpace(currentOwner) && !Runtime.SessionService.IsRunOwner(TaskQueueRunOwner))
@@ -7120,7 +7479,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                     TaskQueueItemStatus.Skipped,
                     callback.PayloadJson,
                     resolveSource: resolveSource);
-                CompleteTaskQueueRunOwnership();
+                CompleteTaskQueueRunOwnership(callbackRunLease);
                 break;
             case "AllTasksCompleted":
                 ResetAllTaskStatuses();
@@ -7141,6 +7500,12 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                     }
                 }
                 await ConsumeCompletedOneShotTaskEnabledStatesAsync();
+                CancelStallReminder();
+                // WPF parity: AsstProxy marks the run idle before firing
+                // CheckAfterCompleted in the background, so a new run may start while
+                // post actions (e.g. the power-action confirmation countdown) are still
+                // running. Release the run owner before executing post actions.
+                CompleteTaskQueueRunOwnership(callbackRunLease);
                 if (IsMainTaskQueueCompletion(metadata))
                 {
                     AppendWpfCallbackLog(callback, metadata, taskIndex);
@@ -7152,9 +7517,6 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                         await ExecutePostActionAfterCompletionAsync(callback, runId, taskIndex);
                     }
                 }
-
-                CancelStallReminder();
-                CompleteTaskQueueRunOwnership();
 
                 break;
             case "TaskChainExtraInfo":
@@ -7818,8 +8180,25 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     }
 
     private void CompleteTaskQueueRunOwnership()
+        => CompleteTaskQueueRunOwnership(_activeRunLease?.Lease);
+
+    private void CompleteTaskQueueRunOwnership(RunOwnershipLease? expectedLease)
     {
-        Runtime.SessionService.EndRun(TaskQueueRunOwner);
+        if (!expectedLease.HasValue || !Runtime.SessionService.EndRun(expectedLease.Value))
+        {
+            return;
+        }
+
+        var lease = expectedLease.Value;
+        var activeSnapshot = _activeRunLease;
+        if (activeSnapshot is not null && activeSnapshot.Lease == lease)
+        {
+            _activeRunLease = null;
+        }
+
+        // The run is over: any forced roguelike delayed-stop request is resolved with
+        // it, so a later run starts with a clean delayed-stop state.
+        _roguelikeDelayStopForceRequested = false;
     }
 
     private async Task RecordRuntimeStatusAsync(
@@ -7966,6 +8345,12 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         while (elapsed < MaxWaitSeconds && _roguelikeInCombat)
         {
             cancellationToken.ThrowIfCancellationRequested();
+
+            if (_roguelikeDelayStopForceRequested)
+            {
+                Runtime.LogService.Info("TaskQueue.Stop: roguelike delayed stop interrupted by a repeated stop request.");
+                break;
+            }
 
             var delayEnabled = TryReadProfileBool(
                 Runtime.ConfigurationService.CurrentConfig,
@@ -8510,6 +8895,12 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     {
         void Apply(SessionState changedState)
         {
+            var currentState = Runtime.SessionService.CurrentState;
+            if (changedState != currentState)
+            {
+                return;
+            }
+
             CurrentSessionState = changedState;
             OnPropertyChanged(nameof(IsRunOwnedByAnotherFeature));
             OnPropertyChanged(nameof(IsOwnRunActive));
@@ -8524,7 +8915,13 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 return;
             }
 
-            if (changedState == SessionState.Connecting && _isStartRequestActive)
+            if (_isStartRequestActive)
+            {
+                return;
+            }
+
+            if (changedState == SessionState.Connected
+                && Runtime.SessionService.IsRunOwner(TaskQueueRunOwner))
             {
                 return;
             }

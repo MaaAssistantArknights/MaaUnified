@@ -188,7 +188,7 @@ public sealed class TaskQueueReportRequestTests
         Assert.NotNull(method);
 
         var callback = new CoreCallbackEvent(30000, "ReportRequest", payloadJson, DateTimeOffset.UtcNow);
-        var task = method.Invoke(vm, [callback]) as Task;
+        var task = method.Invoke(vm, [callback, null]) as Task;
         Assert.NotNull(task);
         await task;
 

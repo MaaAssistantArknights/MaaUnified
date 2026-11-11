@@ -20,7 +20,9 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge, IMaaCoreBridgeRecovery
     private const int AsstInstanceOptionKillAdbOnExit = 5;
     private const int AsstInstanceOptionClientType = 6;
     private static readonly TimeSpan DefaultConnectTimeout = TimeSpan.FromSeconds(30);
-    private static readonly TimeSpan DefaultStopTimeout = TimeSpan.FromSeconds(10);
+    // Matches the WPF TaskQueueViewModel.Stop default timeout (60s): slow task chains
+    // (e.g. roguelike settlement) can take well over 10s to wind down after AsstStop.
+    private static readonly TimeSpan DefaultStopTimeout = TimeSpan.FromSeconds(60);
     private static readonly TimeSpan DefaultStopCallTimeout = TimeSpan.FromSeconds(3);
     private static readonly TimeSpan DefaultScreencapTimeout = TimeSpan.FromSeconds(8);
     private static readonly TimeSpan AbandonedConnectStopTimeout = TimeSpan.FromSeconds(2);

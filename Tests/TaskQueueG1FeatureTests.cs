@@ -1839,13 +1839,30 @@ public sealed class TaskQueueG1FeatureTests
             BindingFlags.Instance | BindingFlags.NonPublic);
         Assert.NotNull(method);
 
-        var task = method.Invoke(vm, [callback]) as Task;
+        var task = method.Invoke(vm, [callback, GetActiveRunLease(vm)]) as Task;
         if (task is null)
         {
             throw new InvalidOperationException("HandleCallbackCoreAsync invocation returned null.");
         }
 
         await task;
+    }
+
+    private static RunOwnershipLease? GetActiveRunLease(TaskQueuePageViewModel vm)
+    {
+        var field = typeof(TaskQueuePageViewModel).GetField(
+            "_activeRunLease",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(field);
+        var snapshot = field!.GetValue(vm);
+        if (snapshot is null)
+        {
+            return null;
+        }
+
+        var leaseProperty = snapshot.GetType().GetProperty("Lease", BindingFlags.Instance | BindingFlags.Public);
+        Assert.NotNull(leaseProperty);
+        return (RunOwnershipLease)leaseProperty!.GetValue(snapshot)!;
     }
 
     private static void MapCoreTaskId(UnifiedSessionService sessionService, int taskId, int taskIndex)

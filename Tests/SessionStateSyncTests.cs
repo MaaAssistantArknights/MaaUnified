@@ -702,6 +702,26 @@ public sealed class SessionStateSyncTests
     }
 
     [Fact]
+    public void RunOwnershipLease_ShouldRejectSameOwnerReentryAndIgnoreStaleRelease()
+    {
+        var session = new UnifiedSessionService(new FakeBridge(), CreateConfigService(), new UiLogService(), new SessionStateMachine());
+
+        Assert.True(session.TryAcquireRun("TaskQueue", out var firstLease, out var firstOwner));
+        Assert.Equal("TaskQueue", firstOwner);
+        Assert.False(session.TryAcquireRun("TaskQueue", out _, out var blockedOwner));
+        Assert.Equal("TaskQueue", blockedOwner);
+
+        Assert.True(session.EndRun(firstLease));
+        Assert.True(session.TryAcquireRun("TaskQueue", out var secondLease, out _));
+        Assert.NotEqual(firstLease.Generation, secondLease.Generation);
+
+        Assert.False(session.EndRun(firstLease));
+        Assert.Equal("TaskQueue", session.CurrentRunOwner);
+        Assert.True(session.EndRun(secondLease));
+        Assert.Null(session.CurrentRunOwner);
+    }
+
+    [Fact]
     public async Task AppendTasksFromCurrentProfile_BlockingIssue_ShouldFailAndClearTaskIdMappings()
     {
         var bridge = new FakeBridge();

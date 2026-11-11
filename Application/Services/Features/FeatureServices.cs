@@ -4878,6 +4878,7 @@ public sealed class PostActionFeatureService : IPostActionFeatureService
     private readonly UnifiedSessionService? _sessionService;
     private readonly IAppLifecycleService? _appLifecycleService;
     private readonly IPostActionPromptService _promptService;
+    private readonly Func<bool> _hasOtherMaaProcess;
 
     public PostActionFeatureService(
         UnifiedConfigurationService configService,
@@ -4894,7 +4895,8 @@ public sealed class PostActionFeatureService : IPostActionFeatureService
         IMaaCoreBridge? coreBridge,
         IAppLifecycleService? appLifecycleService,
         IPostActionPromptService? promptService,
-        UnifiedSessionService? sessionService = null)
+        UnifiedSessionService? sessionService = null,
+        Func<bool>? hasOtherMaaProcess = null)
     {
         _configService = configService;
         _diagnostics = diagnostics;
@@ -4903,7 +4905,7 @@ public sealed class PostActionFeatureService : IPostActionFeatureService
         _sessionService = sessionService;
         _appLifecycleService = appLifecycleService;
         _promptService = promptService ?? new NoOpPostActionPromptService();
-        _sessionService = sessionService;
+        _hasOtherMaaProcess = hasOtherMaaProcess ?? HasOtherMaaProcess;
     }
 
     public async Task<UiOperationResult<PostActionConfig>> LoadAsync(CancellationToken cancellationToken = default)
@@ -5225,8 +5227,9 @@ public sealed class PostActionFeatureService : IPostActionFeatureService
         var executedActions = new List<string>();
         var skippedActions = new List<string>();
         var failures = new List<string>();
-        var skipSystemActionsForOtherMaa = config.IfNoOtherMaa && HasOtherMaaProcess();
         var persistentExitSelfRestored = false;
+        var hasSystemActions = config.Hibernate || config.Shutdown || config.Sleep;
+        var skipSystemActionsForOtherMaa = config.IfNoOtherMaa && _hasOtherMaaProcess();
         if (skipSystemActionsForOtherMaa)
         {
             summary.Add("Detected another MAA process, skipped system-level post actions.");
@@ -5286,7 +5289,17 @@ public sealed class PostActionFeatureService : IPostActionFeatureService
             }
         }
 
-        if (config.ExitSelf)
+        // WPF parity (TaskQueueViewModel.CheckAfterCompleted): ExitSelf only runs when no
+        // system-level action is configured; and when IfNoOtherMaa skips a configured
+        // system-level action because another MAA process exists, WPF exits itself instead
+        // of performing the system action.
+        var exitSelfInsteadOfSystemAction = skipSystemActionsForOtherMaa && hasSystemActions;
+        if (exitSelfInsteadOfSystemAction)
+        {
+            summary.Add("Exiting MAA instead of the skipped system-level post actions.");
+        }
+
+        if ((config.ExitSelf && !hasSystemActions) || exitSelfInsteadOfSystemAction)
         {
             await ExecuteActionAsync(PostActionType.ExitSelf, cancellationToken);
         }

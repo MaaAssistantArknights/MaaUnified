@@ -677,9 +677,24 @@ public sealed class TaskQueueNotificationTests
                 throw new InvalidOperationException("Unable to locate TaskQueue callback handler.");
             }
 
-            var result = method.Invoke(vm, new object?[] { callback }) as Task
+            var result = method.Invoke(vm, new object?[] { callback, GetActiveRunLease(vm) }) as Task
                 ?? throw new InvalidOperationException("TaskQueue callback handler did not return a task.");
             await result;
+        }
+
+        private static RunOwnershipLease? GetActiveRunLease(TaskQueuePageViewModel vm)
+        {
+            var field = typeof(TaskQueuePageViewModel).GetField("_activeRunLease", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new InvalidOperationException("Unable to locate the active run lease field.");
+            var snapshot = field.GetValue(vm);
+            if (snapshot is null)
+            {
+                return null;
+            }
+
+            var leaseProperty = snapshot.GetType().GetProperty("Lease", BindingFlags.Instance | BindingFlags.Public)
+                ?? throw new InvalidOperationException("Unable to locate the run lease snapshot property.");
+            return (RunOwnershipLease)leaseProperty.GetValue(snapshot)!;
         }
 
         private sealed class TestBridge : IMaaCoreBridge

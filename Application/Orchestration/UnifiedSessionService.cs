@@ -154,6 +154,8 @@ public sealed record ConnectionCallbackStatus(
     int? Height = null,
     string? Method = null);
 
+public readonly record struct RunOwnershipLease(string Owner, long Generation);
+
 public sealed class UnifiedSessionService
 {
     private static readonly TimeSpan DefaultConnectTimeout = TimeSpan.FromSeconds(30);
@@ -172,6 +174,9 @@ public sealed class UnifiedSessionService
     private CoreConnectionInfo? _lastSuccessfulConnectionInfo;
     private string? _currentRunOwner;
     private string? _currentRunOwnerDisplayName;
+    private long _currentRunOwnershipGeneration;
+    private long _nextRunOwnershipGeneration;
+    private int _currentAppendAttemptQueuedTaskCount;
     private CancellationTokenSource? _activeConnectCts;
     private CoreConnectionInfo? _activeConnectionTarget;
     private CoreConnectionInfo? _activeCallbackConnectionInfo;
@@ -218,6 +223,8 @@ public sealed class UnifiedSessionService
     public CoreConnectionInfo? LastSuccessfulConnectionInfo => _lastSuccessfulConnectionInfo;
 
     public ConnectionCallbackStatus? LastConnectionCallbackStatus { get; private set; }
+
+    public int CurrentAppendAttemptQueuedTaskCount => Volatile.Read(ref _currentAppendAttemptQueuedTaskCount);
 
     public event Action<SessionState>? SessionStateChanged;
 
@@ -283,6 +290,42 @@ public sealed class UnifiedSessionService
         }
     }
 
+    public bool TryAcquireRun(
+        string owner,
+        out RunOwnershipLease lease,
+        out string? currentOwner)
+    {
+        lease = default;
+        currentOwner = null;
+        if (string.IsNullOrWhiteSpace(owner))
+        {
+            return false;
+        }
+
+        var normalizedOwner = owner.Trim();
+        lock (_runOwnerGate)
+        {
+            if (!string.IsNullOrWhiteSpace(_currentRunOwner))
+            {
+                currentOwner = _currentRunOwner;
+                return false;
+            }
+
+            var generation = unchecked(++_nextRunOwnershipGeneration);
+            if (generation == 0)
+            {
+                generation = unchecked(++_nextRunOwnershipGeneration);
+            }
+
+            _currentRunOwner = normalizedOwner;
+            _currentRunOwnerDisplayName = normalizedOwner;
+            _currentRunOwnershipGeneration = generation;
+            lease = new RunOwnershipLease(normalizedOwner, generation);
+            currentOwner = normalizedOwner;
+            return true;
+        }
+    }
+
     public bool IsRunOwner(string owner)
     {
         if (string.IsNullOrWhiteSpace(owner))
@@ -309,7 +352,30 @@ public sealed class UnifiedSessionService
             {
                 _currentRunOwner = null;
                 _currentRunOwnerDisplayName = null;
+                _currentRunOwnershipGeneration = 0;
             }
+        }
+    }
+
+    public bool EndRun(RunOwnershipLease lease)
+    {
+        if (string.IsNullOrWhiteSpace(lease.Owner) || lease.Generation == 0)
+        {
+            return false;
+        }
+
+        lock (_runOwnerGate)
+        {
+            if (!string.Equals(_currentRunOwner, lease.Owner.Trim(), StringComparison.Ordinal)
+                || _currentRunOwnershipGeneration != lease.Generation)
+            {
+                return false;
+            }
+
+            _currentRunOwner = null;
+            _currentRunOwnerDisplayName = null;
+            _currentRunOwnershipGeneration = 0;
+            return true;
         }
     }
 
@@ -739,6 +805,7 @@ public sealed class UnifiedSessionService
         }
 
         BeginProfileTaskIdMappings();
+        Interlocked.Exchange(ref _currentAppendAttemptQueuedTaskCount, 0);
 
         int appended = 0;
         var resetOneShotRecruitExpedited = false;
@@ -838,6 +905,7 @@ public sealed class UnifiedSessionService
 
                     SetTaskIdMapping(appendCoreResult.Value, queueIndex);
                     appended += 1;
+                    Interlocked.Increment(ref _currentAppendAttemptQueuedTaskCount);
                     _logService.Info($"Appended task #{appendCoreResult.Value}: {userDataTask.Name}");
                     await ThrowIfAppendCanceledAsync(appended, cancellationToken, "profile append canceled").ConfigureAwait(false);
                 }
@@ -868,6 +936,7 @@ public sealed class UnifiedSessionService
             SetTaskIdMapping(appendResult.Value, queueIndex);
 
             appended += 1;
+            Interlocked.Increment(ref _currentAppendAttemptQueuedTaskCount);
             if (ResetOneShotRecruitExpedited(task, oneShotRecruitSnapshots))
             {
                 resetOneShotRecruitExpedited = true;
@@ -1426,6 +1495,7 @@ public sealed class UnifiedSessionService
 
             if (result.Success)
             {
+                Interlocked.Exchange(ref _currentAppendAttemptQueuedTaskCount, 0);
                 // Every callback of the stopped batch is enqueued before AsstStop
                 // returns; any of them still waiting in the pump must not resurrect
                 // the run this stop just ended.
@@ -1438,6 +1508,7 @@ public sealed class UnifiedSessionService
             }
             else if (IsAbandonedNativeStopFailure(result.Error))
             {
+                Interlocked.Exchange(ref _currentAppendAttemptQueuedTaskCount, 0);
                 _lastSuccessfulConnectionInfo = null;
                 ClearActiveConnectionTarget();
                 MarkIdleConnectionCallbacksStale();
@@ -1703,6 +1774,7 @@ public sealed class UnifiedSessionService
                 return;
             }
 
+            Interlocked.Exchange(ref _currentAppendAttemptQueuedTaskCount, 0);
             MoveToState(SessionState.Connected, "Session.Callback", callback.MsgName);
             return;
         }
