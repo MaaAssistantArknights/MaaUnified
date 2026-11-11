@@ -114,7 +114,7 @@ public sealed class OverlayParityTests
     }
 
     [Fact]
-    public async Task TaskQueuePage_AppendSystemLog_ShouldMirrorAndTrimOverlayLogs()
+    public async Task TaskQueuePage_AppendSystemLog_ShouldMirrorAllOverlayLogs()
     {
         await using var fixture = await OverlayFixture.CreateAsync();
         var vm = fixture.Shell.TaskQueuePage;
@@ -124,15 +124,16 @@ public sealed class OverlayParityTests
             vm.AppendSystemLog($"entry-{index}");
         }
 
-        Assert.Equal(200, vm.OverlayLogs.Count);
-        Assert.Contains("entry-5", vm.OverlayLogs[0].Content, StringComparison.Ordinal);
+        Assert.Equal(205, vm.OverlayLogs.Count);
+        Assert.Contains("entry-0", vm.OverlayLogs[0].Content, StringComparison.Ordinal);
         Assert.Contains("entry-204", vm.OverlayLogs[^1].Content, StringComparison.Ordinal);
-        Assert.NotEmpty(vm.LogCards);
-        Assert.Contains("entry-204", vm.LogCards[^1].Items[0].Content, StringComparison.Ordinal);
+        var card = Assert.Single(vm.LogCards);
+        Assert.Equal(205, card.Items.Count);
+        Assert.Contains("entry-204", card.Items[^1].Content, StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task TaskQueuePage_AppendSystemLog_ShouldCreateOneCardPerLogEntry()
+    public async Task TaskQueuePage_AppendSystemLog_ShouldMergeOrdinaryEntriesIntoCurrentCard()
     {
         await using var fixture = await OverlayFixture.CreateAsync();
         var vm = fixture.Shell.TaskQueuePage;
@@ -140,11 +141,10 @@ public sealed class OverlayParityTests
         vm.AppendSystemLog("first adb retry");
         vm.AppendSystemLog("second adb retry");
 
-        Assert.Equal(2, vm.LogCards.Count);
-        Assert.Single(vm.LogCards[0].Items);
-        Assert.Single(vm.LogCards[1].Items);
-        Assert.Equal("first adb retry", vm.LogCards[0].PrimaryContent);
-        Assert.Equal("second adb retry", vm.LogCards[1].PrimaryContent);
+        var card = Assert.Single(vm.LogCards);
+        Assert.Equal(2, card.Items.Count);
+        Assert.Equal("first adb retry", card.Items[0].Content);
+        Assert.Equal("second adb retry", card.PrimaryContent);
     }
 
     [Fact]

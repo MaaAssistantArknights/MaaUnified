@@ -250,6 +250,10 @@
                      Classes="app-body long-wrap"
                      Classes.state-error="{Binding IsError}"
                      Classes.state-warning="{Binding IsWarning}"
+                     Classes.log-info="{Binding IsInfoColor}"
+                     Classes.log-rare="{Binding IsRareOperatorColor}"
+                     Classes.log-download="{Binding IsDownloadColor}"
+                     FontWeight="{Binding DisplayFontWeight}"
                      Margin="{DynamicResource MAA.Thickness.MarginActionButtonLeft}"
                      Text="{Binding Content}" />
         </Grid>

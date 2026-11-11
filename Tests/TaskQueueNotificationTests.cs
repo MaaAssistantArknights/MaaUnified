@@ -176,7 +176,8 @@ public sealed class TaskQueueNotificationTests
         Assert.Contains("completed", call.Title, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("completed all tasks", call.Message, StringComparison.OrdinalIgnoreCase);
         Assert.Contains(fixture.Config.CurrentConfig.CurrentProfile, call.Message, StringComparison.Ordinal);
-        Assert.Contains("[InfoLogBrush]detail-line", call.Message, StringComparison.Ordinal);
+        // WPF stores the default TraceLogBrush on entries without an explicit color.
+        Assert.Contains("[TraceLogBrush]detail-line", call.Message, StringComparison.Ordinal);
         Assert.Equal(1, fixture.NotificationCapability.NotificationCallCount);
         Assert.False(fixture.NotificationCapability.LastNotification?.UseSystemNotification);
     }
@@ -383,6 +384,41 @@ public sealed class TaskQueueNotificationTests
 
         await WaitForNotificationCountAsync(fixture.NotificationCapability, 1);
         Assert.Equal("Senior Operator", fixture.NotificationCapability.LastMessage);
+    }
+
+    [Theory]
+    [InlineData(false, 0)]
+    [InlineData(true, 1)]
+    public async Task RecruitSpecialTag_SupportMachine_SuppressedWhenLevel1RecruitmentAllowed(
+        bool notChooseLevel1,
+        int expectedCount)
+    {
+        await using var fixture = await NotificationFixture.CreateAsync(useNotify: true);
+        await fixture.ViewModel.InitializeAsync();
+        fixture.ViewModel.RecruitModule.NotChooseLevel1 = notChooseLevel1;
+
+        // WPF AsstProxy.RecruitSpecialTag: the support-machine tag toast is skipped
+        // when NotChooseLevel1 == false.
+        await NotificationFixture.InvokeCallbackAsync(
+            fixture.ViewModel,
+            new CoreCallbackEvent(
+                10004,
+                "SubTaskExtraInfo",
+                new JsonObject
+                {
+                    ["task_chain"] = "Recruit",
+                    ["subtask"] = "AutoRecruitTask",
+                    ["what"] = "RecruitSpecialTag",
+                    ["details"] = new JsonObject { ["tag"] = "支援机械" },
+                }.ToJsonString(),
+                DateTimeOffset.UtcNow));
+
+        if (expectedCount > 0)
+        {
+            await WaitForNotificationCountAsync(fixture.NotificationCapability, expectedCount);
+        }
+
+        Assert.Equal(expectedCount, fixture.NotificationCapability.NotificationCallCount);
     }
 
     [Theory]

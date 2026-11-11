@@ -408,6 +408,54 @@
     <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.State.Success}" />
   </Style>
 
+  <Style Selector="TextBlock.log-info">
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Log.Info}" />
+  </Style>
+
+  <Style Selector="TextBlock.log-rare">
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Log.RareOperator}" />
+  </Style>
+
+  <Style Selector="TextBlock.log-download">
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Log.Download}" />
+  </Style>
+
+  <Style Selector="TextBlock.log-message">
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Log.Message}" />
+  </Style>
+
+  <Style Selector="TextBlock.log-success-is">
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Log.SuccessIS}" />
+  </Style>
+
+  <Style Selector="TextBlock.log-safehouse-is">
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Log.SafehouseIS}" />
+  </Style>
+
+  <Style Selector="TextBlock.log-trader-is">
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Log.TraderIS}" />
+  </Style>
+
+  <Style Selector="TextBlock.log-truth-is">
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Log.TruthIS}" />
+  </Style>
+
+  <Style Selector="TextBlock.log-combat-is">
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Log.CombatIS}" />
+  </Style>
+
+  <Style Selector="TextBlock.log-emergency-is">
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Log.EmergencyIS}" />
+  </Style>
+
+  <Style Selector="TextBlock.log-boss-is">
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Log.BossIS}" />
+  </Style>
+
+  <Style Selector="TextBlock.log-exploration-abandoned-is">
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Log.ExplorationAbandonedIS}" />
+  </Style>
+
   <Style Selector="Border.achievement-toast">
     <Setter Property="Width" Value="360" />
     <Setter Property="Background" Value="{DynamicResource MAA.Brush.Toast.AchievementBackground}" />

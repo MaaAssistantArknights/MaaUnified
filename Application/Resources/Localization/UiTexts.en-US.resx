@@ -21,6 +21,9 @@
   <data name="AlgorithmConstructionPoint" xml:space="preserve">
     <value>Algorithm Construction Point</value>
   </data>
+  <data name="AlgorithmDoneSmeltGold" xml:space="preserve">
+    <value>Forging Red Gold</value>
+  </data>
   <data name="AlgorithmFinish" xml:space="preserve">
     <value>Algorithm Finish</value>
   </data>
@@ -778,6 +781,9 @@ Remaining credits: </value>
   <data name="EmergencyOps" xml:space="preserve">
     <value>Stage: Emergency Operation</value>
   </data>
+  <data name="Error" xml:space="preserve">
+    <value>Error</value>
+  </data>
   <data name="ErrorOccurred" xml:space="preserve">
     <value>Error occurred</value>
   </data>
@@ -1092,6 +1098,9 @@ Target inventory: use saved Toolbox depot data and only farm the missing amount 
   </data>
   <data name="IS5NewSquad9" xml:space="preserve">
     <value>Agent Squad</value>
+  </data>
+  <data name="IdentifyTheMistakes" xml:space="preserve">
+    <value>Recognition error</value>
   </data>
   <data name="Infrast.Advanced" xml:space="preserve">
     <value>Advanced</value>
@@ -2049,8 +2058,17 @@ With save file: farm points through crafting (advanced).
   <data name="RecruitConfirm" xml:space="preserve">
     <value>Recruit confirm</value>
   </data>
+  <data name="RecruitSupportOperator" xml:space="preserve">
+    <value>Add support unit: {0}</value>
+  </data>
   <data name="RecruitingResults" xml:space="preserve">
     <value>Recruitment Results: </value>
+  </data>
+  <data name="RecruitingTips" xml:space="preserve">
+    <value>Recruiting Tips</value>
+  </data>
+  <data name="RecruitmentOfStar" xml:space="preserve">
+    <value>{0}★ has been recruited!</value>
   </data>
   <data name="Refreshed" xml:space="preserve">
     <value>Refreshed</value>
@@ -4210,6 +4228,9 @@ If you want to run multiple MAA at the same time, please copy the whole MAA and 
   <data name="StageInfoError" xml:space="preserve">
     <value>Stage recognition error</value>
   </data>
+  <data name="StageQueue" xml:space="preserve">
+    <value>Stage Queue: </value>
+  </data>
   <data name="StartCombat" xml:space="preserve">
     <value>Start combat: </value>
   </data>
@@ -4382,6 +4403,12 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
   </data>
   <data name="StoneUsedTimes" xml:space="preserve">
     <value>Stone: {0}  </value>
+  </data>
+  <data name="Stopped" xml:space="preserve">
+    <value>Has stopped</value>
+  </data>
+  <data name="Stopping" xml:space="preserve">
+    <value>Stopping……</value>
   </data>
   <data name="SupportSquad" xml:space="preserve">
     <value>Support Squad</value>
@@ -4721,6 +4748,9 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
   </data>
   <data name="TaskQueue.Validation.WarningCount" xml:space="preserve">
     <value>{0} warning issue(s).</value>
+  </data>
+  <data name="TaskStallWarning" xml:space="preserve">
+    <value>Task log output has not been updated for {0} minutes (currently stalled for {1} minutes). Please check whether the task is still running.</value>
   </data>
   <data name="TheEx" xml:space="preserve">
     <value>No bonus stage, stopped</value>
@@ -5326,6 +5356,9 @@ Pressing Confirm means you understand and accept the possible risks.</value>
   <data name="TrainingTimeLeft" xml:space="preserve">
     <value>Remaining Time</value>
   </data>
+  <data name="UnableToAgent" xml:space="preserve">
+    <value>Unable to use PRTS</value>
+  </data>
   <data name="Unbreakable" xml:space="preserve">
     <value>Indestructible (Defender, Caster, Medic)</value>
   </data>
@@ -5343,6 +5376,9 @@ Pressing Confirm means you understand and accept the possible risks.</value>
   </data>
   <data name="Visiting" xml:space="preserve">
     <value>Visit Friends</value>
+  </data>
+  <data name="Waiting" xml:space="preserve">
+    <value>Waiting for the mission completion…</value>
   </data>
   <data name="Achievement.NewBadgeText" xml:space="preserve">
     <value>NEW</value>

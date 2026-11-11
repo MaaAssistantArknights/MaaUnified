@@ -448,7 +448,7 @@ public sealed class TaskQueueG2FeatureTests
     }
 
     [Fact]
-    public async Task Callback_TaskChainCompleted_ShouldUseSeparateLogCardFromTaskStart()
+    public async Task Callback_TaskChainCompleted_ShouldMergeIntoTaskStartCard()
     {
         await using var fixture = await TestFixture.CreateAsync();
         Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "开始唤醒")).Success);
@@ -468,9 +468,10 @@ public sealed class TaskQueueG2FeatureTests
             """{"task_chain":"StartUp","task_index":0,"run_id":"run-g2-startup-split"}""",
             DateTimeOffset.UtcNow));
 
-        Assert.Equal(2, vm.LogCards.Count);
-        Assert.Contains("开始任务: 开始唤醒", vm.LogCards[0].PrimaryContent, StringComparison.Ordinal);
-        Assert.Contains("完成任务: 开始唤醒", vm.LogCards[1].PrimaryContent, StringComparison.Ordinal);
+        var card = Assert.Single(vm.LogCards);
+        Assert.Equal(2, card.Items.Count);
+        Assert.Contains("开始任务: 开始唤醒", card.Items[0].Content, StringComparison.Ordinal);
+        Assert.Contains("完成任务: 开始唤醒", card.PrimaryContent, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -503,7 +504,7 @@ public sealed class TaskQueueG2FeatureTests
     }
 
     [Fact]
-    public async Task Callback_StageDrops_ShouldUseSeparateLogCardAndRequestThumbnail()
+    public async Task Callback_StageDrops_ShouldMergeIntoCurrentCardSortDropsAndRequestThumbnail()
     {
         await using var fixture = await TestFixture.CreateAsync();
         Assert.True((await fixture.TaskQueue.AddTaskAsync("Fight", "fight-a")).Success);
@@ -520,15 +521,24 @@ public sealed class TaskQueueG2FeatureTests
         await InvokeCallbackAsync(vm, new CoreCallbackEvent(
             10002,
             "SubTaskExtraInfo",
-            """{"task_chain":"Fight","task_index":0,"what":"StageDrops","details":{"stats":[{"itemName":"源岩","quantity":2,"addQuantity":1}],"stage":{"stageCode":"1-7"},"cur_times":1}}""",
+            """{"task_chain":"Fight","task_index":0,"what":"StageDrops","details":{"stats":[{"itemName":"A","quantity":10000,"addQuantity":1},{"itemName":"B","quantity":3,"addQuantity":2},{"itemName":"C","quantity":20000,"addQuantity":2}],"stage":{"stageCode":"1-7"},"cur_times":1}}""",
             DateTimeOffset.UtcNow));
 
         Assert.True(await WaitForConditionAsync(() => fixture.Bridge.GetImageCallCount > 0));
 
-        Assert.Equal(2, vm.LogCards.Count);
-        Assert.Equal("开始任务: fight-a", vm.LogCards[0].PrimaryContent);
-        Assert.Contains("1-7", vm.LogCards[1].PrimaryContent, StringComparison.Ordinal);
-        Assert.Contains("源岩", vm.LogCards[1].PrimaryContent, StringComparison.Ordinal);
+        var card = Assert.Single(vm.LogCards);
+        Assert.Equal(2, card.Items.Count);
+        Assert.Equal("开始任务: fight-a", card.Items[0].Content);
+        Assert.Contains("1-7", card.PrimaryContent, StringComparison.Ordinal);
+        Assert.Contains("C : 20k (+2)", card.PrimaryContent, StringComparison.Ordinal);
+        Assert.Contains("B : 3 (+2)", card.PrimaryContent, StringComparison.Ordinal);
+        Assert.Contains("A : 10k (+1)", card.PrimaryContent, StringComparison.Ordinal);
+        Assert.True(
+            card.PrimaryContent.IndexOf("C : 20k (+2)", StringComparison.Ordinal)
+            < card.PrimaryContent.IndexOf("B : 3 (+2)", StringComparison.Ordinal));
+        Assert.True(
+            card.PrimaryContent.IndexOf("B : 3 (+2)", StringComparison.Ordinal)
+            < card.PrimaryContent.IndexOf("A : 10k (+1)", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -549,6 +559,39 @@ public sealed class TaskQueueG2FeatureTests
 
         var content = Assert.Single(vm.LogCards).PrimaryContent;
         Assert.Equal("当前设施: 制造站 01", content);
+    }
+
+    [Fact]
+    public async Task Callback_RecruitResult_ShouldPreserveWpfRareOperatorMetadata()
+    {
+        await using var fixture = await TestFixture.CreateAsync(language: "en-us");
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        await InvokeCallbackAsync(vm, new CoreCallbackEvent(
+            10003,
+            "SubTaskExtraInfo",
+            """{"task_chain":"Recruit","task_index":0,"what":"RecruitResult","details":{"level":5}}""",
+            DateTimeOffset.UtcNow));
+        await InvokeCallbackAsync(vm, new CoreCallbackEvent(
+            10004,
+            "SubTaskExtraInfo",
+            """{"task_chain":"Recruit","task_index":0,"what":"RecruitResult","details":{"level":3}}""",
+            DateTimeOffset.UtcNow));
+
+        // WPF: level + " ★ Tags"; >=5 uses RareOperator + Bold, otherwise Info color.
+        var card = Assert.Single(vm.LogCards);
+        Assert.Equal(2, card.Items.Count);
+        var rare = card.Items[0];
+        Assert.Equal("5 ★ Tags", rare.Content);
+        Assert.Equal("RareOperatorLogBrush", rare.Color);
+        Assert.True(rare.IsBold);
+        Assert.True(rare.IsRareOperatorColor);
+        var normal = card.Items[1];
+        Assert.Equal("3 ★ Tags", normal.Content);
+        Assert.Equal("InfoLogBrush", normal.Color);
+        Assert.False(normal.IsBold);
+        Assert.True(normal.IsInfoColor);
     }
 
     [Fact]
@@ -574,7 +617,7 @@ public sealed class TaskQueueG2FeatureTests
     }
 
     [Fact]
-    public async Task Callback_MallCompletedLogs_ShouldNotStickToPreviousCard()
+    public async Task Callback_MallCompletedLogs_ShouldMergeIntoCurrentCard()
     {
         await using var fixture = await TestFixture.CreateAsync();
         Assert.True((await fixture.TaskQueue.AddTaskAsync("Mall", "信用收支")).Success);
@@ -593,9 +636,10 @@ public sealed class TaskQueueG2FeatureTests
             """{"task_chain":"Mall","task_index":0,"sub_task":"ProcessTask","details":{"task":"VisitNextBlack"}}""",
             DateTimeOffset.UtcNow));
 
-        Assert.Equal(2, vm.LogCards.Count);
-        Assert.Contains("开始任务: 信用收支", vm.LogCards[0].PrimaryContent, StringComparison.Ordinal);
-        Assert.Contains("完成任务: 访问好友", vm.LogCards[1].PrimaryContent, StringComparison.Ordinal);
+        var card = Assert.Single(vm.LogCards);
+        Assert.Equal(2, card.Items.Count);
+        Assert.Contains("开始任务: 信用收支", card.Items[0].Content, StringComparison.Ordinal);
+        Assert.Contains("完成任务: 访问好友", card.PrimaryContent, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -873,10 +917,12 @@ public sealed class TaskQueueG2FeatureTests
     {
         await using var fixture = await TestFixture.CreateAsync();
         Assert.True((await fixture.TaskQueue.AddTaskAsync("Fight", "fight-a")).Success);
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup-a")).Success);
 
         var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
         await vm.InitializeAsync();
         vm.Tasks[0].Status = TaskQueueItemStatus.Running;
+        vm.Tasks[1].Status = TaskQueueItemStatus.Error;
         MapCoreTaskId(fixture.Runtime.SessionService, 3, 0);
 
         var callback = new CoreCallbackEvent(
@@ -888,8 +934,29 @@ public sealed class TaskQueueG2FeatureTests
         await InvokeCallbackAsync(vm, callback);
         await InvokeCallbackAsync(vm, callback);
 
-        Assert.Equal(TaskQueueItemStatus.Success, vm.Tasks[0].Status);
+        Assert.All(vm.Tasks, task => Assert.Equal(TaskQueueItemStatus.Idle, task.Status));
         Assert.Equal(1, fixture.PostAction.ExecuteCount);
+    }
+
+    [Fact]
+    public async Task Callback_TaskChainStopped_ShouldResetEveryTaskStatusToIdle()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Fight", "fight-a")).Success);
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup-a")).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        vm.Tasks[0].Status = TaskQueueItemStatus.Success;
+        vm.Tasks[1].Status = TaskQueueItemStatus.Error;
+
+        await InvokeCallbackAsync(vm, new CoreCallbackEvent(
+            10005,
+            "TaskChainStopped",
+            """{"task_chain":"Fight","task_index":0,"run_id":"run-g2-stopped"}""",
+            DateTimeOffset.UtcNow));
+
+        Assert.All(vm.Tasks, task => Assert.Equal(TaskQueueItemStatus.Idle, task.Status));
     }
 
     [Fact]
@@ -933,6 +1000,39 @@ public sealed class TaskQueueG2FeatureTests
         Assert.Equal(1, completionLogCount);
         Assert.Equal(1, fixture.PostAction.ExecuteCount);
         Assert.Equal(0, CountTaskQueueLogs(vm, "CloseDown"));
+    }
+
+    [Fact]
+    public async Task Callback_CloseDown_ShouldNotProjectTaskQueueStateOrEndOwnership()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Fight", "fight-a")).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        await InvokeCallbackAsync(vm, new CoreCallbackEvent(
+            10001,
+            "TaskChainStart",
+            """{"task_chain":"Fight","task_index":0,"run_id":"run-g2-close-down-state"}""",
+            DateTimeOffset.UtcNow));
+        vm.Tasks[0].Status = TaskQueueItemStatus.Error;
+
+        var runtimeStatusBefore = vm.LastRuntimeStatus;
+        var logCardCountBefore = vm.LogCards.Count;
+        var logItemCountBefore = vm.LogCards.Sum(card => card.Items.Count);
+        Assert.True(fixture.Runtime.SessionService.TryBeginRun("TaskQueue", out _));
+
+        await InvokeCallbackAsync(vm, new CoreCallbackEvent(
+            10002,
+            "TaskChainStart",
+            """{"task_chain":"CloseDown","task_id":999,"run_id":"close-down"}""",
+            DateTimeOffset.UtcNow));
+
+        Assert.Equal(TaskQueueItemStatus.Error, vm.Tasks[0].Status);
+        Assert.Equal(runtimeStatusBefore, vm.LastRuntimeStatus);
+        Assert.Equal(logCardCountBefore, vm.LogCards.Count);
+        Assert.Equal(logItemCountBefore, vm.LogCards.Sum(card => card.Items.Count));
+        Assert.True(fixture.Runtime.SessionService.IsRunOwner("TaskQueue"));
     }
 
     [Fact]
@@ -992,6 +1092,405 @@ public sealed class TaskQueueG2FeatureTests
 
         Assert.Contains("PR-A-1/2: 奶&盾芯片", hint);
         Assert.Contains("(库存 8 & -1 / -1 & -1)", hint);
+    }
+
+    [Fact]
+    public async Task StopAsync_ShouldAppendStoppingLogLikeWpf()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup-a")).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(fixture.Runtime.ConnectFeatureService, fixture.ReadyAdbPath)).Success);
+        await vm.StartAsync();
+        Assert.Equal(SessionState.Running, vm.CurrentSessionState);
+
+        await vm.StopAsync();
+
+        var entries = vm.LogCards.SelectMany(card => card.Items).ToArray();
+        Assert.Contains(entries, entry => string.Equals(entry.Content, "正在停止……", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Callback_TaskChainStopped_ShouldAppendStoppedLogLikeWpf()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Fight", "fight-a")).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        await InvokeCallbackAsync(vm, new CoreCallbackEvent(
+            10005,
+            "TaskChainStopped",
+            """{"task_chain":"Fight","task_index":0,"run_id":"run-g2-stopped-log"}""",
+            DateTimeOffset.UtcNow));
+
+        var entries = vm.LogCards.SelectMany(card => card.Items).ToArray();
+        Assert.Contains(entries, entry => string.Equals(entry.Content, "已停止", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Callback_PenguinUploadFailure_ShouldWarnOnlyForNonAnnihilation()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Fight", "fight-anni")).Success);
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Fight", "fight-normal")).Success);
+        Assert.True((await fixture.TaskQueue.SaveFightParamsAsync(0, new FightTaskParamsDto { Stage = "Annihilation" })).Success);
+        Assert.True((await fixture.TaskQueue.SaveFightParamsAsync(1, new FightTaskParamsDto { Stage = "1-7" })).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        await InvokeCallbackAsync(vm, new CoreCallbackEvent(
+            10010,
+            "SubTaskError",
+            """{"task_chain":"Fight","task_index":0,"subtask":"ReportToPenguinStats","details":{"why":"upload failed"}}""",
+            DateTimeOffset.UtcNow));
+        await InvokeCallbackAsync(vm, new CoreCallbackEvent(
+            10011,
+            "SubTaskError",
+            """{"task_chain":"Fight","task_index":1,"subtask":"ReportToPenguinStats","why":"upload failed"}""",
+            DateTimeOffset.UtcNow));
+
+        var entries = vm.LogCards.SelectMany(card => card.Items).ToArray();
+        var annihilation = Assert.Single(entries, entry => entry.Content.Contains("AnnihilationStage", StringComparison.Ordinal));
+        Assert.Equal("INFO", annihilation.Level);
+        Assert.False(annihilation.IsWarning);
+        var normal = Assert.Single(entries, entry => entry.Content.Contains("upload failed", StringComparison.Ordinal));
+        Assert.Equal("WARN", normal.Level);
+    }
+
+    [Fact]
+    public async Task Callback_FightTimes_TimesLimitDisabled_ShouldNotWarnLikeWpf()
+    {
+        await using var fixture = await TestFixture.CreateAsync(language: "en-us");
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Fight", "fight-nolimit")).Success);
+        Assert.True((await fixture.TaskQueue.SaveFightParamsAsync(0, new FightTaskParamsDto
+        {
+            Stage = "1-7",
+            EnableTimesLimit = false,
+            Times = 5,
+        })).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        // WPF AsstProxy FightTimes gates the unused-times warning on
+        // HasTimesLimited != false; with the limit off nothing is logged even
+        // though the compiled params carry times=int.MaxValue.
+        await InvokeCallbackAsync(vm, new CoreCallbackEvent(
+            10020,
+            "SubTaskExtraInfo",
+            """{"task_chain":"Fight","task_index":0,"what":"FightTimes","details":{"finished":true,"times_finished":3,"series":1,"sanity_cost":-1}}""",
+            DateTimeOffset.UtcNow));
+
+        Assert.DoesNotContain(
+            vm.LogCards.SelectMany(card => card.Items),
+            entry => entry.Content.Contains("battles", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Callback_FightTimes_TimesLimitEnabled_ShouldWarnLikeWpf()
+    {
+        await using var fixture = await TestFixture.CreateAsync(language: "en-us");
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Fight", "fight-limit")).Success);
+        Assert.True((await fixture.TaskQueue.SaveFightParamsAsync(0, new FightTaskParamsDto
+        {
+            Stage = "1-7",
+            EnableTimesLimit = true,
+            Times = 5,
+        })).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        await InvokeCallbackAsync(vm, new CoreCallbackEvent(
+            10021,
+            "SubTaskExtraInfo",
+            """{"task_chain":"Fight","task_index":0,"what":"FightTimes","details":{"finished":true,"times_finished":3,"series":1,"sanity_cost":-1}}""",
+            DateTimeOffset.UtcNow));
+
+        var entry = Assert.Single(vm.LogCards.SelectMany(card => card.Items));
+        Assert.Equal("WARN", entry.Level);
+        Assert.True(entry.IsWarning);
+        Assert.Contains("Completed 3 battles", entry.Content, StringComparison.Ordinal);
+        Assert.Contains("exceeds 5 limit", entry.Content, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Callback_UseMedicine_ShouldTrackExpiringSeparatelyAndUseInfoColorLikeWpf()
+    {
+        await using var fixture = await TestFixture.CreateAsync(language: "en-us");
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Fight", "fight-med")).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        await InvokeCallbackAsync(vm, new CoreCallbackEvent(
+            10022,
+            "SubTaskExtraInfo",
+            """{"task_chain":"Fight","task_index":0,"what":"UseMedicine","details":{"is_expiring":true,"count":2}}""",
+            DateTimeOffset.UtcNow));
+        await InvokeCallbackAsync(vm, new CoreCallbackEvent(
+            10023,
+            "SubTaskExtraInfo",
+            """{"task_chain":"Fight","task_index":0,"what":"UseMedicine","details":{"is_expiring":false,"count":1}}""",
+            DateTimeOffset.UtcNow));
+        await InvokeCallbackAsync(vm, new CoreCallbackEvent(
+            10024,
+            "SubTaskStart",
+            """{"task_chain":"Fight","task_index":0,"sub_task":"ProcessTask","details":{"task":"StartButton2","exec_times":1}}""",
+            DateTimeOffset.UtcNow));
+
+        var entries = vm.LogCards.SelectMany(card => card.Items).ToArray();
+        // WPF (AsstProxy UseMedicine): expiring uses only increment
+        // ExpiringMedicineUsedTimes, and both variants log with UiLogColor.Info.
+        var expiring = Assert.Single(entries, entry => entry.Content.Contains("Expiring medicine used", StringComparison.Ordinal));
+        Assert.Equal("Expiring medicine used 2(+2)", expiring.Content);
+        Assert.Equal("InfoLogBrush", expiring.Color);
+        var regular = Assert.Single(
+            entries,
+            entry => entry.Content.Contains("Medicine used", StringComparison.Ordinal)
+                && !entry.Content.Contains("Expiring", StringComparison.Ordinal));
+        Assert.Equal("Medicine used 1(+1)", regular.Content);
+        Assert.Equal("InfoLogBrush", regular.Color);
+
+        // The mission-start summary must not double-count expiring medicine
+        // (WPF MedicineUsedTimesWithExpiring: {0}=regular only, {1}=expiring).
+        var missionStart = Assert.Single(entries, entry => entry.Content.Contains("Mission started", StringComparison.Ordinal));
+        Assert.Contains("Medicine: 1,2(Expiring)", missionStart.Content, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Callback_SubTaskError_ShouldKeepTaskStatusAndOnlyLogLikeWpf()
+    {
+        await using var fixture = await TestFixture.CreateAsync(language: "en-us");
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Fight", "fight-suberr")).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        await InvokeCallbackAsync(vm, new CoreCallbackEvent(
+            10025,
+            "TaskChainStart",
+            """{"task_chain":"Fight","task_index":0,"run_id":"run-g2-subtask-error"}""",
+            DateTimeOffset.UtcNow));
+        Assert.Equal(TaskQueueItemStatus.Running, vm.Tasks[0].Status);
+
+        // WPF ProcSubTaskError (AsstProxy.cs:1394+) only logs per-subtask error
+        // text; it never changes task status or run state.
+        await InvokeCallbackAsync(vm, new CoreCallbackEvent(
+            10026,
+            "SubTaskError",
+            """{"task_chain":"Fight","task_index":0,"subtask":"RecognizeDrops","details":{}}""",
+            DateTimeOffset.UtcNow));
+
+        Assert.Equal(TaskQueueItemStatus.Running, vm.Tasks[0].Status);
+        var entries = vm.LogCards.SelectMany(card => card.Items).ToArray();
+        Assert.Contains(
+            entries,
+            entry => entry.Content.Contains("Drops recognition error", StringComparison.Ordinal)
+                && entry.Level == "ERROR");
+    }
+
+    [Fact]
+    public async Task Callback_ReclamationProcedureStart_MissingTimes_ShouldRenderMinusOneLikeWpf()
+    {
+        await using var fixture = await TestFixture.CreateAsync(language: "en-us");
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Reclamation", "ra-b")).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        // WPF AsstProxy ReclamationProcedureStart: subTaskDetails["times"] ?? -1.
+        await InvokeCallbackAsync(vm, new CoreCallbackEvent(
+            10027,
+            "SubTaskExtraInfo",
+            """{"task_chain":"Reclamation","task_index":0,"what":"ReclamationProcedureStart","details":{}}""",
+            DateTimeOffset.UtcNow));
+
+        var card = Assert.Single(vm.LogCards);
+        Assert.Equal("Mission started -1 times", card.PrimaryContent);
+    }
+
+    [Fact]
+    public async Task Callback_ReclamationSmeltGold_ShouldLogLikeWpf()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Reclamation", "ra-a")).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        await InvokeCallbackAsync(vm, new CoreCallbackEvent(
+            10012,
+            "SubTaskExtraInfo",
+            """{"task_chain":"Reclamation","task_index":0,"what":"ReclamationSmeltGold","details":{"times":3}}""",
+            DateTimeOffset.UtcNow));
+
+        var card = Assert.Single(vm.LogCards);
+        Assert.Equal("锻造赤金 3 次", card.PrimaryContent);
+    }
+
+    [Fact]
+    public async Task Callback_RoguelikeNodeLogs_ShouldCarryWpfColorMetadata()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Roguelike", "rogue-a")).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        await InvokeCallbackAsync(vm, new CoreCallbackEvent(
+            10013,
+            "SubTaskStart",
+            """{"task_chain":"Roguelike","task_index":0,"sub_task":"ProcessTask","details":{"task":"StageTrader","exec_times":1}}""",
+            DateTimeOffset.UtcNow));
+        await InvokeCallbackAsync(vm, new CoreCallbackEvent(
+            10014,
+            "SubTaskStart",
+            """{"task_chain":"Roguelike","task_index":0,"sub_task":"ProcessTask","details":{"task":"GamePass","exec_times":1}}""",
+            DateTimeOffset.UtcNow));
+
+        var entries = vm.LogCards.SelectMany(card => card.Items).ToArray();
+        var trader = Assert.Single(entries, entry => string.Equals(entry.Color, "TraderIS", StringComparison.Ordinal));
+        Assert.True(trader.IsTraderISColor);
+        var gamePass = Assert.Single(entries, entry => string.Equals(entry.Color, "RareOperatorLogBrush", StringComparison.Ordinal));
+        Assert.True(gamePass.IsRareOperatorColor);
+    }
+
+    [Fact]
+    public async Task Callback_RecruitTagsDetected_EmptyTags_ShouldFallbackToErrorLikeWpf()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Recruit", "recruit-a")).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        await InvokeCallbackAsync(vm, new CoreCallbackEvent(
+            10015,
+            "SubTaskExtraInfo",
+            """{"task_chain":"Recruit","task_index":0,"what":"RecruitTagsDetected","details":{"tags":[]}}""",
+            DateTimeOffset.UtcNow));
+
+        var card = Assert.Single(vm.LogCards);
+        Assert.Contains("公招识别结果", card.PrimaryContent, StringComparison.Ordinal);
+        Assert.Contains("错误", card.PrimaryContent, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Callback_RecruitSupportOperator_ShouldUseLocalizedTemplateAndInfoColor()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Recruit", "recruit-b")).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        await InvokeCallbackAsync(vm, new CoreCallbackEvent(
+            10016,
+            "SubTaskExtraInfo",
+            """{"task_chain":"Recruit","task_index":0,"what":"RecruitSupportOperator","details":{"name":"能天使"}}""",
+            DateTimeOffset.UtcNow));
+
+        var card = Assert.Single(vm.LogCards);
+        Assert.Equal("编入助战干员：能天使", card.PrimaryContent);
+        Assert.Equal("InfoLogBrush", Assert.Single(card.Items).Color);
+    }
+
+    [Fact]
+    public async Task Callback_EnterFacility_MissingIndex_ShouldRenderMinusOneLikeWpf()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Infrast", "base-a")).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        await InvokeCallbackAsync(vm, new CoreCallbackEvent(
+            10017,
+            "SubTaskExtraInfo",
+            """{"task_chain":"Infrast","task_index":0,"what":"EnterFacility","details":{"facility":"Mfg"}}""",
+            DateTimeOffset.UtcNow));
+
+        var card = Assert.Single(vm.LogCards);
+        Assert.Equal("当前设施: 制造站 -01", card.PrimaryContent);
+    }
+
+    [Fact]
+    public async Task Callback_SanityBeforeStage_NonPositiveMax_ShouldClearSanityStateLikeWpf()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Fight", "fight-sanity")).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        await InvokeCallbackAsync(vm, new CoreCallbackEvent(
+            10018,
+            "SubTaskExtraInfo",
+            """{"task_chain":"Fight","task_index":0,"what":"SanityBeforeStage","details":{"current_sanity":10,"max_sanity":0,"report_time":"2026-04-03 12:00:00.000"}}""",
+            DateTimeOffset.UtcNow));
+        await InvokeCallbackAsync(vm, new CoreCallbackEvent(
+            10019,
+            "TaskChainCompleted",
+            """{"task_chain":"Fight","task_index":0,"run_id":"run-g2-sanity-gate"}""",
+            DateTimeOffset.UtcNow));
+
+        var card = Assert.Single(vm.LogCards);
+        Assert.DoesNotContain("理智", card.PrimaryContent, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Callback_TaskChainCompleted_ShouldUseDefaultLevelWithoutScreenshotLikeWpf()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Fight", "fight-done")).Success);
+        fixture.Bridge.NextImageBytes = SinglePixelPng;
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        await InvokeCallbackAsync(vm, new CoreCallbackEvent(
+            10020,
+            "TaskChainStart",
+            """{"task_chain":"Fight","task_index":0,"run_id":"run-g2-complete-plain"}""",
+            DateTimeOffset.UtcNow));
+        await InvokeCallbackAsync(vm, new CoreCallbackEvent(
+            10021,
+            "TaskChainCompleted",
+            """{"task_chain":"Fight","task_index":0,"run_id":"run-g2-complete-plain"}""",
+            DateTimeOffset.UtcNow));
+        Dispatcher.UIThread.RunJobs(null);
+
+        var card = Assert.Single(vm.LogCards);
+        var completed = card.Items[^1];
+        Assert.Contains("完成任务", completed.Content, StringComparison.Ordinal);
+        Assert.Equal("INFO", completed.Level);
+        Assert.False(completed.IsSuccess);
+        Assert.Equal(0, fixture.Bridge.GetImageCallCount);
+    }
+
+    [Fact]
+    public async Task Callback_CombatRecordRecognition_ShouldNotLogIntoTaskQueue()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Copilot", "copilot-a")).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        await InvokeCallbackAsync(vm, new CoreCallbackEvent(
+            10022,
+            "SubTaskStart",
+            """{"task_chain":"Copilot","task_index":0,"sub_task":"CombatRecordRecognitionTask","what":"识别完成"}""",
+            DateTimeOffset.UtcNow));
+
+        Assert.Empty(vm.LogCards);
     }
 
     private static async Task InvokeCallbackAsync(TaskQueuePageViewModel vm, CoreCallbackEvent callback)

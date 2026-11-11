@@ -21,6 +21,9 @@
   <data name="AlgorithmConstructionPoint" xml:space="preserve">
     <value>建造点数</value>
   </data>
+  <data name="AlgorithmDoneSmeltGold" xml:space="preserve">
+    <value>锻造赤金</value>
+  </data>
   <data name="AlgorithmFinish" xml:space="preserve">
     <value>演算结束</value>
   </data>
@@ -778,6 +781,9 @@
   <data name="EmergencyOps" xml:space="preserve">
     <value>关卡: 紧急作战</value>
   </data>
+  <data name="Error" xml:space="preserve">
+    <value>错误</value>
+  </data>
   <data name="ErrorOccurred" xml:space="preserve">
     <value>出现错误</value>
   </data>
@@ -1092,6 +1098,9 @@
   </data>
   <data name="IS5NewSquad9" xml:space="preserve">
     <value>代理人分队</value>
+  </data>
+  <data name="IdentifyTheMistakes" xml:space="preserve">
+    <value>识别错误</value>
   </data>
   <data name="Infrast.Advanced" xml:space="preserve">
     <value>高级选项</value>
@@ -2049,8 +2058,17 @@
   <data name="RecruitConfirm" xml:space="preserve">
     <value>已确认招募</value>
   </data>
+  <data name="RecruitSupportOperator" xml:space="preserve">
+    <value>编入助战{key=Operator}：{0}</value>
+  </data>
   <data name="RecruitingResults" xml:space="preserve">
     <value>公招识别结果: </value>
+  </data>
+  <data name="RecruitingTips" xml:space="preserve">
+    <value>公招提示</value>
+  </data>
+  <data name="RecruitmentOfStar" xml:space="preserve">
+    <value>公招出 {0} 星了哦！</value>
   </data>
   <data name="Refreshed" xml:space="preserve">
     <value>当前槽位已刷新</value>
@@ -4211,6 +4229,9 @@
   <data name="StageInfoError" xml:space="preserve">
     <value>关卡识别错误</value>
   </data>
+  <data name="StageQueue" xml:space="preserve">
+    <value>关卡队列:</value>
+  </data>
   <data name="StartCombat" xml:space="preserve">
     <value>开始战斗: </value>
   </data>
@@ -4383,6 +4404,12 @@
   </data>
   <data name="StoneUsedTimes" xml:space="preserve">
     <value>石: {0}  </value>
+  </data>
+  <data name="Stopped" xml:space="preserve">
+    <value>已停止</value>
+  </data>
+  <data name="Stopping" xml:space="preserve">
+    <value>正在停止……</value>
   </data>
   <data name="SupportSquad" xml:space="preserve">
     <value>后勤分队</value>
@@ -4722,6 +4749,9 @@
   </data>
   <data name="TaskQueue.Validation.WarningCount" xml:space="preserve">
     <value>存在 {0} 条预警。</value>
+  </data>
+  <data name="TaskStallWarning" xml:space="preserve">
+    <value>任务日志输出已 {0} 分钟没有更新（当前已停滞 {1} 分钟），请检查任务是否仍在运行。</value>
   </data>
   <data name="TheEx" xml:space="preserve">
     <value>无奖励关卡，已停止</value>
@@ -5306,6 +5336,9 @@
   <data name="TrainingTimeLeft" xml:space="preserve">
     <value>剩余时间</value>
   </data>
+  <data name="UnableToAgent" xml:space="preserve">
+    <value>无法使用代理指挥</value>
+  </data>
   <data name="Unbreakable" xml:space="preserve">
     <value>坚不可摧（重装、术师、医疗）</value>
   </data>
@@ -5323,6 +5356,9 @@
   </data>
   <data name="Visiting" xml:space="preserve">
     <value>访问好友</value>
+  </data>
+  <data name="Waiting" xml:space="preserve">
+    <value>正在等待当前任务结束……</value>
   </data>
   <data name="Achievement.NewBadgeText" xml:space="preserve">
     <value>新</value>

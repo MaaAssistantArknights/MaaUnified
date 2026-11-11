@@ -23,6 +23,18 @@
           <Color x:Key="MAA.Color.State.Warning">#FFB36C00</Color>
           <Color x:Key="MAA.Color.State.Error">#FFC13C3C</Color>
           <Color x:Key="MAA.Color.State.Success">#FF1D8C5F</Color>
+          <Color x:Key="MAA.Color.Log.Info">#FF008B8B</Color>
+          <Color x:Key="MAA.Color.Log.RareOperator">#FFFF8C00</Color>
+          <Color x:Key="MAA.Color.Log.Download">#FF8A2BE2</Color>
+          <Color x:Key="MAA.Color.Log.Message">#FF000000</Color>
+          <Color x:Key="MAA.Color.Log.SuccessIS">#FF708F70</Color>
+          <Color x:Key="MAA.Color.Log.SafehouseIS">#FF6C8399</Color>
+          <Color x:Key="MAA.Color.Log.TraderIS">#FF728A7D</Color>
+          <Color x:Key="MAA.Color.Log.TruthIS">#FF837D6C</Color>
+          <Color x:Key="MAA.Color.Log.CombatIS">#FF998266</Color>
+          <Color x:Key="MAA.Color.Log.EmergencyIS">#FF8E6B81</Color>
+          <Color x:Key="MAA.Color.Log.BossIS">#FF8A6D6D</Color>
+          <Color x:Key="MAA.Color.Log.ExplorationAbandonedIS">#FF7D8083</Color>
           <Color x:Key="MAA.Color.State.Running">#FF4A9EFF</Color>
           <Color x:Key="MAA.Color.State.Skipped">#FF8F9099</Color>
           <Color x:Key="MAA.Color.State.Idle">#FFC8CCD3</Color>
@@ -114,6 +126,18 @@
           <Color x:Key="MAA.Color.State.Warning">#FFFFB347</Color>
           <Color x:Key="MAA.Color.State.Error">#FFFF7B7B</Color>
           <Color x:Key="MAA.Color.State.Success">#FF5CCB9A</Color>
+          <Color x:Key="MAA.Color.Log.Info">#FF00C8C8</Color>
+          <Color x:Key="MAA.Color.Log.RareOperator">#FFFFA500</Color>
+          <Color x:Key="MAA.Color.Log.Download">#FFEE82EE</Color>
+          <Color x:Key="MAA.Color.Log.Message">#FFE6E6E6</Color>
+          <Color x:Key="MAA.Color.Log.SuccessIS">#FF91B091</Color>
+          <Color x:Key="MAA.Color.Log.SafehouseIS">#FF8DA4BA</Color>
+          <Color x:Key="MAA.Color.Log.TraderIS">#FF93AB9E</Color>
+          <Color x:Key="MAA.Color.Log.TruthIS">#FFA39E8D</Color>
+          <Color x:Key="MAA.Color.Log.CombatIS">#FFBAA387</Color>
+          <Color x:Key="MAA.Color.Log.EmergencyIS">#FFAF8BA2</Color>
+          <Color x:Key="MAA.Color.Log.BossIS">#FFAB8E8E</Color>
+          <Color x:Key="MAA.Color.Log.ExplorationAbandonedIS">#FF9EA1A4</Color>
           <Color x:Key="MAA.Color.State.Running">#FF74B6FF</Color>
           <Color x:Key="MAA.Color.State.Skipped">#FF7A8090</Color>
           <Color x:Key="MAA.Color.State.Idle">#FF596170</Color>
@@ -206,6 +230,18 @@
       <SolidColorBrush x:Key="MAA.Brush.State.Warning" Color="{DynamicResource MAA.Color.State.Warning}" />
       <SolidColorBrush x:Key="MAA.Brush.State.Error" Color="{DynamicResource MAA.Color.State.Error}" />
       <SolidColorBrush x:Key="MAA.Brush.State.Success" Color="{DynamicResource MAA.Color.State.Success}" />
+      <SolidColorBrush x:Key="MAA.Brush.Log.Info" Color="{DynamicResource MAA.Color.Log.Info}" />
+      <SolidColorBrush x:Key="MAA.Brush.Log.RareOperator" Color="{DynamicResource MAA.Color.Log.RareOperator}" />
+      <SolidColorBrush x:Key="MAA.Brush.Log.Download" Color="{DynamicResource MAA.Color.Log.Download}" />
+      <SolidColorBrush x:Key="MAA.Brush.Log.Message" Color="{DynamicResource MAA.Color.Log.Message}" />
+      <SolidColorBrush x:Key="MAA.Brush.Log.SuccessIS" Color="{DynamicResource MAA.Color.Log.SuccessIS}" />
+      <SolidColorBrush x:Key="MAA.Brush.Log.SafehouseIS" Color="{DynamicResource MAA.Color.Log.SafehouseIS}" />
+      <SolidColorBrush x:Key="MAA.Brush.Log.TraderIS" Color="{DynamicResource MAA.Color.Log.TraderIS}" />
+      <SolidColorBrush x:Key="MAA.Brush.Log.TruthIS" Color="{DynamicResource MAA.Color.Log.TruthIS}" />
+      <SolidColorBrush x:Key="MAA.Brush.Log.CombatIS" Color="{DynamicResource MAA.Color.Log.CombatIS}" />
+      <SolidColorBrush x:Key="MAA.Brush.Log.EmergencyIS" Color="{DynamicResource MAA.Color.Log.EmergencyIS}" />
+      <SolidColorBrush x:Key="MAA.Brush.Log.BossIS" Color="{DynamicResource MAA.Color.Log.BossIS}" />
+      <SolidColorBrush x:Key="MAA.Brush.Log.ExplorationAbandonedIS" Color="{DynamicResource MAA.Color.Log.ExplorationAbandonedIS}" />
       <SolidColorBrush x:Key="MAA.Brush.State.Running" Color="{DynamicResource MAA.Color.State.Running}" />
       <SolidColorBrush x:Key="MAA.Brush.State.Skipped" Color="{DynamicResource MAA.Color.State.Skipped}" />
       <SolidColorBrush x:Key="MAA.Brush.State.Idle" Color="{DynamicResource MAA.Color.State.Idle}" />

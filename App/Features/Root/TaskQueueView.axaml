@@ -878,6 +878,7 @@
                              Text="{Binding Time}" />
                   <TextBlock Grid.Column="2"
                              Classes="long-wrap task-queue-log-message"
+                             Classes.log-download="{Binding IsDownloadColor}"
                              Margin="8,0,8,0"
                              VerticalAlignment="Center"
                              TextWrapping="Wrap"
@@ -953,6 +954,19 @@
                                      Classes.state-error="{Binding IsError}"
                                      Classes.state-warning="{Binding IsWarning}"
                                      Classes.state-success="{Binding IsSuccess}"
+                                     Classes.log-info="{Binding IsInfoColor}"
+                                     Classes.log-rare="{Binding IsRareOperatorColor}"
+                                     Classes.log-download="{Binding IsDownloadColor}"
+                                     Classes.log-message="{Binding IsMessageColor}"
+                                     Classes.log-success-is="{Binding IsSuccessISColor}"
+                                     Classes.log-safehouse-is="{Binding IsSafehouseISColor}"
+                                     Classes.log-trader-is="{Binding IsTraderISColor}"
+                                     Classes.log-truth-is="{Binding IsTruthISColor}"
+                                     Classes.log-combat-is="{Binding IsCombatISColor}"
+                                     Classes.log-emergency-is="{Binding IsEmergencyISColor}"
+                                     Classes.log-boss-is="{Binding IsBossISColor}"
+                                     Classes.log-exploration-abandoned-is="{Binding IsExplorationAbandonedISColor}"
+                                     FontWeight="{Binding DisplayFontWeight}"
                                      TextWrapping="Wrap"
                                      Text="{Binding Content}" />
                         </DataTemplate>

@@ -277,8 +277,6 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             ],
         };
 
-    private const int MaxLogCards = 180;
-    private const int MaxOverlayLogs = 200;
     private const int MaxTimeoutMinutes = 11451;
     private const string UiMallCreditFightLastTime = "_ui_mall_credit_fight_last_time";
     private const string UiMallVisitFriendsLastTime = "_ui_mall_visit_friends_last_time";
@@ -4092,6 +4090,14 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 _ = Runtime.AchievementTrackerService.Unlock("TacticalRetreat");
             }
 
+            // WPF TaskQueueViewModel.Stop() logs "Stopping" with a card split on both sides.
+            AppendLogEntry(
+                DateTimeOffset.Now,
+                GetRootText("Stopping", "Stopping……"),
+                "INFO",
+                updateThumbnail: false,
+                splitMode: LogCardSplitMode.Both);
+
             if (!await ApplyResultAsync(await Runtime.ConnectFeatureService.StopAsync(cancellationToken), "TaskQueue.Stop", cancellationToken))
             {
                 CurrentSessionState = Runtime.SessionService.CurrentState;
@@ -4158,6 +4164,14 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
             IsWaitingForStop = true;
             _clearTaskStatusesWhenStopped = true;
+
+            // WPF TaskQueueViewModel.WaitAndStop() logs "Waiting" when the wait begins.
+            AppendLogEntry(
+                DateTimeOffset.Now,
+                GetRootText("Waiting", "Waiting for the mission completion…"),
+                "INFO",
+                updateThumbnail: false);
+
             if (!await ApplyResultAsync(
                     await Runtime.ConnectFeatureService.WaitAndStopAsync(TimeSpan.FromSeconds(15), cancellationToken),
                     "TaskQueue.WaitAndStop",
@@ -4840,7 +4854,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             DownloadLogEntry = new TaskQueueLogEntryViewModel(
                 FormatLogTimestamp(timestamp),
                 content,
-                NormalizeLogLevel(level));
+                NormalizeLogLevel(level),
+                "DownloadLogBrush");
         }
     }
 
@@ -4903,7 +4918,10 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         string level,
         bool updateThumbnail,
         bool forceScreenshot = false,
-        bool notifyActivity = true)
+        bool notifyActivity = true,
+        string? color = null,
+        string weight = "Regular",
+        LogCardSplitMode splitMode = LogCardSplitMode.None)
     {
         if (notifyActivity && _stallReminderCts is not null)
         {
@@ -4913,8 +4931,14 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         var logTime = FormatLogTimestamp(timestamp);
         if (string.IsNullOrWhiteSpace(content) && !updateThumbnail)
         {
-            TrimLogCards();
             return;
+        }
+
+        var splitBefore = splitMode is LogCardSplitMode.Before or LogCardSplitMode.Both;
+        var splitAfter = splitMode is LogCardSplitMode.After or LogCardSplitMode.Both;
+        if (splitBefore)
+        {
+            CreateLogCardIfNeeded(forceNew: true);
         }
 
         TaskQueueLogCardViewModel? card = null;
@@ -4923,12 +4947,12 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             var entry = new TaskQueueLogEntryViewModel(
                 logTime,
                 NormalizeLogContent(content, logTime),
-                level);
-            card = new TaskQueueLogCardViewModel();
+                level,
+                color,
+                weight);
+            card = CreateLogCardIfNeeded();
             card.Append(entry);
-            LogCards.Add(card);
             OverlayLogs.Add(entry);
-            TrimOverlayLogs();
         }
 
         if (updateThumbnail)
@@ -4940,7 +4964,27 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             }
         }
 
-        TrimLogCards();
+        if (splitAfter)
+        {
+            CreateLogCardIfNeeded(forceNew: true);
+        }
+    }
+
+    private TaskQueueLogCardViewModel CreateLogCardIfNeeded(bool forceNew = false)
+    {
+        if (!forceNew && LogCards.Count > 0 && LogCards[^1].Items.Count > 0)
+        {
+            return LogCards[^1];
+        }
+
+        if (LogCards.Count > 0 && LogCards[^1].Items.Count == 0)
+        {
+            return LogCards[^1];
+        }
+
+        var card = new TaskQueueLogCardViewModel();
+        LogCards.Add(card);
+        return card;
     }
 
     private TaskQueueLogCardViewModel? FindLatestNonEmptyLogCard()
@@ -4954,14 +4998,6 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         }
 
         return null;
-    }
-
-    private void TrimOverlayLogs()
-    {
-        while (OverlayLogs.Count > MaxOverlayLogs)
-        {
-            OverlayLogs.RemoveAt(0);
-        }
     }
 
     private async Task<bool> SelectAndPersistOverlayTargetAsync(string targetId, CancellationToken cancellationToken)
@@ -5087,16 +5123,6 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         return string.IsNullOrWhiteSpace(text) ? "-" : text;
     }
 
-    private void TrimLogCards()
-    {
-        while (LogCards.Count > MaxLogCards)
-        {
-            var first = LogCards[0];
-            first.Thumbnail = null;
-            LogCards.RemoveAt(0);
-        }
-    }
-
     private async Task AttachThumbnailToCardAsync(TaskQueueLogCardViewModel card, bool forceScreenshot)
     {
         if (!await _logThumbnailSemaphore.WaitAsync(100))
@@ -5185,76 +5211,6 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         }
     }
 
-    private void AppendSemanticCallbackLog(
-        string callbackName,
-        string module,
-        int? taskIndex,
-        string? subTask)
-    {
-        var moduleDisplay = ResolveModuleDisplayName(module);
-        var taskLabel = IsValidTaskIndex(taskIndex, Tasks.Count)
-            ? Tasks[taskIndex!.Value].Name
-            : moduleDisplay;
-        var (message, level, withThumbnail) = callbackName switch
-        {
-            "TaskChainStart" => (
-                string.Format(RootTexts.GetOrDefault("TaskQueue.Log.TaskStart", "Task started: {0}"), taskLabel),
-                "INFO",
-                false),
-            "SubTaskStart" => (
-                string.Format(
-                    RootTexts.GetOrDefault("TaskQueue.Log.SubTaskRunning", "{0}: {1} running"),
-                    moduleDisplay,
-                    subTask ?? "SubTask"),
-                "INFO",
-                false),
-            "SubTaskCompleted" => (
-                string.Format(
-                    RootTexts.GetOrDefault("TaskQueue.Log.SubTaskCompleted", "{0}: {1} completed"),
-                    moduleDisplay,
-                    subTask ?? "SubTask"),
-                "SUCCESS",
-                true),
-            "TaskChainCompleted" => (
-                string.Format(RootTexts.GetOrDefault("TaskQueue.Log.TaskCompleted", "Task completed: {0}"), taskLabel),
-                "SUCCESS",
-                true),
-            "TaskChainError" => (
-                string.Format(RootTexts.GetOrDefault("TaskQueue.Log.TaskError", "{0} failed"), taskLabel),
-                "ERROR",
-                true),
-            "SubTaskError" => (
-                string.Format(
-                    RootTexts.GetOrDefault("TaskQueue.Log.SubTaskError", "{0}: {1} failed"),
-                    moduleDisplay,
-                    subTask ?? "SubTask"),
-                "ERROR",
-                true),
-            "TaskChainStopped" => (
-                RootTexts.GetOrDefault("TaskQueue.Log.TaskStopped", "Task stopped"),
-                "WARN",
-                false),
-            "AllTasksCompleted" => (
-                RootTexts.GetOrDefault("TaskQueue.Log.AllCompleted", "All tasks completed"),
-                "SUCCESS",
-                true),
-            _ => (
-                string.Format(
-                    RootTexts.GetOrDefault("TaskQueue.Log.Observed", "{0}: {1}"),
-                    moduleDisplay,
-                    callbackName),
-                "INFO",
-                false),
-        };
-
-        AppendLogEntry(
-            timestamp: DateTimeOffset.Now,
-            content: message,
-            level: level,
-            updateThumbnail: withThumbnail,
-            forceScreenshot: withThumbnail);
-    }
-
     private void AppendWpfCallbackLog(CoreCallbackEvent callback, CallbackPayload payload, int? taskIndex)
     {
         if (IsSuppressedWpfTaskChainLog(callback.MsgName, payload.TaskChain))
@@ -5292,7 +5248,10 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             content: value.Content,
             level: value.Level,
             updateThumbnail: value.UpdateThumbnail,
-            forceScreenshot: value.ForceScreenshot);
+            forceScreenshot: value.ForceScreenshot,
+            color: value.Color,
+            weight: value.Weight,
+            splitMode: value.SplitMode);
     }
 
     private static bool IsSuppressedWpfTaskChainLog(string? msgName, string? taskChain)
@@ -5306,7 +5265,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     private TaskQueueCallbackUserLog BuildTaskChainStartLog(int? taskIndex, string? taskChain)
     {
         return new(
-            Content: GetRootText("StartTask", "Start task: ") + ResolveTaskLogName(taskIndex, taskChain));
+            Content: GetRootText("StartTask", "Start task: ") + ResolveTaskLogName(taskIndex, taskChain),
+            SplitMode: LogCardSplitMode.Before);
     }
 
     private TaskQueueCallbackUserLog BuildTaskChainCompletedLog(int? taskIndex, string? taskChain)
@@ -5322,11 +5282,9 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 _fightSanityMax.Value);
         }
 
-        return new(
-            content,
-            "SUCCESS",
-            UpdateThumbnail: true,
-            ForceScreenshot: true);
+        // WPF logs TaskChainCompleted with the default trace color and does not
+        // refresh the card screenshot (AsstProxy.ProcTaskChainMsg).
+        return new(content);
     }
 
     private TaskQueueCallbackUserLog BuildTaskChainErrorLog(string? taskChain)
@@ -5367,11 +5325,11 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             content += Environment.NewLine + sanityReport;
         }
 
+        // WPF logs AllTasksCompleted with the default trace color, split on both
+        // sides, and does not refresh the card screenshot.
         return new(
             Content: content,
-            Level: "SUCCESS",
-            UpdateThumbnail: true,
-            ForceScreenshot: true);
+            SplitMode: LogCardSplitMode.Both);
     }
 
     private string BuildAllTasksCompletedTitle(DateTimeOffset timestamp)
@@ -5433,7 +5391,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 $"{payload.Why ?? GetRootText("ErrorOccurred", "Error occurred")}, {GetRootText("HasReturned", "Has returned")}",
                 "ERROR"),
             "RecognizeDrops" => new(GetRootText("DropRecognitionError", "Drops recognition error"), "ERROR"),
-            "ReportToPenguinStats" => new(BuildPenguinUploadFailureLog(payload, taskIndex), "WARN"),
+            "ReportToPenguinStats" => BuildPenguinUploadFailureLog(payload, taskIndex),
             "CheckStageValid" => new(GetRootText("TheEx", "No bonus stage, stopped"), "ERROR"),
             _ => null,
         };
@@ -5497,10 +5455,28 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         }
         else if (string.Equals(callbackName, "SubTaskExtraInfo", StringComparison.Ordinal))
         {
-            var title = GetRootText("RecruitingTips", "Recruitment Tips");
+            var title = GetRootText("RecruitingTips", "Recruiting Tips");
             switch (payload.What)
             {
                 case "RecruitSpecialTag":
+                    {
+                        var specialTag = GetStringValue(payload.Details, "tag");
+
+                        // WPF suppresses the toast for the support-machine tag when
+                        // level-1 recruitment is still allowed (NotChooseLevel1 == false).
+                        if (string.Equals(specialTag, "支援机械", StringComparison.Ordinal) && !RecruitModule.NotChooseLevel1)
+                        {
+                            break;
+                        }
+
+                        if (!string.IsNullOrWhiteSpace(specialTag))
+                        {
+                            notification = new(title, specialTag, "TaskQueue.Notification.RecruitTag", "recruitment tag");
+                        }
+
+                        break;
+                    }
+
                 case "RecruitPreservedTag":
                 case "RecruitRobotTag":
                     var tag = GetStringValue(payload.Details, "tag");
@@ -5777,7 +5753,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             builder.Append('[')
                 .Append(entry.Time)
                 .Append("][")
-                .Append(MapExternalLogColor(entry.Level))
+                .Append(entry.Color ?? MapExternalLogColor(entry.Level))
                 .Append(']')
                 .Append(entry.Content)
                 .Append('\n');
@@ -5792,7 +5768,11 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         {
             "ERROR" => "ErrorLogBrush",
             "WARN" or "WARNING" => "WarningLogBrush",
-            "INFO" => "InfoLogBrush",
+
+            // WPF stores the default TraceLogBrush on entries without an explicit
+            // color, so colorless INFO entries map to Trace (AsstProxy external
+            // notification details use the stored log color verbatim).
+            "INFO" => "TraceLogBrush",
             "SUCCESS" => "SuccessLogBrush",
             "TRACE" => "TraceLogBrush",
             _ => "MessageLogBrush",
@@ -5895,28 +5875,27 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         return text.Trim();
     }
 
-    private string BuildPenguinUploadFailureLog(CallbackPayload payload, int? taskIndex)
+    private TaskQueueCallbackUserLog BuildPenguinUploadFailureLog(CallbackPayload payload, int? taskIndex)
     {
+        // WPF: the annihilation branch logs with the default trace color; only
+        // non-annihilation failures use the warning color (AsstProxy.ProcSubTaskError).
         if (IsAnnihilationFightTask(taskIndex))
         {
-            return $"AnnihilationStage, {GetRootText("GiveUpUploadingPenguins", "Abort upload to Penguin Statistics")}";
+            return new($"AnnihilationStage, {GetRootText("GiveUpUploadingPenguins", "Abort upload to Penguin Statistics")}");
         }
 
         var why = string.IsNullOrWhiteSpace(payload.Why)
             ? GetRootText("GiveUpUploadingPenguins", "Abort upload to Penguin Statistics")
             : payload.Why!;
-        return $"{why}, {GetRootText("GiveUpUploadingPenguins", "Abort upload to Penguin Statistics")}";
+        return new(
+            $"{why}, {GetRootText("GiveUpUploadingPenguins", "Abort upload to Penguin Statistics")}",
+            "WARN");
     }
 
     private TaskQueueCallbackUserLog? BuildSubTaskStartLog(CallbackPayload payload)
     {
-        if (string.Equals(payload.SubTask, "CombatRecordRecognitionTask", StringComparison.OrdinalIgnoreCase))
-        {
-            return string.IsNullOrWhiteSpace(payload.What)
-                ? null
-                : new(payload.What!);
-        }
-
+        // WPF routes CombatRecordRecognitionTask messages to the Copilot log only;
+        // MAAUnified mirrors that in CopilotPageViewModel, so nothing is logged here.
         if (!string.Equals(payload.SubTask, "ProcessTask", StringComparison.OrdinalIgnoreCase))
         {
             return null;
@@ -5926,23 +5905,32 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         var execTimes = GetIntValue(payload.Details, "exec_times") ?? 0;
         return taskName switch
         {
-            "StartButton2" or "AnnihilationConfirm" => new(BuildFightMissionStartLog()),
+            "StartButton2" or "AnnihilationConfirm" => new(
+                BuildFightMissionStartLog(),
+                Color: "InfoLogBrush",
+                SplitMode: LogCardSplitMode.Before),
             "StoneConfirm" => BuildStoneUsedLog(execTimes),
             "AbandonAction" => new(GetRootText("ActingCommandError", "PRTS error"), "ERROR"),
             "FightMissionFailedAndStop" => new(GetRootText("FightMissionFailedAndStop", "Proxy failed too many times, task stopped"), "ERROR"),
-            "RecruitRefreshConfirm" => new(GetRootText("LabelsRefreshed", "Labels refreshed")),
-            "RecruitConfirm" => new(GetRootText("RecruitConfirm", "Recruit confirm")),
+            "RecruitRefreshConfirm" => new(GetRootText("LabelsRefreshed", "Labels refreshed"), Color: "InfoLogBrush"),
+            "RecruitConfirm" => new(GetRootText("RecruitConfirm", "Recruit confirm"), Color: "InfoLogBrush"),
             "InfrastDormDoubleConfirmButton" => new(GetRootText("InfrastDormDoubleConfirmed", "Operator conflict"), "ERROR"),
-            "ExitThenAbandon" => new(GetRootText("ExplorationAbandoned", "Abandoned this Exploration")),
-            "MissionCompletedFlag" => new(GetRootText("FightCompleted", "Combat completed"), "SUCCESS", UpdateThumbnail: true),
+            "ExitThenAbandon" => new(
+                GetRootText("ExplorationAbandoned", "Abandoned this Exploration"),
+                Color: "ExplorationAbandonedIS"),
+            "MissionCompletedFlag" => new(
+                GetRootText("FightCompleted", "Combat completed"),
+                "SUCCESS",
+                UpdateThumbnail: true,
+                Color: "SuccessIS"),
             "MissionFailedFlag" => new(GetRootText("FightFailed", "Combat failed"), "ERROR", UpdateThumbnail: true),
-            "StageTrader" => new(GetRootText("Trader", "Node: Rogue Trader")),
-            "StageSafeHouse" => new(GetRootText("SafeHouse", "Node: Safe House")),
-            "StageFilterTruth" => new(GetRootText("FilterTruth", "Node: Idea Filter")),
-            "StageCombatOps" => new(GetRootText("CombatOps", "Node: Combat Operation")),
-            "StageEmergencyOps" => new(GetRootText("EmergencyOps", "Stage: Emergency Operation")),
-            "StageDreadfulFoe" or "StageDreadfulFoe-5" => new(GetRootText("DreadfulFoe", "Stage: Dreadful Foe")),
-            "StageTraderInvestSystemFull" => new(GetRootText("UpperLimit", "Investment limit reached")),
+            "StageTrader" => new(GetRootText("Trader", "Node: Rogue Trader"), Color: "TraderIS"),
+            "StageSafeHouse" => new(GetRootText("SafeHouse", "Node: Safe House"), Color: "SafehouseIS"),
+            "StageFilterTruth" => new(GetRootText("FilterTruth", "Node: Idea Filter"), Color: "TruthIS"),
+            "StageCombatOps" => new(GetRootText("CombatOps", "Node: Combat Operation"), Color: "CombatIS"),
+            "StageEmergencyOps" => new(GetRootText("EmergencyOps", "Stage: Emergency Operation"), Color: "EmergencyIS"),
+            "StageDreadfulFoe" or "StageDreadfulFoe-5" => new(GetRootText("DreadfulFoe", "Stage: Dreadful Foe"), Color: "BossIS"),
+            "StageTraderInvestSystemFull" => new(GetRootText("UpperLimit", "Investment limit reached"), Color: "InfoLogBrush"),
             "OfflineConfirm" => new(
                 GetRootText(
                     IsAutoRestartOnDropEnabled() ? "GameDrop" : "GameDropNoRestart",
@@ -5950,8 +5938,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                         ? "Game disconnected, pending reconnect"
                         : "Game disconnected, not restarting, stopping"),
                 "WARN"),
-            "GamePass" => new(GetRootText("RoguelikeGamePass", "Exploration completed! Congratulations!")),
-            "StageTraderSpecialShoppingAfterRefresh" => new(GetRootText("RoguelikeSpecialItemBought", "Special Item Purchased!")),
+            "GamePass" => new(GetRootText("RoguelikeGamePass", "Exploration completed! Congratulations!"), Color: "RareOperatorLogBrush"),
+            "StageTraderSpecialShoppingAfterRefresh" => new(GetRootText("RoguelikeSpecialItemBought", "Special Item Purchased!"), Color: "RareOperatorLogBrush"),
             "DeepExplorationNotUnlockedComplain" => new(GetRootText("DeepExplorationNotUnlockedComplain", "Deep Investigation not unlocked yet"), "WARN"),
             "PNS-Resume" => new(GetRootText("ReclamationPnsModeError", "Current task mode does not support the current save."), "ERROR"),
             "PIS-Commence" => new(GetRootText("ReclamationPisModeError", "Current task mode requires a compatible save."), "ERROR"),
@@ -5963,7 +5951,9 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     {
         var displayTimes = execTimes > 0 ? execTimes : _stoneUsedTimes + 1;
         _stoneUsedTimes = Math.Max(_stoneUsedTimes + 1, displayTimes);
-        return new($"{GetRootText("StoneUsed", "Originite Prime used")} {displayTimes} {GetRootText("UnitTime", "times")}");
+        return new(
+            $"{GetRootText("StoneUsed", "Originite Prime used")} {displayTimes} {GetRootText("UnitTime", "times")}",
+            Color: "InfoLogBrush");
     }
 
     private string BuildFightMissionStartLog()
@@ -6035,7 +6025,9 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             && string.Equals(taskName, "StartExplore", StringComparison.Ordinal))
         {
             return new(
-                $"{GetRootText("BegunToExplore", "Exploration started")} {execTimes} {GetRootText("UnitTime", "times")}");
+                $"{GetRootText("BegunToExplore", "Exploration started")} {execTimes} {GetRootText("UnitTime", "times")}",
+                Color: "InfoLogBrush",
+                SplitMode: LogCardSplitMode.Before);
         }
 
         if (!string.Equals(taskChain, TaskModuleTypes.Mall, StringComparison.OrdinalIgnoreCase))
@@ -6073,7 +6065,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             case "ProductUnknown":
                 return new(GetRootText("ProductUnknown", "Unknown Product"), "ERROR");
             case "ProductChanged":
-                return new(GetRootText("ProductChanged", "Product has changed"));
+                return new(GetRootText("ProductChanged", "Product has changed"), Color: "InfoLogBrush");
             case "InfrastConfirmButton":
                 return new(
                     string.Empty,
@@ -6081,6 +6073,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                     ForceScreenshot: true);
             case "RecruitTagsDetected":
                 return BuildRecruitTagsDetectedLog(payload.Details);
+            case "RecruitResult":
+                return BuildRecruitResultLog(payload.Details);
             case "RecruitSupportOperator":
                 return BuildRecruitSupportOperatorLog(payload.Details);
             case "RecruitTagsSelected":
@@ -6096,16 +6090,21 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             case "NotEnoughStaff":
                 return new(GetRootText("NotEnoughStaff", "Insufficient Operators"), "ERROR");
             case "CreditFullOnlyBuyDiscount":
-                return new($"{GetRootText("CreditFullOnlyBuyDiscount", "Remaining credits: ")}{GetIntValue(payload.Details, "credit") ?? 0}");
+                return new(
+                    $"{GetRootText("CreditFullOnlyBuyDiscount", "Remaining credits: ")}{GetIntValue(payload.Details, "credit") ?? 0}",
+                    Color: "MessageLogBrush");
             case "StageInfo":
                 return new(
                     $"{GetRootText("StartCombat", "Start combat: ")}{GetStringValue(payload.Details, "name") ?? string.Empty}");
             case "StageInfoError":
+                // WPF attaches the latest cached screenshot here without forcing a
+                // new capture (updateCardImage: true, fetchLatestImage: false).
                 return new(
                     GetRootText("StageInfoError", "Stage recognition error"),
                     "ERROR",
                     UpdateThumbnail: true,
-                    ForceScreenshot: true);
+                    ForceScreenshot: false,
+                    SplitMode: LogCardSplitMode.Both);
             case "CustomInfrastRoomGroupsMatch":
                 return new($"{GetRootText("RoomGroupsMatch", "Match Group: ")}{GetStringValue(payload.Details, "group") ?? string.Empty}");
             case "CustomInfrastRoomGroupsMatchFailed":
@@ -6121,11 +6120,20 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             case "ReclamationReport":
                 return BuildReclamationReportLog(payload.Details);
             case "ReclamationProcedureStart":
-                return new($"{GetRootText("MissionStart", "Mission started")} {GetIntValue(payload.Details, "times") ?? 0} {GetRootText("UnitTime", "times")}");
+                return new(
+                    $"{GetRootText("MissionStart", "Mission started")} {GetIntValue(payload.Details, "times") ?? -1} {GetRootText("UnitTime", "times")}",
+                    Color: "InfoLogBrush");
+            case "ReclamationSmeltGold":
+                return new($"{GetRootText("AlgorithmDoneSmeltGold", "Forging Red Gold")} {GetIntValue(payload.Details, "times") ?? -1} {GetRootText("UnitTime", "times")}");
             case "StageQueueUnableToAgent":
-                return new($"{GetRootText("StageQueue", "Stage Queue: ")} {GetStringValue(payload.Details, "stage_code")} {GetRootText("UnableToAgent", "Unable to use PRTS")}");
+                return new(
+                    $"{GetRootText("StageQueue", "Stage Queue: ")} {GetStringValue(payload.Details, "stage_code")} {GetRootText("UnableToAgent", "Unable to use PRTS")}",
+                    Color: "InfoLogBrush");
             case "StageQueueMissionCompleted":
-                return new($"{GetRootText("StageQueue", "Stage Queue: ")} {GetStringValue(payload.Details, "stage_code")} - {GetIntValue(payload.Details, "stars") ?? 0} ★");
+                // WPF interpolates the raw stars token, which renders empty when missing.
+                return new(
+                    $"{GetRootText("StageQueue", "Stage Queue: ")} {GetStringValue(payload.Details, "stage_code")} - {GetIntValue(payload.Details, "stars")?.ToString(CultureInfo.InvariantCulture) ?? string.Empty} ★",
+                    Color: "InfoLogBrush");
             default:
                 return null;
         }
@@ -6133,8 +6141,20 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
     private void UpdateFightSanityState(JsonObject? details)
     {
-        _fightSanityCurrent = GetIntValue(details, "current_sanity");
-        _fightSanityMax = GetIntValue(details, "max_sanity");
+        var current = GetIntValue(details, "current_sanity");
+        var max = GetIntValue(details, "max_sanity");
+
+        // WPF keeps SanityReport null unless max_sanity > 0 (AsstProxy SanityBeforeStage).
+        if (!max.HasValue || max.Value <= 0)
+        {
+            _fightSanityCurrent = null;
+            _fightSanityMax = null;
+            _fightSanityReportTime = null;
+            return;
+        }
+
+        _fightSanityCurrent = current;
+        _fightSanityMax = max;
         var reportTime = GetStringValue(details, "report_time");
         if (DateTimeOffset.TryParse(reportTime, out var parsed))
         {
@@ -6154,7 +6174,17 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             return null;
         }
 
-        var maxTimes = GetFightTaskTimesLimit(taskIndex);
+        // WPF gates this warning on the times-limit switch being enabled
+        // (AsstProxy FightTimes: HasTimesLimited != false). With the limit off,
+        // compiled params carry times=int.MaxValue, which would otherwise emit a
+        // spurious "exceeds limit" warning for every finished battle.
+        var taskParams = GetCurrentTaskParams(taskIndex);
+        if (GetBoolValue(taskParams, "_ui_enable_times_limit") == false)
+        {
+            return null;
+        }
+
+        var maxTimes = GetIntValue(taskParams, "times");
         if (!maxTimes.HasValue || _fightTimesFinished.Value >= maxTimes.Value)
         {
             return null;
@@ -6180,17 +6210,23 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             return null;
         }
 
+        // WPF (AsstProxy UseMedicine): expiring medicine only increments
+        // ExpiringMedicineUsedTimes; the regular counter stays untouched. Both
+        // variants are logged with UiLogColor.Info.
         var isExpiring = GetBoolValue(details, "is_expiring") == true;
+        string content;
         if (isExpiring)
         {
             _expiringMedicineUsedTimes += medicineCount.Value;
+            content = $"{GetRootText("ExpiringMedicineUsed", "Expiring medicine used")} {_expiringMedicineUsedTimes}(+{medicineCount.Value})";
+        }
+        else
+        {
+            _medicineUsedTimes += medicineCount.Value;
+            content = $"{GetRootText("MedicineUsed", "Medicine used")} {_medicineUsedTimes}(+{medicineCount.Value})";
         }
 
-        _medicineUsedTimes += medicineCount.Value;
-        return new(
-            isExpiring
-                ? $"{GetRootText("ExpiringMedicineUsed", "Expiring medicine used")} {_expiringMedicineUsedTimes}(+{medicineCount.Value})"
-                : $"{GetRootText("MedicineUsed", "Medicine used")} {_medicineUsedTimes}(+{medicineCount.Value})");
+        return new(content, Color: "InfoLogBrush");
     }
 
     private TaskQueueCallbackUserLog? BuildStageDropsLog(JsonObject? details)
@@ -6204,6 +6240,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         var stats = GetArrayValue(details, "stats");
         if (stats is not null)
         {
+            var drops = new List<(string Name, int Total, int Add)>();
             foreach (var itemNode in stats)
             {
                 if (itemNode is not JsonObject item)
@@ -6217,15 +6254,22 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                     itemName = GetRootText("FurnitureDrop", "Furniture");
                 }
 
-                var total = GetIntValue(item, "quantity") ?? 0;
-                var add = GetIntValue(item, "addQuantity") ?? 0;
-                builder.Append(itemName);
+                drops.Add((
+                    itemName,
+                    GetIntValue(item, "quantity") ?? 0,
+                    GetIntValue(item, "addQuantity") ?? 0));
+            }
+
+            // WPF presents the newly acquired amount first, then the total.
+            foreach (var drop in drops.OrderByDescending(static drop => drop.Add).ThenByDescending(static drop => drop.Total))
+            {
+                builder.Append(drop.Name);
                 builder.Append(" : ");
-                builder.Append(total);
-                if (add > 0)
+                builder.Append(FormatWpfDropNumber(drop.Total));
+                if (drop.Add > 0)
                 {
                     builder.Append(" (+");
-                    builder.Append(add);
+                    builder.Append(FormatWpfDropNumber(drop.Add));
                     builder.Append(')');
                 }
 
@@ -6265,9 +6309,12 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
         var facility = GetStringValue(details, "facility") ?? string.Empty;
         var facilityName = RootTexts.GetOrDefault(facility, facility);
-        var index = (GetIntValue(details, "index") ?? -1) + 1;
+
+        // WPF renders -1 when the index field is missing ((-2 + 1).ToString("D2")).
+        var index = (GetIntValue(details, "index") ?? -2) + 1;
         return new(
-            $"{GetRootText("ThisFacility", "Current Facility: ")}{facilityName} {index:D2}");
+            $"{GetRootText("ThisFacility", "Current Facility: ")}{facilityName} {index:D2}",
+            SplitMode: LogCardSplitMode.Before);
     }
 
     private TaskQueueCallbackUserLog? BuildRecruitTagsDetectedLog(JsonObject? details)
@@ -6282,16 +6329,50 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             .Select(tag => tag?.GetValue<string>() ?? string.Empty)
             .Where(static tag => !string.IsNullOrWhiteSpace(tag))
             .ToArray();
-        var content = lines.Length == 0 ? GetRootText("NoDrop", "Nothing") : string.Join(Environment.NewLine, lines);
+        // WPF falls back to the localized "Error" text when no tags were detected.
+        var content = lines.Length == 0 ? GetRootText("Error", "Error") : string.Join(Environment.NewLine, lines);
         return new(
             $"{GetRootText("RecruitingResults", "Recruitment Results: ")}{Environment.NewLine}{content}",
-            UpdateThumbnail: true);
+            UpdateThumbnail: true,
+            SplitMode: LogCardSplitMode.Before);
+    }
+
+    private TaskQueueCallbackUserLog? BuildRecruitResultLog(JsonObject? details)
+    {
+        var level = GetIntValue(details, "level");
+        if (!level.HasValue || level.Value < 0)
+        {
+            return null;
+        }
+
+        // WPF logs a single star glyph regardless of level; the repeated star
+        // glyphs only appear in the >=5 toast notification (already handled by
+        // QueueSpecialCallbackNotification).
+        var content = $"{level.Value} \u2605 Tags";
+        return level.Value >= 5
+            ? new(content, Color: "RareOperatorLogBrush", Weight: "Bold")
+            : new(content, Color: "InfoLogBrush");
+    }
+
+    private static string FormatWpfDropNumber(int value)
+    {
+        return value switch
+        {
+            >= 1_000_000_000 => $"{value / 1_000_000_000.0:#.#}B",
+            >= 1_000_000 => $"{value / 1_000_000.0:#.#}M",
+            >= 10_000 => $"{value / 1_000.0:#.#}k",
+            _ => value.ToString(CultureInfo.CurrentCulture),
+        };
     }
 
     private TaskQueueCallbackUserLog? BuildRecruitSupportOperatorLog(JsonObject? details)
     {
         var name = GetStringValue(details, "name");
-        return string.IsNullOrWhiteSpace(name) ? null : new($"Support Operator: {name}");
+        return string.IsNullOrWhiteSpace(name)
+            ? null
+            : new(
+                string.Format(GetRootText("RecruitSupportOperator", "Add support unit: {0}"), name),
+                Color: "InfoLogBrush");
     }
 
     private TaskQueueCallbackUserLog? BuildRecruitTagsSelectedLog(JsonObject? details)
@@ -6349,7 +6430,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         var skill = GetStringValue(details, "skill") ?? "Unknown";
         var level = GetIntValue(details, "level") ?? -1;
         return new(
-            $"[{oper}] {skill}{Environment.NewLine}{GetRootText("TrainingLevel", "Skill Rank")}: {level} {GetRootText("TrainingCompleted", "Training completed")}");
+            $"[{oper}] {skill}{Environment.NewLine}{GetRootText("TrainingLevel", "Skill Rank")}: {level} {GetRootText("TrainingCompleted", "Training completed")}",
+            Color: "InfoLogBrush");
     }
 
     private TaskQueueCallbackUserLog? BuildTrainingTimeLeftLog(JsonObject? details)
@@ -6364,7 +6446,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         var level = GetIntValue(details, "level") ?? -1;
         var time = GetStringValue(details, "time") ?? string.Empty;
         return new(
-            $"[{oper}] {skill}{Environment.NewLine}{GetRootText("TrainingLevel", "Skill Rank")}: {level}{Environment.NewLine}{GetRootText("TrainingTimeLeft", "Remaining Time")}: {time}");
+            $"[{oper}] {skill}{Environment.NewLine}{GetRootText("TrainingLevel", "Skill Rank")}: {level}{Environment.NewLine}{GetRootText("TrainingTimeLeft", "Remaining Time")}: {time}",
+            Color: "InfoLogBrush");
     }
 
     private TaskQueueCallbackUserLog? BuildReclamationReportLog(JsonObject? details)
@@ -6429,12 +6512,6 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         _medicineUsedTimes = 0;
         _expiringMedicineUsedTimes = 0;
         _stoneUsedTimes = 0;
-    }
-
-    private int? GetFightTaskTimesLimit(int? taskIndex)
-    {
-        var taskParams = GetCurrentTaskParams(taskIndex);
-        return GetIntValue(taskParams, "times");
     }
 
     private bool IsAnnihilationFightTask(int? taskIndex)
@@ -6633,6 +6710,13 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             await RecordEventAsync("TaskQueue.Callback.Parse", warning);
         }
 
+        // WPF returns immediately for CloseDown task-chain callbacks. They belong
+        // to the post-action lifecycle rather than to a queue item or its logs.
+        if (IsSuppressedWpfTaskChainLog(callback.MsgName, metadata.TaskChain))
+        {
+            return;
+        }
+
         UpdateRoguelikeCombatState(callback.MsgName, metadata);
 
         var taskChain = metadata.TaskChain;
@@ -6713,13 +6797,24 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                     callback.PayloadJson,
                     resolveSource: resolveSource);
                 break;
-            case "TaskChainError":
             case "SubTaskError":
+                // WPF ProcSubTaskError (AsstProxy.cs:1394+) only emits per-subtask
+                // error logs; it never changes task status or run state. Core treats
+                // SubTaskError as recoverable (drop recognition, penguin upload, ...),
+                // so the task status projection and run ownership stay untouched.
+                AppendWpfCallbackLog(callback, metadata, taskIndex);
+                await RecordRuntimeStatusAsync(
+                    runId,
+                    taskIndex,
+                    module,
+                    callback.MsgName,
+                    TaskQueueItemStatus.Running,
+                    callback.PayloadJson,
+                    resolveSource: resolveSource);
+                break;
+            case "TaskChainError":
                 UpdateTaskStatus(taskIndex, taskChain, TaskQueueItemStatus.Error);
-                if (string.Equals(callback.MsgName, "TaskChainError", StringComparison.OrdinalIgnoreCase))
-                {
-                    ClearRoguelikeCombatStateIfTaskCompleted(taskChain);
-                }
+                ClearRoguelikeCombatStateIfTaskCompleted(taskChain);
                 LastErrorMessage = $"{callback.MsgName}: {callback.PayloadJson}";
                 AppendWpfCallbackLog(callback, metadata, taskIndex);
                 await RecordRuntimeStatusAsync(
@@ -6735,18 +6830,18 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 break;
             case "TaskChainStopped":
                 CancelStallReminder();
-                if (_clearTaskStatusesWhenStopped)
-                {
-                    ResetAllTaskStatuses();
-                }
-                else if (taskIndex.HasValue || !string.IsNullOrWhiteSpace(taskChain))
-                {
-                    UpdateTaskStatus(taskIndex, taskChain, TaskQueueItemStatus.Skipped);
-                }
-                else
-                {
-                    MarkRunningTasks(TaskQueueItemStatus.Skipped);
-                }
+                // WPF SetStopped() logs "Stopped" (split on both sides) when the
+                // stop callback arrives. notifyActivity stays false so the stall
+                // reminder cancelled above is not restarted by this final entry.
+                AppendLogEntry(
+                    callback.Timestamp,
+                    GetRootText("Stopped", "Has stopped"),
+                    "INFO",
+                    updateThumbnail: false,
+                    notifyActivity: false,
+                    splitMode: LogCardSplitMode.Both);
+                ResetAllTaskStatuses();
+                _clearTaskStatusesWhenStopped = false;
 
                 ClearRoguelikeCombatStateIfTaskCompleted(taskChain);
 
@@ -6761,7 +6856,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 CompleteTaskQueueRunOwnership();
                 break;
             case "AllTasksCompleted":
-                MarkRunningTasks(TaskQueueItemStatus.Success);
+                ResetAllTaskStatuses();
                 await RecordRuntimeStatusAsync(
                     runId,
                     taskIndex,
@@ -7554,7 +7649,18 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         string Content,
         string Level = "INFO",
         bool UpdateThumbnail = false,
-        bool ForceScreenshot = false);
+        bool ForceScreenshot = false,
+        string? Color = null,
+        string Weight = "Regular",
+        LogCardSplitMode SplitMode = LogCardSplitMode.None);
+
+    private enum LogCardSplitMode
+    {
+        None,
+        Before,
+        After,
+        Both,
+    }
 
     private bool ShouldDelayStopUntilRoguelikeCombatComplete()
     {

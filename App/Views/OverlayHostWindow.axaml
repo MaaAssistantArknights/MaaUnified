@@ -51,6 +51,45 @@
     <Style Selector="TextBlock.overlay-log-content.state-error">
       <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.State.Error}" />
     </Style>
+    <Style Selector="TextBlock.overlay-log-content.state-success">
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.State.Success}" />
+    </Style>
+    <Style Selector="TextBlock.overlay-log-content.log-info">
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Log.Info}" />
+    </Style>
+    <Style Selector="TextBlock.overlay-log-content.log-rare">
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Log.RareOperator}" />
+    </Style>
+    <Style Selector="TextBlock.overlay-log-content.log-download">
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Log.Download}" />
+    </Style>
+    <Style Selector="TextBlock.overlay-log-content.log-message">
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Log.Message}" />
+    </Style>
+    <Style Selector="TextBlock.overlay-log-content.log-success-is">
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Log.SuccessIS}" />
+    </Style>
+    <Style Selector="TextBlock.overlay-log-content.log-safehouse-is">
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Log.SafehouseIS}" />
+    </Style>
+    <Style Selector="TextBlock.overlay-log-content.log-trader-is">
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Log.TraderIS}" />
+    </Style>
+    <Style Selector="TextBlock.overlay-log-content.log-truth-is">
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Log.TruthIS}" />
+    </Style>
+    <Style Selector="TextBlock.overlay-log-content.log-combat-is">
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Log.CombatIS}" />
+    </Style>
+    <Style Selector="TextBlock.overlay-log-content.log-emergency-is">
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Log.EmergencyIS}" />
+    </Style>
+    <Style Selector="TextBlock.overlay-log-content.log-boss-is">
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Log.BossIS}" />
+    </Style>
+    <Style Selector="TextBlock.overlay-log-content.log-exploration-abandoned-is">
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Log.ExplorationAbandonedIS}" />
+    </Style>
   </Window.Styles>
 
   <Window.DataTemplates>
@@ -64,6 +103,20 @@
                    Classes="overlay-log-content"
                    Classes.state-error="{Binding IsError}"
                    Classes.state-warning="{Binding IsWarning}"
+                   Classes.state-success="{Binding IsSuccess}"
+                   Classes.log-info="{Binding IsInfoColor}"
+                   Classes.log-rare="{Binding IsRareOperatorColor}"
+                   Classes.log-download="{Binding IsDownloadColor}"
+                   Classes.log-message="{Binding IsMessageColor}"
+                   Classes.log-success-is="{Binding IsSuccessISColor}"
+                   Classes.log-safehouse-is="{Binding IsSafehouseISColor}"
+                   Classes.log-trader-is="{Binding IsTraderISColor}"
+                   Classes.log-truth-is="{Binding IsTruthISColor}"
+                   Classes.log-combat-is="{Binding IsCombatISColor}"
+                   Classes.log-emergency-is="{Binding IsEmergencyISColor}"
+                   Classes.log-boss-is="{Binding IsBossISColor}"
+                   Classes.log-exploration-abandoned-is="{Binding IsExplorationAbandonedISColor}"
+                   FontWeight="{Binding DisplayFontWeight}"
                    Margin="10,0,0,0"
                    Text="{Binding Content}" />
       </Grid>

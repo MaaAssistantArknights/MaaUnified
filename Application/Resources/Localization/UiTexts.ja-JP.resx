@@ -466,6 +466,9 @@
   <data name="FlexibleDeployment" xml:space="preserve">
     <value>柔軟配置（先鋒、補助、特殊）</value>
   </data>
+  <data name="IdentifyTheMistakes" xml:space="preserve">
+    <value>認識エラー</value>
+  </data>
   <data name="Infrast.Clear" xml:space="preserve">
     <value>クリア</value>
   </data>
@@ -3689,6 +3692,9 @@ MAA を複数開くには、新しい MAA を他のフォルダにコピーし�
     <value>この機能は高リスクで、意図しないガチャを引く可能性があります。
 「確認」を押すと、リスクを理解し受け入れたものとみなされます。</value>
   </data>
+  <data name="UnableToAgent" xml:space="preserve">
+    <value>自動指揮利用不可</value>
+  </data>
   <data name="Unbreakable" xml:space="preserve">
     <value>難攻不落（重装、術師、医療）</value>
   </data>
@@ -3700,6 +3706,9 @@ MAA を複数開くには、新しい MAA を他のフォルダにコピーし�
   </data>
   <data name="AlgorithmConstructionPoint" xml:space="preserve">
     <value>ビルドポイント</value>
+  </data>
+  <data name="AlgorithmDoneSmeltGold" xml:space="preserve">
+    <value>鍛造レッドゴールド</value>
   </data>
   <data name="AlgorithmFinish" xml:space="preserve">
     <value>演算終了</value>
@@ -3875,6 +3884,9 @@ MAA を複数開くには、新しい MAA を他のフォルダにコピーし�
   </data>
   <data name="EmergencyOps" xml:space="preserve">
     <value>ステージ: 緊急作戦</value>
+  </data>
+  <data name="Error" xml:space="preserve">
+    <value>エラー</value>
   </data>
   <data name="ErrorOccurred" xml:space="preserve">
     <value>エラー発生</value>
@@ -4095,8 +4107,17 @@ MAA を複数開くには、新しい MAA を他のフォルダにコピーし�
   <data name="RecruitConfirm" xml:space="preserve">
     <value>募集を行いました</value>
   </data>
+  <data name="RecruitSupportOperator" xml:space="preserve">
+    <value>サポートユニットを追加：{0}</value>
+  </data>
   <data name="RecruitingResults" xml:space="preserve">
     <value>公開求人の認識結果: </value>
+  </data>
+  <data name="RecruitingTips" xml:space="preserve">
+    <value>公開求人ヒント</value>
+  </data>
+  <data name="RecruitmentOfStar" xml:space="preserve">
+    <value>公開求人で星{0}が出ました！</value>
   </data>
   <data name="Refreshed" xml:space="preserve">
     <value>現在のタグが更新されました</value>
@@ -4230,6 +4251,9 @@ MAA を複数開くには、新しい MAA を他のフォルダにコピーし�
   <data name="StageInfoError" xml:space="preserve">
     <value>ステージ認識エラー</value>
   </data>
+  <data name="StageQueue" xml:space="preserve">
+    <value>ステージキュー:</value>
+  </data>
   <data name="StartCombat" xml:space="preserve">
     <value>戦闘開始: </value>
   </data>
@@ -4256,6 +4280,12 @@ MAA を複数開くには、新しい MAA を他のフォルダにコピーし�
   </data>
   <data name="StoneUsedTimes" xml:space="preserve">
     <value>石: {0}  </value>
+  </data>
+  <data name="Stopped" xml:space="preserve">
+    <value>動作停止</value>
+  </data>
+  <data name="Stopping" xml:space="preserve">
+    <value>動作停止中……</value>
   </data>
   <data name="SupportSquad" xml:space="preserve">
     <value>支援分隊</value>
@@ -4302,6 +4332,9 @@ MAA を複数開くには、新しい MAA を他のフォルダにコピーし�
   <data name="TaskQueue.Status.Error" xml:space="preserve">
     <value>エラー</value>
   </data>
+  <data name="TaskStallWarning" xml:space="preserve">
+    <value>タスクログの出力が {0} 分間更新されていません（現在 {1} 分間停滞しています）。タスクがまだ実行中か確認してください。</value>
+  </data>
   <data name="TheEx" xml:space="preserve">
     <value>ステージ報酬がないため停止します</value>
   </data>
@@ -4337,6 +4370,9 @@ MAA を複数開くには、新しい MAA を他のフォルダにコピーし�
   </data>
   <data name="Visiting" xml:space="preserve">
     <value>戦友訪問</value>
+  </data>
+  <data name="Waiting" xml:space="preserve">
+    <value>ミッション終了を待っています……</value>
   </data>
   <data name="Copilot.Popup.UserAdditionalTitle" xml:space="preserve">
     <value>カスタム{key=Operator}追加</value>

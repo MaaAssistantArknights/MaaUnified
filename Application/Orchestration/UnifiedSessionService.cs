@@ -1666,6 +1666,7 @@ public sealed class UnifiedSessionService
         }
 
         if (string.Equals(callback.MsgName, "TaskChainStopped", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(callback.MsgName, "TaskChainError", StringComparison.OrdinalIgnoreCase)
             || string.Equals(callback.MsgName, "AllTasksCompleted", StringComparison.OrdinalIgnoreCase))
         {
             if (IsStaleRunBoundaryCallback(callback, "terminal"))
