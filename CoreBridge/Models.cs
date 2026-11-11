@@ -133,7 +133,8 @@ public sealed record CoreConnectionInfo(
     string ConnectConfig,
     string? AdbPath,
     CoreConnectionExtras? Extras = null,
-    TimeSpan? Timeout = null);
+    TimeSpan? Timeout = null,
+    bool DiscoverRuntimeCandidates = false);
 
 public sealed record CoreTaskRequest(string Type, string Name, bool IsEnabled, string ParamsJson);
 

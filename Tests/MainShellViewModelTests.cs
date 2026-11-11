@@ -1245,6 +1245,68 @@ public sealed class MainShellViewModelTests
     }
 
     [Fact]
+    public async Task ClientTypeChange_ShouldReloadCoreClientResource()
+    {
+        var bridge = new FakeBridge();
+        await using var fixture = await TestFixture.CreateAsync(bridge: bridge);
+        await fixture.ViewModel.InitializeAsync();
+        var initialReloadCount = bridge.ReloadResourceCallCount;
+
+        fixture.ViewModel.ConnectionGameSharedState.ClientType = "YoStarEN";
+
+        Assert.True(await WaitUntilAsync(() => bridge.ReloadResourceCallCount > initialReloadCount));
+        Assert.Equal("YoStarEN", bridge.LastReloadClientType);
+    }
+    [Fact]
+    public async Task ClientTypeChange_OfficialToBilibili_ShouldNotReloadCoreClientResource()
+    {
+        var bridge = new FakeBridge();
+        await using var fixture = await TestFixture.CreateAsync(bridge: bridge);
+        await fixture.ViewModel.InitializeAsync();
+        var initialReloadCount = bridge.ReloadResourceCallCount;
+
+        fixture.ViewModel.ConnectionGameSharedState.ClientType = "Bilibili";
+        await Task.Delay(500);
+        Assert.Equal(initialReloadCount, bridge.ReloadResourceCallCount);
+
+        fixture.ViewModel.ConnectionGameSharedState.ClientType = "Official";
+        await Task.Delay(500);
+        Assert.Equal(initialReloadCount, bridge.ReloadResourceCallCount);
+
+        fixture.ViewModel.ConnectionGameSharedState.ClientType = "YoStarEN";
+        Assert.True(await WaitUntilAsync(() => bridge.ReloadResourceCallCount > initialReloadCount));
+        Assert.Equal("YoStarEN", bridge.LastReloadClientType);
+    }
+
+    [Fact]
+    public async Task ClientTypeChange_RapidChangesWhileBusy_ShouldReloadOnlyLatestClient()
+    {
+        var bridge = new FakeBridge
+        {
+            RuntimeRunning = true,
+        };
+        await using var fixture = await TestFixture.CreateAsync(bridge: bridge);
+        await fixture.ViewModel.InitializeAsync();
+        var initialReloadCount = bridge.ReloadResourceCallCount;
+
+        fixture.ViewModel.ConnectionGameSharedState.ClientType = "YoStarEN";
+        await Task.Delay(400);
+        fixture.ViewModel.ConnectionGameSharedState.ClientType = "YoStarJP";
+        await Task.Delay(400);
+        Assert.Equal(initialReloadCount, bridge.ReloadResourceCallCount);
+
+        bridge.RuntimeRunning = false;
+        Assert.True(await WaitUntilAsync(() => bridge.ReloadResourceCallCount > initialReloadCount));
+        await Task.Delay(400);
+
+        Assert.Equal("YoStarJP", bridge.LastReloadClientType);
+        Assert.DoesNotContain(
+            bridge.ReloadClientTypes.Skip(initialReloadCount),
+            client => string.Equals(client, "YoStarEN", StringComparison.OrdinalIgnoreCase));
+    }
+
+
+    [Fact]
     public async Task RuntimeFactory_ShouldInjectShellFeatureService()
     {
         var root = Path.Combine(Path.GetTempPath(), "maa-unified-tests", Guid.NewGuid().ToString("N"));
@@ -2811,6 +2873,12 @@ public sealed class MainShellViewModelTests
 
         public int ConnectCallCount { get; private set; }
 
+        public int ReloadResourceCallCount { get; private set; }
+
+        public string? LastReloadClientType { get; private set; }
+
+        public List<string?> ReloadClientTypes { get; } = new();
+
         public CoreConnectionInfo? LastConnectionInfo { get; private set; }
 
         public Task<CoreResult<CoreInitializeInfo>> InitializeAsync(
@@ -2843,9 +2911,25 @@ public sealed class MainShellViewModelTests
             return Task.FromResult(CoreResult<bool>.Ok(true));
         }
 
+        public bool RuntimeRunning { get; set; }
+
         public Task<CoreResult<CoreRuntimeStatus>> GetRuntimeStatusAsync(CancellationToken cancellationToken = default)
         {
-            return Task.FromResult(CoreResult<CoreRuntimeStatus>.Ok(new CoreRuntimeStatus(true, true, false)));
+            return Task.FromResult(CoreResult<CoreRuntimeStatus>.Ok(new CoreRuntimeStatus(true, true, RuntimeRunning)));
+        }
+
+        public Task<CoreResult<bool>> ReloadResourceAsync(
+            string? clientType = null,
+            CancellationToken cancellationToken = default)
+        {
+            ReloadResourceCallCount++;
+            LastReloadClientType = clientType;
+            lock (ReloadClientTypes)
+            {
+                ReloadClientTypes.Add(clientType);
+            }
+
+            return Task.FromResult(CoreResult<bool>.Ok(true));
         }
 
         public Task<CoreResult<bool>> AttachWindowAsync(CoreAttachWindowRequest request, CancellationToken cancellationToken = default)

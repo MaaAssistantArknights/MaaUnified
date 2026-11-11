@@ -1402,7 +1402,11 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             var reload = await Runtime.SessionService.ReloadResourceWhenIdleAsync(
                 clientType,
                 waitTimeout: TimeSpan.FromSeconds(30),
-                cancellationToken);
+                cancellationToken,
+                isStillRequested: () => string.Equals(
+                    _connectionGameSharedState.ClientType,
+                    clientType,
+                    StringComparison.OrdinalIgnoreCase));
             if (!reload.Success
                 && reload.Error?.Code is not CoreErrorCode.NotInitialized
                     and not CoreErrorCode.NotSupported
@@ -3295,6 +3299,11 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                     _connectionGameSharedState.ConnectAddress = result.SuccessfulAddress;
                 }
 
+                if (_connectionGameSharedState.AutoDetect && !_connectionGameSharedState.AlwaysAutoDetect)
+                {
+                    _connectionGameSharedState.AutoDetect = false;
+                }
+
                 return result.Result;
             }
 
@@ -4350,6 +4359,62 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             content: $"Link Start failed: {message}",
             level: "ERROR",
             updateThumbnail: false);
+    }
+
+    private void AppendConnectionInfoUserLog(CallbackPayload metadata)
+    {
+        // WPF parity (AsstProxy.ProcConnectInfo): surface known ConnectionInfo states in the
+        // task queue log so connection failures are visible to the user.
+        switch (metadata.What)
+        {
+            case "UnsupportedResolution":
+                AppendSystemLog(
+                    BuildLocalizedMessage(
+                        "模拟器分辨率不支持，请设置为 720p 或更高，且为 16:9 比例，推荐使用 1280x720 或 1920x1080",
+                        "Emulator resolution not supported. Set at least 1280x720 with a 16:9 aspect ratio; 1280x720 or 1920x1080 is recommended."),
+                    "ERROR");
+                break;
+            case "ResolutionError":
+                AppendSystemLog(
+                    BuildLocalizedMessage(
+                        "模拟器分辨率获取失败，建议重启模拟器与 ADB 或重启电脑，或更换模拟器后再次尝试",
+                        "Failed to obtain emulator resolution. Try restarting the emulator and ADB, restarting the computer, or switching to another emulator."),
+                    "ERROR");
+                break;
+            case "TouchModeNotAvailable":
+                AppendSystemLog(
+                    BuildLocalizedMessage(
+                        "触控模式不可用，请在「设置 - 连接设置」中切换其他触控模式。",
+                        "Touch mode is not available. Please switch to a different touch mode in Settings - Connection Settings."),
+                    "ERROR");
+                break;
+            case "Disconnect":
+                AppendSystemLog(
+                    BuildLocalizedMessage("重连失败，连接断开！", "Reconnection failed. The connection is down!"),
+                    "ERROR");
+                break;
+            case "ScreencapFailed":
+                AppendSystemLog(
+                    BuildLocalizedMessage(
+                        "截图失败，如反复出现请尝试重启或更换模拟器！",
+                        "Screencap failed. If it happens repeatedly, try to restart or change the emulator!"),
+                    "ERROR");
+                break;
+            case "Reconnecting":
+                var times = GetIntValue(metadata.Details, "times");
+                var timesSuffix = times.HasValue ? $" ({times.Value + 1})" : string.Empty;
+                AppendSystemLog(
+                    BuildLocalizedMessage(
+                        $"模拟器断开，正在尝试重连{timesSuffix}",
+                        $"Emulator disconnected, trying to reconnect{timesSuffix}"),
+                    "ERROR");
+                break;
+            case "Reconnected":
+                AppendSystemLog(
+                    BuildLocalizedMessage("重连成功，继续任务", "Reconnection succeeded. Continuing the task."),
+                    "INFO");
+                break;
+        }
     }
 
     private bool AppendConnectionRecoveryAttemptLog(string zh, string en)
@@ -6711,6 +6776,17 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 TrackAchievementsFromCallback(metadata, callback.MsgName);
                 AppendWpfCallbackLog(callback, metadata, taskIndex);
                 QueueSpecialCallbackNotification(callback.MsgName, metadata);
+                await RecordRuntimeStatusAsync(
+                    runId,
+                    taskIndex,
+                    module,
+                    callback.MsgName,
+                    "Observed",
+                    callback.PayloadJson,
+                    resolveSource: resolveSource);
+                break;
+            case "ConnectionInfo":
+                AppendConnectionInfoUserLog(metadata);
                 await RecordRuntimeStatusAsync(
                     runId,
                     taskIndex,

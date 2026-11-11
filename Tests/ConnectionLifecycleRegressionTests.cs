@@ -672,6 +672,771 @@ public sealed class ConnectionLifecycleRegressionTests
     }
 
     [Fact]
+    public async Task SessionCallback_DisconnectWhileRunning_ShouldStopNativeAndMoveIdle()
+    {
+        var bridge = new ScriptedBridge();
+        await using var fixture = await SessionFixture.CreateAsync(bridge);
+        using var pumpCts = new CancellationTokenSource();
+        var pumpTask = fixture.Session.StartCallbackPumpAsync(_ => Task.CompletedTask, pumpCts.Token);
+
+        Assert.True((await fixture.Session.ConnectAsync("127.0.0.1:5555", "General", "/tmp/adb")).Success);
+        Assert.True((await fixture.Session.StartAsync()).Success);
+
+        bridge.PublishCallback(ConnectionCallback("Disconnect", "127.0.0.1:5555", "General", "/tmp/adb"));
+        await bridge.StopStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+        Assert.Equal(SessionState.Idle, fixture.Session.CurrentState);
+        Assert.Null(fixture.Session.LastSuccessfulConnectionInfo);
+
+        await pumpCts.CancelAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pumpTask.WaitAsync(TimeSpan.FromSeconds(2)));
+    }
+
+    [Theory]
+    [InlineData("UnsupportedResolution")]
+    [InlineData("ResolutionError")]
+    [InlineData("TouchModeNotAvailable")]
+    public async Task SessionCallback_KnownFailureCallbacks_ShouldInvalidateConnection(string what)
+    {
+        var bridge = new ScriptedBridge();
+        await using var fixture = await SessionFixture.CreateAsync(bridge);
+        using var pumpCts = new CancellationTokenSource();
+        var pumpTask = RunCallbackPumpUntilCanceledAsync(fixture.Session, pumpCts.Token);
+
+        Assert.True((await fixture.Session.ConnectAsync("127.0.0.1:5555", "General", "/tmp/adb")).Success);
+        Assert.Equal(SessionState.Connected, fixture.Session.CurrentState);
+
+        bridge.PublishCallback(ConnectionCallback(what, "127.0.0.1:5555", "General", "/tmp/adb"));
+        await WaitUntilAsync(() => fixture.Session.CurrentState == SessionState.Idle);
+
+        Assert.Null(fixture.Session.LastSuccessfulConnectionInfo);
+        Assert.False(fixture.Session.IsConnectedWith(new CoreConnectionInfo("127.0.0.1:5555", "General", "/tmp/adb")));
+        Assert.Equal(what, fixture.Session.LastConnectionCallbackStatus?.What);
+
+        pumpCts.Cancel();
+        await pumpTask;
+    }
+
+    [Fact]
+    public async Task SessionCallback_StaleFailureCallbackForOtherTarget_ShouldKeepConnection()
+    {
+        var bridge = new ScriptedBridge();
+        await using var fixture = await SessionFixture.CreateAsync(bridge);
+        using var pumpCts = new CancellationTokenSource();
+        var pumpTask = RunCallbackPumpUntilCanceledAsync(fixture.Session, pumpCts.Token);
+
+        Assert.True((await fixture.Session.ConnectAsync("127.0.0.1:5555", "General", "/tmp/adb")).Success);
+
+        bridge.PublishCallback(ConnectionCallback("ResolutionError", "127.0.0.1:9999", "General", "/tmp/adb-old"));
+        await Task.Delay(150);
+
+        Assert.Equal(SessionState.Connected, fixture.Session.CurrentState);
+        Assert.Equal("127.0.0.1:5555", fixture.Session.LastSuccessfulConnectionInfo?.Address);
+
+        pumpCts.Cancel();
+        await pumpTask;
+    }
+
+    [Fact]
+    public async Task SessionCallback_StaleDisconnectDuringPendingConnect_ShouldKeepNewTarget()
+    {
+        var bridge = new ScriptedBridge();
+        await using var fixture = await SessionFixture.CreateAsync(bridge);
+        using var pumpCts = new CancellationTokenSource();
+        var pumpTask = RunCallbackPumpUntilCanceledAsync(fixture.Session, pumpCts.Token);
+
+        Assert.True((await fixture.Session.ConnectAsync("127.0.0.1:5555", "General", "/tmp/adb-old")).Success);
+
+        bridge.BlockConnect = true;
+        bridge.ConnectCompletion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var reconnectTask = fixture.Session.ConnectAsync("127.0.0.1:5556", "General", "/tmp/adb-new");
+        await WaitUntilAsync(() => bridge.LastConnectionInfo?.Address == "127.0.0.1:5556");
+        Assert.Equal(SessionState.Connecting, fixture.Session.CurrentState);
+
+        bridge.PublishCallback(ConnectionCallback("Disconnect", "127.0.0.1:5555", "General", "/tmp/adb-old"));
+        await Task.Delay(150);
+        Assert.Equal(SessionState.Connecting, fixture.Session.CurrentState);
+
+        bridge.ConnectCompletion.SetResult(true);
+        Assert.True((await reconnectTask.WaitAsync(TimeSpan.FromSeconds(2))).Success);
+        Assert.Equal(SessionState.Connected, fixture.Session.CurrentState);
+        Assert.Equal("127.0.0.1:5556", fixture.Session.LastSuccessfulConnectionInfo?.Address);
+
+        pumpCts.Cancel();
+        await pumpTask;
+    }
+
+    [Fact]
+    public async Task SessionCallback_MatchingDisconnectDuringPendingConnect_ShouldClearTarget()
+    {
+        var bridge = new ScriptedBridge();
+        await using var fixture = await SessionFixture.CreateAsync(bridge);
+        using var pumpCts = new CancellationTokenSource();
+        var pumpTask = RunCallbackPumpUntilCanceledAsync(fixture.Session, pumpCts.Token);
+
+        bridge.BlockConnect = true;
+        bridge.ConnectCompletion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var connectTask = fixture.Session.ConnectAsync("127.0.0.1:5555", "General", "/tmp/adb");
+        await WaitUntilAsync(() => bridge.LastConnectionInfo?.Address == "127.0.0.1:5555");
+
+        bridge.PublishCallback(ConnectionCallback("Disconnect", "127.0.0.1:5555", "General", "/tmp/adb"));
+        await WaitUntilAsync(() => fixture.Session.CurrentState == SessionState.Idle);
+
+        // MaaCoreBridgeNative.TryHandlePendingConnectCallback fails a pending connect when a
+        // Disconnect callback arrives, so mirror that here instead of completing successfully.
+        bridge.ConnectResult = CoreResult<bool>.Fail(new CoreError(CoreErrorCode.ConnectFailed, "disconnect during connect"));
+        bridge.ConnectCompletion.SetResult(true);
+        Assert.False((await connectTask.WaitAsync(TimeSpan.FromSeconds(2))).Success);
+        Assert.Equal(SessionState.Idle, fixture.Session.CurrentState);
+        Assert.Null(fixture.Session.LastSuccessfulConnectionInfo);
+
+        pumpCts.Cancel();
+        await pumpTask;
+    }
+
+    [Fact]
+    public async Task SessionCallback_DisconnectNativeStop_ShouldGateImmediateReconnect()
+    {
+        var bridge = new ScriptedBridge
+        {
+            StopCompletion = new TaskCompletionSource<CoreResult<bool>>(TaskCreationOptions.RunContinuationsAsynchronously),
+        };
+        await using var fixture = await SessionFixture.CreateAsync(bridge);
+        using var pumpCts = new CancellationTokenSource();
+        var pumpTask = RunCallbackPumpUntilCanceledAsync(fixture.Session, pumpCts.Token);
+
+        Assert.True((await fixture.Session.ConnectAsync("127.0.0.1:5555", "General", "/tmp/adb")).Success);
+        Assert.True((await fixture.Session.StartAsync()).Success);
+        var connectCallsBefore = bridge.ConnectCallCount;
+
+        bridge.PublishCallback(ConnectionCallback("Disconnect", "127.0.0.1:5555", "General", "/tmp/adb"));
+        await bridge.StopStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        Assert.Equal(SessionState.Idle, fixture.Session.CurrentState);
+
+        var reconnectTask = fixture.Session.ConnectAsync("127.0.0.1:5556", "General", "/tmp/adb");
+        await Task.Delay(300);
+        Assert.Equal(connectCallsBefore, bridge.ConnectCallCount);
+
+        bridge.StopCompletion.SetResult(CoreResult<bool>.Ok(true));
+        Assert.True((await reconnectTask.WaitAsync(TimeSpan.FromSeconds(5))).Success);
+        Assert.Equal(connectCallsBefore + 1, bridge.ConnectCallCount);
+        Assert.Equal("127.0.0.1:5556", fixture.Session.LastSuccessfulConnectionInfo?.Address);
+
+        pumpCts.Cancel();
+        await pumpTask;
+    }
+
+    [Fact]
+    public async Task StartAsync_ShouldWaitForPendingNativeStopFromDisconnect()
+    {
+        var bridge = new ScriptedBridge
+        {
+            StopCompletion = new TaskCompletionSource<CoreResult<bool>>(TaskCreationOptions.RunContinuationsAsynchronously),
+        };
+        await using var fixture = await SessionFixture.CreateAsync(bridge);
+        using var pumpCts = new CancellationTokenSource();
+        var pumpTask = RunCallbackPumpUntilCanceledAsync(fixture.Session, pumpCts.Token);
+
+        Assert.True((await fixture.Session.ConnectAsync("127.0.0.1:5555", "General", "/tmp/adb")).Success);
+        Assert.True((await fixture.Session.StartAsync()).Success);
+        Assert.Equal(1, bridge.StartCallCount);
+
+        bridge.PublishCallback(ConnectionCallback("Disconnect", "127.0.0.1:5555", "General", "/tmp/adb"));
+        await bridge.StopStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+        var startTask = fixture.Session.StartAsync();
+        await Task.Delay(300);
+        Assert.Equal(1, bridge.StartCallCount);
+
+        bridge.StopCompletion.SetResult(CoreResult<bool>.Ok(true));
+        Assert.True((await startTask.WaitAsync(TimeSpan.FromSeconds(5))).Success);
+        Assert.Equal(2, bridge.StartCallCount);
+
+        pumpCts.Cancel();
+        await pumpTask;
+    }
+
+    [Fact]
+    public async Task SessionCallback_ConnectedDuringPendingConnect_ShouldProjectActualAddressAdbAndStatus()
+    {
+        var bridge = new ScriptedBridge
+        {
+            BlockConnect = true,
+            ConnectCompletion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously),
+        };
+        await using var fixture = await SessionFixture.CreateAsync(bridge);
+        using var pumpCts = new CancellationTokenSource();
+        var pumpTask = fixture.Session.StartCallbackPumpAsync(_ => Task.CompletedTask, pumpCts.Token);
+
+        var connectTask = fixture.Session.ConnectAsync("127.0.0.1:5555", "General", "/tmp/requested-adb");
+        await bridge.ConnectStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        bridge.PublishCallback(ConnectionCallback("Connected", "emulator-5556", "General", "/tmp/actual-adb"));
+        await WaitUntilAsync(() => fixture.Session.LastConnectionCallbackStatus?.AdbPath == "/tmp/actual-adb");
+        bridge.ConnectCompletion.SetResult(true);
+
+        Assert.True((await connectTask.WaitAsync(TimeSpan.FromSeconds(2))).Success);
+        Assert.Equal("emulator-5556", fixture.Session.LastSuccessfulConnectionInfo?.Address);
+        Assert.Equal("/tmp/actual-adb", fixture.Session.LastSuccessfulConnectionInfo?.AdbPath);
+        Assert.Equal("emulator-5556", fixture.Session.LastConnectionCallbackStatus?.Address);
+        Assert.Equal("Connected", fixture.Session.LastConnectionCallbackStatus?.What);
+
+        bridge.PublishCallback(ConnectionCallback("Reconnected", "emulator-5558", "General", "/tmp/reconnected-adb"));
+        await WaitUntilAsync(() => fixture.Session.LastSuccessfulConnectionInfo?.Address == "emulator-5558");
+        Assert.Equal("/tmp/reconnected-adb", fixture.Session.LastSuccessfulConnectionInfo?.AdbPath);
+        Assert.Equal("emulator-5558", fixture.Session.LastConnectionCallbackStatus?.Address);
+        Assert.Equal("Reconnected", fixture.Session.LastConnectionCallbackStatus?.What);
+
+        await pumpCts.CancelAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pumpTask.WaitAsync(TimeSpan.FromSeconds(2)));
+    }
+
+    [Fact]
+    public async Task SessionCallback_ShouldProjectReconnectResolutionAndScreencapMethod()
+    {
+        var bridge = new ScriptedBridge();
+        await using var fixture = await SessionFixture.CreateAsync(bridge);
+        using var pumpCts = new CancellationTokenSource();
+        var pumpTask = fixture.Session.StartCallbackPumpAsync(_ => Task.CompletedTask, pumpCts.Token);
+
+        bridge.PublishCallback(new CoreCallbackEvent(
+            2,
+            "ConnectionInfo",
+            """{"what":"Reconnecting","details":{"times":1}}""",
+            DateTimeOffset.UtcNow));
+        await WaitUntilAsync(() => fixture.Session.LastConnectionCallbackStatus?.What == "Reconnecting");
+        Assert.Equal(2, fixture.Session.LastConnectionCallbackStatus?.ReconnectAttempt);
+
+        bridge.PublishCallback(new CoreCallbackEvent(
+            2,
+            "ConnectionInfo",
+            """{"what":"ResolutionGot","details":{"width":1920,"height":1080}}""",
+            DateTimeOffset.UtcNow));
+        await WaitUntilAsync(() => fixture.Session.LastConnectionCallbackStatus?.What == "ResolutionGot");
+        Assert.Equal(1920, fixture.Session.LastConnectionCallbackStatus?.Width);
+        Assert.Equal(1080, fixture.Session.LastConnectionCallbackStatus?.Height);
+
+        bridge.PublishCallback(new CoreCallbackEvent(
+            2,
+            "ConnectionInfo",
+            """{"what":"FastestWayToScreencap","details":{"method":"MumuExtras","cost":12}}""",
+            DateTimeOffset.UtcNow));
+        await WaitUntilAsync(() => fixture.Session.LastConnectionCallbackStatus?.What == "FastestWayToScreencap");
+        Assert.Equal("MumuExtras", fixture.Session.LastConnectionCallbackStatus?.Method);
+
+        await pumpCts.CancelAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pumpTask.WaitAsync(TimeSpan.FromSeconds(2)));
+    }
+
+    [Fact]
+    public async Task ConnectCandidates_Success_ShouldDisableOneShotAutoDetectButPreserveAlwaysDetect()
+    {
+        var bridge = new ScriptedBridge();
+        await using var fixture = await SessionFixture.CreateAsync(bridge);
+        Assert.True(fixture.Config.TryGetCurrentProfile(out var profile));
+        profile.Values["AutoDetect"] = JsonValue.Create(true);
+        profile.Values["AlwaysAutoDetect"] = JsonValue.Create(false);
+        var connect = new ConnectFeatureService(fixture.Session, fixture.Config);
+
+        var result = await connect.ConnectCandidatesAsync(
+            [new CoreConnectionInfo("127.0.0.1:5555", "General", null, Timeout: TimeSpan.FromSeconds(5))]);
+
+        Assert.True(result.Success);
+        Assert.False(profile.Values["AutoDetect"]?.GetValue<bool>());
+        Assert.False(profile.Values["AlwaysAutoDetect"]?.GetValue<bool>());
+    }
+
+    [Fact]
+    public async Task ConnectCandidates_WhenAutoDetectSaveFails_ShouldKeepSuccessfulConnection()
+    {
+        var bridge = new ScriptedBridge();
+        await using var fixture = await SessionFixture.CreateAsync(bridge);
+        Assert.True(fixture.Config.TryGetCurrentProfile(out var profile));
+        profile.Values["AutoDetect"] = JsonValue.Create(true);
+        profile.Values["AlwaysAutoDetect"] = JsonValue.Create(false);
+        fixture.ConfigStore.FailSaves = true;
+        var connect = new ConnectFeatureService(fixture.Session, fixture.Config, fixture.Log);
+
+        var result = await connect.ConnectCandidatesAsync(
+            [new CoreConnectionInfo("127.0.0.1:5555", "General", null, Timeout: TimeSpan.FromSeconds(5))]);
+
+        Assert.True(result.Success);
+        Assert.Equal(SessionState.Connected, fixture.Session.CurrentState);
+        Assert.False(profile.Values["AutoDetect"]?.GetValue<bool>());
+        Assert.Contains(
+            fixture.Log.Snapshot,
+            entry => entry.Level == "WARN"
+                && entry.Message.Contains("one-shot auto-detect could not be persisted", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task BuildConnectionCandidates_ShouldNormalizeAsciiSpacesAndLimitEachCandidateTimeout()
+    {
+        var bridge = new ScriptedBridge();
+        await using var fixture = await SessionFixture.CreateAsync(bridge);
+        var connect = new ConnectFeatureService(fixture.Session, fixture.Config);
+
+        var result = connect.BuildConnectionCandidates(
+            " 127.0. 0.1 : 5555 ",
+            " BlueStacks ",
+            @" C:\Program Files\Android\adb.exe ",
+            new CoreConnectionExtras(MuMu12EmulatorPath: @"C:\Program Files\Netease\MuMu"),
+            autoDetect: false,
+            timeout: TimeSpan.FromSeconds(20));
+
+        var candidate = Assert.Single(result.Value!);
+        Assert.Equal("127.0.0.1:5555", candidate.Address);
+        Assert.Equal("BlueStacks", candidate.ConnectConfig);
+        Assert.Equal(@"C:\Program Files\Android\adb.exe", candidate.AdbPath);
+        Assert.Equal(@"C:\Program Files\Netease\MuMu", candidate.Extras?.MuMu12EmulatorPath);
+        Assert.Equal(TimeSpan.FromSeconds(5), candidate.Timeout);
+    }
+
+    [Fact]
+    public async Task ScreenshotTest_ShouldReturnFastestScreencapMethodFromConnectionCallback()
+    {
+        var bridge = new ScriptedBridge
+        {
+            BlockConnect = true,
+            ConnectCompletion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously),
+        };
+        await using var fixture = await SessionFixture.CreateAsync(bridge);
+        Assert.True(fixture.Config.TryGetCurrentProfile(out var profile));
+        profile.Values["AutoDetect"] = JsonValue.Create(false);
+        var connect = new ConnectFeatureService(
+            fixture.Session,
+            fixture.Config,
+            fixture.Log,
+            bridge,
+            fixture.Root,
+            enableQuickConnectionPrecheck: false);
+        using var pumpCts = new CancellationTokenSource();
+        var pumpTask = fixture.Session.StartCallbackPumpAsync(_ => Task.CompletedTask, pumpCts.Token);
+
+        var testTask = connect.RunScreenshotTestAsync(
+            [new CoreConnectionInfo(
+                "127.0.0.1:5555",
+                "MuMuEmulator12",
+                null,
+                new CoreConnectionExtras(MuMu12ExtrasEnabled: true),
+                TimeSpan.FromSeconds(5))],
+            sampleCount: 1);
+        await bridge.ConnectStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        bridge.PublishCallback(new CoreCallbackEvent(
+            2,
+            "ConnectionInfo",
+            """{"what":"FastestWayToScreencap","details":{"method":"MumuExtras","cost":12}}""",
+            DateTimeOffset.UtcNow));
+        await WaitUntilAsync(() => fixture.Session.LastConnectionCallbackStatus?.Method == "MumuExtras");
+        bridge.ConnectCompletion.SetResult(true);
+
+        var result = await testTask.WaitAsync(TimeSpan.FromSeconds(2));
+        Assert.True(result.Success);
+        Assert.Equal("MumuExtras", result.FastestScreencapMethod);
+
+        await pumpCts.CancelAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pumpTask.WaitAsync(TimeSpan.FromSeconds(2)));
+    }
+
+    [Fact]
+    public async Task ScreenshotTest_ShouldRejectWrongExtrasMethodReportedDuringCapture()
+    {
+        var bridge = new ScriptedBridge
+        {
+            ScreencapCallback = new CoreCallbackEvent(
+                2,
+                "ConnectionInfo",
+                """{"what":"FastestWayToScreencap","details":{"method":"RawByNetcat","cost":12}}""",
+                DateTimeOffset.UtcNow),
+        };
+        await using var fixture = await SessionFixture.CreateAsync(bridge);
+        Assert.True(fixture.Config.TryGetCurrentProfile(out var profile));
+        profile.Values["AutoDetect"] = JsonValue.Create(false);
+        var connect = new ConnectFeatureService(
+            fixture.Session,
+            fixture.Config,
+            fixture.Log,
+            bridge,
+            fixture.Root,
+            enableQuickConnectionPrecheck: false);
+        using var pumpCts = new CancellationTokenSource();
+        var pumpTask = fixture.Session.StartCallbackPumpAsync(_ => Task.CompletedTask, pumpCts.Token);
+
+        var result = await connect.RunScreenshotTestAsync(
+            [new CoreConnectionInfo(
+                "127.0.0.1:5555",
+                "MuMuEmulator12",
+                null,
+                new CoreConnectionExtras(MuMu12ExtrasEnabled: true),
+                TimeSpan.FromSeconds(5))],
+            sampleCount: 1);
+
+        Assert.False(result.Success);
+        Assert.Equal("RawByNetcat", result.FastestScreencapMethod);
+        Assert.Contains("Expected MumuExtras, actual RawByNetcat", result.Result.Message, StringComparison.Ordinal);
+
+        await pumpCts.CancelAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pumpTask.WaitAsync(TimeSpan.FromSeconds(2)));
+    }
+
+
+    [Fact]
+    public void EmulatorRuntimeDiscovery_ShouldMapWpfProcessNamesAndResolveBundledAdb()
+    {
+        Assert.True(EmulatorRuntimeDiscovery.TryMapEmulatorProcessName("HD-Player", out var blueStacks));
+        Assert.Equal("BlueStacks", blueStacks);
+        Assert.True(EmulatorRuntimeDiscovery.TryMapEmulatorProcessName("dnplayer", out var ldPlayer));
+        Assert.Equal("LDPlayer", ldPlayer);
+        Assert.True(EmulatorRuntimeDiscovery.TryMapEmulatorProcessName("Nox", out var nox));
+        Assert.Equal("Nox", nox);
+        Assert.True(EmulatorRuntimeDiscovery.TryMapEmulatorProcessName("MuMuPlayer", out var muMu));
+        Assert.Equal("MuMuEmulator12", muMu);
+        Assert.True(EmulatorRuntimeDiscovery.TryMapEmulatorProcessName("MuMuNxDevice", out var muMuNx));
+        Assert.Equal("MuMuEmulator12", muMuNx);
+        Assert.True(EmulatorRuntimeDiscovery.TryMapEmulatorProcessName("MEmu", out var xyaz));
+        Assert.Equal("XYAZ", xyaz);
+        Assert.False(EmulatorRuntimeDiscovery.TryMapEmulatorProcessName("chrome", out _));
+        Assert.False(EmulatorRuntimeDiscovery.TryMapEmulatorProcessName(null, out _));
+
+        var ldAdb = EmulatorRuntimeDiscovery.ResolveEmulatorAdbPath(
+            "LDPlayer",
+            "/emu/LDPlayer/dnplayer.exe",
+            path => string.Equals(path, "/emu/LDPlayer/adb.exe", StringComparison.Ordinal));
+        Assert.Equal("/emu/LDPlayer/adb.exe", ldAdb);
+
+        var blueStacksAdb = EmulatorRuntimeDiscovery.ResolveEmulatorAdbPath(
+            "BlueStacks",
+            "/emu/BlueStacks_nxt/HD-Player.exe",
+            path => string.Equals(path, "/emu/BlueStacks_nxt/Engine/ProgramFiles/HD-Adb.exe", StringComparison.Ordinal));
+        Assert.Equal("/emu/BlueStacks_nxt/Engine/ProgramFiles/HD-Adb.exe", blueStacksAdb);
+
+        var muMuAdb = EmulatorRuntimeDiscovery.ResolveEmulatorAdbPath(
+            "MuMuEmulator12",
+            "/emu/MuMu Player 12/shell/MuMuPlayer.exe",
+            path => string.Equals(path, "/emu/MuMu Player 12/vmonitor/bin/adb_server.exe", StringComparison.Ordinal));
+        Assert.Equal("/emu/MuMu Player 12/vmonitor/bin/adb_server.exe", muMuAdb);
+
+        Assert.Null(EmulatorRuntimeDiscovery.ResolveEmulatorAdbPath("Nox", "/emu/Nox/bin/Nox.exe", _ => false));
+        Assert.Null(EmulatorRuntimeDiscovery.ResolveEmulatorAdbPath("Unknown", "/emu/x.exe", _ => true));
+    }
+
+    [Fact]
+    public void EmulatorRuntimeDiscovery_ShouldDetectAndDeduplicateRunningEmulators()
+    {
+        var discovered = EmulatorRuntimeDiscovery.DetectRunningEmulators(
+            processProvider: () =>
+            [
+                new EmulatorProcessSnapshot("chrome", "/usr/bin/chrome"),
+                new EmulatorProcessSnapshot("MuMuPlayer", "/emu/MuMu Player 12/shell/MuMuPlayer.exe"),
+                new EmulatorProcessSnapshot("MuMuNxDevice", "/emu/MuMu Player 12/shell/MuMuNxDevice.exe"),
+            ],
+            fileExists: path => string.Equals(path, "/emu/MuMu Player 12/vmonitor/bin/adb_server.exe", StringComparison.Ordinal));
+
+        var emulator = Assert.Single(discovered);
+        Assert.Equal("MuMuEmulator12", emulator.EmulatorId);
+        Assert.Equal("/emu/MuMu Player 12/vmonitor/bin/adb_server.exe", emulator.AdbPath);
+    }
+
+    [Fact]
+    public void EmulatorRuntimeDiscovery_WhenMultipleBundledAdbExist_ShouldPreferLastWpfListedPath()
+    {
+        // WPF parity (WinAdapter.RefreshEmulatorsInfo): the loop overwrites the mapping for
+        // every existing relative path, so the last existing entry in the WPF list wins.
+        var blueStacksAdb = EmulatorRuntimeDiscovery.ResolveEmulatorAdbPath(
+            "BlueStacks",
+            "/emu/BlueStacks_nxt/HD-Player.exe",
+            path => path is "/emu/BlueStacks_nxt/HD-Adb.exe"
+                or "/emu/BlueStacks_nxt/Engine/ProgramFiles/HD-Adb.exe");
+        Assert.Equal("/emu/BlueStacks_nxt/Engine/ProgramFiles/HD-Adb.exe", blueStacksAdb);
+
+        var muMuAdb = EmulatorRuntimeDiscovery.ResolveEmulatorAdbPath(
+            "MuMuEmulator12",
+            "/emu/MuMu Player 12/shell/MuMuPlayer.exe",
+            path => path is "/emu/MuMu Player 12/vmonitor/bin/adb_server.exe"
+                or "/emu/MuMu Player 12/shell/adb.exe");
+        Assert.Equal("/emu/MuMu Player 12/shell/adb.exe", muMuAdb);
+    }
+
+    [Fact]
+    public async Task RuntimeCandidateExpansion_WithEmptyAdbPath_ShouldAdoptDiscoveredEmulatorConfigAndBundledAdb()
+    {
+        var bridge = new ScriptedBridge();
+        await using var fixture = await SessionFixture.CreateAsync(bridge);
+        var connect = new ConnectFeatureService(
+            fixture.Session,
+            fixture.Config,
+            fixture.Log,
+            bridge,
+            fixture.Root,
+            enableQuickConnectionPrecheck: false)
+        {
+            EmulatorDiscoveryOverride = () =>
+            [
+                new EmulatorRuntimeInfo(
+                    "MuMuEmulator12",
+                    "/emu/MuMu Player 12/shell/MuMuPlayer.exe",
+                    "/emu/MuMu Player 12/nx_main/adb.exe"),
+            ],
+        };
+
+        var expanded = await connect.ExpandRuntimeConnectionCandidatesAsync(
+            [new CoreConnectionInfo(
+                "127.0.0.1:16384",
+                "General",
+                null,
+                Timeout: TimeSpan.FromSeconds(5),
+                DiscoverRuntimeCandidates: true)],
+            CancellationToken.None);
+
+        var template = Assert.Single(expanded);
+        Assert.Equal("127.0.0.1:16384", template.Address);
+        Assert.Equal("MuMuEmulator12", template.ConnectConfig);
+        Assert.Equal("/emu/MuMu Player 12/nx_main/adb.exe", template.AdbPath);
+    }
+
+    [Fact]
+    public async Task RuntimeCandidateExpansion_WhenDiscoveryFindsNoEmulator_ShouldKeepOriginalCandidates()
+    {
+        var bridge = new ScriptedBridge();
+        await using var fixture = await SessionFixture.CreateAsync(bridge);
+        var connect = new ConnectFeatureService(
+            fixture.Session,
+            fixture.Config,
+            fixture.Log,
+            bridge,
+            fixture.Root,
+            enableQuickConnectionPrecheck: false)
+        {
+            EmulatorDiscoveryOverride = () => [],
+        };
+
+        // Use a nonexistent ADB path so the runtime precheck cannot observe host-attached
+        // devices; this test must stay hermetic on machines where `adb` is on PATH.
+        var candidates = (IReadOnlyList<CoreConnectionInfo>)
+        [
+            new CoreConnectionInfo(
+                "127.0.0.1:5555",
+                "General",
+                "/nonexistent/m05-test-adb",
+                Timeout: TimeSpan.FromSeconds(5),
+                DiscoverRuntimeCandidates: true),
+            new CoreConnectionInfo(
+                "127.0.0.1:5556",
+                "General",
+                "/nonexistent/m05-test-adb",
+                Timeout: TimeSpan.FromSeconds(5),
+                DiscoverRuntimeCandidates: true),
+        ];
+        var expanded = await connect.ExpandRuntimeConnectionCandidatesAsync(candidates, CancellationToken.None);
+
+        Assert.Equal(2, expanded.Count);
+        Assert.Equal("127.0.0.1:5555", expanded[0].Address);
+        Assert.Equal("/nonexistent/m05-test-adb", expanded[0].AdbPath);
+        Assert.Equal("General", expanded[0].ConnectConfig);
+    }
+
+    [Fact]
+    public async Task RuntimeCandidateExpansion_WhenRuntimeDiscoveryNotRequested_ShouldNotInvokeEmulatorDiscovery()
+    {
+        var bridge = new ScriptedBridge();
+        await using var fixture = await SessionFixture.CreateAsync(bridge);
+        var discoveryCalls = 0;
+        var connect = new ConnectFeatureService(
+            fixture.Session,
+            fixture.Config,
+            fixture.Log,
+            bridge,
+            fixture.Root,
+            enableQuickConnectionPrecheck: false)
+        {
+            EmulatorDiscoveryOverride = () =>
+            {
+                discoveryCalls++;
+                return [new EmulatorRuntimeInfo("MuMuEmulator12", null, "/emu/mumu-adb.exe")];
+            },
+        };
+
+        var expanded = await connect.ExpandRuntimeConnectionCandidatesAsync(
+            [new CoreConnectionInfo("127.0.0.1:5555", "General", null, Timeout: TimeSpan.FromSeconds(5))],
+            CancellationToken.None);
+
+        Assert.Equal(0, discoveryCalls);
+        var candidate = Assert.Single(expanded);
+        Assert.Null(candidate.AdbPath);
+        Assert.Equal("General", candidate.ConnectConfig);
+    }
+
+    [Fact]
+    public async Task ReloadResourceWhenIdleAsync_WhenSupersededDuringIdleWait_ShouldSkipBridgeReload()
+    {
+        var bridge = new ScriptedBridge
+        {
+            RuntimeRunningOverride = true,
+        };
+        await using var fixture = await SessionFixture.CreateAsync(bridge);
+
+        var staleReload = fixture.Session.ReloadResourceWhenIdleAsync(
+            "YoStarEN",
+            waitTimeout: TimeSpan.FromSeconds(10),
+            isStillRequested: () => false);
+        await Task.Delay(400);
+        Assert.False(staleReload.IsCompleted);
+        Assert.Equal(0, bridge.ReloadResourceCallCount);
+
+        bridge.RuntimeRunningOverride = false;
+        Assert.True((await staleReload.WaitAsync(TimeSpan.FromSeconds(5))).Success);
+        Assert.Equal(0, bridge.ReloadResourceCallCount);
+
+        var latestReload = await fixture.Session.ReloadResourceWhenIdleAsync(
+            "YoStarJP",
+            isStillRequested: () => true);
+        Assert.True(latestReload.Success);
+        Assert.Equal(1, bridge.ReloadResourceCallCount);
+        Assert.Equal("YoStarJP", bridge.LastReloadClientType);
+    }
+
+    [Fact]
+    public async Task ReloadResourceWhenIdleAsync_ConcurrentRequests_ShouldSerializeBridgeReloadsInRequestOrder()
+    {
+        var bridge = new ScriptedBridge();
+        await using var fixture = await SessionFixture.CreateAsync(bridge);
+        bridge.ReloadResourceCompletion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var firstReload = fixture.Session.ReloadResourceWhenIdleAsync("Official", isStillRequested: () => true);
+        await bridge.ReloadResourceStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        var secondReload = fixture.Session.ReloadResourceWhenIdleAsync("YoStarEN", isStillRequested: () => true);
+        await Task.Delay(300);
+
+        // The second request must not enter the bridge while the first reload is in flight.
+        Assert.Equal(1, bridge.ReloadResourceCallCount);
+
+        bridge.ReloadResourceCompletion.TrySetResult(true);
+        Assert.True((await firstReload.WaitAsync(TimeSpan.FromSeconds(5))).Success);
+        Assert.True((await secondReload.WaitAsync(TimeSpan.FromSeconds(5))).Success);
+        Assert.Equal(2, bridge.ReloadResourceCallCount);
+
+        // The later request must be the terminal reload; an older request may never finish last.
+        Assert.Equal(new[] { "Official", "YoStarEN" }, bridge.ReloadedClientTypes);
+        Assert.Equal("YoStarEN", bridge.LastReloadClientType);
+    }
+
+    [Fact]
+    public async Task ReloadResourceWhenIdleAsync_WhenSupersededBehindInFlightReload_ShouldSkipBridgeReload()
+    {
+        var bridge = new ScriptedBridge();
+        await using var fixture = await SessionFixture.CreateAsync(bridge);
+        bridge.ReloadResourceCompletion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var firstReload = fixture.Session.ReloadResourceWhenIdleAsync("Official", isStillRequested: () => true);
+        await bridge.ReloadResourceStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        var supersededReload = fixture.Session.ReloadResourceWhenIdleAsync("YoStarEN", isStillRequested: () => false);
+        await Task.Delay(300);
+
+        bridge.ReloadResourceCompletion.TrySetResult(true);
+        Assert.True((await firstReload.WaitAsync(TimeSpan.FromSeconds(5))).Success);
+        Assert.True((await supersededReload.WaitAsync(TimeSpan.FromSeconds(5))).Success);
+
+        // The superseded request re-validates the gate after the in-flight reload completes.
+        Assert.Equal(1, bridge.ReloadResourceCallCount);
+        Assert.Equal("Official", bridge.LastReloadClientType);
+    }
+
+    [Fact]
+    public async Task ScreenshotTest_ShouldWaitForDelayedFastestMethodCallbackProjection()
+    {
+        var bridge = new ScriptedBridge();
+        await using var fixture = await SessionFixture.CreateAsync(bridge);
+        Assert.True(fixture.Config.TryGetCurrentProfile(out var profile));
+        profile.Values["AutoDetect"] = JsonValue.Create(false);
+        var connect = new ConnectFeatureService(
+            fixture.Session,
+            fixture.Config,
+            fixture.Log,
+            bridge,
+            fixture.Root,
+            enableQuickConnectionPrecheck: false);
+        using var pumpCts = new CancellationTokenSource();
+        var pumpTask = fixture.Session.StartCallbackPumpAsync(_ => Task.CompletedTask, pumpCts.Token);
+
+        var testTask = connect.RunScreenshotTestAsync(
+            [new CoreConnectionInfo(
+                "127.0.0.1:5555",
+                "MuMuEmulator12",
+                null,
+                new CoreConnectionExtras(MuMu12ExtrasEnabled: true),
+                TimeSpan.FromSeconds(5))],
+            sampleCount: 1);
+        await WaitUntilAsync(() => bridge.ImageBgrCallCount >= 1);
+
+        // Simulate the FastestWayToScreencap envelope still queued behind the last forced capture.
+        await Task.Delay(250);
+        bridge.PublishCallback(new CoreCallbackEvent(
+            2,
+            "ConnectionInfo",
+            """{"what":"FastestWayToScreencap","details":{"method":"MumuExtras","cost":12}}""",
+            DateTimeOffset.UtcNow));
+
+        var result = await testTask.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.True(result.Success, result.Result.Message);
+        Assert.Equal("MumuExtras", result.FastestScreencapMethod);
+
+        await pumpCts.CancelAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pumpTask.WaitAsync(TimeSpan.FromSeconds(2)));
+    }
+
+    [Fact]
+    public void RuntimeCandidateDiscovery_ShouldParseBlueStacksPortAndReadyAdbSerials()
+    {
+        var blueStacksAddress = ConnectFeatureService.ParseBlueStacksDynamicAddress(
+            [
+                "bst.installed_images=\"Nougat64,Pie64\"",
+                "bst.instance.Nougat64.status.adb_port=\"61234\"",
+            ],
+            configuredKeyword: null);
+        var serials = ConnectFeatureService.ParseReadyAdbSerials(
+            """
+            List of devices attached
+            emulator-5556 device product:sdk model:sdk transport_id:1
+            127.0.0.1:16384 offline
+            192.168.1.9:5555 device product:test
+            1234567890ABCDEF device
+            """);
+
+        Assert.Equal("127.0.0.1:61234", blueStacksAddress);
+        Assert.Equal(["emulator-5556", "192.168.1.9:5555"], serials);
+    }
+
+    [Fact]
+    public void ParseReadyAdbSerials_ShouldSkipEmulator5554OnlyWhenMultipleDevicesOnline()
+    {
+        // WPF parity (DetectAdbConfig): with multiple online devices the default first console
+        // serial emulator-5554 is skipped, but it stays a valid candidate as the only device.
+        var single = ConnectFeatureService.ParseReadyAdbSerials(
+            """
+            List of devices attached
+            emulator-5554 device product:sdk model:sdk transport_id:1
+            """);
+        Assert.Equal(["emulator-5554"], single);
+
+        var multiple = ConnectFeatureService.ParseReadyAdbSerials(
+            """
+            List of devices attached
+            emulator-5554 device product:sdk model:sdk transport_id:1
+            emulator-5556 device product:sdk model:sdk transport_id:2
+            """);
+        Assert.Equal(["emulator-5556"], multiple);
+
+        var placeholderOnly = ConnectFeatureService.ParseReadyAdbSerials(
+            """
+            List of devices attached
+            emulator-5554 device
+            1234567890ABCDEF device
+            """);
+        Assert.Empty(placeholderOnly);
+    }
+
+    [Fact]
     public async Task RemoteControlEnsureConnected_ShouldCompareEffectiveAdbPath_WhenBundledAdbEnabled()
     {
         if (!OperatingSystem.IsMacOS())
@@ -2092,13 +2857,15 @@ public sealed class ConnectionLifecycleRegressionTests
             UnifiedConfigurationService config,
             UnifiedSessionService session,
             IMaaCoreBridge bridge,
-            UiLogService log)
+            UiLogService log,
+            ToggleFailingConfigStore configStore)
         {
             Root = root;
             Config = config;
             Session = session;
             Bridge = bridge;
             Log = log;
+            ConfigStore = configStore;
         }
 
         public string Root { get; }
@@ -2111,13 +2878,16 @@ public sealed class ConnectionLifecycleRegressionTests
 
         public UiLogService Log { get; }
 
+        public ToggleFailingConfigStore ConfigStore { get; }
+
         public static async Task<SessionFixture> CreateAsync(IMaaCoreBridge bridge)
         {
             var root = Path.Combine(Path.GetTempPath(), "maaunified-session-lifecycle-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(root);
             var log = new UiLogService();
+            var configStore = new ToggleFailingConfigStore(root);
             var config = new UnifiedConfigurationService(
-                new AvaloniaJsonConfigStore(root),
+                configStore,
                 new GuiNewJsonConfigImporter(),
                 new GuiJsonConfigImporter(),
                 log,
@@ -2133,7 +2903,8 @@ public sealed class ConnectionLifecycleRegressionTests
                 config,
                 new UnifiedSessionService(bridge, config, log, new SessionStateMachine()),
                 bridge,
-                log);
+                log,
+                configStore);
         }
 
         public async ValueTask DisposeAsync()
@@ -2148,6 +2919,34 @@ public sealed class ConnectionLifecycleRegressionTests
                 // Keep temporary files for local diagnosis.
             }
         }
+    }
+
+    private sealed class ToggleFailingConfigStore(string root) : IUnifiedConfigStore
+    {
+        private readonly AvaloniaJsonConfigStore _inner = new(root);
+
+        public bool FailSaves { get; set; }
+
+        public string ConfigPath => _inner.ConfigPath;
+
+        public bool Exists() => _inner.Exists();
+
+        public Task<UnifiedConfig?> LoadAsync(CancellationToken cancellationToken = default)
+            => _inner.LoadAsync(cancellationToken);
+
+        public Task SaveAsync(UnifiedConfig config, CancellationToken cancellationToken = default)
+            => FailSaves
+                ? Task.FromException(new IOException("Synthetic config save failure."))
+                : _inner.SaveAsync(config, cancellationToken);
+
+        public Task BackupAsync(string suffix, CancellationToken cancellationToken = default)
+            => _inner.BackupAsync(suffix, cancellationToken);
+
+        public Task BackupSanitizedAsync(
+            UnifiedConfig config,
+            string suffix,
+            CancellationToken cancellationToken = default)
+            => _inner.BackupSanitizedAsync(config, suffix, cancellationToken);
     }
 
     private sealed class ScriptedBridge : IMaaCoreBridge, IMaaCoreBridgeRecovery
@@ -2183,6 +2982,8 @@ public sealed class ConnectionLifecycleRegressionTests
         public Queue<CoreResult<bool>> ConnectResults { get; } = new();
 
         public Queue<CoreResult<bool>> ApplyInstanceOptionsResults { get; } = new();
+
+        public CoreCallbackEvent? ScreencapCallback { get; set; }
 
         public Task<CoreResult<CoreInitializeInfo>> InitializeAsync(CoreInitializeRequest request, CancellationToken cancellationToken = default)
             => Task.FromResult(CoreResult<CoreInitializeInfo>.Ok(new CoreInitializeInfo(request.BaseDirectory, "fake", "fake", request.ClientType)));
@@ -2253,6 +3054,7 @@ public sealed class ConnectionLifecycleRegressionTests
 
         public Task<CoreResult<bool>> StartAsync(CancellationToken cancellationToken = default)
         {
+            StartCallCount++;
             _running = _connected;
             return Task.FromResult(_running
                 ? CoreResult<bool>.Ok(true)
@@ -2283,6 +3085,12 @@ public sealed class ConnectionLifecycleRegressionTests
 
         public CancellationTokenSource? StatusProbeCancellationToTrigger { get; set; }
 
+        public bool? RuntimeRunningOverride { get; set; }
+
+        public int ReloadResourceCallCount { get; private set; }
+
+        public string? LastReloadClientType { get; private set; }
+
         public Task<CoreResult<CoreRuntimeStatus>> GetRuntimeStatusAsync(CancellationToken cancellationToken = default)
         {
             if (StatusProbeCancellationToTrigger is not null)
@@ -2293,7 +3101,44 @@ public sealed class ConnectionLifecycleRegressionTests
                 cancellationToken.ThrowIfCancellationRequested();
             }
 
-            return Task.FromResult(CoreResult<CoreRuntimeStatus>.Ok(new CoreRuntimeStatus(true, _connected, _running)));
+            return Task.FromResult(CoreResult<CoreRuntimeStatus>.Ok(new CoreRuntimeStatus(true, _connected, RuntimeRunningOverride ?? _running)));
+        }
+
+        public TaskCompletionSource<bool>? ReloadResourceCompletion { get; set; }
+
+        public TaskCompletionSource<bool> ReloadResourceStarted { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        private readonly object _reloadRecordGate = new();
+        private readonly List<string?> _reloadedClientTypes = [];
+
+        public IReadOnlyList<string?> ReloadedClientTypes
+        {
+            get
+            {
+                lock (_reloadRecordGate)
+                {
+                    return _reloadedClientTypes.ToArray();
+                }
+            }
+        }
+
+        public async Task<CoreResult<bool>> ReloadResourceAsync(string? clientType = null, CancellationToken cancellationToken = default)
+        {
+            lock (_reloadRecordGate)
+            {
+                ReloadResourceCallCount++;
+                LastReloadClientType = clientType;
+                _reloadedClientTypes.Add(clientType);
+            }
+
+            ReloadResourceStarted.TrySetResult(true);
+            if (ReloadResourceCompletion is { } completion)
+            {
+                await completion.Task.WaitAsync(cancellationToken);
+            }
+
+            return CoreResult<bool>.Ok(true);
         }
 
         public Task<CoreResult<bool>> AttachWindowAsync(CoreAttachWindowRequest request, CancellationToken cancellationToken = default)
@@ -2302,8 +3147,22 @@ public sealed class ConnectionLifecycleRegressionTests
         public Task<CoreResult<byte[]>> GetImageAsync(CancellationToken cancellationToken = default)
             => Task.FromResult(CoreResult<byte[]>.Fail(new CoreError(CoreErrorCode.GetImageFailed, "not supported")));
 
-        public Task<CoreResult<byte[]>> GetImageBgrAsync(bool forceScreencap = false, CancellationToken cancellationToken = default)
-            => Task.FromResult(CoreResult<byte[]>.Ok([1, 2, 3]));
+        public int ImageBgrCallCount { get; private set; }
+
+        public int StartCallCount { get; private set; }
+
+        public async Task<CoreResult<byte[]>> GetImageBgrAsync(bool forceScreencap = false, CancellationToken cancellationToken = default)
+        {
+            ImageBgrCallCount++;
+            if (ScreencapCallback is { } callback)
+            {
+                ScreencapCallback = null;
+                PublishCallback(callback);
+                await Task.Delay(50, cancellationToken);
+            }
+
+            return CoreResult<byte[]>.Ok([1, 2, 3]);
+        }
 
         public void PublishCallback(CoreCallbackEvent callback)
         {

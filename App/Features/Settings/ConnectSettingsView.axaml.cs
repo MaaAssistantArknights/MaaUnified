@@ -211,6 +211,13 @@ public partial class ConnectSettingsView : UserControl
                 vm.ConnectAddress = testResult.SuccessfulAddress;
             }
 
+            if (vm.AutoDetect && !vm.AlwaysAutoDetect)
+            {
+                vm.AutoDetect = false;
+            }
+
+            vm.FastestScreencapMethod = testResult.FastestScreencapMethod ?? string.Empty;
+
             var elapsedSamples = testResult.Screenshot?.SampleMilliseconds ?? [];
             for (var i = 0; i < elapsedSamples.Count; i++)
             {
@@ -228,6 +235,21 @@ public partial class ConnectSettingsView : UserControl
             var avg = (long)Math.Round(elapsedSamples.Average(), MidpointRounding.AwayFromZero);
             vm.UpdateScreencapCost(min, avg, max, DateTimeOffset.Now);
             vm.TestLinkInfo = vm.ScreencapCost;
+            var expectedExtrasMethod = vm.ConnectConfig switch
+            {
+                "MuMuEmulator12" when vm.MuMu12ExtrasEnabled => "MumuExtras",
+                "LDPlayer" when vm.LdPlayerExtrasEnabled => "LDExtras",
+                _ => null,
+            };
+            if (expectedExtrasMethod is not null
+                && !string.Equals(vm.FastestScreencapMethod, expectedExtrasMethod, StringComparison.Ordinal))
+            {
+                var actualMethod = string.IsNullOrWhiteSpace(vm.FastestScreencapMethod)
+                    ? "<unknown>"
+                    : vm.FastestScreencapMethod;
+                vm.TestLinkInfo = $"{vm.ScreencapCost}\nExpected {expectedExtrasMethod}, actual {actualMethod}.";
+                vm.TestLinkInfoSeverity = TestLinkInfoSeverity.Error;
+            }
             LogScreenshotTestEvent(
                 "summary",
                 vm,

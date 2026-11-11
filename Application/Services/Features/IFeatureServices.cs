@@ -63,7 +63,8 @@ public sealed record ConnectionScreenshotTestOperationResult(
     UiOperationResult Result,
     ConnectionScreenshotTestResult? Screenshot,
     string? SuccessfulAddress,
-    IReadOnlyList<ConnectionCandidateAttempt> CandidateFailures)
+    IReadOnlyList<ConnectionCandidateAttempt> CandidateFailures,
+    string? FastestScreencapMethod = null)
 {
     public bool Success => Result.Success;
 }

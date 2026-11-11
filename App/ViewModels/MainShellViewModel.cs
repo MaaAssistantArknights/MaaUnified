@@ -71,6 +71,8 @@ public sealed class MainShellViewModel : ObservableObject
     private ToolboxPageViewModel? _toolboxPage;
     private SettingsPageViewModel? _settingsPage;
     private bool _syncingConnectionState;
+    private int _clientResourceReloadVersion;
+    private string? _lastObservedClientType;
     private bool _sessionCallbackPumpStarted;
     private bool _startupLaunchBehaviorExecuted;
     private int _timerScheduleProcessing;
@@ -134,6 +136,7 @@ public sealed class MainShellViewModel : ObservableObject
 
         _connectionGameSharedState = new ConnectionGameSharedStateViewModel();
         _overlaySharedState = OverlaySharedStateRegistry.Get(runtime);
+        _lastObservedClientType = _connectionGameSharedState.ClientType;
         _connectionGameSharedState.PropertyChanged += OnSharedConnectionStateChanged;
 
         RootTexts = new RootLocalizationTextMap("Root.Localization.MainShell");
@@ -1616,7 +1619,8 @@ public sealed class MainShellViewModel : ObservableObject
             .Select(candidate => _connectionGameSharedState.BuildCoreConnectionInfo(
                 address: candidate,
                 effectiveAdbPath: adbPath,
-                timeout: TimeSpan.FromSeconds(20)))
+                timeout: TimeSpan.FromSeconds(5),
+                discoverRuntimeCandidates: _connectionGameSharedState.AutoDetect || _connectionGameSharedState.AlwaysAutoDetect))
             .ToList();
         _runtime.LogService.Debug(
             $"Connect candidates prepared: count={candidates.Count}, config={_connectionGameSharedState.ConnectConfig}, adb={adbPath ?? "<null>"}");
@@ -1628,6 +1632,11 @@ public sealed class MainShellViewModel : ObservableObject
             if (!string.IsNullOrWhiteSpace(result.SuccessfulAddress))
             {
                 _connectionGameSharedState.ConnectAddress = result.SuccessfulAddress;
+            }
+
+            if (_connectionGameSharedState.AutoDetect && !_connectionGameSharedState.AlwaysAutoDetect)
+            {
+                _connectionGameSharedState.AutoDetect = false;
             }
 
             return result.Result;
@@ -2550,7 +2559,9 @@ public sealed class MainShellViewModel : ObservableObject
 
     private async Task HandleSettingsConfigurationContextChangedAsync(ConfigurationContextChangedEventArgs change)
     {
+        var previousClientType = _connectionGameSharedState.ClientType;
         SyncConnectionFromProfile();
+        await ReloadClientResourceIfChangedAsync(previousClientType, _connectionGameSharedState.ClientType);
         RefreshConfigValidationState(_runtime.ConfigurationService.CurrentValidationIssues);
 
         switch (change.Reason)
@@ -2607,6 +2618,7 @@ public sealed class MainShellViewModel : ObservableObject
         finally
         {
             _syncingConnectionState = false;
+            _lastObservedClientType = _connectionGameSharedState.ClientType;
         }
     }
 
@@ -2634,6 +2646,25 @@ public sealed class MainShellViewModel : ObservableObject
 
         if (!TryParseScreencapCost(callback.PayloadJson, out var min, out var avg, out var max))
         {
+            var status = _runtime.SessionService.LastConnectionCallbackStatus;
+            if (status is null)
+            {
+                return;
+            }
+
+            if (string.Equals(status.What, "Connected", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(status.What, "Reconnected", StringComparison.OrdinalIgnoreCase))
+            {
+                if (!string.IsNullOrWhiteSpace(status.Address))
+                {
+                    _connectionGameSharedState.ConnectAddress = status.Address;
+                }
+            }
+            else if (string.Equals(status.What, "FastestWayToScreencap", StringComparison.OrdinalIgnoreCase))
+            {
+                _connectionGameSharedState.FastestScreencapMethod = status.Method ?? string.Empty;
+            }
+
             return;
         }
 
@@ -2651,6 +2682,65 @@ public sealed class MainShellViewModel : ObservableObject
         {
             SyncConnectionToProfile(e.PropertyName);
         }
+
+        if (string.Equals(e.PropertyName, nameof(ConnectionGameSharedStateViewModel.ClientType), StringComparison.Ordinal))
+        {
+            var previousClientType = _lastObservedClientType;
+            _lastObservedClientType = _connectionGameSharedState.ClientType;
+            _ = ReloadClientResourceIfChangedAsync(previousClientType, _connectionGameSharedState.ClientType);
+        }
+    }
+
+    private async Task ReloadClientResourceIfChangedAsync(string? previousClientType, string? currentClientType)
+    {
+        if (!IsClientResourceReloadRequired(previousClientType, currentClientType))
+        {
+            return;
+        }
+
+        var requestedClientType = currentClientType!.Trim();
+        var version = Interlocked.Increment(ref _clientResourceReloadVersion);
+        var result = await _runtime.SessionService.ReloadResourceWhenIdleAsync(
+            requestedClientType,
+            waitTimeout: TimeSpan.FromSeconds(30),
+            isStillRequested: () => Volatile.Read(ref _clientResourceReloadVersion) == version);
+        if (!result.Success
+            && result.Error?.Code is not CoreErrorCode.NotInitialized
+                and not CoreErrorCode.NotSupported
+                and not CoreErrorCode.Disposed)
+        {
+            _runtime.LogService.Warn($"Client resource reload failed for `{currentClientType}`: {result.Error?.Message}");
+        }
+    }
+
+    internal static bool IsClientResourceReloadRequired(string? previousClientType, string? currentClientType)
+    {
+        if (string.IsNullOrWhiteSpace(currentClientType))
+        {
+            return false;
+        }
+
+        var previous = previousClientType?.Trim();
+        var current = currentClientType.Trim();
+        if (string.IsNullOrWhiteSpace(previous))
+        {
+            return true;
+        }
+
+        if (string.Equals(previous, current, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        // WPF parity (GameSettingsUserControlModel.NeedRestartAfterClientTypeChange): switching
+        // between Official and Bilibili reuses the same resource set and needs no reload.
+        return !(IsOfficialOrBilibiliClientType(previous) && IsOfficialOrBilibiliClientType(current));
+    }
+
+    private static bool IsOfficialOrBilibiliClientType(string clientType)
+    {
+        return string.Equals(clientType, "Official", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(clientType, "Bilibili", StringComparison.OrdinalIgnoreCase);
     }
 
     private void StartTimerScheduler()
@@ -2856,6 +2946,7 @@ public sealed class MainShellViewModel : ObservableObject
             return true;
         }
 
+        var previousClientType = _connectionGameSharedState.ClientType;
         try
         {
             var failedNames = await FlushConfigurationSavesForCloseAsync(cancellationToken);
@@ -2882,6 +2973,7 @@ public sealed class MainShellViewModel : ObservableObject
             await TaskQueuePage.ReloadConfigurationContextAsync(cancellationToken: cancellationToken);
             await TaskQueuePage.WaitForPendingBindingAsync(cancellationToken);
             SyncConnectionFromProfile();
+            await ReloadClientResourceIfChangedAsync(previousClientType, _connectionGameSharedState.ClientType);
             await RecordEventAsync(
                 "Timer.Schedule.SwitchProfile",
                 $"slot={slot.Index}; profile={targetProfile}",

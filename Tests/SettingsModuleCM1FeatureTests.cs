@@ -289,7 +289,7 @@ public sealed class SettingsModuleCM1FeatureTests
         Assert.Equal("192.168.0.252:5555", first.Address);
         Assert.Equal("General", first.ConnectConfig);
         Assert.Equal("/resolved/adb", first.AdbPath);
-        Assert.Equal(TimeSpan.FromSeconds(20), first.Timeout);
+        Assert.Equal(TimeSpan.FromSeconds(5), first.Timeout);
         Assert.NotNull(first.Extras);
         Assert.Equal("YoStarEN", first.Extras!.ClientType);
         Assert.Equal("MaaFwAdb", first.Extras.TouchMode);
@@ -348,7 +348,7 @@ public sealed class SettingsModuleCM1FeatureTests
         Assert.Equal("minitouch", candidate.Extras?.TouchMode);
         Assert.False(candidate.Extras?.AdbLiteEnabled);
         Assert.Null(candidate.Extras?.FallbackStrategy);
-        Assert.Equal(TimeSpan.FromSeconds(20), candidate.Timeout);
+        Assert.Equal(TimeSpan.FromSeconds(5), candidate.Timeout);
     }
 
     [Fact]

@@ -7,6 +7,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Microsoft.Win32;
 using MAAUnified.Application.Configuration;
 using MAAUnified.Application.Models;
 using MAAUnified.Application.Models.TaskParams;
@@ -39,9 +40,11 @@ public sealed class ConnectFeatureService : IConnectFeatureService
     private MacRawByNcRiskForceRunCacheEntry? _macRawByNcRiskForceRunCache;
     private const string DefaultTouchMode = "MaaFwAdb";
     private static readonly TimeSpan DefaultConnectBudget = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan DefaultCandidateConnectTimeout = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan LifecycleOperationWaitTimeout = TimeSpan.FromMilliseconds(250);
     private static readonly TimeSpan QuickTcpProbeTimeout = TimeSpan.FromMilliseconds(750);
     private static readonly TimeSpan QuickAdbDevicesTimeout = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan FastestScreencapCallbackGracePeriod = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan MacRawByNcForceRunCacheTtl = TimeSpan.FromMinutes(5);
     private const string MaaFwAdbTouchMode = "MaaFwAdb";
     private const string MacRawByNcGuardAppliedRecommendedStrategy = "temporary-macos-rawbync-guard:applied-recommended-profile";
@@ -81,6 +84,8 @@ public sealed class ConnectFeatureService : IConnectFeatureService
             ?? NoOpMacRawByNcRiskConnectionPromptService.Instance;
         _enableQuickConnectionPrecheck = enableQuickConnectionPrecheck;
     }
+
+    internal Func<IReadOnlyList<EmulatorRuntimeInfo>>? EmulatorDiscoveryOverride { get; set; }
 
     public IMacRawByNcRiskConnectionPromptService MacRawByNcRiskPromptService
     {
@@ -499,7 +504,7 @@ public sealed class ConnectFeatureService : IConnectFeatureService
         bool includeConfiguredAddress = true,
         TimeSpan? timeout = null)
     {
-        var normalizedConfiguredAddress = NormalizeText(configuredAddress);
+        var normalizedConfiguredAddress = NormalizeAddress(configuredAddress);
         var normalizedConnectConfig = NormalizeText(connectConfig);
         var addresses = BuildConnectAddressCandidates(
             normalizedConfiguredAddress,
@@ -520,7 +525,8 @@ public sealed class ConnectFeatureService : IConnectFeatureService
                 normalizedConnectConfig,
                 NormalizeNullableText(adbPath),
                 NormalizeConnectionExtras(extras ?? CoreConnectionExtras.Empty),
-                timeout ?? DefaultConnectBudget));
+                NormalizeCandidateTimeout(timeout),
+                DiscoverRuntimeCandidates: autoDetect || alwaysAutoDetect));
         }
 
         return UiOperationResult<IReadOnlyList<CoreConnectionInfo>>.Ok(candidates, "Connection candidates built.");
@@ -567,45 +573,114 @@ public sealed class ConnectFeatureService : IConnectFeatureService
         }
 
         sampleCount = Math.Clamp(sampleCount, 1, 10);
-        var connect = await ConnectCandidatesCoreAsync(candidates, "ScreenshotTest", operation.Token).ConfigureAwait(false);
-        if (!connect.Success)
+        var screencapMethodGate = new object();
+        string? fastestScreencapMethod = null;
+        var fastestScreencapMethodProjected = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        string? ReadFastestScreencapMethod()
         {
-            return new ConnectionScreenshotTestOperationResult(
-                connect.Result,
-                null,
-                connect.SuccessfulAddress,
-                connect.CandidateFailures);
+            lock (screencapMethodGate)
+            {
+                return fastestScreencapMethod;
+            }
         }
 
-        var samples = new List<long>(sampleCount);
-        byte[]? latestImage = null;
-        for (var index = 0; index < sampleCount; index++)
+        void CaptureScreencapMethod(SessionCallbackEnvelope envelope)
         {
-            var watch = System.Diagnostics.Stopwatch.StartNew();
-            var imageResult = await _bridge.GetImageBgrAsync(forceScreencap: true, operation.Token).ConfigureAwait(false);
-            watch.Stop();
-            if (!imageResult.Success || imageResult.Value is null || imageResult.Value.Length == 0)
+            if (!string.Equals(envelope.Callback.MsgName, "ConnectionInfo", StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(envelope.What, "FastestWayToScreencap", StringComparison.OrdinalIgnoreCase))
             {
-                var failure = UiOperationResult.Fail(
-                    imageResult.Error?.Code.ToString() ?? UiErrorCode.ConnectFailed,
-                    imageResult.Error?.Message ?? "Failed to capture screenshot.",
-                    imageResult.Error?.NativeDetails ?? imageResult.Error?.Exception);
-                return new ConnectionScreenshotTestOperationResult(
-                    failure,
-                    null,
-                    connect.SuccessfulAddress,
-                    connect.CandidateFailures);
+                return;
             }
 
-            latestImage = imageResult.Value;
-            samples.Add(watch.ElapsedMilliseconds);
+            lock (screencapMethodGate)
+            {
+                fastestScreencapMethod = ReadCallbackDetail(envelope.Payload, "method");
+            }
+
+            fastestScreencapMethodProjected.TrySetResult();
         }
 
-        return new ConnectionScreenshotTestOperationResult(
-            UiOperationResult.Ok("Screenshot test completed."),
-            new ConnectionScreenshotTestResult(samples, latestImage ?? []),
-            connect.SuccessfulAddress,
-            connect.CandidateFailures);
+        _sessionService.CallbackProjected += CaptureScreencapMethod;
+        try
+        {
+            var connect = await ConnectCandidatesCoreAsync(candidates, "ScreenshotTest", operation.Token).ConfigureAwait(false);
+            if (!connect.Success)
+            {
+                return new ConnectionScreenshotTestOperationResult(
+                    connect.Result,
+                    null,
+                    connect.SuccessfulAddress,
+                    connect.CandidateFailures,
+                    ReadFastestScreencapMethod());
+            }
+
+            var samples = new List<long>(sampleCount);
+            byte[]? latestImage = null;
+            for (var index = 0; index < sampleCount; index++)
+            {
+                var watch = System.Diagnostics.Stopwatch.StartNew();
+                var imageResult = await _bridge.GetImageBgrAsync(forceScreencap: true, operation.Token).ConfigureAwait(false);
+                watch.Stop();
+                if (!imageResult.Success || imageResult.Value is null || imageResult.Value.Length == 0)
+                {
+                    var failure = UiOperationResult.Fail(
+                        imageResult.Error?.Code.ToString() ?? UiErrorCode.ConnectFailed,
+                        imageResult.Error?.Message ?? "Failed to capture screenshot.",
+                        imageResult.Error?.NativeDetails ?? imageResult.Error?.Exception);
+                    return new ConnectionScreenshotTestOperationResult(
+                        failure,
+                        null,
+                        connect.SuccessfulAddress,
+                        connect.CandidateFailures,
+                        ReadFastestScreencapMethod());
+                }
+
+                latestImage = imageResult.Value;
+                samples.Add(watch.ElapsedMilliseconds);
+            }
+
+            var connectedCandidate = candidates.FirstOrDefault(
+                candidate => string.Equals(candidate.Address, connect.SuccessfulAddress, StringComparison.OrdinalIgnoreCase))
+                ?? candidates.FirstOrDefault();
+            var expectedExtrasMethod = ResolveExpectedExtrasScreencapMethod(connectedCandidate);
+            var capturedMethod = ReadFastestScreencapMethod();
+            if (expectedExtrasMethod is not null
+                && !string.Equals(capturedMethod, expectedExtrasMethod, StringComparison.Ordinal))
+            {
+                // The FastestWayToScreencap callback travels through the asynchronous callback
+                // channel, so the projection can lag behind the last forced screencap. Give the
+                // pump a bounded grace period before concluding the enhancement is inactive.
+                await Task.WhenAny(
+                    fastestScreencapMethodProjected.Task,
+                    Task.Delay(FastestScreencapCallbackGracePeriod, CancellationToken.None)).ConfigureAwait(false);
+                capturedMethod = ReadFastestScreencapMethod();
+            }
+
+            if (expectedExtrasMethod is not null
+                && !string.Equals(capturedMethod, expectedExtrasMethod, StringComparison.Ordinal))
+            {
+                var actualMethod = string.IsNullOrWhiteSpace(capturedMethod) ? "<unknown>" : capturedMethod;
+                return new ConnectionScreenshotTestOperationResult(
+                    UiOperationResult.Fail(
+                        UiErrorCode.ConnectFailed,
+                        $"Configured screenshot enhancement was not active. Expected {expectedExtrasMethod}, actual {actualMethod}."),
+                    null,
+                    connect.SuccessfulAddress,
+                    connect.CandidateFailures,
+                    capturedMethod);
+            }
+
+            return new ConnectionScreenshotTestOperationResult(
+                UiOperationResult.Ok("Screenshot test completed."),
+                new ConnectionScreenshotTestResult(samples, latestImage ?? []),
+                connect.SuccessfulAddress,
+                connect.CandidateFailures,
+                capturedMethod);
+        }
+        finally
+        {
+            _sessionService.CallbackProjected -= CaptureScreencapMethod;
+        }
     }
 
     public async Task<UiOperationResult> WaitAndStopAsync(TimeSpan wait, CancellationToken cancellationToken = default)
@@ -678,6 +753,7 @@ public sealed class ConnectFeatureService : IConnectFeatureService
                 []);
         }
 
+        candidates = await ExpandRuntimeConnectionCandidatesAsync(candidates, cancellationToken).ConfigureAwait(false);
         UiOperationResult? lastFailure = null;
         var candidateFailures = new List<ConnectionCandidateAttempt>();
         var riskPromptSession = new MacRawByNcRiskPromptSession();
@@ -700,7 +776,9 @@ public sealed class ConnectFeatureService : IConnectFeatureService
 
             if (result.Success)
             {
-                return new ConnectionConnectOperationResult(result, candidate.Address, candidateFailures);
+                await DisableOneShotAutoDetectAfterSuccessAsync().ConfigureAwait(false);
+                var successfulAddress = _sessionService.LastSuccessfulConnectionInfo?.Address ?? candidate.Address;
+                return new ConnectionConnectOperationResult(result, successfulAddress, candidateFailures);
             }
 
             lastFailure = result;
@@ -936,13 +1014,13 @@ public sealed class ConnectFeatureService : IConnectFeatureService
     {
         var normalized = connectionInfo with
         {
-            Address = NormalizeText(connectionInfo.Address),
+            Address = NormalizeAddress(connectionInfo.Address),
             ConnectConfig = NormalizeText(connectionInfo.ConnectConfig),
         };
         var extras = normalized.Extras ?? CoreConnectionExtras.Empty;
 
         return new CoreConnectionInfo(
-            NormalizeText(normalized.Address),
+            NormalizeAddress(normalized.Address),
             NormalizeText(normalized.ConnectConfig),
             NormalizeNullableText(effectiveAdbPath),
             NormalizeConnectionExtras(extras),
@@ -1512,7 +1590,7 @@ public sealed class ConnectFeatureService : IConnectFeatureService
     {
         host = string.Empty;
         port = 0;
-        var normalized = NormalizeText(address);
+        var normalized = NormalizeAddress(address);
         var separator = normalized.LastIndexOf(':');
         if (separator <= 0 || separator == normalized.Length - 1)
         {
@@ -1731,6 +1809,207 @@ public sealed class ConnectFeatureService : IConnectFeatureService
         return candidates;
     }
 
+    internal async Task<IReadOnlyList<CoreConnectionInfo>> ExpandRuntimeConnectionCandidatesAsync(
+        IReadOnlyList<CoreConnectionInfo> candidates,
+        CancellationToken cancellationToken)
+    {
+        if (candidates.Count == 0
+            || candidates[0] is not { } template
+            || !template.DiscoverRuntimeCandidates)
+        {
+            return candidates;
+        }
+
+        var discoveredEmulators = EmulatorDiscoveryOverride?.Invoke()
+            ?? EmulatorRuntimeDiscovery.DetectRunningEmulators();
+        EmulatorRuntimeInfo? detectedEmulator = null;
+        if (discoveredEmulators.Count > 0)
+        {
+            detectedEmulator = discoveredEmulators[0];
+            if (discoveredEmulators.Count > 1)
+            {
+                _logService?.Warn(
+                    $"Runtime discovery found multiple running emulators ({string.Join(", ", discoveredEmulators.Select(emulator => emulator.EmulatorId))}); using {detectedEmulator.EmulatorId}.");
+            }
+
+            _logService?.Info(
+                $"Runtime discovery detected emulator {detectedEmulator.EmulatorId}: adb={detectedEmulator.AdbPath ?? "<unresolved>"}");
+        }
+
+        // WPF parity (DetectAdbConfig): a running emulator overrides the connect config, and its
+        // resolved bundled ADB is preferred over the configured one for runtime discovery.
+        var effectiveConfig = detectedEmulator?.EmulatorId is { Length: > 0 } detectedConfig
+            ? detectedConfig
+            : template.ConnectConfig;
+        var effectiveAdbPath = !string.IsNullOrWhiteSpace(detectedEmulator?.AdbPath)
+            ? detectedEmulator!.AdbPath
+            : template.AdbPath;
+
+        var discovered = new List<string>();
+        if (string.Equals(effectiveConfig, "BlueStacks", StringComparison.OrdinalIgnoreCase))
+        {
+            AddAddressCandidate(discovered, TryReadBlueStacksDynamicAddress());
+        }
+
+        var adbDevices = await RunAdbPrecheckCommandAsync(
+            effectiveAdbPath,
+            "adb devices -l",
+            ["devices", "-l"],
+            cancellationToken).ConfigureAwait(false);
+        if (adbDevices.Success)
+        {
+            foreach (var serial in ParseReadyAdbSerials(adbDevices.StandardOutput))
+            {
+                AddAddressCandidate(discovered, serial);
+            }
+        }
+
+        if (discovered.Count == 0 && detectedEmulator is not null)
+        {
+            // WPF parity: when no online serial was discovered, fall back to the first default
+            // address of the detected emulator config.
+            var defaultAddresses = GetDefaultAddresses(effectiveConfig);
+            if (defaultAddresses.Count > 0)
+            {
+                AddAddressCandidate(discovered, defaultAddresses[0]);
+            }
+        }
+
+        if (discovered.Count == 0 && detectedEmulator is null)
+        {
+            return candidates;
+        }
+
+        var effectiveTemplate = template with
+        {
+            AdbPath = string.IsNullOrWhiteSpace(effectiveAdbPath) ? template.AdbPath : effectiveAdbPath,
+            ConnectConfig = string.IsNullOrWhiteSpace(effectiveConfig) ? template.ConnectConfig : effectiveConfig,
+        };
+        var expanded = new List<CoreConnectionInfo>(candidates.Count + discovered.Count) { effectiveTemplate };
+        foreach (var address in discovered)
+        {
+            if (expanded.Any(candidate => string.Equals(candidate.Address, address, StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+
+            var existing = candidates.FirstOrDefault(
+                candidate => string.Equals(candidate.Address, address, StringComparison.OrdinalIgnoreCase));
+            expanded.Add(existing is { } matched
+                ? matched with
+                {
+                    AdbPath = string.IsNullOrWhiteSpace(matched.AdbPath) ? effectiveTemplate.AdbPath : matched.AdbPath,
+                    ConnectConfig = effectiveTemplate.ConnectConfig,
+                }
+                : effectiveTemplate with { Address = address });
+        }
+
+        expanded.AddRange(candidates.Skip(1).Where(
+            candidate => !expanded.Any(existing => string.Equals(existing.Address, candidate.Address, StringComparison.OrdinalIgnoreCase))));
+        return expanded;
+    }
+
+    internal static IReadOnlyList<string> ParseReadyAdbSerials(string? output)
+    {
+        if (string.IsNullOrWhiteSpace(output))
+        {
+            return [];
+        }
+
+        var serials = new List<string>();
+        foreach (var line in output.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var columns = line.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+            if (columns.Length < 2
+                || !string.Equals(columns[1], "device", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            AddAddressCandidate(serials, columns[0]);
+        }
+
+        // WPF parity (DetectAdbConfig): "1234567890ABCDEF" is an offline placeholder and never
+        // a candidate. When multiple devices are online WPF also skips the default first
+        // console serial "emulator-5554", but keeps it when it is the only online device.
+        var effective = serials.Where(
+            serial => !string.Equals(serial, "1234567890ABCDEF", StringComparison.OrdinalIgnoreCase));
+        if (serials.Count > 1)
+        {
+            effective = effective.Where(
+                serial => !string.Equals(serial, "emulator-5554", StringComparison.OrdinalIgnoreCase));
+        }
+
+        return [.. effective];
+    }
+
+    private string? TryReadBlueStacksDynamicAddress()
+    {
+        var configuredPath = _configService.TryGetCurrentProfile(out var profile)
+            ? ReadProfileString(profile, "BluestacksConfigPath", ConfigurationKeys.BluestacksConfigPath)
+            : null;
+        var keyword = profile is not null
+            ? ReadProfileString(profile, "BluestacksConfigKeyword", ConfigurationKeys.BluestacksConfigKeyword)
+            : null;
+        var path = configuredPath;
+        if (string.IsNullOrWhiteSpace(path) && OperatingSystem.IsWindows())
+        {
+            try
+            {
+                using var key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\BlueStacks_nxt");
+                if (key?.GetValue("UserDefinedDir") is string directory && !string.IsNullOrWhiteSpace(directory))
+                {
+                    path = Path.Combine(directory, "bluestacks.conf");
+                }
+            }
+            catch
+            {
+                // Fall through to the static BlueStacks ports.
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+        {
+            return null;
+        }
+
+        try
+        {
+            return ParseBlueStacksDynamicAddress(File.ReadLines(path), keyword);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    internal static string? ParseBlueStacksDynamicAddress(IEnumerable<string> lines, string? configuredKeyword)
+    {
+        var snapshot = lines.ToArray();
+        var keyword = NormalizeText(configuredKeyword);
+        if (string.IsNullOrWhiteSpace(keyword))
+        {
+            var installedImages = snapshot.FirstOrDefault(line => line.StartsWith("bst.installed_images", StringComparison.Ordinal));
+            var firstImage = installedImages?.Split('"', StringSplitOptions.RemoveEmptyEntries).ElementAtOrDefault(1)?
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).FirstOrDefault();
+            if (!string.IsNullOrWhiteSpace(firstImage))
+            {
+                keyword = $"bst.instance.{firstImage}.status.adb_port";
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(keyword))
+        {
+            return null;
+        }
+
+        var portLine = snapshot.FirstOrDefault(line => line.StartsWith(keyword, StringComparison.Ordinal));
+        var port = portLine?.Split('"', StringSplitOptions.RemoveEmptyEntries).ElementAtOrDefault(1);
+        return int.TryParse(port, out var parsedPort) && parsedPort is > 0 and <= 65535
+            ? $"127.0.0.1:{parsedPort}"
+            : null;
+    }
+
     private static void AddAddressCandidate(List<string> candidates, string? address)
     {
         var normalized = NormalizeText(address);
@@ -1763,7 +2042,69 @@ public sealed class ConnectFeatureService : IConnectFeatureService
             ? timeout
             : DefaultConnectBudget;
 
+    private static TimeSpan NormalizeCandidateTimeout(TimeSpan? requested)
+        => requested is { } timeout && timeout > TimeSpan.Zero && timeout < DefaultCandidateConnectTimeout
+            ? timeout
+            : DefaultCandidateConnectTimeout;
+
     private static string NormalizeText(string? value) => (value ?? string.Empty).Trim();
+
+    private static string NormalizeAddress(string? value)
+        => NormalizeText(value).Replace(" ", string.Empty, StringComparison.Ordinal);
+
+    private async Task DisableOneShotAutoDetectAfterSuccessAsync()
+    {
+        if (!_configService.TryGetCurrentProfile(out var profile)
+            || !ReadProfileBool(profile, "AutoDetect", ConfigurationKeys.AutoDetect, fallback: true)
+            || ReadProfileBool(profile, "AlwaysAutoDetect", ConfigurationKeys.AlwaysAutoDetect))
+        {
+            return;
+        }
+
+        profile.Values["AutoDetect"] = JsonValue.Create(false);
+        try
+        {
+            await _configService.SaveAsync(CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logService?.Warn($"Connected successfully, but disabling one-shot auto-detect could not be persisted: {ex.Message}");
+        }
+    }
+
+    private static string? ReadCallbackDetail(JsonObject? payload, string key)
+    {
+        if (payload?["details"] is not JsonObject details
+            || !details.TryGetPropertyValue(key, out var node)
+            || node is null)
+        {
+            return null;
+        }
+
+        return node is JsonValue value && value.TryGetValue(out string? text)
+            ? NormalizeNullableText(text)
+            : NormalizeNullableText(node.ToString());
+    }
+
+    private static string? ResolveExpectedExtrasScreencapMethod(CoreConnectionInfo? connectionInfo)
+    {
+        var extras = connectionInfo?.Extras;
+        if (extras is null)
+        {
+            return null;
+        }
+
+        if (string.Equals(connectionInfo!.ConnectConfig, "MuMuEmulator12", StringComparison.OrdinalIgnoreCase)
+            && extras.MuMu12ExtrasEnabled)
+        {
+            return "MumuExtras";
+        }
+
+        return string.Equals(connectionInfo.ConnectConfig, "LDPlayer", StringComparison.OrdinalIgnoreCase)
+               && extras.LdPlayerExtrasEnabled
+            ? "LDExtras"
+            : null;
+    }
 
     private static string? NormalizeNullableText(string? value)
     {

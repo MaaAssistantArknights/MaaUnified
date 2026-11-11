@@ -144,6 +144,16 @@ public sealed record SessionCallbackEnvelope(
     }
 }
 
+public sealed record ConnectionCallbackStatus(
+    string What,
+    string? Address = null,
+    string? AdbPath = null,
+    string? ConnectConfig = null,
+    int? ReconnectAttempt = null,
+    int? Width = null,
+    int? Height = null,
+    string? Method = null);
+
 public sealed class UnifiedSessionService
 {
     private static readonly TimeSpan DefaultConnectTimeout = TimeSpan.FromSeconds(30);
@@ -156,6 +166,7 @@ public sealed class UnifiedSessionService
     private readonly object _runOwnerGate = new();
     private readonly object _connectionOperationGate = new();
     private readonly SemaphoreSlim _connectionOperationLock = new(1, 1);
+    private readonly SemaphoreSlim _resourceReloadLock = new(1, 1);
     private readonly Dictionary<int, int> _taskIndexByCoreTaskId = new();
     private bool _taskIndexMappingsBelongToProfileBatch;
     private CoreConnectionInfo? _lastSuccessfulConnectionInfo;
@@ -163,6 +174,10 @@ public sealed class UnifiedSessionService
     private string? _currentRunOwnerDisplayName;
     private CancellationTokenSource? _activeConnectCts;
     private CoreConnectionInfo? _activeConnectionTarget;
+    private CoreConnectionInfo? _activeCallbackConnectionInfo;
+    private CoreConnectionInfo? _previousConnectionTarget;
+    private CoreConnectionInfo? _lastRequestedConnectionTarget;
+    private CoreConnectionInfo? _lastRejectedConnectionTarget;
     private long _activeConnectionGeneration;
     private long _connectionOperationGeneration;
     // Snapshot of the bridge's callback enqueue counter taken at the latest run
@@ -183,6 +198,8 @@ public sealed class UnifiedSessionService
         bool HadExpediteTimes,
         JsonNode? ExpediteTimes);
 
+    private Task _pendingNativeStopTask = Task.CompletedTask;
+
     public UnifiedSessionService(
         IMaaCoreBridge bridge,
         UnifiedConfigurationService configService,
@@ -200,11 +217,15 @@ public sealed class UnifiedSessionService
 
     public CoreConnectionInfo? LastSuccessfulConnectionInfo => _lastSuccessfulConnectionInfo;
 
+    public ConnectionCallbackStatus? LastConnectionCallbackStatus { get; private set; }
+
     public event Action<SessionState>? SessionStateChanged;
 
     public event Action<CoreCallbackEvent>? CallbackReceived;
 
     public event Action<SessionCallbackEnvelope>? CallbackProjected;
+
+    public event Action<ConnectionCallbackStatus>? ConnectionCallbackStatusChanged;
 
     public string? CurrentRunOwner
     {
@@ -406,7 +427,7 @@ public sealed class UnifiedSessionService
         CancellationToken cancellationToken = default)
     {
         var connectionInfo = new CoreConnectionInfo(
-            NormalizeConnectionText(address),
+            NormalizeConnectionAddress(address),
             NormalizeConnectionText(connectConfig),
             NormalizeConnectionPath(adbPath),
             extras,
@@ -436,8 +457,19 @@ public sealed class UnifiedSessionService
                 _activeConnectCts?.Dispose();
                 _activeConnectCts = operationCts;
                 _activeConnectionTarget = connectionInfo;
+                _activeCallbackConnectionInfo = null;
+                _previousConnectionTarget = _lastRequestedConnectionTarget;
+                _lastRequestedConnectionTarget = connectionInfo;
                 _activeConnectionGeneration = generation;
                 _ignoreIdleConnectionCallbacks = false;
+            }
+
+            var pendingNativeStop = PendingNativeStopSnapshot;
+            if (!pendingNativeStop.IsCompleted)
+            {
+                _logService.Info(
+                    $"Session.Connect waiting for pending native stop from a previous disconnect before connect: {BuildConnectionSummary(connectionInfo)}");
+                await pendingNativeStop.WaitAsync(operationToken).ConfigureAwait(false);
             }
 
             if (CurrentState == SessionState.Connected && !LastSuccessfulConnectionInfoMatches(connectionInfo))
@@ -553,9 +585,9 @@ public sealed class UnifiedSessionService
             if (result.Success)
             {
                 _taskQueueTainted = queueRecoveryPending;
-                _lastSuccessfulConnectionInfo = connectionInfo;
+                _lastSuccessfulConnectionInfo = CompleteActiveCallbackConnectionInfo(connectionInfo);
                 MoveToState(SessionState.Connected, "Session.Connect", "connected");
-                _logService.Info($"Connected: {BuildConnectionSummary(connectionInfo)}");
+                _logService.Info($"Connected: {BuildConnectionSummary(_lastSuccessfulConnectionInfo)}");
             }
             else
             {
@@ -586,6 +618,7 @@ public sealed class UnifiedSessionService
                 if (_activeConnectionGeneration == generation)
                 {
                     _activeConnectionTarget = null;
+                    _activeCallbackConnectionInfo = null;
                     _activeConnectionGeneration = 0;
                 }
             }
@@ -1263,6 +1296,13 @@ public sealed class UnifiedSessionService
         await _connectionOperationLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            var pendingNativeStop = PendingNativeStopSnapshot;
+            if (!pendingNativeStop.IsCompleted)
+            {
+                _logService.Info("Session.Start waiting for pending native stop from a previous disconnect before starting tasks.");
+                await pendingNativeStop.WaitAsync(cancellationToken).ConfigureAwait(false);
+            }
+
             if (_taskQueueTainted)
             {
                 return CoreResult<bool>.Fail(CreateReconnectRequiredError());
@@ -1465,7 +1505,8 @@ public sealed class UnifiedSessionService
     public async Task<CoreResult<bool>> ReloadResourceWhenIdleAsync(
         string? clientType = null,
         TimeSpan? waitTimeout = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        Func<bool>? isStillRequested = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var effectiveTimeout = waitTimeout ?? TimeSpan.FromSeconds(30);
@@ -1495,36 +1536,61 @@ public sealed class UnifiedSessionService
                 return waitResult;
             }
 
+            // Serialize concurrent reload requests and re-validate the supersede gate while
+            // holding the lock. Without this an older request could pass the gate, then complete
+            // its native reload after a newer request, leaving the previous client's resources
+            // loaded as the terminal state.
             remaining = deadlineAt - DateTimeOffset.UtcNow;
             if (remaining <= TimeSpan.Zero
-                || !await _connectionOperationLock.WaitAsync(remaining, cancellationToken).ConfigureAwait(false))
+                || !await _resourceReloadLock.WaitAsync(remaining, cancellationToken).ConfigureAwait(false))
             {
                 return ReloadTimeoutFailure();
             }
 
             try
             {
-                if (!await IsReloadSafeSnapshotAsync(cancellationToken).ConfigureAwait(false))
+                if (isStillRequested is not null && !isStillRequested())
                 {
-                    continue;
+                    _logService.Debug(
+                        $"Session.ReloadResource skipped because a newer reload request superseded it before the idle window opened: client={clientType ?? "<current>"}");
+                    return CoreResult<bool>.Ok(true);
                 }
 
-                var reloadResult = await _bridge.ReloadResourceAsync(clientType, cancellationToken).ConfigureAwait(false);
-                if (reloadResult.Success)
+                remaining = deadlineAt - DateTimeOffset.UtcNow;
+                if (remaining <= TimeSpan.Zero
+                    || !await _connectionOperationLock.WaitAsync(remaining, cancellationToken).ConfigureAwait(false))
                 {
-                    _logService.Info($"Session resources reloaded. client={clientType ?? "<current>"}");
-                }
-                else
-                {
-                    _logService.Warn(
-                        $"Session resource reload failed: {reloadResult.Error?.Code} {reloadResult.Error?.Message}");
+                    return ReloadTimeoutFailure();
                 }
 
-                return reloadResult;
+                try
+                {
+                    if (!await IsReloadSafeSnapshotAsync(cancellationToken).ConfigureAwait(false))
+                    {
+                        continue;
+                    }
+
+                    var reloadResult = await _bridge.ReloadResourceAsync(clientType, cancellationToken).ConfigureAwait(false);
+                    if (reloadResult.Success)
+                    {
+                        _logService.Info($"Session resources reloaded. client={clientType ?? "<current>"}");
+                    }
+                    else
+                    {
+                        _logService.Warn(
+                            $"Session resource reload failed: {reloadResult.Error?.Code} {reloadResult.Error?.Message}");
+                    }
+
+                    return reloadResult;
+                }
+                finally
+                {
+                    _connectionOperationLock.Release();
+                }
             }
             finally
             {
-                _connectionOperationLock.Release();
+                _resourceReloadLock.Release();
             }
         }
     }
@@ -1643,6 +1709,7 @@ public sealed class UnifiedSessionService
 
         if (string.Equals(what, "ResolutionGot", StringComparison.OrdinalIgnoreCase))
         {
+            PublishConnectionCallbackStatus(envelope, what);
             if (TryGetCallbackConnectionInfo(envelope.Payload, out var resolutionConnectionInfo))
             {
                 _ = ShouldAcceptConnectedCallback(resolutionConnectionInfo, what);
@@ -1673,8 +1740,17 @@ public sealed class UnifiedSessionService
                 return;
             }
 
+            PublishConnectionCallbackStatus(envelope, what);
             if (CurrentState == SessionState.Connecting)
             {
+                if (hasCallbackConnectionInfo)
+                {
+                    lock (_connectionOperationGate)
+                    {
+                        _activeCallbackConnectionInfo = callbackConnectionInfo;
+                    }
+                }
+
                 _logService.Debug(
                     $"Session.Callback recorded ConnectionInfo:{what} while connect is still pending.");
                 return;
@@ -1691,15 +1767,36 @@ public sealed class UnifiedSessionService
 
         if (string.Equals(what, "Disconnect", StringComparison.OrdinalIgnoreCase))
         {
-            if (TryGetCallbackConnectionInfo(envelope.Payload, out var disconnectConnectionInfo)
-                && _lastSuccessfulConnectionInfo is not null
-                && !ConnectionInfoMatches(_lastSuccessfulConnectionInfo, disconnectConnectionInfo, compareExtras: false))
+            CoreConnectionInfo? activeTarget;
+            lock (_connectionOperationGate)
+            {
+                activeTarget = _activeConnectionTarget;
+            }
+
+            if (TryGetCallbackConnectionInfo(envelope.Payload, out var disconnectConnectionInfo))
+            {
+                var matchesActiveTarget = activeTarget is not null
+                    && CallbackConnectionIdentityMatches(activeTarget, disconnectConnectionInfo);
+                var matchesLastSuccessful = _lastSuccessfulConnectionInfo is not null
+                    && CallbackConnectionIdentityMatches(_lastSuccessfulConnectionInfo, disconnectConnectionInfo);
+                if (!matchesActiveTarget
+                    && !matchesLastSuccessful
+                    && (activeTarget is not null || _lastSuccessfulConnectionInfo is not null))
+                {
+                    _logService.Warn(
+                        $"Session.Callback ignored stale ConnectionInfo:Disconnect for address={disconnectConnectionInfo.Address}, config={disconnectConnectionInfo.ConnectConfig}.");
+                    return;
+                }
+            }
+            else if (activeTarget is not null && CurrentState == SessionState.Connecting)
             {
                 _logService.Warn(
-                    $"Session.Callback ignored stale ConnectionInfo:Disconnect for address={disconnectConnectionInfo.Address}, config={disconnectConnectionInfo.ConnectConfig}.");
+                    "Session.Callback ignored ConnectionInfo:Disconnect without connection details while a new connect is pending.");
                 return;
             }
 
+            PublishConnectionCallbackStatus(envelope, what);
+            var shouldStopNative = CurrentState is SessionState.Running or SessionState.Stopping;
             _lastSuccessfulConnectionInfo = null;
             ClearActiveConnectionTarget();
             if (CurrentState is SessionState.Running or SessionState.Stopping)
@@ -1707,6 +1804,40 @@ public sealed class UnifiedSessionService
                 _ = StopAsync();
             }
             MoveToState(SessionState.Idle, "Session.Callback", "ConnectionInfo:Disconnect");
+            if (shouldStopNative)
+            {
+                TrackPendingNativeStop();
+            }
+            return;
+        }
+
+        if (string.Equals(what, "UnsupportedResolution", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(what, "ResolutionError", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(what, "TouchModeNotAvailable", StringComparison.OrdinalIgnoreCase))
+        {
+            CoreConnectionInfo? activeTarget;
+            lock (_connectionOperationGate)
+            {
+                activeTarget = _activeConnectionTarget;
+            }
+
+            if (TryGetCallbackConnectionInfo(envelope.Payload, out var failureConnectionInfo)
+                && !IsCallbackConnectionCurrent(activeTarget, failureConnectionInfo))
+            {
+                _logService.Warn(
+                    $"Session.Callback ignored stale ConnectionInfo:{what} for address={failureConnectionInfo.Address}, config={failureConnectionInfo.ConnectConfig}.");
+                return;
+            }
+
+            PublishConnectionCallbackStatus(envelope, what);
+            _lastSuccessfulConnectionInfo = null;
+            if (CurrentState == SessionState.Connected)
+            {
+                MoveToState(SessionState.Idle, "Session.Callback", $"ConnectionInfo:{what}");
+            }
+
+            _logService.Warn(
+                $"Session.Callback connection invalidated by ConnectionInfo:{what}; the next link start will reconnect.");
             return;
         }
 
@@ -1725,11 +1856,15 @@ public sealed class UnifiedSessionService
         }
 
         if (string.Equals(what, "ScreencapCost", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(what, "FastestWayToScreencap", StringComparison.OrdinalIgnoreCase))
+            || string.Equals(what, "FastestWayToScreencap", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(what, "Reconnecting", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(what, "ScreencapFailed", StringComparison.OrdinalIgnoreCase))
         {
+            PublishConnectionCallbackStatus(envelope, what);
             return;
         }
 
+        PublishConnectionCallbackStatus(envelope, what);
         _logService.Warn(
             $"Session.Callback ignored unknown ConnectionInfo.what `{what}`; msgId={callback.MsgId}; msgName={callback.MsgName}");
     }
@@ -1817,8 +1952,10 @@ public sealed class UnifiedSessionService
         return SessionState.Idle;
     }
 
-    private static string NormalizeConnectionText(string? value)
-        => (value ?? string.Empty).Trim();
+    private static string NormalizeConnectionText(string? value) => (value ?? string.Empty).Trim();
+
+    private static string NormalizeConnectionAddress(string? value)
+        => NormalizeConnectionText(value).Replace(" ", string.Empty, StringComparison.Ordinal);
 
     private static string? NormalizeConnectionPath(string? value)
     {
@@ -1831,11 +1968,12 @@ public sealed class UnifiedSessionService
         TimeSpan? fallbackTimeout = null)
     {
         return new CoreConnectionInfo(
-            NormalizeConnectionText(connectionInfo.Address),
+            NormalizeConnectionAddress(connectionInfo.Address),
             NormalizeConnectionText(connectionInfo.ConnectConfig),
             NormalizeConnectionPath(connectionInfo.AdbPath),
             NormalizeConnectionExtras(connectionInfo.Extras),
-            connectionInfo.Timeout ?? fallbackTimeout);
+            connectionInfo.Timeout ?? fallbackTimeout,
+            connectionInfo.DiscoverRuntimeCandidates);
     }
 
     private static bool ConnectionInfoMatches(
@@ -1846,8 +1984,8 @@ public sealed class UnifiedSessionService
         var rightConfig = NormalizeConnectionText(right.ConnectConfig);
         var rightAdbPath = NormalizeConnectionPath(right.AdbPath);
         return string.Equals(
-                NormalizeConnectionText(left.Address),
-                NormalizeConnectionText(right.Address),
+                NormalizeConnectionAddress(left.Address),
+                NormalizeConnectionAddress(right.Address),
                 StringComparison.Ordinal)
             && (string.IsNullOrWhiteSpace(rightConfig)
                 || string.Equals(
@@ -1911,7 +2049,7 @@ public sealed class UnifiedSessionService
             return false;
         }
 
-        var address = NormalizeConnectionText(GetJsonString(details, "address"));
+        var address = NormalizeConnectionAddress(GetJsonString(details, "address"));
         var config = NormalizeConnectionText(GetJsonString(details, "config"));
         if (string.IsNullOrWhiteSpace(address))
         {
@@ -1925,9 +2063,9 @@ public sealed class UnifiedSessionService
         return true;
     }
 
-    private static string? GetJsonString(JsonObject payload, string key)
+    private static string? GetJsonString(JsonObject? payload, string key)
     {
-        if (!payload.TryGetPropertyValue(key, out var node) || node is null)
+        if (payload is null || !payload.TryGetPropertyValue(key, out var node) || node is null)
         {
             return null;
         }
@@ -2185,8 +2323,113 @@ public sealed class UnifiedSessionService
             }
 
             _activeConnectionTarget = null;
+            _activeCallbackConnectionInfo = null;
             _activeConnectionGeneration = 0;
         }
+    }
+
+    private CoreConnectionInfo CompleteActiveCallbackConnectionInfo(CoreConnectionInfo requested)
+    {
+        CoreConnectionInfo? callbackInfo;
+        lock (_connectionOperationGate)
+        {
+            callbackInfo = _activeCallbackConnectionInfo;
+        }
+
+        if (callbackInfo is null)
+        {
+            return requested;
+        }
+
+        return requested with
+        {
+            Address = string.IsNullOrWhiteSpace(callbackInfo.Address) ? requested.Address : callbackInfo.Address,
+            ConnectConfig = string.IsNullOrWhiteSpace(callbackInfo.ConnectConfig) ? requested.ConnectConfig : callbackInfo.ConnectConfig,
+            AdbPath = callbackInfo.AdbPath ?? requested.AdbPath,
+        };
+    }
+
+    private Task PendingNativeStopSnapshot
+    {
+        get
+        {
+            lock (_connectionOperationGate)
+            {
+                return _pendingNativeStopTask;
+            }
+        }
+    }
+
+    private void TrackPendingNativeStop()
+    {
+        lock (_connectionOperationGate)
+        {
+            _pendingNativeStopTask = RunPendingNativeStopAfterAsync(_pendingNativeStopTask);
+        }
+    }
+
+    private async Task RunPendingNativeStopAfterAsync(Task previous)
+    {
+        if (!previous.IsCompleted)
+        {
+            try
+            {
+                await previous.ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logService.Warn($"Chained native stop after disconnect observed a previous stop failure: {ex.Message}");
+            }
+        }
+
+        await StopNativeAfterDisconnectAsync().ConfigureAwait(false);
+    }
+
+    private async Task StopNativeAfterDisconnectAsync()
+    {
+        try
+        {
+            var result = await _bridge.StopAsync(CancellationToken.None).ConfigureAwait(false);
+            if (!result.Success)
+            {
+                _logService.Warn($"Native stop after disconnect failed: {result.Error?.Code} {result.Error?.Message}");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logService.Warn($"Native stop after disconnect threw: {ex.Message}");
+        }
+    }
+
+    private void PublishConnectionCallbackStatus(SessionCallbackEnvelope envelope, string what)
+    {
+        var details = envelope.Payload?["details"] as JsonObject;
+        var status = new ConnectionCallbackStatus(
+            what,
+            GetJsonString(details, "address"),
+            GetJsonString(details, "adb"),
+            GetJsonString(details, "config"),
+            GetJsonInt(details, "times") is { } times ? times + 1 : null,
+            GetJsonInt(details, "width"),
+            GetJsonInt(details, "height"),
+            GetJsonString(details, "method"));
+        LastConnectionCallbackStatus = status;
+        ConnectionCallbackStatusChanged?.Invoke(status);
+    }
+
+    private static int? GetJsonInt(JsonObject? payload, string key)
+    {
+        if (payload is null || !payload.TryGetPropertyValue(key, out var node) || node is not JsonValue value)
+        {
+            return null;
+        }
+
+        if (value.TryGetValue(out int number))
+        {
+            return number;
+        }
+
+        return value.TryGetValue(out string? text) && int.TryParse(text, out number) ? number : null;
     }
 
     private void MarkIdleConnectionCallbacksStale()
@@ -2208,30 +2451,61 @@ public sealed class UnifiedSessionService
     private bool ShouldAcceptConnectedCallback(CoreConnectionInfo? callbackConnectionInfo, string what)
     {
         CoreConnectionInfo? activeTarget;
+        CoreConnectionInfo? previousTarget;
+        CoreConnectionInfo? rejectedTarget;
         lock (_connectionOperationGate)
         {
             activeTarget = _activeConnectionTarget;
+            previousTarget = _previousConnectionTarget;
+            rejectedTarget = _lastRejectedConnectionTarget;
         }
 
         if (callbackConnectionInfo is not null)
         {
-            if (activeTarget is not null
-                && !ConnectionInfoMatches(activeTarget, callbackConnectionInfo, compareExtras: false))
+            if (activeTarget is not null && !CallbackConnectionIdentityMatches(activeTarget, callbackConnectionInfo))
             {
-                _logService.Warn(
-                    $"Session.Callback ignored stale ConnectionInfo:{what} for address={callbackConnectionInfo.Address}, config={callbackConnectionInfo.ConnectConfig}; active address={activeTarget.Address}, config={activeTarget.ConnectConfig}.");
-                return false;
+                var isActualPendingTarget = CurrentState == SessionState.Connecting
+                    && CallbackConnectionConfigMatches(activeTarget, callbackConnectionInfo)
+                    && (previousTarget is null
+                        || !CallbackConnectionIdentityMatches(previousTarget, callbackConnectionInfo))
+                    && (rejectedTarget is null
+                        || !CallbackConnectionIdentityMatches(rejectedTarget, callbackConnectionInfo));
+                if (!isActualPendingTarget)
+                {
+                    RememberRejectedConnectionTarget(callbackConnectionInfo);
+                    _logService.Warn(
+                        $"Session.Callback ignored stale ConnectionInfo:{what} for address={callbackConnectionInfo.Address}, config={callbackConnectionInfo.ConnectConfig}; active address={activeTarget.Address}, config={activeTarget.ConnectConfig}.");
+                    return false;
+                }
             }
 
             if (_lastSuccessfulConnectionInfo is not null
-                && !ConnectionInfoMatches(_lastSuccessfulConnectionInfo, callbackConnectionInfo, compareExtras: false))
+                && !CallbackConnectionIdentityMatches(_lastSuccessfulConnectionInfo, callbackConnectionInfo))
             {
-                _logService.Warn(
-                    $"Session.Callback ignored stale ConnectionInfo:{what} for address={callbackConnectionInfo.Address}, config={callbackConnectionInfo.ConnectConfig}; current address={_lastSuccessfulConnectionInfo.Address}, config={_lastSuccessfulConnectionInfo.ConnectConfig}.");
-                return false;
+                var isActualCompletedTarget = CurrentState == SessionState.Connecting
+                    || ((string.Equals(what, "Connected", StringComparison.OrdinalIgnoreCase)
+                            || string.Equals(what, "Reconnected", StringComparison.OrdinalIgnoreCase))
+                        && CallbackConnectionConfigMatches(_lastSuccessfulConnectionInfo, callbackConnectionInfo)
+                        && (previousTarget is null
+                            || !CallbackConnectionIdentityMatches(previousTarget, callbackConnectionInfo))
+                        && (rejectedTarget is null
+                            || !CallbackConnectionIdentityMatches(rejectedTarget, callbackConnectionInfo)));
+                if (!isActualCompletedTarget)
+                {
+                    RememberRejectedConnectionTarget(callbackConnectionInfo);
+                    _logService.Warn(
+                        $"Session.Callback ignored stale ConnectionInfo:{what} for address={callbackConnectionInfo.Address}, config={callbackConnectionInfo.ConnectConfig}; current address={_lastSuccessfulConnectionInfo.Address}, config={_lastSuccessfulConnectionInfo.ConnectConfig}.");
+                    return false;
+                }
             }
 
-            return _lastSuccessfulConnectionInfo is not null || activeTarget is not null;
+            if (_lastSuccessfulConnectionInfo is not null || activeTarget is not null)
+            {
+                return true;
+            }
+
+            RememberRejectedConnectionTarget(callbackConnectionInfo);
+            return false;
         }
 
         if (_lastSuccessfulConnectionInfo is null && activeTarget is null)
@@ -2249,6 +2523,14 @@ public sealed class UnifiedSessionService
         return true;
     }
 
+    private void RememberRejectedConnectionTarget(CoreConnectionInfo connectionInfo)
+    {
+        lock (_connectionOperationGate)
+        {
+            _lastRejectedConnectionTarget = connectionInfo;
+        }
+    }
+
     private CoreConnectionInfo CompleteCallbackConnectionInfo(CoreConnectionInfo callbackConnectionInfo)
     {
         CoreConnectionInfo? activeTarget;
@@ -2258,18 +2540,68 @@ public sealed class UnifiedSessionService
         }
 
         if (activeTarget is not null
-            && ConnectionInfoMatches(activeTarget, callbackConnectionInfo, compareExtras: false))
+            && CallbackConnectionIdentityMatches(activeTarget, callbackConnectionInfo))
         {
-            return activeTarget;
+            return activeTarget with
+            {
+                Address = callbackConnectionInfo.Address,
+                ConnectConfig = string.IsNullOrWhiteSpace(callbackConnectionInfo.ConnectConfig)
+                    ? activeTarget.ConnectConfig
+                    : callbackConnectionInfo.ConnectConfig,
+                AdbPath = callbackConnectionInfo.AdbPath ?? activeTarget.AdbPath,
+            };
         }
 
         if (_lastSuccessfulConnectionInfo is not null
-            && ConnectionInfoMatches(_lastSuccessfulConnectionInfo, callbackConnectionInfo, compareExtras: false))
+            && CallbackConnectionConfigMatches(_lastSuccessfulConnectionInfo, callbackConnectionInfo))
         {
-            return _lastSuccessfulConnectionInfo;
+            return _lastSuccessfulConnectionInfo with
+            {
+                Address = callbackConnectionInfo.Address,
+                ConnectConfig = string.IsNullOrWhiteSpace(callbackConnectionInfo.ConnectConfig)
+                    ? _lastSuccessfulConnectionInfo.ConnectConfig
+                    : callbackConnectionInfo.ConnectConfig,
+                AdbPath = callbackConnectionInfo.AdbPath ?? _lastSuccessfulConnectionInfo.AdbPath,
+            };
         }
 
         return callbackConnectionInfo;
+    }
+
+    private bool IsCallbackConnectionCurrent(CoreConnectionInfo? activeTarget, CoreConnectionInfo callbackConnectionInfo)
+    {
+        if (activeTarget is not null
+            && CallbackConnectionIdentityMatches(activeTarget, callbackConnectionInfo))
+        {
+            return true;
+        }
+
+        if (_lastSuccessfulConnectionInfo is not null
+            && CallbackConnectionIdentityMatches(_lastSuccessfulConnectionInfo, callbackConnectionInfo))
+        {
+            return true;
+        }
+
+        return activeTarget is null && _lastSuccessfulConnectionInfo is null;
+    }
+
+    private static bool CallbackConnectionIdentityMatches(CoreConnectionInfo expected, CoreConnectionInfo callback)
+    {
+        return string.Equals(
+                NormalizeConnectionAddress(expected.Address),
+                NormalizeConnectionAddress(callback.Address),
+                StringComparison.Ordinal)
+            && CallbackConnectionConfigMatches(expected, callback);
+    }
+
+    private static bool CallbackConnectionConfigMatches(CoreConnectionInfo expected, CoreConnectionInfo callback)
+    {
+        var callbackConfig = NormalizeConnectionText(callback.ConnectConfig);
+        return string.IsNullOrWhiteSpace(callbackConfig)
+            || string.Equals(
+                NormalizeConnectionText(expected.ConnectConfig),
+                callbackConfig,
+                StringComparison.Ordinal);
     }
 
     private static async Task WaitForConnectCancellationAsync(CancellationToken cancellationToken)

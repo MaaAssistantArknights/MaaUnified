@@ -3,6 +3,8 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Text.RegularExpressions;
+using Microsoft.Win32;
 using MAAUnified.App.ViewModels.Infrastructure;
 using MAAUnified.Application.Services.Localization;
 using MAAUnified.Application.Services;
@@ -25,6 +27,7 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
     private static readonly string[] MuMuExternalRendererCandidates =
     [
         Path.Combine("nx_device", "12.0", "shell", "sdk", "external_renderer_ipc.dll"),
+        Path.Combine("nx_device", "15.0", "shell", "sdk", "external_renderer_ipc.dll"),
         Path.Combine("shell", "sdk", "external_renderer_ipc.dll"),
     ];
 
@@ -73,6 +76,7 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
     private string _testLinkInfo = string.Empty;
     private TestLinkInfoSeverity _testLinkInfoSeverity;
     private string _screencapCost = string.Empty;
+    private string _fastestScreencapMethod = string.Empty;
     private long? _lastScreencapCostMin;
     private long? _lastScreencapCostAvg;
     private long? _lastScreencapCostMax;
@@ -674,6 +678,12 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
         set => SetProperty(ref _screencapCost, string.IsNullOrWhiteSpace(value) ? BuildDefaultScreencapCostText() : value);
     }
 
+    public string FastestScreencapMethod
+    {
+        get => _fastestScreencapMethod;
+        set => SetProperty(ref _fastestScreencapMethod, (value ?? string.Empty).Trim());
+    }
+
     public void UpdateScreencapCost(long min, long avg, long max, DateTimeOffset timestamp)
     {
         _lastScreencapCostMin = min;
@@ -860,15 +870,17 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
     public CoreConnectionInfo BuildCoreConnectionInfo(
         string? address = null,
         string? effectiveAdbPath = null,
-        TimeSpan? timeout = null)
+        TimeSpan? timeout = null,
+        bool discoverRuntimeCandidates = false)
     {
         var resolvedAdbPath = effectiveAdbPath ?? ResolveEffectiveAdbPath(updateStateWhenResolved: true);
         return new CoreConnectionInfo(
-            (address ?? ConnectAddress ?? string.Empty).Trim(),
+            (address ?? ConnectAddress ?? string.Empty).Replace(" ", string.Empty, StringComparison.Ordinal).Trim(),
             (ConnectConfig ?? string.Empty).Trim(),
             string.IsNullOrWhiteSpace(resolvedAdbPath) ? null : resolvedAdbPath.Trim(),
             BuildCoreConnectionExtras(),
-            timeout);
+            timeout,
+            discoverRuntimeCandidates);
     }
 
     public CoreConnectionExtras BuildCoreConnectionExtras()
@@ -1200,6 +1212,7 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
             .Replace("：", ":", StringComparison.Ordinal)
             .Replace("；", ":", StringComparison.Ordinal)
             .Replace(";", ":", StringComparison.Ordinal)
+            .Replace(" ", string.Empty, StringComparison.Ordinal)
             .Trim();
         if (string.IsNullOrWhiteSpace(normalized))
         {
@@ -1232,8 +1245,12 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
 
     private static IReadOnlyList<string> BuildMuMu12PathCandidates()
     {
-        return
+        var candidates = new List<string>();
+        candidates.AddRange(ReadMuMuInstallDirectoriesFromRegistry());
+        candidates.AddRange(
         [
+            Path.Combine(GetProgramFiles(), "Netease", "MuMuPlayer-15.0"),
+            Path.Combine(GetProgramFilesX86(), "Netease", "MuMuPlayer-15.0"),
             Path.Combine(GetProgramFiles(), "Netease", "MuMuPlayer-12.0"),
             Path.Combine(GetProgramFilesX86(), "Netease", "MuMuPlayer-12.0"),
             Path.Combine(GetProgramFiles(), "Netease", "MuMuPlayerGlobal-12.0"),
@@ -1242,13 +1259,18 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
             Path.Combine(GetProgramFilesX86(), "Netease", "YXArkNights-12.0"),
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Netease", "MuMuPlayer-12.0"),
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Netease", "MuMuPlayerGlobal-12.0"),
-        ];
+        ]);
+        return candidates;
     }
 
     private static IReadOnlyList<string> BuildLdPlayerPathCandidates()
     {
-        return
+        var candidates = new List<string>();
+        candidates.AddRange(ReadLdPlayerInstallDirectoriesFromRegistry());
+        candidates.AddRange(
         [
+            Path.Combine(GetProgramFiles(), "leidian", "LDPlayer14"),
+            Path.Combine(GetProgramFilesX86(), "leidian", "LDPlayer14"),
             Path.Combine(GetProgramFiles(), "leidian", "LDPlayer9"),
             Path.Combine(GetProgramFilesX86(), "leidian", "LDPlayer9"),
             Path.Combine(GetProgramFiles(), "leidian", "LDPlayer4.0"),
@@ -1257,7 +1279,74 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
             Path.Combine(GetProgramFilesX86(), "LDPlayer"),
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "leidian", "LDPlayer9"),
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "leidian", "LDPlayer4.0"),
+        ]);
+        return candidates;
+    }
+
+    private static IReadOnlyList<string> ReadMuMuInstallDirectoriesFromRegistry()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return [];
+        }
+
+        string[] keys =
+        [
+            @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\MuMuPlayer-15.0",
+            @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\MuMuPlayer-12.0",
+            @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\MuMuPlayer",
+            @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\MuMuPlayerGlobal-15.0",
+            @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\MuMuPlayerGlobal-12.0",
+            @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\YXArkNights-12.0",
         ];
+        var paths = new List<string>();
+        foreach (var keyPath in keys)
+        {
+            try
+            {
+                using var key = Registry.LocalMachine.OpenSubKey(keyPath);
+                var uninstall = key?.GetValue("UninstallString") as string;
+                var match = Regex.Match(uninstall ?? string.Empty, "^\\\"(.*?)\\\\uninstall\\.exe", RegexOptions.IgnoreCase);
+                if (match.Success)
+                {
+                    paths.Add(match.Groups[1].Value);
+                }
+            }
+            catch
+            {
+                // Registry discovery is best effort; fixed-path candidates remain available.
+            }
+        }
+
+        return paths.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+    }
+
+    private static IReadOnlyList<string> ReadLdPlayerInstallDirectoriesFromRegistry()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return [];
+        }
+
+        string[] keys = [@"Software\leidian\ldplayer14", @"Software\leidian\ldplayer9", @"Software\mrfz\mrfz"];
+        var paths = new List<string>();
+        foreach (var keyPath in keys)
+        {
+            try
+            {
+                using var key = Registry.CurrentUser.OpenSubKey(keyPath);
+                if (key?.GetValue("InstallDir") is string path && !string.IsNullOrWhiteSpace(path))
+                {
+                    paths.Add(path.Trim());
+                }
+            }
+            catch
+            {
+                // Registry discovery is best effort; fixed-path candidates remain available.
+            }
+        }
+
+        return paths.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
     }
 
     private static string GetProgramFiles()
